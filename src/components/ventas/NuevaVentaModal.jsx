@@ -119,12 +119,14 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
     if (cart.length === 0) return toast({ title: "Carrito vacío", variant: "destructive" });
     if (paymentMethod === 'Cuenta Corriente' && !selectedClient) return toast({ title: "Cliente requerido", variant: "destructive" });
 
+    const freshProductMap = new Map();
     for (const item of cart) {
       const { data: freshProduct } = await supabase.from('productos').select('stock_actual').eq('id', item.id).single();
       if (!freshProduct || freshProduct.stock_actual < item.cantidad) {
          toast({ title: "Stock Insuficiente", description: `El producto ${item.nombre} cambió su stock.`, variant: "destructive" });
          return;
       }
+      freshProductMap.set(item.id, freshProduct);
     }
 
     setLoading(true);
@@ -157,7 +159,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
       await supabase.from('comprobante_items').insert(itemsPayload);
 
       for (const item of cart) {
-        await supabase.from('productos').update({ stock_actual: item.stock_actual - item.cantidad }).eq('id', item.id);
+        await supabase.from('productos').update({ stock_actual: freshProductMap.get(item.id).stock_actual - item.cantidad }).eq('id', item.id);
         await supabase.from('movimientos_inventario').insert([{
            tenant_id: user.tenant_id,
            empresa_id: user.empresa_id,
@@ -171,7 +173,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
 
       // Also create record in 'ventas' table for legacy/dashboard compatibility
       const { data: venta } = await supabase.from('ventas').insert([{
-          user_id: user.id, // Creator
+          user_id: user.tenant_id,
           empresa_id: user.empresa_id,
           fecha: now,
           cliente: selectedClient?.nombre || 'Consumidor Final',
@@ -197,7 +199,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
       // If Payment is Received (not Cta Cte), add to Caja
       if (paymentMethod !== 'Cuenta Corriente') {
           await supabase.from('movimientos_caja').insert([{
-              user_id: user.id,
+              user_id: user.tenant_id,
               empresa_id: user.empresa_id,
               fecha: now,
               tipo: 'ingreso',
@@ -210,7 +212,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
       } else if (selectedClient) {
           // If Cta Cte, add movement to Cta Cte table (DEBE)
           await supabase.from('cuenta_corriente_movimientos').insert([{
-              user_id: user.id,
+              user_id: user.tenant_id,
               empresa_id: user.empresa_id,
               cliente_id: selectedClient.id,
               tipo: 'DEBE',

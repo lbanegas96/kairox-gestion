@@ -36,11 +36,6 @@ function CajaSection() {
   const { currentSession, isSessionOpen, loading: sessionLoading, openSession, refreshSession } = useCaja();
   const { toast } = useToast();
   
-  // Debugging Session State
-  useEffect(() => {
-    console.log("CajaSection - Session State Update:", { isSessionOpen, currentSession });
-  }, [isSessionOpen, currentSession]);
-
   // State
   const [activeTab, setActiveTab] = useState("movimientos");
   const [loading, setLoading] = useState(false);
