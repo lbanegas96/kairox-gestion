@@ -6,3 +6,4 @@ export { comprasService, COMPRAS_KEYS } from './comprasService';
 export { cajaService, CAJA_KEYS } from './cajaService';
 export { dashboardService, DASHBOARD_KEYS } from './dashboardService';
 export { cotizacionesService, COTIZACIONES_KEYS } from './cotizacionesService';
+export { ordenesCompraService, OC_KEYS } from './ordenesCompraService';

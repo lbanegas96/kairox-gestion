@@ -13,6 +13,7 @@ import ReportesSection from '@/components/sections/ReportesSection';
 import UsuariosSection from '@/components/sections/UsuariosSection';
 import ConfiguracionSection from '@/components/sections/ConfiguracionSection';
 import CotizacionesSection from '@/components/sections/CotizacionesSection';
+import OrdenesCompraSection from '@/components/sections/OrdenesCompraSection';
 import { CommandPalette, useCommandPalette } from '@/components/CommandPalette';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 
@@ -35,6 +36,8 @@ function Dashboard({ user, onLogout }) {
         return <VentasSection />;
       case 'cotizaciones':
         return <CotizacionesSection />;
+      case 'ordenes_compra':
+        return <OrdenesCompraSection />;
       case 'compras':
         return <ComprasSection />;
       case 'caja':

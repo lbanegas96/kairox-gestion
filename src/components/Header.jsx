@@ -1,5 +1,6 @@
 import React from 'react';
-import { Menu, LogOut, User as UserIcon, Bell, CheckCircle, Moon, Sun, Search, Settings, Building, Upload } from 'lucide-react';
+import { Menu, LogOut, User as UserIcon, Bell, CheckCircle, Moon, Sun, Search, Settings, Building, Upload, Package, CreditCard, ShoppingBag, AlertCircle } from 'lucide-react';
+import { useNotifications } from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -15,21 +16,27 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useConfig } from '@/contexts/ConfigContext';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 
-function Header({ user, onLogout, toggleSidebar, alerts, onNavigate, onOpenSearch }) {
+function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch }) {
   const { theme, toggleTheme } = useTheme();
   const { config } = useConfig();
   const { userRole } = useAuth();
+  const notifications = useNotifications();
 
   const firstName = user?.user_metadata?.first_name || user?.first_name || 'Usuario';
   const lastName = user?.user_metadata?.last_name || user?.last_name || '';
   const initials = `${firstName.charAt(0)}${lastName ? lastName.charAt(0) : ''}`.toUpperCase() || 'U';
-  
-  // Use company name from config (DB) or fallback to user's company or default
-  const empresaName = config?.nombre_empresa || user?.empresa_nombre || 'KAIROX Gestión';
-  const logoUrl = config?.company_logo || config?.logo_base64; // Support both new URL and legacy base64
 
-  const hasNotifications = alerts?.count > 0;
+  const empresaName = config?.nombre_empresa || user?.empresa_nombre || 'KAIROX Gestión';
+  const logoUrl = config?.company_logo || config?.logo_base64;
+
+  const hasNotifications = notifications.hasNotifications;
   const roleLabel = userRole === 'admin' ? 'Administrador' : 'Staff';
+
+  const TIPO_CONFIG = {
+    stock_bajo:    { icon: Package,     color: 'text-amber-500',  bg: 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/30' },
+    deuda_vencida: { icon: CreditCard,  color: 'text-rose-500',   bg: 'bg-rose-50 dark:bg-rose-900/10 border-rose-200 dark:border-rose-800/30' },
+    oc_pendiente:  { icon: ShoppingBag, color: 'text-blue-500',   bg: 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800/30' },
+  };
 
   // "Subir Logo" button and other actions are still permission-gated for consistency, 
   // but header info is visible to all as requested.
@@ -105,54 +112,65 @@ function Header({ user, onLogout, toggleSidebar, alerts, onNavigate, onOpenSearc
               <Button variant="ghost" size="icon" className="relative text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full w-9 h-9">
                 <Bell className="h-4 w-4" />
                 {hasNotifications && (
-                  <span className="absolute top-2 right-2.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-slate-900 animate-pulse"></span>
+                  <span className="absolute top-1.5 right-1.5 h-4 w-4 rounded-full bg-red-500 ring-2 ring-white dark:ring-slate-900 text-[9px] font-bold text-white flex items-center justify-center">
+                    {notifications.count > 9 ? '9+' : notifications.count}
+                  </span>
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 p-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl rounded-xl z-50">
+            <DropdownMenuContent align="end" className="w-84 p-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl rounded-xl z-50" style={{ width: '340px' }}>
               <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-950/50">
-                <h4 className="font-semibold text-sm text-slate-900 dark:text-white">Notificaciones</h4>
+                <h4 className="font-semibold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <Bell className="w-4 h-4" /> Notificaciones
+                </h4>
                 {hasNotifications && (
                   <span className="text-[10px] font-bold bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full">
-                    {alerts.count} nuevas
+                    {notifications.count} alertas
                   </span>
                 )}
               </div>
-              
-              <div className="max-h-[300px] overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
+
+              <div className="max-h-[360px] overflow-y-auto p-2 space-y-1">
                 {!hasNotifications ? (
-                  <div className="py-8 px-4 text-center flex flex-col items-center justify-center text-slate-400 gap-2">
-                    <CheckCircle className="h-10 w-10 text-emerald-500/20" />
+                  <div className="py-8 px-4 text-center flex flex-col items-center gap-2">
+                    <CheckCircle className="h-10 w-10 text-emerald-500/30" />
                     <p className="text-sm font-medium text-slate-600 dark:text-slate-300">¡Todo al día!</p>
+                    <p className="text-xs text-slate-400">Sin alertas pendientes</p>
                   </div>
                 ) : (
-                  <div className="space-y-1">
-                    {alerts.items.slice(0, 5).map((item) => (
-                      <div key={item.id} className="p-3 rounded-lg bg-white dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer group" onClick={() => onNavigate && onNavigate('productos')}>
-                        <div className="flex justify-between items-start mb-1">
-                          <span className="font-medium text-xs text-slate-700 dark:text-slate-200 truncate max-w-[160px] group-hover:text-blue-600 dark:group-hover:text-[#00D4FF]">
-                            {item.nombre}
-                          </span>
-                          {item.stock_actual === 0 ? (
-                            <span className="text-[10px] font-bold text-red-600 bg-red-100 dark:bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded">CRÍTICO</span>
-                          ) : (
-                            <span className="text-[10px] font-bold text-orange-600 bg-orange-100 dark:bg-orange-500/20 dark:text-orange-400 px-1.5 py-0.5 rounded">BAJO</span>
+                  notifications.items.slice(0, 8).map((item) => {
+                    const cfg = TIPO_CONFIG[item.tipo] ?? TIPO_CONFIG.stock_bajo;
+                    const Icon = cfg.icon;
+                    return (
+                      <button key={item.id}
+                        className={`w-full text-left p-3 rounded-lg border transition-colors hover:opacity-90 ${cfg.bg}`}
+                        onClick={() => onNavigate?.(item.seccion)}>
+                        <div className="flex items-start gap-2.5">
+                          <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${cfg.color}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">{item.titulo}</p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">{item.detalle}</p>
+                          </div>
+                          {item.nivel === 'critico' && (
+                            <span className="text-[9px] font-bold text-red-600 bg-red-100 dark:bg-red-500/20 px-1.5 py-0.5 rounded shrink-0">CRÍTICO</span>
                           )}
                         </div>
-                        <div className="text-[11px] text-slate-500 flex justify-between">
-                          <span>Stock actual: <b className="text-slate-700 dark:text-slate-300">{item.stock_actual}</b></span>
-                          <span>Mín: {item.stock_minimo}</span>
-                        </div>
-                      </div>
-                    ))}
-                    {alerts.items.length > 5 && (
-                       <p className="text-center text-xs text-slate-400 py-2">
-                         + {alerts.items.length - 5} más...
-                       </p>
-                    )}
-                  </div>
+                      </button>
+                    );
+                  })
+                )}
+                {notifications.count > 8 && (
+                  <p className="text-center text-xs text-slate-400 py-2">+ {notifications.count - 8} más alertas</p>
                 )}
               </div>
+
+              {hasNotifications && (
+                <div className="p-2 border-t border-slate-100 dark:border-slate-800 grid grid-cols-3 gap-1 text-[10px] text-slate-400 bg-slate-50/50 dark:bg-slate-950/50 rounded-b-xl">
+                  <span className="text-center">📦 {notifications.stockBajo.length} stock</span>
+                  <span className="text-center">💳 {notifications.deudaVencida.length} deudas</span>
+                  <span className="text-center">🛒 {notifications.ocPendientes.length} OC</span>
+                </div>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 
