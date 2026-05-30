@@ -1,4 +1,5 @@
-export { productosService, QUERY_KEYS as PRODUCTOS_KEYS } from './productosService';
+// Servicios tipados (TypeScript) — fuente de verdad
+export { productosService, PRODUCTOS_KEYS } from './productosService';
 export { ventasService, VENTAS_KEYS } from './ventasService';
 export { clientesService, CLIENTES_KEYS } from './clientesService';
 export { comprasService, COMPRAS_KEYS } from './comprasService';
