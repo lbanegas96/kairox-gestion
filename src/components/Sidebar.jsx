@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Package, ShoppingCart, ArrowLeftRight, Wallet, FileText, Users, Settings, X, LogOut, ChevronRight, Contact, CreditCard, ClipboardList, ShoppingBag, BookOpen } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, ArrowLeftRight, Wallet, FileText, Users, Settings, X, LogOut, ChevronRight, Contact, CreditCard, ClipboardList, ShoppingBag, BookOpen, Banknote } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
@@ -17,12 +17,13 @@ function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen, alerts })
     { id: 'cotizaciones', label: 'Cotizaciones', icon: ClipboardList },
     { id: 'compras', label: 'Compras', icon: ArrowLeftRight },
     { id: 'ordenes_compra', label: 'Órdenes de Compra', icon: ShoppingBag },
-    { 
-      id: 'caja', 
-      label: 'Caja', 
+    {
+      id: 'caja',
+      label: 'Caja',
       icon: Wallet,
-      statusIndicator: true 
+      statusIndicator: true
     },
+    { id: 'movimientos-uala', label: 'Ualá', icon: Banknote },
     { id: 'clientes', label: 'Clientes', icon: Contact },
     { id: 'cuentacorriente', label: 'Cta. Corriente', icon: CreditCard },
     { id: 'plan_cuentas', label: 'Contabilidad', icon: BookOpen },
