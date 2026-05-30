@@ -14,6 +14,7 @@ import UsuariosSection from '@/components/sections/UsuariosSection';
 import ConfiguracionSection from '@/components/sections/ConfiguracionSection';
 import CotizacionesSection from '@/components/sections/CotizacionesSection';
 import OrdenesCompraSection from '@/components/sections/OrdenesCompraSection';
+import PlanCuentasSection from '@/components/sections/PlanCuentasSection';
 import { CommandPalette, useCommandPalette } from '@/components/CommandPalette';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 
@@ -52,6 +53,8 @@ function Dashboard({ user, onLogout }) {
         return <UsuariosSection />;
       case 'configuracion':
         return <ConfiguracionSection />;
+      case 'plan_cuentas':
+        return <PlanCuentasSection />;
       default:
         return <DashboardSection onNavigate={setActiveSection} />;
     }

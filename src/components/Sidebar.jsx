@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Package, ShoppingCart, ArrowLeftRight, Wallet, FileText, Users, Settings, X, LogOut, ChevronRight, Contact, CreditCard, ClipboardList, ShoppingBag } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, ArrowLeftRight, Wallet, FileText, Users, Settings, X, LogOut, ChevronRight, Contact, CreditCard, ClipboardList, ShoppingBag, BookOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
@@ -25,6 +25,7 @@ function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen, alerts })
     },
     { id: 'clientes', label: 'Clientes', icon: Contact },
     { id: 'cuentacorriente', label: 'Cta. Corriente', icon: CreditCard },
+    { id: 'plan_cuentas', label: 'Contabilidad', icon: BookOpen },
     { id: 'reportes', label: 'Reportes', icon: FileText },
     { id: 'usuarios', label: 'Usuarios', icon: Users },
     { id: 'configuracion', label: 'Configuración', icon: Settings },

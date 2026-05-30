@@ -7,3 +7,4 @@ export { cajaService, CAJA_KEYS } from './cajaService';
 export { dashboardService, DASHBOARD_KEYS } from './dashboardService';
 export { cotizacionesService, COTIZACIONES_KEYS } from './cotizacionesService';
 export { ordenesCompraService, OC_KEYS } from './ordenesCompraService';
+export { planCuentasService, asientosService, PLAN_CUENTAS_KEYS } from './planCuentasService';

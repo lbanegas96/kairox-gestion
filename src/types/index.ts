@@ -363,6 +363,61 @@ export interface FlujoCajaMensual {
 // ---------------------------------------------------------------------------
 // Auditoría
 // ---------------------------------------------------------------------------
+// Plan de Cuentas / Contabilidad
+// ---------------------------------------------------------------------------
+
+export type CuentaTipo = 'activo' | 'pasivo' | 'patrimonio' | 'ingreso' | 'egreso';
+
+export interface PlanCuenta {
+  id: string;
+  empresa_id: string;
+  codigo: string;
+  nombre: string;
+  tipo: CuentaTipo;
+  nivel: number;
+  cuenta_padre_id: string | null;
+  permite_movimientos: boolean;
+  saldo_actual: number;
+  activa: boolean;
+  created_at: string;
+  // join virtual para árbol
+  hijos?: PlanCuenta[];
+}
+
+export type AsientoEstado = 'borrador' | 'confirmado' | 'anulado';
+export type AsientoOrigen = 'venta' | 'compra' | 'caja' | 'manual';
+
+export interface AsientoContable {
+  id: string;
+  empresa_id: string;
+  user_id: string;
+  numero: string;
+  fecha: string;
+  descripcion: string | null;
+  estado: AsientoEstado;
+  total_debe: number;
+  total_haber: number;
+  origen: AsientoOrigen | null;
+  origen_id: string | null;
+  created_at: string;
+  // join
+  asientos_items?: AsientoItem[];
+}
+
+export interface AsientoItem {
+  id: string;
+  asiento_id: string;
+  empresa_id: string;
+  cuenta_id: string;
+  descripcion: string | null;
+  debe: number;
+  haber: number;
+  created_at: string;
+  // join
+  plan_cuentas?: Pick<PlanCuenta, 'codigo' | 'nombre' | 'tipo'>;
+}
+
+// ---------------------------------------------------------------------------
 
 export type AuditOperacion = 'INSERT' | 'UPDATE' | 'DELETE';
 
