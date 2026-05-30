@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useConfig } from '@/contexts/ConfigContext';
 import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 
 const ConfiguracionSection = () => {
@@ -35,74 +34,55 @@ const ConfiguracionSection = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const uploadLogoToStorage = async (file) => {
-    try {
-      setUploading(true);
-      const fileExt = file.name.split('.').pop();
-      const fileName = `logo-${Date.now()}.${fileExt}`;
-      const filePath = `logos/${fileName}`;
-
-      // Upload to Supabase Storage 'public' bucket
-      const { data, error } = await supabase.storage
-        .from('public') 
-        .upload(filePath, file);
-
-      if (error) throw error;
-
-      // Get Public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('public')
-        .getPublicUrl(filePath);
-
-      return publicUrl;
-    } catch (error) {
-      console.error('Error uploading logo:', error);
-      throw error;
-    } finally {
-      setUploading(false);
-    }
-  };
+  const convertToBase64 = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+    reader.readAsDataURL(file);
+  });
 
   const handleFileSelect = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Validation: Type
     const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp'];
     if (!validTypes.includes(file.type)) {
       toast({
         title: "Formato no soportado",
-        description: "Por favor sube una imagen PNG, JPG, JPEG, SVG o WEBP.",
+        description: "Sube una imagen PNG, JPG, SVG o WEBP.",
         variant: "destructive"
       });
       return;
     }
 
-    // Validation: Size (20MB = 20 * 1024 * 1024 bytes)
-    const maxSize = 20 * 1024 * 1024; // Updated from 2MB to 20MB
+    const maxSize = 2 * 1024 * 1024; // 2MB — razonable para base64 en DB
     if (file.size > maxSize) {
       toast({
         title: "Archivo muy grande",
-        description: "La imagen es muy grande. Máximo 20MB.", // Updated message
+        description: "El logo debe pesar menos de 2MB. Comprime la imagen e intentá de nuevo.",
         variant: "destructive"
       });
       return;
     }
 
     try {
-      const publicUrl = await uploadLogoToStorage(file);
-      setFormData(prev => ({ ...prev, company_logo: publicUrl }));
+      setUploading(true);
+      const base64 = await convertToBase64(file);
+      setFormData(prev => ({ ...prev, company_logo: base64, logo_base64: base64 }));
       toast({
-        title: "Logo subido",
-        description: "El logo se ha cargado correctamente. Recuerda guardar los cambios.",
+        title: "Logo cargado",
+        description: "Hacé clic en Guardar para aplicar el cambio.",
         className: "bg-blue-600 text-white border-blue-500"
       });
     } catch (error) {
       toast({
-        title: "Error al subir logo",
-        description: "No se pudo subir la imagen al servidor.",
+        title: "Error al cargar el logo",
+        description: error.message || "No se pudo procesar la imagen.",
         variant: "destructive"
       });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -222,8 +202,8 @@ const ConfiguracionSection = () => {
                    <AlertCircle className="w-4 h-4 shrink-0" />
                    <div>
                      Formatos: PNG, JPG, SVG, WEBP. <br/>
-                     Tamaño máximo: 20MB. <br/> {/* Updated text here */}
-                     El logo se almacenará de forma segura en la nube.
+                     Tamaño máximo: 2MB. <br/>
+                     El logo se guarda directamente en la base de datos.
                    </div>
                 </div>
               </div>

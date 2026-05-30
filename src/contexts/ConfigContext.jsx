@@ -23,13 +23,13 @@ export const ConfigProvider = ({ children }) => {
       }
 
       if (data) {
-        const newConfig = { ...config };
+        const overrides = {};
         data.forEach(item => {
-          if (item.clave === 'nombre_empresa') newConfig.nombre_empresa = item.valor;
-          if (item.clave === 'logo_base64') newConfig.logo_base64 = item.valor;
-          if (item.clave === 'company_logo') newConfig.company_logo = item.valor;
+          if (['nombre_empresa', 'logo_base64', 'company_logo'].includes(item.clave)) {
+            overrides[item.clave] = item.valor;
+          }
         });
-        setConfig(newConfig);
+        setConfig(prev => ({ ...prev, ...overrides }));
       }
     } catch (err) {
       console.error('Unexpected error fetching config:', err);
