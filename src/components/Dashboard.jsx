@@ -12,11 +12,14 @@ import CuentaCorrienteSection from '@/components/sections/CuentaCorrienteSection
 import ReportesSection from '@/components/sections/ReportesSection';
 import UsuariosSection from '@/components/sections/UsuariosSection';
 import ConfiguracionSection from '@/components/sections/ConfiguracionSection';
+import CotizacionesSection from '@/components/sections/CotizacionesSection';
+import { CommandPalette, useCommandPalette } from '@/components/CommandPalette';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 
 function Dashboard({ user, onLogout }) {
   const [activeSection, setActiveSection] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const { open: cmdOpen, setOpen: setCmdOpen } = useCommandPalette();
 
   // Removed permission checks for rendering sections.
   // All sections are now accessible for viewing.
@@ -30,6 +33,8 @@ function Dashboard({ user, onLogout }) {
         return <ProductosSection />;
       case 'ventas':
         return <VentasSection />;
+      case 'cotizaciones':
+        return <CotizacionesSection />;
       case 'compras':
         return <ComprasSection />;
       case 'caja':
@@ -59,12 +64,13 @@ function Dashboard({ user, onLogout }) {
       />
       
       <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-0'}`}>
-        <Header 
-          user={user} 
+        <Header
+          user={user}
           onLogout={onLogout}
           toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          onOpenSearch={() => setCmdOpen(true)}
         />
-        
+
         <main className="p-6">
           <AnimatePresence mode="wait">
             <motion.div
@@ -79,6 +85,12 @@ function Dashboard({ user, onLogout }) {
           </AnimatePresence>
         </main>
       </div>
+
+      <CommandPalette
+        open={cmdOpen}
+        onClose={() => setCmdOpen(false)}
+        onNavigate={(section) => { setActiveSection(section); setCmdOpen(false); }}
+      />
     </div>
   );
 }

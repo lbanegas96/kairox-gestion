@@ -287,7 +287,8 @@ function ComprasSection() {
         .from('compras')
         .insert([{
           user_id: user.tenant_id,
-          fecha: getDateFromInputAR(purchaseForm.fecha), 
+          empresa_id: user.empresa_id,
+          fecha: getDateFromInputAR(purchaseForm.fecha),
           proveedor_id: purchaseForm.proveedor_id,
           numero_factura: purchaseForm.numero_factura || 'S/N',
           total: totalCompra,
@@ -301,6 +302,7 @@ function ComprasSection() {
 
       const purchaseItems = cart.map(item => ({
         compra_id: newPurchase.id,
+        empresa_id: user.empresa_id,
         producto_id: item.id,
         cantidad: parseInt(item.cantidad),
         costo_unitario: parseFloat(item.costo_unitario),
@@ -315,13 +317,19 @@ function ComprasSection() {
 
       // Update Stock (Create Mode: Always Add)
       for (const item of cart) {
-         // Using RPC for safety
-         await supabase.rpc('increment_stock', { row_id: item.id, quantity: parseInt(item.cantidad) });
-         
-         // Update cost
-         await supabase.from('productos')
-           .update({ costo_compra: parseFloat(item.costo_unitario) })
-           .eq('id', item.id);
+         const { data: prod } = await supabase
+           .from('productos')
+           .select('stock_actual')
+           .eq('id', item.id)
+           .single();
+         if (prod != null) {
+           await supabase.from('productos')
+             .update({
+               stock_actual: (prod.stock_actual || 0) + parseInt(item.cantidad),
+               costo_compra: parseFloat(item.costo_unitario)
+             })
+             .eq('id', item.id);
+         }
       }
 
       // Caja
@@ -329,8 +337,9 @@ function ComprasSection() {
       if (status === 'pagada') {
         await supabase.from('movimientos_caja').insert([{
           user_id: user.tenant_id,
-          caja_sesion_id: currentSession?.id, // Link to Session
-          fecha: getDateFromInputAR(purchaseForm.fecha), 
+          empresa_id: user.empresa_id,
+          caja_sesion_id: currentSession?.id,
+          fecha: getDateFromInputAR(purchaseForm.fecha),
           tipo: 'egreso',
           categoria: 'Compra',
           concepto: `Compra a ${providerName} (${purchaseForm.forma_pago})`,

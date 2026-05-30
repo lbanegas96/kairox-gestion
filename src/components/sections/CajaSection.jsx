@@ -114,14 +114,12 @@ function CajaSection() {
   }, [user]);
 
   useEffect(() => {
-    if (user && user.tenant_id) {
-      if (activeTab === 'movimientos') {
-        loadMovimientos();
-      } else if (activeTab === 'resumen') {
-        loadFinancialSummary();
-      }
+    if (!user || !user.tenant_id || sessionLoading) return;
+    if (activeTab === 'movimientos') {
+      loadMovimientos();
     }
-  }, [user, filters, activeTab, reportPeriod, customDateRange, currentSession, isSessionOpen]); 
+    loadFinancialSummary();
+  }, [user, filters, activeTab, reportPeriod, customDateRange, currentSession, isSessionOpen, sessionLoading]);
 
   // Auto-close modals when session state changes successfully
   useEffect(() => {
@@ -602,9 +600,9 @@ function CajaSection() {
                         </td>
                         <td className="p-4 align-middle">
                           {m.tipo === 'ingreso' ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-green-500/10 text-green-600 border border-green-500/20 dark:bg-green-500/20 dark:text-green-400">IN</span>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-green-500/10 text-green-600 border border-green-500/20 dark:bg-green-500/20 dark:text-green-400">INGRESO</span>
                           ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-red-500/10 text-red-600 border border-red-500/20 dark:bg-red-500/20 dark:text-red-400">OUT</span>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-red-500/10 text-red-600 border border-red-500/20 dark:bg-red-500/20 dark:text-red-400">EGRESO</span>
                           )}
                         </td>
                         <td className="p-4 align-middle font-medium kairox-text-primary text-xs dark:text-slate-300">{m.categoria}</td>

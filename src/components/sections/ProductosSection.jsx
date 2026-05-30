@@ -388,9 +388,9 @@ const ProductosSection = () => {
   };
 
   // --- Filtered Views ---
-  const filteredProducts = products.filter(p => 
-    p.nombre.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    p.codigo_sku.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredProducts = products.filter(p =>
+    (p.nombre || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (p.codigo_sku || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // --- Render Components ---

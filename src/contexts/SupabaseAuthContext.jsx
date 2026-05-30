@@ -77,9 +77,9 @@ export const AuthProvider = ({ children }) => {
       // Important: Map tenant_id to empresa_id for backward compatibility with components using user.tenant_id
       const empresaId = profileData?.empresa_id;
       
-      // CRITICAL FIX: Ensure tenant_id is not undefined. Fallback to profile's tenant_id or user.id if necessary.
-      // This prevents "undefined" string errors in Supabase queries.
-      const tenantId = empresaId || profileData?.tenant_id || currentSession.user.id;
+      // CRITICAL FIX: tenant_id must always equal user.id (auth UUID).
+      // Tables have FK: tenant_id → profiles(id), so we can never use empresa_id here.
+      const tenantId = currentSession.user.id;
 
       const newUser = {
         ...currentSession.user,
