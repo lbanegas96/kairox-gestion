@@ -12,6 +12,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [needsPasswordReset, setNeedsPasswordReset] = useState(false);
   const mounted = useRef(true);
+  const isRecoveryFlow = useRef(false);
   
   const lastProcessedToken = useRef(null);
 
@@ -121,19 +122,20 @@ export const AuthProvider = ({ children }) => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
           if (!mounted.current) return;
           if (event === 'PASSWORD_RECOVERY') {
-            // Mostrar pantalla de reset sin loguear al usuario
+            isRecoveryFlow.current = true;
             setNeedsPasswordReset(true);
             setSession(currentSession);
             setLoading(false);
           } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-             if (needsPasswordReset) return; // No loguear si estamos en medio de un reset
-             await handleSession(currentSession);
+            if (isRecoveryFlow.current) return; // Bloquear login durante recovery
+            await handleSession(currentSession);
           } else if (event === 'SIGNED_OUT') {
-             setUser(null);
-             setSession(null);
-             setNeedsPasswordReset(false);
-             lastProcessedToken.current = null;
-             setLoading(false);
+            isRecoveryFlow.current = false;
+            setUser(null);
+            setSession(null);
+            setNeedsPasswordReset(false);
+            lastProcessedToken.current = null;
+            setLoading(false);
           }
         });
         authListener = subscription;

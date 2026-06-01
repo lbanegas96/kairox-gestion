@@ -33,8 +33,9 @@ function ResetPasswordPage({ onDone }) {
       toast({ title: 'Error al actualizar', description: error.message, variant: 'destructive' });
     } else {
       setDone(true);
+      // Cerrar sesión para que el usuario haga login con la nueva contraseña
+      await supabase.auth.signOut();
       setTimeout(() => {
-        // Limpiar el hash de la URL y volver al app
         window.history.replaceState(null, '', window.location.pathname);
         onDone();
       }, 2500);
