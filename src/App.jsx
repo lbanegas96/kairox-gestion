@@ -4,6 +4,7 @@ import AuthPage from '@/components/AuthPage';
 import Dashboard from '@/components/Dashboard';
 import ResetPasswordPage from '@/components/ResetPasswordPage';
 import { Toaster } from '@/components/ui/toaster';
+import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { CajaProvider } from '@/contexts/CajaContext';
@@ -12,6 +13,18 @@ function App() {
   const { user, loading, signOut, needsPasswordReset, setNeedsPasswordReset } = useAuth();
   const { theme } = useTheme();
   const [longLoad, setLongLoad] = useState(false);
+  const { toast } = useToast();
+
+  // Detectar error en el hash (ej: link vencido)
+  useEffect(() => {
+    const hash = window.location.hash.substring(1);
+    const params = Object.fromEntries(new URLSearchParams(hash));
+    if (params.error) {
+      const desc = params.error_description?.replace(/\+/g, ' ') || 'El link es inválido o ha expirado.';
+      toast({ title: 'Link inválido', description: desc, variant: 'destructive' });
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
 
   // Debug visualizer for long loading times
   useEffect(() => {
