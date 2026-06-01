@@ -10,6 +10,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [needsPasswordReset, setNeedsPasswordReset] = useState(false);
   const mounted = useRef(true);
   
   const lastProcessedToken = useRef(null);
@@ -119,11 +120,18 @@ export const AuthProvider = ({ children }) => {
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
           if (!mounted.current) return;
-          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+          if (event === 'PASSWORD_RECOVERY') {
+            // Mostrar pantalla de reset sin loguear al usuario
+            setNeedsPasswordReset(true);
+            setSession(currentSession);
+            setLoading(false);
+          } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+             if (needsPasswordReset) return; // No loguear si estamos en medio de un reset
              await handleSession(currentSession);
           } else if (event === 'SIGNED_OUT') {
              setUser(null);
              setSession(null);
+             setNeedsPasswordReset(false);
              lastProcessedToken.current = null;
              setLoading(false);
           }
@@ -195,12 +203,14 @@ export const AuthProvider = ({ children }) => {
     user,
     session,
     loading,
+    needsPasswordReset,
+    setNeedsPasswordReset,
     signUp,
     signIn,
     signOut,
     userRole: user?.role,
     getPermissions
-  }), [user, session, loading, signUp, signIn, signOut, getPermissions]);
+  }), [user, session, loading, needsPasswordReset, signUp, signIn, signOut, getPermissions]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

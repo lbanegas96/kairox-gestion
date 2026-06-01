@@ -8,24 +8,10 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { CajaProvider } from '@/contexts/CajaContext';
 
-function getHashParams() {
-  const hash = window.location.hash.substring(1);
-  return Object.fromEntries(new URLSearchParams(hash));
-}
-
 function App() {
-  const { user, loading, signOut } = useAuth();
+  const { user, loading, signOut, needsPasswordReset, setNeedsPasswordReset } = useAuth();
   const { theme } = useTheme();
   const [longLoad, setLongLoad] = useState(false);
-  const [authType, setAuthType] = useState(null); // 'recovery' | 'invite' | null
-
-  // Detectar tipo de link al cargar
-  useEffect(() => {
-    const params = getHashParams();
-    if (params.type === 'recovery' || params.type === 'invite') {
-      setAuthType(params.type);
-    }
-  }, []);
 
   // Debug visualizer for long loading times
   useEffect(() => {
@@ -62,8 +48,8 @@ function App() {
         <meta name="description" content="Sistema completo de gestión empresarial para productos, ventas, compras y caja" />
       </Helmet>
       <div className="min-h-screen kairox-bg-base transition-colors duration-300 text-slate-900 dark:text-slate-100">
-        {(authType === 'recovery' || authType === 'invite') ? (
-          <ResetPasswordPage onDone={() => setAuthType(null)} />
+        {needsPasswordReset ? (
+          <ResetPasswordPage onDone={() => setNeedsPasswordReset(false)} />
         ) : !user ? (
           <AuthPage />
         ) : (
