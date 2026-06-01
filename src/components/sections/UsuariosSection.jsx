@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Trash2, Shield, Mail, Edit, Loader2, Search, RefreshCw, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
+import { UserPlus, Trash2, Shield, Mail, Edit, Loader2, Search, RefreshCw, AlertCircle, CheckCircle2, XCircle, Clock, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -34,13 +34,11 @@ function UsuariosSection() {
   const [isPermissionsModalOpen, setIsPermissionsModalOpen] = useState(false);
   const [selectedUserForPermissions, setSelectedUserForPermissions] = useState(null);
 
-  // New User Form State
+  // New User Form State (invitation — no password needed)
   const [formData, setFormData] = useState({
     email: '',
     first_name: '',
     last_name: '',
-    password: '',
-    confirmPassword: '',
     role: 'staff',
     active: true,
     permissions: {
@@ -98,7 +96,7 @@ function UsuariosSection() {
 
         const { data, error } = await supabase
             .from('profiles')
-            .select('id, first_name, last_name, email, role, permissions, active, created_at')
+            .select('id, first_name, last_name, email, role, permissions, active, created_at, last_login_at')
             .eq('empresa_id', user.empresa_id)
             .order('created_at', { ascending: false });
         
@@ -117,8 +115,6 @@ function UsuariosSection() {
       email: '',
       first_name: '',
       last_name: '',
-      password: '',
-      confirmPassword: '',
       role: 'staff',
       active: true,
       permissions: {
@@ -146,26 +142,11 @@ function UsuariosSection() {
   };
 
   const validateCreateForm = async () => {
-    if (!formData.first_name.trim()) {
-      toast({ title: "Campo requerido", description: "El nombre es obligatorio.", variant: "destructive" });
-      return false;
-    }
-    
     if (!validateEmail(formData.email)) {
-      toast({ title: "Email inválido", description: "Por favor ingrese un correo electrónico válido.", variant: "destructive" });
+      toast({ title: "Email inválido", description: "Por favor ingresá un correo electrónico válido.", variant: "destructive" });
       return false;
     }
 
-    if (!validatePassword(formData.password)) {
-      toast({ title: "Contraseña insegura", description: "La contraseña debe tener al menos 6 caracteres.", variant: "destructive" });
-      return false;
-    }
-    
-    if (formData.password !== formData.confirmPassword) {
-      toast({ title: "Error de contraseña", description: "Las contraseñas no coinciden.", variant: "destructive" });
-      return false;
-    }
-    
     const exists = await checkEmailExists(formData.email);
     if (exists) {
       toast({ title: "Email duplicado", description: "El email ya está registrado en el sistema.", variant: "destructive" });
@@ -189,26 +170,25 @@ function UsuariosSection() {
 
     setProcessing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('create-user', {
+      const { data, error } = await supabase.functions.invoke('invite-user', {
         body: {
           email: formData.email,
-          password: formData.password,
           firstName: formData.first_name,
           lastName: formData.last_name,
-          role: formData.role, 
-          permissions: formData.permissions, 
-          tenantId: user.tenant_id,
+          role: formData.role,
+          permissions: formData.permissions,
           empresa_id: user.empresa_id,
-          active: formData.active
+          tenantId: user.tenant_id,
+          redirectTo: window.location.origin
         }
       });
 
       if (error) throw new Error(error.message || "Error de conexión con el servidor.");
       if (data && data.error) throw new Error(data.error);
 
-      toast({ 
-          title: "Usuario creado con éxito", 
-          description: `Se ha enviado un correo de confirmación a ${formData.email}`,
+      toast({
+          title: "¡Invitación enviada!",
+          description: `${formData.email} recibirá un email para crear su contraseña.`,
           className: "bg-green-600 text-white border-green-700"
       });
 
@@ -217,10 +197,10 @@ function UsuariosSection() {
 
     } catch (error) {
       console.error("Submit Error:", error);
-      toast({ 
-          title: "Error al crear usuario", 
-          description: error.message || "Ocurrió un error inesperado.", 
-          variant: "destructive" 
+      toast({
+          title: "Error al enviar invitación",
+          description: error.message || "Ocurrió un error inesperado.",
+          variant: "destructive"
       });
     } finally {
       setProcessing(false);
@@ -317,7 +297,7 @@ function UsuariosSection() {
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Actualizar
             </Button>
             <Button onClick={handleCreateUser} className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-md">
-                <UserPlus className="h-4 w-4 mr-2" /> Nuevo Usuario
+                <Send className="h-4 w-4 mr-2" /> Invitar Usuario
             </Button>
         </div>
       </div>
@@ -342,6 +322,7 @@ function UsuariosSection() {
                         <TableHead>Rol</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead>Permisos</TableHead>
+                        <TableHead><span className="flex items-center gap-1"><Clock className="h-3 w-3" />Último acceso</span></TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                 </TableHeader>
@@ -415,20 +396,26 @@ function UsuariosSection() {
                                             </Badge>
                                         )}
                                     </TableCell>
+                                    <TableCell className="text-xs text-slate-400">
+                                        {u.last_login_at
+                                          ? new Date(u.last_login_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+                                          : <span className="italic text-slate-500">Nunca</span>
+                                        }
+                                    </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex justify-end gap-2">
-                                            <Button 
-                                                variant="ghost" 
-                                                size="sm" 
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
                                                 onClick={() => openPermissionsModal(u)}
                                                 title="Gestionar Permisos"
                                             >
                                                 <Edit className="h-4 w-4 text-slate-500 hover:text-blue-600" />
                                             </Button>
                                             {u.id !== user.id && (
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="sm" 
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
                                                     onClick={() => handleDelete(u.id)}
                                                     className="hover:text-red-600 text-slate-400"
                                                     title="Eliminar Usuario"
@@ -462,23 +449,23 @@ function UsuariosSection() {
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent className="max-w-2xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-slate-900 dark:text-white">
-              Crear Nuevo Usuario
+            <DialogTitle className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Send className="h-5 w-5 text-blue-500" /> Invitar Usuario
             </DialogTitle>
             <DialogDescription className="dark:text-slate-400">
-              Ingresa los datos para registrar un nuevo usuario en el sistema.
+              El usuario recibirá un email con un link para crear su propia contraseña y acceder al sistema.
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
                 <div className="space-y-4">
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wide border-b border-slate-100 dark:border-slate-800 pb-2">Datos Personales</h4>
-                    
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wide border-b border-slate-100 dark:border-slate-800 pb-2">Datos del Invitado</h4>
+
                     <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-2">
                             <div className="space-y-1">
-                                <Label htmlFor="first_name">Nombre <span className="text-red-500">*</span></Label>
+                                <Label htmlFor="first_name">Nombre</Label>
                                 <Input id="first_name" name="first_name" value={formData.first_name} onChange={handleInputChange} placeholder="Ej. Juan" />
                             </div>
                             <div className="space-y-1">
@@ -489,17 +476,12 @@ function UsuariosSection() {
 
                         <div className="space-y-1">
                             <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
-                            <Input id="email" name="email" value={formData.email} onChange={handleInputChange} placeholder="usuario@ejemplo.com" />
+                            <Input id="email" name="email" type="email" value={formData.email} onChange={handleInputChange} placeholder="usuario@ejemplo.com" />
                         </div>
 
-                        <div className="space-y-1 pt-2">
-                            <Label htmlFor="password">Contraseña <span className="text-red-500">*</span></Label>
-                            <Input id="password" name="password" type="password" value={formData.password} onChange={handleInputChange} placeholder="Mínimo 6 caracteres" />
-                        </div>
-
-                        <div className="space-y-1">
-                            <Label htmlFor="confirmPassword">Confirmar Contraseña</Label>
-                            <Input id="confirmPassword" name="confirmPassword" type="password" value={formData.confirmPassword} onChange={handleInputChange} placeholder="Repetir contraseña" />
+                        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/30 rounded-lg text-sm text-blue-700 dark:text-blue-300 flex gap-2 items-start">
+                            <Mail className="h-4 w-4 shrink-0 mt-0.5" />
+                            <p>El usuario recibirá un email para crear su propia contraseña. No necesitás definirla vos.</p>
                         </div>
                     </div>
                 </div>
@@ -550,7 +532,10 @@ function UsuariosSection() {
           <DialogFooter className="border-t border-slate-100 dark:border-slate-800 pt-4 mt-2">
             <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)} disabled={processing}>Cancelar</Button>
             <Button onClick={submitCreateUser} disabled={processing} className="bg-blue-600 hover:bg-blue-700 text-white">
-              {processing ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Creando...</> : 'Crear Usuario'}
+              {processing
+                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Enviando...</>
+                : <><Send className="mr-2 h-4 w-4" /> Enviar Invitación</>
+              }
             </Button>
           </DialogFooter>
         </DialogContent>

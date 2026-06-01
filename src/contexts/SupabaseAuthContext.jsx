@@ -58,6 +58,9 @@ export const AuthProvider = ({ children }) => {
       lastProcessedToken.current = currentSession.access_token;
       setSession(currentSession);
 
+      // Registrar último acceso
+      supabase.from('profiles').update({ last_login_at: new Date().toISOString() }).eq('id', currentSession.user.id).then(() => {});
+
       const profileData = await fetchProfile(currentSession.user.id);
       
       if (profileData && profileData.active === false) {
