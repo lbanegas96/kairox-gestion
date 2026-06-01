@@ -23,8 +23,141 @@ import {
 } from "@/components/ui/select";
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { getNowAR } from '@/lib/dateUtils';
+import { getNowAR, formatDateTimeAR } from '@/lib/dateUtils';
 import { Textarea } from '@/components/ui/textarea';
+
+// Defined outside ProductosSection to keep a stable component identity across renders.
+// If defined inside, React creates a new function reference every render, causing
+// Radix UI portal (Select, Dialog) DOM nodes to unmount/remount and throw removeChild errors.
+const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categories, isSubmitting }) => (
+  <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+    <div className="space-y-2">
+      <Label htmlFor="nombre">Nombre del Producto *</Label>
+      <Input
+        id="nombre"
+        value={data.nombre}
+        onChange={e => setData({...data, nombre: e.target.value})}
+        required
+        className="bg-white dark:bg-slate-950"
+      />
+    </div>
+    <div className="space-y-2">
+      <Label htmlFor="sku">Código SKU *</Label>
+      <Input
+        id="sku"
+        value={data.codigo_sku}
+        onChange={e => setData({...data, codigo_sku: e.target.value})}
+        required
+        className="bg-white dark:bg-slate-950 font-mono"
+      />
+    </div>
+
+    <div className="space-y-2">
+      <Label htmlFor="categoria">Categoría</Label>
+      <div className="relative">
+        <Input
+          id="categoria"
+          value={data.categoria_nombre}
+          onChange={e => setData({...data, categoria_nombre: e.target.value})}
+          list="categories-list"
+          placeholder="Escribe o selecciona..."
+          className="bg-white dark:bg-slate-950"
+        />
+        <datalist id="categories-list">
+          {categories.map(c => <option key={c.id} value={c.nombre} />)}
+        </datalist>
+      </div>
+    </div>
+
+    <div className="space-y-2">
+      <Label htmlFor="proveedor">Proveedor</Label>
+      <Select
+        value={data.proveedor_id || "none"}
+        onValueChange={(val) => setData({...data, proveedor_id: val === "none" ? null : val})}
+      >
+        <SelectTrigger className="bg-white dark:bg-slate-950">
+          <SelectValue placeholder="Seleccionar proveedor" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">Sin proveedor</SelectItem>
+          {providers.map(p => (
+            <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+
+    <div className="space-y-2">
+      <Label htmlFor="costo">Costo Compra ($)</Label>
+      <Input
+        id="costo"
+        type="number"
+        step="0.01"
+        min="0"
+        value={data.costo_compra}
+        onChange={e => setData({...data, costo_compra: e.target.value})}
+        className="bg-white dark:bg-slate-950"
+      />
+    </div>
+
+    <div className="space-y-2">
+      <Label htmlFor="precio">Precio Venta ($) *</Label>
+      <Input
+        id="precio"
+        type="number"
+        step="0.01"
+        min="0"
+        value={data.precio_venta}
+        onChange={e => setData({...data, precio_venta: e.target.value})}
+        required
+        className="bg-white dark:bg-slate-950"
+      />
+    </div>
+
+    <div className="space-y-2">
+      <Label htmlFor="stock">Stock Actual</Label>
+      <Input
+        id="stock"
+        type="number"
+        value={data.stock_actual}
+        onChange={e => setData({...data, stock_actual: e.target.value})}
+        className="bg-white dark:bg-slate-950"
+      />
+    </div>
+
+    <div className="space-y-2">
+      <Label htmlFor="min_stock">Stock Mínimo</Label>
+      <Input
+        id="min_stock"
+        type="number"
+        value={data.stock_minimo}
+        onChange={e => setData({...data, stock_minimo: e.target.value})}
+        className="bg-white dark:bg-slate-950"
+      />
+    </div>
+
+    <div className="col-span-1 md:col-span-2 space-y-2">
+      <Label htmlFor="desc">Descripción</Label>
+      <Textarea
+        id="desc"
+        value={data.descripcion}
+        onChange={e => setData({...data, descripcion: e.target.value})}
+        className="bg-white dark:bg-slate-950 resize-none h-20"
+      />
+    </div>
+
+    <div className="col-span-1 md:col-span-2 pt-4 flex justify-end gap-2">
+      <Button
+        type="submit"
+        disabled={isSubmitting}
+        className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white"
+      >
+        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        {isEdit ? 'Guardar Cambios' : 'Crear Producto'}
+      </Button>
+    </div>
+  </form>
+);
 
 const ProductosSection = () => {
   const { user } = useAuth();
@@ -387,145 +520,28 @@ const ProductosSection = () => {
     }
   };
 
+  const handleDisableProduct = async (product) => {
+    if (!user?.empresa_id) return;
+    try {
+      const { error } = await supabase.from('productos')
+        .update({ activo: false })
+        .eq('id', product.id)
+        .eq('empresa_id', user.empresa_id);
+      if (error) throw error;
+      toast({ title: "Producto inhabilitado", description: `"${product.nombre}" fue quitado del inventario.` });
+      await fetchProducts();
+    } catch (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
   // --- Filtered Views ---
-  const filteredProducts = products.filter(p =>
-    (p.nombre || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (p.codigo_sku || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  // --- Render Components ---
-
-  const ProductForm = ({ data, setData, onSubmit, title, isEdit = false }) => (
-    <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-      <div className="space-y-2">
-        <Label htmlFor="nombre">Nombre del Producto *</Label>
-        <Input 
-          id="nombre" 
-          value={data.nombre} 
-          onChange={e => setData({...data, nombre: e.target.value})} 
-          required 
-          className="bg-white dark:bg-slate-950"
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="sku">Código SKU *</Label>
-        <Input 
-          id="sku" 
-          value={data.codigo_sku} 
-          onChange={e => setData({...data, codigo_sku: e.target.value})} 
-          required 
-          className="bg-white dark:bg-slate-950 font-mono"
-        />
-      </div>
-      
-      <div className="space-y-2">
-        <Label htmlFor="categoria">Categoría</Label>
-        <div className="relative">
-          <Input 
-            id="categoria" 
-            value={data.categoria_nombre} 
-            onChange={e => setData({...data, categoria_nombre: e.target.value})} 
-            list="categories-list"
-            placeholder="Escribe o selecciona..."
-            className="bg-white dark:bg-slate-950"
-          />
-          <datalist id="categories-list">
-            {categories.map(c => <option key={c.id} value={c.nombre} />)}
-          </datalist>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="proveedor">Proveedor</Label>
-        <Select 
-          value={data.proveedor_id || "none"} 
-          onValueChange={(val) => setData({...data, proveedor_id: val === "none" ? null : val})}
-        >
-          <SelectTrigger className="bg-white dark:bg-slate-950">
-            <SelectValue placeholder="Seleccionar proveedor" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Sin proveedor</SelectItem>
-            {providers.map(p => (
-              <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="costo">Costo Compra ($)</Label>
-        <Input 
-          id="costo" 
-          type="number" 
-          step="0.01" 
-          min="0"
-          value={data.costo_compra} 
-          onChange={e => setData({...data, costo_compra: e.target.value})} 
-          className="bg-white dark:bg-slate-950"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="precio">Precio Venta ($) *</Label>
-        <Input 
-          id="precio" 
-          type="number" 
-          step="0.01" 
-          min="0"
-          value={data.precio_venta} 
-          onChange={e => setData({...data, precio_venta: e.target.value})} 
-          required
-          className="bg-white dark:bg-slate-950"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="stock">Stock Actual</Label>
-        <Input 
-          id="stock" 
-          type="number" 
-          value={data.stock_actual} 
-          onChange={e => setData({...data, stock_actual: e.target.value})} 
-          className="bg-white dark:bg-slate-950"
-          // Disable stock editing in edit mode to force use of movement history
-          // However, for small businesses, direct edit is often requested. We'll allow it.
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="min_stock">Stock Mínimo</Label>
-        <Input 
-          id="min_stock" 
-          type="number" 
-          value={data.stock_minimo} 
-          onChange={e => setData({...data, stock_minimo: e.target.value})} 
-          className="bg-white dark:bg-slate-950"
-        />
-      </div>
-
-      <div className="col-span-1 md:col-span-2 space-y-2">
-        <Label htmlFor="desc">Descripción</Label>
-        <Textarea 
-          id="desc" 
-          value={data.descripcion} 
-          onChange={e => setData({...data, descripcion: e.target.value})} 
-          className="bg-white dark:bg-slate-950 resize-none h-20"
-        />
-      </div>
-
-      <div className="col-span-1 md:col-span-2 pt-4 flex justify-end gap-2">
-        <Button 
-          type="submit" 
-          disabled={isSubmitting} 
-          className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white"
-        >
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isEdit ? 'Guardar Cambios' : 'Crear Producto'}
-        </Button>
-      </div>
-    </form>
-  );
+  const filteredProducts = products
+    .filter(p => p.activo !== false)
+    .filter(p =>
+      (p.nombre || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.codigo_sku || '').toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -625,11 +641,13 @@ const ProductosSection = () => {
                  <DialogTitle>Nuevo Producto</DialogTitle>
                  <DialogDescription>Ingresa los detalles del nuevo producto para el inventario.</DialogDescription>
                </DialogHeader>
-               <ProductForm 
-                  data={newProduct} 
-                  setData={setNewProduct} 
-                  onSubmit={handleCreateProduct} 
-                  title="Crear Producto" 
+               <ProductForm
+                  data={newProduct}
+                  setData={setNewProduct}
+                  onSubmit={handleCreateProduct}
+                  providers={providers}
+                  categories={categories}
+                  isSubmitting={isSubmitting}
                />
             </DialogContent>
            </Dialog>
@@ -643,12 +661,14 @@ const ProductosSection = () => {
                <DialogTitle>Editar Producto</DialogTitle>
                <DialogDescription>Modifica los detalles del producto.</DialogDescription>
              </DialogHeader>
-             <ProductForm 
-                data={editProduct} 
-                setData={setEditProduct} 
-                onSubmit={handleUpdateProduct} 
-                title="Guardar Cambios" 
+             <ProductForm
+                data={editProduct}
+                setData={setEditProduct}
+                onSubmit={handleUpdateProduct}
                 isEdit={true}
+                providers={providers}
+                categories={categories}
+                isSubmitting={isSubmitting}
              />
           </DialogContent>
        </Dialog>
@@ -721,30 +741,39 @@ const ProductosSection = () => {
                                 </td>
                                 <td className="p-4 text-right">
                                   <div className="flex items-center justify-end gap-2">
-                                     <Button 
-                                       variant="ghost" 
-                                       size="sm" 
+                                     <Button
+                                       variant="ghost"
+                                       size="sm"
                                        className="h-8 w-8 p-0 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                                       onClick={() => { 
-                                         setEditProduct({ 
-                                           ...p, 
+                                       onClick={() => {
+                                         setEditProduct({
+                                           ...p,
                                            categoria_nombre: p.categories?.nombre || '',
                                            proveedor_id: p.proveedor_id || 'none'
-                                         }); 
-                                         setIsEditProductOpen(true); 
+                                         });
+                                         setIsEditProductOpen(true);
                                        }}
                                        title="Editar"
                                      >
                                        <Edit className="h-4 w-4"/>
                                      </Button>
-                                     <Button 
-                                       variant="ghost" 
-                                       size="sm" 
+                                     <Button
+                                       variant="ghost"
+                                       size="sm"
                                        className="h-8 w-8 p-0 text-slate-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
                                        onClick={() => { setSelectedProductForMov(p); setIsMovimientoOpen(true); }}
                                        title="Ajustar Stock"
                                      >
                                        <ArrowRightLeft className="h-4 w-4"/>
+                                     </Button>
+                                     <Button
+                                       variant="ghost"
+                                       size="sm"
+                                       className="h-8 w-8 p-0 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                       onClick={() => handleDisableProduct(p)}
+                                       title="Inhabilitar producto"
+                                     >
+                                       <Trash2 className="h-4 w-4"/>
                                      </Button>
                                   </div>
                                 </td>
@@ -789,7 +818,7 @@ const ProductosSection = () => {
                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {movements.map(m => (
                        <tr key={m.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                          <td className="p-4 text-slate-500">{new Date(m.fecha).toLocaleDateString()} {new Date(m.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                          <td className="p-4 text-slate-500">{formatDateTimeAR(m.fecha)}</td>
                           <td className="p-4 font-medium">{m.productos?.nombre}</td>
                           <td className="p-4">
                              <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase

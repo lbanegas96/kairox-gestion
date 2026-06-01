@@ -28,7 +28,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
-import { getNowAR, getTodayAR, getStartOfDayAR, getEndOfDayAR, getDateFromInputAR } from '@/lib/dateUtils';
+import { getNowAR, getTodayAR, getStartOfDayAR, getEndOfDayAR, getDateFromInputAR, formatDateTimeAR, formatDateAR } from '@/lib/dateUtils';
 import CajaCierre from '@/components/caja/CajaCierre';
 
 function CajaSection() {
@@ -508,7 +508,7 @@ function CajaSection() {
                 </span>
                 <span className="text-xs text-slate-400 flex items-center gap-1">
                   <Clock className="w-3 h-3" />
-                  {new Date(currentSession.apertura_fecha).toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})} hs
+                  {formatDateTimeAR(currentSession.apertura_fecha).split(' ')[1]} hs
                 </span>
               </div>
             )}
@@ -532,6 +532,58 @@ function CajaSection() {
           </div>
         </CardHeader>
       </Card>
+
+      {/* ── Indicadores de turno (BUG 2 FIX) ─────────────────────────────── */}
+      {isSessionOpen && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Ingresos del turno */}
+          <div className="kairox-bg-card border kairox-border rounded-xl p-5 dark:bg-slate-950 dark:border-slate-800 flex items-center gap-4">
+            <div className="p-3 rounded-lg bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 shrink-0">
+              <TrendingUp className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold tracking-wider">INGRESOS DEL TURNO</div>
+              <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                ${totals.ingresos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+              </div>
+              <div className="text-xs text-slate-400 mt-0.5">Desde apertura de caja</div>
+            </div>
+          </div>
+
+          {/* Egresos del turno */}
+          <div className="kairox-bg-card border kairox-border rounded-xl p-5 dark:bg-slate-950 dark:border-slate-800 flex items-center gap-4">
+            <div className="p-3 rounded-lg bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 shrink-0">
+              <TrendingDown className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold tracking-wider">EGRESOS DEL TURNO</div>
+              <div className="text-2xl font-bold font-mono text-red-600 dark:text-red-400">
+                ${totals.egresos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+              </div>
+              <div className="text-xs text-slate-400 mt-0.5">Desde apertura de caja</div>
+            </div>
+          </div>
+
+          {/* Saldo líquido */}
+          {(() => {
+            const saldo = (currentSession?.monto_inicial || 0) + totals.ingresos - totals.egresos;
+            return (
+              <div className="kairox-bg-card border kairox-border rounded-xl p-5 dark:bg-slate-950 dark:border-slate-800 flex items-center gap-4">
+                <div className={`p-3 rounded-lg shrink-0 ${saldo >= 0 ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400'}`}>
+                  <Scale className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold tracking-wider">SALDO LÍQUIDO DE CAJA</div>
+                  <div className={`text-2xl font-bold font-mono ${saldo >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                    ${saldo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                  </div>
+                  <div className="text-xs text-slate-400 mt-0.5">SI + Ingresos − Egresos</div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="bg-transparent p-0 gap-2 mb-6 w-full flex justify-start">
@@ -595,7 +647,7 @@ function CajaSection() {
                       <tr key={m.id} className="kairox-table-row group h-[60px] hover:bg-slate-50 dark:hover:bg-slate-800/50">
                         <td className="p-4 align-middle font-mono whitespace-nowrap">
                             <span className="font-bold kairox-text-primary dark:text-slate-200">
-                              {new Date(m.fecha).toLocaleDateString()} {new Date(m.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
+                              {formatDateTimeAR(m.fecha)}
                             </span>
                         </td>
                         <td className="p-4 align-middle">
@@ -750,7 +802,7 @@ function CajaSection() {
                        <tbody>
                           {summaryData.detailedMovements.map(m => (
                              <tr key={m.id} className="border-t border-slate-100 dark:border-slate-800">
-                                <td className="p-2 dark:text-slate-300">{new Date(m.fecha).toLocaleDateString()}</td>
+                                <td className="p-2 dark:text-slate-300">{formatDateAR(m.fecha)}</td>
                                 <td className="p-2 dark:text-slate-300">{m.concepto}</td>
                                 <td className={`p-2 text-right ${m.tipo === 'ingreso' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{formatAmount(m.monto, m.tipo)}</td>
                              </tr>

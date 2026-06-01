@@ -223,6 +223,34 @@ export const asientosService = {
 
     return Object.values(map).sort((a, b) => a.codigo.localeCompare(b.codigo));
   },
+
+  /** Libro Mayor: todos los movimientos confirmados de una cuenta con saldo acumulado */
+  async getLibroMayor(
+    empresaId: string,
+    cuentaId: string,
+    fechaDesde?: string,
+    fechaHasta?: string
+  ): Promise<any[]> {
+    let q = supabase
+      .from('asientos_items')
+      .select('*, asientos_contables!inner(numero, fecha, descripcion, origen, estado, empresa_id)')
+      .eq('cuenta_id', cuentaId)
+      .eq('asientos_contables.empresa_id', empresaId)
+      .eq('asientos_contables.estado', 'confirmado')
+      .order('asientos_contables(fecha)', { ascending: true });
+
+    if (fechaDesde) q = (q as any).gte('asientos_contables.fecha', fechaDesde);
+    if (fechaHasta) q = (q as any).lte('asientos_contables.fecha', fechaHasta);
+
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+
+    let saldo = 0;
+    return (data ?? []).map((row: any) => {
+      saldo += Number(row.debe) - Number(row.haber);
+      return { ...row, saldo_acumulado: saldo };
+    });
+  },
 };
 
 // ─── Query keys ───────────────────────────────────────────────────────────────
@@ -232,4 +260,90 @@ export const PLAN_CUENTAS_KEYS = {
   asientos: (empresaId: string, filters?: object) => ['asientos', empresaId, filters] as const,
   balance: (empresaId: string, desde?: string, hasta?: string) =>
     ['balance_comprobacion', empresaId, desde, hasta] as const,
+  libroMayor: (empresaId: string, cuentaId: string, desde?: string, hasta?: string) =>
+    ['libro_mayor', empresaId, cuentaId, desde, hasta] as const,
+};
+
+// ─── Asientos automáticos ────────────────────────────────────────────────────
+// Helper interno: busca cuenta por código, retorna null si no existe
+
+async function findCuentaByCodigo(empresaId: string, codigo: string): Promise<string | null> {
+  const { data } = await supabase
+    .from('plan_cuentas')
+    .select('id')
+    .eq('empresa_id', empresaId)
+    .eq('codigo', codigo)
+    .maybeSingle();
+  return (data as any)?.id ?? null;
+}
+
+export const asientosAutoService = {
+  /**
+   * Crea y confirma el asiento de una venta al contado.
+   *   DEBE  1.1.1 Caja y Bancos  (o 1.1.2 Cuentas a Cobrar si es crédito)
+   *   HABER 4.1   Ventas de Productos
+   * Si la empresa no tiene plan de cuentas, sale silenciosamente.
+   */
+  async crearAsientoVenta(
+    empresaId: string,
+    userId: string,
+    params: {
+      ventaId: string;
+      total: number;
+      fecha: string;       // YYYY-MM-DD
+      descripcion: string;
+      esCredito?: boolean;
+    }
+  ): Promise<void> {
+    const codigoCobro = params.esCredito ? '1.1.2' : '1.1.1';
+    const [cuentaCobro, cuentaVentas] = await Promise.all([
+      findCuentaByCodigo(empresaId, codigoCobro),
+      findCuentaByCodigo(empresaId, '4.1'),
+    ]);
+    if (!cuentaCobro || !cuentaVentas) return; // empresa sin plan de cuentas
+
+    const asiento = await asientosService.createAsiento(
+      empresaId, userId,
+      { fecha: params.fecha, descripcion: params.descripcion, origen: 'venta', origen_id: params.ventaId },
+      [
+        { cuenta_id: cuentaCobro,  debe: params.total, haber: 0,            descripcion: 'Cobro por venta' },
+        { cuenta_id: cuentaVentas, debe: 0,            haber: params.total, descripcion: 'Ingreso por venta' },
+      ]
+    );
+    await asientosService.confirmarAsiento(asiento.id);
+  },
+
+  /**
+   * Crea y confirma el asiento de una compra.
+   *   DEBE  1.1.3 Mercaderías / Inventario
+   *   HABER 1.1.1 Caja y Bancos  (o 2.1.1 Cuentas a Pagar si es crédito)
+   */
+  async crearAsientoCompra(
+    empresaId: string,
+    userId: string,
+    params: {
+      compraId: string;
+      total: number;
+      fecha: string;       // YYYY-MM-DD
+      descripcion: string;
+      esCredito?: boolean;
+    }
+  ): Promise<void> {
+    const codigoPago = params.esCredito ? '2.1.1' : '1.1.1';
+    const [cuentaInventario, cuentaPago] = await Promise.all([
+      findCuentaByCodigo(empresaId, '1.1.3'),
+      findCuentaByCodigo(empresaId, codigoPago),
+    ]);
+    if (!cuentaInventario || !cuentaPago) return;
+
+    const asiento = await asientosService.createAsiento(
+      empresaId, userId,
+      { fecha: params.fecha, descripcion: params.descripcion, origen: 'compra', origen_id: params.compraId },
+      [
+        { cuenta_id: cuentaInventario, debe: params.total, haber: 0,            descripcion: 'Compra de mercadería' },
+        { cuenta_id: cuentaPago,       debe: 0,            haber: params.total, descripcion: 'Pago por compra' },
+      ]
+    );
+    await asientosService.confirmarAsiento(asiento.id);
+  },
 };

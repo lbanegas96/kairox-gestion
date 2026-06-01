@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-05-30
+**Última actualización:** 2026-06-01
 **Branch activo:** `claude/suspicious-panini-6cb9e5`
 
 ---
@@ -22,7 +22,7 @@
 | Tarea | Archivos clave |
 |---|---|
 | TanStack Query instalado y configurado | `src/main.jsx`, `src/lib/queryClient.ts` |
-| Capa de servicios con paginación | `src/services/*.ts` (8 servicios) |
+| Capa de servicios con paginación | `src/services/*.ts` (9 servicios) |
 | Tabla de auditoría (audit_log) | `migrations/001_audit_log.sql` |
 | TypeScript: tsconfig + tipos de dominio | `tsconfig.json`, `src/types/index.ts` |
 | Exportación Excel (xlsx) | `src/lib/excelUtils.js` |
@@ -46,11 +46,14 @@
 | Dashboard mejorado (8 KPIs + 2 gráficos) | ✅ Completo | `src/components/sections/DashboardSection.jsx` |
 | Notificaciones inteligentes | ✅ Completo | `src/hooks/useNotifications.js`, Header actualizado |
 
-### 🔄 FASE 4 — Módulos contables (EN CURSO)
+### ✅ FASE 4 — Módulos contables (COMPLETA)
 
 | Tarea | Estado | Archivos clave |
 |---|---|---|
 | Plan de Cuentas / Contabilidad | ✅ Completo | `src/components/sections/PlanCuentasSection.jsx`, `src/services/planCuentasService.ts`, `migrations/004_plan_cuentas.sql` |
+| Libro Mayor por cuenta | ✅ Completo | `PlanCuentasSection.jsx` (tab 4), `planCuentasService.ts` (`getLibroMayor`) |
+| Asientos automáticos (Ventas) | ✅ Completo | `NuevaVentaModal.jsx`, `planCuentasService.ts` (`asientosAutoService`) |
+| Asientos automáticos (Compras) | ✅ Completo | `ComprasSection.jsx`, `planCuentasService.ts` (`asientosAutoService`) |
 | Multi-almacén | ⏸️ Diferido | — |
 | Lotes y vencimientos | ⏸️ Diferido | — |
 
@@ -68,46 +71,56 @@ Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Ua
 | Staff bloqueado en Compras (user.id → user.tenant_id) | `ComprasSection.jsx` | Corregido |
 | Logo: upload a bucket 'public' inexistente | `ConfiguracionSection.jsx` | Reemplazado por Base64 en DB |
 | Closure stale en ConfigContext.fetchConfig() | `ConfigContext.jsx` | `setConfig(prev => ...)` |
+| Error `removeChild` en Radix UI Dialog | `ProductosSection.jsx` | `ProductForm` movido fuera del componente |
+| Soft delete de productos | `ProductosSection.jsx` | Botón tacho → `activo=false`, lista filtra `activo≠false` |
+| **Timezone desfasado en movimientos** | `dateUtils.js`, `ProductosSection.jsx`, `CajaSection.jsx`, `MovimientosUala.jsx` | `getNowAR()` ahora resta 3h del epoch UTC sin depender del browser TZ; display usa UTC parts directamente |
+| **"Gastos del Mes" incluía apertura de caja** | `dashboardService.ts` | `.neq('categoria','Apertura')` en query `gastosMes` y `getFlujoCajaMensual` |
+| **Indicadores de turno mostraban $0** | `CajaSection.jsx` | Tarjetas INGRESOS/EGRESOS/SALDO LÍQUIDO DEL TURNO agregadas al JSX |
+| **Fecha/hora de movimientos usaba `created_at`** | `CajaSection.jsx` | Display unificado con `formatDateTimeAR(m.fecha)` |
+| **Movimiento fantasma Ualá ($2.317.362)** | `movimientos_caja` en Supabase | Eliminado manualmente. Causado por bug en `UalaSync.gs` que acumuló montos del período en lugar del monto individual. El registro legítimo ($5.000, mismo concepto) quedó intacto. |
 
 ---
 
-## Arquitectura de archivos nuevos creados
+## Archivos clave modificados (últimas dos sesiones)
 
 ```
 src/
-├── types/
-│   └── index.ts              ← Tipos de dominio: 25+ interfaces (incluye PlanCuenta, AsientoContable, AsientoItem)
-├── services/
-│   ├── index.ts              ← Barrel export de todos los servicios
-│   ├── productosService.ts
-│   ├── ventasService.ts
-│   ├── clientesService.ts
-│   ├── comprasService.ts
-│   ├── cajaService.ts
-│   ├── dashboardService.ts
-│   ├── cotizacionesService.ts
-│   ├── ordenesCompraService.ts
-│   └── planCuentasService.ts ← Plan de cuentas + asientos + balance de comprobación
 ├── lib/
-│   ├── queryClient.ts
-│   └── excelUtils.js
-├── hooks/
-│   └── useNotifications.js   ← Stock bajo + deuda vencida + OC pendientes
-└── components/
-    ├── CommandPalette.jsx
-    ├── ui/
-    │   └── DataTable.jsx     ← Tabla universal (sort, búsqueda, paginación, Excel)
-    └── sections/
-        ├── CotizacionesSection.jsx
-        ├── OrdenesCompraSection.jsx
-        └── PlanCuentasSection.jsx  ← Plan de cuentas (árbol) + Asientos + Balance
-
-migrations/
-├── 001_audit_log.sql
-├── 002_cotizaciones.sql
-├── 003_ordenes_compra.sql
-└── 004_plan_cuentas.sql      ← plan_cuentas + asientos_contables + asientos_items + seed estándar
+│   └── dateUtils.js          ← Reescrito: getNowAR correcto + formatDateAR/formatDateTimeAR
+├── services/
+│   └── planCuentasService.ts ← +getLibroMayor (en asientosService) +asientosAutoService
+│                                  +PLAN_CUENTAS_KEYS.libroMayor
+├── components/
+│   ├── sections/
+│   │   ├── CajaSection.jsx   ← +3 tarjetas indicadoras de turno, fix fechas, fix apertura hora
+│   │   ├── ProductosSection.jsx ← ProductForm movido fuera, +handleDisableProduct, fix fechas
+│   │   ├── MovimientosUala.jsx ← formatFecha usa getUTC* (TZ-safe)
+│   │   ├── PlanCuentasSection.jsx ← +TabLibroMayor, +tab "Libro Mayor"
+│   │   └── ComprasSection.jsx ← +asiento automático al registrar compra
+│   └── ventas/
+│       └── NuevaVentaModal.jsx ← +asiento automático al registrar venta
 ```
+
+---
+
+## Plan de Cuentas — Detalle completo del módulo
+
+### Funcionalidades existentes
+- **Tab Árbol de Cuentas:** vista jerárquica expandible, búsqueda en tiempo real, editar nombre/estado, agregar nuevas cuentas
+- **Tab Asientos Contables:** libro diario paginado, crear asiento (validación de cuadre), confirmar/anular, ver detalle con líneas
+- **Tab Balance de Comprobación:** totales debe/haber por cuenta para asientos confirmados, filtrable por fecha
+
+### Funcionalidades nuevas (Fase 4 completa)
+- **Tab Libro Mayor:** seleccionar cuenta → ver todos sus movimientos confirmados con saldo acumulado progresivo (D/H), filtros por fecha
+- **Asientos automáticos:** al confirmar una venta → asiento `Caja/Clientes DEBE | Ventas HABER` (auto-confirmado); al registrar una compra → asiento `Inventario DEBE | Caja/Proveedores HABER` (auto-confirmado). Silencioso si la empresa no tiene plan de cuentas configurado.
+
+### Schema SQL (migration 004)
+- `plan_cuentas` — árbol de cuentas con RLS por empresa
+- `asientos_contables` — libro diario con estados (borrador/confirmado/anulado), campos `origen` y `origen_id`
+- `asientos_items` — líneas de cada asiento
+- `seed_plan_cuentas(empresa_id)` — inicializa plan estándar para PyME argentina (39 cuentas en 5 grupos)
+- `next_numero_asiento(empresa_id)` — numeración correlativa AS-000001
+- Trigger que recalcula `saldo_actual` en `plan_cuentas` al confirmar/anular asientos
 
 ---
 
@@ -116,39 +129,34 @@ migrations/
 | Módulo | Sección | Estado |
 |---|---|---|
 | Dashboard | `DashboardSection.jsx` | ✅ 8 KPIs + 2 gráficos |
-| Ventas (POS) | `VentasSection.jsx` | ✅ Funcional |
-| Inventario | `ProductosSection.jsx` | ✅ Funcional |
-| Compras | `ComprasSection.jsx` | ✅ Funcional |
+| Ventas (POS) | `VentasSection.jsx` + `NuevaVentaModal.jsx` | ✅ Funcional + asiento auto |
+| Inventario | `ProductosSection.jsx` | ✅ Funcional + soft delete |
+| Compras | `ComprasSection.jsx` | ✅ Funcional + asiento auto |
 | Cotizaciones | `CotizacionesSection.jsx` | ✅ Funcional |
 | Órdenes de Compra | `OrdenesCompraSection.jsx` | ✅ Funcional |
-| Caja | `CajaSection.jsx` | ✅ Funcional |
+| Caja | `CajaSection.jsx` | ✅ Funcional + indicadores de turno corregidos |
 | Clientes | `ClientesSection.jsx` | ✅ Funcional |
 | Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Funcional |
-| **Contabilidad** | `PlanCuentasSection.jsx` | ✅ **Nuevo — Fase 4** |
+| **Contabilidad** | `PlanCuentasSection.jsx` | ✅ **Fase 4 completa** |
 | Reportes | `ReportesSection.jsx` | ✅ Funcional |
 | Usuarios | `UsuariosSection.jsx` | ✅ Funcional |
 | Configuración | `ConfiguracionSection.jsx` | ✅ Funcional |
+| Movimientos Ualá | `MovimientosUala.jsx` | ✅ Funcional + fix timezone |
 
 ---
 
-## Plan de Cuentas — Detalle del módulo nuevo
+## Timezone — Diseño de la solución
 
-### Funcionalidades
-- **Tab Árbol de Cuentas:** vista jerárquica expandible, búsqueda en tiempo real, editar nombre/estado, agregar nuevas cuentas
-- **Tab Asientos Contables:** libro diario paginado, crear asiento (validación de cuadre), confirmar/anular, ver detalle con líneas
-- **Tab Balance de Comprobación:** totales debe/haber por cuenta para asientos confirmados, filtrable por fecha
+**Esquema:** "Argentina-local-as-UTC" — los timestamps se almacenan con la hora local argentina representada como UTC.  
+Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 
-### Schema SQL (migration 004)
-- `plan_cuentas` — árbol de cuentas con RLS por empresa
-- `asientos_contables` — libro diario con estados (borrador/confirmado/anulado)
-- `asientos_items` — líneas de cada asiento
-- `seed_plan_cuentas(empresa_id)` — inicializa plan estándar para PyME argentina (39 cuentas en 5 grupos)
-- `next_numero_asiento(empresa_id)` — numeración correlativa AS-000001
-- Trigger que recalcula `saldo_actual` en `plan_cuentas` al confirmar/anular asientos
+**Regla de display:** SIEMPRE leer los campos `getUTC*()` del objeto Date, nunca `toLocaleDateString()` sin timezone.
 
-### Próximos pasos sugeridos para Fase 4
-1. **Asientos automáticos** — generar asiento al confirmar una Venta, Compra u OC (vincula ERP con contabilidad)
-2. **Libro Mayor** por cuenta — ver todos los movimientos de una cuenta específica
+**Helpers en `dateUtils.js`:**
+- `getNowAR()` → `new Date(Date.now() - 3*3600000)` (TZ-safe, no depende del browser)
+- `formatDateAR(iso)` → `dd/mm/yyyy` usando UTC parts
+- `formatDateTimeAR(iso)` → `dd/mm/yyyy HH:MM` usando UTC parts
+- `getTodayAR()` → `YYYY-MM-DD` para hoy en Argentina
 
 ---
 
@@ -168,3 +176,25 @@ migrations/
 - **Multi-tenancy:** RLS via `get_my_empresa_id()` + columna `empresa_id` en todas las tablas
 - **Logo:** almacenado como Base64 en tabla `configuracion` (clave `company_logo` / `logo_base64`)
 - **Roles:** `admin` (acceso total) | `staff` (permisos granulares en `profiles.permissions` JSONB)
+
+---
+
+## Pendientes inmediatos (retomar mañana)
+
+| Prioridad | Tarea | Detalle |
+|---|---|---|
+| 🔴 Alta | **Indicadores de Caja siguen rompiéndose** | Los indicadores INGRESOS / EGRESOS / SALDO del turno fallan intermitentemente. Causa raíz aún no identificada. Retomar investigación. |
+| 🟡 Media | **Borrar 4 comprobantes de prueba** | Query lista. IDs: `3ef2fa9b`, `8ffcc081`, `e2f320c2`, `74173b27`. Primero borrar `comprobante_items` y luego `comprobantes`. |
+| 🟡 Media | **Bug en UalaSync.gs** | Revisar script Google Apps Script para evitar que vuelva a importar montos acumulados en lugar del monto individual del movimiento. Agregar control de duplicados por monto + fecha + concepto. |
+
+---
+
+## Próximos pasos sugeridos
+
+| Prioridad | Tarea |
+|---|---|
+| Media | Asientos automáticos para **Órdenes de Compra** confirmadas |
+| Baja | Facturación electrónica AFIP |
+| Baja | Multi-almacén |
+| Baja | Lotes y vencimientos |
+| Diferida | Fase 5: Email, WhatsApp, API REST, backups |

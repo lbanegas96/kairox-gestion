@@ -13,6 +13,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { getTodayAR, getDateFromInputAR } from '@/lib/dateUtils';
+import { asientosAutoService } from '@/services/planCuentasService';
 import CompraDetailModal from '../ventas/CompraDetailModal';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 
@@ -348,6 +349,19 @@ function ComprasSection() {
           is_automatic: true
         }]);
       }
+
+      // Asiento contable automático (no bloquea el flujo de compras)
+      asientosAutoService.crearAsientoCompra(
+        user.empresa_id,
+        user.id,
+        {
+          compraId: newPurchase.id,
+          total: totalCompra,
+          fecha: purchaseForm.fecha || getTodayAR(),
+          descripcion: `Compra a ${providerName} - Fac. ${purchaseForm.numero_factura || 'S/N'}`,
+          esCredito: purchaseForm.forma_pago === 'Cuenta Corriente',
+        }
+      ).catch(e => console.warn('[Contabilidad] Asiento compra (no crítico):', e.message));
 
       toast({
         title: "¡Compra registrada correctamente! Stock actualizado.",

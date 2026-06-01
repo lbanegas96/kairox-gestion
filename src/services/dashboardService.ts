@@ -14,7 +14,8 @@ export const dashboardService = {
       supabase.from('movimientos_caja').select('monto').eq('user_id', empresaId).eq('tipo', 'ingreso').eq('categoria', 'Venta').gte('fecha', todayStart).lte('fecha', todayEnd),
       supabase.from('movimientos_caja').select('monto').eq('user_id', empresaId).eq('tipo', 'ingreso').eq('categoria', 'Venta').gte('fecha', getStartOfDayAR(ayer)).lte('fecha', getEndOfDayAR(ayer)),
       supabase.from('movimientos_caja').select('monto').eq('user_id', empresaId).eq('tipo', 'ingreso').gte('fecha', mesStart).lte('fecha', todayEnd),
-      supabase.from('movimientos_caja').select('monto').eq('user_id', empresaId).eq('tipo', 'egreso').gte('fecha', mesStart).lte('fecha', todayEnd),
+      // BUG 1 FIX: exclude 'Apertura' category — apertura de caja no es un gasto real
+      supabase.from('movimientos_caja').select('monto').eq('user_id', empresaId).eq('tipo', 'egreso').neq('categoria', 'Apertura').gte('fecha', mesStart).lte('fecha', todayEnd),
       supabase.from('clientes').select('saldo_actual').eq('user_id', empresaId).gt('saldo_actual', 0),
       supabase.from('productos').select('id, nombre, stock_actual, stock_minimo, unidad_medida').eq('user_id', empresaId).eq('activo', true),
     ]);
@@ -99,14 +100,15 @@ export const dashboardService = {
 
       const { data } = await supabase
         .from('movimientos_caja')
-        .select('tipo, monto')
+        .select('tipo, monto, categoria')
         .eq('user_id', empresaId)
         .gte('fecha', start)
         .lte('fecha', end);
 
-      type Row = { tipo: string; monto: number };
+      type Row = { tipo: string; monto: number; categoria: string };
       const ingresos = (data ?? []).filter((m: Row) => m.tipo === 'ingreso').reduce((s: number, m: Row) => s + Number(m.monto), 0);
-      const egresos = (data ?? []).filter((m: Row) => m.tipo === 'egreso').reduce((s: number, m: Row) => s + Number(m.monto), 0);
+      // BUG 1 FIX: exclude Apertura de caja from egresos in cash flow chart
+      const egresos = (data ?? []).filter((m: Row) => m.tipo === 'egreso' && m.categoria !== 'Apertura').reduce((s: number, m: Row) => s + Number(m.monto), 0);
       result.push({ label, ingresos, egresos, balance: ingresos - egresos });
     }
 

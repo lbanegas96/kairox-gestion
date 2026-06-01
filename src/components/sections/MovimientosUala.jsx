@@ -23,11 +23,13 @@ function formatARS(amount) {
   }).format(amount);
 }
 
+// BUG 3 FIX: timestamps stored as "Argentina-local-as-UTC" — always read UTC parts directly
+// so the displayed time matches Argentina local time regardless of browser timezone.
 function formatFecha(isoString) {
   if (!isoString) return '—';
   const d = new Date(isoString);
   const pad = (n) => String(n).padStart(2, '0');
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
 }
 
 // ── Componente principal ──────────────────────────────────────────────────────

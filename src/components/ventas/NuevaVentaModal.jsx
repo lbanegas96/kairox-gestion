@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { getNowAR, getTodayAR } from '@/lib/dateUtils';
+import { asientosAutoService } from '@/services/planCuentasService';
 import ComprobantePrintModal from './ComprobantePrintModal';
 
 const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
@@ -221,6 +222,19 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
               fecha: now
           }]);
       }
+
+      // Asiento contable automático (no bloquea el flujo de ventas)
+      asientosAutoService.crearAsientoVenta(
+        user.empresa_id,
+        user.id,
+        {
+          ventaId: comprobante.id,
+          total,
+          fecha: getTodayAR(),
+          descripcion: `Venta #${saleNumber}`,
+          esCredito: paymentMethod === 'Cuenta Corriente',
+        }
+      ).catch(e => console.warn('[Contabilidad] Asiento venta (no crítico):', e.message));
 
       toast({ title: "¡Venta Exitosa!", description: `Comprobante ${saleNumber} generado.` });
       setLastComprobante(comprobante);
