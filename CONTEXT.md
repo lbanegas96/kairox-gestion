@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-01 (sesión tarde)
+**Última actualización:** 2026-06-02 (sesión noche)
 **Branch activo:** `claude/suspicious-panini-6cb9e5`
 
 ---
@@ -86,6 +86,11 @@ Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Ua
 | **Tablas faltantes en DB** | Supabase SQL | Aplicadas migraciones 002 (cotizaciones), 003 (ordenes_compra), 004 (plan_cuentas). |
 | **`cuenta_corriente_movimientos.created_at` does not exist** | Supabase SQL | `ALTER TABLE ... ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ`. |
 | **Warning Radix UI: Missing Description en Dialog** | `ClientesSection.jsx` | Agregado `<DialogDescription>` en modal "Nuevo Cliente". |
+| **Warnings Radix UI en 8+ componentes** | `CotizacionesSection`, `PlanCuentasSection`, `ReportesSection`, `command.jsx`, `CajaSection`, `OrdenesCompraSection`, `ClientesSection` | Búsqueda exhaustiva: todos los `DialogContent` sin `DialogDescription` corregidos. `ReportesSection` y `CommandDialog` usan `sr-only`. |
+| **`seed_plan_cuentas` RLS 403 Forbidden** | Supabase función + `PlanCuentasSection.jsx` | Función redefinida con `SECURITY DEFINER`. Fix en componente: `empresaId = user?.empresa_id` (antes usaba `tenant_id` = auth UUID incorrecto). Filas mal insertadas limpiadas manualmente. |
+| **Plan de Cuentas no mostraba cuentas tras inicializar** | `PlanCuentasSection.jsx` | `empresaId = user?.tenant_id \|\| user?.empresa_id` → `user?.empresa_id`. `tenant_id` es el auth UUID, no el empresa UUID. |
+| **RLS `profiles` bloqueaba vista de equipo** | Supabase SQL | Política `profiles_select` reemplazada: `id = auth.uid() OR empresa_id = get_my_empresa_id()` para que admin vea todo el equipo. |
+| **Creación de usuarios fallaba (CORS + función inexistente)** | `UsuariosSection.jsx` + Supabase | Flujo cambiado de `invite-user` a `create-user`. Nueva Edge Function `create-user` deployada con CORS + `auth.admin.createUser()` + insert en `profiles`. Campo contraseña con show/hide en el form. |
 
 ---
 
@@ -203,8 +208,9 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 | 🔴 Alta | **Indicadores de Caja siguen rompiéndose** | Los indicadores INGRESOS / EGRESOS / SALDO del turno fallan intermitentemente. Causa raíz aún no identificada. |
 | 🟡 Media | **Borrar 4 comprobantes de prueba** | Query lista. IDs: `3ef2fa9b`, `8ffcc081`, `e2f320c2`, `74173b27`. Primero borrar `comprobante_items` y luego `comprobantes`. |
 | 🟡 Media | **Bug en UalaSync.gs** | Agregar control de duplicados por monto + fecha + concepto para evitar imports incorrectos. |
-| 🟢 Hecho | **Auth & Usuarios** | Reset contraseña ✅, invitación por email ✅, SMTP Resend ✅, último acceso ✅ |
-| 🟢 Hecho | **Errores de consola** | Toaster dismiss ✅, CotizacionesSection key ✅, ProductForm label ✅, migraciones DB ✅, created_at cuenta corriente ✅ |
+| 🟢 Hecho | **Auth & Usuarios** | Reset contraseña ✅, creación directa con contraseña ✅, SMTP Resend ✅, último acceso ✅ |
+| 🟢 Hecho | **Errores de consola** | Toaster dismiss ✅, CotizacionesSection key ✅, ProductForm label ✅, migraciones DB ✅, created_at cuenta corriente ✅, **todos los warnings Radix UI DialogDescription ✅** |
+| 🟢 Hecho | **Contabilidad** | Plan de Cuentas inicializa correctamente ✅, RLS y empresa_id corregidos ✅ |
 
 ---
 
