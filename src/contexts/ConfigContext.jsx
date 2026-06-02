@@ -43,8 +43,10 @@ export const ConfigProvider = ({ children }) => {
     setConfig(prev => ({ ...prev, ...newSettings }));
 
     try {
+      const { data: empresaId, error: rpcError } = await supabase.rpc('get_my_empresa_id');
+      if (rpcError || !empresaId) throw rpcError || new Error('No se pudo obtener empresa_id');
+
       for (const [key, value] of Object.entries(newSettings)) {
-        // Verificar si la clave ya existe (RLS filtra por empresa automáticamente)
         const { data: existing } = await supabase
           .from('configuracion')
           .select('clave')
@@ -60,7 +62,7 @@ export const ConfigProvider = ({ children }) => {
         } else {
           const { error } = await supabase
             .from('configuracion')
-            .insert({ clave: key, valor: value });
+            .insert({ empresa_id: empresaId, clave: key, valor: value });
           if (error) throw error;
         }
       }

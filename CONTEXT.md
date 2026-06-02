@@ -1,6 +1,6 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-02 (sesión noche)
-**Branch activo:** `claude/suspicious-panini-6cb9e5`
+**Última actualización:** 2026-06-02 (sesión SaaS multi-tenant)
+**Branch activo:** `master`
 
 ---
 
@@ -86,6 +86,8 @@ Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Ua
 | **Tablas faltantes en DB** | Supabase SQL | Aplicadas migraciones 002 (cotizaciones), 003 (ordenes_compra), 004 (plan_cuentas). |
 | **`cuenta_corriente_movimientos.created_at` does not exist** | Supabase SQL | `ALTER TABLE ... ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ`. |
 | **Warning Radix UI: Missing Description en Dialog** | `ClientesSection.jsx` | Agregado `<DialogDescription>` en modal "Nuevo Cliente". |
+| **403 RLS en tabla configuracion al guardar logo** | `ConfigContext.jsx` | `updateConfig` ahora llama a `get_my_empresa_id()` RPC e incluye `empresa_id` en INSERT. Migration 005 agrega `UNIQUE(empresa_id,clave)` y políticas RLS correctas. |
+| **Nuevo usuario sin empresa_id quedaba en dashboard vacío** | `App.jsx`, `OnboardingPage.jsx`, `SupabaseAuthContext.jsx` | Flujo SaaS: detectar `!user.empresa_id` → mostrar OnboardingPage → RPC `create_tenant()` crea empresa + perfil + config inicial. |
 | **Warnings Radix UI en 8+ componentes** | `CotizacionesSection`, `PlanCuentasSection`, `ReportesSection`, `command.jsx`, `CajaSection`, `OrdenesCompraSection`, `ClientesSection` | Búsqueda exhaustiva: todos los `DialogContent` sin `DialogDescription` corregidos. `ReportesSection` y `CommandDialog` usan `sr-only`. |
 | **`seed_plan_cuentas` RLS 403 Forbidden** | Supabase función + `PlanCuentasSection.jsx` | Función redefinida con `SECURITY DEFINER`. Fix en componente: `empresaId = user?.empresa_id` (antes usaba `tenant_id` = auth UUID incorrecto). Filas mal insertadas limpiadas manualmente. |
 | **Plan de Cuentas no mostraba cuentas tras inicializar** | `PlanCuentasSection.jsx` | `empresaId = user?.tenant_id \|\| user?.empresa_id` → `user?.empresa_id`. `tenant_id` es el auth UUID, no el empresa UUID. |
@@ -106,6 +108,7 @@ src/
 ├── components/
 │   ├── ResetPasswordPage.jsx     ← NUEVO: pantalla de reset/invite con confirmación x2
 │   ├── PasswordRecoveryModal.jsx ← Modal "Olvidé mi contraseña" desde login
+│   ├── OnboardingPage.jsx        ← NUEVO: pantalla SaaS para crear empresa en primer login
 │   ├── sections/
 │   │   ├── CajaSection.jsx       ← +3 tarjetas indicadoras de turno, fix fechas
 │   │   ├── ProductosSection.jsx  ← ProductForm movido fuera, soft delete, fix fechas
@@ -116,8 +119,9 @@ src/
 │   └── ventas/
 │       └── NuevaVentaModal.jsx   ← +asiento automático al registrar venta
 ├── contexts/
-│   └── SupabaseAuthContext.jsx   ← +needsPasswordReset, +isRecoveryFlow ref, +last_login_at
-└── App.jsx                       ← detección recovery flow, toast link vencido
+│   ├── SupabaseAuthContext.jsx   ← +needsPasswordReset, +isRecoveryFlow ref, +last_login_at, +refreshUser
+│   └── ConfigContext.jsx         ← updateConfig incluye empresa_id vía get_my_empresa_id()
+└── App.jsx                       ← +OnboardingPage cuando !user.empresa_id
 ```
 
 ---
@@ -206,12 +210,40 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 
 | Prioridad | Tarea | Detalle |
 |---|---|---|
+| 🟢 Hecho | **SaaS multi-tenant** | Flujo completo: registro → onboarding → empresa aislada ✅ |
+| 🟢 Hecho | **Fix logo / configuracion RLS** | 403 resuelto con empresa_id en upsert ✅ |
 | 🟢 Hecho | **Indicadores de Caja** | Resuelto ✅ |
-| 🟢 Hecho | **Borrar 4 comprobantes de prueba** | Resuelto ✅ |
-| 🟢 Hecho | **Bug en UalaSync.gs** | Resuelto ✅ |
-| 🟢 Hecho | **Auth & Usuarios** | Reset contraseña ✅, creación directa con contraseña ✅, SMTP Resend ✅, último acceso ✅ |
-| 🟢 Hecho | **Errores de consola** | Toaster dismiss ✅, CotizacionesSection key ✅, ProductForm label ✅, migraciones DB ✅, created_at cuenta corriente ✅, **todos los warnings Radix UI DialogDescription ✅** |
-| 🟢 Hecho | **Contabilidad** | Plan de Cuentas inicializa correctamente ✅, RLS y empresa_id corregidos ✅ |
+| 🟢 Hecho | **Auth & Usuarios** | Reset contraseña ✅, creación directa ✅, SMTP Resend ✅, último acceso ✅ |
+| 🟢 Hecho | **Errores de consola** | Todos los warnings Radix UI, claves TanStack Query, etc. ✅ |
+| 🟢 Hecho | **Contabilidad** | Plan de Cuentas + Libro Mayor + asientos automáticos ✅ |
+| 🟡 Media | **SMTP para nuevos tenants** | `onboarding@resend.dev` solo envía a emails verificados. Para producción: verificar dominio propio en Resend y actualizar sender. Confirmación de email desactivada en dev. |
+
+---
+
+## SaaS — Flujo de registro de nuevo tenant
+
+```
+Nuevo usuario → Registro (nombre, apellido, empresa, email, pass)
+    ↓ supabase.auth.signUp() — sin confirmación de email (dev)
+    ↓ SIGNED_IN → fetchProfile → empresa_id = null
+    ↓ App.jsx detecta !user.empresa_id → OnboardingPage
+    ↓ Usuario completa nombre empresa → create_tenant() RPC
+    ↓ INSERT empresas + UPDATE profiles (role=admin) + INSERT configuracion
+    ↓ refreshUser() → empresa_id tiene valor
+    ↓ Dashboard con tenant completamente aislado ✅
+
+Usuario existente (Nalux/Luciano):
+    Login → empresa_id en perfil → Dashboard directo ✅
+
+Staff invitado por admin (create-user edge function):
+    Edge function crea perfil con empresa_id del admin → Login → Dashboard directo ✅
+```
+
+**Archivos clave del flujo SaaS:**
+- `src/components/OnboardingPage.jsx` — pantalla de creación de empresa
+- `src/contexts/SupabaseAuthContext.jsx` — `refreshUser()` para recargar perfil post-onboarding
+- `src/App.jsx` — gate: `!user.empresa_id` → `<OnboardingPage />`
+- `migrations/006_saas_create_tenant.sql` — RPC `create_tenant()` SECURITY DEFINER
 
 ---
 
@@ -219,6 +251,7 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 
 | Prioridad | Tarea |
 |---|---|
+| Alta | Verificar dominio en Resend para habilitar confirmación de email en producción |
 | Media | Asientos automáticos para **Órdenes de Compra** confirmadas |
 | Baja | Facturación electrónica AFIP |
 | Baja | Multi-almacén |

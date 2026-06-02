@@ -212,6 +212,21 @@ export const AuthProvider = ({ children }) => {
     return { error };
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    if (!currentSession) return;
+    const profileData = await fetchProfile(currentSession.user.id);
+    const empresaId = profileData?.empresa_id;
+    setUser({
+      ...currentSession.user,
+      ...profileData,
+      role: profileData?.role || currentSession.user?.user_metadata?.role || 'staff',
+      empresa_id: empresaId,
+      empresa_nombre: profileData?.empresas?.nombre,
+      tenant_id: currentSession.user.id,
+    });
+  }, []);
+
   const getPermissions = useCallback(() => {
      if (!user) return [];
      if (user.role === 'admin') return ['ALL'];
@@ -227,9 +242,10 @@ export const AuthProvider = ({ children }) => {
     signUp,
     signIn,
     signOut,
+    refreshUser,
     userRole: user?.role,
     getPermissions
-  }), [user, session, loading, needsPasswordReset, signUp, signIn, signOut, getPermissions]);
+  }), [user, session, loading, needsPasswordReset, signUp, signIn, signOut, refreshUser, getPermissions]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
