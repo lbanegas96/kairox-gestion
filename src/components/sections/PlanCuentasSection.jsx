@@ -991,7 +991,7 @@ function TabLibroMayor({ empresaId, cuentasFlat }) {
 
 export default function PlanCuentasSection() {
   const { user } = useAuth();
-  const empresaId = user?.tenant_id || user?.empresa_id;
+  const empresaId = user?.empresa_id;
   const userId    = user?.id;
   const qc        = useQueryClient();
 
