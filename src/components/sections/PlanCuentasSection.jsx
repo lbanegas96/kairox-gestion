@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -486,6 +486,7 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
         <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-sm">
           <DialogHeader>
             <DialogTitle>Editar Cuenta</DialogTitle>
+            <DialogDescription>Modificá el nombre y estado de la cuenta contable.</DialogDescription>
           </DialogHeader>
           {editCuenta && (
             <div className="space-y-3 py-2">
@@ -675,6 +676,7 @@ function TabAsientos({ empresaId, userId, cuentasFlat, onRefresh }) {
                 {detalle?.estado}
               </span>
             </DialogTitle>
+            <DialogDescription>Líneas y detalle del asiento contable.</DialogDescription>
           </DialogHeader>
           {detalle && (
             <div className="space-y-3">
