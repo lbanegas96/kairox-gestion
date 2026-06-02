@@ -59,7 +59,7 @@ function CotizacionesSection() {
   });
 
   const { data: detalle } = useQuery({
-    queryKey: COTIZACIONES_KEYS.cotizacion(viewId),
+    queryKey: COTIZACIONES_KEYS.detail(viewId),
     queryFn: () => cotizacionesService.getById(viewId),
     enabled: !!viewId,
   });
