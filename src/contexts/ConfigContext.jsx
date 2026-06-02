@@ -43,14 +43,29 @@ export const ConfigProvider = ({ children }) => {
     setConfig(prev => ({ ...prev, ...newSettings }));
 
     try {
-      const updates = Object.entries(newSettings).map(([key, value]) => {
-        return supabase
+      for (const [key, value] of Object.entries(newSettings)) {
+        // Verificar si la clave ya existe (RLS filtra por empresa automáticamente)
+        const { data: existing } = await supabase
           .from('configuracion')
-          .upsert({ clave: key, valor: value }, { onConflict: 'clave' });
-      });
+          .select('clave')
+          .eq('clave', key)
+          .maybeSingle();
 
-      await Promise.all(updates);
-      await fetchConfig(); // Refresh to ensure sync
+        if (existing) {
+          const { error } = await supabase
+            .from('configuracion')
+            .update({ valor: value })
+            .eq('clave', key);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('configuracion')
+            .insert({ clave: key, valor: value });
+          if (error) throw error;
+        }
+      }
+
+      await fetchConfig();
       return { success: true };
     } catch (error) {
       console.error('Error updating config:', error);
