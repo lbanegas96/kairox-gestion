@@ -91,6 +91,7 @@ Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Ua
 | **Plan de Cuentas no mostraba cuentas tras inicializar** | `PlanCuentasSection.jsx` | `empresaId = user?.tenant_id \|\| user?.empresa_id` → `user?.empresa_id`. `tenant_id` es el auth UUID, no el empresa UUID. |
 | **RLS `profiles` bloqueaba vista de equipo** | Supabase SQL | Política `profiles_select` reemplazada: `id = auth.uid() OR empresa_id = get_my_empresa_id()` para que admin vea todo el equipo. |
 | **Creación de usuarios fallaba (CORS + función inexistente)** | `UsuariosSection.jsx` + Supabase | Flujo cambiado de `invite-user` a `create-user`. Nueva Edge Function `create-user` deployada con CORS + `auth.admin.createUser()` + insert en `profiles`. Campo contraseña con show/hide en el form. |
+| **Error 42P10 al guardar configuración (logo/nombre)** | `ConfigContext.jsx` | `upsert onConflict:'clave'` reemplazado por `maybeSingle() → update/insert`. No requiere UNIQUE constraint en la tabla. |
 
 ---
 
