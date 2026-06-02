@@ -5,7 +5,7 @@ import {
   Users, CreditCard, FileSpreadsheet
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
@@ -364,6 +364,8 @@ function ReportesSection() {
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="kairox-bg-card border kairox-border kairox-text-primary sm:max-w-[900px] flex flex-col max-h-[90vh] dark:bg-slate-950 dark:border-slate-800">
+          <DialogTitle className="sr-only">{selectedReport?.title ?? 'Reporte'}</DialogTitle>
+          <DialogDescription className="sr-only">Visualización y descarga del reporte seleccionado.</DialogDescription>
           {selectedReport && (
              <>
                <div className="flex-none">

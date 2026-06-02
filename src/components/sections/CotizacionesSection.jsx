@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -363,6 +363,7 @@ function CotizacionesSection() {
               <FileText className="w-5 h-5 text-blue-500" />
               Cotización {detalle?.numero}
             </DialogTitle>
+            <DialogDescription className="dark:text-slate-400">Detalle y líneas de la cotización.</DialogDescription>
           </DialogHeader>
           {detalle && (
             <div className="space-y-4">
