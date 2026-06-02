@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-01
+**Última actualización:** 2026-06-01 (sesión tarde)
 **Branch activo:** `claude/suspicious-panini-6cb9e5`
 
 ---
@@ -78,27 +78,34 @@ Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Ua
 | **Indicadores de turno mostraban $0** | `CajaSection.jsx` | Tarjetas INGRESOS/EGRESOS/SALDO LÍQUIDO DEL TURNO agregadas al JSX |
 | **Fecha/hora de movimientos usaba `created_at`** | `CajaSection.jsx` | Display unificado con `formatDateTimeAR(m.fecha)` |
 | **Movimiento fantasma Ualá ($2.317.362)** | `movimientos_caja` en Supabase | Eliminado manualmente. Causado por bug en `UalaSync.gs` que acumuló montos del período en lugar del monto individual. El registro legítimo ($5.000, mismo concepto) quedó intacto. |
+| **Reset de contraseña abría el sistema directo** | `SupabaseAuthContext.jsx`, `App.jsx`, `ResetPasswordPage.jsx` | Fix definitivo: leer hash URL sincrónicamente antes de `getSession()` + `isRecoveryFlow` ref para bloquear `SIGNED_IN` durante recovery. |
+| **Rate limit de emails (2/hora)** | Supabase Auth | Configurado SMTP propio con Resend.com. API key activa. |
 
 ---
 
-## Archivos clave modificados (últimas dos sesiones)
+## Archivos clave modificados (últimas sesiones)
 
 ```
 src/
 ├── lib/
-│   └── dateUtils.js          ← Reescrito: getNowAR correcto + formatDateAR/formatDateTimeAR
+│   └── dateUtils.js              ← Reescrito: getNowAR correcto + formatDateAR/formatDateTimeAR
 ├── services/
-│   └── planCuentasService.ts ← +getLibroMayor (en asientosService) +asientosAutoService
-│                                  +PLAN_CUENTAS_KEYS.libroMayor
+│   └── planCuentasService.ts     ← +getLibroMayor +asientosAutoService
 ├── components/
+│   ├── ResetPasswordPage.jsx     ← NUEVO: pantalla de reset/invite con confirmación x2
+│   ├── PasswordRecoveryModal.jsx ← Modal "Olvidé mi contraseña" desde login
 │   ├── sections/
-│   │   ├── CajaSection.jsx   ← +3 tarjetas indicadoras de turno, fix fechas, fix apertura hora
-│   │   ├── ProductosSection.jsx ← ProductForm movido fuera, +handleDisableProduct, fix fechas
-│   │   ├── MovimientosUala.jsx ← formatFecha usa getUTC* (TZ-safe)
-│   │   ├── PlanCuentasSection.jsx ← +TabLibroMayor, +tab "Libro Mayor"
-│   │   └── ComprasSection.jsx ← +asiento automático al registrar compra
+│   │   ├── CajaSection.jsx       ← +3 tarjetas indicadoras de turno, fix fechas
+│   │   ├── ProductosSection.jsx  ← ProductForm movido fuera, soft delete, fix fechas
+│   │   ├── MovimientosUala.jsx   ← formatFecha TZ-safe
+│   │   ├── PlanCuentasSection.jsx← +TabLibroMayor
+│   │   ├── ComprasSection.jsx    ← +asiento automático
+│   │   └── UsuariosSection.jsx   ← flujo invitación por email, columna último acceso
 │   └── ventas/
-│       └── NuevaVentaModal.jsx ← +asiento automático al registrar venta
+│       └── NuevaVentaModal.jsx   ← +asiento automático al registrar venta
+├── contexts/
+│   └── SupabaseAuthContext.jsx   ← +needsPasswordReset, +isRecoveryFlow ref, +last_login_at
+└── App.jsx                       ← detección recovery flow, toast link vencido
 ```
 
 ---
@@ -139,7 +146,7 @@ src/
 | Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Funcional |
 | **Contabilidad** | `PlanCuentasSection.jsx` | ✅ **Fase 4 completa** |
 | Reportes | `ReportesSection.jsx` | ✅ Funcional |
-| Usuarios | `UsuariosSection.jsx` | ✅ Funcional |
+| Usuarios | `UsuariosSection.jsx` | ✅ Invitación por email + último acceso + activar/desactivar |
 | Configuración | `ConfiguracionSection.jsx` | ✅ Funcional |
 | Movimientos Ualá | `MovimientosUala.jsx` | ✅ Funcional + fix timezone |
 
@@ -171,21 +178,26 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 ## Datos de conexión / configuración
 
 - **Supabase URL/Key:** en `.env` (variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`)
-- **Supabase Project ID:** `wuznppxeonmhfcvnqfbf`
+- **Supabase Project ID:** `wuznppxeonmhfcvnqfbf` (org: NALUX — distinta a la org del MCP)
+- **Supabase Site URL:** `http://localhost:3001` (dev) — actualizar a dominio en producción
+- **SMTP:** Resend.com — `smtp.resend.com:465` / user: `resend` / sender: `onboarding@resend.dev`
+- **Edge Functions deployadas:** `create-user`, `delete-user`, `invite-user`
 - **Timezone:** Argentina (UTC-3) — helpers en `src/lib/dateUtils.js`
 - **Multi-tenancy:** RLS via `get_my_empresa_id()` + columna `empresa_id` en todas las tablas
 - **Logo:** almacenado como Base64 en tabla `configuracion` (clave `company_logo` / `logo_base64`)
 - **Roles:** `admin` (acceso total) | `staff` (permisos granulares en `profiles.permissions` JSONB)
+- **profiles.last_login_at:** columna agregada, se actualiza en cada login exitoso
 
 ---
 
-## Pendientes inmediatos (retomar mañana)
+## Pendientes inmediatos
 
 | Prioridad | Tarea | Detalle |
 |---|---|---|
-| 🔴 Alta | **Indicadores de Caja siguen rompiéndose** | Los indicadores INGRESOS / EGRESOS / SALDO del turno fallan intermitentemente. Causa raíz aún no identificada. Retomar investigación. |
+| 🔴 Alta | **Indicadores de Caja siguen rompiéndose** | Los indicadores INGRESOS / EGRESOS / SALDO del turno fallan intermitentemente. Causa raíz aún no identificada. |
 | 🟡 Media | **Borrar 4 comprobantes de prueba** | Query lista. IDs: `3ef2fa9b`, `8ffcc081`, `e2f320c2`, `74173b27`. Primero borrar `comprobante_items` y luego `comprobantes`. |
-| 🟡 Media | **Bug en UalaSync.gs** | Revisar script Google Apps Script para evitar que vuelva a importar montos acumulados en lugar del monto individual del movimiento. Agregar control de duplicados por monto + fecha + concepto. |
+| 🟡 Media | **Bug en UalaSync.gs** | Agregar control de duplicados por monto + fecha + concepto para evitar imports incorrectos. |
+| 🟢 Hecho | **Auth & Usuarios** | Reset contraseña ✅, invitación por email ✅, SMTP Resend ✅, último acceso ✅ |
 
 ---
 
