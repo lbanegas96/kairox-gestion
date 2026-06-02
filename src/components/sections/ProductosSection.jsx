@@ -75,7 +75,7 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
         value={data.proveedor_id || "none"}
         onValueChange={(val) => setData({...data, proveedor_id: val === "none" ? null : val})}
       >
-        <SelectTrigger className="bg-white dark:bg-slate-950">
+        <SelectTrigger id="proveedor" className="bg-white dark:bg-slate-950">
           <SelectValue placeholder="Seleccionar proveedor" />
         </SelectTrigger>
         <SelectContent>
