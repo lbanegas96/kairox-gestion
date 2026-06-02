@@ -114,10 +114,27 @@ export const AuthProvider = ({ children }) => {
 
     const init = async () => {
       try {
+        // Leer hash ANTES de cualquier operación async — es la única forma confiable
+        const hash = window.location.hash.substring(1);
+        const hashParams = Object.fromEntries(new URLSearchParams(hash));
+        if (hashParams.type === 'recovery' || hashParams.type === 'invite') {
+          isRecoveryFlow.current = true;
+          setNeedsPasswordReset(true);
+        }
+
         const { data: { session: initialSession }, error } = await supabase.auth.getSession();
-        
+
         if (error) throw error;
-        await handleSession(initialSession);
+
+        // Si es recovery, guardamos la sesión pero NO logueamos
+        if (isRecoveryFlow.current) {
+          setSession(initialSession);
+          setLoading(false);
+          // Limpiar el hash de la URL para que no se reprocese
+          window.history.replaceState(null, '', window.location.pathname);
+        } else {
+          await handleSession(initialSession);
+        }
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
           if (!mounted.current) return;
