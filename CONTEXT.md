@@ -80,6 +80,11 @@ Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Ua
 | **Movimiento fantasma Ualá ($2.317.362)** | `movimientos_caja` en Supabase | Eliminado manualmente. Causado por bug en `UalaSync.gs` que acumuló montos del período en lugar del monto individual. El registro legítimo ($5.000, mismo concepto) quedó intacto. |
 | **Reset de contraseña abría el sistema directo** | `SupabaseAuthContext.jsx`, `App.jsx`, `ResetPasswordPage.jsx` | Fix definitivo: leer hash URL sincrónicamente antes de `getSession()` + `isRecoveryFlow` ref para bloquear `SIGNED_IN` durante recovery. |
 | **Rate limit de emails (2/hora)** | Supabase Auth | Configurado SMTP propio con Resend.com. API key activa. |
+| **prop `dismiss` en DOM** | `toaster.jsx` | Destructurar `dismiss` del spread para no pasarlo al DOM. |
+| **`COTIZACIONES_KEYS.cotizacion` is not a function** | `CotizacionesSection.jsx` | Renombrado a `.detail()` para coincidir con el servicio. |
+| **Label `for` sin match en ProductForm** | `ProductosSection.jsx` | Agregado `id="proveedor"` al `SelectTrigger`. |
+| **Tablas faltantes en DB** | Supabase SQL | Aplicadas migraciones 002 (cotizaciones), 003 (ordenes_compra), 004 (plan_cuentas). |
+| **`cuenta_corriente_movimientos.created_at` does not exist** | Supabase SQL | `ALTER TABLE ... ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ`. |
 
 ---
 
@@ -198,6 +203,7 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 | 🟡 Media | **Borrar 4 comprobantes de prueba** | Query lista. IDs: `3ef2fa9b`, `8ffcc081`, `e2f320c2`, `74173b27`. Primero borrar `comprobante_items` y luego `comprobantes`. |
 | 🟡 Media | **Bug en UalaSync.gs** | Agregar control de duplicados por monto + fecha + concepto para evitar imports incorrectos. |
 | 🟢 Hecho | **Auth & Usuarios** | Reset contraseña ✅, invitación por email ✅, SMTP Resend ✅, último acceso ✅ |
+| 🟢 Hecho | **Errores de consola** | Toaster dismiss ✅, CotizacionesSection key ✅, ProductForm label ✅, migraciones DB ✅, created_at cuenta corriente ✅ |
 
 ---
 
