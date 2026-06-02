@@ -128,7 +128,10 @@ function ClientesSection() {
       {/* Add Modal */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="dark:bg-slate-950 dark:border-slate-800">
-           <DialogHeader><DialogTitle className="dark:text-white">Nuevo Cliente</DialogTitle></DialogHeader>
+           <DialogHeader>
+             <DialogTitle className="dark:text-white">Nuevo Cliente</DialogTitle>
+             <DialogDescription className="dark:text-slate-400">Completá los datos del nuevo cliente.</DialogDescription>
+           </DialogHeader>
            <div className="grid gap-4 py-4">
               <Input placeholder="Nombre" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
               <Input placeholder="Teléfono" value={formData.telefono} onChange={e => setFormData({...formData, telefono: e.target.value})} className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
