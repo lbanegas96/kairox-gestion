@@ -85,6 +85,7 @@ Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Ua
 | **Label `for` sin match en ProductForm** | `ProductosSection.jsx` | Agregado `id="proveedor"` al `SelectTrigger`. |
 | **Tablas faltantes en DB** | Supabase SQL | Aplicadas migraciones 002 (cotizaciones), 003 (ordenes_compra), 004 (plan_cuentas). |
 | **`cuenta_corriente_movimientos.created_at` does not exist** | Supabase SQL | `ALTER TABLE ... ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ`. |
+| **Warning Radix UI: Missing Description en Dialog** | `ClientesSection.jsx` | Agregado `<DialogDescription>` en modal "Nuevo Cliente". |
 
 ---
 
