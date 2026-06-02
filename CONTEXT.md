@@ -205,9 +205,9 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 
 | Prioridad | Tarea | Detalle |
 |---|---|---|
-| 🔴 Alta | **Indicadores de Caja siguen rompiéndose** | Los indicadores INGRESOS / EGRESOS / SALDO del turno fallan intermitentemente. Causa raíz aún no identificada. |
-| 🟡 Media | **Borrar 4 comprobantes de prueba** | Query lista. IDs: `3ef2fa9b`, `8ffcc081`, `e2f320c2`, `74173b27`. Primero borrar `comprobante_items` y luego `comprobantes`. |
-| 🟡 Media | **Bug en UalaSync.gs** | Agregar control de duplicados por monto + fecha + concepto para evitar imports incorrectos. |
+| 🟢 Hecho | **Indicadores de Caja** | Resuelto ✅ |
+| 🟢 Hecho | **Borrar 4 comprobantes de prueba** | Resuelto ✅ |
+| 🟢 Hecho | **Bug en UalaSync.gs** | Resuelto ✅ |
 | 🟢 Hecho | **Auth & Usuarios** | Reset contraseña ✅, creación directa con contraseña ✅, SMTP Resend ✅, último acceso ✅ |
 | 🟢 Hecho | **Errores de consola** | Toaster dismiss ✅, CotizacionesSection key ✅, ProductForm label ✅, migraciones DB ✅, created_at cuenta corriente ✅, **todos los warnings Radix UI DialogDescription ✅** |
 | 🟢 Hecho | **Contabilidad** | Plan de Cuentas inicializa correctamente ✅, RLS y empresa_id corregidos ✅ |
