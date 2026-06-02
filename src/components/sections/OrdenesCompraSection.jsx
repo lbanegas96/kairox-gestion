@@ -131,8 +131,8 @@ function OrdenesCompraSection() {
   const searchProveedor = async (q) => {
     setProvSearch(q);
     setForm(f => ({ ...f, proveedor_nombre: q }));
-    if (!q || q.length < 1) { setProvResults([]); return; }
-    const { data } = await supabase.from('proveedores').select('id, nombre').eq('user_id', empresaId).ilike('nombre', `%${q}%`).limit(6);
+    const query = supabase.from('proveedores').select('id, nombre').eq('empresa_id', empresaId).order('nombre').limit(10);
+    const { data } = q ? await query.ilike('nombre', `%${q}%`) : await query;
     setProvResults(data ?? []);
   };
 
@@ -148,7 +148,7 @@ function OrdenesCompraSection() {
     updated[idx] = { ...updated[idx], _prodSearch: q, descripcion: q };
     setItems(updated);
     if (!q || q.length < 2) { setProdResults(p => ({ ...p, [idx]: [] })); return; }
-    const { data } = await supabase.from('productos').select('id, nombre, costo_compra, unidad_medida').eq('user_id', empresaId).ilike('nombre', `%${q}%`).limit(6);
+    const { data } = await supabase.from('productos').select('id, nombre, costo_compra, unidad_medida').eq('empresa_id', empresaId).ilike('nombre', `%${q}%`).limit(6);
     setProdResults(p => ({ ...p, [idx]: data ?? [] }));
   };
 
@@ -350,7 +350,9 @@ function OrdenesCompraSection() {
                 <div className="space-y-2 relative">
                   <Label className="dark:text-white">Proveedor</Label>
                   <Input value={provSearch} onChange={e => searchProveedor(e.target.value)}
-                    placeholder="Buscar proveedor..." className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
+                    onFocus={() => searchProveedor(provSearch)}
+                    onBlur={() => setTimeout(() => setProvResults([]), 200)}
+                    placeholder="Buscar o seleccionar proveedor..." className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
                   {provResults.length > 0 && (
                     <div className="absolute top-full left-0 right-0 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl mt-1">
                       {provResults.map(p => (
@@ -431,9 +433,27 @@ function OrdenesCompraSection() {
                         className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm" />
                     </div>
                     <div className="col-span-2">
-                      <Input value={item.unidad_medida} placeholder="un"
+                      <Input list="unidades-medida" value={item.unidad_medida} placeholder="un"
                         onChange={e => updateItem(idx, 'unidad_medida', e.target.value)}
                         className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm" />
+                      <datalist id="unidades-medida">
+                        <option value="un" />
+                        <option value="kg" />
+                        <option value="g" />
+                        <option value="lt" />
+                        <option value="ml" />
+                        <option value="mt" />
+                        <option value="cm" />
+                        <option value="m²" />
+                        <option value="m³" />
+                        <option value="caja" />
+                        <option value="pack" />
+                        <option value="docena" />
+                        <option value="par" />
+                        <option value="hs" />
+                        <option value="día" />
+                        <option value="servicio" />
+                      </datalist>
                     </div>
                     <div className="col-span-2">
                       <Input type="number" min="0" step="0.01" value={item.costo_unitario} placeholder="0.00"

@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { formatDateTimeAR, getNowAR } from './dateUtils';
 import 'jspdf-autotable';
 
 export const generatePDF = ({
@@ -28,7 +29,7 @@ export const generatePDF = ({
   doc.setFontSize(10);
   doc.setTextColor(80);
   doc.text(`Período: ${startDate} al ${endDate}`, 14, 38);
-  doc.text(`Generado: ${new Date().toLocaleString('es-AR')}`, 14, 44);
+  doc.text(`Generado: ${formatDateTimeAR(getNowAR().toISOString())}`, 14, 44);
 
   // Line Separator
   doc.setLineWidth(0.5);

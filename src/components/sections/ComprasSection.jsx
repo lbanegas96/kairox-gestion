@@ -12,7 +12,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
-import { getTodayAR, getDateFromInputAR } from '@/lib/dateUtils';
+import { getTodayAR, getDateFromInputAR, formatDateTimeAR } from '@/lib/dateUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
 import CompraDetailModal from '../ventas/CompraDetailModal';
 import EstadoBadge from '@/components/ui/EstadoBadge';
@@ -140,13 +140,10 @@ function ComprasSection() {
   // --- FILTERING LOGIC ---
   const filteredCompras = useMemo(() => {
     return compras.filter(compra => {
-      // Date Range
-      if (filters.dateStart && new Date(compra.fecha) < new Date(filters.dateStart)) return false;
-      if (filters.dateEnd) {
-         const toDate = new Date(filters.dateEnd);
-         toDate.setHours(23, 59, 59, 999);
-         if (new Date(compra.fecha) > toDate) return false;
-      }
+      // Date Range — compare by AR date string (YYYY-MM-DD) to avoid timezone drift
+      const compraDateStr = compra.fecha ? compra.fecha.slice(0, 10) : '';
+      if (filters.dateStart && compraDateStr < filters.dateStart) return false;
+      if (filters.dateEnd && compraDateStr > filters.dateEnd) return false;
       // Proveedor
       if (filters.proveedorId !== 'Todos' && compra.proveedor_id !== filters.proveedorId) return false;
       // Payment Method
@@ -759,7 +756,7 @@ function ComprasSection() {
                     filteredCompras.map(compra => (
                       <tr key={compra.id} className="group hover:bg-blue-50/50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer" onClick={() => { setSelectedCompraId(compra.id); setDetailsOpen(true); }}>
                         <td className="p-4 text-slate-600 dark:text-slate-300 font-mono text-xs">
-                          {new Date(compra.fecha).toLocaleDateString()} <span className="text-slate-400 ml-1">{new Date(compra.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                          {formatDateTimeAR(compra.fecha)}
                         </td>
                         <td className="p-4 text-slate-500 font-mono text-xs font-medium dark:text-slate-400">
                           {compra.numero_factura}

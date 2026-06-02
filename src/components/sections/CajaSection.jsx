@@ -334,7 +334,7 @@ function CajaSection() {
         categoria: formData.categoria,
         concepto: formData.concepto,
         monto: parseFloat(formData.monto),
-        fecha: getDateFromInputAR(formData.fecha), 
+        fecha: getNowAR().toISOString(),
         metodo_pago: formData.metodo_pago || 'Efectivo',
         is_automatic: false,
         empresa_id: user.empresa_id // Ensure empresa_id is also set
@@ -773,7 +773,7 @@ function CajaSection() {
                 )}
              </div>
              
-             {lastUpdate && (<div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1"><Clock className="w-3 h-3"/> Act: {lastUpdate.toLocaleTimeString()}</div>)}
+             {lastUpdate && (<div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1"><Clock className="w-3 h-3"/> Act: {lastUpdate.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'})}</div>)}
            </div>
  
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

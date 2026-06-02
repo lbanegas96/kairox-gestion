@@ -11,7 +11,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
-import { getNowAR } from '@/lib/dateUtils';
+import { getNowAR, formatDateAR, formatDateTimeAR } from '@/lib/dateUtils';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 
 const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate }) => {
@@ -249,8 +249,7 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
                              return (
                                 <tr key={mov.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/30 transition-colors">
                                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400 font-mono text-xs">
-                                      {new Date(mov.created_at || mov.fecha).toLocaleDateString()}
-                                      <div className="text-[10px] text-slate-400">{new Date(mov.created_at || mov.fecha).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+                                      {formatDateTimeAR(mov.created_at || mov.fecha)}
                                    </td>
                                    <td className="px-4 py-3 text-center">
                                       <Badge variant={isDebe ? "outline" : "default"} className={`text-[10px] h-5 ${isDebe ? 'text-red-600 border-red-200 bg-red-50 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/50' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/30'}`}>

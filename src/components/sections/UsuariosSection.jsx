@@ -15,6 +15,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import StaffPermissionsModal from '@/components/sections/StaffPermissionsModal';
 import { validateEmail, validatePassword, checkEmailExists } from '@/lib/validationUtils';
+import { formatDateTimeAR } from '@/lib/dateUtils';
 
 function UsuariosSection() {
   const { user } = useAuth();
@@ -408,7 +409,7 @@ function UsuariosSection() {
                                     </TableCell>
                                     <TableCell className="text-xs text-slate-400">
                                         {u.last_login_at
-                                          ? new Date(u.last_login_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+                                          ? formatDateTimeAR(u.last_login_at)
                                           : <span className="italic text-slate-500">Nunca</span>
                                         }
                                     </TableCell>

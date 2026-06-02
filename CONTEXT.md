@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-02 (sesión SaaS multi-tenant)
+**Última actualización:** 2026-06-02 (sesión UX + timezone fixes globales)
 **Branch activo:** `master`
 
 ---
@@ -94,6 +94,22 @@ Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Ua
 | **RLS `profiles` bloqueaba vista de equipo** | Supabase SQL | Política `profiles_select` reemplazada: `id = auth.uid() OR empresa_id = get_my_empresa_id()` para que admin vea todo el equipo. |
 | **Creación de usuarios fallaba (CORS + función inexistente)** | `UsuariosSection.jsx` + Supabase | Flujo cambiado de `invite-user` a `create-user`. Nueva Edge Function `create-user` deployada con CORS + `auth.admin.createUser()` + insert en `profiles`. Campo contraseña con show/hide en el form. |
 | **Error 42P10 al guardar configuración (logo/nombre)** | `ConfigContext.jsx` | `upsert onConflict:'clave'` reemplazado por `maybeSingle() → update/insert`. No requiere UNIQUE constraint en la tabla. |
+
+### Sesión 2026-06-02 (UX + timezone global)
+
+| Bug | Archivo | Fix aplicado |
+|---|---|---|
+| **Movimientos de Caja registraban siempre 12:00** | `CajaSection.jsx` L337 | `fecha: getDateFromInputAR(formData.fecha)` (fijaba 12:00 UTC) → `fecha: getNowAR().toISOString()` para capturar hora real |
+| **Ticket de venta mostraba hora -3h del valor real** | `ComprobantePrintModal.jsx` | `new Date(...).toLocaleString()` → `formatDateTimeAR()`. El timestamp ya está con offset AR aplicado, `toLocaleString` lo restaba de nuevo |
+| **Fechas/horas mal mostradas en toda la app** | 11 archivos | Reemplazado masivo de `new Date(x).toLocaleDateString/toLocaleTimeString/toLocaleString` por `formatDateAR`/`formatDateTimeAR` en: `HistorialVentas`, `SaleDetailModal`, `CompraDetailModal`, `ComprasSection`, `ClientDetailModal`, `ReportesSection` (4 reportes), `UsuariosSection` (último login), `CommandPalette`, `CajaSection` (Act:), `pdfUtils` ("Generado:") |
+| **Filtro de fecha en Historial/Compras descartaba registros válidos** | `HistorialVentas.jsx`, `ComprasSection.jsx` | `new Date(sale.fecha) < new Date(dateFrom)` comparaba contra medianoche UTC mientras las ventas están con offset AR → reemplazado por comparación de strings `YYYY-MM-DD` (slice 0,10) directamente. Sin timezone drift |
+| **OrdenesCompra: error 42703 `proveedores.user_id does not exist`** | `OrdenesCompraSection.jsx` L135,151 | `.eq('user_id', empresaId)` → `.eq('empresa_id', empresaId)` en búsqueda de proveedores y productos |
+| **Cotizaciones: búsqueda de productos no devolvía nada** | `CotizacionesSection.jsx` L99 | Mismo bug `user_id` → `empresa_id` en query de productos |
+| **Categorías vacías en Nuevo Producto** | Supabase | INSERT de 13 categorías default para empresa NALUX (Electrónica, Belleza, Ropa, Hogar, Alimentos, Herramientas, Salud, Tecnología, Deportes, Juguetes, Limpieza, Papelería, Otros) |
+| **Dropdown de productos en Nueva Venta tapaba el carrito** | `NuevaVentaModal.jsx` | `setShowProductDropdown(false)` se anulaba por `onFocus={()=>setShow(true)}` al recuperar foco tras agregar item. Reestructurado: panel inline `max-h-64` siempre visible (catálogo arriba + carrito abajo, ambos scrolleables). Sin más dropdown flotante |
+| **Buscador de proveedor en OrdenesCompra exigía escribir** | `OrdenesCompraSection.jsx` | `searchProveedor` ahora trae top 10 ordenados alfabéticamente si query vacía. `onFocus` dispara `searchProveedor('')` para mostrar lista de inmediato. `onBlur` cierra con timeout 200ms |
+| **Campo Unidad sin sugerencias** | `CotizacionesSection.jsx`, `OrdenesCompraSection.jsx` | Agregado `<datalist id="unidades-medida">` con 16 opciones (un, kg, g, lt, ml, mt, cm, m², m³, caja, pack, docena, par, hs, día, servicio). Input con `list="unidades-medida"` — usuario puede elegir o escribir libremente |
+| **Ícono de calendario invisible en modo oscuro** | `index.css` | CSS global: `.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1) brightness(1.5) }` para todos los inputs date/time/datetime-local/month/week. No afecta modo claro |
 
 ---
 
@@ -257,3 +273,13 @@ Staff invitado por admin (create-user edge function):
 | Baja | Multi-almacén |
 | Baja | Lotes y vencimientos |
 | Diferida | Fase 5: Email, WhatsApp, API REST, backups |
+
+---
+
+## Convenciones aprendidas (para futuras sesiones)
+
+- **Tablas multi-tenant:** `proveedores`, `productos`, `categorias`, `configuracion`, etc. usan **`empresa_id`**, no `user_id`. Tablas más viejas (`comprobantes`, `movimientos_caja`, `movimientos_inventario`, `cuenta_corriente_movimientos`) usan `user_id = tenant_id`. Verificar con `list_tables`/`information_schema` antes de escribir queries.
+- **Timezone:** todo timestamp guardado en DB se persiste con offset AR ya aplicado (esquema "AR-local-as-UTC"). Para mostrar usar **siempre** `formatDateAR` / `formatDateTimeAR` de `dateUtils.js`. **Nunca** `new Date(x).toLocale*()` — resta los 3h dos veces.
+- **Filtros por rango de fecha:** comparar strings `YYYY-MM-DD` (slice 0,10), no instanciar `new Date()` sobre inputs de tipo date — evita drift de timezone.
+- **Inputs date en dark mode:** el CSS global ya invierte el ícono — no hace falta agregar nada por componente.
+- **Datalist para sugerencias libres:** patrón usado para "Unidad" (input + `<datalist id="unidades-medida">`) — reutilizable para otros campos que toleren texto libre.
