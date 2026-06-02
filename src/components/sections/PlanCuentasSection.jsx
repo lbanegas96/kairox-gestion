@@ -171,6 +171,7 @@ function ModalNuevaCuenta({ open, onClose, cuentasFlat, empresaId, onSuccess }) 
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             <Plus size={18} className="text-[#00D4FF]" /> Nueva Cuenta
           </DialogTitle>
+          <DialogDescription className="text-slate-400">Definí código, nombre y tipo de la nueva cuenta contable.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
@@ -293,6 +294,7 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             <FileText size={18} className="text-[#00D4FF]" /> Nuevo Asiento Contable
           </DialogTitle>
+          <DialogDescription className="text-slate-400">Ingresá fecha, descripción y las líneas de débito/crédito del asiento.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto pr-1">

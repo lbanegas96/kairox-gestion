@@ -479,6 +479,7 @@ function OrdenesCompraSection() {
               <ShoppingBag className="w-5 h-5 text-indigo-500" />
               Orden de Compra {detalle?.numero}
             </DialogTitle>
+            <DialogDescription className="dark:text-slate-400">Detalle e ítems de la orden de compra.</DialogDescription>
           </DialogHeader>
           {detalle && (
             <div className="space-y-4">

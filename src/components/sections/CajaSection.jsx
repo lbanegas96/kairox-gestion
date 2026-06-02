@@ -850,6 +850,8 @@ function CajaSection() {
       {/* MODAL: Cerrar Caja */}
       <Dialog open={isCierreSessionModalOpen} onOpenChange={setIsCierreSessionModalOpen}>
         <DialogContent className="sm:max-w-md kairox-bg-card kairox-text-primary p-6 dark:bg-slate-950 dark:border-slate-800">
+          <DialogTitle className="sr-only">Cerrar Caja</DialogTitle>
+          <DialogDescription className="sr-only">Confirmá el cierre de la sesión de caja actual.</DialogDescription>
            <CajaCierre onCancel={() => setIsCierreSessionModalOpen(false)} />
         </DialogContent>
       </Dialog>
