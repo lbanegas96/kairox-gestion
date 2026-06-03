@@ -93,25 +93,27 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
       // 1. Insert Movement in Current Account (HABER reduces debt)
       const { error: movError } = await supabase.from('cuenta_corriente_movimientos').insert([{
         user_id: user.tenant_id,
+        empresa_id: user.empresa_id,
         cliente_id: clientId,
         tipo: 'HABER',
         monto: amount,
         descripcion: 'Pago registrado desde detalle',
         fecha: date
       }]);
-      
+
       if (movError) throw movError;
 
       // 2. Insert Movement in Cash Box
       const { error: cashError } = await supabase.from('movimientos_caja').insert([{
         user_id: user.tenant_id,
+        empresa_id: user.empresa_id,
         caja_sesion_id: currentSession?.id,
         fecha: date,
         tipo: 'ingreso',
         categoria: 'Cobro Cliente',
         concepto: `Cobro a ${localClientData.nombre} (Detalle)`,
         monto: amount,
-        metodo_pago: 'Efectivo', // Default for quick pay
+        metodo_pago: 'Efectivo',
         is_automatic: true
       }]);
 

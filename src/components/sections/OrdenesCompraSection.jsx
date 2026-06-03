@@ -56,13 +56,12 @@ function OrdenesCompraSection({ navPayload }) {
 
   const empresaId = user?.empresa_id;
 
-  // Abrir modal de recepción directo desde notificaciones
-  // El timeout da tiempo al DropdownMenu a cerrar y soltar el foco antes
-  // de que el Dialog se monte (evita el warning aria-hidden de Radix UI)
+  // Abrir modal de recepción directo desde notificaciones.
+  // El DropdownMenu ya está desmontado cuando onNavigate se llama (ver Header.jsx),
+  // así que no hay conflicto de foco con Radix.
   useEffect(() => {
     if (navPayload?.openRecepcion) {
-      const t = setTimeout(() => setRecepcionId(navPayload.openRecepcion), 80);
-      return () => clearTimeout(t);
+      setRecepcionId(navPayload.openRecepcion);
     }
   }, [navPayload]);
 

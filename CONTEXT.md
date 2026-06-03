@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-02 (sesión cierre — unificación branches + fix aria-hidden)
+**Última actualización:** 2026-06-02 (sesión — fix notificaciones, RLS cta-cte, drill-down Plan de Cuentas)
 **Branch activo:** `master`
 
 ---
@@ -99,6 +99,18 @@ Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Ua
 | **Creación de usuarios fallaba (CORS + función inexistente)** | `UsuariosSection.jsx` + Supabase | Flujo cambiado de `invite-user` a `create-user`. Nueva Edge Function `create-user` deployada con CORS + `auth.admin.createUser()` + insert en `profiles`. Campo contraseña con show/hide en el form. |
 | **Error 42P10 al guardar configuración (logo/nombre)** | `ConfigContext.jsx` | `upsert onConflict:'clave'` reemplazado por `maybeSingle() → update/insert`. No requiere UNIQUE constraint en la tabla. |
 
+### Sesión 2026-06-02 — tarde (notificaciones, RLS, Plan de Cuentas drill-down)
+
+| Bug / Feature | Archivo | Cambio |
+|---|---|---|
+| **`as HTMLElement` (TypeScript en JSX)** | `Header.jsx` | `(document.activeElement as HTMLElement)?.blur()` → `document.activeElement?.blur()`. El cast es inválido en `.jsx`. |
+| **Notificaciones no navegaban (onOpenChange)** | `Header.jsx` | `DropdownMenu` cambiado a modo controlled (`open={notifOpen}`). `onOpenChange` de Radix solo dispara en interacción del usuario, no al cerrar programáticamente. Fix: `setNotifOpen(false)` + `setTimeout(150ms, onNavigate)` para garantizar que el portal de Radix se desmonta antes de abrir cualquier Dialog. |
+| **Stack overflow `handleFocusOut2` de Radix** | `Header.jsx`, `OrdenesCompraSection.jsx` | Causado por conflicto de foco entre DropdownMenu abierto y Dialog montándose en paralelo. Fix: navegar DESPUÉS de que Radix desmonta el portal (los 150ms garantizan esto). Eliminado el `setTimeout(80ms)` innecesario en `OrdenesCompraSection`. |
+| **RLS 403 al cobrar en Cuenta Corriente** | `ClientDetailModal.jsx` | El insert de `cuenta_corriente_movimientos` no incluía `empresa_id`. La policy RLS evalúa `empresa_id = get_my_empresa_id()` → `NULL = valor` → false → 403. Fix: agregado `empresa_id: user.empresa_id` en ambos inserts (cuenta corriente y movimientos_caja). |
+| **Feature: Nuevo Cliente desde Cta. Corriente** | `CuentaCorrienteSection.jsx` | Botón "+ Nuevo Cliente" en el header. Modal con Nombre, Teléfono, Email, Límite de Crédito. Al guardar, el cliente aparece de inmediato y está disponible en toda la app. |
+| **Feature: Drill-down SAP en Plan de Cuentas** | `PlanCuentasSection.jsx`, `planCuentasService.ts` | En el árbol de cuentas, hover sobre cualquier cuenta muestra ícono `≡`. Al clickear: vista drill-down con TODOS los asientos_items confirmados de esa cuenta y sus hijos (igual al reporte FBL3N de SAP). Columnas: Fecha \| Asiento # \| Cuenta \| Descripción \| Debe \| Haber. Totales y saldo neto al pie. Filtros por fecha. Botón "Volver al árbol". |
+| **Migration 007** | `migrations/007_cta_cte_empresa_id.sql` | Agrega `empresa_id` a `cuenta_corriente_movimientos` si no existe, backfill desde `clientes.empresa_id`, reemplaza RLS policy con `empresa_id = get_my_empresa_id()`. **Ejecutar en Supabase SQL Editor.** |
+
 ### Sesión 2026-06-02 (UX + timezone global)
 
 | Bug | Archivo | Fix aplicado |
@@ -124,29 +136,33 @@ src/
 ├── lib/
 │   └── dateUtils.js              ← Reescrito: getNowAR correcto + formatDateAR/formatDateTimeAR
 ├── services/
-│   └── planCuentasService.ts     ← +getLibroMayor +asientosAutoService
+│   ├── planCuentasService.ts     ← +getLibroMayor +asientosAutoService +getMovimientosPorGrupo +movimientosGrupo key
+│   └── ordenesCompraService.ts  ← recibirItems: ADD en lugar de SET, respeta máximo pedido
 ├── components/
 │   ├── ResetPasswordPage.jsx     ← NUEVO: pantalla de reset/invite con confirmación x2
 │   ├── PasswordRecoveryModal.jsx ← Modal "Olvidé mi contraseña" desde login
 │   ├── OnboardingPage.jsx        ← NUEVO: pantalla SaaS para crear empresa en primer login
-│   ├── Header.jsx                ← notificaciones OC: blur() antes de navegar + payload { openRecepcion: id }
+│   ├── Header.jsx                ← DropdownMenu notif controlled + setTimeout(150ms) nav; fix `as HTMLElement`
 │   ├── Dashboard.jsx             ← +navPayload state, navigate(section, payload), navigatePlain()
 │   ├── sections/
 │   │   ├── CajaSection.jsx       ← +3 tarjetas indicadoras de turno, fix fechas
 │   │   ├── ProductosSection.jsx  ← ProductForm movido fuera, soft delete, fix fechas
 │   │   ├── MovimientosUala.jsx   ← formatFecha TZ-safe
-│   │   ├── PlanCuentasSection.jsx← +TabLibroMayor
+│   │   ├── PlanCuentasSection.jsx← +TabLibroMayor +DrillDownMovimientos (drill-down SAP)
 │   │   ├── ComprasSection.jsx    ← +asiento automático
-│   │   ├── OrdenesCompraSection.jsx ← fix recepción ADD+pendiente; abre modal via navPayload
+│   │   ├── OrdenesCompraSection.jsx ← fix recepción; abre modal via navPayload (sin setTimeout)
+│   │   ├── ClientDetailModal.jsx ← +empresa_id en inserts cta-cte y movimientos_caja
+│   │   ├── CuentaCorrienteSection.jsx ← +Nuevo Cliente inline (modal directo en la sección)
 │   │   └── UsuariosSection.jsx   ← flujo invitación por email, columna último acceso
 │   └── ventas/
 │       └── NuevaVentaModal.jsx   ← +asiento automático al registrar venta
 ├── contexts/
 │   ├── SupabaseAuthContext.jsx   ← +needsPasswordReset, +isRecoveryFlow ref, +last_login_at, +refreshUser
 │   └── ConfigContext.jsx         ← updateConfig incluye empresa_id vía get_my_empresa_id()
-├── services/
-│   └── ordenesCompraService.ts  ← recibirItems: ADD en lugar de SET, respeta máximo pedido
 └── App.jsx                       ← +OnboardingPage cuando !user.empresa_id
+
+migrations/
+└── 007_cta_cte_empresa_id.sql   ← ADD COLUMN empresa_id + backfill + RLS fix (PENDIENTE ejecutar en Supabase)
 ```
 
 ---
@@ -240,10 +256,16 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 | 🟢 Hecho | **Indicadores de Caja** | Resuelto ✅ |
 | 🟢 Hecho | **Auth & Usuarios** | Reset contraseña ✅, creación directa ✅, SMTP Resend ✅, último acceso ✅ |
 | 🟢 Hecho | **Errores de consola** | Todos los warnings Radix UI, claves TanStack Query, etc. ✅ |
-| 🟢 Hecho | **Contabilidad** | Plan de Cuentas + Libro Mayor + asientos automáticos ✅ |
-| 🟢 Hecho | **Módulos configurables** | Configuración → "Módulos del Sistema": toggles para habilitar/deshabilitar módulos por empresa. Guardado en `configuracion.modulos_activos` (JSON). Sidebar filtra automáticamente. Dashboard, Usuarios y Configuración son obligatorios. |
-| 🟡 Media | **SMTP para nuevos tenants** | `onboarding@resend.dev` solo envía a emails verificados. Para producción: verificar dominio propio en Resend y actualizar sender. Confirmación de email desactivada en dev. |
-| 🟡 Media | **Asientos auto para recepción OC** | Las recepciones de Órdenes de Compra no generan asiento contable. Pendiente: DEBE 1.1.3 Mercaderías / HABER 2.1.1 Ctas a Pagar (o Caja si es contado). |
+| 🟢 Hecho | **Contabilidad** | Plan de Cuentas + Libro Mayor + asientos automáticos + drill-down SAP ✅ |
+| 🟢 Hecho | **Módulos configurables** | Sidebar filtra automáticamente. Dashboard, Usuarios y Configuración son obligatorios ✅ |
+| 🟢 Hecho | **Notificaciones OC** | Navegación con controlled dropdown + setTimeout(150ms). Sin stack overflow ✅ |
+| 🟢 Hecho | **Cobro en Cta. Corriente** | Fix RLS 403: `empresa_id` en inserts de `ClientDetailModal` ✅ |
+| 🟢 Hecho | **Nuevo Cliente desde Cta. Corriente** | Modal inline en CuentaCorrienteSection ✅ |
+| 🔴 URGENTE | **Migration 007** | Ejecutar `migrations/007_cta_cte_empresa_id.sql` en Supabase SQL Editor del proyecto `wuznppxeonmhfcvnqfbf`. Agrega `empresa_id` a `cuenta_corriente_movimientos` y corrige RLS. Sin esto el cobro sigue fallando. |
+| 🟡 Media | **Eliminar/inactivar Clientes** | Botón de baja (soft delete `activo=false`) en `ClientesSection`. Lista debe filtrar `activo != false`. Pendiente de implementar. |
+| 🟡 Media | **Recepción OC — refactor SAP** | Stats cards usan `listData.data` (paginado/filtrado) → counts erróneos. `onSuccess` de `useQuery` ignorado en TQ v5 → inputs de recepción vacíos → OC queda anclada. Solución: useEffect para inicializar `recepciones` en 0 + query de resumen para counts. Pendiente. |
+| 🟡 Media | **SMTP para nuevos tenants** | `onboarding@resend.dev` solo envía a emails verificados. Para producción: verificar dominio propio en Resend. |
+| 🟡 Media | **Asientos auto para recepción OC** | DEBE 1.1.3 Mercaderías / HABER 2.1.1 Ctas a Pagar. Trigger de DB ya actualiza stock correctamente. |
 
 ---
 
@@ -278,9 +300,11 @@ Staff invitado por admin (create-user edge function):
 
 | Prioridad | Tarea |
 |---|---|
-| Alta | Verificar dominio en Resend para habilitar confirmación de email en producción |
-| Media | **Asientos auto para recepción OC** — DEBE 1.1.3 Mercaderías / HABER 2.1.1 Ctas a Pagar |
-| Media | Asientos automáticos para **Órdenes de Compra** confirmadas |
+| 🔴 Alta | **Ejecutar migration 007** en Supabase SQL Editor → habilita cobros en Cta. Corriente |
+| 🟡 Media | **Fix OC reception** — refactor SAP: useEffect para recepciones, query de resumen para stats cards |
+| 🟡 Media | **Eliminar/inactivar clientes** — soft delete `activo=false` en ClientesSection |
+| 🟡 Media | Verificar dominio en Resend para habilitar confirmación de email en producción |
+| 🟡 Media | **Asientos auto para recepción OC** — DEBE 1.1.3 Mercaderías / HABER 2.1.1 Ctas a Pagar |
 | Baja | Facturación electrónica AFIP |
 | Baja | Multi-almacén |
 | Baja | Lotes y vencimientos |

@@ -224,6 +224,31 @@ export const asientosService = {
     return Object.values(map).sort((a, b) => a.codigo.localeCompare(b.codigo));
   },
 
+  /** Movimientos de grupo: todos los asientos_items de un conjunto de cuentas (grupo y sus hijos) */
+  async getMovimientosPorGrupo(
+    empresaId: string,
+    cuentaIds: string[],
+    fechaDesde?: string,
+    fechaHasta?: string
+  ): Promise<any[]> {
+    if (cuentaIds.length === 0) return [];
+
+    let q = supabase
+      .from('asientos_items')
+      .select('*, plan_cuentas(codigo, nombre, tipo), asientos_contables!inner(numero, fecha, descripcion, origen, estado, empresa_id)')
+      .in('cuenta_id', cuentaIds)
+      .eq('asientos_contables.empresa_id', empresaId)
+      .eq('asientos_contables.estado', 'confirmado')
+      .order('asientos_contables(fecha)', { ascending: true });
+
+    if (fechaDesde) q = (q as any).gte('asientos_contables.fecha', fechaDesde);
+    if (fechaHasta) q = (q as any).lte('asientos_contables.fecha', fechaHasta);
+
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  },
+
   /** Libro Mayor: todos los movimientos confirmados de una cuenta con saldo acumulado */
   async getLibroMayor(
     empresaId: string,
@@ -262,6 +287,8 @@ export const PLAN_CUENTAS_KEYS = {
     ['balance_comprobacion', empresaId, desde, hasta] as const,
   libroMayor: (empresaId: string, cuentaId: string, desde?: string, hasta?: string) =>
     ['libro_mayor', empresaId, cuentaId, desde, hasta] as const,
+  movimientosGrupo: (empresaId: string, ids: string[], desde?: string, hasta?: string) =>
+    ['movimientos_grupo', empresaId, [...ids].sort().join(','), desde, hasta] as const,
 };
 
 // ─── Asientos automáticos ────────────────────────────────────────────────────

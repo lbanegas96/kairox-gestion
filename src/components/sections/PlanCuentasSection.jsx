@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookOpen, BookMarked, Plus, ChevronRight, ChevronDown, Check, X, AlertTriangle,
   FileText, BarChart2, ListOrdered, Search, Loader2, CheckCircle2,
-  Ban, RefreshCw, Eye, Pencil, ChevronLeft,
+  Ban, RefreshCw, Eye, Pencil, ChevronLeft, List,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { planCuentasService, asientosService, PLAN_CUENTAS_KEYS } from '@/services/planCuentasService';
@@ -44,9 +44,17 @@ const ESTADO_COLOR = {
 
 const fmt = (n) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 }).format(n ?? 0);
 
+// ─── Helper: recolecta todos los IDs de una cuenta y sus descendientes ─────────
+
+function collectIds(cuenta) {
+  const ids = [cuenta.id];
+  (cuenta.hijos ?? []).forEach((h) => ids.push(...collectIds(h)));
+  return ids;
+}
+
 // ─── Árbol de cuentas (nodo recursivo) ───────────────────────────────────────
 
-function CuentaNode({ cuenta, depth = 0, onEdit, search }) {
+function CuentaNode({ cuenta, depth = 0, onEdit, onViewMovimientos, search }) {
   const [open, setOpen] = useState(depth < 2);
   const hasChildren = cuenta.hijos?.length > 0;
   const highlight = search && (
@@ -92,6 +100,18 @@ function CuentaNode({ cuenta, depth = 0, onEdit, search }) {
           </span>
         )}
 
+        {/* Botón ver movimientos: aparece en hover para cualquier cuenta (grupo o hoja) */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewMovimientos(cuenta, collectIds(cuenta));
+          }}
+          title="Ver movimientos"
+          className="opacity-0 group-hover:opacity-100 p-1 rounded text-[#00D4FF] hover:bg-[#00D4FF]/10 transition-all"
+        >
+          <List size={13} />
+        </button>
+
         {cuenta.permite_movimientos && (
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(cuenta); }}
@@ -112,7 +132,7 @@ function CuentaNode({ cuenta, depth = 0, onEdit, search }) {
             className="overflow-hidden"
           >
             {cuenta.hijos.map((h) => (
-              <CuentaNode key={h.id} cuenta={h} depth={depth + 1} onEdit={onEdit} search={search} />
+              <CuentaNode key={h.id} cuenta={h} depth={depth + 1} onEdit={onEdit} onViewMovimientos={onViewMovimientos} search={search} />
             ))}
           </motion.div>
         )}
@@ -410,12 +430,140 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
   );
 }
 
+// ─── Drill-down: movimientos de un grupo de cuentas ──────────────────────────
+
+function DrillDownMovimientos({ cuenta, cuentaIds, empresaId, onVolver }) {
+  const [fechaDesde, setDesde] = useState('');
+  const [fechaHasta, setHasta] = useState('');
+
+  const { data: rows = [], isLoading, refetch } = useQuery({
+    queryKey: PLAN_CUENTAS_KEYS.movimientosGrupo(empresaId, cuentaIds, fechaDesde, fechaHasta),
+    queryFn: () => asientosService.getMovimientosPorGrupo(
+      empresaId, cuentaIds,
+      fechaDesde || undefined, fechaHasta || undefined
+    ),
+    enabled: !!empresaId && cuentaIds.length > 0,
+  });
+
+  const totalDebe  = rows.reduce((s, r) => s + Number(r.debe),  0);
+  const totalHaber = rows.reduce((s, r) => s + Number(r.haber), 0);
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          onClick={onVolver}
+          className="flex items-center gap-1.5 text-slate-400 hover:text-white text-sm transition-colors"
+        >
+          <ChevronLeft size={16} /> Volver al árbol
+        </button>
+        <div className="h-4 w-px bg-slate-700" />
+        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${TIPO_COLOR[cuenta.tipo]}`}>
+          {TIPO_LABEL[cuenta.tipo]}
+        </span>
+        <span className="text-white font-semibold">
+          <span className="font-mono text-[#00D4FF] mr-2 text-xs">{cuenta.codigo}</span>
+          {cuenta.nombre}
+        </span>
+        <span className="ml-auto text-xs text-slate-500">{rows.length} movimientos</span>
+      </div>
+
+      {/* Filtros de fecha */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Label className="text-slate-400 text-xs whitespace-nowrap">Desde</Label>
+          <Input type="date" value={fechaDesde} onChange={(e) => setDesde(e.target.value)}
+            className="bg-slate-800 border-slate-700 h-9 text-sm w-36" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Label className="text-slate-400 text-xs whitespace-nowrap">Hasta</Label>
+          <Input type="date" value={fechaHasta} onChange={(e) => setHasta(e.target.value)}
+            className="bg-slate-800 border-slate-700 h-9 text-sm w-36" />
+        </div>
+        <Button onClick={() => refetch()} size="sm" variant="outline"
+          className="border-slate-700 text-slate-300 hover:bg-slate-800">
+          <RefreshCw size={14} className="mr-1" /> Actualizar
+        </Button>
+      </div>
+
+      {/* Tabla */}
+      <div className="rounded-xl border border-slate-700 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-800">
+            <tr>
+              <th className="px-3 py-2.5 text-left text-slate-400 font-medium w-24">Fecha</th>
+              <th className="px-3 py-2.5 text-left text-slate-400 font-medium w-28">Asiento</th>
+              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">Cuenta</th>
+              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">Descripción</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium w-28">Debe</th>
+              <th className="px-3 py-2.5 text-right text-slate-400 font-medium w-28">Haber</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading && (
+              <tr><td colSpan={6} className="py-12 text-center text-slate-500">
+                <Loader2 size={20} className="animate-spin mx-auto" />
+              </td></tr>
+            )}
+            {!isLoading && rows.length === 0 && (
+              <tr><td colSpan={6} className="py-12 text-center text-slate-500">
+                No hay movimientos confirmados en este grupo
+              </td></tr>
+            )}
+            {rows.map((row, i) => {
+              const asiento = row.asientos_contables;
+              const pc      = row.plan_cuentas;
+              const fecha   = asiento?.fecha ? asiento.fecha.slice(0, 10).split('-').reverse().join('/') : '—';
+              return (
+                <tr key={row.id ?? i} className="border-t border-slate-800 hover:bg-slate-800/30">
+                  <td className="px-3 py-2 font-mono text-xs text-slate-400">{fecha}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-[#00D4FF]">{asiento?.numero ?? '—'}</td>
+                  <td className="px-3 py-2">
+                    <span className="font-mono text-[10px] text-slate-500 mr-1">{pc?.codigo}</span>
+                    <span className="text-slate-300 text-xs">{pc?.nombre}</span>
+                  </td>
+                  <td className="px-3 py-2 text-slate-400 text-xs max-w-[200px] truncate">
+                    {row.descripcion || asiento?.descripcion || '—'}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-xs">
+                    {Number(row.debe) > 0 ? <span className="text-slate-200">{fmt(row.debe)}</span> : <span className="text-slate-600">—</span>}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-xs">
+                    {Number(row.haber) > 0 ? <span className="text-slate-200">{fmt(row.haber)}</span> : <span className="text-slate-600">—</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          {rows.length > 0 && (
+            <tfoot className="bg-slate-800">
+              <tr>
+                <td colSpan={4} className="px-3 py-2 text-slate-400 font-semibold text-xs">TOTALES</td>
+                <td className="px-3 py-2 text-right font-mono font-bold text-white text-xs">{fmt(totalDebe)}</td>
+                <td className="px-3 py-2 text-right font-mono font-bold text-white text-xs">{fmt(totalHaber)}</td>
+              </tr>
+              <tr>
+                <td colSpan={5} className="px-3 py-1 text-slate-500 text-xs">Saldo neto (D-H)</td>
+                <td className={`px-3 py-1 text-right font-mono font-bold text-xs ${totalDebe - totalHaber >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {fmt(Math.abs(totalDebe - totalHaber))} {totalDebe - totalHaber >= 0 ? '(D)' : '(H)'}
+                </td>
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ─── Tab: Plan de Cuentas ────────────────────────────────────────────────────
 
 function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
   const [search, setSearch]         = useState('');
   const [showModal, setShowModal]   = useState(false);
   const [editCuenta, setEditCuenta] = useState(null);
+  const [drillDown, setDrillDown]   = useState(null); // { cuenta, ids[] }
   const { toast } = useToast();
 
   const handleSeedCuentas = async () => {
@@ -450,6 +598,18 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
     );
   }
 
+  // Drill-down activo → mostrar movimientos del grupo seleccionado
+  if (drillDown) {
+    return (
+      <DrillDownMovimientos
+        cuenta={drillDown.cuenta}
+        cuentaIds={drillDown.ids}
+        empresaId={empresaId}
+        onVolver={() => setDrillDown(null)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -468,12 +628,16 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
         <div className="p-3 space-y-1">
           {tree.map((raiz) => (
             <CuentaNode key={raiz.id} cuenta={raiz} depth={0}
-              onEdit={setEditCuenta} search={search} />
+              onEdit={setEditCuenta}
+              onViewMovimientos={(cuenta, ids) => setDrillDown({ cuenta, ids })}
+              search={search} />
           ))}
         </div>
       </div>
 
-      <p className="text-xs text-slate-600 text-right">{cuentasFlat.length} cuentas en total</p>
+      <p className="text-xs text-slate-600 text-right flex items-center justify-end gap-1">
+        {cuentasFlat.length} cuentas en total — hover para ver movimientos <List size={11} />
+      </p>
 
       <ModalNuevaCuenta
         open={showModal}

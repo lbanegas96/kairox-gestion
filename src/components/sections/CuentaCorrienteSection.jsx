@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Search, 
-  DollarSign, 
-  AlertTriangle, 
+import {
+  Search,
+  DollarSign,
+  AlertTriangle,
   Users,
   CreditCard,
   ArrowLeft,
@@ -13,6 +13,7 @@ import {
   X,
   Banknote,
   Eye,
+  Plus,
   ArrowDownCircle,
   ArrowUpCircle
 } from 'lucide-react';
@@ -70,6 +71,11 @@ function CuentaCorrienteSection() {
     nota: ''
   });
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+
+  // Nuevo Cliente
+  const [isNewClientOpen, setIsNewClientOpen] = useState(false);
+  const [newClientForm, setNewClientForm] = useState({ nombre: '', telefono: '', email: '', limite_credito: '' });
+  const [isSavingClient, setIsSavingClient] = useState(false);
 
   useEffect(() => {
     if (user && user.empresa_id) {
@@ -222,6 +228,35 @@ function CuentaCorrienteSection() {
     }
   };
 
+  const handleCreateClient = async () => {
+    if (!newClientForm.nombre.trim()) {
+      toast({ title: 'Nombre requerido', variant: 'destructive' });
+      return;
+    }
+    setIsSavingClient(true);
+    try {
+      const { error } = await supabase.from('clientes').insert([{
+        user_id: user.tenant_id,
+        empresa_id: user.empresa_id,
+        nombre: newClientForm.nombre.trim(),
+        telefono: newClientForm.telefono.trim() || null,
+        email: newClientForm.email.trim() || null,
+        limite_credito: parseFloat(newClientForm.limite_credito) || 0,
+        saldo_actual: 0,
+        activo: true,
+      }]);
+      if (error) throw error;
+      toast({ title: 'Cliente creado', description: newClientForm.nombre, className: 'bg-emerald-600 text-white border-none' });
+      setIsNewClientOpen(false);
+      setNewClientForm({ nombre: '', telefono: '', email: '', limite_credito: '' });
+      fetchData();
+    } catch (err) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsSavingClient(false);
+    }
+  };
+
   const getStatusBadge = (saldo) => {
     const hasDebt = (saldo || 0) > 0;
     const isFavor = (saldo || 0) < 0;
@@ -252,6 +287,11 @@ function CuentaCorrienteSection() {
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Cuenta Corriente</h2>
           <p className="text-slate-500 dark:text-slate-400">Control de saldos y movimientos de clientes</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button onClick={() => setIsNewClientOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
+            <Plus className="h-4 w-4" /> Nuevo Cliente
+          </Button>
         </div>
         {!isSessionOpen && (
            <div className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-4 py-2 rounded-lg flex items-center gap-2 border border-red-200 dark:border-red-800 text-sm font-bold shadow-sm">
@@ -459,6 +499,42 @@ function CuentaCorrienteSection() {
          // Task 4 asks to add payment inside modal. We'll handle that inside modal component.
          onUpdate={() => fetchData()} 
       />
+
+      {/* NUEVO CLIENTE DIALOG */}
+      <Dialog open={isNewClientOpen} onOpenChange={setIsNewClientOpen}>
+        <DialogContent className="sm:max-w-[420px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+              <Users className="h-5 w-5" /> Nuevo Cliente
+            </DialogTitle>
+            <DialogDescription>Completá los datos básicos. El cliente quedará disponible en toda la app.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="nc-nombre">Nombre *</Label>
+              <Input id="nc-nombre" value={newClientForm.nombre} onChange={(e) => setNewClientForm({ ...newClientForm, nombre: e.target.value })} placeholder="Ej: Juan Pérez" autoFocus />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="nc-telefono">Teléfono</Label>
+              <Input id="nc-telefono" value={newClientForm.telefono} onChange={(e) => setNewClientForm({ ...newClientForm, telefono: e.target.value })} placeholder="+54 11 1234-5678" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="nc-email">Email</Label>
+              <Input id="nc-email" type="email" value={newClientForm.email} onChange={(e) => setNewClientForm({ ...newClientForm, email: e.target.value })} placeholder="cliente@mail.com" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="nc-limite">Límite de Crédito ($)</Label>
+              <Input id="nc-limite" type="number" min="0" value={newClientForm.limite_credito} onChange={(e) => setNewClientForm({ ...newClientForm, limite_credito: e.target.value })} placeholder="0" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsNewClientOpen(false)} disabled={isSavingClient}>Cancelar</Button>
+            <Button onClick={handleCreateClient} disabled={isSavingClient || !newClientForm.nombre.trim()} className="bg-blue-600 hover:bg-blue-700 text-white">
+              {isSavingClient ? 'Guardando...' : 'Crear Cliente'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* QUICK PAYMENT DIALOG (From list view) */}
       <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
