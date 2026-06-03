@@ -325,6 +325,45 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 | Baja | Multi-almacén | — |
 | Baja | Lotes y vencimientos | — |
 | Diferida | Fase 5: Email, WhatsApp, API REST, backups | — |
+| ⏸️ ESTRATÉGICO (último) | **Multi-membership + modelo de licencias** | Permitir que un mismo email pertenezca a varias empresas (modelo Notion/Slack: tabla `memberships` M:N). Postponed porque depende de la estrategia de comercialización (cobro por empresa / por usuario / por módulos). Ver §"Pendientes estratégicos". |
+
+---
+
+## Pendientes estratégicos (post-comercialización)
+
+Este bloque queda **explícitamente al final** del roadmap. La idea es definir la estrategia de venta y cobro PRIMERO, y después implementar el modelo técnico que la soporte.
+
+### 🎯 Multi-membership (1 email → N empresas)
+
+**Por qué se posterga:** el modelo de licencias determina la arquitectura. Decidir el schema sin tener el pricing definido es prematuro.
+
+**Modelos de cobro a evaluar:**
+
+| Modelo | Cómo cobra | Schema requerido |
+|---|---|---|
+| **Flat fee por empresa** | $X/mes por tenant, usuarios ilimitados | Actual sirve (1 user = 1 empresa) |
+| **Seat-based (por usuario activo)** | $X/mes por usuario invitado | Necesita `memberships` M:N |
+| **Tier híbrido (plan + límite de seats)** | Starter (3 users) / Pro (10) / Enterprise (∞) | `memberships` M:N + tabla `planes` + `empresas.plan_id` |
+| **Por módulos activados** | Cada módulo es un add-on | `empresa_features` (empresa_id, modulo, activo, vence_en) |
+| **Freemium + paywall** | Gratis hasta N registros, después pagás | Counters en `empresas` + límites configurables |
+
+**Decisiones que dispara este punto cuando lo retomemos:**
+1. ¿Cobro por empresa o por usuario activo?
+2. ¿Hay tiers (Starter/Pro/Enterprise) o un solo plan?
+3. ¿Los módulos (Contabilidad, Cotizaciones, OC) son add-ons o vienen todos?
+4. ¿Hay trial gratuito? ¿De cuántos días?
+5. ¿Cómo se gestionan los cobros? (Stripe / MercadoPago / manual)
+6. ¿Suspensión por impago? ¿Período de gracia?
+
+**Cuando se retome, los entregables esperados son:**
+1. `ESTRATEGIA_COMERCIAL.md` — modelo elegido, precios, tiers
+2. `MIGRACION_MEMBERSHIPS.md` — plan técnico de migración paso a paso
+3. SQL de migración (memberships + backfill desde profiles actuales)
+4. Frontend: WorkspaceSelector + switcher en Header + cambios en AuthContext
+5. Edge function `create-user` reescrita (manejar email ya existente)
+6. Integración con la pasarela de pago elegida
+
+**Hasta ese momento:** KAIROX queda con modelo 1-user-1-empresa, sin cambios.
 
 ---
 
