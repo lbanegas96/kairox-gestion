@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-03 (sesión — revisión completa empresa_id + sidebar light mode + dashboard fix)
+**Última actualización:** 2026-06-03 (sesión — fix removeChild Radix UI en ClientDetailModal)
 **Branch activo:** `master`
 
 ---
@@ -125,6 +125,12 @@ Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Ua
 | **Servicio de Compras devolvía vacío** | `comprasService.ts` (1 filtro) | Mismo patrón. |
 | **Servicio de Productos devolvía vacío** | `productosService.ts` (2 filtros) | Mismo patrón. |
 | **Sidebar no soportaba modo claro** | `Sidebar.jsx` | Todos los colores eran hardcodeados oscuros (`bg-[#1E293B]`, `text-white`, etc.). Agregadas variantes `dark:` en fondo, texto, bordes, hover, item activo, zona de usuario y botón cerrar sesión. Modo día: blanco + texto oscuro + azul suave activo. Modo noche: gris claro suave (`slate-700/60`) como item activo. |
+
+### Sesión 2026-06-03 (fix removeChild en ClientDetailModal)
+
+| Bug | Archivo | Cambio |
+|---|---|---|
+| **`NotFoundError: removeChild` al cerrar detalle de cliente** | `ClientDetailModal.jsx` | El componente tenía `if (!open) return null` que desmontaba el `<Dialog>` de Radix UI abruptamente antes de que Radix completara el cleanup de portal/foco. Al volver el foco a la tabla, React encontraba el nodo DOM reemplazado → `removeChild` falla. Fix: eliminar el `return null` y dejar que Radix maneje el show/hide con la prop `open`. Mismo patrón que el bug previo de `ProductosSection`. |
 
 ---
 

@@ -142,8 +142,6 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate,
   // Let's stick to requested logic: "Calculated as limite_crédito - saldo_actual when saldo_actual > 0"
   const disponible = saldo > 0 ? Math.max(0, limite - saldo) : limite;
 
-  if (!open) return null;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl kairox-bg-card kairox-text-primary overflow-hidden flex flex-col max-h-[90vh] dark:bg-slate-950 dark:border-slate-800">
