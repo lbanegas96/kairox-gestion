@@ -155,7 +155,12 @@ function OrdenesCompraSection({ navPayload }) {
 
   const recibirMutation = useMutation({
     mutationFn: ({ ordenId, recepciones: recs }) =>
-      ordenesCompraService.recibirItems(ordenId, Object.entries(recs).map(([itemId, qty]) => ({ itemId, cantidadRecibida: Number(qty) }))),
+      ordenesCompraService.recibirItems(
+        ordenId,
+        Object.entries(recs).map(([itemId, qty]) => ({ itemId, cantidadRecibida: Number(qty) })),
+        empresaId,
+        user.id
+      ),
     onSuccess: () => {
       invalidateOC();
       toast({ title: 'Stock actualizado ✓', description: 'Recepción registrada. El inventario fue actualizado automáticamente.', className: 'bg-green-600 text-white' });

@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-03 (sesión — bugfixes OC/clientes, SAP items 1+2+3)
+**Última actualización:** 2026-06-03 (sesión — asientos auto recepción OC + migration 008 ejecutada)
 **Branch activo:** `master`
 
 ---
@@ -107,6 +107,13 @@ Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Ua
 | **SAP Item 2: Cierre de períodos** | `PlanCuentasSection.jsx`, `planCuentasService.ts`, `migrations/008` | `periodosService` con `getPeriodosAnio`, `togglePeriodo`, `isPeriodoCerrado`. Check en `createAsiento` → lanza error si el período está cerrado. Tab "Períodos": grilla 12 meses con Cerrar/Reabrir (solo admin). |
 | **SAP Item 3: P&L + Balance General** | `PlanCuentasSection.jsx`, `planCuentasService.ts` | `asientosService.getEstadoResultados()` y `getBalanceGeneral()` (computan desde `getBalanceComprobacion`). Tab "P&L": KPIs (Ingresos/Egresos/Resultado) + detalle por cuenta. Tab "Balance General": columnas Activo vs Pasivo+PN + verificación ecuación contable. |
 
+### Sesión 2026-06-03 tarde (migration 008 + asientos auto recepción OC)
+
+| Feature | Archivo | Cambio |
+|---|---|---|
+| **Migration 008 ejecutada** | Supabase SQL Editor | `pendiente_aprobacion` CHECK constraint + tabla `periodos_contables` ya en DB |
+| **Asientos auto recepción OC** | `planCuentasService.ts`, `ordenesCompraService.ts`, `OrdenesCompraSection.jsx` | Al confirmar recepción: DEBE 1.1.3 Mercaderías / HABER 2.1.1 Ctas a Pagar. Monto = Σ(deltaQty × costoUnitario). Silencioso si empresa sin plan de cuentas o período cerrado. |
+
 ---
 
 ## Archivos clave modificados (sesión 2026-06-03)
@@ -171,7 +178,7 @@ migrations/
 | Inventario | `ProductosSection.jsx` | ✅ Funcional + soft delete |
 | Compras | `ComprasSection.jsx` | ✅ Funcional + asiento auto |
 | Cotizaciones | `CotizacionesSection.jsx` | ✅ Funcional |
-| Órdenes de Compra | `OrdenesCompraSection.jsx` | ✅ Funcional + aprobación + realtime + filtro fecha |
+| Órdenes de Compra | `OrdenesCompraSection.jsx` | ✅ Funcional + aprobación + realtime + filtro fecha + asiento auto recepción |
 | Caja | `CajaSection.jsx` | ✅ Funcional + indicadores de turno |
 | Clientes | `ClientesSection.jsx` | ✅ Funcional + inactivar/reactivar + validación eliminación |
 | Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Funcional + solo muestra clientes activos |
@@ -270,8 +277,8 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 | 🟢 Hecho | **Inactivar/reactivar clientes** | Soft delete SAP-style en ClientesSection + ClientDetailModal ✅ |
 | 🟢 Hecho | **Fix recepción parcial OC** | `useEffect` reemplaza `onSuccess` (TQ v5) ✅ |
 | 🟢 Hecho | **SAP items 1+2+3** | Aprobación OC + Cierre períodos + P&L + Balance General ✅ |
-| 🔴 URGENTE | **Migration 008** | Ejecutar `migrations/008_oc_approval_periodos.sql` en Supabase SQL Editor del proyecto `wuznppxeonmhfcvnqfbf`. Sin esto: el estado `pendiente_aprobacion` falla por CHECK constraint y la tabla `periodos_contables` no existe. |
-| 🟡 Media | **Asientos auto para recepción OC** | DEBE 1.1.3 Mercaderías / HABER 2.1.1 Ctas a Pagar al recibir mercadería de una OC |
+| 🟢 Hecho | **Migration 008** | Ejecutada en Supabase `wuznppxeonmhfcvnqfbf` ✅ — CHECK constraint `pendiente_aprobacion` + tabla `periodos_contables` activas. |
+| 🟢 Hecho | **Asientos auto para recepción OC** | DEBE 1.1.3 Mercaderías / HABER 2.1.1 Ctas a Pagar — se genera y confirma automáticamente al registrar recepción ✅ |
 | 🟡 Media | **3-way match OC-Recepción-Factura** | Vincular factura del proveedor a la OC y validar montos |
 | 🟡 Media | **Cotización → Pedido → Factura** | Vincular `cotizaciones.id` como origen de la venta para trazabilidad |
 | 🟡 Media | **Verificar dominio Resend** | `onboarding@resend.dev` solo envía a emails verificados → dominio propio para producción |

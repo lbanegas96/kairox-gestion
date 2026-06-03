@@ -428,6 +428,38 @@ export const asientosAutoService = {
   },
 
   /**
+   * Crea y confirma el asiento de recepción de mercadería de una OC.
+   *   DEBE  1.1.3 Mercaderías
+   *   HABER 2.1.1 Cuentas a Pagar Proveedores
+   */
+  async crearAsientoRecepcionOC(
+    empresaId: string,
+    userId: string,
+    params: {
+      ocId: string;
+      total: number;
+      fecha: string;
+      descripcion: string;
+    }
+  ): Promise<void> {
+    const [cuentaMercaderias, cuentaProveedores] = await Promise.all([
+      findCuentaByCodigo(empresaId, '1.1.3'),
+      findCuentaByCodigo(empresaId, '2.1.1'),
+    ]);
+    if (!cuentaMercaderias || !cuentaProveedores) return;
+
+    const asiento = await asientosService.createAsiento(
+      empresaId, userId,
+      { fecha: params.fecha, descripcion: params.descripcion, origen: 'recepcion_oc', origen_id: params.ocId },
+      [
+        { cuenta_id: cuentaMercaderias, debe: params.total, haber: 0,            descripcion: 'Recepción de mercadería' },
+        { cuenta_id: cuentaProveedores, debe: 0,            haber: params.total, descripcion: 'Deuda con proveedor' },
+      ]
+    );
+    await asientosService.confirmarAsiento(asiento.id);
+  },
+
+  /**
    * Crea y confirma el asiento de una compra.
    *   DEBE  1.1.3 Mercaderías / Inventario
    *   HABER 1.1.1 Caja y Bancos  (o 2.1.1 Cuentas a Pagar si es crédito)

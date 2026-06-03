@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/customSupabaseClient';
 import type { OrdenCompra, OrdenCompraEstado, OrdenCompraItem, PaginatedResult, EstadoPago } from '@/types';
+import { asientosAutoService } from './planCuentasService';
 
 interface GetAllFilters {
   estado?: OrdenCompraEstado;
@@ -124,26 +125,32 @@ export const ordenesCompraService = {
     return data as OrdenCompra;
   },
 
-  /** Recepción parcial o total de ítems — suma el delta al acumulado y actualiza stock */
+  /** Recepción parcial o total de ítems — suma el delta al acumulado, actualiza stock y genera asiento contable */
   async recibirItems(
     ordenId: string,
-    recepciones: { itemId: string; cantidadRecibida: number }[]
+    recepciones: { itemId: string; cantidadRecibida: number }[],
+    empresaId?: string,
+    userId?: string
   ): Promise<void> {
-    for (const rec of recepciones) {
-      if (rec.cantidadRecibida <= 0) continue; // ignorar items sin recepción
+    let totalAsiento = 0;
 
-      // Leer estado actual para hacer ADD en lugar de SET
+    for (const rec of recepciones) {
+      if (rec.cantidadRecibida <= 0) continue;
+
+      // Leer estado actual + costo para hacer ADD y calcular monto del asiento
       const { data: current, error: fetchItemError } = await supabase
         .from('ordenes_compra_items')
-        .select('cantidad_recibida, cantidad_pedida')
+        .select('cantidad_recibida, cantidad_pedida, costo_unitario')
         .eq('id', rec.itemId)
         .single();
       if (fetchItemError) throw new Error(fetchItemError.message);
 
       const nuevaCantidad = Math.min(
         Number(current.cantidad_recibida) + rec.cantidadRecibida,
-        Number(current.cantidad_pedida) // no superar lo pedido
+        Number(current.cantidad_pedida)
       );
+      const deltaQty = nuevaCantidad - Number(current.cantidad_recibida);
+      totalAsiento += deltaQty * Number(current.costo_unitario);
 
       const { error } = await supabase
         .from('ordenes_compra_items')
@@ -172,6 +179,27 @@ export const ordenesCompraService = {
       .from('ordenes_compra')
       .update({ estado: nuevoEstado })
       .eq('id', ordenId);
+
+    // Asiento contable automático: DEBE Mercaderías / HABER Ctas a Pagar
+    if (empresaId && userId && totalAsiento > 0) {
+      try {
+        const fecha = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
+        const { data: oc } = await supabase
+          .from('ordenes_compra')
+          .select('numero, proveedor_nombre')
+          .eq('id', ordenId)
+          .single();
+        const provNombre = (oc as any)?.proveedor_nombre ?? 'Proveedor';
+        await asientosAutoService.crearAsientoRecepcionOC(empresaId, userId, {
+          ocId: ordenId,
+          total: totalAsiento,
+          fecha,
+          descripcion: `Recepción mercadería OC ${(oc as any)?.numero ?? ordenId} — ${provNombre}`,
+        });
+      } catch {
+        // silencioso si empresa no tiene plan de cuentas o período cerrado
+      }
+    }
   },
 
   async cancelar(id: string): Promise<void> {
