@@ -144,7 +144,10 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch }) {
                     return (
                       <button key={item.id}
                         className={`w-full text-left p-3 rounded-lg border transition-colors hover:opacity-90 ${cfg.bg}`}
-                        onClick={() => {
+                        onClick={(e) => {
+                          // Blur inmediato para que Radix no aplique aria-hidden sobre un elemento enfocado
+                          e.currentTarget.blur();
+                          (document.activeElement as HTMLElement)?.blur();
                           if (item.tipo === 'oc_pendiente') {
                             onNavigate?.(item.seccion, { openRecepcion: item.raw.id });
                           } else {
