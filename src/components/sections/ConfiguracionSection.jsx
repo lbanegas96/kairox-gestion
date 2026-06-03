@@ -1,14 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Save, Building, Image as ImageIcon, Loader2, Upload, Trash2, AlertCircle } from 'lucide-react';
+import { Settings, Save, Building, Image as ImageIcon, Loader2, Upload, Trash2, AlertCircle, LayoutDashboard, Package, ShoppingCart, ArrowLeftRight, Wallet, FileText, Users, Contact, CreditCard, ClipboardList, ShoppingBag, BookOpen, Banknote, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useConfig } from '@/contexts/ConfigContext';
+import { Switch } from '@/components/ui/switch';
+import { useConfig, ALL_MODULES } from '@/contexts/ConfigContext';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 
+const MODULE_ICONS = {
+  dashboard:        LayoutDashboard,
+  productos:        Package,
+  ventas:           ShoppingCart,
+  cotizaciones:     ClipboardList,
+  compras:          ArrowLeftRight,
+  ordenes_compra:   ShoppingBag,
+  caja:             Wallet,
+  'movimientos-uala': Banknote,
+  clientes:         Contact,
+  cuentacorriente:  CreditCard,
+  plan_cuentas:     BookOpen,
+  reportes:         FileText,
+  usuarios:         Users,
+  configuracion:    Settings,
+};
+
 const ConfiguracionSection = () => {
-  const { config, updateConfig } = useConfig();
+  const { config, updateConfig, isModuloActivo } = useConfig();
   const { user } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef(null);
@@ -19,6 +37,12 @@ const ConfiguracionSection = () => {
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [savingModulos, setSavingModulos] = useState(false);
+
+  // Estado local de módulos: { [id]: boolean }
+  const [modulosState, setModulosState] = useState(() =>
+    Object.fromEntries(ALL_MODULES.map(m => [m.id, true]))
+  );
 
   useEffect(() => {
     if (config) {
@@ -26,8 +50,33 @@ const ConfiguracionSection = () => {
         nombre_empresa: config.nombre_empresa || '',
         company_logo: config.company_logo || config.logo_base64 || ''
       });
+      // Sincronizar switches con la configuración guardada
+      setModulosState(
+        Object.fromEntries(ALL_MODULES.map(m => [m.id, isModuloActivo(m.id)]))
+      );
     }
-  }, [config]);
+  }, [config, isModuloActivo]);
+
+  const handleToggleModulo = (moduleId) => {
+    const mod = ALL_MODULES.find(m => m.id === moduleId);
+    if (mod?.required) return; // no se puede deshabilitar
+    setModulosState(prev => ({ ...prev, [moduleId]: !prev[moduleId] }));
+  };
+
+  const handleSaveModulos = async () => {
+    setSavingModulos(true);
+    // Guardar solo los habilitados (required siempre true, no es necesario incluirlos)
+    const activos = ALL_MODULES
+      .filter(m => m.required || modulosState[m.id])
+      .map(m => m.id);
+    const result = await updateConfig({ modulos_activos: JSON.stringify(activos) });
+    setSavingModulos(false);
+    if (result.success) {
+      toast({ title: 'Módulos actualizados', description: 'Los cambios se aplicaron inmediatamente.', className: 'bg-green-600 text-white border-green-700' });
+    } else {
+      toast({ title: 'Error al guardar módulos', variant: 'destructive' });
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -262,6 +311,60 @@ const ConfiguracionSection = () => {
           <div className="text-sm text-slate-500 max-w-xs">
             <p>Los cambios se aplicarán inmediatamente en toda la aplicación para todos los usuarios.</p>
           </div>
+        </div>
+      </div>
+
+      {/* ── Módulos del Sistema ── */}
+      <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+        <div className="flex items-center justify-between mb-5 border-b kairox-border pb-3">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Módulos del Sistema</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Activá o desactivá los módulos que tu empresa necesita. Los módulos desactivados no aparecen en el menú.
+            </p>
+          </div>
+          <Button
+            onClick={handleSaveModulos}
+            disabled={savingModulos}
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 dark:bg-[#00D4FF] dark:hover:bg-[#00D4FF]/90 text-white dark:text-black font-bold"
+          >
+            {savingModulos ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
+            Guardar módulos
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {ALL_MODULES.map(mod => {
+            const Icon = MODULE_ICONS[mod.id] || Settings;
+            const isActive = modulosState[mod.id] ?? true;
+            return (
+              <div
+                key={mod.id}
+                className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                  isActive
+                    ? 'border-blue-200 bg-blue-50/50 dark:border-blue-900/50 dark:bg-blue-900/10'
+                    : 'border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/30 opacity-60'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-blue-500 dark:text-[#00D4FF]' : 'text-slate-400'}`} />
+                  <span className={`text-sm font-medium ${isActive ? 'text-slate-800 dark:text-slate-200' : 'text-slate-400'}`}>
+                    {mod.label}
+                  </span>
+                  {mod.required && (
+                    <Lock className="w-3 h-3 text-slate-400" title="Módulo obligatorio" />
+                  )}
+                </div>
+                <Switch
+                  checked={isActive}
+                  onCheckedChange={() => handleToggleModulo(mod.id)}
+                  disabled={mod.required}
+                  className="data-[state=checked]:bg-blue-500 dark:data-[state=checked]:bg-[#00D4FF]"
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

@@ -3,14 +3,15 @@ import { LayoutDashboard, Package, ShoppingCart, ArrowLeftRight, Wallet, FileTex
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
+import { useConfig } from '@/contexts/ConfigContext';
 import { Button } from '@/components/ui/button';
 
 function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen, alerts }) {
   const { user, signOut } = useAuth();
   const { isSessionOpen } = useCaja();
+  const { isModuloActivo } = useConfig();
 
-  // All menu items are visible to everyone now
-  const menuItems = [
+  const allMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'productos', label: 'Inventario', icon: Package, badge: alerts?.count > 0 ? alerts.count : null },
     { id: 'ventas', label: 'Ventas', icon: ShoppingCart },
@@ -31,6 +32,8 @@ function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen, alerts })
     { id: 'usuarios', label: 'Usuarios', icon: Users },
     { id: 'configuracion', label: 'Configuración', icon: Settings },
   ];
+
+  const menuItems = allMenuItems.filter(item => isModuloActivo(item.id));
 
   const handleSignOut = async () => {
     await signOut();

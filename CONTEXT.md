@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-02 (sesión fixes OC + notificaciones navegables)
+**Última actualización:** 2026-06-02 (sesión módulos configurables + auditoría plan cuentas)
 **Branch activo:** `master`
 
 ---
@@ -240,7 +240,9 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 | 🟢 Hecho | **Auth & Usuarios** | Reset contraseña ✅, creación directa ✅, SMTP Resend ✅, último acceso ✅ |
 | 🟢 Hecho | **Errores de consola** | Todos los warnings Radix UI, claves TanStack Query, etc. ✅ |
 | 🟢 Hecho | **Contabilidad** | Plan de Cuentas + Libro Mayor + asientos automáticos ✅ |
+| 🟢 Hecho | **Módulos configurables** | Configuración → "Módulos del Sistema": toggles para habilitar/deshabilitar módulos por empresa. Guardado en `configuracion.modulos_activos` (JSON). Sidebar filtra automáticamente. Dashboard, Usuarios y Configuración son obligatorios. |
 | 🟡 Media | **SMTP para nuevos tenants** | `onboarding@resend.dev` solo envía a emails verificados. Para producción: verificar dominio propio en Resend y actualizar sender. Confirmación de email desactivada en dev. |
+| 🟡 Media | **Asientos auto para recepción OC** | Las recepciones de Órdenes de Compra no generan asiento contable. Pendiente: DEBE 1.1.3 Mercaderías / HABER 2.1.1 Ctas a Pagar (o Caja si es contado). |
 
 ---
 

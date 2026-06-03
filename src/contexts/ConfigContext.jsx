@@ -1,13 +1,34 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 
 const ConfigContext = createContext();
+
+// IDs de todos los módulos del sistema
+export const ALL_MODULES = [
+  { id: 'dashboard',       label: 'Dashboard',          required: true  },
+  { id: 'productos',       label: 'Inventario',          required: false },
+  { id: 'ventas',          label: 'Ventas',              required: false },
+  { id: 'cotizaciones',    label: 'Cotizaciones',        required: false },
+  { id: 'compras',         label: 'Compras',             required: false },
+  { id: 'ordenes_compra',  label: 'Órdenes de Compra',   required: false },
+  { id: 'caja',            label: 'Caja',                required: false },
+  { id: 'movimientos-uala',label: 'Ualá',                required: false },
+  { id: 'clientes',        label: 'Clientes',            required: false },
+  { id: 'cuentacorriente', label: 'Cta. Corriente',      required: false },
+  { id: 'plan_cuentas',    label: 'Contabilidad',        required: false },
+  { id: 'reportes',        label: 'Reportes',            required: false },
+  { id: 'usuarios',        label: 'Usuarios',            required: true  },
+  { id: 'configuracion',   label: 'Configuración',       required: true  },
+];
+
+const ALL_MODULE_IDS = ALL_MODULES.map(m => m.id);
 
 export const ConfigProvider = ({ children }) => {
   const [config, setConfig] = useState({
     nombre_empresa: 'KAIROX Gestión',
     logo_base64: '',
-    company_logo: '' // Added for URL support
+    company_logo: '',
+    modulos_activos: null, // null = todos activos (default)
   });
   const [loading, setLoading] = useState(true);
 
@@ -28,6 +49,10 @@ export const ConfigProvider = ({ children }) => {
           if (['nombre_empresa', 'logo_base64', 'company_logo'].includes(item.clave)) {
             overrides[item.clave] = item.valor;
           }
+          if (item.clave === 'modulos_activos') {
+            try { overrides.modulos_activos = JSON.parse(item.valor); }
+            catch { overrides.modulos_activos = null; }
+          }
         });
         setConfig(prev => ({ ...prev, ...overrides }));
       }
@@ -37,6 +62,14 @@ export const ConfigProvider = ({ children }) => {
       setLoading(false);
     }
   };
+
+  // Devuelve true si el módulo está activo (null = todos activos)
+  const isModuloActivo = useCallback((moduleId) => {
+    const mod = ALL_MODULES.find(m => m.id === moduleId);
+    if (mod?.required) return true; // siempre activos
+    if (!config.modulos_activos) return true; // sin configuración = todos activos
+    return config.modulos_activos.includes(moduleId);
+  }, [config.modulos_activos]);
 
   const updateConfig = async (newSettings) => {
     // Optimistic update
@@ -80,7 +113,7 @@ export const ConfigProvider = ({ children }) => {
   }, []);
 
   return (
-    <ConfigContext.Provider value={{ config, loading, updateConfig }}>
+    <ConfigContext.Provider value={{ config, loading, updateConfig, isModuloActivo, ALL_MODULES }}>
       {children}
     </ConfigContext.Provider>
   );
