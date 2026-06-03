@@ -25,7 +25,7 @@ export const comprasService = {
     let query = supabase
       .from('compras')
       .select('*, proveedores(nombre)', { count: 'exact' })
-      .eq('user_id', empresaId)
+      .eq('empresa_id', empresaId)
       .order('fecha', { ascending: false });
 
     if (fechaDesde) query = query.gte('fecha', getStartOfDayAR(new Date(fechaDesde)));

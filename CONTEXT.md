@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-03 (sesión — asientos auto recepción OC + migration 008 ejecutada)
+**Última actualización:** 2026-06-03 (sesión — revisión completa empresa_id + sidebar light mode + dashboard fix)
 **Branch activo:** `master`
 
 ---
@@ -113,6 +113,18 @@ Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Ua
 |---|---|---|
 | **Migration 008 ejecutada** | Supabase SQL Editor | `pendiente_aprobacion` CHECK constraint + tabla `periodos_contables` ya en DB |
 | **Asientos auto recepción OC** | `planCuentasService.ts`, `ordenesCompraService.ts`, `OrdenesCompraSection.jsx` | Al confirmar recepción: DEBE 1.1.3 Mercaderías / HABER 2.1.1 Ctas a Pagar. Monto = Σ(deltaQty × costoUnitario). Silencioso si empresa sin plan de cuentas o período cerrado. |
+
+### Sesión 2026-06-03 noche (revisión completa empresa_id + sidebar light + dashboard fix)
+
+| Bug / Feature | Archivo(s) | Cambio |
+|---|---|---|
+| **Dashboard mostraba $0 en todas las tarjetas** | `dashboardService.ts` (7 filtros) | `.eq('user_id', empresaId)` → `.eq('empresa_id', empresaId)`. El servicio recibía el UUID de empresa pero lo comparaba contra `user_id` (UUID del admin), que no coincide. Todos los KPIs + gráficos afectados. |
+| **Búsqueda global Cmd+K no encontraba productos ni clientes** | `CommandPalette.jsx` (2 queries) | Mismo patrón: `user_id` → `empresa_id` en queries de productos y clientes. |
+| **Servicio de Caja con cálculos rotos** | `cajaService.ts` (4 filtros) | Mismo patrón. Resúmenes de sesión/movimientos podían quedar vacíos. |
+| **Servicio de Clientes devolvía vacío** | `clientesService.ts` (2 filtros) | Mismo patrón. Lista paginada no cargaba. |
+| **Servicio de Compras devolvía vacío** | `comprasService.ts` (1 filtro) | Mismo patrón. |
+| **Servicio de Productos devolvía vacío** | `productosService.ts` (2 filtros) | Mismo patrón. |
+| **Sidebar no soportaba modo claro** | `Sidebar.jsx` | Todos los colores eran hardcodeados oscuros (`bg-[#1E293B]`, `text-white`, etc.). Agregadas variantes `dark:` en fondo, texto, bordes, hover, item activo, zona de usuario y botón cerrar sesión. Modo día: blanco + texto oscuro + azul suave activo. Modo noche: gris claro suave (`slate-700/60`) como item activo. |
 
 ---
 
@@ -312,7 +324,7 @@ Staff invitado por admin (create-user edge function):
 
 ## Convenciones aprendidas (para futuras sesiones)
 
-- **Tablas multi-tenant:** `proveedores`, `productos`, `categorias`, `configuracion`, etc. usan **`empresa_id`**, no `user_id`. Tablas más viejas (`comprobantes`, `movimientos_caja`, `movimientos_inventario`) usan `user_id = tenant_id`. `cuenta_corriente_movimientos` tiene ambos (backfill migration 007). Verificar con `information_schema` antes de escribir queries.
+- **Tablas multi-tenant:** TODAS las tablas tienen columna `empresa_id`. Todas las queries de servicios (`*Service.ts`) y componentes deben filtrar por `.eq('empresa_id', empresaId)`. Algunas tablas viejas (`movimientos_caja`, `clientes`, `productos`, `compras`, `caja_sesiones`) todavía tienen `user_id` como columna legacy pero **NO se debe usar en queries** — solo `empresa_id`. En componentes directos (no vía servicio), como `CajaSection.jsx`, se usa `.eq('user_id', user.tenant_id)` porque ahí `tenant_id === admin UUID` que sí coincide con `user_id` en las tablas legacy. **Regla de oro:** servicios siempre `empresa_id`, componentes directos verificar caso por caso.
 - **Timezone:** todo timestamp guardado en DB se persiste con offset AR ya aplicado (esquema "AR-local-as-UTC"). Para mostrar usar **siempre** `formatDateAR` / `formatDateTimeAR` de `dateUtils.js`. **Nunca** `new Date(x).toLocale*()` — resta los 3h dos veces.
 - **Filtros por rango de fecha:** comparar strings `YYYY-MM-DD` (slice 0,10), no instanciar `new Date()` sobre inputs de tipo date — evita drift de timezone.
 - **TanStack Query v5:** `onSuccess` en `useQuery` **no existe**. Usar `useEffect` que observe el resultado del query. Solo `useMutation` conserva `onSuccess`.

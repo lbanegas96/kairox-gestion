@@ -27,7 +27,7 @@ export const cajaService = {
     let query = supabase
       .from('movimientos_caja')
       .select('*', { count: 'exact' })
-      .eq('user_id', empresaId)
+      .eq('empresa_id', empresaId)
       .order('fecha', { ascending: false });
 
     if (sesionId) query = query.eq('caja_sesion_id', sesionId);
@@ -51,7 +51,7 @@ export const cajaService = {
     const { data, error } = await supabase
       .from('movimientos_caja')
       .select('tipo, monto, categoria')
-      .eq('user_id', empresaId)
+      .eq('empresa_id', empresaId)
       .gte('fecha', start)
       .lte('fecha', end);
     if (error) throw new Error(error.message);
@@ -87,7 +87,7 @@ export const cajaService = {
       .from('movimientos_caja')
       .delete()
       .eq('id', id)
-      .eq('user_id', empresaId);
+      .eq('empresa_id', empresaId);
     if (error) throw new Error(error.message);
   },
 
@@ -99,7 +99,7 @@ export const cajaService = {
     const { data, error, count } = await supabase
       .from('caja_sesiones')
       .select('*', { count: 'exact' })
-      .eq('user_id', empresaId)
+      .eq('empresa_id', empresaId)
       .order('apertura_fecha', { ascending: false })
       .range(from, from + pageSize - 1);
     if (error) throw new Error(error.message);

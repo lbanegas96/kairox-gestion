@@ -67,8 +67,8 @@ export function CommandPalette({ open, onClose, onNavigate }) {
     );
 
     const [{ data: prods }, { data: clientes }, { data: ventas }] = await Promise.all([
-      supabase.from('productos').select('id, nombre, stock_actual, codigo_sku').eq('user_id', user.empresa_id).ilike('nombre', `%${q}%`).limit(5),
-      supabase.from('clientes').select('id, nombre, documento, saldo_actual').eq('user_id', user.empresa_id).ilike('nombre', `%${q}%`).limit(5),
+      supabase.from('productos').select('id, nombre, stock_actual, codigo_sku').eq('empresa_id', user.empresa_id).ilike('nombre', `%${q}%`).limit(5),
+      supabase.from('clientes').select('id, nombre, documento, saldo_actual').eq('empresa_id', user.empresa_id).ilike('nombre', `%${q}%`).limit(5),
       supabase.from('comprobantes').select('id, numero_venta, total, created_at').eq('empresa_id', user.empresa_id).ilike('numero_venta', `%${q}%`).limit(3),
     ]);
 
