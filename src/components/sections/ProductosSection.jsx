@@ -426,8 +426,6 @@ const ProductosSection = () => {
         throw new Error("El nombre de la empresa es obligatorio.");
       }
 
-      console.log("Creating provider for empresa:", user.empresa_id);
-
       const payload = {
         nombre: newProvider.nombre.trim(),
         contacto: newProvider.contacto?.trim() || null,
@@ -437,8 +435,6 @@ const ProductosSection = () => {
         empresa_id: user.empresa_id,
         created_at: new Date().toISOString()
       };
-
-      console.log("Provider Payload:", payload);
 
       const { data, error } = await supabase
         .from('proveedores')

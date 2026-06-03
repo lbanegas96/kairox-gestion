@@ -11,6 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { supabase } from '@/lib/customSupabaseClient';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -35,18 +36,21 @@ function formatFecha(isoString) {
 // ── Componente principal ──────────────────────────────────────────────────────
 
 function MovimientosUala() {
+  const { user } = useAuth();
   const [movimientos, setMovimientos] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
   const [lastUpdate, setLastUpdate]   = useState(null);
 
   const cargarMovimientos = async () => {
+    if (!user?.empresa_id) return;
     setLoading(true);
     setError(null);
 
     const { data, error: err } = await supabase
       .from('movimientos_uala')
       .select('id, fecha, monto, destinatario, created_at')
+      .eq('empresa_id', user.empresa_id)
       .order('fecha', { ascending: false });
 
     if (err) {
@@ -60,8 +64,8 @@ function MovimientosUala() {
   };
 
   useEffect(() => {
-    cargarMovimientos();
-  }, []);
+    if (user?.empresa_id) cargarMovimientos();
+  }, [user?.empresa_id]);
 
   const totalEgresado = useMemo(
     () => movimientos.reduce((sum, m) => sum + Number(m.monto), 0),

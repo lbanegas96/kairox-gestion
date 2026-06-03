@@ -1,6 +1,7 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-03 (sesión — fix removeChild Radix UI en ClientDetailModal)
+**Última actualización:** 2026-06-03 (sesión — auditoría integral end-to-end)
 **Branch activo:** `master`
+**Entregables de auditoría:** `AUDITORIA.md` · `SUPABASE_ANALISIS.md` (recién creados)
 
 ---
 
@@ -131,6 +132,21 @@ Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Ua
 | Bug | Archivo | Cambio |
 |---|---|---|
 | **`NotFoundError: removeChild` al cerrar detalle de cliente** | `ClientDetailModal.jsx` | El componente tenía `if (!open) return null` que desmontaba el `<Dialog>` de Radix UI abruptamente antes de que Radix completara el cleanup de portal/foco. Al volver el foco a la tabla, React encontraba el nodo DOM reemplazado → `removeChild` falla. Fix: eliminar el `return null` y dejar que Radix maneje el show/hide con la prop `open`. Mismo patrón que el bug previo de `ProductosSection`. |
+
+### Sesión 2026-06-03 (auditoría integral end-to-end)
+
+**Entregables:** `AUDITORIA.md` (resumen ejecutivo) + `SUPABASE_ANALISIS.md` (schema + RLS fix SQL).
+
+| Categoría | Archivo(s) | Cambio |
+|---|---|---|
+| **Queries multi-tenant: `user_id` → `empresa_id`** | `CajaSection.jsx` (7 puntos) | `loadMovimientos`, `loadFinancialSummary`, `loadFinancialSummary` ventas día, INSERT handleSubmit, DELETE handleConfirmDelete, guards de useEffect e INSERT. |
+| **Queries multi-tenant** | `ComprasSection.jsx` (3 fixes) | `loadProveedores` (sin filtro → `empresa_id`), `loadProducts` y `loadCompras` (`user_id` → `empresa_id`). |
+| **Fuga multi-tenant en reportes** | `ReportesSection.jsx` (5 fixes + guard) | 5 reportes (ventas, compras, clientes, cta. corriente, financiero) sin filtro empresa_id → fixeados. |
+| **Multi-tenant en Ualá** | `MovimientosUala.jsx` | Agregado import de `useAuth` + filtro `.eq('empresa_id', user.empresa_id)` + guard. |
+| **Console.log de debug** | `ProductosSection.jsx` | Eliminados 2 `console.log` ("Creating provider..." / "Provider Payload"). |
+| **Código muerto** | `src/pages/HomePage.jsx` | Eliminado (archivo vacío, no se importaba). Directorio `src/pages/` también removido. |
+| **Documentado, NO ejecutado** | Supabase | Fix SQL del RLS infinite recursion en `profiles` está en `SUPABASE_ANALISIS.md` §3 — ejecutar manualmente en SQL Editor. |
+| **Decisiones arquitecturales planteadas** | — | (1) Caja por-usuario vs por-empresa. (2) Deprecar duplicación `ventas`/`detalle_ventas` vs `comprobantes`. (3) Cliente Ualá: integrar o aislar. |
 
 ---
 
@@ -297,6 +313,11 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 | 🟢 Hecho | **SAP items 1+2+3** | Aprobación OC + Cierre períodos + P&L + Balance General ✅ |
 | 🟢 Hecho | **Migration 008** | Ejecutada en Supabase `wuznppxeonmhfcvnqfbf` ✅ — CHECK constraint `pendiente_aprobacion` + tabla `periodos_contables` activas. |
 | 🟢 Hecho | **Asientos auto para recepción OC** | DEBE 1.1.3 Mercaderías / HABER 2.1.1 Ctas a Pagar — se genera y confirma automáticamente al registrar recepción ✅ |
+| 🟢 Hecho | **Auditoría integral** | Frontend limpio: 12 fixes multi-tenant + 2 console.log eliminados + 1 archivo muerto borrado + 3 entregables MD ✅ |
+| 🔴 URGENTE | **Fix RLS recursion en `profiles`** | Ejecutar SQL del `SUPABASE_ANALISIS.md` §3 en SQL Editor. Sin esto: login y sección Usuarios pueden romper con error 42P17. |
+| 🟡 Media | **Decisión: caja por-usuario vs por-empresa** | Ver `SUPABASE_ANALISIS.md` §5.1. Hoy es por-usuario (`tenant_id = auth.uid()`). |
+| 🟡 Media | **Decisión: deprecar `ventas`/`detalle_ventas`** | Ver `AUDITORIA.md` §4.2.A. Hoy `NuevaVentaModal` inserta en `comprobantes` Y en `ventas`. |
+| 🟡 Media | **Decisión: cliente Ualá secundario** | `ualaSupabaseClient.js` apunta a `cgzaiijspgafruytozzk` pero `MovimientosUala.jsx` usa cliente principal. Eliminar o completar integración. |
 | 🟡 Media | **3-way match OC-Recepción-Factura** | Vincular factura del proveedor a la OC y validar montos |
 | 🟡 Media | **Cotización → Pedido → Factura** | Vincular `cotizaciones.id` como origen de la venta para trazabilidad |
 | 🟡 Media | **Verificar dominio Resend** | `onboarding@resend.dev` solo envía a emails verificados → dominio propio para producción |
@@ -330,7 +351,9 @@ Staff invitado por admin (create-user edge function):
 
 ## Convenciones aprendidas (para futuras sesiones)
 
-- **Tablas multi-tenant:** TODAS las tablas tienen columna `empresa_id`. Todas las queries de servicios (`*Service.ts`) y componentes deben filtrar por `.eq('empresa_id', empresaId)`. Algunas tablas viejas (`movimientos_caja`, `clientes`, `productos`, `compras`, `caja_sesiones`) todavía tienen `user_id` como columna legacy pero **NO se debe usar en queries** — solo `empresa_id`. En componentes directos (no vía servicio), como `CajaSection.jsx`, se usa `.eq('user_id', user.tenant_id)` porque ahí `tenant_id === admin UUID` que sí coincide con `user_id` en las tablas legacy. **Regla de oro:** servicios siempre `empresa_id`, componentes directos verificar caso por caso.
+- **Tablas multi-tenant (REGLA DE ORO post-auditoría 2026-06-03):** TODAS las queries SELECT/UPDATE/DELETE deben filtrar por `.eq('empresa_id', user.empresa_id)`. **Nunca** filtrar por `user_id` (queda como columna legacy en algunas tablas, pero solo se usa en INSERT para identificar al autor del registro). Excepción única: lookup del propio perfil por `id = user.id`. Esto vale para servicios `*Service.ts`, componentes y contextos.
+- **INSERTs con auditoría de autor:** pasar `empresa_id: user.empresa_id` (tenant) + `user_id: user.id` (auth UUID del autor). Nunca `user_id: user.tenant_id` — eran lo mismo solo cuando había un único admin.
+- **`caja_sesiones` es una excepción pendiente:** hoy filtra por `tenant_id = auth.uid()` (caja por-usuario). Decisión arquitectural pendiente para migrar a por-empresa. Ver `SUPABASE_ANALISIS.md` §5.1.
 - **Timezone:** todo timestamp guardado en DB se persiste con offset AR ya aplicado (esquema "AR-local-as-UTC"). Para mostrar usar **siempre** `formatDateAR` / `formatDateTimeAR` de `dateUtils.js`. **Nunca** `new Date(x).toLocale*()` — resta los 3h dos veces.
 - **Filtros por rango de fecha:** comparar strings `YYYY-MM-DD` (slice 0,10), no instanciar `new Date()` sobre inputs de tipo date — evita drift de timezone.
 - **TanStack Query v5:** `onSuccess` en `useQuery` **no existe**. Usar `useEffect` que observe el resultado del query. Solo `useMutation` conserva `onSuccess`.

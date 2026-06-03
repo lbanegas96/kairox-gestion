@@ -77,32 +77,34 @@ function ComprasSection() {
   // --- DATA LOADING ---
 
   const loadProveedores = async () => {
+    if (!user?.empresa_id) return;
     const { data } = await supabase
       .from('proveedores')
       .select('id, nombre')
+      .eq('empresa_id', user.empresa_id)
       .order('nombre');
     if (data) setProveedores(data);
   };
 
   const loadProducts = async () => {
+    if (!user?.empresa_id) return;
     const { data } = await supabase
       .from('productos')
       .select('id, nombre, codigo_sku, costo_compra, stock_actual, unidad_medida')
-      .eq('user_id', user.tenant_id)
+      .eq('empresa_id', user.empresa_id)
       .eq('activo', true)
       .order('nombre');
     if (data) setProducts(data);
   };
 
   const loadCompras = async () => {
+    if (!user?.empresa_id) return;
     setLoading(true);
     try {
-      // Basic fetch, filtering done in memory for small datasets or specialized queries
-      // If dataset is huge, move filters to Supabase query
       const { data, error } = await supabase
         .from('compras')
         .select('*, proveedores(nombre)')
-        .eq('user_id', user.tenant_id)
+        .eq('empresa_id', user.empresa_id)
         .order('fecha', { ascending: false });
 
       if (error) throw error;

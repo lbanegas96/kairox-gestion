@@ -114,7 +114,7 @@ function CajaSection() {
   }, [user]);
 
   useEffect(() => {
-    if (!user || !user.tenant_id || sessionLoading) return;
+    if (!user?.empresa_id || sessionLoading) return;
     if (activeTab === 'movimientos') {
       loadMovimientos();
     }
@@ -160,15 +160,15 @@ function CajaSection() {
   // Note: Closing is handled by CajaCierre component inside the modal
 
   const loadMovimientos = async () => {
-    // CRITICAL FIX: Guard clause for tenant_id
-    if (!user || !user.tenant_id) return;
+    // AUDIT FIX: filtrar por empresa_id (multi-tenant) en vez de user_id
+    if (!user?.empresa_id) return;
 
     setLoading(true);
     try {
       let query = supabase
         .from('movimientos_caja')
         .select('*')
-        .eq('user_id', user.tenant_id);
+        .eq('empresa_id', user.empresa_id);
 
       // If session is open, prioritize session filtering
       if (isSessionOpen && currentSession?.id) {
@@ -195,17 +195,17 @@ function CajaSection() {
   };
 
   const loadFinancialSummary = async () => {
-     // CRITICAL FIX: Guard clause for tenant_id
-     if (!user || !user.tenant_id) return;
+     // AUDIT FIX: filtrar por empresa_id (multi-tenant) en vez de user_id
+     if (!user?.empresa_id) return;
 
      setLoading(true);
      try {
         const dates = getPeriodDates();
-        
+
         const { data: currentData, error: currentError } = await supabase
             .from('movimientos_caja')
             .select('*')
-            .eq('user_id', user.tenant_id)
+            .eq('empresa_id', user.empresa_id)
             .gte('fecha', dates.start)
             .lte('fecha', dates.end)
             .order('fecha', { ascending: false });
@@ -223,7 +223,7 @@ function CajaSection() {
         const { data: todaySalesData } = await supabase
            .from('movimientos_caja')
            .select('monto')
-           .eq('user_id', user.tenant_id)
+           .eq('empresa_id', user.empresa_id)
            .eq('tipo', 'ingreso')
            .eq('categoria', 'Venta')
            .gte('fecha', todayStartISO)
@@ -309,9 +309,9 @@ function CajaSection() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // CRITICAL FIX: Guard clause for tenant_id
-    if (!user || !user.tenant_id) {
+
+    // AUDIT FIX: requerir empresa_id (tenant) además de user
+    if (!user?.empresa_id) {
       toast({ title: "Error", description: "Usuario no identificado. Recargue la página.", variant: "destructive" });
       return;
     }
@@ -328,16 +328,16 @@ function CajaSection() {
     setLoading(true);
     try {
       const { error } = await supabase.from('movimientos_caja').insert([{
-        user_id: user.tenant_id,
-        caja_sesion_id: isSessionOpen ? currentSession?.id : null, 
+        empresa_id: user.empresa_id,
+        user_id: user.id, // autor del movimiento (auth.uid)
+        caja_sesion_id: isSessionOpen ? currentSession?.id : null,
         tipo: formData.tipo,
         categoria: formData.categoria,
         concepto: formData.concepto,
         monto: parseFloat(formData.monto),
         fecha: getNowAR().toISOString(),
         metodo_pago: formData.metodo_pago || 'Efectivo',
-        is_automatic: false,
-        empresa_id: user.empresa_id // Ensure empresa_id is also set
+        is_automatic: false
       }]);
 
       if (error) throw error;
@@ -376,16 +376,16 @@ function CajaSection() {
 
   const handleConfirmDelete = async () => {
     if (!itemToDelete) return;
-    // CRITICAL FIX: Guard clause for tenant_id
-    if (!user || !user.tenant_id) return;
-    
+    // AUDIT FIX: empresa_id en lugar de user_id
+    if (!user?.empresa_id) return;
+
     setLoading(true);
     try {
       const { error } = await supabase
         .from('movimientos_caja')
         .delete()
         .eq('id', itemToDelete)
-        .eq('user_id', user.tenant_id);
+        .eq('empresa_id', user.empresa_id);
 
       if (error) throw error;
 

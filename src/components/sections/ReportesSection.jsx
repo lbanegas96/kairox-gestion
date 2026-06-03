@@ -87,7 +87,10 @@ function ReportesSection() {
 
   // --- FETCHING LOGIC ---
   const handleGenerate = async () => {
-    if (!user) return;
+    if (!user?.empresa_id) {
+      toast({ title: "Error", description: "Empresa no identificada.", variant: "destructive" });
+      return;
+    }
     setLoading(true);
     try {
       const start = new Date(startDate).toISOString();
@@ -99,7 +102,8 @@ function ReportesSection() {
       if (selectedReport.id === 'ventas') {
         const { data: sales, error } = await supabase
           .from('ventas')
-          .select('*, detalle_ventas(*)') 
+          .select('*, detalle_ventas(*)')
+          .eq('empresa_id', user.empresa_id)
           .gte('fecha', start)
           .lte('fecha', end)
           .order('fecha', { ascending: false });
@@ -121,6 +125,7 @@ function ReportesSection() {
          const { data: purchases, error } = await supabase
           .from('compras')
           .select('*, proveedores(nombre)')
+          .eq('empresa_id', user.empresa_id)
           .gte('fecha', start)
           .lte('fecha', end)
           .order('fecha', { ascending: false });
@@ -141,6 +146,7 @@ function ReportesSection() {
          const { data: clients, error } = await supabase
            .from('clientes')
            .select('*')
+           .eq('empresa_id', user.empresa_id)
            .gte('created_at', start)
            .lte('created_at', end)
            .order('nombre');
@@ -161,6 +167,7 @@ function ReportesSection() {
          const { data: movs, error } = await supabase
            .from('cuenta_corriente_movimientos')
            .select('*, clientes(nombre)')
+           .eq('empresa_id', user.empresa_id)
            .gte('created_at', start)
            .lte('created_at', end)
            .order('created_at', { ascending: false });
@@ -182,6 +189,7 @@ function ReportesSection() {
          const { data: fins, error } = await supabase
             .from('movimientos_caja')
             .select('*')
+            .eq('empresa_id', user.empresa_id)
             .gte('fecha', start)
             .lte('fecha', end)
             .order('fecha', { ascending: false });
