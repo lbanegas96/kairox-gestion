@@ -29,6 +29,7 @@ export const ConfigProvider = ({ children }) => {
     logo_base64: '',
     company_logo: '',
     modulos_activos: null, // null = todos activos (default)
+    oc_requiere_aprobacion: 'false',
   });
   const [loading, setLoading] = useState(true);
 
@@ -46,7 +47,7 @@ export const ConfigProvider = ({ children }) => {
       if (data) {
         const overrides = {};
         data.forEach(item => {
-          if (['nombre_empresa', 'logo_base64', 'company_logo'].includes(item.clave)) {
+          if (['nombre_empresa', 'logo_base64', 'company_logo', 'oc_requiere_aprobacion'].includes(item.clave)) {
             overrides[item.clave] = item.valor;
           }
           if (item.clave === 'modulos_activos') {

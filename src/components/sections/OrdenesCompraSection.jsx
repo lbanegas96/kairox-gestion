@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, ShoppingBag, Search, Eye, Truck, XCircle,
   Send, CheckCircle, Clock, AlertCircle, Package,
-  ChevronRight, Trash2, ArrowRight
+  ChevronRight, Trash2, ArrowRight, ThumbsUp, ShieldAlert
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,17 +13,19 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useConfig } from '@/contexts/ConfigContext';
 import { ordenesCompraService, OC_KEYS } from '@/services/ordenesCompraService';
 import { supabase } from '@/lib/customSupabaseClient';
 
 // ─── Helpers de estado ────────────────────────────────────────────────────────
 
 const ESTADOS = {
-  borrador:         { label: 'Borrador',         color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',     icon: Clock },
-  enviada:          { label: 'Enviada',           color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',      icon: Send },
-  recibida_parcial: { label: 'Recibida parcial',  color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300', icon: AlertCircle },
-  recibida:         { label: 'Recibida',          color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',  icon: CheckCircle },
-  cancelada:        { label: 'Cancelada',         color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',         icon: XCircle },
+  pendiente_aprobacion: { label: 'Pend. Aprobación', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300', icon: ShieldAlert },
+  borrador:             { label: 'Borrador',          color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',        icon: Clock },
+  enviada:              { label: 'Enviada',            color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',         icon: Send },
+  recibida_parcial:     { label: 'Recibida parcial',   color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300', icon: AlertCircle },
+  recibida:             { label: 'Recibida',           color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',     icon: CheckCircle },
+  cancelada:            { label: 'Cancelada',          color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',            icon: XCircle },
 };
 
 const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Cheque', 'Tarjeta Crédito', 'Cuenta Corriente'];
@@ -33,13 +35,19 @@ const EMPTY_ITEM = { descripcion: '', cantidad_pedida: 1, costo_unitario: '', pr
 
 function OrdenesCompraSection({ navPayload }) {
   const { user } = useAuth();
+  const { config } = useConfig();
   const { toast } = useToast();
   const qc = useQueryClient();
+
+  const isAdmin = user?.role === 'admin';
+  const ocRequiereAprobacion = config.oc_requiere_aprobacion === 'true';
 
   const [tab, setTab] = useState('lista');
   const [estadoFiltro, setEstadoFiltro] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   // modales
   const [detalleId, setDetalleId] = useState(null);
@@ -68,8 +76,14 @@ function OrdenesCompraSection({ navPayload }) {
   // ── Queries ──────────────────────────────────────────────────────────────────
 
   const { data: listData, isLoading } = useQuery({
-    queryKey: OC_KEYS.list(empresaId, { estado: estadoFiltro || undefined, page }),
-    queryFn: () => ordenesCompraService.getAll(empresaId, { estado: estadoFiltro || undefined, page }),
+    queryKey: OC_KEYS.list(empresaId, { estado: estadoFiltro || undefined, page, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
+    queryFn: () => ordenesCompraService.getAll(empresaId, { estado: estadoFiltro || undefined, page, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
+    enabled: !!empresaId,
+  });
+
+  const { data: estadoCounts = {} } = useQuery({
+    queryKey: OC_KEYS.counts(empresaId),
+    queryFn: () => ordenesCompraService.getEstadoCounts(empresaId),
     enabled: !!empresaId,
   });
 
@@ -83,24 +97,36 @@ function OrdenesCompraSection({ navPayload }) {
     queryKey: OC_KEYS.detail(recepcionId),
     queryFn: () => ordenesCompraService.getById(recepcionId),
     enabled: !!recepcionId,
-    onSuccess: (data) => {
-      // inicializar con la cantidad PENDIENTE de recibir (lo que falta, no lo que ya llegó)
-      const init = {};
-      (data?.ordenes_compra_items ?? []).forEach(i => {
-        const pendiente = Number(i.cantidad_pedida) - Number(i.cantidad_recibida ?? 0);
-        init[i.id] = Math.max(pendiente, 0);
-      });
-      setRecepciones(init);
-    },
   });
+
+  // Inicializar recepciones con la cantidad pendiente cada vez que carga la OC
+  useEffect(() => {
+    if (!detalleRecepcion) return;
+    const init = {};
+    (detalleRecepcion.ordenes_compra_items ?? []).forEach(i => {
+      const pendiente = Math.max(Number(i.cantidad_pedida) - Number(i.cantidad_recibida ?? 0), 0);
+      init[i.id] = pendiente;
+    });
+    setRecepciones(init);
+  }, [detalleRecepcion]);
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
 
+  const invalidateOC = () => {
+    qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] });
+    qc.invalidateQueries({ queryKey: OC_KEYS.counts(empresaId) });
+  };
+
   const createMutation = useMutation({
     mutationFn: (payload) => ordenesCompraService.create(empresaId, user.id, payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] });
-      toast({ title: 'Orden de compra creada ✓', className: 'bg-green-600 text-white' });
+    onSuccess: (_, payload) => {
+      invalidateOC();
+      const isPendiente = payload.estadoInicial === 'pendiente_aprobacion';
+      toast({
+        title: isPendiente ? 'OC enviada a aprobación ✓' : 'Orden de compra creada ✓',
+        description: isPendiente ? 'Un administrador debe aprobarla antes de enviarla al proveedor.' : undefined,
+        className: 'bg-green-600 text-white',
+      });
       setTab('lista');
       resetForm();
     },
@@ -109,25 +135,49 @@ function OrdenesCompraSection({ navPayload }) {
 
   const estadoMutation = useMutation({
     mutationFn: ({ id, estado }) => ordenesCompraService.updateEstado(id, estado),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] }),
+    onSuccess: invalidateOC,
+    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const aprobarMutation = useMutation({
+    mutationFn: (id) => ordenesCompraService.updateEstado(id, 'borrador'),
+    onSuccess: () => {
+      invalidateOC();
+      toast({ title: 'OC aprobada ✓', description: 'La orden quedó en borrador lista para enviar al proveedor.', className: 'bg-green-600 text-white' });
+    },
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
   const cancelarMutation = useMutation({
     mutationFn: (id) => ordenesCompraService.cancelar(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] }),
+    onSuccess: invalidateOC,
   });
 
   const recibirMutation = useMutation({
     mutationFn: ({ ordenId, recepciones: recs }) =>
       ordenesCompraService.recibirItems(ordenId, Object.entries(recs).map(([itemId, qty]) => ({ itemId, cantidadRecibida: Number(qty) }))),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] });
+      invalidateOC();
       toast({ title: 'Stock actualizado ✓', description: 'Recepción registrada. El inventario fue actualizado automáticamente.', className: 'bg-green-600 text-white' });
       setRecepcionId(null);
     },
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
+
+  // ── Realtime ──────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!empresaId) return;
+    const channel = supabase
+      .channel(`ordenes_compra_rt_${empresaId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ordenes_compra', filter: `empresa_id=eq.${empresaId}` },
+        () => {
+          qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] });
+          qc.invalidateQueries({ queryKey: OC_KEYS.counts(empresaId) });
+        })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [empresaId, qc]);
 
   // ── Helpers de form ───────────────────────────────────────────────────────────
 
@@ -187,6 +237,7 @@ function OrdenesCompraSection({ navPayload }) {
       fecha_entrega_esperada: form.fecha_entrega_esperada || null,
       forma_pago: form.forma_pago,
       notas: form.notas || undefined,
+      estadoInicial: (ocRequiereAprobacion && !isAdmin) ? 'pendiente_aprobacion' : 'borrador',
       items: validItems.map(i => ({
         producto_id: i.producto_id ?? null,
         descripcion: i.descripcion,
@@ -222,8 +273,11 @@ function OrdenesCompraSection({ navPayload }) {
 
       {/* Stats rápidas */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {['borrador', 'enviada', 'recibida_parcial', 'recibida'].map(est => {
-          const count = (listData?.data ?? []).filter(o => o.estado === est).length;
+        {[
+          ...(ocRequiereAprobacion ? ['pendiente_aprobacion'] : []),
+          'borrador', 'enviada', 'recibida_parcial', 'recibida'
+        ].map(est => {
+          const count = estadoCounts[est] ?? 0;
           const cfg = ESTADOS[est];
           const Icon = cfg.icon;
           return (
@@ -261,6 +315,16 @@ function OrdenesCompraSection({ navPayload }) {
               <option value="">Todos los estados</option>
               {Object.entries(ESTADOS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
+            <Input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1); }}
+              title="Desde" className="w-38 dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
+            <Input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1); }}
+              title="Hasta" className="w-38 dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
+            {(dateFrom || dateTo) && (
+              <Button variant="ghost" size="sm" onClick={() => { setDateFrom(''); setDateTo(''); setPage(1); }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white px-2">
+                ✕ Limpiar fechas
+              </Button>
+            )}
           </div>
 
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
@@ -312,6 +376,13 @@ function OrdenesCompraSection({ navPayload }) {
                             <Eye className="w-3.5 h-3.5" />
                           </Button>
 
+                          {oc.estado === 'pendiente_aprobacion' && isAdmin && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-green-600"
+                              onClick={() => aprobarMutation.mutate(oc.id)} title="Aprobar OC">
+                              <ThumbsUp className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+
                           {oc.estado === 'borrador' && (
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-blue-600"
                               onClick={() => estadoMutation.mutate({ id: oc.id, estado: 'enviada' })} title="Marcar como enviada al proveedor">
@@ -326,7 +397,7 @@ function OrdenesCompraSection({ navPayload }) {
                             </Button>
                           )}
 
-                          {['borrador', 'enviada'].includes(oc.estado) && (
+                          {['borrador', 'enviada', 'pendiente_aprobacion'].includes(oc.estado) && (
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-500"
                               onClick={() => cancelarMutation.mutate(oc.id)} title="Cancelar OC">
                               <XCircle className="w-3.5 h-3.5" />

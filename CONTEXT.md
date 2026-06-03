@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-02 (sesión — fix notificaciones, RLS cta-cte, drill-down Plan de Cuentas)
+**Última actualización:** 2026-06-03 (sesión — bugfixes OC/clientes, SAP items 1+2+3)
 **Branch activo:** `master`
 
 ---
@@ -51,9 +51,12 @@
 | Tarea | Estado | Archivos clave |
 |---|---|---|
 | Plan de Cuentas / Contabilidad | ✅ Completo | `src/components/sections/PlanCuentasSection.jsx`, `src/services/planCuentasService.ts`, `migrations/004_plan_cuentas.sql` |
-| Libro Mayor por cuenta | ✅ Completo | `PlanCuentasSection.jsx` (tab 4), `planCuentasService.ts` (`getLibroMayor`) |
+| Libro Mayor por cuenta | ✅ Completo | `PlanCuentasSection.jsx` (tab Libro Mayor), `planCuentasService.ts` (`getLibroMayor`) |
 | Asientos automáticos (Ventas) | ✅ Completo | `NuevaVentaModal.jsx`, `planCuentasService.ts` (`asientosAutoService`) |
 | Asientos automáticos (Compras) | ✅ Completo | `ComprasSection.jsx`, `planCuentasService.ts` (`asientosAutoService`) |
+| Estado de Resultados (P&L) | ✅ Completo | `PlanCuentasSection.jsx` (tab P&L), `planCuentasService.ts` (`getEstadoResultados`) |
+| Balance General | ✅ Completo | `PlanCuentasSection.jsx` (tab Balance General), `planCuentasService.ts` (`getBalanceGeneral`) |
+| Cierre de períodos contables | ✅ Completo | `PlanCuentasSection.jsx` (tab Períodos), `planCuentasService.ts` (`periodosService`), `migrations/008_oc_approval_periodos.sql` |
 | Multi-almacén | ⏸️ Diferido | — |
 | Lotes y vencimientos | ⏸️ Diferido | — |
 
@@ -73,118 +76,89 @@ Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Ua
 | Closure stale en ConfigContext.fetchConfig() | `ConfigContext.jsx` | `setConfig(prev => ...)` |
 | Error `removeChild` en Radix UI Dialog | `ProductosSection.jsx` | `ProductForm` movido fuera del componente |
 | Soft delete de productos | `ProductosSection.jsx` | Botón tacho → `activo=false`, lista filtra `activo≠false` |
-| **Timezone desfasado en movimientos** | `dateUtils.js`, `ProductosSection.jsx`, `CajaSection.jsx`, `MovimientosUala.jsx` | `getNowAR()` ahora resta 3h del epoch UTC sin depender del browser TZ; display usa UTC parts directamente |
+| **Timezone desfasado en movimientos** | `dateUtils.js`, múltiples archivos | `getNowAR()` ahora resta 3h del epoch UTC sin depender del browser TZ; display usa UTC parts directamente |
 | **"Gastos del Mes" incluía apertura de caja** | `dashboardService.ts` | `.neq('categoria','Apertura')` en query `gastosMes` y `getFlujoCajaMensual` |
 | **Indicadores de turno mostraban $0** | `CajaSection.jsx` | Tarjetas INGRESOS/EGRESOS/SALDO LÍQUIDO DEL TURNO agregadas al JSX |
-| **Fecha/hora de movimientos usaba `created_at`** | `CajaSection.jsx` | Display unificado con `formatDateTimeAR(m.fecha)` |
-| **Movimiento fantasma Ualá ($2.317.362)** | `movimientos_caja` en Supabase | Eliminado manualmente. Causado por bug en `UalaSync.gs` que acumuló montos del período en lugar del monto individual. El registro legítimo ($5.000, mismo concepto) quedó intacto. |
-| **Reset de contraseña abría el sistema directo** | `SupabaseAuthContext.jsx`, `App.jsx`, `ResetPasswordPage.jsx` | Fix definitivo: leer hash URL sincrónicamente antes de `getSession()` + `isRecoveryFlow` ref para bloquear `SIGNED_IN` durante recovery. |
+| **Reset de contraseña abría el sistema directo** | `SupabaseAuthContext.jsx`, `App.jsx`, `ResetPasswordPage.jsx` | Fix definitivo: leer hash URL sincrónicamente antes de `getSession()` + `isRecoveryFlow` ref |
 | **Rate limit de emails (2/hora)** | Supabase Auth | Configurado SMTP propio con Resend.com. API key activa. |
-| **prop `dismiss` en DOM** | `toaster.jsx` | Destructurar `dismiss` del spread para no pasarlo al DOM. |
-| **`COTIZACIONES_KEYS.cotizacion` is not a function** | `CotizacionesSection.jsx` | Renombrado a `.detail()` para coincidir con el servicio. |
-| **Label `for` sin match en ProductForm** | `ProductosSection.jsx` | Agregado `id="proveedor"` al `SelectTrigger`. |
 | **Tablas faltantes en DB** | Supabase SQL | Aplicadas migraciones 002 (cotizaciones), 003 (ordenes_compra), 004 (plan_cuentas). |
-| **`cuenta_corriente_movimientos.created_at` does not exist** | Supabase SQL | `ALTER TABLE ... ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ`. |
-| **Warning Radix UI: Missing Description en Dialog** | `ClientesSection.jsx` | Agregado `<DialogDescription>` en modal "Nuevo Cliente". |
-| **403 RLS en tabla configuracion al guardar logo** | `ConfigContext.jsx` | `updateConfig` ahora llama a `get_my_empresa_id()` RPC e incluye `empresa_id` en INSERT. Migration 005 agrega `UNIQUE(empresa_id,clave)` y políticas RLS correctas. |
-| **Nuevo usuario sin empresa_id quedaba en dashboard vacío** | `App.jsx`, `OnboardingPage.jsx`, `SupabaseAuthContext.jsx` | Flujo SaaS: detectar `!user.empresa_id` → mostrar OnboardingPage → RPC `create_tenant()` crea empresa + perfil + config inicial. |
-| **Recepción OC: SET en vez de ADD + input pre-rellena incorrecto** | `ordenesCompraService.ts`, `OrdenesCompraSection.jsx` | Servicio cambiado a ADD (suma delta al acumulado, respeta máximo pedido). UI pre-rellena con cantidad pendiente. Estado pasa a `recibida_parcial` / `recibida` correctamente. |
-| **Input recepción mostraba 0 aunque había pendiente** | `OrdenesCompraSection.jsx` | `onSuccess` de TanStack Query no re-dispara con caché caliente. Fix: valor del input usa `pendiente` directamente como fallback en lugar de `?? 0`. |
-| **Notificaciones OC no navegaban a la OC específica** | `Header.jsx`, `Dashboard.jsx`, `OrdenesCompraSection.jsx` | Dashboard agrega `navPayload` state + función `navigate(section, payload)`. Header pasa `{ openRecepcion: id }` para OCs. OrdenesCompraSection abre modal de recepción automáticamente vía `useEffect`. |
-| **aria-hidden Radix UI al navegar desde notificaciones** | `Header.jsx`, `OrdenesCompraSection.jsx` | Fix definitivo: `e.currentTarget.blur()` + `document.activeElement.blur()` antes de llamar `onNavigate`. Corta el conflicto de foco antes de que el DropdownMenu cierre. |
-| **Warnings Radix UI en 8+ componentes** | `CotizacionesSection`, `PlanCuentasSection`, `ReportesSection`, `command.jsx`, `CajaSection`, `OrdenesCompraSection`, `ClientesSection` | Búsqueda exhaustiva: todos los `DialogContent` sin `DialogDescription` corregidos. `ReportesSection` y `CommandDialog` usan `sr-only`. |
-| **`seed_plan_cuentas` RLS 403 Forbidden** | Supabase función + `PlanCuentasSection.jsx` | Función redefinida con `SECURITY DEFINER`. Fix en componente: `empresaId = user?.empresa_id` (antes usaba `tenant_id` = auth UUID incorrecto). Filas mal insertadas limpiadas manualmente. |
-| **Plan de Cuentas no mostraba cuentas tras inicializar** | `PlanCuentasSection.jsx` | `empresaId = user?.tenant_id \|\| user?.empresa_id` → `user?.empresa_id`. `tenant_id` es el auth UUID, no el empresa UUID. |
-| **RLS `profiles` bloqueaba vista de equipo** | Supabase SQL | Política `profiles_select` reemplazada: `id = auth.uid() OR empresa_id = get_my_empresa_id()` para que admin vea todo el equipo. |
-| **Creación de usuarios fallaba (CORS + función inexistente)** | `UsuariosSection.jsx` + Supabase | Flujo cambiado de `invite-user` a `create-user`. Nueva Edge Function `create-user` deployada con CORS + `auth.admin.createUser()` + insert en `profiles`. Campo contraseña con show/hide en el form. |
-| **Error 42P10 al guardar configuración (logo/nombre)** | `ConfigContext.jsx` | `upsert onConflict:'clave'` reemplazado por `maybeSingle() → update/insert`. No requiere UNIQUE constraint en la tabla. |
+| **403 RLS en tabla configuracion al guardar logo** | `ConfigContext.jsx` | `updateConfig` ahora llama a `get_my_empresa_id()` RPC e incluye `empresa_id` en INSERT. |
+| **Nuevo usuario sin empresa_id quedaba en dashboard vacío** | `App.jsx`, `OnboardingPage.jsx`, `SupabaseAuthContext.jsx` | Flujo SaaS: detectar `!user.empresa_id` → mostrar OnboardingPage → RPC `create_tenant()`. |
+| **Recepción OC: SET en vez de ADD** | `ordenesCompraService.ts` | Servicio cambiado a ADD (suma delta al acumulado, respeta máximo pedido). |
+| **Notificaciones OC no navegaban** | `Header.jsx`, `Dashboard.jsx`, `OrdenesCompraSection.jsx` | DropdownMenu controlled + setTimeout(150ms) nav + navPayload. |
+| **aria-hidden Radix UI al navegar desde notificaciones** | `Header.jsx`, `OrdenesCompraSection.jsx` | Fix definitivo: blur antes de navegar + 150ms para desmontar portal. |
+| **Warnings Radix UI en 8+ componentes** | Múltiples secciones | Todos los `DialogContent` sin `DialogDescription` corregidos. |
+| **`seed_plan_cuentas` RLS 403 Forbidden** | Supabase + `PlanCuentasSection.jsx` | Función `SECURITY DEFINER`. Fix: `empresaId = user?.empresa_id`. |
+| **RLS `profiles` bloqueaba vista de equipo** | Supabase SQL | Política `profiles_select` reemplazada con `OR empresa_id = get_my_empresa_id()`. |
+| **Creación de usuarios fallaba (CORS + función inexistente)** | `UsuariosSection.jsx` + Supabase | Edge Function `create-user` deployada. |
+| **RLS 403 al cobrar en Cuenta Corriente** | `ClientDetailModal.jsx` | `empresa_id: user.empresa_id` en ambos inserts de `cuenta_corriente_movimientos` y `movimientos_caja`. |
 
-### Sesión 2026-06-02 — tarde (notificaciones, RLS, Plan de Cuentas drill-down)
+### Sesión 2026-06-03 (bugfixes OC + inactivar clientes + SAP items)
 
 | Bug / Feature | Archivo | Cambio |
 |---|---|---|
-| **`as HTMLElement` (TypeScript en JSX)** | `Header.jsx` | `(document.activeElement as HTMLElement)?.blur()` → `document.activeElement?.blur()`. El cast es inválido en `.jsx`. |
-| **Notificaciones no navegaban (onOpenChange)** | `Header.jsx` | `DropdownMenu` cambiado a modo controlled (`open={notifOpen}`). `onOpenChange` de Radix solo dispara en interacción del usuario, no al cerrar programáticamente. Fix: `setNotifOpen(false)` + `setTimeout(150ms, onNavigate)` para garantizar que el portal de Radix se desmonta antes de abrir cualquier Dialog. |
-| **Stack overflow `handleFocusOut2` de Radix** | `Header.jsx`, `OrdenesCompraSection.jsx` | Causado por conflicto de foco entre DropdownMenu abierto y Dialog montándose en paralelo. Fix: navegar DESPUÉS de que Radix desmonta el portal (los 150ms garantizan esto). Eliminado el `setTimeout(80ms)` innecesario en `OrdenesCompraSection`. |
-| **RLS 403 al cobrar en Cuenta Corriente** | `ClientDetailModal.jsx` | El insert de `cuenta_corriente_movimientos` no incluía `empresa_id`. La policy RLS evalúa `empresa_id = get_my_empresa_id()` → `NULL = valor` → false → 403. Fix: agregado `empresa_id: user.empresa_id` en ambos inserts (cuenta corriente y movimientos_caja). |
-| **Feature: Nuevo Cliente desde Cta. Corriente** | `CuentaCorrienteSection.jsx` | Botón "+ Nuevo Cliente" en el header. Modal con Nombre, Teléfono, Email, Límite de Crédito. Al guardar, el cliente aparece de inmediato y está disponible en toda la app. |
-| **Feature: Drill-down SAP en Plan de Cuentas** | `PlanCuentasSection.jsx`, `planCuentasService.ts` | En el árbol de cuentas, hover sobre cualquier cuenta muestra ícono `≡`. Al clickear: vista drill-down con TODOS los asientos_items confirmados de esa cuenta y sus hijos (igual al reporte FBL3N de SAP). Columnas: Fecha \| Asiento # \| Cuenta \| Descripción \| Debe \| Haber. Totales y saldo neto al pie. Filtros por fecha. Botón "Volver al árbol". |
-| **Migration 007** | `migrations/007_cta_cte_empresa_id.sql` | Agrega `empresa_id` a `cuenta_corriente_movimientos` si no existe, backfill desde `clientes.empresa_id`, reemplaza RLS policy con `empresa_id = get_my_empresa_id()`. **Ejecutar en Supabase SQL Editor.** |
-
-### Sesión 2026-06-02 (UX + timezone global)
-
-| Bug | Archivo | Fix aplicado |
-|---|---|---|
-| **Movimientos de Caja registraban siempre 12:00** | `CajaSection.jsx` L337 | `fecha: getDateFromInputAR(formData.fecha)` (fijaba 12:00 UTC) → `fecha: getNowAR().toISOString()` para capturar hora real |
-| **Ticket de venta mostraba hora -3h del valor real** | `ComprobantePrintModal.jsx` | `new Date(...).toLocaleString()` → `formatDateTimeAR()`. El timestamp ya está con offset AR aplicado, `toLocaleString` lo restaba de nuevo |
-| **Fechas/horas mal mostradas en toda la app** | 11 archivos | Reemplazado masivo de `new Date(x).toLocaleDateString/toLocaleTimeString/toLocaleString` por `formatDateAR`/`formatDateTimeAR` en: `HistorialVentas`, `SaleDetailModal`, `CompraDetailModal`, `ComprasSection`, `ClientDetailModal`, `ReportesSection` (4 reportes), `UsuariosSection` (último login), `CommandPalette`, `CajaSection` (Act:), `pdfUtils` ("Generado:") |
-| **Filtro de fecha en Historial/Compras descartaba registros válidos** | `HistorialVentas.jsx`, `ComprasSection.jsx` | `new Date(sale.fecha) < new Date(dateFrom)` comparaba contra medianoche UTC mientras las ventas están con offset AR → reemplazado por comparación de strings `YYYY-MM-DD` (slice 0,10) directamente. Sin timezone drift |
-| **OrdenesCompra: error 42703 `proveedores.user_id does not exist`** | `OrdenesCompraSection.jsx` L135,151 | `.eq('user_id', empresaId)` → `.eq('empresa_id', empresaId)` en búsqueda de proveedores y productos |
-| **Cotizaciones: búsqueda de productos no devolvía nada** | `CotizacionesSection.jsx` L99 | Mismo bug `user_id` → `empresa_id` en query de productos |
-| **Categorías vacías en Nuevo Producto** | Supabase | INSERT de 13 categorías default para empresa NALUX (Electrónica, Belleza, Ropa, Hogar, Alimentos, Herramientas, Salud, Tecnología, Deportes, Juguetes, Limpieza, Papelería, Otros) |
-| **Dropdown de productos en Nueva Venta tapaba el carrito** | `NuevaVentaModal.jsx` | `setShowProductDropdown(false)` se anulaba por `onFocus={()=>setShow(true)}` al recuperar foco tras agregar item. Reestructurado: panel inline `max-h-64` siempre visible (catálogo arriba + carrito abajo, ambos scrolleables). Sin más dropdown flotante |
-| **Buscador de proveedor en OrdenesCompra exigía escribir** | `OrdenesCompraSection.jsx` | `searchProveedor` ahora trae top 10 ordenados alfabéticamente si query vacía. `onFocus` dispara `searchProveedor('')` para mostrar lista de inmediato. `onBlur` cierra con timeout 200ms |
-| **Campo Unidad sin sugerencias** | `CotizacionesSection.jsx`, `OrdenesCompraSection.jsx` | Agregado `<datalist id="unidades-medida">` con 16 opciones (un, kg, g, lt, ml, mt, cm, m², m³, caja, pack, docena, par, hs, día, servicio). Input con `list="unidades-medida"` — usuario puede elegir o escribir libremente |
-| **Ícono de calendario invisible en modo oscuro** | `index.css` | CSS global: `.dark input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1) brightness(1.5) }` para todos los inputs date/time/datetime-local/month/week. No afecta modo claro |
+| **Recepción parcial OC no funcionaba** | `OrdenesCompraSection.jsx` | `onSuccess` de TQ v5 no existe → `recepciones` siempre `{}` → nada se enviaba al DB. Fix: `useEffect` que observa `detalleRecepcion` e inicializa el mapa `{ [itemId]: pendiente }`. El DB trigger `trg_oc_stock` calcula el delta correcto. |
+| **Stats cards mostraban count de la página visible** | `OrdenesCompraSection.jsx`, `ordenesCompraService.ts` | Nuevo método `getEstadoCounts()` + query key `OC_KEYS.counts`. Cards usan el total real, no el slice paginado. |
+| **OC no actualizaba en tiempo real** | `OrdenesCompraSection.jsx` | Suscripción Supabase Realtime en `ordenes_compra` → invalida lista + counts al cambiar cualquier registro. |
+| **Filtro de fecha en OC** | `OrdenesCompraSection.jsx`, `ordenesCompraService.ts` | Inputs Desde/Hasta en la lista. Filtran en servidor contra `ordenes_compra.fecha`. |
+| **Inactivar/reactivar clientes** | `ClientesSection.jsx`, `ClientDetailModal.jsx` | Filtro tabular Activos/Inactivos/Todos. Badge visual. Botón `UserX`/`UserCheck` por fila. Validación: si el cliente tiene movimientos en `cuenta_corriente_movimientos` → bloquea eliminación física y pide inactivar. Botón Inactivar/Reactivar en footer del modal de detalle. |
+| **Clientes inactivos aparecían en Cta. Corriente** | `CuentaCorrienteSection.jsx` | Agregado `.neq('activo', false)` al fetch de clientes. |
+| **SAP Item 1: Workflow aprobación OC** | `OrdenesCompraSection.jsx`, `ordenesCompraService.ts`, `ConfiguracionSection.jsx`, `ConfigContext.jsx`, `migrations/008` | Nuevo estado `pendiente_aprobacion`. Config `oc_requiere_aprobacion` en Configuración (toggle solo admin). Staff crea OC → `pendiente_aprobacion`. Admin ve botón 👍 Aprobar → pasa a `borrador`. Tarjeta de stats condicional. |
+| **SAP Item 2: Cierre de períodos** | `PlanCuentasSection.jsx`, `planCuentasService.ts`, `migrations/008` | `periodosService` con `getPeriodosAnio`, `togglePeriodo`, `isPeriodoCerrado`. Check en `createAsiento` → lanza error si el período está cerrado. Tab "Períodos": grilla 12 meses con Cerrar/Reabrir (solo admin). |
+| **SAP Item 3: P&L + Balance General** | `PlanCuentasSection.jsx`, `planCuentasService.ts` | `asientosService.getEstadoResultados()` y `getBalanceGeneral()` (computan desde `getBalanceComprobacion`). Tab "P&L": KPIs (Ingresos/Egresos/Resultado) + detalle por cuenta. Tab "Balance General": columnas Activo vs Pasivo+PN + verificación ecuación contable. |
 
 ---
 
-## Archivos clave modificados (últimas sesiones)
+## Archivos clave modificados (sesión 2026-06-03)
 
 ```
 src/
-├── lib/
-│   └── dateUtils.js              ← Reescrito: getNowAR correcto + formatDateAR/formatDateTimeAR
-├── services/
-│   ├── planCuentasService.ts     ← +getLibroMayor +asientosAutoService +getMovimientosPorGrupo +movimientosGrupo key
-│   └── ordenesCompraService.ts  ← recibirItems: ADD en lugar de SET, respeta máximo pedido
-├── components/
-│   ├── ResetPasswordPage.jsx     ← NUEVO: pantalla de reset/invite con confirmación x2
-│   ├── PasswordRecoveryModal.jsx ← Modal "Olvidé mi contraseña" desde login
-│   ├── OnboardingPage.jsx        ← NUEVO: pantalla SaaS para crear empresa en primer login
-│   ├── Header.jsx                ← DropdownMenu notif controlled + setTimeout(150ms) nav; fix `as HTMLElement`
-│   ├── Dashboard.jsx             ← +navPayload state, navigate(section, payload), navigatePlain()
-│   ├── sections/
-│   │   ├── CajaSection.jsx       ← +3 tarjetas indicadoras de turno, fix fechas
-│   │   ├── ProductosSection.jsx  ← ProductForm movido fuera, soft delete, fix fechas
-│   │   ├── MovimientosUala.jsx   ← formatFecha TZ-safe
-│   │   ├── PlanCuentasSection.jsx← +TabLibroMayor +DrillDownMovimientos (drill-down SAP)
-│   │   ├── ComprasSection.jsx    ← +asiento automático
-│   │   ├── OrdenesCompraSection.jsx ← fix recepción; abre modal via navPayload (sin setTimeout)
-│   │   ├── ClientDetailModal.jsx ← +empresa_id en inserts cta-cte y movimientos_caja
-│   │   ├── CuentaCorrienteSection.jsx ← +Nuevo Cliente inline (modal directo en la sección)
-│   │   └── UsuariosSection.jsx   ← flujo invitación por email, columna último acceso
-│   └── ventas/
-│       └── NuevaVentaModal.jsx   ← +asiento automático al registrar venta
 ├── contexts/
-│   ├── SupabaseAuthContext.jsx   ← +needsPasswordReset, +isRecoveryFlow ref, +last_login_at, +refreshUser
-│   └── ConfigContext.jsx         ← updateConfig incluye empresa_id vía get_my_empresa_id()
-└── App.jsx                       ← +OnboardingPage cuando !user.empresa_id
+│   └── ConfigContext.jsx          ← +oc_requiere_aprobacion en fetchConfig y defaults
+├── services/
+│   ├── planCuentasService.ts      ← +periodosService +getEstadoResultados +getBalanceGeneral
+│   │                                 +check período en createAsiento +nuevos PLAN_CUENTAS_KEYS
+│   └── ordenesCompraService.ts   ← +getEstadoCounts +dateFrom/dateTo en getAll
+│                                     +estadoInicial en create +OC_KEYS.counts
+├── components/
+│   └── sections/
+│       ├── OrdenesCompraSection.jsx  ← fix recepción (useEffect vs onSuccess) +realtime
+│       │                               +stats cards reales +fecha filter +pendiente_aprobacion
+│       │                               +botón Aprobar (admin) +invalidateOC helper
+│       ├── ClientesSection.jsx       ← reescrito: filtro activos/inactivos/todos, badge,
+│       │                               inactivar/reactivar, validación antes de eliminar
+│       ├── ClientDetailModal.jsx     ← +botón Inactivar/Reactivar en footer +onToggleActivo prop
+│       ├── CuentaCorrienteSection.jsx ← +.neq('activo', false) en fetch clientes
+│       ├── ConfiguracionSection.jsx  ← +sección "Flujo de Trabajo" con toggle aprobación OC
+│       └── PlanCuentasSection.jsx    ← +TabPeriodos +TabEstadoResultados +TabBalanceGeneral
+│                                       +7 tabs en total (antes 4)
 
 migrations/
-└── 007_cta_cte_empresa_id.sql   ← ADD COLUMN empresa_id + backfill + RLS fix (PENDIENTE ejecutar en Supabase)
+└── 008_oc_approval_periodos.sql  ← ADD pendiente_aprobacion a CHECK + CREATE periodos_contables
+                                     ⚠️ PENDIENTE ejecutar en Supabase SQL Editor
 ```
 
 ---
 
-## Plan de Cuentas — Detalle completo del módulo
+## Plan de Cuentas — Tabs disponibles (7 en total)
 
-### Funcionalidades existentes
-- **Tab Árbol de Cuentas:** vista jerárquica expandible, búsqueda en tiempo real, editar nombre/estado, agregar nuevas cuentas
-- **Tab Asientos Contables:** libro diario paginado, crear asiento (validación de cuadre), confirmar/anular, ver detalle con líneas
-- **Tab Balance de Comprobación:** totales debe/haber por cuenta para asientos confirmados, filtrable por fecha
+| Tab | Funcionalidad |
+|---|---|
+| **Plan de Cuentas** | Árbol jerárquico expandible, búsqueda, editar, drill-down (FBL3N) |
+| **Asientos** | Libro diario paginado, crear/confirmar/anular asientos |
+| **Balance** | Balance de comprobación: Debe/Haber/Saldo por cuenta, filtros de fecha |
+| **Libro Mayor** | Movimientos por cuenta con saldo acumulado progresivo |
+| **P&L** | Estado de Resultados: Ingresos / Egresos / Resultado neto con KPIs |
+| **Balance General** | Activo vs Pasivo + Patrimonio con verificación de ecuación contable |
+| **Períodos** | Grilla 12 meses × año. Admin puede cerrar/reabrir períodos. Cerrar un período bloquea nuevos asientos |
 
-### Funcionalidades nuevas (Fase 4 completa)
-- **Tab Libro Mayor:** seleccionar cuenta → ver todos sus movimientos confirmados con saldo acumulado progresivo (D/H), filtros por fecha
-- **Asientos automáticos:** al confirmar una venta → asiento `Caja/Clientes DEBE | Ventas HABER` (auto-confirmado); al registrar una compra → asiento `Inventario DEBE | Caja/Proveedores HABER` (auto-confirmado). Silencioso si la empresa no tiene plan de cuentas configurado.
-
-### Schema SQL (migration 004)
-- `plan_cuentas` — árbol de cuentas con RLS por empresa
-- `asientos_contables` — libro diario con estados (borrador/confirmado/anulado), campos `origen` y `origen_id`
+### Schema SQL relevante (migrations 004 + 008)
+- `plan_cuentas` — árbol de cuentas (activo/pasivo/patrimonio/ingreso/egreso)
+- `asientos_contables` — libro diario (borrador/confirmado/anulado)
 - `asientos_items` — líneas de cada asiento
-- `seed_plan_cuentas(empresa_id)` — inicializa plan estándar para PyME argentina (39 cuentas en 5 grupos)
-- `next_numero_asiento(empresa_id)` — numeración correlativa AS-000001
-- Trigger que recalcula `saldo_actual` en `plan_cuentas` al confirmar/anular asientos
+- `periodos_contables` — (empresa_id, anio, mes, cerrado) — PRIMARY KEY compuesta
+- `seed_plan_cuentas(empresa_id)` — inicializa plan estándar PyME argentina (39 cuentas, 5 grupos)
+- `trg_asiento_item_saldo` — recalcula `saldo_actual` en `plan_cuentas` al confirmar/anular
 
 ---
 
@@ -197,15 +171,49 @@ migrations/
 | Inventario | `ProductosSection.jsx` | ✅ Funcional + soft delete |
 | Compras | `ComprasSection.jsx` | ✅ Funcional + asiento auto |
 | Cotizaciones | `CotizacionesSection.jsx` | ✅ Funcional |
-| Órdenes de Compra | `OrdenesCompraSection.jsx` | ✅ Funcional |
-| Caja | `CajaSection.jsx` | ✅ Funcional + indicadores de turno corregidos |
-| Clientes | `ClientesSection.jsx` | ✅ Funcional |
-| Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Funcional |
-| **Contabilidad** | `PlanCuentasSection.jsx` | ✅ **Fase 4 completa** |
+| Órdenes de Compra | `OrdenesCompraSection.jsx` | ✅ Funcional + aprobación + realtime + filtro fecha |
+| Caja | `CajaSection.jsx` | ✅ Funcional + indicadores de turno |
+| Clientes | `ClientesSection.jsx` | ✅ Funcional + inactivar/reactivar + validación eliminación |
+| Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Funcional + solo muestra clientes activos |
+| **Contabilidad** | `PlanCuentasSection.jsx` | ✅ **7 tabs: P&L + Balance General + Períodos** |
 | Reportes | `ReportesSection.jsx` | ✅ Funcional |
 | Usuarios | `UsuariosSection.jsx` | ✅ Invitación por email + último acceso + activar/desactivar |
-| Configuración | `ConfiguracionSection.jsx` | ✅ Funcional |
+| Configuración | `ConfiguracionSection.jsx` | ✅ Funcional + toggle aprobación OC |
 | Movimientos Ualá | `MovimientosUala.jsx` | ✅ Funcional + fix timezone |
+
+---
+
+## Workflow aprobación de OC (SAP Item 1)
+
+```
+Config: oc_requiere_aprobacion = 'true' (toggle en Configuración, solo admin)
+
+Staff crea OC
+    ↓ estado = pendiente_aprobacion
+    ↓ Aparece en tarjeta "Pend. Aprobación" con badge púrpura
+
+Admin ve la OC en lista
+    ↓ Botón 👍 Aprobar → updateEstado('borrador')
+    ↓ OC disponible para enviar al proveedor
+
+Admin puede también cancelar directamente desde pendiente_aprobacion
+
+Si oc_requiere_aprobacion = 'false':
+    Admin y Staff crean OC directo en estado 'borrador' (comportamiento anterior)
+```
+
+**Estados de OC en orden:** `pendiente_aprobacion` → `borrador` → `enviada` → `recibida_parcial` → `recibida` / `cancelada`
+
+---
+
+## Cierre de períodos contables (SAP Item 2)
+
+- **`periodosService.togglePeriodo(empresaId, anio, mes, cerrado, userId)`** — upsert en `periodos_contables`
+- **`periodosService.isPeriodoCerrado(empresaId, fecha)`** — check al crear cualquier asiento
+- Si el período está cerrado → `createAsiento` lanza: _"El período M/AAAA está cerrado."_
+- Los asientos automáticos (ventas/compras) también se bloquean silenciosamente (catch en sus llamadores)
+- Solo admin puede cerrar/reabrir períodos desde el tab "Períodos"
+- Períodos futuros no se pueden cerrar
 
 ---
 
@@ -244,6 +252,7 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 - **Logo:** almacenado como Base64 en tabla `configuracion` (clave `company_logo` / `logo_base64`)
 - **Roles:** `admin` (acceso total) | `staff` (permisos granulares en `profiles.permissions` JSONB)
 - **profiles.last_login_at:** columna agregada, se actualiza en cada login exitoso
+- **Config keys en `configuracion` table:** `nombre_empresa`, `company_logo`, `logo_base64`, `modulos_activos` (JSON), `oc_requiere_aprobacion` ('true'/'false')
 
 ---
 
@@ -252,20 +261,24 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 | Prioridad | Tarea | Detalle |
 |---|---|---|
 | 🟢 Hecho | **SaaS multi-tenant** | Flujo completo: registro → onboarding → empresa aislada ✅ |
-| 🟢 Hecho | **Fix logo / configuracion RLS** | 403 resuelto con empresa_id en upsert ✅ |
-| 🟢 Hecho | **Indicadores de Caja** | Resuelto ✅ |
 | 🟢 Hecho | **Auth & Usuarios** | Reset contraseña ✅, creación directa ✅, SMTP Resend ✅, último acceso ✅ |
-| 🟢 Hecho | **Errores de consola** | Todos los warnings Radix UI, claves TanStack Query, etc. ✅ |
-| 🟢 Hecho | **Contabilidad** | Plan de Cuentas + Libro Mayor + asientos automáticos + drill-down SAP ✅ |
-| 🟢 Hecho | **Módulos configurables** | Sidebar filtra automáticamente. Dashboard, Usuarios y Configuración son obligatorios ✅ |
-| 🟢 Hecho | **Notificaciones OC** | Navegación con controlled dropdown + setTimeout(150ms). Sin stack overflow ✅ |
-| 🟢 Hecho | **Cobro en Cta. Corriente** | Fix RLS 403: `empresa_id` en inserts de `ClientDetailModal` ✅ |
-| 🟢 Hecho | **Nuevo Cliente desde Cta. Corriente** | Modal inline en CuentaCorrienteSection ✅ |
-| 🔴 URGENTE | **Migration 007** | Ejecutar `migrations/007_cta_cte_empresa_id.sql` en Supabase SQL Editor del proyecto `wuznppxeonmhfcvnqfbf`. Agrega `empresa_id` a `cuenta_corriente_movimientos` y corrige RLS. Sin esto el cobro sigue fallando. |
-| 🟡 Media | **Eliminar/inactivar Clientes** | Botón de baja (soft delete `activo=false`) en `ClientesSection`. Lista debe filtrar `activo != false`. Pendiente de implementar. |
-| 🟡 Media | **Recepción OC — refactor SAP** | Stats cards usan `listData.data` (paginado/filtrado) → counts erróneos. `onSuccess` de `useQuery` ignorado en TQ v5 → inputs de recepción vacíos → OC queda anclada. Solución: useEffect para inicializar `recepciones` en 0 + query de resumen para counts. Pendiente. |
-| 🟡 Media | **SMTP para nuevos tenants** | `onboarding@resend.dev` solo envía a emails verificados. Para producción: verificar dominio propio en Resend. |
-| 🟡 Media | **Asientos auto para recepción OC** | DEBE 1.1.3 Mercaderías / HABER 2.1.1 Ctas a Pagar. Trigger de DB ya actualiza stock correctamente. |
+| 🟢 Hecho | **Contabilidad Fase 4** | Plan de Cuentas + Libro Mayor + asientos auto + drill-down + P&L + Balance General + Períodos ✅ |
+| 🟢 Hecho | **Módulos configurables** | Sidebar filtra automáticamente ✅ |
+| 🟢 Hecho | **Notificaciones OC** | Navegación + realtime ✅ |
+| 🟢 Hecho | **Cobro Cta. Corriente** | Fix RLS 403 ✅ |
+| 🟢 Hecho | **Migration 007** | `empresa_id` en `cuenta_corriente_movimientos` + RLS ✅ ejecutada |
+| 🟢 Hecho | **Inactivar/reactivar clientes** | Soft delete SAP-style en ClientesSection + ClientDetailModal ✅ |
+| 🟢 Hecho | **Fix recepción parcial OC** | `useEffect` reemplaza `onSuccess` (TQ v5) ✅ |
+| 🟢 Hecho | **SAP items 1+2+3** | Aprobación OC + Cierre períodos + P&L + Balance General ✅ |
+| 🔴 URGENTE | **Migration 008** | Ejecutar `migrations/008_oc_approval_periodos.sql` en Supabase SQL Editor del proyecto `wuznppxeonmhfcvnqfbf`. Sin esto: el estado `pendiente_aprobacion` falla por CHECK constraint y la tabla `periodos_contables` no existe. |
+| 🟡 Media | **Asientos auto para recepción OC** | DEBE 1.1.3 Mercaderías / HABER 2.1.1 Ctas a Pagar al recibir mercadería de una OC |
+| 🟡 Media | **3-way match OC-Recepción-Factura** | Vincular factura del proveedor a la OC y validar montos |
+| 🟡 Media | **Cotización → Pedido → Factura** | Vincular `cotizaciones.id` como origen de la venta para trazabilidad |
+| 🟡 Media | **Verificar dominio Resend** | `onboarding@resend.dev` solo envía a emails verificados → dominio propio para producción |
+| Baja | Facturación electrónica AFIP | — |
+| Baja | Multi-almacén | — |
+| Baja | Lotes y vencimientos | — |
+| Diferida | Fase 5: Email, WhatsApp, API REST, backups | — |
 
 ---
 
@@ -288,34 +301,15 @@ Staff invitado por admin (create-user edge function):
     Edge function crea perfil con empresa_id del admin → Login → Dashboard directo ✅
 ```
 
-**Archivos clave del flujo SaaS:**
-- `src/components/OnboardingPage.jsx` — pantalla de creación de empresa
-- `src/contexts/SupabaseAuthContext.jsx` — `refreshUser()` para recargar perfil post-onboarding
-- `src/App.jsx` — gate: `!user.empresa_id` → `<OnboardingPage />`
-- `migrations/006_saas_create_tenant.sql` — RPC `create_tenant()` SECURITY DEFINER
-
----
-
-## Próximos pasos sugeridos
-
-| Prioridad | Tarea |
-|---|---|
-| 🔴 Alta | **Ejecutar migration 007** en Supabase SQL Editor → habilita cobros en Cta. Corriente |
-| 🟡 Media | **Fix OC reception** — refactor SAP: useEffect para recepciones, query de resumen para stats cards |
-| 🟡 Media | **Eliminar/inactivar clientes** — soft delete `activo=false` en ClientesSection |
-| 🟡 Media | Verificar dominio en Resend para habilitar confirmación de email en producción |
-| 🟡 Media | **Asientos auto para recepción OC** — DEBE 1.1.3 Mercaderías / HABER 2.1.1 Ctas a Pagar |
-| Baja | Facturación electrónica AFIP |
-| Baja | Multi-almacén |
-| Baja | Lotes y vencimientos |
-| Diferida | Fase 5: Email, WhatsApp, API REST, backups |
-
 ---
 
 ## Convenciones aprendidas (para futuras sesiones)
 
-- **Tablas multi-tenant:** `proveedores`, `productos`, `categorias`, `configuracion`, etc. usan **`empresa_id`**, no `user_id`. Tablas más viejas (`comprobantes`, `movimientos_caja`, `movimientos_inventario`, `cuenta_corriente_movimientos`) usan `user_id = tenant_id`. Verificar con `list_tables`/`information_schema` antes de escribir queries.
+- **Tablas multi-tenant:** `proveedores`, `productos`, `categorias`, `configuracion`, etc. usan **`empresa_id`**, no `user_id`. Tablas más viejas (`comprobantes`, `movimientos_caja`, `movimientos_inventario`) usan `user_id = tenant_id`. `cuenta_corriente_movimientos` tiene ambos (backfill migration 007). Verificar con `information_schema` antes de escribir queries.
 - **Timezone:** todo timestamp guardado en DB se persiste con offset AR ya aplicado (esquema "AR-local-as-UTC"). Para mostrar usar **siempre** `formatDateAR` / `formatDateTimeAR` de `dateUtils.js`. **Nunca** `new Date(x).toLocale*()` — resta los 3h dos veces.
 - **Filtros por rango de fecha:** comparar strings `YYYY-MM-DD` (slice 0,10), no instanciar `new Date()` sobre inputs de tipo date — evita drift de timezone.
+- **TanStack Query v5:** `onSuccess` en `useQuery` **no existe**. Usar `useEffect` que observe el resultado del query. Solo `useMutation` conserva `onSuccess`.
 - **Inputs date en dark mode:** el CSS global ya invierte el ícono — no hace falta agregar nada por componente.
-- **Datalist para sugerencias libres:** patrón usado para "Unidad" (input + `<datalist id="unidades-medida">`) — reutilizable para otros campos que toleren texto libre.
+- **Supabase Realtime:** para tablas con RLS que usan `get_my_empresa_id()`, el filtro en el canal debe ser `filter: 'empresa_id=eq.{uuid}'`. Sin filtro, el canal no recibe eventos en tablas con RLS activo.
+- **Clientes activos:** todas las queries de selección de clientes (ventas, cta. corriente, etc.) deben incluir `.neq('activo', false)`. Solo `ClientesSection` muestra inactivos cuando el filtro está en "Inactivos" o "Todos".
+- **Check de período:** `periodosService.isPeriodoCerrado` hace una DB call en cada `createAsiento`. Para auto-asientos (ventas/compras), si falla, es silencioso. Para asientos manuales, el error se muestra en toast.

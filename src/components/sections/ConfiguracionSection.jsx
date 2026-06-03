@@ -38,6 +38,8 @@ const ConfiguracionSection = () => {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [savingModulos, setSavingModulos] = useState(false);
+  const [savingWorkflow, setSavingWorkflow] = useState(false);
+  const [ocAprobacion, setOcAprobacion] = useState(false);
 
   // Estado local de módulos: { [id]: boolean }
   const [modulosState, setModulosState] = useState(() =>
@@ -54,6 +56,7 @@ const ConfiguracionSection = () => {
       setModulosState(
         Object.fromEntries(ALL_MODULES.map(m => [m.id, isModuloActivo(m.id)]))
       );
+      setOcAprobacion(config.oc_requiere_aprobacion === 'true');
     }
   }, [config, isModuloActivo]);
 
@@ -367,6 +370,55 @@ const ConfiguracionSection = () => {
           })}
         </div>
       </div>
+
+      {/* ── Flujo de Trabajo ── */}
+      {user?.role === 'admin' && (
+        <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+          <div className="flex items-center justify-between mb-5 border-b kairox-border pb-3">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Flujo de Trabajo</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Configura procesos de aprobación internos.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className={`flex items-start justify-between p-4 rounded-lg border transition-all ${
+              ocAprobacion
+                ? 'border-purple-200 bg-purple-50/50 dark:border-purple-900/50 dark:bg-purple-900/10'
+                : 'border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/30'
+            }`}>
+              <div className="flex-1 pr-4">
+                <p className={`text-sm font-semibold ${ocAprobacion ? 'text-slate-800 dark:text-slate-200' : 'text-slate-500 dark:text-slate-400'}`}>
+                  Aprobación de Órdenes de Compra
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
+                  Cuando está activo, los usuarios Staff generan OCs en estado "Pendiente Aprobación".
+                  Solo el administrador puede aprobarlas antes de enviarlas al proveedor.
+                </p>
+              </div>
+              <Switch
+                checked={ocAprobacion}
+                onCheckedChange={async (val) => {
+                  setOcAprobacion(val);
+                  setSavingWorkflow(true);
+                  const result = await updateConfig({ oc_requiere_aprobacion: String(val) });
+                  setSavingWorkflow(false);
+                  if (result.success) {
+                    toast({ title: val ? 'Aprobación de OC activada' : 'Aprobación de OC desactivada', className: 'bg-green-600 text-white border-green-700' });
+                  } else {
+                    toast({ title: 'Error al guardar', variant: 'destructive' });
+                    setOcAprobacion(!val);
+                  }
+                }}
+                disabled={savingWorkflow}
+                className="data-[state=checked]:bg-purple-600"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

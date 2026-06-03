@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { User, Loader2, TrendingUp, TrendingDown, DollarSign, Calendar, Clock, Banknote, AlertCircle, CheckCircle } from 'lucide-react';
+import { User, Loader2, TrendingUp, TrendingDown, DollarSign, Calendar, Clock, Banknote, AlertCircle, CheckCircle, UserX, UserCheck } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -14,7 +14,7 @@ import { useCaja } from '@/contexts/CajaContext';
 import { getNowAR, formatDateAR, formatDateTimeAR } from '@/lib/dateUtils';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 
-const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate }) => {
+const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate, onToggleActivo }) => {
   const { user } = useAuth();
   const { isSessionOpen, currentSession } = useCaja();
   const { toast } = useToast();
@@ -275,7 +275,21 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
 
         </div>
 
-        <DialogFooter className="border-t border-slate-100 dark:border-slate-800 pt-4">
+        <DialogFooter className="border-t border-slate-100 dark:border-slate-800 pt-4 flex-wrap gap-2">
+          {onToggleActivo && localClientData && (
+            <Button
+              variant="outline"
+              onClick={() => { onToggleActivo(localClientData); onOpenChange(false); }}
+              className={localClientData.activo === false
+                ? 'border-green-400 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-900/20'
+                : 'border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20'
+              }>
+              {localClientData.activo === false
+                ? <><UserCheck className="h-4 w-4 mr-2" />Reactivar cliente</>
+                : <><UserX className="h-4 w-4 mr-2" />Inactivar cliente</>
+              }
+            </Button>
+          )}
           <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:text-white dark:border-slate-700 dark:hover:bg-slate-800">
             Cerrar
           </Button>

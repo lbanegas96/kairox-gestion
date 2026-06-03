@@ -86,11 +86,11 @@ function CuentaCorrienteSection() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      // Fixed: fetching clients by empresa_id instead of user_id/tenant_id
       const { data, error } = await supabase
         .from('clientes')
         .select('*')
         .eq('empresa_id', user.empresa_id)
+        .neq('activo', false)
         .order('nombre');
 
       if (error) throw error;

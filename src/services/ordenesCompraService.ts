@@ -6,6 +6,8 @@ interface GetAllFilters {
   proveedorId?: string | null;
   page?: number;
   pageSize?: number;
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 interface CreateOCPayload {
@@ -14,6 +16,7 @@ interface CreateOCPayload {
   fecha_entrega_esperada?: string | null;
   forma_pago: string;
   notas?: string;
+  estadoInicial?: OrdenCompraEstado;
   items: {
     producto_id?: string | null;
     descripcion: string;
@@ -26,7 +29,7 @@ interface CreateOCPayload {
 export const ordenesCompraService = {
   async getAll(
     empresaId: string,
-    { estado, proveedorId, page = 1, pageSize = 30 }: GetAllFilters = {}
+    { estado, proveedorId, page = 1, pageSize = 30, dateFrom, dateTo }: GetAllFilters = {}
   ): Promise<PaginatedResult<OrdenCompra>> {
     let query = supabase
       .from('ordenes_compra')
@@ -36,6 +39,8 @@ export const ordenesCompraService = {
 
     if (estado) query = query.eq('estado', estado);
     if (proveedorId) query = query.eq('proveedor_id', proveedorId);
+    if (dateFrom) query = query.gte('fecha', `${dateFrom}T00:00:00`);
+    if (dateTo) query = query.lte('fecha', `${dateTo}T23:59:59`);
 
     const from = (page - 1) * pageSize;
     query = query.range(from, from + pageSize - 1);
@@ -83,7 +88,7 @@ export const ordenesCompraService = {
         notas: payload.notas ?? null,
         subtotal,
         total: subtotal,
-        estado: 'borrador' as OrdenCompraEstado,
+        estado: (payload.estadoInicial ?? 'borrador') as OrdenCompraEstado,
         estado_pago: 'pendiente' as EstadoPago,
       }])
       .select()
@@ -176,9 +181,22 @@ export const ordenesCompraService = {
       .eq('id', id);
     if (error) throw new Error(error.message);
   },
+
+  async getEstadoCounts(empresaId: string): Promise<Record<string, number>> {
+    const { data, error } = await supabase
+      .from('ordenes_compra')
+      .select('estado')
+      .eq('empresa_id', empresaId);
+    if (error) throw new Error(error.message);
+    return (data ?? []).reduce((acc: Record<string, number>, row: { estado: string }) => {
+      acc[row.estado] = (acc[row.estado] ?? 0) + 1;
+      return acc;
+    }, {});
+  },
 };
 
 export const OC_KEYS = {
   list: (empresaId: string, filters?: GetAllFilters) => ['ordenes_compra', empresaId, filters] as const,
   detail: (id: string) => ['orden_compra', id] as const,
+  counts: (empresaId: string) => ['ordenes_compra_counts', empresaId] as const,
 };
