@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-02 (sesión módulos configurables + auditoría plan cuentas)
+**Última actualización:** 2026-06-02 (sesión cierre — unificación branches + fix aria-hidden)
 **Branch activo:** `master`
 
 ---
@@ -91,6 +91,7 @@ Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Ua
 | **Recepción OC: SET en vez de ADD + input pre-rellena incorrecto** | `ordenesCompraService.ts`, `OrdenesCompraSection.jsx` | Servicio cambiado a ADD (suma delta al acumulado, respeta máximo pedido). UI pre-rellena con cantidad pendiente. Estado pasa a `recibida_parcial` / `recibida` correctamente. |
 | **Input recepción mostraba 0 aunque había pendiente** | `OrdenesCompraSection.jsx` | `onSuccess` de TanStack Query no re-dispara con caché caliente. Fix: valor del input usa `pendiente` directamente como fallback en lugar de `?? 0`. |
 | **Notificaciones OC no navegaban a la OC específica** | `Header.jsx`, `Dashboard.jsx`, `OrdenesCompraSection.jsx` | Dashboard agrega `navPayload` state + función `navigate(section, payload)`. Header pasa `{ openRecepcion: id }` para OCs. OrdenesCompraSection abre modal de recepción automáticamente vía `useEffect`. |
+| **aria-hidden Radix UI al navegar desde notificaciones** | `Header.jsx`, `OrdenesCompraSection.jsx` | Fix definitivo: `e.currentTarget.blur()` + `document.activeElement.blur()` antes de llamar `onNavigate`. Corta el conflicto de foco antes de que el DropdownMenu cierre. |
 | **Warnings Radix UI en 8+ componentes** | `CotizacionesSection`, `PlanCuentasSection`, `ReportesSection`, `command.jsx`, `CajaSection`, `OrdenesCompraSection`, `ClientesSection` | Búsqueda exhaustiva: todos los `DialogContent` sin `DialogDescription` corregidos. `ReportesSection` y `CommandDialog` usan `sr-only`. |
 | **`seed_plan_cuentas` RLS 403 Forbidden** | Supabase función + `PlanCuentasSection.jsx` | Función redefinida con `SECURITY DEFINER`. Fix en componente: `empresaId = user?.empresa_id` (antes usaba `tenant_id` = auth UUID incorrecto). Filas mal insertadas limpiadas manualmente. |
 | **Plan de Cuentas no mostraba cuentas tras inicializar** | `PlanCuentasSection.jsx` | `empresaId = user?.tenant_id \|\| user?.empresa_id` → `user?.empresa_id`. `tenant_id` es el auth UUID, no el empresa UUID. |
@@ -128,7 +129,7 @@ src/
 │   ├── ResetPasswordPage.jsx     ← NUEVO: pantalla de reset/invite con confirmación x2
 │   ├── PasswordRecoveryModal.jsx ← Modal "Olvidé mi contraseña" desde login
 │   ├── OnboardingPage.jsx        ← NUEVO: pantalla SaaS para crear empresa en primer login
-│   ├── Header.jsx                ← notificaciones OC navegan con payload { openRecepcion: id }
+│   ├── Header.jsx                ← notificaciones OC: blur() antes de navegar + payload { openRecepcion: id }
 │   ├── Dashboard.jsx             ← +navPayload state, navigate(section, payload), navigatePlain()
 │   ├── sections/
 │   │   ├── CajaSection.jsx       ← +3 tarjetas indicadoras de turno, fix fechas
@@ -278,6 +279,7 @@ Staff invitado por admin (create-user edge function):
 | Prioridad | Tarea |
 |---|---|
 | Alta | Verificar dominio en Resend para habilitar confirmación de email en producción |
+| Media | **Asientos auto para recepción OC** — DEBE 1.1.3 Mercaderías / HABER 2.1.1 Ctas a Pagar |
 | Media | Asientos automáticos para **Órdenes de Compra** confirmadas |
 | Baja | Facturación electrónica AFIP |
 | Baja | Multi-almacén |
