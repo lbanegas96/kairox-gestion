@@ -194,8 +194,20 @@ function UsuariosSection() {
         }
       });
 
-      if (error) throw new Error(error.message || "Error de conexión con el servidor.");
-      if (data && data.error) throw new Error(data.error);
+      // Si la edge function tira 4xx/5xx, Supabase intenta parsear el body como JSON
+      // y a veces lo devuelve dentro de `error.context.body` o como string en error.message.
+      const rawError =
+        (data && data.error) ||
+        (error && (error.message || error.context?.body)) ||
+        null;
+
+      if (rawError) {
+        const lower = String(rawError).toLowerCase();
+        if (lower.includes('already been registered') || lower.includes('already exists') || lower.includes('user_already_exists')) {
+          throw new Error(`El email ${formData.email} ya está registrado en el sistema (puede pertenecer a otra empresa). Usá uno distinto.`);
+        }
+        throw new Error(rawError);
+      }
 
       toast({
           title: "✅ Usuario creado",
@@ -209,7 +221,7 @@ function UsuariosSection() {
     } catch (error) {
       console.error("Submit Error:", error);
       toast({
-          title: "Error al enviar invitación",
+          title: "No se pudo crear el usuario",
           description: error.message || "Ocurrió un error inesperado.",
           variant: "destructive"
       });
