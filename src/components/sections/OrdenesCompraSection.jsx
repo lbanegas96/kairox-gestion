@@ -57,9 +57,12 @@ function OrdenesCompraSection({ navPayload }) {
   const empresaId = user?.empresa_id;
 
   // Abrir modal de recepción directo desde notificaciones
+  // El timeout da tiempo al DropdownMenu a cerrar y soltar el foco antes
+  // de que el Dialog se monte (evita el warning aria-hidden de Radix UI)
   useEffect(() => {
     if (navPayload?.openRecepcion) {
-      setRecepcionId(navPayload.openRecepcion);
+      const t = setTimeout(() => setRecepcionId(navPayload.openRecepcion), 80);
+      return () => clearTimeout(t);
     }
   }, [navPayload]);
 
