@@ -1,7 +1,7 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-03 (sesión — auditoría integral end-to-end)
+**Última actualización:** 2026-06-03 (sesión — fix RLS profiles + validación email global + estrategia comercial documentada)
 **Branch activo:** `master`
-**Entregables de auditoría:** `AUDITORIA.md` · `SUPABASE_ANALISIS.md` (recién creados)
+**Entregables de auditoría:** `AUDITORIA.md` · `SUPABASE_ANALISIS.md`
 
 ---
 
@@ -147,6 +147,16 @@ Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Ua
 | **Código muerto** | `src/pages/HomePage.jsx` | Eliminado (archivo vacío, no se importaba). Directorio `src/pages/` también removido. |
 | **Documentado, NO ejecutado** | Supabase | Fix SQL del RLS infinite recursion en `profiles` está en `SUPABASE_ANALISIS.md` §3 — ejecutar manualmente en SQL Editor. |
 | **Decisiones arquitecturales planteadas** | — | (1) Caja por-usuario vs por-empresa. (2) Deprecar duplicación `ventas`/`detalle_ventas` vs `comprobantes`. (3) Cliente Ualá: integrar o aislar. |
+
+### Sesión 2026-06-03 cierre (fix RLS profiles + validación email global)
+
+| Acción | Archivos | Detalle |
+|---|---|---|
+| **Fix RLS ejecutado en Supabase** | Supabase SQL Editor | Función `get_my_empresa_id()` recreada con `SECURITY DEFINER STABLE`. Policies `profiles_select/update/insert` reemplazadas sin auto-referencia. Confirmado: 3 policies activas, 3 profiles visibles, 3 empresas en DB. |
+| **Fix validación email global** | `src/lib/validationUtils.js` | `checkEmailExists` migrada de `SELECT FROM profiles` (sujeto a RLS del tenant) a RPC `email_exists_in_system` (SECURITY DEFINER que consulta `auth.users` globalmente). Evita false negative cuando el email existe en OTRO tenant. |
+| **Fix UX error creación usuario** | `src/components/sections/UsuariosSection.jsx` | `submitCreateUser` ahora parsea el error de la edge function en cualquiera de sus formas (`data.error`, `error.message`, `error.context.body`) y muestra mensaje amigable cuando el email ya existe en el sistema. |
+| **Decisión multi-membership** | `CONTEXT.md` | Postergado explícitamente hasta definir estrategia comercial (modelo de licencias). Ver sección "Pendientes estratégicos". |
+| **RPC pendiente de ejecutar** | Supabase SQL Editor | `email_exists_in_system(p_email text)` — SQL documentado en conversación. Hasta que se ejecute, la validación de email único puede dar false negative. |
 
 ---
 
@@ -314,7 +324,9 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 | 🟢 Hecho | **Migration 008** | Ejecutada en Supabase `wuznppxeonmhfcvnqfbf` ✅ — CHECK constraint `pendiente_aprobacion` + tabla `periodos_contables` activas. |
 | 🟢 Hecho | **Asientos auto para recepción OC** | DEBE 1.1.3 Mercaderías / HABER 2.1.1 Ctas a Pagar — se genera y confirma automáticamente al registrar recepción ✅ |
 | 🟢 Hecho | **Auditoría integral** | Frontend limpio: 12 fixes multi-tenant + 2 console.log eliminados + 1 archivo muerto borrado + 3 entregables MD ✅ |
-| 🔴 URGENTE | **Fix RLS recursion en `profiles`** | Ejecutar SQL del `SUPABASE_ANALISIS.md` §3 en SQL Editor. Sin esto: login y sección Usuarios pueden romper con error 42P17. |
+| 🟢 Hecho | **Fix RLS recursion en `profiles`** | SQL ejecutado en Supabase ✅. Función `get_my_empresa_id()` SECURITY DEFINER + 3 policies nuevas sin recursión. Confirmado con tests en SQL Editor. |
+| 🟢 Hecho | **Fix validación email global** | `validationUtils.js` usa RPC `email_exists_in_system` ✅. `UsuariosSection` muestra mensaje amigable si el email existe en otro tenant. |
+| 🔴 URGENTE | **Ejecutar RPC `email_exists_in_system`** | Correr SQL en Supabase para que la validación de email único funcione: `CREATE OR REPLACE FUNCTION public.email_exists_in_system(p_email text) RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE AS $$ SELECT EXISTS (SELECT 1 FROM auth.users WHERE lower(email) = lower(p_email)) $$; GRANT EXECUTE ON FUNCTION public.email_exists_in_system(text) TO authenticated;` |
 | 🟡 Media | **Decisión: caja por-usuario vs por-empresa** | Ver `SUPABASE_ANALISIS.md` §5.1. Hoy es por-usuario (`tenant_id = auth.uid()`). |
 | 🟡 Media | **Decisión: deprecar `ventas`/`detalle_ventas`** | Ver `AUDITORIA.md` §4.2.A. Hoy `NuevaVentaModal` inserta en `comprobantes` Y en `ventas`. |
 | 🟡 Media | **Decisión: cliente Ualá secundario** | `ualaSupabaseClient.js` apunta a `cgzaiijspgafruytozzk` pero `MovimientosUala.jsx` usa cliente principal. Eliminar o completar integración. |
