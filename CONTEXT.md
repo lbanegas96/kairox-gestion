@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-02 (sesión UX + timezone fixes globales)
+**Última actualización:** 2026-06-02 (sesión fixes OC + notificaciones navegables)
 **Branch activo:** `master`
 
 ---
@@ -88,6 +88,9 @@ Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Ua
 | **Warning Radix UI: Missing Description en Dialog** | `ClientesSection.jsx` | Agregado `<DialogDescription>` en modal "Nuevo Cliente". |
 | **403 RLS en tabla configuracion al guardar logo** | `ConfigContext.jsx` | `updateConfig` ahora llama a `get_my_empresa_id()` RPC e incluye `empresa_id` en INSERT. Migration 005 agrega `UNIQUE(empresa_id,clave)` y políticas RLS correctas. |
 | **Nuevo usuario sin empresa_id quedaba en dashboard vacío** | `App.jsx`, `OnboardingPage.jsx`, `SupabaseAuthContext.jsx` | Flujo SaaS: detectar `!user.empresa_id` → mostrar OnboardingPage → RPC `create_tenant()` crea empresa + perfil + config inicial. |
+| **Recepción OC: SET en vez de ADD + input pre-rellena incorrecto** | `ordenesCompraService.ts`, `OrdenesCompraSection.jsx` | Servicio cambiado a ADD (suma delta al acumulado, respeta máximo pedido). UI pre-rellena con cantidad pendiente. Estado pasa a `recibida_parcial` / `recibida` correctamente. |
+| **Input recepción mostraba 0 aunque había pendiente** | `OrdenesCompraSection.jsx` | `onSuccess` de TanStack Query no re-dispara con caché caliente. Fix: valor del input usa `pendiente` directamente como fallback en lugar de `?? 0`. |
+| **Notificaciones OC no navegaban a la OC específica** | `Header.jsx`, `Dashboard.jsx`, `OrdenesCompraSection.jsx` | Dashboard agrega `navPayload` state + función `navigate(section, payload)`. Header pasa `{ openRecepcion: id }` para OCs. OrdenesCompraSection abre modal de recepción automáticamente vía `useEffect`. |
 | **Warnings Radix UI en 8+ componentes** | `CotizacionesSection`, `PlanCuentasSection`, `ReportesSection`, `command.jsx`, `CajaSection`, `OrdenesCompraSection`, `ClientesSection` | Búsqueda exhaustiva: todos los `DialogContent` sin `DialogDescription` corregidos. `ReportesSection` y `CommandDialog` usan `sr-only`. |
 | **`seed_plan_cuentas` RLS 403 Forbidden** | Supabase función + `PlanCuentasSection.jsx` | Función redefinida con `SECURITY DEFINER`. Fix en componente: `empresaId = user?.empresa_id` (antes usaba `tenant_id` = auth UUID incorrecto). Filas mal insertadas limpiadas manualmente. |
 | **Plan de Cuentas no mostraba cuentas tras inicializar** | `PlanCuentasSection.jsx` | `empresaId = user?.tenant_id \|\| user?.empresa_id` → `user?.empresa_id`. `tenant_id` es el auth UUID, no el empresa UUID. |
@@ -125,18 +128,23 @@ src/
 │   ├── ResetPasswordPage.jsx     ← NUEVO: pantalla de reset/invite con confirmación x2
 │   ├── PasswordRecoveryModal.jsx ← Modal "Olvidé mi contraseña" desde login
 │   ├── OnboardingPage.jsx        ← NUEVO: pantalla SaaS para crear empresa en primer login
+│   ├── Header.jsx                ← notificaciones OC navegan con payload { openRecepcion: id }
+│   ├── Dashboard.jsx             ← +navPayload state, navigate(section, payload), navigatePlain()
 │   ├── sections/
 │   │   ├── CajaSection.jsx       ← +3 tarjetas indicadoras de turno, fix fechas
 │   │   ├── ProductosSection.jsx  ← ProductForm movido fuera, soft delete, fix fechas
 │   │   ├── MovimientosUala.jsx   ← formatFecha TZ-safe
 │   │   ├── PlanCuentasSection.jsx← +TabLibroMayor
 │   │   ├── ComprasSection.jsx    ← +asiento automático
+│   │   ├── OrdenesCompraSection.jsx ← fix recepción ADD+pendiente; abre modal via navPayload
 │   │   └── UsuariosSection.jsx   ← flujo invitación por email, columna último acceso
 │   └── ventas/
 │       └── NuevaVentaModal.jsx   ← +asiento automático al registrar venta
 ├── contexts/
 │   ├── SupabaseAuthContext.jsx   ← +needsPasswordReset, +isRecoveryFlow ref, +last_login_at, +refreshUser
 │   └── ConfigContext.jsx         ← updateConfig incluye empresa_id vía get_my_empresa_id()
+├── services/
+│   └── ordenesCompraService.ts  ← recibirItems: ADD en lugar de SET, respeta máximo pedido
 └── App.jsx                       ← +OnboardingPage cuando !user.empresa_id
 ```
 

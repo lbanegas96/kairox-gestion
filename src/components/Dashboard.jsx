@@ -21,8 +21,21 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 
 function Dashboard({ user, onLogout }) {
   const [activeSection, setActiveSection] = useState('dashboard');
+  const [navPayload, setNavPayload] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const { open: cmdOpen, setOpen: setCmdOpen } = useCommandPalette();
+
+  // Navegación con payload opcional (usado por notificaciones)
+  const navigate = (section, payload = null) => {
+    setActiveSection(section);
+    setNavPayload(payload);
+  };
+
+  // Navegación simple sin payload (sidebar, command palette)
+  const navigatePlain = (section) => {
+    setActiveSection(section);
+    setNavPayload(null);
+  };
 
   // Removed permission checks for rendering sections.
   // All sections are now accessible for viewing.
@@ -39,7 +52,7 @@ function Dashboard({ user, onLogout }) {
       case 'cotizaciones':
         return <CotizacionesSection />;
       case 'ordenes_compra':
-        return <OrdenesCompraSection />;
+        return <OrdenesCompraSection navPayload={navPayload} />;
       case 'compras':
         return <ComprasSection />;
       case 'caja':
@@ -65,18 +78,19 @@ function Dashboard({ user, onLogout }) {
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 flex transition-colors duration-300">
-      <Sidebar 
-        activeSection={activeSection} 
-        setActiveSection={setActiveSection}
+      <Sidebar
+        activeSection={activeSection}
+        setActiveSection={navigatePlain}
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
       />
-      
+
       <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-0'}`}>
         <Header
           user={user}
           onLogout={onLogout}
           toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          onNavigate={navigate}
           onOpenSearch={() => setCmdOpen(true)}
         />
 
@@ -98,7 +112,7 @@ function Dashboard({ user, onLogout }) {
       <CommandPalette
         open={cmdOpen}
         onClose={() => setCmdOpen(false)}
-        onNavigate={(section) => { setActiveSection(section); setCmdOpen(false); }}
+        onNavigate={(section) => { navigatePlain(section); setCmdOpen(false); }}
       />
     </div>
   );

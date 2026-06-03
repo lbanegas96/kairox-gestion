@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, ShoppingBag, Search, Eye, Truck, XCircle,
@@ -31,7 +31,7 @@ const EMPTY_ITEM = { descripcion: '', cantidad_pedida: 1, costo_unitario: '', pr
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-function OrdenesCompraSection() {
+function OrdenesCompraSection({ navPayload }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -56,6 +56,13 @@ function OrdenesCompraSection() {
 
   const empresaId = user?.empresa_id;
 
+  // Abrir modal de recepción directo desde notificaciones
+  useEffect(() => {
+    if (navPayload?.openRecepcion) {
+      setRecepcionId(navPayload.openRecepcion);
+    }
+  }, [navPayload]);
+
   // ── Queries ──────────────────────────────────────────────────────────────────
 
   const { data: listData, isLoading } = useQuery({
@@ -75,10 +82,11 @@ function OrdenesCompraSection() {
     queryFn: () => ordenesCompraService.getById(recepcionId),
     enabled: !!recepcionId,
     onSuccess: (data) => {
-      // inicializar recepciones con cantidades ya recibidas
+      // inicializar con la cantidad PENDIENTE de recibir (lo que falta, no lo que ya llegó)
       const init = {};
       (data?.ordenes_compra_items ?? []).forEach(i => {
-        init[i.id] = i.cantidad_recibida ?? 0;
+        const pendiente = Number(i.cantidad_pedida) - Number(i.cantidad_recibida ?? 0);
+        init[i.id] = Math.max(pendiente, 0);
       });
       setRecepciones(init);
     },
@@ -601,12 +609,19 @@ function OrdenesCompraSection() {
                   <Package className="w-5 h-5 text-slate-400 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm dark:text-white truncate">{item.descripcion}</p>
-                    <p className="text-xs text-slate-400">Pedido: {item.cantidad_pedida} {item.unidad_medida} — Ya recibido: {item.cantidad_recibida}</p>
+                    <p className="text-xs text-slate-400">
+                      Pedido: {item.cantidad_pedida} {item.unidad_medida}
+                      {' · '}
+                      <span className="text-green-500">Recibido: {item.cantidad_recibida ?? 0}</span>
+                      {' · '}
+                      <span className="text-yellow-500">Pendiente: {Math.max(Number(item.cantidad_pedida) - Number(item.cantidad_recibida ?? 0), 0)}</span>
+                    </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <Label className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">A recibir:</Label>
-                    <Input type="number" min="0" max={item.cantidad_pedida}
-                      value={recepciones[item.id] ?? item.cantidad_recibida}
+                    <Label className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Recibir ahora:</Label>
+                    <Input type="number" min="0"
+                      max={Math.max(Number(item.cantidad_pedida) - Number(item.cantidad_recibida ?? 0), 0)}
+                      value={recepciones[item.id] !== undefined ? recepciones[item.id] : Math.max(Number(item.cantidad_pedida) - Number(item.cantidad_recibida ?? 0), 0)}
                       onChange={e => setRecepciones(r => ({ ...r, [item.id]: e.target.value }))}
                       className="w-20 text-center dark:bg-slate-800 dark:border-slate-700 dark:text-white text-sm" />
                   </div>

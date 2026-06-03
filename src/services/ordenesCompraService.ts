@@ -119,15 +119,30 @@ export const ordenesCompraService = {
     return data as OrdenCompra;
   },
 
-  /** Recepción parcial o total de ítems — el trigger DB actualiza stock automáticamente */
+  /** Recepción parcial o total de ítems — suma el delta al acumulado y actualiza stock */
   async recibirItems(
     ordenId: string,
     recepciones: { itemId: string; cantidadRecibida: number }[]
   ): Promise<void> {
     for (const rec of recepciones) {
+      if (rec.cantidadRecibida <= 0) continue; // ignorar items sin recepción
+
+      // Leer estado actual para hacer ADD en lugar de SET
+      const { data: current, error: fetchItemError } = await supabase
+        .from('ordenes_compra_items')
+        .select('cantidad_recibida, cantidad_pedida')
+        .eq('id', rec.itemId)
+        .single();
+      if (fetchItemError) throw new Error(fetchItemError.message);
+
+      const nuevaCantidad = Math.min(
+        Number(current.cantidad_recibida) + rec.cantidadRecibida,
+        Number(current.cantidad_pedida) // no superar lo pedido
+      );
+
       const { error } = await supabase
         .from('ordenes_compra_items')
-        .update({ cantidad_recibida: rec.cantidadRecibida })
+        .update({ cantidad_recibida: nuevaCantidad })
         .eq('id', rec.itemId);
       if (error) throw new Error(error.message);
     }

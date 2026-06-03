@@ -144,7 +144,13 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch }) {
                     return (
                       <button key={item.id}
                         className={`w-full text-left p-3 rounded-lg border transition-colors hover:opacity-90 ${cfg.bg}`}
-                        onClick={() => onNavigate?.(item.seccion)}>
+                        onClick={() => {
+                          if (item.tipo === 'oc_pendiente') {
+                            onNavigate?.(item.seccion, { openRecepcion: item.raw.id });
+                          } else {
+                            onNavigate?.(item.seccion);
+                          }
+                        }}>
                         <div className="flex items-start gap-2.5">
                           <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${cfg.color}`} />
                           <div className="flex-1 min-w-0">
