@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-03 (sesión — fix RLS profiles + validación email global + estrategia comercial documentada)
+**Última actualización:** 2026-06-04 (sesión — 6 pendientes medios resueltos: cajas por-terminal, deprecar ventas/detalle_ventas, módulo Bancos, 3-way match OC)
 **Branch activo:** `master`
 **Entregables de auditoría:** `AUDITORIA.md` · `SUPABASE_ANALISIS.md`
 
@@ -185,9 +185,30 @@ src/
 │                                       +7 tabs en total (antes 4)
 
 migrations/
-└── 008_oc_approval_periodos.sql  ← ADD pendiente_aprobacion a CHECK + CREATE periodos_contables
-                                     ⚠️ PENDIENTE ejecutar en Supabase SQL Editor
+├── 008_oc_approval_periodos.sql  ← ADD pendiente_aprobacion a CHECK + CREATE periodos_contables ✅
+├── 009_cajas.sql                 ← CREATE cajas + FK caja_id en caja_sesiones + trigger ✅
+├── 010_drop_ventas_legacy.sql    ← backup + DROP ventas + detalle_ventas ✅
+├── 011_cuentas_bancarias.sql     ← CREATE cuentas_bancarias + movimientos_bancarios ✅
+└── 012_facturas_proveedor.sql    ← CREATE facturas_proveedor (3-way match) ✅
 ```
+
+## Sesión 2026-06-04 — cambios aplicados
+
+| Área | Archivos | Detalle |
+|---|---|---|
+| **Caja por-terminal** | `CajaContext.jsx`, `CajaSection.jsx`, migration 009 | `cajas` table. Trigger auto-crea "Caja Principal". Context usa `resolveActiveCaja()`. Queries migradas a `empresa_id` |
+| **Deprecar ventas legacy** | `ReportesSection.jsx`, `NuevaVentaModal.jsx`, migration 010 | Reportes leen `comprobantes`. NuevaVenta ya no escribe en tablas legacy. DROP con backup |
+| **Módulo Bancos** | `CuentasBancariasSection.jsx`, `cuentasBancariasService.ts`, migration 011 | Reemplaza "Ualá" en sidebar. Cuentas con FK a Plan de Cuentas. Import CSV con mapper. `ualaSupabaseClient.js` eliminado |
+| **3-way match OC** | `OrdenesCompraSection.jsx`, `ordenesCompraService.ts`, migration 012 | `facturas_proveedor` table. Panel detalle OC muestra grilla OC/Recibido/Factura con match visual. Modal registrar factura + marcar pagada |
+
+## Estado integración Ualá (Google Apps Script)
+
+| Componente | Estado | Notas |
+|---|---|---|
+| `UalaSync.gs` (Google Apps Script) | ✅ Intacto | Externo al repo. Lee Gmail → inserta en `movimientos_uala` cada 10 min |
+| Tabla `movimientos_uala` | ✅ Intacta en Supabase | No fue dropeada |
+| `MovimientosUala.jsx` | ⚠️ Existe pero sin acceso por UI | Sidebar reemplazado por "Bancos" |
+| **Pendiente**: integrar Ualá al módulo Bancos | 🟡 Decidir | Opción A: crear cuenta "Ualá" en Bancos + migrar datos históricos. Opción B: actualizar Apps Script para escribir en `movimientos_bancarios`. Opción C: re-agregar ítem "Ualá" al sidebar |
 
 ---
 
@@ -326,11 +347,11 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 | 🟢 Hecho | **Auditoría integral** | Frontend limpio: 12 fixes multi-tenant + 2 console.log eliminados + 1 archivo muerto borrado + 3 entregables MD ✅ |
 | 🟢 Hecho | **Fix RLS recursion en `profiles`** | SQL ejecutado en Supabase ✅. Función `get_my_empresa_id()` SECURITY DEFINER + 3 policies nuevas sin recursión. Confirmado con tests en SQL Editor. |
 | 🟢 Hecho | **Fix validación email global** | `validationUtils.js` usa RPC `email_exists_in_system` ✅. `UsuariosSection` muestra mensaje amigable si el email existe en otro tenant. |
-| 🔴 URGENTE | **Ejecutar RPC `email_exists_in_system`** | Correr SQL en Supabase para que la validación de email único funcione: `CREATE OR REPLACE FUNCTION public.email_exists_in_system(p_email text) RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE AS $$ SELECT EXISTS (SELECT 1 FROM auth.users WHERE lower(email) = lower(p_email)) $$; GRANT EXECUTE ON FUNCTION public.email_exists_in_system(text) TO authenticated;` |
-| 🟡 Media | **Decisión: caja por-usuario vs por-empresa** | Ver `SUPABASE_ANALISIS.md` §5.1. Hoy es por-usuario (`tenant_id = auth.uid()`). |
-| 🟡 Media | **Decisión: deprecar `ventas`/`detalle_ventas`** | Ver `AUDITORIA.md` §4.2.A. Hoy `NuevaVentaModal` inserta en `comprobantes` Y en `ventas`. |
-| 🟡 Media | **Decisión: cliente Ualá secundario** | `ualaSupabaseClient.js` apunta a `cgzaiijspgafruytozzk` pero `MovimientosUala.jsx` usa cliente principal. Eliminar o completar integración. |
-| 🟡 Media | **3-way match OC-Recepción-Factura** | Vincular factura del proveedor a la OC y validar montos |
+| 🟢 Hecho | **RPC `email_exists_in_system` ejecutada** | Función activa en Supabase. `validationUtils.js` la usa para validar duplicados globales. ✅ |
+| 🟢 Hecho | **Cajas (terminales POS) — modelo por-terminal** | Tabla `cajas` con `(id, empresa_id, nombre, activo)`. `caja_sesiones` tiene FK `caja_id`. Único índice: 1 sesión abierta por caja. Trigger auto-crea "Caja Principal" en cada nueva empresa. `CajaContext` usa `resolveActiveCaja()` → busca primer caja activa de la empresa. `CajaSection` queries de `movimientos_caja` migradas a `empresa_id`. Migration 009. ✅ |
+| 🟢 Hecho | **Deprecar `ventas`/`detalle_ventas`** | `ReportesSection` lee de `comprobantes`/`comprobante_items` + empresa_id en los 5 reportes + fix timezone en fechas. `NuevaVentaModal` ya no escribe en tablas legacy. Migration 010 crea backups y hace DROP. ✅ |
+| 🟢 Hecho | **Módulo Cuentas Bancarias** | Reemplaza `MovimientosUala`. `ualaSupabaseClient.js` eliminado (dead code). Tablas `cuentas_bancarias` + `movimientos_bancarios` con FK a `plan_cuentas`. Sidebar: "Bancos" con ícono Landmark. Import CSV con mapper de columnas, detección automática de tipo por signo. Migration 011. ✅ |
+| 🟢 Hecho | **3-way match OC-Recepción-Factura** | Tabla `facturas_proveedor` (UNIQUE por OC). En panel detalle OC: grilla Total OC / Recibido / Factura con indicador visual de match. Botón "Registrar Factura" (auto-precarga monto recibido), "Marcar pagada". Migration 012. ✅ |
 | 🟡 Media | **Cotización → Pedido → Factura** | Vincular `cotizaciones.id` como origen de la venta para trazabilidad |
 | 🟡 Media | **Verificar dominio Resend** | `onboarding@resend.dev` solo envía a emails verificados → dominio propio para producción |
 | Baja | Facturación electrónica AFIP | — |
