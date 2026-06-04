@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-04 tarde (Ualá cerrado, Cotización→Venta, CommandPalette+cotizaciones+bancos, Dashboard KPIs cotizaciones)
+**Última actualización:** 2026-06-04 noche (Multi-moneda base, Módulo Proveedores schema, Reconciliación bancaria schema)
 **Branch activo:** `master`
 **Entregables de auditoría:** `AUDITORIA.md` · `SUPABASE_ANALISIS.md`
 
@@ -210,6 +210,46 @@ migrations/
 | **CommandPalette (Cmd+K)** | `CommandPalette.jsx` | Fix `user_id`→`empresa_id` en productos y clientes. Añadidas búsquedas de cotizaciones (`numero`, `cliente_nombre`) y cuentas bancarias (`nombre`). Placeholder actualizado. |
 | **Dashboard — KPIs cotizaciones** | `DashboardSection.jsx`, `dashboardService.ts` | Nueva fila de 4 KPIs: Cotizaciones del Mes, Tasa de Conversión (con barra de progreso), Aprobadas Pendientes, Monto Convertido. Nueva columna en fila 3: "Cotizaciones Aprobadas" con lista de pendientes clickeable. `getCotizacionesStats()` en dashboardService. |
 
+## Sesión 2026-06-04 noche — cambios aplicados
+
+### Análisis competitivo realizado
+Comparado KAIROX vs Colppy, Xubio, Bind ERP, Tango, Alegra, Odoo. Brechas identificadas y priorizadas.
+Decisión: implementar Multi-moneda + Proveedores + Reconciliación bancaria. AFIP y Multi-membership al final.
+
+### Fundamentos implementados (listos para continuar en próxima sesión)
+
+| Área | Archivos | Estado |
+|---|---|---|
+| **Migration 013 — Multi-moneda** | `migrations/013_multi_moneda.sql` | ✅ Listo para ejecutar en Supabase |
+| **Migration 014 — Proveedores** | `migrations/014_proveedores.sql` | ✅ Listo para ejecutar en Supabase |
+| **Migration 015 — Reconciliación** | `migrations/015_conciliacion_bancaria.sql` | ✅ Listo para ejecutar en Supabase |
+| **currencyUtils** | `src/lib/currencyUtils.js` | ✅ `formatCurrency`, `convertToARS`, `MONEDAS`, `MONEDA_SYMBOLS` |
+| **tipoCambioService** | `src/services/tipoCambioService.ts` | ✅ `getTasaVigente`, `getHistorial`, `upsertTasa`, `deleteTasa` |
+| **MonedaSelector** | `src/components/ui/MonedaSelector.jsx` | ✅ Componente reutilizable: selector ARS/USD/EUR + campo tasa condicional |
+| **Cotizaciones — moneda** | `CotizacionesSection.jsx`, `cotizacionesService.ts` | ✅ Formulario con MonedaSelector, totales con `formatCurrency`, servicio pasa `moneda`+`tipo_cambio_tasa` |
+
+### ⚠️ Pendiente para próxima sesión (continuación task #5-8)
+
+| Tarea | Detalle |
+|---|---|
+| **Task 5 — OC + Ventas con moneda** | `OrdenesCompraSection.jsx` y `NuevaVentaModal.jsx` necesitan el mismo tratamiento que Cotizaciones. Dashboard: convertir totales USD→ARS en KPIs. |
+| **Task 6 — ProveedoresSection** | `src/components/sections/ProveedoresSection.jsx` + `src/services/proveedoresService.ts`. Módulo completo: lista, ficha, cuenta corriente, historial compras/OC. |
+| **Task 7 — Integrar Proveedores en app** | `App.jsx` sidebar (ícono Truck). `ComprasSection` y `OrdenesCompraSection`: autocomplete de proveedor desde tabla `proveedores`. |
+| **Task 8 — Conciliación bancaria** | `src/services/conciliacionService.ts` + tab "Conciliación" en `CuentasBancariasSection.jsx`. Vista split: extracto vs movimientos registrados + auto-match + resumen. |
+
+### Schema SQL — nuevas tablas (migrations 013-015)
+
+- `tipos_cambio` — (empresa_id, moneda, tasa, fecha) UNIQUE. Función `get_tasa_cambio(empresa_id, moneda, fecha)`.
+- `cotizaciones.tipo_cambio_tasa` — nueva columna (ALTER TABLE IF NOT EXISTS).
+- `ordenes_compra.tipo_cambio_tasa` — ídem.
+- `comprobantes.moneda + tipo_cambio_tasa` — ídem.
+- `proveedores` — completada con: nombre, razon_social, cuit, condicion_iva, telefono, email, direccion, localidad, provincia, condicion_pago, plazo_pago_dias, activo, notas. RLS. Trigger updated_at.
+- `cuenta_corriente_proveedores` — (empresa_id, proveedor_id, tipo, monto, descripcion, referencia_id). Vista `v_saldo_proveedores`.
+- `extractos_bancarios` — metadata de archivos importados para conciliar.
+- `extracto_lineas` — líneas del extracto con FK nullable a `movimientos_bancarios`. Trigger `fn_sync_conciliado` sincroniza flag `conciliado` en ambas tablas.
+
+---
+
 ## Estado integración Ualá (Google Apps Script) ✅ CERRADO
 
 | Componente | Estado | Notas |
@@ -362,12 +402,17 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 | 🟢 Hecho | **Módulo Cuentas Bancarias** | Reemplaza `MovimientosUala`. `ualaSupabaseClient.js` eliminado (dead code). Tablas `cuentas_bancarias` + `movimientos_bancarios` con FK a `plan_cuentas`. Sidebar: "Bancos" con ícono Landmark. Import CSV con mapper de columnas, detección automática de tipo por signo. Migration 011. ✅ |
 | 🟢 Hecho | **3-way match OC-Recepción-Factura** | Tabla `facturas_proveedor` (UNIQUE por OC). En panel detalle OC: grilla Total OC / Recibido / Factura con indicador visual de match. Botón "Registrar Factura" (auto-precarga monto recibido), "Marcar pagada". Migration 012. ✅ |
 | 🟢 Hecho | **Cotización → Venta** | Botón convertir + pre-fill carrito + estado `convertida` + `comprobante_id` FK ✅ |
+| 🔴 Alta | **Task 5 — Multi-moneda UI en OC y Ventas** | `OrdenesCompraSection.jsx` + `NuevaVentaModal.jsx`: mismo MonedaSelector que Cotizaciones. Dashboard: convertir totales USD→ARS. |
+| 🔴 Alta | **Task 6 — ProveedoresSection** | `ProveedoresSection.jsx` + `proveedoresService.ts`: lista paginada, ficha completa, cuenta corriente, historial OC/compras. |
+| 🔴 Alta | **Task 7 — Proveedores en sidebar + autocomplete** | `App.jsx` sidebar + `ComprasSection` + `OrdenesCompraSection`: ComboBox desde tabla `proveedores`. |
+| 🔴 Alta | **Task 8 — Reconciliación bancaria UI** | `conciliacionService.ts` + tab "Conciliación" en `CuentasBancariasSection`. Vista split + auto-match. |
+| 🟡 Media | **Ejecutar migrations 013-015 en Supabase** | SQL Editor: `013_multi_moneda.sql`, `014_proveedores.sql`, `015_conciliacion_bancaria.sql` |
 | 🟡 Media | **Verificar dominio Resend** | `onboarding@resend.dev` solo envía a emails verificados → dominio propio para producción |
-| Baja | Facturación electrónica AFIP | — |
+| Baja | Facturación electrónica AFIP | — (última prioridad, junto con multi-membership) |
 | Baja | Multi-almacén | — |
 | Baja | Lotes y vencimientos | — |
 | Diferida | Fase 5: Email, WhatsApp, API REST, backups | — |
-| ⏸️ ESTRATÉGICO (último) | **Multi-membership + modelo de licencias** | Permitir que un mismo email pertenezca a varias empresas (modelo Notion/Slack: tabla `memberships` M:N). Postponed porque depende de la estrategia de comercialización (cobro por empresa / por usuario / por módulos). Ver §"Pendientes estratégicos". |
+| ⏸️ ESTRATÉGICO (último) | **Multi-membership + modelo de licencias** | Permitir que un mismo email pertenezca a varias empresas (modelo Notion/Slack: tabla `memberships` M:N). Postponed porque depende de la estrategia de comercialización. Ver §"Pendientes estratégicos". |
 
 ---
 

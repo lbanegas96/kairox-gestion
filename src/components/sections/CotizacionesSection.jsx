@@ -15,6 +15,8 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { cotizacionesService, COTIZACIONES_KEYS } from '@/services/cotizacionesService';
 import { supabase } from '@/lib/customSupabaseClient';
 import NuevaVentaModal from '@/components/ventas/NuevaVentaModal';
+import { MonedaSelector } from '@/components/ui/MonedaSelector';
+import { formatCurrency, MONEDA_SYMBOLS } from '@/lib/currencyUtils';
 
 const ESTADOS = {
   borrador:   { label: 'Borrador',   color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
@@ -43,6 +45,8 @@ function CotizacionesSection() {
     notas: '',
     condiciones_pago: 'Pago a 30 días',
     fecha_vencimiento: '',
+    moneda: 'ARS',
+    tipoCambioTasa: 1,
   });
   const [items, setItems] = useState([{ ...EMPTY_ITEM }]);
   const [prodSearch, setProdSearch] = useState({});
@@ -118,7 +122,7 @@ function CotizacionesSection() {
   };
 
   const resetForm = () => {
-    setForm({ cliente_nombre: '', notas: '', condiciones_pago: 'Pago a 30 días', fecha_vencimiento: '' });
+    setForm({ cliente_nombre: '', notas: '', condiciones_pago: 'Pago a 30 días', fecha_vencimiento: '', moneda: 'ARS', tipoCambioTasa: 1 });
     setItems([{ ...EMPTY_ITEM }]);
   };
 
@@ -164,6 +168,8 @@ function CotizacionesSection() {
       notas: form.notas,
       condicionesPago: form.condiciones_pago,
       fechaVencimiento: form.fecha_vencimiento || null,
+      moneda: form.moneda,
+      tipoCambioTasa: form.tipoCambioTasa,
     });
   };
 
@@ -246,7 +252,7 @@ function CotizacionesSection() {
                       </span>
                     </td>
                     <td className="p-4 text-right font-mono font-bold text-slate-800 dark:text-slate-200">
-                      ${Number(cot.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                      {formatCurrency(cot.total, cot.moneda ?? 'ARS')}
                     </td>
                     <td className="p-4">
                       <div className="flex items-center justify-center gap-1">
@@ -327,6 +333,14 @@ function CotizacionesSection() {
                   <Label className="dark:text-white">Notas</Label>
                   <Input value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} placeholder="Observaciones opcionales" className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
                 </div>
+                <div className="space-y-2 col-span-2">
+                  <MonedaSelector
+                    moneda={form.moneda}
+                    tasa={form.tipoCambioTasa}
+                    onMonedaChange={v => setForm(f => ({ ...f, moneda: v, tipoCambioTasa: v === 'ARS' ? 1 : f.tipoCambioTasa }))}
+                    onTasaChange={v => setForm(f => ({ ...f, tipoCambioTasa: v }))}
+                  />
+                </div>
               </CardContent>
             </Card>
 
@@ -382,7 +396,7 @@ function CotizacionesSection() {
                   <div className="text-right">
                     <span className="text-sm text-slate-500 dark:text-slate-400 mr-4">Total:</span>
                     <span className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
-                      ${total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                      {formatCurrency(total, form.moneda)}
                     </span>
                   </div>
                 </div>
@@ -456,8 +470,8 @@ function CotizacionesSection() {
                   ))}
                 </tbody>
                 <tfoot><tr className="border-t-2 border-slate-200 dark:border-slate-700">
-                  <td colSpan={3} className="py-3 text-right font-bold dark:text-white">TOTAL</td>
-                  <td className="py-3 text-right font-bold text-lg dark:text-white">${Number(detalle.total).toFixed(2)}</td>
+                  <td colSpan={3} className="py-3 text-right font-bold dark:text-white">TOTAL {detalle.moneda && detalle.moneda !== 'ARS' && <span className="text-xs text-slate-400 ml-1">({detalle.moneda} — tasa {detalle.tipo_cambio_tasa})</span>}</td>
+                  <td className="py-3 text-right font-bold text-lg dark:text-white">{formatCurrency(detalle.total, detalle.moneda ?? 'ARS')}</td>
                 </tr></tfoot>
               </table>
 

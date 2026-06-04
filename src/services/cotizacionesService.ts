@@ -14,6 +14,8 @@ interface CreateCotizacionPayload {
   notas?: string;
   condicionesPago?: string;
   fechaVencimiento?: string | null;
+  moneda?: string;
+  tipoCambioTasa?: number;
 }
 
 export const cotizacionesService = {
@@ -51,7 +53,7 @@ export const cotizacionesService = {
   async create(
     empresaId: string,
     userId: string,
-    { cliente, items, notas, condicionesPago, fechaVencimiento }: CreateCotizacionPayload
+    { cliente, items, notas, condicionesPago, fechaVencimiento, moneda = 'ARS', tipoCambioTasa = 1 }: CreateCotizacionPayload
   ): Promise<Cotizacion> {
     const { data: numData, error: numError } = await supabase
       .rpc('next_cotizacion_number', { p_empresa_id: empresaId });
@@ -75,6 +77,8 @@ export const cotizacionesService = {
         notas: notas ?? null,
         condiciones_pago: condicionesPago ?? null,
         fecha_vencimiento: fechaVencimiento ?? null,
+        moneda,
+        tipo_cambio_tasa: tipoCambioTasa,
         estado: 'borrador' as CotizacionEstado,
       }])
       .select()
