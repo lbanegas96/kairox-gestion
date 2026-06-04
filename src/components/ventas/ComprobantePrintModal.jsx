@@ -10,8 +10,19 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items }) => {
   const handlePrint = () => {
     const printContent = printRef.current;
     const windowPrint = window.open('', '', 'left=0,top=0,width=800,height=900,toolbar=0,scrollbars=0,status=0');
-    
+
     if (windowPrint) {
+      // Clonar el nodo y sanear: eliminar scripts e inline handlers antes de imprimir
+      const clone = printContent.cloneNode(true);
+      clone.querySelectorAll('script, style[data-unsafe]').forEach(el => el.remove());
+      // Eliminar atributos de eventos inline (on*)
+      clone.querySelectorAll('*').forEach(el => {
+        [...el.attributes].forEach(attr => {
+          if (attr.name.startsWith('on')) el.removeAttribute(attr.name);
+        });
+      });
+      const safeHTML = clone.innerHTML;
+
       windowPrint.document.write(`
         <html>
           <head>
@@ -32,7 +43,7 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items }) => {
             </style>
           </head>
           <body>
-            ${printContent.innerHTML}
+            ${safeHTML}
           </body>
         </html>
       `);

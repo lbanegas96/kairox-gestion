@@ -1,5 +1,14 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+
+// ─── Suprimir console.* en producción para evitar fuga de datos ──────────────
+if (!import.meta.env.DEV) {
+  const noop = () => {};
+  console.log   = noop;
+  console.warn  = noop;
+  console.info  = noop;
+  // console.error se mantiene para monitoreo (silenciado por filtros de prod si se usa Sentry)
+}
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import App from '@/App';

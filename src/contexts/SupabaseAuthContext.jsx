@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
+import { logger, safeErrorMessage } from '@/lib/securityUtils';
+import { useInactivityTimeout } from '@/hooks/useInactivityTimeout';
 
 const AuthContext = createContext(undefined);
 
@@ -27,12 +29,12 @@ export const AuthProvider = ({ children }) => {
         .maybeSingle();
 
       if (error) {
-        console.warn("Profile fetch warning:", error.message);
+        logger.warn("Profile fetch warning:", error.message);
         return null;
       }
       return data;
     } catch (err) {
-      console.error("Profile fetch exception:", err);
+      logger.error("Profile fetch exception:", err);
       return null;
     }
   };
@@ -100,7 +102,7 @@ export const AuthProvider = ({ children }) => {
       }
 
     } catch (error) {
-      console.error("Auth: Critical error in handleSession", error);
+      logger.error("Auth: Critical error in handleSession", error);
     } finally {
       if (mounted.current) {
         setLoading(false);
@@ -158,7 +160,7 @@ export const AuthProvider = ({ children }) => {
         authListener = subscription;
 
       } catch (err) {
-        console.error("Auth: Init error", err);
+        logger.error("Auth: Init error", err);
         if (mounted.current) setLoading(false);
       }
     };
@@ -217,6 +219,19 @@ export const AuthProvider = ({ children }) => {
      if (user.role === 'admin') return ['ALL'];
      return Object.keys(user.permissions || {}).filter(k => user.permissions[k] === true);
   }, [user]);
+
+  // ─── Inactividad: cerrar sesión luego de 30 min sin actividad ─────────────
+  useInactivityTimeout(signOut, {
+    minutes: 30,
+    enabled: !!user,   // Solo cuando hay sesión activa
+    onWarning: () => {
+      toast({
+        title: '⚠️ Sesión por expirar',
+        description: 'Tu sesión se cerrará en 1 minuto por inactividad. Hacé click en cualquier lugar para mantenerla.',
+        duration: 55_000,
+      });
+    },
+  });
 
   const value = useMemo(() => ({
     user,

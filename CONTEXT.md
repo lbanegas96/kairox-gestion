@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-04 noche (Multi-moneda base, Módulo Proveedores schema, Reconciliación bancaria schema)
+**Última actualización:** 2026-06-04 noche-2 (Security hardening: RLS completo, edge functions, inactividad, validaciones, XSS fix)
 **Branch activo:** `master`
 **Entregables de auditoría:** `AUDITORIA.md` · `SUPABASE_ANALISIS.md`
 
@@ -210,6 +210,41 @@ migrations/
 | **CommandPalette (Cmd+K)** | `CommandPalette.jsx` | Fix `user_id`→`empresa_id` en productos y clientes. Añadidas búsquedas de cotizaciones (`numero`, `cliente_nombre`) y cuentas bancarias (`nombre`). Placeholder actualizado. |
 | **Dashboard — KPIs cotizaciones** | `DashboardSection.jsx`, `dashboardService.ts` | Nueva fila de 4 KPIs: Cotizaciones del Mes, Tasa de Conversión (con barra de progreso), Aprobadas Pendientes, Monto Convertido. Nueva columna en fila 3: "Cotizaciones Aprobadas" con lista de pendientes clickeable. `getCotizacionesStats()` en dashboardService. |
 
+## Sesión 2026-06-04 noche-2 — Security Hardening
+
+### Auditoría de seguridad realizada
+Análisis completo del sistema. Hallazgos: 3 CRITICAL, 4 HIGH, 5 MEDIUM, 4 LOW. Todo resuelto en esta sesión.
+
+| Área | Archivos | Fix aplicado |
+|---|---|---|
+| **Migration 016 — RLS crítico** | `migrations/016_security_hardening.sql` | ✅ RLS + INSERT/UPDATE/DELETE policies en `configuracion`. Función `is_admin()`. Admin-only policies en `profiles` (role, permissions). `periodos_contables` cerrar/reabrir solo admin. Audit triggers agregados: profiles, ordenes_compra, periodos_contables, configuracion, cotizaciones. Tabla `rate_limit_attempts` + funciones `check_rate_limit`/`record_attempt`. `audit_log` protegido: solo SELECT para usuarios, INSERT solo vía SECURITY DEFINER triggers. |
+| **securityUtils** | `src/lib/securityUtils.js` | ✅ `sanitizeInput`, `sanitizeText`, `sanitizeNumber`, `validatePasswordStrength` (12 chars + upper/lower/num/special), `safeErrorMessage` (mensajes genéricos sin filtrar internos), `logger` (suprimido en producción). |
+| **validationUtils** | `src/lib/validationUtils.js` | ✅ `validatePassword` → usa `validatePasswordStrength`. `validateEmail` → RFC 5322 simplificado + longitud máx. `validateName` → bloquea HTML/scripts. `validateCUIT` → verificación dígito verificador argentino. `checkEmailExists` → solo via RPC SECURITY DEFINER. |
+| **useInactivityTimeout** | `src/hooks/useInactivityTimeout.js` | ✅ Auto-logout a los 30 min de inactividad. Aviso 1 min antes (toast "¿Seguís ahí?"). Detecta mousemove, click, keydown, touchstart, scroll. Solo activo con sesión viva. |
+| **SupabaseAuthContext** | `src/contexts/SupabaseAuthContext.jsx` | ✅ `useInactivityTimeout` integrado. `console.*` → `logger.*`. |
+| **Edge functions hardened** | `supabase/functions/create-user/index.ts`, `delete-user/index.ts`, `invite-user/index.ts`, `_shared/auth.ts` | ✅ Shared `verifyAdmin()`: verifica JWT + rol admin + cuenta activa. Inputs sanitizados y validados. Respuestas genéricas (sin leakage). CORS restringido a SITE_URL. Rollback en create-user si falla el perfil. Bloqueo: un admin no puede eliminarse, no puede haber 2 admins, límite 50 usuarios/empresa. |
+| **XSS print modal** | `src/components/ventas/ComprobantePrintModal.jsx` | ✅ `cloneNode` + strip de `<script>` y atributos `on*` antes de pasar innerHTML a ventana de impresión. |
+| **Console suppression** | `src/main.jsx` | ✅ `console.log/warn/info = noop` en producción (import.meta.env.PROD). `console.error` preservado para monitoreo. |
+
+### Nuevas convenciones de seguridad (para futuras sesiones)
+
+- **Siempre usar `logger` de `securityUtils.js`** en lugar de `console.*` en archivos nuevos.
+- **Mensajes de error al usuario:** siempre pasar por `safeErrorMessage()`. Nunca `error.message` directo al toast.
+- **Validar inputs en edge functions:** siempre sanitizar con `.trim().slice(0, N)` antes de usar.
+- **RLS en tablas nuevas:** toda nueva tabla necesita: `ENABLE ROW LEVEL SECURITY` + policy con `get_my_empresa_id()` + audit trigger si es operativa.
+- **Admin-only actions:** si una acción requiere admin, verificar en DB con `is_admin()` (no solo en frontend).
+- **Rate limiting:** usar `check_rate_limit` + `record_attempt` en edge functions de creación de usuarios/auth.
+
+### Schema SQL — nuevas tablas/funciones (migration 016)
+- `is_admin()` — SECURITY DEFINER, verifica role='admin' + active=true
+- `rate_limit_attempts` — (action, identifier, created_at). RLS deny_all (solo SECURITY DEFINER accede)
+- `check_rate_limit(action, identifier, max, window_min)` — retorna bool
+- `record_attempt(action, identifier, empresa_id)` — inserta + limpia >24h
+- Nuevas policies en `configuracion`, `profiles`, `periodos_contables`
+- Audit triggers en 7 tablas adicionales
+
+---
+
 ## Sesión 2026-06-04 noche — cambios aplicados
 
 ### Análisis competitivo realizado
@@ -402,11 +437,12 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 | 🟢 Hecho | **Módulo Cuentas Bancarias** | Reemplaza `MovimientosUala`. `ualaSupabaseClient.js` eliminado (dead code). Tablas `cuentas_bancarias` + `movimientos_bancarios` con FK a `plan_cuentas`. Sidebar: "Bancos" con ícono Landmark. Import CSV con mapper de columnas, detección automática de tipo por signo. Migration 011. ✅ |
 | 🟢 Hecho | **3-way match OC-Recepción-Factura** | Tabla `facturas_proveedor` (UNIQUE por OC). En panel detalle OC: grilla Total OC / Recibido / Factura con indicador visual de match. Botón "Registrar Factura" (auto-precarga monto recibido), "Marcar pagada". Migration 012. ✅ |
 | 🟢 Hecho | **Cotización → Venta** | Botón convertir + pre-fill carrito + estado `convertida` + `comprobante_id` FK ✅ |
-| 🔴 Alta | **Task 5 — Multi-moneda UI en OC y Ventas** | `OrdenesCompraSection.jsx` + `NuevaVentaModal.jsx`: mismo MonedaSelector que Cotizaciones. Dashboard: convertir totales USD→ARS. |
-| 🔴 Alta | **Task 6 — ProveedoresSection** | `ProveedoresSection.jsx` + `proveedoresService.ts`: lista paginada, ficha completa, cuenta corriente, historial OC/compras. |
-| 🔴 Alta | **Task 7 — Proveedores en sidebar + autocomplete** | `App.jsx` sidebar + `ComprasSection` + `OrdenesCompraSection`: ComboBox desde tabla `proveedores`. |
-| 🔴 Alta | **Task 8 — Reconciliación bancaria UI** | `conciliacionService.ts` + tab "Conciliación" en `CuentasBancariasSection`. Vista split + auto-match. |
-| 🟡 Media | **Ejecutar migrations 013-015 en Supabase** | SQL Editor: `013_multi_moneda.sql`, `014_proveedores.sql`, `015_conciliacion_bancaria.sql` |
+| 🔴 Alta | **Multi-moneda UI en OC y Ventas** | `OrdenesCompraSection.jsx` + `NuevaVentaModal.jsx`: mismo MonedaSelector que Cotizaciones. Dashboard: convertir totales USD→ARS. |
+| 🔴 Alta | **ProveedoresSection** | `ProveedoresSection.jsx` + `proveedoresService.ts`: lista paginada, ficha completa, cuenta corriente, historial OC/compras. |
+| 🔴 Alta | **Proveedores en sidebar + autocomplete** | `App.jsx` sidebar + `ComprasSection` + `OrdenesCompraSection`: ComboBox desde tabla `proveedores`. |
+| 🔴 Alta | **Reconciliación bancaria UI** | `conciliacionService.ts` + tab "Conciliación" en `CuentasBancariasSection`. Vista split + auto-match. |
+| 🟡 Media | **Ejecutar migrations 013-016 en Supabase** | SQL Editor orden: `013_multi_moneda.sql`, `014_proveedores.sql`, `015_conciliacion_bancaria.sql`, `016_security_hardening.sql` |
+| 🟡 Media | **Re-deploy edge functions** | `supabase functions deploy create-user delete-user invite-user` — fueron reescritas con hardening. |
 | 🟡 Media | **Verificar dominio Resend** | `onboarding@resend.dev` solo envía a emails verificados → dominio propio para producción |
 | Baja | Facturación electrónica AFIP | — (última prioridad, junto con multi-membership) |
 | Baja | Multi-almacén | — |
