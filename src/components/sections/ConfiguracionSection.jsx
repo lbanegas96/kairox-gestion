@@ -1,32 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Save, Building, Image as ImageIcon, Loader2, Upload, Trash2, AlertCircle, LayoutDashboard, Package, ShoppingCart, ArrowLeftRight, Wallet, FileText, Users, Contact, CreditCard, ClipboardList, ShoppingBag, BookOpen, Banknote, Lock } from 'lucide-react';
+import { Settings, Save, Building, Image as ImageIcon, Loader2, Upload, Trash2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { useConfig, ALL_MODULES } from '@/contexts/ConfigContext';
+import { useConfig } from '@/contexts/ConfigContext';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 
-const MODULE_ICONS = {
-  dashboard:        LayoutDashboard,
-  productos:        Package,
-  ventas:           ShoppingCart,
-  cotizaciones:     ClipboardList,
-  compras:          ArrowLeftRight,
-  ordenes_compra:   ShoppingBag,
-  caja:             Wallet,
-  'movimientos-uala': Banknote,
-  clientes:         Contact,
-  cuentacorriente:  CreditCard,
-  plan_cuentas:     BookOpen,
-  reportes:         FileText,
-  usuarios:         Users,
-  configuracion:    Settings,
-};
-
 const ConfiguracionSection = () => {
-  const { config, updateConfig, isModuloActivo } = useConfig();
+  const { config, updateConfig } = useConfig();
   const { user } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef(null);
@@ -37,14 +19,6 @@ const ConfiguracionSection = () => {
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [savingModulos, setSavingModulos] = useState(false);
-  const [savingWorkflow, setSavingWorkflow] = useState(false);
-  const [ocAprobacion, setOcAprobacion] = useState(false);
-
-  // Estado local de módulos: { [id]: boolean }
-  const [modulosState, setModulosState] = useState(() =>
-    Object.fromEntries(ALL_MODULES.map(m => [m.id, true]))
-  );
 
   useEffect(() => {
     if (config) {
@@ -52,34 +26,8 @@ const ConfiguracionSection = () => {
         nombre_empresa: config.nombre_empresa || '',
         company_logo: config.company_logo || config.logo_base64 || ''
       });
-      // Sincronizar switches con la configuración guardada
-      setModulosState(
-        Object.fromEntries(ALL_MODULES.map(m => [m.id, isModuloActivo(m.id)]))
-      );
-      setOcAprobacion(config.oc_requiere_aprobacion === 'true');
     }
-  }, [config, isModuloActivo]);
-
-  const handleToggleModulo = (moduleId) => {
-    const mod = ALL_MODULES.find(m => m.id === moduleId);
-    if (mod?.required) return; // no se puede deshabilitar
-    setModulosState(prev => ({ ...prev, [moduleId]: !prev[moduleId] }));
-  };
-
-  const handleSaveModulos = async () => {
-    setSavingModulos(true);
-    // Guardar solo los habilitados (required siempre true, no es necesario incluirlos)
-    const activos = ALL_MODULES
-      .filter(m => m.required || modulosState[m.id])
-      .map(m => m.id);
-    const result = await updateConfig({ modulos_activos: JSON.stringify(activos) });
-    setSavingModulos(false);
-    if (result.success) {
-      toast({ title: 'Módulos actualizados', description: 'Los cambios se aplicaron inmediatamente.', className: 'bg-green-600 text-white border-green-700' });
-    } else {
-      toast({ title: 'Error al guardar módulos', variant: 'destructive' });
-    }
-  };
+  }, [config]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -316,109 +264,6 @@ const ConfiguracionSection = () => {
           </div>
         </div>
       </div>
-
-      {/* ── Módulos del Sistema ── */}
-      <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
-        <div className="flex items-center justify-between mb-5 border-b kairox-border pb-3">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Módulos del Sistema</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Activá o desactivá los módulos que tu empresa necesita. Los módulos desactivados no aparecen en el menú.
-            </p>
-          </div>
-          <Button
-            onClick={handleSaveModulos}
-            disabled={savingModulos}
-            size="sm"
-            className="bg-blue-600 hover:bg-blue-700 dark:bg-[#00D4FF] dark:hover:bg-[#00D4FF]/90 text-white dark:text-black font-bold"
-          >
-            {savingModulos ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
-            Guardar módulos
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {ALL_MODULES.map(mod => {
-            const Icon = MODULE_ICONS[mod.id] || Settings;
-            const isActive = modulosState[mod.id] ?? true;
-            return (
-              <div
-                key={mod.id}
-                className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
-                  isActive
-                    ? 'border-blue-200 bg-blue-50/50 dark:border-blue-900/50 dark:bg-blue-900/10'
-                    : 'border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/30 opacity-60'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-blue-500 dark:text-[#00D4FF]' : 'text-slate-400'}`} />
-                  <span className={`text-sm font-medium ${isActive ? 'text-slate-800 dark:text-slate-200' : 'text-slate-400'}`}>
-                    {mod.label}
-                  </span>
-                  {mod.required && (
-                    <Lock className="w-3 h-3 text-slate-400" title="Módulo obligatorio" />
-                  )}
-                </div>
-                <Switch
-                  checked={isActive}
-                  onCheckedChange={() => handleToggleModulo(mod.id)}
-                  disabled={mod.required}
-                  className="data-[state=checked]:bg-blue-500 dark:data-[state=checked]:bg-[#00D4FF]"
-                />
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Flujo de Trabajo ── */}
-      {user?.role === 'admin' && (
-        <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
-          <div className="flex items-center justify-between mb-5 border-b kairox-border pb-3">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Flujo de Trabajo</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Configura procesos de aprobación internos.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className={`flex items-start justify-between p-4 rounded-lg border transition-all ${
-              ocAprobacion
-                ? 'border-purple-200 bg-purple-50/50 dark:border-purple-900/50 dark:bg-purple-900/10'
-                : 'border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/30'
-            }`}>
-              <div className="flex-1 pr-4">
-                <p className={`text-sm font-semibold ${ocAprobacion ? 'text-slate-800 dark:text-slate-200' : 'text-slate-500 dark:text-slate-400'}`}>
-                  Aprobación de Órdenes de Compra
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
-                  Cuando está activo, los usuarios Staff generan OCs en estado "Pendiente Aprobación".
-                  Solo el administrador puede aprobarlas antes de enviarlas al proveedor.
-                </p>
-              </div>
-              <Switch
-                checked={ocAprobacion}
-                onCheckedChange={async (val) => {
-                  setOcAprobacion(val);
-                  setSavingWorkflow(true);
-                  const result = await updateConfig({ oc_requiere_aprobacion: String(val) });
-                  setSavingWorkflow(false);
-                  if (result.success) {
-                    toast({ title: val ? 'Aprobación de OC activada' : 'Aprobación de OC desactivada', className: 'bg-green-600 text-white border-green-700' });
-                  } else {
-                    toast({ title: 'Error al guardar', variant: 'destructive' });
-                    setOcAprobacion(!val);
-                  }
-                }}
-                disabled={savingWorkflow}
-                className="data-[state=checked]:bg-purple-600"
-              />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

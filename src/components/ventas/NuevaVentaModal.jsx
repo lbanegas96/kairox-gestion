@@ -172,35 +172,10 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
         }]);
       }
 
-      // Also create record in 'ventas' table for legacy/dashboard compatibility
-      const { data: venta } = await supabase.from('ventas').insert([{
-          user_id: user.tenant_id,
-          empresa_id: user.empresa_id,
-          fecha: now,
-          cliente: selectedClient?.nombre || 'Consumidor Final',
-          cliente_id: selectedClient?.id,
-          metodo_pago: paymentMethod,
-          subtotal: total,
-          total: total,
-          descuento: 0
-      }]).select().single();
-      
-      if(venta) {
-          const detailPayload = cart.map(item => ({
-              venta_id: venta.id,
-              empresa_id: user.empresa_id,
-              producto_id: item.id,
-              cantidad: item.cantidad,
-              precio_unitario: item.precio_venta,
-              subtotal: item.precio_venta * item.cantidad
-          }));
-          await supabase.from('detalle_ventas').insert(detailPayload);
-      }
-
       // If Payment is Received (not Cta Cte), add to Caja
       if (paymentMethod !== 'Cuenta Corriente') {
           await supabase.from('movimientos_caja').insert([{
-              user_id: user.tenant_id,
+              user_id: user.id,
               empresa_id: user.empresa_id,
               fecha: now,
               tipo: 'ingreso',
@@ -263,28 +238,23 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
 
           <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
             <div className="flex-1 flex flex-col border-r border-slate-200 dark:border-slate-800">
-              <div ref={searchWrapperRef} className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50">
+              <div ref={searchWrapperRef} className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 relative">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input ref={searchInputRef} placeholder="Buscar producto..." value={productSearch} onChange={(e) => setProductSearch(e.target.value)} className="pl-10 h-12 text-lg kairox-input pr-10 dark:bg-slate-900 dark:border-slate-700 dark:text-white" autoComplete="off" />
-                </div>
-              </div>
-              <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 max-h-64 overflow-y-auto">
-                <div className="sticky top-0 px-3 py-1.5 text-[11px] uppercase font-semibold tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-                  Productos disponibles ({filteredProducts.length})
-                </div>
-                {filteredProducts.length === 0 ? (
-                  <div className="px-3 py-6 text-center text-sm text-slate-400">No hay productos {productSearch && 'que coincidan'}</div>
-                ) : (
-                  filteredProducts.map(p => (
-                    <div key={p.id} className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 grid grid-cols-12 gap-2 items-center cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20" onClick={() => handleAddToCart(p)}>
-                      <div className="col-span-3 text-xs text-slate-500 font-mono truncate">{p.codigo_sku}</div>
-                      <div className="col-span-5 font-medium truncate text-sm text-slate-800 dark:text-slate-200">{p.nombre}</div>
-                      <div className="col-span-2 text-right text-xs font-bold dark:text-slate-300">{p.stock_actual}</div>
-                      <div className="col-span-2 text-right font-bold text-emerald-600 dark:text-emerald-400 text-sm">${p.precio_venta}</div>
+                  <Input ref={searchInputRef} placeholder="Buscar producto..." value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setShowProductDropdown(true); }} onFocus={() => setShowProductDropdown(true)} className="pl-10 h-12 text-lg kairox-input pr-10 dark:bg-slate-900 dark:border-slate-700 dark:text-white" autoComplete="off" />
+                  {showProductDropdown && (
+                    <div className="absolute top-full left-0 w-full z-50 bg-white dark:bg-slate-950 border kairox-border shadow-xl rounded-md mt-1 overflow-hidden max-h-80 overflow-y-auto">
+                      {filteredProducts.map(p => (
+                        <div key={p.id} className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 grid grid-cols-12 gap-2 items-center cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20" onClick={() => handleAddToCart(p)}>
+                          <div className="col-span-3 text-xs text-slate-500 font-mono truncate">{p.codigo_sku}</div>
+                          <div className="col-span-5 font-medium truncate text-sm text-slate-800 dark:text-slate-200">{p.nombre}</div>
+                          <div className="col-span-2 text-right text-xs font-bold dark:text-slate-300">{p.stock_actual}</div>
+                          <div className="col-span-2 text-right font-bold text-emerald-600 dark:text-emerald-400 text-sm">${p.precio_venta}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))
-                )}
+                  )}
+                </div>
               </div>
               <div className="flex-1 overflow-y-auto p-4 dark:bg-slate-950">
                 {cart.length === 0 ? (

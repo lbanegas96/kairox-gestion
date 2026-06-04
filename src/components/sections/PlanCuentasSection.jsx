@@ -4,11 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookOpen, BookMarked, Plus, ChevronRight, ChevronDown, Check, X, AlertTriangle,
   FileText, BarChart2, ListOrdered, Search, Loader2, CheckCircle2,
-  Ban, RefreshCw, Eye, Pencil, ChevronLeft, List,
-  Lock, Unlock, TrendingUp, TrendingDown, Scale, Calendar,
+  Ban, RefreshCw, Eye, Pencil, ChevronLeft,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { planCuentasService, asientosService, periodosService, PLAN_CUENTAS_KEYS } from '@/services/planCuentasService';
+import { planCuentasService, asientosService, PLAN_CUENTAS_KEYS } from '@/services/planCuentasService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,17 +44,9 @@ const ESTADO_COLOR = {
 
 const fmt = (n) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 }).format(n ?? 0);
 
-// ─── Helper: recolecta todos los IDs de una cuenta y sus descendientes ─────────
-
-function collectIds(cuenta) {
-  const ids = [cuenta.id];
-  (cuenta.hijos ?? []).forEach((h) => ids.push(...collectIds(h)));
-  return ids;
-}
-
 // ─── Árbol de cuentas (nodo recursivo) ───────────────────────────────────────
 
-function CuentaNode({ cuenta, depth = 0, onEdit, onViewMovimientos, search }) {
+function CuentaNode({ cuenta, depth = 0, onEdit, search }) {
   const [open, setOpen] = useState(depth < 2);
   const hasChildren = cuenta.hijos?.length > 0;
   const highlight = search && (
@@ -101,18 +92,6 @@ function CuentaNode({ cuenta, depth = 0, onEdit, onViewMovimientos, search }) {
           </span>
         )}
 
-        {/* Botón ver movimientos: aparece en hover para cualquier cuenta (grupo o hoja) */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onViewMovimientos(cuenta, collectIds(cuenta));
-          }}
-          title="Ver movimientos"
-          className="opacity-0 group-hover:opacity-100 p-1 rounded text-[#00D4FF] hover:bg-[#00D4FF]/10 transition-all"
-        >
-          <List size={13} />
-        </button>
-
         {cuenta.permite_movimientos && (
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(cuenta); }}
@@ -133,7 +112,7 @@ function CuentaNode({ cuenta, depth = 0, onEdit, onViewMovimientos, search }) {
             className="overflow-hidden"
           >
             {cuenta.hijos.map((h) => (
-              <CuentaNode key={h.id} cuenta={h} depth={depth + 1} onEdit={onEdit} onViewMovimientos={onViewMovimientos} search={search} />
+              <CuentaNode key={h.id} cuenta={h} depth={depth + 1} onEdit={onEdit} search={search} />
             ))}
           </motion.div>
         )}
@@ -192,7 +171,6 @@ function ModalNuevaCuenta({ open, onClose, cuentasFlat, empresaId, onSuccess }) 
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             <Plus size={18} className="text-[#00D4FF]" /> Nueva Cuenta
           </DialogTitle>
-          <DialogDescription className="text-slate-400">Definí código, nombre y tipo de la nueva cuenta contable.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
@@ -315,7 +293,6 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             <FileText size={18} className="text-[#00D4FF]" /> Nuevo Asiento Contable
           </DialogTitle>
-          <DialogDescription className="text-slate-400">Ingresá fecha, descripción y las líneas de débito/crédito del asiento.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto pr-1">
@@ -431,140 +408,12 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
   );
 }
 
-// ─── Drill-down: movimientos de un grupo de cuentas ──────────────────────────
-
-function DrillDownMovimientos({ cuenta, cuentaIds, empresaId, onVolver }) {
-  const [fechaDesde, setDesde] = useState('');
-  const [fechaHasta, setHasta] = useState('');
-
-  const { data: rows = [], isLoading, refetch } = useQuery({
-    queryKey: PLAN_CUENTAS_KEYS.movimientosGrupo(empresaId, cuentaIds, fechaDesde, fechaHasta),
-    queryFn: () => asientosService.getMovimientosPorGrupo(
-      empresaId, cuentaIds,
-      fechaDesde || undefined, fechaHasta || undefined
-    ),
-    enabled: !!empresaId && cuentaIds.length > 0,
-  });
-
-  const totalDebe  = rows.reduce((s, r) => s + Number(r.debe),  0);
-  const totalHaber = rows.reduce((s, r) => s + Number(r.haber), 0);
-
-  return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <button
-          onClick={onVolver}
-          className="flex items-center gap-1.5 text-slate-400 hover:text-white text-sm transition-colors"
-        >
-          <ChevronLeft size={16} /> Volver al árbol
-        </button>
-        <div className="h-4 w-px bg-slate-700" />
-        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${TIPO_COLOR[cuenta.tipo]}`}>
-          {TIPO_LABEL[cuenta.tipo]}
-        </span>
-        <span className="text-white font-semibold">
-          <span className="font-mono text-[#00D4FF] mr-2 text-xs">{cuenta.codigo}</span>
-          {cuenta.nombre}
-        </span>
-        <span className="ml-auto text-xs text-slate-500">{rows.length} movimientos</span>
-      </div>
-
-      {/* Filtros de fecha */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Label className="text-slate-400 text-xs whitespace-nowrap">Desde</Label>
-          <Input type="date" value={fechaDesde} onChange={(e) => setDesde(e.target.value)}
-            className="bg-slate-800 border-slate-700 h-9 text-sm w-36" />
-        </div>
-        <div className="flex items-center gap-2">
-          <Label className="text-slate-400 text-xs whitespace-nowrap">Hasta</Label>
-          <Input type="date" value={fechaHasta} onChange={(e) => setHasta(e.target.value)}
-            className="bg-slate-800 border-slate-700 h-9 text-sm w-36" />
-        </div>
-        <Button onClick={() => refetch()} size="sm" variant="outline"
-          className="border-slate-700 text-slate-300 hover:bg-slate-800">
-          <RefreshCw size={14} className="mr-1" /> Actualizar
-        </Button>
-      </div>
-
-      {/* Tabla */}
-      <div className="rounded-xl border border-slate-700 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-800">
-            <tr>
-              <th className="px-3 py-2.5 text-left text-slate-400 font-medium w-24">Fecha</th>
-              <th className="px-3 py-2.5 text-left text-slate-400 font-medium w-28">Asiento</th>
-              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">Cuenta</th>
-              <th className="px-3 py-2.5 text-left text-slate-400 font-medium">Descripción</th>
-              <th className="px-3 py-2.5 text-right text-slate-400 font-medium w-28">Debe</th>
-              <th className="px-3 py-2.5 text-right text-slate-400 font-medium w-28">Haber</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading && (
-              <tr><td colSpan={6} className="py-12 text-center text-slate-500">
-                <Loader2 size={20} className="animate-spin mx-auto" />
-              </td></tr>
-            )}
-            {!isLoading && rows.length === 0 && (
-              <tr><td colSpan={6} className="py-12 text-center text-slate-500">
-                No hay movimientos confirmados en este grupo
-              </td></tr>
-            )}
-            {rows.map((row, i) => {
-              const asiento = row.asientos_contables;
-              const pc      = row.plan_cuentas;
-              const fecha   = asiento?.fecha ? asiento.fecha.slice(0, 10).split('-').reverse().join('/') : '—';
-              return (
-                <tr key={row.id ?? i} className="border-t border-slate-800 hover:bg-slate-800/30">
-                  <td className="px-3 py-2 font-mono text-xs text-slate-400">{fecha}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-[#00D4FF]">{asiento?.numero ?? '—'}</td>
-                  <td className="px-3 py-2">
-                    <span className="font-mono text-[10px] text-slate-500 mr-1">{pc?.codigo}</span>
-                    <span className="text-slate-300 text-xs">{pc?.nombre}</span>
-                  </td>
-                  <td className="px-3 py-2 text-slate-400 text-xs max-w-[200px] truncate">
-                    {row.descripcion || asiento?.descripcion || '—'}
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono text-xs">
-                    {Number(row.debe) > 0 ? <span className="text-slate-200">{fmt(row.debe)}</span> : <span className="text-slate-600">—</span>}
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono text-xs">
-                    {Number(row.haber) > 0 ? <span className="text-slate-200">{fmt(row.haber)}</span> : <span className="text-slate-600">—</span>}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-          {rows.length > 0 && (
-            <tfoot className="bg-slate-800">
-              <tr>
-                <td colSpan={4} className="px-3 py-2 text-slate-400 font-semibold text-xs">TOTALES</td>
-                <td className="px-3 py-2 text-right font-mono font-bold text-white text-xs">{fmt(totalDebe)}</td>
-                <td className="px-3 py-2 text-right font-mono font-bold text-white text-xs">{fmt(totalHaber)}</td>
-              </tr>
-              <tr>
-                <td colSpan={5} className="px-3 py-1 text-slate-500 text-xs">Saldo neto (D-H)</td>
-                <td className={`px-3 py-1 text-right font-mono font-bold text-xs ${totalDebe - totalHaber >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {fmt(Math.abs(totalDebe - totalHaber))} {totalDebe - totalHaber >= 0 ? '(D)' : '(H)'}
-                </td>
-              </tr>
-            </tfoot>
-          )}
-        </table>
-      </div>
-    </div>
-  );
-}
-
 // ─── Tab: Plan de Cuentas ────────────────────────────────────────────────────
 
 function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
   const [search, setSearch]         = useState('');
   const [showModal, setShowModal]   = useState(false);
   const [editCuenta, setEditCuenta] = useState(null);
-  const [drillDown, setDrillDown]   = useState(null); // { cuenta, ids[] }
   const { toast } = useToast();
 
   const handleSeedCuentas = async () => {
@@ -599,18 +448,6 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
     );
   }
 
-  // Drill-down activo → mostrar movimientos del grupo seleccionado
-  if (drillDown) {
-    return (
-      <DrillDownMovimientos
-        cuenta={drillDown.cuenta}
-        cuentaIds={drillDown.ids}
-        empresaId={empresaId}
-        onVolver={() => setDrillDown(null)}
-      />
-    );
-  }
-
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -629,16 +466,12 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
         <div className="p-3 space-y-1">
           {tree.map((raiz) => (
             <CuentaNode key={raiz.id} cuenta={raiz} depth={0}
-              onEdit={setEditCuenta}
-              onViewMovimientos={(cuenta, ids) => setDrillDown({ cuenta, ids })}
-              search={search} />
+              onEdit={setEditCuenta} search={search} />
           ))}
         </div>
       </div>
 
-      <p className="text-xs text-slate-600 text-right flex items-center justify-end gap-1">
-        {cuentasFlat.length} cuentas en total — hover para ver movimientos <List size={11} />
-      </p>
+      <p className="text-xs text-slate-600 text-right">{cuentasFlat.length} cuentas en total</p>
 
       <ModalNuevaCuenta
         open={showModal}
@@ -1152,401 +985,11 @@ function TabLibroMayor({ empresaId, cuentasFlat }) {
   );
 }
 
-// ─── Tab: Períodos Contables ──────────────────────────────────────────────────
-
-const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-
-function TabPeriodos({ empresaId, userId, isAdmin }) {
-  const [anio, setAnio] = useState(new Date().getFullYear());
-  const { toast } = useToast();
-
-  const { data: periodos = [], isLoading, refetch } = useQuery({
-    queryKey: PLAN_CUENTAS_KEYS.periodos(empresaId, anio),
-    queryFn: () => periodosService.getPeriodosAnio(empresaId, anio),
-    enabled: !!empresaId,
-  });
-
-  const handleToggle = async (mes, cerrado) => {
-    try {
-      await periodosService.togglePeriodo(empresaId, anio, mes, cerrado, userId);
-      toast({
-        title: cerrado ? `Período ${MESES[mes - 1]} ${anio} cerrado` : `Período ${MESES[mes - 1]} ${anio} reabierto`,
-        className: 'bg-green-900 border-green-700 text-white',
-      });
-      refetch();
-    } catch (e) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    }
-  };
-
-  const hoy = new Date();
-
-  return (
-    <div className="space-y-6">
-      {/* Selector de año */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => setAnio(a => a - 1)}
-          className="p-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:border-slate-500 transition-colors">
-          <ChevronLeft size={16} />
-        </button>
-        <span className="text-white font-bold text-xl w-16 text-center">{anio}</span>
-        <button onClick={() => setAnio(a => a + 1)}
-          className="p-2 rounded-lg border border-slate-700 text-slate-400 hover:text-white hover:border-slate-500 transition-colors">
-          <ChevronRight size={16} />
-        </button>
-        <span className="ml-4 text-xs text-slate-500">
-          Los períodos cerrados bloquean la creación de nuevos asientos contables en ese mes.
-        </span>
-      </div>
-
-      {isLoading ? (
-        <div className="py-12 text-center"><Loader2 size={24} className="animate-spin mx-auto text-[#00D4FF]" /></div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          {MESES.map((nombre, i) => {
-            const mes = i + 1;
-            const periodo = periodos.find(p => p.mes === mes);
-            const isCerrado = periodo?.cerrado ?? false;
-            const isFuturo = anio > hoy.getFullYear() ||
-              (anio === hoy.getFullYear() && mes > hoy.getMonth() + 1);
-
-            return (
-              <div key={mes} className={`p-4 rounded-xl border transition-all ${
-                isCerrado
-                  ? 'bg-red-900/20 border-red-800/50'
-                  : isFuturo
-                  ? 'bg-slate-800/30 border-slate-800 opacity-50'
-                  : 'bg-green-900/10 border-green-800/30'
-              }`}>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="font-semibold text-white text-sm">{nombre}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${
-                    isCerrado
-                      ? 'bg-red-500/10 text-red-400 border-red-500/30'
-                      : isFuturo
-                      ? 'bg-slate-500/10 text-slate-500 border-slate-500/30'
-                      : 'bg-green-500/10 text-green-400 border-green-500/30'
-                  }`}>
-                    {isFuturo ? 'Futuro' : isCerrado ? 'Cerrado' : 'Abierto'}
-                  </span>
-                </div>
-
-                {isCerrado && periodo?.fecha_cierre && (
-                  <p className="text-[10px] text-slate-500 mb-2">
-                    Cerrado: {new Date(periodo.fecha_cierre).toLocaleDateString('es-AR')}
-                  </p>
-                )}
-
-                {isAdmin && !isFuturo && (
-                  <button
-                    onClick={() => handleToggle(mes, !isCerrado)}
-                    className={`w-full text-xs py-1.5 px-3 rounded-lg border flex items-center justify-center gap-1.5 transition-colors ${
-                      isCerrado
-                        ? 'border-green-700 text-green-400 hover:bg-green-900/20'
-                        : 'border-red-800 text-red-400 hover:bg-red-900/20'
-                    }`}>
-                    {isCerrado ? <><Unlock size={11} /> Reabrir</> : <><Lock size={11} /> Cerrar período</>}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {!isAdmin && (
-        <p className="text-slate-500 text-xs text-center">Solo el administrador puede cerrar o reabrir períodos.</p>
-      )}
-    </div>
-  );
-}
-
-// ─── Tab: Estado de Resultados (P&L) ─────────────────────────────────────────
-
-function TabEstadoResultados({ empresaId }) {
-  const [fechaDesde, setDesde] = useState(`${new Date().getFullYear()}-01-01`);
-  const [fechaHasta, setHasta] = useState(`${new Date().getFullYear()}-12-31`);
-
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: PLAN_CUENTAS_KEYS.estadoResultados(empresaId, fechaDesde, fechaHasta),
-    queryFn:  () => asientosService.getEstadoResultados(empresaId, fechaDesde || undefined, fechaHasta || undefined),
-    enabled:  !!empresaId,
-  });
-
-  const { ingresos = [], egresos = [], totalIngresos = 0, totalEgresos = 0, resultado = 0 } = data ?? {};
-  const esPositivo = resultado >= 0;
-
-  const SeccionRows = ({ filas }) => filas.map(r => (
-    <tr key={r.cuenta_id} className="border-t border-slate-800 hover:bg-slate-800/30">
-      <td className="px-4 py-2.5 font-mono text-xs text-[#00D4FF]">{r.codigo}</td>
-      <td className="px-4 py-2.5 text-slate-300">{r.nombre}</td>
-      <td className="px-4 py-2.5 text-right font-mono text-slate-200">{fmt(r.saldo)}</td>
-    </tr>
-  ));
-
-  return (
-    <div className="space-y-4">
-      {/* Filtros */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Label className="text-slate-400 text-xs whitespace-nowrap">Desde</Label>
-          <Input type="date" value={fechaDesde} onChange={e => setDesde(e.target.value)}
-            className="bg-slate-800 border-slate-700 h-9 text-sm w-36" />
-        </div>
-        <div className="flex items-center gap-2">
-          <Label className="text-slate-400 text-xs whitespace-nowrap">Hasta</Label>
-          <Input type="date" value={fechaHasta} onChange={e => setHasta(e.target.value)}
-            className="bg-slate-800 border-slate-700 h-9 text-sm w-36" />
-        </div>
-        <Button onClick={() => refetch()} size="sm" variant="outline"
-          className="border-slate-700 text-slate-300 hover:bg-slate-800">
-          <RefreshCw size={14} className="mr-1" /> Actualizar
-        </Button>
-      </div>
-
-      {isLoading ? (
-        <div className="py-12 text-center"><Loader2 size={24} className="animate-spin mx-auto text-[#00D4FF]" /></div>
-      ) : (
-        <>
-          {/* KPIs resumen */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl bg-green-900/20 border border-green-800/30">
-              <p className="text-xs text-green-400 uppercase font-semibold mb-1 flex items-center gap-1"><TrendingUp size={12} /> Ingresos</p>
-              <p className="text-2xl font-bold text-green-400 font-mono">{fmt(totalIngresos)}</p>
-            </div>
-            <div className="p-4 rounded-xl bg-red-900/20 border border-red-800/30">
-              <p className="text-xs text-red-400 uppercase font-semibold mb-1 flex items-center gap-1"><TrendingDown size={12} /> Egresos</p>
-              <p className="text-2xl font-bold text-red-400 font-mono">{fmt(totalEgresos)}</p>
-            </div>
-            <div className={`p-4 rounded-xl border ${esPositivo ? 'bg-blue-900/20 border-blue-800/30' : 'bg-orange-900/20 border-orange-800/30'}`}>
-              <p className={`text-xs uppercase font-semibold mb-1 ${esPositivo ? 'text-blue-400' : 'text-orange-400'}`}>
-                Resultado Neto
-              </p>
-              <p className={`text-2xl font-bold font-mono ${esPositivo ? 'text-blue-400' : 'text-orange-400'}`}>
-                {fmt(Math.abs(resultado))} {esPositivo ? '(Ganancia)' : '(Pérdida)'}
-              </p>
-            </div>
-          </div>
-
-          {/* Tabla detalle */}
-          <div className="rounded-xl border border-slate-700 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-800">
-                <tr>
-                  <th className="px-4 py-3 text-left text-slate-400 font-medium w-24">Código</th>
-                  <th className="px-4 py-3 text-left text-slate-400 font-medium">Cuenta</th>
-                  <th className="px-4 py-3 text-right text-slate-400 font-medium w-36">Saldo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ingresos.length > 0 && (
-                  <tr className="bg-green-900/10">
-                    <td colSpan={3} className="px-4 py-2 text-xs font-bold text-green-400 uppercase tracking-wider flex items-center gap-1">
-                      <TrendingUp size={11} /> INGRESOS
-                    </td>
-                  </tr>
-                )}
-                <SeccionRows filas={ingresos} />
-                {ingresos.length > 0 && (
-                  <tr className="bg-green-900/20 border-t border-green-800/30">
-                    <td colSpan={2} className="px-4 py-2.5 text-sm font-bold text-green-400">Total Ingresos</td>
-                    <td className="px-4 py-2.5 text-right font-mono font-bold text-green-400">{fmt(totalIngresos)}</td>
-                  </tr>
-                )}
-                {egresos.length > 0 && (
-                  <tr className="bg-red-900/10">
-                    <td colSpan={3} className="px-4 py-2 text-xs font-bold text-red-400 uppercase tracking-wider">
-                      EGRESOS / GASTOS
-                    </td>
-                  </tr>
-                )}
-                <SeccionRows filas={egresos} />
-                {egresos.length > 0 && (
-                  <tr className="bg-red-900/20 border-t border-red-800/30">
-                    <td colSpan={2} className="px-4 py-2.5 text-sm font-bold text-red-400">Total Egresos</td>
-                    <td className="px-4 py-2.5 text-right font-mono font-bold text-red-400">{fmt(totalEgresos)}</td>
-                  </tr>
-                )}
-                {ingresos.length === 0 && egresos.length === 0 && (
-                  <tr><td colSpan={3} className="py-12 text-center text-slate-500">
-                    No hay movimientos confirmados en el período seleccionado
-                  </td></tr>
-                )}
-              </tbody>
-              {(ingresos.length > 0 || egresos.length > 0) && (
-                <tfoot className={`${esPositivo ? 'bg-blue-900/30' : 'bg-orange-900/30'}`}>
-                  <tr>
-                    <td colSpan={2} className={`px-4 py-3 font-bold text-base ${esPositivo ? 'text-blue-300' : 'text-orange-300'}`}>
-                      RESULTADO DEL PERÍODO
-                    </td>
-                    <td className={`px-4 py-3 text-right font-mono font-bold text-xl ${esPositivo ? 'text-blue-300' : 'text-orange-300'}`}>
-                      {esPositivo ? '+' : '-'}{fmt(Math.abs(resultado))}
-                    </td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ─── Tab: Balance General ─────────────────────────────────────────────────────
-
-function TabBalanceGeneral({ empresaId }) {
-  const [fechaHasta, setHasta] = useState(new Date().toISOString().slice(0, 10));
-
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: PLAN_CUENTAS_KEYS.balanceGeneral(empresaId, undefined, fechaHasta),
-    queryFn:  () => asientosService.getBalanceGeneral(empresaId, undefined, fechaHasta || undefined),
-    enabled:  !!empresaId,
-  });
-
-  const { activos = [], pasivos = [], patrimonio = [], totalActivos = 0, totalPasivos = 0, totalPatrimonio = 0 } = data ?? {};
-  const totalPasivosYPN = totalPasivos + totalPatrimonio;
-  const cuadra = Math.abs(totalActivos - totalPasivosYPN) < 0.01;
-
-  const GrupoRows = ({ filas }) => filas.map(r => (
-    <tr key={r.cuenta_id} className="border-t border-slate-800 hover:bg-slate-800/30">
-      <td className="px-4 py-2.5 font-mono text-xs text-[#00D4FF]">{r.codigo}</td>
-      <td className="px-4 py-2.5 text-slate-300">{r.nombre}</td>
-      <td className="px-4 py-2.5 text-right font-mono text-slate-200">{fmt(r.saldo)}</td>
-    </tr>
-  ));
-
-  return (
-    <div className="space-y-4">
-      {/* Filtro fecha hasta */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Label className="text-slate-400 text-xs whitespace-nowrap">Al día</Label>
-          <Input type="date" value={fechaHasta} onChange={e => setHasta(e.target.value)}
-            className="bg-slate-800 border-slate-700 h-9 text-sm w-36" />
-        </div>
-        <Button onClick={() => refetch()} size="sm" variant="outline"
-          className="border-slate-700 text-slate-300 hover:bg-slate-800">
-          <RefreshCw size={14} className="mr-1" /> Actualizar
-        </Button>
-      </div>
-
-      {isLoading ? (
-        <div className="py-12 text-center"><Loader2 size={24} className="animate-spin mx-auto text-[#00D4FF]" /></div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Columna izquierda: ACTIVO */}
-          <div className="rounded-xl border border-blue-800/30 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-blue-900/30">
-                <tr>
-                  <th colSpan={3} className="px-4 py-3 text-left text-blue-300 font-bold text-base">ACTIVO</th>
-                </tr>
-                <tr className="bg-slate-800/50">
-                  <th className="px-4 py-2 text-left text-slate-400 font-medium text-xs w-20">Código</th>
-                  <th className="px-4 py-2 text-left text-slate-400 font-medium text-xs">Cuenta</th>
-                  <th className="px-4 py-2 text-right text-slate-400 font-medium text-xs w-32">Saldo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activos.length === 0
-                  ? <tr><td colSpan={3} className="py-8 text-center text-slate-600 text-xs">Sin movimientos</td></tr>
-                  : <GrupoRows filas={activos} />
-                }
-              </tbody>
-              <tfoot className="bg-blue-900/20 border-t border-blue-800/30">
-                <tr>
-                  <td colSpan={2} className="px-4 py-3 font-bold text-blue-300">TOTAL ACTIVO</td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-blue-300 text-base">{fmt(totalActivos)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-
-          {/* Columna derecha: PASIVO + PN */}
-          <div className="space-y-4">
-            <div className="rounded-xl border border-red-800/30 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-red-900/30">
-                  <tr>
-                    <th colSpan={3} className="px-4 py-3 text-left text-red-300 font-bold text-base">PASIVO</th>
-                  </tr>
-                  <tr className="bg-slate-800/50">
-                    <th className="px-4 py-2 text-left text-slate-400 font-medium text-xs w-20">Código</th>
-                    <th className="px-4 py-2 text-left text-slate-400 font-medium text-xs">Cuenta</th>
-                    <th className="px-4 py-2 text-right text-slate-400 font-medium text-xs w-32">Saldo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pasivos.length === 0
-                    ? <tr><td colSpan={3} className="py-6 text-center text-slate-600 text-xs">Sin movimientos</td></tr>
-                    : <GrupoRows filas={pasivos} />
-                  }
-                </tbody>
-                <tfoot className="bg-red-900/20 border-t border-red-800/30">
-                  <tr>
-                    <td colSpan={2} className="px-4 py-3 font-bold text-red-300">TOTAL PASIVO</td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-red-300">{fmt(totalPasivos)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-
-            <div className="rounded-xl border border-purple-800/30 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-purple-900/30">
-                  <tr>
-                    <th colSpan={3} className="px-4 py-3 text-left text-purple-300 font-bold text-base">PATRIMONIO NETO</th>
-                  </tr>
-                  <tr className="bg-slate-800/50">
-                    <th className="px-4 py-2 text-left text-slate-400 font-medium text-xs w-20">Código</th>
-                    <th className="px-4 py-2 text-left text-slate-400 font-medium text-xs">Cuenta</th>
-                    <th className="px-4 py-2 text-right text-slate-400 font-medium text-xs w-32">Saldo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {patrimonio.length === 0
-                    ? <tr><td colSpan={3} className="py-6 text-center text-slate-600 text-xs">Sin movimientos</td></tr>
-                    : <GrupoRows filas={patrimonio} />
-                  }
-                </tbody>
-                <tfoot className="bg-purple-900/20 border-t border-purple-800/30">
-                  <tr>
-                    <td colSpan={2} className="px-4 py-3 font-bold text-purple-300">TOTAL PATRIMONIO NETO</td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-purple-300">{fmt(totalPatrimonio)}</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-
-            {/* Ecuación de cierre */}
-            <div className={`p-4 rounded-xl border text-center ${cuadra ? 'bg-green-900/20 border-green-800/30' : 'bg-yellow-900/20 border-yellow-800/30'}`}>
-              <div className="flex items-center justify-center gap-2 text-sm font-mono">
-                <span className="text-blue-400">{fmt(totalActivos)}</span>
-                <span className="text-slate-400">=</span>
-                <span className="text-red-400">{fmt(totalPasivos)}</span>
-                <span className="text-slate-400">+</span>
-                <span className="text-purple-400">{fmt(totalPatrimonio)}</span>
-              </div>
-              {cuadra
-                ? <p className="text-xs text-green-400 mt-2 flex items-center justify-center gap-1"><CheckCircle2 size={12} /> Balance cuadra correctamente</p>
-                : <p className="text-xs text-yellow-400 mt-2 flex items-center justify-center gap-1">
-                    <AlertTriangle size={12} /> Diferencia: {fmt(Math.abs(totalActivos - totalPasivosYPN))} — Verificar asientos manuales o agregar Resultado del Ejercicio al PN.
-                  </p>
-              }
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export default function PlanCuentasSection() {
   const { user } = useAuth();
-  const empresaId = user?.empresa_id;
+  const empresaId = user?.tenant_id || user?.empresa_id;
   const userId    = user?.id;
   const qc        = useQueryClient();
 
@@ -1584,7 +1027,7 @@ export default function PlanCuentasSection() {
         </div>
       ) : (
         <Tabs defaultValue="cuentas" className="space-y-4">
-          <TabsList className="bg-slate-800 border border-slate-700 p-1 flex-wrap gap-1">
+          <TabsList className="bg-slate-800 border border-slate-700 p-1">
             <TabsTrigger value="cuentas"
               className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-slate-400 gap-2">
               <ListOrdered size={14} /> Plan de Cuentas
@@ -1600,18 +1043,6 @@ export default function PlanCuentasSection() {
             <TabsTrigger value="libro_mayor"
               className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-slate-400 gap-2">
               <BookMarked size={14} /> Libro Mayor
-            </TabsTrigger>
-            <TabsTrigger value="estado_resultados"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-slate-400 gap-2">
-              <TrendingUp size={14} /> P&amp;L
-            </TabsTrigger>
-            <TabsTrigger value="balance_general"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-slate-400 gap-2">
-              <Scale size={14} /> Balance General
-            </TabsTrigger>
-            <TabsTrigger value="periodos"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-slate-400 gap-2">
-              <Calendar size={14} /> Períodos
             </TabsTrigger>
           </TabsList>
 
@@ -1639,18 +1070,6 @@ export default function PlanCuentasSection() {
 
           <TabsContent value="libro_mayor">
             <TabLibroMayor empresaId={empresaId} cuentasFlat={cuentasFlat} />
-          </TabsContent>
-
-          <TabsContent value="estado_resultados">
-            <TabEstadoResultados empresaId={empresaId} />
-          </TabsContent>
-
-          <TabsContent value="balance_general">
-            <TabBalanceGeneral empresaId={empresaId} />
-          </TabsContent>
-
-          <TabsContent value="periodos">
-            <TabPeriodos empresaId={empresaId} userId={userId} isAdmin={user?.role === 'admin'} />
           </TabsContent>
         </Tabs>
       )}

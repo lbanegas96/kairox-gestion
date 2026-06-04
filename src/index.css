@@ -135,19 +135,3 @@
     @apply text-slate-800 dark:text-slate-300;
   }
 }
-
-/* Date/time input calendar icon visible in dark mode */
-.dark input[type="date"]::-webkit-calendar-picker-indicator,
-.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
-.dark input[type="time"]::-webkit-calendar-picker-indicator,
-.dark input[type="month"]::-webkit-calendar-picker-indicator,
-.dark input[type="week"]::-webkit-calendar-picker-indicator {
-  filter: invert(1) brightness(1.5);
-  cursor: pointer;
-  opacity: 0.9;
-}
-.dark input[type="date"]::-webkit-calendar-picker-indicator:hover,
-.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
-.dark input[type="time"]::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
-}

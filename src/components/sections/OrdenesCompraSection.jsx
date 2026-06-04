@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, ShoppingBag, Search, Eye, Truck, XCircle,
   Send, CheckCircle, Clock, AlertCircle, Package,
-  ChevronRight, Trash2, ArrowRight, ThumbsUp, ShieldAlert
+  ChevronRight, Trash2, ArrowRight, Receipt, AlertTriangle, BadgeCheck, Banknote
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,19 +13,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { useConfig } from '@/contexts/ConfigContext';
 import { ordenesCompraService, OC_KEYS } from '@/services/ordenesCompraService';
 import { supabase } from '@/lib/customSupabaseClient';
 
 // ─── Helpers de estado ────────────────────────────────────────────────────────
 
 const ESTADOS = {
-  pendiente_aprobacion: { label: 'Pend. Aprobación', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300', icon: ShieldAlert },
-  borrador:             { label: 'Borrador',          color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',        icon: Clock },
-  enviada:              { label: 'Enviada',            color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',         icon: Send },
-  recibida_parcial:     { label: 'Recibida parcial',   color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300', icon: AlertCircle },
-  recibida:             { label: 'Recibida',           color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',     icon: CheckCircle },
-  cancelada:            { label: 'Cancelada',          color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',            icon: XCircle },
+  borrador:         { label: 'Borrador',         color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',     icon: Clock },
+  enviada:          { label: 'Enviada',           color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',      icon: Send },
+  recibida_parcial: { label: 'Recibida parcial',  color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300', icon: AlertCircle },
+  recibida:         { label: 'Recibida',          color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',  icon: CheckCircle },
+  cancelada:        { label: 'Cancelada',         color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',         icon: XCircle },
 };
 
 const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Cheque', 'Tarjeta Crédito', 'Cuenta Corriente'];
@@ -33,26 +31,22 @@ const EMPTY_ITEM = { descripcion: '', cantidad_pedida: 1, costo_unitario: '', pr
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-function OrdenesCompraSection({ navPayload }) {
+function OrdenesCompraSection() {
   const { user } = useAuth();
-  const { config } = useConfig();
   const { toast } = useToast();
   const qc = useQueryClient();
-
-  const isAdmin = user?.role === 'admin';
-  const ocRequiereAprobacion = config.oc_requiere_aprobacion === 'true';
 
   const [tab, setTab] = useState('lista');
   const [estadoFiltro, setEstadoFiltro] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
 
   // modales
   const [detalleId, setDetalleId] = useState(null);
   const [recepcionId, setRecepcionId] = useState(null);
   const [recepciones, setRecepciones] = useState({});   // { [itemId]: cantidad }
+  const [facturaModal, setFacturaModal] = useState(false);
+  const [facturaForm, setFacturaForm] = useState({ numero_factura: '', fecha_factura: '', fecha_vencimiento: '', monto_total: '', notas: '' });
 
   // form nueva OC
   const [form, setForm] = useState({ proveedor_nombre: '', fecha_entrega_esperada: '', forma_pago: 'Efectivo', notas: '' });
@@ -64,26 +58,11 @@ function OrdenesCompraSection({ navPayload }) {
 
   const empresaId = user?.empresa_id;
 
-  // Abrir modal de recepción directo desde notificaciones.
-  // El DropdownMenu ya está desmontado cuando onNavigate se llama (ver Header.jsx),
-  // así que no hay conflicto de foco con Radix.
-  useEffect(() => {
-    if (navPayload?.openRecepcion) {
-      setRecepcionId(navPayload.openRecepcion);
-    }
-  }, [navPayload]);
-
   // ── Queries ──────────────────────────────────────────────────────────────────
 
   const { data: listData, isLoading } = useQuery({
-    queryKey: OC_KEYS.list(empresaId, { estado: estadoFiltro || undefined, page, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
-    queryFn: () => ordenesCompraService.getAll(empresaId, { estado: estadoFiltro || undefined, page, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined }),
-    enabled: !!empresaId,
-  });
-
-  const { data: estadoCounts = {} } = useQuery({
-    queryKey: OC_KEYS.counts(empresaId),
-    queryFn: () => ordenesCompraService.getEstadoCounts(empresaId),
+    queryKey: OC_KEYS.list(empresaId, { estado: estadoFiltro || undefined, page }),
+    queryFn: () => ordenesCompraService.getAll(empresaId, { estado: estadoFiltro || undefined, page }),
     enabled: !!empresaId,
   });
 
@@ -97,36 +76,63 @@ function OrdenesCompraSection({ navPayload }) {
     queryKey: OC_KEYS.detail(recepcionId),
     queryFn: () => ordenesCompraService.getById(recepcionId),
     enabled: !!recepcionId,
+    onSuccess: (data) => {
+      // inicializar recepciones con cantidades ya recibidas
+      const init = {};
+      (data?.ordenes_compra_items ?? []).forEach(i => {
+        init[i.id] = i.cantidad_recibida ?? 0;
+      });
+      setRecepciones(init);
+    },
   });
 
-  // Inicializar recepciones con la cantidad pendiente cada vez que carga la OC
-  useEffect(() => {
-    if (!detalleRecepcion) return;
-    const init = {};
-    (detalleRecepcion.ordenes_compra_items ?? []).forEach(i => {
-      const pendiente = Math.max(Number(i.cantidad_pedida) - Number(i.cantidad_recibida ?? 0), 0);
-      init[i.id] = pendiente;
-    });
-    setRecepciones(init);
-  }, [detalleRecepcion]);
+  const { data: factura } = useQuery({
+    queryKey: OC_KEYS.factura(detalleId),
+    queryFn: () => ordenesCompraService.getFactura(detalleId),
+    enabled: !!detalleId,
+  });
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
 
-  const invalidateOC = () => {
-    qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] });
-    qc.invalidateQueries({ queryKey: OC_KEYS.counts(empresaId) });
+  const registrarFacturaMutation = useMutation({
+    mutationFn: (payload) => ordenesCompraService.registrarFactura(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: OC_KEYS.factura(detalleId) });
+      toast({ title: 'Factura registrada ✓', className: 'bg-green-600 text-white' });
+      setFacturaModal(false);
+    },
+    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const pagarFacturaMutation = useMutation({
+    mutationFn: (facturaId) => ordenesCompraService.pagarFactura(facturaId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: OC_KEYS.factura(detalleId) });
+      toast({ title: 'Factura marcada como pagada ✓', className: 'bg-green-600 text-white' });
+    },
+    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const handleRegistrarFactura = (e) => {
+    e.preventDefault();
+    if (!detalle) return;
+    registrarFacturaMutation.mutate({
+      empresa_id: empresaId,
+      orden_compra_id: detalle.id,
+      proveedor_id: detalle.proveedor_id ?? null,
+      numero_factura: facturaForm.numero_factura,
+      fecha_factura: facturaForm.fecha_factura,
+      fecha_vencimiento: facturaForm.fecha_vencimiento || null,
+      monto_total: parseFloat(facturaForm.monto_total),
+      notas: facturaForm.notas || null,
+    });
   };
 
   const createMutation = useMutation({
     mutationFn: (payload) => ordenesCompraService.create(empresaId, user.id, payload),
-    onSuccess: (_, payload) => {
-      invalidateOC();
-      const isPendiente = payload.estadoInicial === 'pendiente_aprobacion';
-      toast({
-        title: isPendiente ? 'OC enviada a aprobación ✓' : 'Orden de compra creada ✓',
-        description: isPendiente ? 'Un administrador debe aprobarla antes de enviarla al proveedor.' : undefined,
-        className: 'bg-green-600 text-white',
-      });
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] });
+      toast({ title: 'Orden de compra creada ✓', className: 'bg-green-600 text-white' });
       setTab('lista');
       resetForm();
     },
@@ -135,54 +141,25 @@ function OrdenesCompraSection({ navPayload }) {
 
   const estadoMutation = useMutation({
     mutationFn: ({ id, estado }) => ordenesCompraService.updateEstado(id, estado),
-    onSuccess: invalidateOC,
-    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
-  });
-
-  const aprobarMutation = useMutation({
-    mutationFn: (id) => ordenesCompraService.updateEstado(id, 'borrador'),
-    onSuccess: () => {
-      invalidateOC();
-      toast({ title: 'OC aprobada ✓', description: 'La orden quedó en borrador lista para enviar al proveedor.', className: 'bg-green-600 text-white' });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] }),
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
   const cancelarMutation = useMutation({
     mutationFn: (id) => ordenesCompraService.cancelar(id),
-    onSuccess: invalidateOC,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] }),
   });
 
   const recibirMutation = useMutation({
     mutationFn: ({ ordenId, recepciones: recs }) =>
-      ordenesCompraService.recibirItems(
-        ordenId,
-        Object.entries(recs).map(([itemId, qty]) => ({ itemId, cantidadRecibida: Number(qty) })),
-        empresaId,
-        user.id
-      ),
+      ordenesCompraService.recibirItems(ordenId, Object.entries(recs).map(([itemId, qty]) => ({ itemId, cantidadRecibida: Number(qty) }))),
     onSuccess: () => {
-      invalidateOC();
+      qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] });
       toast({ title: 'Stock actualizado ✓', description: 'Recepción registrada. El inventario fue actualizado automáticamente.', className: 'bg-green-600 text-white' });
       setRecepcionId(null);
     },
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
-
-  // ── Realtime ──────────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!empresaId) return;
-    const channel = supabase
-      .channel(`ordenes_compra_rt_${empresaId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'ordenes_compra', filter: `empresa_id=eq.${empresaId}` },
-        () => {
-          qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] });
-          qc.invalidateQueries({ queryKey: OC_KEYS.counts(empresaId) });
-        })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [empresaId, qc]);
 
   // ── Helpers de form ───────────────────────────────────────────────────────────
 
@@ -196,8 +173,8 @@ function OrdenesCompraSection({ navPayload }) {
   const searchProveedor = async (q) => {
     setProvSearch(q);
     setForm(f => ({ ...f, proveedor_nombre: q }));
-    const query = supabase.from('proveedores').select('id, nombre').eq('empresa_id', empresaId).order('nombre').limit(10);
-    const { data } = q ? await query.ilike('nombre', `%${q}%`) : await query;
+    if (!q || q.length < 1) { setProvResults([]); return; }
+    const { data } = await supabase.from('proveedores').select('id, nombre').eq('user_id', empresaId).ilike('nombre', `%${q}%`).limit(6);
     setProvResults(data ?? []);
   };
 
@@ -213,7 +190,7 @@ function OrdenesCompraSection({ navPayload }) {
     updated[idx] = { ...updated[idx], _prodSearch: q, descripcion: q };
     setItems(updated);
     if (!q || q.length < 2) { setProdResults(p => ({ ...p, [idx]: [] })); return; }
-    const { data } = await supabase.from('productos').select('id, nombre, costo_compra, unidad_medida').eq('empresa_id', empresaId).ilike('nombre', `%${q}%`).limit(6);
+    const { data } = await supabase.from('productos').select('id, nombre, costo_compra, unidad_medida').eq('user_id', empresaId).ilike('nombre', `%${q}%`).limit(6);
     setProdResults(p => ({ ...p, [idx]: data ?? [] }));
   };
 
@@ -242,7 +219,6 @@ function OrdenesCompraSection({ navPayload }) {
       fecha_entrega_esperada: form.fecha_entrega_esperada || null,
       forma_pago: form.forma_pago,
       notas: form.notas || undefined,
-      estadoInicial: (ocRequiereAprobacion && !isAdmin) ? 'pendiente_aprobacion' : 'borrador',
       items: validItems.map(i => ({
         producto_id: i.producto_id ?? null,
         descripcion: i.descripcion,
@@ -278,11 +254,8 @@ function OrdenesCompraSection({ navPayload }) {
 
       {/* Stats rápidas */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          ...(ocRequiereAprobacion ? ['pendiente_aprobacion'] : []),
-          'borrador', 'enviada', 'recibida_parcial', 'recibida'
-        ].map(est => {
-          const count = estadoCounts[est] ?? 0;
+        {['borrador', 'enviada', 'recibida_parcial', 'recibida'].map(est => {
+          const count = (listData?.data ?? []).filter(o => o.estado === est).length;
           const cfg = ESTADOS[est];
           const Icon = cfg.icon;
           return (
@@ -320,16 +293,6 @@ function OrdenesCompraSection({ navPayload }) {
               <option value="">Todos los estados</option>
               {Object.entries(ESTADOS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
-            <Input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1); }}
-              title="Desde" className="w-38 dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
-            <Input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1); }}
-              title="Hasta" className="w-38 dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
-            {(dateFrom || dateTo) && (
-              <Button variant="ghost" size="sm" onClick={() => { setDateFrom(''); setDateTo(''); setPage(1); }}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-white px-2">
-                ✕ Limpiar fechas
-              </Button>
-            )}
           </div>
 
           <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
@@ -381,13 +344,6 @@ function OrdenesCompraSection({ navPayload }) {
                             <Eye className="w-3.5 h-3.5" />
                           </Button>
 
-                          {oc.estado === 'pendiente_aprobacion' && isAdmin && (
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-green-600"
-                              onClick={() => aprobarMutation.mutate(oc.id)} title="Aprobar OC">
-                              <ThumbsUp className="w-3.5 h-3.5" />
-                            </Button>
-                          )}
-
                           {oc.estado === 'borrador' && (
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-blue-600"
                               onClick={() => estadoMutation.mutate({ id: oc.id, estado: 'enviada' })} title="Marcar como enviada al proveedor">
@@ -402,7 +358,7 @@ function OrdenesCompraSection({ navPayload }) {
                             </Button>
                           )}
 
-                          {['borrador', 'enviada', 'pendiente_aprobacion'].includes(oc.estado) && (
+                          {['borrador', 'enviada'].includes(oc.estado) && (
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-500"
                               onClick={() => cancelarMutation.mutate(oc.id)} title="Cancelar OC">
                               <XCircle className="w-3.5 h-3.5" />
@@ -436,9 +392,7 @@ function OrdenesCompraSection({ navPayload }) {
                 <div className="space-y-2 relative">
                   <Label className="dark:text-white">Proveedor</Label>
                   <Input value={provSearch} onChange={e => searchProveedor(e.target.value)}
-                    onFocus={() => searchProveedor(provSearch)}
-                    onBlur={() => setTimeout(() => setProvResults([]), 200)}
-                    placeholder="Buscar o seleccionar proveedor..." className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
+                    placeholder="Buscar proveedor..." className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
                   {provResults.length > 0 && (
                     <div className="absolute top-full left-0 right-0 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl mt-1">
                       {provResults.map(p => (
@@ -519,27 +473,9 @@ function OrdenesCompraSection({ navPayload }) {
                         className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm" />
                     </div>
                     <div className="col-span-2">
-                      <Input list="unidades-medida" value={item.unidad_medida} placeholder="un"
+                      <Input value={item.unidad_medida} placeholder="un"
                         onChange={e => updateItem(idx, 'unidad_medida', e.target.value)}
                         className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm" />
-                      <datalist id="unidades-medida">
-                        <option value="un" />
-                        <option value="kg" />
-                        <option value="g" />
-                        <option value="lt" />
-                        <option value="ml" />
-                        <option value="mt" />
-                        <option value="cm" />
-                        <option value="m²" />
-                        <option value="m³" />
-                        <option value="caja" />
-                        <option value="pack" />
-                        <option value="docena" />
-                        <option value="par" />
-                        <option value="hs" />
-                        <option value="día" />
-                        <option value="servicio" />
-                      </datalist>
                     </div>
                     <div className="col-span-2">
                       <Input type="number" min="0" step="0.01" value={item.costo_unitario} placeholder="0.00"
@@ -585,7 +521,6 @@ function OrdenesCompraSection({ navPayload }) {
               <ShoppingBag className="w-5 h-5 text-indigo-500" />
               Orden de Compra {detalle?.numero}
             </DialogTitle>
-            <DialogDescription className="dark:text-slate-400">Detalle e ítems de la orden de compra.</DialogDescription>
           </DialogHeader>
           {detalle && (
             <div className="space-y-4">
@@ -654,6 +589,99 @@ function OrdenesCompraSection({ navPayload }) {
                   <span className="font-medium">Notas: </span>{detalle.notas}
                 </div>
               )}
+
+              {/* ── 3-Way Match ── */}
+              {(() => {
+                const totalOC = Number(detalle.total);
+                const totalRecibido = (detalle.ordenes_compra_items ?? [])
+                  .reduce((s, i) => s + Number(i.cantidad_recibida) * Number(i.costo_unitario), 0);
+                const totalFactura = factura ? Number(factura.monto_total) : null;
+                const diff = totalFactura !== null ? Math.abs(totalFactura - totalRecibido) : null;
+                const matchOk = diff !== null && diff < 0.01;
+                const matchWarn = diff !== null && !matchOk && diff / (totalRecibido || 1) < 0.05;
+
+                const FACTURA_ESTADO_COLORS = {
+                  pendiente: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300',
+                  pagada:    'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+                  vencida:   'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+                  anulada:   'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
+                };
+
+                return (
+                  <div className="border border-slate-200 dark:border-slate-800 rounded-lg p-4 space-y-3">
+                    <p className="text-xs font-semibold text-slate-500 uppercase flex items-center gap-2">
+                      <Receipt className="w-3.5 h-3.5" /> 3-Way Match
+                    </p>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="p-2 rounded bg-slate-50 dark:bg-slate-900">
+                        <p className="text-xs text-slate-400 mb-1">Total OC</p>
+                        <p className="font-bold text-sm dark:text-white">${totalOC.toFixed(2)}</p>
+                      </div>
+                      <div className="p-2 rounded bg-slate-50 dark:bg-slate-900">
+                        <p className="text-xs text-slate-400 mb-1">Recibido</p>
+                        <p className={`font-bold text-sm ${totalRecibido >= totalOC ? 'text-green-600 dark:text-green-400' : totalRecibido > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-slate-400'}`}>
+                          ${totalRecibido.toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="p-2 rounded bg-slate-50 dark:bg-slate-900">
+                        <p className="text-xs text-slate-400 mb-1">Factura</p>
+                        {totalFactura !== null ? (
+                          <p className={`font-bold text-sm ${matchOk ? 'text-green-600 dark:text-green-400' : matchWarn ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-500'}`}>
+                            ${totalFactura.toFixed(2)}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-slate-400 italic">Sin factura</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {totalFactura !== null && (
+                      <div className={`p-2 rounded text-xs flex items-center gap-2 ${matchOk ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' : matchWarn ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'}`}>
+                        {matchOk ? <BadgeCheck className="w-4 h-4 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
+                        {matchOk
+                          ? 'Match perfecto — OC, recepción y factura coinciden.'
+                          : `Diferencia de $${diff.toFixed(2)} entre recibido y factura.`}
+                      </div>
+                    )}
+
+                    {factura ? (
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                          <span className={`px-2 py-0.5 rounded font-medium ${FACTURA_ESTADO_COLORS[factura.estado]}`}>
+                            {factura.estado.charAt(0).toUpperCase() + factura.estado.slice(1)}
+                          </span>
+                          <span>N° {factura.numero_factura}</span>
+                          {factura.fecha_vencimiento && (
+                            <span>· Vence: {new Date(factura.fecha_vencimiento + 'T12:00:00').toLocaleDateString('es-AR')}</span>
+                          )}
+                        </div>
+                        {factura.estado === 'pendiente' && (
+                          <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"
+                            onClick={() => pagarFacturaMutation.mutate(factura.id)}
+                            disabled={pagarFacturaMutation.isPending}>
+                            <Banknote className="w-3.5 h-3.5" /> Marcar pagada
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      ['recibida_parcial', 'recibida'].includes(detalle.estado) && (
+                        <Button size="sm" variant="outline" className="w-full gap-2 text-xs"
+                          onClick={() => {
+                            setFacturaForm({
+                              numero_factura: '', fecha_factura: '',
+                              fecha_vencimiento: '',
+                              monto_total: totalRecibido.toFixed(2),
+                              notas: ''
+                            });
+                            setFacturaModal(true);
+                          }}>
+                          <Receipt className="w-3.5 h-3.5" /> Registrar Factura del Proveedor
+                        </Button>
+                      )
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
           <DialogFooter className="gap-2">
@@ -687,19 +715,12 @@ function OrdenesCompraSection({ navPayload }) {
                   <Package className="w-5 h-5 text-slate-400 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm dark:text-white truncate">{item.descripcion}</p>
-                    <p className="text-xs text-slate-400">
-                      Pedido: {item.cantidad_pedida} {item.unidad_medida}
-                      {' · '}
-                      <span className="text-green-500">Recibido: {item.cantidad_recibida ?? 0}</span>
-                      {' · '}
-                      <span className="text-yellow-500">Pendiente: {Math.max(Number(item.cantidad_pedida) - Number(item.cantidad_recibida ?? 0), 0)}</span>
-                    </p>
+                    <p className="text-xs text-slate-400">Pedido: {item.cantidad_pedida} {item.unidad_medida} — Ya recibido: {item.cantidad_recibida}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <Label className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Recibir ahora:</Label>
-                    <Input type="number" min="0"
-                      max={Math.max(Number(item.cantidad_pedida) - Number(item.cantidad_recibida ?? 0), 0)}
-                      value={recepciones[item.id] !== undefined ? recepciones[item.id] : Math.max(Number(item.cantidad_pedida) - Number(item.cantidad_recibida ?? 0), 0)}
+                    <Label className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">A recibir:</Label>
+                    <Input type="number" min="0" max={item.cantidad_pedida}
+                      value={recepciones[item.id] ?? item.cantidad_recibida}
                       onChange={e => setRecepciones(r => ({ ...r, [item.id]: e.target.value }))}
                       className="w-20 text-center dark:bg-slate-800 dark:border-slate-700 dark:text-white text-sm" />
                   </div>
@@ -717,6 +738,79 @@ function OrdenesCompraSection({ navPayload }) {
               {recibirMutation.isPending ? 'Actualizando stock...' : 'Confirmar Recepción'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── MODAL: Registrar Factura del Proveedor ── */}
+      <Dialog open={facturaModal} onOpenChange={setFacturaModal}>
+        <DialogContent className="max-w-md dark:bg-slate-950 dark:border-slate-800">
+          <DialogHeader>
+            <DialogTitle className="dark:text-white flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-indigo-500" />
+              Registrar Factura — OC {detalle?.numero}
+            </DialogTitle>
+            <DialogDescription className="dark:text-slate-400">
+              Completá los datos de la factura recibida del proveedor.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleRegistrarFactura} className="space-y-4 mt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="text-xs font-medium text-slate-700 dark:text-slate-300">N° de Factura *</label>
+                <input
+                  className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                  placeholder="ej: A-0001-00012345"
+                  value={facturaForm.numero_factura}
+                  onChange={e => setFacturaForm(p => ({ ...p, numero_factura: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Fecha Factura *</label>
+                <input type="date"
+                  className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white dark:[color-scheme:dark]"
+                  value={facturaForm.fecha_factura}
+                  onChange={e => setFacturaForm(p => ({ ...p, fecha_factura: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Vencimiento</label>
+                <input type="date"
+                  className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white dark:[color-scheme:dark]"
+                  value={facturaForm.fecha_vencimiento}
+                  onChange={e => setFacturaForm(p => ({ ...p, fecha_vencimiento: e.target.value }))}
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Monto Total Facturado *</label>
+                <input type="number" min="0.01" step="0.01"
+                  className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                  placeholder="0.00"
+                  value={facturaForm.monto_total}
+                  onChange={e => setFacturaForm(p => ({ ...p, monto_total: e.target.value }))}
+                  required
+                />
+                <p className="text-xs text-slate-400 mt-1">Pre-cargado con el total de lo recibido. Ajustá si el proveedor facturó diferente.</p>
+              </div>
+              <div className="col-span-2">
+                <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Notas</label>
+                <textarea
+                  className="mt-1 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white resize-none"
+                  rows={2}
+                  placeholder="Observaciones opcionales..."
+                  value={facturaForm.notas}
+                  onChange={e => setFacturaForm(p => ({ ...p, notas: e.target.value }))}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setFacturaModal(false)} className="dark:border-slate-700 dark:text-slate-300">Cancelar</Button>
+              <Button type="submit" disabled={registrarFacturaMutation.isPending}>
+                {registrarFacturaMutation.isPending ? 'Guardando...' : 'Registrar Factura'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

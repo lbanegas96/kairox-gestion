@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Menu, LogOut, User as UserIcon, Bell, CheckCircle, Moon, Sun, Search, Settings, Building, Upload, Package, CreditCard, ShoppingBag, AlertCircle } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/button';
@@ -31,9 +31,6 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch }) {
 
   const hasNotifications = notifications.hasNotifications;
   const roleLabel = userRole === 'admin' ? 'Administrador' : 'Staff';
-
-  // Controlled dropdown: permite cerrar manualmente y navegar después de que Radix desmonte el portal
-  const [notifOpen, setNotifOpen] = useState(false);
 
   const TIPO_CONFIG = {
     stock_bajo:    { icon: Package,     color: 'text-amber-500',  bg: 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/30' },
@@ -110,7 +107,7 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch }) {
             {theme === 'dark' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4 text-amber-500" />}
           </Button>
 
-          <DropdownMenu open={notifOpen} onOpenChange={setNotifOpen}>
+          <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="relative text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full w-9 h-9">
                 <Bell className="h-4 w-4" />
@@ -147,14 +144,7 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch }) {
                     return (
                       <button key={item.id}
                         className={`w-full text-left p-3 rounded-lg border transition-colors hover:opacity-90 ${cfg.bg}`}
-                        onClick={() => {
-                          const seccion = item.seccion;
-                          const payload = item.tipo === 'oc_pendiente' ? { openRecepcion: item.raw.id } : null;
-                          setNotifOpen(false);
-                          // 150 ms: tiempo suficiente para que Radix desmonte el portal del dropdown
-                          // antes de que el Dialog de destino se monte, evitando el conflicto de foco.
-                          setTimeout(() => onNavigate?.(seccion, payload), 150);
-                        }}>
+                        onClick={() => onNavigate?.(item.seccion)}>
                         <div className="flex items-start gap-2.5">
                           <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${cfg.color}`} />
                           <div className="flex-1 min-w-0">

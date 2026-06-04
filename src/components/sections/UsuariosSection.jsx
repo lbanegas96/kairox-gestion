@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Trash2, Shield, Mail, Edit, Loader2, Search, RefreshCw, AlertCircle, CheckCircle2, XCircle, Clock, Send, Eye, EyeOff } from 'lucide-react';
+import { UserPlus, Trash2, Shield, Mail, Edit, Loader2, Search, RefreshCw, AlertCircle, CheckCircle2, XCircle, Clock, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -15,7 +15,6 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import StaffPermissionsModal from '@/components/sections/StaffPermissionsModal';
 import { validateEmail, validatePassword, checkEmailExists } from '@/lib/validationUtils';
-import { formatDateTimeAR } from '@/lib/dateUtils';
 
 function UsuariosSection() {
   const { user } = useAuth();
@@ -35,12 +34,9 @@ function UsuariosSection() {
   const [isPermissionsModalOpen, setIsPermissionsModalOpen] = useState(false);
   const [selectedUserForPermissions, setSelectedUserForPermissions] = useState(null);
 
-  const [showPassword, setShowPassword] = useState(false);
-
-  // New User Form State
+  // New User Form State (invitation — no password needed)
   const [formData, setFormData] = useState({
     email: '',
-    password: '',
     first_name: '',
     last_name: '',
     role: 'staff',
@@ -117,7 +113,6 @@ function UsuariosSection() {
   const handleCreateUser = () => {
     setFormData({
       email: '',
-      password: '',
       first_name: '',
       last_name: '',
       role: 'staff',
@@ -128,7 +123,6 @@ function UsuariosSection() {
         usuarios: false, configuracion: false
       }
     });
-    setShowPassword(false);
     setIsCreateDialogOpen(true);
   };
 
@@ -150,11 +144,6 @@ function UsuariosSection() {
   const validateCreateForm = async () => {
     if (!validateEmail(formData.email)) {
       toast({ title: "Email inválido", description: "Por favor ingresá un correo electrónico válido.", variant: "destructive" });
-      return false;
-    }
-
-    if (!formData.password || formData.password.length < 6) {
-      toast({ title: "Contraseña inválida", description: "La contraseña debe tener al menos 6 caracteres.", variant: "destructive" });
       return false;
     }
 
@@ -181,37 +170,25 @@ function UsuariosSection() {
 
     setProcessing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('create-user', {
+      const { data, error } = await supabase.functions.invoke('invite-user', {
         body: {
           email: formData.email,
-          password: formData.password,
           firstName: formData.first_name,
           lastName: formData.last_name,
           role: formData.role,
           permissions: formData.permissions,
           empresa_id: user.empresa_id,
           tenantId: user.tenant_id,
+          redirectTo: window.location.origin
         }
       });
 
-      // Si la edge function tira 4xx/5xx, Supabase intenta parsear el body como JSON
-      // y a veces lo devuelve dentro de `error.context.body` o como string en error.message.
-      const rawError =
-        (data && data.error) ||
-        (error && (error.message || error.context?.body)) ||
-        null;
-
-      if (rawError) {
-        const lower = String(rawError).toLowerCase();
-        if (lower.includes('already been registered') || lower.includes('already exists') || lower.includes('user_already_exists')) {
-          throw new Error(`El email ${formData.email} ya está registrado en el sistema (puede pertenecer a otra empresa). Usá uno distinto.`);
-        }
-        throw new Error(rawError);
-      }
+      if (error) throw new Error(error.message || "Error de conexión con el servidor.");
+      if (data && data.error) throw new Error(data.error);
 
       toast({
-          title: "✅ Usuario creado",
-          description: `${formData.email} puede iniciar sesión con la contraseña definida.`,
+          title: "¡Invitación enviada!",
+          description: `${formData.email} recibirá un email para crear su contraseña.`,
           className: "bg-green-600 text-white border-green-700"
       });
 
@@ -221,7 +198,7 @@ function UsuariosSection() {
     } catch (error) {
       console.error("Submit Error:", error);
       toast({
-          title: "No se pudo crear el usuario",
+          title: "Error al enviar invitación",
           description: error.message || "Ocurrió un error inesperado.",
           variant: "destructive"
       });
@@ -320,7 +297,7 @@ function UsuariosSection() {
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Actualizar
             </Button>
             <Button onClick={handleCreateUser} className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-md">
-                <UserPlus className="h-4 w-4 mr-2" /> Nuevo Usuario
+                <Send className="h-4 w-4 mr-2" /> Invitar Usuario
             </Button>
         </div>
       </div>
@@ -421,7 +398,7 @@ function UsuariosSection() {
                                     </TableCell>
                                     <TableCell className="text-xs text-slate-400">
                                         {u.last_login_at
-                                          ? formatDateTimeAR(u.last_login_at)
+                                          ? new Date(u.last_login_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
                                           : <span className="italic text-slate-500">Nunca</span>
                                         }
                                     </TableCell>
@@ -473,17 +450,17 @@ function UsuariosSection() {
         <DialogContent className="max-w-2xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <UserPlus className="h-5 w-5 text-blue-500" /> Nuevo Usuario
+              <Send className="h-5 w-5 text-blue-500" /> Invitar Usuario
             </DialogTitle>
             <DialogDescription className="dark:text-slate-400">
-              Creá el usuario directamente con email y contraseña. Podrá iniciar sesión de inmediato.
+              El usuario recibirá un email con un link para crear su propia contraseña y acceder al sistema.
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
                 <div className="space-y-4">
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wide border-b border-slate-100 dark:border-slate-800 pb-2">Datos del Usuario</h4>
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wide border-b border-slate-100 dark:border-slate-800 pb-2">Datos del Invitado</h4>
 
                     <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-2">
@@ -502,25 +479,9 @@ function UsuariosSection() {
                             <Input id="email" name="email" type="email" value={formData.email} onChange={handleInputChange} placeholder="usuario@ejemplo.com" />
                         </div>
 
-                        <div className="space-y-1">
-                            <Label htmlFor="password">Contraseña <span className="text-red-500">*</span></Label>
-                            <div className="relative">
-                                <Input
-                                    id="password" name="password"
-                                    type={showPassword ? 'text' : 'password'}
-                                    value={formData.password}
-                                    onChange={handleInputChange}
-                                    placeholder="Mínimo 6 caracteres"
-                                    className="pr-10"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(v => !v)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                                >
-                                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                </button>
-                            </div>
+                        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/30 rounded-lg text-sm text-blue-700 dark:text-blue-300 flex gap-2 items-start">
+                            <Mail className="h-4 w-4 shrink-0 mt-0.5" />
+                            <p>El usuario recibirá un email para crear su propia contraseña. No necesitás definirla vos.</p>
                         </div>
                     </div>
                 </div>
@@ -572,8 +533,8 @@ function UsuariosSection() {
             <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)} disabled={processing}>Cancelar</Button>
             <Button onClick={submitCreateUser} disabled={processing} className="bg-blue-600 hover:bg-blue-700 text-white">
               {processing
-                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Creando...</>
-                : <><UserPlus className="mr-2 h-4 w-4" /> Crear Usuario</>
+                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin"/> Enviando...</>
+                : <><Send className="mr-2 h-4 w-4" /> Enviar Invitación</>
               }
             </Button>
           </DialogFooter>

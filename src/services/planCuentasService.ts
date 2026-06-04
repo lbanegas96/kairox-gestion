@@ -130,13 +130,6 @@ export const asientosService = {
     },
     items: Omit<AsientoItem, 'id' | 'asiento_id' | 'empresa_id' | 'created_at'>[]
   ): Promise<AsientoContable> {
-    // Verificar cierre de período antes de insertar
-    const cerrado = await periodosService.isPeriodoCerrado(empresaId, payload.fecha);
-    if (cerrado) {
-      const [anio, mes] = payload.fecha.slice(0, 7).split('-').map(Number);
-      throw new Error(`El período ${mes}/${anio} está cerrado. No se pueden registrar asientos en este período.`);
-    }
-
     const totalDebe  = items.reduce((s, i) => s + Number(i.debe),  0);
     const totalHaber = items.reduce((s, i) => s + Number(i.haber), 0);
 
@@ -231,53 +224,6 @@ export const asientosService = {
     return Object.values(map).sort((a, b) => a.codigo.localeCompare(b.codigo));
   },
 
-  /** Movimientos de grupo: todos los asientos_items de un conjunto de cuentas (grupo y sus hijos) */
-  async getMovimientosPorGrupo(
-    empresaId: string,
-    cuentaIds: string[],
-    fechaDesde?: string,
-    fechaHasta?: string
-  ): Promise<any[]> {
-    if (cuentaIds.length === 0) return [];
-
-    let q = supabase
-      .from('asientos_items')
-      .select('*, plan_cuentas(codigo, nombre, tipo), asientos_contables!inner(numero, fecha, descripcion, origen, estado, empresa_id)')
-      .in('cuenta_id', cuentaIds)
-      .eq('asientos_contables.empresa_id', empresaId)
-      .eq('asientos_contables.estado', 'confirmado')
-      .order('asientos_contables(fecha)', { ascending: true });
-
-    if (fechaDesde) q = (q as any).gte('asientos_contables.fecha', fechaDesde);
-    if (fechaHasta) q = (q as any).lte('asientos_contables.fecha', fechaHasta);
-
-    const { data, error } = await q;
-    if (error) throw new Error(error.message);
-    return data ?? [];
-  },
-
-  /** Estado de Resultados (P&L): ingresos y egresos del período */
-  async getEstadoResultados(empresaId: string, fechaDesde?: string, fechaHasta?: string) {
-    const rows = await this.getBalanceComprobacion(empresaId, fechaDesde, fechaHasta);
-    const ingresos = rows.filter(r => r.tipo === 'ingreso').map(r => ({ ...r, saldo: r.total_haber - r.total_debe }));
-    const egresos  = rows.filter(r => r.tipo === 'egreso' ).map(r => ({ ...r, saldo: r.total_debe  - r.total_haber }));
-    const totalIngresos = ingresos.reduce((s, r) => s + r.saldo, 0);
-    const totalEgresos  = egresos.reduce((s,  r) => s + r.saldo, 0);
-    return { ingresos, egresos, totalIngresos, totalEgresos, resultado: totalIngresos - totalEgresos };
-  },
-
-  /** Balance General: activo = pasivo + patrimonio */
-  async getBalanceGeneral(empresaId: string, fechaDesde?: string, fechaHasta?: string) {
-    const rows = await this.getBalanceComprobacion(empresaId, fechaDesde, fechaHasta);
-    const activos    = rows.filter(r => r.tipo === 'activo'    ).map(r => ({ ...r, saldo: r.total_debe  - r.total_haber }));
-    const pasivos    = rows.filter(r => r.tipo === 'pasivo'    ).map(r => ({ ...r, saldo: r.total_haber - r.total_debe  }));
-    const patrimonio = rows.filter(r => r.tipo === 'patrimonio').map(r => ({ ...r, saldo: r.total_haber - r.total_debe  }));
-    const totalActivos    = activos.reduce((s, r)    => s + r.saldo, 0);
-    const totalPasivos    = pasivos.reduce((s, r)    => s + r.saldo, 0);
-    const totalPatrimonio = patrimonio.reduce((s, r) => s + r.saldo, 0);
-    return { activos, pasivos, patrimonio, totalActivos, totalPasivos, totalPatrimonio };
-  },
-
   /** Libro Mayor: todos los movimientos confirmados de una cuenta con saldo acumulado */
   async getLibroMayor(
     empresaId: string,
@@ -307,58 +253,6 @@ export const asientosService = {
   },
 };
 
-// ─── Períodos contables ───────────────────────────────────────────────────────
-
-interface PeriodoContable {
-  empresa_id: string;
-  anio: number;
-  mes: number;
-  cerrado: boolean;
-  fecha_cierre: string | null;
-  cerrado_por: string | null;
-}
-
-export const periodosService = {
-  async getPeriodosAnio(empresaId: string, anio: number): Promise<PeriodoContable[]> {
-    const { data, error } = await supabase
-      .from('periodos_contables')
-      .select('*')
-      .eq('empresa_id', empresaId)
-      .eq('anio', anio);
-    if (error) throw new Error(error.message);
-    return (data ?? []) as PeriodoContable[];
-  },
-
-  async togglePeriodo(
-    empresaId: string, anio: number, mes: number,
-    cerrado: boolean, userId: string
-  ): Promise<void> {
-    const { error } = await supabase
-      .from('periodos_contables')
-      .upsert({
-        empresa_id: empresaId, anio, mes, cerrado,
-        fecha_cierre: cerrado ? new Date().toISOString() : null,
-        cerrado_por:  cerrado ? userId : null,
-      }, { onConflict: 'empresa_id,anio,mes' });
-    if (error) throw new Error(error.message);
-  },
-
-  async isPeriodoCerrado(empresaId: string, fecha: string): Promise<boolean> {
-    const parts = fecha.slice(0, 7).split('-');
-    const anio = Number(parts[0]);
-    const mes  = Number(parts[1]);
-    const { data, error } = await supabase
-      .from('periodos_contables')
-      .select('cerrado')
-      .eq('empresa_id', empresaId)
-      .eq('anio', anio)
-      .eq('mes', mes)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    return (data as any)?.cerrado ?? false;
-  },
-};
-
 // ─── Query keys ───────────────────────────────────────────────────────────────
 
 export const PLAN_CUENTAS_KEYS = {
@@ -368,14 +262,6 @@ export const PLAN_CUENTAS_KEYS = {
     ['balance_comprobacion', empresaId, desde, hasta] as const,
   libroMayor: (empresaId: string, cuentaId: string, desde?: string, hasta?: string) =>
     ['libro_mayor', empresaId, cuentaId, desde, hasta] as const,
-  movimientosGrupo: (empresaId: string, ids: string[], desde?: string, hasta?: string) =>
-    ['movimientos_grupo', empresaId, [...ids].sort().join(','), desde, hasta] as const,
-  periodos: (empresaId: string, anio: number) =>
-    ['periodos_contables', empresaId, anio] as const,
-  estadoResultados: (empresaId: string, desde?: string, hasta?: string) =>
-    ['estado_resultados', empresaId, desde, hasta] as const,
-  balanceGeneral: (empresaId: string, desde?: string, hasta?: string) =>
-    ['balance_general', empresaId, desde, hasta] as const,
 };
 
 // ─── Asientos automáticos ────────────────────────────────────────────────────
@@ -422,38 +308,6 @@ export const asientosAutoService = {
       [
         { cuenta_id: cuentaCobro,  debe: params.total, haber: 0,            descripcion: 'Cobro por venta' },
         { cuenta_id: cuentaVentas, debe: 0,            haber: params.total, descripcion: 'Ingreso por venta' },
-      ]
-    );
-    await asientosService.confirmarAsiento(asiento.id);
-  },
-
-  /**
-   * Crea y confirma el asiento de recepción de mercadería de una OC.
-   *   DEBE  1.1.3 Mercaderías
-   *   HABER 2.1.1 Cuentas a Pagar Proveedores
-   */
-  async crearAsientoRecepcionOC(
-    empresaId: string,
-    userId: string,
-    params: {
-      ocId: string;
-      total: number;
-      fecha: string;
-      descripcion: string;
-    }
-  ): Promise<void> {
-    const [cuentaMercaderias, cuentaProveedores] = await Promise.all([
-      findCuentaByCodigo(empresaId, '1.1.3'),
-      findCuentaByCodigo(empresaId, '2.1.1'),
-    ]);
-    if (!cuentaMercaderias || !cuentaProveedores) return;
-
-    const asiento = await asientosService.createAsiento(
-      empresaId, userId,
-      { fecha: params.fecha, descripcion: params.descripcion, origen: 'recepcion_oc', origen_id: params.ocId },
-      [
-        { cuenta_id: cuentaMercaderias, debe: params.total, haber: 0,            descripcion: 'Recepción de mercadería' },
-        { cuenta_id: cuentaProveedores, debe: 0,            haber: params.total, descripcion: 'Deuda con proveedor' },
       ]
     );
     await asientosService.confirmarAsiento(asiento.id);

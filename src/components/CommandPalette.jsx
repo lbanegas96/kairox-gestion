@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
-import { formatDateAR } from '@/lib/dateUtils';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import {
   Search, Package, Users, ShoppingCart, Receipt,
@@ -67,8 +66,8 @@ export function CommandPalette({ open, onClose, onNavigate }) {
     );
 
     const [{ data: prods }, { data: clientes }, { data: ventas }] = await Promise.all([
-      supabase.from('productos').select('id, nombre, stock_actual, codigo_sku').eq('empresa_id', user.empresa_id).ilike('nombre', `%${q}%`).limit(5),
-      supabase.from('clientes').select('id, nombre, documento, saldo_actual').eq('empresa_id', user.empresa_id).ilike('nombre', `%${q}%`).limit(5),
+      supabase.from('productos').select('id, nombre, stock_actual, codigo_sku').eq('user_id', user.empresa_id).ilike('nombre', `%${q}%`).limit(5),
+      supabase.from('clientes').select('id, nombre, documento, saldo_actual').eq('user_id', user.empresa_id).ilike('nombre', `%${q}%`).limit(5),
       supabase.from('comprobantes').select('id, numero_venta, total, created_at').eq('empresa_id', user.empresa_id).ilike('numero_venta', `%${q}%`).limit(3),
     ]);
 
@@ -85,7 +84,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
     ...results.secciones.map(s => ({ type: 'seccion', ...s })),
     ...results.productos.map(p => ({ type: 'producto', id: p.id, label: p.nombre, sub: `SKU: ${p.codigo_sku || '-'} | Stock: ${p.stock_actual}`, section: 'productos' })),
     ...results.clientes.map(c => ({ type: 'cliente', id: c.id, label: c.nombre, sub: `Doc: ${c.documento || '-'} | Saldo: $${Number(c.saldo_actual).toFixed(2)}`, section: 'clientes' })),
-    ...results.ventas.map(v => ({ type: 'venta', id: v.id, label: `Venta #${v.numero_venta}`, sub: `$${Number(v.total).toFixed(2)} — ${formatDateAR(v.created_at)}`, section: 'ventas' })),
+    ...results.ventas.map(v => ({ type: 'venta', id: v.id, label: `Venta #${v.numero_venta}`, sub: `$${Number(v.total).toFixed(2)} — ${new Date(v.created_at).toLocaleDateString('es-AR')}`, section: 'ventas' })),
   ];
 
   useEffect(() => { setSelectedIdx(0); }, [allItems.length]);

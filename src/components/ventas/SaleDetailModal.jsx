@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Printer, X, Save, Edit2, Loader2, Check } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
-import { formatDateTimeAR } from '@/lib/dateUtils';
 import ComprobantePrintModal from './ComprobantePrintModal';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 
@@ -119,7 +118,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale }) => {
               </span>
             </DialogTitle>
             <DialogDescription className="dark:text-slate-400">
-              Detalle completo de la transacción {sale && `- ${formatDateTimeAR(sale.fecha)}`}
+              Detalle completo de la transacción {sale && `- ${new Date(sale.fecha).toLocaleString()}`}
             </DialogDescription>
           </DialogHeader>
 

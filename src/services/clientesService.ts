@@ -21,7 +21,7 @@ export const clientesService = {
     let query = supabase
       .from('clientes')
       .select('*', { count: 'exact' })
-      .eq('empresa_id', empresaId)
+      .eq('user_id', empresaId)
       .order('nombre');
 
     if (search) query = query.ilike('nombre', `%${search}%`);
@@ -86,7 +86,7 @@ export const clientesService = {
     const { data, error } = await supabase
       .from('clientes')
       .select('saldo_actual')
-      .eq('empresa_id', empresaId)
+      .eq('user_id', empresaId)
       .gt('saldo_actual', 0);
     if (error) throw new Error(error.message);
     return (data ?? []).reduce((s: number, c: { saldo_actual: number }) => s + Number(c.saldo_actual), 0);

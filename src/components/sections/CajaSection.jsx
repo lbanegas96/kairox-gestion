@@ -114,7 +114,7 @@ function CajaSection() {
   }, [user]);
 
   useEffect(() => {
-    if (!user?.empresa_id || sessionLoading) return;
+    if (!user || !user.empresa_id || sessionLoading) return;
     if (activeTab === 'movimientos') {
       loadMovimientos();
     }
@@ -160,8 +160,7 @@ function CajaSection() {
   // Note: Closing is handled by CajaCierre component inside the modal
 
   const loadMovimientos = async () => {
-    // AUDIT FIX: filtrar por empresa_id (multi-tenant) en vez de user_id
-    if (!user?.empresa_id) return;
+    if (!user || !user.empresa_id) return;
 
     setLoading(true);
     try {
@@ -195,8 +194,7 @@ function CajaSection() {
   };
 
   const loadFinancialSummary = async () => {
-     // AUDIT FIX: filtrar por empresa_id (multi-tenant) en vez de user_id
-     if (!user?.empresa_id) return;
+     if (!user || !user.empresa_id) return;
 
      setLoading(true);
      try {
@@ -209,13 +207,13 @@ function CajaSection() {
             .gte('fecha', dates.start)
             .lte('fecha', dates.end)
             .order('fecha', { ascending: false });
-            
+
         if(currentError) throw currentError;
 
         const ingresosPeriodo = currentData.filter(m => m.tipo === 'ingreso').reduce((sum, m) => sum + Number(m.monto), 0);
         const egresosPeriodo = currentData.filter(m => m.tipo === 'egreso').reduce((sum, m) => sum + Number(m.monto), 0);
         const balancePeriodo = ingresosPeriodo - egresosPeriodo;
-        
+
         const nowAR = getNowAR();
         const todayStartISO = getStartOfDayAR(nowAR);
         const todayEndISO = getEndOfDayAR(nowAR);
@@ -309,9 +307,8 @@ function CajaSection() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // AUDIT FIX: requerir empresa_id (tenant) además de user
-    if (!user?.empresa_id) {
+    
+    if (!user || !user.empresa_id) {
       toast({ title: "Error", description: "Usuario no identificado. Recargue la página.", variant: "destructive" });
       return;
     }
@@ -328,16 +325,16 @@ function CajaSection() {
     setLoading(true);
     try {
       const { error } = await supabase.from('movimientos_caja').insert([{
+        user_id: user.id,
         empresa_id: user.empresa_id,
-        user_id: user.id, // autor del movimiento (auth.uid)
         caja_sesion_id: isSessionOpen ? currentSession?.id : null,
         tipo: formData.tipo,
         categoria: formData.categoria,
         concepto: formData.concepto,
         monto: parseFloat(formData.monto),
-        fecha: getNowAR().toISOString(),
+        fecha: getDateFromInputAR(formData.fecha),
         metodo_pago: formData.metodo_pago || 'Efectivo',
-        is_automatic: false
+        is_automatic: false,
       }]);
 
       if (error) throw error;
@@ -376,8 +373,7 @@ function CajaSection() {
 
   const handleConfirmDelete = async () => {
     if (!itemToDelete) return;
-    // AUDIT FIX: empresa_id en lugar de user_id
-    if (!user?.empresa_id) return;
+    if (!user || !user.empresa_id) return;
 
     setLoading(true);
     try {
@@ -773,7 +769,7 @@ function CajaSection() {
                 )}
              </div>
              
-             {lastUpdate && (<div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1"><Clock className="w-3 h-3"/> Act: {lastUpdate.toLocaleTimeString('es-AR', {hour:'2-digit', minute:'2-digit'})}</div>)}
+             {lastUpdate && (<div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1"><Clock className="w-3 h-3"/> Act: {lastUpdate.toLocaleTimeString()}</div>)}
            </div>
  
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -850,8 +846,6 @@ function CajaSection() {
       {/* MODAL: Cerrar Caja */}
       <Dialog open={isCierreSessionModalOpen} onOpenChange={setIsCierreSessionModalOpen}>
         <DialogContent className="sm:max-w-md kairox-bg-card kairox-text-primary p-6 dark:bg-slate-950 dark:border-slate-800">
-          <DialogTitle className="sr-only">Cerrar Caja</DialogTitle>
-          <DialogDescription className="sr-only">Confirmá el cierre de la sesión de caja actual.</DialogDescription>
            <CajaCierre onCancel={() => setIsCierreSessionModalOpen(false)} />
         </DialogContent>
       </Dialog>

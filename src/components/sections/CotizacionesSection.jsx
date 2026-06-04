@@ -96,7 +96,7 @@ function CotizacionesSection() {
   const searchProducto = async (idx, q) => {
     setProdSearch(prev => ({ ...prev, [idx]: q }));
     if (!q || q.length < 2) { setProdResults(prev => ({ ...prev, [idx]: [] })); return; }
-    const { data } = await supabase.from('productos').select('id, nombre, precio_venta, unidad_medida').eq('empresa_id', empresaId).ilike('nombre', `%${q}%`).limit(5);
+    const { data } = await supabase.from('productos').select('id, nombre, precio_venta, unidad_medida').eq('user_id', empresaId).ilike('nombre', `%${q}%`).limit(5);
     setProdResults(prev => ({ ...prev, [idx]: data ?? [] }));
   };
 
@@ -320,25 +320,7 @@ function CotizacionesSection() {
                     </div>
                     <div className="col-span-2 space-y-1">
                       <Label className="text-xs dark:text-slate-400">Unidad</Label>
-                      <Input list="unidades-medida" value={item.unidad_medida} onChange={e => updateItem(idx, 'unidad_medida', e.target.value)} placeholder="un" className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm" />
-                      <datalist id="unidades-medida">
-                        <option value="un" />
-                        <option value="kg" />
-                        <option value="g" />
-                        <option value="lt" />
-                        <option value="ml" />
-                        <option value="mt" />
-                        <option value="cm" />
-                        <option value="m²" />
-                        <option value="m³" />
-                        <option value="caja" />
-                        <option value="pack" />
-                        <option value="docena" />
-                        <option value="par" />
-                        <option value="hs" />
-                        <option value="día" />
-                        <option value="servicio" />
-                      </datalist>
+                      <Input value={item.unidad_medida} onChange={e => updateItem(idx, 'unidad_medida', e.target.value)} placeholder="un" className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm" />
                     </div>
                     <div className="col-span-2 space-y-1">
                       <Label className="text-xs dark:text-slate-400">Precio Unit.</Label>

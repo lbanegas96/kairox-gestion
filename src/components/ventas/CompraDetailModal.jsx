@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge';
 import { Printer, X, Save, Edit2, Loader2, FileText, User, Clock } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
-import { formatDateTimeAR } from '@/lib/dateUtils';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 
 const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra }) => {
@@ -127,7 +126,7 @@ const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra }) => 
                   {compra.proveedores?.nombre || 'Desconocido'}
                 </div>
                 <div className="flex gap-4 text-xs text-slate-500 border-t border-slate-200 dark:border-slate-800 pt-2 dark:text-slate-400">
-                   <div className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatDateTimeAR(compra.fecha)}</div>
+                   <div className="flex items-center gap-1"><Clock className="h-3 w-3" /> {new Date(compra.fecha).toLocaleDateString()}</div>
                    <div className="font-mono">Ref: {compra.numero_factura}</div>
                 </div>
               </div>

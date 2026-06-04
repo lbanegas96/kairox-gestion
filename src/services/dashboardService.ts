@@ -11,13 +11,13 @@ export const dashboardService = {
     const mesStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
 
     const [ventasHoy, ventasAyer, ventasMes, gastosMes, deudaTotal, stockRaw] = await Promise.all([
-      supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'ingreso').eq('categoria', 'Venta').gte('fecha', todayStart).lte('fecha', todayEnd),
-      supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'ingreso').eq('categoria', 'Venta').gte('fecha', getStartOfDayAR(ayer)).lte('fecha', getEndOfDayAR(ayer)),
-      supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'ingreso').gte('fecha', mesStart).lte('fecha', todayEnd),
+      supabase.from('movimientos_caja').select('monto').eq('user_id', empresaId).eq('tipo', 'ingreso').eq('categoria', 'Venta').gte('fecha', todayStart).lte('fecha', todayEnd),
+      supabase.from('movimientos_caja').select('monto').eq('user_id', empresaId).eq('tipo', 'ingreso').eq('categoria', 'Venta').gte('fecha', getStartOfDayAR(ayer)).lte('fecha', getEndOfDayAR(ayer)),
+      supabase.from('movimientos_caja').select('monto').eq('user_id', empresaId).eq('tipo', 'ingreso').gte('fecha', mesStart).lte('fecha', todayEnd),
       // BUG 1 FIX: exclude 'Apertura' category — apertura de caja no es un gasto real
-      supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'egreso').neq('categoria', 'Apertura').gte('fecha', mesStart).lte('fecha', todayEnd),
-      supabase.from('clientes').select('saldo_actual').eq('empresa_id', empresaId).gt('saldo_actual', 0),
-      supabase.from('productos').select('id, nombre, stock_actual, stock_minimo, unidad_medida').eq('empresa_id', empresaId).eq('activo', true),
+      supabase.from('movimientos_caja').select('monto').eq('user_id', empresaId).eq('tipo', 'egreso').neq('categoria', 'Apertura').gte('fecha', mesStart).lte('fecha', todayEnd),
+      supabase.from('clientes').select('saldo_actual').eq('user_id', empresaId).gt('saldo_actual', 0),
+      supabase.from('productos').select('id, nombre, stock_actual, stock_minimo, unidad_medida').eq('user_id', empresaId).eq('activo', true),
     ]);
 
     const sum = (rows: { data: { monto: number }[] | null }) =>
@@ -61,7 +61,7 @@ export const dashboardService = {
     const { data, error } = await supabase
       .from('movimientos_caja')
       .select('fecha, monto')
-      .eq('empresa_id', empresaId)
+      .eq('user_id', empresaId)
       .eq('tipo', 'ingreso')
       .eq('categoria', 'Venta')
       .gte('fecha', desde.toISOString())
@@ -101,7 +101,7 @@ export const dashboardService = {
       const { data } = await supabase
         .from('movimientos_caja')
         .select('tipo, monto, categoria')
-        .eq('empresa_id', empresaId)
+        .eq('user_id', empresaId)
         .gte('fecha', start)
         .lte('fecha', end);
 

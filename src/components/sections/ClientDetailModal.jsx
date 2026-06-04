@@ -6,15 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { User, Loader2, TrendingUp, TrendingDown, DollarSign, Calendar, Clock, Banknote, AlertCircle, CheckCircle, UserX, UserCheck } from 'lucide-react';
+import { User, Loader2, TrendingUp, TrendingDown, DollarSign, Calendar, Clock, Banknote, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
-import { getNowAR, formatDateAR, formatDateTimeAR } from '@/lib/dateUtils';
+import { getNowAR } from '@/lib/dateUtils';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 
-const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate, onToggleActivo }) => {
+const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate }) => {
   const { user } = useAuth();
   const { isSessionOpen, currentSession } = useCaja();
   const { toast } = useToast();
@@ -93,27 +93,25 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate,
       // 1. Insert Movement in Current Account (HABER reduces debt)
       const { error: movError } = await supabase.from('cuenta_corriente_movimientos').insert([{
         user_id: user.tenant_id,
-        empresa_id: user.empresa_id,
         cliente_id: clientId,
         tipo: 'HABER',
         monto: amount,
         descripcion: 'Pago registrado desde detalle',
         fecha: date
       }]);
-
+      
       if (movError) throw movError;
 
       // 2. Insert Movement in Cash Box
       const { error: cashError } = await supabase.from('movimientos_caja').insert([{
         user_id: user.tenant_id,
-        empresa_id: user.empresa_id,
         caja_sesion_id: currentSession?.id,
         fecha: date,
         tipo: 'ingreso',
         categoria: 'Cobro Cliente',
         concepto: `Cobro a ${localClientData.nombre} (Detalle)`,
         monto: amount,
-        metodo_pago: 'Efectivo',
+        metodo_pago: 'Efectivo', // Default for quick pay
         is_automatic: true
       }]);
 
@@ -141,6 +139,8 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate,
   // Standard logic: Credit Limit - Used Credit (Debt). If debt is positive, subtract. If negative (favor), technically more available? 
   // Let's stick to requested logic: "Calculated as limite_crédito - saldo_actual when saldo_actual > 0"
   const disponible = saldo > 0 ? Math.max(0, limite - saldo) : limite;
+
+  if (!open) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -249,7 +249,8 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate,
                              return (
                                 <tr key={mov.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/30 transition-colors">
                                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400 font-mono text-xs">
-                                      {formatDateTimeAR(mov.created_at || mov.fecha)}
+                                      {new Date(mov.created_at || mov.fecha).toLocaleDateString()}
+                                      <div className="text-[10px] text-slate-400">{new Date(mov.created_at || mov.fecha).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
                                    </td>
                                    <td className="px-4 py-3 text-center">
                                       <Badge variant={isDebe ? "outline" : "default"} className={`text-[10px] h-5 ${isDebe ? 'text-red-600 border-red-200 bg-red-50 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/50' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/30'}`}>
@@ -273,21 +274,7 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate,
 
         </div>
 
-        <DialogFooter className="border-t border-slate-100 dark:border-slate-800 pt-4 flex-wrap gap-2">
-          {onToggleActivo && localClientData && (
-            <Button
-              variant="outline"
-              onClick={() => { onToggleActivo(localClientData); onOpenChange(false); }}
-              className={localClientData.activo === false
-                ? 'border-green-400 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-900/20'
-                : 'border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20'
-              }>
-              {localClientData.activo === false
-                ? <><UserCheck className="h-4 w-4 mr-2" />Reactivar cliente</>
-                : <><UserX className="h-4 w-4 mr-2" />Inactivar cliente</>
-              }
-            </Button>
-          )}
+        <DialogFooter className="border-t border-slate-100 dark:border-slate-800 pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:text-white dark:border-slate-700 dark:hover:bg-slate-800">
             Cerrar
           </Button>

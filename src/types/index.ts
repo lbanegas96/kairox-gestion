@@ -256,11 +256,28 @@ export interface CotizacionItem {
 // ---------------------------------------------------------------------------
 
 export type OrdenCompraEstado =
+  | 'pendiente_aprobacion'
   | 'borrador'
   | 'enviada'
   | 'recibida_parcial'
   | 'recibida'
   | 'cancelada';
+
+export type FacturaEstado = 'pendiente' | 'pagada' | 'vencida' | 'anulada';
+
+export interface FacturaProveedor {
+  id: string;
+  empresa_id: string;
+  orden_compra_id?: string | null;
+  proveedor_id?: string | null;
+  numero_factura: string;
+  fecha_factura: string;
+  fecha_vencimiento?: string | null;
+  monto_total: number;
+  notas?: string | null;
+  estado: FacturaEstado;
+  created_at: string;
+}
 
 export interface OrdenCompra {
   id: string;

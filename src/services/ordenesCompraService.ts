@@ -1,14 +1,11 @@
 import { supabase } from '@/lib/customSupabaseClient';
-import type { OrdenCompra, OrdenCompraEstado, OrdenCompraItem, PaginatedResult, EstadoPago } from '@/types';
-import { asientosAutoService } from './planCuentasService';
+import type { OrdenCompra, OrdenCompraEstado, OrdenCompraItem, PaginatedResult, EstadoPago, FacturaProveedor } from '@/types';
 
 interface GetAllFilters {
   estado?: OrdenCompraEstado;
   proveedorId?: string | null;
   page?: number;
   pageSize?: number;
-  dateFrom?: string;
-  dateTo?: string;
 }
 
 interface CreateOCPayload {
@@ -17,7 +14,6 @@ interface CreateOCPayload {
   fecha_entrega_esperada?: string | null;
   forma_pago: string;
   notas?: string;
-  estadoInicial?: OrdenCompraEstado;
   items: {
     producto_id?: string | null;
     descripcion: string;
@@ -30,7 +26,7 @@ interface CreateOCPayload {
 export const ordenesCompraService = {
   async getAll(
     empresaId: string,
-    { estado, proveedorId, page = 1, pageSize = 30, dateFrom, dateTo }: GetAllFilters = {}
+    { estado, proveedorId, page = 1, pageSize = 30 }: GetAllFilters = {}
   ): Promise<PaginatedResult<OrdenCompra>> {
     let query = supabase
       .from('ordenes_compra')
@@ -40,8 +36,6 @@ export const ordenesCompraService = {
 
     if (estado) query = query.eq('estado', estado);
     if (proveedorId) query = query.eq('proveedor_id', proveedorId);
-    if (dateFrom) query = query.gte('fecha', `${dateFrom}T00:00:00`);
-    if (dateTo) query = query.lte('fecha', `${dateTo}T23:59:59`);
 
     const from = (page - 1) * pageSize;
     query = query.range(from, from + pageSize - 1);
@@ -89,7 +83,7 @@ export const ordenesCompraService = {
         notas: payload.notas ?? null,
         subtotal,
         total: subtotal,
-        estado: (payload.estadoInicial ?? 'borrador') as OrdenCompraEstado,
+        estado: 'borrador' as OrdenCompraEstado,
         estado_pago: 'pendiente' as EstadoPago,
       }])
       .select()
@@ -125,36 +119,15 @@ export const ordenesCompraService = {
     return data as OrdenCompra;
   },
 
-  /** Recepción parcial o total de ítems — suma el delta al acumulado, actualiza stock y genera asiento contable */
+  /** Recepción parcial o total de ítems — el trigger DB actualiza stock automáticamente */
   async recibirItems(
     ordenId: string,
-    recepciones: { itemId: string; cantidadRecibida: number }[],
-    empresaId?: string,
-    userId?: string
+    recepciones: { itemId: string; cantidadRecibida: number }[]
   ): Promise<void> {
-    let totalAsiento = 0;
-
     for (const rec of recepciones) {
-      if (rec.cantidadRecibida <= 0) continue;
-
-      // Leer estado actual + costo para hacer ADD y calcular monto del asiento
-      const { data: current, error: fetchItemError } = await supabase
-        .from('ordenes_compra_items')
-        .select('cantidad_recibida, cantidad_pedida, costo_unitario')
-        .eq('id', rec.itemId)
-        .single();
-      if (fetchItemError) throw new Error(fetchItemError.message);
-
-      const nuevaCantidad = Math.min(
-        Number(current.cantidad_recibida) + rec.cantidadRecibida,
-        Number(current.cantidad_pedida)
-      );
-      const deltaQty = nuevaCantidad - Number(current.cantidad_recibida);
-      totalAsiento += deltaQty * Number(current.costo_unitario);
-
       const { error } = await supabase
         .from('ordenes_compra_items')
-        .update({ cantidad_recibida: nuevaCantidad })
+        .update({ cantidad_recibida: rec.cantidadRecibida })
         .eq('id', rec.itemId);
       if (error) throw new Error(error.message);
     }
@@ -179,27 +152,6 @@ export const ordenesCompraService = {
       .from('ordenes_compra')
       .update({ estado: nuevoEstado })
       .eq('id', ordenId);
-
-    // Asiento contable automático: DEBE Mercaderías / HABER Ctas a Pagar
-    if (empresaId && userId && totalAsiento > 0) {
-      try {
-        const fecha = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
-        const { data: oc } = await supabase
-          .from('ordenes_compra')
-          .select('numero, proveedor_nombre')
-          .eq('id', ordenId)
-          .single();
-        const provNombre = (oc as any)?.proveedor_nombre ?? 'Proveedor';
-        await asientosAutoService.crearAsientoRecepcionOC(empresaId, userId, {
-          ocId: ordenId,
-          total: totalAsiento,
-          fecha,
-          descripcion: `Recepción mercadería OC ${(oc as any)?.numero ?? ordenId} — ${provNombre}`,
-        });
-      } catch {
-        // silencioso si empresa no tiene plan de cuentas o período cerrado
-      }
-    }
   },
 
   async cancelar(id: string): Promise<void> {
@@ -210,16 +162,43 @@ export const ordenesCompraService = {
     if (error) throw new Error(error.message);
   },
 
-  async getEstadoCounts(empresaId: string): Promise<Record<string, number>> {
+  // ── Facturas de proveedor (3-way match) ──────────────────────────────────
+
+  async getFactura(ordenId: string): Promise<FacturaProveedor | null> {
     const { data, error } = await supabase
-      .from('ordenes_compra')
-      .select('estado')
-      .eq('empresa_id', empresaId);
+      .from('facturas_proveedor')
+      .select('*')
+      .eq('orden_compra_id', ordenId)
+      .maybeSingle();
     if (error) throw new Error(error.message);
-    return (data ?? []).reduce((acc: Record<string, number>, row: { estado: string }) => {
-      acc[row.estado] = (acc[row.estado] ?? 0) + 1;
-      return acc;
-    }, {});
+    return data;
+  },
+
+  async registrarFactura(payload: {
+    empresa_id: string;
+    orden_compra_id: string;
+    proveedor_id?: string | null;
+    numero_factura: string;
+    fecha_factura: string;
+    fecha_vencimiento?: string | null;
+    monto_total: number;
+    notas?: string | null;
+  }): Promise<FacturaProveedor> {
+    const { data, error } = await supabase
+      .from('facturas_proveedor')
+      .upsert([payload], { onConflict: 'orden_compra_id' })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    return data as FacturaProveedor;
+  },
+
+  async pagarFactura(facturaId: string): Promise<void> {
+    const { error } = await supabase
+      .from('facturas_proveedor')
+      .update({ estado: 'pagada' })
+      .eq('id', facturaId);
+    if (error) throw new Error(error.message);
   },
 };
 
@@ -227,4 +206,5 @@ export const OC_KEYS = {
   list: (empresaId: string, filters?: GetAllFilters) => ['ordenes_compra', empresaId, filters] as const,
   detail: (id: string) => ['orden_compra', id] as const,
   counts: (empresaId: string) => ['ordenes_compra_counts', empresaId] as const,
+  factura: (ordenId: string) => ['factura_proveedor', ordenId] as const,
 };

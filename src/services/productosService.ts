@@ -24,7 +24,7 @@ export const productosService = {
     let query = supabase
       .from('productos')
       .select('*, categorias(nombre), proveedores(nombre)', { count: 'exact' })
-      .eq('empresa_id', empresaId)
+      .eq('user_id', empresaId)
       .eq('activo', true)
       .order('nombre');
 
@@ -53,7 +53,7 @@ export const productosService = {
     const { data, error } = await supabase
       .from('productos')
       .select('id, nombre, stock_actual, stock_minimo, unidad_medida')
-      .eq('empresa_id', empresaId)
+      .eq('user_id', empresaId)
       .eq('activo', true);
     if (error) throw new Error(error.message);
     return ((data ?? []) as Producto[]).filter(

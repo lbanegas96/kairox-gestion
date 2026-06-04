@@ -10,7 +10,6 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { generatePDF } from '@/lib/pdfUtils';
-import { formatDateAR } from '@/lib/dateUtils';
 import ReportHeader from '@/components/reports/ReportHeader';
 import ReportTable from '@/components/reports/ReportTable';
 
@@ -87,35 +86,34 @@ function ReportesSection() {
 
   // --- FETCHING LOGIC ---
   const handleGenerate = async () => {
-    if (!user?.empresa_id) {
-      toast({ title: "Error", description: "Empresa no identificada.", variant: "destructive" });
-      return;
-    }
+    if (!user?.empresa_id) return;
     setLoading(true);
     try {
-      const start = new Date(startDate).toISOString();
-      const end = new Date(endDate + 'T23:59:59.999Z').toISOString();
+      const [sy, sm, sd] = startDate.split('-').map(Number);
+      const [ey, em, ed] = endDate.split('-').map(Number);
+      const start = new Date(Date.UTC(sy, sm - 1, sd, 0, 0, 0)).toISOString();
+      const end = new Date(Date.UTC(ey, em - 1, ed, 23, 59, 59, 999)).toISOString();
 
       let data = [];
 
-      // 1. VENTAS
+      // 1. VENTAS — lee de comprobantes/comprobante_items (schema actual)
       if (selectedReport.id === 'ventas') {
         const { data: sales, error } = await supabase
-          .from('ventas')
-          .select('*, detalle_ventas(*)')
+          .from('comprobantes')
+          .select('*, comprobante_items(*)')
           .eq('empresa_id', user.empresa_id)
           .gte('fecha', start)
           .lte('fecha', end)
           .order('fecha', { ascending: false });
 
         if (error) throw error;
-        
+
         data = sales.map(s => ({
           id: s.id,
           fecha: s.fecha,
-          cliente: s.cliente || 'Consumidor Final',
-          metodo_pago: s.metodo_pago,
-          items: s.detalle_ventas?.length || 0,
+          cliente: s.cliente_nombre || 'Consumidor Final',
+          metodo_pago: s.forma_pago,
+          items: s.comprobante_items?.length || 0,
           total: s.total
         }));
       }
@@ -147,12 +145,11 @@ function ReportesSection() {
            .from('clientes')
            .select('*')
            .eq('empresa_id', user.empresa_id)
-           .gte('created_at', start)
-           .lte('created_at', end)
+           .neq('activo', false)
            .order('nombre');
-         
+
          if (error) throw error;
-         
+
          data = clients.map(c => ({
             id: c.id,
             nombre: c.nombre,
@@ -171,19 +168,19 @@ function ReportesSection() {
            .gte('created_at', start)
            .lte('created_at', end)
            .order('created_at', { ascending: false });
-         
+
          if (error) throw error;
 
          data = movs.map(m => ({
            id: m.id,
-           fecha: m.created_at, 
+           fecha: m.created_at,
            cliente: m.clientes?.nombre || 'Desconocido',
-           tipo: m.tipo, 
+           tipo: m.tipo,
            descripcion: m.descripcion,
            monto: m.monto
          }));
       }
-      
+
       // 5. FINANCIERO
       else if (selectedReport.id === 'financiero') {
          const { data: fins, error } = await supabase
@@ -238,7 +235,7 @@ function ReportesSection() {
       const totalAmount = data.reduce((acc, curr) => acc + (curr.total || 0), 0);
       return {
         columns: [
-          { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
+          { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => new Date(r.fecha).toLocaleDateString(), pdfRender: (r) => new Date(r.fecha).toLocaleDateString() },
           { header: 'Cliente', key: 'cliente', align: 'left' },
           { header: 'Pago', key: 'metodo_pago', align: 'center' },
           { header: 'Items', key: 'items', align: 'center' },
@@ -256,7 +253,7 @@ function ReportesSection() {
       const totalAmount = data.reduce((acc, curr) => acc + (curr.total || 0), 0);
       return {
         columns: [
-          { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
+          { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => new Date(r.fecha).toLocaleDateString(), pdfRender: (r) => new Date(r.fecha).toLocaleDateString() },
           { header: 'Proveedor', key: 'proveedor', align: 'left' },
           { header: 'N° Factura', key: 'numero_factura', align: 'left' },
           { header: 'Total', key: 'total', align: 'right', render: (r) => `$${Number(r.total).toFixed(2)}`, pdfRender: (r) => `$${Number(r.total).toFixed(2)}` }
@@ -291,7 +288,7 @@ function ReportesSection() {
        
        return {
          columns: [
-           { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
+           { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => new Date(r.fecha).toLocaleDateString(), pdfRender: (r) => new Date(r.fecha).toLocaleDateString() },
            { header: 'Cliente', key: 'cliente', align: 'left' },
            { header: 'Tipo', key: 'tipo', align: 'center', render: (r) => <span className={`px-2 py-1 rounded text-xs font-bold ${r.tipo === 'DEBE' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'}`}>{r.tipo}</span> },
            { header: 'Descripción', key: 'descripcion', align: 'left' },
@@ -308,7 +305,7 @@ function ReportesSection() {
         const egresos = data.filter(d => d.tipo === 'egreso').reduce((acc, curr) => acc + curr.monto, 0);
         return {
           columns: [
-             { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
+             { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => new Date(r.fecha).toLocaleDateString(), pdfRender: (r) => new Date(r.fecha).toLocaleDateString() },
              { header: 'Tipo', key: 'tipo', align: 'center', render: (r) => r.tipo.toUpperCase() },
              { header: 'Categoría', key: 'categoria', align: 'left' },
              { header: 'Concepto', key: 'concepto', align: 'left' },

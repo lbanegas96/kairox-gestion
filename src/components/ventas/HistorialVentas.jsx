@@ -8,7 +8,6 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatDateTimeAR } from '@/lib/dateUtils';
 import SaleDetailModal from './SaleDetailModal';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 
@@ -89,10 +88,14 @@ const HistorialVentas = () => {
   // Memoized Filter Logic
   const filteredSales = useMemo(() => {
     return comprobantes.filter(sale => {
-      // Date Range — compare by AR date string (YYYY-MM-DD) to avoid timezone drift
-      const saleDateStr = sale.fecha ? sale.fecha.slice(0, 10) : '';
-      if (dateFrom && saleDateStr < dateFrom) return false;
-      if (dateTo && saleDateStr > dateTo) return false;
+      // Date Range
+      if (dateFrom && new Date(sale.fecha) < new Date(dateFrom)) return false;
+      // Add one day to 'to' date to include the whole day
+      if (dateTo) {
+         const toDate = new Date(dateTo);
+         toDate.setHours(23, 59, 59, 999);
+         if (new Date(sale.fecha) > toDate) return false;
+      }
       
       // Client
       if (selectedClient && sale.cliente_id !== selectedClient) return false;
@@ -256,7 +259,7 @@ const HistorialVentas = () => {
                       {sale.numero_venta}
                     </td>
                     <td className="p-4 text-slate-500 text-xs dark:text-slate-400">
-                      {formatDateTimeAR(sale.fecha)}
+                      {new Date(sale.fecha).toLocaleDateString()} <span className="text-slate-400 ml-1">{new Date(sale.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                     </td>
                     <td className="p-4 font-medium text-slate-800 dark:text-slate-200">
                       {sale.cliente_nombre || <span className="text-slate-400 italic">Consumidor Final</span>}
