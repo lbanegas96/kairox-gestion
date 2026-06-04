@@ -14,6 +14,8 @@ interface CreateOCPayload {
   fecha_entrega_esperada?: string | null;
   forma_pago: string;
   notas?: string;
+  moneda?: string;
+  tipoCambioTasa?: number;
   items: {
     producto_id?: string | null;
     descripcion: string;
@@ -81,6 +83,8 @@ export const ordenesCompraService = {
         fecha_entrega_esperada: payload.fecha_entrega_esperada ?? null,
         forma_pago: payload.forma_pago,
         notas: payload.notas ?? null,
+        moneda: payload.moneda ?? 'ARS',
+        tipo_cambio_tasa: payload.tipoCambioTasa ?? 1,
         subtotal,
         total: subtotal,
         estado: 'borrador' as OrdenCompraEstado,

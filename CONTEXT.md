@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-04 noche-2 (Security hardening: RLS completo, edge functions, inactividad, validaciones, XSS fix)
+**Última actualización:** 2026-06-04 noche-3 (Multi-moneda UI completo, Módulo Proveedores, Conciliación bancaria)
 **Branch activo:** `master`
 **Entregables de auditoría:** `AUDITORIA.md` · `SUPABASE_ANALISIS.md`
 
@@ -210,6 +210,20 @@ migrations/
 | **CommandPalette (Cmd+K)** | `CommandPalette.jsx` | Fix `user_id`→`empresa_id` en productos y clientes. Añadidas búsquedas de cotizaciones (`numero`, `cliente_nombre`) y cuentas bancarias (`nombre`). Placeholder actualizado. |
 | **Dashboard — KPIs cotizaciones** | `DashboardSection.jsx`, `dashboardService.ts` | Nueva fila de 4 KPIs: Cotizaciones del Mes, Tasa de Conversión (con barra de progreso), Aprobadas Pendientes, Monto Convertido. Nueva columna en fila 3: "Cotizaciones Aprobadas" con lista de pendientes clickeable. `getCotizacionesStats()` en dashboardService. |
 
+## Sesión 2026-06-04 noche-3 — Multi-moneda UI + Proveedores + Conciliación
+
+| Área | Archivos | Detalle |
+|---|---|---|
+| **Multi-moneda OC** | `OrdenesCompraSection.jsx`, `ordenesCompraService.ts` | MonedaSelector en formulario. `moneda` + `tipo_cambio_tasa` en create. `formatCurrency` en lista, detalle y 3-way match. Fix bug `user_id`→`empresa_id` en búsqueda de proveedores. |
+| **Multi-moneda Ventas** | `NuevaVentaModal.jsx` | MonedaSelector en panel resumen. `moneda` + `tipo_cambio_tasa` en INSERT comprobante. `formatCurrency` en total del carrito. |
+| **proveedoresService** | `src/services/proveedoresService.ts` | CRUD completo: `getAll` (paginado+filtros), `create`, `update`, `toggleActivo`, `getStats`, `getCuentaCorriente`, `registrarPago`, `getSaldoProveedor`, `getHistorialOC`. Constantes `PROV_KEYS`. |
+| **ProveedoresSection** | `src/components/sections/ProveedoresSection.jsx` | Módulo completo: stats cards (total/activos/deuda), tabla paginada con search/filtro activos, modal crear/editar con ficha completa (CUIT, condición IVA, domicilio, plazo pago), panel detalle con 3 tabs (Cuenta Corriente / Historial OC / Ficha), modal Registrar Pago. |
+| **Sidebar + routing** | `Sidebar.jsx`, `Dashboard.jsx` | Ícono `Truck` + entrada `proveedores` en menuItems. `case 'proveedores'` en renderSection. |
+| **conciliacionService** | `src/services/conciliacionService.ts` | `parsearCSV` (formatos 3 y 4 columnas, DD/MM/YYYY). `importarExtracto`. `getExtractos`, `getLineas`, `getMovimientosSinConciliar`. `matchManual`, `desMatch`, `autoMatch` (por monto+tipo+fecha±2d). |
+| **Tab Conciliación** | `CuentasBancariasSection.jsx` | Nuevo tab "Conciliación". `ConciliacionTab`: selector cuenta/extracto, importar CSV, auto-match con toast, vista split (extracto izq / movimientos der), conciliar click, deshacer, resumen pendientes/conciliadas. |
+
+---
+
 ## Sesión 2026-06-04 noche-2 — Security Hardening
 
 ### Auditoría de seguridad realizada
@@ -336,6 +350,8 @@ Decisión: implementar Multi-moneda + Proveedores + Reconciliación bancaria. AF
 | Usuarios | `UsuariosSection.jsx` | ✅ Invitación por email + último acceso + activar/desactivar |
 | Configuración | `ConfiguracionSection.jsx` | ✅ Funcional + toggle aprobación OC |
 | Movimientos Ualá | `MovimientosUala.jsx` | ✅ Funcional + fix timezone |
+| **Proveedores** | `ProveedoresSection.jsx` | ✅ **Ficha completa + Cuenta Corriente + Historial OC** |
+| **Bancos — Conciliación** | `CuentasBancariasSection.jsx` | ✅ **Tab Conciliación: import CSV + auto-match + match manual** |
 
 ---
 
@@ -437,10 +453,6 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 | 🟢 Hecho | **Módulo Cuentas Bancarias** | Reemplaza `MovimientosUala`. `ualaSupabaseClient.js` eliminado (dead code). Tablas `cuentas_bancarias` + `movimientos_bancarios` con FK a `plan_cuentas`. Sidebar: "Bancos" con ícono Landmark. Import CSV con mapper de columnas, detección automática de tipo por signo. Migration 011. ✅ |
 | 🟢 Hecho | **3-way match OC-Recepción-Factura** | Tabla `facturas_proveedor` (UNIQUE por OC). En panel detalle OC: grilla Total OC / Recibido / Factura con indicador visual de match. Botón "Registrar Factura" (auto-precarga monto recibido), "Marcar pagada". Migration 012. ✅ |
 | 🟢 Hecho | **Cotización → Venta** | Botón convertir + pre-fill carrito + estado `convertida` + `comprobante_id` FK ✅ |
-| 🔴 Alta | **Multi-moneda UI en OC y Ventas** | `OrdenesCompraSection.jsx` + `NuevaVentaModal.jsx`: mismo MonedaSelector que Cotizaciones. Dashboard: convertir totales USD→ARS. |
-| 🔴 Alta | **ProveedoresSection** | `ProveedoresSection.jsx` + `proveedoresService.ts`: lista paginada, ficha completa, cuenta corriente, historial OC/compras. |
-| 🔴 Alta | **Proveedores en sidebar + autocomplete** | `App.jsx` sidebar + `ComprasSection` + `OrdenesCompraSection`: ComboBox desde tabla `proveedores`. |
-| 🔴 Alta | **Reconciliación bancaria UI** | `conciliacionService.ts` + tab "Conciliación" en `CuentasBancariasSection`. Vista split + auto-match. |
 | 🟡 Media | **Ejecutar migrations 013-016 en Supabase** | SQL Editor orden: `013_multi_moneda.sql`, `014_proveedores.sql`, `015_conciliacion_bancaria.sql`, `016_security_hardening.sql` |
 | 🟡 Media | **Re-deploy edge functions** | `supabase functions deploy create-user delete-user invite-user` — fueron reescritas con hardening. |
 | 🟡 Media | **Verificar dominio Resend** | `onboarding@resend.dev` solo envía a emails verificados → dominio propio para producción |

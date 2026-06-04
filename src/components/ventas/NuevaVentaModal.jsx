@@ -10,6 +10,8 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { getNowAR, getTodayAR } from '@/lib/dateUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
 import ComprobantePrintModal from './ComprobantePrintModal';
+import { MonedaSelector } from '@/components/ui/MonedaSelector';
+import { formatCurrency } from '@/lib/currencyUtils';
 
 const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = null, onConvertSuccess }) => {
   const { user } = useAuth();
@@ -21,6 +23,8 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   const [cart, setCart] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('Efectivo');
+  const [moneda, setMoneda] = useState('ARS');
+  const [tipoCambioTasa, setTipoCambioTasa] = useState(1);
   const [loading, setLoading] = useState(false);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [lastComprobante, setLastComprobante] = useState(null);
@@ -86,6 +90,8 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     setCart([]);
     setSelectedClient(null);
     setPaymentMethod('Efectivo');
+    setMoneda('ARS');
+    setTipoCambioTasa(1);
     setProductSearch('');
     setLoading(false);
   };
@@ -168,7 +174,9 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           cliente_id: selectedClient?.id || null,
           cliente_nombre: selectedClient?.nombre || 'Consumidor Final',
           total: total,
-          forma_pago: paymentMethod
+          forma_pago: paymentMethod,
+          moneda,
+          tipo_cambio_tasa: tipoCambioTasa
         }]).select().single();
 
       if (compError) throw compError;
@@ -309,7 +317,15 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
 
             <div className="w-full md:w-96 bg-slate-50 dark:bg-slate-900/30 p-6 flex flex-col gap-6 overflow-y-auto border-l border-slate-200 dark:border-slate-800">
                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border kairox-border">
-                  <div className="flex justify-between items-center text-xl font-bold pt-2 dark:text-white"><span>Total</span><span className="text-blue-600 dark:text-[#00D4FF]">${calculateTotal().toFixed(2)}</span></div>
+                  <div className="flex justify-between items-center text-xl font-bold pt-2 dark:text-white"><span>Total</span><span className="text-blue-600 dark:text-[#00D4FF]">{formatCurrency(calculateTotal(), moneda)}</span></div>
+                  <div className="mt-3">
+                    <MonedaSelector
+                      moneda={moneda}
+                      tasa={tipoCambioTasa}
+                      onMonedaChange={v => { setMoneda(v); if (v === 'ARS') setTipoCambioTasa(1); }}
+                      onTasaChange={setTipoCambioTasa}
+                    />
+                  </div>
                </div>
                <div className="space-y-3 dark:text-white"><Label>Método de Pago</Label><div className="grid grid-cols-2 gap-2">{['Efectivo', 'Transferencia', 'Tarjeta', 'Cuenta Corriente'].map(method => (<div key={method} className={`cursor-pointer border rounded-lg p-3 text-center text-sm transition-colors ${paymentMethod === method ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200' : 'hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800'}`} onClick={() => setPaymentMethod(method)}>{method}</div>))}</div></div>
                <div className="space-y-3 dark:text-white"><Label>Cliente</Label><select className="w-full h-10 rounded-md border bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white px-3 text-sm focus:border-blue-500 dark:focus:border-[#00D4FF]" value={selectedClient?.id || ''} onChange={(e) => setSelectedClient(clients.find(c => c.id === e.target.value) || null)}><option value="">Consumidor Final</option>{clients.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></div>

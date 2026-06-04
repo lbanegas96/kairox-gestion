@@ -15,6 +15,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { ordenesCompraService, OC_KEYS } from '@/services/ordenesCompraService';
 import { supabase } from '@/lib/customSupabaseClient';
+import { MonedaSelector } from '@/components/ui/MonedaSelector';
+import { formatCurrency } from '@/lib/currencyUtils';
 
 // ─── Helpers de estado ────────────────────────────────────────────────────────
 
@@ -49,7 +51,7 @@ function OrdenesCompraSection() {
   const [facturaForm, setFacturaForm] = useState({ numero_factura: '', fecha_factura: '', fecha_vencimiento: '', monto_total: '', notas: '' });
 
   // form nueva OC
-  const [form, setForm] = useState({ proveedor_nombre: '', fecha_entrega_esperada: '', forma_pago: 'Efectivo', notas: '' });
+  const [form, setForm] = useState({ proveedor_nombre: '', fecha_entrega_esperada: '', forma_pago: 'Efectivo', notas: '', moneda: 'ARS', tipoCambioTasa: 1 });
   const [items, setItems] = useState([{ ...EMPTY_ITEM }]);
   const [provSearch, setProvSearch] = useState('');
   const [provResults, setProvResults] = useState([]);
@@ -164,7 +166,7 @@ function OrdenesCompraSection() {
   // ── Helpers de form ───────────────────────────────────────────────────────────
 
   const resetForm = () => {
-    setForm({ proveedor_nombre: '', fecha_entrega_esperada: '', forma_pago: 'Efectivo', notas: '' });
+    setForm({ proveedor_nombre: '', fecha_entrega_esperada: '', forma_pago: 'Efectivo', notas: '', moneda: 'ARS', tipoCambioTasa: 1 });
     setItems([{ ...EMPTY_ITEM }]);
     setSelectedProv(null);
     setProvSearch('');
@@ -174,7 +176,7 @@ function OrdenesCompraSection() {
     setProvSearch(q);
     setForm(f => ({ ...f, proveedor_nombre: q }));
     if (!q || q.length < 1) { setProvResults([]); return; }
-    const { data } = await supabase.from('proveedores').select('id, nombre').eq('user_id', empresaId).ilike('nombre', `%${q}%`).limit(6);
+    const { data } = await supabase.from('proveedores').select('id, nombre').eq('empresa_id', empresaId).ilike('nombre', `%${q}%`).limit(6);
     setProvResults(data ?? []);
   };
 
@@ -219,6 +221,8 @@ function OrdenesCompraSection() {
       fecha_entrega_esperada: form.fecha_entrega_esperada || null,
       forma_pago: form.forma_pago,
       notas: form.notas || undefined,
+      moneda: form.moneda,
+      tipoCambioTasa: form.tipoCambioTasa,
       items: validItems.map(i => ({
         producto_id: i.producto_id ?? null,
         descripcion: i.descripcion,
@@ -335,7 +339,7 @@ function OrdenesCompraSection() {
                         </span>
                       </td>
                       <td className="p-4 text-right font-mono font-bold text-slate-800 dark:text-slate-200">
-                        ${Number(oc.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                        {formatCurrency(oc.total, oc.moneda ?? 'ARS')}
                       </td>
                       <td className="p-4">
                         <div className="flex items-center justify-center gap-1">
@@ -426,6 +430,14 @@ function OrdenesCompraSection() {
                     placeholder="Instrucciones especiales, referencia, etc."
                     className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
                 </div>
+                <div className="col-span-2">
+                  <MonedaSelector
+                    moneda={form.moneda}
+                    tasa={form.tipoCambioTasa}
+                    onMonedaChange={v => setForm(f => ({ ...f, moneda: v, tipoCambioTasa: v === 'ARS' ? 1 : f.tipoCambioTasa }))}
+                    onTasaChange={v => setForm(f => ({ ...f, tipoCambioTasa: v }))}
+                  />
+                </div>
               </CardContent>
             </Card>
 
@@ -495,7 +507,7 @@ function OrdenesCompraSection() {
                   <div className="text-right">
                     <span className="text-sm text-slate-500 mr-4">Total pedido:</span>
                     <span className="text-2xl font-bold font-mono text-slate-900 dark:text-white">
-                      ${total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                      {formatCurrency(total, form.moneda)}
                     </span>
                   </div>
                 </div>
@@ -570,16 +582,16 @@ function OrdenesCompraSection() {
                             <div className={`h-1 rounded-full ${progreso >= 100 ? 'bg-green-500' : 'bg-yellow-500'}`} style={{ width: `${Math.min(progreso, 100)}%` }} />
                           </div>
                         </td>
-                        <td className="py-2 text-right dark:text-slate-300">${Number(item.costo_unitario).toFixed(2)}</td>
-                        <td className="py-2 text-right font-medium dark:text-white">${Number(item.subtotal).toFixed(2)}</td>
+                        <td className="py-2 text-right dark:text-slate-300">{formatCurrency(item.costo_unitario, detalle.moneda ?? 'ARS')}</td>
+                        <td className="py-2 text-right font-medium dark:text-white">{formatCurrency(item.subtotal, detalle.moneda ?? 'ARS')}</td>
                       </tr>
                     );
                   })}
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-slate-200 dark:border-slate-700">
-                    <td colSpan={4} className="py-3 text-right font-bold dark:text-white">TOTAL</td>
-                    <td className="py-3 text-right font-bold text-lg dark:text-white">${Number(detalle.total).toFixed(2)}</td>
+                    <td colSpan={4} className="py-3 text-right font-bold dark:text-white">TOTAL {detalle.moneda && detalle.moneda !== 'ARS' && <span className="text-xs font-normal text-slate-400 ml-1">({detalle.moneda} — tasa {detalle.tipo_cambio_tasa})</span>}</td>
+                    <td className="py-3 text-right font-bold text-lg dark:text-white">{formatCurrency(detalle.total, detalle.moneda ?? 'ARS')}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -615,19 +627,19 @@ function OrdenesCompraSection() {
                     <div className="grid grid-cols-3 gap-2 text-center">
                       <div className="p-2 rounded bg-slate-50 dark:bg-slate-900">
                         <p className="text-xs text-slate-400 mb-1">Total OC</p>
-                        <p className="font-bold text-sm dark:text-white">${totalOC.toFixed(2)}</p>
+                        <p className="font-bold text-sm dark:text-white">{formatCurrency(totalOC, detalle.moneda ?? 'ARS')}</p>
                       </div>
                       <div className="p-2 rounded bg-slate-50 dark:bg-slate-900">
                         <p className="text-xs text-slate-400 mb-1">Recibido</p>
                         <p className={`font-bold text-sm ${totalRecibido >= totalOC ? 'text-green-600 dark:text-green-400' : totalRecibido > 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-slate-400'}`}>
-                          ${totalRecibido.toFixed(2)}
+                          {formatCurrency(totalRecibido, detalle.moneda ?? 'ARS')}
                         </p>
                       </div>
                       <div className="p-2 rounded bg-slate-50 dark:bg-slate-900">
                         <p className="text-xs text-slate-400 mb-1">Factura</p>
                         {totalFactura !== null ? (
                           <p className={`font-bold text-sm ${matchOk ? 'text-green-600 dark:text-green-400' : matchWarn ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-500'}`}>
-                            ${totalFactura.toFixed(2)}
+                            {formatCurrency(totalFactura, detalle.moneda ?? 'ARS')}
                           </p>
                         ) : (
                           <p className="text-xs text-slate-400 italic">Sin factura</p>
