@@ -544,10 +544,10 @@ function CuentasBancariasSection() {
   const deleteMov = useMutation({
     mutationFn: (id) => movimientosService.delete(id, empresaId),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: CB_KEYS.movimientos(empresaId) });
-      toast({ title: 'Movimiento eliminado' });
+      qc.invalidateQueries({ queryKey: ['movimientos_bancarios', empresaId] });
+      toast({ title: 'Movimiento eliminado', className: 'bg-green-600 text-white' });
     },
-    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+    onError: (e) => toast({ title: 'Error al eliminar', description: e.message, variant: 'destructive' }),
   });
 
   const deactivateCuenta = useMutation({

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, FileText, Search, Eye, Trash2, CheckCircle, XCircle,
-  Send, Clock, ArrowRight, Download, RefreshCw, Filter
+  Send, Clock, ArrowRight, Download, RefreshCw, Filter, ShoppingCart, ExternalLink
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { cotizacionesService, COTIZACIONES_KEYS } from '@/services/cotizacionesService';
 import { supabase } from '@/lib/customSupabaseClient';
+import NuevaVentaModal from '@/components/ventas/NuevaVentaModal';
 
 const ESTADOS = {
   borrador:   { label: 'Borrador',   color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
@@ -49,6 +50,10 @@ function CotizacionesSection() {
 
   // Detail modal
   const [viewId, setViewId] = useState(null);
+
+  // Conversión a venta
+  const [convertirCot, setConvertirCot] = useState(null);  // cotización completa para convertir
+  const [showVentaModal, setShowVentaModal] = useState(false);
 
   const empresaId = user?.empresa_id;
 
@@ -87,6 +92,30 @@ function CotizacionesSection() {
       toast({ title: 'Cotización eliminada' });
     },
   });
+
+  const convertirMutation = useMutation({
+    mutationFn: ({ cotizacionId, comprobanteId }) =>
+      cotizacionesService.convertir(cotizacionId, comprobanteId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cotizaciones', empresaId] });
+      toast({ title: '✅ Cotización convertida en venta', className: 'bg-green-600 text-white' });
+    },
+    onError: (e) => toast({ title: 'Error al convertir', description: e.message, variant: 'destructive' }),
+  });
+
+  const handleConvertirClick = async (cot) => {
+    // Cargar detalle completo (con items) antes de abrir el modal
+    const detalle = await cotizacionesService.getById(cot.id);
+    setConvertirCot(detalle);
+    setShowVentaModal(true);
+  };
+
+  const handleConvertSuccess = (comprobanteId) => {
+    if (convertirCot) {
+      convertirMutation.mutate({ cotizacionId: convertirCot.id, comprobanteId });
+      setConvertirCot(null);
+    }
+  };
 
   const resetForm = () => {
     setForm({ cliente_nombre: '', notas: '', condiciones_pago: 'Pago a 30 días', fecha_vencimiento: '' });
@@ -239,6 +268,21 @@ function CotizacionesSection() {
                             </Button>
                           </>
                         )}
+                        {['aprobada', 'enviada'].includes(cot.estado) && (
+                          <Button
+                            variant="ghost" size="icon"
+                            className="h-7 w-7 text-slate-400 hover:text-purple-600"
+                            onClick={() => handleConvertirClick(cot)}
+                            title="Convertir en Venta"
+                          >
+                            <ShoppingCart className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                        {cot.estado === 'convertida' && cot.comprobante_id && (
+                          <span className="text-xs text-purple-500 font-medium flex items-center gap-1">
+                            <ExternalLink className="w-3 h-3" /> Venta
+                          </span>
+                        )}
                         {['borrador', 'rechazada'].includes(cot.estado) && (
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-500" onClick={() => deleteMutation.mutate(cot.id)} title="Eliminar">
                             <Trash2 className="w-3.5 h-3.5" />
@@ -355,6 +399,14 @@ function CotizacionesSection() {
         </TabsContent>
       </Tabs>
 
+      {/* MODAL CONVERTIR EN VENTA */}
+      <NuevaVentaModal
+        isOpen={showVentaModal}
+        onOpenChange={(open) => { setShowVentaModal(open); if (!open) setConvertirCot(null); }}
+        cotizacion={convertirCot}
+        onConvertSuccess={handleConvertSuccess}
+      />
+
       {/* MODAL DETALLE */}
       <Dialog open={!!viewId} onOpenChange={() => setViewId(null)}>
         <DialogContent className="max-w-2xl dark:bg-slate-950 dark:border-slate-800">
@@ -412,6 +464,12 @@ function CotizacionesSection() {
               {detalle.notas && (
                 <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-lg text-sm text-slate-600 dark:text-slate-400">
                   <span className="font-medium">Notas: </span>{detalle.notas}
+                </div>
+              )}
+              {detalle.estado === 'convertida' && detalle.comprobante_id && (
+                <div className="flex items-center gap-2 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800 text-sm text-purple-700 dark:text-purple-300">
+                  <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>Esta cotización fue convertida en venta. Comprobante ID: <span className="font-mono text-xs">{detalle.comprobante_id}</span></span>
                 </div>
               )}
             </div>

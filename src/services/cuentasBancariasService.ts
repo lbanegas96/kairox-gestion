@@ -127,12 +127,13 @@ export const movimientosService = {
   },
 
   async delete(id: string, empresaId: string): Promise<void> {
-    const { error } = await supabase
+    const { error, count } = await supabase
       .from('movimientos_bancarios')
-      .delete()
+      .delete({ count: 'exact' })
       .eq('id', id)
       .eq('empresa_id', empresaId);
     if (error) throw new Error(error.message);
+    if (count === 0) throw new Error('No se encontró el movimiento o no tenés permiso para eliminarlo.');
   },
 
   computeSaldos(

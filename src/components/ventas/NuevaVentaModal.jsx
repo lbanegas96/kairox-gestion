@@ -11,10 +11,10 @@ import { getNowAR, getTodayAR } from '@/lib/dateUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
 import ComprobantePrintModal from './ComprobantePrintModal';
 
-const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
+const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = null, onConvertSuccess }) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  
+
   const [products, setProducts] = useState([]);
   const [clients, setClients] = useState([]);
   const [productSearch, setProductSearch] = useState('');
@@ -31,11 +31,45 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
   const searchWrapperRef = useRef(null);
 
   useEffect(() => {
-    if (isOpen && user && user.empresa_id) {
-      loadProducts();
-      loadClients();
+    if (!isOpen || !user?.empresa_id) return;
+
+    const init = async () => {
+      const [{ data: prods }, { data: clis }] = await Promise.all([
+        supabase.from('productos').select('*').eq('empresa_id', user.empresa_id).eq('activo', true),
+        supabase.from('clientes').select('*').eq('empresa_id', user.empresa_id).eq('activo', true),
+      ]);
+      setProducts(prods || []);
+      setClients(clis || []);
       resetForm();
-    }
+
+      // Pre-llenar carrito desde cotización
+      if (cotizacion?.cotizacion_items?.length > 0) {
+        const preCart = [];
+        let sinProducto = 0;
+        for (const item of cotizacion.cotizacion_items) {
+          if (item.producto_id) {
+            const prod = (prods || []).find(p => p.id === item.producto_id);
+            if (prod) {
+              preCart.push({ ...prod, precio_venta: Number(item.precio_unitario), cantidad: Number(item.cantidad) });
+            } else {
+              sinProducto++;
+            }
+          } else {
+            sinProducto++;
+          }
+        }
+        if (preCart.length > 0) setCart(preCart);
+        if (sinProducto > 0) {
+          toast({ title: `${sinProducto} ítem(s) sin producto vinculado no se cargaron automáticamente.`, variant: 'destructive' });
+        }
+        if (cotizacion.cliente_id) {
+          const client = (clis || []).find(c => c.id === cotizacion.cliente_id);
+          if (client) setSelectedClient(client);
+        }
+      }
+    };
+
+    init();
   }, [isOpen, user]);
 
   useEffect(() => {
@@ -47,16 +81,6 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
     if (showProductDropdown) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showProductDropdown]);
-
-  const loadProducts = async () => {
-    const { data } = await supabase.from('productos').select('*').eq('empresa_id', user.empresa_id).eq('activo', true);
-    setProducts(data || []);
-  };
-
-  const loadClients = async () => {
-    const { data } = await supabase.from('clientes').select('*').eq('empresa_id', user.empresa_id).eq('activo', true);
-    setClients(data || []);
-  };
 
   const resetForm = () => {
     setCart([]);
@@ -216,6 +240,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
       setLastItems(cart.map(i => ({ producto_nombre: i.nombre, cantidad: i.cantidad, precio_unitario: i.precio_venta, subtotal: i.precio_venta * i.cantidad })));
       setShowPrintModal(true);
       if (onSaleSuccess) onSaleSuccess();
+      if (onConvertSuccess) onConvertSuccess(comprobante.id);
       resetForm();
       onOpenChange(false);
 
@@ -232,8 +257,13 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-4xl kairox-bg-card kairox-text-primary h-[90vh] flex flex-col p-0 gap-0 overflow-hidden dark:bg-slate-950 dark:border-slate-800">
           <DialogHeader className="p-6 border-b border-slate-200 dark:border-slate-800">
-            <DialogTitle className="text-2xl flex items-center gap-2 dark:text-white"><ShoppingCart className="h-6 w-6 text-blue-600 dark:text-[#00D4FF]" /> Nueva Venta</DialogTitle>
-            <DialogDescription className="dark:text-slate-400">Registra una nueva venta, controla stock y pagos.</DialogDescription>
+            <DialogTitle className="text-2xl flex items-center gap-2 dark:text-white">
+              <ShoppingCart className="h-6 w-6 text-blue-600 dark:text-[#00D4FF]" />
+              {cotizacion ? `Convertir Cotización ${cotizacion.numero}` : 'Nueva Venta'}
+            </DialogTitle>
+            <DialogDescription className="dark:text-slate-400">
+              {cotizacion ? `Generando venta desde la cotización ${cotizacion.numero}. Revisá los ítems y confirmá.` : 'Registra una nueva venta, controla stock y pagos.'}
+            </DialogDescription>
           </DialogHeader>
 
           <div className="flex-1 overflow-hidden flex flex-col md:flex-row">

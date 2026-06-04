@@ -114,6 +114,14 @@ export const cotizacionesService = {
     const { error } = await supabase.from('cotizaciones').delete().eq('id', id);
     if (error) throw new Error(error.message);
   },
+
+  async convertir(cotizacionId: string, comprobanteId: string): Promise<void> {
+    const { error } = await supabase
+      .from('cotizaciones')
+      .update({ estado: 'convertida' as CotizacionEstado, comprobante_id: comprobanteId })
+      .eq('id', cotizacionId);
+    if (error) throw new Error(error.message);
+  },
 };
 
 export const COTIZACIONES_KEYS = {
