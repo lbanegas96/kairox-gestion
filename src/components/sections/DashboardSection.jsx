@@ -4,7 +4,8 @@ import { motion } from 'framer-motion';
 import {
   ShoppingCart, Package, AlertCircle, ArrowUpRight, ArrowDownRight,
   DollarSign, TrendingUp, Calendar, CreditCard, FileText, UserPlus,
-  Wallet, BarChart3, RefreshCw, Archive, History, Percent, ClipboardList, ShoppingBag
+  Wallet, BarChart3, RefreshCw, Archive, History, Percent, ClipboardList, ShoppingBag,
+  CheckCircle2, Clock, TrendingDown
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -113,6 +114,13 @@ function DashboardSection({ onNavigate }) {
     queryKey: DASHBOARD_KEYS.flujoCaja(empresaId, 6),
     queryFn: () => dashboardService.getFlujoCajaMensual(empresaId, 6),
     enabled: !!empresaId,
+  });
+
+  const { data: cotStats, isLoading: cotLoading } = useQuery({
+    queryKey: DASHBOARD_KEYS.cotizaciones(empresaId),
+    queryFn: () => dashboardService.getCotizacionesStats(empresaId),
+    enabled: !!empresaId,
+    staleTime: 1000 * 60,
   });
 
   const loading = kpisLoading;
@@ -251,6 +259,57 @@ function DashboardSection({ onNavigate }) {
         />
       </div>
 
+      {/* ── Fila 2.5: KPIs Cotizaciones del Mes ────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <MetricCard title="Cotizaciones del Mes" icon={ClipboardList}
+          gradient="from-indigo-600 to-indigo-500"
+          loading={cotLoading}
+          customContent={
+            <div>
+              <div className="text-3xl font-bold text-white mb-1">{cotStats?.totalMes ?? 0}</div>
+              <p className="text-xs text-white/80">${(cotStats?.montoMes ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 })} cotizado</p>
+            </div>
+          }
+          onClick={() => onNavigate?.('cotizaciones')}
+        />
+        <MetricCard title="Tasa de Conversión" icon={TrendingUp}
+          gradient={(cotStats?.tasaConversion ?? 0) >= 50 ? 'from-emerald-600 to-emerald-500' : 'from-yellow-600 to-yellow-500'}
+          loading={cotLoading}
+          customContent={
+            <div>
+              <div className="text-3xl font-bold text-white mb-1">{(cotStats?.tasaConversion ?? 0).toFixed(0)}%</div>
+              <div className="w-full bg-white/20 rounded-full h-1.5 mt-2">
+                <div className="bg-white/80 rounded-full h-1.5 transition-all" style={{ width: `${Math.min(cotStats?.tasaConversion ?? 0, 100)}%` }} />
+              </div>
+              <p className="text-xs text-white/70 mt-1">{cotStats?.convertidas ?? 0} convertidas</p>
+            </div>
+          }
+          onClick={() => onNavigate?.('cotizaciones')}
+        />
+        <MetricCard title="Aprobadas Pendientes" icon={Clock}
+          gradient={(cotStats?.aprobadas ?? 0) > 0 ? 'from-violet-600 to-purple-500' : 'from-slate-600 to-slate-500'}
+          loading={cotLoading}
+          customContent={
+            <div>
+              <div className="text-3xl font-bold text-white mb-1">{cotStats?.aprobadas ?? 0}</div>
+              <p className="text-xs text-white/80">{(cotStats?.aprobadas ?? 0) > 0 ? 'Listas para convertir' : 'Sin pendientes ✓'}</p>
+            </div>
+          }
+          onClick={() => onNavigate?.('cotizaciones')}
+        />
+        <MetricCard title="Monto Convertido" icon={CheckCircle2}
+          gradient="from-teal-600 to-teal-500"
+          loading={cotLoading}
+          customContent={
+            <div>
+              <div className="text-2xl font-bold text-white mb-1">${(cotStats?.montoConvertido ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 })}</div>
+              <p className="text-xs text-white/80">de ${(cotStats?.montoMes ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 })} cotizado</p>
+            </div>
+          }
+          onClick={() => onNavigate?.('cotizaciones')}
+        />
+      </div>
+
       {/* ── Fila 2: Gráficos ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Ventas últimos 7 días */}
@@ -308,8 +367,8 @@ function DashboardSection({ onNavigate }) {
         </Card>
       </div>
 
-      {/* ── Fila 3: Alertas + Top productos ─────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* ── Fila 3: Alertas + Cotizaciones pendientes + Acciones Rápidas ──── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Stock bajo — detalle */}
         <Card className="dark:bg-slate-950 dark:border-slate-800">
           <CardHeader className="flex flex-row items-center justify-between pb-3">
@@ -341,6 +400,46 @@ function DashboardSection({ onNavigate }) {
                       <span className="text-sm font-bold text-amber-600 dark:text-amber-400">{p.stock_actual}</span>
                       <span className="text-xs text-slate-400 ml-1">{p.unidad_medida}</span>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Cotizaciones aprobadas pendientes de conversión */}
+        <Card className="dark:bg-slate-950 dark:border-slate-800">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <CardTitle className="text-base dark:text-white flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-indigo-500" /> Cotizaciones Aprobadas
+            </CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => onNavigate?.('cotizaciones')}
+              className="text-xs text-blue-500 dark:text-blue-400 h-7">
+              Ver todas <ArrowUpRight className="w-3 h-3 ml-1" />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {cotLoading ? (
+              <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-10 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />)}</div>
+            ) : (cotStats?.pendientes?.length ?? 0) === 0 ? (
+              <div className="flex flex-col items-center py-6 text-slate-400 dark:text-slate-500">
+                <CheckCircle2 className="w-8 h-8 mb-2 opacity-40" />
+                <p className="text-sm">Sin cotizaciones pendientes ✓</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                {(cotStats?.pendientes ?? []).map(c => (
+                  <div key={c.id} className="flex items-center justify-between p-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-200 dark:border-indigo-800/30 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/20 transition-colors" onClick={() => onNavigate?.('cotizaciones')}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <ClipboardList className="w-4 h-4 text-indigo-500 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium dark:text-white truncate">{c.numero}</p>
+                        <p className="text-xs text-slate-400 truncate">{c.cliente ?? 'Sin cliente'}</p>
+                      </div>
+                    </div>
+                    <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 shrink-0 ml-2">
+                      ${Number(c.total).toLocaleString('es-AR', { minimumFractionDigits: 0 })}
+                    </span>
                   </div>
                 ))}
               </div>

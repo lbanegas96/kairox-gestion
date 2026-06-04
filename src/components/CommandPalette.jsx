@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import {
   Search, Package, Users, ShoppingCart, Receipt,
   DollarSign, LayoutDashboard, Settings, FileText,
-  TrendingUp, ArrowRight, Loader2, X, BookOpen
+  TrendingUp, ArrowRight, Loader2, X, BookOpen, Landmark, ClipboardList
 } from 'lucide-react';
 
 const SECCIONES = [
@@ -34,7 +34,7 @@ function useDebounce(value, delay) {
 export function CommandPalette({ open, onClose, onNavigate }) {
   const { user } = useAuth();
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState({ secciones: [], productos: [], clientes: [], ventas: [] });
+  const [results, setResults] = useState({ secciones: [], productos: [], clientes: [], ventas: [], cotizaciones: [], bancos: [] });
   const [loading, setLoading] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef(null);
@@ -50,7 +50,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
 
   useEffect(() => {
     if (!debouncedQuery.trim() || !user?.empresa_id) {
-      setResults({ secciones: SECCIONES.slice(0, 5), productos: [], clientes: [], ventas: [] });
+      setResults({ secciones: SECCIONES.slice(0, 5), productos: [], clientes: [], ventas: [], cotizaciones: [], bancos: [] });
       return;
     }
     buscar(debouncedQuery.trim());
@@ -65,10 +65,12 @@ export function CommandPalette({ open, onClose, onNavigate }) {
       s.keywords.some(k => k.includes(qLower))
     );
 
-    const [{ data: prods }, { data: clientes }, { data: ventas }] = await Promise.all([
-      supabase.from('productos').select('id, nombre, stock_actual, codigo_sku').eq('user_id', user.empresa_id).ilike('nombre', `%${q}%`).limit(5),
-      supabase.from('clientes').select('id, nombre, documento, saldo_actual').eq('user_id', user.empresa_id).ilike('nombre', `%${q}%`).limit(5),
+    const [{ data: prods }, { data: clientes }, { data: ventas }, { data: cotizaciones }, { data: bancos }] = await Promise.all([
+      supabase.from('productos').select('id, nombre, stock_actual, codigo_sku').eq('empresa_id', user.empresa_id).eq('activo', true).ilike('nombre', `%${q}%`).limit(5),
+      supabase.from('clientes').select('id, nombre, documento, saldo_actual').eq('empresa_id', user.empresa_id).neq('activo', false).ilike('nombre', `%${q}%`).limit(5),
       supabase.from('comprobantes').select('id, numero_venta, total, created_at').eq('empresa_id', user.empresa_id).ilike('numero_venta', `%${q}%`).limit(3),
+      supabase.from('cotizaciones').select('id, numero, cliente_nombre, total, estado').eq('empresa_id', user.empresa_id).or(`numero.ilike.%${q}%,cliente_nombre.ilike.%${q}%`).limit(4),
+      supabase.from('cuentas_bancarias').select('id, nombre, banco').eq('empresa_id', user.empresa_id).eq('activo', true).ilike('nombre', `%${q}%`).limit(3),
     ]);
 
     setResults({
@@ -76,6 +78,8 @@ export function CommandPalette({ open, onClose, onNavigate }) {
       productos: prods ?? [],
       clientes: clientes ?? [],
       ventas: ventas ?? [],
+      cotizaciones: cotizaciones ?? [],
+      bancos: bancos ?? [],
     });
     setLoading(false);
   }, [user?.empresa_id]);
@@ -85,6 +89,8 @@ export function CommandPalette({ open, onClose, onNavigate }) {
     ...results.productos.map(p => ({ type: 'producto', id: p.id, label: p.nombre, sub: `SKU: ${p.codigo_sku || '-'} | Stock: ${p.stock_actual}`, section: 'productos' })),
     ...results.clientes.map(c => ({ type: 'cliente', id: c.id, label: c.nombre, sub: `Doc: ${c.documento || '-'} | Saldo: $${Number(c.saldo_actual).toFixed(2)}`, section: 'clientes' })),
     ...results.ventas.map(v => ({ type: 'venta', id: v.id, label: `Venta #${v.numero_venta}`, sub: `$${Number(v.total).toFixed(2)} — ${new Date(v.created_at).toLocaleDateString('es-AR')}`, section: 'ventas' })),
+    ...results.cotizaciones.map(c => ({ type: 'cotizacion', id: c.id, label: `Cotización ${c.numero}`, sub: `${c.cliente_nombre ?? 'Sin cliente'} — $${Number(c.total).toFixed(2)} · ${c.estado}`, section: 'cotizaciones' })),
+    ...results.bancos.map(b => ({ type: 'banco', id: b.id, label: b.nombre, sub: `Banco: ${b.banco}`, section: 'bancos' })),
   ];
 
   useEffect(() => { setSelectedIdx(0); }, [allItems.length]);
@@ -114,14 +120,16 @@ export function CommandPalette({ open, onClose, onNavigate }) {
 
   const getIcon = (item) => {
     if (item.type === 'seccion') { const Icon = item.icon; return <Icon className="w-4 h-4" />; }
-    if (item.type === 'producto') return <Package className="w-4 h-4 text-blue-500" />;
-    if (item.type === 'cliente')  return <Users className="w-4 h-4 text-purple-500" />;
-    if (item.type === 'venta')    return <Receipt className="w-4 h-4 text-green-500" />;
+    if (item.type === 'producto')    return <Package className="w-4 h-4 text-blue-500" />;
+    if (item.type === 'cliente')     return <Users className="w-4 h-4 text-purple-500" />;
+    if (item.type === 'venta')       return <Receipt className="w-4 h-4 text-green-500" />;
+    if (item.type === 'cotizacion')  return <ClipboardList className="w-4 h-4 text-indigo-500" />;
+    if (item.type === 'banco')       return <Landmark className="w-4 h-4 text-teal-500" />;
     return null;
   };
 
   const getGroupLabel = (type) => {
-    const map = { seccion: 'Módulos', producto: 'Productos', cliente: 'Clientes', venta: 'Ventas' };
+    const map = { seccion: 'Módulos', producto: 'Productos', cliente: 'Clientes', venta: 'Ventas', cotizacion: 'Cotizaciones', banco: 'Cuentas Bancarias' };
     return map[type] || type;
   };
 
@@ -140,7 +148,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Buscar productos, clientes, ventas, módulos..."
+            placeholder="Buscar productos, clientes, cotizaciones, bancos, módulos..."
             className="flex-1 bg-transparent text-slate-900 dark:text-white placeholder-slate-400 outline-none text-sm"
           />
           {loading && <Loader2 className="w-4 h-4 text-slate-400 animate-spin shrink-0" />}

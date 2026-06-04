@@ -114,10 +114,41 @@ export const dashboardService = {
 
     return result;
   },
+
+  async getCotizacionesStats(empresaId: string) {
+    const now = getNowAR();
+    const mesStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+
+    const { data, error } = await supabase
+      .from('cotizaciones')
+      .select('id, estado, total, numero, cliente_nombre, created_at')
+      .eq('empresa_id', empresaId)
+      .gte('created_at', mesStart);
+
+    if (error) throw new Error(error.message);
+
+    const todas = data ?? [];
+    const convertidas = todas.filter(c => c.estado === 'convertida');
+    const aprobadas   = todas.filter(c => c.estado === 'aprobada');
+    const montoTotal  = todas.reduce((s, c) => s + Number(c.total), 0);
+    const montoConvertido = convertidas.reduce((s, c) => s + Number(c.total), 0);
+    const tasaConversion  = todas.length > 0 ? (convertidas.length / todas.length) * 100 : 0;
+
+    return {
+      totalMes:       todas.length,
+      montoMes:       montoTotal,
+      convertidas:    convertidas.length,
+      montoConvertido,
+      aprobadas:      aprobadas.length,
+      tasaConversion,
+      pendientes:     aprobadas.slice(0, 5).map(c => ({ id: c.id, numero: c.numero, cliente: c.cliente_nombre, total: c.total })),
+    };
+  },
 };
 
 export const DASHBOARD_KEYS = {
   kpis: (empresaId: string) => ['dashboard', 'kpis', empresaId] as const,
   ventasPorDia: (empresaId: string, dias: number) => ['dashboard', 'ventasPorDia', empresaId, dias] as const,
   flujoCaja: (empresaId: string, meses: number) => ['dashboard', 'flujoCaja', empresaId, meses] as const,
+  cotizaciones: (empresaId: string) => ['dashboard', 'cotizaciones', empresaId] as const,
 };

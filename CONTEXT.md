@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-04 (sesión — 6 pendientes medios resueltos: cajas por-terminal, deprecar ventas/detalle_ventas, módulo Bancos, 3-way match OC)
+**Última actualización:** 2026-06-04 tarde (Ualá cerrado, Cotización→Venta, CommandPalette+cotizaciones+bancos, Dashboard KPIs cotizaciones)
 **Branch activo:** `master`
 **Entregables de auditoría:** `AUDITORIA.md` · `SUPABASE_ANALISIS.md`
 
@@ -201,14 +201,23 @@ migrations/
 | **Módulo Bancos** | `CuentasBancariasSection.jsx`, `cuentasBancariasService.ts`, migration 011 | Reemplaza "Ualá" en sidebar. Cuentas con FK a Plan de Cuentas. Import CSV con mapper. `ualaSupabaseClient.js` eliminado |
 | **3-way match OC** | `OrdenesCompraSection.jsx`, `ordenesCompraService.ts`, migration 012 | `facturas_proveedor` table. Panel detalle OC muestra grilla OC/Recibido/Factura con match visual. Modal registrar factura + marcar pagada |
 
-## Estado integración Ualá (Google Apps Script)
+## Sesión 2026-06-04 tarde — cambios aplicados
+
+| Área | Archivos | Detalle |
+|---|---|---|
+| **Cotización → Venta** | `CotizacionesSection.jsx`, `NuevaVentaModal.jsx`, `cotizacionesService.ts` | Botón 🛒 en aprobadas/enviadas. Modal pre-llena carrito + cliente desde la cotización. Al confirmar venta → `estado='convertida'` + `comprobante_id` vinculado. Banner en detalle. No requiere migración (schema ya tenía FK). |
+| **Fix delete Bancos** | `CuentasBancariasSection.jsx`, `cuentasBancariasService.ts` | `count: 'exact'` en delete + error si 0 filas. `invalidateQueries` usa key base para prefix-match correcto. |
+| **CommandPalette (Cmd+K)** | `CommandPalette.jsx` | Fix `user_id`→`empresa_id` en productos y clientes. Añadidas búsquedas de cotizaciones (`numero`, `cliente_nombre`) y cuentas bancarias (`nombre`). Placeholder actualizado. |
+| **Dashboard — KPIs cotizaciones** | `DashboardSection.jsx`, `dashboardService.ts` | Nueva fila de 4 KPIs: Cotizaciones del Mes, Tasa de Conversión (con barra de progreso), Aprobadas Pendientes, Monto Convertido. Nueva columna en fila 3: "Cotizaciones Aprobadas" con lista de pendientes clickeable. `getCotizacionesStats()` en dashboardService. |
+
+## Estado integración Ualá (Google Apps Script) ✅ CERRADO
 
 | Componente | Estado | Notas |
 |---|---|---|
-| `UalaSync.gs` (Google Apps Script) | ✅ Intacto | Externo al repo. Lee Gmail → inserta en `movimientos_uala` cada 10 min |
-| Tabla `movimientos_uala` | ✅ Intacta en Supabase | No fue dropeada |
-| `MovimientosUala.jsx` | ⚠️ Existe pero sin acceso por UI | Sidebar reemplazado por "Bancos" |
-| **Pendiente**: integrar Ualá al módulo Bancos | 🟡 Decidir | Opción A: crear cuenta "Ualá" en Bancos + migrar datos históricos. Opción B: actualizar Apps Script para escribir en `movimientos_bancarios`. Opción C: re-agregar ítem "Ualá" al sidebar |
+| `UalaSync.gs` (Google Apps Script) | ✅ Actualizado | Ahora escribe en `movimientos_bancarios` con `cuenta_bancaria_id` de "Ualá Home banking" |
+| Tabla `movimientos_uala` | ✅ Legacy | 15 movimientos históricos migrados a `movimientos_bancarios`. Tabla queda como backup. |
+| `MovimientosUala.jsx` | ⚠️ Dead code | Existe pero sin acceso por UI. Candidata a eliminar en limpieza futura. |
+| Cuenta "Ualá Home banking" | ✅ Creada | `id: 04445887-3c78-4044-90e3-d035ac493ccb` en Nalux |
 
 ---
 
@@ -352,7 +361,7 @@ Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
 | 🟢 Hecho | **Deprecar `ventas`/`detalle_ventas`** | `ReportesSection` lee de `comprobantes`/`comprobante_items` + empresa_id en los 5 reportes + fix timezone en fechas. `NuevaVentaModal` ya no escribe en tablas legacy. Migration 010 crea backups y hace DROP. ✅ |
 | 🟢 Hecho | **Módulo Cuentas Bancarias** | Reemplaza `MovimientosUala`. `ualaSupabaseClient.js` eliminado (dead code). Tablas `cuentas_bancarias` + `movimientos_bancarios` con FK a `plan_cuentas`. Sidebar: "Bancos" con ícono Landmark. Import CSV con mapper de columnas, detección automática de tipo por signo. Migration 011. ✅ |
 | 🟢 Hecho | **3-way match OC-Recepción-Factura** | Tabla `facturas_proveedor` (UNIQUE por OC). En panel detalle OC: grilla Total OC / Recibido / Factura con indicador visual de match. Botón "Registrar Factura" (auto-precarga monto recibido), "Marcar pagada". Migration 012. ✅ |
-| 🟡 Media | **Cotización → Pedido → Factura** | Vincular `cotizaciones.id` como origen de la venta para trazabilidad |
+| 🟢 Hecho | **Cotización → Venta** | Botón convertir + pre-fill carrito + estado `convertida` + `comprobante_id` FK ✅ |
 | 🟡 Media | **Verificar dominio Resend** | `onboarding@resend.dev` solo envía a emails verificados → dominio propio para producción |
 | Baja | Facturación electrónica AFIP | — |
 | Baja | Multi-almacén | — |
