@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS public.cuenta_corriente_proveedores (
 
 ALTER TABLE public.cuenta_corriente_proveedores ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "ccp_empresa" ON public.cuenta_corriente_proveedores;
 CREATE POLICY "ccp_empresa" ON public.cuenta_corriente_proveedores
   FOR ALL
   USING  (empresa_id = get_my_empresa_id())

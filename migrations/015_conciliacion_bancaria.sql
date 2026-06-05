@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS public.extractos_bancarios (
 
 ALTER TABLE public.extractos_bancarios ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "eb_empresa" ON public.extractos_bancarios;
 CREATE POLICY "eb_empresa" ON public.extractos_bancarios
   FOR ALL
   USING  (empresa_id = get_my_empresa_id())
@@ -47,14 +48,15 @@ CREATE TABLE IF NOT EXISTS public.extracto_lineas (
 
 ALTER TABLE public.extracto_lineas ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "el_empresa" ON public.extracto_lineas;
 CREATE POLICY "el_empresa" ON public.extracto_lineas
   FOR ALL
   USING  (empresa_id = get_my_empresa_id())
   WITH CHECK (empresa_id = get_my_empresa_id());
 
-CREATE INDEX IF NOT EXISTS idx_el_extracto  ON public.extracto_lineas(extracto_id);
-CREATE INDEX IF NOT EXISTS idx_el_cuenta    ON public.extracto_lineas(cuenta_bancaria_id);
-CREATE INDEX IF NOT EXISTS idx_el_fecha     ON public.extracto_lineas(fecha DESC);
+CREATE INDEX IF NOT EXISTS idx_el_extracto   ON public.extracto_lineas(extracto_id);
+CREATE INDEX IF NOT EXISTS idx_el_cuenta     ON public.extracto_lineas(cuenta_bancaria_id);
+CREATE INDEX IF NOT EXISTS idx_el_fecha      ON public.extracto_lineas(fecha DESC);
 CREATE INDEX IF NOT EXISTS idx_el_conciliado ON public.extracto_lineas(conciliado);
 
 -- 3. Cuando se concilia una línea, marcar también el movimiento_bancarios.conciliado
