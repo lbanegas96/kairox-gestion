@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { Eye, Search, Filter, RefreshCw, AlertCircle, X, Check } from 'lucide-react';
+import { Eye, Search, Filter, RefreshCw, AlertCircle, X, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,6 +29,8 @@ const HistorialVentas = () => {
   // UI State
   const [selectedSaleId, setSelectedSaleId] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
 
   useEffect(() => {
     if (user) {
@@ -43,7 +45,6 @@ const HistorialVentas = () => {
       const { data: salesData, error: salesError } = await supabase
         .from('comprobantes')
         .select('*')
-        .eq('tenant_id', user.tenant_id)
         .order('fecha', { ascending: false });
 
       if (salesError) throw salesError;
@@ -51,7 +52,7 @@ const HistorialVentas = () => {
       // Ensure estado_pago exists
       const processedSales = (salesData || []).map(s => ({
          ...s,
-         estado_pago: s.estado_pago || 'pagada' // Default fallback
+         estado_pago: s.estado_pago || (s.forma_pago === 'Cuenta Corriente' ? 'pendiente' : 'pagada')
       }));
 
       setComprobantes(processedSales);
@@ -60,7 +61,6 @@ const HistorialVentas = () => {
       const { data: clientsData } = await supabase
         .from('clientes')
         .select('id, nombre')
-        .eq('user_id', user.tenant_id)
         .order('nombre');
       
       setClients(clientsData || []);
@@ -84,6 +84,9 @@ const HistorialVentas = () => {
     setSelectedPayment('');
     setSelectedStatus('');
   };
+
+  // Reset page when filters change
+  useEffect(() => { setPage(1); }, [dateFrom, dateTo, selectedClient, selectedPayment, selectedStatus]);
 
   // Memoized Filter Logic
   const filteredSales = useMemo(() => {
@@ -116,6 +119,9 @@ const HistorialVentas = () => {
   }, [filteredSales]);
 
   const activeFiltersCount = [dateFrom, dateTo, selectedClient, selectedPayment, selectedStatus].filter(Boolean).length;
+
+  const totalPages = Math.max(1, Math.ceil(filteredSales.length / PAGE_SIZE));
+  const paginatedSales = filteredSales.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -249,7 +255,7 @@ const HistorialVentas = () => {
                   </td>
                 </tr>
               ) : (
-                filteredSales.map(sale => (
+                paginatedSales.map(sale => (
                   <tr 
                     key={sale.id} 
                     className="group hover:bg-blue-50/50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
@@ -286,7 +292,58 @@ const HistorialVentas = () => {
         </div>
       </div>
 
-      <SaleDetailModal 
+      {/* PAGINATION */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-2">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredSales.length)} de {filteredSales.length} ventas
+          </p>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="h-8 w-8 p-0"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+              .reduce((acc, p, idx, arr) => {
+                if (idx > 0 && arr[idx - 1] !== p - 1) acc.push('...');
+                acc.push(p);
+                return acc;
+              }, [])
+              .map((item, idx) =>
+                item === '...' ? (
+                  <span key={`ellipsis-${idx}`} className="px-2 text-slate-400">…</span>
+                ) : (
+                  <Button
+                    key={item}
+                    variant={page === item ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setPage(item)}
+                    className="h-8 w-8 p-0"
+                  >
+                    {item}
+                  </Button>
+                )
+              )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="h-8 w-8 p-0"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <SaleDetailModal
         open={showDetailModal}
         onOpenChange={setShowDetailModal}
         saleId={selectedSaleId}

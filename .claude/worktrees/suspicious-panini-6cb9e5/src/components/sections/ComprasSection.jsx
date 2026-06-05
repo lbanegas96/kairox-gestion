@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Calendar, Filter, Eye, ShoppingBag, Search, Eraser, PackageOpen, X, FileText, User, Clock, Loader2, Trash2, AlertTriangle, Edit, Save, Check } from 'lucide-react';
+import { Calendar, Filter, Eye, ShoppingBag, Search, Eraser, PackageOpen, X, FileText, User, Clock, Loader2, Trash2, AlertTriangle, Edit, Save, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,6 +45,8 @@ function ComprasSection() {
 
   // --- HISTORIAL States ---
   const [compras, setCompras] = useState([]);
+  const [comprasPage, setComprasPage] = useState(1);
+  const COMPRAS_PAGE_SIZE = 50;
   const [filters, setFilters] = useState({
     dateStart: '',
     dateEnd: '',
@@ -162,9 +164,15 @@ function ComprasSection() {
     return filteredCompras.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
   }, [filteredCompras]);
 
+  // Reset page when filters change
+  useEffect(() => { setComprasPage(1); }, [filters]);
+
+  const comprasTotalPages = Math.max(1, Math.ceil(filteredCompras.length / COMPRAS_PAGE_SIZE));
+  const paginatedCompras = filteredCompras.slice((comprasPage - 1) * COMPRAS_PAGE_SIZE, comprasPage * COMPRAS_PAGE_SIZE);
+
   const activeFiltersCount = [
-    filters.dateStart, 
-    filters.dateEnd, 
+    filters.dateStart,
+    filters.dateEnd,
     filters.proveedorId !== 'Todos', 
     filters.paymentMethod !== 'Todos', 
     filters.status !== 'Todos'
@@ -756,7 +764,7 @@ function ComprasSection() {
                       </td>
                     </tr>
                   ) : (
-                    filteredCompras.map(compra => (
+                    paginatedCompras.map(compra => (
                       <tr key={compra.id} className="group hover:bg-blue-50/50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer" onClick={() => { setSelectedCompraId(compra.id); setDetailsOpen(true); }}>
                         <td className="p-4 text-slate-600 dark:text-slate-300 font-mono text-xs">
                           {new Date(compra.fecha).toLocaleDateString()} <span className="text-slate-400 ml-1">{new Date(compra.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
@@ -793,11 +801,34 @@ function ComprasSection() {
               </table>
             </div>
           </div>
+          {/* PAGINATION */}
+          {comprasTotalPages > 1 && (
+            <div className="flex items-center justify-between px-2 pt-2">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Mostrando {(comprasPage - 1) * COMPRAS_PAGE_SIZE + 1}–{Math.min(comprasPage * COMPRAS_PAGE_SIZE, filteredCompras.length)} de {filteredCompras.length} compras
+              </p>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" onClick={() => setComprasPage(p => Math.max(1, p - 1))} disabled={comprasPage === 1} className="h-8 w-8 p-0">
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                {Array.from({ length: comprasTotalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === comprasTotalPages || Math.abs(p - comprasPage) <= 1)
+                  .reduce((acc, p, idx, arr) => { if (idx > 0 && arr[idx - 1] !== p - 1) acc.push('...'); acc.push(p); return acc; }, [])
+                  .map((item, idx) =>
+                    item === '...' ? <span key={`e-${idx}`} className="px-2 text-slate-400">…</span> :
+                    <Button key={item} variant={comprasPage === item ? "default" : "outline"} size="sm" onClick={() => setComprasPage(item)} className="h-8 w-8 p-0">{item}</Button>
+                  )}
+                <Button variant="outline" size="sm" onClick={() => setComprasPage(p => Math.min(comprasTotalPages, p + 1))} disabled={comprasPage === comprasTotalPages} className="h-8 w-8 p-0">
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 
       {/* MODAL DETALLE DE COMPRA */}
-      <CompraDetailModal 
+      <CompraDetailModal
         open={detailsOpen}
         onOpenChange={setDetailsOpen}
         compraId={selectedCompraId}

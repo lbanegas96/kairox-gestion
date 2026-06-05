@@ -175,6 +175,7 @@ const ProductosSection = () => {
   
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
+  const [showInactivos, setShowInactivos] = useState(false);
   const [historyFilters, setHistoryFilters] = useState({ productId: 'all', dateFrom: '', dateTo: '' });
   
   // Modal States
@@ -528,7 +529,22 @@ const ProductosSection = () => {
         .eq('id', product.id)
         .eq('empresa_id', user.empresa_id);
       if (error) throw error;
-      toast({ title: "Producto inhabilitado", description: `"${product.nombre}" fue quitado del inventario.` });
+      toast({ title: "Producto desactivado", description: `"${product.nombre}" fue desactivado. Puede reactivarlo desde la vista de inactivos.` });
+      await fetchProducts();
+    } catch (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const handleReactivateProduct = async (product) => {
+    if (!user?.empresa_id) return;
+    try {
+      const { error } = await supabase.from('productos')
+        .update({ activo: true })
+        .eq('id', product.id)
+        .eq('empresa_id', user.empresa_id);
+      if (error) throw error;
+      toast({ title: "Producto reactivado", description: `"${product.nombre}" vuelve a estar disponible en el inventario.` });
       await fetchProducts();
     } catch (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -537,11 +553,13 @@ const ProductosSection = () => {
 
   // --- Filtered Views ---
   const filteredProducts = products
-    .filter(p => p.activo !== false)
+    .filter(p => showInactivos ? p.activo === false : p.activo !== false)
     .filter(p =>
       (p.nombre || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (p.codigo_sku || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
+
+  const inactivosCount = products.filter(p => p.activo === false).length;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -551,6 +569,16 @@ const ProductosSection = () => {
           <p className="text-sm text-slate-500 dark:text-slate-400">Gestiona tus productos y control de stock</p>
         </div>
         <div className="flex flex-wrap gap-3">
+           {/* Toggle Inactive */}
+           <Button
+             variant={showInactivos ? "destructive" : "outline"}
+             onClick={() => setShowInactivos(v => !v)}
+             className={showInactivos ? "" : "border-slate-300 dark:border-slate-700"}
+           >
+             {showInactivos ? <Power className="h-4 w-4 mr-2" /> : <PowerOff className="h-4 w-4 mr-2" />}
+             {showInactivos ? `Activos` : `Inactivos${inactivosCount > 0 ? ` (${inactivosCount})` : ''}`}
+           </Button>
+
            {/* Add Provider Dialog */}
            <Dialog open={isNewProviderOpen} onOpenChange={setIsNewProviderOpen}>
              <DialogTrigger asChild>
@@ -680,11 +708,17 @@ const ProductosSection = () => {
           </TabsList>
 
           <TabsContent value="inventory" className="space-y-4">
+             {showInactivos && (
+               <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">
+                 <PowerOff className="h-4 w-4 shrink-0" />
+                 Mostrando productos <strong>inactivos</strong>. Usá el botón "Activos" para volver a la vista normal.
+               </div>
+             )}
              {/* Search Bar */}
              <div className="relative">
                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-               <Input 
-                 placeholder="Buscar por nombre o SKU..." 
+               <Input
+                 placeholder="Buscar por nombre o SKU..."
                  value={searchQuery}
                  onChange={(e) => setSearchQuery(e.target.value)}
                  className="pl-10 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
@@ -741,40 +775,55 @@ const ProductosSection = () => {
                                 </td>
                                 <td className="p-4 text-right">
                                   <div className="flex items-center justify-end gap-2">
-                                     <Button
-                                       variant="ghost"
-                                       size="sm"
-                                       className="h-8 w-8 p-0 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                                       onClick={() => {
-                                         setEditProduct({
-                                           ...p,
-                                           categoria_nombre: p.categories?.nombre || '',
-                                           proveedor_id: p.proveedor_id || 'none'
-                                         });
-                                         setIsEditProductOpen(true);
-                                       }}
-                                       title="Editar"
-                                     >
-                                       <Edit className="h-4 w-4"/>
-                                     </Button>
-                                     <Button
-                                       variant="ghost"
-                                       size="sm"
-                                       className="h-8 w-8 p-0 text-slate-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-                                       onClick={() => { setSelectedProductForMov(p); setIsMovimientoOpen(true); }}
-                                       title="Ajustar Stock"
-                                     >
-                                       <ArrowRightLeft className="h-4 w-4"/>
-                                     </Button>
-                                     <Button
-                                       variant="ghost"
-                                       size="sm"
-                                       className="h-8 w-8 p-0 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                                       onClick={() => handleDisableProduct(p)}
-                                       title="Inhabilitar producto"
-                                     >
-                                       <Trash2 className="h-4 w-4"/>
-                                     </Button>
+                                    {!showInactivos && (
+                                      <>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 w-8 p-0 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                          onClick={() => {
+                                            setEditProduct({
+                                              ...p,
+                                              categoria_nombre: p.categories?.nombre || '',
+                                              proveedor_id: p.proveedor_id || 'none'
+                                            });
+                                            setIsEditProductOpen(true);
+                                          }}
+                                          title="Editar"
+                                        >
+                                          <Edit className="h-4 w-4"/>
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 w-8 p-0 text-slate-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                                          onClick={() => { setSelectedProductForMov(p); setIsMovimientoOpen(true); }}
+                                          title="Ajustar Stock"
+                                        >
+                                          <ArrowRightLeft className="h-4 w-4"/>
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 w-8 p-0 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                          onClick={() => handleDisableProduct(p)}
+                                          title="Desactivar producto"
+                                        >
+                                          <PowerOff className="h-4 w-4"/>
+                                        </Button>
+                                      </>
+                                    )}
+                                    {showInactivos && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                                        onClick={() => handleReactivateProduct(p)}
+                                        title="Reactivar producto"
+                                      >
+                                        <Power className="h-4 w-4"/>
+                                      </Button>
+                                    )}
                                   </div>
                                 </td>
                              </tr>
