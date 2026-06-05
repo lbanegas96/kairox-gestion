@@ -75,7 +75,10 @@ CREATE INDEX IF NOT EXISTS idx_ccp_proveedor  ON public.cuenta_corriente_proveed
 CREATE INDEX IF NOT EXISTS idx_ccp_fecha      ON public.cuenta_corriente_proveedores(fecha DESC);
 
 -- 3. Vista: saldo de cuenta corriente por proveedor
-CREATE OR REPLACE VIEW public.v_saldo_proveedores AS
+-- security_invoker = true: la vista respeta el RLS del usuario que la consulta
+CREATE OR REPLACE VIEW public.v_saldo_proveedores
+WITH (security_invoker = true)
+AS
 SELECT
   p.id             AS proveedor_id,
   p.empresa_id,
