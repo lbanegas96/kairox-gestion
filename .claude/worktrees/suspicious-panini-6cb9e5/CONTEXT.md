@@ -178,8 +178,7 @@ Rediseño completo del modal de detalle de cliente. Inspirado en SAP S/4HANA Ope
 |---|---|
 | ✅ Listo | Paginación en tablas históricas — HistorialVentas + ComprasSection (50/pág, client-side) |
 | ✅ Listo | Soft delete SAP-style en productos — toggle inactivos + reactivar |
-| ✅ Listo | Migrations 013-016 creadas (pendiente ejecutar en Supabase) |
-| 🔴 Alta | Ejecutar migrations 013-016 en Supabase SQL Editor (en orden: 013→014→015→016) |
+| ✅ Listo | Migrations 013-016 ejecutadas en Supabase (2026-06-05) |
 | 🟡 Media | Configurar SMTP para password recovery en producción |
 | 🟡 Media | Re-deploy edge functions con hardening |
 | 🟡 Media | Paginación en ReportesSection |
