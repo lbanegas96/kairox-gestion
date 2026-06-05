@@ -1,537 +1,182 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-04 noche-3 (Multi-moneda UI completo, Módulo Proveedores, Conciliación bancaria)
+**Última actualización:** 2026-06-05 — Deuda técnica cerrada + Análisis diferencial de mercado
 **Branch activo:** `master`
-**Entregables de auditoría:** `AUDITORIA.md` · `SUPABASE_ANALISIS.md`
+**Entregables de auditoría:** `AUDITORIA.md` · `SUPABASE_ANALISIS.md` · `STATUS_REPORT.md` · `SUPABASE_SETUP.md`
 
 ---
 
 ## ¿Qué es este proyecto?
 
-**KAIROX Gestión** es un ERP para PyMEs — multi-tenant SaaS construido con:
-- **Frontend:** React 18 + Vite + TailwindCSS + Shadcn/UI + Framer Motion
-- **Backend:** Supabase (PostgreSQL + Auth + RLS)
-- **Estado global:** Context API (Auth, Caja, Theme, Config)
-- **Data fetching:** TanStack Query v5
-- **Lenguaje:** JavaScript (JSX) + TypeScript coexistiendo (migración gradual)
+**KAIROX Gestión** es un ERP/POS SaaS para PyMEs comerciales argentinas (ferreterías, distribuidoras, mayoristas, almacenes). Posicionamiento: **conceptos ERP enterprise a precio y simplicidad PyME**.
+
+- **Mercado objetivo:** ~520K PyMEs registradas en Argentina. Segmento inicial: micro (1–3 empleados). Monetización real: Pro (comercios con stock, compras y CC).
+- **Competidores:** Xubio (50K+ clientes), Colppy (foco contable, sin POS), Tango (enterprise desde $528K/mes).
+- **Stack:** React 18 + Vite + TailwindCSS + Shadcn/UI · Supabase (PostgreSQL + Auth + RLS + Edge Functions) · Context API · TanStack Query v5 · JS (JSX) + TS coexistiendo
 
 ---
 
-## Estado actual del plan de transformación ERP
+## Módulos disponibles
 
-### ✅ FASE 1 — Fundamentos técnicos (COMPLETA)
-
-| Tarea | Archivos clave |
-|---|---|
-| TanStack Query instalado y configurado | `src/main.jsx`, `src/lib/queryClient.ts` |
-| Capa de servicios con paginación | `src/services/*.ts` (9 servicios) |
-| Tabla de auditoría (audit_log) | `migrations/001_audit_log.sql` |
-| TypeScript: tsconfig + tipos de dominio | `tsconfig.json`, `src/types/index.ts` |
-| Exportación Excel (xlsx) | `src/lib/excelUtils.js` |
-| Búsqueda global Cmd+K | `src/components/CommandPalette.jsx` |
-
-### ✅ FASE 2 — Módulos ERP faltantes (COMPLETA)
-
-| Tarea | Estado | Archivos clave |
+| Módulo | Archivo principal | Estado |
 |---|---|---|
-| Cotizaciones (presupuestos) | ✅ Completo | `src/components/sections/CotizacionesSection.jsx`, `src/services/cotizacionesService.ts`, `migrations/002_cotizaciones.sql` |
-| Órdenes de Compra | ✅ Completo | `src/components/sections/OrdenesCompraSection.jsx`, `src/services/ordenesCompraService.ts`, `migrations/003_ordenes_compra.sql` |
-| Facturación electrónica AFIP | ⏸️ Diferida | — |
-
-### ✅ FASE 3 — UX de primer nivel (COMPLETA)
-
-| Tarea | Estado | Archivos clave |
-|---|---|---|
-| Búsqueda global Cmd+K | ✅ Completo | `src/components/CommandPalette.jsx` |
-| Exportar Excel | ✅ Completo | `src/lib/excelUtils.js` |
-| DataTable universal avanzada | ✅ Completo | `src/components/ui/DataTable.jsx` |
-| Dashboard mejorado (8 KPIs + 2 gráficos) | ✅ Completo | `src/components/sections/DashboardSection.jsx` |
-| Notificaciones inteligentes | ✅ Completo | `src/hooks/useNotifications.js`, Header actualizado |
-
-### ✅ FASE 4 — Módulos contables (COMPLETA)
-
-| Tarea | Estado | Archivos clave |
-|---|---|---|
-| Plan de Cuentas / Contabilidad | ✅ Completo | `src/components/sections/PlanCuentasSection.jsx`, `src/services/planCuentasService.ts`, `migrations/004_plan_cuentas.sql` |
-| Libro Mayor por cuenta | ✅ Completo | `PlanCuentasSection.jsx` (tab Libro Mayor), `planCuentasService.ts` (`getLibroMayor`) |
-| Asientos automáticos (Ventas) | ✅ Completo | `NuevaVentaModal.jsx`, `planCuentasService.ts` (`asientosAutoService`) |
-| Asientos automáticos (Compras) | ✅ Completo | `ComprasSection.jsx`, `planCuentasService.ts` (`asientosAutoService`) |
-| Estado de Resultados (P&L) | ✅ Completo | `PlanCuentasSection.jsx` (tab P&L), `planCuentasService.ts` (`getEstadoResultados`) |
-| Balance General | ✅ Completo | `PlanCuentasSection.jsx` (tab Balance General), `planCuentasService.ts` (`getBalanceGeneral`) |
-| Cierre de períodos contables | ✅ Completo | `PlanCuentasSection.jsx` (tab Períodos), `planCuentasService.ts` (`periodosService`), `migrations/008_oc_approval_periodos.sql` |
-| Multi-almacén | ⏸️ Diferido | — |
-| Lotes y vencimientos | ⏸️ Diferido | — |
-
-### ⏳ FASE 5 — Integraciones (0%)
-Email, WhatsApp, API REST pública, backups — diferida por decisión del usuario.
-Nota: El script `UalaSync.gs` (Google Apps Script) ya existe y lee correos de Uala → inserta en `movimientos_caja` automáticamente cada 10 minutos. No forma parte del repo React.
+| Dashboard | `DashboardSection.jsx` | ✅ 8 KPIs + 2 gráficos + KPIs cotizaciones |
+| Ventas (POS) | `VentasSection.jsx` + `NuevaVentaModal.jsx` | ✅ Funcional + asiento auto + multi-moneda |
+| Historial Ventas | `HistorialVentas.jsx` | ✅ Filtros avanzados + estado_pago CC + paginación 50/pág |
+| Inventario | `ProductosSection.jsx` | ✅ Soft delete SAP-style (inactivar + reactivar) |
+| Compras | `ComprasSection.jsx` | ✅ Funcional + asiento auto + paginación 50/pág |
+| Cotizaciones | `CotizacionesSection.jsx` | ✅ Funcional + convertir a venta |
+| Órdenes de Compra (proveedores) | `OrdenesCompraSection.jsx` | ✅ Workflow aprobación + 3-way match + realtime |
+| Caja | `CajaSection.jsx` + `CajaContext.jsx` | ✅ Por-terminal + indicadores turno |
+| Clientes | `ClientesSection.jsx` | ✅ Soft delete + validación |
+| Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Solo activos |
+| Detalle Cta. Cte. | `ClientDetailModal.jsx` | ✅ **Open Item Management SAP-style** |
+| Contabilidad | `PlanCuentasSection.jsx` | ✅ 7 tabs: Plan/Asientos/Balance/LM/P&L/BalanceGeneral/Períodos |
+| Proveedores | `ProveedoresSection.jsx` | ✅ Ficha completa + Cta. Cte. + Historial OC |
+| Bancos | `CuentasBancariasSection.jsx` | ✅ Import CSV + conciliación auto/manual |
+| Reportes | `ReportesSection.jsx` | ✅ Funcional + paginación 100/pág |
+| Usuarios | `UsuariosSection.jsx` | ✅ Invitación + último acceso + activar/desactivar |
+| Configuración | `ConfiguracionSection.jsx` | ✅ Logo + toggle aprobación OC |
 
 ---
 
-## Bugs corregidos en sesiones anteriores
+## Migraciones aplicadas en Supabase
 
-| Bug | Archivo | Fix aplicado |
+| Archivo | Contenido | Estado |
 |---|---|---|
-| Staff bloqueado en Caja (user.id → user.tenant_id) | `CajaSection.jsx` | Corregido |
-| Staff bloqueado en Compras (user.id → user.tenant_id) | `ComprasSection.jsx` | Corregido |
-| Logo: upload a bucket 'public' inexistente | `ConfiguracionSection.jsx` | Reemplazado por Base64 en DB |
-| Closure stale en ConfigContext.fetchConfig() | `ConfigContext.jsx` | `setConfig(prev => ...)` |
-| Error `removeChild` en Radix UI Dialog | `ProductosSection.jsx` | `ProductForm` movido fuera del componente |
-| Soft delete de productos | `ProductosSection.jsx` | Botón tacho → `activo=false`, lista filtra `activo≠false` |
-| **Timezone desfasado en movimientos** | `dateUtils.js`, múltiples archivos | `getNowAR()` ahora resta 3h del epoch UTC sin depender del browser TZ; display usa UTC parts directamente |
-| **"Gastos del Mes" incluía apertura de caja** | `dashboardService.ts` | `.neq('categoria','Apertura')` en query `gastosMes` y `getFlujoCajaMensual` |
-| **Indicadores de turno mostraban $0** | `CajaSection.jsx` | Tarjetas INGRESOS/EGRESOS/SALDO LÍQUIDO DEL TURNO agregadas al JSX |
-| **Reset de contraseña abría el sistema directo** | `SupabaseAuthContext.jsx`, `App.jsx`, `ResetPasswordPage.jsx` | Fix definitivo: leer hash URL sincrónicamente antes de `getSession()` + `isRecoveryFlow` ref |
-| **Rate limit de emails (2/hora)** | Supabase Auth | Configurado SMTP propio con Resend.com. API key activa. |
-| **Tablas faltantes en DB** | Supabase SQL | Aplicadas migraciones 002 (cotizaciones), 003 (ordenes_compra), 004 (plan_cuentas). |
-| **403 RLS en tabla configuracion al guardar logo** | `ConfigContext.jsx` | `updateConfig` ahora llama a `get_my_empresa_id()` RPC e incluye `empresa_id` en INSERT. |
-| **Nuevo usuario sin empresa_id quedaba en dashboard vacío** | `App.jsx`, `OnboardingPage.jsx`, `SupabaseAuthContext.jsx` | Flujo SaaS: detectar `!user.empresa_id` → mostrar OnboardingPage → RPC `create_tenant()`. |
-| **Recepción OC: SET en vez de ADD** | `ordenesCompraService.ts` | Servicio cambiado a ADD (suma delta al acumulado, respeta máximo pedido). |
-| **Notificaciones OC no navegaban** | `Header.jsx`, `Dashboard.jsx`, `OrdenesCompraSection.jsx` | DropdownMenu controlled + setTimeout(150ms) nav + navPayload. |
-| **aria-hidden Radix UI al navegar desde notificaciones** | `Header.jsx`, `OrdenesCompraSection.jsx` | Fix definitivo: blur antes de navegar + 150ms para desmontar portal. |
-| **Warnings Radix UI en 8+ componentes** | Múltiples secciones | Todos los `DialogContent` sin `DialogDescription` corregidos. |
-| **`seed_plan_cuentas` RLS 403 Forbidden** | Supabase + `PlanCuentasSection.jsx` | Función `SECURITY DEFINER`. Fix: `empresaId = user?.empresa_id`. |
-| **RLS `profiles` bloqueaba vista de equipo** | Supabase SQL | Política `profiles_select` reemplazada con `OR empresa_id = get_my_empresa_id()`. |
-| **Creación de usuarios fallaba (CORS + función inexistente)** | `UsuariosSection.jsx` + Supabase | Edge Function `create-user` deployada. |
-| **RLS 403 al cobrar en Cuenta Corriente** | `ClientDetailModal.jsx` | `empresa_id: user.empresa_id` en ambos inserts de `cuenta_corriente_movimientos` y `movimientos_caja`. |
+| `schema.sql` | Schema base completo + RLS + triggers | ✅ |
+| `migrations/001_audit_log.sql` | Tabla audit_log + fn_audit_trigger | ✅ |
+| `migrations/002_cotizaciones.sql` | Cotizaciones + cotizacion_items | ✅ |
+| `migrations/003_ordenes_compra.sql` | Órdenes de compra + items | ✅ |
+| `migrations/004_plan_cuentas.sql` | Plan cuentas + asientos + seed | ✅ |
+| `migrations/005_configuracion_rls_fix.sql` | Fix RLS tabla configuracion | ✅ |
+| `migrations/009_cajas.sql` | Tabla cajas + FK caja_sesiones | ✅ |
+| `migrations/010_drop_ventas_legacy.sql` | Backup + DROP ventas legacy | ✅ |
+| `migrations/011_cuentas_bancarias.sql` | Cuentas bancarias + movimientos | ✅ |
+| `migrations/012_facturas_proveedor.sql` | 3-way match OC | ✅ |
+| `migrations/013_multi_moneda.sql` | Tabla tipos_cambio + columnas tipo_cambio_tasa | ✅ |
+| `migrations/014_proveedores.sql` | Ficha completa proveedores + cuenta_corriente_proveedores | ✅ |
+| `migrations/015_conciliacion_bancaria.sql` | extractos_bancarios + extracto_lineas + trigger sync | ✅ |
+| `migrations/016_security_hardening.sql` | is_admin() + RLS config + rate_limit + audit triggers | ✅ |
 
-### Sesión 2026-06-03 (bugfixes OC + inactivar clientes + SAP items)
+### SQL adicional ejecutado directamente
 
-| Bug / Feature | Archivo | Cambio |
-|---|---|---|
-| **Recepción parcial OC no funcionaba** | `OrdenesCompraSection.jsx` | `onSuccess` de TQ v5 no existe → `recepciones` siempre `{}` → nada se enviaba al DB. Fix: `useEffect` que observa `detalleRecepcion` e inicializa el mapa `{ [itemId]: pendiente }`. El DB trigger `trg_oc_stock` calcula el delta correcto. |
-| **Stats cards mostraban count de la página visible** | `OrdenesCompraSection.jsx`, `ordenesCompraService.ts` | Nuevo método `getEstadoCounts()` + query key `OC_KEYS.counts`. Cards usan el total real, no el slice paginado. |
-| **OC no actualizaba en tiempo real** | `OrdenesCompraSection.jsx` | Suscripción Supabase Realtime en `ordenes_compra` → invalida lista + counts al cambiar cualquier registro. |
-| **Filtro de fecha en OC** | `OrdenesCompraSection.jsx`, `ordenesCompraService.ts` | Inputs Desde/Hasta en la lista. Filtran en servidor contra `ordenes_compra.fecha`. |
-| **Inactivar/reactivar clientes** | `ClientesSection.jsx`, `ClientDetailModal.jsx` | Filtro tabular Activos/Inactivos/Todos. Badge visual. Botón `UserX`/`UserCheck` por fila. Validación: si el cliente tiene movimientos en `cuenta_corriente_movimientos` → bloquea eliminación física y pide inactivar. Botón Inactivar/Reactivar en footer del modal de detalle. |
-| **Clientes inactivos aparecían en Cta. Corriente** | `CuentaCorrienteSection.jsx` | Agregado `.neq('activo', false)` al fetch de clientes. |
-| **SAP Item 1: Workflow aprobación OC** | `OrdenesCompraSection.jsx`, `ordenesCompraService.ts`, `ConfiguracionSection.jsx`, `ConfigContext.jsx`, `migrations/008` | Nuevo estado `pendiente_aprobacion`. Config `oc_requiere_aprobacion` en Configuración (toggle solo admin). Staff crea OC → `pendiente_aprobacion`. Admin ve botón 👍 Aprobar → pasa a `borrador`. Tarjeta de stats condicional. |
-| **SAP Item 2: Cierre de períodos** | `PlanCuentasSection.jsx`, `planCuentasService.ts`, `migrations/008` | `periodosService` con `getPeriodosAnio`, `togglePeriodo`, `isPeriodoCerrado`. Check en `createAsiento` → lanza error si el período está cerrado. Tab "Períodos": grilla 12 meses con Cerrar/Reabrir (solo admin). |
-| **SAP Item 3: P&L + Balance General** | `PlanCuentasSection.jsx`, `planCuentasService.ts` | `asientosService.getEstadoResultados()` y `getBalanceGeneral()` (computan desde `getBalanceComprobacion`). Tab "P&L": KPIs (Ingresos/Egresos/Resultado) + detalle por cuenta. Tab "Balance General": columnas Activo vs Pasivo+PN + verificación ecuación contable. |
-
-### Sesión 2026-06-03 tarde (migration 008 + asientos auto recepción OC)
-
-| Feature | Archivo | Cambio |
-|---|---|---|
-| **Migration 008 ejecutada** | Supabase SQL Editor | `pendiente_aprobacion` CHECK constraint + tabla `periodos_contables` ya en DB |
-| **Asientos auto recepción OC** | `planCuentasService.ts`, `ordenesCompraService.ts`, `OrdenesCompraSection.jsx` | Al confirmar recepción: DEBE 1.1.3 Mercaderías / HABER 2.1.1 Ctas a Pagar. Monto = Σ(deltaQty × costoUnitario). Silencioso si empresa sin plan de cuentas o período cerrado. |
-
-### Sesión 2026-06-03 noche (revisión completa empresa_id + sidebar light + dashboard fix)
-
-| Bug / Feature | Archivo(s) | Cambio |
-|---|---|---|
-| **Dashboard mostraba $0 en todas las tarjetas** | `dashboardService.ts` (7 filtros) | `.eq('user_id', empresaId)` → `.eq('empresa_id', empresaId)`. El servicio recibía el UUID de empresa pero lo comparaba contra `user_id` (UUID del admin), que no coincide. Todos los KPIs + gráficos afectados. |
-| **Búsqueda global Cmd+K no encontraba productos ni clientes** | `CommandPalette.jsx` (2 queries) | Mismo patrón: `user_id` → `empresa_id` en queries de productos y clientes. |
-| **Servicio de Caja con cálculos rotos** | `cajaService.ts` (4 filtros) | Mismo patrón. Resúmenes de sesión/movimientos podían quedar vacíos. |
-| **Servicio de Clientes devolvía vacío** | `clientesService.ts` (2 filtros) | Mismo patrón. Lista paginada no cargaba. |
-| **Servicio de Compras devolvía vacío** | `comprasService.ts` (1 filtro) | Mismo patrón. |
-| **Servicio de Productos devolvía vacío** | `productosService.ts` (2 filtros) | Mismo patrón. |
-| **Sidebar no soportaba modo claro** | `Sidebar.jsx` | Todos los colores eran hardcodeados oscuros (`bg-[#1E293B]`, `text-white`, etc.). Agregadas variantes `dark:` en fondo, texto, bordes, hover, item activo, zona de usuario y botón cerrar sesión. Modo día: blanco + texto oscuro + azul suave activo. Modo noche: gris claro suave (`slate-700/60`) como item activo. |
-
-### Sesión 2026-06-03 (fix removeChild en ClientDetailModal)
-
-| Bug | Archivo | Cambio |
-|---|---|---|
-| **`NotFoundError: removeChild` al cerrar detalle de cliente** | `ClientDetailModal.jsx` | El componente tenía `if (!open) return null` que desmontaba el `<Dialog>` de Radix UI abruptamente antes de que Radix completara el cleanup de portal/foco. Al volver el foco a la tabla, React encontraba el nodo DOM reemplazado → `removeChild` falla. Fix: eliminar el `return null` y dejar que Radix maneje el show/hide con la prop `open`. Mismo patrón que el bug previo de `ProductosSection`. |
-
-### Sesión 2026-06-03 (auditoría integral end-to-end)
-
-**Entregables:** `AUDITORIA.md` (resumen ejecutivo) + `SUPABASE_ANALISIS.md` (schema + RLS fix SQL).
-
-| Categoría | Archivo(s) | Cambio |
-|---|---|---|
-| **Queries multi-tenant: `user_id` → `empresa_id`** | `CajaSection.jsx` (7 puntos) | `loadMovimientos`, `loadFinancialSummary`, `loadFinancialSummary` ventas día, INSERT handleSubmit, DELETE handleConfirmDelete, guards de useEffect e INSERT. |
-| **Queries multi-tenant** | `ComprasSection.jsx` (3 fixes) | `loadProveedores` (sin filtro → `empresa_id`), `loadProducts` y `loadCompras` (`user_id` → `empresa_id`). |
-| **Fuga multi-tenant en reportes** | `ReportesSection.jsx` (5 fixes + guard) | 5 reportes (ventas, compras, clientes, cta. corriente, financiero) sin filtro empresa_id → fixeados. |
-| **Multi-tenant en Ualá** | `MovimientosUala.jsx` | Agregado import de `useAuth` + filtro `.eq('empresa_id', user.empresa_id)` + guard. |
-| **Console.log de debug** | `ProductosSection.jsx` | Eliminados 2 `console.log` ("Creating provider..." / "Provider Payload"). |
-| **Código muerto** | `src/pages/HomePage.jsx` | Eliminado (archivo vacío, no se importaba). Directorio `src/pages/` también removido. |
-| **Documentado, NO ejecutado** | Supabase | Fix SQL del RLS infinite recursion en `profiles` está en `SUPABASE_ANALISIS.md` §3 — ejecutar manualmente en SQL Editor. |
-| **Decisiones arquitecturales planteadas** | — | (1) Caja por-usuario vs por-empresa. (2) Deprecar duplicación `ventas`/`detalle_ventas` vs `comprobantes`. (3) Cliente Ualá: integrar o aislar. |
-
-### Sesión 2026-06-03 cierre (fix RLS profiles + validación email global)
-
-| Acción | Archivos | Detalle |
-|---|---|---|
-| **Fix RLS ejecutado en Supabase** | Supabase SQL Editor | Función `get_my_empresa_id()` recreada con `SECURITY DEFINER STABLE`. Policies `profiles_select/update/insert` reemplazadas sin auto-referencia. Confirmado: 3 policies activas, 3 profiles visibles, 3 empresas en DB. |
-| **Fix validación email global** | `src/lib/validationUtils.js` | `checkEmailExists` migrada de `SELECT FROM profiles` (sujeto a RLS del tenant) a RPC `email_exists_in_system` (SECURITY DEFINER que consulta `auth.users` globalmente). Evita false negative cuando el email existe en OTRO tenant. |
-| **Fix UX error creación usuario** | `src/components/sections/UsuariosSection.jsx` | `submitCreateUser` ahora parsea el error de la edge function en cualquiera de sus formas (`data.error`, `error.message`, `error.context.body`) y muestra mensaje amigable cuando el email ya existe en el sistema. |
-| **Decisión multi-membership** | `CONTEXT.md` | Postergado explícitamente hasta definir estrategia comercial (modelo de licencias). Ver sección "Pendientes estratégicos". |
-| **RPC pendiente de ejecutar** | Supabase SQL Editor | `email_exists_in_system(p_email text)` — SQL documentado en conversación. Hasta que se ejecute, la validación de email único puede dar false negative. |
-
----
-
-## Archivos clave modificados (sesión 2026-06-03)
-
-```
-src/
-├── contexts/
-│   └── ConfigContext.jsx          ← +oc_requiere_aprobacion en fetchConfig y defaults
-├── services/
-│   ├── planCuentasService.ts      ← +periodosService +getEstadoResultados +getBalanceGeneral
-│   │                                 +check período en createAsiento +nuevos PLAN_CUENTAS_KEYS
-│   └── ordenesCompraService.ts   ← +getEstadoCounts +dateFrom/dateTo en getAll
-│                                     +estadoInicial en create +OC_KEYS.counts
-├── components/
-│   └── sections/
-│       ├── OrdenesCompraSection.jsx  ← fix recepción (useEffect vs onSuccess) +realtime
-│       │                               +stats cards reales +fecha filter +pendiente_aprobacion
-│       │                               +botón Aprobar (admin) +invalidateOC helper
-│       ├── ClientesSection.jsx       ← reescrito: filtro activos/inactivos/todos, badge,
-│       │                               inactivar/reactivar, validación antes de eliminar
-│       ├── ClientDetailModal.jsx     ← +botón Inactivar/Reactivar en footer +onToggleActivo prop
-│       ├── CuentaCorrienteSection.jsx ← +.neq('activo', false) en fetch clientes
-│       ├── ConfiguracionSection.jsx  ← +sección "Flujo de Trabajo" con toggle aprobación OC
-│       └── PlanCuentasSection.jsx    ← +TabPeriodos +TabEstadoResultados +TabBalanceGeneral
-│                                       +7 tabs en total (antes 4)
-
-migrations/
-├── 008_oc_approval_periodos.sql  ← ADD pendiente_aprobacion a CHECK + CREATE periodos_contables ✅
-├── 009_cajas.sql                 ← CREATE cajas + FK caja_id en caja_sesiones + trigger ✅
-├── 010_drop_ventas_legacy.sql    ← backup + DROP ventas + detalle_ventas ✅
-├── 011_cuentas_bancarias.sql     ← CREATE cuentas_bancarias + movimientos_bancarios ✅
-└── 012_facturas_proveedor.sql    ← CREATE facturas_proveedor (3-way match) ✅
+```sql
+-- Fix fn_audit_trigger: to_jsonb()
+-- Trigger saldo cliente automático: fn_update_cliente_saldo
+-- Open Item: estado_pago en comprobantes + comprobante_id + metodo_cobro en movimientos
+-- Fix v_saldo_proveedores: WITH (security_invoker = true)
 ```
 
-## Sesión 2026-06-04 — cambios aplicados
-
-| Área | Archivos | Detalle |
-|---|---|---|
-| **Caja por-terminal** | `CajaContext.jsx`, `CajaSection.jsx`, migration 009 | `cajas` table. Trigger auto-crea "Caja Principal". Context usa `resolveActiveCaja()`. Queries migradas a `empresa_id` |
-| **Deprecar ventas legacy** | `ReportesSection.jsx`, `NuevaVentaModal.jsx`, migration 010 | Reportes leen `comprobantes`. NuevaVenta ya no escribe en tablas legacy. DROP con backup |
-| **Módulo Bancos** | `CuentasBancariasSection.jsx`, `cuentasBancariasService.ts`, migration 011 | Reemplaza "Ualá" en sidebar. Cuentas con FK a Plan de Cuentas. Import CSV con mapper. `ualaSupabaseClient.js` eliminado |
-| **3-way match OC** | `OrdenesCompraSection.jsx`, `ordenesCompraService.ts`, migration 012 | `facturas_proveedor` table. Panel detalle OC muestra grilla OC/Recibido/Factura con match visual. Modal registrar factura + marcar pagada |
-
-## Sesión 2026-06-04 tarde — cambios aplicados
-
-| Área | Archivos | Detalle |
-|---|---|---|
-| **Cotización → Venta** | `CotizacionesSection.jsx`, `NuevaVentaModal.jsx`, `cotizacionesService.ts` | Botón 🛒 en aprobadas/enviadas. Modal pre-llena carrito + cliente desde la cotización. Al confirmar venta → `estado='convertida'` + `comprobante_id` vinculado. Banner en detalle. No requiere migración (schema ya tenía FK). |
-| **Fix delete Bancos** | `CuentasBancariasSection.jsx`, `cuentasBancariasService.ts` | `count: 'exact'` en delete + error si 0 filas. `invalidateQueries` usa key base para prefix-match correcto. |
-| **CommandPalette (Cmd+K)** | `CommandPalette.jsx` | Fix `user_id`→`empresa_id` en productos y clientes. Añadidas búsquedas de cotizaciones (`numero`, `cliente_nombre`) y cuentas bancarias (`nombre`). Placeholder actualizado. |
-| **Dashboard — KPIs cotizaciones** | `DashboardSection.jsx`, `dashboardService.ts` | Nueva fila de 4 KPIs: Cotizaciones del Mes, Tasa de Conversión (con barra de progreso), Aprobadas Pendientes, Monto Convertido. Nueva columna en fila 3: "Cotizaciones Aprobadas" con lista de pendientes clickeable. `getCotizacionesStats()` en dashboardService. |
-
-## Sesión 2026-06-04 noche-3 — Multi-moneda UI + Proveedores + Conciliación
-
-| Área | Archivos | Detalle |
-|---|---|---|
-| **Multi-moneda OC** | `OrdenesCompraSection.jsx`, `ordenesCompraService.ts` | MonedaSelector en formulario. `moneda` + `tipo_cambio_tasa` en create. `formatCurrency` en lista, detalle y 3-way match. Fix bug `user_id`→`empresa_id` en búsqueda de proveedores. |
-| **Multi-moneda Ventas** | `NuevaVentaModal.jsx` | MonedaSelector en panel resumen. `moneda` + `tipo_cambio_tasa` en INSERT comprobante. `formatCurrency` en total del carrito. |
-| **proveedoresService** | `src/services/proveedoresService.ts` | CRUD completo: `getAll` (paginado+filtros), `create`, `update`, `toggleActivo`, `getStats`, `getCuentaCorriente`, `registrarPago`, `getSaldoProveedor`, `getHistorialOC`. Constantes `PROV_KEYS`. |
-| **ProveedoresSection** | `src/components/sections/ProveedoresSection.jsx` | Módulo completo: stats cards (total/activos/deuda), tabla paginada con search/filtro activos, modal crear/editar con ficha completa (CUIT, condición IVA, domicilio, plazo pago), panel detalle con 3 tabs (Cuenta Corriente / Historial OC / Ficha), modal Registrar Pago. |
-| **Sidebar + routing** | `Sidebar.jsx`, `Dashboard.jsx` | Ícono `Truck` + entrada `proveedores` en menuItems. `case 'proveedores'` en renderSection. |
-| **conciliacionService** | `src/services/conciliacionService.ts` | `parsearCSV` (formatos 3 y 4 columnas, DD/MM/YYYY). `importarExtracto`. `getExtractos`, `getLineas`, `getMovimientosSinConciliar`. `matchManual`, `desMatch`, `autoMatch` (por monto+tipo+fecha±2d). |
-| **Tab Conciliación** | `CuentasBancariasSection.jsx` | Nuevo tab "Conciliación". `ConciliacionTab`: selector cuenta/extracto, importar CSV, auto-match con toast, vista split (extracto izq / movimientos der), conciliar click, deshacer, resumen pendientes/conciliadas. |
-
 ---
 
-## Sesión 2026-06-04 noche-2 — Security Hardening
+## Infraestructura
 
-### Auditoría de seguridad realizada
-Análisis completo del sistema. Hallazgos: 3 CRITICAL, 4 HIGH, 5 MEDIUM, 4 LOW. Todo resuelto en esta sesión.
-
-| Área | Archivos | Fix aplicado |
-|---|---|---|
-| **Migration 016 — RLS crítico** | `migrations/016_security_hardening.sql` | ✅ RLS + INSERT/UPDATE/DELETE policies en `configuracion`. Función `is_admin()`. Admin-only policies en `profiles` (role, permissions). `periodos_contables` cerrar/reabrir solo admin. Audit triggers agregados: profiles, ordenes_compra, periodos_contables, configuracion, cotizaciones. Tabla `rate_limit_attempts` + funciones `check_rate_limit`/`record_attempt`. `audit_log` protegido: solo SELECT para usuarios, INSERT solo vía SECURITY DEFINER triggers. |
-| **securityUtils** | `src/lib/securityUtils.js` | ✅ `sanitizeInput`, `sanitizeText`, `sanitizeNumber`, `validatePasswordStrength` (12 chars + upper/lower/num/special), `safeErrorMessage` (mensajes genéricos sin filtrar internos), `logger` (suprimido en producción). |
-| **validationUtils** | `src/lib/validationUtils.js` | ✅ `validatePassword` → usa `validatePasswordStrength`. `validateEmail` → RFC 5322 simplificado + longitud máx. `validateName` → bloquea HTML/scripts. `validateCUIT` → verificación dígito verificador argentino. `checkEmailExists` → solo via RPC SECURITY DEFINER. |
-| **useInactivityTimeout** | `src/hooks/useInactivityTimeout.js` | ✅ Auto-logout a los 30 min de inactividad. Aviso 1 min antes (toast "¿Seguís ahí?"). Detecta mousemove, click, keydown, touchstart, scroll. Solo activo con sesión viva. |
-| **SupabaseAuthContext** | `src/contexts/SupabaseAuthContext.jsx` | ✅ `useInactivityTimeout` integrado. `console.*` → `logger.*`. |
-| **Edge functions hardened** | `supabase/functions/create-user/index.ts`, `delete-user/index.ts`, `invite-user/index.ts`, `_shared/auth.ts` | ✅ Shared `verifyAdmin()`: verifica JWT + rol admin + cuenta activa. Inputs sanitizados y validados. Respuestas genéricas (sin leakage). CORS restringido a SITE_URL. Rollback en create-user si falla el perfil. Bloqueo: un admin no puede eliminarse, no puede haber 2 admins, límite 50 usuarios/empresa. |
-| **XSS print modal** | `src/components/ventas/ComprobantePrintModal.jsx` | ✅ `cloneNode` + strip de `<script>` y atributos `on*` antes de pasar innerHTML a ventana de impresión. |
-| **Console suppression** | `src/main.jsx` | ✅ `console.log/warn/info = noop` en producción (import.meta.env.PROD). `console.error` preservado para monitoreo. |
-
-### Nuevas convenciones de seguridad (para futuras sesiones)
-
-- **Siempre usar `logger` de `securityUtils.js`** en lugar de `console.*` en archivos nuevos.
-- **Mensajes de error al usuario:** siempre pasar por `safeErrorMessage()`. Nunca `error.message` directo al toast.
-- **Validar inputs en edge functions:** siempre sanitizar con `.trim().slice(0, N)` antes de usar.
-- **RLS en tablas nuevas:** toda nueva tabla necesita: `ENABLE ROW LEVEL SECURITY` + policy con `get_my_empresa_id()` + audit trigger si es operativa.
-- **Admin-only actions:** si una acción requiere admin, verificar en DB con `is_admin()` (no solo en frontend).
-- **Rate limiting:** usar `check_rate_limit` + `record_attempt` en edge functions de creación de usuarios/auth.
-
-### Schema SQL — nuevas tablas/funciones (migration 016)
-- `is_admin()` — SECURITY DEFINER, verifica role='admin' + active=true
-- `rate_limit_attempts` — (action, identifier, created_at). RLS deny_all (solo SECURITY DEFINER accede)
-- `check_rate_limit(action, identifier, max, window_min)` — retorna bool
-- `record_attempt(action, identifier, empresa_id)` — inserta + limpia >24h
-- Nuevas policies en `configuracion`, `profiles`, `periodos_contables`
-- Audit triggers en 7 tablas adicionales
-
----
-
-## Sesión 2026-06-04 noche — cambios aplicados
-
-### Análisis competitivo realizado
-Comparado KAIROX vs Colppy, Xubio, Bind ERP, Tango, Alegra, Odoo. Brechas identificadas y priorizadas.
-Decisión: implementar Multi-moneda + Proveedores + Reconciliación bancaria. AFIP y Multi-membership al final.
-
-### Fundamentos implementados (listos para continuar en próxima sesión)
-
-| Área | Archivos | Estado |
-|---|---|---|
-| **Migration 013 — Multi-moneda** | `migrations/013_multi_moneda.sql` | ✅ Listo para ejecutar en Supabase |
-| **Migration 014 — Proveedores** | `migrations/014_proveedores.sql` | ✅ Listo para ejecutar en Supabase |
-| **Migration 015 — Reconciliación** | `migrations/015_conciliacion_bancaria.sql` | ✅ Listo para ejecutar en Supabase |
-| **currencyUtils** | `src/lib/currencyUtils.js` | ✅ `formatCurrency`, `convertToARS`, `MONEDAS`, `MONEDA_SYMBOLS` |
-| **tipoCambioService** | `src/services/tipoCambioService.ts` | ✅ `getTasaVigente`, `getHistorial`, `upsertTasa`, `deleteTasa` |
-| **MonedaSelector** | `src/components/ui/MonedaSelector.jsx` | ✅ Componente reutilizable: selector ARS/USD/EUR + campo tasa condicional |
-| **Cotizaciones — moneda** | `CotizacionesSection.jsx`, `cotizacionesService.ts` | ✅ Formulario con MonedaSelector, totales con `formatCurrency`, servicio pasa `moneda`+`tipo_cambio_tasa` |
-
-### ⚠️ Pendiente para próxima sesión (continuación task #5-8)
-
-| Tarea | Detalle |
-|---|---|
-| **Task 5 — OC + Ventas con moneda** | `OrdenesCompraSection.jsx` y `NuevaVentaModal.jsx` necesitan el mismo tratamiento que Cotizaciones. Dashboard: convertir totales USD→ARS en KPIs. |
-| **Task 6 — ProveedoresSection** | `src/components/sections/ProveedoresSection.jsx` + `src/services/proveedoresService.ts`. Módulo completo: lista, ficha, cuenta corriente, historial compras/OC. |
-| **Task 7 — Integrar Proveedores en app** | `App.jsx` sidebar (ícono Truck). `ComprasSection` y `OrdenesCompraSection`: autocomplete de proveedor desde tabla `proveedores`. |
-| **Task 8 — Conciliación bancaria** | `src/services/conciliacionService.ts` + tab "Conciliación" en `CuentasBancariasSection.jsx`. Vista split: extracto vs movimientos registrados + auto-match + resumen. |
-
-### Schema SQL — nuevas tablas (migrations 013-015)
-
-- `tipos_cambio` — (empresa_id, moneda, tasa, fecha) UNIQUE. Función `get_tasa_cambio(empresa_id, moneda, fecha)`.
-- `cotizaciones.tipo_cambio_tasa` — nueva columna (ALTER TABLE IF NOT EXISTS).
-- `ordenes_compra.tipo_cambio_tasa` — ídem.
-- `comprobantes.moneda + tipo_cambio_tasa` — ídem.
-- `proveedores` — completada con: nombre, razon_social, cuit, condicion_iva, telefono, email, direccion, localidad, provincia, condicion_pago, plazo_pago_dias, activo, notas. RLS. Trigger updated_at.
-- `cuenta_corriente_proveedores` — (empresa_id, proveedor_id, tipo, monto, descripcion, referencia_id). Vista `v_saldo_proveedores`.
-- `extractos_bancarios` — metadata de archivos importados para conciliar.
-- `extracto_lineas` — líneas del extracto con FK nullable a `movimientos_bancarios`. Trigger `fn_sync_conciliado` sincroniza flag `conciliado` en ambas tablas.
-
----
-
-## Estado integración Ualá (Google Apps Script) ✅ CERRADO
-
-| Componente | Estado | Notas |
-|---|---|---|
-| `UalaSync.gs` (Google Apps Script) | ✅ Actualizado | Ahora escribe en `movimientos_bancarios` con `cuenta_bancaria_id` de "Ualá Home banking" |
-| Tabla `movimientos_uala` | ✅ Legacy | 15 movimientos históricos migrados a `movimientos_bancarios`. Tabla queda como backup. |
-| `MovimientosUala.jsx` | ⚠️ Dead code | Existe pero sin acceso por UI. Candidata a eliminar en limpieza futura. |
-| Cuenta "Ualá Home banking" | ✅ Creada | `id: 04445887-3c78-4044-90e3-d035ac493ccb` en Nalux |
-
----
-
-## Plan de Cuentas — Tabs disponibles (7 en total)
-
-| Tab | Funcionalidad |
-|---|---|
-| **Plan de Cuentas** | Árbol jerárquico expandible, búsqueda, editar, drill-down (FBL3N) |
-| **Asientos** | Libro diario paginado, crear/confirmar/anular asientos |
-| **Balance** | Balance de comprobación: Debe/Haber/Saldo por cuenta, filtros de fecha |
-| **Libro Mayor** | Movimientos por cuenta con saldo acumulado progresivo |
-| **P&L** | Estado de Resultados: Ingresos / Egresos / Resultado neto con KPIs |
-| **Balance General** | Activo vs Pasivo + Patrimonio con verificación de ecuación contable |
-| **Períodos** | Grilla 12 meses × año. Admin puede cerrar/reabrir períodos. Cerrar un período bloquea nuevos asientos |
-
-### Schema SQL relevante (migrations 004 + 008)
-- `plan_cuentas` — árbol de cuentas (activo/pasivo/patrimonio/ingreso/egreso)
-- `asientos_contables` — libro diario (borrador/confirmado/anulado)
-- `asientos_items` — líneas de cada asiento
-- `periodos_contables` — (empresa_id, anio, mes, cerrado) — PRIMARY KEY compuesta
-- `seed_plan_cuentas(empresa_id)` — inicializa plan estándar PyME argentina (39 cuentas, 5 grupos)
-- `trg_asiento_item_saldo` — recalcula `saldo_actual` en `plan_cuentas` al confirmar/anular
-
----
-
-## Módulos existentes y su estado
-
-| Módulo | Sección | Estado |
-|---|---|---|
-| Dashboard | `DashboardSection.jsx` | ✅ 8 KPIs + 2 gráficos |
-| Ventas (POS) | `VentasSection.jsx` + `NuevaVentaModal.jsx` | ✅ Funcional + asiento auto |
-| Inventario | `ProductosSection.jsx` | ✅ Funcional + soft delete |
-| Compras | `ComprasSection.jsx` | ✅ Funcional + asiento auto |
-| Cotizaciones | `CotizacionesSection.jsx` | ✅ Funcional |
-| Órdenes de Compra | `OrdenesCompraSection.jsx` | ✅ Funcional + aprobación + realtime + filtro fecha + asiento auto recepción |
-| Caja | `CajaSection.jsx` | ✅ Funcional + indicadores de turno |
-| Clientes | `ClientesSection.jsx` | ✅ Funcional + inactivar/reactivar + validación eliminación |
-| Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Funcional + solo muestra clientes activos |
-| **Contabilidad** | `PlanCuentasSection.jsx` | ✅ **7 tabs: P&L + Balance General + Períodos** |
-| Reportes | `ReportesSection.jsx` | ✅ Funcional |
-| Usuarios | `UsuariosSection.jsx` | ✅ Invitación por email + último acceso + activar/desactivar |
-| Configuración | `ConfiguracionSection.jsx` | ✅ Funcional + toggle aprobación OC |
-| Movimientos Ualá | `MovimientosUala.jsx` | ✅ Funcional + fix timezone |
-| **Proveedores** | `ProveedoresSection.jsx` | ✅ **Ficha completa + Cuenta Corriente + Historial OC** |
-| **Bancos — Conciliación** | `CuentasBancariasSection.jsx` | ✅ **Tab Conciliación: import CSV + auto-match + match manual** |
-
----
-
-## Workflow aprobación de OC (SAP Item 1)
-
-```
-Config: oc_requiere_aprobacion = 'true' (toggle en Configuración, solo admin)
-
-Staff crea OC
-    ↓ estado = pendiente_aprobacion
-    ↓ Aparece en tarjeta "Pend. Aprobación" con badge púrpura
-
-Admin ve la OC en lista
-    ↓ Botón 👍 Aprobar → updateEstado('borrador')
-    ↓ OC disponible para enviar al proveedor
-
-Admin puede también cancelar directamente desde pendiente_aprobacion
-
-Si oc_requiere_aprobacion = 'false':
-    Admin y Staff crean OC directo en estado 'borrador' (comportamiento anterior)
-```
-
-**Estados de OC en orden:** `pendiente_aprobacion` → `borrador` → `enviada` → `recibida_parcial` → `recibida` / `cancelada`
-
----
-
-## Cierre de períodos contables (SAP Item 2)
-
-- **`periodosService.togglePeriodo(empresaId, anio, mes, cerrado, userId)`** — upsert en `periodos_contables`
-- **`periodosService.isPeriodoCerrado(empresaId, fecha)`** — check al crear cualquier asiento
-- Si el período está cerrado → `createAsiento` lanza: _"El período M/AAAA está cerrado."_
-- Los asientos automáticos (ventas/compras) también se bloquean silenciosamente (catch en sus llamadores)
-- Solo admin puede cerrar/reabrir períodos desde el tab "Períodos"
-- Períodos futuros no se pueden cerrar
-
----
-
-## Timezone — Diseño de la solución
-
-**Esquema:** "Argentina-local-as-UTC" — los timestamps se almacenan con la hora local argentina representada como UTC.  
-Ejemplo: Argentina 23:00 del 30/05 se guarda como `2026-05-30T23:00:00Z`.
-
-**Regla de display:** SIEMPRE leer los campos `getUTC*()` del objeto Date, nunca `toLocaleDateString()` sin timezone.
-
-**Helpers en `dateUtils.js`:**
-- `getNowAR()` → `new Date(Date.now() - 3*3600000)` (TZ-safe, no depende del browser)
-- `formatDateAR(iso)` → `dd/mm/yyyy` usando UTC parts
-- `formatDateTimeAR(iso)` → `dd/mm/yyyy HH:MM` usando UTC parts
-- `getTodayAR()` → `YYYY-MM-DD` para hoy en Argentina
-
----
-
-## Integración externa (fuera del repo)
-
-| Sistema | Descripción |
-|---|---|
-| `UalaSync.gs` (Google Apps Script) | Lee correos de Uala en Gmail, parsea montos, inserta en `movimientos_caja`. Trigger cada 10 min. Proyecto Supabase: `wuznppxeonmhfcvnqfbf` |
-
----
-
-## Datos de conexión / configuración
-
-- **Supabase URL/Key:** en `.env` (variables `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`)
-- **Supabase Project ID:** `wuznppxeonmhfcvnqfbf` (org: NALUX — distinta a la org del MCP)
-- **Supabase Site URL:** `http://localhost:3001` (dev) — actualizar a dominio en producción
-- **SMTP:** Resend.com — `smtp.resend.com:465` / user: `resend` / sender: `onboarding@resend.dev`
-- **Edge Functions deployadas:** `create-user`, `delete-user`, `invite-user`
+- **Supabase URL:** `https://wuznppxeonmhfcvnqfbf.supabase.co`
+- **Supabase Project ID:** `wuznppxeonmhfcvnqfbf` (org: NALUX)
+- **SMTP:** Resend.com — `smtp.resend.com:465` · user: `resend` · sender: KAIROX Gestión ✅
+- **Edge Functions deployadas:** `create-user` · `delete-user` · `invite-user` ✅
 - **Timezone:** Argentina (UTC-3) — helpers en `src/lib/dateUtils.js`
-- **Multi-tenancy:** RLS via `get_my_empresa_id()` + columna `empresa_id` en todas las tablas
-- **Logo:** almacenado como Base64 en tabla `configuracion` (clave `company_logo` / `logo_base64`)
+- **Multi-tenancy:** RLS via `get_my_empresa_id()` + `empresa_id` en todas las tablas
+- **Logo:** Base64 en tabla `configuracion` (clave `logo_base64`)
 - **Roles:** `admin` (acceso total) | `staff` (permisos granulares en `profiles.permissions` JSONB)
-- **profiles.last_login_at:** columna agregada, se actualiza en cada login exitoso
-- **Config keys en `configuracion` table:** `nombre_empresa`, `company_logo`, `logo_base64`, `modulos_activos` (JSON), `oc_requiere_aprobacion` ('true'/'false')
 
 ---
 
-## Pendientes inmediatos
+## Convenciones (REGLAS DE ORO)
 
-| Prioridad | Tarea | Detalle |
+- **Multi-tenant:** TODAS las queries deben filtrar `.eq('empresa_id', user.empresa_id)`. Nunca `user_id` para filtrar (solo para INSERTs como autor).
+- **INSERTs:** siempre incluir `empresa_id: user.empresa_id` + `user_id: user.id`.
+- **Timezone:** usar siempre `getNowAR()` / `formatDateAR()` / `formatDateTimeAR()` de `dateUtils.js`. Nunca `toLocaleString()`.
+- **Clientes activos:** todas las queries de selección incluyen `.neq('activo', false)`.
+- **TanStack Query v5:** `onSuccess` en `useQuery` no existe. Usar `useEffect`.
+- **RLS en tablas nuevas:** `ENABLE ROW LEVEL SECURITY` + policy `get_my_empresa_id()` + audit trigger + `DROP POLICY IF EXISTS` antes de `CREATE POLICY`.
+- **Radix UI Dialogs:** nunca `if (!open) return null` — dejar que Radix maneje show/hide con prop `open`.
+- **Caja:** solo cobros en Efectivo requieren caja abierta. Transferencia/Tarjeta/Cheque no.
+- **Open Items:** al cobrar CC, siempre referenciar `comprobante_id` en el movimiento HABER.
+- **Migrations:** siempre idempotentes — `IF NOT EXISTS`, `DROP POLICY/TRIGGER IF EXISTS`, `CREATE OR REPLACE`.
+- **Vistas:** siempre `WITH (security_invoker = true)` para respetar RLS del usuario.
+
+---
+
+## Análisis diferencial de mercado (Junio 2025)
+
+> Basado en estudio de mercado Argentina PyME. Competidores: Xubio, Colppy, Tango.
+
+### Estado actual vs. lo que necesita el mercado
+
+| Feature | Competidores | Estado KAIROX |
 |---|---|---|
-| 🟢 Hecho | **SaaS multi-tenant** | Flujo completo: registro → onboarding → empresa aislada ✅ |
-| 🟢 Hecho | **Auth & Usuarios** | Reset contraseña ✅, creación directa ✅, SMTP Resend ✅, último acceso ✅ |
-| 🟢 Hecho | **Contabilidad Fase 4** | Plan de Cuentas + Libro Mayor + asientos auto + drill-down + P&L + Balance General + Períodos ✅ |
-| 🟢 Hecho | **Módulos configurables** | Sidebar filtra automáticamente ✅ |
-| 🟢 Hecho | **Notificaciones OC** | Navegación + realtime ✅ |
-| 🟢 Hecho | **Cobro Cta. Corriente** | Fix RLS 403 ✅ |
-| 🟢 Hecho | **Migration 007** | `empresa_id` en `cuenta_corriente_movimientos` + RLS ✅ ejecutada |
-| 🟢 Hecho | **Inactivar/reactivar clientes** | Soft delete SAP-style en ClientesSection + ClientDetailModal ✅ |
-| 🟢 Hecho | **Fix recepción parcial OC** | `useEffect` reemplaza `onSuccess` (TQ v5) ✅ |
-| 🟢 Hecho | **SAP items 1+2+3** | Aprobación OC + Cierre períodos + P&L + Balance General ✅ |
-| 🟢 Hecho | **Migration 008** | Ejecutada en Supabase `wuznppxeonmhfcvnqfbf` ✅ — CHECK constraint `pendiente_aprobacion` + tabla `periodos_contables` activas. |
-| 🟢 Hecho | **Asientos auto para recepción OC** | DEBE 1.1.3 Mercaderías / HABER 2.1.1 Ctas a Pagar — se genera y confirma automáticamente al registrar recepción ✅ |
-| 🟢 Hecho | **Auditoría integral** | Frontend limpio: 12 fixes multi-tenant + 2 console.log eliminados + 1 archivo muerto borrado + 3 entregables MD ✅ |
-| 🟢 Hecho | **Fix RLS recursion en `profiles`** | SQL ejecutado en Supabase ✅. Función `get_my_empresa_id()` SECURITY DEFINER + 3 policies nuevas sin recursión. Confirmado con tests en SQL Editor. |
-| 🟢 Hecho | **Fix validación email global** | `validationUtils.js` usa RPC `email_exists_in_system` ✅. `UsuariosSection` muestra mensaje amigable si el email existe en otro tenant. |
-| 🟢 Hecho | **RPC `email_exists_in_system` ejecutada** | Función activa en Supabase. `validationUtils.js` la usa para validar duplicados globales. ✅ |
-| 🟢 Hecho | **Cajas (terminales POS) — modelo por-terminal** | Tabla `cajas` con `(id, empresa_id, nombre, activo)`. `caja_sesiones` tiene FK `caja_id`. Único índice: 1 sesión abierta por caja. Trigger auto-crea "Caja Principal" en cada nueva empresa. `CajaContext` usa `resolveActiveCaja()` → busca primer caja activa de la empresa. `CajaSection` queries de `movimientos_caja` migradas a `empresa_id`. Migration 009. ✅ |
-| 🟢 Hecho | **Deprecar `ventas`/`detalle_ventas`** | `ReportesSection` lee de `comprobantes`/`comprobante_items` + empresa_id en los 5 reportes + fix timezone en fechas. `NuevaVentaModal` ya no escribe en tablas legacy. Migration 010 crea backups y hace DROP. ✅ |
-| 🟢 Hecho | **Módulo Cuentas Bancarias** | Reemplaza `MovimientosUala`. `ualaSupabaseClient.js` eliminado (dead code). Tablas `cuentas_bancarias` + `movimientos_bancarios` con FK a `plan_cuentas`. Sidebar: "Bancos" con ícono Landmark. Import CSV con mapper de columnas, detección automática de tipo por signo. Migration 011. ✅ |
-| 🟢 Hecho | **3-way match OC-Recepción-Factura** | Tabla `facturas_proveedor` (UNIQUE por OC). En panel detalle OC: grilla Total OC / Recibido / Factura con indicador visual de match. Botón "Registrar Factura" (auto-precarga monto recibido), "Marcar pagada". Migration 012. ✅ |
-| 🟢 Hecho | **Cotización → Venta** | Botón convertir + pre-fill carrito + estado `convertida` + `comprobante_id` FK ✅ |
-| 🟡 Media | **Ejecutar migrations 013-016 en Supabase** | SQL Editor orden: `013_multi_moneda.sql`, `014_proveedores.sql`, `015_conciliacion_bancaria.sql`, `016_security_hardening.sql` |
-| 🟡 Media | **Re-deploy edge functions** | `supabase functions deploy create-user delete-user invite-user` — fueron reescritas con hardening. |
-| 🟡 Media | **Verificar dominio Resend** | `onboarding@resend.dev` solo envía a emails verificados → dominio propio para producción |
-| Baja | Facturación electrónica AFIP | — (última prioridad, junto con multi-membership) |
-| Baja | Multi-almacén | — |
-| Baja | Lotes y vencimientos | — |
-| Diferida | Fase 5: Email, WhatsApp, API REST, backups | — |
-| ⏸️ ESTRATÉGICO (último) | **Multi-membership + modelo de licencias** | Permitir que un mismo email pertenezca a varias empresas (modelo Notion/Slack: tabla `memberships` M:N). Postponed porque depende de la estrategia de comercialización. Ver §"Pendientes estratégicos". |
+| **ARCA/AFIP facturación electrónica** | Xubio ✓, Colppy ✓ | 🔴 **No implementado — CRÍTICO** |
+| POS táctil nativo | Colppy ✗, Xubio ✗ | ✅ Funcional |
+| Caja con apertura/cierre | Colppy ✗, Xubio ✗ | ✅ Funcional (falta discrepancia arqueo) |
+| Open Item CC | Ambos básico | ✅ SAP-style completo |
+| Aging report (antigüedad deuda) | Ambos ✗ | ❌ Pendiente |
+| Alertas vencimiento CC | Ambos ✗ | ❌ Pendiente |
+| Límite de crédito por cliente | Ambos ✗ | ❌ Pendiente |
+| Multi-pago en una venta | Ambos ✗ | ❌ Pendiente |
+| Permisos granulares | Ambos limitado | ✅ Admin/Staff + JSONB permissions |
+| Audit log por usuario | Ambos básico | ✅ Completo (migration 016) |
+| Import CSV productos/clientes | Regular | ❌ Pendiente |
+| OC de clientes (pedidos) | Colppy parcial | ❌ Pendiente (hay cotizaciones, son distintas) |
+| Remito de transporte sin precios | Ambos ✗ | ❌ Pendiente |
+| Condiciones de venta flexibles | Ambos fijos | ❌ Pendiente |
+| Dashboard ejecutivo completo | Colppy mejorado 2025 | ⚠️ Parcial (falta top productos, CC vencidas, stock mínimo) |
+| Onboarding self-service <30min | Regular | ⚠️ Parcial (falta wizard + import) |
+| Multi-moneda | Variable | ✅ Completo |
+| Conciliación bancaria | Variable | ✅ Completo |
 
 ---
 
-## Pendientes estratégicos (post-comercialización)
+## Roadmap próxima sesión — ordenado por impacto
 
-Este bloque queda **explícitamente al final** del roadmap. La idea es definir la estrategia de venta y cobro PRIMERO, y después implementar el modelo técnico que la soporte.
+### 🔴 Fase 1 — Piso mínimo para vender (sin esto no hay producto)
+1. **Integración ARCA/AFIP** — Emisión comprobantes A/B/C, WS WSFE, CAE automático, QR en impresión, puntos de venta registrados por empresa
 
-### 🎯 Multi-membership (1 email → N empresas)
+### 🟠 Fase 2 — Gaps rápidos (días de trabajo, alto impacto)
+2. **Multi-pago en una venta** — Efectivo + Transferencia + Tarjeta en un mismo comprobante
+3. **Remito de transporte sin precios** — Toggle en config del comprobante imprimible
+4. **Aging report CC** — Antigüedad de deuda por cliente (30/60/90/+90 días)
+5. **Alertas vencimiento CC** — Facturas próximas a vencer y vencidas en dashboard
+6. **Discrepancia en cierre de caja** — Efectivo declarado vs. real con registro de diferencia
 
-**Por qué se posterga:** el modelo de licencias determina la arquitectura. Decidir el schema sin tener el pricing definido es prematuro.
+### 🟡 Fase 3 — Diferenciales vs. Colppy
+7. **Import CSV productos/clientes** — Mapeo visual de columnas, validación, preview
+8. **OC de clientes (Pedidos)** — Borrador → Confirmado → En preparación → Facturado. Distinto a cotizaciones.
+9. **Condiciones de venta flexibles** — Texto libre + días, guardables por cliente, reflejo en vencimiento
+10. **Límite de crédito por cliente** — Con bloqueo configurable al superar el límite
+11. **Usuario "solo caja"** — POS sin acceso a reportes ni configuración
 
-**Modelos de cobro a evaluar:**
+### 🟢 Fase 4 — Retención y experiencia
+12. **Dashboard ejecutivo completo** — Top 5 productos, facturas CC vencidas, stock en mínimo, último mov. banco (todos clickeables)
+13. **Onboarding wizard completo** — Empresa → ARCA → Productos → Primera venta, con checklist de progreso
+14. **Datos de ejemplo precargados** — Para explorar el sistema antes de configurarlo
 
-| Modelo | Cómo cobra | Schema requerido |
+---
+
+## 3 grandes proyectos reservados para el final
+
+> Estos se encaran después de completar las Fases 1-4. Son proyectos de negocio, no de features.
+
+| # | Proyecto | Por qué al final |
 |---|---|---|
-| **Flat fee por empresa** | $X/mes por tenant, usuarios ilimitados | Actual sirve (1 user = 1 empresa) |
-| **Seat-based (por usuario activo)** | $X/mes por usuario invitado | Necesita `memberships` M:N |
-| **Tier híbrido (plan + límite de seats)** | Starter (3 users) / Pro (10) / Enterprise (∞) | `memberships` M:N + tabla `planes` + `empresas.plan_id` |
-| **Por módulos activados** | Cada módulo es un add-on | `empresa_features` (empresa_id, modulo, activo, vence_en) |
-| **Freemium + paywall** | Gratis hasta N registros, después pagás | Counters en `empresas` + límites configurables |
-
-**Decisiones que dispara este punto cuando lo retomemos:**
-1. ¿Cobro por empresa o por usuario activo?
-2. ¿Hay tiers (Starter/Pro/Enterprise) o un solo plan?
-3. ¿Los módulos (Contabilidad, Cotizaciones, OC) son add-ons o vienen todos?
-4. ¿Hay trial gratuito? ¿De cuántos días?
-5. ¿Cómo se gestionan los cobros? (Stripe / MercadoPago / manual)
-6. ¿Suspensión por impago? ¿Período de gracia?
-
-**Cuando se retome, los entregables esperados son:**
-1. `ESTRATEGIA_COMERCIAL.md` — modelo elegido, precios, tiers
-2. `MIGRACION_MEMBERSHIPS.md` — plan técnico de migración paso a paso
-3. SQL de migración (memberships + backfill desde profiles actuales)
-4. Frontend: WorkspaceSelector + switcher en Header + cambios en AuthContext
-5. Edge function `create-user` reescrita (manejar email ya existente)
-6. Integración con la pasarela de pago elegida
-
-**Hasta ese momento:** KAIROX queda con modelo 1-user-1-empresa, sin cambios.
+| 1 | **Deploy en Vercel** | Requiere dominio propio + variables de entorno de producción configuradas |
+| 2 | **Membership / Stripe o MercadoPago** | Requiere modelo de precios definido + ARCA funcionando primero |
+| 3 | **Modelo de licencias (Starter/Pro/Business)** | Requiere validación con primeros clientes reales |
 
 ---
 
-## SaaS — Flujo de registro de nuevo tenant
+## Historial de sesiones
 
-```
-Nuevo usuario → Registro (nombre, apellido, empresa, email, pass)
-    ↓ supabase.auth.signUp() — sin confirmación de email (dev)
-    ↓ SIGNED_IN → fetchProfile → empresa_id = null
-    ↓ App.jsx detecta !user.empresa_id → OnboardingPage
-    ↓ Usuario completa nombre empresa → create_tenant() RPC
-    ↓ INSERT empresas + UPDATE profiles (role=admin) + INSERT configuracion
-    ↓ refreshUser() → empresa_id tiene valor
-    ↓ Dashboard con tenant completamente aislado ✅
+### Sesión 2026-06-05 — Deuda técnica + Análisis de mercado
+- ✅ Migrations 013-016 ejecutadas en Supabase
+- ✅ Soft delete SAP-style en productos (toggle inactivos + reactivar)
+- ✅ Paginación en HistorialVentas, ComprasSection, ReportesSection
+- ✅ Edge functions deployadas con hardening (npx supabase functions deploy)
+- ✅ SMTP Resend.com verificado y funcionando
+- ✅ Fix alerta security_definer en v_saldo_proveedores (security_invoker = true)
+- ✅ Análisis diferencial de mercado incorporado al roadmap
 
-Usuario existente (Nalux/Luciano):
-    Login → empresa_id en perfil → Dashboard directo ✅
-
-Staff invitado por admin (create-user edge function):
-    Edge function crea perfil con empresa_id del admin → Login → Dashboard directo ✅
-```
-
----
-
-## Convenciones aprendidas (para futuras sesiones)
-
-- **Tablas multi-tenant (REGLA DE ORO post-auditoría 2026-06-03):** TODAS las queries SELECT/UPDATE/DELETE deben filtrar por `.eq('empresa_id', user.empresa_id)`. **Nunca** filtrar por `user_id` (queda como columna legacy en algunas tablas, pero solo se usa en INSERT para identificar al autor del registro). Excepción única: lookup del propio perfil por `id = user.id`. Esto vale para servicios `*Service.ts`, componentes y contextos.
-- **INSERTs con auditoría de autor:** pasar `empresa_id: user.empresa_id` (tenant) + `user_id: user.id` (auth UUID del autor). Nunca `user_id: user.tenant_id` — eran lo mismo solo cuando había un único admin.
-- **`caja_sesiones` es una excepción pendiente:** hoy filtra por `tenant_id = auth.uid()` (caja por-usuario). Decisión arquitectural pendiente para migrar a por-empresa. Ver `SUPABASE_ANALISIS.md` §5.1.
-- **Timezone:** todo timestamp guardado en DB se persiste con offset AR ya aplicado (esquema "AR-local-as-UTC"). Para mostrar usar **siempre** `formatDateAR` / `formatDateTimeAR` de `dateUtils.js`. **Nunca** `new Date(x).toLocale*()` — resta los 3h dos veces.
-- **Filtros por rango de fecha:** comparar strings `YYYY-MM-DD` (slice 0,10), no instanciar `new Date()` sobre inputs de tipo date — evita drift de timezone.
-- **TanStack Query v5:** `onSuccess` en `useQuery` **no existe**. Usar `useEffect` que observe el resultado del query. Solo `useMutation` conserva `onSuccess`.
-- **Inputs date en dark mode:** el CSS global ya invierte el ícono — no hace falta agregar nada por componente.
-- **Supabase Realtime:** para tablas con RLS que usan `get_my_empresa_id()`, el filtro en el canal debe ser `filter: 'empresa_id=eq.{uuid}'`. Sin filtro, el canal no recibe eventos en tablas con RLS activo.
-- **Clientes activos:** todas las queries de selección de clientes (ventas, cta. corriente, etc.) deben incluir `.neq('activo', false)`. Solo `ClientesSection` muestra inactivos cuando el filtro está en "Inactivos" o "Todos".
-- **Check de período:** `periodosService.isPeriodoCerrado` hace una DB call en cada `createAsiento`. Para auto-asientos (ventas/compras), si falla, es silencioso. Para asientos manuales, el error se muestra en toast.
+### Sesión 2026-06-04 — Setup + Bugfixes + Open Item Management
+- ✅ Open Item Management SAP-style en ClientDetailModal
+- ✅ Trigger fn_update_cliente_saldo + recalculo saldos
+- ✅ Múltiples bugfixes (fn_audit_trigger, Chrome Translate, HistorialVentas, RLS 403)
