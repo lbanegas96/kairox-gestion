@@ -76,6 +76,7 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_sync_conciliado ON public.extracto_lineas;
 CREATE TRIGGER trg_sync_conciliado
   AFTER UPDATE OF movimiento_id, conciliado ON public.extracto_lineas
   FOR EACH ROW EXECUTE FUNCTION public.fn_sync_conciliado();

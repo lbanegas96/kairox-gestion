@@ -41,6 +41,7 @@ CREATE POLICY "prov_empresa" ON public.proveedores
   WITH CHECK (empresa_id = get_my_empresa_id());
 
 -- Trigger updated_at
+DROP TRIGGER IF EXISTS trg_proveedores_updated_at ON public.proveedores;
 CREATE TRIGGER trg_proveedores_updated_at
   BEFORE UPDATE ON public.proveedores
   FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
