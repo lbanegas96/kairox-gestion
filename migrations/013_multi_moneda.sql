@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS public.tipos_cambio (
 
 ALTER TABLE public.tipos_cambio ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "tc_all" ON public.tipos_cambio;
 CREATE POLICY "tc_all" ON public.tipos_cambio
   FOR ALL
   USING  (empresa_id = get_my_empresa_id())
