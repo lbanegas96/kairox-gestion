@@ -43,7 +43,6 @@ const HistorialVentas = () => {
       const { data: salesData, error: salesError } = await supabase
         .from('comprobantes')
         .select('*')
-        .eq('tenant_id', user.tenant_id)
         .order('fecha', { ascending: false });
 
       if (salesError) throw salesError;
@@ -51,7 +50,7 @@ const HistorialVentas = () => {
       // Ensure estado_pago exists
       const processedSales = (salesData || []).map(s => ({
          ...s,
-         estado_pago: s.estado_pago || 'pagada' // Default fallback
+         estado_pago: s.estado_pago || (s.forma_pago === 'Cuenta Corriente' ? 'pendiente' : 'pagada')
       }));
 
       setComprobantes(processedSales);
@@ -60,7 +59,6 @@ const HistorialVentas = () => {
       const { data: clientsData } = await supabase
         .from('clientes')
         .select('id, nombre')
-        .eq('user_id', user.tenant_id)
         .order('nombre');
       
       setClients(clientsData || []);
