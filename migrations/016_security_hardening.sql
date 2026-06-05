@@ -137,12 +137,18 @@ DECLARE
   t TEXT;
 BEGIN
   FOREACH t IN ARRAY tablas LOOP
-    EXECUTE format('
-      DROP TRIGGER IF EXISTS trg_audit_%1$s ON public.%1$s;
-      CREATE TRIGGER trg_audit_%1$s
-      AFTER INSERT OR UPDATE OR DELETE ON public.%1$s
-      FOR EACH ROW EXECUTE FUNCTION public.fn_audit_trigger();
-    ', t);
+    -- Solo crear el trigger si la tabla existe
+    IF EXISTS (
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = t
+    ) THEN
+      EXECUTE format('
+        DROP TRIGGER IF EXISTS trg_audit_%1$s ON public.%1$s;
+        CREATE TRIGGER trg_audit_%1$s
+        AFTER INSERT OR UPDATE OR DELETE ON public.%1$s
+        FOR EACH ROW EXECUTE FUNCTION public.fn_audit_trigger();
+      ', t);
+    END IF;
   END LOOP;
 END;
 $$;
