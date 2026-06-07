@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-06 — Fases 2, 3 y 4 completadas + Auditoría aplicada
+**Última actualización:** 2026-06-06 — Fases 2, 3 y 4 completadas + Auditoría aplicada + Módulo Proveedores completo
 **Branch activo:** `master`
 **Entregables de auditoría:** `AUDITORIA.md` · `SUPABASE_ANALISIS.md` · `STATUS_REPORT.md` · `SUPABASE_SETUP.md`
 
@@ -33,7 +33,7 @@
 | Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Tab Antigüedad de Deuda (FIFO 30/60/90/+90 días) |
 | Detalle Cta. Cte. | `ClientDetailModal.jsx` | ✅ Open Item Management SAP-style |
 | Contabilidad | `PlanCuentasSection.jsx` | ✅ 7 tabs: Plan/Asientos/Balance/LM/P&L/BalanceGeneral/Períodos |
-| Proveedores | `ProveedoresSection.jsx` | ✅ Ficha completa + Cta. Cte. + Historial OC |
+| Proveedores | `ProveedoresSection.jsx` + `proveedoresService.ts` | ✅ Ficha completa + Cta. Cte. + Historial OC + Registrar pago |
 | Bancos | `CuentasBancariasSection.jsx` | ✅ Import CSV + conciliación auto/manual |
 | Reportes | `ReportesSection.jsx` | ✅ Funcional + paginación 100/pág |
 | Usuarios | `UsuariosSection.jsx` | ✅ Invitación + último acceso + activar/desactivar + preset Solo Caja |
@@ -181,7 +181,7 @@
 |---|---|
 | `user_id` como filtro empresa en servicios (`cajaService`, `productosService`, etc.) | Es diseño intencional del schema (user_id = empresa_id en las tablas legacy). Cambiar requiere auditar también todos los inserts — riesgo alto sin tests |
 | `ClientesSection` sin paginación server-side | Funcional hasta ~500 clientes. Bajo impacto actual |
-| `ProveedoresSection` no registrada en routing/sidebar | Módulo documentado en CONTEXT.md como ✅ pero sin route activo. Pendiente revisar si hay componente o agregar al routing |
+| `ProveedoresSection` no registrada en routing/sidebar | ✅ **RESUELTO** (commit 2c0397c) — componente creado + route activo en Dashboard + Sidebar + permisos |
 | Columnas en portugués en `comprobante_items` (`produto_id`, `quantidade`) | Inconsistencia histórica del schema. El código existente funciona; cambiar requiere migración de BD |
 
 ---
