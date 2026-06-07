@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-06 — Fases 2, 3 y 4 completadas + Auditoría aplicada + Módulo Proveedores completo
+**Última actualización:** 2026-06-07 — Portales por área (Fiori-style) + Launchpad + Módulo Proveedores completo
 **Branch activo:** `master`
 **Entregables de auditoría:** `AUDITORIA.md` · `SUPABASE_ANALISIS.md` · `STATUS_REPORT.md` · `SUPABASE_SETUP.md`
 
@@ -183,6 +183,23 @@
 | `ClientesSection` sin paginación server-side | Funcional hasta ~500 clientes. Bajo impacto actual |
 | `ProveedoresSection` no registrada en routing/sidebar | ✅ **RESUELTO** (commit 2c0397c) — componente creado + route activo en Dashboard + Sidebar + permisos |
 | Columnas en portugués en `comprobante_items` (`produto_id`, `quantidade`) | Inconsistencia histórica del schema. El código existente funciona; cambiar requiere migración de BD |
+
+---
+
+## Portales por área — arquitectura (2026-06-07)
+
+| Sección ID | Componente | Descripción |
+|---|---|---|
+| `dashboard` | `LaunchpadSection.jsx` | Home: 4 area tiles con KPIs + accesos rápidos |
+| `portal_ventas` | `portals/VentasPortal.jsx` | 6 KPIs + módulos Ventas, Cotizaciones, Pedidos, Clientes, CC |
+| `portal_compras` | `portals/ComprasPortal.jsx` | 5 KPIs + módulos Compras, OC, Proveedores |
+| `portal_finanzas` | `portals/FinanzasPortal.jsx` | 5 KPIs + posición neta CxC-CxP + módulos Caja, Bancos, Contabilidad |
+| `portal_inventario` | `portals/InventarioPortal.jsx` | 5 KPIs + barra salud stock + módulo Inventario |
+| `panel_ejecutivo` | `DashboardSection.jsx` | Dashboard legacy con gráficos (accesible desde Portal Finanzas) |
+
+**Servicio:** `src/services/portalService.ts` — 5 funciones async con Promise.all
+
+**Sidebar:** agrupado por área con headers coloreados navegables
 
 ---
 
