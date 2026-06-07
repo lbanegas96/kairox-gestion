@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { getTodayAR } from '@/lib/dateUtils';
 import { motion } from 'framer-motion';
-import { 
-  BarChart3, Package, TrendingUp, Banknote, ShoppingCart, 
-  Users, CreditCard, FileSpreadsheet
+import {
+  BarChart3, Package, TrendingUp, Banknote, ShoppingCart,
+  Users, CreditCard, FileSpreadsheet, ArrowUpRight, ArrowDownRight, Minus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
@@ -30,6 +30,8 @@ function ReportesSection() {
   
   // Data
   const [reportData, setReportData] = useState([]);
+  const [reportDataAnterior, setReportDataAnterior] = useState([]);
+  const [showComparativa, setShowComparativa] = useState(false);
 
   // Report Definitions
   const reports = [
@@ -79,6 +81,55 @@ function ReportesSection() {
     setStartDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
     setEndDate(new Date().toISOString().split('T')[0]);
     setReportData([]);
+    setReportDataAnterior([]);
+  };
+
+  // Calcula el período anterior equivalente (misma cantidad de días)
+  const getPeriodoAnterior = () => {
+    const [sy, sm, sd] = startDate.split('-').map(Number);
+    const [ey, em, ed] = endDate.split('-').map(Number);
+    const start = new Date(Date.UTC(sy, sm - 1, sd));
+    const end = new Date(Date.UTC(ey, em - 1, ed));
+    const duracion = end.getTime() - start.getTime(); // ms
+    const prevEnd = new Date(start.getTime() - 1);    // día antes del inicio actual
+    const prevStart = new Date(prevEnd.getTime() - duracion);
+    return {
+      start: new Date(Date.UTC(prevStart.getUTCFullYear(), prevStart.getUTCMonth(), prevStart.getUTCDate(), 0, 0, 0)).toISOString(),
+      end:   new Date(Date.UTC(prevEnd.getUTCFullYear(),  prevEnd.getUTCMonth(),  prevEnd.getUTCDate(),  23, 59, 59, 999)).toISOString(),
+      label: `${prevStart.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })} — ${prevEnd.toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' })}`,
+    };
+  };
+
+  // Helper: fetch ventas totales para un rango
+  const fetchVentasTotal = async (start, end) => {
+    const { data } = await supabase
+      .from('comprobantes')
+      .select('total')
+      .eq('empresa_id', user.empresa_id)
+      .eq('tipo', 'venta')
+      .gte('fecha', start).lte('fecha', end);
+    return (data || []).reduce((s, r) => s + Number(r.total || 0), 0);
+  };
+
+  const fetchComprasTotal = async (start, end) => {
+    const { data } = await supabase
+      .from('compras')
+      .select('total')
+      .eq('empresa_id', user.empresa_id)
+      .gte('fecha', start).lte('fecha', end);
+    return (data || []).reduce((s, r) => s + Number(r.total || 0), 0);
+  };
+
+  const fetchFinancieroNeto = async (start, end) => {
+    const { data } = await supabase
+      .from('movimientos_caja')
+      .select('tipo, monto')
+      .eq('empresa_id', user.empresa_id)
+      .gte('fecha', start).lte('fecha', end);
+    const rows = data || [];
+    const ing = rows.filter(r => r.tipo === 'ingreso').reduce((s, r) => s + Number(r.monto), 0);
+    const eg  = rows.filter(r => r.tipo === 'egreso').reduce((s, r) => s + Number(r.monto), 0);
+    return ing - eg;
   };
 
   const openReportDialog = (report) => {
@@ -200,6 +251,18 @@ function ReportesSection() {
       setReportData(data);
       if (data.length === 0) {
         toast({ description: "No se encontraron datos para el período.", duration: 3000 });
+      }
+
+      // Comparativa período anterior (solo para reportes con fecha)
+      if (showComparativa && selectedReport.requiresDate && ['ventas', 'compras', 'financiero'].includes(selectedReport.id)) {
+        const prev = getPeriodoAnterior();
+        let prevTotal = 0;
+        if (selectedReport.id === 'ventas')     prevTotal = await fetchVentasTotal(prev.start, prev.end);
+        if (selectedReport.id === 'compras')    prevTotal = await fetchComprasTotal(prev.start, prev.end);
+        if (selectedReport.id === 'financiero') prevTotal = await fetchFinancieroNeto(prev.start, prev.end);
+        setReportDataAnterior([{ total: prevTotal, label: prev.label }]);
+      } else {
+        setReportDataAnterior([]);
       }
 
     } catch (error) {
@@ -378,7 +441,7 @@ function ReportesSection() {
           {selectedReport && (
              <>
                <div className="flex-none">
-                 <ReportHeader 
+                 <ReportHeader
                     title={selectedReport.title}
                     startDate={startDate}
                     setStartDate={setStartDate}
@@ -390,10 +453,57 @@ function ReportesSection() {
                     hasData={reportData.length > 0}
                     onDownloadPDF={handleDownloadPDF}
                  />
+                 {/* Toggle comparativa — solo reportes con fecha */}
+                 {selectedReport.requiresDate && ['ventas', 'compras', 'financiero'].includes(selectedReport.id) && (
+                   <div className="flex items-center gap-2 mt-3 px-1">
+                     <button
+                       type="button"
+                       onClick={() => setShowComparativa(v => !v)}
+                       className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${showComparativa ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-600'}`}
+                     >
+                       <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ${showComparativa ? 'translate-x-4' : 'translate-x-0'}`} />
+                     </button>
+                     <span className="text-xs text-slate-500 dark:text-slate-400">
+                       Comparar con período anterior equivalente
+                     </span>
+                   </div>
+                 )}
                </div>
-               
+
+               {/* Card comparativa */}
+               {showComparativa && reportDataAnterior.length > 0 && reportData.length > 0 && (() => {
+                 const actual   = selectedReport.id === 'financiero'
+                   ? reportData.filter(r => r.tipo === 'ingreso').reduce((s, r) => s + Number(r.monto || 0), 0)
+                     - reportData.filter(r => r.tipo === 'egreso').reduce((s, r) => s + Number(r.monto || 0), 0)
+                   : reportData.reduce((s, r) => s + Number(r.total || 0), 0);
+                 const anterior = reportDataAnterior[0].total;
+                 const delta    = anterior !== 0 ? ((actual - anterior) / Math.abs(anterior)) * 100 : 0;
+                 const positivo = actual >= anterior;
+                 const fmt = (n) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 }).format(n);
+                 return (
+                   <div className="flex items-center gap-4 mt-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                     <div className="flex-1">
+                       <p className="text-xs text-slate-500 mb-0.5">Período seleccionado</p>
+                       <p className="text-lg font-bold text-slate-900 dark:text-white">{fmt(actual)}</p>
+                     </div>
+                     <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${positivo ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
+                       {delta === 0 ? <Minus className="h-4 w-4 text-slate-400" /> :
+                        positivo ? <ArrowUpRight className="h-4 w-4 text-emerald-600" /> :
+                        <ArrowDownRight className="h-4 w-4 text-red-500" />}
+                       <span className={`text-sm font-bold ${positivo ? 'text-emerald-600' : 'text-red-500'}`}>
+                         {positivo && delta > 0 ? '+' : ''}{delta.toFixed(1)}%
+                       </span>
+                     </div>
+                     <div className="flex-1 text-right">
+                       <p className="text-xs text-slate-500 mb-0.5">Período anterior · {reportDataAnterior[0].label}</p>
+                       <p className="text-lg font-bold text-slate-400">{fmt(anterior)}</p>
+                     </div>
+                   </div>
+                 );
+               })()}
+
                <div className="flex-1 overflow-y-auto mt-4 min-h-[300px]">
-                 <ReportTable 
+                 <ReportTable
                     columns={getTableConfig(selectedReport.id, reportData).columns}
                     data={reportData}
                     loading={loading}

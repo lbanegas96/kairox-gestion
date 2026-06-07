@@ -4,10 +4,11 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Printer, X, Save, Edit2, Loader2, Check } from 'lucide-react';
+import { Printer, X, Save, Edit2, Loader2, RotateCcw } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import ComprobantePrintModal from './ComprobantePrintModal';
+import NotaCreditoModal from './NotaCreditoModal';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 
 const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale }) => {
@@ -22,6 +23,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [newStatus, setNewStatus] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showNCModal, setShowNCModal] = useState(false);
 
   useEffect(() => {
     if (open && saleId) {
@@ -239,21 +241,48 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale }) => {
             <div className="p-8 text-center text-slate-500">No se encontraron datos.</div>
           )}
 
-          <DialogFooter className="border-t border-slate-100 dark:border-slate-800 pt-4 flex gap-2 justify-end">
-            <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:text-white dark:border-slate-700 dark:hover:bg-slate-800">
-              Cerrar
-            </Button>
-            <Button 
-              className="bg-blue-600 hover:bg-blue-700 text-white" 
-              onClick={() => setShowPrintModal(true)}
-              disabled={!sale}
-            >
-              <Printer className="w-4 h-4 mr-2" /> Imprimir Comprobante
-            </Button>
+          <DialogFooter className="border-t border-slate-100 dark:border-slate-800 pt-4 flex flex-wrap gap-2 justify-between">
+            <div className="flex gap-2">
+              {/* NC solo para ventas (no sobre NCs ya emitidas) y no canceladas */}
+              {sale && sale.tipo !== 'nota_credito' && sale.estado_pago !== 'cancelada' && (
+                <Button
+                  variant="outline"
+                  onClick={() => setShowNCModal(true)}
+                  className="gap-2 border-orange-200 text-orange-600 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400 dark:hover:bg-orange-900/20"
+                >
+                  <RotateCcw className="w-4 h-4" /> Nota de Crédito
+                </Button>
+              )}
+              {sale?.tipo === 'nota_credito' && (
+                <span className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                  <RotateCcw className="w-3 h-3" /> Nota de Crédito
+                </span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:text-white dark:border-slate-700 dark:hover:bg-slate-800">
+                Cerrar
+              </Button>
+              <Button
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={() => setShowPrintModal(true)}
+                disabled={!sale}
+              >
+                <Printer className="w-4 h-4 mr-2" /> Imprimir
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
       
+      {sale && (
+        <NotaCreditoModal
+          open={showNCModal}
+          onClose={() => setShowNCModal(false)}
+          comprobante={sale}
+          onCreated={() => { fetchSaleDetails(); onUpdateSale?.(); }}
+        />
+      )}
       {sale && (
          <ComprobantePrintModal
            open={showPrintModal}

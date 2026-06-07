@@ -26,6 +26,141 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import ImportCSVModal from '@/components/ui/ImportCSVModal';
 import { getNowAR, formatDateTimeAR } from '@/lib/dateUtils';
 import { Textarea } from '@/components/ui/textarea';
+import { getAnalisisABC } from '@/services/abcService';
+
+// ─── Componente Análisis ABC ──────────────────────────────────────────────────
+function ABCTab({ empresaId }) {
+  const [data, setData] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [loaded, setLoaded] = React.useState(false);
+
+  const cargar = async () => {
+    setLoading(true);
+    try {
+      const result = await getAnalisisABC(empresaId);
+      setData(result);
+      setLoaded(true);
+    } catch (e) {
+      console.error('Error ABC:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (empresaId && !loaded) cargar();
+  }, [empresaId]);
+
+  const fmt = (n) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 }).format(n || 0);
+
+  const CLASE_STYLE = {
+    A: { bg: 'bg-emerald-100 dark:bg-emerald-900/30', text: 'text-emerald-700 dark:text-emerald-400', ring: 'ring-emerald-400', bar: '#10B981' },
+    B: { bg: 'bg-blue-100 dark:bg-blue-900/30',   text: 'text-blue-700 dark:text-blue-400',   ring: 'ring-blue-400',   bar: '#3B82F6' },
+    C: { bg: 'bg-slate-100 dark:bg-slate-800',    text: 'text-slate-600 dark:text-slate-400', ring: 'ring-slate-300',  bar: '#94A3B8' },
+  };
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-16">
+      <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+    </div>
+  );
+
+  if (!data) return (
+    <div className="text-center py-12 text-slate-400">
+      <button onClick={cargar} className="text-blue-500 hover:underline text-sm">Cargar análisis ABC</button>
+    </div>
+  );
+
+  const { productos, totales, revenueTotal } = data;
+
+  return (
+    <div className="space-y-6">
+      {/* Explicación */}
+      <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">¿Qué es el Análisis ABC?</p>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          Clasifica productos por su contribución al revenue total. <strong>A</strong>: generan el 80% (críticos). <strong>B</strong>: generan el siguiente 15%. <strong>C</strong>: el 5% restante.
+        </p>
+      </div>
+
+      {/* Resumen por clase */}
+      <div className="grid grid-cols-3 gap-4">
+        {(['A', 'B', 'C']).map(cls => {
+          const t = totales[cls];
+          const s = CLASE_STYLE[cls];
+          return (
+            <div key={cls} className={`rounded-xl p-4 border ${s.bg} ring-1 ${s.ring}`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className={`text-2xl font-black ${s.text}`}>{cls}</span>
+                <span className="text-xs text-slate-500">{t.cantidad} productos</span>
+              </div>
+              <p className={`text-lg font-bold ${s.text}`}>{fmt(t.revenue)}</p>
+              <p className="text-xs text-slate-500 mt-0.5">{t.pct.toFixed(1)}% del revenue</p>
+              {/* Barra de proporción */}
+              <div className="mt-2 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all" style={{ width: `${t.pct}%`, background: s.bar }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Tabla de productos */}
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+          <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            Ranking de productos — {productos.length} total
+          </p>
+          <button onClick={cargar} className="text-xs text-blue-500 hover:underline">↺ Actualizar</button>
+        </div>
+        <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 z-10">
+              <tr className="text-xs text-slate-500 uppercase tracking-wide border-b border-slate-200 dark:border-slate-700">
+                <th className="px-4 py-2.5 text-left">#</th>
+                <th className="px-4 py-2.5 text-left">Producto</th>
+                <th className="px-4 py-2.5 text-left">Categoría</th>
+                <th className="px-4 py-2.5 text-center">Clase</th>
+                <th className="px-4 py-2.5 text-right">Unidades</th>
+                <th className="px-4 py-2.5 text-right">Revenue</th>
+                <th className="px-4 py-2.5 text-right">% del total</th>
+                <th className="px-4 py-2.5 text-right">% acum.</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {productos.map((p, i) => {
+                const s = CLASE_STYLE[p.clase];
+                return (
+                  <tr key={p.produto_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <td className="px-4 py-2.5 text-slate-400 text-xs">{i + 1}</td>
+                    <td className="px-4 py-2.5 font-medium text-slate-900 dark:text-slate-100">{p.nombre}</td>
+                    <td className="px-4 py-2.5 text-slate-500 text-xs">{p.categoria || '—'}</td>
+                    <td className="px-4 py-2.5 text-center">
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${s.bg} ${s.text}`}>
+                        {p.clase}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-slate-600 dark:text-slate-400">{p.unidades_vendidas.toLocaleString('es-AR')}</td>
+                    <td className="px-4 py-2.5 text-right font-medium text-slate-900 dark:text-slate-100">{fmt(p.revenue)}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="w-16 h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${Math.min(p.pct_revenue * 5, 100)}%`, background: CLASE_STYLE[p.clase].bar }} />
+                        </div>
+                        <span className="text-xs text-slate-500 w-10 text-right">{p.pct_revenue.toFixed(1)}%</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-right text-xs text-slate-400">{p.pct_acumulado.toFixed(1)}%</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Defined outside ProductosSection to keep a stable component identity across renders.
 // If defined inside, React creates a new function reference every render, causing
@@ -712,6 +847,7 @@ const ProductosSection = () => {
           <TabsList className="bg-slate-100 dark:bg-slate-800 p-1">
             <TabsTrigger value="inventory" className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">Inventario</TabsTrigger>
             <TabsTrigger value="history" className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">Historial de Movimientos</TabsTrigger>
+            <TabsTrigger value="abc" className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">Análisis ABC</TabsTrigger>
           </TabsList>
 
           <TabsContent value="inventory" className="space-y-4">
@@ -898,8 +1034,12 @@ const ProductosSection = () => {
                </table>
              </div>
           </TabsContent>
+
+          <TabsContent value="abc" className="space-y-4">
+            <ABCTab empresaId={user?.empresa_id} />
+          </TabsContent>
        </Tabs>
-       
+
        {/* Movement Dialog */}
        <Dialog open={isMovimientoOpen} onOpenChange={setIsMovimientoOpen}>
          <DialogContent className="sm:max-w-[425px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
