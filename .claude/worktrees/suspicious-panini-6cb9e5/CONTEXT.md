@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-05 — Deuda técnica cerrada + Análisis diferencial de mercado
+**Última actualización:** 2026-06-06 — Fases 2 y 3 completadas
 **Branch activo:** `master`
 **Entregables de auditoría:** `AUDITORIA.md` · `SUPABASE_ANALISIS.md` · `STATUS_REPORT.md` · `SUPABASE_SETUP.md`
 
@@ -19,22 +19,23 @@
 
 | Módulo | Archivo principal | Estado |
 |---|---|---|
-| Dashboard | `DashboardSection.jsx` | ✅ 8 KPIs + 2 gráficos + KPIs cotizaciones |
-| Ventas (POS) | `VentasSection.jsx` + `NuevaVentaModal.jsx` | ✅ Funcional + asiento auto + multi-moneda |
+| Dashboard | `DashboardSection.jsx` | ✅ 8 KPIs + 2 gráficos + alerta aging CC |
+| Ventas (POS) | `VentasSection.jsx` + `NuevaVentaModal.jsx` | ✅ Multi-pago + check límite crédito + condición pago |
 | Historial Ventas | `HistorialVentas.jsx` | ✅ Filtros avanzados + estado_pago CC + paginación 50/pág |
-| Inventario | `ProductosSection.jsx` | ✅ Soft delete SAP-style (inactivar + reactivar) |
+| Comprobantes | `ComprobantePrintModal.jsx` | ✅ Toggle Comprobante / Remito sin precios |
+| Inventario | `ProductosSection.jsx` | ✅ Soft delete + import CSV |
 | Compras | `ComprasSection.jsx` | ✅ Funcional + asiento auto + paginación 50/pág |
 | Cotizaciones | `CotizacionesSection.jsx` | ✅ Funcional + convertir a venta |
 | Órdenes de Compra (proveedores) | `OrdenesCompraSection.jsx` | ✅ Workflow aprobación + 3-way match + realtime |
-| Caja | `CajaSection.jsx` + `CajaContext.jsx` | ✅ Por-terminal + indicadores turno |
-| Clientes | `ClientesSection.jsx` | ✅ Soft delete + validación |
-| Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Solo activos |
-| Detalle Cta. Cte. | `ClientDetailModal.jsx` | ✅ **Open Item Management SAP-style** |
+| Caja | `CajaSection.jsx` + `CajaCierre.jsx` | ✅ Arqueo por denominaciones + tab Arqueos + Sobrante/Faltante |
+| Clientes | `ClientesSection.jsx` | ✅ Form completo + condicion_pago + limite_credito + import CSV |
+| Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Tab Antigüedad de Deuda (FIFO 30/60/90/+90 días) |
+| Detalle Cta. Cte. | `ClientDetailModal.jsx` | ✅ Open Item Management SAP-style |
 | Contabilidad | `PlanCuentasSection.jsx` | ✅ 7 tabs: Plan/Asientos/Balance/LM/P&L/BalanceGeneral/Períodos |
 | Proveedores | `ProveedoresSection.jsx` | ✅ Ficha completa + Cta. Cte. + Historial OC |
 | Bancos | `CuentasBancariasSection.jsx` | ✅ Import CSV + conciliación auto/manual |
 | Reportes | `ReportesSection.jsx` | ✅ Funcional + paginación 100/pág |
-| Usuarios | `UsuariosSection.jsx` | ✅ Invitación + último acceso + activar/desactivar |
+| Usuarios | `UsuariosSection.jsx` | ✅ Invitación + último acceso + activar/desactivar + preset Solo Caja |
 | Configuración | `ConfiguracionSection.jsx` | ✅ Logo + toggle aprobación OC |
 
 ---
@@ -57,6 +58,8 @@
 | `migrations/014_proveedores.sql` | Ficha completa proveedores + cuenta_corriente_proveedores | ✅ |
 | `migrations/015_conciliacion_bancaria.sql` | extractos_bancarios + extracto_lineas + trigger sync | ✅ |
 | `migrations/016_security_hardening.sql` | is_admin() + RLS config + rate_limit + audit triggers | ✅ |
+| `migrations/017_multi_pago.sql` | Tabla comprobante_pagos + RLS + índices | ✅ aplicada |
+| `migrations/018_condicion_pago.sql` | condicion_pago + dias_credito en clientes | ⏳ **Pendiente aplicar** |
 
 ### SQL adicional ejecutado directamente
 
@@ -78,7 +81,7 @@
 - **Timezone:** Argentina (UTC-3) — helpers en `src/lib/dateUtils.js`
 - **Multi-tenancy:** RLS via `get_my_empresa_id()` + `empresa_id` en todas las tablas
 - **Logo:** Base64 en tabla `configuracion` (clave `logo_base64`)
-- **Roles:** `admin` (acceso total) | `staff` (permisos granulares en `profiles.permissions` JSONB)
+- **Roles:** `admin` (acceso total) | `staff` (permisos granulares en `profiles.permissions` JSONB) | `solo_caja` (solo Ventas + Caja)
 
 ---
 
@@ -95,59 +98,59 @@
 - **Open Items:** al cobrar CC, siempre referenciar `comprobante_id` en el movimiento HABER.
 - **Migrations:** siempre idempotentes — `IF NOT EXISTS`, `DROP POLICY/TRIGGER IF EXISTS`, `CREATE OR REPLACE`.
 - **Vistas:** siempre `WITH (security_invoker = true)` para respetar RLS del usuario.
+- **Multi-pago:** al confirmar venta, insertar en `comprobante_pagos` + `movimientos_caja` por cada pago no-CC + `cuenta_corriente_movimientos` para suma CC.
+- **Límite de crédito:** verificar `saldo_actual + montoCC > limite_credito` antes de confirmar venta CC (cuando limite > 0).
 
 ---
 
-## Análisis diferencial de mercado (Junio 2025)
+## Análisis diferencial de mercado (Junio 2026)
 
 > Basado en estudio de mercado Argentina PyME. Competidores: Xubio, Colppy, Tango.
-
-### Estado actual vs. lo que necesita el mercado
 
 | Feature | Competidores | Estado KAIROX |
 |---|---|---|
 | **ARCA/AFIP facturación electrónica** | Xubio ✓, Colppy ✓ | 🔴 **No implementado — CRÍTICO** |
 | POS táctil nativo | Colppy ✗, Xubio ✗ | ✅ Funcional |
-| Caja con apertura/cierre | Colppy ✗, Xubio ✗ | ✅ Funcional (falta discrepancia arqueo) |
+| Caja con apertura/cierre + arqueo | Colppy ✗, Xubio ✗ | ✅ Completo (arqueo por denominaciones) |
 | Open Item CC | Ambos básico | ✅ SAP-style completo |
-| Aging report (antigüedad deuda) | Ambos ✗ | ❌ Pendiente |
-| Alertas vencimiento CC | Ambos ✗ | ❌ Pendiente |
-| Límite de crédito por cliente | Ambos ✗ | ❌ Pendiente |
-| Multi-pago en una venta | Ambos ✗ | ❌ Pendiente |
-| Permisos granulares | Ambos limitado | ✅ Admin/Staff + JSONB permissions |
+| Aging report (antigüedad deuda) | Ambos ✗ | ✅ FIFO 30/60/90/+90 días |
+| Alertas vencimiento CC | Ambos ✗ | ✅ Banner en Dashboard |
+| Límite de crédito por cliente | Ambos ✗ | ✅ Con bloqueo en venta |
+| Multi-pago en una venta | Ambos ✗ | ✅ Efectivo + Transferencia + Tarjeta + CC |
+| Remito sin precios | Ambos ✗ | ✅ Toggle en comprobante imprimible |
+| Condiciones de venta flexibles | Ambos fijos | ✅ condicion_pago + dias_credito por cliente |
+| Import CSV productos/clientes | Regular | ✅ Drag-drop, mapeo visual, preview |
+| Permisos granulares + Solo Caja | Ambos limitado | ✅ Admin/Staff/SoloCaja + JSONB |
 | Audit log por usuario | Ambos básico | ✅ Completo (migration 016) |
-| Import CSV productos/clientes | Regular | ❌ Pendiente |
-| OC de clientes (pedidos) | Colppy parcial | ❌ Pendiente (hay cotizaciones, son distintas) |
-| Remito de transporte sin precios | Ambos ✗ | ❌ Pendiente |
-| Condiciones de venta flexibles | Ambos fijos | ❌ Pendiente |
-| Dashboard ejecutivo completo | Colppy mejorado 2025 | ⚠️ Parcial (falta top productos, CC vencidas, stock mínimo) |
-| Onboarding self-service <30min | Regular | ⚠️ Parcial (falta wizard + import) |
+| OC de clientes (pedidos) | Colppy parcial | ⏳ Pendiente (hay cotizaciones, son distintas) |
+| Dashboard ejecutivo completo | Colppy mejorado 2025 | ⚠️ Parcial (falta top productos clickeables) |
+| Onboarding self-service <30min | Regular | ⚠️ Parcial (falta wizard) |
 | Multi-moneda | Variable | ✅ Completo |
 | Conciliación bancaria | Variable | ✅ Completo |
 
 ---
 
-## Roadmap próxima sesión — ordenado por impacto
+## Roadmap — estado actualizado
 
-### 🔴 Fase 1 — Piso mínimo para vender (sin esto no hay producto)
+### 🔴 Fase 1 — Piso mínimo para vender (bloqueante)
 1. **Integración ARCA/AFIP** — Emisión comprobantes A/B/C, WS WSFE, CAE automático, QR en impresión, puntos de venta registrados por empresa
 
-### 🟠 Fase 2 — Gaps rápidos (días de trabajo, alto impacto)
-2. **Multi-pago en una venta** — Efectivo + Transferencia + Tarjeta en un mismo comprobante
-3. **Remito de transporte sin precios** — Toggle en config del comprobante imprimible
-4. **Aging report CC** — Antigüedad de deuda por cliente (30/60/90/+90 días)
-5. **Alertas vencimiento CC** — Facturas próximas a vencer y vencidas en dashboard
-6. **Discrepancia en cierre de caja** — Efectivo declarado vs. real con registro de diferencia
+### 🟠 Fase 2 — COMPLETADA ✅
+2. ~~Multi-pago en una venta~~ ✅
+3. ~~Remito de transporte sin precios~~ ✅
+4. ~~Aging report CC~~ ✅
+5. ~~Alertas vencimiento CC~~ ✅
+6. ~~Discrepancia en cierre de caja~~ ✅
 
-### 🟡 Fase 3 — Diferenciales vs. Colppy
-7. **Import CSV productos/clientes** — Mapeo visual de columnas, validación, preview
-8. **OC de clientes (Pedidos)** — Borrador → Confirmado → En preparación → Facturado. Distinto a cotizaciones.
-9. **Condiciones de venta flexibles** — Texto libre + días, guardables por cliente, reflejo en vencimiento
-10. **Límite de crédito por cliente** — Con bloqueo configurable al superar el límite
-11. **Usuario "solo caja"** — POS sin acceso a reportes ni configuración
+### 🟡 Fase 3 — Parcialmente completada
+7. ~~Import CSV productos/clientes~~ ✅
+8. **OC de clientes (Pedidos)** ⏳ — Borrador → Confirmado → En preparación → Facturado
+9. ~~Condiciones de venta flexibles~~ ✅
+10. ~~Límite de crédito por cliente~~ ✅
+11. ~~Usuario "solo caja"~~ ✅
 
 ### 🟢 Fase 4 — Retención y experiencia
-12. **Dashboard ejecutivo completo** — Top 5 productos, facturas CC vencidas, stock en mínimo, último mov. banco (todos clickeables)
+12. **Dashboard ejecutivo completo** — Top 5 productos clickeables, facturas CC vencidas, stock en mínimo, último mov. banco
 13. **Onboarding wizard completo** — Empresa → ARCA → Productos → Primera venta, con checklist de progreso
 14. **Datos de ejemplo precargados** — Para explorar el sistema antes de configurarlo
 
@@ -155,25 +158,54 @@
 
 ## 3 grandes proyectos reservados para el final
 
-> Estos se encaran después de completar las Fases 1-4. Son proyectos de negocio, no de features.
-
 | # | Proyecto | Por qué al final |
 |---|---|---|
-| 1 | **Deploy en Vercel** | Requiere dominio propio + variables de entorno de producción configuradas |
-| 2 | **Membership / Stripe o MercadoPago** | Requiere modelo de precios definido + ARCA funcionando primero |
-| 3 | **Modelo de licencias (Starter/Pro/Business)** | Requiere validación con primeros clientes reales |
+| 1 | **Deploy en Vercel** | Requiere dominio propio + variables de entorno de producción |
+| 2 | **Membership / Stripe o MercadoPago** | Requiere modelo de precios + ARCA primero |
+| 3 | **Modelo de licencias (Starter/Pro/Business)** | Requiere validación con primeros clientes |
+
+---
+
+## Próxima sesión — por dónde seguir
+
+1. **Aplicar migration 018** en Supabase Dashboard (SQL Editor → pegar `migrations/018_condicion_pago.sql`)
+2. **OC de clientes (Pedidos)** — único ítem pendiente de Fase 3
+3. **Fase 4** — Dashboard ejecutivo + onboarding wizard + datos de ejemplo
 
 ---
 
 ## Historial de sesiones
 
+### Sesión 2026-06-06 — Fases 2 y 3
+
+**Fase 2 completada:**
+- ✅ `migrations/017_multi_pago.sql` — tabla `comprobante_pagos` (RLS, índices) — **aplicada en Supabase**
+- ✅ `NuevaVentaModal` — multi-pago: botones rápidos + entrada manual + saldo pendiente + cambio
+- ✅ `ComprobantePrintModal` — desglose de pagos + toggle Remito sin precios (firma, sin precios/total)
+- ✅ `SaleDetailModal` — carga breakdown de `comprobante_pagos`
+- ✅ `dashboardAgingService` — algoritmo FIFO para aging 30/60/90/+90 días
+- ✅ `DashboardSection` — banner ámbar de deuda vencida clickeable → CuentaCorriente
+- ✅ `CuentaCorrienteSection` — tab "Antigüedad de Deuda" con tabla por cliente y totales
+- ✅ `CajaCierre` — arqueo por denominaciones ($1000→$10) + labels Sobrante/Faltante/Exacto
+- ✅ `CajaSection` — tab "Arqueos" con historial de sesiones (diferencia coloreada)
+
+**Fase 3 completada (excepto Pedidos):**
+- ✅ `migrations/018_condicion_pago.sql` — `condicion_pago` + `dias_credito` en clientes — **⏳ PENDIENTE aplicar**
+- ✅ `ClientesSection` — reescritura completa: form add/edit con todos los campos + botón Import CSV
+- ✅ `NuevaVentaModal` — check límite crédito + display condición/crédito usado al seleccionar cliente CC
+- ✅ `useUserPermissions` — `isSoloCaja()` + `getAccessibleSections()` con manejo de `solo_caja: true`
+- ✅ `StaffPermissionsModal` — presets: 🏪 Solo Caja / ✓ Todos / ✗ Ninguno
+- ✅ `Sidebar` — filtra items por `userPermissions` (staff y solo_caja ven solo sus secciones)
+- ✅ `ImportCSVModal` — componente reutilizable: drag-drop, auto-mapeo, preview, validación, batch insert ×50. Configurado para productos y clientes.
+- ✅ `ProductosSection` — botón "Importar CSV" integrado
+
 ### Sesión 2026-06-05 — Deuda técnica + Análisis de mercado
 - ✅ Migrations 013-016 ejecutadas en Supabase
 - ✅ Soft delete SAP-style en productos (toggle inactivos + reactivar)
 - ✅ Paginación en HistorialVentas, ComprasSection, ReportesSection
-- ✅ Edge functions deployadas con hardening (npx supabase functions deploy)
+- ✅ Edge functions deployadas con hardening
 - ✅ SMTP Resend.com verificado y funcionando
-- ✅ Fix alerta security_definer en v_saldo_proveedores (security_invoker = true)
+- ✅ Fix alerta security_definer en v_saldo_proveedores
 - ✅ Análisis diferencial de mercado incorporado al roadmap
 
 ### Sesión 2026-06-04 — Setup + Bugfixes + Open Item Management

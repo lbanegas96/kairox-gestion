@@ -2,7 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
-  ShoppingCart, Package, AlertCircle, ArrowUpRight, ArrowDownRight,
+  ShoppingCart, Package, AlertCircle, AlertTriangle, ArrowUpRight, ArrowDownRight,
   DollarSign, TrendingUp, Calendar, CreditCard, FileText, UserPlus,
   Wallet, BarChart3, RefreshCw, Archive, History, Percent, ClipboardList, ShoppingBag
 } from 'lucide-react';
@@ -16,7 +16,7 @@ import {
   CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
-import { dashboardService, DASHBOARD_KEYS } from '@/services/dashboardService';
+import { dashboardService, dashboardAgingService, DASHBOARD_KEYS } from '@/services/dashboardService';
 import { useQueryClient } from '@tanstack/react-query';
 
 // ─── MetricCard ───────────────────────────────────────────────────────────────
@@ -113,6 +113,13 @@ function DashboardSection({ onNavigate }) {
     queryKey: DASHBOARD_KEYS.flujoCaja(empresaId, 6),
     queryFn: () => dashboardService.getFlujoCajaMensual(empresaId, 6),
     enabled: !!empresaId,
+  });
+
+  const { data: aging } = useQuery({
+    queryKey: DASHBOARD_KEYS.aging(empresaId),
+    queryFn: () => dashboardAgingService.getAgingResumen(empresaId),
+    enabled: !!empresaId,
+    staleTime: 1000 * 60 * 5,
   });
 
   const loading = kpisLoading;
@@ -250,6 +257,39 @@ function DashboardSection({ onNavigate }) {
           onClick={() => onNavigate?.('productos')}
         />
       </div>
+
+      {/* ── Alertas CC vencidas ──────────────────────────────────────────────── */}
+      {aging && (aging.totals.d60 + aging.totals.d90 + aging.totals.d90plus) > 0 && (
+        <div
+          className="flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-5 py-4 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+          onClick={() => onNavigate?.('cuentacorriente')}
+        >
+          <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+              {aging.totals.vencidos} {aging.totals.vencidos === 1 ? 'cliente con deuda vencida' : 'clientes con deuda vencida'} (+30 días)
+            </p>
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
+              {aging.totals.d60 > 0 && (
+                <span className="text-xs text-amber-700 dark:text-amber-400">
+                  31-60 días: <span className="font-bold">${aging.totals.d60.toLocaleString('es-AR', { minimumFractionDigits: 0 })}</span>
+                </span>
+              )}
+              {aging.totals.d90 > 0 && (
+                <span className="text-xs text-orange-700 dark:text-orange-400">
+                  61-90 días: <span className="font-bold">${aging.totals.d90.toLocaleString('es-AR', { minimumFractionDigits: 0 })}</span>
+                </span>
+              )}
+              {aging.totals.d90plus > 0 && (
+                <span className="text-xs text-red-700 dark:text-red-400">
+                  +90 días: <span className="font-bold">${aging.totals.d90plus.toLocaleString('es-AR', { minimumFractionDigits: 0 })}</span>
+                </span>
+              )}
+            </div>
+          </div>
+          <span className="text-xs text-amber-600 dark:text-amber-400 font-medium whitespace-nowrap">Ver Antigüedad →</span>
+        </div>
+      )}
 
       {/* ── Fila 2: Gráficos ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

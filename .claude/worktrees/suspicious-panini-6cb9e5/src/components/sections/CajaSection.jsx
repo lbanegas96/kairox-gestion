@@ -5,7 +5,7 @@ import {
   Wallet, AlertCircle, CheckCircle2, User, X, Bot,
   Coins, Receipt, Scale, ShoppingCart, ArrowUp, ArrowDown, Percent,
   PieChart, BarChart3, Download, RefreshCw, Clock, Trash2, ArrowUpDown, Lock,
-  Unlock, Archive
+  Unlock, Archive, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -73,6 +73,10 @@ function CajaSection() {
     search: ''
   });
 
+  // Arqueos (historial de sesiones)
+  const [arqueos, setArqueos] = useState([]);
+  const [arqueosLoading, setArqueosLoading] = useState(false);
+
   // Report Period State
   const [reportPeriod, setReportPeriod] = useState('thisMonth');
   const [customDateRange, setCustomDateRange] = useState({
@@ -115,9 +119,8 @@ function CajaSection() {
 
   useEffect(() => {
     if (!user || !user.empresa_id || sessionLoading) return;
-    if (activeTab === 'movimientos') {
-      loadMovimientos();
-    }
+    if (activeTab === 'movimientos') loadMovimientos();
+    if (activeTab === 'arqueos') loadArqueos();
     loadFinancialSummary();
   }, [user, filters, activeTab, reportPeriod, customDateRange, currentSession, isSessionOpen, sessionLoading]);
 
@@ -190,6 +193,25 @@ function CajaSection() {
       toast({ title: "Error", description: "No se pudieron cargar los movimientos", variant: "destructive" });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadArqueos = async () => {
+    if (!user?.empresa_id) return;
+    setArqueosLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('caja_sesiones')
+        .select('*')
+        .eq('empresa_id', user.empresa_id)
+        .order('apertura_fecha', { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      setArqueos(data || []);
+    } catch (err) {
+      console.error('Error loading arqueos:', err);
+    } finally {
+      setArqueosLoading(false);
     }
   };
 
@@ -586,6 +608,7 @@ function CajaSection() {
           <TabsTrigger value="movimientos" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white rounded-md px-4 py-2"><Filter className="w-4 h-4 mr-2"/> Movimientos</TabsTrigger>
           <TabsTrigger value="nuevo" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white rounded-md px-4 py-2"><Plus className="w-4 h-4 mr-2"/> Nuevo Movimiento</TabsTrigger>
           <TabsTrigger value="resumen" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white rounded-md px-4 py-2"><Wallet className="w-4 h-4 mr-2"/> Reporte Histórico</TabsTrigger>
+          <TabsTrigger value="arqueos" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white rounded-md px-4 py-2"><Archive className="w-4 h-4 mr-2"/> Arqueos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="movimientos" className="space-y-4">
@@ -745,6 +768,92 @@ function CajaSection() {
         </TabsContent>
 
         {/* --- TAB: RESUMEN (Preserved - Historical View) --- */}
+        {/* ── Tab: Arqueos ─────────────────────────────────────────────────────── */}
+        <TabsContent value="arqueos" className="space-y-4">
+          <div className="kairox-bg-card border kairox-border rounded-xl overflow-hidden shadow-lg">
+            {arqueosLoading ? (
+              <div className="flex items-center justify-center h-32 text-slate-400">
+                <Loader2 className="h-6 w-6 animate-spin mr-2" /> Cargando arqueos...
+              </div>
+            ) : arqueos.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-32 text-slate-400">
+                <Archive className="h-10 w-10 mb-2 opacity-30" />
+                <p>No hay sesiones de caja registradas aún</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left border-collapse">
+                  <thead className="kairox-table-header text-xs uppercase tracking-wider border-b kairox-border dark:bg-slate-900/50 dark:text-slate-300">
+                    <tr>
+                      <th className="p-4">Apertura</th>
+                      <th className="p-4">Cierre</th>
+                      <th className="p-4 text-right">Inicial</th>
+                      <th className="p-4 text-right">Esperado</th>
+                      <th className="p-4 text-right">Real</th>
+                      <th className="p-4 text-center">Diferencia</th>
+                      <th className="p-4">Observaciones</th>
+                      <th className="p-4 text-center">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {arqueos.map(sesion => {
+                      const diff = Number(sesion.diferencia ?? 0);
+                      const isPerfect = Math.abs(diff) < 0.01;
+                      const esSobrante = diff > 0.01;
+                      return (
+                        <tr key={sesion.id} className="border-t kairox-border dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                          <td className="p-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                            {sesion.apertura_fecha ? formatDateTimeAR(sesion.apertura_fecha) : '—'}
+                          </td>
+                          <td className="p-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                            {sesion.cierre_fecha ? formatDateTimeAR(sesion.cierre_fecha) : '—'}
+                          </td>
+                          <td className="p-4 text-right font-mono text-slate-700 dark:text-slate-300">
+                            ${Number(sesion.monto_inicial ?? 0).toFixed(2)}
+                          </td>
+                          <td className="p-4 text-right font-mono text-slate-700 dark:text-slate-300">
+                            {sesion.monto_final_esperado != null ? `$${Number(sesion.monto_final_esperado).toFixed(2)}` : '—'}
+                          </td>
+                          <td className="p-4 text-right font-mono text-slate-700 dark:text-slate-300">
+                            {sesion.monto_final_real != null ? `$${Number(sesion.monto_final_real).toFixed(2)}` : '—'}
+                          </td>
+                          <td className="p-4 text-center">
+                            {sesion.estado === 'abierta' ? (
+                              <span className="text-slate-400 text-xs">—</span>
+                            ) : (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${
+                                isPerfect
+                                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                  : esSobrante
+                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                  : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                              }`}>
+                                {isPerfect ? '✓ Exacto' : esSobrante ? `+$${diff.toFixed(2)}` : `-$${Math.abs(diff).toFixed(2)}`}
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-4 text-slate-500 dark:text-slate-400 max-w-[180px] truncate text-xs">
+                            {sesion.observaciones || '—'}
+                          </td>
+                          <td className="p-4 text-center">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${
+                              sesion.estado === 'abierta'
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                            }`}>
+                              {sesion.estado === 'abierta' ? '● Abierta' : '✓ Cerrada'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
         <TabsContent value="resumen" className="space-y-6">
            <div className="kairox-bg-card p-4 rounded-xl border kairox-border text-center mb-4 dark:bg-slate-950 dark:border-slate-800">
               <p className="text-sm text-slate-500 dark:text-slate-400">Este resumen muestra datos históricos globales.</p>

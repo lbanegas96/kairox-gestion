@@ -114,6 +114,49 @@ export default function StaffPermissionsModal({ isOpen, onClose, userData, onSav
           </div>
         ) : (
           <div className="space-y-4 py-2">
+            {/* Presets rápidos */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Presets:</span>
+              <button
+                type="button"
+                onClick={() => setPermissions({ solo_caja: true })}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  permissions.solo_caja
+                    ? 'bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-400'
+                    : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-amber-300 hover:text-amber-600'
+                }`}
+              >
+                🏪 Solo Caja
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const all = {};
+                  modules.forEach(m => { all[m.id] = true; });
+                  setPermissions(all);
+                }}
+                className="px-2.5 py-1 rounded-full text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-500 hover:border-blue-300 hover:text-blue-600 transition-colors"
+              >
+                ✓ Todos
+              </button>
+              <button
+                type="button"
+                onClick={() => setPermissions({})}
+                className="px-2.5 py-1 rounded-full text-xs font-medium border border-slate-200 dark:border-slate-700 text-slate-500 hover:border-red-300 hover:text-red-600 transition-colors"
+              >
+                ✗ Ninguno
+              </button>
+            </div>
+
+            {permissions.solo_caja ? (
+              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-amber-700 dark:text-amber-300 text-sm flex items-start gap-2">
+                <span className="text-lg">🏪</span>
+                <div>
+                  <p className="font-semibold">Perfil: Solo Caja</p>
+                  <p className="text-xs mt-0.5">Este usuario solo verá las secciones <strong>Ventas</strong> y <strong>Caja</strong>. Sin acceso a reportes, configuración ni clientes.</p>
+                </div>
+              </div>
+            ) : (
             <div className="flex justify-end">
               <Button variant="link" size="sm" onClick={handleSelectAll} className="h-auto p-0 text-blue-600">
                 {modules.every(m => permissions[m.id]) ? 'Deseleccionar todo' : 'Seleccionar todo'}
@@ -147,6 +190,8 @@ export default function StaffPermissionsModal({ isOpen, onClose, userData, onSav
                 </div>
               ))}
             </div>
+
+            )} {/* cierre del if !solo_caja */}
 
             <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/10 rounded-md text-xs text-blue-700 dark:text-blue-300">
                <AlertTriangle className="h-4 w-4 shrink-0" />

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import ImportCSVModal from '@/components/ui/ImportCSVModal';
 import { getNowAR, formatDateTimeAR } from '@/lib/dateUtils';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -180,6 +181,7 @@ const ProductosSection = () => {
   
   // Modal States
   const [isNewProductOpen, setIsNewProductOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [isEditProductOpen, setIsEditProductOpen] = useState(false);
   const [isNewProviderOpen, setIsNewProviderOpen] = useState(false);
   const [isMovimientoOpen, setIsMovimientoOpen] = useState(false);
@@ -657,6 +659,11 @@ const ProductosSection = () => {
              </DialogContent>
            </Dialog>
 
+           {/* Import CSV */}
+           <Button variant="outline" onClick={() => setIsImportOpen(true)} className="border-slate-300 dark:border-slate-700 dark:text-white">
+             <Upload className="h-4 w-4 mr-2" /> Importar CSV
+           </Button>
+
            {/* Add Product Dialog */}
            <Dialog open={isNewProductOpen} onOpenChange={setIsNewProductOpen}>
             <DialogTrigger asChild>
@@ -951,6 +958,15 @@ const ProductosSection = () => {
             </form>
          </DialogContent>
        </Dialog>
+
+       <ImportCSVModal
+         open={isImportOpen}
+         onOpenChange={setIsImportOpen}
+         tipo="productos"
+         empresaId={user?.empresa_id}
+         tenantId={user?.tenant_id}
+         onSuccess={() => { fetchProducts(); fetchHistory(); }}
+       />
     </div>
   );
 };

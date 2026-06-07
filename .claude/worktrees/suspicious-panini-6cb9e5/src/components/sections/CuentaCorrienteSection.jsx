@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Search, 
-  DollarSign, 
-  AlertTriangle, 
+import { useQuery } from '@tanstack/react-query';
+import {
+  Search,
+  DollarSign,
+  AlertTriangle,
   Users,
   CreditCard,
   ArrowLeft,
@@ -14,8 +15,10 @@ import {
   Banknote,
   Eye,
   ArrowDownCircle,
-  ArrowUpCircle
+  ArrowUpCircle,
+  Clock
 } from 'lucide-react';
+import { dashboardAgingService, DASHBOARD_KEYS } from '@/services/dashboardService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -58,6 +61,9 @@ function CuentaCorrienteSection() {
   // Filters
   const [statusFilter, setStatusFilter] = useState('Todos'); // 'Todos', 'Con Deuda', 'Al Día'
 
+  // Tabs
+  const [activeTab, setActiveTab] = useState('saldos'); // 'saldos' | 'antigüedad'
+
   // Modals
   const [selectedClient, setSelectedClient] = useState(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -70,6 +76,13 @@ function CuentaCorrienteSection() {
     nota: ''
   });
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+
+  const { data: aging, isLoading: agingLoading } = useQuery({
+    queryKey: DASHBOARD_KEYS.aging(user?.empresa_id),
+    queryFn: () => dashboardAgingService.getAgingResumen(user.empresa_id),
+    enabled: !!user?.empresa_id && activeTab === 'antigüedad',
+    staleTime: 1000 * 60 * 5,
+  });
 
   useEffect(() => {
     if (user && user.empresa_id) {
@@ -246,6 +259,8 @@ function CuentaCorrienteSection() {
     );
   };
 
+  const fmtCurrency = (n) => `$${Number(n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 })}`;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -259,6 +274,129 @@ function CuentaCorrienteSection() {
            </div>
         )}
       </div>
+
+      {/* ── Tabs ─────────────────────────────────────────────────────────────── */}
+      <div className="flex border-b border-slate-200 dark:border-slate-800 gap-1">
+        <button
+          onClick={() => setActiveTab('saldos')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            activeTab === 'saldos'
+              ? 'border-blue-600 text-blue-600 dark:text-blue-400 dark:border-blue-400'
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          Saldos
+        </button>
+        <button
+          onClick={() => setActiveTab('antigüedad')}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 ${
+            activeTab === 'antigüedad'
+              ? 'border-amber-600 text-amber-600 dark:text-amber-400 dark:border-amber-400'
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+          }`}
+        >
+          <Clock className="h-3.5 w-3.5" /> Antigüedad de Deuda
+        </button>
+      </div>
+
+      {/* ══ Vista Antigüedad ════════════════════════════════════════════════════ */}
+      {activeTab === 'antigüedad' && (
+        <div className="space-y-4">
+          {agingLoading ? (
+            <div className="flex items-center justify-center h-40 text-slate-400">
+              <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mr-3" />
+              Calculando antigüedad...
+            </div>
+          ) : !aging || aging.clientes.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-40 text-slate-400">
+              <CheckCircle className="h-12 w-12 mb-3 text-emerald-400" />
+              <p className="font-medium">Sin deudas pendientes</p>
+            </div>
+          ) : (
+            <>
+              {/* Resumen por bucket */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: '0–30 días', value: aging.totals.d30, color: 'from-emerald-600 to-emerald-500', textColor: 'text-emerald-600' },
+                  { label: '31–60 días', value: aging.totals.d60, color: 'from-amber-600 to-amber-500', textColor: 'text-amber-600' },
+                  { label: '61–90 días', value: aging.totals.d90, color: 'from-orange-600 to-orange-500', textColor: 'text-orange-600' },
+                  { label: '+90 días', value: aging.totals.d90plus, color: 'from-red-700 to-red-600', textColor: 'text-red-600' },
+                ].map(({ label, value, color, textColor }) => (
+                  <Card key={label} className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
+                    <CardContent className="p-4">
+                      <p className="text-xs text-slate-500 font-medium uppercase tracking-wider mb-1">{label}</p>
+                      <p className={`text-xl font-black ${value > 0 ? textColor : 'text-slate-400'}`}>
+                        {fmtCurrency(value)}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Tabla por cliente */}
+              <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                      <TableRow>
+                        <TableHead className="pl-6 font-semibold text-slate-600 dark:text-slate-300 w-[220px]">Cliente</TableHead>
+                        <TableHead className="text-right font-semibold text-emerald-700 dark:text-emerald-400">0–30 días</TableHead>
+                        <TableHead className="text-right font-semibold text-amber-700 dark:text-amber-400">31–60 días</TableHead>
+                        <TableHead className="text-right font-semibold text-orange-700 dark:text-orange-400">61–90 días</TableHead>
+                        <TableHead className="text-right font-semibold text-red-700 dark:text-red-400">+90 días</TableHead>
+                        <TableHead className="text-right font-semibold text-slate-600 dark:text-slate-300 pr-6">Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {aging.clientes.map((row) => (
+                        <TableRow
+                          key={row.clienteId}
+                          className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30"
+                          onClick={() => {
+                            const c = clients.find(cl => cl.id === row.clienteId);
+                            if (c) openDetailModal(c);
+                          }}
+                        >
+                          <TableCell className="pl-6 font-medium text-slate-800 dark:text-slate-200">{row.nombre}</TableCell>
+                          <TableCell className="text-right font-mono text-sm text-emerald-700 dark:text-emerald-400">
+                            {row.d30 > 0 ? fmtCurrency(row.d30) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm text-amber-700 dark:text-amber-400">
+                            {row.d60 > 0 ? fmtCurrency(row.d60) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm text-orange-700 dark:text-orange-400">
+                            {row.d90 > 0 ? fmtCurrency(row.d90) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm text-red-700 dark:text-red-400">
+                            {row.d90plus > 0 ? fmtCurrency(row.d90plus) : <span className="text-slate-300 dark:text-slate-700">—</span>}
+                          </TableCell>
+                          <TableCell className="text-right font-mono font-bold text-slate-800 dark:text-slate-200 pr-6">
+                            {fmtCurrency(row.total)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {/* Fila de totales */}
+                      <TableRow className="bg-slate-50 dark:bg-slate-800/50 border-t-2 border-slate-200 dark:border-slate-700 font-bold">
+                        <TableCell className="pl-6 text-slate-600 dark:text-slate-400 text-xs uppercase tracking-wider">Totales</TableCell>
+                        <TableCell className="text-right font-mono text-emerald-700 dark:text-emerald-400">{fmtCurrency(aging.totals.d30)}</TableCell>
+                        <TableCell className="text-right font-mono text-amber-700 dark:text-amber-400">{fmtCurrency(aging.totals.d60)}</TableCell>
+                        <TableCell className="text-right font-mono text-orange-700 dark:text-orange-400">{fmtCurrency(aging.totals.d90)}</TableCell>
+                        <TableCell className="text-right font-mono text-red-700 dark:text-red-400">{fmtCurrency(aging.totals.d90plus)}</TableCell>
+                        <TableCell className="text-right font-mono text-slate-800 dark:text-slate-200 pr-6">
+                          {fmtCurrency(aging.totals.d30 + aging.totals.d60 + aging.totals.d90 + aging.totals.d90plus)}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              </Card>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ══ Vista Saldos (existente) ════════════════════════════════════════════ */}
+      {activeTab === 'saldos' && <>
 
       {/* Metrics Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -531,6 +669,7 @@ function CuentaCorrienteSection() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      </> /* fin activeTab === 'saldos' */}
     </div>
   );
 }

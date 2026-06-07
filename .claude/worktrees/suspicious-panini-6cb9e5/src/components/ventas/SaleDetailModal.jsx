@@ -16,7 +16,8 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale }) => {
   const [sale, setSale] = useState(null);
   const [items, setItems] = useState([]);
   const [showPrintModal, setShowPrintModal] = useState(false);
-  
+  const [pagos, setPagos] = useState([]);
+
   // Edit State
   const [isEditing, setIsEditing] = useState(false);
   const [newStatus, setNewStatus] = useState('');
@@ -28,6 +29,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale }) => {
     } else {
       setSale(null);
       setItems([]);
+      setPagos([]);
       setIsEditing(false);
       setNewStatus('');
     }
@@ -42,7 +44,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale }) => {
         .select('*, clientes(nombre)')
         .eq('id', saleId)
         .single();
-      
+
       if (saleError) throw saleError;
 
       // Ensure estado_pago exists (for legacy records)
@@ -55,7 +57,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale }) => {
         .from('comprobante_items')
         .select('*, productos(nombre)')
         .eq('comprobante_id', saleId);
-      
+
       if (itemsError) throw itemsError;
 
       const formattedItems = itemsData.map(i => ({
@@ -63,6 +65,14 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale }) => {
         producto_nombre: i.productos?.nombre || 'Producto Eliminado'
       }));
       setItems(formattedItems);
+
+      // Fetch pagos breakdown (tabla nueva — falla silenciosamente en registros legacy)
+      const { data: pagosData } = await supabase
+        .from('comprobante_pagos')
+        .select('metodo, monto')
+        .eq('comprobante_id', saleId)
+        .order('created_at');
+      setPagos(pagosData || []);
 
     } catch (error) {
       console.error("Error loading sale details:", error);
@@ -138,6 +148,16 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale }) => {
                   <div className="text-xs text-slate-500 dark:text-slate-400">
                     Pago: {sale.forma_pago}
                   </div>
+                  {pagos.length > 1 && (
+                    <div className="text-xs space-y-0.5 border-t border-slate-200 dark:border-slate-700 pt-1.5 mt-1">
+                      {pagos.map((p, i) => (
+                        <div key={i} className="flex justify-between text-slate-500 dark:text-slate-400">
+                          <span>{p.metodo}</span>
+                          <span className="font-medium text-slate-700 dark:text-slate-300">${Number(p.monto).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border kairox-border space-y-3">
@@ -236,11 +256,12 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale }) => {
       </Dialog>
       
       {sale && (
-         <ComprobantePrintModal 
-           open={showPrintModal} 
+         <ComprobantePrintModal
+           open={showPrintModal}
            onOpenChange={setShowPrintModal}
            comprobante={sale}
            items={items}
+           pagos={pagos}
          />
       )}
     </>
