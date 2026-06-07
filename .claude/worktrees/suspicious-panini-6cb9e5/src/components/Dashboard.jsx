@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+
+// Secciones principales
+import LaunchpadSection from '@/components/sections/LaunchpadSection';
 import DashboardSection from '@/components/sections/DashboardSection';
 import ProductosSection from '@/components/sections/ProductosSection';
 import VentasSection from '@/components/sections/VentasSection';
@@ -18,22 +21,37 @@ import OrdenesCompraSection from '@/components/sections/OrdenesCompraSection';
 import PlanCuentasSection from '@/components/sections/PlanCuentasSection';
 import CuentasBancariasSection from '@/components/sections/CuentasBancariasSection';
 import ProveedoresSection from '@/components/sections/ProveedoresSection';
+
+// Portales de área
+import VentasPortal from '@/components/portals/VentasPortal';
+import ComprasPortal from '@/components/portals/ComprasPortal';
+import FinanzasPortal from '@/components/portals/FinanzasPortal';
+import InventarioPortal from '@/components/portals/InventarioPortal';
+
 import { CommandPalette, useCommandPalette } from '@/components/CommandPalette';
-import { useAuth } from '@/contexts/SupabaseAuthContext';
 
 function Dashboard({ user, onLogout }) {
   const [activeSection, setActiveSection] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const { open: cmdOpen, setOpen: setCmdOpen } = useCommandPalette();
 
-  // Removed permission checks for rendering sections.
-  // All sections are now accessible for viewing.
-  // Specific actions within sections will be gated by permissions if needed.
-
   const renderSection = () => {
     switch (activeSection) {
+      // ── Home / Launchpad ──────────────────────────────────────
       case 'dashboard':
-        return <DashboardSection onNavigate={setActiveSection} />;
+        return <LaunchpadSection onNavigate={setActiveSection} />;
+
+      // ── Portales de área ──────────────────────────────────────
+      case 'portal_ventas':
+        return <VentasPortal onNavigate={setActiveSection} />;
+      case 'portal_compras':
+        return <ComprasPortal onNavigate={setActiveSection} />;
+      case 'portal_finanzas':
+        return <FinanzasPortal onNavigate={setActiveSection} />;
+      case 'portal_inventario':
+        return <InventarioPortal onNavigate={setActiveSection} />;
+
+      // ── Módulos individuales ──────────────────────────────────
       case 'productos':
         return <ProductosSection />;
       case 'ventas':
@@ -64,21 +82,26 @@ function Dashboard({ user, onLogout }) {
         return <CuentasBancariasSection />;
       case 'proveedores':
         return <ProveedoresSection />;
-      default:
+
+      // ── Panel ejecutivo legacy (accesible desde Finanzas portal) ──
+      case 'panel_ejecutivo':
         return <DashboardSection onNavigate={setActiveSection} />;
+
+      default:
+        return <LaunchpadSection onNavigate={setActiveSection} />;
     }
   };
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 flex transition-colors duration-300">
-      <Sidebar 
-        activeSection={activeSection} 
+      <Sidebar
+        activeSection={activeSection}
         setActiveSection={setActiveSection}
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
       />
-      
-      <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-0'}`}>
+
+      <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-0 md:ml-20'}`}>
         <Header
           user={user}
           onLogout={onLogout}
@@ -90,10 +113,10 @@ function Dashboard({ user, onLogout }) {
           <AnimatePresence mode="wait">
             <motion.div
               key={activeSection}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.22 }}
             >
               {renderSection()}
             </motion.div>

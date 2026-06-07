@@ -8,19 +8,27 @@ import {
 } from 'lucide-react';
 
 const SECCIONES = [
-  { id: 'dashboard',       label: 'Dashboard',         icon: LayoutDashboard, keywords: ['inicio', 'home'] },
-  { id: 'ventas',          label: 'Ventas',             icon: Receipt,         keywords: ['pos', 'factura', 'vender'] },
-  { id: 'productos',       label: 'Inventario',         icon: Package,         keywords: ['stock', 'producto', 'almacen'] },
-  { id: 'compras',         label: 'Compras',            icon: ShoppingCart,    keywords: ['proveedor', 'comprar'] },
-  { id: 'caja',            label: 'Caja',               icon: DollarSign,      keywords: ['efectivo', 'dinero', 'sesion'] },
-  { id: 'clientes',        label: 'Clientes',           icon: Users,           keywords: ['cliente', 'contacto'] },
-  { id: 'cotizaciones',    label: 'Cotizaciones',       icon: FileText,        keywords: ['presupuesto', 'cotizar'] },
-  { id: 'ordenes_compra',  label: 'Órdenes de Compra',  icon: ShoppingCart,    keywords: ['oc', 'orden', 'pedido'] },
-  { id: 'proveedores',     label: 'Proveedores',         icon: Truck,           keywords: ['proveedor', 'cuit', 'ficha'] },
-  { id: 'cuentacorriente', label: 'Cuenta Corriente',   icon: TrendingUp,      keywords: ['deuda', 'credito', 'saldo'] },
-  { id: 'plan_cuentas',    label: 'Contabilidad',       icon: BookOpen,        keywords: ['contabilidad', 'cuentas', 'asiento', 'balance', 'diario'] },
-  { id: 'reportes',        label: 'Reportes',           icon: FileText,        keywords: ['reporte', 'informe', 'pdf'] },
-  { id: 'configuracion',   label: 'Configuración',      icon: Settings,        keywords: ['config', 'empresa', 'logo'] },
+  // Home
+  { id: 'dashboard',        label: 'Inicio (Launchpad)',  icon: LayoutDashboard, keywords: ['inicio', 'home', 'launchpad'] },
+  // Portales de área
+  { id: 'portal_ventas',    label: 'Portal Ventas',       icon: TrendingUp,      keywords: ['portal', 'area', 'ventas'] },
+  { id: 'portal_compras',   label: 'Portal Compras',      icon: ShoppingCart,    keywords: ['portal', 'area', 'compras'] },
+  { id: 'portal_finanzas',  label: 'Portal Finanzas',     icon: DollarSign,      keywords: ['portal', 'area', 'finanzas', 'caja', 'banco'] },
+  { id: 'portal_inventario',label: 'Portal Inventario',   icon: Package,         keywords: ['portal', 'area', 'inventario', 'stock'] },
+  // Módulos
+  { id: 'ventas',           label: 'Ventas (POS)',         icon: Receipt,         keywords: ['pos', 'factura', 'vender'] },
+  { id: 'productos',        label: 'Inventario',           icon: Package,         keywords: ['stock', 'producto', 'almacen'] },
+  { id: 'compras',          label: 'Compras',              icon: ShoppingCart,    keywords: ['comprar', 'compra directa'] },
+  { id: 'caja',             label: 'Caja',                 icon: DollarSign,      keywords: ['efectivo', 'dinero', 'sesion'] },
+  { id: 'clientes',         label: 'Clientes',             icon: Users,           keywords: ['cliente', 'contacto'] },
+  { id: 'cotizaciones',     label: 'Cotizaciones',         icon: FileText,        keywords: ['presupuesto', 'cotizar'] },
+  { id: 'ordenes_compra',   label: 'Órdenes de Compra',    icon: ShoppingCart,    keywords: ['oc', 'orden', 'pedido'] },
+  { id: 'proveedores',      label: 'Proveedores',          icon: Truck,           keywords: ['proveedor', 'cuit', 'ficha'] },
+  { id: 'cuentacorriente',  label: 'Cuenta Corriente',     icon: TrendingUp,      keywords: ['deuda', 'credito', 'saldo'] },
+  { id: 'plan_cuentas',     label: 'Contabilidad',         icon: BookOpen,        keywords: ['contabilidad', 'cuentas', 'asiento', 'balance', 'diario'] },
+  { id: 'reportes',         label: 'Reportes',             icon: FileText,        keywords: ['reporte', 'informe', 'pdf'] },
+  { id: 'configuracion',    label: 'Configuración',        icon: Settings,        keywords: ['config', 'empresa', 'logo'] },
+  { id: 'panel_ejecutivo',  label: 'Panel Ejecutivo',      icon: LayoutDashboard, keywords: ['dashboard', 'graficos', 'ejecutivo', 'kpi'] },
 ];
 
 function useDebounce(value, delay) {
