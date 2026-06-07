@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+
 import { 
   BarChart3, Package, TrendingUp, Banknote, ShoppingCart, 
   Users, CreditCard, FileSpreadsheet
@@ -336,11 +336,8 @@ function ReportesSection() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {reports.map((report, index) => (
-          <motion.div
+          <div
             key={report.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
             className="group relative kairox-bg-card border kairox-border hover:border-slate-400 dark:hover:border-slate-600 rounded-xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden cursor-pointer dark:bg-slate-950 dark:border-slate-800"
             onClick={() => openReportDialog(report)}
           >
@@ -364,7 +361,7 @@ function ReportesSection() {
             <Button className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-500 transition-all relative z-10">
               Ver Reporte
             </Button>
-          </motion.div>
+          </div>
         ))}
       </div>
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import { Lock, Mail, User, UserCircle, ArrowRight, Loader2, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -130,15 +130,10 @@ function AuthPage() {
         <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-[#00D4FF]/10 rounded-full blur-[100px]" />
         <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-[#A855F7]/10 rounded-full blur-[100px]" />
         
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-          className="w-full max-w-md relative z-10"
-        >
+        <div className="w-full max-w-md relative z-10 animate-in fade-in zoom-in-95 duration-500">
           <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 shadow-2xl p-8">
             <div className="text-center mb-8">
-              <motion.div initial={{ y: -20 }} animate={{ y: 0 }} className="inline-block mb-4">
+              <div className="inline-block mb-4">
                 {config?.logo_base64 ? (
                   <div className="h-24 w-full flex items-center justify-center mb-2 overflow-hidden">
                     <img src={config.logo_base64} alt="Logo" className="max-h-full max-w-[200px] object-contain drop-shadow-lg" />
@@ -150,8 +145,8 @@ function AuthPage() {
                     </div>
                   </div>
                 )}
-              </motion.div>
-              
+              </div>
+
               <h1 className="text-3xl font-bold mb-2 text-white">
                 {config?.nombre_empresa || (isLogin ? 'Bienvenido' : 'Crear Cuenta')}
               </h1>
@@ -161,14 +156,8 @@ function AuthPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <AnimatePresence mode="wait">
-                {!isLogin && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="space-y-4 overflow-hidden"
-                  >
+              {!isLogin && (
+                  <div className="space-y-4 overflow-hidden">
                     <div className="space-y-2">
                         <Label htmlFor="companyName" className="text-slate-300 text-xs uppercase font-bold tracking-wider">Nombre de tu Empresa</Label>
                         <div className="relative group">
@@ -216,9 +205,8 @@ function AuthPage() {
                         </div>
                       </div>
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                  </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-slate-300 text-xs uppercase font-bold tracking-wider">Email</Label>
@@ -276,7 +264,7 @@ function AuthPage() {
               </Button>
             </div>
           </div>
-        </motion.div>
+        </div>
       </div>
     </>
   );

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+
 import { Wallet, ArrowRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,12 +23,7 @@ const CajaApertura = () => {
 
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.3 }}
-        className="w-full max-w-md"
-      >
+      <div className="w-full max-w-md animate-in fade-in zoom-in-95 duration-300">
         <Card className="border-slate-200 dark:border-slate-800 shadow-xl">
           <CardHeader className="text-center pb-2">
             <div className="mx-auto w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4">
@@ -82,7 +77,7 @@ const CajaApertura = () => {
             </CardFooter>
           </form>
         </Card>
-      </motion.div>
+      </div>
     </div>
   );
 };

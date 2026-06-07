@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
+
 import {
   ShoppingCart, Package, AlertCircle, ArrowUpRight, ArrowDownRight,
   DollarSign, TrendingUp, Calendar, CreditCard, FileText, UserPlus,
@@ -22,10 +22,9 @@ import { useQueryClient } from '@tanstack/react-query';
 
 // ─── MetricCard ───────────────────────────────────────────────────────────────
 const MetricCard = React.memo(({ title, value, icon: Icon, trend, trendValue, gradient, loading, onClick, customContent }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
-    whileHover={{ scale: 1.02, y: -2 }} onClick={onClick}
-    className={`cursor-pointer ${onClick ? 'hover:shadow-xl' : ''}`}
+  <div
+    onClick={onClick}
+    className={`cursor-pointer transition-transform duration-200 hover:-translate-y-0.5 ${onClick ? 'hover:shadow-xl' : ''}`}
   >
     <Card className={`border-slate-200 dark:border-slate-800 bg-gradient-to-br ${gradient} shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden relative`}>
       <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-full" />
@@ -55,22 +54,21 @@ const MetricCard = React.memo(({ title, value, icon: Icon, trend, trendValue, gr
         )}
       </CardContent>
     </Card>
-  </motion.div>
+  </div>
 ));
 
 // ─── QuickActionButton ────────────────────────────────────────────────────────
 const QuickActionButton = ({ icon: Icon, label, onClick, gradient, disabled }) => (
-  <motion.button
-    whileHover={!disabled ? { scale: 1.05, y: -3 } : {}} whileTap={!disabled ? { scale: 0.95 } : {}}
+  <button
     onClick={onClick} disabled={disabled}
-    className={`flex flex-col items-center justify-center p-6 rounded-xl bg-gradient-to-br ${gradient} shadow-lg hover:shadow-2xl transition-all duration-300 group relative overflow-hidden ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+    className={`flex flex-col items-center justify-center p-6 rounded-xl bg-gradient-to-br ${gradient} shadow-lg hover:shadow-2xl transition-all duration-300 group relative overflow-hidden hover:-translate-y-1 active:scale-95 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
   >
     <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-300" />
     <div className="p-3 rounded-full bg-white/20 backdrop-blur-sm mb-3 group-hover:bg-white/30 transition-all relative z-10">
       <Icon className="h-6 w-6 text-white" />
     </div>
     <span className="text-sm font-semibold text-white relative z-10">{label}</span>
-  </motion.button>
+  </button>
 );
 
 // ─── Tooltip personalizado para charts ────────────────────────────────────────
@@ -319,7 +317,7 @@ function DashboardSection({ onNavigate }) {
 
       {/* ── Alertas CC vencidas ──────────────────────────────────────────────── */}
       {(alertasCC?.total ?? 0) > 0 && (
-        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+        <div>
           <div className="rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 px-5 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-start sm:items-center gap-3">
               <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/40 shrink-0 mt-0.5 sm:mt-0">
@@ -354,7 +352,7 @@ function DashboardSection({ onNavigate }) {
               Gestionar CC <ArrowUpRight className="w-3 h-3 ml-1" />
             </Button>
           </div>
-        </motion.div>
+        </div>
       )}
 
       {/* ── Fila 2: Gráficos ─────────────────────────────────────────────────── */}

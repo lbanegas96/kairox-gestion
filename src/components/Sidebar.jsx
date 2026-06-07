@@ -1,6 +1,6 @@
 import React from 'react';
 import { LayoutDashboard, Package, ShoppingCart, ArrowLeftRight, Wallet, FileText, Users, Settings, X, LogOut, ChevronRight, Contact, CreditCard, ClipboardList, ShoppingBag, BookOpen, Landmark, Truck, PackageCheck, Tag } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { Button } from '@/components/ui/button';
@@ -41,19 +41,14 @@ function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen, alerts })
 
   return (
     <>
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setIsOpen(false)}
-            className="md:hidden fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-40"
-          />
-        )}
-      </AnimatePresence>
+      {isOpen && (
+        <div
+          onClick={() => setIsOpen(false)}
+          className="md:hidden fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-40 transition-opacity duration-200"
+        />
+      )}
 
-      <motion.aside 
+      <aside
         className={`fixed inset-y-0 left-0 z-50 flex flex-col bg-[#1E293B] border-r border-slate-700 shadow-2xl transition-all duration-300 ease-in-out
           ${isOpen ? 'w-64 translate-x-0' : '-translate-x-full md:translate-x-0 md:w-20'}
         `}
@@ -64,13 +59,9 @@ function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen, alerts })
                <span className="text-white font-bold text-lg">K</span>
             </div>
             {isOpen && (
-              <motion.span 
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="font-bold text-xl text-white tracking-tight whitespace-nowrap"
-              >
+              <span className="font-bold text-xl text-white tracking-tight whitespace-nowrap animate-in fade-in slide-in-from-left-2 duration-200">
                 KAIROX
-              </motion.span>
+              </span>
             )}
           </div>
           <button onClick={() => setIsOpen(false)} className="md:hidden text-slate-400 hover:text-white transition-colors">
@@ -159,7 +150,7 @@ function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen, alerts })
              </div>
            )}
         </div>
-      </motion.aside>
+      </aside>
     </>
   );
 }

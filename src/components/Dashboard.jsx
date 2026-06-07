@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import DashboardSection from '@/components/sections/DashboardSection';
@@ -90,17 +89,9 @@ function Dashboard({ user, onLogout }) {
         />
 
         <main className="p-6">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeSection}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-            >
-              {renderSection()}
-            </motion.div>
-          </AnimatePresence>
+          <div key={activeSection} className="animate-in fade-in slide-in-from-bottom-4 duration-300">
+            {renderSection()}
+          </div>
         </main>
       </div>
 

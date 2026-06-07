@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { motion, AnimatePresence } from 'framer-motion';
+
 import {
   BookOpen, BookMarked, Plus, ChevronRight, ChevronDown, Check, X, AlertTriangle,
   FileText, BarChart2, ListOrdered, Search, Loader2, CheckCircle2,
@@ -102,21 +102,13 @@ function CuentaNode({ cuenta, depth = 0, onEdit, search }) {
         )}
       </div>
 
-      <AnimatePresence>
-        {open && hasChildren && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="overflow-hidden"
-          >
-            {cuenta.hijos.map((h) => (
-              <CuentaNode key={h.id} cuenta={h} depth={depth + 1} onEdit={onEdit} search={search} />
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {open && hasChildren && (
+        <div className="overflow-hidden">
+          {cuenta.hijos.map((h) => (
+            <CuentaNode key={h.id} cuenta={h} depth={depth + 1} onEdit={onEdit} search={search} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
