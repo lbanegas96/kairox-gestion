@@ -164,8 +164,8 @@ export default function LaunchpadSection({ onNavigate }) {
       area: { label: 'Ventas', icon: TrendingUp },
       accent: '#3B82F6',
       portalId: 'portal_ventas',
-      kpi1: { label: 'Ventas hoy', value: fmtShort(kpis?.ventas.hoy), color: 'text-blue-600 dark:text-blue-400' },
-      kpi2: { label: 'Pedidos pend.', value: String(kpis?.ventas.pedidosPendientes ?? 0) },
+      kpi1: { label: 'Ventas hoy', value: fmtShort(kpis?.ventas?.hoy), color: 'text-blue-600 dark:text-blue-400' },
+      kpi2: { label: 'Pedidos pend.', value: String(kpis?.ventas?.pedidosPendientes ?? 0) },
       modules: [
         { id: 'ventas', label: 'POS', icon: ShoppingCart },
         { id: 'cotizaciones', label: 'Cotizaciones', icon: ClipboardList },
@@ -179,8 +179,8 @@ export default function LaunchpadSection({ onNavigate }) {
       area: { label: 'Compras', icon: ShoppingBag },
       accent: '#8B5CF6',
       portalId: 'portal_compras',
-      kpi1: { label: 'OC pendientes', value: String(kpis?.compras.ocPendientes ?? 0), color: (kpis?.compras.ocPendientes ?? 0) > 0 ? 'text-amber-500' : 'text-slate-900 dark:text-white' },
-      kpi2: { label: 'Deuda prov.', value: fmtShort(kpis?.compras.deudaProveedores), color: (kpis?.compras.deudaProveedores ?? 0) > 0 ? 'text-red-500' : 'text-slate-900 dark:text-white' },
+      kpi1: { label: 'OC pendientes', value: String(kpis?.compras?.ocPendientes ?? 0), color: (kpis?.compras?.ocPendientes ?? 0) > 0 ? 'text-amber-500' : 'text-slate-900 dark:text-white' },
+      kpi2: { label: 'Deuda prov.', value: fmtShort(kpis?.compras?.deudaProveedores), color: (kpis?.compras?.deudaProveedores ?? 0) > 0 ? 'text-red-500' : 'text-slate-900 dark:text-white' },
       modules: [
         { id: 'compras', label: 'Compras', icon: ArrowLeftRight },
         { id: 'ordenes_compra', label: 'Órdenes', icon: ShoppingBag },
@@ -191,8 +191,8 @@ export default function LaunchpadSection({ onNavigate }) {
       area: { label: 'Finanzas', icon: Landmark },
       accent: '#10B981',
       portalId: 'portal_finanzas',
-      kpi1: { label: 'Saldo bancario', value: fmtShort(kpis?.finanzas.saldoBancario), color: 'text-emerald-600 dark:text-emerald-400' },
-      kpi2: { label: 'CxC pendiente', value: fmtShort(kpis?.finanzas.cxcTotal), color: (kpis?.finanzas.cxcTotal ?? 0) > 0 ? 'text-amber-500' : 'text-slate-900 dark:text-white' },
+      kpi1: { label: 'Saldo bancario', value: fmtShort(kpis?.finanzas?.saldoBancario), color: 'text-emerald-600 dark:text-emerald-400' },
+      kpi2: { label: 'CxC pendiente', value: fmtShort(kpis?.finanzas?.cxcTotal), color: (kpis?.finanzas?.cxcTotal ?? 0) > 0 ? 'text-amber-500' : 'text-slate-900 dark:text-white' },
       modules: [
         { id: 'caja', label: 'Caja', icon: Wallet },
         { id: 'bancos', label: 'Bancos', icon: Landmark },
@@ -203,12 +203,12 @@ export default function LaunchpadSection({ onNavigate }) {
       area: { label: 'Inventario', icon: Package },
       accent: '#F59E0B',
       portalId: 'portal_inventario',
-      kpi1: { label: 'Productos activos', value: String(kpis?.inventario.totalProductos ?? 0) },
-      kpi2: { label: 'Bajo mínimo', value: String(kpis?.inventario.bajominimo ?? 0), color: (kpis?.inventario.bajominimo ?? 0) > 0 ? 'text-red-500 font-bold' : 'text-slate-900 dark:text-white' },
+      kpi1: { label: 'Productos activos', value: String(kpis?.inventario?.totalProductos ?? 0) },
+      kpi2: { label: 'Bajo mínimo', value: String(kpis?.inventario?.bajominimo ?? 0), color: (kpis?.inventario?.bajominimo ?? 0) > 0 ? 'text-red-500 font-bold' : 'text-slate-900 dark:text-white' },
       modules: [
         { id: 'productos', label: 'Inventario', icon: Package },
       ],
-      alert: (kpis?.inventario.bajominimo ?? 0) > 0 ? `${kpis?.inventario.bajominimo} bajo mínimo` : null,
+      alert: (kpis?.inventario?.bajominimo ?? 0) > 0 ? `${kpis?.inventario?.bajominimo} bajo mínimo` : null,
     },
   ];
 
