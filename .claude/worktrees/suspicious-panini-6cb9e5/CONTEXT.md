@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-06 — Fases 2 y 3 completadas
+**Última actualización:** 2026-06-06 — Fases 2, 3 y 4 completadas + Auditoría aplicada
 **Branch activo:** `master`
 **Entregables de auditoría:** `AUDITORIA.md` · `SUPABASE_ANALISIS.md` · `STATUS_REPORT.md` · `SUPABASE_SETUP.md`
 
@@ -158,6 +158,34 @@
 
 ---
 
+## Auditoría de código — 2026-06-06
+
+### Bugs corregidos (commit `600c6da`)
+
+| Archivo | Problema | Fix aplicado |
+|---|---|---|
+| `SaleDetailModal.jsx` | `if (!open) return null` — Radix anti-pattern | Eliminado; Radix maneja el ciclo de vida |
+| `CompraDetailModal.jsx` | Ídem | Eliminado |
+| `ClientDetailModal.jsx` | Ídem + `toLocaleDateString()` sin locale | Eliminado + `'es-AR'` |
+| `CajaSection.jsx` | `formatAmount` usaba locale `'en-US'` | Cambiado a `'es-AR'` |
+| `ComprasSection.jsx` | `toLocaleDateString()` sin locale | `'es-AR'` |
+| `ReportesSection.jsx` | Fecha inicial con `new Date()` (timezone browser) + sin locale | `getTodayAR()` + `'es-AR'` |
+| `ClientesSection.jsx` | `fetchClients()` no filtraba inactivos | `.neq('activo', false)` |
+| `StaffPermissionsModal.jsx` | Faltaban 5 módulos (cotizaciones, pedidos, OC, bancos, contabilidad) | Agregados — ahora 15 módulos |
+| `CotizacionesSection.jsx` | Delete sin confirmación | AlertDialog de confirmación |
+| `PedidosSection.jsx` | Ídem | AlertDialog de confirmación |
+
+### Problemas conocidos — NO corregidos (decisión consciente)
+
+| Problema | Motivo de no aplicar |
+|---|---|
+| `user_id` como filtro empresa en servicios (`cajaService`, `productosService`, etc.) | Es diseño intencional del schema (user_id = empresa_id en las tablas legacy). Cambiar requiere auditar también todos los inserts — riesgo alto sin tests |
+| `ClientesSection` sin paginación server-side | Funcional hasta ~500 clientes. Bajo impacto actual |
+| `ProveedoresSection` no registrada en routing/sidebar | Módulo documentado en CONTEXT.md como ✅ pero sin route activo. Pendiente revisar si hay componente o agregar al routing |
+| Columnas en portugués en `comprobante_items` (`produto_id`, `quantidade`) | Inconsistencia histórica del schema. El código existente funciona; cambiar requiere migración de BD |
+
+---
+
 ## 3 grandes proyectos reservados para el final
 
 | # | Proyecto | Por qué al final |
@@ -170,13 +198,26 @@
 
 ## Próxima sesión — por dónde seguir
 
-1. **Fase 1 ARCA/AFIP** — único bloqueante restante para poder vender
-2. **Deploy Vercel** — requiere dominio + env vars producción
-3. **Membership / Stripe o MercadoPago** — requiere ARCA primero
+El sistema está limpio y auditado. Las tres opciones:
+
+1. **Deploy Vercel** — URL pública para demos y primeros clientes. Requiere: dominio propio, variables de entorno de producción (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY).
+2. **ARCA/AFIP** — único bloqueante para facturar legalmente. Requiere: CUIT empresa, certificado digital, punto de venta registrado en AFIP, integración WS WSFE.
+3. **Membresías / Monetización** — Stripe o MercadoPago. Requiere ARCA primero + modelo de precios definido.
 
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-06 (continuación 3) — Auditoría y fixes
+
+- ✅ 10 bugs corregidos en 11 archivos (ver tabla en sección Auditoría)
+- ✅ Early returns eliminados en `SaleDetailModal`, `CompraDetailModal`, `ClientDetailModal`
+- ✅ `CajaSection` — locale `'en-US'` → `'es-AR'` en `formatAmount`
+- ✅ `ReportesSection` — fecha inicial usa `getTodayAR()` + locale `'es-AR'` en columnas fecha
+- ✅ `ComprasSection` — locale `'es-AR'` en fechas
+- ✅ `ClientesSection` — excluye clientes inactivos
+- ✅ `StaffPermissionsModal` — 10 → 15 módulos (cotizaciones, pedidos, OC, bancos, contabilidad)
+- ✅ `CotizacionesSection` + `PedidosSection` — AlertDialog de confirmación antes de eliminar
 
 ### Sesión 2026-06-06 (continuación 2) — Fase 4 completa
 
