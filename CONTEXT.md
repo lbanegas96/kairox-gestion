@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-05 — Deuda técnica cerrada + Análisis diferencial de mercado
+**Última actualización:** 2026-06-07 — Fase 2 completa + Fase 3 completa
 **Branch activo:** `master`
 **Entregables de auditoría:** `AUDITORIA.md` · `SUPABASE_ANALISIS.md` · `STATUS_REPORT.md` · `SUPABASE_SETUP.md`
 
@@ -19,23 +19,26 @@
 
 | Módulo | Archivo principal | Estado |
 |---|---|---|
-| Dashboard | `DashboardSection.jsx` | ✅ 8 KPIs + 2 gráficos + KPIs cotizaciones |
-| Ventas (POS) | `VentasSection.jsx` + `NuevaVentaModal.jsx` | ✅ Funcional + asiento auto + multi-moneda |
+| Dashboard | `DashboardSection.jsx` | ✅ 8 KPIs + 2 gráficos + KPIs cotizaciones + **alertas CC vencidas** |
+| Ventas (POS) | `VentasSection.jsx` + `NuevaVentaModal.jsx` | ✅ **Multi-pago** + asiento auto + multi-moneda + chequeo límite CC |
 | Historial Ventas | `HistorialVentas.jsx` | ✅ Filtros avanzados + estado_pago CC + paginación 50/pág |
-| Inventario | `ProductosSection.jsx` | ✅ Soft delete SAP-style (inactivar + reactivar) |
+| Inventario | `ProductosSection.jsx` | ✅ Soft delete SAP-style + **Import CSV** |
 | Compras | `ComprasSection.jsx` | ✅ Funcional + asiento auto + paginación 50/pág |
 | Cotizaciones | `CotizacionesSection.jsx` | ✅ Funcional + convertir a venta |
+| **Pedidos** | `PedidosSection.jsx` | ✅ **NUEVO** Workflow Borrador→Confirmado→En Prep.→Facturado |
 | Órdenes de Compra (proveedores) | `OrdenesCompraSection.jsx` | ✅ Workflow aprobación + 3-way match + realtime |
-| Caja | `CajaSection.jsx` + `CajaContext.jsx` | ✅ Por-terminal + indicadores turno |
-| Clientes | `ClientesSection.jsx` | ✅ Soft delete + validación |
-| Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Solo activos |
+| Caja | `CajaSection.jsx` + `CajaContext.jsx` | ✅ Por-terminal + indicadores turno + **fix arqueo** |
+| Clientes | `ClientesSection.jsx` | ✅ **Límite crédito + Condiciones pago + Import CSV** |
+| Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Solo activos + **Aging report 30/60/90/+90 días** |
 | Detalle Cta. Cte. | `ClientDetailModal.jsx` | ✅ **Open Item Management SAP-style** |
 | Contabilidad | `PlanCuentasSection.jsx` | ✅ 7 tabs: Plan/Asientos/Balance/LM/P&L/BalanceGeneral/Períodos |
 | Proveedores | `ProveedoresSection.jsx` | ✅ Ficha completa + Cta. Cte. + Historial OC |
 | Bancos | `CuentasBancariasSection.jsx` | ✅ Import CSV + conciliación auto/manual |
 | Reportes | `ReportesSection.jsx` | ✅ Funcional + paginación 100/pág |
-| Usuarios | `UsuariosSection.jsx` | ✅ Invitación + último acceso + activar/desactivar |
+| Usuarios | `UsuariosSection.jsx` | ✅ Invitación + último acceso + **presets Solo Caja / Vendedor** |
 | Configuración | `ConfiguracionSection.jsx` | ✅ Logo + toggle aprobación OC |
+| **Comprobante Print** | `ComprobantePrintModal.jsx` | ✅ **Multi-pago display + botón Remito sin precios** |
+| **Import CSV** | `CSVImportModal.jsx` | ✅ **NUEVO** Reutilizable para productos y clientes |
 
 ---
 
@@ -57,6 +60,7 @@
 | `migrations/014_proveedores.sql` | Ficha completa proveedores + cuenta_corriente_proveedores | ✅ |
 | `migrations/015_conciliacion_bancaria.sql` | extractos_bancarios + extracto_lineas + trigger sync | ✅ |
 | `migrations/016_security_hardening.sql` | is_admin() + RLS config + rate_limit + audit triggers | ✅ |
+| `migrations/017_pedidos_condiciones.sql` | Tablas pedidos + pedido_items + columnas CC en clientes | ⚠️ **PENDIENTE aplicar en Supabase** |
 
 ### SQL adicional ejecutado directamente
 
@@ -132,19 +136,23 @@
 ### 🔴 Fase 1 — Piso mínimo para vender (sin esto no hay producto)
 1. **Integración ARCA/AFIP** — Emisión comprobantes A/B/C, WS WSFE, CAE automático, QR en impresión, puntos de venta registrados por empresa
 
-### 🟠 Fase 2 — Gaps rápidos (días de trabajo, alto impacto)
-2. **Multi-pago en una venta** — Efectivo + Transferencia + Tarjeta en un mismo comprobante
-3. **Remito de transporte sin precios** — Toggle en config del comprobante imprimible
-4. **Aging report CC** — Antigüedad de deuda por cliente (30/60/90/+90 días)
-5. **Alertas vencimiento CC** — Facturas próximas a vencer y vencidas en dashboard
-6. **Discrepancia en cierre de caja** — Efectivo declarado vs. real con registro de diferencia
+### 🟠 Fase 2 — Gaps rápidos (días de trabajo, alto impacto) ✅ COMPLETADA
+2. ✅ **Multi-pago en una venta** — Efectivo + Transferencia + Tarjeta en un mismo comprobante (`NuevaVentaModal.jsx`)
+3. ✅ **Remito de transporte sin precios** — Botón "Remito" en print modal oculta precios (`ComprobantePrintModal.jsx`)
+4. ✅ **Aging report CC** — Tab "Antigüedad" con bandas 0-30/31-60/61-90/+90 días (`CuentaCorrienteSection.jsx`)
+5. ✅ **Alertas vencimiento CC** — Banner en dashboard con clientes +30 días vencidos (`DashboardSection.jsx` + `dashboardService.ts`)
+6. ✅ **Discrepancia en cierre de caja** — Fix bug `user_id` + UI mejorada arqueo (`CajaCierre.jsx`)
 
-### 🟡 Fase 3 — Diferenciales vs. Colppy
-7. **Import CSV productos/clientes** — Mapeo visual de columnas, validación, preview
-8. **OC de clientes (Pedidos)** — Borrador → Confirmado → En preparación → Facturado. Distinto a cotizaciones.
-9. **Condiciones de venta flexibles** — Texto libre + días, guardables por cliente, reflejo en vencimiento
-10. **Límite de crédito por cliente** — Con bloqueo configurable al superar el límite
-11. **Usuario "solo caja"** — POS sin acceso a reportes ni configuración
+### 🟡 Fase 3 — Diferenciales vs. Colppy ✅ COMPLETADA
+7.  ✅ **Import CSV productos/clientes** — `CSVImportModal.jsx`: 4 pasos (upload→mapeo→preview→resultado), auto-mapping, batch de 50
+8.  ✅ **Pedidos de clientes** — `PedidosSection.jsx`: workflow Borrador→Confirmado→En Prep.→Facturado, modal edición, KPIs estado
+9.  ✅ **Condiciones de venta flexibles** — `condiciones_pago` + `dias_credito` en clientes, visible en NuevaVentaModal al seleccionar CC
+10. ✅ **Límite de crédito por cliente** — `limite_credito` + `bloquear_en_limite`, chequeo en NuevaVentaModal con bloqueo configurable
+11. ✅ **Usuario "solo caja"** — Presets en `StaffPermissionsModal`: Solo Caja / Vendedor / Acceso completo
+
+⚠️ **Requiere aplicar en Supabase:** `migrations/017_pedidos_condiciones.sql`
+- Agrega columnas `condiciones_pago`, `dias_credito`, `bloquear_en_limite` a clientes
+- Crea tablas `pedidos` y `pedido_items` con RLS + audit trigger
 
 ### 🟢 Fase 4 — Retención y experiencia
 12. **Dashboard ejecutivo completo** — Top 5 productos, facturas CC vencidas, stock en mínimo, último mov. banco (todos clickeables)
@@ -166,6 +174,21 @@
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-07 — Fase 2 + Fase 3 completas
+- ✅ Fase 2: multi-pago, remito sin precios, fix arqueo caja, alertas CC, aging report
+- ✅ Fase 3: Import CSV (productos + clientes), Pedidos workflow, Límite crédito+bloqueo, Condiciones pago, Presets usuario solo-caja
+- ⚠️ Pendiente aplicar: `migrations/017_pedidos_condiciones.sql` en Supabase
+- Archivos nuevos: `CSVImportModal.jsx`, `PedidosSection.jsx`, `migrations/017_pedidos_condiciones.sql`
+- Módulos actualizados: Dashboard.jsx, Sidebar.jsx, ClientesSection.jsx, ProductosSection.jsx, NuevaVentaModal.jsx, StaffPermissionsModal.jsx, useUserPermissions.js
+
+### Sesión 2026-06-07 — Fase 2 completa
+- ✅ Multi-pago en venta: Set de métodos activos + montos por método, 1 movimiento_caja por método
+- ✅ Remito sin precios: botón "Remito" en ComprobantePrintModal oculta columnas precio/subtotal vía CSS print
+- ✅ Aging report CC: tab "Antigüedad" en CuentaCorrienteSection, bandas 0-30/31-60/61-90/+90 días
+- ✅ Alertas CC en dashboard: banner contextual con clientes +30 días vencidos y total vencido
+- ✅ Fix bug CajaCierre: filtro `.eq('empresa_id')` en lugar de `.eq('user_id', user.tenant_id)` (causaba arqueo vacío)
+- ✅ UI discrepancia caja mejorada: etiquetas "Sobrante/Faltante/Cuadra" + mensaje explicativo
 
 ### Sesión 2026-06-05 — Deuda técnica + Análisis de mercado
 - ✅ Migrations 013-016 ejecutadas en Supabase

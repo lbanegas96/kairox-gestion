@@ -115,6 +115,77 @@ export const dashboardService = {
     return result;
   },
 
+  async getAlertasCC(empresaId: string) {
+    const now = getNowAR();
+    const hace30 = new Date(now.getTime() - 30 * 86400000).toISOString();
+    const hace60 = new Date(now.getTime() - 60 * 86400000).toISOString();
+    const hace90 = new Date(now.getTime() - 90 * 86400000).toISOString();
+
+    // Clientes con saldo pendiente
+    const { data: conDeuda } = await supabase
+      .from('clientes')
+      .select('id, nombre, saldo_actual')
+      .eq('empresa_id', empresaId)
+      .gt('saldo_actual', 0)
+      .eq('activo', true)
+      .order('saldo_actual', { ascending: false });
+
+    if (!conDeuda?.length) {
+      return { total: 0, montoTotal: 0, vencidos30: 0, vencidos60: 0, vencidos90: 0, lista: [] };
+    }
+
+    const clienteIds = conDeuda.map((c: { id: string }) => c.id);
+
+    // Movimiento DEBE más antiguo por cliente (para calcular antigüedad de la deuda)
+    const { data: movs } = await supabase
+      .from('cuenta_corriente_movimientos')
+      .select('cliente_id, fecha')
+      .eq('empresa_id', empresaId)
+      .eq('tipo', 'DEBE')
+      .in('cliente_id', clienteIds)
+      .order('fecha', { ascending: true });
+
+    // Oldest DEBE per client
+    const oldestByClient: Record<string, string> = {};
+    for (const m of (movs ?? []) as { cliente_id: string; fecha: string }[]) {
+      if (!oldestByClient[m.cliente_id]) oldestByClient[m.cliente_id] = m.fecha;
+    }
+
+    const clientesVencidos30 = new Set<string>();
+    const clientesVencidos60 = new Set<string>();
+    const clientesVencidos90 = new Set<string>();
+
+    for (const [clienteId, fecha] of Object.entries(oldestByClient)) {
+      if (fecha <= hace90) { clientesVencidos90.add(clienteId); clientesVencidos60.add(clienteId); clientesVencidos30.add(clienteId); }
+      else if (fecha <= hace60) { clientesVencidos60.add(clienteId); clientesVencidos30.add(clienteId); }
+      else if (fecha <= hace30) { clientesVencidos30.add(clienteId); }
+    }
+
+    const montoVencido30 = (conDeuda as { id: string; saldo_actual: number }[])
+      .filter((c) => clientesVencidos30.has(c.id))
+      .reduce((s, c) => s + Number(c.saldo_actual), 0);
+
+    const lista = (conDeuda as { id: string; nombre: string; saldo_actual: number }[])
+      .filter((c) => clientesVencidos30.has(c.id))
+      .map((c) => ({
+        id: c.id,
+        nombre: c.nombre,
+        saldo: Number(c.saldo_actual),
+        diasVencido: Math.floor((now.getTime() - new Date(oldestByClient[c.id] || now).getTime()) / 86400000),
+        urgente: clientesVencidos60.has(c.id),
+      }))
+      .slice(0, 5);
+
+    return {
+      total: clientesVencidos30.size,
+      montoTotal: montoVencido30,
+      vencidos30: clientesVencidos30.size,
+      vencidos60: clientesVencidos60.size,
+      vencidos90: clientesVencidos90.size,
+      lista,
+    };
+  },
+
   async getCotizacionesStats(empresaId: string) {
     const now = getNowAR();
     const mesStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
@@ -151,4 +222,5 @@ export const DASHBOARD_KEYS = {
   ventasPorDia: (empresaId: string, dias: number) => ['dashboard', 'ventasPorDia', empresaId, dias] as const,
   flujoCaja: (empresaId: string, meses: number) => ['dashboard', 'flujoCaja', empresaId, meses] as const,
   cotizaciones: (empresaId: string) => ['dashboard', 'cotizaciones', empresaId] as const,
+  alertasCC: (empresaId: string) => ['dashboard', 'alertasCC', empresaId] as const,
 };

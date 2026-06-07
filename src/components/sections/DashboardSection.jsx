@@ -123,6 +123,13 @@ function DashboardSection({ onNavigate }) {
     staleTime: 1000 * 60,
   });
 
+  const { data: alertasCC } = useQuery({
+    queryKey: DASHBOARD_KEYS.alertasCC(empresaId),
+    queryFn: () => dashboardService.getAlertasCC(empresaId),
+    enabled: !!empresaId,
+    staleTime: 1000 * 60 * 5, // 5 min
+  });
+
   const loading = kpisLoading;
 
   const handleRefresh = () => {
@@ -309,6 +316,46 @@ function DashboardSection({ onNavigate }) {
           onClick={() => onNavigate?.('cotizaciones')}
         />
       </div>
+
+      {/* ── Alertas CC vencidas ──────────────────────────────────────────────── */}
+      {(alertasCC?.total ?? 0) > 0 && (
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <div className="rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 px-5 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/40 shrink-0 mt-0.5 sm:mt-0">
+                <AlertCircle className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+              </div>
+              <div>
+                <p className="font-semibold text-rose-800 dark:text-rose-300">
+                  {alertasCC.total} cliente{alertasCC.total !== 1 ? 's' : ''} con deuda vencida (+30 días)
+                </p>
+                <p className="text-sm text-rose-600 dark:text-rose-400 mt-0.5">
+                  Monto vencido: <strong>${alertasCC.montoTotal.toLocaleString('es-AR', { minimumFractionDigits: 0 })}</strong>
+                  {(alertasCC.vencidos60 ?? 0) > 0 && (
+                    <span className="ml-2 px-1.5 py-0.5 rounded bg-rose-200 dark:bg-rose-800 text-xs font-semibold">
+                      ⚠ {alertasCC.vencidos60} críticos +60 días
+                    </span>
+                  )}
+                </p>
+                {alertasCC.lista?.length > 0 && (
+                  <p className="text-xs text-rose-500 dark:text-rose-500 mt-1">
+                    {alertasCC.lista.slice(0, 3).map(c => c.nombre).join(' · ')}
+                    {alertasCC.lista.length > 3 && ` y ${alertasCC.lista.length - 3} más`}
+                  </p>
+                )}
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onNavigate?.('cuentacorriente')}
+              className="border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 shrink-0"
+            >
+              Gestionar CC <ArrowUpRight className="w-3 h-3 ml-1" />
+            </Button>
+          </div>
+        </motion.div>
+      )}
 
       {/* ── Fila 2: Gráficos ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

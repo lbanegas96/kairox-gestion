@@ -13,17 +13,40 @@ export default function StaffPermissionsModal({ isOpen, onClose, userData, onSav
   const [loading, setLoading] = useState(false);
 
   const modules = [
-    { id: 'dashboard', label: 'Dashboard', desc: 'Ver métricas y resumen general' },
-    { id: 'productos', label: 'Inventario (Productos)', desc: 'Gestionar catálogo y stock' },
-    { id: 'ventas', label: 'Ventas', desc: 'Registrar ventas y ver historial' },
-    { id: 'compras', label: 'Compras', desc: 'Registrar compras a proveedores' },
-    { id: 'caja', label: 'Caja', desc: 'Apertura y cierre de caja, movimientos' },
-    { id: 'clientes', label: 'Clientes', desc: 'Gestión de base de datos de clientes' },
-    { id: 'cuentacorriente', label: 'Cuenta Corriente', desc: 'Gestionar deudas y saldos de clientes' },
-    { id: 'reportes', label: 'Reportes', desc: 'Acceso a reportes detallados' },
-    { id: 'usuarios', label: 'Usuarios', desc: 'Ver lista de usuarios (solo lectura)' },
-    { id: 'configuracion', label: 'Configuración', desc: 'Ajustes del sistema' }
+    { id: 'dashboard',        label: 'Dashboard',              desc: 'Ver métricas y resumen general' },
+    { id: 'productos',        label: 'Inventario (Productos)', desc: 'Gestionar catálogo y stock' },
+    { id: 'ventas',           label: 'Ventas',                 desc: 'Registrar ventas y ver historial' },
+    { id: 'pedidos',          label: 'Pedidos de Clientes',    desc: 'Gestionar pedidos y su workflow' },
+    { id: 'compras',          label: 'Compras',                desc: 'Registrar compras a proveedores' },
+    { id: 'caja',             label: 'Caja',                   desc: 'Apertura y cierre de caja, movimientos' },
+    { id: 'clientes',         label: 'Clientes',               desc: 'Gestión de base de datos de clientes' },
+    { id: 'cuentacorriente',  label: 'Cuenta Corriente',       desc: 'Gestionar deudas y saldos de clientes' },
+    { id: 'reportes',         label: 'Reportes',               desc: 'Acceso a reportes detallados' },
+    { id: 'usuarios',         label: 'Usuarios',               desc: 'Ver lista de usuarios (solo lectura)' },
+    { id: 'configuracion',    label: 'Configuración',          desc: 'Ajustes del sistema' }
   ];
+
+  // ── Presets ───────────────────────────────────────────────────────────────
+  const applyPreset = (preset) => {
+    const p = {};
+    modules.forEach(m => { p[m.id] = false; });
+    if (preset === 'solo_caja') {
+      p.ventas = true;
+      p.caja = true;
+      p.dashboard = true;
+    } else if (preset === 'vendedor') {
+      p.dashboard = true;
+      p.ventas = true;
+      p.pedidos = true;
+      p.cotizaciones = true;
+      p.clientes = true;
+      p.cuentacorriente = true;
+      p.caja = true;
+    } else if (preset === 'completo') {
+      modules.forEach(m => { p[m.id] = true; });
+    }
+    setPermissions(p);
+  };
 
   useEffect(() => {
     if (userData) {
@@ -114,6 +137,25 @@ export default function StaffPermissionsModal({ isOpen, onClose, userData, onSav
           </div>
         ) : (
           <div className="space-y-4 py-2">
+            {/* Presets */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Presets rápidos</p>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => applyPreset('solo_caja')}
+                  className="h-7 text-xs dark:text-slate-300 dark:border-slate-700 border-amber-300 text-amber-700 hover:bg-amber-50">
+                  🏷 Solo Caja
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => applyPreset('vendedor')}
+                  className="h-7 text-xs dark:text-slate-300 dark:border-slate-700 border-blue-300 text-blue-700 hover:bg-blue-50">
+                  🛒 Vendedor
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => applyPreset('completo')}
+                  className="h-7 text-xs dark:text-slate-300 dark:border-slate-700 border-green-300 text-green-700 hover:bg-green-50">
+                  ✅ Acceso completo
+                </Button>
+              </div>
+            </div>
+
             <div className="flex justify-end">
               <Button variant="link" size="sm" onClick={handleSelectAll} className="h-auto p-0 text-blue-600">
                 {modules.every(m => permissions[m.id]) ? 'Deseleccionar todo' : 'Seleccionar todo'}

@@ -1,21 +1,20 @@
 import React, { useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, X } from 'lucide-react';
+import { Printer, X, FileText } from 'lucide-react';
 import { getNowAR } from '@/lib/dateUtils';
 
-const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items }) => {
+const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos = [] }) => {
   const printRef = useRef();
 
-  const handlePrint = () => {
+  const handlePrint = (opts = {}) => {
+    const { remito = false } = opts;
     const printContent = printRef.current;
     const windowPrint = window.open('', '', 'left=0,top=0,width=800,height=900,toolbar=0,scrollbars=0,status=0');
 
     if (windowPrint) {
-      // Clonar el nodo y sanear: eliminar scripts e inline handlers antes de imprimir
       const clone = printContent.cloneNode(true);
       clone.querySelectorAll('script, style[data-unsafe]').forEach(el => el.remove());
-      // Eliminar atributos de eventos inline (on*)
       clone.querySelectorAll('*').forEach(el => {
         [...el.attributes].forEach(attr => {
           if (attr.name.startsWith('on')) el.removeAttribute(attr.name);
@@ -26,7 +25,7 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items }) => {
       windowPrint.document.write(`
         <html>
           <head>
-            <title>Imprimir Comprobante</title>
+            <title>${remito ? 'Remito' : 'Comprobante'}</title>
             <style>
               body { font-family: 'Courier New', Courier, monospace; padding: 20px; max-width: 400px; margin: 0 auto; }
               .header { text-align: center; margin-bottom: 20px; border-bottom: 1px dashed #000; padding-bottom: 10px; }
@@ -36,6 +35,7 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items }) => {
               .table td { padding: 4px 0; }
               .total { text-align: right; font-size: 18px; font-weight: bold; border-top: 1px dashed #000; padding-top: 10px; }
               .footer { text-align: center; margin-top: 30px; font-size: 10px; color: #555; }
+              ${remito ? '.price-col { display: none !important; } .total-row { display: none !important; }' : ''}
               @media print {
                 body { padding: 0; margin: 0; }
                 .no-print { display: none; }
@@ -56,6 +56,11 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items }) => {
     }
   };
 
+  // Renderizar detalle de pagos
+  const pagoLabel = pagos.length > 1
+    ? pagos.map(p => `${p.metodo}: $${Number(p.monto).toFixed(2)}`).join(' | ')
+    : comprobante?.forma_pago || '';
+
   if (!comprobante) return null;
 
   return (
@@ -69,9 +74,9 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items }) => {
         <div className="bg-white text-black p-6 rounded-md shadow-sm border border-slate-200" ref={printRef}>
           <div className="text-center mb-4 border-b border-dashed border-slate-300 pb-4">
             <h2 className="font-bold text-xl uppercase">Ticket de Venta</h2>
-            <p className="text-sm text-slate-500">Comprobante No Valido como Factura</p>
+            <p className="text-sm text-slate-500">Comprobante No Válido como Factura</p>
           </div>
-          
+
           <div className="space-y-1 text-sm mb-4 font-mono">
             <div className="flex justify-between">
               <span className="text-slate-500">Nro:</span>
@@ -85,34 +90,45 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items }) => {
               <span className="text-slate-500">Cliente:</span>
               <span className="truncate max-w-[150px]">{comprobante.cliente_nombre || 'Consumidor Final'}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Pago:</span>
-              <span>{comprobante.forma_pago}</span>
-            </div>
+            {pagos.length > 1 ? (
+              <div className="pt-1 border-t border-dashed border-slate-200">
+                {pagos.map((p, i) => (
+                  <div key={i} className="flex justify-between">
+                    <span className="text-slate-500">{p.metodo}:</span>
+                    <span className="font-semibold">${Number(p.monto).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex justify-between">
+                <span className="text-slate-500">Pago:</span>
+                <span>{comprobante.forma_pago}</span>
+              </div>
+            )}
           </div>
 
           <table className="w-full text-xs font-mono mb-4">
             <thead>
               <tr className="border-b border-slate-300">
-                <th className="text-left py-1">Prod</th>
+                <th className="text-left py-1">Producto</th>
                 <th className="text-center py-1">Cant</th>
-                <th className="text-right py-1">Precio</th>
-                <th className="text-right py-1">Subt</th>
+                <th className="text-right py-1 price-col">Precio</th>
+                <th className="text-right py-1 price-col">Subt</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, i) => (
                 <tr key={i}>
-                  <td className="py-1 truncate max-w-[100px]">{item.producto_nombre}</td>
+                  <td className="py-1 truncate max-w-[120px]">{item.producto_nombre}</td>
                   <td className="text-center py-1">{item.cantidad}</td>
-                  <td className="text-right py-1">${Number(item.precio_unitario).toFixed(2)}</td>
-                  <td className="text-right py-1 font-bold">${Number(item.subtotal).toFixed(2)}</td>
+                  <td className="text-right py-1 price-col">${Number(item.precio_unitario).toFixed(2)}</td>
+                  <td className="text-right py-1 font-bold price-col">${Number(item.subtotal).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          <div className="border-t border-dashed border-slate-300 pt-2 text-right">
+          <div className="border-t border-dashed border-slate-300 pt-2 text-right total-row">
             <span className="text-sm mr-4">TOTAL:</span>
             <span className="text-2xl font-bold">${Number(comprobante.total).toFixed(2)}</span>
           </div>
@@ -122,13 +138,18 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items }) => {
           </div>
         </div>
 
-        <DialogFooter className="flex gap-2 sm:justify-between">
+        <DialogFooter className="flex gap-2 flex-wrap sm:justify-between">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             <X className="w-4 h-4 mr-2" /> Cerrar
           </Button>
-          <Button onClick={handlePrint} className="bg-blue-600 hover:bg-blue-700 text-white">
-            <Printer className="w-4 h-4 mr-2" /> Imprimir
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => handlePrint({ remito: true })} className="border-slate-300 text-slate-700 dark:text-slate-300 dark:border-slate-600">
+              <FileText className="w-4 h-4 mr-2" /> Remito
+            </Button>
+            <Button onClick={() => handlePrint()} className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Printer className="w-4 h-4 mr-2" /> Imprimir
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

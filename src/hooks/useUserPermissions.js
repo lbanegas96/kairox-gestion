@@ -24,15 +24,16 @@ export const useUserPermissions = () => {
     if (!user) return [];
     
     const allSections = [
-      'dashboard', 
-      'productos', 
-      'ventas', 
-      'compras', 
-      'caja', 
-      'clientes', 
+      'dashboard',
+      'productos',
+      'ventas',
+      'pedidos',
+      'compras',
+      'caja',
+      'clientes',
       'cuentacorriente',
-      'reportes', 
-      'usuarios', 
+      'reportes',
+      'usuarios',
       'configuracion'
     ];
 

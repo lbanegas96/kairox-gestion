@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ShoppingCart, Search, Trash2, X, Check, Loader2, Package, ChevronDown, AlertTriangle } from 'lucide-react';
+import { ShoppingCart, Search, Trash2, X, Check, Loader2, Package, ChevronDown, AlertTriangle, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,7 +22,9 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   const [productSearch, setProductSearch] = useState('');
   const [cart, setCart] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
-  const [paymentMethod, setPaymentMethod] = useState('Efectivo');
+  // Multi-pago: Set de métodos activos + montos por método
+  const [selectedMethods, setSelectedMethods] = useState(new Set(['Efectivo']));
+  const [methodAmounts, setMethodAmounts] = useState({});
   const [moneda, setMoneda] = useState('ARS');
   const [tipoCambioTasa, setTipoCambioTasa] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -30,6 +32,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   const [lastComprobante, setLastComprobante] = useState(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [lastItems, setLastItems] = useState([]);
+  const [lastPagos, setLastPagos] = useState([]);
 
   const searchInputRef = useRef(null);
   const searchWrapperRef = useRef(null);
@@ -89,11 +92,52 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   const resetForm = () => {
     setCart([]);
     setSelectedClient(null);
-    setPaymentMethod('Efectivo');
+    setSelectedMethods(new Set(['Efectivo']));
+    setMethodAmounts({});
     setMoneda('ARS');
     setTipoCambioTasa(1);
     setProductSearch('');
     setLoading(false);
+  };
+
+  // ── Helpers multi-pago ──────────────────────────────────────────────────────
+  const isCC = selectedMethods.has('Cuenta Corriente');
+  const isMultiPago = !isCC && selectedMethods.size > 1;
+
+  const totalPagado = useMemo(() => {
+    if (!isMultiPago) return 0;
+    return Array.from(selectedMethods).reduce(
+      (sum, m) => sum + (parseFloat(methodAmounts[m]) || 0), 0
+    );
+  }, [isMultiPago, selectedMethods, methodAmounts]);
+
+  const restante = calculateTotal() - totalPagado;
+
+  const toggleMethod = (method) => {
+    if (method === 'Cuenta Corriente') {
+      setSelectedMethods(new Set(['Cuenta Corriente']));
+      setMethodAmounts({});
+      return;
+    }
+    // Salir de CC
+    if (selectedMethods.has('Cuenta Corriente')) {
+      setSelectedMethods(new Set([method]));
+      setMethodAmounts({});
+      return;
+    }
+    if (selectedMethods.has(method)) {
+      if (selectedMethods.size === 1) return; // No deseleccionar el último
+      const next = new Set(selectedMethods);
+      next.delete(method);
+      setSelectedMethods(next);
+      setMethodAmounts(prev => {
+        const copy = { ...prev };
+        delete copy[method];
+        return copy;
+      });
+    } else {
+      setSelectedMethods(new Set([...selectedMethods, method]));
+    }
   };
 
   const filteredProducts = useMemo(() => {
@@ -148,7 +192,56 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
 
   const handleConfirmSale = async () => {
     if (cart.length === 0) return toast({ title: "Carrito vacío", variant: "destructive" });
-    if (paymentMethod === 'Cuenta Corriente' && !selectedClient) return toast({ title: "Cliente requerido", variant: "destructive" });
+    if (isCC && !selectedClient) return toast({ title: "Cliente requerido para Cuenta Corriente", variant: "destructive" });
+
+    // Validar multi-pago
+    const total = calculateTotal();
+    let pagosFinales;
+    if (isCC) {
+      pagosFinales = [{ metodo: 'Cuenta Corriente', monto: total }];
+    } else if (isMultiPago) {
+      pagosFinales = Array.from(selectedMethods).map(m => ({
+        metodo: m,
+        monto: parseFloat(methodAmounts[m]) || 0,
+      }));
+      const suma = pagosFinales.reduce((s, p) => s + p.monto, 0);
+      if (Math.abs(suma - total) > 0.01) {
+        return toast({
+          title: "Pago incompleto",
+          description: `Asignado: $${suma.toFixed(2)} de $${total.toFixed(2)}. Completá todos los montos.`,
+          variant: "destructive",
+        });
+      }
+    } else {
+      const [singleMethod] = Array.from(selectedMethods);
+      pagosFinales = [{ metodo: singleMethod, monto: total }];
+    }
+
+    // ── Verificar límite de crédito (CC) ────────────────────────────────────
+    if (isCC && selectedClient) {
+      const { data: clienteActual } = await supabase
+        .from('clientes').select('saldo_actual, limite_credito, bloquear_en_limite')
+        .eq('id', selectedClient.id).single();
+      const limite = Number(clienteActual?.limite_credito || 0);
+      if (limite > 0) {
+        const nuevoSaldo = Number(clienteActual?.saldo_actual || 0) + total;
+        if (nuevoSaldo > limite) {
+          if (clienteActual?.bloquear_en_limite) {
+            return toast({
+              title: '⛔ Límite de crédito excedido',
+              description: `${selectedClient.nombre} tiene un límite de $${limite.toLocaleString('es-AR')}. Saldo actual: $${Number(clienteActual.saldo_actual).toLocaleString('es-AR')}.`,
+              variant: 'destructive',
+            });
+          } else {
+            // Solo advertencia, no bloquea
+            toast({
+              title: '⚠ Atención: Límite de crédito',
+              description: `La venta supera el límite de $${limite.toLocaleString('es-AR')} para ${selectedClient.nombre}.`,
+            });
+          }
+        }
+      }
+    }
 
     const freshProductMap = new Map();
     for (const item of cart) {
@@ -163,8 +256,11 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     setLoading(true);
     try {
       const saleNumber = await generateVentaNumber();
-      const total = calculateTotal();
       const now = getNowAR().toISOString();
+
+      const formaPago = pagosFinales.length > 1
+        ? pagosFinales.map(p => p.metodo).join(' + ')
+        : pagosFinales[0].metodo;
 
       const { data: comprobante, error: compError } = await supabase.from('comprobantes').insert([{
           tenant_id: user.tenant_id, // Keep legacy tenant_id populated
@@ -174,7 +270,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           cliente_id: selectedClient?.id || null,
           cliente_nombre: selectedClient?.nombre || 'Consumidor Final',
           total: total,
-          forma_pago: paymentMethod,
+          forma_pago: formaPago,
           moneda,
           tipo_cambio_tasa: tipoCambioTasa
         }]).select().single();
@@ -204,30 +300,32 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         }]);
       }
 
-      // If Payment is Received (not Cta Cte), add to Caja
-      if (paymentMethod !== 'Cuenta Corriente') {
-          await supabase.from('movimientos_caja').insert([{
-              user_id: user.id,
-              empresa_id: user.empresa_id,
-              fecha: now,
-              tipo: 'ingreso',
-              categoria: 'Venta',
-              concepto: `Venta #${saleNumber}`,
-              monto: total,
-              metodo_pago: paymentMethod,
-              is_automatic: true
-          }]);
-      } else if (selectedClient) {
-          // If Cta Cte, add movement to Cta Cte table (DEBE)
-          await supabase.from('cuenta_corriente_movimientos').insert([{
-              user_id: user.tenant_id,
-              empresa_id: user.empresa_id,
-              cliente_id: selectedClient.id,
-              tipo: 'DEBE',
-              monto: total,
-              descripcion: `Venta #${saleNumber}`,
-              fecha: now
-          }]);
+      // Multi-pago: registrar un movimiento de caja por cada método (excepto CC)
+      const pagosEfectivos = pagosFinales.filter(p => p.metodo !== 'Cuenta Corriente');
+      for (const pago of pagosEfectivos) {
+        await supabase.from('movimientos_caja').insert([{
+          user_id: user.id,
+          empresa_id: user.empresa_id,
+          fecha: now,
+          tipo: 'ingreso',
+          categoria: 'Venta',
+          concepto: `Venta #${saleNumber}`,
+          monto: pago.monto,
+          metodo_pago: pago.metodo,
+          is_automatic: true
+        }]);
+      }
+      // Si hay pago en CC, registrar en cuenta corriente (DEBE)
+      if (isCC && selectedClient) {
+        await supabase.from('cuenta_corriente_movimientos').insert([{
+          user_id: user.tenant_id,
+          empresa_id: user.empresa_id,
+          cliente_id: selectedClient.id,
+          tipo: 'DEBE',
+          monto: total,
+          descripcion: `Venta #${saleNumber}`,
+          fecha: now
+        }]);
       }
 
       // Asiento contable automático (no bloquea el flujo de ventas)
@@ -239,13 +337,14 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           total,
           fecha: getTodayAR(),
           descripcion: `Venta #${saleNumber}`,
-          esCredito: paymentMethod === 'Cuenta Corriente',
+          esCredito: isCC,
         }
       ).catch(e => console.warn('[Contabilidad] Asiento venta (no crítico):', e.message));
 
       toast({ title: "¡Venta Exitosa!", description: `Comprobante ${saleNumber} generado.` });
       setLastComprobante(comprobante);
       setLastItems(cart.map(i => ({ producto_nombre: i.nombre, cantidad: i.cantidad, precio_unitario: i.precio_venta, subtotal: i.precio_venta * i.cantidad })));
+      setLastPagos(pagosFinales);
       setShowPrintModal(true);
       if (onSaleSuccess) onSaleSuccess();
       if (onConvertSuccess) onConvertSuccess(comprobante.id);
@@ -327,14 +426,88 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
                     />
                   </div>
                </div>
-               <div className="space-y-3 dark:text-white"><Label>Método de Pago</Label><div className="grid grid-cols-2 gap-2">{['Efectivo', 'Transferencia', 'Tarjeta', 'Cuenta Corriente'].map(method => (<div key={method} className={`cursor-pointer border rounded-lg p-3 text-center text-sm transition-colors ${paymentMethod === method ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200' : 'hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800'}`} onClick={() => setPaymentMethod(method)}>{method}</div>))}</div></div>
-               <div className="space-y-3 dark:text-white"><Label>Cliente</Label><select className="w-full h-10 rounded-md border bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white px-3 text-sm focus:border-blue-500 dark:focus:border-[#00D4FF]" value={selectedClient?.id || ''} onChange={(e) => setSelectedClient(clients.find(c => c.id === e.target.value) || null)}><option value="">Consumidor Final</option>{clients.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></div>
+               <div className="space-y-3 dark:text-white">
+                 <div className="flex items-center justify-between">
+                   <Label>Método de Pago</Label>
+                   {isMultiPago && (
+                     <span className="text-xs text-slate-400 dark:text-slate-500">Seleccioná varios métodos</span>
+                   )}
+                 </div>
+                 <div className="grid grid-cols-2 gap-2">
+                   {['Efectivo', 'Transferencia', 'Tarjeta', 'Cuenta Corriente'].map(method => (
+                     <div key={method}
+                       className={`cursor-pointer border rounded-lg p-3 text-center text-sm transition-colors select-none ${
+                         selectedMethods.has(method)
+                           ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200'
+                           : 'hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800 dark:text-slate-300'
+                       }`}
+                       onClick={() => toggleMethod(method)}
+                     >
+                       <div className="flex items-center justify-center gap-1">
+                         {selectedMethods.has(method) && <Check className="h-3.5 w-3.5 shrink-0" />}
+                         <span>{method}</span>
+                       </div>
+                       {/* Amount input for multi-pago (not CC) */}
+                       {isMultiPago && selectedMethods.has(method) && method !== 'Cuenta Corriente' && (
+                         <div className="mt-2" onClick={e => e.stopPropagation()}>
+                           <input
+                             type="number"
+                             step="0.01"
+                             min="0"
+                             placeholder="$0.00"
+                             value={methodAmounts[method] || ''}
+                             onChange={e => setMethodAmounts(prev => ({ ...prev, [method]: e.target.value }))}
+                             className="w-full h-7 text-center text-xs rounded border border-blue-300 dark:border-blue-700 dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 px-1"
+                           />
+                         </div>
+                       )}
+                     </div>
+                   ))}
+                 </div>
+                 {/* Restante indicator */}
+                 {isMultiPago && (
+                   <div className={`text-sm font-semibold text-center py-2 px-3 rounded-lg ${
+                     Math.abs(restante) < 0.01
+                       ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                       : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400'
+                   }`}>
+                     {Math.abs(restante) < 0.01
+                       ? '✓ Pago completo'
+                       : `Restante a asignar: $${restante.toFixed(2)}`}
+                   </div>
+                 )}
+               </div>
+               <div className="space-y-2 dark:text-white">
+                 <Label>Cliente</Label>
+                 <select
+                   className="w-full h-10 rounded-md border bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white px-3 text-sm focus:border-blue-500 dark:focus:border-[#00D4FF]"
+                   value={selectedClient?.id || ''}
+                   onChange={e => setSelectedClient(clients.find(c => c.id === e.target.value) || null)}
+                 >
+                   <option value="">Consumidor Final</option>
+                   {clients.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                 </select>
+                 {/* Condiciones de pago + límite CC */}
+                 {isCC && selectedClient && (selectedClient.condiciones_pago || selectedClient.limite_credito > 0) && (
+                   <div className="text-xs rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-2 space-y-0.5">
+                     {selectedClient.condiciones_pago && (
+                       <p className="text-blue-700 dark:text-blue-300">📋 {selectedClient.condiciones_pago}</p>
+                     )}
+                     {selectedClient.limite_credito > 0 && (
+                       <p className="text-blue-600 dark:text-blue-400">
+                         Límite: ${Number(selectedClient.limite_credito).toLocaleString('es-AR')}
+                         {' · '}Saldo: ${Number(selectedClient.saldo_actual || 0).toLocaleString('es-AR')}
+                       </p>
+                     )}
+                   </div>
+                 )}
+               </div>
                <div className="mt-auto"><Button className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 text-white dark:bg-green-700 dark:hover:bg-green-600" disabled={loading || cart.length === 0} onClick={handleConfirmSale}>{loading ? <Loader2 className="animate-spin mr-2" /> : <Check className="mr-2" />} Confirmar Venta</Button></div>
             </div>
           </div>
         </DialogContent>
       </Dialog>
-      <ComprobantePrintModal open={showPrintModal} onOpenChange={setShowPrintModal} comprobante={lastComprobante} items={lastItems} />
+      <ComprobantePrintModal open={showPrintModal} onOpenChange={setShowPrintModal} comprobante={lastComprobante} items={lastItems} pagos={lastPagos} />
     </>
   );
 };

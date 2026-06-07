@@ -25,6 +25,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { getNowAR, formatDateTimeAR } from '@/lib/dateUtils';
 import { Textarea } from '@/components/ui/textarea';
+import CSVImportModal from '@/components/ui/CSVImportModal';
 
 // Defined outside ProductosSection to keep a stable component identity across renders.
 // If defined inside, React creates a new function reference every render, causing
@@ -183,6 +184,7 @@ const ProductosSection = () => {
   const [isEditProductOpen, setIsEditProductOpen] = useState(false);
   const [isNewProviderOpen, setIsNewProviderOpen] = useState(false);
   const [isMovimientoOpen, setIsMovimientoOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   
   // Selection State
   const [selectedProductForMov, setSelectedProductForMov] = useState(null);
@@ -657,6 +659,11 @@ const ProductosSection = () => {
              </DialogContent>
            </Dialog>
 
+           {/* Import CSV Button */}
+           <Button variant="outline" onClick={() => setIsImportOpen(true)} className="dark:text-white dark:border-slate-700">
+             <Upload className="h-4 w-4 mr-2" /> Importar CSV
+           </Button>
+
            {/* Add Product Dialog */}
            <Dialog open={isNewProductOpen} onOpenChange={setIsNewProductOpen}>
             <DialogTrigger asChild>
@@ -951,6 +958,14 @@ const ProductosSection = () => {
             </form>
          </DialogContent>
        </Dialog>
+
+       {/* CSV Import Modal */}
+       <CSVImportModal
+         open={isImportOpen}
+         onOpenChange={setIsImportOpen}
+         tipo="productos"
+         onSuccess={() => Promise.all([fetchProducts(), fetchCategories(), fetchProviders()])}
+       />
     </div>
   );
 };

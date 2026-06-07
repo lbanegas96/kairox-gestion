@@ -35,17 +35,16 @@ const CajaCierre = ({ onCancel }) => {
 
   useEffect(() => {
     const fetchSessionTotals = async () => {
-      // CRITICAL FIX: Guard clause for tenant_id
-      if (!currentSession || !user || !user.tenant_id) return;
-      
+      if (!currentSession || !user || !user.empresa_id) return;
+
       try {
         setLoading(true);
-        // Fetch movements for this session
+        // Filtrar por caja_sesion_id + empresa_id (no user_id — los movimientos se insertan con user.id)
         const { data: movements, error } = await supabase
           .from('movimientos_caja')
           .select('monto, tipo, metodo_pago')
           .eq('caja_sesion_id', currentSession.id)
-          .eq('user_id', user.tenant_id);
+          .eq('empresa_id', user.empresa_id);
 
         if (error) throw error;
 
@@ -108,6 +107,8 @@ const CajaCierre = ({ onCancel }) => {
 
   const diferencia = (parseFloat(saldoReal || 0) - totals.esperado);
   const isPerfect = Math.abs(diferencia) < 0.01;
+  const isSobrante = diferencia > 0.01;
+  const isFaltante = diferencia < -0.01;
 
   if (loading) {
     return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-blue-500"/></div>;
@@ -173,10 +174,26 @@ const CajaCierre = ({ onCancel }) => {
               </div>
               
               <div className="space-y-2">
-                <Label className="text-base">Diferencia</Label>
-                <div className={`h-12 flex items-center px-4 rounded-md border text-lg font-bold font-mono ${isPerfect ? 'bg-green-50 text-green-600 border-green-200' : diferencia > 0 ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
-                   {diferencia > 0 ? '+' : ''}{diferencia.toFixed(2)}
+                <Label className="text-base">Diferencia (Arqueo)</Label>
+                <div className={`h-12 flex items-center justify-between px-4 rounded-md border text-lg font-bold font-mono ${
+                  isPerfect
+                    ? 'bg-green-50 text-green-600 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
+                    : isSobrante
+                    ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800'
+                    : 'bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'
+                }`}>
+                  <span>{diferencia > 0 ? '+' : ''}{diferencia.toFixed(2)}</span>
+                  <span className="text-xs font-normal">
+                    {isPerfect ? '✓ Cuadra' : isSobrante ? '↑ Sobrante' : '↓ Faltante'}
+                  </span>
                 </div>
+                {!isPerfect && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {isFaltante
+                      ? `Faltan $${Math.abs(diferencia).toFixed(2)} en caja. Registrá la observación.`
+                      : `Hay $${diferencia.toFixed(2)} de más. Verificá los movimientos.`}
+                  </p>
+                )}
               </div>
            </div>
 

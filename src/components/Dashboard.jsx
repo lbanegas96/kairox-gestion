@@ -14,6 +14,7 @@ import UsuariosSection from '@/components/sections/UsuariosSection';
 import ConfiguracionSection from '@/components/sections/ConfiguracionSection';
 import CotizacionesSection from '@/components/sections/CotizacionesSection';
 import OrdenesCompraSection from '@/components/sections/OrdenesCompraSection';
+import PedidosSection from '@/components/sections/PedidosSection';
 import PlanCuentasSection from '@/components/sections/PlanCuentasSection';
 import CuentasBancariasSection from '@/components/sections/CuentasBancariasSection';
 import ProveedoresSection from '@/components/sections/ProveedoresSection';
@@ -39,6 +40,8 @@ function Dashboard({ user, onLogout }) {
         return <VentasSection />;
       case 'cotizaciones':
         return <CotizacionesSection />;
+      case 'pedidos':
+        return <PedidosSection />;
       case 'ordenes_compra':
         return <OrdenesCompraSection />;
       case 'compras':
