@@ -1,7 +1,7 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-07 — Sesión completa: Proveedores + Portales Fiori + NC/ABC/Comparativa
+**Última actualización:** 2026-06-07 — Sesión verificación migraciones + fix MCP Supabase
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
-**Commits esta sesión:** `2c0397c` → `82fb7f1` (6 commits)
+**Commits esta sesión:** `2c0397c` → `82fb7f1` (6 commits, sin código nuevo — sesión de infraestructura)
 
 ---
 
@@ -194,18 +194,50 @@ dashboard (Launchpad)
 ### 🔵 Fase 5 — COMPLETADA ✅ (sesión 2026-06-07)
 - Módulo Proveedores · Portales Fiori · Launchpad · Notas de crédito · Análisis ABC · Comparativa
 
-### ⚪ Fase 6 — PRÓXIMA SESIÓN
-1. Lista de precios por cliente
-2. Notificaciones / Inbox accionable
-3. Document Flow visual
-4. Recepción parcial de OC
+### ⚪ Fase 6 — PRÓXIMA SESIÓN (detalles completos en sección "⚠️ PRÓXIMA SESIÓN")
+1. **Lista de precios por cliente** — migración `021_listas_precio.sql` + UI NuevaVentaModal
+2. **Notificaciones / Inbox accionable** — campana en Header + polling TanStack Query
+3. **Document Flow visual** — panel lateral con cadena de documentos relacionados
+4. **Recepción parcial de OC** — estado `recibida_parcial` + `cantidad_recibida` en items
 
 ### ⚫ Fase 7 — FINAL
 - Deploy Vercel · ARCA/AFIP + Libro IVA · Membresías/Stripe o MercadoPago · Modelo de licencias
 
 ---
 
+## ⚠️ PRÓXIMA SESIÓN — Leer primero
+
+### 1. Verificar MCP Supabase (5 min)
+El conector Supabase de claude.ai estaba conectado a una cuenta incorrecta (no NALUX). Se reconectó vía OAuth a la cuenta NALUX en esta sesión. Al abrir la próxima sesión, verificar que el MCP funciona correctamente ejecutando:
+```
+list_projects → debe aparecer wuznppxeonmhfcvnqfbf (kairox-gestion)
+```
+Si NO aparece: ir a claude.ai → Conectores → Supabase → desconectar y reconectar con cuenta NALUX.
+
+### 2. Continuar con Fase 6 (en este orden)
+
+| # | Feature | Esfuerzo | Descripción |
+|---|---|---|---|
+| **1** | **Lista de precios por cliente** | Medio | Tabla `listas_precio` + `lista_precio_items`. Precio de lista / VIP / mayorista. En NuevaVentaModal: al seleccionar cliente, aplicar automáticamente su lista. Requiere migración `021_listas_precio.sql`. Diferenciador clave vs Xubio/Colppy. |
+| **2** | **Notificaciones / Inbox accionable** | Bajo | El Header ya tiene el ícono campana (stub). Mostrar: OC pendientes de aprobación, CC vencida (+30 días), stock bajo mínimo, caja sin cerrar hace más de 24h. Polling cada 5 min con TanStack Query. Sin push. |
+| **3** | **Document Flow visual** | Medio | Panel lateral en modales de detalle. Cadena: Cotización → Pedido → Venta → NC → Cobro CC. Links navegables entre documentos relacionados. Inspirado en SAP SD Document Flow. |
+| **4** | **Recepción parcial de OC** | Medio | Hoy es todo o nada. Permitir recibir X de Y unidades pedidas. OC queda en estado `recibida_parcial` hasta completar. Requiere migración (columna `cantidad_recibida` en `ordenes_compra_items`). |
+
+---
+
 ## Historial de sesiones
+
+### Sesión 2026-06-07 (continuación) — Infraestructura / Fix MCP
+
+**Verificación de migraciones:**
+- Confirmado que migraciones 018, 019 y 020 están aplicadas en Supabase (`wuznppxeonmhfcvnqfbf`) ✅
+- Schema completo y al día hasta Fase 5
+
+**Fix conector Supabase MCP:**
+- Problema: el MCP de Supabase en claude.ai estaba autenticado con una cuenta distinta a NALUX (mostraba proyectos de org `kqtqkrbsorgtocnvnfxp`, no el proyecto `wuznppxeonmhfcvnqfbf`)
+- Solución aplicada: reconexión vía OAuth en claude.ai → Conectores → Supabase
+- Pendiente: verificar en próxima sesión que `list_projects` retorna el proyecto correcto
+- El código y la app no se vieron afectados (el frontend se conecta directamente vía URL/anon key del .env)
 
 ### Sesión 2026-06-07 — Fase 5 completa
 
