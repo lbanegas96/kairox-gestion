@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import {
   Search, Package, Users, ShoppingCart, Receipt,
   DollarSign, LayoutDashboard, Settings, FileText,
-  TrendingUp, ArrowRight, Loader2, X, BookOpen
+  TrendingUp, ArrowRight, Loader2, X, BookOpen, Truck
 } from 'lucide-react';
 
 const SECCIONES = [
@@ -16,6 +16,7 @@ const SECCIONES = [
   { id: 'clientes',        label: 'Clientes',           icon: Users,           keywords: ['cliente', 'contacto'] },
   { id: 'cotizaciones',    label: 'Cotizaciones',       icon: FileText,        keywords: ['presupuesto', 'cotizar'] },
   { id: 'ordenes_compra',  label: 'Órdenes de Compra',  icon: ShoppingCart,    keywords: ['oc', 'orden', 'pedido'] },
+  { id: 'proveedores',     label: 'Proveedores',         icon: Truck,           keywords: ['proveedor', 'cuit', 'ficha'] },
   { id: 'cuentacorriente', label: 'Cuenta Corriente',   icon: TrendingUp,      keywords: ['deuda', 'credito', 'saldo'] },
   { id: 'plan_cuentas',    label: 'Contabilidad',       icon: BookOpen,        keywords: ['contabilidad', 'cuentas', 'asiento', 'balance', 'diario'] },
   { id: 'reportes',        label: 'Reportes',           icon: FileText,        keywords: ['reporte', 'informe', 'pdf'] },

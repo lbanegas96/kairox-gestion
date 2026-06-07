@@ -20,6 +20,7 @@ export default function StaffPermissionsModal({ isOpen, onClose, userData, onSav
     { id: 'pedidos', label: 'Pedidos de Clientes', desc: 'Gestionar pedidos y convertir a ventas' },
     { id: 'compras', label: 'Compras', desc: 'Registrar compras a proveedores' },
     { id: 'ordenes_compra', label: 'Órdenes de Compra', desc: 'Workflow de aprobación de OC a proveedores' },
+    { id: 'proveedores', label: 'Proveedores', desc: 'Ficha de proveedores, cuenta corriente e historial de OC' },
     { id: 'caja', label: 'Caja', desc: 'Apertura y cierre de caja, movimientos' },
     { id: 'bancos', label: 'Bancos', desc: 'Cuentas bancarias y conciliación' },
     { id: 'clientes', label: 'Clientes', desc: 'Gestión de base de datos de clientes' },
