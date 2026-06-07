@@ -84,10 +84,10 @@ export function useNotifications() {
       const hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data, error } = await supabase
         .from('caja_sesiones')
-        .select('id, caja_id, apertura, cajas(nombre)')
+        .select('id, caja_id, apertura_fecha, cajas(nombre)')
         .eq('empresa_id', empresaId)
-        .is('cierre', null)
-        .lt('apertura', hace24h);
+        .is('cierre_fecha', null)
+        .lt('apertura_fecha', hace24h);
       if (error) return [];
       return data ?? [];
     },
@@ -128,7 +128,7 @@ export function useNotifications() {
       id: `caja-${s.id}`,
       tipo: 'caja_sin_cerrar',
       titulo: s.cajas?.nombre ?? 'Caja sin cerrar',
-      detalle: `Abierta desde ${new Date(s.apertura).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} — más de 24h sin cierre`,
+      detalle: `Abierta desde ${new Date(s.apertura_fecha).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} — más de 24h sin cierre`,
       nivel: 'advertencia',
       seccion: 'caja',
       raw: s,
