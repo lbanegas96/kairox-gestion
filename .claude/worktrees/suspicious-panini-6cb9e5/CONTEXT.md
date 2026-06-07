@@ -19,7 +19,7 @@
 
 | Módulo | Archivo principal | Estado |
 |---|---|---|
-| Dashboard | `DashboardSection.jsx` | ✅ 8 KPIs + 2 gráficos + alerta aging CC |
+| Dashboard | `DashboardSection.jsx` | ✅ 8 KPIs + 2 gráficos + alerta aging CC + Top 5 vendidos + último banco + OnboardingBanner |
 | Ventas (POS) | `VentasSection.jsx` + `NuevaVentaModal.jsx` | ✅ Multi-pago + check límite crédito + condición pago |
 | Historial Ventas | `HistorialVentas.jsx` | ✅ Filtros avanzados + estado_pago CC + paginación 50/pág |
 | Comprobantes | `ComprobantePrintModal.jsx` | ✅ Toggle Comprobante / Remito sin precios |
@@ -37,7 +37,7 @@
 | Bancos | `CuentasBancariasSection.jsx` | ✅ Import CSV + conciliación auto/manual |
 | Reportes | `ReportesSection.jsx` | ✅ Funcional + paginación 100/pág |
 | Usuarios | `UsuariosSection.jsx` | ✅ Invitación + último acceso + activar/desactivar + preset Solo Caja |
-| Configuración | `ConfiguracionSection.jsx` | ✅ Logo + toggle aprobación OC |
+| Configuración | `ConfiguracionSection.jsx` | ✅ Logo + toggle aprobación OC + datos de ejemplo |
 
 ---
 
@@ -61,7 +61,7 @@
 | `migrations/016_security_hardening.sql` | is_admin() + RLS config + rate_limit + audit triggers | ✅ |
 | `migrations/017_multi_pago.sql` | Tabla comprobante_pagos + RLS + índices | ✅ aplicada |
 | `migrations/018_condicion_pago.sql` | condicion_pago + dias_credito en clientes | ✅ aplicada |
-| `migrations/019_pedidos.sql` | pedidos + pedido_items + RLS + audit trigger | ⏳ **Pendiente aplicar** |
+| `migrations/019_pedidos.sql` | pedidos + pedido_items + RLS + audit trigger | ✅ aplicada |
 
 ### SQL adicional ejecutado directamente
 
@@ -151,10 +151,10 @@
 10. ~~Límite de crédito por cliente~~ ✅
 11. ~~Usuario "solo caja"~~ ✅
 
-### 🟢 Fase 4 — Retención y experiencia
-12. **Dashboard ejecutivo completo** — Top 5 productos clickeables, facturas CC vencidas, stock en mínimo, último mov. banco
-13. **Onboarding wizard completo** — Empresa → ARCA → Productos → Primera venta, con checklist de progreso
-14. **Datos de ejemplo precargados** — Para explorar el sistema antes de configurarlo
+### 🟢 Fase 4 — COMPLETADA ✅
+12. ~~Dashboard ejecutivo completo~~ ✅ — Top 5 vendidos, último mov banco, OnboardingBanner
+13. ~~Onboarding wizard~~ ✅ — Banner con checklist 3 pasos + dismiss persistente
+14. ~~Datos de ejemplo precargados~~ ✅ — 8 productos + 3 clientes desde Configuración
 
 ---
 
@@ -170,12 +170,21 @@
 
 ## Próxima sesión — por dónde seguir
 
-1. **Aplicar migration 019** en Supabase Dashboard (SQL Editor → pegar `migrations/019_pedidos.sql`)
-2. **Fase 4** — Dashboard ejecutivo + onboarding wizard + datos de ejemplo
+1. **Fase 1 ARCA/AFIP** — único bloqueante restante para poder vender
+2. **Deploy Vercel** — requiere dominio + env vars producción
+3. **Membership / Stripe o MercadoPago** — requiere ARCA primero
 
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-06 (continuación 2) — Fase 4 completa
+
+- ✅ `dashboardService.ts` — `dashboardExtrasService`: `getTopProductosVendidos`, `getUltimoMovBancario`, `checkOnboardingStatus`
+- ✅ `DashboardSection.jsx` — nueva fila Top 5 Vendidos + Último mov banco + OnboardingBanner integrado
+- ✅ `OnboardingBanner.jsx` — checklist 3 pasos (empresa/productos/ventas) + dismiss en localStorage + ARCA como pendiente
+- ✅ `ConfiguracionSection.jsx` — sección "Datos de Ejemplo" con carga de 8 productos + 3 clientes
+- ✅ `demoDataService.ts` — inserta datos de ferretería con idempotencia (no sobreescribe si ya hay datos)
 
 ### Sesión 2026-06-06 (continuación) — Fase 3 completa: Pedidos
 

@@ -1,24 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Save, Building, Image as ImageIcon, Loader2, Upload, Trash2, AlertCircle } from 'lucide-react';
+import { Settings, Save, Building, Image as ImageIcon, Loader2, Upload, Trash2, AlertCircle, FlaskConical, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useConfig } from '@/contexts/ConfigContext';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { demoDataService } from '@/services/demoDataService';
 
 const ConfiguracionSection = () => {
   const { config, updateConfig } = useConfig();
   const { user } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef(null);
-  
+
   const [formData, setFormData] = useState({
     nombre_empresa: '',
     company_logo: '' // URL of the uploaded image
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [loadingDemo, setLoadingDemo] = useState(false);
+  const [demoLoaded, setDemoLoaded] = useState(false);
 
   useEffect(() => {
     if (config) {
@@ -95,6 +98,28 @@ const ConfiguracionSection = () => {
       title: "Logo eliminado",
       description: "El logo se ha eliminado de la vista previa.",
     });
+  };
+
+  const handleLoadDemo = async () => {
+    const already = await demoDataService.hasData(user.empresa_id);
+    if (already) {
+      toast({ title: 'Ya hay datos cargados', description: 'El sistema ya tiene productos registrados. Los datos de ejemplo no se sobreescriben.', variant: 'destructive' });
+      return;
+    }
+    setLoadingDemo(true);
+    try {
+      const result = await demoDataService.loadDemoData(user.empresa_id, user.id);
+      setDemoLoaded(true);
+      toast({
+        title: 'Datos de ejemplo cargados',
+        description: `${result.productos} productos y ${result.clientes} clientes de prueba agregados.`,
+        className: 'bg-green-600 text-white',
+      });
+    } catch (e) {
+      toast({ title: 'Error al cargar datos', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoadingDemo(false);
+    }
   };
 
   const handleSave = async (e) => {
@@ -261,6 +286,46 @@ const ConfiguracionSection = () => {
           
           <div className="text-sm text-slate-500 max-w-xs">
             <p>Los cambios se aplicarán inmediatamente en toda la aplicación para todos los usuarios.</p>
+          </div>
+        </div>
+      </div>
+      {/* ── Datos de Prueba ─────────────────────────────────────────────────── */}
+      <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-lg bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
+            <FlaskConical className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">Datos de Ejemplo</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              Carga 8 productos y 3 clientes de prueba para explorar el sistema sin configurar todo desde cero.
+              Solo disponible si el inventario está vacío.
+            </p>
+            <ul className="mt-2 space-y-0.5 text-xs text-slate-400 dark:text-slate-500">
+              <li>• 8 productos de ferretería con precios, stock y SKU</li>
+              <li>• 3 clientes con distintas condiciones de pago</li>
+            </ul>
+            <div className="mt-4">
+              {demoLoaded ? (
+                <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 font-medium">
+                  <CheckCircle2 className="w-4 h-4" /> Datos de ejemplo cargados correctamente
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleLoadDemo}
+                  disabled={loadingDemo}
+                  className="border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20"
+                >
+                  {loadingDemo ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Cargando...</>
+                  ) : (
+                    <><FlaskConical className="w-4 h-4 mr-2" /> Cargar datos de ejemplo</>
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </div>

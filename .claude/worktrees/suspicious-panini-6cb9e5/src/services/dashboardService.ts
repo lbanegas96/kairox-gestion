@@ -192,9 +192,74 @@ export const dashboardAgingService = {
   },
 };
 
+export const dashboardExtrasService = {
+  async getTopProductosVendidos(empresaId: string, limit = 5): Promise<{ nombre: string; cantidad: number; total: number }[]> {
+    const { data, error } = await supabase
+      .from('comprobante_items')
+      .select('produto_id, quantidade, subtotal, produtos(nome)')
+      .eq('empresa_id', empresaId)
+      .limit(1000);
+
+    if (error || !data?.length) return [];
+
+    const map: Record<string, { nombre: string; cantidad: number; total: number }> = {};
+    for (const item of data) {
+      const pid = item.produto_id as string;
+      if (!pid) continue;
+      if (!map[pid]) {
+        map[pid] = {
+          nombre: (item.produtos as { nome: string } | null)?.nome ?? 'Producto',
+          cantidad: 0,
+          total: 0,
+        };
+      }
+      map[pid].cantidad += Number(item.quantidade ?? 0);
+      map[pid].total += Number(item.subtotal ?? 0);
+    }
+    return Object.values(map)
+      .filter(p => p.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, limit);
+  },
+
+  async getUltimoMovBancario(empresaId: string): Promise<{ fecha: string; descripcion: string; monto: number; tipo: string; cuenta: string } | null> {
+    const { data, error } = await supabase
+      .from('movimientos_bancarios')
+      .select('fecha, descripcion, monto, tipo, cuentas_bancarias(nombre)')
+      .eq('empresa_id', empresaId)
+      .order('fecha', { ascending: false })
+      .limit(1);
+
+    if (error || !data?.length) return null;
+    const m = data[0] as any;
+    return {
+      fecha: m.fecha,
+      descripcion: m.descripcion,
+      monto: Number(m.monto),
+      tipo: m.tipo,
+      cuenta: m.cuentas_bancarias?.nombre ?? 'Banco',
+    };
+  },
+
+  async checkOnboardingStatus(empresaId: string, userId: string): Promise<{ empresa: boolean; productos: boolean; ventas: boolean }> {
+    const [prodRes, ventasRes] = await Promise.all([
+      supabase.from('productos').select('id', { count: 'exact', head: true }).eq('empresa_id', empresaId).eq('activo', true),
+      supabase.from('comprobantes').select('id', { count: 'exact', head: true }).eq('empresa_id', empresaId),
+    ]);
+    return {
+      empresa: true,  // se verifica con config.nombre_empresa en el componente
+      productos: (prodRes.count ?? 0) > 0,
+      ventas: (ventasRes.count ?? 0) > 0,
+    };
+  },
+};
+
 export const DASHBOARD_KEYS = {
   kpis: (empresaId: string) => ['dashboard', 'kpis', empresaId] as const,
   ventasPorDia: (empresaId: string, dias: number) => ['dashboard', 'ventasPorDia', empresaId, dias] as const,
   flujoCaja: (empresaId: string, meses: number) => ['dashboard', 'flujoCaja', empresaId, meses] as const,
   aging: (empresaId: string) => ['dashboard', 'aging', empresaId] as const,
+  topProductos: (empresaId: string) => ['dashboard', 'topProductos', empresaId] as const,
+  ultimoBanco: (empresaId: string) => ['dashboard', 'ultimoBanco', empresaId] as const,
+  onboarding: (empresaId: string) => ['dashboard', 'onboarding', empresaId] as const,
 };

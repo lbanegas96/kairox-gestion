@@ -4,7 +4,8 @@ import { motion } from 'framer-motion';
 import {
   ShoppingCart, Package, AlertCircle, AlertTriangle, ArrowUpRight, ArrowDownRight,
   DollarSign, TrendingUp, Calendar, CreditCard, FileText, UserPlus,
-  Wallet, BarChart3, RefreshCw, Archive, History, Percent, ClipboardList, ShoppingBag
+  Wallet, BarChart3, RefreshCw, Archive, History, Percent, ClipboardList, ShoppingBag,
+  TrendingDown, Landmark,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,8 +17,9 @@ import {
   CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
-import { dashboardService, dashboardAgingService, DASHBOARD_KEYS } from '@/services/dashboardService';
+import { dashboardService, dashboardAgingService, dashboardExtrasService, DASHBOARD_KEYS } from '@/services/dashboardService';
 import { useQueryClient } from '@tanstack/react-query';
+import OnboardingBanner from '@/components/sections/OnboardingBanner';
 
 // ─── MetricCard ───────────────────────────────────────────────────────────────
 const MetricCard = React.memo(({ title, value, icon: Icon, trend, trendValue, gradient, loading, onClick, customContent }) => (
@@ -122,6 +124,20 @@ function DashboardSection({ onNavigate }) {
     staleTime: 1000 * 60 * 5,
   });
 
+  const { data: topProductos = [] } = useQuery({
+    queryKey: DASHBOARD_KEYS.topProductos(empresaId),
+    queryFn: () => dashboardExtrasService.getTopProductosVendidos(empresaId, 5),
+    enabled: !!empresaId,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: ultimoBanco } = useQuery({
+    queryKey: DASHBOARD_KEYS.ultimoBanco(empresaId),
+    queryFn: () => dashboardExtrasService.getUltimoMovBancario(empresaId),
+    enabled: !!empresaId,
+    staleTime: 1000 * 60 * 5,
+  });
+
   const loading = kpisLoading;
 
   const handleRefresh = () => {
@@ -167,6 +183,9 @@ function DashboardSection({ onNavigate }) {
           )}
         </div>
       </div>
+
+      {/* ── Onboarding banner ────────────────────────────────────────────────── */}
+      <OnboardingBanner onNavigate={onNavigate} />
 
       {/* ── Fila 1: KPIs principales (8 cards) ─────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -414,6 +433,116 @@ function DashboardSection({ onNavigate }) {
                 onClick={() => onNavigate?.('reportes')} gradient="from-amber-600 to-amber-500"
                 disabled={!canAccessSection('reportes')} />
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Fila 5: Top 5 Vendidos + Último mov banco ───────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Top 5 productos más vendidos */}
+        <Card className="lg:col-span-2 dark:bg-slate-950 dark:border-slate-800">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <CardTitle className="text-base dark:text-white flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-blue-500" /> Top 5 Productos Vendidos
+            </CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => onNavigate?.('productos')}
+              className="text-xs text-blue-500 dark:text-blue-400 h-7">
+              Ver inventario <ArrowUpRight className="w-3 h-3 ml-1" />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {topProductos.length === 0 ? (
+              <div className="flex flex-col items-center py-6 text-slate-400 dark:text-slate-500">
+                <TrendingUp className="w-8 h-8 mb-2 opacity-40" />
+                <p className="text-sm">Sin datos de ventas todavía</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {topProductos.map((p, i) => {
+                  const maxTotal = topProductos[0]?.total ?? 1;
+                  const pct = maxTotal > 0 ? (p.total / maxTotal) * 100 : 0;
+                  return (
+                    <div key={i} className="space-y-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 ${
+                            i === 0 ? 'bg-yellow-500' : i === 1 ? 'bg-slate-400' : i === 2 ? 'bg-orange-400' : 'bg-slate-300 dark:bg-slate-600'
+                          }`}>{i + 1}</span>
+                          <span className="font-medium text-slate-800 dark:text-slate-200 truncate">{p.nombre}</span>
+                        </div>
+                        <div className="text-right shrink-0 ml-3">
+                          <span className="font-bold text-slate-800 dark:text-slate-200">
+                            ${p.total.toLocaleString('es-AR', { minimumFractionDigits: 0 })}
+                          </span>
+                          <span className="text-xs text-slate-400 ml-1">({p.cantidad} un.)</span>
+                        </div>
+                      </div>
+                      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5">
+                        <div
+                          className={`h-1.5 rounded-full transition-all duration-500 ${
+                            i === 0 ? 'bg-yellow-500' : i === 1 ? 'bg-blue-400' : 'bg-blue-300'
+                          }`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Último movimiento bancario */}
+        <Card className="dark:bg-slate-950 dark:border-slate-800">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <CardTitle className="text-base dark:text-white flex items-center gap-2">
+              <Landmark className="w-4 h-4 text-violet-500" /> Último Mov. Banco
+            </CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => onNavigate?.('bancos')}
+              className="text-xs text-blue-500 dark:text-blue-400 h-7">
+              Ver bancos <ArrowUpRight className="w-3 h-3 ml-1" />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {!ultimoBanco ? (
+              <div className="flex flex-col items-center py-6 text-slate-400 dark:text-slate-500">
+                <Landmark className="w-8 h-8 mb-2 opacity-40" />
+                <p className="text-sm text-center">Sin movimientos bancarios registrados</p>
+                <Button variant="ghost" size="sm" onClick={() => onNavigate?.('bancos')}
+                  className="mt-2 text-xs text-blue-500 dark:text-blue-400">
+                  Configurar cuenta →
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-slate-400 dark:text-slate-500">{ultimoBanco.cuenta}</span>
+                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                      ultimoBanco.tipo === 'ingreso'
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                        : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                    }`}>
+                      {ultimoBanco.tipo === 'ingreso' ? '↑ Ingreso' : '↓ Egreso'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-slate-700 dark:text-slate-300 font-medium truncate">
+                    {ultimoBanco.descripcion || 'Sin descripción'}
+                  </p>
+                  <div className="flex items-center justify-between mt-1.5">
+                    <span className="text-xs text-slate-400">
+                      {new Date(ultimoBanco.fecha).toLocaleDateString('es-AR')}
+                    </span>
+                    <span className={`text-lg font-bold ${
+                      ultimoBanco.tipo === 'ingreso' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                    }`}>
+                      {ultimoBanco.tipo === 'ingreso' ? '+' : '-'}${ultimoBanco.monto.toLocaleString('es-AR', { minimumFractionDigits: 0 })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
