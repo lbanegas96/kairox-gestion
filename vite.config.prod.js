@@ -15,18 +15,6 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-    chunkSizeWarningLimit: 1200,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          // Separar vendors pesados para mejor cache
-          'vendor-react':    ['react', 'react-dom'],
-          'vendor-supabase': ['@supabase/supabase-js'],
-          'vendor-charts':   ['recharts'],
-          'vendor-ui':       ['framer-motion', 'lucide-react'],
-          'vendor-pdf':      ['jspdf', 'jspdf-autotable'],
-        },
-      },
-    },
+    chunkSizeWarningLimit: 1500,
   },
 });
