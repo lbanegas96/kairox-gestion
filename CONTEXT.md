@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-07 — Fase 5 completa · Fix MCP Supabase · Fase 6 pendiente
+**Última actualización:** 2026-06-07 — Fase 6 completa
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 
 ---
@@ -19,6 +19,7 @@
 | Módulo | Archivo principal | Estado |
 |---|---|---|
 | Launchpad (Home) | `LaunchpadSection.jsx` | ✅ Tiles por área + KPIs + accesos rápidos |
+| **Listas de Precios** | `ListasPrecioSection.jsx` + `listaPreciosService.ts` | ✅ **NUEVO** CRUD listas + items por producto + asignación a cliente |
 | Dashboard Ejecutivo | `DashboardSection.jsx` | ✅ 8 KPIs + 2 gráficos (accesible desde Portal Finanzas) |
 | Portal Ventas | `portals/VentasPortal.jsx` | ✅ 6 KPIs + módulos |
 | Portal Compras | `portals/ComprasPortal.jsx` | ✅ 5 KPIs + módulos |
@@ -68,6 +69,7 @@
 | `migrations/018_condicion_pago.sql` | condicion_pago + dias_credito en clientes | ✅ |
 | `migrations/019_pedidos.sql` | pedidos + pedido_items + RLS + audit trigger | ✅ |
 | `migrations/020_notas_credito.sql` | tipo + estado_pago + comprobante_origen_id + motivo_nc en comprobantes | ✅ |
+| `migrations/021_listas_precio.sql` | listas_precio + lista_precio_items + lista_precio_id en clientes + cotizacion_id/pedido_id en comprobantes | ✅ |
 
 ### SQL adicional ejecutado directamente
 
@@ -149,14 +151,12 @@ dashboard (Launchpad)
 ### 🔵 Fase 5 — COMPLETADA ✅
 - Módulo Proveedores · Portales Fiori · Launchpad · Notas de crédito · Análisis ABC · Comparativa
 
-### ⚪ Fase 6 — PRÓXIMA
+### ⚪ Fase 6 — COMPLETADA ✅
 
-| # | Feature | Esfuerzo | Descripción |
-|---|---|---|---|
-| **1** | **Lista de precios por cliente** | Medio | Tabla `listas_precio` + `lista_precio_items`. Precio de lista / VIP / mayorista. En NuevaVentaModal: al seleccionar cliente, aplicar automáticamente su lista. Requiere migración `021_listas_precio.sql`. Diferenciador clave vs Xubio/Colppy. |
-| **2** | **Notificaciones / Inbox accionable** | Bajo | El Header ya tiene el ícono campana (stub). Mostrar: OC pendientes de aprobación, CC vencida (+30 días), stock bajo mínimo, caja sin cerrar hace más de 24h. Polling cada 5 min con TanStack Query. Sin push. |
-| **3** | **Document Flow visual** | Medio | Panel lateral en modales de detalle. Cadena: Cotización → Pedido → Venta → NC → Cobro CC. Links navegables entre documentos relacionados. Inspirado en SAP SD Document Flow. |
-| **4** | **Recepción parcial de OC** | Medio | Hoy es todo o nada. Permitir recibir X de Y unidades pedidas. OC queda en estado `recibida_parcial` hasta completar. Requiere migración (columna `cantidad_recibida` en `ordenes_compra_items`). |
+1. ✅ **Lista de precios por cliente** — `listaPreciosService.ts` + `ListasPrecioSection.jsx` + aplicación automática en `NuevaVentaModal`
+2. ✅ **Notificaciones / Inbox accionable** — fix bug `empresa_id` + caja sin cerrar (24h) en `useNotifications.js`
+3. ✅ **Document Flow visual** — `documentFlowService.ts` + `DocumentFlowPanel.jsx` integrado en `SaleDetailModal`
+4. ✅ **Recepción parcial OC** — ya estaba implementado; fix TanStack Query v5 `onSuccess→useEffect` en `OrdenesCompraSection`
 
 ### ⚫ Fase 7 — FINAL
 - Deploy Vercel · ARCA/AFIP + Libro IVA · Membresías/Stripe o MercadoPago · Modelo de licencias
@@ -198,6 +198,16 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-07 — Fase 6 completa (commit `a846bac`)
+- migration 021: listas_precio + lista_precio_items + cols cotizacion_id/pedido_id en comprobantes
+- `ListasPrecioSection.jsx` + `listaPreciosService.ts`: CRUD listas, precios por producto, asignación a cliente
+- `NuevaVentaModal.jsx`: precios de lista aplicados automáticamente, badge "LISTA" en carrito
+- `ClientesSection.jsx`: selector de lista en form de cliente
+- `useNotifications.js`: fix `user_id→empresa_id` + caja sin cerrar +24h
+- `DocumentFlowPanel.jsx` + `documentFlowService.ts`: panel SAP Document Flow en SaleDetailModal
+- `OrdenesCompraSection.jsx`: fix TanStack Query v5 (`onSuccess→useEffect`) en recepción OC
+- MCP Supabase configurado en `~/.claude/settings.json` — operativo ✅
 
 ### Sesión 2026-06-07 (continuación) — Infraestructura / Fix MCP
 - Confirmado migraciones 018, 019, 020 aplicadas en Supabase ✅
