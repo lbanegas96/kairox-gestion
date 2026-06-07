@@ -1,15 +1,15 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-07 — Portales por área (Fiori-style) + Launchpad + Módulo Proveedores completo
-**Branch activo:** `master`
-**Entregables de auditoría:** `AUDITORIA.md` · `SUPABASE_ANALISIS.md` · `STATUS_REPORT.md` · `SUPABASE_SETUP.md`
+**Última actualización:** 2026-06-07 — Sesión completa: Proveedores + Portales Fiori + NC/ABC/Comparativa
+**Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
+**Commits esta sesión:** `2c0397c` → `82fb7f1` (6 commits)
 
 ---
 
 ## ¿Qué es este proyecto?
 
-**KAIROX Gestión** es un ERP/POS SaaS para PyMEs comerciales argentinas (ferreterías, distribuidoras, mayoristas, almacenes). Posicionamiento: **conceptos ERP enterprise a precio y simplicidad PyME**.
+**KAIROX Gestión** es un ERP/POS SaaS para PyMEs comerciales argentinas (ferreterías, distribuidoras, mayoristas, almacenes).
 
-- **Mercado objetivo:** ~520K PyMEs registradas en Argentina. Segmento inicial: micro (1–3 empleados). Monetización real: Pro (comercios con stock, compras y CC).
+- **Mercado objetivo:** ~520K PyMEs registradas en Argentina. Segmento inicial: micro (1–3 empleados).
 - **Competidores:** Xubio (50K+ clientes), Colppy (foco contable, sin POS), Tango (enterprise desde $528K/mes).
 - **Stack:** React 18 + Vite + TailwindCSS + Shadcn/UI · Supabase (PostgreSQL + Auth + RLS + Edge Functions) · Context API · TanStack Query v5 · JS (JSX) + TS coexistiendo
 
@@ -19,23 +19,29 @@
 
 | Módulo | Archivo principal | Estado |
 |---|---|---|
-| Dashboard | `DashboardSection.jsx` | ✅ 8 KPIs + 2 gráficos + alerta aging CC + Top 5 vendidos + último banco + OnboardingBanner |
-| Ventas (POS) | `VentasSection.jsx` + `NuevaVentaModal.jsx` | ✅ Multi-pago + check límite crédito + condición pago |
+| Launchpad (Home) | `LaunchpadSection.jsx` | ✅ Tiles por área + KPIs + accesos rápidos |
+| Dashboard Ejecutivo | `DashboardSection.jsx` | ✅ 8 KPIs + 2 gráficos (accesible desde Portal Finanzas) |
+| Portal Ventas | `portals/VentasPortal.jsx` | ✅ 6 KPIs + módulos |
+| Portal Compras | `portals/ComprasPortal.jsx` | ✅ 5 KPIs + módulos |
+| Portal Finanzas | `portals/FinanzasPortal.jsx` | ✅ 5 KPIs + posición neta CxC-CxP |
+| Portal Inventario | `portals/InventarioPortal.jsx` | ✅ 5 KPIs + barra salud stock |
+| Ventas (POS) | `VentasSection.jsx` + `NuevaVentaModal.jsx` | ✅ Multi-pago + check límite crédito |
+| Notas de Crédito | `NotaCreditoModal.jsx` + `notaCreditoService.ts` | ✅ Devolución parcial/total + reversión stock/CC/caja |
 | Historial Ventas | `HistorialVentas.jsx` | ✅ Filtros avanzados + estado_pago CC + paginación 50/pág |
 | Comprobantes | `ComprobantePrintModal.jsx` | ✅ Toggle Comprobante / Remito sin precios |
-| Inventario | `ProductosSection.jsx` | ✅ Soft delete + import CSV |
+| Inventario | `ProductosSection.jsx` | ✅ Soft delete + import CSV + **Análisis ABC** |
 | Compras | `ComprasSection.jsx` | ✅ Funcional + asiento auto + paginación 50/pág |
 | Cotizaciones | `CotizacionesSection.jsx` | ✅ Funcional + convertir a venta |
-| Pedidos (OC Clientes) | `PedidosSection.jsx` | ✅ Workflow borrador→confirmado→en_preparacion→facturado + Convertir a Venta |
-| Órdenes de Compra (proveedores) | `OrdenesCompraSection.jsx` | ✅ Workflow aprobación + 3-way match + realtime |
-| Caja | `CajaSection.jsx` + `CajaCierre.jsx` | ✅ Arqueo por denominaciones + tab Arqueos + Sobrante/Faltante |
+| Pedidos (OC Clientes) | `PedidosSection.jsx` | ✅ Workflow borrador→confirmado→en_preparacion→facturado |
+| Órdenes de Compra | `OrdenesCompraSection.jsx` | ✅ Workflow aprobación + 3-way match + realtime |
+| Caja | `CajaSection.jsx` + `CajaCierre.jsx` | ✅ Arqueo por denominaciones + tab Arqueos |
 | Clientes | `ClientesSection.jsx` | ✅ Form completo + condicion_pago + limite_credito + import CSV |
 | Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Tab Antigüedad de Deuda (FIFO 30/60/90/+90 días) |
 | Detalle Cta. Cte. | `ClientDetailModal.jsx` | ✅ Open Item Management SAP-style |
 | Contabilidad | `PlanCuentasSection.jsx` | ✅ 7 tabs: Plan/Asientos/Balance/LM/P&L/BalanceGeneral/Períodos |
-| Proveedores | `ProveedoresSection.jsx` + `proveedoresService.ts` | ✅ Ficha completa + Cta. Cte. + Historial OC + Registrar pago |
+| Proveedores | `ProveedoresSection.jsx` + `proveedoresService.ts` | ✅ Ficha completa + Cta. Cte. + Historial OC + Pago inline |
 | Bancos | `CuentasBancariasSection.jsx` | ✅ Import CSV + conciliación auto/manual |
-| Reportes | `ReportesSection.jsx` | ✅ Funcional + paginación 100/pág |
+| Reportes | `ReportesSection.jsx` | ✅ 5 reportes + paginación 100/pág + **comparativa período anterior** |
 | Usuarios | `UsuariosSection.jsx` | ✅ Invitación + último acceso + activar/desactivar + preset Solo Caja |
 | Configuración | `ConfiguracionSection.jsx` | ✅ Logo + toggle aprobación OC + datos de ejemplo |
 
@@ -59,9 +65,10 @@
 | `migrations/014_proveedores.sql` | Ficha completa proveedores + cuenta_corriente_proveedores | ✅ |
 | `migrations/015_conciliacion_bancaria.sql` | extractos_bancarios + extracto_lineas + trigger sync | ✅ |
 | `migrations/016_security_hardening.sql` | is_admin() + RLS config + rate_limit + audit triggers | ✅ |
-| `migrations/017_multi_pago.sql` | Tabla comprobante_pagos + RLS + índices | ✅ aplicada |
-| `migrations/018_condicion_pago.sql` | condicion_pago + dias_credito en clientes | ✅ aplicada |
-| `migrations/019_pedidos.sql` | pedidos + pedido_items + RLS + audit trigger | ✅ aplicada |
+| `migrations/017_multi_pago.sql` | Tabla comprobante_pagos + RLS + índices | ✅ |
+| `migrations/018_condicion_pago.sql` | condicion_pago + dias_credito en clientes | ✅ |
+| `migrations/019_pedidos.sql` | pedidos + pedido_items + RLS + audit trigger | ✅ |
+| `migrations/020_notas_credito.sql` | tipo + estado_pago + comprobante_origen_id + motivo_nc en comprobantes | ✅ |
 
 ### SQL adicional ejecutado directamente
 
@@ -84,6 +91,7 @@
 - **Multi-tenancy:** RLS via `get_my_empresa_id()` + `empresa_id` en todas las tablas
 - **Logo:** Base64 en tabla `configuracion` (clave `logo_base64`)
 - **Roles:** `admin` (acceso total) | `staff` (permisos granulares en `profiles.permissions` JSONB) | `solo_caja` (solo Ventas + Caja)
+- **GitHub:** `https://github.com/lbanegas96/kairox-gestion` (branch: master)
 
 ---
 
@@ -102,190 +110,158 @@
 - **Vistas:** siempre `WITH (security_invoker = true)` para respetar RLS del usuario.
 - **Multi-pago:** al confirmar venta, insertar en `comprobante_pagos` + `movimientos_caja` por cada pago no-CC + `cuenta_corriente_movimientos` para suma CC.
 - **Límite de crédito:** verificar `saldo_actual + montoCC > limite_credito` antes de confirmar venta CC (cuando limite > 0).
+- **Schema mixto PT/ES:** `comprobante_items` usa columnas portuguesas (`produto_id`, `quantidade`). El código existente funciona; NO cambiar sin migración de BD.
+- **Notas de crédito:** al crear NC, insertar en `comprobante_items` con columnas PT. Revertir stock vía `movimientos_inventario` + RPC `increment_stock`.
+- **Portales:** las secciones `portal_ventas`, `portal_compras`, `portal_finanzas`, `portal_inventario` son entry points — no van en ALL_SECTIONS de permisos.
 
 ---
 
-## Análisis diferencial de mercado (Junio 2026)
+## Arquitectura de navegación (Fiori-style)
 
-> Basado en estudio de mercado Argentina PyME. Competidores: Xubio, Colppy, Tango.
+```
+dashboard (Launchpad)
+├── portal_ventas     → POS · Cotizaciones · Pedidos · Clientes · CC
+├── portal_compras    → Compras · OC · Proveedores
+├── portal_finanzas   → Caja · Bancos · Contabilidad · Panel Ejecutivo
+├── portal_inventario → Inventario (con tab Análisis ABC)
+└── Admin (sin portal)→ Reportes · Usuarios · Configuración
+```
 
-| Feature | Competidores | Estado KAIROX |
+- **Sidebar:** agrupado por área con headers de color. Headers navegan al portal del área.
+- **Servicio:** `src/services/portalService.ts` — 5 funciones async con Promise.all
+- **Panel Ejecutivo:** `DashboardSection.jsx` — accesible desde Portal Finanzas (`panel_ejecutivo`)
+
+---
+
+## Estado del Análisis SAP S/4HANA — 2026-06-07
+
+### ✅ Implementado esta sesión
+
+| Feature | Referente SAP | Commit |
 |---|---|---|
-| **ARCA/AFIP facturación electrónica** | Xubio ✓, Colppy ✓ | 🔴 **No implementado — CRÍTICO** |
-| POS táctil nativo | Colppy ✗, Xubio ✗ | ✅ Funcional |
-| Caja con apertura/cierre + arqueo | Colppy ✗, Xubio ✗ | ✅ Completo (arqueo por denominaciones) |
-| Open Item CC | Ambos básico | ✅ SAP-style completo |
-| Aging report (antigüedad deuda) | Ambos ✗ | ✅ FIFO 30/60/90/+90 días |
-| Alertas vencimiento CC | Ambos ✗ | ✅ Banner en Dashboard |
-| Límite de crédito por cliente | Ambos ✗ | ✅ Con bloqueo en venta |
-| Multi-pago en una venta | Ambos ✗ | ✅ Efectivo + Transferencia + Tarjeta + CC |
-| Remito sin precios | Ambos ✗ | ✅ Toggle en comprobante imprimible |
-| Condiciones de venta flexibles | Ambos fijos | ✅ condicion_pago + dias_credito por cliente |
-| Import CSV productos/clientes | Regular | ✅ Drag-drop, mapeo visual, preview |
-| Permisos granulares + Solo Caja | Ambos limitado | ✅ Admin/Staff/SoloCaja + JSONB |
-| Audit log por usuario | Ambos básico | ✅ Completo (migration 016) |
-| OC de clientes (pedidos) | Colppy parcial | ⏳ Pendiente (hay cotizaciones, son distintas) |
-| Dashboard ejecutivo completo | Colppy mejorado 2025 | ⚠️ Parcial (falta top productos clickeables) |
-| Onboarding self-service <30min | Regular | ⚠️ Parcial (falta wizard) |
-| Multi-moneda | Variable | ✅ Completo |
-| Conciliación bancaria | Variable | ✅ Completo |
+| Portales por área (Fiori Launchpad) | Fiori Shell | `d2d50fb` |
+| Sidebar agrupado por área | Fiori Navigation | `d2d50fb` |
+| Posición neta CxC − CxP | FI Liquidity | `d2d50fb` |
+| Módulo Proveedores completo | AP Master Data | `2c0397c` |
+| Notas de Crédito / Devoluciones | SD Returns | `82fb7f1` |
+| Análisis ABC de inventario | MM-IM ABC | `82fb7f1` |
+| Comparativa período anterior | CO Comparative | `82fb7f1` |
+
+### ⏳ PENDIENTES — por orden de prioridad
+
+#### 🟡 Media prioridad (siguiente sesión)
+
+| # | Feature | Referente SAP | Esfuerzo | Notas |
+|---|---|---|---|---|
+| **1** | **Lista de precios por cliente** | SD Condition Types | Medio | Precio de lista / VIP / mayorista. Requiere migración BD (tabla `listas_precio`) + UI en NuevaVentaModal. Diferenciador clave vs Xubio/Colppy. |
+| **2** | **Notificaciones / Inbox accionable** | SAP My Inbox | Bajo | El Header ya tiene el stub (ícono campana). Mostrar: OC pendientes de aprobación, CC vencida, stock bajo, caja sin cerrar. Sin push — polling cada 5 min con TanStack Query. |
+| **3** | **Document Flow visual** | SD Document Flow | Medio | Cadena de documentos: Cotización → Pedido → Venta → NC → Cobro CC. Panel lateral en cada modal de detalle con links. |
+| **4** | **Recepción parcial de OC** | MM Partial GR | Medio | Hoy es todo o nada. Recibir 50 de 100 unidades pedidas, dejar OC en estado "recibida_parcial". |
+
+#### 🟢 Baja prioridad (post-ARCA)
+
+| # | Feature | Referente SAP | Esfuerzo |
+|---|---|---|---|
+| 5 | Solicitud de Compra (previa a OC) | MM Purchase Req. | Alto |
+| 6 | Presupuesto vs Real mensual | CO Budget | Alto |
+| 7 | Gestión de cheques | TM Checks | Alto |
+| 8 | Cierre formal de períodos contables | FI Period Close | Medio |
+| 9 | Retenciones IIBB/Ganancias | FI Withholding | Medio |
+
+#### 🔴 Bloqueante para producción
+
+| # | Feature | Por qué | Qué se necesita |
+|---|---|---|---|
+| **ARCA/AFIP** | Sin esto no se puede facturar legalmente | CUIT empresa, certificado digital (.crt + .key generado en WSAA de AFIP), nro. punto de venta registrado en AFIP, entorno homologación primero. |
+| **Libro IVA** | Requerido para ARCA + lo piden contadores | Se implementa junto con ARCA — Débito/Crédito Fiscal por período. |
 
 ---
 
-## Roadmap — estado actualizado
+## Roadmap completo — estado actualizado
 
-### 🔴 Fase 1 — Piso mínimo para vender (bloqueante)
-1. **Integración ARCA/AFIP** — Emisión comprobantes A/B/C, WS WSFE, CAE automático, QR en impresión, puntos de venta registrados por empresa
+### 🔴 Fase 1 — Bloqueante para facturar legalmente
+- **ARCA/AFIP:** WS WSFE, CAE automático, QR en impresión, puntos de venta por empresa, Libro IVA
 
 ### 🟠 Fase 2 — COMPLETADA ✅
-2. ~~Multi-pago en una venta~~ ✅
-3. ~~Remito de transporte sin precios~~ ✅
-4. ~~Aging report CC~~ ✅
-5. ~~Alertas vencimiento CC~~ ✅
-6. ~~Discrepancia en cierre de caja~~ ✅
+- Multi-pago · Remito sin precios · Aging CC · Alertas CC · Discrepancia caja
 
 ### 🟡 Fase 3 — COMPLETADA ✅
-7. ~~Import CSV productos/clientes~~ ✅
-8. ~~OC de clientes (Pedidos)~~ ✅ — Borrador → Confirmado → En preparación → Facturado
-9. ~~Condiciones de venta flexibles~~ ✅
-10. ~~Límite de crédito por cliente~~ ✅
-11. ~~Usuario "solo caja"~~ ✅
+- Import CSV · Pedidos de clientes · Condiciones de venta · Límite de crédito · Solo Caja
 
 ### 🟢 Fase 4 — COMPLETADA ✅
-12. ~~Dashboard ejecutivo completo~~ ✅ — Top 5 vendidos, último mov banco, OnboardingBanner
-13. ~~Onboarding wizard~~ ✅ — Banner con checklist 3 pasos + dismiss persistente
-14. ~~Datos de ejemplo precargados~~ ✅ — 8 productos + 3 clientes desde Configuración
+- Dashboard ejecutivo · Onboarding banner · Datos de ejemplo precargados
 
----
+### 🔵 Fase 5 — COMPLETADA ✅ (sesión 2026-06-07)
+- Módulo Proveedores · Portales Fiori · Launchpad · Notas de crédito · Análisis ABC · Comparativa
 
-## Auditoría de código — 2026-06-06
+### ⚪ Fase 6 — PRÓXIMA SESIÓN
+1. Lista de precios por cliente
+2. Notificaciones / Inbox accionable
+3. Document Flow visual
+4. Recepción parcial de OC
 
-### Bugs corregidos (commit `600c6da`)
-
-| Archivo | Problema | Fix aplicado |
-|---|---|---|
-| `SaleDetailModal.jsx` | `if (!open) return null` — Radix anti-pattern | Eliminado; Radix maneja el ciclo de vida |
-| `CompraDetailModal.jsx` | Ídem | Eliminado |
-| `ClientDetailModal.jsx` | Ídem + `toLocaleDateString()` sin locale | Eliminado + `'es-AR'` |
-| `CajaSection.jsx` | `formatAmount` usaba locale `'en-US'` | Cambiado a `'es-AR'` |
-| `ComprasSection.jsx` | `toLocaleDateString()` sin locale | `'es-AR'` |
-| `ReportesSection.jsx` | Fecha inicial con `new Date()` (timezone browser) + sin locale | `getTodayAR()` + `'es-AR'` |
-| `ClientesSection.jsx` | `fetchClients()` no filtraba inactivos | `.neq('activo', false)` |
-| `StaffPermissionsModal.jsx` | Faltaban 5 módulos (cotizaciones, pedidos, OC, bancos, contabilidad) | Agregados — ahora 15 módulos |
-| `CotizacionesSection.jsx` | Delete sin confirmación | AlertDialog de confirmación |
-| `PedidosSection.jsx` | Ídem | AlertDialog de confirmación |
-
-### Problemas conocidos — NO corregidos (decisión consciente)
-
-| Problema | Motivo de no aplicar |
-|---|---|
-| `user_id` como filtro empresa en servicios (`cajaService`, `productosService`, etc.) | Es diseño intencional del schema (user_id = empresa_id en las tablas legacy). Cambiar requiere auditar también todos los inserts — riesgo alto sin tests |
-| `ClientesSection` sin paginación server-side | Funcional hasta ~500 clientes. Bajo impacto actual |
-| `ProveedoresSection` no registrada en routing/sidebar | ✅ **RESUELTO** (commit 2c0397c) — componente creado + route activo en Dashboard + Sidebar + permisos |
-| Columnas en portugués en `comprobante_items` (`produto_id`, `quantidade`) | Inconsistencia histórica del schema. El código existente funciona; cambiar requiere migración de BD |
-
----
-
-## Portales por área — arquitectura (2026-06-07)
-
-| Sección ID | Componente | Descripción |
-|---|---|---|
-| `dashboard` | `LaunchpadSection.jsx` | Home: 4 area tiles con KPIs + accesos rápidos |
-| `portal_ventas` | `portals/VentasPortal.jsx` | 6 KPIs + módulos Ventas, Cotizaciones, Pedidos, Clientes, CC |
-| `portal_compras` | `portals/ComprasPortal.jsx` | 5 KPIs + módulos Compras, OC, Proveedores |
-| `portal_finanzas` | `portals/FinanzasPortal.jsx` | 5 KPIs + posición neta CxC-CxP + módulos Caja, Bancos, Contabilidad |
-| `portal_inventario` | `portals/InventarioPortal.jsx` | 5 KPIs + barra salud stock + módulo Inventario |
-| `panel_ejecutivo` | `DashboardSection.jsx` | Dashboard legacy con gráficos (accesible desde Portal Finanzas) |
-
-**Servicio:** `src/services/portalService.ts` — 5 funciones async con Promise.all
-
-**Sidebar:** agrupado por área con headers coloreados navegables
-
----
-
-## 3 grandes proyectos reservados para el final
-
-| # | Proyecto | Por qué al final |
-|---|---|---|
-| 1 | **Deploy en Vercel** | Requiere dominio propio + variables de entorno de producción |
-| 2 | **Membership / Stripe o MercadoPago** | Requiere modelo de precios + ARCA primero |
-| 3 | **Modelo de licencias (Starter/Pro/Business)** | Requiere validación con primeros clientes |
-
----
-
-## Próxima sesión — por dónde seguir
-
-El sistema está limpio y auditado. Las tres opciones:
-
-1. **Deploy Vercel** — URL pública para demos y primeros clientes. Requiere: dominio propio, variables de entorno de producción (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY).
-2. **ARCA/AFIP** — único bloqueante para facturar legalmente. Requiere: CUIT empresa, certificado digital, punto de venta registrado en AFIP, integración WS WSFE.
-3. **Membresías / Monetización** — Stripe o MercadoPago. Requiere ARCA primero + modelo de precios definido.
+### ⚫ Fase 7 — FINAL
+- Deploy Vercel · ARCA/AFIP + Libro IVA · Membresías/Stripe o MercadoPago · Modelo de licencias
 
 ---
 
 ## Historial de sesiones
 
-### Sesión 2026-06-06 (continuación 3) — Auditoría y fixes
+### Sesión 2026-06-07 — Fase 5 completa
 
-- ✅ 10 bugs corregidos en 11 archivos (ver tabla en sección Auditoría)
-- ✅ Early returns eliminados en `SaleDetailModal`, `CompraDetailModal`, `ClientDetailModal`
-- ✅ `CajaSection` — locale `'en-US'` → `'es-AR'` en `formatAmount`
-- ✅ `ReportesSection` — fecha inicial usa `getTodayAR()` + locale `'es-AR'` en columnas fecha
-- ✅ `ComprasSection` — locale `'es-AR'` en fechas
-- ✅ `ClientesSection` — excluye clientes inactivos
-- ✅ `StaffPermissionsModal` — 10 → 15 módulos (cotizaciones, pedidos, OC, bancos, contabilidad)
-- ✅ `CotizacionesSection` + `PedidosSection` — AlertDialog de confirmación antes de eliminar
+**Módulo Proveedores (commit `2c0397c`):**
+- `ProveedoresSection.jsx` — lista con KPIs, CRUD, modal detalle con tabs CC + OC
+- `proveedoresService.ts` — CRUD + saldo via v_saldo_proveedores + pago inline
+- Sidebar + Dashboard + permisos + CommandPalette actualizados
 
-### Sesión 2026-06-06 (continuación 2) — Fase 4 completa
+**Portales por área Fiori-style (commits `d2d50fb`, `add747b`):**
+- `LaunchpadSection.jsx` — home con 4 area tiles + KPIs en vivo + accesos rápidos
+- `portalService.ts` — 5 funciones async, 7 queries en paralelo para launchpad
+- `portals/VentasPortal.jsx` — 6 KPIs + módulos (reemplaza Dashboard genérico)
+- `portals/ComprasPortal.jsx` — 5 KPIs + alerta OC pendientes
+- `portals/FinanzasPortal.jsx` — posición neta CxC−CxP + estado caja
+- `portals/InventarioPortal.jsx` — barra visual salud stock (verde/ámbar/rojo)
+- `Sidebar.jsx` reescrito — 5 grupos con headers coloreados navegables
+- `Dashboard.jsx` — 8 nuevos cases de portal + `panel_ejecutivo`
 
-- ✅ `dashboardService.ts` — `dashboardExtrasService`: `getTopProductosVendidos`, `getUltimoMovBancario`, `checkOnboardingStatus`
-- ✅ `DashboardSection.jsx` — nueva fila Top 5 Vendidos + Último mov banco + OnboardingBanner integrado
-- ✅ `OnboardingBanner.jsx` — checklist 3 pasos (empresa/productos/ventas) + dismiss en localStorage + ARCA como pendiente
-- ✅ `ConfiguracionSection.jsx` — sección "Datos de Ejemplo" con carga de 8 productos + 3 clientes
-- ✅ `demoDataService.ts` — inserta datos de ferretería con idempotencia (no sobreescribe si ya hay datos)
+**NC/ABC/Comparativa (commit `82fb7f1`):**
+- `migrations/020_notas_credito.sql` — tipo, estado_pago, comprobante_origen_id, motivo_nc ✅ APLICADA
+- `notaCreditoService.ts` — reversión completa stock + CC + caja
+- `NotaCreditoModal.jsx` — devolución parcial/total, aviso método pago
+- `SaleDetailModal.jsx` — botón "Nota de Crédito" en footer
+- `abcService.ts` — A(80%)/B(95%)/C(resto) por revenue, cruza comprobante_items PT
+- `ProductosSection.jsx` — tab "Análisis ABC" con cards + tabla ranking
+- `ReportesSection.jsx` — toggle comparativa + card delta % con flecha ↑↓
 
-### Sesión 2026-06-06 (continuación) — Fase 3 completa: Pedidos
+### Sesión 2026-06-06 (continuación 3) — Auditoría y fixes (commit `600c6da`)
+- 10 bugs corregidos en 11 archivos (locale, Radix dialogs, permisos, UX)
+- StaffPermissionsModal: 10 → 15 módulos
+- CotizacionesSection + PedidosSection: AlertDialog de confirmación antes de eliminar
 
-- ✅ `migrations/019_pedidos.sql` — tablas `pedidos` + `pedido_items`, RLS, audit trigger, función `next_pedido_number` — **⏳ PENDIENTE aplicar**
-- ✅ `pedidosService.ts` — CRUD + `markAsFacturado`
-- ✅ `PedidosSection.jsx` — workflow estados + "Convertir a Venta" via NuevaVentaModal preloaded
-- ✅ `NuevaVentaModal` — props `initialPedido` + `onPedidoConverted` para precargar carrito desde pedido
-- ✅ `Sidebar` — ítem "Pedidos" entre Cotizaciones y Compras
-- ✅ `useUserPermissions` — `pedidos` agregado a ALL_SECTIONS
+### Sesión 2026-06-06 (continuación 2) — Fase 4 completa (commit `bcd8d63`)
+- DashboardSection: Top 5 vendidos + último mov banco + OnboardingBanner
+- ConfiguracionSection: sección "Datos de Ejemplo" (8 productos + 3 clientes)
 
-### Sesión 2026-06-06 — Fases 2 y 3
+### Sesión 2026-06-06 (continuación) — Fase 3: Pedidos (commit `fcdad78`)
+- PedidosSection: workflow estados + "Convertir a Venta"
+- migration 019_pedidos.sql, pedidosService.ts
 
-**Fase 2 completada:**
-- ✅ `migrations/017_multi_pago.sql` — tabla `comprobante_pagos` (RLS, índices) — **aplicada en Supabase**
-- ✅ `NuevaVentaModal` — multi-pago: botones rápidos + entrada manual + saldo pendiente + cambio
-- ✅ `ComprobantePrintModal` — desglose de pagos + toggle Remito sin precios (firma, sin precios/total)
-- ✅ `SaleDetailModal` — carga breakdown de `comprobante_pagos`
-- ✅ `dashboardAgingService` — algoritmo FIFO para aging 30/60/90/+90 días
-- ✅ `DashboardSection` — banner ámbar de deuda vencida clickeable → CuentaCorriente
-- ✅ `CuentaCorrienteSection` — tab "Antigüedad de Deuda" con tabla por cliente y totales
-- ✅ `CajaCierre` — arqueo por denominaciones ($1000→$10) + labels Sobrante/Faltante/Exacto
-- ✅ `CajaSection` — tab "Arqueos" con historial de sesiones (diferencia coloreada)
+### Sesión 2026-06-06 — Fases 2 y 3 (commit `a0d8c99`)
+- Multi-pago, aging CC, remito sin precios, arqueo caja
+- Import CSV, límite crédito, condición pago, solo-caja
 
-**Fase 3 completada (excepto Pedidos):**
-- ✅ `migrations/018_condicion_pago.sql` — `condicion_pago` + `dias_credito` en clientes — **aplicada en Supabase**
-- ✅ `ClientesSection` — reescritura completa: form add/edit con todos los campos + botón Import CSV
-- ✅ `NuevaVentaModal` — check límite crédito + display condición/crédito usado al seleccionar cliente CC
-- ✅ `useUserPermissions` — `isSoloCaja()` + `getAccessibleSections()` con manejo de `solo_caja: true`
-- ✅ `StaffPermissionsModal` — presets: 🏪 Solo Caja / ✓ Todos / ✗ Ninguno
-- ✅ `Sidebar` — filtra items por `userPermissions` (staff y solo_caja ven solo sus secciones)
-- ✅ `ImportCSVModal` — componente reutilizable: drag-drop, auto-mapeo, preview, validación, batch insert ×50. Configurado para productos y clientes.
-- ✅ `ProductosSection` — botón "Importar CSV" integrado
+### Sesión 2026-06-05 — Deuda técnica + análisis
+- Migrations 013-016, soft delete productos, paginación, Edge functions, SMTP
 
-### Sesión 2026-06-05 — Deuda técnica + Análisis de mercado
-- ✅ Migrations 013-016 ejecutadas en Supabase
-- ✅ Soft delete SAP-style en productos (toggle inactivos + reactivar)
-- ✅ Paginación en HistorialVentas, ComprasSection, ReportesSection
-- ✅ Edge functions deployadas con hardening
-- ✅ SMTP Resend.com verificado y funcionando
-- ✅ Fix alerta security_definer en v_saldo_proveedores
-- ✅ Análisis diferencial de mercado incorporado al roadmap
+### Sesión 2026-06-04 — Setup + Open Item Management
+- Open Item CC SAP-style, trigger saldo cliente, bugfixes
 
-### Sesión 2026-06-04 — Setup + Bugfixes + Open Item Management
-- ✅ Open Item Management SAP-style en ClientDetailModal
-- ✅ Trigger fn_update_cliente_saldo + recalculo saldos
-- ✅ Múltiples bugfixes (fn_audit_trigger, Chrome Translate, HistorialVentas, RLS 403)
+---
+
+## 3 grandes proyectos al final
+
+| # | Proyecto | Por qué al final |
+|---|---|---|
+| 1 | **Deploy en Vercel** | Requiere dominio propio + variables de entorno de producción |
+| 2 | **Membresías / Stripe o MercadoPago** | Requiere ARCA primero + modelo de precios validado |
+| 3 | **Modelo de licencias (Starter/Pro/Business)** | Requiere primeros clientes |
