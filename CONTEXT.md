@@ -1,6 +1,7 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-07 — Fase 6 completa · Merge + Push a GitHub
+**Última actualización:** 2026-06-07 — Fase 7 iniciada · Deploy Vercel ✅
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
+**Producción:** https://kairox-gestion.vercel.app
 
 ---
 
@@ -161,8 +162,15 @@ dashboard (Launchpad)
 3. ✅ **Document Flow visual** — `documentFlowService.ts` + `DocumentFlowPanel.jsx` integrado en `SaleDetailModal`
 4. ✅ **Recepción parcial OC** — ya estaba implementado; fix TanStack Query v5 `onSuccess→useEffect` en `OrdenesCompraSection`
 
-### ⚫ Fase 7 — FINAL
-- Deploy Vercel · ARCA/AFIP + Libro IVA · Membresías/Stripe o MercadoPago · Modelo de licencias
+### ⚫ Fase 7 — EN CURSO
+- ✅ **Deploy Vercel** — https://kairox-gestion.vercel.app · `vercel.json` + `vite.config.prod.js` · env vars configuradas
+- ⏳ **ARCA/AFIP** + Libro IVA
+- ⏳ **Membresías** / MercadoPago · Modelo de licencias Starter/Pro/Business
+
+#### Pendientes Fase 7
+- Configurar Supabase Auth URLs (Site URL + Redirect URLs → `https://kairox-gestion.vercel.app/**`)
+- Corregir GitHub auto-deploy: reconectar Vercel a `lbanegas96/kairox-gestion` (actualmente apunta a `Kairox-IA/gestión de Kairox`)
+- Investigar error 400 en consola (query Supabase con timestamp malformado — no bloquea funcionalidad)
 
 ---
 
@@ -201,6 +209,13 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-07 — Deploy Vercel (Fase 7 inicio)
+- `vercel.json` + `vite.config.prod.js` — config producción sin plugins Horizons
+- Fix `manualChunks` TDZ (circular deps con framer-motion) → sin chunk splitting manual
+- Deploy exitoso en https://kairox-gestion.vercel.app (Vercel CLI `vercel --prod`)
+- Env vars configuradas: `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY`
+- GitHub conectado a Vercel (pendiente reconectar al repo correcto `lbanegas96/kairox-gestion`)
 
 ### Sesión 2026-06-07 — Fase 6 completa (commit `a846bac`)
 - migration 021: listas_precio + lista_precio_items + cols cotizacion_id/pedido_id en comprobantes
