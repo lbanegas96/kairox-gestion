@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Search, Plus, Edit, Eye, Upload, X, AlertTriangle, Shield, CreditCard,
-  FileText, Phone, Mail, MapPin, Hash, DollarSign, Clock
+  FileText, Phone, Mail, MapPin, Hash, DollarSign, Clock, Tag
 } from 'lucide-react';
+import { listaPreciosService } from '@/services/listaPreciosService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,7 +24,7 @@ import CSVImportModal from '@/components/ui/CSVImportModal';
 const emptyForm = () => ({
   nombre: '', documento: '', telefono: '', email: '', direccion: '',
   limite_credito: '', condiciones_pago: '', dias_credito: '',
-  bloquear_en_limite: false,
+  bloquear_en_limite: false, lista_precio_id: '',
 });
 
 function ClientesSection() {
@@ -42,6 +44,12 @@ function ClientesSection() {
   const [saving, setSaving] = useState(false);
 
   const [formData, setFormData] = useState(emptyForm());
+
+  const { data: listasPrecios = [] } = useQuery({
+    queryKey: ['listas_precio', user?.empresa_id],
+    queryFn: () => listaPreciosService.getAll(user.empresa_id),
+    enabled: !!user?.empresa_id,
+  });
 
   useEffect(() => {
     if (user?.empresa_id) fetchClients();
@@ -78,6 +86,7 @@ function ClientesSection() {
       condiciones_pago:   client.condiciones_pago || '',
       dias_credito:       client.dias_credito != null ? String(client.dias_credito) : '',
       bloquear_en_limite: client.bloquear_en_limite || false,
+      lista_precio_id:    client.lista_precio_id || '',
     });
     setIsEditDialogOpen(true);
   };
@@ -96,6 +105,7 @@ function ClientesSection() {
         condiciones_pago:   formData.condiciones_pago.trim(),
         dias_credito:       formData.dias_credito !== '' ? parseInt(formData.dias_credito) : 0,
         bloquear_en_limite: formData.bloquear_en_limite,
+        lista_precio_id:    formData.lista_precio_id || null,
       };
 
       if (isEdit) {
@@ -198,6 +208,24 @@ function ClientesSection() {
           className="resize-none h-16 dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm"
         />
       </div>
+      {/* Lista de precios */}
+      {listasPrecios.filter(l => l.activo).length > 0 && (
+        <div className="md:col-span-2 space-y-1.5">
+          <Label className="dark:text-white flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-violet-500" /> Lista de Precios</Label>
+          <select
+            value={formData.lista_precio_id}
+            onChange={e => setFormData(f => ({ ...f, lista_precio_id: e.target.value }))}
+            className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
+          >
+            <option value="">Sin lista especial (precio estándar)</option>
+            {listasPrecios.filter(l => l.activo).map(l => (
+              <option key={l.id} value={l.id}>{l.nombre}{l.descripcion ? ` — ${l.descripcion}` : ''}</option>
+            ))}
+          </select>
+          <p className="text-xs text-slate-400">Al seleccionar un cliente en Ventas, se aplicarán automáticamente sus precios de lista.</p>
+        </div>
+      )}
+
       {/* Bloquear */}
       {(parseFloat(formData.limite_credito) || 0) > 0 && (
         <div className="md:col-span-2 flex items-center gap-3 bg-amber-50 dark:bg-amber-900/10 p-3 rounded-lg border border-amber-200 dark:border-amber-800">

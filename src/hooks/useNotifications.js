@@ -22,7 +22,7 @@ export function useNotifications() {
       const { data, error } = await supabase
         .from('productos')
         .select('id, nombre, stock_actual, stock_minimo, unidad_medida')
-        .eq('user_id', empresaId)
+        .eq('empresa_id', empresaId)
         .eq('activo', true);
       if (error) return [];
       return (data ?? []).filter(p => (p.stock_actual ?? 0) <= (p.stock_minimo ?? 5));
@@ -39,7 +39,8 @@ export function useNotifications() {
       const { data: clientes, error } = await supabase
         .from('clientes')
         .select('id, nombre, saldo_actual')
-        .eq('user_id', empresaId)
+        .eq('empresa_id', empresaId)
+        .neq('activo', false)
         .gt('saldo_actual', 0);
       if (error) return [];
 
@@ -76,6 +77,24 @@ export function useNotifications() {
     staleTime: STALE_TIME,
   });
 
+  // ── Caja sin cerrar hace más de 24h ────────────────────────────────────────
+  const { data: cajaSinCerrar = [] } = useQuery({
+    queryKey: ['notif', 'caja_sin_cerrar', empresaId],
+    queryFn: async () => {
+      const hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { data, error } = await supabase
+        .from('caja_sesiones')
+        .select('id, caja_id, apertura, cajas(nombre)')
+        .eq('empresa_id', empresaId)
+        .is('cierre', null)
+        .lt('apertura', hace24h);
+      if (error) return [];
+      return data ?? [];
+    },
+    enabled: !!empresaId,
+    staleTime: STALE_TIME,
+  });
+
   // ── Armar lista unificada ──────────────────────────────────────────────────
   const items = [
     ...stockBajo.map(p => ({
@@ -105,6 +124,15 @@ export function useNotifications() {
       seccion: 'ordenes_compra',
       raw: oc,
     })),
+    ...cajaSinCerrar.map(s => ({
+      id: `caja-${s.id}`,
+      tipo: 'caja_sin_cerrar',
+      titulo: s.cajas?.nombre ?? 'Caja sin cerrar',
+      detalle: `Abierta desde ${new Date(s.apertura).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} — más de 24h sin cierre`,
+      nivel: 'advertencia',
+      seccion: 'caja',
+      raw: s,
+    })),
   ];
 
   return {
@@ -113,6 +141,7 @@ export function useNotifications() {
     stockBajo,
     deudaVencida,
     ocPendientes,
+    cajaSinCerrar,
     hasNotifications: items.length > 0,
   };
 }

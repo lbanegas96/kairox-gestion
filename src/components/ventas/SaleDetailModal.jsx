@@ -9,8 +9,9 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import ComprobantePrintModal from './ComprobantePrintModal';
 import EstadoBadge from '@/components/ui/EstadoBadge';
+import { DocumentFlowPanel } from '@/components/ui/DocumentFlowPanel';
 
-const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale }) => {
+const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate }) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [sale, setSale] = useState(null);
@@ -214,6 +215,11 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale }) => {
                     </tr>
                   </tfoot>
                 </table>
+              </div>
+
+              {/* Document Flow */}
+              <div className="border border-slate-100 dark:border-slate-800 rounded-lg p-4 mb-2">
+                <DocumentFlowPanel comprobanteId={saleId} onNavigate={onNavigate} />
               </div>
             </div>
           ) : (

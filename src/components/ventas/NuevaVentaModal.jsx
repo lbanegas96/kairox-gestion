@@ -12,6 +12,7 @@ import { asientosAutoService } from '@/services/planCuentasService';
 import ComprobantePrintModal from './ComprobantePrintModal';
 import { MonedaSelector } from '@/components/ui/MonedaSelector';
 import { formatCurrency } from '@/lib/currencyUtils';
+import { listaPreciosService } from '@/services/listaPreciosService';
 
 const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = null, onConvertSuccess }) => {
   const { user } = useAuth();
@@ -33,6 +34,8 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [lastItems, setLastItems] = useState([]);
   const [lastPagos, setLastPagos] = useState([]);
+  const [precioMap, setPrecioMap] = useState({}); // { producto_id → precio lista }
+  const [listaNombre, setListaNombre] = useState(''); // nombre de la lista activa
 
   const searchInputRef = useRef(null);
   const searchWrapperRef = useRef(null);
@@ -98,6 +101,40 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     setTipoCambioTasa(1);
     setProductSearch('');
     setLoading(false);
+    setPrecioMap({});
+    setListaNombre('');
+  };
+
+  // Cuando cambia el cliente, cargar su lista de precios
+  const handleSelectClient = async (client) => {
+    setSelectedClient(client);
+    if (!client) { setPrecioMap({}); setListaNombre(''); return; }
+    try {
+      const map = await listaPreciosService.getPrecioMapForCliente(client.id);
+      setPrecioMap(map);
+      // Buscar el nombre de la lista si hay precios
+      if (Object.keys(map).length > 0 && client.lista_precio_id) {
+        const { data: lista } = await supabase
+          .from('listas_precio')
+          .select('nombre')
+          .eq('id', client.lista_precio_id)
+          .single();
+        setListaNombre(lista?.nombre ?? '');
+      } else {
+        setListaNombre('');
+      }
+      // Actualizar precios en el carrito si ya tiene productos
+      if (Object.keys(map).length > 0) {
+        setCart(prev => prev.map(item =>
+          map[item.id] !== undefined
+            ? { ...item, precio_venta: map[item.id], _precioLista: true }
+            : { ...item, _precioLista: false }
+        ));
+      }
+    } catch {
+      setPrecioMap({});
+      setListaNombre('');
+    }
   };
 
   // ── Helpers multi-pago ──────────────────────────────────────────────────────
@@ -154,6 +191,9 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
       toast({ title: "Stock insuficiente", description: `Solo hay ${product.stock_actual} disponibles.`, variant: "destructive" });
       return;
     }
+    // Aplicar precio de lista si existe
+    const precioFinal = precioMap[product.id] !== undefined ? precioMap[product.id] : product.precio_venta;
+    const esPrecioLista = precioMap[product.id] !== undefined;
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
@@ -163,7 +203,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         }
         return prev.map(item => item.id === product.id ? { ...item, cantidad: item.cantidad + qty } : item);
       }
-      return [...prev, { ...product, cantidad: qty }];
+      return [...prev, { ...product, precio_venta: precioFinal, _precioLista: esPrecioLista, cantidad: qty }];
     });
     setProductSearch('');
     setShowProductDropdown(false);
@@ -402,7 +442,15 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
                     <tbody className="dark:text-slate-200">
                       {cart.map(item => (
                         <tr key={item.id} className="group hover:bg-slate-50 dark:hover:bg-slate-900/20">
-                          <td className="py-3 pl-2"><div className="font-medium">{item.nombre}</div><div className="text-xs text-slate-400">${item.precio_venta}</div></td>
+                          <td className="py-3 pl-2">
+                            <div className="font-medium">{item.nombre}</div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-slate-400">${item.precio_venta}</span>
+                              {item._precioLista && (
+                                <span className="text-[9px] font-bold bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 px-1 py-0.5 rounded">LISTA</span>
+                              )}
+                            </div>
+                          </td>
                           <td className="py-3 text-center"><Input type="number" value={item.cantidad} onChange={(e) => updateQuantity(item.id, e.target.value)} className="h-8 w-16 text-center mx-auto dark:bg-slate-800 dark:border-slate-700" /></td>
                           <td className="py-3 text-right font-bold">${(item.precio_venta * item.cantidad).toFixed(2)}</td>
                           <td className="py-3 text-right pr-2"><Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => removeFromCart(item.id)}><Trash2 className="h-4 w-4" /></Button></td>
@@ -479,10 +527,16 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
                </div>
                <div className="space-y-2 dark:text-white">
                  <Label>Cliente</Label>
+                 {listaNombre && (
+                   <div className="text-xs text-violet-600 dark:text-violet-400 flex items-center gap-1 mb-1">
+                     <span className="inline-block w-2 h-2 rounded-full bg-violet-500"></span>
+                     Lista activa: <strong>{listaNombre}</strong>
+                   </div>
+                 )}
                  <select
                    className="w-full h-10 rounded-md border bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white px-3 text-sm focus:border-blue-500 dark:focus:border-[#00D4FF]"
                    value={selectedClient?.id || ''}
-                   onChange={e => setSelectedClient(clients.find(c => c.id === e.target.value) || null)}
+                   onChange={e => handleSelectClient(clients.find(c => c.id === e.target.value) || null)}
                  >
                    <option value="">Consumidor Final</option>
                    {clients.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}

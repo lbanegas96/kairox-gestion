@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Package, ShoppingCart, ArrowLeftRight, Wallet, FileText, Users, Settings, X, LogOut, ChevronRight, Contact, CreditCard, ClipboardList, ShoppingBag, BookOpen, Landmark, Truck, PackageCheck } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, ArrowLeftRight, Wallet, FileText, Users, Settings, X, LogOut, ChevronRight, Contact, CreditCard, ClipboardList, ShoppingBag, BookOpen, Landmark, Truck, PackageCheck, Tag } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
@@ -16,6 +16,7 @@ function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen, alerts })
     { id: 'ventas', label: 'Ventas', icon: ShoppingCart },
     { id: 'cotizaciones', label: 'Cotizaciones', icon: ClipboardList },
     { id: 'pedidos', label: 'Pedidos', icon: PackageCheck },
+    { id: 'listas_precio', label: 'Listas de Precios', icon: Tag },
     { id: 'compras', label: 'Compras', icon: ArrowLeftRight },
     { id: 'ordenes_compra', label: 'Órdenes de Compra', icon: ShoppingBag },
     { id: 'proveedores', label: 'Proveedores', icon: Truck },

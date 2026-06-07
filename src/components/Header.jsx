@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, LogOut, User as UserIcon, Bell, CheckCircle, Moon, Sun, Search, Settings, Building, Upload, Package, CreditCard, ShoppingBag, AlertCircle } from 'lucide-react';
+import { Menu, LogOut, User as UserIcon, Bell, CheckCircle, Moon, Sun, Search, Settings, Building, Upload, Package, CreditCard, ShoppingBag, AlertCircle, Wallet } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,9 +33,10 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch }) {
   const roleLabel = userRole === 'admin' ? 'Administrador' : 'Staff';
 
   const TIPO_CONFIG = {
-    stock_bajo:    { icon: Package,     color: 'text-amber-500',  bg: 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/30' },
-    deuda_vencida: { icon: CreditCard,  color: 'text-rose-500',   bg: 'bg-rose-50 dark:bg-rose-900/10 border-rose-200 dark:border-rose-800/30' },
-    oc_pendiente:  { icon: ShoppingBag, color: 'text-blue-500',   bg: 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800/30' },
+    stock_bajo:      { icon: Package,     color: 'text-amber-500',  bg: 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/30' },
+    deuda_vencida:   { icon: CreditCard,  color: 'text-rose-500',   bg: 'bg-rose-50 dark:bg-rose-900/10 border-rose-200 dark:border-rose-800/30' },
+    oc_pendiente:    { icon: ShoppingBag, color: 'text-blue-500',   bg: 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800/30' },
+    caja_sin_cerrar: { icon: Wallet,      color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800/30' },
   };
 
   // "Subir Logo" button and other actions are still permission-gated for consistency, 
@@ -169,6 +170,9 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch }) {
                   <span className="text-center">📦 {notifications.stockBajo.length} stock</span>
                   <span className="text-center">💳 {notifications.deudaVencida.length} deudas</span>
                   <span className="text-center">🛒 {notifications.ocPendientes.length} OC</span>
+                  {(notifications.cajaSinCerrar?.length ?? 0) > 0 && (
+                    <span className="text-center col-span-3">🏦 {notifications.cajaSinCerrar.length} caja sin cerrar</span>
+                  )}
                 </div>
               )}
             </DropdownMenuContent>

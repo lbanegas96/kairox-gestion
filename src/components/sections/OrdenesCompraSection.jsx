@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, ShoppingBag, Search, Eye, Truck, XCircle,
@@ -78,15 +78,17 @@ function OrdenesCompraSection() {
     queryKey: OC_KEYS.detail(recepcionId),
     queryFn: () => ordenesCompraService.getById(recepcionId),
     enabled: !!recepcionId,
-    onSuccess: (data) => {
-      // inicializar recepciones con cantidades ya recibidas
-      const init = {};
-      (data?.ordenes_compra_items ?? []).forEach(i => {
-        init[i.id] = i.cantidad_recibida ?? 0;
-      });
-      setRecepciones(init);
-    },
   });
+
+  // Fix TanStack Query v5: onSuccess no existe en useQuery — usar useEffect
+  useEffect(() => {
+    if (!detalleRecepcion) return;
+    const init = {};
+    (detalleRecepcion.ordenes_compra_items ?? []).forEach(i => {
+      init[i.id] = i.cantidad_recibida ?? 0;
+    });
+    setRecepciones(init);
+  }, [detalleRecepcion]);
 
   const { data: factura } = useQuery({
     queryKey: OC_KEYS.factura(detalleId),
