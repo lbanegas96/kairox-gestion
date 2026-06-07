@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 const ALL_SECTIONS = [
   'dashboard', 'productos', 'ventas', 'compras', 'caja',
   'clientes', 'cuentacorriente', 'reportes', 'usuarios', 'configuracion',
-  'cotizaciones', 'ordenes_compra', 'plan_cuentas', 'bancos',
+  'cotizaciones', 'pedidos', 'ordenes_compra', 'plan_cuentas', 'bancos',
 ];
 
 const SOLO_CAJA_SECTIONS = ['ventas', 'caja'];

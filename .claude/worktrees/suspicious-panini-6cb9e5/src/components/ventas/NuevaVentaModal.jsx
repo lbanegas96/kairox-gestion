@@ -13,7 +13,7 @@ import ComprobantePrintModal from './ComprobantePrintModal';
 
 const METODOS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta', 'Cuenta Corriente'];
 
-const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
+const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, initialPedido, onPedidoConverted }) => {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -40,9 +40,41 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
 
   useEffect(() => {
     if (isOpen && user?.empresa_id) {
-      loadProducts();
-      loadClients();
-      resetForm();
+      if (initialPedido) {
+        // Pre-populate cart and client from pedido
+        setPagos([]);
+        setPagoMetodo('Efectivo');
+        setPagoMonto('');
+        setProductSearch('');
+        setLoading(false);
+        Promise.all([loadProducts(), loadClients()]).then(([_prods, cls]) => {
+          const cartItems = (initialPedido.pedido_items ?? [])
+            .filter(item => item.producto_id)
+            .map(item => {
+              const prod = item.productos;
+              const qty = Number(item.cantidad);
+              return {
+                id: item.producto_id,
+                nombre: prod?.nombre ?? item.descripcion,
+                precio_venta: prod?.precio_venta ?? Number(item.precio_unitario),
+                stock_actual: prod?.stock_actual ?? 9999,
+                codigo_sku: prod?.codigo_sku ?? '',
+                unidad_medida: prod?.unidad_medida ?? '',
+                cantidad: qty,
+                quantidade: qty,
+              };
+            });
+          setCart(cartItems);
+          if (initialPedido.cliente_id) {
+            const client = cls.find(c => c.id === initialPedido.cliente_id);
+            if (client) setSelectedClient(client);
+          }
+        });
+      } else {
+        loadProducts();
+        loadClients();
+        resetForm();
+      }
     }
   }, [isOpen, user]);
 
@@ -58,11 +90,13 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
   const loadProducts = async () => {
     const { data } = await supabase.from('productos').select('*').eq('empresa_id', user.empresa_id).eq('activo', true);
     setProducts(data || []);
+    return data || [];
   };
 
   const loadClients = async () => {
     const { data } = await supabase.from('clientes').select('*').eq('empresa_id', user.empresa_id).eq('activo', true);
     setClients(data || []);
+    return data || [];
   };
 
   const resetForm = () => {
@@ -308,6 +342,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
       })));
       setLastPagos([...pagos]);
       setShowPrintModal(true);
+      if (onPedidoConverted) onPedidoConverted(comprobante.id);
       if (onSaleSuccess) onSaleSuccess();
       resetForm();
       onOpenChange(false);
@@ -326,7 +361,8 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess }) => {
         <DialogContent className="max-w-4xl kairox-bg-card kairox-text-primary h-[90vh] flex flex-col p-0 gap-0 overflow-hidden dark:bg-slate-950 dark:border-slate-800">
           <DialogHeader className="p-6 border-b border-slate-200 dark:border-slate-800">
             <DialogTitle className="text-2xl flex items-center gap-2 dark:text-white">
-              <ShoppingCart className="h-6 w-6 text-blue-600 dark:text-[#00D4FF]" /> Nueva Venta
+              <ShoppingCart className="h-6 w-6 text-blue-600 dark:text-[#00D4FF]" />
+              {initialPedido ? `Convertir Pedido ${initialPedido.numero} a Venta` : 'Nueva Venta'}
             </DialogTitle>
             <DialogDescription className="dark:text-slate-400">
               Registra una nueva venta, controla stock y pagos.

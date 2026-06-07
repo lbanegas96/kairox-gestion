@@ -26,6 +26,7 @@
 | Inventario | `ProductosSection.jsx` | ✅ Soft delete + import CSV |
 | Compras | `ComprasSection.jsx` | ✅ Funcional + asiento auto + paginación 50/pág |
 | Cotizaciones | `CotizacionesSection.jsx` | ✅ Funcional + convertir a venta |
+| Pedidos (OC Clientes) | `PedidosSection.jsx` | ✅ Workflow borrador→confirmado→en_preparacion→facturado + Convertir a Venta |
 | Órdenes de Compra (proveedores) | `OrdenesCompraSection.jsx` | ✅ Workflow aprobación + 3-way match + realtime |
 | Caja | `CajaSection.jsx` + `CajaCierre.jsx` | ✅ Arqueo por denominaciones + tab Arqueos + Sobrante/Faltante |
 | Clientes | `ClientesSection.jsx` | ✅ Form completo + condicion_pago + limite_credito + import CSV |
@@ -59,7 +60,8 @@
 | `migrations/015_conciliacion_bancaria.sql` | extractos_bancarios + extracto_lineas + trigger sync | ✅ |
 | `migrations/016_security_hardening.sql` | is_admin() + RLS config + rate_limit + audit triggers | ✅ |
 | `migrations/017_multi_pago.sql` | Tabla comprobante_pagos + RLS + índices | ✅ aplicada |
-| `migrations/018_condicion_pago.sql` | condicion_pago + dias_credito en clientes | ⏳ **Pendiente aplicar** |
+| `migrations/018_condicion_pago.sql` | condicion_pago + dias_credito en clientes | ✅ aplicada |
+| `migrations/019_pedidos.sql` | pedidos + pedido_items + RLS + audit trigger | ⏳ **Pendiente aplicar** |
 
 ### SQL adicional ejecutado directamente
 
@@ -142,9 +144,9 @@
 5. ~~Alertas vencimiento CC~~ ✅
 6. ~~Discrepancia en cierre de caja~~ ✅
 
-### 🟡 Fase 3 — Parcialmente completada
+### 🟡 Fase 3 — COMPLETADA ✅
 7. ~~Import CSV productos/clientes~~ ✅
-8. **OC de clientes (Pedidos)** ⏳ — Borrador → Confirmado → En preparación → Facturado
+8. ~~OC de clientes (Pedidos)~~ ✅ — Borrador → Confirmado → En preparación → Facturado
 9. ~~Condiciones de venta flexibles~~ ✅
 10. ~~Límite de crédito por cliente~~ ✅
 11. ~~Usuario "solo caja"~~ ✅
@@ -168,13 +170,21 @@
 
 ## Próxima sesión — por dónde seguir
 
-1. **Aplicar migration 018** en Supabase Dashboard (SQL Editor → pegar `migrations/018_condicion_pago.sql`)
-2. **OC de clientes (Pedidos)** — único ítem pendiente de Fase 3
-3. **Fase 4** — Dashboard ejecutivo + onboarding wizard + datos de ejemplo
+1. **Aplicar migration 019** en Supabase Dashboard (SQL Editor → pegar `migrations/019_pedidos.sql`)
+2. **Fase 4** — Dashboard ejecutivo + onboarding wizard + datos de ejemplo
 
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-06 (continuación) — Fase 3 completa: Pedidos
+
+- ✅ `migrations/019_pedidos.sql` — tablas `pedidos` + `pedido_items`, RLS, audit trigger, función `next_pedido_number` — **⏳ PENDIENTE aplicar**
+- ✅ `pedidosService.ts` — CRUD + `markAsFacturado`
+- ✅ `PedidosSection.jsx` — workflow estados + "Convertir a Venta" via NuevaVentaModal preloaded
+- ✅ `NuevaVentaModal` — props `initialPedido` + `onPedidoConverted` para precargar carrito desde pedido
+- ✅ `Sidebar` — ítem "Pedidos" entre Cotizaciones y Compras
+- ✅ `useUserPermissions` — `pedidos` agregado a ALL_SECTIONS
 
 ### Sesión 2026-06-06 — Fases 2 y 3
 
@@ -190,7 +200,7 @@
 - ✅ `CajaSection` — tab "Arqueos" con historial de sesiones (diferencia coloreada)
 
 **Fase 3 completada (excepto Pedidos):**
-- ✅ `migrations/018_condicion_pago.sql` — `condicion_pago` + `dias_credito` en clientes — **⏳ PENDIENTE aplicar**
+- ✅ `migrations/018_condicion_pago.sql` — `condicion_pago` + `dias_credito` en clientes — **aplicada en Supabase**
 - ✅ `ClientesSection` — reescritura completa: form add/edit con todos los campos + botón Import CSV
 - ✅ `NuevaVentaModal` — check límite crédito + display condición/crédito usado al seleccionar cliente CC
 - ✅ `useUserPermissions` — `isSoloCaja()` + `getAccessibleSections()` con manejo de `solo_caja: true`
