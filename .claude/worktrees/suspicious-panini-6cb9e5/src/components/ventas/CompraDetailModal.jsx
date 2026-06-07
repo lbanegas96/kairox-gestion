@@ -92,7 +92,6 @@ const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra }) => 
 
   const hasChanges = compra && newStatus !== compra.estado_pago;
 
-  if (!open) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

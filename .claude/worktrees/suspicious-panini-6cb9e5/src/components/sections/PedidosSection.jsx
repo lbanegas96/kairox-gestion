@@ -4,6 +4,7 @@ import {
   Plus, ShoppingBasket, Search, Eye, Trash2,
   CheckCircle, XCircle, ArrowRight, Loader2, PackageCheck,
 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,6 +42,7 @@ function PedidosSection() {
 
   // Convertir a venta
   const [convertirPedido, setConvertirPedido] = useState(null);
+  const [deleteId, setDeleteId] = useState(null);
   const [loadingConvertir, setLoadingConvertir] = useState(false);
   const [showVentaModal, setShowVentaModal] = useState(false);
 
@@ -347,7 +349,7 @@ function PedidosSection() {
                           <Button
                             variant="ghost" size="icon"
                             className="h-7 w-7 text-slate-400 hover:text-red-500"
-                            onClick={() => deleteMutation.mutate(ped.id)}
+                            onClick={() => setDeleteId(ped.id)}
                             title="Eliminar"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -502,6 +504,27 @@ function PedidosSection() {
           </form>
         </TabsContent>
       </Tabs>
+
+      {/* ─── CONFIRMACIÓN ELIMINAR ─── */}
+      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent className="dark:bg-slate-950 dark:border-slate-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="dark:text-white">¿Eliminar pedido?</AlertDialogTitle>
+            <AlertDialogDescription className="dark:text-slate-400">
+              Esta acción no se puede deshacer. El pedido será eliminado permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="dark:border-slate-700 dark:text-slate-300">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { deleteMutation.mutate(deleteId); setDeleteId(null); }}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ─── MODAL DETALLE ─── */}
       <Dialog open={!!viewId} onOpenChange={() => setViewId(null)}>

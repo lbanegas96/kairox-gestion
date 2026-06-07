@@ -474,7 +474,7 @@ function CajaSection() {
 
   const formatAmount = (amount, type) => {
     const num = Number(amount);
-    const formatted = num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const formatted = num.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     if (type === 'egreso') return `-$${formatted}`;
     return `$${formatted}`;
   };

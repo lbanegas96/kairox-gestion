@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -49,6 +50,7 @@ function CotizacionesSection() {
 
   // Detail modal
   const [viewId, setViewId] = useState(null);
+  const [deleteId, setDeleteId] = useState(null);
 
   const empresaId = user?.empresa_id;
 
@@ -240,7 +242,7 @@ function CotizacionesSection() {
                           </>
                         )}
                         {['borrador', 'rechazada'].includes(cot.estado) && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-500" onClick={() => deleteMutation.mutate(cot.id)} title="Eliminar">
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-500" onClick={() => setDeleteId(cot.id)} title="Eliminar">
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         )}
@@ -354,6 +356,27 @@ function CotizacionesSection() {
           </form>
         </TabsContent>
       </Tabs>
+
+      {/* CONFIRMACIÓN ELIMINAR */}
+      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent className="dark:bg-slate-950 dark:border-slate-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="dark:text-white">¿Eliminar cotización?</AlertDialogTitle>
+            <AlertDialogDescription className="dark:text-slate-400">
+              Esta acción no se puede deshacer. La cotización será eliminada permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="dark:border-slate-700 dark:text-slate-300">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { deleteMutation.mutate(deleteId); setDeleteId(null); }}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* MODAL DETALLE */}
       <Dialog open={!!viewId} onOpenChange={() => setViewId(null)}>

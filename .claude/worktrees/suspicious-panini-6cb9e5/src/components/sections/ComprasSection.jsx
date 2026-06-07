@@ -767,7 +767,7 @@ function ComprasSection() {
                     paginatedCompras.map(compra => (
                       <tr key={compra.id} className="group hover:bg-blue-50/50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer" onClick={() => { setSelectedCompraId(compra.id); setDetailsOpen(true); }}>
                         <td className="p-4 text-slate-600 dark:text-slate-300 font-mono text-xs">
-                          {new Date(compra.fecha).toLocaleDateString()} <span className="text-slate-400 ml-1">{new Date(compra.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                          {new Date(compra.fecha).toLocaleDateString('es-AR')} <span className="text-slate-400 ml-1">{new Date(compra.fecha).toLocaleTimeString('es-AR', {hour: '2-digit', minute:'2-digit'})}</span>
                         </td>
                         <td className="p-4 text-slate-500 font-mono text-xs font-medium dark:text-slate-400">
                           {compra.numero_factura}

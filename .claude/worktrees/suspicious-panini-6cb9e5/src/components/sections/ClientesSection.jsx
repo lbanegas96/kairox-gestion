@@ -44,6 +44,7 @@ function ClientesSection() {
         .from('clientes')
         .select('*')
         .eq('empresa_id', user.empresa_id)
+        .neq('activo', false)
         .order('nombre');
       if (error) throw error;
       setClients(data || []);

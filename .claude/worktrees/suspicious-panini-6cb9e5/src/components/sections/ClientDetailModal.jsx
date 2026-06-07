@@ -206,8 +206,6 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
   const disponible = saldo > 0 ? Math.max(0, limite - saldo) : limite;
   const hasDebt = saldo > 0;
 
-  if (!open) return null;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl kairox-bg-card kairox-text-primary overflow-hidden flex flex-col max-h-[90vh] dark:bg-slate-950 dark:border-slate-800">
@@ -310,7 +308,7 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
                               {item.numero_venta}
                             </td>
                             <td className="px-4 py-3 text-slate-500 dark:text-slate-400 text-xs">
-                              {new Date(item.fecha).toLocaleDateString()}
+                              {new Date(item.fecha).toLocaleDateString('es-AR')}
                             </td>
                             <td className="px-4 py-3 text-center">
                               <Badge className={`text-[10px] shadow-none border-transparent ${item.estado_pago === 'parcial' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
@@ -418,7 +416,7 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
                     return (
                       <tr key={mov.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/30 transition-colors">
                         <td className="px-4 py-3 text-xs text-slate-500 dark:text-slate-400 font-mono">
-                          {new Date(mov.fecha || mov.created_at).toLocaleDateString()}
+                          {new Date(mov.fecha || mov.created_at).toLocaleDateString('es-AR')}
                           <div className="text-[10px] text-slate-400">{new Date(mov.fecha || mov.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                         </td>
                         <td className="px-4 py-3 text-center">

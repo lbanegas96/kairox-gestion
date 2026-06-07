@@ -16,13 +16,18 @@ export default function StaffPermissionsModal({ isOpen, onClose, userData, onSav
     { id: 'dashboard', label: 'Dashboard', desc: 'Ver métricas y resumen general' },
     { id: 'productos', label: 'Inventario (Productos)', desc: 'Gestionar catálogo y stock' },
     { id: 'ventas', label: 'Ventas', desc: 'Registrar ventas y ver historial' },
+    { id: 'cotizaciones', label: 'Cotizaciones', desc: 'Crear y gestionar presupuestos' },
+    { id: 'pedidos', label: 'Pedidos de Clientes', desc: 'Gestionar pedidos y convertir a ventas' },
     { id: 'compras', label: 'Compras', desc: 'Registrar compras a proveedores' },
+    { id: 'ordenes_compra', label: 'Órdenes de Compra', desc: 'Workflow de aprobación de OC a proveedores' },
     { id: 'caja', label: 'Caja', desc: 'Apertura y cierre de caja, movimientos' },
+    { id: 'bancos', label: 'Bancos', desc: 'Cuentas bancarias y conciliación' },
     { id: 'clientes', label: 'Clientes', desc: 'Gestión de base de datos de clientes' },
     { id: 'cuentacorriente', label: 'Cuenta Corriente', desc: 'Gestionar deudas y saldos de clientes' },
+    { id: 'plan_cuentas', label: 'Contabilidad', desc: 'Plan de cuentas, asientos y balances' },
     { id: 'reportes', label: 'Reportes', desc: 'Acceso a reportes detallados' },
     { id: 'usuarios', label: 'Usuarios', desc: 'Ver lista de usuarios (solo lectura)' },
-    { id: 'configuracion', label: 'Configuración', desc: 'Ajustes del sistema' }
+    { id: 'configuracion', label: 'Configuración', desc: 'Ajustes del sistema' },
   ];
 
   useEffect(() => {

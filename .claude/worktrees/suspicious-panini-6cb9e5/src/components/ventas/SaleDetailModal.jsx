@@ -114,7 +114,6 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale }) => {
 
   const hasChanges = sale && newStatus !== sale.estado_pago;
 
-  if (!open) return null;
 
   return (
     <>
@@ -128,7 +127,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale }) => {
               </span>
             </DialogTitle>
             <DialogDescription className="dark:text-slate-400">
-              Detalle completo de la transacción {sale && `- ${new Date(sale.fecha).toLocaleString()}`}
+              Detalle completo de la transacción {sale && `- ${new Date(sale.fecha).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}`}
             </DialogDescription>
           </DialogHeader>
 
