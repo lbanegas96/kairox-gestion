@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-08 — TC del día + Moneda Paralela SAP-style + Bugs críticos ✅
+**Última actualización:** 2026-06-08 (sesión PM) — Testing & polish: fix empresa_id filters, conversión moneda en venta, UX cotizaciones/pedidos ✅
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -275,6 +275,41 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-08 (PM) — Testing roadmap + bugs UX/conversión moneda
+**Branch:** `fix/sidebar-light-mode-and-bugs` (pendiente PR a master)
+
+**Bugs corregidos durante testing manual:**
+- **Sidebar:** soporte modo claro — todos los colores hardcoded ahora con variantes `dark:` ([Sidebar.jsx](src/components/Sidebar.jsx))
+- **Dashboard KPIs = $0:** servicios filtraban por `.eq('user_id', empresaId)` en vez de `.eq('empresa_id', empresaId)`. Fixeado en 6 servicios (14 ocurrencias): `dashboardService.ts`, `cajaService.ts`, `clientesService.ts`, `comprasService.ts`, `productosService.ts`, `OrdenesCompraSection.jsx`
+- **Producto SKU obligatorio:** auto-generación `SKU-{timestamp}` si campo vacío + mensaje claro en error de duplicado ([ProductosSection.jsx](src/components/sections/ProductosSection.jsx))
+- **NuevaVentaModal carrito invisible:** agregado `min-h-0` en flex containers + `min-h-[200px]` en panel del carrito para que no colapse a 0 en flexbox
+
+**TC del día — fix schema + parser robusto:**
+- Tabla `tipos_cambio` real en DB NO tiene columnas `user_id` ni `updated_at` (a diferencia de lo que asumía el código). Removidas del upsert en [tipoCambioService.js](src/services/tipoCambioService.js)
+- Input decimal rechazaba "." en navegador con locale español. Cambiado de `type="number"` a `type="text" inputMode="decimal"` en `TipoCambioModal.jsx` y `MonedaSelector.jsx`
+- **Nuevo helper [`parseNumberLocale()`](src/lib/currencyUtils.js)**: detecta automáticamente formato es-AR (`1.668,21`) o en-US (`1,668.21`) — el último separador es decimal, el resto miles
+
+**Conversión moneda en venta (decisión de diseño):**
+- **Lógica adoptada:** productos siempre en ARS, ventas se guardan SIEMPRE en ARS, solo display se convierte a moneda elegida para mostrar al cliente
+- `NuevaVentaModal.jsx`: nuevo helper `totalEnMonedaSeleccionada()` que divide por la tasa solo para mostrar. Banner "Equivale a $X ARS (TC $Y)" debajo del total
+- `ComprobantePrintModal.jsx`: ticket muestra bloque con moneda cobrada + TC + equivalente cuando moneda ≠ ARS
+- `HistorialVentas.jsx`: badge USD/EUR + equivalente debajo del total ARS
+- Fix línea 283 NuevaVentaModal: `calculateTotal()` siempre devuelve ARS, sin multiplicar por tasa (era doble conversión)
+
+**UX Cotizaciones ([CotizacionesSection.jsx](src/components/sections/CotizacionesSection.jsx)):**
+- **Nombre del Cliente:** ahora autocomplete con clientes existentes + permite tipear nombre libre (mensaje aclaratorio)
+- **Buscar producto:** dropdown se abre al hacer focus (no requiere tipear 2+ caracteres). Carga 200 productos al montar, filtra en memoria (sin hits Supabase por tecla)
+- **Cantidad:** step de `0.001` → `1` (flechitas suben/bajan de 1 en 1)
+- **Unidad:** `<input list="unidades-medida">` con datalist de 17 opciones comunes (un, kg, g, l, ml, m, cm, m², m³, caja, paquete, docena, par, hora, día, servicio) + texto libre
+
+**UX Pedidos:** [PedidosSection.jsx](src/components/sections/PedidosSection.jsx) — fix mismo step de cantidad
+
+**Pendientes identificados (no fixeados aún):**
+- Configuración: faltan toggles "Módulos Activos" y "Aprobación OC" (posiblemente perdidos en refactor)
+- Contabilidad muestra 4 tabs en vez de 7 (verificar tras inicializar Plan de Cuentas)
+- Pedidos: dropdown de cliente y producto debería ser igual al de Cotizaciones (mismo patrón)
+- Multi-pago en USD: validación interna sigue siendo en ARS, requiere refactor mayor
 
 ### Sesión 2026-06-08 — TC del día + Moneda Paralela + Bugs críticos producción
 - **Bugs críticos corregidos:**

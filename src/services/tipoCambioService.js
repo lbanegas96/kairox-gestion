@@ -22,18 +22,16 @@ export async function getTodayTC(empresaId, moneda = 'USD') {
  * Guarda (o actualiza) el tipo de cambio del día.
  * Usa upsert con UNIQUE(empresa_id, moneda, fecha) para evitar duplicados.
  */
-export async function upsertTC(empresaId, userId, moneda, tasa) {
+export async function upsertTC(empresaId, _userId, moneda, tasa) {
   const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
   const { data, error } = await supabase
     .from('tipos_cambio')
     .upsert(
       {
         empresa_id: empresaId,
-        user_id: userId,
         moneda,
         fecha: today,
         tasa: Number(tasa),
-        updated_at: new Date().toISOString(),
       },
       { onConflict: 'empresa_id,moneda,fecha' }
     )

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MONEDAS, isMonedaExtranjera } from '@/lib/currencyUtils';
+import { MONEDAS, isMonedaExtranjera, parseNumberLocale } from '@/lib/currencyUtils';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -96,9 +96,19 @@ export function MonedaSelector({
     setShowTCModal(false);
   };
 
+  // Estado local para permitir tipear comas/puntos sin que el input number las rechace
+  const [tasaInput, setTasaInput] = useState('');
+  useEffect(() => {
+    // Sincroniza el input local cuando la tasa cambia desde afuera (ej. fetch del TC)
+    setTasaInput(tasa ? String(tasa) : '');
+  }, [tasa]);
+
   // Si el usuario edita manualmente la tasa, la validamos
   const handleTasaManual = (e) => {
-    const v = parseFloat(e.target.value);
+    // Permitir solo dígitos, coma y punto
+    const raw = e.target.value.replace(/[^\d.,]/g, '');
+    setTasaInput(raw);
+    const v = parseNumberLocale(raw);
     onTasaChange?.(isNaN(v) ? 1 : v);
     if (v > 0) {
       setTcStatus('ok');
@@ -140,14 +150,13 @@ export function MonedaSelector({
                 </div>
               ) : (
                 <Input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={tasa}
+                  type="text"
+                  inputMode="decimal"
+                  value={tasaInput}
                   onChange={handleTasaManual}
                   disabled={disabled}
                   className="h-9"
-                  placeholder="ej. 1250"
+                  placeholder="ej. 1250.50"
                 />
               )}
             </div>

@@ -278,6 +278,12 @@ const HistorialVentas = () => {
                     </td>
                     <td className="p-4 text-right font-bold text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 transition-colors">
                       ${Number(sale.total).toFixed(2)}
+                      {sale.moneda && sale.moneda !== 'ARS' && Number(sale.tipo_cambio_tasa) > 0 && (
+                        <div className="text-[10px] font-normal text-slate-500 dark:text-slate-400 mt-0.5">
+                          <span className="inline-block bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-bold mr-1">{sale.moneda}</span>
+                          {sale.moneda} {(Number(sale.total) / Number(sale.tipo_cambio_tasa)).toFixed(2)} · TC ${Number(sale.tipo_cambio_tasa).toLocaleString('es-AR')}
+                        </div>
+                      )}
                     </td>
                     <td className="p-4 text-center">
                       <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full">

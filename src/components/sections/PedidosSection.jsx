@@ -513,7 +513,7 @@ function PedidosSection() {
                     </div>
                     <div className="col-span-2">
                       <Input
-                        type="number" min="0.001" step="0.001"
+                        type="number" min="0" step="1"
                         value={item.cantidad}
                         onChange={e => updateItem(i, 'cantidad', e.target.value)}
                         className="h-9 text-sm text-center dark:bg-slate-900 dark:border-slate-700 dark:text-white"

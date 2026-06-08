@@ -133,6 +133,23 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
             <span className="text-2xl font-bold">${Number(comprobante.total).toFixed(2)}</span>
           </div>
 
+          {comprobante.moneda && comprobante.moneda !== 'ARS' && Number(comprobante.tipo_cambio_tasa) > 0 && (
+            <div className="mt-2 pt-2 border-t border-dashed border-slate-300 text-xs font-mono space-y-0.5 total-row">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Moneda cobrada:</span>
+                <span className="font-bold">{comprobante.moneda}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Tipo de cambio:</span>
+                <span>1 {comprobante.moneda} = ${Number(comprobante.tipo_cambio_tasa).toLocaleString('es-AR')}</span>
+              </div>
+              <div className="flex justify-between text-base font-bold pt-1">
+                <span>Equivale a:</span>
+                <span>{comprobante.moneda} {(Number(comprobante.total) / Number(comprobante.tipo_cambio_tasa)).toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+
           <div className="mt-6 text-center text-xs text-slate-400">
             Gracias por su compra
           </div>
