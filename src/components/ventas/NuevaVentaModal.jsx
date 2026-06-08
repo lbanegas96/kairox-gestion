@@ -326,6 +326,9 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           cliente_nombre: selectedClient?.nombre || 'Consumidor Final',
           total: total,
           forma_pago: formaPago,
+          // Una venta en Cuenta Corriente NO está pagada: queda como deuda pendiente.
+          // El resto de medios de pago se cobran en el acto.
+          estado_pago: isCC ? 'pendiente' : 'pagada',
           moneda,
           tipo_cambio_tasa: tipoCambioTasa
         }]).select().single();

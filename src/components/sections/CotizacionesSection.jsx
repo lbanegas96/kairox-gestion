@@ -129,7 +129,7 @@ function CotizacionesSection() {
   const searchProducto = async (idx, q) => {
     setProdSearch(prev => ({ ...prev, [idx]: q }));
     if (!q || q.length < 2) { setProdResults(prev => ({ ...prev, [idx]: [] })); return; }
-    const { data } = await supabase.from('productos').select('id, nombre, precio_venta, unidad_medida').eq('user_id', empresaId).ilike('nombre', `%${q}%`).limit(5);
+    const { data } = await supabase.from('productos').select('id, nombre, precio_venta, unidad_medida').eq('empresa_id', empresaId).eq('activo', true).ilike('nombre', `%${q}%`).limit(5);
     setProdResults(prev => ({ ...prev, [idx]: data ?? [] }));
   };
 

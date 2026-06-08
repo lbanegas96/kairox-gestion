@@ -52,8 +52,8 @@ export function MonedaSelector({
           </Label>
           <Input
             type="number"
-            min="0.0001"
-            step="0.01"
+            min="0"
+            step="any"
             value={tasa}
             onChange={e => onTasaChange?.(parseFloat(e.target.value) || 1)}
             disabled={disabled}
