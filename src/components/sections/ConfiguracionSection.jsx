@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Save, Building, Image as ImageIcon, Loader2, Upload, Trash2, AlertCircle } from 'lucide-react';
+import { Settings, Save, Building, Image as ImageIcon, Loader2, Upload, Trash2, AlertCircle, TrendingUp, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useConfig } from '@/contexts/ConfigContext';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { supabase } from '@/lib/customSupabaseClient';
 
 const ConfiguracionSection = () => {
   const { config, updateConfig } = useConfig();
@@ -20,6 +23,11 @@ const ConfiguracionSection = () => {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  // ── Configuración de Moneda Paralela ──────────────────────────────────────
+  const [tcConfig, setTcConfig] = useState({ usa_tc_paralelo: false, moneda_paralela: 'USD' });
+  const [loadingTC, setLoadingTC] = useState(false);
+  const [savingTC, setSavingTC] = useState(false);
+
   useEffect(() => {
     if (config) {
       setFormData({
@@ -28,6 +36,56 @@ const ConfiguracionSection = () => {
       });
     }
   }, [config]);
+
+  // Cargar configuración de moneda paralela desde la tabla empresas
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    const loadTC = async () => {
+      setLoadingTC(true);
+      try {
+        const { data } = await supabase
+          .from('empresas')
+          .select('usa_tc_paralelo, moneda_paralela')
+          .eq('id', user.empresa_id)
+          .single();
+        if (data) setTcConfig({
+          usa_tc_paralelo: data.usa_tc_paralelo ?? false,
+          moneda_paralela: data.moneda_paralela ?? 'USD',
+        });
+      } catch (e) {
+        console.error('[TC Paralela] Error al cargar config:', e);
+      } finally {
+        setLoadingTC(false);
+      }
+    };
+    loadTC();
+  }, [user?.empresa_id]);
+
+  const handleSaveTC = async () => {
+    if (!user?.empresa_id) return;
+    setSavingTC(true);
+    try {
+      const { error } = await supabase
+        .from('empresas')
+        .update({
+          usa_tc_paralelo: tcConfig.usa_tc_paralelo,
+          moneda_paralela: tcConfig.moneda_paralela,
+        })
+        .eq('id', user.empresa_id);
+      if (error) throw error;
+      toast({
+        title: 'Moneda paralela guardada',
+        description: tcConfig.usa_tc_paralelo
+          ? `Activada. El sistema pedirá el TC de ${tcConfig.moneda_paralela} antes de cada operación.`
+          : 'Desactivada. El sistema no requerirá TC paralelo.',
+        className: 'bg-green-600 text-white border-green-700',
+      });
+    } catch (e) {
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingTC(false);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -263,6 +321,98 @@ const ConfiguracionSection = () => {
             <p>Los cambios se aplicarán inmediatamente en toda la aplicación para todos los usuarios.</p>
           </div>
         </div>
+      </div>
+      {/* ── Moneda Paralela (TC) ─────────────────────────────────────────────── */}
+      <div className="lg:col-span-2 kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg mt-0.5">
+            <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+              Moneda Paralela (Tipo de Cambio)
+            </h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              Similar a "Parallel Currency" en SAP S/4. Cuando está activo, el sistema exige el TC del día
+              antes de cualquier movimiento contable y habilita el <strong>Reporte de Paridad ARS / {tcConfig.moneda_paralela}</strong>.
+            </p>
+          </div>
+        </div>
+
+        {loadingTC ? (
+          <div className="flex items-center gap-2 text-slate-400 py-4">
+            <Loader2 className="h-4 w-4 animate-spin" /> Cargando configuración...
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {/* Toggle */}
+            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border kairox-border">
+              <div>
+                <Label className="text-slate-800 dark:text-slate-200 font-medium">
+                  Activar moneda paralela
+                </Label>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {tcConfig.usa_tc_paralelo
+                    ? 'El TC del día es obligatorio antes de vender, cotizar o registrar pagos.'
+                    : 'El TC del día es opcional (solo para operaciones en moneda extranjera).'}
+                </p>
+              </div>
+              <Switch
+                checked={tcConfig.usa_tc_paralelo}
+                onCheckedChange={v => setTcConfig(prev => ({ ...prev, usa_tc_paralelo: v }))}
+              />
+            </div>
+
+            {/* Selector de moneda paralela */}
+            {tcConfig.usa_tc_paralelo && (
+              <div className="space-y-2 max-w-xs">
+                <Label className="text-slate-700 dark:text-slate-300">Moneda paralela</Label>
+                <Select
+                  value={tcConfig.moneda_paralela}
+                  onValueChange={v => setTcConfig(prev => ({ ...prev, moneda_paralela: v }))}
+                >
+                  <SelectTrigger className="h-9 dark:bg-slate-900 dark:border-slate-700 dark:text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">USD — Dólar estadounidense</SelectItem>
+                    <SelectItem value="EUR">EUR — Euro</SelectItem>
+                    <SelectItem value="BRL">BRL — Real brasileño</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  Todos los comprobantes y movimientos se guardarán también en {tcConfig.moneda_paralela} usando el TC del día.
+                </p>
+              </div>
+            )}
+
+            {/* Info boxes */}
+            {tcConfig.usa_tc_paralelo && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                {[
+                  { icon: <CheckCircle2 className="h-3.5 w-3.5" />, text: 'TC obligatorio antes de operar' },
+                  { icon: <CheckCircle2 className="h-3.5 w-3.5" />, text: `Comprobantes con equiv. ${tcConfig.moneda_paralela}` },
+                  { icon: <CheckCircle2 className="h-3.5 w-3.5" />, text: 'Reporte de Paridad habilitado' },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg px-3 py-2 border border-emerald-200 dark:border-emerald-800">
+                    {item.icon}
+                    {item.text}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Button
+              onClick={handleSaveTC}
+              disabled={savingTC}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {savingTC
+                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</>
+                : <><Save className="mr-2 h-4 w-4" /> Guardar configuración de moneda</>}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

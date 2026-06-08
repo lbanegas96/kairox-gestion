@@ -11,7 +11,9 @@ import { getNowAR, getTodayAR } from '@/lib/dateUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
 import ComprobantePrintModal from './ComprobantePrintModal';
 import { MonedaSelector } from '@/components/ui/MonedaSelector';
+import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 import { formatCurrency } from '@/lib/currencyUtils';
+import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { listaPreciosService } from '@/services/listaPreciosService';
 
 const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = null, onConvertSuccess }) => {
@@ -30,7 +32,11 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   const [tipoCambioTasa, setTipoCambioTasa] = useState(1);
   const [loading, setLoading] = useState(false);
   const [tcMissing, setTcMissing] = useState(false);
+  const [showParaleloTCModal, setShowParaleloTCModal] = useState(false);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
+
+  // ── Moneda Paralela (SAP-style parallel currency) ───────────────────────────
+  const tcParalelo = useTCParalelo();
   const [lastComprobante, setLastComprobante] = useState(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [lastItems, setLastItems] = useState([]);
@@ -138,6 +144,14 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
       setListaNombre('');
     }
   };
+
+  // Sincronizar tcParalelo.tcHoy cuando la operación es EN la moneda paralela
+  // (MonedaSelector guarda el TC en DB; aquí lo refleja en el hook local)
+  useEffect(() => {
+    if (tcParalelo.enabled && moneda === tcParalelo.monedaParalela && tipoCambioTasa > 0) {
+      tcParalelo.setTC(tipoCambioTasa);
+    }
+  }, [moneda, tipoCambioTasa, tcParalelo.enabled, tcParalelo.monedaParalela]);
 
   // ── IMPORTANTE: definir calculateTotal ANTES de usarla para evitar TDZ ────
   const calculateTotal = () => cart.reduce((sum, item) => sum + (item.precio_venta * item.cantidad), 0);
@@ -247,6 +261,30 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         variant: 'destructive',
       });
     }
+    // Bloquear si la empresa usa moneda paralela y falta el TC (operación en ARS)
+    if (tcParalelo.enabled && moneda === 'ARS' && tcParalelo.tcMissing) {
+      return toast({
+        title: `Falta el TC de paridad ${tcParalelo.monedaParalela}`,
+        description: `La empresa usa moneda paralela. Cargá el TC de ${tcParalelo.monedaParalela} antes de confirmar.`,
+        variant: 'destructive',
+      });
+    }
+
+    // ── Calcular monto en moneda paralela ─────────────────────────────────────
+    let montoParalelo = null;
+    let tcParaleloFinalValue = null;
+    if (tcParalelo.enabled) {
+      if (moneda === tcParalelo.monedaParalela) {
+        // La operación es en la moneda paralela → el monto ya está en esa moneda
+        montoParalelo = calculateTotal();
+        tcParaleloFinalValue = tipoCambioTasa;
+      } else if (tcParalelo.tcHoy) {
+        // Operación en ARS (u otra): convertir al paralelo usando tcHoy
+        const inARS = moneda === 'ARS' ? calculateTotal() : calculateTotal() * tipoCambioTasa;
+        montoParalelo = inARS / tcParalelo.tcHoy;
+        tcParaleloFinalValue = tcParalelo.tcHoy;
+      }
+    }
 
     // ── Validar que la sesión siga viva ANTES de insertar ────────────────────
     // Si el token expiró, las inserciones con RLS (empresa_id) fallan con 403 y
@@ -341,7 +379,12 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           // El resto de medios de pago se cobran en el acto.
           estado_pago: isCC ? 'pendiente' : 'pagada',
           moneda,
-          tipo_cambio_tasa: tipoCambioTasa
+          tipo_cambio_tasa: tipoCambioTasa,
+          // Moneda paralela (SAP parallel currency)
+          ...(tcParalelo.enabled && montoParalelo !== null ? {
+            monto_paralelo: montoParalelo,
+            tc_paralelo: tcParaleloFinalValue,
+          } : {}),
         }]).select().single();
 
       if (compError) throw compError;
@@ -375,6 +418,9 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
       // Multi-pago: registrar un movimiento de caja por cada método (excepto CC)
       const pagosEfectivos = pagosFinales.filter(p => p.metodo !== 'Cuenta Corriente');
       for (const pago of pagosEfectivos) {
+        const pagoParalelo = tcParalelo.enabled && tcParaleloFinalValue
+          ? tcParalelo.calcParalelo(pago.monto, moneda, tipoCambioTasa)
+          : null;
         const { error: cajaError } = await supabase.from('movimientos_caja').insert([{
           user_id: user.id,
           empresa_id: user.empresa_id,
@@ -384,7 +430,8 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           concepto: `Venta #${saleNumber}`,
           monto: pago.monto,
           metodo_pago: pago.metodo,
-          is_automatic: true
+          is_automatic: true,
+          ...(pagoParalelo !== null ? { monto_paralelo: pagoParalelo, tc_paralelo: tcParaleloFinalValue } : {}),
         }]);
         if (cajaError) throw cajaError;
       }
@@ -506,6 +553,27 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
                       onTCMissingChange={setTcMissing}
                     />
                   </div>
+                  {/* Banner de paridad: visible cuando la empresa usa moneda paralela y la operación es en ARS */}
+                  {tcParalelo.enabled && moneda === 'ARS' && !tcParalelo.loading && (
+                    <div className="mt-2">
+                      {tcParalelo.tcMissing ? (
+                        <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2 border border-amber-200 dark:border-amber-800">
+                          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                          <span>Sin TC de paridad {tcParalelo.monedaParalela} del día</span>
+                          <Button type="button" size="sm" variant="outline"
+                            className="ml-auto h-6 text-xs px-2 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                            onClick={() => setShowParaleloTCModal(true)}>
+                            Cargar TC
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg px-3 py-2 border border-emerald-200 dark:border-emerald-800">
+                          <Check className="h-3.5 w-3.5 flex-shrink-0" />
+                          Paridad {tcParalelo.monedaParalela}: 1 {tcParalelo.monedaParalela} = ${Number(tcParalelo.tcHoy || 0).toLocaleString('es-AR')} ARS
+                        </div>
+                      )}
+                    </div>
+                  )}
                </div>
                <div className="space-y-3 dark:text-white">
                  <div className="flex items-center justify-between">
@@ -592,24 +660,35 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
                <div className="mt-auto">
                  <Button
                    className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 text-white dark:bg-green-700 dark:hover:bg-green-600 disabled:opacity-50"
-                   disabled={loading || cart.length === 0 || (moneda !== 'ARS' && tcMissing)}
+                   disabled={
+                     loading ||
+                     cart.length === 0 ||
+                     (moneda !== 'ARS' && tcMissing) ||
+                     (tcParalelo.enabled && moneda === 'ARS' && tcParalelo.tcMissing)
+                   }
                    onClick={handleConfirmSale}
-                   title={moneda !== 'ARS' && tcMissing ? `Cargá el tipo de cambio ${moneda} del día para continuar` : undefined}
                  >
                    {loading ? <Loader2 className="animate-spin mr-2" /> : <Check className="mr-2" />}
                    Confirmar Venta
                  </Button>
-                 {moneda !== 'ARS' && tcMissing && (
+                 {(moneda !== 'ARS' && tcMissing) || (tcParalelo.enabled && moneda === 'ARS' && tcParalelo.tcMissing) ? (
                    <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-1.5">
                      ⚠ Cargá el TC del día para habilitar la venta
                    </p>
-                 )}
+                 ) : null}
                </div>
             </div>
           </div>
         </DialogContent>
       </Dialog>
       <ComprobantePrintModal open={showPrintModal} onOpenChange={setShowPrintModal} comprobante={lastComprobante} items={lastItems} pagos={lastPagos} />
+      {/* Modal TC paralelo: se abre cuando la operación es en ARS pero falta el TC de paridad */}
+      <TipoCambioModal
+        open={showParaleloTCModal}
+        onOpenChange={setShowParaleloTCModal}
+        moneda={tcParalelo.monedaParalela}
+        onConfirm={(t) => { tcParalelo.setTC(t); setShowParaleloTCModal(false); }}
+      />
     </>
   );
 };

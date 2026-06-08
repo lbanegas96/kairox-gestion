@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 
-import { 
-  BarChart3, Package, TrendingUp, Banknote, ShoppingCart, 
-  Users, CreditCard, FileSpreadsheet
+import {
+  BarChart3, Package, TrendingUp, Banknote, ShoppingCart,
+  Users, CreditCard, FileSpreadsheet, ArrowLeftRight
 } from 'lucide-react';
+import ReporteParidad from '@/components/reportes/ReporteParidad';
+import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -16,10 +18,12 @@ import ReportTable from '@/components/reports/ReportTable';
 function ReportesSection() {
   const { user } = useAuth();
   const { toast } = useToast();
-  
+  const { enabled: tcParaleloEnabled, monedaParalela } = useTCParalelo();
+
   const [selectedReport, setSelectedReport] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showParidad, setShowParidad] = useState(false);
   
   // Filters
   const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
@@ -320,6 +324,11 @@ function ReportesSection() {
     return { columns: [], totals: [] };
   };
 
+  // Reporte de Paridad: render inline (reemplaza el grid)
+  if (showParidad) {
+    return <ReporteParidad onBack={() => setShowParidad(false)} />;
+  }
+
   return (
     <div className="space-y-8 pb-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-transparent p-6 -mx-6 -mt-6 mb-6 border-b border-slate-200 dark:border-none">
@@ -335,20 +344,20 @@ function ReportesSection() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {reports.map((report, index) => (
+        {reports.map((report) => (
           <div
             key={report.id}
             className="group relative kairox-bg-card border kairox-border hover:border-slate-400 dark:hover:border-slate-600 rounded-xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden cursor-pointer dark:bg-slate-950 dark:border-slate-800"
             onClick={() => openReportDialog(report)}
           >
             <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${report.gradient} opacity-5 rounded-bl-[100px] transition-opacity group-hover:opacity-10`} />
-            
+
             <div className="flex items-start justify-between mb-4 relative z-10">
               <div className="p-3 bg-slate-100 dark:bg-slate-900 rounded-lg border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-700 transition-colors">
                 {report.icon}
               </div>
             </div>
-            
+
             <div className="mb-6 relative z-10">
               <h3 className="text-xl font-bold kairox-text-primary dark:text-white mb-2 group-hover:text-blue-600 dark:group-hover:text-[#00D4FF] transition-colors">
                 {report.title}
@@ -357,12 +366,50 @@ function ReportesSection() {
                 {report.description}
               </p>
             </div>
-            
+
             <Button className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-500 transition-all relative z-10">
               Ver Reporte
             </Button>
           </div>
         ))}
+
+        {/* ── Reporte de Paridad ARS / Moneda Paralela ── */}
+        <div
+          className={`group relative kairox-bg-card border rounded-xl p-6 shadow-lg transition-all duration-300 overflow-hidden dark:bg-slate-950 dark:border-slate-800
+            ${tcParaleloEnabled
+              ? 'hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-2xl cursor-pointer kairox-border'
+              : 'opacity-60 border-dashed border-slate-300 dark:border-slate-700 cursor-default'}`}
+          onClick={() => tcParaleloEnabled && setShowParidad(true)}
+          title={!tcParaleloEnabled ? 'Activá la Moneda Paralela en Configuración para usar este reporte' : ''}
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-600 to-indigo-600 opacity-5 rounded-bl-[100px] transition-opacity group-hover:opacity-10" />
+          <div className="flex items-start justify-between mb-4 relative z-10">
+            <div className="p-3 bg-slate-100 dark:bg-slate-900 rounded-lg border kairox-border">
+              <ArrowLeftRight className="w-8 h-8 text-blue-500" />
+            </div>
+            {tcParaleloEnabled && (
+              <span className="text-xs font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">
+                {monedaParalela}
+              </span>
+            )}
+          </div>
+          <div className="mb-6 relative z-10">
+            <h3 className="text-xl font-bold kairox-text-primary dark:text-white mb-2 group-hover:text-blue-600 dark:group-hover:text-[#00D4FF] transition-colors">
+              Reporte de Paridad
+            </h3>
+            <p className="kairox-text-secondary dark:text-slate-400 text-sm h-10 line-clamp-2">
+              {tcParaleloEnabled
+                ? `Comparativa ARS / ${monedaParalela} por comprobante al TC histórico.`
+                : 'Activá la Moneda Paralela en Configuración para habilitar este reporte.'}
+            </p>
+          </div>
+          <Button
+            disabled={!tcParaleloEnabled}
+            className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-500 transition-all relative z-10 disabled:opacity-50"
+          >
+            {tcParaleloEnabled ? 'Ver Reporte' : 'Requiere configuración'}
+          </Button>
+        </div>
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
