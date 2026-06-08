@@ -16,7 +16,13 @@ let _instance = null;
 
 function getInstance() {
   if (!_instance) {
-    _instance = createClient(supabaseUrl, supabaseAnonKey);
+    _instance = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    });
   }
   return _instance;
 }

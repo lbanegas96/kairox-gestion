@@ -237,6 +237,18 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     if (cart.length === 0) return toast({ title: "Carrito vacío", variant: "destructive" });
     if (isCC && !selectedClient) return toast({ title: "Cliente requerido para Cuenta Corriente", variant: "destructive" });
 
+    // ── Validar que la sesión siga viva ANTES de insertar ────────────────────
+    // Si el token expiró, las inserciones con RLS (empresa_id) fallan con 403 y
+    // la venta quedaría a medio escribir. Mejor avisar y frenar.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      return toast({
+        title: "Sesión expirada",
+        description: "Tu sesión venció. Volvé a iniciar sesión para registrar la venta.",
+        variant: "destructive",
+      });
+    }
+
     // Validar multi-pago
     const total = calculateTotal();
     let pagosFinales;
@@ -328,11 +340,13 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
          precio_unitario: item.precio_venta,
          subtotal: item.precio_venta * item.cantidad
       }));
-      await supabase.from('comprobante_items').insert(itemsPayload);
+      const { error: itemsError } = await supabase.from('comprobante_items').insert(itemsPayload);
+      if (itemsError) throw itemsError;
 
       for (const item of cart) {
-        await supabase.from('productos').update({ stock_actual: freshProductMap.get(item.id).stock_actual - item.cantidad }).eq('id', item.id);
-        await supabase.from('movimientos_inventario').insert([{
+        const { error: stockError } = await supabase.from('productos').update({ stock_actual: freshProductMap.get(item.id).stock_actual - item.cantidad }).eq('id', item.id);
+        if (stockError) throw stockError;
+        const { error: movInvError } = await supabase.from('movimientos_inventario').insert([{
            tenant_id: user.tenant_id,
            empresa_id: user.empresa_id,
            producto_id: item.id,
@@ -341,12 +355,13 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
            motivo: `Venta #${saleNumber}`,
            fecha: now
         }]);
+        if (movInvError) throw movInvError;
       }
 
       // Multi-pago: registrar un movimiento de caja por cada método (excepto CC)
       const pagosEfectivos = pagosFinales.filter(p => p.metodo !== 'Cuenta Corriente');
       for (const pago of pagosEfectivos) {
-        await supabase.from('movimientos_caja').insert([{
+        const { error: cajaError } = await supabase.from('movimientos_caja').insert([{
           user_id: user.id,
           empresa_id: user.empresa_id,
           fecha: now,
@@ -357,11 +372,12 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           metodo_pago: pago.metodo,
           is_automatic: true
         }]);
+        if (cajaError) throw cajaError;
       }
       // Si hay pago en CC, registrar en cuenta corriente (DEBE)
       if (isCC && selectedClient) {
-        await supabase.from('cuenta_corriente_movimientos').insert([{
-          user_id: user.tenant_id,
+        const { error: ccError } = await supabase.from('cuenta_corriente_movimientos').insert([{
+          user_id: user.id,
           empresa_id: user.empresa_id,
           cliente_id: selectedClient.id,
           tipo: 'DEBE',
@@ -369,6 +385,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           descripcion: `Venta #${saleNumber}`,
           fecha: now
         }]);
+        if (ccError) throw ccError;
       }
 
       // Asiento contable automático (no bloquea el flujo de ventas)
