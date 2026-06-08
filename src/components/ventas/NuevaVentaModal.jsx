@@ -210,7 +210,9 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     });
     setProductSearch('');
     setShowProductDropdown(false);
-    searchInputRef.current?.focus(); 
+    // Defer focus until AFTER React commits DOM updates to avoid
+    // Radix UI FocusScope modifying the DOM mid-commit (insertBefore/removeChild errors)
+    setTimeout(() => searchInputRef.current?.focus(), 0);
   };
 
   const removeFromCart = (productId) => setCart(prev => prev.filter(item => item.id !== productId));
