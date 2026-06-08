@@ -420,18 +420,16 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input ref={searchInputRef} placeholder="Buscar producto..." value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setShowProductDropdown(true); }} onFocus={() => setShowProductDropdown(true)} className="pl-10 h-12 text-lg kairox-input pr-10 dark:bg-slate-900 dark:border-slate-700 dark:text-white" autoComplete="off" />
-                  {showProductDropdown && (
-                    <div className="absolute top-full left-0 w-full z-50 bg-white dark:bg-slate-950 border kairox-border shadow-xl rounded-md mt-1 overflow-hidden max-h-80 overflow-y-auto">
-                      {filteredProducts.map(p => (
-                        <div key={p.id} className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 grid grid-cols-12 gap-2 items-center cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20" onClick={() => handleAddToCart(p)}>
-                          <div className="col-span-3 text-xs text-slate-500 font-mono truncate">{p.codigo_sku}</div>
-                          <div className="col-span-5 font-medium truncate text-sm text-slate-800 dark:text-slate-200">{p.nombre}</div>
-                          <div className="col-span-2 text-right text-xs font-bold dark:text-slate-300">{p.stock_actual}</div>
-                          <div className="col-span-2 text-right font-bold text-emerald-600 dark:text-emerald-400 text-sm">${p.precio_venta}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <div className={`absolute top-full left-0 w-full z-50 bg-white dark:bg-slate-950 border kairox-border shadow-xl rounded-md mt-1 overflow-hidden max-h-80 overflow-y-auto ${showProductDropdown ? '' : 'hidden'}`}>
+                    {filteredProducts.map(p => (
+                      <div key={p.id} className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 grid grid-cols-12 gap-2 items-center cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20" onClick={() => handleAddToCart(p)}>
+                        <div className="col-span-3 text-xs text-slate-500 font-mono truncate">{p.codigo_sku}</div>
+                        <div className="col-span-5 font-medium truncate text-sm text-slate-800 dark:text-slate-200">{p.nombre}</div>
+                        <div className="col-span-2 text-right text-xs font-bold dark:text-slate-300">{p.stock_actual}</div>
+                        <div className="col-span-2 text-right font-bold text-emerald-600 dark:text-emerald-400 text-sm">${p.precio_venta}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto p-4 dark:bg-slate-950">
