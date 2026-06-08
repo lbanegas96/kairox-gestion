@@ -137,6 +137,9 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     }
   };
 
+  // ── IMPORTANTE: definir calculateTotal ANTES de usarla para evitar TDZ ────
+  const calculateTotal = () => cart.reduce((sum, item) => sum + (item.precio_venta * item.cantidad), 0);
+
   // ── Helpers multi-pago ──────────────────────────────────────────────────────
   const isCC = selectedMethods.has('Cuenta Corriente');
   const isMultiPago = !isCC && selectedMethods.size > 1;
@@ -219,8 +222,6 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     if (!product || product.stock_actual < qty) return;
     setCart(prev => prev.map(item => item.id === productId ? { ...item, cantidad: qty } : item));
   };
-
-  const calculateTotal = () => cart.reduce((sum, item) => sum + (item.precio_venta * item.cantidad), 0);
 
   const generateVentaNumber = async () => {
     const todayStr = getTodayAR().replace(/-/g, '');
