@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-07 — Fase 7 iniciada · Deploy Vercel ✅
+**Última actualización:** 2026-06-08 — TC del día + Moneda Paralela SAP-style + Bugs críticos ✅
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -20,19 +20,19 @@
 | Módulo | Archivo principal | Estado |
 |---|---|---|
 | Launchpad (Home) | `LaunchpadSection.jsx` | ✅ Tiles por área + KPIs + accesos rápidos |
-| **Listas de Precios** | `ListasPrecioSection.jsx` + `listaPreciosService.ts` | ✅ **NUEVO** CRUD listas + items por producto + asignación a cliente |
+| **Listas de Precios** | `ListasPrecioSection.jsx` + `listaPreciosService.ts` | ✅ CRUD listas + items por producto + asignación a cliente |
 | Dashboard Ejecutivo | `DashboardSection.jsx` | ✅ 8 KPIs + 2 gráficos (accesible desde Portal Finanzas) |
 | Portal Ventas | `portals/VentasPortal.jsx` | ✅ 6 KPIs + módulos |
 | Portal Compras | `portals/ComprasPortal.jsx` | ✅ 5 KPIs + módulos |
 | Portal Finanzas | `portals/FinanzasPortal.jsx` | ✅ 5 KPIs + posición neta CxC-CxP |
 | Portal Inventario | `portals/InventarioPortal.jsx` | ✅ 5 KPIs + barra salud stock |
-| Ventas (POS) | `VentasSection.jsx` + `NuevaVentaModal.jsx` | ✅ Multi-pago + check límite crédito |
+| Ventas (POS) | `VentasSection.jsx` + `NuevaVentaModal.jsx` | ✅ Multi-pago + check límite crédito + Moneda Paralela |
 | Notas de Crédito | `NotaCreditoModal.jsx` + `notaCreditoService.ts` | ✅ Devolución parcial/total + reversión stock/CC/caja |
 | Historial Ventas | `HistorialVentas.jsx` | ✅ Filtros avanzados + estado_pago CC + paginación 50/pág |
 | Comprobantes | `ComprobantePrintModal.jsx` | ✅ Toggle Comprobante / Remito sin precios |
 | Inventario | `ProductosSection.jsx` | ✅ Soft delete + import CSV + Análisis ABC |
 | Compras | `ComprasSection.jsx` | ✅ Funcional + asiento auto + paginación 50/pág |
-| Cotizaciones | `CotizacionesSection.jsx` | ✅ Funcional + convertir a venta |
+| Cotizaciones | `CotizacionesSection.jsx` | ✅ Funcional + convertir a venta + TC obligatorio |
 | Pedidos (OC Clientes) | `PedidosSection.jsx` | ✅ Workflow borrador→confirmado→en_preparacion→facturado |
 | Órdenes de Compra | `OrdenesCompraSection.jsx` | ✅ Workflow aprobación + 3-way match + realtime |
 | Caja | `CajaSection.jsx` + `CajaCierre.jsx` | ✅ Arqueo por denominaciones + tab Arqueos |
@@ -42,9 +42,11 @@
 | Contabilidad | `PlanCuentasSection.jsx` | ✅ 7 tabs: Plan/Asientos/Balance/LM/P&L/BalanceGeneral/Períodos |
 | Proveedores | `ProveedoresSection.jsx` + `proveedoresService.ts` | ✅ Ficha completa + Cta. Cte. + Historial OC + Pago inline |
 | Bancos | `CuentasBancariasSection.jsx` | ✅ Import CSV + conciliación auto/manual |
-| Reportes | `ReportesSection.jsx` | ✅ 5 reportes + paginación 100/pág + comparativa período anterior |
+| Reportes | `ReportesSection.jsx` | ✅ 5 reportes + Reporte de Paridad ARS/USD + paginación 100/pág |
+| **Tipo de Cambio** | `TipoCambioModal.jsx` + `tipoCambioService.js` | ✅ **NUEVO** TC diario centralizado + upsert por empresa/moneda/fecha |
+| **Reporte de Paridad** | `reportes/ReporteParidad.jsx` | ✅ **NUEVO** Comparativa ARS/USD por comprobante + CSV export |
 | Usuarios | `UsuariosSection.jsx` | ✅ Invitación + último acceso + activar/desactivar + preset Solo Caja |
-| Configuración | `ConfiguracionSection.jsx` | ✅ Logo + toggle aprobación OC + datos de ejemplo |
+| Configuración | `ConfiguracionSection.jsx` | ✅ Logo + toggle OC + datos de ejemplo + **Moneda Paralela SAP-style** |
 
 ---
 
@@ -71,6 +73,8 @@
 | `migrations/019_pedidos.sql` | pedidos + pedido_items + RLS + audit trigger | ✅ |
 | `migrations/020_notas_credito.sql` | tipo + estado_pago + comprobante_origen_id + motivo_nc en comprobantes | ✅ |
 | `migrations/021_listas_precio.sql` | listas_precio + lista_precio_items + lista_precio_id en clientes + cotizacion_id/pedido_id en comprobantes | ✅ |
+| **`create_tipos_cambio`** (SQL directo) | Tabla `tipos_cambio` — UNIQUE(empresa_id, moneda, fecha) + RLS via get_my_empresa_id() + índice | ✅ |
+| **`add_moneda_paralela`** (SQL directo) | Columnas `usa_tc_paralelo`/`moneda_paralela` en empresas + `monto_paralelo`/`tc_paralelo` en comprobantes, movimientos_caja, cuenta_corriente_movimientos, compras | ✅ |
 
 ### SQL adicional ejecutado directamente
 
@@ -79,6 +83,8 @@
 -- Trigger saldo cliente automático: fn_update_cliente_saldo
 -- Open Item: estado_pago en comprobantes + comprobante_id + metodo_cobro en movimientos
 -- Fix v_saldo_proveedores: WITH (security_invoker = true)
+-- create_tipos_cambio: tipos_cambio table + UNIQUE constraint + RLS + index
+-- add_moneda_paralela: 5 tables altered (empresas + 4 transaction tables)
 ```
 
 ---
@@ -118,6 +124,12 @@
 - **Lista de precios:** `listaPreciosService.getPrecioMapForCliente(clienteId)` retorna `{producto_id: precio}`. En `NuevaVentaModal`, llamar en `handleSelectClient()`. Items con precio de lista tienen `_precioLista: true` para el badge.
 - **Document Flow:** `documentFlowService.getFlowForComprobante(id)` retorna nodos origen/actual/NC/cobros. Usar `DocumentFlowPanel` pasando `comprobanteId` + `onNavigate`.
 - **Notificaciones:** `useNotifications()` retorna `{items, count, stockBajo, deudaVencida, ocPendientes, cajaSinCerrar, hasNotifications}`. Bug histórico `user_id→empresa_id` ya corregido.
+- **TC del día (fecha local):** usar `new Date().toLocaleDateString('en-CA')` para formato `YYYY-MM-DD` en hora local (NO `toISOString()` que da UTC y puede desfasar en UTC-3).
+- **TC upsert:** tabla `tipos_cambio` con UNIQUE(empresa_id, moneda, fecha). Siempre `upsert` con `onConflict: 'empresa_id,moneda,fecha'` — nunca insert directo.
+- **PGRST116:** el código de error Supabase "no rows returned" (`.single()` sin match) es ESPERADO cuando no hay TC del día — NO es un error real. Verificar `error.code !== 'PGRST116'` antes de `throw`.
+- **Moneda Paralela:** cuando `empresa.usa_tc_paralelo = true`, todas las transacciones deben guardar `monto_paralelo` + `tc_paralelo`. Usar `useTCParalelo()` hook. Si `tcMissing = true` → bloquear operación y abrir `TipoCambioModal`.
+- **TC sync en NuevaVentaModal:** cuando `moneda === monedaParalela`, el `tipoCambioTasa` del MonedaSelector se sincroniza automáticamente con `tcParalelo.setTC()` vía useEffect.
+- **Supabase client lazy:** `customSupabaseClient.js` exporta un getter lazy para evitar TDZ (Temporal Dead Zone) en el bundle de producción. Nunca instanciar Supabase en el top-level de un módulo con `BroadcastChannel`.
 
 ---
 
@@ -135,6 +147,54 @@ dashboard (Launchpad)
 - **Sidebar:** agrupado por área con headers de color. Headers navegan al portal del área.
 - **Servicio:** `src/services/portalService.ts` — 5 funciones async con Promise.all
 - **Panel Ejecutivo:** `DashboardSection.jsx` — accesible desde Portal Finanzas (`panel_ejecutivo`)
+
+---
+
+## Sistema TC del día centralizado (SAP-style)
+
+### Arquitectura
+- **Tabla:** `tipos_cambio` — columnas: `empresa_id`, `moneda`, `fecha` (YYYY-MM-DD), `tasa`, `user_id`, `updated_at`
+- **Constraint:** `UNIQUE(empresa_id, moneda, fecha)` — un solo TC por empresa/moneda/día
+- **Servicio:** `src/services/tipoCambioService.js`
+  - `getTodayTC(empresaId, moneda)` — busca TC de HOY (hora local Argentina)
+  - `upsertTC(empresaId, userId, moneda, tasa)` — crea o actualiza el TC del día
+- **Modal:** `src/components/ui/TipoCambioModal.jsx` — se abre automáticamente si falta TC. Props: `open`, `onOpenChange`, `moneda`, `onConfirm(tasa)`.
+- **MonedaSelector:** al cambiar moneda, auto-fetcha TC desde DB. Badge verde ✅ si encontrado, badge ámbar ⚠️ + "Cargar ahora" si falta. Prop `onTCMissingChange(bool)` para que el padre bloquee submit.
+
+### Flujo obligatorio
+1. Usuario selecciona moneda extranjera → MonedaSelector busca TC en DB
+2. Si TC existe → auto-rellena campo tasa (editable)
+3. Si TC falta → badge ámbar + botón "Cargar ahora" → abre TipoCambioModal → guarda + continúa
+4. Si usuario intenta confirmar sin TC → toast de error + submit bloqueado
+
+---
+
+## Sistema Moneda Paralela (SAP Parallel Currency)
+
+### Configuración
+- **Toggle en Configuración:** `empresa.usa_tc_paralelo` (bool) + `empresa.moneda_paralela` ('USD' | 'EUR' | 'BRL')
+- **Card en ConfiguracionSection:** Switch on/off + Select moneda + 3 info chips cuando activo
+
+### Hook `useTCParalelo()` — `src/hooks/useTCParalelo.js`
+```js
+const { enabled, monedaParalela, tcHoy, tcMissing, loading, calcParalelo, setTC } = useTCParalelo();
+// tcMissing = enabled && settingsReady && !loading && tcHoy === null
+// calcParalelo(monto, monedaOp, tasaOp) → monto en moneda paralela | null
+```
+
+### Cobertura de módulos
+Cuando `enabled = true`, los siguientes módulos guardan `monto_paralelo` + `tc_paralelo`:
+- **Ventas (NuevaVentaModal):** banner naranja si TC ARS→USD falta; badge verde si cargado
+- **Cotizaciones:** bloqueo TC si moneda extranjera
+- **Caja, Cuenta Corriente, Compras:** columnas ready en DB (implementación pendiente UI)
+
+### Reporte de Paridad — `src/components/reportes/ReporteParidad.jsx`
+- Filtro por rango de fechas
+- 4 KPIs: Total ARS · Total USD equiv. · TC promedio ponderado · Cobertura %
+- Tabla: Nro | Fecha | Cliente | Forma Pago | Estado | Total ARS | TC | Equiv. USD
+- Cálculo retroactivo para comprobantes sin `monto_paralelo` (usa histórico de `tipos_cambio`)
+- Export CSV con BOM para Excel (`﻿`)
+- Accesible desde ReportesSection (card deshabilitada si `usa_tc_paralelo = false`)
 
 ---
 
@@ -163,13 +223,17 @@ dashboard (Launchpad)
 4. ✅ **Recepción parcial OC** — ya estaba implementado; fix TanStack Query v5 `onSuccess→useEffect` en `OrdenesCompraSection`
 
 ### ⚫ Fase 7 — EN CURSO
-- ✅ **Deploy Vercel** — https://kairox-gestion.vercel.app · `vercel.json` + `vite.config.prod.js` · env vars configuradas
-- ⏳ **ARCA/AFIP** + Libro IVA
-- ⏳ **Membresías** / MercadoPago · Modelo de licencias Starter/Pro/Business
+
+1. ✅ **Deploy Vercel** — https://kairox-gestion.vercel.app · `vercel.json` + `vite.config.prod.js` · env vars configuradas
+2. ✅ **Estabilización producción** — fix TDZ crash (framer-motion + BroadcastChannel), Google Translate DOM, stale-session 403
+3. ✅ **TC del día centralizado** — tabla `tipos_cambio` + `TipoCambioModal` + `MonedaSelector` reescrito + bloqueo operaciones
+4. ✅ **Moneda Paralela SAP-style** — toggle config + hook `useTCParalelo` + `monto_paralelo`/`tc_paralelo` en 4 tablas + Reporte Paridad
+5. ⏳ **ARCA/AFIP** + Libro IVA
+6. ⏳ **Membresías** / MercadoPago · Modelo de licencias Starter/Pro/Business
 
 #### Pendientes Fase 7
 - Configurar Supabase Auth URLs (Site URL + Redirect URLs → `https://kairox-gestion.vercel.app/**`)
-- Corregir GitHub auto-deploy: reconectar Vercel a `lbanegas96/kairox-gestion` (actualmente apunta a `Kairox-IA/gestión de Kairox`)
+- Extender TC obligatorio a módulos Caja + Cuenta Corriente + Compras (columnas DB ya listas)
 - Investigar error 400 en consola (query Supabase con timestamp malformado — no bloquea funcionalidad)
 
 ---
@@ -187,14 +251,16 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 
 ## Pendientes de la tabla SAP S/4HANA
 
-### 🟡 Media prioridad (Fase 6)
+### ✅ Completados
 
-| # | Feature | Referente SAP | Notas |
+| # | Feature | Referente SAP | Estado |
 |---|---|---|---|
-| 1 | Lista de precios por cliente | SD Condition Types | Diferenciador vs Xubio/Colppy |
-| 2 | Notificaciones / Inbox accionable | SAP My Inbox | Stub de campana ya existe en Header |
-| 3 | Document Flow visual | SD Document Flow | Panel lateral en cada modal de detalle |
-| 4 | Recepción parcial de OC | MM Partial GR | Columna `cantidad_recibida` en OC items |
+| 1 | Lista de precios por cliente | SD Condition Types | ✅ Fase 6 |
+| 2 | Notificaciones / Inbox accionable | SAP My Inbox | ✅ Fase 6 |
+| 3 | Document Flow visual | SD Document Flow | ✅ Fase 6 |
+| 4 | Recepción parcial de OC | MM Partial GR | ✅ Fase 6 |
+| 10 | TC del día centralizado | FI Exchange Rate Entry | ✅ Fase 7 |
+| 11 | Moneda paralela (Parallel Currency) | FI Company Code Global Parameters | ✅ Fase 7 |
 
 ### 🟢 Baja prioridad (post-ARCA)
 
@@ -209,6 +275,30 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-08 — TC del día + Moneda Paralela + Bugs críticos producción
+- **Bugs críticos corregidos:**
+  - `acf8363` — Supabase client lazy (evita TDZ por BroadcastChannel en bundle)
+  - `76b0ab1` — Remove framer-motion (TDZ crash en producción)
+  - `6454d70` — Fix TDZ `calculateTotal before initialization`
+  - `1945a51` — Fix `removeChild` DOM error en NuevaVentaModal product dropdown
+  - `77997a1` — Defer `focus()` call after React DOM commit
+  - `806f428` — Fix Google Translate DOM corruption (removeChild/insertBefore)
+  - `a57cf76` — Harden sale flow contra stale-session 403 + silent failures
+  - `85231c1` — Fix CC sale status (Pendiente no Pagada) + MonedaSelector input + cotizaciones product search
+- **TC del día centralizado** (`1260307`):
+  - Tabla `tipos_cambio` + migration `create_tipos_cambio`
+  - `tipoCambioService.js` — `getTodayTC()` + `upsertTC()` (fecha local Argentina)
+  - `TipoCambioModal.jsx` — dialog auto-open, autoFocus, Enter key
+  - `MonedaSelector.jsx` — reescrito: auto-fetch TC, badge OK/Missing, prop `onTCMissingChange`
+  - `CotizacionesSection.jsx` — integra TC obligatorio
+- **Moneda Paralela SAP-style** (`576a0d8`):
+  - Migration `add_moneda_paralela` — 5 tablas alteradas
+  - `useTCParalelo.js` — hook empresa settings + TC diario + `calcParalelo()` + `tcMissing`
+  - `ConfiguracionSection.jsx` — card "Moneda Paralela" con toggle + Select moneda + info chips
+  - `NuevaVentaModal.jsx` — banner TC paralelo, bloqueo ARS si tcMissing, guarda `monto_paralelo`/`tc_paralelo`
+  - `ReporteParidad.jsx` — reporte completo ARS/USD con cálculo retroactivo + CSV export
+  - `ReportesSection.jsx` — tarjeta Reporte Paridad, disabled si `!tcParaleloEnabled`
 
 ### Sesión 2026-06-07 — Deploy Vercel (Fase 7 inicio)
 - `vercel.json` + `vite.config.prod.js` — config producción sin plugins Horizons
@@ -263,6 +353,6 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 
 | # | Proyecto | Por qué al final |
 |---|---|---|
-| 1 | **Deploy en Vercel** | Requiere dominio propio + variables de entorno de producción |
+| 1 | **Deploy en Vercel** | ✅ Completado — https://kairox-gestion.vercel.app |
 | 2 | **Membresías / Stripe o MercadoPago** | Requiere ARCA primero + modelo de precios validado |
 | 3 | **Modelo de licencias (Starter/Pro/Business)** | Requiere primeros clientes |
