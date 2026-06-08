@@ -59,6 +59,9 @@ function CotizacionesSection() {
   const [convertirCot, setConvertirCot] = useState(null);  // cotización completa para convertir
   const [showVentaModal, setShowVentaModal] = useState(false);
 
+  // Bloqueo por tipo de cambio faltante
+  const [tcMissing, setTcMissing] = useState(false);
+
   const empresaId = user?.empresa_id;
 
   const { data: listData, isLoading } = useQuery({
@@ -124,6 +127,7 @@ function CotizacionesSection() {
   const resetForm = () => {
     setForm({ cliente_nombre: '', notas: '', condiciones_pago: 'Pago a 30 días', fecha_vencimiento: '', moneda: 'ARS', tipoCambioTasa: 1 });
     setItems([{ ...EMPTY_ITEM }]);
+    setTcMissing(false);
   };
 
   const searchProducto = async (idx, q) => {
@@ -160,6 +164,14 @@ function CotizacionesSection() {
     e.preventDefault();
     if (items.every(i => !i.descripcion)) {
       toast({ title: 'Agrega al menos un ítem', variant: 'destructive' }); return;
+    }
+    if (form.moneda !== 'ARS' && tcMissing) {
+      toast({
+        title: 'Falta el tipo de cambio del día',
+        description: `Cargá la tasa de ${form.moneda} para hoy antes de guardar la cotización.`,
+        variant: 'destructive',
+      });
+      return;
     }
     const validItems = items.filter(i => i.descripcion && i.cantidad > 0 && i.precio_unitario > 0);
     createMutation.mutate({
@@ -339,6 +351,7 @@ function CotizacionesSection() {
                     tasa={form.tipoCambioTasa}
                     onMonedaChange={v => setForm(f => ({ ...f, moneda: v, tipoCambioTasa: v === 'ARS' ? 1 : f.tipoCambioTasa }))}
                     onTasaChange={v => setForm(f => ({ ...f, tipoCambioTasa: v }))}
+                    onTCMissingChange={setTcMissing}
                   />
                 </div>
               </CardContent>
@@ -405,7 +418,12 @@ function CotizacionesSection() {
 
             <div className="flex gap-3 justify-end">
               <Button type="button" variant="outline" onClick={resetForm} className="dark:border-slate-700 dark:text-slate-300">Limpiar</Button>
-              <Button type="submit" disabled={createMutation.isPending} className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Button
+                type="submit"
+                disabled={createMutation.isPending || (form.moneda !== 'ARS' && tcMissing)}
+                className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                title={form.moneda !== 'ARS' && tcMissing ? `Cargá el tipo de cambio ${form.moneda} del día para continuar` : undefined}
+              >
                 {createMutation.isPending ? 'Guardando...' : 'Guardar Cotización'}
               </Button>
             </div>

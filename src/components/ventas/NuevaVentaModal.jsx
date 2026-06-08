@@ -29,6 +29,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   const [moneda, setMoneda] = useState('ARS');
   const [tipoCambioTasa, setTipoCambioTasa] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [tcMissing, setTcMissing] = useState(false);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [lastComprobante, setLastComprobante] = useState(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
@@ -99,6 +100,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     setMethodAmounts({});
     setMoneda('ARS');
     setTipoCambioTasa(1);
+    setTcMissing(false);
     setProductSearch('');
     setLoading(false);
     setPrecioMap({});
@@ -236,6 +238,15 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   const handleConfirmSale = async () => {
     if (cart.length === 0) return toast({ title: "Carrito vacío", variant: "destructive" });
     if (isCC && !selectedClient) return toast({ title: "Cliente requerido para Cuenta Corriente", variant: "destructive" });
+
+    // Bloquear si la moneda es extranjera y no se cargó el TC del día
+    if (moneda !== 'ARS' && tcMissing) {
+      return toast({
+        title: 'Falta el tipo de cambio del día',
+        description: `Cargá la tasa de ${moneda} para hoy antes de confirmar la venta.`,
+        variant: 'destructive',
+      });
+    }
 
     // ── Validar que la sesión siga viva ANTES de insertar ────────────────────
     // Si el token expiró, las inserciones con RLS (empresa_id) fallan con 403 y
@@ -492,6 +503,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
                       tasa={tipoCambioTasa}
                       onMonedaChange={v => { setMoneda(v); if (v === 'ARS') setTipoCambioTasa(1); }}
                       onTasaChange={setTipoCambioTasa}
+                      onTCMissingChange={setTcMissing}
                     />
                   </div>
                </div>
@@ -577,7 +589,22 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
                    </div>
                  )}
                </div>
-               <div className="mt-auto"><Button className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 text-white dark:bg-green-700 dark:hover:bg-green-600" disabled={loading || cart.length === 0} onClick={handleConfirmSale}>{loading ? <Loader2 className="animate-spin mr-2" /> : <Check className="mr-2" />} Confirmar Venta</Button></div>
+               <div className="mt-auto">
+                 <Button
+                   className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 text-white dark:bg-green-700 dark:hover:bg-green-600 disabled:opacity-50"
+                   disabled={loading || cart.length === 0 || (moneda !== 'ARS' && tcMissing)}
+                   onClick={handleConfirmSale}
+                   title={moneda !== 'ARS' && tcMissing ? `Cargá el tipo de cambio ${moneda} del día para continuar` : undefined}
+                 >
+                   {loading ? <Loader2 className="animate-spin mr-2" /> : <Check className="mr-2" />}
+                   Confirmar Venta
+                 </Button>
+                 {moneda !== 'ARS' && tcMissing && (
+                   <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-1.5">
+                     ⚠ Cargá el TC del día para habilitar la venta
+                   </p>
+                 )}
+               </div>
             </div>
           </div>
         </DialogContent>
