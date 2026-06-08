@@ -336,9 +336,10 @@ const ProductosSection = () => {
 
     try {
       const categoryId = await getCategoryIdFromName(newProduct.categoria_nombre);
+      const autoSku = newProduct.codigo_sku?.trim() || `SKU-${Date.now().toString(36).toUpperCase()}`;
       const payload = {
         nombre: newProduct.nombre,
-        codigo_sku: newProduct.codigo_sku,
+        codigo_sku: autoSku,
         user_id: user.id, 
         empresa_id: user.empresa_id,
         costo_compra: parseFloat(newProduct.costo_compra) || 0,
@@ -362,7 +363,10 @@ const ProductosSection = () => {
       await fetchProducts(); 
     } catch (error) {
       console.error("Create product error:", error);
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+      const msg = error.message?.includes('productos_empresa_id_codigo_sku_key')
+        ? 'Ya existe un producto con ese código SKU. Usá uno diferente o dejá el campo vacío para generar uno automático.'
+        : error.message;
+      toast({ title: "Error", description: msg, variant: "destructive" });
     } finally {
       setIsSubmitting(false); 
     }

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { tipoCambioService } from '@/services/tipoCambioService';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 import { useToast } from '@/components/ui/use-toast';
 import { TrendingUp, Loader2 } from 'lucide-react';
 
@@ -26,7 +27,8 @@ export function TipoCambioModal({ open, onOpenChange, moneda, onConfirm }) {
   const [saving, setSaving] = useState(false);
 
   const handleConfirm = async () => {
-    const t = parseFloat(tasa);
+    // Acepta cualquier formato: 1668.21 / 1668,21 / 1.668,21 / 1,668.21
+    const t = parseNumberLocale(tasa);
     if (!t || t <= 0) {
       toast({ title: 'Ingresá una tasa válida mayor a cero', variant: 'destructive' });
       return;
@@ -81,12 +83,15 @@ export function TipoCambioModal({ open, onOpenChange, moneda, onConfirm }) {
             1 {moneda} = ? ARS
           </Label>
           <Input
-            type="number"
-            min="0"
-            step="any"
-            placeholder="ej. 1250"
+            type="text"
+            inputMode="decimal"
+            placeholder="ej. 1446.50"
             value={tasa}
-            onChange={e => setTasa(e.target.value)}
+            onChange={e => {
+              // Permitir solo dígitos, coma y punto
+              const v = e.target.value.replace(/[^\d.,]/g, '');
+              setTasa(v);
+            }}
             onKeyDown={e => e.key === 'Enter' && !saving && handleConfirm()}
             autoFocus
             className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-lg h-12"

@@ -25,6 +25,28 @@ export function montoEnARS(amount, moneda, tasa) {
   return convertToARS(amount, moneda, tasa);
 }
 
+/**
+ * Parsea un número en cualquier formato local (es-AR o en-US).
+ * El ÚLTIMO separador (. o ,) se trata como decimal; el resto como miles.
+ *   "1668.21"   → 1668.21
+ *   "1668,21"   → 1668.21
+ *   "1.668,21"  → 1668.21  (formato español)
+ *   "1,668.21"  → 1668.21  (formato inglés)
+ *   "1668"      → 1668
+ */
+export function parseNumberLocale(input) {
+  if (input === null || input === undefined || input === '') return NaN;
+  const s = String(input).trim().replace(/\s/g, '');
+  if (!s) return NaN;
+  const lastDot = s.lastIndexOf('.');
+  const lastComma = s.lastIndexOf(',');
+  const decSep = lastDot > lastComma ? '.' : (lastComma > -1 ? ',' : null);
+  if (!decSep) return parseFloat(s.replace(/[.,]/g, ''));
+  const intPart = s.slice(0, decSep === '.' ? lastDot : lastComma).replace(/[.,]/g, '');
+  const decPart = s.slice((decSep === '.' ? lastDot : lastComma) + 1);
+  return parseFloat(`${intPart || '0'}.${decPart}`);
+}
+
 /** True si la moneda no es ARS */
 export function isMonedaExtranjera(moneda) {
   return moneda !== 'ARS';

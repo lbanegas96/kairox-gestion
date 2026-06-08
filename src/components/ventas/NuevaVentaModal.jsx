@@ -154,7 +154,14 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   }, [moneda, tipoCambioTasa, tcParalelo.enabled, tcParalelo.monedaParalela]);
 
   // ── IMPORTANTE: definir calculateTotal ANTES de usarla para evitar TDZ ────
+  // Total SIEMPRE en ARS (los productos están cargados en ARS).
   const calculateTotal = () => cart.reduce((sum, item) => sum + (item.precio_venta * item.cantidad), 0);
+  // Total convertido a la moneda elegida (solo para mostrar al cliente).
+  const totalEnMonedaSeleccionada = () => {
+    const totalARS = calculateTotal();
+    if (moneda === 'ARS' || !tipoCambioTasa || tipoCambioTasa <= 0) return totalARS;
+    return totalARS / tipoCambioTasa;
+  };
 
   // ── Helpers multi-pago ──────────────────────────────────────────────────────
   const isCC = selectedMethods.has('Cuenta Corriente');
@@ -275,13 +282,12 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     let tcParaleloFinalValue = null;
     if (tcParalelo.enabled) {
       if (moneda === tcParalelo.monedaParalela) {
-        // La operación es en la moneda paralela → el monto ya está en esa moneda
-        montoParalelo = calculateTotal();
+        // La operación se muestra en la moneda paralela → convertir total ARS a esa moneda
+        montoParalelo = tipoCambioTasa > 0 ? calculateTotal() / tipoCambioTasa : calculateTotal();
         tcParaleloFinalValue = tipoCambioTasa;
       } else if (tcParalelo.tcHoy) {
-        // Operación en ARS (u otra): convertir al paralelo usando tcHoy
-        const inARS = moneda === 'ARS' ? calculateTotal() : calculateTotal() * tipoCambioTasa;
-        montoParalelo = inARS / tcParalelo.tcHoy;
+        // calculateTotal() YA está en ARS → solo dividir por tcHoy para obtener paralelo
+        montoParalelo = calculateTotal() / tcParalelo.tcHoy;
         tcParaleloFinalValue = tcParalelo.tcHoy;
       }
     }
@@ -494,8 +500,8 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-            <div className="flex-1 flex flex-col border-r border-slate-200 dark:border-slate-800">
+          <div className="flex-1 overflow-hidden flex flex-col md:flex-row min-h-0">
+            <div className="flex-1 flex flex-col min-h-0 border-r border-slate-200 dark:border-slate-800">
               <div ref={searchWrapperRef} className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 relative">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -512,7 +518,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
                   </div>
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 dark:bg-slate-950">
+              <div className="flex-1 overflow-y-auto p-4 dark:bg-slate-950 min-h-[200px]">
                 {cart.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-slate-400"><Package className="h-16 w-16 mb-4 opacity-20" /><p>El carrito está vacío</p></div>
                 ) : (
@@ -543,7 +549,12 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
 
             <div className="w-full md:w-96 bg-slate-50 dark:bg-slate-900/30 p-6 flex flex-col gap-6 overflow-y-auto border-l border-slate-200 dark:border-slate-800">
                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border kairox-border">
-                  <div className="flex justify-between items-center text-xl font-bold pt-2 dark:text-white"><span>Total</span><span className="text-blue-600 dark:text-[#00D4FF]">{formatCurrency(calculateTotal(), moneda)}</span></div>
+                  <div className="flex justify-between items-center text-xl font-bold pt-2 dark:text-white"><span>Total</span><span className="text-blue-600 dark:text-[#00D4FF]">{formatCurrency(totalEnMonedaSeleccionada(), moneda)}</span></div>
+                  {moneda !== 'ARS' && tipoCambioTasa > 0 && (
+                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 text-right">
+                      Equivale a {formatCurrency(calculateTotal(), 'ARS')} (TC ${Number(tipoCambioTasa).toLocaleString('es-AR')})
+                    </div>
+                  )}
                   <div className="mt-3">
                     <MonedaSelector
                       moneda={moneda}

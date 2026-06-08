@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, FileText, Search, Eye, Trash2, CheckCircle, XCircle,
@@ -51,6 +51,13 @@ function CotizacionesSection() {
   const [items, setItems] = useState([{ ...EMPTY_ITEM }]);
   const [prodSearch, setProdSearch] = useState({});
   const [prodResults, setProdResults] = useState({});
+  const [prodOpen, setProdOpen] = useState({});  // qué fila tiene el dropdown abierto
+  const [allProducts, setAllProducts] = useState([]);
+
+  // Clientes para autocompletar
+  const [allClientes, setAllClientes] = useState([]);
+  const [showClienteDropdown, setShowClienteDropdown] = useState(false);
+  const clienteWrapperRef = useRef(null);
 
   // Detail modal
   const [viewId, setViewId] = useState(null);
@@ -63,6 +70,31 @@ function CotizacionesSection() {
   const [tcMissing, setTcMissing] = useState(false);
 
   const empresaId = user?.empresa_id;
+
+  // Cargar productos y clientes al montar (después de tener empresaId)
+  useEffect(() => {
+    if (!empresaId) return;
+    (async () => {
+      const { data: prods } = await supabase.from('productos').select('id, nombre, precio_venta, unidad_medida').eq('empresa_id', empresaId).eq('activo', true).order('nombre').limit(200);
+      setAllProducts(prods ?? []);
+      const { data: clis } = await supabase.from('clientes').select('id, nombre').eq('empresa_id', empresaId).order('nombre').limit(500);
+      setAllClientes(clis ?? []);
+    })();
+  }, [empresaId]);
+
+  // Cerrar dropdowns al hacer click afuera
+  useEffect(() => {
+    const onClick = (e) => {
+      if (clienteWrapperRef.current && !clienteWrapperRef.current.contains(e.target)) {
+        setShowClienteDropdown(false);
+      }
+      if (!e.target.closest('[data-prod-row]')) {
+        setProdOpen({});
+      }
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
 
   const { data: listData, isLoading } = useQuery({
     queryKey: COTIZACIONES_KEYS.list(empresaId, { estado: estadoFiltro, page }),
@@ -130,11 +162,13 @@ function CotizacionesSection() {
     setTcMissing(false);
   };
 
-  const searchProducto = async (idx, q) => {
+  const searchProducto = (idx, q) => {
     setProdSearch(prev => ({ ...prev, [idx]: q }));
-    if (!q || q.length < 2) { setProdResults(prev => ({ ...prev, [idx]: [] })); return; }
-    const { data } = await supabase.from('productos').select('id, nombre, precio_venta, unidad_medida').eq('empresa_id', empresaId).eq('activo', true).ilike('nombre', `%${q}%`).limit(5);
-    setProdResults(prev => ({ ...prev, [idx]: data ?? [] }));
+    const query = (q ?? '').toLowerCase().trim();
+    const filtered = query
+      ? allProducts.filter(p => p.nombre.toLowerCase().includes(query)).slice(0, 10)
+      : allProducts.slice(0, 10);
+    setProdResults(prev => ({ ...prev, [idx]: filtered }));
   };
 
   const selectProducto = (idx, prod) => {
@@ -143,6 +177,7 @@ function CotizacionesSection() {
     setItems(updated);
     setProdSearch(prev => ({ ...prev, [idx]: prod.nombre }));
     setProdResults(prev => ({ ...prev, [idx]: [] }));
+    setProdOpen(prev => ({ ...prev, [idx]: false }));
   };
 
   const updateItem = (idx, field, value) => {
@@ -325,13 +360,65 @@ function CotizacionesSection() {
 
         {/* NUEVA COTIZACIÓN */}
         <TabsContent value="nueva">
+          {/* Opciones globales de unidad de medida para los <input list="..."> de los ítems */}
+          <datalist id="unidades-medida">
+            <option value="un" />
+            <option value="kg" />
+            <option value="g" />
+            <option value="l" />
+            <option value="ml" />
+            <option value="m" />
+            <option value="cm" />
+            <option value="mm" />
+            <option value="m²" />
+            <option value="m³" />
+            <option value="caja" />
+            <option value="paquete" />
+            <option value="docena" />
+            <option value="par" />
+            <option value="hora" />
+            <option value="día" />
+            <option value="servicio" />
+          </datalist>
           <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl">
             <Card className="dark:bg-slate-950 dark:border-slate-800">
               <CardHeader><CardTitle className="text-base dark:text-white">Datos del Cliente</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div className="space-y-2 relative" ref={clienteWrapperRef}>
                   <Label className="dark:text-white">Nombre del Cliente</Label>
-                  <Input value={form.cliente_nombre} onChange={e => setForm(f => ({ ...f, cliente_nombre: e.target.value }))} placeholder="Nombre del cliente o empresa" className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
+                  <Input
+                    value={form.cliente_nombre}
+                    onChange={e => { setForm(f => ({ ...f, cliente_nombre: e.target.value })); setShowClienteDropdown(true); }}
+                    onFocus={() => setShowClienteDropdown(true)}
+                    placeholder="Buscar cliente existente o escribir uno nuevo"
+                    className="dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+                    autoComplete="off"
+                  />
+                  {showClienteDropdown && (() => {
+                    const q = form.cliente_nombre.toLowerCase().trim();
+                    const filtered = q ? allClientes.filter(c => c.nombre.toLowerCase().includes(q)) : allClientes;
+                    const shown = filtered.slice(0, 8);
+                    if (shown.length === 0) return null;
+                    return (
+                      <div className="absolute top-full left-0 right-0 z-30 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl mt-1 max-h-56 overflow-y-auto">
+                        {shown.map(c => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 dark:text-slate-200"
+                            onClick={() => { setForm(f => ({ ...f, cliente_nombre: c.nombre })); setShowClienteDropdown(false); }}
+                          >
+                            {c.nombre}
+                          </button>
+                        ))}
+                        {q && !allClientes.some(c => c.nombre.toLowerCase() === q) && (
+                          <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 italic">
+                            O tipeá un nombre nuevo y se guardará como texto libre.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="space-y-2">
                   <Label className="dark:text-white">Condiciones de Pago</Label>
@@ -367,19 +454,22 @@ function CotizacionesSection() {
               <CardContent className="space-y-3">
                 {items.map((item, idx) => (
                   <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                    <div className="col-span-5 space-y-1 relative">
+                    <div className="col-span-5 space-y-1 relative" data-prod-row>
                       <Label className="text-xs dark:text-slate-400">Descripción / Producto</Label>
                       <Input
                         value={prodSearch[idx] ?? item.descripcion}
-                        onChange={e => { searchProducto(idx, e.target.value); updateItem(idx, 'descripcion', e.target.value); }}
+                        onChange={e => { searchProducto(idx, e.target.value); updateItem(idx, 'descripcion', e.target.value); setProdOpen(prev => ({ ...prev, [idx]: true })); }}
+                        onFocus={() => { searchProducto(idx, prodSearch[idx] ?? item.descripcion ?? ''); setProdOpen(prev => ({ ...prev, [idx]: true })); }}
                         placeholder="Buscar producto o escribir descripción"
                         className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm"
+                        autoComplete="off"
                       />
-                      {(prodResults[idx] ?? []).length > 0 && (
-                        <div className="absolute top-full left-0 right-0 z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl mt-1 max-h-40 overflow-y-auto">
+                      {prodOpen[idx] && (prodResults[idx] ?? []).length > 0 && (
+                        <div className="absolute top-full left-0 right-0 z-30 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl mt-1 max-h-56 overflow-y-auto">
                           {prodResults[idx].map(p => (
-                            <button key={p.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 dark:text-slate-200" onClick={() => selectProducto(idx, p)}>
-                              {p.nombre} <span className="text-slate-400 text-xs ml-2">${p.precio_venta}</span>
+                            <button key={p.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 dark:text-slate-200 flex justify-between items-center" onClick={() => selectProducto(idx, p)}>
+                              <span className="truncate">{p.nombre}</span>
+                              <span className="text-slate-400 text-xs ml-2 flex-shrink-0">${Number(p.precio_venta ?? 0).toLocaleString('es-AR')}</span>
                             </button>
                           ))}
                         </div>
@@ -387,11 +477,17 @@ function CotizacionesSection() {
                     </div>
                     <div className="col-span-2 space-y-1">
                       <Label className="text-xs dark:text-slate-400">Cantidad</Label>
-                      <Input type="number" min="0.001" step="0.001" value={item.cantidad} onChange={e => updateItem(idx, 'cantidad', e.target.value)} className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm" />
+                      <Input type="number" min="0" step="1" value={item.cantidad} onChange={e => updateItem(idx, 'cantidad', e.target.value)} className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm" />
                     </div>
                     <div className="col-span-2 space-y-1">
                       <Label className="text-xs dark:text-slate-400">Unidad</Label>
-                      <Input value={item.unidad_medida} onChange={e => updateItem(idx, 'unidad_medida', e.target.value)} placeholder="un" className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm" />
+                      <Input
+                        list="unidades-medida"
+                        value={item.unidad_medida}
+                        onChange={e => updateItem(idx, 'unidad_medida', e.target.value)}
+                        placeholder="un"
+                        className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm"
+                      />
                     </div>
                     <div className="col-span-2 space-y-1">
                       <Label className="text-xs dark:text-slate-400">Precio Unit.</Label>

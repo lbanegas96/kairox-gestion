@@ -194,7 +194,7 @@ function OrdenesCompraSection() {
     updated[idx] = { ...updated[idx], _prodSearch: q, descripcion: q };
     setItems(updated);
     if (!q || q.length < 2) { setProdResults(p => ({ ...p, [idx]: [] })); return; }
-    const { data } = await supabase.from('productos').select('id, nombre, costo_compra, unidad_medida').eq('user_id', empresaId).ilike('nombre', `%${q}%`).limit(6);
+    const { data } = await supabase.from('productos').select('id, nombre, costo_compra, unidad_medida').eq('empresa_id', empresaId).ilike('nombre', `%${q}%`).limit(6);
     setProdResults(p => ({ ...p, [idx]: data ?? [] }));
   };
 
