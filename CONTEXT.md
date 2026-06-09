@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-09 (noche) — 20 bugs corregidos durante testing manual completo de TODOS los módulos: parser numérico es-AR estricto, datos TC corruptos arreglados en DB, RPC seed_plan_cuentas SECURITY DEFINER, fix tenant_id legacy en PlanCuentas, logo en Header, autocompletes, sentinels Radix, CORS edge functions (pendiente deploy), y más
+**Última actualización:** 2026-06-09 (PM·3) — Aging Open Item Management por comprobante individual (eliminación de falsos positivos definitiva); deploy Edge Functions CORS (create-user v3, invite-user v3, delete-user v2); fix timezone/timestamp en useNotifications, ReporteParidad y tipoCambioService
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -126,7 +126,9 @@
 - **Lista de precios:** `listaPreciosService.getPrecioMapForCliente(clienteId)` retorna `{producto_id: precio}`. En `NuevaVentaModal`, llamar en `handleSelectClient()`. Items con precio de lista tienen `_precioLista: true` para el badge.
 - **Document Flow:** `documentFlowService.getFlowForComprobante(id)` retorna nodos origen/actual/NC/cobros. Usar `DocumentFlowPanel` pasando `comprobanteId` + `onNavigate`.
 - **Notificaciones:** `useNotifications()` retorna `{items, count, stockBajo, deudaVencida, ocPendientes, cajaSinCerrar, hasNotifications}`. Bug histórico `user_id→empresa_id` ya corregido.
-- **TC del día (fecha local):** usar `new Date().toLocaleDateString('en-CA')` para formato `YYYY-MM-DD` en hora local (NO `toISOString()` que da UTC y puede desfasar en UTC-3).
+- **TC del día (fecha local):** usar `getTodayAR()` de `dateUtils.js` para formato `YYYY-MM-DD` en hora Argentina (NO `toISOString().slice(0,10)` que da UTC y puede desfasar en UTC-3).
+- **AR-local-as-UTC:** el sistema almacena timestamps como "AR-local-as-UTC" — medianoche AR = `T00:00:00Z`, NO `T03:00:00Z`. Para filtros TIMESTAMPTZ usar `getNowAR().getTime()`, nunca `Date.now()`. Para construir ISO de inicio/fin de día usar `` `${date}T00:00:00.000Z` ``, nunca `new Date(\`${date}T00:00:00\`).toISOString()` (agrega tz del browser).
+- **DATE vs TIMESTAMPTZ:** columnas `fecha` en `tipos_cambio`, `asientos_contables`, `extracto_lineas`, `extractos_bancarios`, `facturas_proveedor`, `pedidos.fecha_entrega` son DATE → reciben YYYY-MM-DD. El resto (`movimientos_caja.fecha`, `comprobantes.fecha`, `caja_sesiones.apertura_fecha`, etc.) son TIMESTAMPTZ → reciben ISO completo alineado con AR-local-as-UTC.
 - **TC upsert:** tabla `tipos_cambio` con UNIQUE(empresa_id, moneda, fecha). Siempre `upsert` con `onConflict: 'empresa_id,moneda,fecha'` — nunca insert directo.
 - **PGRST116:** el código de error Supabase "no rows returned" (`.single()` sin match) es ESPERADO cuando no hay TC del día — NO es un error real. Verificar `error.code !== 'PGRST116'` antes de `throw`.
 - **Moneda Paralela:** cuando `empresa.usa_tc_paralelo = true`, todas las transacciones deben guardar `monto_paralelo` + `tc_paralelo`. Usar `useTCParalelo()` hook. Si `tcMissing = true` → bloquear operación y abrir `TipoCambioModal`.
@@ -238,7 +240,7 @@ Cuando `enabled = true`, los siguientes módulos guardan `monto_paralelo` + `tc_
 #### Pendientes Fase 7
 - Configurar Supabase Auth URLs (Site URL + Redirect URLs → `https://kairox-gestion.vercel.app/**`)
 - Extender TC obligatorio a módulos Caja + Cuenta Corriente + Compras (columnas DB ya listas)
-- Investigar error 400 en consola (query Supabase con timestamp malformado — no bloquea funcionalidad; DISTINTO al bug de lista_precio_items que ya fue corregido)
+- ✅ ~~Investigar error 400 en consola~~ — **RESUELTO** sesión PM·3: auditados todos los usos de `toISOString()` contra columnas DATE; fixes en `useNotifications.js` (getNowAR), `ReporteParidad.jsx` (AR-local-as-UTC), `tipoCambioService.ts` (import + getTodayAR)
 - **Tests manuales pendientes:**
   - POS: hacer venta y verificar stock decrementa correctamente (RPC 022)
   - CC cobro Transferencia con caja cerrada → debe aprobar
@@ -287,6 +289,66 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-09 (PM·3) — Aging Open Item por comprobante + Deploy Edge Functions CORS + Fix timezone/timestamp
+**Branch:** `master` (commits: `5b19a59`, `16f96c6`)
+
+#### 1. Aging refactor — Open Item Management por comprobante individual (commit `5b19a59`)
+**Archivo:** `src/components/sections/CuentaCorrienteSection.jsx`
+
+**Problema:** el `fetchAgingData()` anterior tomaba el movimiento DEBE más antiguo por cliente (incluso si ya había sido cancelado), lo que causaba falsos positivos: clientes con deuda vieja pagada y deuda nueva reciente aparecían en banda +90 días incorrectamente.
+
+**Solución (SAP FI Open Item Management):** cada fila de la tabla = un `comprobante` con `estado_pago = 'pendiente'`, `tipo = 'venta'`, y `cliente_id IS NOT NULL`. La antigüedad se calcula desde `comprobante.fecha` hasta `getNowAR()`. Cada comprobante tiene su propia banda y color.
+
+**Cambios:**
+- `fetchAgingData()` completamente reescrito: query directa a `comprobantes` con filtros `estado_pago='pendiente'`, `tipo='venta'`, `.not('cliente_id', 'is', null)`.
+- `agingBandas` useMemo: suma `comp.total` (no `c.saldo_actual`), cuenta comprobantes no clientes.
+- Cards UI: "comprobante(s)" en lugar de "cliente(s)".
+- Tabla: 7 columnas — Comprobante | Cliente | Monto | Fecha | Antigüedad | Banda | Acciones.
+- Tbody: key=`comp.comprobante_id`, muestra `formatDateAR(comp.fecha)`, `comp.cliente_nombre`, `comp.total`.
+- Botón ojo: `setSelectedClient({ id: comp.cliente_id, nombre: comp.cliente_nombre })`.
+- `colSpan` actualizado 5→7 en skeleton y empty state.
+
+#### 2. Deploy Edge Functions CORS (sin commit de código — ya estaba correcto)
+**Funciones desplegadas vía MCP Supabase (`wuznppxeonmhfcvnqfbf`):**
+- `create-user` → versión 3, status ACTIVE
+- `invite-user` → versión 3, status ACTIVE
+- `delete-user` → versión 2, status ACTIVE
+
+**Código ya correcto en `supabase/functions/_shared/auth.ts`:**
+- `ALLOWED_ORIGINS`: Set con producción + localhost:3000/3001/5173 + 127.0.0.1:3000/3001/5173.
+- `buildCorsHeaders(req)`: refleja el `Origin` del request si está en la whitelist; incluye `Vary: Origin`.
+- `errorResponse()` y `okResponse()` aceptan `req` y usan `buildCorsHeaders(req)`.
+- `verify_jwt: false` en el deploy (las funciones implementan auth propia con `verifyAdmin()`).
+
+#### 3. Fix timezone / timestamp malformado (commit `16f96c6`)
+**Problema raíz:** el sistema usa "AR-local-as-UTC" — `getNowAR()` resta 3h del UTC real para que `getUTC*()` devuelva hora Argentina. Las fechas deben manejarse con ese shift, nunca con `Date.now()` real ni `new Date(T00:00:00)` (browser-tz-dependent).
+
+**Archivos corregidos:**
+
+- **`src/hooks/useNotifications.js`:**
+  - `hace30dias`: `new Date(Date.now() - 30*86400000)` → `new Date(getNowAR().getTime() - 30*86400000)` (TIMESTAMPTZ filter, alineado con AR-as-UTC)
+  - `hace24h`: mismo patrón para filtro `caja_sesiones.apertura_fecha`
+  - `import { getNowAR } from '@/lib/dateUtils'` agregado
+
+- **`src/components/reportes/ReporteParidad.jsx`:**
+  - Estado inicial: `new Date().toISOString().split('T')[0]` → `getTodayAR()` (evita fecha UTC en lugar de AR)
+  - `firstOfMonth`: `new Date(year, month, 1).toISOString()` → `todayStr.slice(0, 7) + '-01'`
+  - ISO para filtro `comprobantes.fecha` (TIMESTAMPTZ): `new Date(\`${date}T00:00:00\`).toISOString()` (browser-tz-dependent) → `` `${date}T00:00:00.000Z` `` (AR-local-as-UTC correcto)
+  - `import { getTodayAR } from '@/lib/dateUtils'` agregado
+
+- **`src/services/tipoCambioService.ts`:**
+  - Import corregido: `@/lib/supabase` (no existía) → `@/lib/customSupabaseClient`
+  - `new Date().toISOString().slice(0,10)` → `getTodayAR()` en `getTasaVigente()`
+  - Nota: archivo efectivamente dead code (Vite resuelve `.js` antes que `.ts`), pero se corrige para evitar build issues futuros.
+
+**Convenciones nuevas confirmadas:**
+- **AR-local-as-UTC:** nunca `Date.now()` para filtros TIMESTAMPTZ; siempre `getNowAR().getTime()`.
+- **ISO para TIMESTAMPTZ:** nunca `` new Date(`${date}T00:00:00`).toISOString() `` (agrega tz browser); siempre `` `${date}T00:00:00.000Z` ``.
+- **ISO para DATE columns:** siempre YYYY-MM-DD string puro, nunca ISO completo.
+- **Fecha AR hoy:** `getTodayAR()` de `dateUtils.js`, nunca `new Date().toISOString().slice(0,10)`.
+
+---
 
 ### Sesión 2026-06-09 (noche) — Testing manual completo + 20 bugs corregidos + 2 cambios DB
 **Branch:** `master` (commits directos)
@@ -390,7 +452,7 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 
 **Pendientes identificados (no resueltos hoy):**
 
-- ⚠️ **Deploy de 4 edge functions** (invite-user, create-user, delete-user, _shared/auth.ts) — código listo, falta `supabase functions deploy` para que CORS funcione en localhost. En producción Vercel ya funciona.
+- ✅ **Deploy Edge Functions** (create-user v3, invite-user v3, delete-user v2) — desplegadas vía MCP en sesión PM·3. CORS dinámico con whitelist `buildCorsHeaders(req)` activo. `Vary: Origin` incluido.
 - ⚠️ **Tabs Contabilidad faltantes**: CONTEXT decía 7 tabs (Plan, Asientos, Balance, LibroMayor, P&L, BalanceGeneral, Períodos) pero solo hay 4. P&L, Balance General y Períodos NUNCA se implementaron. Actualizar feature list o implementar.
 - ⚠️ **Invalidación notifs en CC y Caja**: pendiente aplicar el mismo patrón de `invalidateNotifs()` en `CuentaCorrienteSection` (cobrar deuda) y `CajaSection` (cerrar caja). Sino esas notifs quedan stale 30s tras resolver.
 - ⚠️ **BRL TC = 3.6**: el valor es bajo (real argentino actualmente ~$240-300 ARS). Usuario debería recargarlo manualmente con valor real.
