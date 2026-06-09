@@ -195,12 +195,24 @@ function ModalNuevaCuenta({ open, onClose, cuentasFlat, empresaId, onSuccess }) 
 
           <div className="space-y-1">
             <Label className="text-slate-400 text-xs">Cuenta padre (opcional)</Label>
-            <Select value={form.cuenta_padre_id} onValueChange={(v) => setForm({ ...form, cuenta_padre_id: v })}>
+            {/* Radix no permite SelectItem con value="" — usamos sentinel "__none__"
+                y lo convertimos a null al setear el form. */}
+            <Select
+              value={form.cuenta_padre_id || '__none__'}
+              onValueChange={(v) => setForm({ ...form, cuenta_padre_id: v === '__none__' ? null : v })}
+            >
               <SelectTrigger className="bg-slate-800 border-slate-700">
                 <SelectValue placeholder="Sin padre (cuenta raíz)" />
               </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-700 max-h-48 overflow-y-auto">
-                <SelectItem value="">Sin padre (raíz)</SelectItem>
+              {/* position="popper" → se ancla al trigger en vez de tratar de alinear el item
+                  seleccionado (default "item-aligned"), que clippea items arriba/abajo.
+                  max-h-[400px] para que entren muchos items sin scroll automático. */}
+              <SelectContent
+                position="popper"
+                sideOffset={4}
+                className="bg-slate-800 border-slate-700 max-h-[400px] overflow-y-auto w-[var(--radix-select-trigger-width)]"
+              >
+                <SelectItem value="__none__">Sin padre (raíz)</SelectItem>
                 {cuentasFlat.filter((c) => !c.permite_movimientos || c.nivel < 3).map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.codigo} — {c.nombre}
@@ -981,7 +993,11 @@ function TabLibroMayor({ empresaId, cuentasFlat }) {
 
 export default function PlanCuentasSection() {
   const { user } = useAuth();
-  const empresaId = user?.tenant_id || user?.empresa_id;
+  // OJO: NO usar user?.tenant_id como fallback — es un campo legacy que puede
+  // contener un UUID viejo distinto de empresa_id. get_my_empresa_id() en la DB
+  // siempre devuelve empresa_id, así que si pasamos tenant_id las RLS y los RPC
+  // con validación de empresa van a rechazar la operación.
+  const empresaId = user?.empresa_id;
   const userId    = user?.id;
   const qc        = useQueryClient();
 

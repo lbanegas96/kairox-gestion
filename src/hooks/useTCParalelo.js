@@ -33,11 +33,13 @@ export function useTCParalelo() {
     const init = async () => {
       setLoading(true);
       try {
+        // maybeSingle() en vez de single() — si la fila no existe (caso raro),
+        // devuelve null sin tirar error 406/PGRST116 ruidoso en consola.
         const { data } = await supabase
           .from('empresas')
           .select('usa_tc_paralelo, moneda_paralela')
           .eq('id', user.empresa_id)
-          .single();
+          .maybeSingle();
 
         const isEnabled  = data?.usa_tc_paralelo  ?? false;
         const moneda     = data?.moneda_paralela   ?? 'USD';

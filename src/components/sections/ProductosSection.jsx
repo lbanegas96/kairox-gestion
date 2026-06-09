@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { 
   Package, Search, Filter, Plus, Edit, Tag, Archive, AlertCircle, 
   DollarSign, MoreVertical, Truck, Loader2, Power, PowerOff, Trash2, 
@@ -163,7 +164,10 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
 const ProductosSection = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  
+  const qc = useQueryClient();
+  // Helper: invalidar cache de notificaciones cuando cambia stock
+  const invalidateNotifs = () => qc.invalidateQueries({ queryKey: ['notif'] });
+
   const [activeTab, setActiveTab] = useState('inventory');
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false); 
@@ -360,7 +364,8 @@ const ProductosSection = () => {
       toast({ title: "Producto creado", description: "El producto se ha añadido al inventario." });
       setIsNewProductOpen(false);
       setNewProduct(initialProductState);
-      await fetchProducts(); 
+      await fetchProducts();
+      invalidateNotifs();
     } catch (error) {
       console.error("Create product error:", error);
       const msg = error.message?.includes('productos_empresa_id_codigo_sku_key')
@@ -403,6 +408,7 @@ const ProductosSection = () => {
       toast({ title: "Producto actualizado", description: "Los cambios se han guardado correctamente." });
       setIsEditProductOpen(false);
       await fetchProducts();
+      invalidateNotifs();
     } catch (error) {
       console.error("Update product error:", error);
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -519,6 +525,7 @@ const ProductosSection = () => {
        setIsMovimientoOpen(false);
        setMovimientoForm(initialMovimientoState);
        await fetchProducts();
+      invalidateNotifs();
     } catch (error) {
        console.error("Movimiento error:", error);
        toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -537,6 +544,7 @@ const ProductosSection = () => {
       if (error) throw error;
       toast({ title: "Producto desactivado", description: `"${product.nombre}" fue desactivado. Puede reactivarlo desde la vista de inactivos.` });
       await fetchProducts();
+      invalidateNotifs();
     } catch (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }
@@ -552,6 +560,7 @@ const ProductosSection = () => {
       if (error) throw error;
       toast({ title: "Producto reactivado", description: `"${product.nombre}" vuelve a estar disponible en el inventario.` });
       await fetchProducts();
+      invalidateNotifs();
     } catch (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }

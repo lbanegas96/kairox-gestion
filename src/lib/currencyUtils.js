@@ -26,25 +26,32 @@ export function montoEnARS(amount, moneda, tasa) {
 }
 
 /**
- * Parsea un número en cualquier formato local (es-AR o en-US).
- * El ÚLTIMO separador (. o ,) se trata como decimal; el resto como miles.
- *   "1668.21"   → 1668.21
- *   "1668,21"   → 1668.21
- *   "1.668,21"  → 1668.21  (formato español)
- *   "1,668.21"  → 1668.21  (formato inglés)
- *   "1668"      → 1668
+ * Parsea un número en formato es-AR estricto:
+ *   - PUNTO  (.) = separador de miles
+ *   - COMA   (,) = separador decimal
+ *   - sin separadores → entero
+ *
+ * Ejemplos:
+ *   "1446"        → 1446
+ *   "1.446"       → 1446       (punto = miles)
+ *   "1.446.567"   → 1446567    (miles repetido)
+ *   "1668,21"     → 1668.21    (coma = decimal)
+ *   "1.668,21"    → 1668.21    (formato es-AR completo)
+ *   "0,0036"      → 0.0036
+ *
+ * Nota: si alguien tipea formato en-US como "1,446.50" se va a interpretar
+ * incorrectamente (1.446 con 50 decimales raros). Las reglas argentinas son
+ * estrictas por diseño — los inputs muestran el placeholder con formato es-AR.
  */
 export function parseNumberLocale(input) {
   if (input === null || input === undefined || input === '') return NaN;
   const s = String(input).trim().replace(/\s/g, '');
   if (!s) return NaN;
-  const lastDot = s.lastIndexOf('.');
-  const lastComma = s.lastIndexOf(',');
-  const decSep = lastDot > lastComma ? '.' : (lastComma > -1 ? ',' : null);
-  if (!decSep) return parseFloat(s.replace(/[.,]/g, ''));
-  const intPart = s.slice(0, decSep === '.' ? lastDot : lastComma).replace(/[.,]/g, '');
-  const decPart = s.slice((decSep === '.' ? lastDot : lastComma) + 1);
-  return parseFloat(`${intPart || '0'}.${decPart}`);
+  // 1) Sacar TODOS los puntos (son separadores de miles)
+  // 2) Cambiar la coma por punto (decimal en JS)
+  const cleaned = s.replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) ? n : NaN;
 }
 
 /** True si la moneda no es ARS */

@@ -85,7 +85,7 @@ export function TipoCambioModal({ open, onOpenChange, moneda, onConfirm }) {
           <Input
             type="text"
             inputMode="decimal"
-            placeholder="ej. 1446.50"
+            placeholder="ej. 1.446,50 ó 1446"
             value={tasa}
             onChange={e => {
               // Permitir solo dígitos, coma y punto
@@ -98,6 +98,9 @@ export function TipoCambioModal({ open, onOpenChange, moneda, onConfirm }) {
           />
           <p className="text-xs text-slate-400 dark:text-slate-500">
             Tip: usá el tipo de cambio vendedor del día (ej. dólar blue vendedor).
+            <br />
+            Formato argentino: <strong>punto</strong> = miles, <strong>coma</strong> = decimal.
+            Ej: <code>1.446,50</code> ó <code>1446</code>.
           </p>
         </div>
 

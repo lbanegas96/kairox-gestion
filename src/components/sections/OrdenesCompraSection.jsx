@@ -145,22 +145,28 @@ function OrdenesCompraSection() {
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
+  // Helper: invalidar también el cache de notificaciones cuando cambia el estado/stock
+  const invalidateOCAndNotifs = () => {
+    qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] });
+    qc.invalidateQueries({ queryKey: ['notif'] });
+  };
+
   const estadoMutation = useMutation({
     mutationFn: ({ id, estado }) => ordenesCompraService.updateEstado(id, estado),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] }),
+    onSuccess: invalidateOCAndNotifs,
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
   const cancelarMutation = useMutation({
     mutationFn: (id) => ordenesCompraService.cancelar(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] }),
+    onSuccess: invalidateOCAndNotifs,
   });
 
   const recibirMutation = useMutation({
     mutationFn: ({ ordenId, recepciones: recs }) =>
       ordenesCompraService.recibirItems(ordenId, Object.entries(recs).map(([itemId, qty]) => ({ itemId, cantidadRecibida: Number(qty) }))),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] });
+      invalidateOCAndNotifs();
       toast({ title: 'Stock actualizado ✓', description: 'Recepción registrada. El inventario fue actualizado automáticamente.', className: 'bg-green-600 text-white' });
       setRecepcionId(null);
     },

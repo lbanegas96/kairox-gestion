@@ -21,6 +21,7 @@ import {
 } from '@/services/cuentasBancariasService';
 import { getTodayAR, formatDateAR } from '@/lib/dateUtils';
 import { conciliacionService, CONC_KEYS } from '@/services/conciliacionService';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 
 const BANCOS_COMUNES = ['Ualá', 'Mercado Pago', 'Banco Galicia', 'Banco Santander', 'BBVA', 'HSBC', 'Banco Nación', 'Banco Provincia', 'Brubank', 'Naranja X', 'Otro'];
 
@@ -193,12 +194,14 @@ function MovimientoModal({ open, onClose, cuentas, empresaId, defaultCuentaId })
       cuenta_bancaria_id: data.cuenta_bancaria_id,
       fecha: `${data.fecha}T12:00:00`,
       descripcion: data.descripcion,
-      monto: parseFloat(data.monto),
+      monto: parseNumberLocale(data.monto),
       tipo: data.tipo,
       origen: 'manual',
     }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: CB_KEYS.movimientos(empresaId) });
+      // Invalidar usando solo el prefijo para que matchee con cualquier queryKey
+      // que tenga filters aplicados (CB_KEYS.movimientos arma [..., empresaId, filters]).
+      qc.invalidateQueries({ queryKey: ['movimientos_bancarios', empresaId] });
       toast({ title: 'Movimiento registrado', className: 'bg-green-600 text-white' });
       onClose();
     },
@@ -207,7 +210,20 @@ function MovimientoModal({ open, onClose, cuentas, empresaId, defaultCuentaId })
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!form.cuenta_bancaria_id || !form.monto || parseFloat(form.monto) <= 0) return;
+    // Validar con mensajes claros en vez de fallar silencioso
+    if (!form.cuenta_bancaria_id) {
+      toast({ title: 'Seleccioná una cuenta bancaria', variant: 'destructive' });
+      return;
+    }
+    if (!form.descripcion?.trim()) {
+      toast({ title: 'Ingresá una descripción', variant: 'destructive' });
+      return;
+    }
+    const monto = parseNumberLocale(form.monto);
+    if (!monto || monto <= 0) {
+      toast({ title: 'Ingresá un monto mayor a cero', variant: 'destructive' });
+      return;
+    }
     mutation.mutate(form);
   };
 
@@ -250,7 +266,18 @@ function MovimientoModal({ open, onClose, cuentas, empresaId, defaultCuentaId })
           </div>
           <div>
             <Label>Monto *</Label>
-            <Input type="number" min="0.01" step="0.01" value={form.monto} onChange={e => setForm(p => ({ ...p, monto: e.target.value }))} placeholder="0.00" required />
+            <Input
+              type="text"
+              inputMode="decimal"
+              value={form.monto}
+              onChange={e => {
+                // Solo dígitos, coma y punto
+                const v = e.target.value.replace(/[^\d.,]/g, '');
+                setForm(p => ({ ...p, monto: v }));
+              }}
+              placeholder="ej. 500.000 ó 500.000,50"
+              required
+            />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
@@ -374,7 +401,9 @@ function ImportCSVModal({ open, onClose, cuentas, empresaId }) {
     setLoading(true);
     try {
       const count = await movimientosService.bulkCreate(allRows);
-      qc.invalidateQueries({ queryKey: CB_KEYS.movimientos(empresaId) });
+      // Invalidar usando solo el prefijo para que matchee con cualquier queryKey
+      // que tenga filters aplicados (CB_KEYS.movimientos arma [..., empresaId, filters]).
+      qc.invalidateQueries({ queryKey: ['movimientos_bancarios', empresaId] });
       toast({ title: `${count} movimientos importados`, className: 'bg-green-600 text-white' });
       onClose();
     } catch (e) {
@@ -423,10 +452,14 @@ function ImportCSVModal({ open, onClose, cuentas, empresaId }) {
                 ].map(({ key, label }) => (
                   <div key={key}>
                     <Label className="text-xs">{label}</Label>
-                    <Select value={mapping[key]} onValueChange={v => setMapping(p => ({ ...p, [key]: v }))}>
+                    {/* Sentinel "__none__" porque Radix no permite value="" en SelectItem */}
+                    <Select
+                      value={mapping[key] || '__none__'}
+                      onValueChange={v => setMapping(p => ({ ...p, [key]: v === '__none__' ? '' : v }))}
+                    >
                       <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">—</SelectItem>
+                        <SelectItem value="__none__">—</SelectItem>
                         {parsed.headers.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
                       </SelectContent>
                     </Select>

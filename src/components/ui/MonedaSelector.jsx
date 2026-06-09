@@ -156,7 +156,7 @@ export function MonedaSelector({
                   onChange={handleTasaManual}
                   disabled={disabled}
                   className="h-9"
-                  placeholder="ej. 1250.50"
+                  placeholder="ej. 1.250,50"
                 />
               )}
             </div>

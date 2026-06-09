@@ -6,15 +6,16 @@ import { supabase } from '@/lib/customSupabaseClient';
  */
 export async function getTodayTC(empresaId, moneda = 'USD') {
   const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+  // .maybeSingle() devuelve null sin error cuando no hay rows — evita el ruido
+  // en consola (PGRST116 / 406 Not Acceptable) cuando no hay TC cargado todavía.
   const { data, error } = await supabase
     .from('tipos_cambio')
     .select('tasa')
     .eq('empresa_id', empresaId)
     .eq('moneda', moneda)
     .eq('fecha', today)
-    .single();
-  // PGRST116 = "no rows returned" — esperado cuando no hay TC cargado
-  if (error && error.code !== 'PGRST116') throw error;
+    .maybeSingle();
+  if (error) throw error;
   return data?.tasa ?? null;
 }
 

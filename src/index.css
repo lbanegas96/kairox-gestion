@@ -135,3 +135,38 @@
     @apply text-slate-800 dark:text-slate-300;
   }
 }
+
+/* ── Inputs de fecha/hora en modo oscuro ─────────────────────────────────
+   Chrome/Edge pintan los iconos del picker en negro por defecto → invisibles
+   sobre fondos oscuros. Aplicamos color-scheme + filter para forzar el icono
+   blanco en cualquier input nativo de fecha/hora cuando html.dark está activo.
+*/
+html.dark input[type="date"],
+html.dark input[type="time"],
+html.dark input[type="datetime-local"],
+html.dark input[type="month"],
+html.dark input[type="week"] {
+  color-scheme: dark !important;
+}
+
+html.dark input[type="date"]::-webkit-calendar-picker-indicator,
+html.dark input[type="time"]::-webkit-calendar-picker-indicator,
+html.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+html.dark input[type="month"]::-webkit-calendar-picker-indicator,
+html.dark input[type="week"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(2) !important;
+  cursor: pointer;
+  opacity: 1 !important;
+  display: block !important;
+  visibility: visible !important;
+  width: 1.1em;
+  height: 1.1em;
+  margin-left: 4px;
+}
+
+/* Asegurar que el ícono también se vea aunque el input sea aria-required o
+   tenga ::-webkit-clear-button (que algunos navegadores muestran al lado). */
+html.dark input[type="date"]::-webkit-inner-spin-button,
+html.dark input[type="time"]::-webkit-inner-spin-button {
+  filter: invert(1);
+}

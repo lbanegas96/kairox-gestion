@@ -37,11 +37,11 @@ function ReporteParidad({ onBack }) {
   /**
    * Calcula el monto en moneda paralela dado el monto ARS / moneda op / tasa op / TC paralelo.
    */
-  const computeParalelo = (monto, monedaOp, tasaOp, tcParaleloFecha) => {
-    if (!tcParaleloFecha) return null;
-    if (monedaOp === monedaParalela) return Number(monto);
-    const inARS = monedaOp === 'ARS' ? Number(monto) : Number(monto) * Number(tasaOp || 1);
-    return inARS / tcParaleloFecha;
+  const computeParalelo = (monto, _monedaOp, _tasaOp, tcParaleloFecha) => {
+    // El `total` de los comprobantes SIEMPRE está en ARS (lógica nueva post-2026-06-08).
+    // La conversión es directa: ARS / TC = equivalente en moneda paralela.
+    if (!tcParaleloFecha || tcParaleloFecha <= 0) return null;
+    return Number(monto) / Number(tcParaleloFecha);
   };
 
   const handleGenerate = useCallback(async () => {

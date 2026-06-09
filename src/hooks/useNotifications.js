@@ -2,7 +2,14 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 
-const STALE_TIME = 1000 * 60 * 5; // 5 min
+// Notificaciones tienen que sentirse "vivas" — refrescamos cada 30s
+// y siempre que el usuario vuelve al tab del navegador.
+const STALE_TIME = 1000 * 30; // 30 segundos
+const REFETCH_OPTS = {
+  staleTime: STALE_TIME,
+  refetchOnWindowFocus: true,
+  refetchInterval: 1000 * 60, // refetch en background cada 60s
+};
 
 /**
  * Hook de notificaciones inteligentes.
@@ -28,7 +35,7 @@ export function useNotifications() {
       return (data ?? []).filter(p => (p.stock_actual ?? 0) <= (p.stock_minimo ?? 5));
     },
     enabled: !!empresaId,
-    staleTime: STALE_TIME,
+    ...REFETCH_OPTS,
   });
 
   // ── Deuda vencida (+30 días sin movimiento) ────────────────────────────────
@@ -57,7 +64,7 @@ export function useNotifications() {
       return result;
     },
     enabled: !!empresaId,
-    staleTime: STALE_TIME,
+    ...REFETCH_OPTS,
   });
 
   // ── Órdenes de compra pendientes ───────────────────────────────────────────
@@ -74,7 +81,7 @@ export function useNotifications() {
       return data ?? [];
     },
     enabled: !!empresaId,
-    staleTime: STALE_TIME,
+    ...REFETCH_OPTS,
   });
 
   // ── Caja sin cerrar hace más de 24h ────────────────────────────────────────
@@ -92,7 +99,7 @@ export function useNotifications() {
       return data ?? [];
     },
     enabled: !!empresaId,
-    staleTime: STALE_TIME,
+    ...REFETCH_OPTS,
   });
 
   // ── Armar lista unificada ──────────────────────────────────────────────────

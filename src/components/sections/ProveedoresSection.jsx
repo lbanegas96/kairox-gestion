@@ -129,7 +129,15 @@ function ProveedoresSection() {
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   const openCrear = () => { setEditando(null); setForm({ ...EMPTY_FORM }); setFormOpen(true); };
-  const openEditar = (prov) => { setEditando(prov); setForm({ ...EMPTY_FORM, ...prov }); setFormOpen(true); };
+  const openEditar = (prov) => {
+    setEditando(prov);
+    // Sanitizar nulls de la DB → inputs controlados requieren strings, no null
+    const sanitized = Object.fromEntries(
+      Object.entries(prov || {}).map(([k, v]) => [k, v ?? ''])
+    );
+    setForm({ ...EMPTY_FORM, ...sanitized });
+    setFormOpen(true);
+  };
 
   const handleSave = (e) => {
     e.preventDefault();

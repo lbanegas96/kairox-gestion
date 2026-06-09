@@ -11,11 +11,40 @@ const ANON_KEY      = Deno.env.get('SUPABASE_ANON_KEY')!;
 /** Client con privilegios de servicio (bypassea RLS) */
 export const adminClient = createClient(SUPABASE_URL, SERVICE_KEY);
 
-/** Headers CORS seguros */
-export const corsHeaders = {
-  'Access-Control-Allow-Origin':  Deno.env.get('SITE_URL') || 'http://localhost:3001',
+/** Lista de orígenes permitidos: producción + dev local en cualquier puerto Vite común */
+const ALLOWED_ORIGINS = new Set<string>([
+  Deno.env.get('SITE_URL') || '',
+  'https://kairox-gestion.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001',
+  'http://127.0.0.1:5173',
+].filter(Boolean));
+
+/** Headers CORS base (sin Allow-Origin, que se setea por request en buildCorsHeaders) */
+const BASE_CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Vary': 'Origin',
+};
+
+/**
+ * Devuelve headers CORS reflejando el origin del request si está permitido.
+ * Esto permite que tanto producción como dev local (cualquier puerto Vite común)
+ * puedan llamar a las edge functions sin tener que hardcodear un solo origen.
+ */
+export function buildCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') || '';
+  const allowOrigin = ALLOWED_ORIGINS.has(origin) ? origin : (Deno.env.get('SITE_URL') || 'https://kairox-gestion.vercel.app');
+  return { ...BASE_CORS_HEADERS, 'Access-Control-Allow-Origin': allowOrigin };
+}
+
+/** Headers CORS estáticos (backward compat). Para nuevos handlers, preferí buildCorsHeaders(req). */
+export const corsHeaders = {
+  ...BASE_CORS_HEADERS,
+  'Access-Control-Allow-Origin': Deno.env.get('SITE_URL') || 'https://kairox-gestion.vercel.app',
 };
 
 export interface AuthResult {
@@ -70,18 +99,21 @@ export async function verifyAdmin(req: Request): Promise<AuthResult> {
   return { ok: true, userId: user.id, empresaId: profile.empresa_id, role: profile.role };
 }
 
-/** Respuesta de error genérica (no filtra detalles internos) */
-export function errorResponse(message: string, status = 400): Response {
+/** Respuesta de error genérica (no filtra detalles internos)
+ *  Pasale `req` como tercer argumento para que el header CORS refleje el origen correcto. */
+export function errorResponse(message: string, status = 400, req?: Request): Response {
+  const headers = req ? buildCorsHeaders(req) : corsHeaders;
   return new Response(JSON.stringify({ error: message }), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...headers, 'Content-Type': 'application/json' },
   });
 }
 
 /** Respuesta exitosa */
-export function okResponse(data: unknown): Response {
+export function okResponse(data: unknown, req?: Request): Response {
+  const headers = req ? buildCorsHeaders(req) : corsHeaders;
   return new Response(JSON.stringify(data), {
     status: 200,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...headers, 'Content-Type': 'application/json' },
   });
 }

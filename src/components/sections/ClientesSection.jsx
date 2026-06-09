@@ -139,7 +139,10 @@ function ClientesSection() {
     );
   }, [clients, searchQuery]);
 
-  const ClientForm = ({ onSubmit, isEdit }) => (
+  // OJO: NO usar como <ClientForm /> (eso lo trata como componente y React lo
+  // remonta en cada render del padre, perdiendo focus de los inputs en cada
+  // tecla). Llamar siempre como función: {renderClientForm({ isEdit: false })}
+  const renderClientForm = ({ onSubmit, isEdit }) => (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
       {/* Nombre */}
       <div className="space-y-1.5 md:col-span-2">
@@ -366,7 +369,7 @@ function ClientesSection() {
             <DialogTitle className="dark:text-white">Nuevo Cliente</DialogTitle>
             <DialogDescription className="dark:text-slate-400">Completá los datos del nuevo cliente.</DialogDescription>
           </DialogHeader>
-          <ClientForm isEdit={false} />
+          {renderClientForm({ isEdit: false })}
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="dark:text-white dark:border-slate-700">Cancelar</Button>
             <Button onClick={() => handleSave(false)} disabled={saving} className="bg-blue-600 text-white hover:bg-blue-700">
@@ -383,7 +386,7 @@ function ClientesSection() {
             <DialogTitle className="dark:text-white">Editar: {selectedClient?.nombre}</DialogTitle>
             <DialogDescription className="dark:text-slate-400">Modificá los datos del cliente.</DialogDescription>
           </DialogHeader>
-          <ClientForm isEdit={true} />
+          {renderClientForm({ isEdit: true })}
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="dark:text-white dark:border-slate-700">Cancelar</Button>
             <Button onClick={() => handleSave(true)} disabled={saving} className="bg-blue-600 text-white hover:bg-blue-700">

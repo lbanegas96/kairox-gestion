@@ -58,7 +58,14 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch }) {
           </Button>
           
           <div className="flex items-center gap-3 opacity-90 hover:opacity-100 transition-opacity cursor-default">
-            {/* Replaced logo image with company name text */}
+            {/* Logo de la empresa (si está subido en Configuración) */}
+            {logoUrl && (
+              <img
+                src={logoUrl}
+                alt={`Logo ${empresaName}`}
+                className="h-10 w-10 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shadow-sm flex-shrink-0"
+              />
+            )}
             <div className="flex flex-col">
               <h1 className="text-lg font-bold bg-gradient-to-r from-slate-900 to-slate-700 dark:from-white dark:to-slate-300 bg-clip-text text-transparent leading-none">
                 {empresaName}

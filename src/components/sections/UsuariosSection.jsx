@@ -506,10 +506,14 @@ function UsuariosSection() {
                                 <Label className="text-xs uppercase text-slate-500 dark:text-slate-400 font-bold mb-3 block">Módulos Permitidos</Label>
                                 <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
                                     {modules.map(module => (
+                                    /* OJO: solo UN handler de toggle para evitar el doble disparo
+                                       (antes el div y el Checkbox disparaban juntos cuando clickeabas
+                                       sobre el cuadradito, se cancelaban entre sí y parecía bloqueado). */
                                     <div key={module.id} className="flex items-center space-x-2 hover:bg-white dark:hover:bg-slate-800 p-1.5 rounded transition-colors cursor-pointer" onClick={() => handlePermissionChange(module.id)}>
-                                        <Checkbox 
-                                            checked={formData.permissions[module.id]} 
-                                            onCheckedChange={() => handlePermissionChange(module.id)}
+                                        <Checkbox
+                                            checked={!!formData.permissions[module.id]}
+                                            className="pointer-events-none"
+                                            tabIndex={-1}
                                         />
                                         <label className="text-sm font-medium leading-none cursor-pointer w-full text-slate-700 dark:text-slate-300 pointer-events-none">
                                             {module.label}
