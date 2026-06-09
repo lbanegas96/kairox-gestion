@@ -108,18 +108,20 @@ function CuentaCorrienteSection() {
 
       const clienteIds = conDeuda.map(c => c.id);
 
-      // Movimiento DEBE más antiguo por cliente
-      const { data: movs } = await supabase
-        .from('cuenta_corriente_movimientos')
+      // Comprobante pendiente más antiguo por cliente (Open Item real)
+      // Bug fix: antes tomaba el DEBE más antiguo aunque ya estuviera pagado,
+      // lo que clasificaba clientes sin deuda activa en bandas +90 días incorrectamente.
+      const { data: comprobantesAbiertos } = await supabase
+        .from('comprobantes')
         .select('cliente_id, fecha')
         .eq('empresa_id', user.empresa_id)
-        .eq('tipo', 'DEBE')
+        .eq('estado_pago', 'pendiente')
         .in('cliente_id', clienteIds)
         .order('fecha', { ascending: true });
 
       const oldestByClient = {};
-      for (const m of (movs || [])) {
-        if (!oldestByClient[m.cliente_id]) oldestByClient[m.cliente_id] = m.fecha;
+      for (const c of (comprobantesAbiertos || [])) {
+        if (!oldestByClient[c.cliente_id]) oldestByClient[c.cliente_id] = c.fecha;
       }
 
       const now = new Date();

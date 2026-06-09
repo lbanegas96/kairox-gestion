@@ -17,6 +17,7 @@ import { ordenesCompraService, OC_KEYS } from '@/services/ordenesCompraService';
 import { supabase } from '@/lib/customSupabaseClient';
 import { MonedaSelector } from '@/components/ui/MonedaSelector';
 import { formatCurrency } from '@/lib/currencyUtils';
+import { formatDateAR } from '@/lib/dateUtils';
 
 // ─── Helpers de estado ────────────────────────────────────────────────────────
 
@@ -52,6 +53,7 @@ function OrdenesCompraSection() {
 
   // form nueva OC
   const [form, setForm] = useState({ proveedor_nombre: '', fecha_entrega_esperada: '', forma_pago: 'Efectivo', notas: '', moneda: 'ARS', tipoCambioTasa: 1 });
+  const [tcMissingOC, setTcMissingOC] = useState(false);
   const [items, setItems] = useState([{ ...EMPTY_ITEM }]);
   const [provSearch, setProvSearch] = useState('');
   const [provResults, setProvResults] = useState([]);
@@ -172,6 +174,7 @@ function OrdenesCompraSection() {
     setItems([{ ...EMPTY_ITEM }]);
     setSelectedProv(null);
     setProvSearch('');
+    setTcMissingOC(false);
   };
 
   const searchProveedor = async (q) => {
@@ -331,9 +334,9 @@ function OrdenesCompraSection() {
                     <tr key={oc.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="p-4 font-mono font-bold text-indigo-600 dark:text-indigo-400">{oc.numero}</td>
                       <td className="p-4 font-medium text-slate-700 dark:text-slate-200">{oc.proveedor_nombre ?? oc.proveedores?.nombre ?? '—'}</td>
-                      <td className="p-4 text-slate-500 dark:text-slate-400">{new Date(oc.created_at).toLocaleDateString('es-AR')}</td>
+                      <td className="p-4 text-slate-500 dark:text-slate-400">{formatDateAR(oc.created_at)}</td>
                       <td className="p-4 text-slate-500 dark:text-slate-400">
-                        {oc.fecha_entrega_esperada ? new Date(oc.fecha_entrega_esperada).toLocaleDateString('es-AR') : '—'}
+                        {oc.fecha_entrega_esperada ? formatDateAR(oc.fecha_entrega_esperada) : '—'}
                       </td>
                       <td className="p-4">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${cfg.color}`}>
@@ -436,8 +439,12 @@ function OrdenesCompraSection() {
                   <MonedaSelector
                     moneda={form.moneda}
                     tasa={form.tipoCambioTasa}
-                    onMonedaChange={v => setForm(f => ({ ...f, moneda: v, tipoCambioTasa: v === 'ARS' ? 1 : f.tipoCambioTasa }))}
+                    onMonedaChange={v => {
+                      setForm(f => ({ ...f, moneda: v, tipoCambioTasa: v === 'ARS' ? 1 : f.tipoCambioTasa }));
+                      if (v === 'ARS') setTcMissingOC(false);
+                    }}
                     onTasaChange={v => setForm(f => ({ ...f, tipoCambioTasa: v }))}
+                    onTCMissingChange={setTcMissingOC}
                   />
                 </div>
               </CardContent>
@@ -518,10 +525,21 @@ function OrdenesCompraSection() {
 
             <div className="flex gap-3 justify-end">
               <Button type="button" variant="outline" onClick={resetForm} className="dark:border-slate-700 dark:text-slate-300">Limpiar</Button>
-              <Button type="submit" disabled={createMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
-                <ShoppingBag className="w-4 h-4" />
-                {createMutation.isPending ? 'Guardando...' : 'Crear Orden de Compra'}
-              </Button>
+              <div className="flex flex-col items-end gap-1">
+                <Button
+                  type="submit"
+                  disabled={createMutation.isPending || (form.moneda !== 'ARS' && tcMissingOC)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2"
+                >
+                  <ShoppingBag className="w-4 h-4" />
+                  {createMutation.isPending ? 'Guardando...' : 'Crear Orden de Compra'}
+                </Button>
+                {form.moneda !== 'ARS' && tcMissingOC && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    ⚠ Cargá el TC del día para habilitar la creación de la OC
+                  </p>
+                )}
+              </div>
             </div>
           </form>
         </TabsContent>
@@ -555,7 +573,7 @@ function OrdenesCompraSection() {
                 </div>
                 <div>
                   <p className="text-xs text-slate-400 uppercase mb-1">Entrega esperada</p>
-                  <p className="dark:text-slate-300">{detalle.fecha_entrega_esperada ? new Date(detalle.fecha_entrega_esperada).toLocaleDateString('es-AR') : '—'}</p>
+                  <p className="dark:text-slate-300">{detalle.fecha_entrega_esperada ? formatDateAR(detalle.fecha_entrega_esperada) : '—'}</p>
                 </div>
               </div>
 
@@ -666,7 +684,7 @@ function OrdenesCompraSection() {
                           </span>
                           <span>N° {factura.numero_factura}</span>
                           {factura.fecha_vencimiento && (
-                            <span>· Vence: {new Date(factura.fecha_vencimiento + 'T12:00:00').toLocaleDateString('es-AR')}</span>
+                            <span>· Vence: {formatDateAR(factura.fecha_vencimiento)}</span>
                           )}
                         </div>
                         {factura.estado === 'pendiente' && (

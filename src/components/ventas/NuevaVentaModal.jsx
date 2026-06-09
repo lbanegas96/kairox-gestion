@@ -272,7 +272,15 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     const qty = parseInt(newQty);
     if (isNaN(qty) || qty < 1) return;
     const product = products.find(p => p.id === productId);
-    if (!product || product.stock_actual < qty) return;
+    if (!product) return;
+    if (product.stock_actual < qty) {
+      toast({
+        title: 'Stock insuficiente',
+        description: `Solo hay ${product.stock_actual} unidades disponibles de ${product.nombre}.`,
+        variant: 'destructive',
+      });
+      return;
+    }
     setCart(prev => prev.map(item => item.id === productId ? { ...item, cantidad: qty } : item));
   };
 
