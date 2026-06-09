@@ -46,6 +46,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { getNowAR, formatDateAR } from '@/lib/dateUtils';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import ClientDetailModal from './ClientDetailModal';
 
@@ -244,7 +245,7 @@ function CuentaCorrienteSection() {
 
     if (!selectedClient) return;
 
-    const amount = parseFloat(paymentData.monto);
+    const amount = parseNumberLocale(paymentData.monto);
     if (!amount || isNaN(amount) || amount <= 0) {
       toast({ title: "Error", description: "Ingrese un monto válido mayor a 0", variant: "destructive" });
       return;
@@ -362,6 +363,11 @@ function CuentaCorrienteSection() {
             <div className="text-2xl font-black text-red-600 dark:text-red-400">
               ${metrics.totalAdeudado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
             </div>
+            {tcParalelo.enabled && tcParalelo.tcHoy && metrics.totalAdeudado > 0 && (
+              <p className="text-xs text-slate-400 mt-0.5">
+                ≈ {(metrics.totalAdeudado / tcParalelo.tcHoy).toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
+              </p>
+            )}
             <p className="text-xs text-slate-500 mt-1">Suma de saldos pendientes en vista actual</p>
           </CardContent>
         </Card>
@@ -509,9 +515,14 @@ function CuentaCorrienteSection() {
                         {client.telefono && <div className="text-xs text-slate-400 font-normal mt-0.5 flex items-center gap-1"><span className="text-slate-300">|</span> {client.telefono}</div>}
                       </TableCell>
                       <TableCell className="text-right">
-                        <span className={`font-mono font-bold text-lg ${hasDebt ? 'text-red-600 dark:text-red-400' : (client.saldo_actual || 0) < 0 ? 'text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'}`}>
-                           {(client.saldo_actual || 0) < 0 ? '-' : ''}${Math.abs(client.saldo_actual || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                        </span>
+                        <div className={`font-mono font-bold text-lg ${hasDebt ? 'text-red-600 dark:text-red-400' : (client.saldo_actual || 0) < 0 ? 'text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                          {(client.saldo_actual || 0) < 0 ? '-' : ''}${Math.abs(client.saldo_actual || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                        </div>
+                        {tcParalelo.enabled && tcParalelo.tcHoy && hasDebt && (
+                          <div className="text-xs text-slate-400 mt-0.5">
+                            ≈ {(Number(client.saldo_actual) / tcParalelo.tcHoy).toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
                         {getStatusBadge(client.saldo_actual)}
@@ -528,13 +539,12 @@ function CuentaCorrienteSection() {
                              <Eye className="h-4 w-4" />
                            </Button>
                            {hasDebt && (
-                             <Button 
-                               variant="ghost" 
-                               size="sm" 
-                               className={`h-8 w-8 p-0 rounded-full ${!isSessionOpen ? 'opacity-50 cursor-not-allowed text-slate-400' : 'text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'}`}
-                               onClick={(e) => isSessionOpen && openPaymentDialog(client, e)}
-                               title={isSessionOpen ? "Registrar Cobro" : "Caja Cerrada"}
-                               disabled={!isSessionOpen}
+                             <Button
+                               variant="ghost"
+                               size="sm"
+                               className="h-8 w-8 p-0 rounded-full text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                               onClick={(e) => openPaymentDialog(client, e)}
+                               title="Registrar Cobro"
                              >
                                <Banknote className="h-4 w-4" />
                              </Button>
@@ -694,10 +704,16 @@ function CuentaCorrienteSection() {
           </DialogHeader>
           
           <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700 mb-2">
-             <div className="flex justify-between items-center text-sm mb-1">
-                <span className="text-slate-500">Deuda Actual:</span>
-                <span className="font-bold text-red-600">${selectedClient?.saldo_actual?.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
-             </div>
+            <div className="flex justify-between items-center text-sm mb-1">
+              <span className="text-slate-500">Deuda Actual:</span>
+              <span className="font-bold text-red-600">${selectedClient?.saldo_actual?.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+            </div>
+            {tcParalelo.enabled && tcParalelo.tcHoy && Number(selectedClient?.saldo_actual) > 0 && (
+              <div className="flex justify-between items-center text-xs text-slate-400">
+                <span>Equivalente:</span>
+                <span>≈ {(Number(selectedClient.saldo_actual) / tcParalelo.tcHoy).toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}</span>
+              </div>
+            )}
           </div>
 
           <div className="grid gap-4 py-2">
@@ -705,12 +721,11 @@ function CuentaCorrienteSection() {
               <Label htmlFor="amount-list">Monto a Cobrar ($)</Label>
               <Input
                 id="amount-list"
-                type="number"
-                min="0.01"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={paymentData.monto}
                 onChange={(e) => setPaymentData({...paymentData, monto: e.target.value})}
-                placeholder="0.00"
+                placeholder="0,00"
                 className="font-mono text-lg"
                 autoFocus
               />
@@ -745,7 +760,7 @@ function CuentaCorrienteSection() {
             <Button 
                onClick={handleRegisterPayment} 
                className="bg-emerald-600 hover:bg-emerald-700 text-white"
-               disabled={isProcessingPayment || !paymentData.monto || parseFloat(paymentData.monto) <= 0}
+               disabled={isProcessingPayment || !paymentData.monto || !(parseNumberLocale(paymentData.monto) > 0)}
             >
                {isProcessingPayment ? "Procesando..." : "Confirmar Cobro"}
             </Button>
