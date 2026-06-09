@@ -115,7 +115,7 @@ function ClientesSection() {
         setIsEditDialogOpen(false);
       } else {
         const { error } = await supabase.from('clientes').insert([{
-          ...payload, empresa_id: user.empresa_id, user_id: user.tenant_id, saldo_actual: 0, activo: true,
+          ...payload, empresa_id: user.empresa_id, user_id: user.id, saldo_actual: 0, activo: true,
         }]);
         if (error) throw error;
         toast({ title: 'Cliente creado' });

@@ -46,26 +46,32 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
 
   const searchInputRef = useRef(null);
   const searchWrapperRef = useRef(null);
+  const searchDebounceRef = useRef(null);
 
   useEffect(() => {
     if (!isOpen || !user?.empresa_id) return;
 
     const init = async () => {
-      const [{ data: prods }, { data: clis }] = await Promise.all([
-        supabase.from('productos').select('*').eq('empresa_id', user.empresa_id).eq('activo', true),
-        supabase.from('clientes').select('*').eq('empresa_id', user.empresa_id).eq('activo', true),
-      ]);
-      setProducts(prods || []);
+      // Siempre cargar clientes
+      const { data: clis } = await supabase
+        .from('clientes').select('*').eq('empresa_id', user.empresa_id).eq('activo', true);
       setClients(clis || []);
+      setProducts([]); // Limpiar resultados de búsqueda previos
       resetForm();
 
-      // Pre-llenar carrito desde cotización
+      // Pre-llenar carrito desde cotización: cargar solo los productos necesarios
       if (cotizacion?.cotizacion_items?.length > 0) {
+        const productoIds = cotizacion.cotizacion_items.map(i => i.producto_id).filter(Boolean);
+        const { data: prods } = productoIds.length > 0
+          ? await supabase.from('productos').select('*').eq('empresa_id', user.empresa_id).in('id', productoIds)
+          : { data: [] };
+        const prodMap = Object.fromEntries((prods || []).map(p => [p.id, p]));
+
         const preCart = [];
         let sinProducto = 0;
         for (const item of cotizacion.cotizacion_items) {
           if (item.producto_id) {
-            const prod = (prods || []).find(p => p.id === item.producto_id);
+            const prod = prodMap[item.producto_id];
             if (prod) {
               preCart.push({ ...prod, precio_venta: Number(item.precio_unitario), cantidad: Number(item.cantidad) });
             } else {
@@ -88,6 +94,28 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
 
     init();
   }, [isOpen, user]);
+
+  // Búsqueda server-side con debounce (reemplaza la carga masiva inicial)
+  useEffect(() => {
+    if (!isOpen || !user?.empresa_id) return;
+    if (productSearch.length < 2) {
+      setProducts([]);
+      return;
+    }
+    clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(async () => {
+      const { data } = await supabase
+        .from('productos')
+        .select('id, nombre, codigo_sku, precio_venta, stock_actual, activo, unidad_medida')
+        .eq('empresa_id', user.empresa_id)
+        .eq('activo', true)
+        .or(`nombre.ilike.%${productSearch}%,codigo_sku.ilike.%${productSearch}%`)
+        .order('nombre')
+        .limit(30);
+      setProducts(data || []);
+    }, 300);
+    return () => clearTimeout(searchDebounceRef.current);
+  }, [productSearch, isOpen, user?.empresa_id]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -353,14 +381,13 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
       }
     }
 
-    const freshProductMap = new Map();
+    // Pre-validación de stock (UX): verifica antes de iniciar la transacción
     for (const item of cart) {
       const { data: freshProduct } = await supabase.from('productos').select('stock_actual').eq('id', item.id).single();
       if (!freshProduct || freshProduct.stock_actual < item.cantidad) {
-         toast({ title: "Stock Insuficiente", description: `El producto ${item.nombre} cambió su stock.`, variant: "destructive" });
-         return;
+        toast({ title: "Stock Insuficiente", description: `El producto ${item.nombre} cambió su stock.`, variant: "destructive" });
+        return;
       }
-      freshProductMap.set(item.id, freshProduct);
     }
 
     setLoading(true);
@@ -407,10 +434,14 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
       if (itemsError) throw itemsError;
 
       for (const item of cart) {
-        const { error: stockError } = await supabase.from('productos').update({ stock_actual: freshProductMap.get(item.id).stock_actual - item.cantidad }).eq('id', item.id);
+        // RPC atómica — evita race condition entre ventas simultáneas
+        const { error: stockError } = await supabase.rpc('decrement_stock', {
+          p_producto_id: item.id,
+          p_cantidad: item.cantidad,
+        });
         if (stockError) throw stockError;
         const { error: movInvError } = await supabase.from('movimientos_inventario').insert([{
-           tenant_id: user.tenant_id,
+           tenant_id: user.tenant_id, // campo legacy — mantener para compatibilidad
            empresa_id: user.empresa_id,
            producto_id: item.id,
            tipo: 'salida',
@@ -505,8 +536,13 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
               <div ref={searchWrapperRef} className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 relative">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input ref={searchInputRef} placeholder="Buscar producto..." value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setShowProductDropdown(true); }} onFocus={() => setShowProductDropdown(true)} className="pl-10 h-12 text-lg kairox-input pr-10 dark:bg-slate-900 dark:border-slate-700 dark:text-white" autoComplete="off" />
+                  <Input ref={searchInputRef} placeholder="Buscar por nombre o SKU (mínimo 2 caracteres)..." value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setShowProductDropdown(true); }} onFocus={() => setShowProductDropdown(true)} className="pl-10 h-12 text-lg kairox-input pr-10 dark:bg-slate-900 dark:border-slate-700 dark:text-white" autoComplete="off" />
                   <div className={`absolute top-full left-0 w-full z-50 bg-white dark:bg-slate-950 border kairox-border shadow-xl rounded-md mt-1 overflow-hidden max-h-80 overflow-y-auto ${showProductDropdown ? '' : 'hidden'}`}>
+                    {productSearch.length < 2 && (
+                      <div className="px-3 py-4 text-sm text-slate-400 text-center">
+                        Escribí al menos 2 caracteres para buscar
+                      </div>
+                    )}
                     {filteredProducts.map(p => (
                       <div key={p.id} className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 grid grid-cols-12 gap-2 items-center cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20" onClick={() => handleAddToCart(p)}>
                         <div className="col-span-3 text-xs text-slate-500 font-mono truncate">{p.codigo_sku}</div>

@@ -64,7 +64,7 @@ const CONFIG = {
     ],
     buildRow: (mapped, user) => ({
       empresa_id:       user.empresa_id,
-      user_id:          user.tenant_id,
+      user_id:          user.id,
       nombre:           String(mapped.nombre || '').trim(),
       documento:        String(mapped.documento || '').trim(),
       telefono:         String(mapped.telefono || '').trim(),

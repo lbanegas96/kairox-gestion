@@ -90,7 +90,7 @@ function ComprasSection() {
     const { data } = await supabase
       .from('productos')
       .select('id, nombre, codigo_sku, costo_compra, stock_actual, unidad_medida')
-      .eq('user_id', user.tenant_id)
+      .eq('empresa_id', user.empresa_id)
       .eq('activo', true)
       .order('nombre');
     if (data) setProducts(data);
@@ -104,7 +104,7 @@ function ComprasSection() {
       const { data, error } = await supabase
         .from('compras')
         .select('*, proveedores(nombre)')
-        .eq('user_id', user.tenant_id)
+        .eq('empresa_id', user.empresa_id)
         .order('fecha', { ascending: false });
 
       if (error) throw error;
@@ -295,7 +295,7 @@ function ComprasSection() {
       const { data: newPurchase, error: purchaseError } = await supabase
         .from('compras')
         .insert([{
-          user_id: user.tenant_id,
+          user_id: user.id,
           empresa_id: user.empresa_id,
           fecha: getDateFromInputAR(purchaseForm.fecha),
           proveedor_id: purchaseForm.proveedor_id,
@@ -345,7 +345,7 @@ function ComprasSection() {
       const providerName = proveedores.find(p => p.id === purchaseForm.proveedor_id)?.nombre || 'Proveedor';
       if (status === 'pagada') {
         await supabase.from('movimientos_caja').insert([{
-          user_id: user.tenant_id,
+          user_id: user.id,
           empresa_id: user.empresa_id,
           caja_sesion_id: currentSession?.id,
           fecha: getDateFromInputAR(purchaseForm.fecha),

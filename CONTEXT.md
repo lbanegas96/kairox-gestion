@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-09 — Fix bugs críticos (Dashboard KPIs, Listas Precio 400, Notificaciones, OC búsqueda) + Ficha de Alcance DOCX ✅
+**Última actualización:** 2026-06-09 (PM) — 6 fixes: user.tenant_id→user.id (5 archivos), caja solo Efectivo, RPC decrement_stock atómica, 4 índices, moneda paralela CC, POS búsqueda server-side
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -75,6 +75,8 @@
 | `migrations/021_listas_precio.sql` | listas_precio + lista_precio_items + lista_precio_id en clientes + cotizacion_id/pedido_id en comprobantes | ✅ |
 | **`create_tipos_cambio`** (SQL directo) | Tabla `tipos_cambio` — UNIQUE(empresa_id, moneda, fecha) + RLS via get_my_empresa_id() + índice | ✅ |
 | **`add_moneda_paralela`** (SQL directo) | Columnas `usa_tc_paralelo`/`moneda_paralela` en empresas + `monto_paralelo`/`tc_paralelo` en comprobantes, movimientos_caja, cuenta_corriente_movimientos, compras | ✅ |
+| **`migrations/022_rpc_decrement_stock.sql`** | RPC `decrement_stock(p_producto_id, p_cantidad)` — UPDATE atómico con check stock ≥ 0, SECURITY DEFINER | ⏳ Pendiente aplicar |
+| **`migrations/023_indices_faltantes.sql`** | 4 índices: `idx_comprobantes_estado_pago`, `idx_comprobantes_fecha`, `idx_cta_cte_empresa_cliente_tipo`, `idx_mov_inv_fecha` | ⏳ Pendiente aplicar |
 
 ### SQL adicional ejecutado directamente
 
@@ -237,6 +239,10 @@ Cuando `enabled = true`, los siguientes módulos guardan `monto_paralelo` + `tc_
 - Configurar Supabase Auth URLs (Site URL + Redirect URLs → `https://kairox-gestion.vercel.app/**`)
 - Extender TC obligatorio a módulos Caja + Cuenta Corriente + Compras (columnas DB ya listas)
 - Investigar error 400 en consola (query Supabase con timestamp malformado — no bloquea funcionalidad; DISTINTO al bug de lista_precio_items que ya fue corregido)
+- **Aplicar migrations 022 y 023 en Supabase SQL Editor** — copiar y ejecutar ambos archivos
+- Testear manualmente: abrir POS, hacer venta, verificar stock decrementa correctamente
+- Testear: cobro CC vía Transferencia con caja cerrada — debe aprobar
+- Testear: cobro CC vía Efectivo con caja cerrada — debe bloquear
 - **Commit y deploy a producción** — fixes de esta sesión validados en local; pendiente push + deploy Vercel
 
 ---
@@ -279,56 +285,55 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 
 ## Historial de sesiones
 
-<<<<<<< HEAD
-### Sesión 2026-06-08 (PM) — Testing roadmap + bugs UX/conversión moneda
-**Branch:** `fix/sidebar-light-mode-and-bugs` (pendiente PR a master)
+### Sesión 2026-06-09 (PM) — 6 tareas: race condition stock, moneda paralela CC, POS server-side search, índices, user.id
 
-**Bugs corregidos durante testing manual:**
-- **Sidebar:** soporte modo claro — todos los colores hardcoded ahora con variantes `dark:` ([Sidebar.jsx](src/components/Sidebar.jsx))
-- **Dashboard KPIs = $0:** servicios filtraban por `.eq('user_id', empresaId)` en vez de `.eq('empresa_id', empresaId)`. Fixeado en 6 servicios (14 ocurrencias): `dashboardService.ts`, `cajaService.ts`, `clientesService.ts`, `comprasService.ts`, `productosService.ts`, `OrdenesCompraSection.jsx`
-- **Producto SKU obligatorio:** auto-generación `SKU-{timestamp}` si campo vacío + mensaje claro en error de duplicado ([ProductosSection.jsx](src/components/sections/ProductosSection.jsx))
-- **NuevaVentaModal carrito invisible:** agregado `min-h-0` en flex containers + `min-h-[200px]` en panel del carrito para que no colapse a 0 en flexbox
+**Archivos modificados:**
+- `src/components/sections/CuentaCorrienteSection.jsx` — Tarea 1: `user_id: user.id` en INSERTs; Tarea 2: caja solo requerida para Efectivo (no bloquea Transferencia/Tarjeta/Cheque); Tarea 5: `monto_paralelo` + `tc_paralelo` via `useTCParalelo()` en cobros CC
+- `src/components/ventas/NuevaVentaModal.jsx` — Tarea 3: stock decrement ahora usa RPC atómica `decrement_stock` (evita race conditions con ventas simultáneas); Tarea 6: init() ya no carga todos los productos — búsqueda server-side debounced 300ms, min 2 chars, `.or('nombre.ilike,codigo_sku.ilike')`, limit 30; cotizacion pre-fill fetch por IDs específicos
+- `src/components/sections/ClientDetailModal.jsx` — `user_id: user.id` en ambos INSERTs (cuenta_corriente_movimientos + movimientos_caja)
+- `src/components/sections/ClientesSection.jsx` — `user_id: user.id` en INSERT clientes
+- `src/components/ui/CSVImportModal.jsx` — `user_id: user.id` en buildRow (clientes import CSV)
+- `src/components/sections/ComprasSection.jsx` — `user_id: user.id` en INSERTs + `.eq('empresa_id')` en queries
+- `migrations/022_rpc_decrement_stock.sql` — RPC `decrement_stock(p_producto_id, p_cantidad)` con SECURITY DEFINER, UPDATE atómico, check stock ≥ 0
+- `migrations/023_indices_faltantes.sql` — 4 índices: `idx_comprobantes_estado_pago`, `idx_comprobantes_fecha`, `idx_cta_cte_empresa_cliente_tipo`, `idx_mov_inv_fecha`
 
-**TC del día — fix schema + parser robusto:**
-- Tabla `tipos_cambio` real en DB NO tiene columnas `user_id` ni `updated_at` (a diferencia de lo que asumía el código). Removidas del upsert en [tipoCambioService.js](src/services/tipoCambioService.js)
-- Input decimal rechazaba "." en navegador con locale español. Cambiado de `type="number"` a `type="text" inputMode="decimal"` en `TipoCambioModal.jsx` y `MonedaSelector.jsx`
-- **Nuevo helper [`parseNumberLocale()`](src/lib/currencyUtils.js)**: detecta automáticamente formato es-AR (`1.668,21`) o en-US (`1,668.21`) — el último separador es decimal, el resto miles
+**Convenciones confirmadas/reforzadas:**
+- `user.tenant_id === user.empresa_id` (SupabaseAuthContext.jsx:84) — NUNCA usar como `user_id` en INSERTs. Siempre `user.id` para auditoría.
+- Búsqueda POS server-side: state `products` vacío al montar; se pobla solo con debounced search de 2+ chars. Compatible con pre-fill de cotizaciones (fetch por `.in('id', ids)`).
 
-**Conversión moneda en venta (decisión de diseño):**
-- **Lógica adoptada:** productos siempre en ARS, ventas se guardan SIEMPRE en ARS, solo display se convierte a moneda elegida para mostrar al cliente
-- `NuevaVentaModal.jsx`: nuevo helper `totalEnMonedaSeleccionada()` que divide por la tasa solo para mostrar. Banner "Equivale a $X ARS (TC $Y)" debajo del total
-- `ComprobantePrintModal.jsx`: ticket muestra bloque con moneda cobrada + TC + equivalente cuando moneda ≠ ARS
-- `HistorialVentas.jsx`: badge USD/EUR + equivalente debajo del total ARS
-- Fix línea 283 NuevaVentaModal: `calculateTotal()` siempre devuelve ARS, sin multiplicar por tasa (era doble conversión)
+**Pendiente (aplicar en Supabase SQL Editor):**
+- Migration 022: `decrement_stock` RPC — aún NO aplicada a DB
+- Migration 023: índices — aún NO aplicados a DB
 
-**UX Cotizaciones ([CotizacionesSection.jsx](src/components/sections/CotizacionesSection.jsx)):**
-- **Nombre del Cliente:** ahora autocomplete con clientes existentes + permite tipear nombre libre (mensaje aclaratorio)
-- **Buscar producto:** dropdown se abre al hacer focus (no requiere tipear 2+ caracteres). Carga 200 productos al montar, filtra en memoria (sin hits Supabase por tecla)
-- **Cantidad:** step de `0.001` → `1` (flechitas suben/bajan de 1 en 1)
-- **Unidad:** `<input list="unidades-medida">` con datalist de 17 opciones comunes (un, kg, g, l, ml, m, cm, m², m³, caja, paquete, docena, par, hora, día, servicio) + texto libre
-
-**UX Pedidos:** [PedidosSection.jsx](src/components/sections/PedidosSection.jsx) — fix mismo step de cantidad
-
-**Pendientes identificados (no fixeados aún):**
-- Configuración: faltan toggles "Módulos Activos" y "Aprobación OC" (posiblemente perdidos en refactor)
-- Contabilidad muestra 4 tabs en vez de 7 (verificar tras inicializar Plan de Cuentas)
-- Pedidos: dropdown de cliente y producto debería ser igual al de Cotizaciones (mismo patrón)
-- Multi-pago en USD: validación interna sigue siendo en ARS, requiere refactor mayor
-=======
-### Sesión 2026-06-09 — Fix bugs críticos (Dashboard KPIs · Lista Precio 400 · Notificaciones) + Ficha de Alcance DOCX
+### Sesión 2026-06-09 (AM) — Fix bugs críticos (Dashboard KPIs · Lista Precio 400 · Notificaciones) + Ficha de Alcance DOCX
 
 - **Bugs críticos corregidos:**
   - `dashboardService.ts` — todas las queries de `getKPIs`, `getVentasPorDia` y `getFlujoCajaMensual` usaban `.eq('user_id', empresaId)` en lugar de `.eq('empresa_id', empresaId)` → KPIs del Dashboard mostraban 0 para todas las empresas. Fix: reemplazado en las 3 funciones.
   - `listaPreciosService.ts` — `getItems()` usaba PostgREST embedded select `.select('*, productos(nombre, codigo_sku, precio_venta)')` pero `lista_precio_items.producto_id` no tiene FK a `productos` en la migración 021 → 400 Bad Request al abrir una lista. Fix: reescrito como consulta en dos pasos (query items → `.in('id', productoIds)` en productos → merge manual).
   - `Dashboard.jsx` — `<Header>` se renderizaba sin la prop `onNavigate`, por lo que `onNavigate?.(item.seccion)` en Header.jsx siempre era `undefined?.()` → las notificaciones no navegaban al módulo de origen. Fix: agregado `onNavigate={setActiveSection}` al componente `<Header>`.
-- **Nueva regla de convención:** PostgREST embedded select requiere FK explícita en PostgreSQL. Sin FK → usar consulta en dos pasos.
-- **Bug adicional corregido (misma sesión):**
   - `OrdenesCompraSection.jsx` — `searchProducto()` usaba `.eq('user_id', empresaId)` → búsqueda de productos al crear una nueva OC devolvía vacío. Fix: `.eq('empresa_id', empresaId)`.
 - **Documentación generada:**
-  - `docs/generate_ficha_alcance.js` — script Node.js (~600 líneas) usando `docx` npm. Genera documento Word profesional con 9 secciones, brand colors KAIROX, Arial 11pt, márgenes 1", números de página, header/footer confidencial, tabla comparativa de competidores (columnas en blanco para completar manualmente). 7 grupos de módulos, 29 módulos documentados, 22 filas en tabla comparativa.
-  - `docs/KAIROX_Gestion_Ficha_Alcance.docx` — documento generado (~28 KB, ~20-25 páginas). Secciones: Portada · Resumen Ejecutivo · Ficha Técnica · Módulos del Sistema · Roadmap · Tabla Comparativa · Diferenciadores Clave · Modelo Comercial · Estado del Desarrollo.
-  - `docs/node_modules/` + `docs/package.json` — instalación local de `docx` (global npm no resuelve en este entorno).
->>>>>>> 8fa6a8b (Fix 4 bugs críticos multi-tenant + Ficha de Alcance DOCX)
+  - `docs/generate_ficha_alcance.js` + `docs/KAIROX_Gestion_Ficha_Alcance.docx` — script Node.js + DOCX Word profesional con 9 secciones, 29 módulos documentados, tabla comparativa de competidores.
+
+### Sesión 2026-06-08 (PM) — Testing roadmap + bugs UX/conversión moneda
+
+- **Bugs corregidos durante testing manual:**
+  - `dashboardService.ts`, `cajaService.ts`, `clientesService.ts`, `comprasService.ts`, `productosService.ts`, `OrdenesCompraSection.jsx` — 14 ocurrencias de `.eq('user_id', empresaId)` → `.eq('empresa_id', empresaId)`
+  - `Sidebar.jsx` — soporte modo claro con variantes `dark:`
+  - `ProductosSection.jsx` — SKU obligatorio: auto-genera `SKU-{timestamp}` si vacío + mensaje de duplicado claro
+  - `NuevaVentaModal.jsx` — carrito invisible en flexbox: `min-h-0` + `min-h-[200px]` en panel carrito
+- **TC del día — fix schema + parser robusto:**
+  - `tipoCambioService.js` — removidas columnas `user_id` y `updated_at` del upsert (no existen en DB real)
+  - `TipoCambioModal.jsx` + `MonedaSelector.jsx` — input cambiado de `type="number"` a `type="text" inputMode="decimal"` (fix locale español rechazando ".")
+  - `currencyUtils.js` — nuevo helper `parseNumberLocale()`: detecta formato es-AR vs en-US automáticamente
+- **Conversión moneda en venta (decisión de diseño adoptada):**
+  - Productos siempre en ARS. Ventas se guardan SIEMPRE en ARS. Solo display se convierte.
+  - `NuevaVentaModal.jsx` — `totalEnMonedaSeleccionada()` divide por tasa solo para mostrar. Banner "Equivale a $X ARS (TC $Y)"
+  - `ComprobantePrintModal.jsx` — ticket muestra bloque moneda cobrada + TC + equivalente ARS cuando moneda ≠ ARS
+  - `HistorialVentas.jsx` — badge USD/EUR + equivalente debajo del total ARS
+  - Fix línea 283: `calculateTotal()` siempre devuelve ARS (era doble conversión)
+- **UX Cotizaciones** (`CotizacionesSection.jsx`) — cliente: autocomplete + nombre libre; producto: dropdown en focus, carga 200 en memoria; cantidad: step 1; unidad: datalist 17 opciones
+- **UX Pedidos** (`PedidosSection.jsx`) — fix step cantidad
 
 ### Sesión 2026-06-08 (PM) — Testing roadmap + bugs UX + conversión moneda
 

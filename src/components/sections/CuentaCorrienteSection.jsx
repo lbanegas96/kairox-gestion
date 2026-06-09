@@ -46,12 +46,14 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { getNowAR } from '@/lib/dateUtils';
+import { useTCParalelo } from '@/hooks/useTCParalelo';
 import ClientDetailModal from './ClientDetailModal';
 
 function CuentaCorrienteSection() {
   const { user } = useAuth();
   const { isSessionOpen, currentSession } = useCaja();
   const { toast } = useToast();
+  const tcParalelo = useTCParalelo();
   
   // Data State
   const [loading, setLoading] = useState(true);
@@ -235,13 +237,18 @@ function CuentaCorrienteSection() {
   };
 
   const handleRegisterPayment = async () => {
-    if (!isSessionOpen) {
-      toast({ variant: 'destructive', title: 'Caja cerrada', description: 'Debe abrir caja antes de registrar cobros' });
-      return; 
+    // Solo Efectivo requiere caja abierta — Transferencia/Tarjeta/Cheque no
+    if (paymentData.metodo === 'Efectivo' && !isSessionOpen) {
+      toast({
+        variant: 'destructive',
+        title: 'Caja cerrada',
+        description: 'Abrí la caja antes de registrar cobros en efectivo.',
+      });
+      return;
     }
 
     if (!selectedClient) return;
-    
+
     const amount = parseFloat(paymentData.monto);
     if (!amount || isNaN(amount) || amount <= 0) {
       toast({ title: "Error", description: "Ingrese un monto válido mayor a 0", variant: "destructive" });
@@ -251,24 +258,30 @@ function CuentaCorrienteSection() {
     setIsProcessingPayment(true);
     const date = getNowAR().toISOString();
 
+    // Calcular monto en moneda paralela si la empresa lo usa
+    const pagoParalelo = tcParalelo.enabled && tcParalelo.tcHoy
+      ? tcParalelo.calcParalelo(amount, 'ARS', 1)
+      : null;
+
     try {
-      // 1. Insert Movement in Current Account (HABER reduces debt)
+      // 1. Movimiento en Cuenta Corriente (HABER reduce la deuda)
       const { error: movError } = await supabase.from('cuenta_corriente_movimientos').insert([{
-        user_id: user.tenant_id,
-        empresa_id: user.empresa_id, // Ensure empresa_id is included
+        user_id: user.id,
+        empresa_id: user.empresa_id,
         cliente_id: selectedClient.id,
         tipo: 'HABER',
         monto: amount,
         descripcion: paymentData.nota ? `Pago: ${paymentData.nota}` : 'Pago de deuda',
-        fecha: date
+        fecha: date,
+        ...(pagoParalelo !== null ? { monto_paralelo: pagoParalelo, tc_paralelo: tcParalelo.tcHoy } : {}),
       }]);
-      
+
       if (movError) throw movError;
 
-      // 2. Insert Movement in Cash Box
+      // 2. Movimiento en Caja
       const { error: cashError } = await supabase.from('movimientos_caja').insert([{
-        user_id: user.tenant_id,
-        empresa_id: user.empresa_id, // Ensure empresa_id is included
+        user_id: user.id,
+        empresa_id: user.empresa_id,
         caja_sesion_id: currentSession?.id,
         fecha: date,
         tipo: 'ingreso',
@@ -276,7 +289,8 @@ function CuentaCorrienteSection() {
         concepto: `Cobro a ${selectedClient.nombre} - ${paymentData.metodo}`,
         monto: amount,
         metodo_pago: paymentData.metodo,
-        is_automatic: true
+        is_automatic: true,
+        ...(pagoParalelo !== null ? { monto_paralelo: pagoParalelo, tc_paralelo: tcParalelo.tcHoy } : {}),
       }]);
 
       if (cashError) throw cashError;

@@ -92,7 +92,7 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
     try {
       // 1. Insert Movement in Current Account (HABER reduces debt)
       const { error: movError } = await supabase.from('cuenta_corriente_movimientos').insert([{
-        user_id: user.tenant_id,
+        user_id: user.id,
         cliente_id: clientId,
         tipo: 'HABER',
         monto: amount,
@@ -104,7 +104,7 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
 
       // 2. Insert Movement in Cash Box
       const { error: cashError } = await supabase.from('movimientos_caja').insert([{
-        user_id: user.tenant_id,
+        user_id: user.id,
         caja_sesion_id: currentSession?.id,
         fecha: date,
         tipo: 'ingreso',
