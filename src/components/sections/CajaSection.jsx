@@ -28,6 +28,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
+import { useTCParalelo } from '@/hooks/useTCParalelo';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 import { getNowAR, getTodayAR, getStartOfDayAR, getEndOfDayAR, getDateFromInputAR, formatDateTimeAR, formatDateAR } from '@/lib/dateUtils';
 import CajaCierre from '@/components/caja/CajaCierre';
 
@@ -35,6 +37,7 @@ function CajaSection() {
   const { user } = useAuth();
   const { currentSession, isSessionOpen, loading: sessionLoading, openSession, refreshSession } = useCaja();
   const { toast } = useToast();
+  const tcParalelo = useTCParalelo();
   
   // State
   const [activeTab, setActiveTab] = useState("movimientos");
@@ -324,6 +327,13 @@ function CajaSection() {
 
     setLoading(true);
     try {
+      const montoNum = parseNumberLocale(formData.monto);
+
+      // Moneda paralela: calcular equivalente si está habilitado y hay TC del día
+      const montoParaleloValue = tcParalelo.enabled && tcParalelo.tcHoy
+        ? tcParalelo.calcParalelo(montoNum, 'ARS', 1)
+        : null;
+
       const { error } = await supabase.from('movimientos_caja').insert([{
         user_id: user.id,
         empresa_id: user.empresa_id,
@@ -331,10 +341,14 @@ function CajaSection() {
         tipo: formData.tipo,
         categoria: formData.categoria,
         concepto: formData.concepto,
-        monto: parseFloat(formData.monto),
+        monto: montoNum,
         fecha: getDateFromInputAR(formData.fecha),
         metodo_pago: formData.metodo_pago || 'Efectivo',
         is_automatic: false,
+        ...(montoParaleloValue !== null ? {
+          monto_paralelo: montoParaleloValue,
+          tc_paralelo: tcParalelo.tcHoy,
+        } : {}),
       }]);
 
       if (error) throw error;
@@ -542,6 +556,11 @@ function CajaSection() {
               <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
                 ${totals.ingresos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
               </div>
+              {tcParalelo.enabled && tcParalelo.tcHoy && (
+                <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                  ≈ {(totals.ingresos / tcParalelo.tcHoy).toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
+                </div>
+              )}
               <div className="text-xs text-slate-400 mt-0.5">Desde apertura de caja</div>
             </div>
           </div>
@@ -664,7 +683,12 @@ function CajaSection() {
                         </td>
                         <td className="p-4 align-middle text-xs text-slate-500 dark:text-slate-400">{m.metodo_pago || '-'}</td>
                         <td className={`p-4 align-middle text-right font-bold font-mono ${m.tipo === 'ingreso' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                          {formatAmount(m.monto, m.tipo)}
+                          <div>{formatAmount(m.monto, m.tipo)}</div>
+                          {tcParalelo.enabled && m.monto_paralelo && (
+                            <div className="text-xs font-normal text-slate-400 dark:text-slate-500">
+                              ≈ {Number(m.monto_paralelo).toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
+                            </div>
+                          )}
                         </td>
                         <td className="p-4 align-middle text-center">
                            {!m.is_automatic && (
