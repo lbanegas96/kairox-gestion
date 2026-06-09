@@ -14,6 +14,9 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { getTodayAR, getDateFromInputAR } from '@/lib/dateUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
+import { MonedaSelector } from '@/components/ui/MonedaSelector';
+import { useTCParalelo } from '@/hooks/useTCParalelo';
+import { formatCurrency } from '@/lib/currencyUtils';
 import CompraDetailModal from '../ventas/CompraDetailModal';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 
@@ -67,6 +70,12 @@ function ComprasSection() {
   const [editSearch, setEditSearch] = useState('');
   const [showEditAutocomplete, setShowEditAutocomplete] = useState(false);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  // Moneda y TC obligatorio
+  const [moneda, setMoneda] = useState('ARS');
+  const [tipoCambioTasa, setTipoCambioTasa] = useState(1);
+  const [tcMissing, setTcMissing] = useState(false);
+  const tcParalelo = useTCParalelo();
 
   useEffect(() => {
     if (user) {
@@ -262,6 +271,9 @@ function ComprasSection() {
       forma_pago: 'Efectivo'
     });
     setProductSearch('');
+    setMoneda('ARS');
+    setTipoCambioTasa(1);
+    setTcMissing(false);
     setShowClearConfirm(false);
     toast({ title: "Formulario limpiado" });
   };
@@ -292,6 +304,14 @@ function ComprasSection() {
       const totalCompra = calculateTotal();
       const status = purchaseForm.forma_pago === 'Cuenta Corriente' ? 'pendiente' : 'pagada';
 
+      // Moneda paralela
+      const montoParaleloValue = tcParalelo.enabled && tcParalelo.tcHoy
+        ? tcParalelo.calcParalelo(totalCompra, moneda, tipoCambioTasa)
+        : null;
+      const tcParaleloValue = tcParalelo.enabled && montoParaleloValue !== null
+        ? (moneda === tcParalelo.monedaParalela ? tipoCambioTasa : tcParalelo.tcHoy)
+        : null;
+
       const { data: newPurchase, error: purchaseError } = await supabase
         .from('compras')
         .insert([{
@@ -302,7 +322,13 @@ function ComprasSection() {
           numero_factura: purchaseForm.numero_factura || 'S/N',
           total: totalCompra,
           forma_pago: purchaseForm.forma_pago,
-          estado_pago: status
+          estado_pago: status,
+          moneda,
+          tipo_cambio_tasa: tipoCambioTasa,
+          ...(montoParaleloValue !== null ? {
+            monto_paralelo: montoParaleloValue,
+            tc_paralelo: tcParaleloValue,
+          } : {}),
         }])
         .select()
         .single();
@@ -383,10 +409,13 @@ function ComprasSection() {
         forma_pago: 'Efectivo'
       });
       setCart([]);
-      
+      setMoneda('ARS');
+      setTipoCambioTasa(1);
+      setTcMissing(false);
+
       loadProducts();
       setActiveTab('historial');
-      loadCompras(); 
+      loadCompras();
 
     } catch (error) {
       console.error('Transaction error:', error);
@@ -602,6 +631,18 @@ function ComprasSection() {
               <div className="space-y-2"><Label className="dark:text-white">N° Factura / Referencia</Label><Input value={purchaseForm.numero_factura} onChange={e => setPurchaseForm({...purchaseForm, numero_factura: e.target.value})} placeholder="Ej: F-001-2304" className="kairox-input dark:bg-slate-900 dark:border-slate-700 dark:text-white"/></div>
               <div className="space-y-2"><Label className="dark:text-white">Fecha de Compra</Label><div className="relative"><Calendar className="absolute left-3 top-2.5 h-4 w-4 text-slate-500"/><Input type="date" value={purchaseForm.fecha} onChange={e => setPurchaseForm({...purchaseForm, fecha: e.target.value})} className="pl-9 kairox-input dark:bg-slate-900 dark:border-slate-700 dark:text-white"/></div></div>
               <div className="space-y-2"><Label className="dark:text-white">Forma de Pago</Label><select className="w-full h-10 rounded-md bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={purchaseForm.forma_pago} onChange={e => setPurchaseForm({...purchaseForm, forma_pago: e.target.value})}><option value="Efectivo">Efectivo</option><option value="Transferencia">Transferencia</option><option value="Tarjeta">Tarjeta</option><option value="Cuenta Corriente">Cuenta Corriente</option></select></div>
+              <div className="col-span-1 md:col-span-2">
+                <MonedaSelector
+                  moneda={moneda}
+                  tasa={tipoCambioTasa}
+                  onMonedaChange={v => {
+                    setMoneda(v);
+                    if (v === 'ARS') { setTipoCambioTasa(1); setTcMissing(false); }
+                  }}
+                  onTasaChange={v => setTipoCambioTasa(v)}
+                  onTCMissingChange={setTcMissing}
+                />
+              </div>
             </div>
           </div>
 
@@ -621,13 +662,20 @@ function ComprasSection() {
               <div className="h-12 w-px bg-slate-200 dark:bg-slate-700 mx-2 hidden md:block"></div>
               <div className="flex gap-2 w-full md:w-auto">
                  <Button variant="destructive" onClick={() => setShowClearConfirm(true)} className="h-14 px-4 bg-red-100 hover:bg-red-200 text-red-600 border border-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 dark:border-red-900/50 w-full md:w-auto" disabled={isSubmitting || cart.length === 0}><Trash2 className="w-5 h-5" /></Button>
-                <Button 
-                  onClick={handleRegisterPurchase} 
-                  disabled={!isPurchaseValid() || isSubmitting || !isSessionOpen} 
-                  className={`h-14 px-8 text-lg font-bold text-white shadow-lg border-0 transition-all w-full md:w-auto ${!isSessionOpen ? 'bg-slate-400 cursor-not-allowed dark:bg-slate-600' : 'bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 shadow-blue-900/20 hover:scale-105 dark:from-[#00D4FF] dark:to-[#A855F7]'}`}
-                >
-                  {isSubmitting ? 'REGISTRANDO...' : !isSessionOpen ? 'CAJA CERRADA' : 'REGISTRAR COMPRA'}
-                </Button>
+                <div className="flex flex-col items-end gap-1 w-full md:w-auto">
+                  <Button
+                    onClick={handleRegisterPurchase}
+                    disabled={!isPurchaseValid() || isSubmitting || !isSessionOpen || (moneda !== 'ARS' && tcMissing)}
+                    className={`h-14 px-8 text-lg font-bold text-white shadow-lg border-0 transition-all w-full md:w-auto ${!isSessionOpen ? 'bg-slate-400 cursor-not-allowed dark:bg-slate-600' : 'bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 shadow-blue-900/20 hover:scale-105 dark:from-[#00D4FF] dark:to-[#A855F7]'}`}
+                  >
+                    {isSubmitting ? 'REGISTRANDO...' : !isSessionOpen ? 'CAJA CERRADA' : 'REGISTRAR COMPRA'}
+                  </Button>
+                  {moneda !== 'ARS' && tcMissing && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      ⚠ Cargá el TC del día para registrar la compra
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -782,7 +830,12 @@ function ComprasSection() {
                           <EstadoBadge estado={compra.estado_pago} />
                         </td>
                         <td className="p-4 text-right font-bold text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                          ${compra.total?.toFixed(2)}
+                          {formatCurrency(compra.total, compra.moneda ?? 'ARS')}
+                          {compra.moneda && compra.moneda !== 'ARS' && (
+                            <span className="text-xs text-slate-400 dark:text-slate-500 ml-1 font-normal">
+                              (TC: {compra.tipo_cambio_tasa})
+                            </span>
+                          )}
                         </td>
                         <td className="p-4 text-center">
                           <div className="flex justify-center gap-1">
