@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { getNowAR } from '@/lib/dateUtils';
 
 // Notificaciones tienen que sentirse "vivas" — refrescamos cada 30s
 // y siempre que el usuario vuelve al tab del navegador.
@@ -42,7 +43,7 @@ export function useNotifications() {
   const { data: deudaVencida = [] } = useQuery({
     queryKey: ['notif', 'deuda_vencida', empresaId],
     queryFn: async () => {
-      const hace30dias = new Date(Date.now() - 30 * 86400000).toISOString();
+      const hace30dias = new Date(getNowAR().getTime() - 30 * 86400000).toISOString();
       const { data: clientes, error } = await supabase
         .from('clientes')
         .select('id, nombre, saldo_actual')
@@ -88,7 +89,7 @@ export function useNotifications() {
   const { data: cajaSinCerrar = [] } = useQuery({
     queryKey: ['notif', 'caja_sin_cerrar', empresaId],
     queryFn: async () => {
-      const hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const hace24h = new Date(getNowAR().getTime() - 24 * 60 * 60 * 1000).toISOString();
       const { data, error } = await supabase
         .from('caja_sesiones')
         .select('id, caja_id, apertura_fecha, cajas(nombre)')

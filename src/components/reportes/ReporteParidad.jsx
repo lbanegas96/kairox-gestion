@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
+import { getTodayAR } from '@/lib/dateUtils';
 
 /**
  * Reporte de Paridad ARS / Moneda Paralela (estilo SAP "Currency Translation Report").
@@ -25,11 +26,12 @@ function ReporteParidad({ onBack }) {
   const { user } = useAuth();
   const { monedaParalela } = useTCParalelo();
 
-  const today = new Date();
-  const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  // Usar AR timezone para que la fecha inicial sea la correcta en Argentina
+  const todayStr       = getTodayAR();                      // 'YYYY-MM-DD' en hora AR
+  const firstOfMonthStr = todayStr.slice(0, 7) + '-01';    // 'YYYY-MM-01'
 
-  const [dateFrom, setDateFrom] = useState(firstOfMonth.toISOString().split('T')[0]);
-  const [dateTo, setDateTo]     = useState(today.toISOString().split('T')[0]);
+  const [dateFrom, setDateFrom] = useState(firstOfMonthStr);
+  const [dateTo, setDateTo]     = useState(todayStr);
   const [rows, setRows]         = useState([]);
   const [loading, setLoading]   = useState(false);
   const [generated, setGenerated] = useState(false);
@@ -48,9 +50,10 @@ function ReporteParidad({ onBack }) {
     if (!user?.empresa_id) return;
     setLoading(true);
     try {
-      // Ajustar fechas a UTC boundaries
-      const startISO = new Date(`${dateFrom}T00:00:00`).toISOString();
-      const endISO   = new Date(`${dateTo}T23:59:59`).toISOString();
+      // Construir ISO directo para no depender del timezone del browser.
+      // El sistema almacena timestamps como "AR-local-as-UTC" (medianoche AR = T00:00:00Z).
+      const startISO = `${dateFrom}T00:00:00.000Z`;
+      const endISO   = `${dateTo}T23:59:59.999Z`;
 
       // 1. Traer comprobantes del período
       const { data: comps, error: compError } = await supabase

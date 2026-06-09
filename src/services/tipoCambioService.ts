@@ -1,4 +1,5 @@
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/customSupabaseClient';
+import { getTodayAR } from '@/lib/dateUtils';
 
 export const TC_KEYS = {
   all:     (empresaId: string) => ['tipos_cambio', empresaId] as const,
@@ -17,7 +18,7 @@ export interface TipoCambio {
 /** Obtiene la tasa vigente más reciente para una moneda */
 export async function getTasaVigente(empresaId: string, moneda: string, fecha?: string): Promise<number> {
   if (moneda === 'ARS') return 1;
-  const targetDate = fecha ?? new Date().toISOString().slice(0, 10);
+  const targetDate = fecha ?? getTodayAR();
   const { data, error } = await supabase
     .from('tipos_cambio')
     .select('tasa')
