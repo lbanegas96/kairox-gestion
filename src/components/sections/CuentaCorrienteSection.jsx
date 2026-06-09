@@ -45,7 +45,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
-import { getNowAR } from '@/lib/dateUtils';
+import { getNowAR, formatDateAR } from '@/lib/dateUtils';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import ClientDetailModal from './ClientDetailModal';
 
@@ -96,46 +96,39 @@ function CuentaCorrienteSection() {
   const fetchAgingData = async () => {
     setAgingLoading(true);
     try {
-      const { data: conDeuda } = await supabase
-        .from('clientes')
-        .select('id, nombre, saldo_actual')
-        .eq('empresa_id', user.empresa_id)
-        .gt('saldo_actual', 0)
-        .eq('activo', true)
-        .order('saldo_actual', { ascending: false });
-
-      if (!conDeuda?.length) { setAgingData([]); return; }
-
-      const clienteIds = conDeuda.map(c => c.id);
-
-      // Comprobante pendiente más antiguo por cliente (Open Item real)
-      // Bug fix: antes tomaba el DEBE más antiguo aunque ya estuviera pagado,
-      // lo que clasificaba clientes sin deuda activa en bandas +90 días incorrectamente.
-      const { data: comprobantesAbiertos } = await supabase
+      // Open Item Management: cada comprobante pendiente es un ítem abierto con su propia fecha.
+      // Esto evita que deudas viejas ya pagadas afecten la banda de antigüedad actual.
+      const { data: comprobantes, error } = await supabase
         .from('comprobantes')
-        .select('cliente_id, fecha')
+        .select('id, numero_venta, fecha, total, cliente_id, cliente_nombre')
         .eq('empresa_id', user.empresa_id)
         .eq('estado_pago', 'pendiente')
-        .in('cliente_id', clienteIds)
+        .eq('tipo', 'venta')
+        .not('cliente_id', 'is', null)
         .order('fecha', { ascending: true });
 
-      const oldestByClient = {};
-      for (const c of (comprobantesAbiertos || [])) {
-        if (!oldestByClient[c.cliente_id]) oldestByClient[c.cliente_id] = c.fecha;
-      }
+      if (error) throw error;
+      if (!comprobantes?.length) { setAgingData([]); return; }
 
-      const now = new Date();
-      const result = conDeuda.map(c => {
-        const oldestFecha = oldestByClient[c.id];
-        const dias = oldestFecha
-          ? Math.floor((now - new Date(oldestFecha)) / 86400000)
-          : 0;
+      const now = getNowAR();
+      const result = comprobantes.map(comp => {
+        const dias = Math.floor((now - new Date(comp.fecha)) / 86400000);
         let banda, color;
-        if (dias <= 30)       { banda = '0–30 días';  color = 'green'; }
-        else if (dias <= 60)  { banda = '31–60 días'; color = 'yellow'; }
-        else if (dias <= 90)  { banda = '61–90 días'; color = 'orange'; }
-        else                  { banda = '+90 días';   color = 'red'; }
-        return { ...c, dias, banda, color, oldestFecha };
+        if (dias <= 30)      { banda = '0–30 días';  color = 'green'; }
+        else if (dias <= 60) { banda = '31–60 días'; color = 'yellow'; }
+        else if (dias <= 90) { banda = '61–90 días'; color = 'orange'; }
+        else                 { banda = '+90 días';   color = 'red'; }
+        return {
+          comprobante_id: comp.id,
+          numero_venta:   comp.numero_venta,
+          fecha:          comp.fecha,
+          total:          Number(comp.total),
+          cliente_id:     comp.cliente_id,
+          cliente_nombre: comp.cliente_nombre,
+          dias,
+          banda,
+          color,
+        };
       });
 
       setAgingData(result.sort((a, b) => b.dias - a.dias));
@@ -154,10 +147,10 @@ function CuentaCorrienteSection() {
       '61–90 días': { monto: 0, count: 0, color: 'orange' },
       '+90 días':   { monto: 0, count: 0, color: 'red' },
     };
-    for (const c of agingData) {
-      if (bandas[c.banda]) {
-        bandas[c.banda].monto += Number(c.saldo_actual);
-        bandas[c.banda].count += 1;
+    for (const comp of agingData) {
+      if (bandas[comp.banda]) {
+        bandas[comp.banda].monto += comp.total;
+        bandas[comp.banda].count += 1;
       }
     }
     return bandas;
@@ -575,7 +568,7 @@ function CuentaCorrienteSection() {
                   <CardContent className="p-4">
                     <div className="text-xs font-semibold uppercase tracking-wider mb-2">{banda}</div>
                     <div className="text-xl font-bold font-mono">${info.monto.toLocaleString('es-AR', { minimumFractionDigits: 0 })}</div>
-                    <div className="text-xs mt-1">{info.count} cliente{info.count !== 1 ? 's' : ''}</div>
+                    <div className="text-xs mt-1">{info.count} comprobante{info.count !== 1 ? 's' : ''}</div>
                   </CardContent>
                 </Card>
               );
@@ -588,8 +581,10 @@ function CuentaCorrienteSection() {
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
                   <tr>
+                    <th className="text-left p-4 font-semibold text-slate-600 dark:text-slate-300">Comprobante</th>
                     <th className="text-left p-4 font-semibold text-slate-600 dark:text-slate-300">Cliente</th>
-                    <th className="text-right p-4 font-semibold text-slate-600 dark:text-slate-300">Saldo</th>
+                    <th className="text-right p-4 font-semibold text-slate-600 dark:text-slate-300">Monto</th>
+                    <th className="text-center p-4 font-semibold text-slate-600 dark:text-slate-300">Fecha</th>
                     <th className="text-center p-4 font-semibold text-slate-600 dark:text-slate-300">Antigüedad</th>
                     <th className="text-center p-4 font-semibold text-slate-600 dark:text-slate-300">Banda</th>
                     <th className="text-center p-4 font-semibold text-slate-600 dark:text-slate-300">Acciones</th>
@@ -599,41 +594,51 @@ function CuentaCorrienteSection() {
                   {agingLoading ? (
                     Array.from({ length: 4 }).map((_, i) => (
                       <tr key={i}>
+                        <td className="p-4"><div className="h-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse w-24" /></td>
                         <td className="p-4"><div className="h-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse w-36" /></td>
                         <td className="p-4"><div className="h-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse w-20 ml-auto" /></td>
-                        <td className="p-4"><div className="h-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse w-16 mx-auto" /></td>
                         <td className="p-4"><div className="h-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse w-20 mx-auto" /></td>
                         <td className="p-4"><div className="h-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse w-16 mx-auto" /></td>
+                        <td className="p-4"><div className="h-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse w-20 mx-auto" /></td>
+                        <td className="p-4"><div className="h-4 bg-slate-200 dark:bg-slate-700 rounded animate-pulse w-8 mx-auto" /></td>
                       </tr>
                     ))
                   ) : agingData.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-10 text-center text-slate-400 dark:text-slate-500">
+                      <td colSpan={7} className="p-10 text-center text-slate-400 dark:text-slate-500">
                         <TrendingDown className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                        <p>No hay clientes con deuda pendiente ✓</p>
+                        <p>No hay comprobantes pendientes ✓</p>
                       </td>
                     </tr>
                   ) : (
-                    agingData.map(c => {
+                    agingData.map(comp => {
                       const bandaColors = {
                         green:  { badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400', row: '' },
                         yellow: { badge: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400', row: 'bg-yellow-50/30 dark:bg-yellow-900/5' },
                         orange: { badge: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400', row: 'bg-orange-50/40 dark:bg-orange-900/5' },
                         red:    { badge: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', row: 'bg-red-50/40 dark:bg-red-900/5' },
                       };
-                      const bColors = bandaColors[c.color] || bandaColors.green;
+                      const bColors = bandaColors[comp.color] || bandaColors.green;
                       return (
-                        <tr key={c.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${bColors.row}`}>
-                          <td className="p-4 font-medium text-slate-800 dark:text-slate-200">{c.nombre}</td>
+                        <tr key={comp.comprobante_id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${bColors.row}`}>
+                          <td className="p-4 font-mono text-sm font-bold text-slate-700 dark:text-slate-300">
+                            #{comp.numero_venta}
+                          </td>
+                          <td className="p-4 font-medium text-slate-800 dark:text-slate-200">
+                            {comp.cliente_nombre}
+                          </td>
                           <td className="p-4 text-right font-mono font-bold text-red-600 dark:text-red-400">
-                            ${Number(c.saldo_actual).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                            ${comp.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="p-4 text-center text-slate-500 dark:text-slate-400 text-sm">
+                            {formatDateAR(comp.fecha)}
                           </td>
                           <td className="p-4 text-center font-mono text-slate-600 dark:text-slate-400">
-                            {c.dias} días
+                            {comp.dias} días
                           </td>
                           <td className="p-4 text-center">
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${bColors.badge}`}>
-                              {c.banda}
+                              {comp.banda}
                             </span>
                           </td>
                           <td className="p-4 text-center">
@@ -641,8 +646,12 @@ function CuentaCorrienteSection() {
                               variant="ghost"
                               size="sm"
                               className="h-8 w-8 p-0 rounded-full text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                              onClick={() => { setSelectedClient(c); setDetailModalOpen(true); setActiveTab('clientes'); }}
-                              title="Ver detalle"
+                              onClick={() => {
+                                setSelectedClient({ id: comp.cliente_id, nombre: comp.cliente_nombre });
+                                setDetailModalOpen(true);
+                                setActiveTab('clientes');
+                              }}
+                              title="Ver detalle del cliente"
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
