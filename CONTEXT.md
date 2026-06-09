@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-09 (PM) — 6 fixes: user.tenant_id→user.id (5 archivos), caja solo Efectivo, RPC decrement_stock atómica, 4 índices, moneda paralela CC, POS búsqueda server-side
+**Última actualización:** 2026-06-09 (PM) — 10 bugs corregidos: user.id auditoría, caja/Efectivo, RPC stock, índices, moneda paralela CC, POS server-side, aging Open Items, toast stock carrito, fechas OC timezone, TC faltante bloquea OC
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -75,8 +75,8 @@
 | `migrations/021_listas_precio.sql` | listas_precio + lista_precio_items + lista_precio_id en clientes + cotizacion_id/pedido_id en comprobantes | ✅ |
 | **`create_tipos_cambio`** (SQL directo) | Tabla `tipos_cambio` — UNIQUE(empresa_id, moneda, fecha) + RLS via get_my_empresa_id() + índice | ✅ |
 | **`add_moneda_paralela`** (SQL directo) | Columnas `usa_tc_paralelo`/`moneda_paralela` en empresas + `monto_paralelo`/`tc_paralelo` en comprobantes, movimientos_caja, cuenta_corriente_movimientos, compras | ✅ |
-| **`migrations/022_rpc_decrement_stock.sql`** | RPC `decrement_stock(p_producto_id, p_cantidad)` — UPDATE atómico con check stock ≥ 0, SECURITY DEFINER | ⏳ Pendiente aplicar |
-| **`migrations/023_indices_faltantes.sql`** | 4 índices: `idx_comprobantes_estado_pago`, `idx_comprobantes_fecha`, `idx_cta_cte_empresa_cliente_tipo`, `idx_mov_inv_fecha` | ⏳ Pendiente aplicar |
+| **`migrations/022_rpc_decrement_stock.sql`** | RPC `decrement_stock(p_producto_id, p_cantidad)` — UPDATE atómico con check stock ≥ 0, SECURITY DEFINER | ✅ Aplicada via MCP |
+| **`migrations/023_indices_faltantes.sql`** | 4 índices: `idx_comprobantes_estado_pago`, `idx_comprobantes_fecha`, `idx_cta_cte_empresa_cliente_tipo`, `idx_mov_inv_fecha` | ✅ Aplicada via MCP |
 
 ### SQL adicional ejecutado directamente
 
@@ -239,11 +239,14 @@ Cuando `enabled = true`, los siguientes módulos guardan `monto_paralelo` + `tc_
 - Configurar Supabase Auth URLs (Site URL + Redirect URLs → `https://kairox-gestion.vercel.app/**`)
 - Extender TC obligatorio a módulos Caja + Cuenta Corriente + Compras (columnas DB ya listas)
 - Investigar error 400 en consola (query Supabase con timestamp malformado — no bloquea funcionalidad; DISTINTO al bug de lista_precio_items que ya fue corregido)
-- **Aplicar migrations 022 y 023 en Supabase SQL Editor** — copiar y ejecutar ambos archivos
-- Testear manualmente: abrir POS, hacer venta, verificar stock decrementa correctamente
-- Testear: cobro CC vía Transferencia con caja cerrada — debe aprobar
-- Testear: cobro CC vía Efectivo con caja cerrada — debe bloquear
-- **Commit y deploy a producción** — fixes de esta sesión validados en local; pendiente push + deploy Vercel
+- **Tests manuales pendientes:**
+  - POS: hacer venta y verificar stock decrementa correctamente (RPC 022)
+  - CC cobro Transferencia con caja cerrada → debe aprobar
+  - CC cobro Efectivo con caja cerrada → debe bloquear
+  - Aging: cliente con deuda vieja pagada + deuda nueva → banda correcta
+  - Carrito POS: ingresar cantidad mayor al stock → toast de advertencia
+  - OC en USD sin TC → botón deshabilitado + mensaje ⚠
+- **Deploy a producción** — todos los fixes comiteados y pusheados a master; pendiente deploy Vercel
 
 ---
 
@@ -284,6 +287,18 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-09 (PM·2) — Bugs #4–#7: aging, toast stock, fechas OC, TC bloquea OC
+
+**Archivos modificados:**
+- `src/components/sections/CuentaCorrienteSection.jsx` — Bug #4: `fetchAgingData()` ahora calcula antigüedad desde `comprobantes.estado_pago = 'pendiente'` (Open Items reales) en vez del DEBE más antiguo históricamente. Elimina falsos positivos en banda +90 días para clientes con deuda vieja pagada y deuda nueva reciente.
+- `src/components/ventas/NuevaVentaModal.jsx` — Bug #5: `updateQuantity()` muestra toast destructivo "Solo hay X unidades disponibles de Y" cuando la cantidad del carrito supera el stock. Antes fallaba silenciosamente.
+- `src/components/sections/OrdenesCompraSection.jsx` — Bug #6: 4 ocurrencias de `new Date().toLocaleDateString('es-AR')` reemplazadas por `formatDateAR()` de `dateUtils.js` (usa UTC, evita desfase UTC-3). Import agregado. — Bug #7: `MonedaSelector` recibe `onTCMissingChange={setTcMissingOC}`; botón "Crear Orden de Compra" deshabilitado con mensaje ⚠ cuando `moneda !== 'ARS'` y falta TC del día. `resetForm()` también resetea `tcMissingOC`.
+
+**Convenciones reforzadas:**
+- Aging de CC: siempre desde comprobantes con `estado_pago = 'pendiente'`, nunca desde movimientos DEBE crudos.
+- Fechas en UI: siempre `formatDateAR()` / `formatDateTimeAR()`. Nunca `new Date().toLocaleDateString()`.
+- MonedaSelector en formularios críticos (Ventas, OC): siempre incluir `onTCMissingChange` + bloquear submit si `tcMissing`.
 
 ### Sesión 2026-06-09 (PM) — 6 tareas: race condition stock, moneda paralela CC, POS server-side search, índices, user.id
 
