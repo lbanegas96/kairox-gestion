@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-08 (sesión PM) — Testing & polish: fix empresa_id filters, conversión moneda en venta, UX cotizaciones/pedidos ✅
+**Última actualización:** 2026-06-09 — Fix bugs críticos (Dashboard KPIs, Listas Precio 400, Notificaciones, OC búsqueda) + Ficha de Alcance DOCX ✅
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -130,6 +130,8 @@
 - **Moneda Paralela:** cuando `empresa.usa_tc_paralelo = true`, todas las transacciones deben guardar `monto_paralelo` + `tc_paralelo`. Usar `useTCParalelo()` hook. Si `tcMissing = true` → bloquear operación y abrir `TipoCambioModal`.
 - **TC sync en NuevaVentaModal:** cuando `moneda === monedaParalela`, el `tipoCambioTasa` del MonedaSelector se sincroniza automáticamente con `tcParalelo.setTC()` vía useEffect.
 - **Supabase client lazy:** `customSupabaseClient.js` exporta un getter lazy para evitar TDZ (Temporal Dead Zone) en el bundle de producción. Nunca instanciar Supabase en el top-level de un módulo con `BroadcastChannel`.
+- **PostgREST embedded select:** la sintaxis `.select('*, tabla_relacionada(cols)')` SOLO funciona si existe una FK explícita (`REFERENCES`) en PostgreSQL. Sin FK → 400 Bad Request. Si la FK no existe (o no se puede agregar), usar consulta en dos pasos: query principal → `.in('id', ids)` en tabla relacionada → merge manual en JS.
+- **Dashboard KPIs:** `dashboardService.ts` filtra SIEMPRE con `.eq('empresa_id', empresaId)`. Nunca `user_id` para queries de lectura.
 
 ---
 
@@ -234,7 +236,8 @@ Cuando `enabled = true`, los siguientes módulos guardan `monto_paralelo` + `tc_
 #### Pendientes Fase 7
 - Configurar Supabase Auth URLs (Site URL + Redirect URLs → `https://kairox-gestion.vercel.app/**`)
 - Extender TC obligatorio a módulos Caja + Cuenta Corriente + Compras (columnas DB ya listas)
-- Investigar error 400 en consola (query Supabase con timestamp malformado — no bloquea funcionalidad)
+- Investigar error 400 en consola (query Supabase con timestamp malformado — no bloquea funcionalidad; DISTINTO al bug de lista_precio_items que ya fue corregido)
+- **Commit y deploy a producción** — fixes de esta sesión validados en local; pendiente push + deploy Vercel
 
 ---
 
@@ -276,6 +279,7 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 
 ## Historial de sesiones
 
+<<<<<<< HEAD
 ### Sesión 2026-06-08 (PM) — Testing roadmap + bugs UX/conversión moneda
 **Branch:** `fix/sidebar-light-mode-and-bugs` (pendiente PR a master)
 
@@ -310,6 +314,41 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 - Contabilidad muestra 4 tabs en vez de 7 (verificar tras inicializar Plan de Cuentas)
 - Pedidos: dropdown de cliente y producto debería ser igual al de Cotizaciones (mismo patrón)
 - Multi-pago en USD: validación interna sigue siendo en ARS, requiere refactor mayor
+=======
+### Sesión 2026-06-09 — Fix bugs críticos (Dashboard KPIs · Lista Precio 400 · Notificaciones) + Ficha de Alcance DOCX
+
+- **Bugs críticos corregidos:**
+  - `dashboardService.ts` — todas las queries de `getKPIs`, `getVentasPorDia` y `getFlujoCajaMensual` usaban `.eq('user_id', empresaId)` en lugar de `.eq('empresa_id', empresaId)` → KPIs del Dashboard mostraban 0 para todas las empresas. Fix: reemplazado en las 3 funciones.
+  - `listaPreciosService.ts` — `getItems()` usaba PostgREST embedded select `.select('*, productos(nombre, codigo_sku, precio_venta)')` pero `lista_precio_items.producto_id` no tiene FK a `productos` en la migración 021 → 400 Bad Request al abrir una lista. Fix: reescrito como consulta en dos pasos (query items → `.in('id', productoIds)` en productos → merge manual).
+  - `Dashboard.jsx` — `<Header>` se renderizaba sin la prop `onNavigate`, por lo que `onNavigate?.(item.seccion)` en Header.jsx siempre era `undefined?.()` → las notificaciones no navegaban al módulo de origen. Fix: agregado `onNavigate={setActiveSection}` al componente `<Header>`.
+- **Nueva regla de convención:** PostgREST embedded select requiere FK explícita en PostgreSQL. Sin FK → usar consulta en dos pasos.
+- **Bug adicional corregido (misma sesión):**
+  - `OrdenesCompraSection.jsx` — `searchProducto()` usaba `.eq('user_id', empresaId)` → búsqueda de productos al crear una nueva OC devolvía vacío. Fix: `.eq('empresa_id', empresaId)`.
+- **Documentación generada:**
+  - `docs/generate_ficha_alcance.js` — script Node.js (~600 líneas) usando `docx` npm. Genera documento Word profesional con 9 secciones, brand colors KAIROX, Arial 11pt, márgenes 1", números de página, header/footer confidencial, tabla comparativa de competidores (columnas en blanco para completar manualmente). 7 grupos de módulos, 29 módulos documentados, 22 filas en tabla comparativa.
+  - `docs/KAIROX_Gestion_Ficha_Alcance.docx` — documento generado (~28 KB, ~20-25 páginas). Secciones: Portada · Resumen Ejecutivo · Ficha Técnica · Módulos del Sistema · Roadmap · Tabla Comparativa · Diferenciadores Clave · Modelo Comercial · Estado del Desarrollo.
+  - `docs/node_modules/` + `docs/package.json` — instalación local de `docx` (global npm no resuelve en este entorno).
+>>>>>>> 8fa6a8b (Fix 4 bugs críticos multi-tenant + Ficha de Alcance DOCX)
+
+### Sesión 2026-06-08 (PM) — Testing roadmap + bugs UX + conversión moneda
+
+- **Bugs corregidos durante testing manual:**
+  - `dashboardService.ts`, `cajaService.ts`, `clientesService.ts`, `comprasService.ts`, `productosService.ts`, `OrdenesCompraSection.jsx` — 14 ocurrencias de `.eq('user_id', empresaId)` → `.eq('empresa_id', empresaId)`
+  - `Sidebar.jsx` — soporte modo claro con variantes `dark:`
+  - `ProductosSection.jsx` — SKU obligatorio: auto-genera `SKU-{timestamp}` si vacío + mensaje de duplicado claro
+  - `NuevaVentaModal.jsx` — carrito invisible en flexbox: `min-h-0` + `min-h-[200px]` en panel carrito
+- **TC del día — fix schema + parser robusto:**
+  - `tipoCambioService.js` — removidas columnas `user_id` y `updated_at` del upsert (no existen en DB real)
+  - `TipoCambioModal.jsx` + `MonedaSelector.jsx` — input cambiado de `type="number"` a `type="text" inputMode="decimal"` (fix locale español rechazando ".")
+  - `currencyUtils.js` — nuevo helper `parseNumberLocale()`: detecta formato es-AR vs en-US automáticamente
+- **Conversión moneda en venta (decisión de diseño adoptada):**
+  - Productos siempre en ARS. Ventas se guardan SIEMPRE en ARS. Solo display se convierte.
+  - `NuevaVentaModal.jsx` — `totalEnMonedaSeleccionada()` divide por tasa solo para mostrar. Banner "Equivale a $X ARS (TC $Y)"
+  - `ComprobantePrintModal.jsx` — ticket muestra bloque moneda cobrada + TC + equivalente ARS cuando moneda ≠ ARS
+  - `HistorialVentas.jsx` — badge USD/EUR + equivalente debajo del total ARS
+  - Fix línea 283: `calculateTotal()` siempre devuelve ARS (era doble conversión)
+- **UX Cotizaciones** (`CotizacionesSection.jsx`) — cliente: autocomplete + nombre libre; producto: dropdown en focus, carga 200 en memoria; cantidad: step 1; unidad: datalist 17 opciones
+- **UX Pedidos** (`PedidosSection.jsx`) — fix step cantidad
 
 ### Sesión 2026-06-08 — TC del día + Moneda Paralela + Bugs críticos producción
 - **Bugs críticos corregidos:**

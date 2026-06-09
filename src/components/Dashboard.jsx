@@ -85,6 +85,7 @@ function Dashboard({ user, onLogout }) {
           user={user}
           onLogout={onLogout}
           toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          onNavigate={setActiveSection}
           onOpenSearch={() => setCmdOpen(true)}
         />
 

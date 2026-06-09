@@ -80,11 +80,27 @@ export const listaPreciosService = {
   async getItems(listaPrecioId: string): Promise<ListaPrecioItem[]> {
     const { data, error } = await supabase
       .from('lista_precio_items')
-      .select('*, productos(nombre, codigo_sku, precio_venta)')
+      .select('id, lista_precio_id, empresa_id, producto_id, precio, created_at')
       .eq('lista_precio_id', listaPrecioId)
       .order('created_at');
     if (error) throw new Error(error.message);
-    return (data ?? []) as ListaPrecioItem[];
+    if (!data || data.length === 0) return [];
+
+    const productoIds = (data as any[]).map((i) => i.producto_id);
+    const { data: prods, error: pErr } = await supabase
+      .from('productos')
+      .select('id, nombre, codigo_sku, precio_venta')
+      .in('id', productoIds);
+    if (pErr) throw new Error(pErr.message);
+
+    const prodMap: Record<string, any> = Object.fromEntries(
+      (prods ?? []).map((p: any) => [p.id, p])
+    );
+
+    return (data as any[]).map((i) => ({
+      ...i,
+      productos: prodMap[i.producto_id] ?? undefined,
+    })) as ListaPrecioItem[];
   },
 
   async upsertItem(listaPrecioId: string, empresaId: string, productoId: string, precio: number): Promise<void> {
