@@ -8,9 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { User, Loader2, TrendingUp, TrendingDown, DollarSign, Calendar, Clock, Banknote, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
+import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
+import { useTCParalelo } from '@/hooks/useTCParalelo';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 import { getNowAR } from '@/lib/dateUtils';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 
@@ -18,6 +21,8 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
   const { user } = useAuth();
   const { isSessionOpen, currentSession } = useCaja();
   const { toast } = useToast();
+  const qc = useQueryClient();
+  const tcParalelo = useTCParalelo();
   
   const [loading, setLoading] = useState(false);
   
@@ -80,7 +85,7 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
       return; 
     }
 
-    const amount = parseFloat(paymentAmount);
+    const amount = parseNumberLocale(paymentAmount);
     if (!amount || isNaN(amount) || amount <= 0) {
       toast({ title: "Monto inválido", description: "Ingrese un monto mayor a 0", variant: "destructive" });
       return;
@@ -88,6 +93,11 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
 
     setIsSubmittingPayment(true);
     const date = getNowAR().toISOString();
+
+    // Equivalente en moneda paralela (mismo criterio que CuentaCorrienteSection)
+    const pagoParalelo = tcParalelo.enabled && tcParalelo.tcHoy
+      ? tcParalelo.calcParalelo(amount, 'ARS', 1)
+      : null;
 
     try {
       // 1. Insert Movement in Current Account (HABER reduces debt)
@@ -99,7 +109,8 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
         tipo: 'HABER',
         monto: amount,
         descripcion: 'Pago registrado desde detalle',
-        fecha: date
+        fecha: date,
+        ...(pagoParalelo !== null ? { monto_paralelo: pagoParalelo, tc_paralelo: tcParalelo.tcHoy } : {}),
       }]);
 
       if (movError) throw movError;
@@ -115,17 +126,19 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
         concepto: `Cobro a ${localClientData.nombre} (Detalle)`,
         monto: amount,
         metodo_pago: 'Efectivo', // Default for quick pay
-        is_automatic: true
+        is_automatic: true,
+        ...(pagoParalelo !== null ? { monto_paralelo: pagoParalelo, tc_paralelo: tcParalelo.tcHoy } : {}),
       }]);
 
       if (cashError) throw cashError;
 
       toast({ title: "Pago registrado", description: "El saldo ha sido actualizado.", className: "bg-green-600 text-white border-none" });
       setPaymentAmount('');
-      
+
       // Refresh Data
       await fetchDetails();
       if (onUpdate) onUpdate(); // Notify parent to refresh list
+      qc.invalidateQueries({ queryKey: ['notif'] }); // deuda_vencida depende de estos movimientos
 
     } catch (error) {
       console.error("Error saving payment:", error);

@@ -40,6 +40,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from '@/components/ui/label';
+import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -54,7 +55,11 @@ function CuentaCorrienteSection() {
   const { user } = useAuth();
   const { isSessionOpen, currentSession } = useCaja();
   const { toast } = useToast();
+  const qc = useQueryClient();
   const tcParalelo = useTCParalelo();
+  // Las notifs de deuda_vencida dependen de cuenta_corriente_movimientos:
+  // tras cada cobro hay que invalidarlas o quedan stale hasta 30s.
+  const invalidateNotifs = () => qc.invalidateQueries({ queryKey: ['notif'] });
   
   // Data State
   const [loading, setLoading] = useState(true);
@@ -299,6 +304,7 @@ function CuentaCorrienteSection() {
 
       setIsPaymentDialogOpen(false);
       fetchData(); // Refresh list
+      invalidateNotifs();
       
       // Update selected client in modal if open
       if (selectedClient) {

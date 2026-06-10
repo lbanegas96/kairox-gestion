@@ -10,12 +10,14 @@ import { Separator } from '@/components/ui/separator';
 import { useCaja } from '@/contexts/CajaContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
 
 const CajaCierre = ({ onCancel }) => {
   const { currentSession, closeSession } = useCaja();
   const { user } = useAuth();
   const { toast } = useToast();
+  const qc = useQueryClient();
   
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -101,7 +103,11 @@ const CajaCierre = ({ onCancel }) => {
     const diff = real - totals.esperado;
     
     const success = await closeSession(real, observaciones, totals.esperado, diff);
-    if (success && onCancel) onCancel(); // Actually closes modal
+    if (success) {
+      // La notif caja_sin_cerrar consulta cierre_fecha: invalidar para que desaparezca ya.
+      qc.invalidateQueries({ queryKey: ['notif'] });
+      if (onCancel) onCancel(); // Actually closes modal
+    }
     setIsSubmitting(false);
   };
 

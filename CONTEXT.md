@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-10 (tarde, sesión Nadia) — Fix crítico `crear_venta` (columna user_id no existe en `comprobantes`) + UX POS: dropdown productos abre al focus sin mínimo 2 caracteres
+**Última actualización:** 2026-06-10 (noche) — Cierre de pendientes de testing: invalidación de notifs en CC/Caja/ClientDetailModal, parseNumberLocale + moneda paralela en cobro de ClientDetailModal, docs Contabilidad corregidas (4 tabs reales); (tarde, Nadia) fix crítico `crear_venta` + UX POS dropdown
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -39,14 +39,14 @@
 | Clientes | `ClientesSection.jsx` | ✅ Form completo + condicion_pago + limite_credito + import CSV |
 | Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Tab Antigüedad de Deuda (FIFO 30/60/90/+90 días) |
 | Detalle Cta. Cte. | `ClientDetailModal.jsx` | ✅ Open Item Management SAP-style |
-| Contabilidad | `PlanCuentasSection.jsx` | ✅ 7 tabs: Plan/Asientos/Balance/LM/P&L/BalanceGeneral/Períodos |
+| Contabilidad | `PlanCuentasSection.jsx` | ✅ 4 tabs: Plan/Asientos/Balance/LibroMayor — ⏳ P&L, Balance General y Períodos NO implementados (roadmap) |
 | Proveedores | `ProveedoresSection.jsx` + `proveedoresService.ts` | ✅ Ficha completa + Cta. Cte. + Historial OC + Pago inline |
 | Bancos | `CuentasBancariasSection.jsx` | ✅ Import CSV + conciliación auto/manual |
 | Reportes | `ReportesSection.jsx` | ✅ 5 reportes + Reporte de Paridad ARS/USD + paginación 100/pág |
 | **Tipo de Cambio** | `TipoCambioModal.jsx` + `tipoCambioService.js` | ✅ **NUEVO** TC diario centralizado + upsert por empresa/moneda/fecha |
 | **Reporte de Paridad** | `reportes/ReporteParidad.jsx` | ✅ **NUEVO** Comparativa ARS/USD por comprobante + CSV export |
 | Usuarios | `UsuariosSection.jsx` | ✅ Invitación + último acceso + activar/desactivar + preset Solo Caja |
-| Configuración | `ConfiguracionSection.jsx` | ✅ Logo + toggle OC + datos de ejemplo + **Moneda Paralela SAP-style** |
+| Configuración | `ConfiguracionSection.jsx` | ✅ Logo + toggle OC + datos de ejemplo + **Moneda Paralela SAP-style** + **Wizard AFIP/ARCA** |
 
 ---
 
@@ -292,6 +292,32 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-10 (noche) — Cierre de pendientes detectados en testing
+**Branch:** `master` (commit directo)
+
+**Objetivo:** resolver los pendientes que el equipo detectó en la sesión de testing "noche" del 09-jun y quedaron sin corregir.
+
+**Fixes aplicados:**
+
+1. **Invalidación de notifs en CC y Caja** (pendiente ⚠️ de sesión 09-jun):
+   - [CuentaCorrienteSection.jsx](src/components/sections/CuentaCorrienteSection.jsx) — `useQueryClient` + `invalidateNotifs()` tras cobro exitoso en `handleRegisterPayment` (la notif `deuda_vencida` consulta `cuenta_corriente_movimientos`).
+   - [ClientDetailModal.jsx](src/components/sections/ClientDetailModal.jsx) — ídem tras su cobro rápido.
+   - [CajaCierre.jsx](src/components/caja/CajaCierre.jsx) — invalidación tras `closeSession` exitoso (la notif `caja_sin_cerrar` consulta `cierre_fecha`).
+   - Con esto el patrón `invalidateNotifs` queda completo en los 4 módulos que afectan notifs: Productos, OC, CC y Caja.
+
+2. **ClientDetailModal — bugs de la misma clase ya corregidos en su hermano** (`2d8863f` solo cubrió CuentaCorrienteSection):
+   - `parseFloat(paymentAmount)` → `parseNumberLocale()` (formato es-AR).
+   - El cobro rápido ahora guarda `monto_paralelo` + `tc_paralelo` en ambos INSERTs vía `useTCParalelo()` (antes este camino perdía la cobertura del Reporte de Paridad).
+   - Nota: el bloqueo por caja cerrada en este modal es CORRECTO (su cobro rápido es hardcodeado Efectivo).
+
+3. **Docs Contabilidad corregidas** (pendiente ⚠️): la tabla de módulos decía "7 tabs" pero `PlanCuentasSection.jsx` tiene 4 (cuentas, asientos, balance, libro_mayor). Actualizado a la realidad; P&L, Balance General y Períodos quedan como roadmap.
+
+**Pendientes que siguen abiertos:**
+- ⚠️ **BRL TC corrupto (tasa 3.6 del 08-jun)** — el DELETE en producción requiere autorización del usuario. SQL listo: `DELETE FROM tipos_cambio WHERE moneda = 'BRL' AND tasa = 3.6;` — al borrarlo, el sistema vuelve a pedir el TC con el modal (flujo correcto).
+- ⚠️ **Tests automatizados** — sigue sin haber ninguno; proyecto aparte.
+- ⏳ **Implementar P&L / Balance General / Períodos** en Contabilidad (feature, no bug).
+- ⏳ Continuar TESTING_2026-06-10.md desde el punto 1.
 
 ### Sesión 2026-06-10 (tarde — Nadia) — Fix crítico crear_venta + UX POS
 **Branch:** `master` (commit directo)
