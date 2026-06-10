@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-10 — AFIP/ARCA Fase 2: Wizard de activación UI (3 pasos) en ConfiguracionSection + `generar-csr` v2 con acción `store_cert`; Fase 1: infraestructura (migration 025) + Edge Functions `generar-csr`/`emitir-cae` (homologación/sandbox)
+**Última actualización:** 2026-06-10 (tarde, sesión Nadia) — Fix crítico `crear_venta` (columna user_id no existe en `comprobantes`) + UX POS: dropdown productos abre al focus sin mínimo 2 caracteres
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -292,6 +292,30 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-10 (tarde — Nadia) — Fix crítico crear_venta + UX POS
+**Branch:** `master` (commit directo)
+
+**Contexto:** arrancamos el plan de testing TESTING_2026-06-10.md y al llegar al primer test (crear venta) el RPC `crear_venta` rompía con error PostgreSQL `42703: column "user_id" of relation "comprobantes" does not exist`.
+
+**Bugs corregidos:**
+
+1. **RPC `crear_venta` referenciaba columna inexistente** ([migrations/024_rpc_crear_venta.sql](migrations/024_rpc_crear_venta.sql)):
+   - El INSERT a `comprobantes` incluía `user_id` que NO existe en esa tabla (verificado contra schema real: columnas son `id, empresa_id, tenant_id, cliente_id, numero_venta, ...` SIN `user_id`).
+   - Fix: removido `user_id` y el `p_user_id` correspondiente del INSERT a comprobantes. Se sigue usando para `movimientos_caja` y `cuenta_corriente_movimientos` (que sí lo tienen).
+   - Migration aplicada en DB: `fix_crear_venta_sin_user_id_en_comprobantes`.
+
+2. **POS — dropdown productos pedía mínimo 2 caracteres** ([NuevaVentaModal.jsx](src/components/ventas/NuevaVentaModal.jsx)):
+   - El query server-side solo se disparaba con `productSearch.length >= 2` → al hacer focus el dropdown estaba vacío con mensaje "Escribí al menos 2 caracteres".
+   - Fix: con query vacío trae los primeros 30 productos del servidor (debounce 0ms cuando vacío, 300ms cuando hay texto).
+   - Placeholder cambiado a "Buscar producto o elegí de la lista...".
+
+**Cambios en DB:**
+- 1 migration aplicada: `fix_crear_venta_sin_user_id_en_comprobantes` (CREATE OR REPLACE FUNCTION).
+
+**Pendiente para próxima sesión:**
+- Continuar con TESTING_2026-06-10.md desde el punto 1 (TC obligatorio en Compras) ahora que `crear_venta` anda.
+- Verificar también que la búsqueda server-side en el dropdown del POS no tenga regresiones.
 
 ### Sesión 2026-06-10 — AFIP/ARCA Fase 2: Wizard de activación UI
 **Branch:** `feat/afip-fase2` → merge a `master`

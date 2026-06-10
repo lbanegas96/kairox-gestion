@@ -97,25 +97,26 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     init();
   }, [isOpen, user]);
 
-  // Búsqueda server-side con debounce (reemplaza la carga masiva inicial)
+  // Búsqueda server-side con debounce.
+  // Con query vacío trae los primeros 30 productos (así el dropdown muestra
+  // opciones al hacer focus sin obligar a tipear). Con texto, filtra server-side.
   useEffect(() => {
     if (!isOpen || !user?.empresa_id) return;
-    if (productSearch.length < 2) {
-      setProducts([]);
-      return;
-    }
     clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = setTimeout(async () => {
-      const { data } = await supabase
+      let query = supabase
         .from('productos')
         .select('id, nombre, codigo_sku, precio_venta, stock_actual, activo, unidad_medida')
         .eq('empresa_id', user.empresa_id)
         .eq('activo', true)
-        .or(`nombre.ilike.%${productSearch}%,codigo_sku.ilike.%${productSearch}%`)
         .order('nombre')
         .limit(30);
+      if (productSearch.trim().length > 0) {
+        query = query.or(`nombre.ilike.%${productSearch}%,codigo_sku.ilike.%${productSearch}%`);
+      }
+      const { data } = await query;
       setProducts(data || []);
-    }, 300);
+    }, productSearch.trim() ? 300 : 0);
     return () => clearTimeout(searchDebounceRef.current);
   }, [productSearch, isOpen, user?.empresa_id]);
 
@@ -515,11 +516,11 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
               <div ref={searchWrapperRef} className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 relative">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input ref={searchInputRef} placeholder="Buscar por nombre o SKU (mínimo 2 caracteres)..." value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setShowProductDropdown(true); }} onFocus={() => setShowProductDropdown(true)} className="pl-10 h-12 text-lg kairox-input pr-10 dark:bg-slate-900 dark:border-slate-700 dark:text-white" autoComplete="off" />
+                  <Input ref={searchInputRef} placeholder="Buscar producto o elegí de la lista..." value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setShowProductDropdown(true); }} onFocus={() => setShowProductDropdown(true)} className="pl-10 h-12 text-lg kairox-input pr-10 dark:bg-slate-900 dark:border-slate-700 dark:text-white" autoComplete="off" />
                   <div className={`absolute top-full left-0 w-full z-50 bg-white dark:bg-slate-950 border kairox-border shadow-xl rounded-md mt-1 overflow-hidden max-h-80 overflow-y-auto ${showProductDropdown ? '' : 'hidden'}`}>
-                    {productSearch.length < 2 && (
+                    {filteredProducts.length === 0 && (
                       <div className="px-3 py-4 text-sm text-slate-400 text-center">
-                        Escribí al menos 2 caracteres para buscar
+                        {productSearch.trim() ? 'No se encontraron productos' : 'Cargando productos...'}
                       </div>
                     )}
                     {filteredProducts.map(p => (

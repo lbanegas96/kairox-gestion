@@ -60,13 +60,14 @@ BEGIN
   END IF;
 
   -- ── 1. Insertar comprobante ─────────────────────────────────────────────────
+  -- OJO: comprobantes NO tiene columna user_id (verificado contra DB real).
   INSERT INTO public.comprobantes (
-    empresa_id, tenant_id, user_id, numero_venta, fecha,
+    empresa_id, tenant_id, numero_venta, fecha,
     cliente_id, cliente_nombre, total, forma_pago,
     estado_pago, moneda, tipo_cambio_tasa,
     monto_paralelo, tc_paralelo, tipo
   ) VALUES (
-    p_empresa_id, p_empresa_id, p_user_id, p_numero_venta, p_fecha,
+    p_empresa_id, p_empresa_id, p_numero_venta, p_fecha,
     p_cliente_id, p_cliente_nombre, p_total, p_forma_pago,
     p_estado_pago, p_moneda, p_tipo_cambio_tasa,
     p_monto_paralelo, p_tc_paralelo, 'venta'
