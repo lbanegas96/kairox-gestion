@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useCaja } from '@/contexts/CajaContext';
 import { getNowAR, getTodayAR } from '@/lib/dateUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
 import ComprobantePrintModal from './ComprobantePrintModal';
@@ -18,6 +19,7 @@ import { listaPreciosService } from '@/services/listaPreciosService';
 
 const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = null, onConvertSuccess }) => {
   const { user } = useAuth();
+  const { currentSession } = useCaja();
   const { toast } = useToast();
 
   const [products, setProducts] = useState([]);
@@ -407,103 +409,72 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         ? pagosFinales.map(p => p.metodo).join(' + ')
         : pagosFinales[0].metodo;
 
-      const { data: comprobante, error: compError } = await supabase.from('comprobantes').insert([{
-          tenant_id: user.tenant_id, // Keep legacy tenant_id populated
-          empresa_id: user.empresa_id,
-          numero_venta: saleNumber,
-          fecha: now,
-          cliente_id: selectedClient?.id || null,
-          cliente_nombre: selectedClient?.nombre || 'Consumidor Final',
-          total: total,
-          forma_pago: formaPago,
-          // Una venta en Cuenta Corriente NO está pagada: queda como deuda pendiente.
-          // El resto de medios de pago se cobran en el acto.
-          estado_pago: isCC ? 'pendiente' : 'pagada',
-          moneda,
-          tipo_cambio_tasa: tipoCambioTasa,
-          // Moneda paralela (SAP parallel currency)
-          ...(tcParalelo.enabled && montoParalelo !== null ? {
-            monto_paralelo: montoParalelo,
-            tc_paralelo: tcParaleloFinalValue,
-          } : {}),
-        }]).select().single();
-
-      if (compError) throw compError;
-
+      // Items para la RPC
       const itemsPayload = cart.map(item => ({
-         comprobante_id: comprobante.id,
-         empresa_id: user.empresa_id,
-         producto_id: item.id,
-         cantidad: item.cantidad,
-         precio_unitario: item.precio_venta,
-         subtotal: item.precio_venta * item.cantidad
+        producto_id:     item.id,
+        cantidad:        item.cantidad,
+        precio_unitario: item.precio_venta,
+        subtotal:        item.precio_venta * item.cantidad,
       }));
-      const { error: itemsError } = await supabase.from('comprobante_items').insert(itemsPayload);
-      if (itemsError) throw itemsError;
 
-      for (const item of cart) {
-        // RPC atómica — evita race condition entre ventas simultáneas
-        const { error: stockError } = await supabase.rpc('decrement_stock', {
-          p_producto_id: item.id,
-          p_cantidad: item.cantidad,
-        });
-        if (stockError) throw stockError;
-        const { error: movInvError } = await supabase.from('movimientos_inventario').insert([{
-           tenant_id: user.tenant_id, // campo legacy — mantener para compatibilidad
-           empresa_id: user.empresa_id,
-           producto_id: item.id,
-           tipo: 'salida',
-           cantidad: item.cantidad,
-           motivo: `Venta #${saleNumber}`,
-           fecha: now
-        }]);
-        if (movInvError) throw movInvError;
-      }
-
-      // Multi-pago: registrar un movimiento de caja por cada método (excepto CC)
-      const pagosEfectivos = pagosFinales.filter(p => p.metodo !== 'Cuenta Corriente');
-      for (const pago of pagosEfectivos) {
+      // Pagos para la RPC (monto_paralelo calculado por pago).
+      // Se envía '' en lugar de null para que NULLIF(...,'') del SQL resuelva a NULL.
+      const pagosPayload = pagosFinales.map(pago => {
         const pagoParalelo = tcParalelo.enabled && tcParaleloFinalValue
           ? tcParalelo.calcParalelo(pago.monto, moneda, tipoCambioTasa)
           : null;
-        const { error: cajaError } = await supabase.from('movimientos_caja').insert([{
-          user_id: user.id,
-          empresa_id: user.empresa_id,
-          fecha: now,
-          tipo: 'ingreso',
-          categoria: 'Venta',
-          concepto: `Venta #${saleNumber}`,
-          monto: pago.monto,
-          metodo_pago: pago.metodo,
-          is_automatic: true,
-          ...(pagoParalelo !== null ? { monto_paralelo: pagoParalelo, tc_paralelo: tcParaleloFinalValue } : {}),
-        }]);
-        if (cajaError) throw cajaError;
-      }
-      // Si hay pago en CC, registrar en cuenta corriente (DEBE)
-      if (isCC && selectedClient) {
-        const { error: ccError } = await supabase.from('cuenta_corriente_movimientos').insert([{
-          user_id: user.id,
-          empresa_id: user.empresa_id,
-          cliente_id: selectedClient.id,
-          tipo: 'DEBE',
-          monto: total,
-          descripcion: `Venta #${saleNumber}`,
-          fecha: now
-        }]);
-        if (ccError) throw ccError;
-      }
+        return {
+          metodo:         pago.metodo,
+          monto:          pago.monto,
+          monto_paralelo: pagoParalelo ?? '',
+          tc_paralelo:    pagoParalelo !== null ? tcParaleloFinalValue : '',
+        };
+      });
 
-      // Asiento contable automático (no bloquea el flujo de ventas)
+      // ── Una sola llamada transaccional: todo o nada (rollback automático) ────
+      const { data: rpcResult, error: rpcError } = await supabase.rpc('crear_venta', {
+        p_empresa_id:       user.empresa_id,
+        p_user_id:          user.id,
+        p_numero_venta:     saleNumber,
+        p_fecha:            now,
+        p_cliente_id:       selectedClient?.id ?? null,
+        p_cliente_nombre:   selectedClient?.nombre ?? 'Consumidor Final',
+        p_total:            total,
+        p_forma_pago:       formaPago,
+        p_estado_pago:      isCC ? 'pendiente' : 'pagada',
+        p_moneda:           moneda,
+        p_tipo_cambio_tasa: tipoCambioTasa,
+        p_monto_paralelo:   montoParalelo ?? null,
+        p_tc_paralelo:      tcParaleloFinalValue ?? null,
+        p_items:            itemsPayload,
+        p_pagos:            pagosPayload,
+        p_es_cc:            isCC,
+        p_caja_sesion_id:   currentSession?.id ?? null,
+      });
+
+      if (rpcError) throw rpcError;
+
+      // Objeto comprobante para el modal de impresión
+      const comprobante = {
+        id:             rpcResult.comprobante_id,
+        numero_venta:   rpcResult.numero_venta,
+        fecha:          now,
+        total,
+        moneda,
+        forma_pago:     formaPago,
+        cliente_nombre: selectedClient?.nombre ?? 'Consumidor Final',
+      };
+
+      // Asiento contable — fire & forget, FUERA de la transacción (no crítico)
       asientosAutoService.crearAsientoVenta(
         user.empresa_id,
         user.id,
         {
-          ventaId: comprobante.id,
+          ventaId:     comprobante.id,
           total,
-          fecha: getTodayAR(),
+          fecha:       getTodayAR(),
           descripcion: `Venta #${saleNumber}`,
-          esCredito: isCC,
+          esCredito:   isCC,
         }
       ).catch(e => console.warn('[Contabilidad] Asiento venta (no crítico):', e.message));
 
