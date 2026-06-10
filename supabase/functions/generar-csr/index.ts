@@ -38,6 +38,29 @@ Deno.serve(async (req) => {
     const empresaId = auth.empresaId;
 
     const body = await req.json().catch(() => ({}));
+    const action = String(body.action ?? 'generate');
+
+    // ── Acción store_cert: guarda el .crt emitido por ARCA en Vault ───────────
+    if (action === 'store_cert') {
+      const certContent = String(body.cert_content ?? '').trim();
+      if (!certContent || !certContent.includes('CERTIFICATE')) {
+        return new Response(JSON.stringify({ error: 'Certificado .crt inválido o vacío' }), {
+          status: 400, headers: { ...cors, 'Content-Type': 'application/json' },
+        });
+      }
+      const { error: certVaultError } = await adminClient.rpc('vault_secret_upsert', {
+        p_name: `afip_cert_${empresaId}`,
+        p_secret: certContent,
+        p_description: `Certificado AFIP (.crt) — empresa ${empresaId}`,
+      });
+      if (certVaultError) throw certVaultError;
+      return new Response(
+        JSON.stringify({ success: true, message: 'Certificado guardado en Vault.' }),
+        { headers: { ...cors, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // ── Acción generate (default): genera par RSA + CSR ───────────────────────
     const cuit = String(body.cuit ?? '').replace(/\D/g, '');
     const razonSocial = String(body.razon_social ?? '').trim() || 'KAIROX';
     if (cuit.length !== 11) {
