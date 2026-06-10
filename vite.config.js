@@ -300,6 +300,9 @@ export default defineConfig({
 			'@': path.resolve(__dirname, './src'),
 		},
 	},
+	optimizeDeps: {
+		include: ['@react-pdf/renderer', 'qrcode'],
+	},
 	build: {
 		rollupOptions: {
 			external: [

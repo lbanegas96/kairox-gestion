@@ -1,11 +1,71 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, X, FileText } from 'lucide-react';
+import { Printer, X, FileText, Download, Loader2 } from 'lucide-react';
 import { getNowAR } from '@/lib/dateUtils';
+import { supabase } from '@/lib/customSupabaseClient';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useToast } from '@/components/ui/use-toast';
 
 const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos = [] }) => {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const printRef = useRef();
+  const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [empresaData, setEmpresaData] = useState(null);
+
+  useEffect(() => {
+    if (!open || !user?.empresa_id) return;
+    supabase
+      .from('empresas')
+      .select('nombre, afip_cuit, condicion_iva, direccion')
+      .eq('id', user.empresa_id)
+      .single()
+      .then(({ data }) => setEmpresaData(data));
+  }, [open, user?.empresa_id]);
+
+  const handleDownloadPDF = async () => {
+    if (!comprobante) return;
+    setGeneratingPDF(true);
+    try {
+      // Lazy-load las librerías pesadas solo cuando se necesitan
+      const [{ pdf }, { ComprobantePDF }, { generateAfipQR }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('./pdf/ComprobantePDF'),
+        import('@/lib/afipQR'),
+      ]);
+
+      let qrDataUrl = null;
+      if (comprobante.cae_estado === 'emitido' && comprobante.cae) {
+        const pvNumero = comprobante.numero_afip
+          ? parseInt(comprobante.numero_afip.split('-')[0])
+          : 1;
+        qrDataUrl = await generateAfipQR(comprobante, empresaData?.afip_cuit, pvNumero);
+      }
+
+      const blob = await pdf(
+        <ComprobantePDF
+          comprobante={comprobante}
+          items={items}
+          pagos={pagos}
+          empresaData={empresaData}
+          qrDataUrl={qrDataUrl}
+        />
+      ).toBlob();
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${comprobante.numero_afip ?? comprobante.numero_venta}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[PDF] Error al generar:', err);
+      toast({ title: 'Error al generar PDF', description: err.message, variant: 'destructive' });
+    } finally {
+      setGeneratingPDF(false);
+    }
+  };
 
   const handlePrint = (opts = {}) => {
     const { remito = false } = opts;
@@ -162,6 +222,12 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => handlePrint({ remito: true })} className="border-slate-300 text-slate-700 dark:text-slate-300 dark:border-slate-600">
               <FileText className="w-4 h-4 mr-2" /> Remito
+            </Button>
+            <Button variant="outline" onClick={handleDownloadPDF} disabled={generatingPDF} className="border-slate-300 text-slate-700 dark:text-slate-300 dark:border-slate-600">
+              {generatingPDF
+                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generando...</>
+                : <><Download className="w-4 h-4 mr-2" /> Descargar PDF</>
+              }
             </Button>
             <Button onClick={() => handlePrint()} className="bg-blue-600 hover:bg-blue-700 text-white">
               <Printer className="w-4 h-4 mr-2" /> Imprimir
