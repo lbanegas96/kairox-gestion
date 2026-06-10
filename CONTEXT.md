@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-10 — AFIP/ARCA Fase 1: infraestructura (migration 025: puntos_venta + columnas CAE + Vault wrappers) + Edge Functions `generar-csr` y `emitir-cae` deployadas (homologación/sandbox); (PM·4) RPC transaccional `crear_venta`; moneda paralela en CuentaCorrienteSection
+**Última actualización:** 2026-06-10 — AFIP/ARCA Fase 2: Wizard de activación UI (3 pasos) en ConfiguracionSection + `generar-csr` v2 con acción `store_cert`; Fase 1: infraestructura (migration 025) + Edge Functions `generar-csr`/`emitir-cae` (homologación/sandbox)
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -99,7 +99,7 @@
 - **Supabase Project ID:** `wuznppxeonmhfcvnqfbf` (org: NALUX)
 - **SMTP:** Resend.com — `smtp.resend.com:465` · user: `resend` · sender: KAIROX Gestión ✅
 - **Edge Functions deployadas:** `create-user` · `delete-user` · `invite-user` · `generar-csr` · `emitir-cae` ✅
-- **Supabase Vault:** extensión `supabase_vault` 0.3.1 activa. Secretos AFIP por empresa: `afip_key_<empresa_id>` (clave privada, generada en `generar-csr`) y `afip_cert_<empresa_id>` (certificado .crt, pendiente flujo de carga). Acceso solo vía RPC `vault_secret_upsert`/`vault_secret_read` (service_role).
+- **Supabase Vault:** extensión `supabase_vault` 0.3.1 activa. Secretos AFIP por empresa: `afip_key_<empresa_id>` (clave privada, generada en `generar-csr` acción `generate`) y `afip_cert_<empresa_id>` (certificado .crt, subido vía `generar-csr` acción `store_cert`). Acceso solo vía RPC `vault_secret_upsert`/`vault_secret_read` (service_role).
 - **Timezone:** Argentina (UTC-3) — helpers en `src/lib/dateUtils.js`
 - **Multi-tenancy:** RLS via `get_my_empresa_id()` + `empresa_id` en todas las tablas
 - **Logo:** Base64 en tabla `configuracion` (clave `logo_base64`)
@@ -237,7 +237,7 @@ Cuando `enabled = true`, los siguientes módulos guardan `monto_paralelo` + `tc_
 2. ✅ **Estabilización producción** — fix TDZ crash (framer-motion + BroadcastChannel), Google Translate DOM, stale-session 403
 3. ✅ **TC del día centralizado** — tabla `tipos_cambio` + `TipoCambioModal` + `MonedaSelector` reescrito + bloqueo operaciones
 4. ✅ **Moneda Paralela SAP-style** — toggle config + hook `useTCParalelo` + `monto_paralelo`/`tc_paralelo` en 4 tablas + Reporte Paridad
-5. 🔵 **ARCA/AFIP** + Libro IVA — **Fase 1 EN CURSO**: infra DB (migration 025) + Edge Functions `generar-csr`/`emitir-cae` deployadas en homologación. Pendiente: carga `.crt`, UI config AFIP, verificación con cert real, Libro IVA.
+5. 🔵 **ARCA/AFIP** + Libro IVA — **Fases 1-2 COMPLETAS**: infra DB (migration 025) + Edge Functions `generar-csr` (v2, con `store_cert`)/`emitir-cae` + Wizard de activación UI (ConfiguracionSection). **Fase 3 pendiente**: integrar emisión CAE en flujo post-venta, verificación con cert real, IVA por item, Libro IVA, impresión CAE/QR.
 6. ⏳ **Membresías** / MercadoPago · Modelo de licencias Starter/Pro/Business
 
 #### Pendientes Fase 7
@@ -292,6 +292,23 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-10 — AFIP/ARCA Fase 2: Wizard de activación UI
+**Branch:** `feat/afip-fase2` → merge a `master`
+
+**Objetivo:** UI de activación de Factura Electrónica en `ConfiguracionSection.jsx` (wizard 3 pasos). Scope Fase 2 = solo UI de activación; NO se integra en el flujo de venta (eso es Fase 3).
+
+#### 1. `generar-csr` v2 — acción `store_cert` agregada (redeploy, ACTIVE)
+- La función ahora rutea por `body.action`: `generate` (default, par RSA + CSR como en Fase 1) y `store_cert` (guarda el `.crt` subido por el usuario en Vault como `afip_cert_<empresa_id>`).
+- `store_cert` valida que el contenido incluya `CERTIFICATE` antes de guardar. `empresa_id` se deriva del perfil verificado (verifyAdmin), no del body.
+
+#### 2. `ConfiguracionSection.jsx` — sección AFIP + wizard
+- **Card AFIP** después de Moneda Paralela: Switch + chips de estado (CUIT/condición IVA/punto de venta cuando está completa; aviso ámbar + botón "Completar configuración" cuando falta).
+- **Wizard Dialog 3 pasos** con stepper visual: (1) datos fiscales CUIT + condición IVA, (2) certificado — generar CSR → descargar → instrucciones ARCA → subir `.crt`, (3) punto de venta + tipo de comprobante default.
+- **Handlers:** `handleGenerarCSR` (invoke generar-csr), `handleDescargarCSR` (blob download), `handleCertUpload` (FileReader→text), `handleGuardarConfigAFIP` (store_cert + update empresas + upsert puntos_venta), `handleToggleAFIP` (abre wizard si falta config, alterna flag si ya está).
+- **Adaptado a las convenciones reales del archivo:** usa estado local + `useEffect` + queries directas a Supabase (patrón de la card Moneda Paralela), NO TanStack Query/`queryClient` como sugería el spec. CUIT se guarda sin guiones (`afip_cuit`) pero se muestra formateado con `formatCuit()`. Wizard resetea a paso 1 al reabrir.
+
+**Pendientes (siguen para Fase 3):** integrar `emitirCAE()` en el flujo post-venta, verificación con `.crt` real en homologación, IVA por item, Libro IVA, impresión de CAE/QR en comprobante.
 
 ### Sesión 2026-06-10 — AFIP/ARCA Fase 1: infraestructura + Edge Functions homologación
 **Branch:** `feat/afip-fase1` → merge a `master`
