@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-09 (PM·4) — RPC transaccional `crear_venta` (venta atómica con rollback, migration 024); moneda paralela + fix parseFloat/caja en CuentaCorrienteSection; (PM·3) Aging Open Item por comprobante; deploy Edge Functions CORS; fix timezone/timestamp
+**Última actualización:** 2026-06-10 — AFIP/ARCA Fase 1: infraestructura (migration 025: puntos_venta + columnas CAE + Vault wrappers) + Edge Functions `generar-csr` y `emitir-cae` deployadas (homologación/sandbox); (PM·4) RPC transaccional `crear_venta`; moneda paralela en CuentaCorrienteSection
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -78,6 +78,7 @@
 | **`migrations/022_rpc_decrement_stock.sql`** | RPC `decrement_stock(p_producto_id, p_cantidad)` — UPDATE atómico con check stock ≥ 0, SECURITY DEFINER | ✅ Aplicada via MCP |
 | **`migrations/023_indices_faltantes.sql`** | 4 índices: `idx_comprobantes_estado_pago`, `idx_comprobantes_fecha`, `idx_cta_cte_empresa_cliente_tipo`, `idx_mov_inv_fecha` | ✅ Aplicada via MCP |
 | **`migrations/024_rpc_crear_venta.sql`** | RPC `crear_venta` — venta transaccional atómica (comprobante + items + stock FOR UPDATE + mov_inventario + mov_caja + CC) con rollback automático, SECURITY DEFINER | ✅ Aplicada via MCP |
+| **`migrations/025_afip_infraestructura.sql`** | AFIP Fase 1: columnas fiscales en `empresas` + `clientes.condicion_iva` + tabla `puntos_venta` (RLS) + columnas CAE en `comprobantes` + wrappers Vault `vault_secret_upsert`/`vault_secret_read` (SECURITY DEFINER, solo service_role) | ✅ Aplicada via MCP |
 
 ### SQL adicional ejecutado directamente
 
@@ -97,7 +98,8 @@
 - **Supabase URL:** `https://wuznppxeonmhfcvnqfbf.supabase.co`
 - **Supabase Project ID:** `wuznppxeonmhfcvnqfbf` (org: NALUX)
 - **SMTP:** Resend.com — `smtp.resend.com:465` · user: `resend` · sender: KAIROX Gestión ✅
-- **Edge Functions deployadas:** `create-user` · `delete-user` · `invite-user` ✅
+- **Edge Functions deployadas:** `create-user` · `delete-user` · `invite-user` · `generar-csr` · `emitir-cae` ✅
+- **Supabase Vault:** extensión `supabase_vault` 0.3.1 activa. Secretos AFIP por empresa: `afip_key_<empresa_id>` (clave privada, generada en `generar-csr`) y `afip_cert_<empresa_id>` (certificado .crt, pendiente flujo de carga). Acceso solo vía RPC `vault_secret_upsert`/`vault_secret_read` (service_role).
 - **Timezone:** Argentina (UTC-3) — helpers en `src/lib/dateUtils.js`
 - **Multi-tenancy:** RLS via `get_my_empresa_id()` + `empresa_id` en todas las tablas
 - **Logo:** Base64 en tabla `configuracion` (clave `logo_base64`)
@@ -235,7 +237,7 @@ Cuando `enabled = true`, los siguientes módulos guardan `monto_paralelo` + `tc_
 2. ✅ **Estabilización producción** — fix TDZ crash (framer-motion + BroadcastChannel), Google Translate DOM, stale-session 403
 3. ✅ **TC del día centralizado** — tabla `tipos_cambio` + `TipoCambioModal` + `MonedaSelector` reescrito + bloqueo operaciones
 4. ✅ **Moneda Paralela SAP-style** — toggle config + hook `useTCParalelo` + `monto_paralelo`/`tc_paralelo` en 4 tablas + Reporte Paridad
-5. ⏳ **ARCA/AFIP** + Libro IVA
+5. 🔵 **ARCA/AFIP** + Libro IVA — **Fase 1 EN CURSO**: infra DB (migration 025) + Edge Functions `generar-csr`/`emitir-cae` deployadas en homologación. Pendiente: carga `.crt`, UI config AFIP, verificación con cert real, Libro IVA.
 6. ⏳ **Membresías** / MercadoPago · Modelo de licencias Starter/Pro/Business
 
 #### Pendientes Fase 7
@@ -290,6 +292,45 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-10 — AFIP/ARCA Fase 1: infraestructura + Edge Functions homologación
+**Branch:** `feat/afip-fase1` → merge a `master`
+
+**Objetivo:** infraestructura base para Factura Electrónica vía WSFE de ARCA (ex-AFIP). Scope Fase 1 = solo infra + homologación (sandbox). NO se toca el flujo de venta productivo (eso es Fase 3).
+
+#### 1. Migration 025 — infraestructura (aplicada via MCP)
+- `empresas`: `usa_factura_electronica`, `condicion_iva` (RI|Monotributo|Exento|CF), `afip_cuit`, `afip_ticket_acceso`, `afip_ticket_expira`.
+- `clientes`: `condicion_iva` (el doc del receptor usa el campo existente `documento` — NO existe `cuit` en clientes).
+- Tabla nueva `puntos_venta` (RLS por `get_my_empresa_id()`): `numero` AFIP, correlativos `ultimo_numero_a/b/c`, `tipo_comprobante_default`.
+- `comprobantes`: `cae`, `cae_vencimiento` (DATE), `cae_estado` (no_aplica|pendiente|emitido|error), `tipo_comprobante_afip` (A|B|C|E), `numero_afip`, `punto_venta_id`, `error_afip`.
+- **Vault wrappers** (`vault_secret_upsert`/`vault_secret_read`): SECURITY DEFINER sobre `vault.create_secret`/`vault.decrypted_secrets`. Las RPCs `vault_secret_*` del spec original NO existían en Supabase → se crearon. `REVOKE` a public/anon/authenticated, `GRANT EXECUTE` solo a `service_role`. Round-trip encrypt/decrypt verificado.
+
+#### 2. Edge Function `generar-csr` (v1, ACTIVE) — `supabase/functions/generar-csr/index.ts`
+- Genera par RSA-2048 (Web Crypto) + CSR PKCS#10 con `@peculiar/x509` (compatible con Deno/Edge, vía esm.sh).
+- Subject DN AFIP: `C=AR, O=<razón>, CN=<razón>, serialNumber=CUIT <cuit>`.
+- Guarda la clave privada en Vault (`afip_key_<empresa_id>`) — NUNCA sale al frontend. Devuelve solo el `.csr` para subir a ARCA.
+- Auth: `verifyAdmin(req)` + `empresa_id` derivado del perfil verificado (no se confía en el body). Boot verificado (401 sin token).
+
+#### 3. Edge Function `emitir-cae` (v2, ACTIVE) — `supabase/functions/emitir-cae/index.ts`
+- Recibe `comprobante_id` → lee cert+clave de Vault → llama a ARCA (WSFE) vía `@nicoo01x/arca-sdk` → guarda CAE + incrementa correlativo del punto de venta.
+- **Hallazgo de runtime:** importar el SDK a nivel top-level causa **BOOT_ERROR** (depende de `soap`, paquete Node-only que no carga en Deno Edge). **Fix:** import DINÁMICO (`await import('npm:@nicoo01x/arca-sdk@3')`) justo antes de emitir → la función bootea, autentica, lee Vault y solo carga el SDK en la ruta de emisión real. v1 falló boot, v2 bootea OK (401 verificado).
+- Adaptaciones vs. spec: consultas separadas (sin embedded selects que requieren FK), `clientes.documento` en vez de `cuit`, fix del doble `await req.json()` (se captura `comprobante_id` en scope externo).
+- IVA hardcodeado 21% (Fase 1). Ambiente default `sandbox` (env `AFIP_ENVIRONMENT` opcional; en producción setear `=production`).
+
+#### 4. Frontend `src/services/afipService.ts`
+- `generarCSR(cuit, razonSocial)`, `emitirCAE(comprobante_id)`, `reintentarCAEsPendientes(empresa_id)` (procesa pendiente|error, rate-limit 500ms).
+
+**Convenciones nuevas:**
+- **SDKs npm Node-only en Edge Functions:** si un paquete depende de `soap`/módulos Node que no cargan en Deno, importarlo DINÁMICAMENTE (`await import()`) dentro del handler, nunca top-level — así la función bootea y el fallo se aísla a su ruta de uso.
+- **Secretos (certificados, claves):** SIEMPRE en Supabase Vault vía `vault_secret_upsert`/`vault_secret_read` (service_role). Nunca en columnas de tablas normales.
+- **AFIP doc receptor:** usar `clientes.documento`. 11 dígitos → CUIT (80), 7-8 → DNI (96), vacío → Consumidor Final (99).
+
+**Pendientes Fase 1 / próximas fases:**
+- ⏳ Flujo de carga del `.crt` emitido por ARCA → guardar en Vault como `afip_cert_<empresa_id>` (UI + endpoint, no implementado aún).
+- ⏳ UI de configuración AFIP (toggle factura electrónica, CUIT, condición IVA, alta de punto de venta) en ConfiguracionSection.
+- ⚠️ Shape exacto de `createInvoice` del SDK sin verificar contra ejecución real (requiere cert válido). Validar en homologación cuando haya `.crt`.
+- ⚠️ Compatibilidad runtime del SDK en Deno sin verificar (boot OK; la llamada real a ARCA puede fallar por `soap`). Plan B si falla: implementar WSAA+WSFE con SOAP/XML manual o usar afipsdk.com.
+- ⏳ (Opcional) setear secret `AFIP_ENVIRONMENT=sandbox` en Dashboard — el código ya defaultea a sandbox sin él.
 
 ### Sesión 2026-06-09 (PM·4) — RPC transaccional `crear_venta` + moneda paralela en CuentaCorrienteSection
 **Branch:** `master`
