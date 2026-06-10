@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 
 import {
   BarChart3, Package, TrendingUp, Banknote, ShoppingCart,
-  Users, CreditCard, FileSpreadsheet, ArrowLeftRight
+  Users, CreditCard, FileSpreadsheet, ArrowLeftRight, BookOpen
 } from 'lucide-react';
 import ReporteParidad from '@/components/reportes/ReporteParidad';
+import ReporteLibroIVA from '@/components/reportes/ReporteLibroIVA';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
@@ -24,6 +25,18 @@ function ReportesSection() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showParidad, setShowParidad] = useState(false);
+  const [showLibroIVA, setShowLibroIVA] = useState(false);
+  const [afipActivo, setAfipActivo] = useState(false);
+
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    supabase
+      .from('empresas')
+      .select('usa_factura_electronica')
+      .eq('id', user.empresa_id)
+      .single()
+      .then(({ data }) => setAfipActivo(data?.usa_factura_electronica === true));
+  }, [user?.empresa_id]);
   
   // Filters
   const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
@@ -324,9 +337,12 @@ function ReportesSection() {
     return { columns: [], totals: [] };
   };
 
-  // Reporte de Paridad: render inline (reemplaza el grid)
+  // Reportes inline: reemplazan el grid
   if (showParidad) {
     return <ReporteParidad onBack={() => setShowParidad(false)} />;
+  }
+  if (showLibroIVA) {
+    return <ReporteLibroIVA onBack={() => setShowLibroIVA(false)} />;
   }
 
   return (
@@ -408,6 +424,44 @@ function ReportesSection() {
             className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-500 transition-all relative z-10 disabled:opacity-50"
           >
             {tcParaleloEnabled ? 'Ver Reporte' : 'Requiere configuración'}
+          </Button>
+        </div>
+
+        {/* ── Libro IVA Ventas (AFIP) ── */}
+        <div
+          className={`group relative kairox-bg-card border rounded-xl p-6 shadow-lg transition-all duration-300 overflow-hidden dark:bg-slate-950 dark:border-slate-800
+            ${afipActivo
+              ? 'hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-2xl cursor-pointer kairox-border'
+              : 'opacity-60 border-dashed border-slate-300 dark:border-slate-700 cursor-default'}`}
+          onClick={() => afipActivo && setShowLibroIVA(true)}
+          title={!afipActivo ? 'Activá la facturación electrónica (AFIP) en Configuración para habilitar este reporte' : ''}
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-600 to-violet-600 opacity-5 rounded-bl-[100px] transition-opacity group-hover:opacity-10" />
+          <div className="flex items-start justify-between mb-4 relative z-10">
+            <div className="p-3 bg-slate-100 dark:bg-slate-900 rounded-lg border kairox-border">
+              <BookOpen className="w-8 h-8 text-blue-500" />
+            </div>
+            {afipActivo && (
+              <span className="text-xs font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">
+                AFIP
+              </span>
+            )}
+          </div>
+          <div className="mb-6 relative z-10">
+            <h3 className="text-xl font-bold kairox-text-primary dark:text-white mb-2 group-hover:text-blue-600 dark:group-hover:text-[#00D4FF] transition-colors">
+              Libro IVA Ventas
+            </h3>
+            <p className="kairox-text-secondary dark:text-slate-400 text-sm h-10 line-clamp-2">
+              {afipActivo
+                ? 'Comprobantes emitidos con CAE, neto gravado e IVA 21% por período.'
+                : 'Activá la facturación electrónica (AFIP) en Configuración para habilitar.'}
+            </p>
+          </div>
+          <Button
+            disabled={!afipActivo}
+            className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-500 transition-all relative z-10 disabled:opacity-50"
+          >
+            {afipActivo ? 'Ver Reporte' : 'Requiere AFIP activo'}
           </Button>
         </div>
       </div>
