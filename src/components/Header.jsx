@@ -1,6 +1,8 @@
 import React from 'react';
-import { Menu, LogOut, User as UserIcon, Bell, CheckCircle, Moon, Sun, Search, Settings, Building, Upload, Package, CreditCard, ShoppingBag, AlertCircle, Wallet } from 'lucide-react';
+import { Menu, LogOut, User as UserIcon, Bell, CheckCircle, Moon, Sun, Search, Settings, Building, Upload, Package, CreditCard, ShoppingBag, AlertCircle, Wallet, FileText } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -21,6 +23,8 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch }) {
   const { config } = useConfig();
   const { userRole } = useAuth();
   const notifications = useNotifications();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const firstName = user?.user_metadata?.first_name || user?.first_name || 'Usuario';
   const lastName = user?.user_metadata?.last_name || user?.last_name || '';
@@ -37,6 +41,7 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch }) {
     deuda_vencida:   { icon: CreditCard,  color: 'text-rose-500',   bg: 'bg-rose-50 dark:bg-rose-900/10 border-rose-200 dark:border-rose-800/30' },
     oc_pendiente:    { icon: ShoppingBag, color: 'text-blue-500',   bg: 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800/30' },
     caja_sin_cerrar: { icon: Wallet,      color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800/30' },
+    caes_pendientes: { icon: FileText,    color: 'text-violet-500', bg: 'bg-violet-50 dark:bg-violet-900/10 border-violet-200 dark:border-violet-800/30' },
   };
 
   // "Subir Logo" button and other actions are still permission-gated for consistency, 
@@ -152,7 +157,19 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch }) {
                     return (
                       <button key={item.id}
                         className={`w-full text-left p-3 rounded-lg border transition-colors hover:opacity-90 ${cfg.bg}`}
-                        onClick={() => onNavigate?.(item.seccion)}>
+                        onClick={() => {
+                          if (item.action === 'reintentar-cae') {
+                            import('@/services/afipService').then(({ reintentarCAEsPendientes }) => {
+                              reintentarCAEsPendientes(user.empresa_id).then(() => {
+                                toast({ title: 'Reintentando emisión de CAEs...' });
+                                queryClient.invalidateQueries({ queryKey: ['ventas'] });
+                                queryClient.invalidateQueries({ queryKey: ['notif'] });
+                              }).catch(err => console.warn('[AFIP] Reintento CAEs:', err.message));
+                            });
+                          } else {
+                            onNavigate?.(item.seccion);
+                          }
+                        }}>
                         <div className="flex items-start gap-2.5">
                           <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${cfg.color}`} />
                           <div className="flex-1 min-w-0">
@@ -179,6 +196,9 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch }) {
                   <span className="text-center">🛒 {notifications.ocPendientes.length} OC</span>
                   {(notifications.cajaSinCerrar?.length ?? 0) > 0 && (
                     <span className="text-center col-span-3">🏦 {notifications.cajaSinCerrar.length} caja sin cerrar</span>
+                  )}
+                  {(notifications.caesPendientes?.length ?? 0) > 0 && (
+                    <span className="text-center col-span-3">🧾 {notifications.caesPendientes.length} CAE{notifications.caesPendientes.length > 1 ? 's' : ''} pendiente{notifications.caesPendientes.length > 1 ? 's' : ''}</span>
                   )}
                 </div>
               )}

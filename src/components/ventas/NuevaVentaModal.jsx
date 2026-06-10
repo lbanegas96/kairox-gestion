@@ -16,11 +16,13 @@ import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 import { formatCurrency } from '@/lib/currencyUtils';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { listaPreciosService } from '@/services/listaPreciosService';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = null, onConvertSuccess }) => {
   const { user } = useAuth();
   const { currentSession } = useCaja();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [products, setProducts] = useState([]);
   const [clients, setClients] = useState([]);
@@ -39,6 +41,31 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
 
   // ── Moneda Paralela (SAP-style parallel currency) ───────────────────────────
   const tcParalelo = useTCParalelo();
+
+  // ── Configuración AFIP (stale 5 min — no cambia frecuente) ─────────────────
+  const { data: afipConfig } = useQuery({
+    queryKey: ['afip-config', user?.empresa_id],
+    queryFn: async () => {
+      if (!user?.empresa_id) return null;
+      const { data: empresa } = await supabase
+        .from('empresas')
+        .select('usa_factura_electronica, condicion_iva, afip_cuit')
+        .eq('id', user.empresa_id)
+        .single();
+      if (!empresa?.usa_factura_electronica) return null;
+      const { data: pv } = await supabase
+        .from('puntos_venta')
+        .select('id, numero, tipo_comprobante_default')
+        .eq('empresa_id', user.empresa_id)
+        .eq('activo', true)
+        .limit(1)
+        .maybeSingle();
+      return { ...empresa, punto_venta: pv };
+    },
+    enabled: !!user?.empresa_id,
+    staleTime: 5 * 60 * 1000,
+  });
+  const afipActivo = afipConfig?.usa_factura_electronica === true && !!afipConfig?.punto_venta;
   const [lastComprobante, setLastComprobante] = useState(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [lastItems, setLastItems] = useState([]);
@@ -295,6 +322,12 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     return `${todayStr}-${String(sequence).padStart(3, '0')}`;
   };
 
+  const determinarTipoComprobante = (emisorCondicion, receptorCondicion) => {
+    if (emisorCondicion === 'Monotributo') return 'C';
+    if (emisorCondicion === 'RI') return receptorCondicion === 'RI' ? 'A' : 'B';
+    return 'B';
+  };
+
   const handleConfirmSale = async () => {
     if (cart.length === 0) return toast({ title: "Carrito vacío", variant: "destructive" });
     if (isCC && !selectedClient) return toast({ title: "Cliente requerido para Cuenta Corriente", variant: "destructive" });
@@ -478,6 +511,52 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           esCredito:   isCC,
         }
       ).catch(e => console.warn('[Contabilidad] Asiento venta (no crítico):', e.message));
+
+      // ── Emisión CAE (fire & forget — no bloquea ni revierte la venta) ────────────
+      if (afipActivo && comprobante?.id) {
+        const tipoComp = determinarTipoComprobante(
+          afipConfig.condicion_iva,
+          selectedClient?.condicion_iva ?? 'CF'
+        );
+        supabase.from('comprobantes').update({
+          tipo_comprobante_afip: tipoComp,
+          punto_venta_id: afipConfig.punto_venta.id,
+          cae_estado: 'pendiente',
+        }).eq('id', comprobante.id).then(({ error }) => {
+          if (error) {
+            console.warn('[AFIP] No se pudo actualizar tipo comprobante:', error.message);
+            return;
+          }
+          import('@/services/afipService').then(({ emitirCAE }) => {
+            emitirCAE(comprobante.id).then(result => {
+              if (result.success) {
+                toast({
+                  title: '✓ Factura electrónica emitida',
+                  description: `CAE: ${result.cae} · Nro: ${result.numero_afip}`,
+                  duration: 6000,
+                });
+                queryClient.invalidateQueries({ queryKey: ['ventas'] });
+              } else {
+                toast({
+                  title: '⚠ Factura pendiente de CAE',
+                  description: 'La venta quedó registrada. El CAE se reintentará automáticamente.',
+                  variant: 'default',
+                  duration: 8000,
+                });
+              }
+            }).catch(err => {
+              console.warn('[AFIP] Error al emitir CAE (no crítico):', err.message);
+              toast({
+                title: '⚠ Factura pendiente de CAE',
+                description: 'AFIP no está disponible en este momento. El CAE se reintentará automáticamente.',
+                variant: 'default',
+                duration: 8000,
+              });
+            });
+          });
+        });
+      }
+      // ─────────────────────────────────────────────────────────────────────────────
 
       toast({ title: "¡Venta Exitosa!", description: `Comprobante ${saleNumber} generado.` });
       setLastComprobante(comprobante);

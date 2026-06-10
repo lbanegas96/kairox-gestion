@@ -103,8 +103,35 @@ export function useNotifications() {
     ...REFETCH_OPTS,
   });
 
+  // ── CAEs pendientes / error ────────────────────────────────────────────────
+  const { data: caesPendientes = [] } = useQuery({
+    queryKey: ['notif', 'caes_pendientes', empresaId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('comprobantes')
+        .select('id, numero_venta')
+        .eq('empresa_id', empresaId)
+        .in('cae_estado', ['pendiente', 'error'])
+        .limit(5);
+      if (error) return [];
+      return data ?? [];
+    },
+    enabled: !!empresaId,
+    ...REFETCH_OPTS,
+  });
+
   // ── Armar lista unificada ──────────────────────────────────────────────────
   const items = [
+    ...(caesPendientes.length > 0 ? [{
+      id: 'caes-pendientes',
+      tipo: 'caes_pendientes',
+      titulo: `${caesPendientes.length} factura${caesPendientes.length > 1 ? 's' : ''} sin CAE`,
+      detalle: 'AFIP no pudo emitir el CAE. Hacé clic para reintentar.',
+      nivel: 'advertencia',
+      seccion: 'ventas',
+      action: 'reintentar-cae',
+      raw: caesPendientes,
+    }] : []),
     ...stockBajo.map(p => ({
       id: `stock-${p.id}`,
       tipo: 'stock_bajo',
@@ -150,6 +177,7 @@ export function useNotifications() {
     deudaVencida,
     ocPendientes,
     cajaSinCerrar,
+    caesPendientes,
     hasNotifications: items.length > 0,
   };
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { Eye, Search, Filter, RefreshCw, AlertCircle, X, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Eye, Search, Filter, RefreshCw, AlertCircle, X, Check, ChevronLeft, ChevronRight, Clock, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -223,6 +223,7 @@ const HistorialVentas = () => {
                 <th className="p-4">Cliente</th>
                 <th className="p-4 w-32">Medio Pago</th>
                 <th className="p-4 w-28 text-center">Estado</th>
+                <th className="p-4 w-32 text-center">Factura</th>
                 <th className="p-4 w-32 text-right">Total</th>
                 <th className="p-4 w-16 text-center">Ver</th>
               </tr>
@@ -236,13 +237,14 @@ const HistorialVentas = () => {
                     <td className="p-4"><Skeleton className="h-4 w-32" /></td>
                     <td className="p-4"><Skeleton className="h-4 w-20" /></td>
                     <td className="p-4 text-center"><Skeleton className="h-6 w-16 mx-auto rounded-full" /></td>
+                    <td className="p-4 text-center"><Skeleton className="h-5 w-20 mx-auto rounded-full" /></td>
                     <td className="p-4 text-right"><Skeleton className="h-4 w-16 ml-auto" /></td>
                     <td className="p-4 text-center"><Skeleton className="h-8 w-8 mx-auto rounded-md" /></td>
                   </tr>
                 ))
               ) : filteredSales.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="p-12 text-center text-slate-500 bg-slate-50/50 dark:bg-slate-900/20">
+                  <td colSpan="8" className="p-12 text-center text-slate-500 bg-slate-50/50 dark:bg-slate-900/20">
                     <div className="flex flex-col items-center gap-2">
                        <AlertCircle className="h-10 w-10 text-slate-300" />
                        <p className="font-medium">
@@ -275,6 +277,29 @@ const HistorialVentas = () => {
                     </td>
                     <td className="p-4 text-center">
                       <EstadoBadge estado={sale.estado_pago} />
+                    </td>
+                    <td className="p-4 text-center">
+                      {sale.cae_estado && sale.cae_estado !== 'no_aplica' ? (
+                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${
+                          sale.cae_estado === 'emitido'
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                            : sale.cae_estado === 'pendiente'
+                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                            : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                        }`}>
+                          {sale.cae_estado === 'emitido' && <Check className="w-3 h-3" />}
+                          {sale.cae_estado === 'pendiente' && <Clock className="w-3 h-3" />}
+                          {sale.cae_estado === 'error' && <AlertTriangle className="w-3 h-3" />}
+                          {sale.cae_estado === 'emitido'
+                            ? `CAE ${sale.numero_afip ?? ''}`.trim()
+                            : sale.cae_estado === 'pendiente'
+                            ? 'CAE pend.'
+                            : 'Error CAE'
+                          }
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
+                      )}
                     </td>
                     <td className="p-4 text-right font-bold text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 transition-colors">
                       ${Number(sale.total).toFixed(2)}
