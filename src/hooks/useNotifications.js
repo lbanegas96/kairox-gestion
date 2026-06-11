@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { getNowAR } from '@/lib/dateUtils';
+import { getNowAR, getTodayAR } from '@/lib/dateUtils';
 
 // Notificaciones tienen que sentirse "vivas" — refrescamos cada 30s
 // y siempre que el usuario vuelve al tab del navegador.
@@ -103,6 +103,27 @@ export function useNotifications() {
     ...REFETCH_OPTS,
   });
 
+  // ── Cheques por vencer (próximos 7 días) ──────────────────────────────────
+  const { data: chequesProximos = [] } = useQuery({
+    queryKey: ['notif', 'cheques_proximos', empresaId],
+    queryFn: async () => {
+      const hoy   = getTodayAR();
+      const in7d  = new Date(new Date(hoy + 'T00:00:00Z').getTime() + 7 * 86400000)
+                      .toISOString().split('T')[0];
+      const { data, error } = await supabase
+        .from('cheques')
+        .select('id, numero, monto, fecha_vencimiento, tipo')
+        .eq('empresa_id', empresaId)
+        .not('estado', 'in', '(cobrado,rechazado)')
+        .gte('fecha_vencimiento', hoy)
+        .lte('fecha_vencimiento', in7d);
+      if (error) return [];
+      return data ?? [];
+    },
+    enabled: !!empresaId,
+    ...REFETCH_OPTS,
+  });
+
   // ── CAEs pendientes / error ────────────────────────────────────────────────
   const { data: caesPendientes = [] } = useQuery({
     queryKey: ['notif', 'caes_pendientes', empresaId],
@@ -122,6 +143,15 @@ export function useNotifications() {
 
   // ── Armar lista unificada ──────────────────────────────────────────────────
   const items = [
+    ...(chequesProximos.length > 0 ? [{
+      id: 'cheques-proximos',
+      tipo: 'cheques_proximos',
+      titulo: `${chequesProximos.length} cheque${chequesProximos.length > 1 ? 's' : ''} vence${chequesProximos.length > 1 ? 'n' : ''} esta semana`,
+      detalle: `Total: $${chequesProximos.reduce((s, c) => s + Number(c.monto), 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
+      nivel: 'advertencia',
+      seccion: 'cheques',
+      raw: chequesProximos,
+    }] : []),
     ...(caesPendientes.length > 0 ? [{
       id: 'caes-pendientes',
       tipo: 'caes_pendientes',
@@ -178,6 +208,7 @@ export function useNotifications() {
     ocPendientes,
     cajaSinCerrar,
     caesPendientes,
+    chequesProximos,
     hasNotifications: items.length > 0,
   };
 }

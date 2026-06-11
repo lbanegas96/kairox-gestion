@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Package, ShoppingCart, ArrowLeftRight, Wallet, FileText, Users, Settings, X, LogOut, ChevronRight, Contact, CreditCard, ClipboardList, ShoppingBag, BookOpen, Landmark, Truck, PackageCheck, Tag } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingCart, ArrowLeftRight, Wallet, FileText, Users, Settings, X, LogOut, ChevronRight, Contact, CreditCard, ClipboardList, ShoppingBag, BookOpen, Landmark, Truck, PackageCheck, Tag, FileCheck } from 'lucide-react';
 
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
@@ -27,6 +27,7 @@ function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen, alerts })
       statusIndicator: true
     },
     { id: 'bancos', label: 'Bancos', icon: Landmark },
+    { id: 'cheques', label: 'Cheques', icon: FileCheck },
     { id: 'clientes', label: 'Clientes', icon: Contact },
     { id: 'cuentacorriente', label: 'Cta. Corriente', icon: CreditCard },
     { id: 'plan_cuentas', label: 'Contabilidad', icon: BookOpen },

@@ -17,6 +17,7 @@ import PedidosSection from '@/components/sections/PedidosSection';
 import ListasPrecioSection from '@/components/sections/ListasPrecioSection';
 import PlanCuentasSection from '@/components/sections/PlanCuentasSection';
 import CuentasBancariasSection from '@/components/sections/CuentasBancariasSection';
+import ChequesSection from '@/components/sections/ChequesSection';
 import ProveedoresSection from '@/components/sections/ProveedoresSection';
 import { CommandPalette, useCommandPalette } from '@/components/CommandPalette';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -79,6 +80,8 @@ function Dashboard({ user, onLogout }) {
         return <PlanCuentasSection />;
       case 'bancos':
         return <CuentasBancariasSection />;
+      case 'cheques':
+        return <ChequesSection />;
       case 'proveedores':
         return <ProveedoresSection />;
       default:
