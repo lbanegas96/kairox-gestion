@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import DashboardSection from '@/components/sections/DashboardSection';
@@ -20,11 +20,26 @@ import CuentasBancariasSection from '@/components/sections/CuentasBancariasSecti
 import ProveedoresSection from '@/components/sections/ProveedoresSection';
 import { CommandPalette, useCommandPalette } from '@/components/CommandPalette';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { supabase } from '@/lib/customSupabaseClient';
+import { OnboardingWizard } from '@/components/OnboardingWizard';
 
 function Dashboard({ user, onLogout }) {
   const [activeSection, setActiveSection] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const { open: cmdOpen, setOpen: setCmdOpen } = useCommandPalette();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    supabase
+      .from('empresas')
+      .select('onboarding_completado')
+      .eq('id', user.empresa_id)
+      .single()
+      .then(({ data }) => {
+        if (data && !data.onboarding_completado) setShowOnboarding(true);
+      });
+  }, [user?.empresa_id]);
 
   // Removed permission checks for rendering sections.
   // All sections are now accessible for viewing.
@@ -100,6 +115,11 @@ function Dashboard({ user, onLogout }) {
         open={cmdOpen}
         onClose={() => setCmdOpen(false)}
         onNavigate={(section) => { setActiveSection(section); setCmdOpen(false); }}
+      />
+
+      <OnboardingWizard
+        open={showOnboarding}
+        onComplete={() => setShowOnboarding(false)}
       />
     </div>
   );

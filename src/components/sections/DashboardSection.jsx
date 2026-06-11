@@ -19,6 +19,7 @@ import {
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { dashboardService, DASHBOARD_KEYS } from '@/services/dashboardService';
 import { useQueryClient } from '@tanstack/react-query';
+import { ChecklistOnboarding } from '@/components/ChecklistOnboarding';
 
 // ─── MetricCard ───────────────────────────────────────────────────────────────
 const MetricCard = React.memo(({ title, value, icon: Icon, trend, trendValue, gradient, loading, onClick, customContent }) => (
@@ -173,6 +174,8 @@ function DashboardSection({ onNavigate }) {
           )}
         </div>
       </div>
+
+      <ChecklistOnboarding onNavigate={onNavigate} />
 
       {/* ── Fila 1: KPIs principales (8 cards) ─────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
