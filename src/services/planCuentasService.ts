@@ -295,6 +295,22 @@ export const asientosAutoService = {
       esCredito?: boolean;
     }
   ): Promise<void> {
+    // Non-critical period check — RPC errors never block the sale
+    try {
+      const { data: cerrado, error: rpcErr } = await supabase.rpc('fecha_en_periodo_cerrado', {
+        p_empresa_id: empresaId,
+        p_fecha: params.fecha,
+      });
+      if (rpcErr) {
+        console.warn('[asientosAutoService] período check failed:', rpcErr.message);
+      } else if (cerrado) {
+        throw new Error(`Período cerrado: la fecha ${params.fecha} pertenece a un período contable cerrado.`);
+      }
+    } catch (e: any) {
+      if (e.message?.startsWith('Período cerrado:')) throw e;
+      console.warn('[asientosAutoService] período check error:', e);
+    }
+
     const codigoCobro = params.esCredito ? '1.1.2' : '1.1.1';
     const [cuentaCobro, cuentaVentas] = await Promise.all([
       findCuentaByCodigo(empresaId, codigoCobro),
@@ -329,6 +345,22 @@ export const asientosAutoService = {
       esCredito?: boolean;
     }
   ): Promise<void> {
+    // Non-critical period check — RPC errors never block the purchase
+    try {
+      const { data: cerrado, error: rpcErr } = await supabase.rpc('fecha_en_periodo_cerrado', {
+        p_empresa_id: empresaId,
+        p_fecha: params.fecha,
+      });
+      if (rpcErr) {
+        console.warn('[asientosAutoService] período check failed:', rpcErr.message);
+      } else if (cerrado) {
+        throw new Error(`Período cerrado: la fecha ${params.fecha} pertenece a un período contable cerrado.`);
+      }
+    } catch (e: any) {
+      if (e.message?.startsWith('Período cerrado:')) throw e;
+      console.warn('[asientosAutoService] período check error:', e);
+    }
+
     const codigoPago = params.esCredito ? '2.1.1' : '1.1.1';
     const [cuentaInventario, cuentaPago] = await Promise.all([
       findCuentaByCodigo(empresaId, '1.1.3'),
