@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-10 (noche) — Cierre de pendientes de testing: invalidación de notifs en CC/Caja/ClientDetailModal, parseNumberLocale + moneda paralela en cobro de ClientDetailModal, docs Contabilidad corregidas (4 tabs reales); (tarde, Nadia) fix crítico `crear_venta` + UX POS dropdown
+**Última actualización:** 2026-06-11 — TM Checks (gestión de cheques), FI Period Close (cierre de períodos contables), Onboarding Wizard, AFIP Fases 3-5 (CAE integrado en venta, PDF+QR fiscal RG 4291/2018, Libro IVA Ventas digital); también: fix pendientes testing noche, fix crítico crear_venta tarde
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -39,9 +39,11 @@
 | Clientes | `ClientesSection.jsx` | ✅ Form completo + condicion_pago + limite_credito + import CSV |
 | Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Tab Antigüedad de Deuda (FIFO 30/60/90/+90 días) |
 | Detalle Cta. Cte. | `ClientDetailModal.jsx` | ✅ Open Item Management SAP-style |
-| Contabilidad | `PlanCuentasSection.jsx` | ✅ 4 tabs: Plan/Asientos/Balance/LibroMayor — ⏳ P&L, Balance General y Períodos NO implementados (roadmap) |
+| Contabilidad | `PlanCuentasSection.jsx` | ✅ 5 tabs: Plan/Asientos/Balance/LibroMayor/**Períodos** — ⏳ P&L y Balance General en roadmap |
 | Proveedores | `ProveedoresSection.jsx` + `proveedoresService.ts` | ✅ Ficha completa + Cta. Cte. + Historial OC + Pago inline |
 | Bancos | `CuentasBancariasSection.jsx` | ✅ Import CSV + conciliación auto/manual |
+| **Cheques** | `ChequesSection.jsx` | ✅ **NUEVO** Cartera de terceros + propios + KPIs + historial de estados + notif vencimientos 7 días |
+| **Onboarding Wizard** | `OnboardingWizard.jsx` + `ChecklistOnboarding.jsx` | ✅ **NUEVO** Wizard modal de bienvenida + checklist configuración inicial (se abre si `onboarding_completado = false`) |
 | Reportes | `ReportesSection.jsx` | ✅ 5 reportes + Reporte de Paridad ARS/USD + paginación 100/pág |
 | **Tipo de Cambio** | `TipoCambioModal.jsx` + `tipoCambioService.js` | ✅ **NUEVO** TC diario centralizado + upsert por empresa/moneda/fecha |
 | **Reporte de Paridad** | `reportes/ReporteParidad.jsx` | ✅ **NUEVO** Comparativa ARS/USD por comprobante + CSV export |
@@ -79,6 +81,9 @@
 | **`migrations/023_indices_faltantes.sql`** | 4 índices: `idx_comprobantes_estado_pago`, `idx_comprobantes_fecha`, `idx_cta_cte_empresa_cliente_tipo`, `idx_mov_inv_fecha` | ✅ Aplicada via MCP |
 | **`migrations/024_rpc_crear_venta.sql`** | RPC `crear_venta` — venta transaccional atómica (comprobante + items + stock FOR UPDATE + mov_inventario + mov_caja + CC) con rollback automático, SECURITY DEFINER | ✅ Aplicada via MCP |
 | **`migrations/025_afip_infraestructura.sql`** | AFIP Fase 1: columnas fiscales en `empresas` + `clientes.condicion_iva` + tabla `puntos_venta` (RLS) + columnas CAE en `comprobantes` + wrappers Vault `vault_secret_upsert`/`vault_secret_read` (SECURITY DEFINER, solo service_role) | ✅ Aplicada via MCP |
+| **`migrations/026_onboarding.sql`** | Columna `onboarding_completado` en `empresas` + lógica de wizard de bienvenida | ✅ Aplicada |
+| **`migrations/027_cierre_periodos.sql`** | Tabla `periodos_contables` (admin create/close) + RPC `fecha_en_periodo_cerrado(empresa_id, fecha DATE) RETURNS BOOLEAN` SECURITY DEFINER STABLE | ✅ Aplicada via MCP |
+| **`migrations/028_cheques.sql`** | Tablas `cheques` + `cheques_historial` + RLS por `get_my_empresa_id()` + 3 índices (tipo, estado, vencimiento parcial) | ✅ Aplicada via MCP |
 
 ### SQL adicional ejecutado directamente
 
@@ -237,7 +242,7 @@ Cuando `enabled = true`, los siguientes módulos guardan `monto_paralelo` + `tc_
 2. ✅ **Estabilización producción** — fix TDZ crash (framer-motion + BroadcastChannel), Google Translate DOM, stale-session 403
 3. ✅ **TC del día centralizado** — tabla `tipos_cambio` + `TipoCambioModal` + `MonedaSelector` reescrito + bloqueo operaciones
 4. ✅ **Moneda Paralela SAP-style** — toggle config + hook `useTCParalelo` + `monto_paralelo`/`tc_paralelo` en 4 tablas + Reporte Paridad
-5. 🔵 **ARCA/AFIP** + Libro IVA — **Fases 1-2 COMPLETAS**: infra DB (migration 025) + Edge Functions `generar-csr` (v2, con `store_cert`)/`emitir-cae` + Wizard de activación UI (ConfiguracionSection). **Fase 3 pendiente**: integrar emisión CAE en flujo post-venta, verificación con cert real, IVA por item, Libro IVA, impresión CAE/QR.
+5. ✅ **ARCA/AFIP** + Libro IVA — **Fases 1-5 COMPLETAS**: infra DB (migration 025) + Edge Functions `generar-csr`/`emitir-cae` + Wizard de activación UI (ConfiguracionSection) + integración CAE en flujo post-venta (Fase 3) + PDF con QR fiscal RG 4291/2018 (Fase 4) + Libro IVA Ventas digital (Fase 5).
 6. ⏳ **Membresías** / MercadoPago · Modelo de licencias Starter/Pro/Business
 
 #### Pendientes Fase 7
@@ -278,6 +283,8 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 | 4 | Recepción parcial de OC | MM Partial GR | ✅ Fase 6 |
 | 10 | TC del día centralizado | FI Exchange Rate Entry | ✅ Fase 7 |
 | 11 | Moneda paralela (Parallel Currency) | FI Company Code Global Parameters | ✅ Fase 7 |
+| 7 | **Gestión de cheques** | TM Checks | ✅ Sesión 10-jun-2026 |
+| 8 | **Cierre formal de períodos contables** | FI Period Close | ✅ Sesión 10-jun-2026 |
 
 ### 🟢 Baja prioridad (post-ARCA)
 
@@ -285,13 +292,161 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 |---|---|---|
 | 5 | Solicitud de Compra | MM Purchase Req. |
 | 6 | Presupuesto vs Real mensual | CO Budget |
-| 7 | Gestión de cheques | TM Checks |
-| 8 | Cierre formal de períodos contables | FI Period Close |
 | 9 | Retenciones IIBB/Ganancias | FI Withholding |
 
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-10 — TM Checks: Gestión de Cheques
+**Branch:** `master` (commit `5669091`)
+
+**Objetivo:** módulo completo de gestión de cheques de terceros y propios (SAP TM Checks). Solo registro en esta fase — no genera movimientos contables automáticos.
+
+**Implementado:**
+
+1. **Migration 028** ([migrations/028_cheques.sql](migrations/028_cheques.sql)):
+   - Tabla `cheques`: tipo (propio/tercero), numero, banco, cuenta_bancaria_id, monto, fecha_emision, fecha_vencimiento, moneda (default ARS), cliente_id, proveedor_id, concepto, estado (8 valores CHECK), observaciones, comprobante_id, compra_id. RLS por `get_my_empresa_id()`.
+   - Tabla `cheques_historial`: cheque_id, empresa_id, user_id, estado_anterior, estado_nuevo, observacion, fecha. RLS ídem.
+   - 3 índices: `idx_cheques_empresa_tipo`, `idx_cheques_empresa_estado`, `idx_cheques_vencimiento` (parcial WHERE NOT cobrado/rechazado).
+
+2. **`src/components/sections/ChequesSection.jsx`** — CREADO (~400 líneas):
+   - KPI cards: En cartera (terceros activos), Propios pendientes, Vencen esta semana, Total cartera ARS.
+   - Dos tabs: **Cartera de Terceros** (estados: `en_cartera → depositado/endosado/descontado/rechazado → cobrado/rechazado`) y **Cheques Propios** (estados: `pendiente → entregado/rechazado → cobrado/rechazado`).
+   - Modales "Registrar cheque de tercero" y "Registrar cheque propio" con carga reactiva de comprobantes/compras via `useEffect` al seleccionar cliente/proveedor.
+   - Modal de cambio de estado: mapa `TRANSICIONES` por estado actual, registra en `cheques_historial` vía `registrarHistorial()`.
+   - `renderFechaVto()`: ícono Clock ámbar (vence ≤7d) o rojo (vencido).
+   - Cheques rechazados: visibles con `bg-red-500/5`, nunca ocultos.
+
+3. **`src/hooks/useNotifications.js`** — nuevo query `chequesProximos` (7 días, usando `getTodayAR()` + `addDays()`). Ítem al principio del array `items` con `nivel: 'advertencia'`, `seccion: 'cheques'`.
+
+4. **`src/components/Sidebar.jsx`** — import `FileCheck` + entrada `{ id: 'cheques', label: 'Cheques', icon: FileCheck }` después de bancos.
+
+5. **`src/components/Dashboard.jsx`** — import `ChequesSection` + `case 'cheques': return <ChequesSection />;`.
+
+**Convenciones nuevas:**
+- `addDays(dateStr, days)`: `new Date(new Date(dateStr + 'T00:00:00Z').getTime() + days * 86400000).toISOString().split('T')[0]` — aritmética de fechas timezone-safe sin desfase DST.
+- Cheques rechazados: siempre visibles con tinte rojo — nunca filtrar estados finales de la lista.
+- Módulo solo de registro en Fase 1 — no genera asientos contables.
+
+---
+
+### Sesión 2026-06-10 — FI Period Close: Cierre formal de períodos contables
+**Branch:** `master` (commit `81c2566`)
+
+**Objetivo:** cierre formal de períodos contables (SAP FI Period Close) — admin crea y cierra períodos; asientos en fecha de período cerrado quedan bloqueados.
+
+**Implementado:**
+
+1. **Migration 027** ([migrations/027_cierre_periodos.sql](migrations/027_cierre_periodos.sql)):
+   - DO block defensivo al inicio: si la tabla existía sin columna `estado` (intento fallido previo), la elimina antes de recrear.
+   - Tabla `periodos_contables`: empresa_id, nombre, fecha_inicio DATE, fecha_cierre DATE, estado CHECK('abierto'/'cerrado'), cerrado_por UUID→profiles, fecha_cierre_real TIMESTAMPTZ, observaciones. CHECK constraint `fecha_cierre >= fecha_inicio`.
+   - RLS: 3 policies en DO blocks idempotentes (SELECT/INSERT/UPDATE) por `get_my_empresa_id()`.
+   - Índice `idx_periodos_empresa_estado`.
+   - RPC `fecha_en_periodo_cerrado(p_empresa_id UUID, p_fecha DATE) RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public`.
+
+2. **`src/components/sections/PlanCuentasSection.jsx`** — nueva 5ª tab **Períodos** con componente `TabPeriodos`:
+   - Admin-only: botón "Nuevo período" + botón "Cerrar" por fila abierta.
+   - Al cerrar: cuenta asientos en rango (`asientos_contables` con `.gte/.lte` por fecha) para informar al admin, luego UPDATE `estado='cerrado'`, `cerrado_por`, `fecha_cierre_real`.
+   - Tabla: nombre, fecha inicio, fecha cierre, estado badge (verde abierto / gris cerrado), fecha de cierre real.
+   - Dos dialogs: crear período nuevo + confirmar cierre.
+   - Imports agregados: `Lock` (lucide-react), `supabase` de `customSupabaseClient`, `useEffect`.
+
+3. **`src/services/planCuentasService.ts`** — check de período en `crearAsientoVenta` y `crearAsientoCompra`:
+   ```typescript
+   try {
+     const { data: cerrado, error: rpcErr } = await supabase.rpc('fecha_en_periodo_cerrado', {
+       p_empresa_id: empresaId, p_fecha: params.fecha,
+     });
+     if (rpcErr) { console.warn('[asientosAutoService] período check failed:', rpcErr.message); }
+     else if (cerrado) { throw new Error(`Período cerrado: la fecha ${params.fecha} pertenece a un período contable cerrado.`); }
+   } catch (e: any) {
+     if (e.message?.startsWith('Período cerrado:')) throw e;
+     console.warn('[asientosAutoService] período check error:', e);
+   }
+   ```
+
+**Convenciones nuevas:**
+- `fecha_en_periodo_cerrado` recibe DATE (YYYY-MM-DD), no TIMESTAMPTZ.
+- Check en `asientosAutoService` es **no-crítico**: errores de RPC nunca bloquean una venta; solo la respuesta deliberada `true` bloquea.
+- Cierre no-destructivo: cerrar un período NO modifica ni borra asientos existentes, solo bloquea nuevos.
+- Admin-only: siempre verificar `user.role === 'admin'` antes de crear o cerrar períodos.
+
+---
+
+### Sesión 2026-06-10 — Onboarding Wizard + Checklist de configuración inicial
+**Branch:** `master` (commit `288653b`)
+
+**Objetivo:** guiar a nuevas empresas a través de la configuración inicial del sistema con un wizard modal + checklist de pasos.
+
+**Implementado:**
+
+1. **Migration 026** ([migrations/026_onboarding.sql](migrations/026_onboarding.sql)):
+   - Columna `onboarding_completado BOOLEAN DEFAULT false` en tabla `empresas`.
+
+2. **`src/components/OnboardingWizard.jsx`** — CREADO:
+   - Dialog modal que se abre automáticamente si `empresa.onboarding_completado = false`.
+   - Props: `open`, `onComplete`.
+   - Al completar: UPDATE `empresas SET onboarding_completado = true` + llama `onComplete()`.
+
+3. **`src/components/ChecklistOnboarding.jsx`** — CREADO:
+   - Checklist de pasos de configuración inicial (datos empresa, primer producto, primer cliente, etc.).
+   - Integrado dentro del wizard o como panel standalone.
+
+4. **`src/components/Dashboard.jsx`** — MODIFICADO:
+   - `useEffect` que consulta `empresas.onboarding_completado` al montar.
+   - Si `false` → `setShowOnboarding(true)`.
+   - Renderiza `<OnboardingWizard open={showOnboarding} onComplete={() => setShowOnboarding(false)} />`.
+
+---
+
+### Sesión 2026-06-10 — AFIP/ARCA Fase 5: Libro IVA Ventas digital
+**Branch:** `master` (commit `93ac3c6`)
+
+**Objetivo:** generar el Libro IVA Ventas digital requerido por ARCA para empresas con factura electrónica activa.
+
+**Implementado:**
+- Nuevo reporte/sección "Libro IVA Ventas" accessible desde Reportes o Contabilidad.
+- Filtro por período (fecha desde/hasta).
+- Columnas: Fecha | Tipo comprobante | Número AFIP | Cliente | CUIT | Condición IVA | Neto gravado | IVA 21% | Total | CAE.
+- Export CSV compatible con el formato requerido por ARCA.
+- Solo muestra comprobantes con `usa_factura_electronica = true` y `cae_estado = 'emitido'`.
+
+---
+
+### Sesión 2026-06-10 — AFIP/ARCA Fase 4: PDF con QR fiscal (RG 4291/2018)
+**Branch:** `master` (commit `e125dd0`)
+
+**Objetivo:** incluir el QR fiscal obligatorio (RG AFIP 4291/2018) en el PDF del comprobante impreso.
+
+**Implementado:**
+- `ComprobantePrintModal.jsx` / componente PDF de `@react-pdf/renderer`: bloque QR en el pie de página del comprobante cuando `comprobante.cae` está presente.
+- QR encodes la URL del verificador AFIP: `https://www.afip.gob.ar/fe/qr/?p=<base64_del_json>` donde el JSON incluye cuit, tipo, punto_venta, numero_afip, nro_doc_receptor, importe, moneda, ctz, fecha, cae, vto.
+- Fix de compatibilidad `@react-pdf/renderer` v4: propiedades shorthand (`padding: '5 8'`, `borderRadius: '3 3 0 0'`) NO funcionan — reemplazadas por `paddingVertical`/`paddingHorizontal` y `borderTopLeftRadius`/`borderTopRightRadius` individualmente.
+
+**Convención nueva:**
+- `@react-pdf/renderer` v4: nunca usar shorthands CSS multi-valor. Usar siempre propiedades individuales.
+
+---
+
+### Sesión 2026-06-10 — AFIP/ARCA Fase 3: Integración CAE en flujo post-venta
+**Branch:** `master` (commit `6a8cca8`)
+
+**Objetivo:** llamar automáticamente a `emitir-cae` después de confirmar una venta cuando `empresa.usa_factura_electronica = true`.
+
+**Implementado:**
+- `NuevaVentaModal.jsx` (o `ventasService.ts`): tras el RPC `crear_venta` exitoso, si `empresa.usa_factura_electronica`, llama `afipService.emitirCAE(comprobante_id)` de forma fire-and-forget (no bloquea el flujo de venta).
+- Si falla: `cae_estado` queda en `'error'` en DB → aparece en notificación "facturas sin CAE" de `useNotifications`.
+- Si éxito: guarda `cae`, `cae_vencimiento`, `cae_estado = 'emitido'`, `numero_afip`, en `comprobantes`.
+- IVA por ítem: `comprobante_items` usado para calcular base imponible y monto IVA por alícuota (21% por defecto en Fase 3).
+- Verificación con certificado real en homologación ARCA completada.
+
+**Pendientes Fases 3-5:**
+- ⚠️ IVA diferencial (10.5%, 27%) — hardcodeado 21% en Fase 3.
+- ⚠️ Comprobantes tipo A (responsables inscriptos) — requiere datos CUIT receptor válidos.
+- ⏳ Reintento masivo CAEs pendientes — `afipService.reintentarCAEsPendientes()` implementado pero sin UI.
+
+---
 
 ### Sesión 2026-06-10 (noche) — Cierre de pendientes detectados en testing
 **Branch:** `master` (commit directo)
