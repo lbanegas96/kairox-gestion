@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { proveedoresService, PROV_KEYS } from '@/services/proveedoresService';
+import { formatDateAR } from '@/lib/dateUtils';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const CONDICIONES_IVA = ['RI', 'Monotributo', 'Exento', 'CF', 'No Categorizado'];
@@ -427,7 +428,7 @@ function ProveedoresSection() {
                       const esDebito = m.tipo === 'compra' || m.tipo === 'nota_debito';
                       return (
                         <tr key={m.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                          <td className="p-3 text-slate-500 dark:text-slate-400">{new Date(m.fecha).toLocaleDateString('es-AR')}</td>
+                          <td className="p-3 text-slate-500 dark:text-slate-400">{formatDateAR(m.fecha)}</td>
                           <td className="p-3">
                             <span className={`px-2 py-0.5 rounded text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
                           </td>
@@ -461,7 +462,7 @@ function ProveedoresSection() {
                     ) : historialOC.map(oc => (
                       <tr key={oc.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                         <td className="p-3 font-mono text-indigo-600 dark:text-indigo-400">{oc.numero}</td>
-                        <td className="p-3 text-slate-500 dark:text-slate-400">{new Date(oc.fecha).toLocaleDateString('es-AR')}</td>
+                        <td className="p-3 text-slate-500 dark:text-slate-400">{formatDateAR(oc.fecha)}</td>
                         <td className="p-3"><span className="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{oc.estado}</span></td>
                         <td className="p-3 text-right font-mono font-bold dark:text-white">
                           {oc.moneda !== 'ARS' ? oc.moneda + ' ' : '$'}{Number(oc.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}

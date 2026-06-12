@@ -12,7 +12,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
-import { getTodayAR, getDateFromInputAR } from '@/lib/dateUtils';
+import { getTodayAR, getDateFromInputAR, formatDateAR, formatTimeAR } from '@/lib/dateUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
 import { MonedaSelector } from '@/components/ui/MonedaSelector';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
@@ -815,7 +815,7 @@ function ComprasSection() {
                     paginatedCompras.map(compra => (
                       <tr key={compra.id} className="group hover:bg-blue-50/50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer" onClick={() => { setSelectedCompraId(compra.id); setDetailsOpen(true); }}>
                         <td className="p-4 text-slate-600 dark:text-slate-300 font-mono text-xs">
-                          {new Date(compra.fecha).toLocaleDateString()} <span className="text-slate-400 ml-1">{new Date(compra.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                          {formatDateAR(compra.fecha)} <span className="text-slate-400 ml-1">{formatTimeAR(compra.fecha)}</span>
                         </td>
                         <td className="p-4 text-slate-500 font-mono text-xs font-medium dark:text-slate-400">
                           {compra.numero_factura}

@@ -171,7 +171,10 @@ const formatARS = (num) =>
 const formatFecha = (dateStr) => {
   if (!dateStr) return '—';
   const d = new Date(dateStr);
-  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const day   = String(d.getUTCDate()).padStart(2, '0');
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const year  = d.getUTCFullYear();
+  return `${day}/${month}/${year}`;
 };
 
 export function ComprobantePDF({ comprobante, items, pagos, empresaData, qrDataUrl }) {

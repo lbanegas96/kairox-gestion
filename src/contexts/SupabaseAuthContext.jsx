@@ -81,12 +81,8 @@ export const AuthProvider = ({ children }) => {
           return;
       }
 
-      // Important: Map tenant_id to empresa_id for backward compatibility with components using user.tenant_id
       const empresaId = profileData?.empresa_id;
-      
-      // CRITICAL FIX: tenant_id must always equal user.id (auth UUID).
-      // Tables have FK: tenant_id → profiles(id), so we can never use empresa_id here.
-      const tenantId = currentSession.user.id;
+      const tenantId = empresaId;
 
       const newUser = {
         ...currentSession.user,

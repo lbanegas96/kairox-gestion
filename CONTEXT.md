@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-11 — TM Checks (gestión de cheques), FI Period Close (cierre de períodos contables), Onboarding Wizard, AFIP Fases 3-5 (CAE integrado en venta, PDF+QR fiscal RG 4291/2018, Libro IVA Ventas digital); también: fix pendientes testing noche, fix crítico crear_venta tarde
+**Última actualización:** 2026-06-11 (noche) — Testeo funcional completo de toda la app + fixes críticos: FK tenant_id (comprobantes, caja_sesiones, movimientos_inventario) → empresas; auth context tenant_id = empresa_id; hora Argentina en 17 archivos; columnas faltantes en compras (moneda, tipo_cambio_tasa); query comprobantes.created_at → fecha en ChequesSection; NuevaVentaModal carga rápida de productos (race condition); DialogDescription en modales de Contabilidad; logo Kairox real en sidebar (más discreto)
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -84,6 +84,9 @@
 | **`migrations/026_onboarding.sql`** | Columna `onboarding_completado` en `empresas` + lógica de wizard de bienvenida | ✅ Aplicada |
 | **`migrations/027_cierre_periodos.sql`** | Tabla `periodos_contables` (admin create/close) + RPC `fecha_en_periodo_cerrado(empresa_id, fecha DATE) RETURNS BOOLEAN` SECURITY DEFINER STABLE | ✅ Aplicada via MCP |
 | **`migrations/028_cheques.sql`** | Tablas `cheques` + `cheques_historial` + RLS por `get_my_empresa_id()` + 3 índices (tipo, estado, vencimiento parcial) | ✅ Aplicada via MCP |
+| **`migrations/029_fix_tenant_id_fkeys.sql`** | Fix FK: `comprobantes.tenant_id`, `caja_sesiones.tenant_id`, `movimientos_inventario.tenant_id` apuntaban a `profiles(id)` — ahora apuntan a `empresas(id)`. DROP constraints → UPDATE data → ADD constraints | ✅ Aplicada via MCP |
+| **`030_compras_add_moneda`** (MCP) | `ALTER TABLE compras ADD COLUMN moneda text NOT NULL DEFAULT 'ARS'` + NOTIFY pgrst | ✅ Aplicada via MCP |
+| **`031_compras_add_tipo_cambio_tasa`** (MCP) | `ALTER TABLE compras ADD COLUMN tipo_cambio_tasa numeric NOT NULL DEFAULT 1` + NOTIFY pgrst | ✅ Aplicada via MCP |
 
 ### SQL adicional ejecutado directamente
 
@@ -297,6 +300,64 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-11 (noche) — Testeo funcional completo + fixes integrales
+
+**Objetivo:** testeo manual de toda la app sección por sección, corregir todos los errores encontrados sobre la marcha, y dejar el sistema operativo end-to-end.
+
+**Bugs detectados y fixes aplicados:**
+
+1. **FK violations sistémicas — `tenant_id` apuntaba a `profiles(id)` pero el código inserta `empresa_id`**
+   - Síntomas: error al **crear venta** (`comprobantes_tenant_id_fkey`), error al **abrir caja** (`caja_sesiones_tenant_id_fkey`).
+   - Causa raíz doble:
+     - **DB:** 3 FK apuntaban a `profiles(id)` cuando el código siempre inserta el `empresa_id`.
+     - **App:** `SupabaseAuthContext.jsx` seteaba `tenant_id = currentSession.user.id` (profile UUID), no el empresa_id.
+   - Fix DB: migration 029 — DROP constraints (comprobantes, caja_sesiones, movimientos_inventario) → UPDATE filas existentes para mappear profile→empresa → ADD constraints apuntando a `empresas(id)`.
+   - Fix App: [src/contexts/SupabaseAuthContext.jsx:85](src/contexts/SupabaseAuthContext.jsx:85) — `const tenantId = empresaId` (no `user.id`).
+
+2. **Hora con 3h de desfase (UTC vs Argentina UTC-3) en toda la app**
+   - Causa: componentes usaban `toLocaleString()`/`toLocaleDateString()` sin pasar `timeZone`. Como las fechas se guardan AR-local-as-UTC, mostraban UTC literal.
+   - Fix: helpers nuevos en [src/lib/dateUtils.js](src/lib/dateUtils.js):
+     ```js
+     formatTimeAR(isoStr)         // "HH:MM" via getUTCHours/getUTCMinutes
+     formatDateLocaleAR(isoStr, options)  // locale-safe via UTC parts
+     ```
+   - Reemplazo `toLocaleString()` → `formatDateAR/formatTimeAR/formatDateTimeAR` en 17 archivos:
+     - `src/components/ventas/ComprobantePrintModal.jsx`, `SaleDetailModal.jsx`, `HistorialVentas.jsx`, `CompraDetailModal.jsx`, `pdf/ComprobantePDF.jsx`
+     - `src/components/sections/ComprasSection.jsx`, `ClientDetailModal.jsx`, `ReportesSection.jsx`, `ProveedoresSection.jsx`, `CotizacionesSection.jsx`, `CuentasBancariasSection.jsx`
+     - `src/components/sections/UsuariosSection.jsx` (este usa real UTC de Supabase auth, así que se le pasó `timeZone: 'America/Argentina/Buenos_Aires'` explícito)
+     - `src/components/CommandPalette.jsx`, `src/components/reportes/ReporteParidad.jsx`
+     - `src/services/proveedoresService.ts`, `listaPreciosService.ts` (`new Date().toISOString()` → `getNowAR().toISOString()`)
+
+3. **Compras sin columnas `moneda` / `tipo_cambio_tasa`** — el código las inserta pero la tabla no las tenía.
+   - Fix: migrations 030 (moneda text DEFAULT 'ARS') + 031 (tipo_cambio_tasa numeric DEFAULT 1) + NOTIFY pgrst.
+
+4. **ChequesSection: `column comprobantes.created_at does not exist`**
+   - Causa: query en [ChequesSection.jsx:165](src/components/sections/ChequesSection.jsx:165) ordenaba por `created_at`, columna que no existe en `comprobantes`.
+   - Fix: cambiar `.order('created_at', ...)` → `.order('fecha', ...)`.
+
+5. **NuevaVentaModal: productos no cargan al abrir el modal (hay que cerrarlo y reabrirlo)**
+   - Causa: race condition entre dos useEffects. El effect de búsqueda fira con `productSearch=''` y carga 30 productos; en paralelo, `init()` espera el fetch de clientes y después ejecuta `setProducts([])` — vaciando los productos recién cargados. `resetForm()` setea `productSearch=''` sin cambio → no re-dispara.
+   - Fix: remover `setProducts([])` de `init()` en [NuevaVentaModal.jsx:88](src/components/ventas/NuevaVentaModal.jsx:88).
+
+6. **Radix Dialog warnings de accesibilidad** en Plan de Cuentas
+   - Fix: agregar `<DialogDescription>` a los modales "Nueva Cuenta" (línea 162) y "Nuevo Asiento Contable" (línea 296) en [PlanCuentasSection.jsx](src/components/sections/PlanCuentasSection.jsx).
+
+7. **Logo de la app vs logo de empresa se confunden**
+   - Cambio UX: reemplazo del logo box gradiente + texto "KAIROX" grande blanco por imagen real de Kairox + texto "Kairox" pequeño gris semibold con opacidad 85% (100% on hover) en [Sidebar.jsx:58-66](src/components/Sidebar.jsx:58).
+   - Imagen guardada en `public/kairox-logo.png`.
+
+**Testeo manual realizado (todas las secciones OK):**
+
+Dashboard, Inventario (productos + Historial Movimientos), Ventas (Nueva + Historial), Cotizaciones, Pedidos, Listas de Precios, Compras (Historial + Nueva), Órdenes de Compra, Caja (Movimientos + Nuevo Movimiento + Reporte Histórico), Bancos (Cuentas + Movimientos + Conciliación), Cheques (Cartera Terceros + Propios), Clientes (lista + modal detalle), Cta. Corriente (Clientes + Antigüedad de Deuda), Contabilidad (Plan + Asientos + Balance + Libro Mayor + Períodos), Reportes (Centro + Reporte de Ventas con PDF), Usuarios, Configuración (Datos Generales + Moneda Paralela + AFIP).
+
+**Convenciones nuevas / refuerzos:**
+- **`tenant_id` en tablas multi-tenant SIEMPRE = `empresa_id`** — la FK apunta a `empresas(id)`. NO usar `user.id` (profile UUID) como tenant_id. Si aparece una tabla nueva con `tenant_id`, verificar que la FK apunte a `empresas(id)`.
+- **Display de fechas/horas:** siempre `formatDateAR`/`formatTimeAR`/`formatDateTimeAR` de `dateUtils.js`. Nunca `toLocaleString()` o `toLocaleDateString()` sin timezone explícito.
+- **Race conditions en modales con doble useEffect:** cuando un modal tiene un effect de "init" y otro de "search", no setear arrays vacíos en el init si el search ya los carga. El init solo debe cargar lo suyo (clientes, configs, etc.).
+- **Modales de Radix:** todos los `DialogContent` deben tener `DialogTitle` Y `DialogDescription` (warning de accesibilidad si falta description).
+
+---
 
 ### Sesión 2026-06-10 — TM Checks: Gestión de Cheques
 **Branch:** `master` (commit `5669091`)

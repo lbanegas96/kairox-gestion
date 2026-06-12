@@ -55,13 +55,11 @@ function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen, alerts })
         `}
       >
         <div className="h-16 flex items-center justify-between px-6 border-b border-slate-200 dark:border-slate-700/50 bg-slate-50 dark:bg-[#0F172A]/50">
-          <div className={`flex items-center gap-3 overflow-hidden ${!isOpen && 'md:justify-center w-full px-0'}`}>
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#00D4FF] to-[#0055FF] flex-shrink-0 flex items-center justify-center shadow-lg shadow-blue-500/20">
-               <span className="text-white font-bold text-lg">K</span>
-            </div>
+          <div className={`flex items-center gap-2 overflow-hidden opacity-85 hover:opacity-100 transition-opacity ${!isOpen && 'md:justify-center w-full px-0'}`}>
+            <img src="/kairox-logo.png" alt="Kairox" className="w-7 h-7 flex-shrink-0 object-contain" />
             {isOpen && (
-              <span className="font-bold text-xl text-slate-800 dark:text-white tracking-tight whitespace-nowrap animate-in fade-in slide-in-from-left-2 duration-200">
-                KAIROX
+              <span className="text-sm font-semibold text-slate-600 dark:text-slate-300 tracking-wide whitespace-nowrap animate-in fade-in slide-in-from-left-2 duration-200">
+                Kairox
               </span>
             )}
           </div>

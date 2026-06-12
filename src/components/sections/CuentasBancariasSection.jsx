@@ -1019,7 +1019,7 @@ function ConciliacionTab({ cuentas, empresaId, userId }) {
                   `}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-xs text-slate-400">{new Date(l.fecha).toLocaleDateString('es-AR')}</p>
+                      <p className="text-xs text-slate-400">{formatDateAR(l.fecha)}</p>
                       <p className="text-sm truncate dark:text-slate-200">{l.descripcion}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -1065,7 +1065,7 @@ function ConciliacionTab({ cuentas, empresaId, userId }) {
                     `}>
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-xs text-slate-400">{new Date(m.fecha).toLocaleDateString('es-AR')}</p>
+                        <p className="text-xs text-slate-400">{formatDateAR(m.fecha)}</p>
                         <p className="text-sm truncate dark:text-slate-200">{m.descripcion}</p>
                         <p className="text-xs text-slate-400">{m.origen}</p>
                       </div>

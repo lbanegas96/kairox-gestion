@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/customSupabaseClient';
+import { getNowAR } from '@/lib/dateUtils';
 
 export interface ListaPrecio {
   id: string;
@@ -54,7 +55,7 @@ export const listaPreciosService = {
   async update(id: string, nombre: string, descripcion?: string): Promise<ListaPrecio> {
     const { data, error } = await supabase
       .from('listas_precio')
-      .update({ nombre, descripcion: descripcion ?? null, updated_at: new Date().toISOString() })
+      .update({ nombre, descripcion: descripcion ?? null, updated_at: getNowAR().toISOString() })
       .eq('id', id)
       .select()
       .single();
@@ -65,7 +66,7 @@ export const listaPreciosService = {
   async toggleActivo(id: string, activo: boolean): Promise<void> {
     const { error } = await supabase
       .from('listas_precio')
-      .update({ activo, updated_at: new Date().toISOString() })
+      .update({ activo, updated_at: getNowAR().toISOString() })
       .eq('id', id);
     if (error) throw new Error(error.message);
   },

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/customSupabaseClient';
+import { getNowAR } from '@/lib/dateUtils';
 
 export const PROV_KEYS = {
   all:     (empresaId: string) => ['proveedores', empresaId] as const,
@@ -76,7 +77,7 @@ export async function create(empresaId: string, payload: Omit<Proveedor, 'id' | 
 export async function update(id: string, payload: Partial<Proveedor>): Promise<Proveedor> {
   const { data, error } = await supabase
     .from('proveedores')
-    .update({ ...payload, updated_at: new Date().toISOString() })
+    .update({ ...payload, updated_at: getNowAR().toISOString() })
     .eq('id', id)
     .select()
     .single();
@@ -129,7 +130,7 @@ export async function registrarPago(empresaId: string, proveedorId: string, mont
     monto,
     descripcion,
     user_id: userId,
-    fecha: new Date().toISOString(),
+    fecha: getNowAR().toISOString(),
   }]);
   if (error) throw new Error(error.message);
 }

@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Printer, X, FileText, Download, Loader2 } from 'lucide-react';
-import { getNowAR } from '@/lib/dateUtils';
+import { getNowAR, formatDateTimeAR } from '@/lib/dateUtils';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
@@ -144,7 +144,7 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Fecha:</span>
-              <span>{new Date(comprobante.fecha).toLocaleString()}</span>
+              <span>{formatDateTimeAR(comprobante.fecha)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Cliente:</span>

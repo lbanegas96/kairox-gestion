@@ -398,7 +398,7 @@ function UsuariosSection() {
                                     </TableCell>
                                     <TableCell className="text-xs text-slate-400">
                                         {u.last_login_at
-                                          ? new Date(u.last_login_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+                                          ? new Date(u.last_login_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' })
                                           : <span className="italic text-slate-500">Nunca</span>
                                         }
                                     </TableCell>

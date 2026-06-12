@@ -162,7 +162,7 @@ export default function ChequesSection() {
     supabase
       .from('comprobantes').select('id, numero_venta, total')
       .eq('empresa_id', user.empresa_id).eq('cliente_id', terceroForm.cliente_id)
-      .order('created_at', { ascending: false }).limit(50)
+      .order('fecha', { ascending: false }).limit(50)
       .then(({ data }) => setComprobCli(data ?? []));
   }, [terceroForm.cliente_id, user?.empresa_id]);
 

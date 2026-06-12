@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import SaleDetailModal from './SaleDetailModal';
 import EstadoBadge from '@/components/ui/EstadoBadge';
+import { formatDateAR, formatTimeAR } from '@/lib/dateUtils';
 
 const HistorialVentas = () => {
   const { user } = useAuth();
@@ -267,7 +268,7 @@ const HistorialVentas = () => {
                       {sale.numero_venta}
                     </td>
                     <td className="p-4 text-slate-500 text-xs dark:text-slate-400">
-                      {new Date(sale.fecha).toLocaleDateString()} <span className="text-slate-400 ml-1">{new Date(sale.fecha).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                      {formatDateAR(sale.fecha)} <span className="text-slate-400 ml-1">{formatTimeAR(sale.fecha)}</span>
                     </td>
                     <td className="p-4 font-medium text-slate-800 dark:text-slate-200">
                       {sale.cliente_nombre || <span className="text-slate-400 italic">Consumidor Final</span>}

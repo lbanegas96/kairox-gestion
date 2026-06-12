@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { generatePDF } from '@/lib/pdfUtils';
 import ReportHeader from '@/components/reports/ReportHeader';
 import ReportTable from '@/components/reports/ReportTable';
+import { formatDateAR } from '@/lib/dateUtils';
 
 function ReportesSection() {
   const { user } = useAuth();
@@ -252,7 +253,7 @@ function ReportesSection() {
       const totalAmount = data.reduce((acc, curr) => acc + (curr.total || 0), 0);
       return {
         columns: [
-          { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => new Date(r.fecha).toLocaleDateString(), pdfRender: (r) => new Date(r.fecha).toLocaleDateString() },
+          { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
           { header: 'Cliente', key: 'cliente', align: 'left' },
           { header: 'Pago', key: 'metodo_pago', align: 'center' },
           { header: 'Items', key: 'items', align: 'center' },
@@ -270,7 +271,7 @@ function ReportesSection() {
       const totalAmount = data.reduce((acc, curr) => acc + (curr.total || 0), 0);
       return {
         columns: [
-          { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => new Date(r.fecha).toLocaleDateString(), pdfRender: (r) => new Date(r.fecha).toLocaleDateString() },
+          { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
           { header: 'Proveedor', key: 'proveedor', align: 'left' },
           { header: 'N° Factura', key: 'numero_factura', align: 'left' },
           { header: 'Total', key: 'total', align: 'right', render: (r) => `$${Number(r.total).toFixed(2)}`, pdfRender: (r) => `$${Number(r.total).toFixed(2)}` }
@@ -305,7 +306,7 @@ function ReportesSection() {
        
        return {
          columns: [
-           { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => new Date(r.fecha).toLocaleDateString(), pdfRender: (r) => new Date(r.fecha).toLocaleDateString() },
+           { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
            { header: 'Cliente', key: 'cliente', align: 'left' },
            { header: 'Tipo', key: 'tipo', align: 'center', render: (r) => <span className={`px-2 py-1 rounded text-xs font-bold ${r.tipo === 'DEBE' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'}`}>{r.tipo}</span> },
            { header: 'Descripción', key: 'descripcion', align: 'left' },
@@ -322,7 +323,7 @@ function ReportesSection() {
         const egresos = data.filter(d => d.tipo === 'egreso').reduce((acc, curr) => acc + curr.monto, 0);
         return {
           columns: [
-             { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => new Date(r.fecha).toLocaleDateString(), pdfRender: (r) => new Date(r.fecha).toLocaleDateString() },
+             { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
              { header: 'Tipo', key: 'tipo', align: 'center', render: (r) => r.tipo.toUpperCase() },
              { header: 'Categoría', key: 'categoria', align: 'left' },
              { header: 'Concepto', key: 'concepto', align: 'left' },

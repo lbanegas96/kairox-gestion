@@ -12,7 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
-import { getTodayAR } from '@/lib/dateUtils';
+import { getTodayAR, formatDateAR } from '@/lib/dateUtils';
 
 /**
  * Reporte de Paridad ARS / Moneda Paralela (estilo SAP "Currency Translation Report").
@@ -118,7 +118,7 @@ function ReporteParidad({ onBack }) {
     const header = `Número,Fecha,Cliente,Forma Pago,Estado,Total ARS,TC ${monedaParalela},Equiv. ${monedaParalela}`;
     const body = rows.map(r => [
       r.numero_venta,
-      new Date(r.fecha).toLocaleDateString('es-AR'),
+      formatDateAR(r.fecha),
       r.cliente_nombre || 'Consumidor Final',
       r.forma_pago,
       r.estado_pago,
@@ -282,7 +282,7 @@ function ReporteParidad({ onBack }) {
                         {row.numero_venta}
                       </td>
                       <td className="p-4 text-slate-500 dark:text-slate-400 text-xs">
-                        {new Date(row.fecha).toLocaleDateString('es-AR')}
+                        {formatDateAR(row.fecha)}
                       </td>
                       <td className="p-4 font-medium text-slate-800 dark:text-slate-200">
                         {row.cliente_nombre || <span className="text-slate-400 italic">Consumidor Final</span>}

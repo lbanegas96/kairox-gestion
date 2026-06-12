@@ -85,7 +85,6 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
       const { data: clis } = await supabase
         .from('clientes').select('*').eq('empresa_id', user.empresa_id).eq('activo', true);
       setClients(clis || []);
-      setProducts([]); // Limpiar resultados de búsqueda previos
       resetForm();
 
       // Pre-llenar carrito desde cotización: cargar solo los productos necesarios

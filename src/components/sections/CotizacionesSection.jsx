@@ -17,6 +17,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import NuevaVentaModal from '@/components/ventas/NuevaVentaModal';
 import { MonedaSelector } from '@/components/ui/MonedaSelector';
 import { formatCurrency, MONEDA_SYMBOLS } from '@/lib/currencyUtils';
+import { formatDateAR } from '@/lib/dateUtils';
 
 const ESTADOS = {
   borrador:   { label: 'Borrador',   color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
@@ -289,9 +290,9 @@ function CotizacionesSection() {
                   <tr key={cot.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                     <td className="p-4 font-mono font-semibold text-blue-600 dark:text-blue-400">{cot.numero}</td>
                     <td className="p-4 text-slate-700 dark:text-slate-300">{cot.cliente_nombre ?? cot.clientes?.nombre ?? '—'}</td>
-                    <td className="p-4 text-slate-500 dark:text-slate-400">{new Date(cot.created_at).toLocaleDateString('es-AR')}</td>
+                    <td className="p-4 text-slate-500 dark:text-slate-400">{formatDateAR(cot.created_at)}</td>
                     <td className="p-4 text-slate-500 dark:text-slate-400">
-                      {cot.fecha_vencimiento ? new Date(cot.fecha_vencimiento).toLocaleDateString('es-AR') : '—'}
+                      {cot.fecha_vencimiento ? formatDateAR(cot.fecha_vencimiento) : '—'}
                     </td>
                     <td className="p-4">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${ESTADOS[cot.estado]?.color}`}>
@@ -562,7 +563,7 @@ function CotizacionesSection() {
                 </div>
                 <div>
                   <span className="text-slate-400 dark:text-slate-500 text-xs uppercase">Vence</span>
-                  <p className="dark:text-slate-300">{detalle.fecha_vencimiento ? new Date(detalle.fecha_vencimiento).toLocaleDateString('es-AR') : '—'}</p>
+                  <p className="dark:text-slate-300">{detalle.fecha_vencimiento ? formatDateAR(detalle.fecha_vencimiento) : '—'}</p>
                 </div>
               </div>
 

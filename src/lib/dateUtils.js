@@ -56,6 +56,27 @@ export const getEndOfDayAR = (date) => {
   )).toISOString();
 };
 
+// Formats a stored ISO string as "HH:MM" (Argentina local time).
+export const formatTimeAR = (isoStr) => {
+  if (!isoStr) return '-';
+  const d = new Date(isoStr);
+  const hours = String(d.getUTCHours()).padStart(2, '0');
+  const mins  = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${hours}:${mins}`;
+};
+
+// Formats a stored ISO string using toLocaleDateString with AR-safe offset.
+// Since dates are stored as AR-local-as-UTC, we read UTC parts.
+export const formatDateLocaleAR = (isoStr, options = {}) => {
+  if (!isoStr) return '-';
+  const d = new Date(isoStr);
+  const defaultOpts = { day: '2-digit', month: '2-digit', year: 'numeric', ...options };
+  // Build a date from UTC parts to avoid browser timezone shift
+  const local = new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(),
+                         d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
+  return local.toLocaleDateString('es-AR', defaultOpts);
+};
+
 // Converts YYYY-MM-DD input string to ISO at 12:00 AR time to avoid boundary issues.
 export const getDateFromInputAR = (dateString) => {
   if (!dateString) return getNowAR().toISOString();

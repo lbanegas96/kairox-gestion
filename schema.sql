@@ -135,7 +135,7 @@ ALTER TABLE public.clientes ENABLE ROW LEVEL SECURITY;
 CREATE TABLE IF NOT EXISTS public.caja_sesiones (
   id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   empresa_id            UUID REFERENCES public.empresas(id) ON DELETE CASCADE,
-  tenant_id             UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+  tenant_id             UUID REFERENCES public.empresas(id) ON DELETE CASCADE,
   user_id               UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   abierto_por           UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   cerrado_por           UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
@@ -177,7 +177,7 @@ ALTER TABLE public.movimientos_caja ENABLE ROW LEVEL SECURITY;
 CREATE TABLE IF NOT EXISTS public.movimientos_inventario (
   id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   empresa_id   UUID NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
-  tenant_id    UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  tenant_id    UUID REFERENCES public.empresas(id) ON DELETE SET NULL,
   producto_id  UUID NOT NULL REFERENCES public.productos(id) ON DELETE CASCADE,
   tipo         TEXT NOT NULL CHECK (tipo IN ('entrada', 'salida', 'ajuste')),
   cantidad     INTEGER NOT NULL,
@@ -227,7 +227,7 @@ ALTER TABLE public.detalle_compras ENABLE ROW LEVEL SECURITY;
 CREATE TABLE IF NOT EXISTS public.comprobantes (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   empresa_id      UUID NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
-  tenant_id       UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  tenant_id       UUID REFERENCES public.empresas(id) ON DELETE SET NULL,
   cliente_id      UUID REFERENCES public.clientes(id) ON DELETE SET NULL,
   numero_venta    TEXT NOT NULL,
   fecha           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
