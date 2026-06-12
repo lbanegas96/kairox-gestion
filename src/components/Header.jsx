@@ -69,7 +69,7 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch, activ
   const roleLabel   = userRole === 'admin' ? 'Administrador' : 'Staff';
 
   return (
-    <header className="h-14 flex-shrink-0 flex items-center px-5 gap-2.5 border-b border-kx-border bg-kx-surface/80 backdrop-blur-md z-30">
+    <header className="h-14 flex-shrink-0 flex items-center px-5 gap-2.5 border-b border-kx-border bg-kx-surface/80 backdrop-blur-md z-30 shadow-sm dark:shadow-none">
       {/* Mobile burger */}
       <button
         onClick={toggleSidebar}
