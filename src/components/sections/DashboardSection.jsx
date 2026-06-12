@@ -164,7 +164,7 @@ function DashboardSection({ onNavigate }) {
       {/* ── Hero row — 3 cards ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-[1.4fr_1fr_1fr] gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden">
         {/* Ventas del mes */}
-        <div className="bg-kx-surface p-5 min-h-[140px] flex flex-col">
+        <div className="bg-kx-surface p-5 min-h-[140px] flex flex-col border-t-2 border-t-kx-violet hover:bg-kx-surface-2 transition-colors duration-200">
           <div className="text-[11.5px] text-kx-text-2 mb-2.5 flex items-center gap-1.5">
             <TrendingUp className="w-3.5 h-3.5" /> Ventas del mes
           </div>
@@ -186,7 +186,7 @@ function DashboardSection({ onNavigate }) {
         </div>
 
         {/* Caja */}
-        <div className="bg-kx-surface p-5 min-h-[140px] flex flex-col">
+        <div className="bg-kx-surface p-5 min-h-[140px] flex flex-col border-t-2 border-t-kx-green hover:bg-kx-surface-2 transition-colors duration-200">
           <div className="text-[11.5px] text-kx-text-2 mb-2.5 flex items-center gap-1.5">
             <Archive className="w-3.5 h-3.5" /> Caja
           </div>
@@ -207,7 +207,7 @@ function DashboardSection({ onNavigate }) {
         </div>
 
         {/* Margen bruto */}
-        <div className="bg-kx-surface p-5 min-h-[140px] flex flex-col">
+        <div className="bg-kx-surface p-5 min-h-[140px] flex flex-col border-t-2 border-t-kx-blue hover:bg-kx-surface-2 transition-colors duration-200">
           <div className="text-[11.5px] text-kx-text-2 mb-2.5 flex items-center gap-1.5">
             <Percent className="w-3.5 h-3.5" /> Margen bruto
           </div>
@@ -230,7 +230,7 @@ function DashboardSection({ onNavigate }) {
       {/* ── KPI row — 4 cards ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden">
         {/* Ventas del día */}
-        <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between">
+        <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-violet hover:bg-kx-surface-2 transition-colors duration-200">
           <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Ventas del día</div>
           <div>
             {loading
@@ -244,7 +244,7 @@ function DashboardSection({ onNavigate }) {
         </div>
 
         {/* Gastos del mes */}
-        <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between">
+        <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-red hover:bg-kx-surface-2 transition-colors duration-200">
           <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Gastos del mes</div>
           <div>
             {loading
@@ -255,7 +255,7 @@ function DashboardSection({ onNavigate }) {
         </div>
 
         {/* Balance neto */}
-        <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between">
+        <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-green hover:bg-kx-surface-2 transition-colors duration-200">
           <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Balance neto</div>
           <div>
             {loading
@@ -272,7 +272,7 @@ function DashboardSection({ onNavigate }) {
 
         {/* Deuda clientes */}
         <div
-          className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between cursor-pointer hover:bg-kx-surface-2 transition-colors"
+          className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between cursor-pointer border-t-2 border-t-kx-amber hover:bg-kx-surface-2 transition-colors duration-200"
           onClick={() => onNavigate?.('cuentacorriente')}
         >
           <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Deuda clientes</div>
@@ -290,7 +290,7 @@ function DashboardSection({ onNavigate }) {
       {/* ── Bottom grid ────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-4">
         {/* Panel izquierdo: Alertas de Stock */}
-        <div className="bg-kx-surface border border-kx-border rounded-2xl p-5">
+        <div className="bg-kx-surface border border-kx-border rounded-2xl p-5 transition-all duration-200 ease-out hover:shadow-md dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:-translate-y-0.5 hover:border-kx-border-hover">
           <div className="flex items-center justify-between mb-4">
             <span className="text-[13px] font-semibold text-kx-text flex items-center gap-2">
               <Package className="w-4 h-4 text-kx-amber" /> Alertas de Stock
@@ -330,7 +330,7 @@ function DashboardSection({ onNavigate }) {
         </div>
 
         {/* Panel derecho: Actividad reciente */}
-        <div className="bg-kx-surface border border-kx-border rounded-2xl p-5 flex flex-col">
+        <div className="bg-kx-surface border border-kx-border rounded-2xl p-5 flex flex-col transition-all duration-200 ease-out hover:shadow-md dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:-translate-y-0.5 hover:border-kx-border-hover">
           <div className="flex items-center justify-between mb-4">
             <span className="text-[13px] font-semibold text-kx-text flex items-center gap-2">
               <ClipboardList className="w-4 h-4 text-kx-blue" /> Cotizaciones Aprobadas
@@ -396,7 +396,7 @@ function DashboardSection({ onNavigate }) {
       {/* ── KPIs Cotizaciones (preservado) ─────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden">
         <div
-          className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between cursor-pointer hover:bg-kx-surface-2 transition-colors"
+          className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between cursor-pointer border-t-2 border-t-kx-violet hover:bg-kx-surface-2 transition-colors duration-200"
           onClick={() => onNavigate?.('cotizaciones')}
         >
           <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Cotizaciones / mes</div>
@@ -407,7 +407,7 @@ function DashboardSection({ onNavigate }) {
             <div className="text-[11.5px] text-kx-text-3">${(cotStats?.montoMes ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 })} cotizado</div>
           </div>
         </div>
-        <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between">
+        <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-green hover:bg-kx-surface-2 transition-colors duration-200">
           <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Tasa de conversión</div>
           <div>
             {cotLoading ? <Skeleton className="h-6 w-16 mb-1" /> : (
@@ -419,7 +419,7 @@ function DashboardSection({ onNavigate }) {
           </div>
         </div>
         <div
-          className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between cursor-pointer hover:bg-kx-surface-2 transition-colors"
+          className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between cursor-pointer border-t-2 border-t-kx-violet hover:bg-kx-surface-2 transition-colors duration-200"
           onClick={() => onNavigate?.('cotizaciones')}
         >
           <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Aprobadas pendientes</div>
@@ -434,7 +434,7 @@ function DashboardSection({ onNavigate }) {
             </div>
           </div>
         </div>
-        <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between">
+        <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-amber hover:bg-kx-surface-2 transition-colors duration-200">
           <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Monto convertido</div>
           <div>
             {cotLoading ? <Skeleton className="h-6 w-28 mb-1" /> : (
@@ -451,7 +451,7 @@ function DashboardSection({ onNavigate }) {
 
       {/* ── Gráficos (preservados) ──────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-kx-surface border border-kx-border rounded-2xl p-5">
+        <div className="bg-kx-surface border border-kx-border rounded-2xl p-5 transition-all duration-200 ease-out hover:shadow-md dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:-translate-y-0.5 hover:border-kx-border-hover">
           <div className="text-[13px] font-semibold text-kx-text mb-4">Ventas — Últimos 7 días</div>
           <div className="h-[240px]">
             {ventasLoading ? (
@@ -472,7 +472,7 @@ function DashboardSection({ onNavigate }) {
           </div>
         </div>
 
-        <div className="bg-kx-surface border border-kx-border rounded-2xl p-5">
+        <div className="bg-kx-surface border border-kx-border rounded-2xl p-5 transition-all duration-200 ease-out hover:shadow-md dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:-translate-y-0.5 hover:border-kx-border-hover">
           <div className="text-[13px] font-semibold text-kx-text mb-4">Flujo de Caja — 6 meses</div>
           <div className="h-[240px]">
             {flujoLoading ? (
@@ -497,7 +497,7 @@ function DashboardSection({ onNavigate }) {
       </div>
 
       {/* ── Acciones rápidas (preservadas) ─────────────────────────────────── */}
-      <div className="bg-kx-surface border border-kx-border rounded-2xl p-5">
+      <div className="bg-kx-surface border border-kx-border rounded-2xl p-5 transition-all duration-200 ease-out hover:shadow-md dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:-translate-y-0.5 hover:border-kx-border-hover">
         <div className="text-[13px] font-semibold text-kx-text mb-4">Acciones Rápidas</div>
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
           <QuickActionButton icon={ShoppingCart} label="Nueva Venta"
