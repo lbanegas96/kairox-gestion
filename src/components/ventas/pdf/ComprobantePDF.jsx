@@ -182,6 +182,16 @@ export function ComprobantePDF({ comprobante, items, pagos, empresaData, qrDataU
     ? `Factura ${comprobante.tipo_comprobante_afip}`
     : 'Ticket de Venta';
 
+  // IVA discriminado real (snapshot guardado por la RPC). Fallback a 21% para
+  // comprobantes viejos sin neto_gravado/iva_discriminado.
+  const totalNum = Number(comprobante.total) || 0;
+  const neto = comprobante.neto_gravado != null
+    ? Number(comprobante.neto_gravado)
+    : totalNum / 1.21;
+  const iva = comprobante.iva_discriminado != null
+    ? Number(comprobante.iva_discriminado)
+    : totalNum - neto;
+
   return (
     <Document title={`${tipoLabel} ${comprobante.numero_afip ?? comprobante.numero_venta}`}>
       <Page size="A4" style={styles.page}>
@@ -265,6 +275,14 @@ export function ComprobantePDF({ comprobante, items, pagos, empresaData, qrDataU
               <Text style={{ fontSize: 9 }}>{'$ ' + formatARS(pago.monto)}</Text>
             </View>
           ))}
+          <View style={styles.totalRow}>
+            <Text style={{ fontSize: 8, color: '#64748b' }}>Neto Gravado</Text>
+            <Text style={{ fontSize: 9 }}>{'$ ' + formatARS(neto)}</Text>
+          </View>
+          <View style={styles.totalRow}>
+            <Text style={{ fontSize: 8, color: '#64748b' }}>IVA</Text>
+            <Text style={{ fontSize: 9 }}>{'$ ' + formatARS(iva)}</Text>
+          </View>
           <View style={styles.totalFinal}>
             <Text style={styles.totalFinalText}>TOTAL</Text>
             <Text style={styles.totalFinalText}>{'$ ' + formatARS(comprobante.total)}</Text>

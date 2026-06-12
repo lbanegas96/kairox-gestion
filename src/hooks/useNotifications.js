@@ -124,6 +124,25 @@ export function useNotifications() {
     ...REFETCH_OPTS,
   });
 
+  // ── Retenciones practicadas del mes (recordatorio de depósito) ─────────────
+  const { data: retencionesPracticadas = 0 } = useQuery({
+    queryKey: ['notif', 'retenciones_practicadas', empresaId],
+    queryFn: async () => {
+      const primerDiaMes = getTodayAR().slice(0, 7) + '-01';
+      const { data, error } = await supabase
+        .from('retenciones')
+        .select('monto')
+        .eq('empresa_id', empresaId)
+        .eq('tipo', 'practicada')
+        .gte('fecha', primerDiaMes)
+        .lte('fecha', getTodayAR());
+      if (error) return 0;
+      return (data ?? []).reduce((s, r) => s + Number(r.monto), 0);
+    },
+    enabled: !!empresaId,
+    ...REFETCH_OPTS,
+  });
+
   // ── CAEs pendientes / error ────────────────────────────────────────────────
   const { data: caesPendientes = [] } = useQuery({
     queryKey: ['notif', 'caes_pendientes', empresaId],
@@ -161,6 +180,15 @@ export function useNotifications() {
       seccion: 'ventas',
       action: 'reintentar-cae',
       raw: caesPendientes,
+    }] : []),
+    ...(retencionesPracticadas > 0 ? [{
+      id: 'retenciones-practicadas',
+      tipo: 'retenciones_practicadas',
+      titulo: `Retenciones practicadas este mes: $${retencionesPracticadas.toLocaleString('es-AR', { minimumFractionDigits: 2 })}`,
+      detalle: 'Recordá depositarlas según el calendario de vencimientos de tu jurisdicción.',
+      nivel: 'info',
+      seccion: 'impuestos',
+      raw: retencionesPracticadas,
     }] : []),
     ...stockBajo.map(p => ({
       id: `stock-${p.id}`,
@@ -209,6 +237,7 @@ export function useNotifications() {
     cajaSinCerrar,
     caesPendientes,
     chequesProximos,
+    retencionesPracticadas,
     hasNotifications: items.length > 0,
   };
 }

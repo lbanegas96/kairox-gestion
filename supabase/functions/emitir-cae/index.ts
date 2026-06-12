@@ -19,6 +19,13 @@ function voucherTypeAfip(tipo: string): number {
   return 6;                     // Factura B (default)
 }
 
+/** Mapea la alícuota IVA KAIROX (string) al porcentaje numérico para WSFE. */
+function alicuotaPct(alicuota: string | null): number {
+  if (alicuota === '10.5') return 10.5;
+  if (alicuota === '0' || alicuota === 'exento' || alicuota === 'no_gravado') return 0;
+  return 21; // default / '21'
+}
+
 /** Determina tipo de documento AFIP a partir del documento del receptor. */
 function docTipoAfip(documento: string | null): { tipo: number; nro: string } {
   const d = (documento ?? '').replace(/\D/g, '');
@@ -51,11 +58,18 @@ Deno.serve(async (req) => {
     // ── 1. Comprobante (scoping por empresa del caller) ──────────────────────
     const { data: comp, error: compError } = await adminClient
       .from('comprobantes')
-      .select('id, numero_venta, fecha, total, cliente_id, cliente_nombre, tipo_comprobante_afip, punto_venta_id, empresa_id')
+      .select('id, numero_venta, fecha, total, neto_gravado, iva_discriminado, cliente_id, cliente_nombre, tipo_comprobante_afip, punto_venta_id, empresa_id')
       .eq('id', comprobanteId)
       .eq('empresa_id', auth.empresaId)
       .single();
     if (compError || !comp) throw new Error('Comprobante no encontrado');
+
+    // ── 1b. Items del comprobante (con alícuota IVA por línea) ────────────────
+    const { data: compItems } = await adminClient
+      .from('comprobante_items')
+      .select('cantidad, precio_unitario, subtotal, alicuota_iva')
+      .eq('comprobante_id', comprobanteId)
+      .eq('empresa_id', auth.empresaId);
 
     // ── 2. Empresa (datos fiscales) ──────────────────────────────────────────
     const { data: empresa, error: empError } = await adminClient
@@ -113,8 +127,45 @@ Deno.serve(async (req) => {
 
     const { tipo: docTipo, nro: docNro } = docTipoAfip(cliDocumento);
     const totalNum = Number(comp.total);
-    const neto = Math.round((totalNum / 1.21) * 100) / 100;
-    const iva  = Math.round((totalNum - neto) * 100) / 100;
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+
+    // Construir items con su alícuota IVA real. Si no hay items (caso borde),
+    // fallback a un único ítem al 21% sobre el total (comportamiento previo).
+    let wsfeItems;
+    let neto: number;
+    let iva: number;
+
+    if (compItems && compItems.length > 0) {
+      let netoAcum = 0;
+      let ivaAcum  = 0;
+      wsfeItems = compItems.map((it) => {
+        const pct      = alicuotaPct(it.alicuota_iva);
+        const subtotal = Number(it.subtotal);
+        const factor   = pct / 100;
+        const itemNeto = factor > 0 ? subtotal / (1 + factor) : subtotal;
+        const itemIva  = subtotal - itemNeto;
+        netoAcum += itemNeto;
+        ivaAcum  += itemIva;
+        return {
+          description: `Venta #${comp.numero_venta}`,
+          quantity: Number(it.cantidad),
+          unitPrice: Number(it.precio_unitario),
+          ivaAliquot: pct,
+        };
+      });
+      // Preferir los totales discriminados ya persistidos por la RPC; si no, los acumulados.
+      neto = comp.neto_gravado != null ? Number(comp.neto_gravado) : round2(netoAcum);
+      iva  = comp.iva_discriminado != null ? Number(comp.iva_discriminado) : round2(ivaAcum);
+    } else {
+      neto = comp.neto_gravado != null ? Number(comp.neto_gravado) : round2(totalNum / 1.21);
+      iva  = comp.iva_discriminado != null ? Number(comp.iva_discriminado) : round2(totalNum - neto);
+      wsfeItems = [{
+        description: `Venta #${comp.numero_venta}`,
+        quantity: 1,
+        unitPrice: totalNum,
+        ivaAliquot: 21,
+      }];
+    }
 
     const invoiceResult = await client.invoice?.createInvoice({
       pointOfSale: pv.numero,
@@ -125,12 +176,7 @@ Deno.serve(async (req) => {
       issueDate: new Date(comp.fecha).toISOString().slice(0, 10).replace(/-/g, ''),
       currency: 'PES',
       currencyRate: 1,
-      items: [{
-        description: `Venta #${comp.numero_venta}`,
-        quantity: 1,
-        unitPrice: totalNum,
-        ivaAliquot: 21,                 // TODO Fase 2: IVA por item real
-      }],
+      items: wsfeItems,
       totals: { netAmount: neto, ivaAmount: iva, totalAmount: totalNum },
     });
 

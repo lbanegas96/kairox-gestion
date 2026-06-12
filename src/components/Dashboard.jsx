@@ -18,6 +18,7 @@ import ListasPrecioSection from '@/components/sections/ListasPrecioSection';
 import PlanCuentasSection from '@/components/sections/PlanCuentasSection';
 import CuentasBancariasSection from '@/components/sections/CuentasBancariasSection';
 import ChequesSection from '@/components/sections/ChequesSection';
+import ImpuestosSection from '@/components/ImpuestosSection';
 import ProveedoresSection from '@/components/sections/ProveedoresSection';
 import { CommandPalette, useCommandPalette } from '@/components/CommandPalette';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -82,6 +83,8 @@ function Dashboard({ user, onLogout }) {
         return <CuentasBancariasSection />;
       case 'cheques':
         return <ChequesSection />;
+      case 'impuestos':
+        return <ImpuestosSection onNavigate={setActiveSection} />;
       case 'proveedores':
         return <ProveedoresSection />;
       default:

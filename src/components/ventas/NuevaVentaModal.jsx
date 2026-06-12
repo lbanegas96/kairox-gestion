@@ -132,7 +132,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     searchDebounceRef.current = setTimeout(async () => {
       let query = supabase
         .from('productos')
-        .select('id, nombre, codigo_sku, precio_venta, stock_actual, activo, unidad_medida')
+        .select('id, nombre, codigo_sku, precio_venta, stock_actual, activo, unidad_medida, alicuota_iva')
         .eq('empresa_id', user.empresa_id)
         .eq('activo', true)
         .order('nombre')
@@ -448,6 +448,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         cantidad:        item.cantidad,
         precio_unitario: item.precio_venta,
         subtotal:        item.precio_venta * item.cantidad,
+        alicuota_iva:    item.alicuota_iva ?? '21',  // snapshot de la alícuota del producto
       }));
 
       // Pagos para la RPC (monto_paralelo calculado por pago).

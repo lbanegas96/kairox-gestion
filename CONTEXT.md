@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-11 (noche) — Testeo funcional completo de toda la app + fixes críticos: FK tenant_id (comprobantes, caja_sesiones, movimientos_inventario) → empresas; auth context tenant_id = empresa_id; hora Argentina en 17 archivos; columnas faltantes en compras (moneda, tipo_cambio_tasa); query comprobantes.created_at → fecha en ChequesSection; NuevaVentaModal carga rápida de productos (race condition); DialogDescription en modales de Contabilidad; logo Kairox real en sidebar (más discreto)
+**Última actualización:** 2026-06-12 — Submódulo **Impuestos** (FI Tax): IVA real por alícuota (21/10.5/0/exento/no_gravado) en productos + snapshot por ítem + neto/IVA discriminado en comprobantes y compras; RPC `crear_venta` calcula IVA real; Tab IVA (alícuota por producto + posición IVA mensual) + Tab Alícuotas (IIBB/Ganancias) + Tab Retenciones (sufridas/practicadas + certificado PDF); Libro IVA Compras; emitir-cae con alícuotas reales por línea (código, pendiente redeploy)
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -40,6 +40,7 @@
 | Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Tab Antigüedad de Deuda (FIFO 30/60/90/+90 días) |
 | Detalle Cta. Cte. | `ClientDetailModal.jsx` | ✅ Open Item Management SAP-style |
 | Contabilidad | `PlanCuentasSection.jsx` | ✅ 5 tabs: Plan/Asientos/Balance/LibroMayor/**Períodos** — ⏳ P&L y Balance General en roadmap |
+| **Impuestos** | `ImpuestosSection.jsx` + `impuestos/Tab*.jsx` | ✅ **NUEVO** 3 tabs: IVA (alícuota por producto + posición IVA mensual + Libros IVA) · Retenciones (sufridas/practicadas + certificado PDF) · Alícuotas (CRUD IIBB/Ganancias) |
 | Proveedores | `ProveedoresSection.jsx` + `proveedoresService.ts` | ✅ Ficha completa + Cta. Cte. + Historial OC + Pago inline |
 | Bancos | `CuentasBancariasSection.jsx` | ✅ Import CSV + conciliación auto/manual |
 | **Cheques** | `ChequesSection.jsx` | ✅ **NUEVO** Cartera de terceros + propios + KPIs + historial de estados + notif vencimientos 7 días |
@@ -87,6 +88,9 @@
 | **`migrations/029_fix_tenant_id_fkeys.sql`** | Fix FK: `comprobantes.tenant_id`, `caja_sesiones.tenant_id`, `movimientos_inventario.tenant_id` apuntaban a `profiles(id)` — ahora apuntan a `empresas(id)`. DROP constraints → UPDATE data → ADD constraints | ✅ Aplicada via MCP |
 | **`030_compras_add_moneda`** (MCP) | `ALTER TABLE compras ADD COLUMN moneda text NOT NULL DEFAULT 'ARS'` + NOTIFY pgrst | ✅ Aplicada via MCP |
 | **`031_compras_add_tipo_cambio_tasa`** (MCP) | `ALTER TABLE compras ADD COLUMN tipo_cambio_tasa numeric NOT NULL DEFAULT 1` + NOTIFY pgrst | ✅ Aplicada via MCP |
+| **`migrations/032_impuestos_infraestructura.sql`** | IVA real: `alicuota_iva` en `productos`/`comprobante_items`/`detalle_compras` (CHECK 21/10.5/0/exento/no_gravado) + `neto_gravado`/`iva_discriminado` en `comprobantes` y `compras` + tabla `alicuotas_impuestos` (RLS, índice) | ✅ Aplicada via MCP |
+| **`migrations/033_crear_venta_iva.sql`** | RPC `crear_venta` recalcula `neto_gravado`/`iva_discriminado` por ítem según su `alicuota_iva` (snapshot), fallback 21%. Copia íntegra de la lógica de 024 + cálculo IVA | ✅ Aplicada via MCP |
+| **`migrations/034_retenciones.sql`** | Tabla `retenciones` (sufrida/practicada, IIBB/Ganancias/SUSS/IVA/Otro, trazabilidad a comprobante/compra) + RLS + índice + vista `retenciones_acumulado_mensual` (security_invoker) | ✅ Aplicada via MCP |
 
 ### SQL adicional ejecutado directamente
 
@@ -288,6 +292,8 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 | 11 | Moneda paralela (Parallel Currency) | FI Company Code Global Parameters | ✅ Fase 7 |
 | 7 | **Gestión de cheques** | TM Checks | ✅ Sesión 10-jun-2026 |
 | 8 | **Cierre formal de períodos contables** | FI Period Close | ✅ Sesión 10-jun-2026 |
+| 9 | **Retenciones IIBB/Ganancias** | FI Withholding | ✅ Sesión 12-jun-2026 |
+| 12 | **IVA real por alícuota + Libro IVA Compras** | FI Tax (RTC) | ✅ Sesión 12-jun-2026 |
 
 ### 🟢 Baja prioridad (post-ARCA)
 
@@ -295,11 +301,41 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 |---|---|---|
 | 5 | Solicitud de Compra | MM Purchase Req. |
 | 6 | Presupuesto vs Real mensual | CO Budget |
-| 9 | Retenciones IIBB/Ganancias | FI Withholding |
 
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-12 — Submódulo Impuestos (FI Tax): IVA real + Alícuotas + Retenciones
+**Branch:** `master` (commit directo)
+
+**Objetivo:** dos fases de un mismo submódulo `Impuestos` accesible desde el Sidebar (grupo Contabilidad), con 3 tabs: IVA, Retenciones y Percepciones, Alícuotas.
+
+**Nota de numeración:** los specs pedían migraciones `029`/`030`/`031`, pero esos números ya estaban aplicados (fix_tenant_id_fkeys, compras_add_moneda, compras_add_tipo_cambio_tasa). Renumeradas a **032/033/034**. Se usó `gen_random_uuid()` (no `uuid_generate_v4()`).
+
+#### Fase A.1 — IVA real + Alícuotas (migrations 032 + 033)
+- **Migration 032:** `alicuota_iva` TEXT en `productos` (NOT NULL DEFAULT '21' + CHECK), `comprobante_items` y `detalle_compras` (snapshot al momento de la operación). `neto_gravado`/`iva_discriminado` NUMERIC en `comprobantes` y `compras`. Tabla `alicuotas_impuestos` (impuesto IIBB/Ganancias/SUSS/Otro, jurisdicción, alícuota, vigencia, fuente manual/padron_arba/padron_agip) con RLS por `get_my_empresa_id()`.
+- **Migration 033:** `crear_venta` recalcula `neto_gravado`/`iva_discriminado` por ítem según `alicuota_iva` (subtotal incluye IVA → `neto = subtotal/(1+factor)`; factores 0.21/0.105/0). Copia íntegra de la lógica de 024 (RPC crítica) + cálculo. Fallback `'21'` para ítems sin alícuota.
+- **`ImpuestosSection.jsx`** (shell 3 tabs) + **`impuestos/TabIVA.jsx`** (Select de alícuota inline por producto + buscador + "Aplicar 21% a todos" con AlertDialog; posición IVA mensual: débito fiscal = IVA ventas, crédito = IVA compras, posición = a pagar/a favor; links a Libro IVA Ventas (navega a Reportes) y Libro IVA Compras (inline)) + **`impuestos/TabAlicuotas.jsx`** (CRUD + seed opt-in Córdoba; exporta `PROVINCIAS_AR`).
+- **`reportes/ReporteLibroIVACompras.jsx`:** espejo del Libro IVA Ventas sobre `compras` + `proveedores` (consulta en 2 pasos sin embedded select), KPIs (bruto/neto/crédito fiscal), CSV con BOM.
+- **POS (`NuevaVentaModal.jsx`):** query de productos incluye `alicuota_iva`; `itemsPayload` envía `alicuota_iva: item.alicuota_iva ?? '21'` (el carrito hace `{...product}`, arrastra la alícuota).
+- **`ComprobantePDF.jsx`:** desglosa Neto Gravado + IVA reales (`comprobante.neto_gravado`/`iva_discriminado`), fallback `total/1.21`.
+- **`emitir-cae/index.ts`:** lee `comprobante_items` y arma items WSFE con alícuota real por línea (`alicuotaPct` + `wsfeItems`); usa `neto_gravado`/`iva_discriminado` persistidos. ⚠️ **Código actualizado, pendiente de redeploy** (toca homologación AFIP).
+- **Sidebar + Dashboard:** ítem `impuestos` (icono `Receipt`) + case routing con `onNavigate`.
+- **Configuración:** verificado que solo tiene `condicion_iva` de AFIP (dato fiscal) — nada que mover.
+
+#### Fase A.2 — Retenciones y Percepciones (migration 034)
+- **Migration 034:** tabla `retenciones` (tipo sufrida/practicada, impuesto, jurisdicción, monto, alícuota_aplicada, contraparte_nombre/cuit, trazabilidad a `comprobante_id`/`compra_id`, numero_certificado) + RLS + índice + vista `retenciones_acumulado_mensual` (security_invoker, agrupado por mes/impuesto/jurisdicción).
+- **`impuestos/TabRetenciones.jsx`:** 2 sub-tabs. **Sufridas** = registro manual (KPIs crédito fiscal IIBB/Ganancias/total, modal completo, importación ARBA marcada "próximamente"). **Practicadas** = select proveedor + compra reactiva, pre-carga de alícuota desde `alicuotas_impuestos` (vigente), cálculo `base × alícuota` editable, correlativo `RET-AÑO-NNNN`, descarga de certificado PDF.
+- **`impuestos/pdf/CertificadoRetencionPDF.jsx`:** `@react-pdf/renderer`, import dinámico (code-split confirmado en build). Agente de retención + sujeto retenido + detalle + monto destacado.
+- **`useNotifications.js`:** recordatorio "Retenciones practicadas este mes: $X" (nivel info, seccion `impuestos`).
+
+**Verificación:** build de producción verde (3126 módulos, `CertificadoRetencionPDF` en chunk lazy propio). Columnas/tablas/RPC confirmadas en DB vía MCP.
+
+**Convenciones nuevas:**
+- **IVA snapshot:** la alícuota se captura en `comprobante_items.alicuota_iva` al vender — si después cambia la del producto, el histórico no se altera. Cálculo: subtotal incluye IVA → `neto = subtotal/(1+factor)`.
+- **Fallback 21% en todos lados:** comprobantes/productos/compras sin alícuota → 21% (nunca rompe lo existente). Usar `COALESCE`/`?? '21'`.
+- **Migraciones renumeradas:** ante colisión, verificar `list_migrations` en Supabase antes de numerar. Próxima libre: **035**.
 
 ### Sesión 2026-06-11 (noche) — Testeo funcional completo + fixes integrales
 
