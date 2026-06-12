@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-12 (tarde) — Bloqueo total con caja cerrada (ventas + movimientos, cualquier método); `parseNumberLocale` ESTRICTO es-AR (rechaza `120000.50`, acepta `120.000,50` / `500.000`); inputs de plata migrados a `type=text inputMode=decimal` con `placeholder="0,00"` en Caja*, Productos (costo/precio), Cotizaciones, Pedidos, NuevaVenta multi-pago; ticket + PDF de venta DISPLAY 100% en moneda elegida (USD si fue USD), TC + ARS como referencia; cantidades como enteros estrictos en OC/Cotizaciones/Pedidos/Productos; dropdown unidades común (11 opciones); helper `src/lib/unidadesMedida.js`; eliminado form "Nuevo Proveedor" duplicado de Inventario (ahora solo desde Proveedores).
+**Última actualización:** 2026-06-12 (noche) — Rediseño v3 completo: sistema de tokens CSS `--kx-*`, Aurora background animada, Sidebar 7 grupos de navegación, Header moderno, DashboardSection Hero+KPI rows; polish visual con acentos `border-t-2` por categoría + hover elevation; light mode v2 Stripe-style (fondo gris #f6f6f8, cards blancas flotando, acentos saturados, sombras reales, dark mode intacto).
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -154,20 +154,25 @@
 
 ---
 
-## Arquitectura de navegación (Fiori-style)
+## Arquitectura de navegación (v3 — Sidebar flat con 7 grupos)
+
+El rediseño v3 (2026-06-12) reemplazó el Launchpad Fiori + Portales por una navegación directa en sidebar:
 
 ```
-dashboard (Launchpad)
-├── portal_ventas     → POS · Cotizaciones · Pedidos · Clientes · CC
-├── portal_compras    → Compras · OC · Proveedores
-├── portal_finanzas   → Caja · Bancos · Contabilidad · Panel Ejecutivo
-├── portal_inventario → Inventario (con tab Análisis ABC)
-└── Admin (sin portal)→ Reportes · Usuarios · Configuración
+Sidebar 7 grupos:
+├── GENERAL       → dashboard, reportes
+├── VENTAS        → ventas, cotizaciones, pedidos, clientes, cuentacorriente, listas_precio
+├── COMPRAS       → proveedores, ordenes_compra, compras
+├── INVENTARIO    → productos
+├── FINANZAS      → caja (con status dot abierta/cerrada), bancos, cheques
+├── CONTABILIDAD  → plan_cuentas, impuestos
+└── ADMINISTRACIÓN→ usuarios, configuracion
 ```
 
-- **Sidebar:** agrupado por área con headers de color. Headers navegan al portal del área.
-- **Servicio:** `src/services/portalService.ts` — 5 funciones async con Promise.all
-- **Panel Ejecutivo:** `DashboardSection.jsx` — accesible desde Portal Finanzas (`panel_ejecutivo`)
+- **Sidebar:** `src/components/Sidebar.jsx` — array `NAV_GROUPS` con grupos + íconos, `fixed md:relative` (overlay en mobile, flex item en desktop), `bg-kx-surface/80 backdrop-blur-md`, user footer con avatar gradiente + rol + LogOut.
+- **Header:** `src/components/Header.jsx` — h-14, breadcrumb `empresa · sección`, búsqueda (⌘K), toggle tema, Bell notificaciones, CTA "Nueva Venta", Avatar dropdown.
+- **Shell:** `src/components/Dashboard.jsx` — flex layout, `AuroraBackground` fixed z-10, no más `ml-{x}`.
+- **Portales legacy:** `portalService.ts` + `portals/*.jsx` se mantienen en código pero ya no son accesibles desde el sidebar. El módulo `DashboardSection.jsx` es ahora el punto de entrada principal.
 
 ---
 
@@ -305,6 +310,102 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-12 (noche) — Light mode v2: Stripe-style contrast + acentos saturados + sombras reales
+**Branch:** `master` (commit `69d9f38`)
+
+**Objetivo:** light mode se veía plano (todo blanco sobre blanco). Mejorarlo con el principio Stripe: fondo gris clarito vs cards blancas, acentos de color más saturados sobre fondo claro, sombras con elevación real.
+
+**Cambio 1 — Diferenciación fondo/card:**
+- `src/index.css` `:root`: `--kx-bg: 246 246 248` (gris #f6f6f8, antes 250 250 250), `--kx-surface-2: 250 250 251`, `--kx-border: rgba(0,0,0,0.08)` (antes 0.06).
+- Las cards (`--kx-surface: 255 255 255` blanco puro) ahora "flotan" sobre el fondo gris sin necesitar bordes gruesos.
+
+**Cambio 2 — Acentos saturados en light:**
+- `:root`: acentos reemplazados por variantes -600 de Tailwind (más saturadas sobre fondo claro): `--kx-violet: 124 58 237` (violet-600), `--kx-green: 5 150 105` (emerald-600), `--kx-blue: 37 99 235` (blue-600), `--kx-amber: 217 119 6` (amber-600), `--kx-red: 220 38 38` (red-600).
+- `.dark`: acentos originales restaurados **explícitamente** (antes solo en `:root` y `.dark` los heredaba — al cambiar `:root` se rompería dark): `--kx-violet: 157 123 255`, `--kx-green: 61 220 151`, etc.
+- **Convención crítica:** si los acentos `--kx-*` solo están en `:root`, `.dark` los hereda. Al cambiar `:root` para light, **siempre agregar los valores dark explícitamente en `.dark`**.
+
+**Cambio 3 — Sombras con elevación real:**
+- Hero/KPI/cotizaciones KPI rows (wrappers de grid): `shadow-sm dark:shadow-none`.
+- Paneles standalone (Stock, Cotizaciones, gráficos, Acciones Rápidas): `shadow-sm dark:shadow-none` en reposo + `hover:shadow-lg dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.4)]` en hover (antes solo `hover:shadow-md`).
+- Header: `shadow-sm dark:shadow-none` — separa el topbar del contenido.
+
+**Cambio 4 — Sidebar/Header automático:**
+- Sidebar/Header usan `bg-kx-surface/80 backdrop-blur-md`. Con `--kx-bg` gris-claro, se ven claramente más blancos que el fondo → separación visual automática sin cambios adicionales.
+
+**Convenciones nuevas:**
+- En light mode, los colores de acento sobre fondos claros necesitan -600 (más saturados) vs dark que usa -400/-300 (más luminosos sobre fondo oscuro).
+- `shadow-sm dark:shadow-none` es el patrón estándar para elevar cards en light sin afectar dark.
+
+---
+
+### Sesión 2026-06-12 (tarde) — Visual polish v3: acentos de color + hover elevation + aurora light mode
+**Branch:** `master` (commit `283527d`)
+
+**Objetivo:** tres refinamientos visuales sobre el rediseño v3 aprobado.
+
+**Cambio 1 — Bordes de acento `border-t-2` por categoría:**
+Aplicado en `DashboardSection.jsx` a cada card según su semántica:
+- Violet (`--kx-violet`): Ventas del mes, Ventas del día, Cotizaciones/mes, Aprobadas pendientes
+- Green (`--kx-green`): Caja, Balance neto, Tasa de conversión
+- Blue (`--kx-blue`): Margen bruto
+- Red (`--kx-red`): Gastos del mes
+- Amber (`--kx-amber`): Deuda clientes, Monto convertido
+
+**Cambio 2 — Hover elevation:**
+- Cards dentro de grids `overflow-hidden` (hero, KPI, cotizaciones KPI rows): solo `hover:bg-kx-surface-2 transition-colors duration-200` — el translate se recortaría con overflow:hidden.
+- Paneles standalone (Stock, Cotizaciones, gráficos, Acciones Rápidas): `transition-all duration-200 ease-out hover:shadow-md dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:-translate-y-0.5 hover:border-kx-border-hover`.
+
+**Cambio 3 — Aurora más visible en light mode:**
+`src/components/ui/AuroraBackground.jsx`:
+- Blobs 1 y 2: `opacity-[0.22] dark:opacity-[0.35]` (antes 0.18), `blur-[60px] dark:blur-[80px]` (antes solo 80px).
+- Blob 3 (verde): `opacity-[0.12] dark:opacity-[0.15]` (antes 0.10).
+
+**Convención nueva:** `overflow-hidden` en un contenedor padre recorta `transform: translateY()` de sus hijos — no usar hover elevation translate dentro de grids con overflow:hidden. Alternativa: solo color change (`hover:bg-kx-surface-2`).
+
+---
+
+### Sesión 2026-06-12 (tarde) — Rediseño v3 completo: Aurora theme + Shell + Dashboard
+**Branch:** `master` (commit `27562b5`)
+
+**Objetivo:** rediseño visual completo del ERP — sistema de design tokens, background animado, sidebar/header/shell nuevos, DashboardSection reconstruido.
+
+#### 1. Sistema de tokens CSS `--kx-*` (`src/index.css` + `tailwind.config.js`)
+Variables en formato `R G B` para soportar modificadores de opacidad Tailwind (`bg-kx-surface/40`):
+- `--kx-bg`, `--kx-surface`, `--kx-surface-2` — fondos y superficies
+- `--kx-border`, `--kx-border-hover` — bordes en formato `rgba()`
+- `--kx-text`, `--kx-text-2`, `--kx-text-3` — jerarquía tipográfica
+- `--kx-violet`, `--kx-green`, `--kx-blue`, `--kx-amber`, `--kx-red` — acentos semánticos
+- `tailwind.config.js`: todos como `'kx-*': 'rgb(var(--kx-*) / <alpha-value>)'` en `colors.extend`, keyframes `kx-float1/2/3` para aurora, animaciones 22s/26s/30s.
+
+#### 2. Aurora Background (`src/components/ui/AuroraBackground.jsx`) — NUEVO
+3 blobs `position:fixed z-index:-10` con `radial-gradient + blur + keyframe` flotando independientemente. Componente puro, sin lógica, sin props.
+
+#### 3. Sidebar reescrito (`src/components/Sidebar.jsx`)
+Array `NAV_GROUPS` con 7 grupos (GENERAL/VENTAS/COMPRAS/INVENTARIO/FINANZAS/CONTABILIDAD/ADMINISTRACIÓN). Layout: `fixed md:relative inset-y-0 left-0` — overlay en mobile, flex item en desktop. Elimina completamente los `ml-{x}` del contenido. Footer con avatar gradiente + nombre + rol + LogOut.
+
+#### 4. Header reescrito (`src/components/Header.jsx`)
+`h-14 bg-kx-surface/80 backdrop-blur-md`. Breadcrumb izquierda (`empresa · sección`). Derecha: búsqueda ⌘K, toggle tema (Sun/Moon), Bell con dropdown de notificaciones completo, CTA "Nueva Venta", Avatar dropdown con configuración/logout.
+
+#### 5. Dashboard shell (`src/components/Dashboard.jsx`)
+`flex h-full relative z-10`. `AuroraBackground` fuera del flex container (fixed). `isSidebarOpen` inicia en `false`. Sin `ml-{x}`.
+
+#### 6. DashboardSection reconstruida (`src/components/sections/DashboardSection.jsx`)
+- **Hero row:** `grid-cols-[1.4fr_1fr_1fr] gap-px bg-kx-border rounded-2xl overflow-hidden` — Ventas mes / Caja / Margen bruto. Técnica `gap-px bg-kx-border` = divisores 1px sin bordes reales.
+- **KPI row:** `grid-cols-2 md:grid-cols-4` — Ventas día / Gastos mes / Balance neto / Deuda clientes.
+- **Bottom grid:** `grid-cols-1 lg:grid-cols-[1.3fr_1fr]` — panel Stock alerts + panel Cotizaciones.
+- **KPIs Cotizaciones:** grid 4 cards preservado (Cotizaciones/mes · Tasa conversión · Aprobadas · Monto convertido).
+- **Gráficos:** Ventas 7d (BarChart) + Flujo Caja 6m (LineChart) — ambos en panels `bg-kx-surface`.
+- **Acciones Rápidas:** 6 `QuickActionButton` con gradientes.
+
+**Error detectado y corregido:** `tailwind.config.js` no permite dos keys `colors` en `extend` — el segundo sobreescribe al primero (shadcn perdido). Fix: merge de ambos en un único objeto `colors`.
+
+**Convenciones nuevas:**
+- CSS variables kx-* como canales RGB (`250 250 250` no `#fafafa`) para que Tailwind pueda aplicar opacidad arbitraria (`/40`, `/80`, etc.).
+- `fixed md:relative` en sidebar elimina la necesidad de margin en el contenido — el sidebar en desktop es un flex item normal.
+- Técnica `gap-px bg-kx-border overflow-hidden rounded-2xl` en grids crea divisores 1px de color sin borders reales en cada celda.
+
+---
 
 ### Sesión 2026-06-12 (tarde) — Reglas UX globales: caja cerrada bloquea todo + parseNumberLocale es-AR estricto + ticket en moneda elegida
 
