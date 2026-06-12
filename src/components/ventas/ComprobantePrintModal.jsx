@@ -118,7 +118,7 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
 
   // Renderizar detalle de pagos
   const pagoLabel = pagos.length > 1
-    ? pagos.map(p => `${p.metodo}: $${Number(p.monto).toFixed(2)}`).join(' | ')
+    ? pagos.map(p => `${p.metodo}: $${Number(p.monto).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`).join(' | ')
     : comprobante?.forma_pago || '';
 
   if (!comprobante) return null;
@@ -155,7 +155,7 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
                 {pagos.map((p, i) => (
                   <div key={i} className="flex justify-between">
                     <span className="text-slate-500">{p.metodo}:</span>
-                    <span className="font-semibold">${Number(p.monto).toFixed(2)}</span>
+                    <span className="font-semibold">${Number(p.monto).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 ))}
               </div>
@@ -167,48 +167,59 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
             )}
           </div>
 
-          <table className="w-full text-xs font-mono mb-4">
-            <thead>
-              <tr className="border-b border-slate-300">
-                <th className="text-left py-1">Producto</th>
-                <th className="text-center py-1">Cant</th>
-                <th className="text-right py-1 price-col">Precio</th>
-                <th className="text-right py-1 price-col">Subt</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, i) => (
-                <tr key={i}>
-                  <td className="py-1 truncate max-w-[120px]">{item.producto_nombre}</td>
-                  <td className="text-center py-1">{item.cantidad}</td>
-                  <td className="text-right py-1 price-col">${Number(item.precio_unitario).toFixed(2)}</td>
-                  <td className="text-right py-1 font-bold price-col">${Number(item.subtotal).toFixed(2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {(() => {
+            const totalARS = Number(comprobante.total);
+            const tc = Number(comprobante.tipo_cambio_tasa);
+            const esExtranjera = comprobante.moneda && comprobante.moneda !== 'ARS' && tc > 0;
+            const monedaDisp = esExtranjera ? comprobante.moneda : 'ARS';
+            const simbolo = esExtranjera ? `${comprobante.moneda} ` : '$';
+            const conv = esExtranjera ? (n) => Number(n) / tc : (n) => Number(n);
+            const fmt = (n) => n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const totalDisp = conv(totalARS);
+            return (
+              <>
+                <table className="w-full text-xs font-mono mb-4">
+                  <thead>
+                    <tr className="border-b border-slate-300">
+                      <th className="text-left py-1">Producto</th>
+                      <th className="text-center py-1">Cant</th>
+                      <th className="text-right py-1 price-col">Precio ({monedaDisp})</th>
+                      <th className="text-right py-1 price-col">Subt ({monedaDisp})</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item, i) => (
+                      <tr key={i}>
+                        <td className="py-1 truncate max-w-[120px]">{item.producto_nombre}</td>
+                        <td className="text-center py-1">{item.cantidad}</td>
+                        <td className="text-right py-1 price-col">{simbolo}{fmt(conv(item.precio_unitario))}</td>
+                        <td className="text-right py-1 font-bold price-col">{simbolo}{fmt(conv(item.subtotal))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
 
-          <div className="border-t border-dashed border-slate-300 pt-2 text-right total-row">
-            <span className="text-sm mr-4">TOTAL:</span>
-            <span className="text-2xl font-bold">${Number(comprobante.total).toFixed(2)}</span>
-          </div>
-
-          {comprobante.moneda && comprobante.moneda !== 'ARS' && Number(comprobante.tipo_cambio_tasa) > 0 && (
-            <div className="mt-2 pt-2 border-t border-dashed border-slate-300 text-xs font-mono space-y-0.5 total-row">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Moneda cobrada:</span>
-                <span className="font-bold">{comprobante.moneda}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Tipo de cambio:</span>
-                <span>1 {comprobante.moneda} = ${Number(comprobante.tipo_cambio_tasa).toLocaleString('es-AR')}</span>
-              </div>
-              <div className="flex justify-between text-base font-bold pt-1">
-                <span>Equivale a:</span>
-                <span>{comprobante.moneda} {(Number(comprobante.total) / Number(comprobante.tipo_cambio_tasa)).toFixed(2)}</span>
-              </div>
-            </div>
-          )}
+                <div className="border-t border-dashed border-slate-300 pt-2 total-row">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-sm">TOTAL:</span>
+                    <span className="text-2xl font-bold">{simbolo}{fmt(totalDisp)}</span>
+                  </div>
+                  {esExtranjera && (
+                    <div className="mt-2 pt-2 border-t border-dashed border-slate-300 text-[10px] font-mono text-slate-500 space-y-0.5">
+                      <div className="flex justify-between">
+                        <span>Tipo de cambio:</span>
+                        <span>1 {comprobante.moneda} = ${fmt(tc)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Equivale a:</span>
+                        <span>${fmt(totalARS)} ARS</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            );
+          })()}
 
           <div className="mt-6 text-center text-xs text-slate-400">
             Gracias por su compra

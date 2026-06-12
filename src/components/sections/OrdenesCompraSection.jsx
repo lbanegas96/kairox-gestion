@@ -495,14 +495,29 @@ function OrdenesCompraSection() {
                       )}
                     </div>
                     <div className="col-span-2">
-                      <Input type="number" min="0.001" step="0.001" value={item.cantidad_pedida}
-                        onChange={e => updateItem(idx, 'cantidad_pedida', e.target.value)}
+                      <Input type="number" min="1" step="1" value={item.cantidad_pedida}
+                        onChange={e => updateItem(idx, 'cantidad_pedida', e.target.value.replace(/[^\d]/g, ''))}
                         className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm" />
                     </div>
                     <div className="col-span-2">
-                      <Input value={item.unidad_medida} placeholder="un"
+                      <select
+                        value={item.unidad_medida || ''}
                         onChange={e => updateItem(idx, 'unidad_medida', e.target.value)}
-                        className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm" />
+                        className="w-full h-10 px-2 rounded-md border border-slate-200 bg-white text-slate-900 dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">— Elegí —</option>
+                        <option value="Unidad">Unidad (un)</option>
+                        <option value="Kilogramos">Kilogramos (kg)</option>
+                        <option value="Gramos">Gramos (gr)</option>
+                        <option value="Litros">Litros (lt)</option>
+                        <option value="Mililitros">Mililitros (ml)</option>
+                        <option value="Metros">Metros (m)</option>
+                        <option value="Centimetros">Centímetros (cm)</option>
+                        <option value="Caja">Caja</option>
+                        <option value="Pack">Pack</option>
+                        <option value="Docena">Docena</option>
+                        <option value="Bolsa">Bolsa</option>
+                      </select>
                     </div>
                     <div className="col-span-2">
                       <Input type="number" min="0" step="0.01" value={item.costo_unitario} placeholder="0.00"

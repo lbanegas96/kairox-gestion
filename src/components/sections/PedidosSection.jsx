@@ -22,6 +22,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { getNowAR, getTodayAR, formatDateAR } from '@/lib/dateUtils';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 
 // ── Estados del workflow ───────────────────────────────────────────────────────
 const ESTADOS = [
@@ -513,15 +514,15 @@ function PedidosSection() {
                     </div>
                     <div className="col-span-2">
                       <Input
-                        type="number" min="0" step="1"
+                        type="number" min="1" step="1"
                         value={item.cantidad}
-                        onChange={e => updateItem(i, 'cantidad', e.target.value)}
+                        onChange={e => updateItem(i, 'cantidad', e.target.value.replace(/[^\d]/g, ''))}
                         className="h-9 text-sm text-center dark:bg-slate-900 dark:border-slate-700 dark:text-white"
                       />
                     </div>
                     <div className="col-span-2">
                       <Input
-                        type="number" min="0" step="0.01"
+                        type="text" inputMode="decimal" placeholder="0,00"
                         value={item.precio_unitario}
                         onChange={e => updateItem(i, 'precio_unitario', e.target.value)}
                         className="h-9 text-sm text-right dark:bg-slate-900 dark:border-slate-700 dark:text-white"

@@ -25,6 +25,7 @@ import {
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { getNowAR, formatDateTimeAR } from '@/lib/dateUtils';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 import { Textarea } from '@/components/ui/textarea';
 import CSVImportModal from '@/components/ui/CSVImportModal';
 
@@ -93,9 +94,9 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
       <Label htmlFor="costo">Costo Compra ($)</Label>
       <Input
         id="costo"
-        type="number"
-        step="0.01"
-        min="0"
+        type="text"
+        inputMode="decimal"
+        placeholder="0,00"
         value={data.costo_compra}
         onChange={e => setData({...data, costo_compra: e.target.value})}
         className="bg-white dark:bg-slate-950"
@@ -106,9 +107,9 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
       <Label htmlFor="precio">Precio Venta ($) *</Label>
       <Input
         id="precio"
-        type="number"
-        step="0.01"
-        min="0"
+        type="text"
+        inputMode="decimal"
+        placeholder="0,00"
         value={data.precio_venta}
         onChange={e => setData({...data, precio_venta: e.target.value})}
         required
@@ -121,8 +122,10 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
       <Input
         id="stock"
         type="number"
+        min="0"
+        step="1"
         value={data.stock_actual}
-        onChange={e => setData({...data, stock_actual: e.target.value})}
+        onChange={e => setData({...data, stock_actual: e.target.value.replace(/[^\d]/g, '')})}
         className="bg-white dark:bg-slate-950"
       />
     </div>
@@ -132,10 +135,34 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
       <Input
         id="min_stock"
         type="number"
+        min="0"
+        step="1"
         value={data.stock_minimo}
-        onChange={e => setData({...data, stock_minimo: e.target.value})}
+        onChange={e => setData({...data, stock_minimo: e.target.value.replace(/[^\d]/g, '')})}
         className="bg-white dark:bg-slate-950"
       />
+    </div>
+
+    <div className="space-y-2">
+      <Label htmlFor="unidad">Unidad de Medida</Label>
+      <select
+        id="unidad"
+        value={data.unidad_medida || 'Unidad'}
+        onChange={e => setData({...data, unidad_medida: e.target.value})}
+        className="w-full h-10 px-3 rounded-md border border-slate-200 bg-white text-slate-900 dark:bg-slate-950 dark:border-slate-700 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="Unidad">Unidad (un)</option>
+        <option value="Kilogramos">Kilogramos (kg)</option>
+        <option value="Gramos">Gramos (gr)</option>
+        <option value="Litros">Litros (lt)</option>
+        <option value="Mililitros">Mililitros (ml)</option>
+        <option value="Metros">Metros (m)</option>
+        <option value="Centimetros">Centímetros (cm)</option>
+        <option value="Caja">Caja</option>
+        <option value="Pack">Pack</option>
+        <option value="Docena">Docena</option>
+        <option value="Bolsa">Bolsa</option>
+      </select>
     </div>
 
     <div className="col-span-1 md:col-span-2 space-y-2">
@@ -186,7 +213,6 @@ const ProductosSection = () => {
   // Modal States
   const [isNewProductOpen, setIsNewProductOpen] = useState(false);
   const [isEditProductOpen, setIsEditProductOpen] = useState(false);
-  const [isNewProviderOpen, setIsNewProviderOpen] = useState(false);
   const [isMovimientoOpen, setIsMovimientoOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   
@@ -202,10 +228,6 @@ const ProductosSection = () => {
 
   const [newProduct, setNewProduct] = useState(initialProductState);
   const [editProduct, setEditProduct] = useState({ ...initialProductState, id: '' });
-  const [newProvider, setNewProvider] = useState({ 
-    nombre: '', contacto: '', telefono: '', email: '', direccion: '' 
-  });
-  
   const initialMovimientoState = { tipo: 'entrada', cantidad: '', motivo: '' };
   const [movimientoForm, setMovimientoForm] = useState(initialMovimientoState);
 
@@ -346,8 +368,8 @@ const ProductosSection = () => {
         codigo_sku: autoSku,
         user_id: user.id, 
         empresa_id: user.empresa_id,
-        costo_compra: parseFloat(newProduct.costo_compra) || 0,
-        precio_venta: parseFloat(newProduct.precio_venta) || 0,
+        costo_compra: parseNumberLocale(newProduct.costo_compra) || 0,
+        precio_venta: parseNumberLocale(newProduct.precio_venta) || 0,
         stock_actual: parseInt(newProduct.stock_actual) || 0,
         stock_minimo: parseInt(newProduct.stock_minimo) || 0,
         categoria_id: categoryId,
@@ -391,8 +413,8 @@ const ProductosSection = () => {
         categoria_id: categoryId,
         proveedor_id: editProduct.proveedor_id || null,
         unidad_medida: editProduct.unidad_medida,
-        costo_compra: parseFloat(editProduct.costo_compra) || 0,
-        precio_venta: parseFloat(editProduct.precio_venta) || 0,
+        costo_compra: parseNumberLocale(editProduct.costo_compra) || 0,
+        precio_venta: parseNumberLocale(editProduct.precio_venta) || 0,
         stock_actual: parseInt(editProduct.stock_actual) || 0,
         stock_minimo: parseInt(editProduct.stock_minimo) || 0,
         descripcion: editProduct.descripcion
@@ -412,73 +434,6 @@ const ProductosSection = () => {
     } catch (error) {
       console.error("Update product error:", error);
       toast({ title: "Error", description: error.message, variant: "destructive" });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleCreateProvider = async (e) => {
-    e.preventDefault();
-    if (isSubmitting) return;
-
-    // Critical check for empresa_id
-    if (!user || !user.empresa_id) {
-        toast({ 
-            title: "Error de permisos", 
-            description: "No se ha identificado la empresa. Por favor recarga la página.", 
-            variant: "destructive" 
-        });
-        return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      // Validate inputs
-      if (!newProvider.nombre || newProvider.nombre.trim() === '') {
-        throw new Error("El nombre de la empresa es obligatorio.");
-      }
-
-      console.log("Creating provider for empresa:", user.empresa_id);
-
-      const payload = {
-        nombre: newProvider.nombre.trim(),
-        contacto: newProvider.contacto?.trim() || null,
-        telefono: newProvider.telefono?.trim() || null,
-        email: newProvider.email?.trim() || null,
-        direccion: newProvider.direccion?.trim() || null,
-        empresa_id: user.empresa_id,
-        created_at: new Date().toISOString()
-      };
-
-      console.log("Provider Payload:", payload);
-
-      const { data, error } = await supabase
-        .from('proveedores')
-        .insert([payload])
-        .select();
-
-      if (error) {
-          console.error("Supabase Error:", error);
-          throw new Error(error.message || "Error al guardar en base de datos");
-      }
-
-      toast({ 
-        title: "Proveedor agregado", 
-        description: "El proveedor ha sido registrado exitosamente.",
-        className: "bg-green-50 border-green-200 text-green-800"
-      });
-      
-      setNewProvider({ nombre: '', contacto: '', telefono: '', email: '', direccion: '' });
-      setIsNewProviderOpen(false);
-      await fetchProviders();
-    } catch (error) {
-      console.error("Create provider error:", error);
-      toast({ 
-        title: "Error al crear proveedor", 
-        description: error.message || "Verifique los datos e intente nuevamente.", 
-        variant: "destructive" 
-      });
     } finally {
       setIsSubmitting(false);
     }
@@ -593,84 +548,6 @@ const ProductosSection = () => {
              {showInactivos ? <Power className="h-4 w-4 mr-2" /> : <PowerOff className="h-4 w-4 mr-2" />}
              {showInactivos ? `Activos` : `Inactivos${inactivosCount > 0 ? ` (${inactivosCount})` : ''}`}
            </Button>
-
-           {/* Add Provider Dialog */}
-           <Dialog open={isNewProviderOpen} onOpenChange={setIsNewProviderOpen}>
-             <DialogTrigger asChild>
-               <Button variant="outline" className="border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800">
-                 <Truck className="h-4 w-4 mr-2" /> Nuevo Proveedor
-               </Button>
-             </DialogTrigger>
-             <DialogContent className="sm:max-w-[500px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
-               <DialogHeader>
-                 <DialogTitle>Registrar Proveedor</DialogTitle>
-                 <DialogDescription>Agrega un nuevo proveedor a tu lista.</DialogDescription>
-               </DialogHeader>
-               <form onSubmit={handleCreateProvider} className="space-y-4 py-4">
-                 <div className="space-y-2">
-                   <Label htmlFor="provider-name">Nombre Empresa *</Label>
-                   <Input 
-                     id="provider-name"
-                     value={newProvider.nombre} 
-                     onChange={e=>setNewProvider({...newProvider, nombre:e.target.value})} 
-                     required 
-                     className="bg-white dark:bg-slate-950"
-                     placeholder="Ej: Distribuidora Central S.A."
-                   />
-                 </div>
-                 <div className="grid grid-cols-2 gap-4">
-                   <div className="space-y-2">
-                     <Label htmlFor="provider-contact">Contacto (Persona)</Label>
-                     <Input 
-                        id="provider-contact"
-                        value={newProvider.contacto} 
-                        onChange={e=>setNewProvider({...newProvider, contacto:e.target.value})} 
-                        className="bg-white dark:bg-slate-950"
-                        placeholder="Ej: Juan Pérez"
-                     />
-                   </div>
-                   <div className="space-y-2">
-                     <Label htmlFor="provider-phone">Teléfono</Label>
-                     <Input 
-                       id="provider-phone"
-                       value={newProvider.telefono} 
-                       onChange={e=>setNewProvider({...newProvider, telefono:e.target.value})} 
-                       className="bg-white dark:bg-slate-950"
-                       placeholder="Ej: 11-1234-5678"
-                     />
-                   </div>
-                 </div>
-                 <div className="space-y-2">
-                   <Label htmlFor="provider-email">Email</Label>
-                   <Input 
-                     id="provider-email"
-                     type="email" 
-                     value={newProvider.email} 
-                     onChange={e=>setNewProvider({...newProvider, email:e.target.value})} 
-                     className="bg-white dark:bg-slate-950"
-                     placeholder="Ej: contacto@empresa.com"
-                   />
-                 </div>
-                 <div className="space-y-2">
-                   <Label htmlFor="provider-address">Dirección</Label>
-                   <Input 
-                     id="provider-address"
-                     value={newProvider.direccion} 
-                     onChange={e=>setNewProvider({...newProvider, direccion:e.target.value})} 
-                     className="bg-white dark:bg-slate-950"
-                     placeholder="Ej: Av. Corrientes 1234, CABA"
-                   />
-                 </div>
-                 <DialogFooter>
-                   <Button type="button" variant="outline" onClick={() => setIsNewProviderOpen(false)}>Cancelar</Button>
-                   <Button type="submit" disabled={isSubmitting}>
-                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                     Guardar Proveedor
-                   </Button>
-                 </DialogFooter>
-               </form>
-             </DialogContent>
-           </Dialog>
 
            {/* Import CSV Button */}
            <Button variant="outline" onClick={() => setIsImportOpen(true)} className="dark:text-white dark:border-slate-700">
@@ -940,12 +817,13 @@ const ProductosSection = () => {
                
                <div className="space-y-2">
                  <Label>Cantidad</Label>
-                 <Input 
-                   type="number" 
+                 <Input
+                   type="number"
                    min="1"
-                   value={movimientoForm.cantidad} 
-                   onChange={e=>setMovimientoForm({...movimientoForm, cantidad:e.target.value})} 
-                   placeholder="0" 
+                   step="1"
+                   value={movimientoForm.cantidad}
+                   onChange={e=>setMovimientoForm({...movimientoForm, cantidad:e.target.value.replace(/[^\d]/g, '')})}
+                   placeholder="0"
                    required
                    className="bg-white dark:bg-slate-950 font-mono text-lg"
                  />

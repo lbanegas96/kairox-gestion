@@ -16,7 +16,7 @@ import { cotizacionesService, COTIZACIONES_KEYS } from '@/services/cotizacionesS
 import { supabase } from '@/lib/customSupabaseClient';
 import NuevaVentaModal from '@/components/ventas/NuevaVentaModal';
 import { MonedaSelector } from '@/components/ui/MonedaSelector';
-import { formatCurrency, MONEDA_SYMBOLS } from '@/lib/currencyUtils';
+import { formatCurrency, MONEDA_SYMBOLS, parseNumberLocale } from '@/lib/currencyUtils';
 import { formatDateAR } from '@/lib/dateUtils';
 
 const ESTADOS = {
@@ -191,8 +191,8 @@ function CotizacionesSection() {
   const removeItem = (idx) => setItems(prev => prev.filter((_, i) => i !== idx));
 
   const total = items.reduce((s, i) => {
-    const cant = parseFloat(i.cantidad) || 0;
-    const precio = parseFloat(i.precio_unitario) || 0;
+    const cant = parseInt(i.cantidad) || 0;
+    const precio = parseNumberLocale(i.precio_unitario) || 0;
     return s + cant * precio;
   }, 0);
 
@@ -209,7 +209,12 @@ function CotizacionesSection() {
       });
       return;
     }
-    const validItems = items.filter(i => i.descripcion && i.cantidad > 0 && i.precio_unitario > 0);
+    const validItems = items
+      .map(i => ({ ...i, cantidad: parseInt(i.cantidad) || 0, precio_unitario: parseNumberLocale(i.precio_unitario) || 0 }))
+      .filter(i => i.descripcion && i.cantidad > 0 && i.precio_unitario > 0);
+    if (validItems.length === 0) {
+      return toast({ title: 'Ítems inválidos', description: 'Revisá cantidades y precios (usar coma para decimales).', variant: 'destructive' });
+    }
     createMutation.mutate({
       cliente: form.cliente_nombre ? { nombre: form.cliente_nombre } : null,
       items: validItems,
@@ -300,7 +305,12 @@ function CotizacionesSection() {
                       </span>
                     </td>
                     <td className="p-4 text-right font-mono font-bold text-slate-800 dark:text-slate-200">
-                      {formatCurrency(cot.total, cot.moneda ?? 'ARS')}
+                      {(() => {
+                        const tc = Number(cot.tipo_cambio_tasa) || 1;
+                        const esExt = cot.moneda && cot.moneda !== 'ARS' && tc > 0;
+                        const valor = esExt ? Number(cot.total) / tc : Number(cot.total);
+                        return formatCurrency(valor, cot.moneda ?? 'ARS');
+                      })()}
                     </td>
                     <td className="p-4">
                       <div className="flex items-center justify-center gap-1">
@@ -478,21 +488,32 @@ function CotizacionesSection() {
                     </div>
                     <div className="col-span-2 space-y-1">
                       <Label className="text-xs dark:text-slate-400">Cantidad</Label>
-                      <Input type="number" min="0" step="1" value={item.cantidad} onChange={e => updateItem(idx, 'cantidad', e.target.value)} className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm" />
+                      <Input type="number" min="1" step="1" value={item.cantidad} onChange={e => updateItem(idx, 'cantidad', e.target.value.replace(/[^\d]/g, ''))} className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm" />
                     </div>
                     <div className="col-span-2 space-y-1">
                       <Label className="text-xs dark:text-slate-400">Unidad</Label>
-                      <Input
-                        list="unidades-medida"
-                        value={item.unidad_medida}
+                      <select
+                        value={item.unidad_medida || ''}
                         onChange={e => updateItem(idx, 'unidad_medida', e.target.value)}
-                        placeholder="un"
-                        className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm"
-                      />
+                        className="w-full h-10 px-2 rounded-md border border-slate-200 bg-white text-slate-900 dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">— Elegí —</option>
+                        <option value="Unidad">Unidad (un)</option>
+                        <option value="Kilogramos">Kilogramos (kg)</option>
+                        <option value="Gramos">Gramos (gr)</option>
+                        <option value="Litros">Litros (lt)</option>
+                        <option value="Mililitros">Mililitros (ml)</option>
+                        <option value="Metros">Metros (m)</option>
+                        <option value="Centimetros">Centímetros (cm)</option>
+                        <option value="Caja">Caja</option>
+                        <option value="Pack">Pack</option>
+                        <option value="Docena">Docena</option>
+                        <option value="Bolsa">Bolsa</option>
+                      </select>
                     </div>
                     <div className="col-span-2 space-y-1">
                       <Label className="text-xs dark:text-slate-400">Precio Unit.</Label>
-                      <Input type="number" min="0" step="0.01" value={item.precio_unitario} onChange={e => updateItem(idx, 'precio_unitario', e.target.value)} className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm" />
+                      <Input type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unitario} onChange={e => updateItem(idx, 'precio_unitario', e.target.value)} className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm" />
                     </div>
                     <div className="col-span-1 flex justify-end pb-0.5">
                       <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-500" onClick={() => removeItem(idx)} disabled={items.length === 1}>
@@ -567,28 +588,52 @@ function CotizacionesSection() {
                 </div>
               </div>
 
-              <table className="w-full text-sm border-collapse">
-                <thead><tr className="border-b border-slate-200 dark:border-slate-800">
-                  <th className="text-left py-2 text-xs text-slate-400">Descripción</th>
-                  <th className="text-right py-2 text-xs text-slate-400">Cant.</th>
-                  <th className="text-right py-2 text-xs text-slate-400">Precio</th>
-                  <th className="text-right py-2 text-xs text-slate-400">Subtotal</th>
-                </tr></thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {(detalle.cotizacion_items ?? []).map(item => (
-                    <tr key={item.id}>
-                      <td className="py-2 dark:text-slate-300">{item.descripcion}</td>
-                      <td className="py-2 text-right dark:text-slate-300">{item.cantidad} {item.unidad_medida}</td>
-                      <td className="py-2 text-right dark:text-slate-300">${Number(item.precio_unitario).toFixed(2)}</td>
-                      <td className="py-2 text-right font-medium dark:text-white">${Number(item.subtotal).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot><tr className="border-t-2 border-slate-200 dark:border-slate-700">
-                  <td colSpan={3} className="py-3 text-right font-bold dark:text-white">TOTAL {detalle.moneda && detalle.moneda !== 'ARS' && <span className="text-xs text-slate-400 ml-1">({detalle.moneda} — tasa {detalle.tipo_cambio_tasa})</span>}</td>
-                  <td className="py-3 text-right font-bold text-lg dark:text-white">{formatCurrency(detalle.total, detalle.moneda ?? 'ARS')}</td>
-                </tr></tfoot>
-              </table>
+              {(() => {
+                const tc = Number(detalle.tipo_cambio_tasa) || 1;
+                const esExtranjera = detalle.moneda && detalle.moneda !== 'ARS' && tc > 0;
+                const conv = esExtranjera ? (n) => Number(n) / tc : (n) => Number(n);
+                const fmt = (n) => n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const monedaDisp = esExtranjera ? detalle.moneda : 'ARS';
+                const simbolo = esExtranjera ? `${detalle.moneda} ` : '$';
+                return (
+                  <table className="w-full text-sm border-collapse">
+                    <thead><tr className="border-b border-slate-200 dark:border-slate-800">
+                      <th className="text-left py-2 text-xs text-slate-400">Descripción</th>
+                      <th className="text-right py-2 text-xs text-slate-400">Cant.</th>
+                      <th className="text-right py-2 text-xs text-slate-400">Precio ({monedaDisp})</th>
+                      <th className="text-right py-2 text-xs text-slate-400">Subtotal ({monedaDisp})</th>
+                    </tr></thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {(detalle.cotizacion_items ?? []).map(item => (
+                        <tr key={item.id}>
+                          <td className="py-2 dark:text-slate-300">{item.descripcion}</td>
+                          <td className="py-2 text-right dark:text-slate-300">{item.cantidad} {item.unidad_medida}</td>
+                          <td className="py-2 text-right dark:text-slate-300">{simbolo}{fmt(conv(item.precio_unitario))}</td>
+                          <td className="py-2 text-right font-medium dark:text-white">{simbolo}{fmt(conv(item.subtotal))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-slate-200 dark:border-slate-700">
+                        <td colSpan={3} className="py-3 text-right font-bold dark:text-white">TOTAL</td>
+                        <td className="py-3 text-right font-bold text-lg dark:text-white">{simbolo}{fmt(conv(detalle.total))}</td>
+                      </tr>
+                      {esExtranjera && (
+                        <>
+                          <tr className="text-xs text-slate-500 dark:text-slate-400">
+                            <td colSpan={3} className="py-1 text-right">Tipo de cambio</td>
+                            <td className="py-1 text-right">1 {detalle.moneda} = ${fmt(tc)}</td>
+                          </tr>
+                          <tr className="text-xs text-slate-500 dark:text-slate-400">
+                            <td colSpan={3} className="py-1 text-right">Equivale a</td>
+                            <td className="py-1 text-right">${fmt(Number(detalle.total))} ARS</td>
+                          </tr>
+                        </>
+                      )}
+                    </tfoot>
+                  </table>
+                );
+              })()}
 
               {detalle.notas && (
                 <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-lg text-sm text-slate-600 dark:text-slate-400">

@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-12 — Submódulo **Impuestos** (FI Tax): IVA real por alícuota (21/10.5/0/exento/no_gravado) en productos + snapshot por ítem + neto/IVA discriminado en comprobantes y compras; RPC `crear_venta` calcula IVA real; Tab IVA (alícuota por producto + posición IVA mensual) + Tab Alícuotas (IIBB/Ganancias) + Tab Retenciones (sufridas/practicadas + certificado PDF); Libro IVA Compras; emitir-cae con alícuotas reales por línea (código, pendiente redeploy)
+**Última actualización:** 2026-06-12 (tarde) — Bloqueo total con caja cerrada (ventas + movimientos, cualquier método); `parseNumberLocale` ESTRICTO es-AR (rechaza `120000.50`, acepta `120.000,50` / `500.000`); inputs de plata migrados a `type=text inputMode=decimal` con `placeholder="0,00"` en Caja*, Productos (costo/precio), Cotizaciones, Pedidos, NuevaVenta multi-pago; ticket + PDF de venta DISPLAY 100% en moneda elegida (USD si fue USD), TC + ARS como referencia; cantidades como enteros estrictos en OC/Cotizaciones/Pedidos/Productos; dropdown unidades común (11 opciones); helper `src/lib/unidadesMedida.js`; eliminado form "Nuevo Proveedor" duplicado de Inventario (ahora solo desde Proveedores).
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -305,6 +305,92 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-12 (tarde) — Reglas UX globales: caja cerrada bloquea todo + parseNumberLocale es-AR estricto + ticket en moneda elegida
+
+**Objetivo:** después de testear el módulo Impuestos de Luciano (todo OK), aplicar reglas de UX consistentes en toda la app para que no haya inconsistencias entre secciones.
+
+#### 1. Caja cerrada bloquea TODO
+
+- **Antes:** la regla histórica era "solo Efectivo requiere caja abierta". Esto generaba confusión porque dejaba registrar ventas Transferencia/Tarjeta/Cheque con caja cerrada.
+- **Ahora:** cualquier venta o movimiento requiere caja abierta, sin importar el método. Caja abierta = todo permitido.
+- Archivos: [src/components/ventas/NuevaVentaModal.jsx](src/components/ventas/NuevaVentaModal.jsx) y [src/components/sections/CajaSection.jsx](src/components/sections/CajaSection.jsx) — validación temprana con toast "⛔ Caja cerrada".
+
+#### 2. `parseNumberLocale` estricto formato es-AR
+
+Reescritura completa en [src/lib/currencyUtils.js](src/lib/currencyUtils.js):
+- **Punto** = separador de miles → grupos de EXACTAMENTE 3 dígitos
+- **Coma** = único separador decimal
+- El primer grupo puede tener 1–3 dígitos; los demás SIEMPRE 3
+- Rechaza con `NaN`: `120000.50`, `500.00`, `1.4`, `1,234.56`, múltiples comas, caracteres no numéricos
+- Acepta: `500.000`, `120.000,50`, `1.668,21`, `0,0036`
+
+Bug previo: el RPC inserta lo que recibe; si el input HTML `type="number"` interpreta `300.000` como `300` (browser locale), el campo `monto` del form ya contiene `300` antes de `parseNumberLocale`. Solución: cambiar inputs a `type="text" inputMode="decimal"` y parsear en submit.
+
+#### 3. Inputs de plata migrados (`type=text inputMode=decimal` + `parseNumberLocale`)
+
+Archivos completados esta sesión:
+- ✅ [CajaApertura.jsx](src/components/caja/CajaApertura.jsx) — monto inicial
+- ✅ [CajaCierre.jsx](src/components/caja/CajaCierre.jsx) — saldo real arqueo
+- ✅ [CajaSection.jsx](src/components/sections/CajaSection.jsx) — nuevo movimiento (monto)
+- ✅ [NuevaVentaModal.jsx](src/components/ventas/NuevaVentaModal.jsx) — montos multi-pago
+- ✅ [ProductosSection.jsx](src/components/sections/ProductosSection.jsx) — `costo_compra` y `precio_venta` (alta + edit)
+- ✅ [CotizacionesSection.jsx](src/components/sections/CotizacionesSection.jsx) — `precio_unitario` por ítem
+- ✅ [PedidosSection.jsx](src/components/sections/PedidosSection.jsx) — `precio_unitario` por ítem
+
+**Pendientes próxima sesión** (requieren refactor del estado del carrito porque guardan valores parseados en cada keystroke):
+- ⏳ ComprasSection — `costo_unitario` cart + edit
+- ⏳ ClientDetailModal — cobros CC en efectivo
+- ⏳ ListasPrecioSection — precio por ítem
+- ⏳ PlanCuentasSection — monto asiento manual
+- ⏳ ProveedoresSection — pago a proveedor
+- ⏳ ConfiguracionSection — eventuales montos
+- ⏳ OnboardingWizard — montos iniciales
+
+#### 4. Ticket y PDF de venta DISPLAY en moneda elegida
+
+[ComprobantePrintModal.jsx](src/components/ventas/ComprobantePrintModal.jsx) y [pdf/ComprobantePDF.jsx](src/components/ventas/pdf/ComprobantePDF.jsx):
+
+- Si `comprobante.moneda === 'ARS'`: todos los precios, subtotales, pagos y total en pesos como antes.
+- Si moneda extranjera (USD/EUR/BRL) con `tipo_cambio_tasa > 0`: **TODO en la moneda elegida**, convertido desde ARS dividiendo por el TC. Headers de columna incluyen la moneda (`P. Unit. (USD)`). Al final del ticket aparece el TC y el equivalente ARS como referencia chiquita.
+- Misma lógica aplicada en el modal de detalle de cotización ([CotizacionesSection.jsx:567](src/components/sections/CotizacionesSection.jsx:567)).
+
+**Convención:** internamente todo se guarda en ARS (con TC) — solo la VISTA cambia según la moneda elegida.
+
+#### 5. Cantidades como enteros estrictos
+
+Inputs de cantidad ahora con `type="number" min="1" step="1"` + `onChange={e => updateItem(...e.target.value.replace(/[^\d]/g, ''))}` — imposible tipear punto, coma o decimales:
+- ✅ [OrdenesCompraSection.jsx](src/components/sections/OrdenesCompraSection.jsx) — `cantidad_pedida`
+- ✅ [CotizacionesSection.jsx](src/components/sections/CotizacionesSection.jsx) — cantidad por ítem
+- ✅ [PedidosSection.jsx](src/components/sections/PedidosSection.jsx) — cantidad por ítem
+- ✅ [ProductosSection.jsx](src/components/sections/ProductosSection.jsx) — stock_actual, stock_minimo, movimientos
+- ⏳ ComprasSection y NuevaVentaModal cart (también pendientes)
+
+#### 6. Dropdown unificado de unidades de medida
+
+Nuevo helper [src/lib/unidadesMedida.js](src/lib/unidadesMedida.js): export `UNIDADES_COMUNES` (11 opciones: Unidad, Kilogramos, Gramos, Litros, Mililitros, Metros, Centímetros, Caja, Pack, Docena, Bolsa) + `getShortUnit(unit)` para mostrar `kg`/`gr`/`lt`/etc.
+
+Aplicado como `<select>` inline (no via componente porque mantiene Radix simple):
+- ✅ [OrdenesCompraSection.jsx](src/components/sections/OrdenesCompraSection.jsx) — unidad por ítem
+- ✅ [CotizacionesSection.jsx](src/components/sections/CotizacionesSection.jsx) — unidad por ítem
+- ✅ [ProductosSection.jsx](src/components/sections/ProductosSection.jsx) — unidad del producto (antes no existía en el form, default `'Unidad'`)
+
+#### 7. Eliminado form duplicado "Nuevo Proveedor" de Inventario
+
+[ProductosSection.jsx](src/components/sections/ProductosSection.jsx) tenía un Dialog "Registrar Proveedor" con campos básicos (nombre, contacto, teléfono, email, dirección), que se duplicaba con el Dialog completo de ProveedoresSection (CUIT, razón social, condición IVA, localidad, provincia, condición/plazo pago). Quitado el Dialog, botón, handler y state. **El alta de proveedores se hace solo desde la sección Proveedores.**
+
+#### Bug observado en producción (solo cacheo del browser)
+
+El user vio una caja abierta con `monto_inicial=$300` después de mis fixes. La DB lo confirmó. La causa: el browser tenía cacheada la versión vieja del JS (cuando el input era `type="number"` y `parseFloat("300.000")` daba 300). Solución: **hard reload (`Ctrl+Shift+R`)** después de cambios en código. Vite manda HMR pero el browser no siempre lo aplica si tiene service worker o cache agresiva.
+
+**Convenciones nuevas:**
+- **Inputs de plata:** SIEMPRE `type="text" inputMode="decimal" placeholder="0,00"` + parsear con `parseNumberLocale()` en submit. Nunca `type="number"` para campos monetarios.
+- **Inputs de cantidad:** `type="number" min="1" step="1"` + `onChange={e.target.value.replace(/[^\d]/g, '')}`. Sin decimales.
+- **Display de moneda:** internamente ARS; la vista (ticket, PDF, cotización detalle) convierte a la moneda registrada del comprobante usando `tipo_cambio_tasa`.
+- **Caja cerrada = nada se puede hacer.** No hacer excepciones por método de pago.
+- **Helpers compartidos** para unidades de medida (`src/lib/unidadesMedida.js`) — si una sección necesita un dropdown de unidades, importar de ahí.
+
+---
 
 ### Sesión 2026-06-12 — Submódulo Impuestos (FI Tax): IVA real + Alícuotas + Retenciones
 **Branch:** `master` (commit directo)

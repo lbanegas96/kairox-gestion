@@ -511,13 +511,14 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
 
       // Objeto comprobante para el modal de impresión
       const comprobante = {
-        id:             rpcResult.comprobante_id,
-        numero_venta:   rpcResult.numero_venta,
-        fecha:          now,
+        id:                rpcResult.comprobante_id,
+        numero_venta:      rpcResult.numero_venta,
+        fecha:             now,
         total,
         moneda,
-        forma_pago:     formaPago,
-        cliente_nombre: selectedClient?.nombre ?? 'Consumidor Final',
+        tipo_cambio_tasa:  tipoCambioTasa,
+        forma_pago:        formaPago,
+        cliente_nombre:    selectedClient?.nombre ?? 'Consumidor Final',
       };
 
       // Asiento contable — fire & forget, FUERA de la transacción (no crítico)

@@ -245,49 +245,74 @@ export function ComprobantePDF({ comprobante, items, pagos, empresaData, qrDataU
           </Text>
         </View>
 
-        {/* TABLA ITEMS */}
-        <View style={styles.table}>
-          <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderText, { flex: 4 }]}>Descripción</Text>
-            <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'right' }]}>Cant.</Text>
-            <Text style={[styles.tableHeaderText, { flex: 2, textAlign: 'right' }]}>P. Unit.</Text>
-            <Text style={[styles.tableHeaderText, { flex: 2, textAlign: 'right' }]}>Subtotal</Text>
-          </View>
-          {(items ?? []).map((item, i) => (
-            <View key={i} style={[styles.tableRow, i % 2 === 1 ? styles.tableRowAlt : {}]}>
-              <Text style={{ flex: 4, fontSize: 9 }}>{item.producto_nombre}</Text>
-              <Text style={{ flex: 1, textAlign: 'right', fontSize: 9 }}>{item.cantidad}</Text>
-              <Text style={{ flex: 2, textAlign: 'right', fontSize: 9 }}>
-                {'$ ' + formatARS(item.precio_unitario)}
-              </Text>
-              <Text style={{ flex: 2, textAlign: 'right', fontSize: 9 }}>
-                {'$ ' + formatARS(item.subtotal)}
-              </Text>
-            </View>
-          ))}
-        </View>
+        {(() => {
+          const tc = Number(comprobante.tipo_cambio_tasa) || 1;
+          const esExtranjera = comprobante.moneda && comprobante.moneda !== 'ARS' && tc > 0;
+          const monedaDisp = esExtranjera ? comprobante.moneda : 'ARS';
+          const simbolo = esExtranjera ? `${comprobante.moneda} ` : '$ ';
+          const conv = esExtranjera ? (n) => Number(n) / tc : (n) => Number(n);
+          return (
+            <>
+              {/* TABLA ITEMS */}
+              <View style={styles.table}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.tableHeaderText, { flex: 4 }]}>Descripción</Text>
+                  <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'right' }]}>Cant.</Text>
+                  <Text style={[styles.tableHeaderText, { flex: 2, textAlign: 'right' }]}>{`P. Unit. (${monedaDisp})`}</Text>
+                  <Text style={[styles.tableHeaderText, { flex: 2, textAlign: 'right' }]}>{`Subtotal (${monedaDisp})`}</Text>
+                </View>
+                {(items ?? []).map((item, i) => (
+                  <View key={i} style={[styles.tableRow, i % 2 === 1 ? styles.tableRowAlt : {}]}>
+                    <Text style={{ flex: 4, fontSize: 9 }}>{item.producto_nombre}</Text>
+                    <Text style={{ flex: 1, textAlign: 'right', fontSize: 9 }}>{item.cantidad}</Text>
+                    <Text style={{ flex: 2, textAlign: 'right', fontSize: 9 }}>
+                      {simbolo + formatARS(conv(item.precio_unitario))}
+                    </Text>
+                    <Text style={{ flex: 2, textAlign: 'right', fontSize: 9 }}>
+                      {simbolo + formatARS(conv(item.subtotal))}
+                    </Text>
+                  </View>
+                ))}
+              </View>
 
-        {/* TOTALES */}
-        <View style={styles.totalesBox}>
-          {(pagos ?? []).map((pago, i) => (
-            <View key={i} style={styles.totalRow}>
-              <Text style={{ fontSize: 8, color: '#64748b' }}>{pago.metodo}</Text>
-              <Text style={{ fontSize: 9 }}>{'$ ' + formatARS(pago.monto)}</Text>
-            </View>
-          ))}
-          <View style={styles.totalRow}>
-            <Text style={{ fontSize: 8, color: '#64748b' }}>Neto Gravado</Text>
-            <Text style={{ fontSize: 9 }}>{'$ ' + formatARS(neto)}</Text>
-          </View>
-          <View style={styles.totalRow}>
-            <Text style={{ fontSize: 8, color: '#64748b' }}>IVA</Text>
-            <Text style={{ fontSize: 9 }}>{'$ ' + formatARS(iva)}</Text>
-          </View>
-          <View style={styles.totalFinal}>
-            <Text style={styles.totalFinalText}>TOTAL</Text>
-            <Text style={styles.totalFinalText}>{'$ ' + formatARS(comprobante.total)}</Text>
-          </View>
-        </View>
+              {/* TOTALES */}
+              <View style={styles.totalesBox}>
+                {(pagos ?? []).map((pago, i) => (
+                  <View key={i} style={styles.totalRow}>
+                    <Text style={{ fontSize: 8, color: '#64748b' }}>{pago.metodo}</Text>
+                    <Text style={{ fontSize: 9 }}>{simbolo + formatARS(conv(pago.monto))}</Text>
+                  </View>
+                ))}
+                <View style={styles.totalRow}>
+                  <Text style={{ fontSize: 8, color: '#64748b' }}>Neto Gravado</Text>
+                  <Text style={{ fontSize: 9 }}>{simbolo + formatARS(conv(neto))}</Text>
+                </View>
+                <View style={styles.totalRow}>
+                  <Text style={{ fontSize: 8, color: '#64748b' }}>IVA</Text>
+                  <Text style={{ fontSize: 9 }}>{simbolo + formatARS(conv(iva))}</Text>
+                </View>
+                <View style={styles.totalFinal}>
+                  <Text style={styles.totalFinalText}>TOTAL</Text>
+                  <Text style={styles.totalFinalText}>{simbolo + formatARS(conv(comprobante.total))}</Text>
+                </View>
+                {esExtranjera ? (
+                  <>
+                    <View style={styles.totalRow}>
+                      <Text style={{ fontSize: 8, color: '#64748b' }}>Tipo de cambio</Text>
+                      <Text style={{ fontSize: 9 }}>
+                        {'1 ' + comprobante.moneda + ' = $ ' + formatARS(tc)}
+                      </Text>
+                    </View>
+                    <View style={styles.totalRow}>
+                      <Text style={{ fontSize: 8, color: '#64748b' }}>Equivale a</Text>
+                      <Text style={{ fontSize: 9 }}>{'$ ' + formatARS(comprobante.total) + ' ARS'}</Text>
+                    </View>
+                  </>
+                ) : null}
+              </View>
+            </>
+          );
+        })()}
 
         {/* CAE + QR — solo si tiene CAE emitido */}
         {comprobante.cae_estado === 'emitido' && comprobante.cae ? (
