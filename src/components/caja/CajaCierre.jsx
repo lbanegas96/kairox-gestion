@@ -12,6 +12,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 
 const CajaCierre = ({ onCancel }) => {
   const { currentSession, closeSession } = useCaja();
@@ -97,9 +98,18 @@ const CajaCierre = ({ onCancel }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (saldoReal === '') return;
-    
+
+    const real = parseNumberLocale(saldoReal);
+    if (isNaN(real) || real < 0) {
+      toast({
+        title: 'Saldo inválido',
+        description: 'Usá formato argentino: punto para miles y coma para decimales (ej: 500.000,00).',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsSubmitting(true);
-    const real = parseFloat(saldoReal);
     const diff = real - totals.esperado;
     
     const success = await closeSession(real, observaciones, totals.esperado, diff);
@@ -111,7 +121,8 @@ const CajaCierre = ({ onCancel }) => {
     setIsSubmitting(false);
   };
 
-  const diferencia = (parseFloat(saldoReal || 0) - totals.esperado);
+  const realParsed = parseNumberLocale(saldoReal);
+  const diferencia = ((isNaN(realParsed) ? 0 : realParsed) - totals.esperado);
   const isPerfect = Math.abs(diferencia) < 0.01;
   const isSobrante = diferencia > 0.01;
   const isFaltante = diferencia < -0.01;
@@ -166,11 +177,11 @@ const CajaCierre = ({ onCancel }) => {
                 <Label htmlFor="saldoReal" className="text-base">Saldo Real (Efectivo)</Label>
                 <div className="relative">
                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">$</span>
-                   <Input 
+                   <Input
                       id="saldoReal"
-                      type="number"
-                      step="0.01"
-                      min="0"
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="0,00"
                       value={saldoReal}
                       onChange={e => setSaldoReal(e.target.value)}
                       className="pl-8 h-12 text-lg font-bold font-mono"

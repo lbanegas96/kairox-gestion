@@ -13,14 +13,14 @@ import { asientosAutoService } from '@/services/planCuentasService';
 import ComprobantePrintModal from './ComprobantePrintModal';
 import { MonedaSelector } from '@/components/ui/MonedaSelector';
 import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
-import { formatCurrency } from '@/lib/currencyUtils';
+import { formatCurrency, parseNumberLocale } from '@/lib/currencyUtils';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { listaPreciosService } from '@/services/listaPreciosService';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = null, onConvertSuccess }) => {
   const { user } = useAuth();
-  const { currentSession } = useCaja();
+  const { currentSession, isSessionOpen } = useCaja();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -381,10 +381,21 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     if (isCC) {
       pagosFinales = [{ metodo: 'Cuenta Corriente', monto: total }];
     } else if (isMultiPago) {
-      pagosFinales = Array.from(selectedMethods).map(m => ({
-        metodo: m,
-        monto: parseFloat(methodAmounts[m]) || 0,
-      }));
+      pagosFinales = Array.from(selectedMethods).map(m => {
+        const parsed = parseNumberLocale(methodAmounts[m]);
+        return { metodo: m, monto: isNaN(parsed) ? 0 : parsed };
+      });
+      const invalido = Array.from(selectedMethods).some(m => {
+        const v = methodAmounts[m];
+        return v && v !== '' && isNaN(parseNumberLocale(v));
+      });
+      if (invalido) {
+        return toast({
+          title: 'Monto inválido',
+          description: 'Usá formato argentino: punto para miles y coma para decimales (ej: 50.000,00).',
+          variant: 'destructive',
+        });
+      }
       const suma = pagosFinales.reduce((s, p) => s + p.monto, 0);
       if (Math.abs(suma - total) > 0.01) {
         return toast({
@@ -396,6 +407,16 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     } else {
       const [singleMethod] = Array.from(selectedMethods);
       pagosFinales = [{ metodo: singleMethod, monto: total }];
+    }
+
+    // ── Bloquear cualquier venta si la caja está cerrada ─────────────────────
+    // Regla: la caja debe estar abierta para registrar ventas (cualquier método).
+    if (!isSessionOpen) {
+      return toast({
+        title: '⛔ Caja cerrada',
+        description: 'No se pueden registrar ventas con la caja cerrada. Abrí la caja para poder operar.',
+        variant: 'destructive',
+      });
     }
 
     // ── Verificar límite de crédito (CC) ────────────────────────────────────
@@ -706,10 +727,9 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
                        {isMultiPago && selectedMethods.has(method) && method !== 'Cuenta Corriente' && (
                          <div className="mt-2" onClick={e => e.stopPropagation()}>
                            <input
-                             type="number"
-                             step="0.01"
-                             min="0"
-                             placeholder="$0.00"
+                             type="text"
+                             inputMode="decimal"
+                             placeholder="$0,00"
                              value={methodAmounts[method] || ''}
                              onChange={e => setMethodAmounts(prev => ({ ...prev, [method]: e.target.value }))}
                              className="w-full h-7 text-center text-xs rounded border border-blue-300 dark:border-blue-700 dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 px-1"

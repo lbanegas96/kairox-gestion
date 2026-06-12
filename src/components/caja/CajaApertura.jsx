@@ -6,18 +6,29 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { useCaja } from '@/contexts/CajaContext';
+import { useToast } from '@/components/ui/use-toast';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 
 const CajaApertura = () => {
   const { openSession } = useCaja();
+  const { toast } = useToast();
   const [montoInicial, setMontoInicial] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (montoInicial === '' || parseFloat(montoInicial) < 0) return;
+    const monto = parseNumberLocale(montoInicial);
+    if (montoInicial === '' || isNaN(monto) || monto < 0) {
+      toast({
+        title: 'Monto inválido',
+        description: 'Usá formato argentino: punto para miles y coma para decimales (ej: 500.000,00).',
+        variant: 'destructive',
+      });
+      return;
+    }
 
     setIsSubmitting(true);
-    await openSession(montoInicial);
+    await openSession(monto);
     setIsSubmitting(false);
   };
 
@@ -42,10 +53,9 @@ const CajaApertura = () => {
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">$</span>
                   <Input
                     id="monto"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0.00"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0,00"
                     value={montoInicial}
                     onChange={(e) => setMontoInicial(e.target.value)}
                     className="pl-8 h-12 text-lg font-mono font-bold"

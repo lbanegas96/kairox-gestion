@@ -316,12 +316,27 @@ function CajaSection() {
       return;
     }
 
-    if (!formData.monto || isNaN(formData.monto) || Number(formData.monto) <= 0) {
-      toast({ title: "Monto inválido", variant: "destructive" });
+    const montoParsed = parseNumberLocale(formData.monto);
+    if (!formData.monto || isNaN(montoParsed) || montoParsed <= 0) {
+      toast({
+        title: 'Monto inválido',
+        description: 'Usá formato argentino: punto para miles y coma para decimales (ej: 500.000,00 o 500000,00).',
+        variant: 'destructive',
+      });
       return;
     }
     if (!formData.concepto) {
       toast({ title: "Concepto requerido", variant: "destructive" });
+      return;
+    }
+
+    // Regla: cualquier movimiento requiere caja abierta.
+    if (!isSessionOpen) {
+      toast({
+        title: '⛔ Caja cerrada',
+        description: 'No se pueden registrar movimientos con la caja cerrada. Abrí la caja para poder operar.',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -728,7 +743,7 @@ function CajaSection() {
                   <Label className={currentThemeColor}>Monto ($)</Label>
                   <div className="relative">
                     <DollarSign className="absolute left-3 top-2.5 h-5 w-5 text-slate-500"/>
-                    <Input type="number" step="0.01" min="0.01" name="monto" value={formData.monto} onChange={handleInputChange} className={`pl-10 h-12 text-xl font-mono font-bold kairox-input dark:bg-slate-900 dark:border-slate-700 dark:text-white ${currentBorderColor}`} placeholder="0.00" required/>
+                    <Input type="text" inputMode="decimal" name="monto" value={formData.monto} onChange={handleInputChange} className={`pl-10 h-12 text-xl font-mono font-bold kairox-input dark:bg-slate-900 dark:border-slate-700 dark:text-white ${currentBorderColor}`} placeholder="0,00" required/>
                   </div>
                 </div>
                 

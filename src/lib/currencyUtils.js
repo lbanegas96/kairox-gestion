@@ -27,31 +27,74 @@ export function montoEnARS(amount, moneda, tasa) {
 
 /**
  * Parsea un número en formato es-AR estricto:
- *   - PUNTO  (.) = separador de miles
- *   - COMA   (,) = separador decimal
- *   - sin separadores → entero
+ *   - PUNTO  (.) = separador de miles → grupos de EXACTAMENTE 3 dígitos
+ *   - COMA   (,) = separador decimal (única, va al final)
  *
- * Ejemplos:
+ * Reglas:
+ *   - Si hay coma: validar que los puntos a la izquierda separen grupos de 3.
+ *   - Si NO hay coma: validar que los puntos separen grupos de 3 (sin decimales).
+ *   - El primer grupo puede tener 1-3 dígitos; los demás SIEMPRE 3.
+ *   - Cualquier otra cosa → NaN (rechazo explícito del formato en-US).
+ *
+ * Ejemplos válidos:
  *   "1446"        → 1446
- *   "1.446"       → 1446       (punto = miles)
- *   "1.446.567"   → 1446567    (miles repetido)
- *   "1668,21"     → 1668.21    (coma = decimal)
- *   "1.668,21"    → 1668.21    (formato es-AR completo)
+ *   "1.446"       → 1446
+ *   "1.446.567"   → 1446567
+ *   "500.000"     → 500000
+ *   "1668,21"     → 1668.21
+ *   "1.668,21"    → 1668.21
+ *   "120.000,50"  → 120000.50
  *   "0,0036"      → 0.0036
  *
- * Nota: si alguien tipea formato en-US como "1,446.50" se va a interpretar
- * incorrectamente (1.446 con 50 decimales raros). Las reglas argentinas son
- * estrictas por diseño — los inputs muestran el placeholder con formato es-AR.
+ * Ejemplos rechazados (NaN):
+ *   "120000.50"   → NaN  (punto como decimal — usá coma)
+ *   "1.4"         → NaN  (grupo de 1 dígito tras punto)
+ *   "500.00"      → NaN  (grupo de 2 dígitos tras punto)
+ *   "1,234.56"    → NaN  (formato en-US)
+ *   "1,5,5"       → NaN  (múltiples comas)
  */
 export function parseNumberLocale(input) {
   if (input === null || input === undefined || input === '') return NaN;
-  const s = String(input).trim().replace(/\s/g, '');
+  let s = String(input).trim().replace(/\s/g, '');
   if (!s) return NaN;
-  // 1) Sacar TODOS los puntos (son separadores de miles)
-  // 2) Cambiar la coma por punto (decimal en JS)
-  const cleaned = s.replace(/\./g, '').replace(',', '.');
-  const n = parseFloat(cleaned);
-  return Number.isFinite(n) ? n : NaN;
+
+  // Signo
+  let sign = 1;
+  if (s.startsWith('-')) { sign = -1; s = s.slice(1); }
+  else if (s.startsWith('+')) { s = s.slice(1); }
+
+  // No permitir caracteres distintos de dígitos, punto o coma
+  if (!/^[\d.,]+$/.test(s)) return NaN;
+
+  // Máximo una coma
+  const comaCount = (s.match(/,/g) || []).length;
+  if (comaCount > 1) return NaN;
+
+  let entero = s;
+  let decimal = '';
+  if (comaCount === 1) {
+    const partes = s.split(',');
+    entero = partes[0];
+    decimal = partes[1];
+    if (!/^\d+$/.test(decimal)) return NaN; // decimal solo dígitos
+    if (entero === '') entero = '0';
+  }
+
+  // Validar parte entera: con o sin puntos como miles (grupos de 3 estrictos)
+  if (entero.includes('.')) {
+    const grupos = entero.split('.');
+    // Primer grupo: 1-3 dígitos; los siguientes: exactamente 3
+    if (!/^\d{1,3}$/.test(grupos[0])) return NaN;
+    for (let i = 1; i < grupos.length; i++) {
+      if (!/^\d{3}$/.test(grupos[i])) return NaN;
+    }
+  } else {
+    if (!/^\d+$/.test(entero)) return NaN;
+  }
+
+  const enteroLimpio = entero.replace(/\./g, '');
+  const n = parseFloat(decimal ? `${enteroLimpio}.${decimal}` : enteroLimpio);
+  return Number.isFinite(n) ? sign * n : NaN;
 }
 
 /** True si la moneda no es ARS */

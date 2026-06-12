@@ -16,7 +16,7 @@ import { getTodayAR, getDateFromInputAR, formatDateAR, formatTimeAR } from '@/li
 import { asientosAutoService } from '@/services/planCuentasService';
 import { MonedaSelector } from '@/components/ui/MonedaSelector';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
-import { formatCurrency } from '@/lib/currencyUtils';
+import { formatCurrency, parseNumberLocale } from '@/lib/currencyUtils';
 import CompraDetailModal from '../ventas/CompraDetailModal';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 
