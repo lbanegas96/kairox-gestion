@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import { AuroraBackground } from '@/components/ui/AuroraBackground';
 import DashboardSection from '@/components/sections/DashboardSection';
 import ProductosSection from '@/components/sections/ProductosSection';
 import VentasSection from '@/components/sections/VentasSection';
@@ -21,15 +22,14 @@ import ChequesSection from '@/components/sections/ChequesSection';
 import ImpuestosSection from '@/components/ImpuestosSection';
 import ProveedoresSection from '@/components/sections/ProveedoresSection';
 import { CommandPalette, useCommandPalette } from '@/components/CommandPalette';
-import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { OnboardingWizard } from '@/components/OnboardingWizard';
 
 function Dashboard({ user, onLogout }) {
-  const [activeSection, setActiveSection] = useState('dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [activeSection, setActiveSection]     = useState('dashboard');
+  const [isSidebarOpen, setIsSidebarOpen]     = useState(false);
   const { open: cmdOpen, setOpen: setCmdOpen } = useCommandPalette();
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showOnboarding, setShowOnboarding]   = useState(false);
 
   useEffect(() => {
     if (!user?.empresa_id) return;
@@ -43,78 +43,60 @@ function Dashboard({ user, onLogout }) {
       });
   }, [user?.empresa_id]);
 
-  // Removed permission checks for rendering sections.
-  // All sections are now accessible for viewing.
-  // Specific actions within sections will be gated by permissions if needed.
-
   const renderSection = () => {
     switch (activeSection) {
-      case 'dashboard':
-        return <DashboardSection onNavigate={setActiveSection} />;
-      case 'productos':
-        return <ProductosSection />;
-      case 'ventas':
-        return <VentasSection />;
-      case 'cotizaciones':
-        return <CotizacionesSection />;
-      case 'pedidos':
-        return <PedidosSection />;
-      case 'listas_precio':
-        return <ListasPrecioSection />;
-      case 'ordenes_compra':
-        return <OrdenesCompraSection />;
-      case 'compras':
-        return <ComprasSection />;
-      case 'caja':
-        return <CajaSection />;
-      case 'clientes':
-        return <ClientesSection />;
-      case 'cuentacorriente':
-        return <CuentaCorrienteSection />;
-      case 'reportes':
-        return <ReportesSection />;
-      case 'usuarios':
-        return <UsuariosSection />;
-      case 'configuracion':
-        return <ConfiguracionSection />;
-      case 'plan_cuentas':
-        return <PlanCuentasSection />;
-      case 'bancos':
-        return <CuentasBancariasSection />;
-      case 'cheques':
-        return <ChequesSection />;
-      case 'impuestos':
-        return <ImpuestosSection onNavigate={setActiveSection} />;
-      case 'proveedores':
-        return <ProveedoresSection />;
-      default:
-        return <DashboardSection onNavigate={setActiveSection} />;
+      case 'dashboard':     return <DashboardSection onNavigate={setActiveSection} />;
+      case 'productos':     return <ProductosSection />;
+      case 'ventas':        return <VentasSection />;
+      case 'cotizaciones':  return <CotizacionesSection />;
+      case 'pedidos':       return <PedidosSection />;
+      case 'listas_precio': return <ListasPrecioSection />;
+      case 'ordenes_compra':return <OrdenesCompraSection />;
+      case 'compras':       return <ComprasSection />;
+      case 'caja':          return <CajaSection />;
+      case 'clientes':      return <ClientesSection />;
+      case 'cuentacorriente':return <CuentaCorrienteSection />;
+      case 'reportes':      return <ReportesSection />;
+      case 'usuarios':      return <UsuariosSection />;
+      case 'configuracion': return <ConfiguracionSection />;
+      case 'plan_cuentas':  return <PlanCuentasSection />;
+      case 'bancos':        return <CuentasBancariasSection />;
+      case 'cheques':       return <ChequesSection />;
+      case 'impuestos':     return <ImpuestosSection onNavigate={setActiveSection} />;
+      case 'proveedores':   return <ProveedoresSection />;
+      default:              return <DashboardSection onNavigate={setActiveSection} />;
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 flex transition-colors duration-300">
-      <Sidebar 
-        activeSection={activeSection} 
-        setActiveSection={setActiveSection}
-        isOpen={isSidebarOpen}
-        setIsOpen={setIsSidebarOpen}
-      />
-      
-      <div className={`flex-1 transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-0'}`}>
-        <Header
-          user={user}
-          onLogout={onLogout}
-          toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-          onNavigate={setActiveSection}
-          onOpenSearch={() => setCmdOpen(true)}
+    <div className="h-screen overflow-hidden bg-kx-bg text-kx-text relative transition-colors duration-300">
+      {/* Aurora fixed background — renderizado una sola vez */}
+      <AuroraBackground />
+
+      <div className="flex h-full relative z-10">
+        <Sidebar
+          activeSection={activeSection}
+          setActiveSection={setActiveSection}
+          isOpen={isSidebarOpen}
+          setIsOpen={setIsSidebarOpen}
         />
 
-        <main className="p-6">
-          <div key={activeSection} className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-            {renderSection()}
-          </div>
-        </main>
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          <Header
+            user={user}
+            onLogout={onLogout}
+            toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+            onNavigate={setActiveSection}
+            onOpenSearch={() => setCmdOpen(true)}
+            activeSection={activeSection}
+          />
+
+          <main className="flex-1 overflow-y-auto p-6">
+            <div key={activeSection} className="animate-in fade-in slide-in-from-bottom-4 duration-300">
+              {renderSection()}
+            </div>
+          </main>
+        </div>
       </div>
 
       <CommandPalette

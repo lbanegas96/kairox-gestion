@@ -1,83 +1,40 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-
 import {
-  ShoppingCart, Package, AlertCircle, ArrowUpRight, ArrowDownRight,
-  DollarSign, TrendingUp, Calendar, CreditCard, FileText, UserPlus,
-  Wallet, BarChart3, RefreshCw, Archive, History, Percent, ClipboardList, ShoppingBag,
-  CheckCircle2, Clock, TrendingDown
+  TrendingUp, TrendingDown, ShoppingCart, Package, AlertCircle, ArrowUpRight,
+  DollarSign, Calendar, CreditCard, FileText, UserPlus,
+  Wallet, BarChart3, RefreshCw, Archive, History, Percent,
+  ClipboardList, ShoppingBag, CheckCircle2, Clock,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useConfig } from '@/contexts/ConfigContext';
 import { useCaja } from '@/contexts/CajaContext';
-import { useToast } from '@/components/ui/use-toast';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer, Legend
+  CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { dashboardService, DASHBOARD_KEYS } from '@/services/dashboardService';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChecklistOnboarding } from '@/components/ChecklistOnboarding';
 
-// ─── MetricCard ───────────────────────────────────────────────────────────────
-const MetricCard = React.memo(({ title, value, icon: Icon, trend, trendValue, gradient, loading, onClick, customContent }) => (
-  <div
-    onClick={onClick}
-    className={`cursor-pointer transition-transform duration-200 hover:-translate-y-0.5 ${onClick ? 'hover:shadow-xl' : ''}`}
-  >
-    <Card className={`border-slate-200 dark:border-slate-800 bg-gradient-to-br ${gradient} shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden relative`}>
-      <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-full" />
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
-        <CardTitle className="text-sm font-semibold text-white/90">{title}</CardTitle>
-        <div className="p-2.5 rounded-lg bg-white/20 backdrop-blur-sm">
-          <Icon className="h-5 w-5 text-white" />
-        </div>
-      </CardHeader>
-      <CardContent className="relative z-10">
-        {loading ? (
-          <div className="h-8 w-32 bg-white/20 rounded animate-pulse" />
-        ) : (
-          <>
-            {customContent ?? (
-              <>
-                <div className="text-3xl font-bold text-white mb-1">{value}</div>
-                {trendValue && (
-                  <p className="text-xs text-white/80 flex items-center gap-1">
-                    {trend === 'up' ? <ArrowUpRight className="h-3.5 w-3.5" /> : trend === 'down' ? <ArrowDownRight className="h-3.5 w-3.5" /> : null}
-                    <span className="font-medium">{trendValue}</span>
-                  </p>
-                )}
-              </>
-            )}
-          </>
-        )}
-      </CardContent>
-    </Card>
-  </div>
-));
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function saludoSegunHora() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Buenos días';
+  if (h < 19) return 'Buenas tardes';
+  return 'Buenas noches';
+}
 
-// ─── QuickActionButton ────────────────────────────────────────────────────────
-const QuickActionButton = ({ icon: Icon, label, onClick, gradient, disabled }) => (
-  <button
-    onClick={onClick} disabled={disabled}
-    className={`flex flex-col items-center justify-center p-6 rounded-xl bg-gradient-to-br ${gradient} shadow-lg hover:shadow-2xl transition-all duration-300 group relative overflow-hidden hover:-translate-y-1 active:scale-95 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-  >
-    <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-300" />
-    <div className="p-3 rounded-full bg-white/20 backdrop-blur-sm mb-3 group-hover:bg-white/30 transition-all relative z-10">
-      <Icon className="h-6 w-6 text-white" />
-    </div>
-    <span className="text-sm font-semibold text-white relative z-10">{label}</span>
-  </button>
-);
+const fmt = (n) => (n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 });
 
-// ─── Tooltip personalizado para charts ────────────────────────────────────────
+// ── Tooltip chart ─────────────────────────────────────────────────────────────
 const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 shadow-xl text-xs">
-      <p className="text-slate-400 mb-1">{label}</p>
+    <div className="bg-kx-surface border border-kx-border rounded-lg px-3 py-2 shadow-xl text-xs">
+      <p className="text-kx-text-2 mb-1">{label}</p>
       {payload.map(p => (
         <p key={p.dataKey} style={{ color: p.color }} className="font-semibold">
           {p.name}: ${Number(p.value).toLocaleString('es-AR', { minimumFractionDigits: 0 })}
@@ -87,443 +44,483 @@ const ChartTooltip = ({ active, payload, label }) => {
   );
 };
 
-// ─── DashboardSection ─────────────────────────────────────────────────────────
+// ── Skeleton de card ──────────────────────────────────────────────────────────
+const Skeleton = ({ className = '' }) => (
+  <div className={`bg-kx-surface-2 rounded animate-pulse ${className}`} />
+);
+
+// ── QuickActionButton ─────────────────────────────────────────────────────────
+const QuickActionButton = ({ icon: Icon, label, onClick, gradient, disabled }) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className={`flex flex-col items-center justify-center p-5 rounded-xl bg-gradient-to-br ${gradient} shadow-lg hover:shadow-xl transition-all duration-200 group relative overflow-hidden hover:-translate-y-0.5 active:scale-95 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+  >
+    <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-200" />
+    <div className="p-2.5 rounded-full bg-white/20 mb-2.5 group-hover:bg-white/30 transition-all relative z-10">
+      <Icon className="h-5 w-5 text-white" />
+    </div>
+    <span className="text-xs font-semibold text-white relative z-10">{label}</span>
+  </button>
+);
+
+// ── DashboardSection ──────────────────────────────────────────────────────────
 function DashboardSection({ onNavigate }) {
-  const { user } = useAuth();
+  const { user }    = useAuth();
+  const { config }  = useConfig();
   const { currentSession, isSessionOpen, loading: cajaLoading } = useCaja();
   const { canAccessSection } = useUserPermissions();
-  const qc = useQueryClient();
-  const empresaId = user?.empresa_id;
+  const qc          = useQueryClient();
+  const empresaId   = user?.empresa_id;
 
-  // ── Queries con React Query ────────────────────────────────────────────────
+  const firstName   = user?.user_metadata?.first_name || user?.email?.split('@')[0] || 'ahí';
+  const empresaName = config?.nombre_empresa || user?.empresa_nombre || 'tu empresa';
+  const fechaFormateada = new Date().toLocaleDateString('es-AR', {
+    weekday: 'long', day: 'numeric', month: 'long',
+  });
+
+  // ── Queries ────────────────────────────────────────────────────────────────
   const { data: kpis, isLoading: kpisLoading, error: kpisError, refetch: refetchKpis } = useQuery({
     queryKey: DASHBOARD_KEYS.kpis(empresaId),
-    queryFn: () => dashboardService.getKPIs(empresaId),
-    enabled: !!empresaId,
-    staleTime: 1000 * 60,   // 1 min — datos de negocio, refrescar seguido
+    queryFn:  () => dashboardService.getKPIs(empresaId),
+    enabled:  !!empresaId,
+    staleTime: 1000 * 60,
   });
 
   const { data: ventasDia = [], isLoading: ventasLoading } = useQuery({
     queryKey: DASHBOARD_KEYS.ventasPorDia(empresaId, 7),
-    queryFn: () => dashboardService.getVentasPorDia(empresaId, 7),
-    enabled: !!empresaId,
+    queryFn:  () => dashboardService.getVentasPorDia(empresaId, 7),
+    enabled:  !!empresaId,
   });
 
   const { data: flujoCaja = [], isLoading: flujoLoading } = useQuery({
     queryKey: DASHBOARD_KEYS.flujoCaja(empresaId, 6),
-    queryFn: () => dashboardService.getFlujoCajaMensual(empresaId, 6),
-    enabled: !!empresaId,
+    queryFn:  () => dashboardService.getFlujoCajaMensual(empresaId, 6),
+    enabled:  !!empresaId,
   });
 
   const { data: cotStats, isLoading: cotLoading } = useQuery({
     queryKey: DASHBOARD_KEYS.cotizaciones(empresaId),
-    queryFn: () => dashboardService.getCotizacionesStats(empresaId),
-    enabled: !!empresaId,
+    queryFn:  () => dashboardService.getCotizacionesStats(empresaId),
+    enabled:  !!empresaId,
     staleTime: 1000 * 60,
   });
 
   const { data: alertasCC } = useQuery({
     queryKey: DASHBOARD_KEYS.alertasCC(empresaId),
-    queryFn: () => dashboardService.getAlertasCC(empresaId),
-    enabled: !!empresaId,
-    staleTime: 1000 * 60 * 5, // 5 min
+    queryFn:  () => dashboardService.getAlertasCC(empresaId),
+    enabled:  !!empresaId,
+    staleTime: 1000 * 60 * 5,
   });
 
   const loading = kpisLoading;
 
-  const handleRefresh = () => {
-    qc.invalidateQueries({ queryKey: ['dashboard', empresaId] });
-  };
+  const handleRefresh = () => qc.invalidateQueries({ queryKey: ['dashboard', empresaId] });
 
-  // ── Variación de ventas (hoy vs ayer) ─────────────────────────────────────
-  const variacion = kpis?.variacionVentas ?? 0;
+  const variacion      = kpis?.variacionVentas ?? 0;
   const variacionLabel = `${variacion >= 0 ? '+' : ''}${variacion.toFixed(1)}% vs ayer`;
+  const balanceNeto    = (kpis?.ventasMes ?? 0) - (kpis?.gastosMes ?? 0);
 
-  // ── Error state ────────────────────────────────────────────────────────────
   if (kpisError && !loading) {
     return (
       <div className="flex flex-col items-center justify-center h-96 space-y-4">
-        <AlertCircle className="h-16 w-16 text-red-500" />
-        <h3 className="text-xl font-semibold dark:text-slate-200">Error al cargar el dashboard</h3>
-        <p className="text-slate-500 text-sm">{kpisError.message}</p>
-        <Button onClick={handleRefresh} variant="outline"><RefreshCw className="h-4 w-4 mr-2" /> Reintentar</Button>
+        <AlertCircle className="h-16 w-16 text-kx-red" />
+        <h3 className="text-xl font-semibold text-kx-text">Error al cargar el dashboard</h3>
+        <p className="text-kx-text-2 text-sm">{kpisError.message}</p>
+        <Button onClick={handleRefresh} variant="outline">
+          <RefreshCw className="h-4 w-4 mr-2" /> Reintentar
+        </Button>
       </div>
     );
   }
 
-  const fmt = (n) => (n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 });
-
   return (
-    <div className="space-y-6 pb-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-transparent p-6 -mx-6 -mt-6 mb-6 border-b border-slate-200 dark:border-slate-800">
+    <div className="space-y-5 pb-8">
+
+      {/* ── Saludo ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-3">
-            <BarChart3 className="h-8 w-8 text-blue-600 dark:text-[#00D4FF]" /> Dashboard
-          </h2>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">Resumen ejecutivo</p>
+          <div className="text-2xl font-semibold text-kx-text tracking-tight">
+            {saludoSegunHora()}, {firstName}
+          </div>
+          <div className="text-[12.5px] text-kx-text-2 mt-1">
+            Esto es lo que está pasando en <span className="text-kx-text font-medium">{empresaName}</span> hoy,&nbsp;{fechaFormateada}
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={handleRefresh} variant="outline" size="sm" disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Actualizar
-          </Button>
-          {canAccessSection('ventas') && (
-            <Button onClick={() => onNavigate?.('ventas')} className="bg-blue-600 text-white">
-              <ShoppingCart className="h-4 w-4 mr-2" /> Nueva Venta
-            </Button>
-          )}
-        </div>
+        <Button
+          onClick={handleRefresh}
+          variant="outline"
+          size="sm"
+          disabled={loading}
+          className="flex-shrink-0 border-kx-border text-kx-text-2 hover:bg-kx-surface-2"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+          Actualizar
+        </Button>
       </div>
 
       <ChecklistOnboarding onNavigate={onNavigate} />
 
-      {/* ── Fila 1: KPIs principales (8 cards) ─────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* ── Hero row — 3 cards ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-[1.4fr_1fr_1fr] gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden">
+        {/* Ventas del mes */}
+        <div className="bg-kx-surface p-5 min-h-[140px] flex flex-col">
+          <div className="text-[11.5px] text-kx-text-2 mb-2.5 flex items-center gap-1.5">
+            <TrendingUp className="w-3.5 h-3.5" /> Ventas del mes
+          </div>
+          {loading ? (
+            <><Skeleton className="h-9 w-40 mb-2" /><Skeleton className="h-4 w-28" /></>
+          ) : (
+            <>
+              <div className="text-[34px] font-semibold text-kx-text tracking-tight leading-none mb-2 tabular-nums">
+                ${fmt(kpis?.ventasMes)}
+              </div>
+              <div className={`text-xs flex items-center gap-1.5 ${variacion >= 0 ? 'text-kx-green' : 'text-kx-red'}`}>
+                {variacion >= 0
+                  ? <TrendingUp  className="w-3.5 h-3.5" />
+                  : <TrendingDown className="w-3.5 h-3.5" />}
+                {variacionLabel}
+              </div>
+            </>
+          )}
+        </div>
+
         {/* Caja */}
-        <MetricCard title="Caja" icon={Archive}
-          gradient={isSessionOpen ? 'from-green-600 to-green-500' : 'from-slate-600 to-slate-500'}
-          loading={cajaLoading} onClick={() => onNavigate?.('caja')}
-          customContent={
-            <div>
-              <div className="text-3xl font-bold text-white mb-1">{isSessionOpen ? 'Abierta' : 'Cerrada'}</div>
-              <p className="text-xs text-white/80 mt-1">
+        <div className="bg-kx-surface p-5 min-h-[140px] flex flex-col">
+          <div className="text-[11.5px] text-kx-text-2 mb-2.5 flex items-center gap-1.5">
+            <Archive className="w-3.5 h-3.5" /> Caja
+          </div>
+          {cajaLoading ? (
+            <><Skeleton className="h-7 w-24 mb-2" /><Skeleton className="h-4 w-36" /></>
+          ) : (
+            <>
+              <div className={`text-[26px] font-semibold tracking-tight leading-none mb-2 ${isSessionOpen ? 'text-kx-green' : 'text-kx-text'}`}>
+                {isSessionOpen ? 'Abierta' : 'Cerrada'}
+              </div>
+              <div className="text-xs text-kx-text-2">
                 {isSessionOpen && currentSession
-                  ? `Saldo inicial: $${fmt(currentSession.monto_inicial)}`
+                  ? `Saldo inicial $${fmt(currentSession.monto_inicial)}`
                   : 'Abrí la caja para operar'}
-              </p>
-            </div>
-          }
-        />
+              </div>
+            </>
+          )}
+        </div>
 
-        {/* Ventas hoy */}
-        <MetricCard title="Ventas del Día" value={`$${fmt(kpis?.ventasHoy)}`} icon={Calendar}
-          gradient="from-emerald-600 to-emerald-500"
-          trend={variacion >= 0 ? 'up' : 'down'}
-          trendValue={variacionLabel} loading={loading}
-        />
-
-        {/* Ventas mes */}
-        <MetricCard title="Ventas del Mes" value={`$${fmt(kpis?.ventasMes)}`} icon={TrendingUp}
-          gradient="from-blue-600 to-blue-500"
-          trendValue="Acumulado mensual" loading={loading}
-        />
-
-        {/* Gastos mes — NUEVO */}
-        <MetricCard title="Gastos del Mes" value={`$${fmt(kpis?.gastosMes)}`} icon={CreditCard}
-          gradient="from-orange-600 to-orange-500"
-          trendValue="Egresos acumulados" loading={loading}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {/* Margen Bruto — NUEVO */}
-        <MetricCard title="Margen Bruto" icon={Percent}
-          gradient={(kpis?.margenBruto ?? 0) >= 30 ? 'from-violet-600 to-purple-500' : 'from-yellow-600 to-yellow-500'}
-          loading={loading}
-          customContent={
-            <div>
-              <div className="text-3xl font-bold text-white mb-1">
+        {/* Margen bruto */}
+        <div className="bg-kx-surface p-5 min-h-[140px] flex flex-col">
+          <div className="text-[11.5px] text-kx-text-2 mb-2.5 flex items-center gap-1.5">
+            <Percent className="w-3.5 h-3.5" /> Margen bruto
+          </div>
+          {loading ? (
+            <><Skeleton className="h-7 w-20 mb-2" /><Skeleton className="h-4 w-24" /></>
+          ) : (
+            <>
+              <div className="text-[26px] font-semibold text-kx-text tracking-tight leading-none mb-2 tabular-nums">
                 {(kpis?.margenBruto ?? 0).toFixed(1)}%
               </div>
-              <div className="w-full bg-white/20 rounded-full h-1.5 mt-2">
-                <div className="bg-white/80 rounded-full h-1.5 transition-all"
-                  style={{ width: `${Math.min(kpis?.margenBruto ?? 0, 100)}%` }} />
+              <div className={`text-xs flex items-center gap-1.5 ${(kpis?.margenBruto ?? 0) >= 30 ? 'text-kx-green' : 'text-kx-amber'}`}>
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                {(kpis?.margenBruto ?? 0) >= 30 ? 'Saludable' : 'Por debajo del 30%'}
               </div>
-              <p className="text-xs text-white/70 mt-1">
-                {(kpis?.margenBruto ?? 0) >= 30 ? 'Saludable ✓' : 'Por debajo del 30%'}
-              </p>
-            </div>
-          }
-        />
-
-        {/* Balance neto */}
-        <MetricCard title="Balance Neto" icon={DollarSign}
-          value={`$${fmt((kpis?.ventasMes ?? 0) - (kpis?.gastosMes ?? 0))}`}
-          gradient={((kpis?.ventasMes ?? 0) - (kpis?.gastosMes ?? 0)) >= 0 ? 'from-teal-600 to-teal-500' : 'from-red-600 to-red-500'}
-          trendValue={((kpis?.ventasMes ?? 0) - (kpis?.gastosMes ?? 0)) >= 0 ? 'Superávit' : 'Déficit'}
-          loading={loading}
-        />
-
-        {/* Deuda clientes */}
-        <MetricCard title="Deuda Clientes" value={`$${fmt(kpis?.deudaClientes)}`} icon={History}
-          gradient="from-rose-600 to-pink-500"
-          trendValue="Cuentas corrientes" loading={loading}
-          onClick={() => onNavigate?.('cuentacorriente')}
-        />
-
-        {/* Stock bajo */}
-        <MetricCard title="Stock Bajo" icon={Package}
-          gradient={(kpis?.productosStockBajo?.length ?? 0) > 0 ? 'from-amber-600 to-amber-500' : 'from-slate-600 to-slate-500'}
-          loading={loading}
-          customContent={
-            <div>
-              <div className="text-3xl font-bold text-white mb-1">
-                {kpis?.productosStockBajo?.length ?? 0} <span className="text-lg font-normal">productos</span>
-              </div>
-              <p className="text-xs text-white/80">{(kpis?.productosStockBajo?.length ?? 0) > 0 ? '⚠ Requieren reposición' : '✓ Sin alertas'}</p>
-            </div>
-          }
-          onClick={() => onNavigate?.('productos')}
-        />
+            </>
+          )}
+        </div>
       </div>
 
-      {/* ── Fila 2.5: KPIs Cotizaciones del Mes ────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <MetricCard title="Cotizaciones del Mes" icon={ClipboardList}
-          gradient="from-indigo-600 to-indigo-500"
-          loading={cotLoading}
-          customContent={
-            <div>
-              <div className="text-3xl font-bold text-white mb-1">{cotStats?.totalMes ?? 0}</div>
-              <p className="text-xs text-white/80">${(cotStats?.montoMes ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 })} cotizado</p>
+      {/* ── KPI row — 4 cards ──────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden">
+        {/* Ventas del día */}
+        <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between">
+          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Ventas del día</div>
+          <div>
+            {loading
+              ? <Skeleton className="h-6 w-28 mb-1" />
+              : <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">${fmt(kpis?.ventasHoy)}</div>}
+            <div className={`text-[11.5px] flex items-center gap-1 ${variacion >= 0 ? 'text-kx-green' : 'text-kx-red'}`}>
+              {variacion >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+              {variacionLabel}
             </div>
-          }
-          onClick={() => onNavigate?.('cotizaciones')}
-        />
-        <MetricCard title="Tasa de Conversión" icon={TrendingUp}
-          gradient={(cotStats?.tasaConversion ?? 0) >= 50 ? 'from-emerald-600 to-emerald-500' : 'from-yellow-600 to-yellow-500'}
-          loading={cotLoading}
-          customContent={
-            <div>
-              <div className="text-3xl font-bold text-white mb-1">{(cotStats?.tasaConversion ?? 0).toFixed(0)}%</div>
-              <div className="w-full bg-white/20 rounded-full h-1.5 mt-2">
-                <div className="bg-white/80 rounded-full h-1.5 transition-all" style={{ width: `${Math.min(cotStats?.tasaConversion ?? 0, 100)}%` }} />
-              </div>
-              <p className="text-xs text-white/70 mt-1">{cotStats?.convertidas ?? 0} convertidas</p>
-            </div>
-          }
-          onClick={() => onNavigate?.('cotizaciones')}
-        />
-        <MetricCard title="Aprobadas Pendientes" icon={Clock}
-          gradient={(cotStats?.aprobadas ?? 0) > 0 ? 'from-violet-600 to-purple-500' : 'from-slate-600 to-slate-500'}
-          loading={cotLoading}
-          customContent={
-            <div>
-              <div className="text-3xl font-bold text-white mb-1">{cotStats?.aprobadas ?? 0}</div>
-              <p className="text-xs text-white/80">{(cotStats?.aprobadas ?? 0) > 0 ? 'Listas para convertir' : 'Sin pendientes ✓'}</p>
-            </div>
-          }
-          onClick={() => onNavigate?.('cotizaciones')}
-        />
-        <MetricCard title="Monto Convertido" icon={CheckCircle2}
-          gradient="from-teal-600 to-teal-500"
-          loading={cotLoading}
-          customContent={
-            <div>
-              <div className="text-2xl font-bold text-white mb-1">${(cotStats?.montoConvertido ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 })}</div>
-              <p className="text-xs text-white/80">de ${(cotStats?.montoMes ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 })} cotizado</p>
-            </div>
-          }
-          onClick={() => onNavigate?.('cotizaciones')}
-        />
-      </div>
-
-      {/* ── Alertas CC vencidas ──────────────────────────────────────────────── */}
-      {(alertasCC?.total ?? 0) > 0 && (
-        <div>
-          <div className="rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 px-5 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex items-start sm:items-center gap-3">
-              <div className="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/40 shrink-0 mt-0.5 sm:mt-0">
-                <AlertCircle className="h-5 w-5 text-rose-600 dark:text-rose-400" />
-              </div>
-              <div>
-                <p className="font-semibold text-rose-800 dark:text-rose-300">
-                  {alertasCC.total} cliente{alertasCC.total !== 1 ? 's' : ''} con deuda vencida (+30 días)
-                </p>
-                <p className="text-sm text-rose-600 dark:text-rose-400 mt-0.5">
-                  Monto vencido: <strong>${alertasCC.montoTotal.toLocaleString('es-AR', { minimumFractionDigits: 0 })}</strong>
-                  {(alertasCC.vencidos60 ?? 0) > 0 && (
-                    <span className="ml-2 px-1.5 py-0.5 rounded bg-rose-200 dark:bg-rose-800 text-xs font-semibold">
-                      ⚠ {alertasCC.vencidos60} críticos +60 días
-                    </span>
-                  )}
-                </p>
-                {alertasCC.lista?.length > 0 && (
-                  <p className="text-xs text-rose-500 dark:text-rose-500 mt-1">
-                    {alertasCC.lista.slice(0, 3).map(c => c.nombre).join(' · ')}
-                    {alertasCC.lista.length > 3 && ` y ${alertasCC.lista.length - 3} más`}
-                  </p>
-                )}
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onNavigate?.('cuentacorriente')}
-              className="border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 shrink-0"
-            >
-              Gestionar CC <ArrowUpRight className="w-3 h-3 ml-1" />
-            </Button>
           </div>
         </div>
-      )}
 
-      {/* ── Fila 2: Gráficos ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Ventas últimos 7 días */}
-        <Card className="shadow-lg dark:bg-slate-950 dark:border-slate-800">
-          <CardHeader>
-            <CardTitle className="text-base dark:text-white">Ventas — Últimos 7 días</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[260px] w-full">
-              {ventasLoading ? (
-                <div className="h-full flex items-center justify-center">
-                  <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={ventasDia} barSize={28}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis dataKey="fecha" stroke="#64748b" tick={{ fontSize: 11 }} />
-                    <YAxis stroke="#64748b" tick={{ fontSize: 11 }} tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}`} />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Bar dataKey="total" name="Ventas" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        {/* Gastos del mes */}
+        <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between">
+          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Gastos del mes</div>
+          <div>
+            {loading
+              ? <Skeleton className="h-6 w-28 mb-1" />
+              : <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">${fmt(kpis?.gastosMes)}</div>}
+            <div className="text-[11.5px] text-kx-text-3">Egresos acumulados</div>
+          </div>
+        </div>
 
-        {/* Flujo de caja 6 meses — NUEVO */}
-        <Card className="shadow-lg dark:bg-slate-950 dark:border-slate-800">
-          <CardHeader>
-            <CardTitle className="text-base dark:text-white">Flujo de Caja — Últimos 6 meses</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[260px] w-full">
-              {flujoLoading ? (
-                <div className="h-full flex items-center justify-center">
-                  <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={flujoCaja} barGap={2} barSize={16}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                    <XAxis dataKey="label" stroke="#64748b" tick={{ fontSize: 11 }} />
-                    <YAxis stroke="#64748b" tick={{ fontSize: 11 }} tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}`} />
-                    <Tooltip content={<ChartTooltip />} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="ingresos" name="Ingresos" fill="#10B981" radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="egresos" name="Egresos" fill="#EF4444" radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
+        {/* Balance neto */}
+        <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between">
+          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Balance neto</div>
+          <div>
+            {loading
+              ? <Skeleton className="h-6 w-28 mb-1" />
+              : <div className={`text-xl font-semibold tracking-tight tabular-nums mb-1 ${balanceNeto >= 0 ? 'text-kx-green' : 'text-kx-red'}`}>
+                  ${fmt(balanceNeto)}
+                </div>}
+            <div className={`text-[11.5px] flex items-center gap-1 ${balanceNeto >= 0 ? 'text-kx-green' : 'text-kx-red'}`}>
+              {balanceNeto >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+              {balanceNeto >= 0 ? 'Superávit' : 'Déficit'}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+
+        {/* Deuda clientes */}
+        <div
+          className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between cursor-pointer hover:bg-kx-surface-2 transition-colors"
+          onClick={() => onNavigate?.('cuentacorriente')}
+        >
+          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Deuda clientes</div>
+          <div>
+            {loading
+              ? <Skeleton className="h-6 w-28 mb-1" />
+              : <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">${fmt(kpis?.deudaClientes)}</div>}
+            <div className="text-[11.5px] text-kx-text-3 flex items-center gap-1">
+              Cuentas corrientes <ArrowUpRight className="w-3 h-3" />
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* ── Fila 3: Alertas + Cotizaciones pendientes + Acciones Rápidas ──── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Stock bajo — detalle */}
-        <Card className="dark:bg-slate-950 dark:border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <CardTitle className="text-base dark:text-white flex items-center gap-2">
-              <Package className="w-4 h-4 text-amber-500" /> Alertas de Stock
-            </CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => onNavigate?.('productos')}
-              className="text-xs text-blue-500 dark:text-blue-400 h-7">
-              Ver todos <ArrowUpRight className="w-3 h-3 ml-1" />
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-10 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />)}</div>
-            ) : (kpis?.productosStockBajo?.length ?? 0) === 0 ? (
-              <div className="flex flex-col items-center py-6 text-slate-400 dark:text-slate-500">
-                <Package className="w-8 h-8 mb-2 opacity-40" />
-                <p className="text-sm">Sin productos en stock bajo ✓</p>
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                {(kpis?.productosStockBajo ?? []).slice(0, 8).map(p => (
-                  <div key={p.id} className="flex items-center justify-between p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-                      <span className="text-sm font-medium dark:text-white truncate">{p.nombre}</span>
-                    </div>
-                    <div className="text-right shrink-0 ml-3">
-                      <span className="text-sm font-bold text-amber-600 dark:text-amber-400">{p.stock_actual}</span>
-                      <span className="text-xs text-slate-400 ml-1">{p.unidad_medida}</span>
-                    </div>
+      {/* ── Bottom grid ────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-4">
+        {/* Panel izquierdo: Alertas de Stock */}
+        <div className="bg-kx-surface border border-kx-border rounded-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[13px] font-semibold text-kx-text flex items-center gap-2">
+              <Package className="w-4 h-4 text-kx-amber" /> Alertas de Stock
+            </span>
+            <button
+              onClick={() => onNavigate?.('productos')}
+              className="text-xs text-kx-text-2 hover:text-kx-text transition-colors flex items-center gap-1"
+            >
+              Ver todos <ArrowUpRight className="w-3 h-3" />
+            </button>
+          </div>
+          {loading ? (
+            <div className="space-y-2">
+              {[1,2,3,4].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          ) : (kpis?.productosStockBajo?.length ?? 0) === 0 ? (
+            <div className="flex flex-col items-center py-8 text-kx-text-3">
+              <CheckCircle2 className="w-8 h-8 mb-2 opacity-40" />
+              <p className="text-sm">Sin productos en stock bajo ✓</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+              {(kpis?.productosStockBajo ?? []).slice(0, 8).map(p => (
+                <div key={p.id} className="flex items-center justify-between p-2.5 rounded-lg bg-kx-surface-2 hover:bg-kx-border transition-colors">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <AlertCircle className="w-3.5 h-3.5 text-kx-amber flex-shrink-0" />
+                    <span className="text-[12.5px] font-medium text-kx-text truncate">{p.nombre}</span>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  <div className="text-right flex-shrink-0 ml-3">
+                    <span className="text-sm font-bold text-kx-amber tabular-nums">{p.stock_actual}</span>
+                    <span className="text-xs text-kx-text-3 ml-1">{p.unidad_medida}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-        {/* Cotizaciones aprobadas pendientes de conversión */}
-        <Card className="dark:bg-slate-950 dark:border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between pb-3">
-            <CardTitle className="text-base dark:text-white flex items-center gap-2">
-              <ClipboardList className="w-4 h-4 text-indigo-500" /> Cotizaciones Aprobadas
-            </CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => onNavigate?.('cotizaciones')}
-              className="text-xs text-blue-500 dark:text-blue-400 h-7">
-              Ver todas <ArrowUpRight className="w-3 h-3 ml-1" />
-            </Button>
-          </CardHeader>
-          <CardContent>
+        {/* Panel derecho: Actividad reciente */}
+        <div className="bg-kx-surface border border-kx-border rounded-2xl p-5 flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[13px] font-semibold text-kx-text flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-kx-blue" /> Cotizaciones Aprobadas
+            </span>
+            <button
+              onClick={() => onNavigate?.('cotizaciones')}
+              className="text-xs text-kx-text-2 hover:text-kx-text transition-colors flex items-center gap-1"
+            >
+              Ver todas <ArrowUpRight className="w-3 h-3" />
+            </button>
+          </div>
+
+          <div className="flex-1">
             {cotLoading ? (
-              <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-10 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />)}</div>
+              <div className="space-y-2">
+                {[1,2,3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+              </div>
             ) : (cotStats?.pendientes?.length ?? 0) === 0 ? (
-              <div className="flex flex-col items-center py-6 text-slate-400 dark:text-slate-500">
-                <CheckCircle2 className="w-8 h-8 mb-2 opacity-40" />
+              <div className="flex flex-col items-center py-6 text-kx-text-3">
+                <CheckCircle2 className="w-7 h-7 mb-2 opacity-40" />
                 <p className="text-sm">Sin cotizaciones pendientes ✓</p>
               </div>
             ) : (
-              <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                 {(cotStats?.pendientes ?? []).map(c => (
-                  <div key={c.id} className="flex items-center justify-between p-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-200 dark:border-indigo-800/30 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/20 transition-colors" onClick={() => onNavigate?.('cotizaciones')}>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <ClipboardList className="w-4 h-4 text-indigo-500 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium dark:text-white truncate">{c.numero}</p>
-                        <p className="text-xs text-slate-400 truncate">{c.cliente ?? 'Sin cliente'}</p>
-                      </div>
+                  <div
+                    key={c.id}
+                    onClick={() => onNavigate?.('cotizaciones')}
+                    className="flex items-center justify-between p-2.5 rounded-lg bg-kx-surface-2 hover:bg-kx-border cursor-pointer transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[12.5px] font-medium text-kx-text truncate">{c.numero}</p>
+                      <p className="text-xs text-kx-text-3 truncate">{c.cliente ?? 'Sin cliente'}</p>
                     </div>
-                    <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400 shrink-0 ml-2">
+                    <span className="text-sm font-bold text-kx-blue flex-shrink-0 ml-2 tabular-nums">
                       ${Number(c.total).toLocaleString('es-AR', { minimumFractionDigits: 0 })}
                     </span>
                   </div>
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* Acciones rápidas */}
-        <Card className="dark:bg-slate-950 dark:border-slate-800">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base dark:text-white">Acciones Rápidas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              <QuickActionButton icon={ShoppingCart} label="Nueva Venta"
-                onClick={() => onNavigate?.('ventas')} gradient="from-blue-600 to-blue-500"
-                disabled={!canAccessSection('ventas')} />
-              <QuickActionButton icon={ClipboardList} label="Cotización"
-                onClick={() => onNavigate?.('cotizaciones')} gradient="from-indigo-600 to-indigo-500"
-                disabled={!canAccessSection('ventas')} />
-              <QuickActionButton icon={ShoppingBag} label="Orden de Compra"
-                onClick={() => onNavigate?.('ordenes_compra')} gradient="from-violet-600 to-purple-500"
-                disabled={!canAccessSection('compras')} />
-              <QuickActionButton icon={Wallet} label="Movimiento Caja"
-                onClick={() => onNavigate?.('caja')} gradient="from-emerald-600 to-emerald-500"
-                disabled={!canAccessSection('caja')} />
-              <QuickActionButton icon={UserPlus} label="Nuevo Cliente"
-                onClick={() => onNavigate?.('clientes')} gradient="from-teal-600 to-teal-500"
-                disabled={!canAccessSection('clientes')} />
-              <QuickActionButton icon={FileText} label="Reportes"
-                onClick={() => onNavigate?.('reportes')} gradient="from-amber-600 to-amber-500"
-                disabled={!canAccessSection('reportes')} />
+          {/* Alerta CC vencida al pie */}
+          {(alertasCC?.total ?? 0) > 0 && (
+            <div className="flex items-center gap-2.5 px-3.5 py-3 rounded-xl mt-4 bg-kx-amber/[0.06] border border-kx-amber/20">
+              <AlertCircle className="w-4 h-4 text-kx-amber flex-shrink-0" />
+              <div className="flex-1 text-[12.5px] text-kx-text min-w-0">
+                {alertasCC.total} cliente{alertasCC.total !== 1 ? 's' : ''} con deuda vencida{' '}
+                <span className="text-kx-text-2">(${alertasCC.montoTotal?.toLocaleString('es-AR', { minimumFractionDigits: 0 })})</span>
+              </div>
+              <button
+                onClick={() => onNavigate?.('cuentacorriente')}
+                className="text-xs text-kx-amber font-medium flex-shrink-0 hover:underline"
+              >
+                Revisar →
+              </button>
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
       </div>
+
+      {/* ── KPIs Cotizaciones (preservado) ─────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden">
+        <div
+          className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between cursor-pointer hover:bg-kx-surface-2 transition-colors"
+          onClick={() => onNavigate?.('cotizaciones')}
+        >
+          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Cotizaciones / mes</div>
+          <div>
+            {cotLoading ? <Skeleton className="h-6 w-12 mb-1" /> : (
+              <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">{cotStats?.totalMes ?? 0}</div>
+            )}
+            <div className="text-[11.5px] text-kx-text-3">${(cotStats?.montoMes ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 })} cotizado</div>
+          </div>
+        </div>
+        <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between">
+          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Tasa de conversión</div>
+          <div>
+            {cotLoading ? <Skeleton className="h-6 w-16 mb-1" /> : (
+              <div className={`text-xl font-semibold tracking-tight tabular-nums mb-1 ${(cotStats?.tasaConversion ?? 0) >= 50 ? 'text-kx-green' : 'text-kx-amber'}`}>
+                {(cotStats?.tasaConversion ?? 0).toFixed(0)}%
+              </div>
+            )}
+            <div className="text-[11.5px] text-kx-text-3">{cotStats?.convertidas ?? 0} convertidas</div>
+          </div>
+        </div>
+        <div
+          className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between cursor-pointer hover:bg-kx-surface-2 transition-colors"
+          onClick={() => onNavigate?.('cotizaciones')}
+        >
+          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Aprobadas pendientes</div>
+          <div>
+            {cotLoading ? <Skeleton className="h-6 w-10 mb-1" /> : (
+              <div className={`text-xl font-semibold tracking-tight tabular-nums mb-1 ${(cotStats?.aprobadas ?? 0) > 0 ? 'text-kx-violet' : 'text-kx-text'}`}>
+                {cotStats?.aprobadas ?? 0}
+              </div>
+            )}
+            <div className="text-[11.5px] text-kx-text-3 flex items-center gap-1">
+              {(cotStats?.aprobadas ?? 0) > 0 ? 'Listas para convertir' : 'Sin pendientes ✓'}
+            </div>
+          </div>
+        </div>
+        <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between">
+          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Monto convertido</div>
+          <div>
+            {cotLoading ? <Skeleton className="h-6 w-28 mb-1" /> : (
+              <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">
+                ${(cotStats?.montoConvertido ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 })}
+              </div>
+            )}
+            <div className="text-[11.5px] text-kx-text-3">
+              de ${(cotStats?.montoMes ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 })} cotizado
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Gráficos (preservados) ──────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-kx-surface border border-kx-border rounded-2xl p-5">
+          <div className="text-[13px] font-semibold text-kx-text mb-4">Ventas — Últimos 7 días</div>
+          <div className="h-[240px]">
+            {ventasLoading ? (
+              <div className="h-full flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-kx-blue border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={ventasDia} barSize={24}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--kx-border)" />
+                  <XAxis dataKey="fecha" tick={{ fontSize: 11, fill: 'rgb(var(--kx-text-2))' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: 'rgb(var(--kx-text-2))' }} axisLine={false} tickLine={false} tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}`} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Bar dataKey="total" name="Ventas" fill="rgb(var(--kx-blue))" radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-kx-surface border border-kx-border rounded-2xl p-5">
+          <div className="text-[13px] font-semibold text-kx-text mb-4">Flujo de Caja — 6 meses</div>
+          <div className="h-[240px]">
+            {flujoLoading ? (
+              <div className="h-full flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-kx-green border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={flujoCaja} barGap={2} barSize={14}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--kx-border)" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'rgb(var(--kx-text-2))' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: 'rgb(var(--kx-text-2))' }} axisLine={false} tickLine={false} tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}`} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 12, color: 'rgb(var(--kx-text-2))' }} />
+                  <Bar dataKey="ingresos" name="Ingresos" fill="rgb(var(--kx-green))" radius={[3,3,0,0]} />
+                  <Bar dataKey="egresos"  name="Egresos"  fill="rgb(var(--kx-red))"   radius={[3,3,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Acciones rápidas (preservadas) ─────────────────────────────────── */}
+      <div className="bg-kx-surface border border-kx-border rounded-2xl p-5">
+        <div className="text-[13px] font-semibold text-kx-text mb-4">Acciones Rápidas</div>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          <QuickActionButton icon={ShoppingCart} label="Nueva Venta"
+            onClick={() => onNavigate?.('ventas')} gradient="from-blue-600 to-blue-500"
+            disabled={!canAccessSection('ventas')} />
+          <QuickActionButton icon={ClipboardList} label="Cotización"
+            onClick={() => onNavigate?.('cotizaciones')} gradient="from-indigo-600 to-indigo-500"
+            disabled={!canAccessSection('ventas')} />
+          <QuickActionButton icon={ShoppingBag} label="Orden Compra"
+            onClick={() => onNavigate?.('ordenes_compra')} gradient="from-violet-600 to-purple-500"
+            disabled={!canAccessSection('compras')} />
+          <QuickActionButton icon={Wallet} label="Caja"
+            onClick={() => onNavigate?.('caja')} gradient="from-emerald-600 to-emerald-500"
+            disabled={!canAccessSection('caja')} />
+          <QuickActionButton icon={UserPlus} label="Cliente"
+            onClick={() => onNavigate?.('clientes')} gradient="from-teal-600 to-teal-500"
+            disabled={!canAccessSection('clientes')} />
+          <QuickActionButton icon={FileText} label="Reportes"
+            onClick={() => onNavigate?.('reportes')} gradient="from-amber-600 to-amber-500"
+            disabled={!canAccessSection('reportes')} />
+        </div>
+      </div>
+
     </div>
   );
 }
