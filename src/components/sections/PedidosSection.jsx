@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   Plus, Search, Eye, Trash2, Check, X, Loader2, Package,
   ClipboardList, ChevronRight, ArrowRight, Banknote, AlertTriangle,
-  Calendar, User, FileText, Edit3
+  Calendar, User, FileText, Edit3, Truck, Receipt,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,8 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { getNowAR, getTodayAR, formatDateAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
+import GenerarEntregaModal from '@/components/ventas/GenerarEntregaModal';
+import NuevaVentaModal from '@/components/ventas/NuevaVentaModal';
 
 // ── Estados del workflow ───────────────────────────────────────────────────────
 const ESTADOS = [
@@ -38,6 +40,25 @@ const getEstado = (id) => ESTADOS.find(e => e.id === id) || ESTADOS[0];
 function EstadoBadge({ estado }) {
   const e = getEstado(estado);
   return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${e.color}`}>{e.label}</span>;
+}
+
+function ProgressoBadge({ items = [] }) {
+  if (!items.length) return null;
+  const totalPedido    = items.reduce((s, i) => s + Number(i.cantidad || 0), 0);
+  const totalEntregado = items.reduce((s, i) => s + Number(i.cantidad_entregada || 0), 0);
+  if (totalEntregado <= 0) return null;
+  if (totalEntregado >= totalPedido) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+        <Check className="h-3 w-3" /> Entregado
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+      {totalEntregado}/{totalPedido} ents.
+    </span>
+  );
 }
 
 // ── Componente principal ───────────────────────────────────────────────────────
@@ -63,6 +84,14 @@ function PedidosSection() {
   // Confirm cancelar
   const [cancelTarget, setCancelTarget] = useState(null);
 
+  // Generar Entrega
+  const [isGenerarEntregaOpen, setIsGenerarEntregaOpen] = useState(false);
+  const [pedidoParaEntrega, setPedidoParaEntrega] = useState(null);
+
+  // Facturar desde pedido
+  const [isFacturarOpen, setIsFacturarOpen] = useState(false);
+  const [pedidoToFacturar, setPedidoToFacturar] = useState(null);
+
   // Form state
   const emptyForm = () => ({
     cliente_id: '',
@@ -74,9 +103,7 @@ function PedidosSection() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (user?.empresa_id) {
-      fetchAll();
-    }
+    if (user?.empresa_id) fetchAll();
   }, [user]);
 
   const fetchAll = async () => {
@@ -123,7 +150,6 @@ function PedidosSection() {
     setForm(f => {
       const items = [...f.items];
       items[i] = { ...items[i], [field]: value };
-      // Auto-fill precio from product
       if (field === 'producto_id' && value) {
         const prod = productos.find(p => p.id === value);
         if (prod) {
@@ -173,7 +199,6 @@ function PedidosSection() {
       );
 
       if (editingPedido) {
-        // Update
         await supabase.from('pedidos').update({
           cliente_id: form.cliente_id || null,
           cliente_nombre: clienteObj?.nombre || 'Sin cliente',
@@ -183,7 +208,6 @@ function PedidosSection() {
           updated_at: now,
         }).eq('id', editingPedido.id);
 
-        // Replace items
         await supabase.from('pedido_items').delete().eq('pedido_id', editingPedido.id);
         await supabase.from('pedido_items').insert(
           validItems.map(it => ({
@@ -235,7 +259,7 @@ function PedidosSection() {
     }
   };
 
-  // ── Avanzar estado ──────────────────────────────────────────────────────────
+  // ── Avanzar estado (para borrador→confirmado y confirmado→en_preparacion) ─
   const handleAvanzar = async (pedido) => {
     const e = getEstado(pedido.estado);
     if (!e.next) return;
@@ -247,6 +271,35 @@ function PedidosSection() {
       toast({ title: `Pedido ${pedido.numero} → ${getEstado(e.next).label}` });
       fetchAll();
     }
+  };
+
+  // ── Facturar desde pedido (abre NuevaVentaModal pre-cargado) ─────────────
+  const handleFacturarPedido = (pedido) => {
+    setPedidoToFacturar(pedido);
+    setIsDetailOpen(false);
+    setIsFacturarOpen(true);
+  };
+
+  const handleSaleSuccessForPedido = async () => {
+    if (!pedidoToFacturar) return;
+    await supabase.from('pedidos')
+      .update({ estado: 'facturado', updated_at: getNowAR().toISOString() })
+      .eq('id', pedidoToFacturar.id);
+    toast({ title: `Pedido ${pedidoToFacturar.numero} marcado como Facturado` });
+    setPedidoToFacturar(null);
+    setIsFacturarOpen(false);
+    fetchAll();
+  };
+
+  // ── Generar Entrega ─────────────────────────────────────────────────────────
+  const handleAbrirGenerarEntrega = (pedido, ev) => {
+    ev?.stopPropagation();
+    setPedidoParaEntrega(pedido);
+    setIsGenerarEntregaOpen(true);
+  };
+
+  const handleEntregaSuccess = (numeroEntrega) => {
+    fetchAll();
   };
 
   const handleCancelar = async () => {
@@ -346,6 +399,7 @@ function PedidosSection() {
                 <th className="text-left p-4 font-semibold text-slate-600 dark:text-slate-400">Fecha</th>
                 <th className="text-left p-4 font-semibold text-slate-600 dark:text-slate-400">Entrega</th>
                 <th className="text-right p-4 font-semibold text-slate-600 dark:text-slate-400">Total</th>
+                <th className="text-center p-4 font-semibold text-slate-600 dark:text-slate-400">Progreso</th>
                 <th className="text-center p-4 font-semibold text-slate-600 dark:text-slate-400">Estado</th>
                 <th className="text-center p-4 font-semibold text-slate-600 dark:text-slate-400">Acciones</th>
               </tr>
@@ -354,7 +408,7 @@ function PedidosSection() {
               {loading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 8 }).map((_, j) => (
                       <td key={j} className="p-4">
                         <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded animate-pulse w-20" />
                       </td>
@@ -363,7 +417,7 @@ function PedidosSection() {
                 ))
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-12 text-center text-slate-400 dark:text-slate-500">
+                  <td colSpan={8} className="p-12 text-center text-slate-400 dark:text-slate-500">
                     <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-20" />
                     <p className="font-medium">No hay pedidos{filterEstado !== 'Todos' ? ` en estado "${getEstado(filterEstado).label}"` : ''}</p>
                     <Button variant="link" onClick={openNew} className="mt-2 text-blue-500">
@@ -374,8 +428,14 @@ function PedidosSection() {
               ) : (
                 filtered.map(pedido => {
                   const e = getEstado(pedido.estado);
-                  const canAdvance = !!e.next;
-                  const canEdit = pedido.estado === 'borrador';
+                  const canEdit    = pedido.estado === 'borrador';
+                  const items      = pedido.pedido_items || [];
+                  const totalPed   = items.reduce((s, i) => s + Number(i.cantidad || 0), 0);
+                  const totalEnt   = items.reduce((s, i) => s + Number(i.cantidad_entregada || 0), 0);
+                  const hayPendiente = totalEnt < totalPed;
+                  const puedeEntrega = ['confirmado', 'en_preparacion'].includes(pedido.estado) && hayPendiente;
+                  const esParaFacturar = e.next === 'facturado';
+
                   return (
                     <tr key={pedido.id}
                       className="hover:bg-slate-50 dark:hover:bg-slate-900/40 transition-colors cursor-pointer"
@@ -405,6 +465,9 @@ function PedidosSection() {
                         ${Number(pedido.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="p-4 text-center">
+                        <ProgressoBadge items={items} />
+                      </td>
+                      <td className="p-4 text-center">
                         <EstadoBadge estado={pedido.estado} />
                       </td>
                       <td className="p-4 text-center" onClick={ev => ev.stopPropagation()}>
@@ -415,13 +478,42 @@ function PedidosSection() {
                               <Edit3 className="h-3.5 w-3.5" />
                             </Button>
                           )}
-                          {canAdvance && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
-                              onClick={() => handleAvanzar(pedido)}
-                              title={`Avanzar → ${getEstado(e.next).label}`}>
-                              <ArrowRight className="h-3.5 w-3.5" />
+
+                          {/* Generar Entrega */}
+                          {puedeEntrega && (
+                            <Button
+                              variant="ghost" size="icon"
+                              className="h-8 w-8 text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20"
+                              onClick={(ev) => handleAbrirGenerarEntrega(pedido, ev)}
+                              title="Generar Entrega"
+                            >
+                              <Truck className="h-3.5 w-3.5" />
                             </Button>
                           )}
+
+                          {/* Avanzar estado o Facturar */}
+                          {e.next && (
+                            esParaFacturar ? (
+                              <Button
+                                variant="ghost" size="icon"
+                                className="h-8 w-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                                onClick={() => handleFacturarPedido(pedido)}
+                                title="Facturar pedido"
+                              >
+                                <Receipt className="h-3.5 w-3.5" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost" size="icon"
+                                className="h-8 w-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                                onClick={() => handleAvanzar(pedido)}
+                                title={`Avanzar → ${getEstado(e.next).label}`}
+                              >
+                                <ArrowRight className="h-3.5 w-3.5" />
+                              </Button>
+                            )
+                          )}
+
                           {pedido.estado !== 'cancelado' && pedido.estado !== 'facturado' && (
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                               onClick={() => setCancelTarget(pedido)} title="Cancelar">
@@ -571,84 +663,119 @@ function PedidosSection() {
       {/* ── Modal Detalle ──────────────────────────────────────────────────────── */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
         <DialogContent className="max-w-lg dark:bg-slate-950 dark:border-slate-800">
-          {detailPedido && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 dark:text-white">
-                  <FileText className="h-5 w-5 text-blue-500" />
-                  Pedido {detailPedido.numero}
-                </DialogTitle>
-                <DialogDescription className="dark:text-slate-400">
-                  Detalle completo del pedido
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-slate-500">Estado</span>
-                  <EstadoBadge estado={detailPedido.estado} />
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-slate-500">Cliente</span>
-                  <span className="font-medium dark:text-white">{detailPedido.cliente_nombre}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-slate-500">Fecha</span>
-                  <span className="text-sm dark:text-slate-300">{formatDateAR(detailPedido.fecha)}</span>
-                </div>
-                {detailPedido.fecha_entrega && (
+          {detailPedido && (() => {
+            const e = getEstado(detailPedido.estado);
+            const items    = detailPedido.pedido_items || [];
+            const totalPed = items.reduce((s, i) => s + Number(i.cantidad || 0), 0);
+            const totalEnt = items.reduce((s, i) => s + Number(i.cantidad_entregada || 0), 0);
+            const hayPendiente = totalEnt < totalPed;
+            const puedeEntrega = ['confirmado', 'en_preparacion'].includes(detailPedido.estado) && hayPendiente;
+
+            return (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 dark:text-white">
+                    <FileText className="h-5 w-5 text-blue-500" />
+                    Pedido {detailPedido.numero}
+                  </DialogTitle>
+                  <DialogDescription className="dark:text-slate-400">
+                    Detalle completo del pedido
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-500">Entrega</span>
-                    <span className="text-sm dark:text-slate-300">{formatDateAR(detailPedido.fecha_entrega)}</span>
+                    <span className="text-sm text-slate-500">Estado</span>
+                    <div className="flex items-center gap-2">
+                      <EstadoBadge estado={detailPedido.estado} />
+                      <ProgressoBadge items={items} />
+                    </div>
                   </div>
-                )}
-                {detailPedido.notas && (
-                  <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 text-sm text-slate-600 dark:text-slate-400">
-                    {detailPedido.notas}
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-500">Cliente</span>
+                    <span className="font-medium dark:text-white">{detailPedido.cliente_nombre}</span>
                   </div>
-                )}
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-slate-500">Fecha</span>
+                    <span className="text-sm dark:text-slate-300">{formatDateAR(detailPedido.fecha)}</span>
+                  </div>
+                  {detailPedido.fecha_entrega && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-slate-500">Entrega</span>
+                      <span className="text-sm dark:text-slate-300">{formatDateAR(detailPedido.fecha_entrega)}</span>
+                    </div>
+                  )}
+                  {detailPedido.notas && (
+                    <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 text-sm text-slate-600 dark:text-slate-400">
+                      {detailPedido.notas}
+                    </div>
+                  )}
 
-                {/* Items */}
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 dark:border-slate-800">
-                      <th className="text-left pb-2 text-slate-500">Descripción</th>
-                      <th className="text-center pb-2 text-slate-500 w-16">Cant.</th>
-                      <th className="text-right pb-2 text-slate-500">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(detailPedido.pedido_items || []).map(it => (
-                      <tr key={it.id} className="border-b border-slate-100 dark:border-slate-800/50">
-                        <td className="py-2 dark:text-slate-200">{it.descripcion}</td>
-                        <td className="py-2 text-center text-slate-500">{it.cantidad}</td>
-                        <td className="py-2 text-right font-mono dark:text-slate-200">
-                          ${Number(it.subtotal).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                        </td>
+                  {/* Items */}
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-800">
+                        <th className="text-left pb-2 text-slate-500">Descripción</th>
+                        <th className="text-center pb-2 text-slate-500 w-16">Cant.</th>
+                        <th className="text-center pb-2 text-slate-500 w-16">Ent.</th>
+                        <th className="text-right pb-2 text-slate-500">Subtotal</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div className="text-right font-bold text-lg dark:text-white">
-                  Total: ${Number(detailPedido.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                </div>
+                    </thead>
+                    <tbody>
+                      {items.map(it => (
+                        <tr key={it.id} className="border-b border-slate-100 dark:border-slate-800/50">
+                          <td className="py-2 dark:text-slate-200">{it.descripcion}</td>
+                          <td className="py-2 text-center text-slate-500">{it.cantidad}</td>
+                          <td className="py-2 text-center text-slate-500">{Number(it.cantidad_entregada || 0)}</td>
+                          <td className="py-2 text-right font-mono dark:text-slate-200">
+                            ${Number(it.subtotal).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="text-right font-bold text-lg dark:text-white">
+                    Total: ${Number(detailPedido.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                  </div>
 
-                {/* Workflow */}
-                {(() => {
-                  const e = getEstado(detailPedido.estado);
-                  if (!e.next) return null;
-                  return (
-                    <Button
-                      className="w-full bg-green-600 hover:bg-green-700 text-white"
-                      onClick={() => { handleAvanzar(detailPedido); setIsDetailOpen(false); }}
-                    >
-                      <ArrowRight className="h-4 w-4 mr-2" />
-                      Avanzar a {getEstado(e.next).label}
-                    </Button>
-                  );
-                })()}
-              </div>
-            </>
-          )}
+                  {/* Workflow buttons */}
+                  <div className="flex flex-col gap-2">
+                    {/* Generar Entrega */}
+                    {puedeEntrega && (
+                      <Button
+                        variant="outline"
+                        className="w-full border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300"
+                        onClick={() => handleAbrirGenerarEntrega(detailPedido)}
+                      >
+                        <Truck className="h-4 w-4 mr-2" />
+                        Generar Entrega
+                      </Button>
+                    )}
+
+                    {/* Avanzar / Facturar */}
+                    {e.next && (
+                      e.next === 'facturado' ? (
+                        <Button
+                          className="w-full bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => handleFacturarPedido(detailPedido)}
+                        >
+                          <Receipt className="h-4 w-4 mr-2" />
+                          Facturar Pedido
+                        </Button>
+                      ) : (
+                        <Button
+                          className="w-full bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => { handleAvanzar(detailPedido); setIsDetailOpen(false); }}
+                        >
+                          <ArrowRight className="h-4 w-4 mr-2" />
+                          Avanzar a {getEstado(e.next).label}
+                        </Button>
+                      )
+                    )}
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
@@ -669,6 +796,22 @@ function PedidosSection() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Generar Entrega Modal ────────────────────────────────────────────── */}
+      <GenerarEntregaModal
+        pedido={pedidoParaEntrega}
+        isOpen={isGenerarEntregaOpen}
+        onClose={() => { setIsGenerarEntregaOpen(false); setPedidoParaEntrega(null); }}
+        onSuccess={handleEntregaSuccess}
+      />
+
+      {/* ── Facturar desde Pedido (abre POS pre-cargado) ────────────────────── */}
+      <NuevaVentaModal
+        isOpen={isFacturarOpen}
+        onOpenChange={v => !v && setIsFacturarOpen(false)}
+        onSaleSuccess={handleSaleSuccessForPedido}
+        pedido={pedidoToFacturar}
+      />
     </div>
   );
 }

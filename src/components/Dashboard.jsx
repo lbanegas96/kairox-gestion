@@ -12,9 +12,7 @@ import CuentaCorrienteSection from '@/components/sections/CuentaCorrienteSection
 import ReportesSection from '@/components/sections/ReportesSection';
 import UsuariosSection from '@/components/sections/UsuariosSection';
 import ConfiguracionSection from '@/components/sections/ConfiguracionSection';
-import CotizacionesSection from '@/components/sections/CotizacionesSection';
 import OrdenesCompraSection from '@/components/sections/OrdenesCompraSection';
-import PedidosSection from '@/components/sections/PedidosSection';
 import ListasPrecioSection from '@/components/sections/ListasPrecioSection';
 import PlanCuentasSection from '@/components/sections/PlanCuentasSection';
 import CuentasBancariasSection from '@/components/sections/CuentasBancariasSection';
@@ -47,9 +45,11 @@ function Dashboard({ user, onLogout }) {
     switch (activeSection) {
       case 'dashboard':     return <DashboardSection onNavigate={setActiveSection} />;
       case 'productos':     return <ProductosSection />;
-      case 'ventas':        return <VentasSection />;
-      case 'cotizaciones':  return <CotizacionesSection />;
-      case 'pedidos':       return <PedidosSection />;
+      case 'ventas':           return <VentasSection initialTab="pedidos" />;
+      case 'cotizaciones':     return <VentasSection initialTab="cotizaciones" />;
+      case 'pedidos':          return <VentasSection initialTab="pedidos" />;
+      case 'entregas':         return <VentasSection initialTab="entregas" />;
+      case 'historial_ventas': return <VentasSection initialTab="historial" />;
       case 'listas_precio': return <ListasPrecioSection />;
       case 'ordenes_compra':return <OrdenesCompraSection />;
       case 'compras':       return <ComprasSection />;

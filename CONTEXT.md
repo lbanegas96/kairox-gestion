@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-13 — Document Flow Prompt 2/6: migration 036, RPCs de negocio (`crear_venta` + entrega implícita, `crear_entrega`, `crear_recepcion`, `crear_recepcion_implicita`, `crear_factura_desde_entrega`).
+**Última actualización:** 2026-06-13 — Document Flow Prompt 3/6: UI Ventas — VentasSection tab shell + EntregasSection + GenerarEntregaModal + PedidosSection (badges progreso + Generar Entrega + Facturar) + shared (ClienteSelector, ClienteDrillDown, ClienteAltaRapidaModal, DocumentFlow) + Sidebar colapsable + Dashboard routing.
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -26,14 +26,19 @@
 | Portal Compras | `portals/ComprasPortal.jsx` | ✅ 5 KPIs + módulos |
 | Portal Finanzas | `portals/FinanzasPortal.jsx` | ✅ 5 KPIs + posición neta CxC-CxP |
 | Portal Inventario | `portals/InventarioPortal.jsx` | ✅ 5 KPIs + barra salud stock |
-| Ventas (POS) | `VentasSection.jsx` + `NuevaVentaModal.jsx` | ✅ Multi-pago + check límite crédito + Moneda Paralela |
+| **Ventas (shell)** | `VentasSection.jsx` | ✅ **Prompt 3/6** Tab shell: Cotizaciones · Pedidos · Entregas · Facturas · Devoluciones + botón POS flotante + `initialTab` prop para nav externa |
+| **Ventas (POS)** | `NuevaVentaModal.jsx` | ✅ Multi-pago + check límite crédito + Moneda Paralela + **`pedido` prop** para pre-carga desde Pedido |
 | Notas de Crédito | `NotaCreditoModal.jsx` + `notaCreditoService.ts` | ✅ Devolución parcial/total + reversión stock/CC/caja |
 | Historial Ventas | `HistorialVentas.jsx` | ✅ Filtros avanzados + estado_pago CC + paginación 50/pág |
 | Comprobantes | `ComprobantePrintModal.jsx` | ✅ Toggle Comprobante / Remito sin precios |
 | Inventario | `ProductosSection.jsx` | ✅ Soft delete + import CSV + Análisis ABC |
 | Compras | `ComprasSection.jsx` | ✅ Funcional + asiento auto + paginación 50/pág |
 | Cotizaciones | `CotizacionesSection.jsx` | ✅ Funcional + convertir a venta + TC obligatorio |
-| Pedidos (OC Clientes) | `PedidosSection.jsx` | ✅ Workflow borrador→confirmado→en_preparacion→facturado |
+| **Pedidos (OC Clientes)** | `PedidosSection.jsx` | ✅ Workflow borrador→facturado + **badges progreso entrega** + **botón Generar Entrega** (llama `crear_entrega` RPC) + **botón Facturar** (abre NuevaVentaModal pre-cargado → actualiza estado a 'facturado') |
+| **Entregas** | `ventas/EntregasSection.jsx` | ✅ **NUEVO Prompt 3/6** Lista entregas con expand inline de ítems + filtro origen (POS/Manual) |
+| **Generar Entrega** | `ventas/GenerarEntregaModal.jsx` | ✅ **NUEVO** Modal: tabla pendientes por item + inputs cantidad → RPC `crear_entrega` |
+| **ClienteSelector** | `shared/ClienteSelector.jsx` | ✅ **NUEVO** Select + DrillDown (popover saldo CC + últimas compras) + Alta Rápida inline |
+| **DocumentFlow** | `shared/DocumentFlow.jsx` | ✅ **NUEVO** Chip chain visual Cotización→Pedido→Entrega→Factura con `onNavigate` callback |
 | Órdenes de Compra | `OrdenesCompraSection.jsx` | ✅ Workflow aprobación + 3-way match + realtime |
 | Caja | `CajaSection.jsx` + `CajaCierre.jsx` | ✅ Arqueo por denominaciones + tab Arqueos |
 | Clientes | `ClientesSection.jsx` | ✅ Form completo + condicion_pago + limite_credito + import CSV |
@@ -163,7 +168,7 @@ El rediseño v3 (2026-06-12) reemplazó el Launchpad Fiori + Portales por una na
 ```
 Sidebar 7 grupos:
 ├── GENERAL       → dashboard, reportes
-├── VENTAS        → ventas, cotizaciones, pedidos, clientes, cuentacorriente, listas_precio
+├── VENTAS        → ventas (POS), cotizaciones, pedidos, entregas, historial_ventas, clientes, cuentacorriente, listas_precio
 ├── COMPRAS       → proveedores, ordenes_compra, compras
 ├── INVENTARIO    → productos
 ├── FINANZAS      → caja (con status dot abierta/cerrada), bancos, cheques
@@ -171,7 +176,7 @@ Sidebar 7 grupos:
 └── ADMINISTRACIÓN→ usuarios, configuracion
 ```
 
-- **Sidebar:** `src/components/Sidebar.jsx` — array `NAV_GROUPS` con grupos + íconos, `fixed md:relative` (overlay en mobile, flex item en desktop), `bg-kx-surface/80 backdrop-blur-md`, user footer con avatar gradiente + rol + LogOut.
+- **Sidebar:** `src/components/Sidebar.jsx` — array `NAV_GROUPS` con grupos + íconos, `fixed md:relative`, `bg-kx-surface/80 backdrop-blur-md`. **Prompt 3/6:** grupos colapsables con toggle y persistencia en `localStorage('kx-sidebar-collapsed')`. Nuevos items VENTAS: `entregas` (Box), `historial_ventas` (ScrollText). Navegación a `entregas`/`historial_ventas` → `<VentasSection initialTab="...">` via Dashboard routing.
 - **Header:** `src/components/Header.jsx` — h-14, breadcrumb `empresa · sección`, búsqueda (⌘K), toggle tema, Bell notificaciones, CTA "Nueva Venta", Avatar dropdown.
 - **Shell:** `src/components/Dashboard.jsx` — flex layout, `AuroraBackground` fixed z-10, no más `ml-{x}`.
 - **Portales legacy:** `portalService.ts` + `portals/*.jsx` se mantienen en código pero ya no son accesibles desde el sidebar. El módulo `DashboardSection.jsx` es ahora el punto de entrada principal.
@@ -312,6 +317,36 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-13 — Document Flow Prompt 3/6: UI Ventas
+**Branch:** `master`
+
+**Objetivo:** construir toda la capa UI del Document Flow de Ventas. Reglas: no romper NuevaVentaModal ni CotizacionesSection; PedidosSection se adapta, no se reescribe desde cero; Sidebar colapsable se aplica a TODOS los grupos.
+
+**Archivos creados:**
+- `src/components/sections/VentasSection.jsx` — **reescrito** como tab shell (`initialTab` prop, tabs: cotizaciones / pedidos / entregas / historial / devoluciones). Botón "Nueva Venta (POS)" fuera de los tabs. Cada sidebar item navega con `initialTab` diferente.
+- `src/components/ventas/EntregasSection.jsx` — listado de `entregas` con expand inline de `entrega_items`. Filtro origen (Todos/Manual/POS). Embedded selects PostgREST: `clientes(nombre)`, `pedidos(numero)`, `comprobantes(numero_venta)`, `entrega_items(*, productos(nombre))`.
+- `src/components/ventas/GenerarEntregaModal.jsx` — tabla de items pendientes (pedido vs entregado), input cantidad por fila (default=pendiente), llama RPC `crear_entrega(p_empresa_id, p_user_id, p_pedido_id, p_items)`.
+- `src/components/shared/DocumentFlow.jsx` — chip chain visual con ArrowRight entre chips. Props: `chips[]` + `onNavigate(tipo, id)`.
+- `src/components/shared/ClienteSelector.jsx` — select de clientes + DrillDown (ojo) + Alta Rápida (UserPlus).
+- `src/components/shared/ClienteDrillDown.jsx` — popover inline: saldo CC + últimas 3 compras. Fetcha `cuenta_corriente_clientes` + `comprobantes`.
+- `src/components/shared/ClienteAltaRapidaModal.jsx` — alta rápida: nombre (req) + cuit + teléfono + condicion_iva. On save → `onCreated(cliente)` auto-selecciona.
+
+**Archivos modificados:**
+- `src/components/sections/PedidosSection.jsx` — importa `GenerarEntregaModal` + `NuevaVentaModal`. Nuevo: `ProgressoBadge` (verde si completo, ámbar si parcial). Botón **Truck** si `['confirmado','en_preparacion']` y hay pendiente → abre `GenerarEntregaModal`. Botón **Receipt** si `en_preparacion → facturado` → abre `NuevaVentaModal(pedido=...)` → `onSaleSuccess` actualiza pedido a 'facturado'. Tabla: columna "Progreso" añadida (colspan 7→8). Modal detalle: añade col Ent. + botones Generar Entrega y Facturar.
+- `src/components/ventas/NuevaVentaModal.jsx` — añade `pedido = null` prop. En init useEffect, si `pedido?.pedido_items`, pre-carga cart (idéntico a cotizacion). Pre-selecciona `pedido.cliente_id`.
+- `src/components/Dashboard.jsx` — elimina imports `CotizacionesSection`, `PedidosSection`. Routing: `cotizaciones`/`pedidos`/`ventas` → `<VentasSection initialTab="...">`. Nuevos casos: `entregas` → `initialTab="entregas"`, `historial_ventas` → `initialTab="historial"`.
+- `src/components/Sidebar.jsx` — imports añadidos: `Box, ScrollText, RotateCcw, ChevronDown, ChevronRight`. VENTAS group: +`entregas` (Box) +`historial_ventas` (ScrollText). Todos los grupos: colapsables con `useState` (default: todos expandidos), persistencia en `localStorage('kx-sidebar-collapsed')`.
+
+**Build verificado:** `vite build --mode development` → ✅ 3129 módulos sin errores.
+
+**Tests manuales pendientes:**
+- POS: venta → verificar fila en `entregas` con `origen='implicita'`
+- Pedido: crear → avanzar a `en_preparacion` → Generar Entrega → verificar stock decrementado + fila en `entregas`
+- Pedido: `en_preparacion` → Facturar → NuevaVentaModal pre-cargado con items + pedido → venta → pedido pasa a `facturado`
+- EntregasSection: expandir row → ver items con nombre de producto
+
+---
 
 ### Sesión 2026-06-13 — Document Flow Prompt 2/6: RPCs de negocio
 **Branch:** `master`

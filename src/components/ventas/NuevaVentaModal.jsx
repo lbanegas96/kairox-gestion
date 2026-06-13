@@ -18,7 +18,7 @@ import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { listaPreciosService } from '@/services/listaPreciosService';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = null, onConvertSuccess }) => {
+const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = null, onConvertSuccess, pedido = null }) => {
   const { user } = useAuth();
   const { currentSession, isSessionOpen } = useCaja();
   const { toast } = useToast();
@@ -115,6 +115,38 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         }
         if (cotizacion.cliente_id) {
           const client = (clis || []).find(c => c.id === cotizacion.cliente_id);
+          if (client) setSelectedClient(client);
+        }
+      }
+
+      // Pre-llenar carrito desde pedido
+      if (pedido?.pedido_items?.length > 0) {
+        const productoIds = pedido.pedido_items.map(i => i.producto_id).filter(Boolean);
+        const { data: prods } = productoIds.length > 0
+          ? await supabase.from('productos').select('*').eq('empresa_id', user.empresa_id).in('id', productoIds)
+          : { data: [] };
+        const prodMap = Object.fromEntries((prods || []).map(p => [p.id, p]));
+
+        const preCart = [];
+        let sinProducto = 0;
+        for (const item of pedido.pedido_items) {
+          if (item.producto_id) {
+            const prod = prodMap[item.producto_id];
+            if (prod) {
+              preCart.push({ ...prod, precio_venta: Number(item.precio_unitario), cantidad: Number(item.cantidad) });
+            } else {
+              sinProducto++;
+            }
+          } else {
+            sinProducto++;
+          }
+        }
+        if (preCart.length > 0) setCart(preCart);
+        if (sinProducto > 0) {
+          toast({ title: `${sinProducto} ítem(s) sin producto vinculado no se cargaron.`, variant: 'destructive' });
+        }
+        if (pedido.cliente_id) {
+          const client = (clis || []).find(c => c.id === pedido.cliente_id);
           if (client) setSelectedClient(client);
         }
       }

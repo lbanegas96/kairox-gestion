@@ -1,67 +1,88 @@
 import React, { useState } from 'react';
-import { ShoppingCart, Receipt } from 'lucide-react';
+import { Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import NuevaVentaModal from '@/components/ventas/NuevaVentaModal';
+import CotizacionesSection from '@/components/sections/CotizacionesSection';
+import PedidosSection from '@/components/sections/PedidosSection';
+import EntregasSection from '@/components/ventas/EntregasSection';
 import HistorialVentas from '@/components/ventas/HistorialVentas';
 
-function VentasSection() {
+function VentasSection({ initialTab = 'pedidos' }) {
+  const [activeTab, setActiveTab]       = useState(initialTab);
   const [isNewSaleOpen, setIsNewSaleOpen] = useState(false);
-  
-  // Just to force refresh history when sale completes
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshKey, setRefreshKey]     = useState(0);
 
-  const handleSaleSuccess = () => {
-    setRefreshKey(prev => prev + 1);
-  };
+  const handleSaleSuccess = () => setRefreshKey(k => k + 1);
 
   return (
-    <div className="space-y-6">
-      {/* HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white dark:bg-transparent p-6 -mx-6 -mt-6 mb-6 border-b border-slate-200 dark:border-slate-800 gap-4">
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-1">Gestión de Ventas</h2>
-          <p className="text-slate-500 dark:text-slate-400">Registra ventas, emite comprobantes y revisa tu historial.</p>
+          <h2 className="text-2xl font-bold text-kx-text">Ventas</h2>
+          <p className="text-sm text-kx-text-2">Cotizaciones, Pedidos, Entregas e Historial</p>
         </div>
+        <Button
+          onClick={() => setIsNewSaleOpen(true)}
+          className="bg-[rgb(var(--kx-violet))] hover:opacity-90 text-white gap-2 h-9 px-4 text-sm font-medium"
+        >
+          <Zap className="w-4 h-4" />
+          Nueva Venta (POS)
+        </Button>
       </div>
 
-      <Tabs defaultValue="dashboard" className="w-full space-y-6">
-        <TabsList className="bg-transparent p-0 gap-2 mb-4 w-full flex justify-start">
-          <TabsTrigger value="dashboard" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white bg-slate-100 dark:bg-slate-800 dark:text-slate-400 rounded-md">
-            <ShoppingCart className="w-4 h-4 mr-2"/> Nueva Venta
-          </TabsTrigger>
-          <TabsTrigger value="historial" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white bg-slate-100 dark:bg-slate-800 dark:text-slate-400 rounded-md">
-            <Receipt className="w-4 h-4 mr-2"/> Historial de Ventas
-          </TabsTrigger>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="bg-transparent p-0 gap-1 flex justify-start border-b border-kx-border rounded-none h-auto pb-0">
+          {[
+            { value: 'cotizaciones', label: 'Cotizaciones' },
+            { value: 'pedidos',      label: 'Pedidos'      },
+            { value: 'entregas',     label: 'Entregas'     },
+            { value: 'historial',    label: 'Facturas'     },
+            { value: 'devoluciones', label: 'Devoluciones' },
+          ].map(tab => (
+            <TabsTrigger
+              key={tab.value}
+              value={tab.value}
+              className={[
+                'rounded-none rounded-t-sm px-4 py-2 text-sm border-b-2 transition-colors',
+                'data-[state=active]:border-[rgb(var(--kx-violet))] data-[state=active]:text-kx-text data-[state=active]:font-semibold',
+                'data-[state=inactive]:border-transparent data-[state=inactive]:text-kx-text-2',
+                'data-[state=inactive]:hover:text-kx-text',
+              ].join(' ')}
+            >
+              {tab.label}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
-        <TabsContent value="dashboard" className="mt-0">
-          <div className="flex flex-col items-center justify-center py-20 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-             <div className="h-20 w-20 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-6">
-                <ShoppingCart className="h-10 w-10 text-blue-600 dark:text-blue-400" />
-             </div>
-             <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Punto de Venta</h3>
-             <p className="text-slate-500 dark:text-slate-400 mb-8 max-w-md text-center">
-               Inicia una nueva venta para registrar salidas de stock, generar comprobantes y actualizar la caja.
-             </p>
-             <Button 
-               size="lg" 
-               className="h-14 px-8 text-lg font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xl shadow-blue-900/20"
-               onClick={() => setIsNewSaleOpen(true)}
-             >
-               <ShoppingCart className="mr-2 h-5 w-5" /> Iniciar Nueva Venta
-             </Button>
-          </div>
+        <TabsContent value="cotizaciones" className="mt-4">
+          <CotizacionesSection />
         </TabsContent>
 
-        <TabsContent value="historial">
-           <HistorialVentas key={refreshKey} />
+        <TabsContent value="pedidos" className="mt-4">
+          <PedidosSection />
+        </TabsContent>
+
+        <TabsContent value="entregas" className="mt-4">
+          <EntregasSection />
+        </TabsContent>
+
+        <TabsContent value="historial" className="mt-4">
+          <HistorialVentas key={refreshKey} />
+        </TabsContent>
+
+        <TabsContent value="devoluciones" className="mt-4">
+          <div className="flex flex-col items-center justify-center py-24 text-center rounded-xl border border-dashed border-kx-border">
+            <p className="font-medium text-kx-text-2">Devoluciones</p>
+            <p className="text-sm text-kx-text-3 mt-1">Disponible en Prompt 4/6</p>
+          </div>
         </TabsContent>
       </Tabs>
 
-      <NuevaVentaModal 
-        isOpen={isNewSaleOpen} 
-        onOpenChange={setIsNewSaleOpen} 
+      <NuevaVentaModal
+        isOpen={isNewSaleOpen}
+        onOpenChange={setIsNewSaleOpen}
         onSaleSuccess={handleSaleSuccess}
       />
     </div>

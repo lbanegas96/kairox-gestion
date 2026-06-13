@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   LayoutDashboard, Package, ShoppingCart, ArrowLeftRight, Wallet, FileText,
   Users, Settings, LogOut, Contact, CreditCard, ClipboardList, ShoppingBag,
   BookOpen, Landmark, Truck, PackageCheck, Tag, FileCheck, Receipt,
+  Box, ScrollText, RotateCcw, ChevronDown, ChevronRight as ChevronRightIcon,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
@@ -18,12 +19,14 @@ const NAV_GROUPS = [
   {
     label: 'VENTAS',
     items: [
-      { id: 'ventas',          label: 'Ventas',            icon: ShoppingCart },
-      { id: 'cotizaciones',    label: 'Cotizaciones',       icon: ClipboardList },
-      { id: 'pedidos',         label: 'Pedidos',            icon: PackageCheck },
-      { id: 'clientes',        label: 'Clientes',           icon: Contact },
-      { id: 'cuentacorriente', label: 'Cta. Corriente',    icon: CreditCard },
-      { id: 'listas_precio',   label: 'Listas de Precios', icon: Tag },
+      { id: 'ventas',            label: 'Nueva Venta (POS)',  icon: ShoppingCart },
+      { id: 'cotizaciones',      label: 'Cotizaciones',       icon: ClipboardList },
+      { id: 'pedidos',           label: 'Pedidos',            icon: PackageCheck },
+      { id: 'entregas',          label: 'Entregas',           icon: Box },
+      { id: 'historial_ventas',  label: 'Historial',          icon: ScrollText },
+      { id: 'clientes',          label: 'Clientes',           icon: Contact },
+      { id: 'cuentacorriente',   label: 'Cta. Corriente',    icon: CreditCard },
+      { id: 'listas_precio',     label: 'Listas de Precios', icon: Tag },
     ],
   },
   {
@@ -68,6 +71,19 @@ function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen }) {
   const { user, signOut } = useAuth();
   const { isSessionOpen } = useCaja();
 
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('kx-sidebar-collapsed') || '{}'); }
+    catch { return {}; }
+  });
+
+  const toggleGroup = (label) => {
+    setCollapsed(prev => {
+      const next = { ...prev, [label]: !prev[label] };
+      localStorage.setItem('kx-sidebar-collapsed', JSON.stringify(next));
+      return next;
+    });
+  };
+
   const firstName = user?.user_metadata?.first_name || user?.email?.split('@')[0] || 'Usuario';
   const lastName  = user?.user_metadata?.last_name  || '';
   const initials  = `${firstName.charAt(0)}${lastName ? lastName.charAt(0) : ''}`.toUpperCase();
@@ -111,41 +127,53 @@ function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen }) {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-2 px-2">
-          {NAV_GROUPS.map((group) => (
-            <div key={group.label}>
-              <div className="text-[10px] font-semibold text-kx-text-3 px-3 pt-4 pb-1.5 uppercase tracking-wider select-none">
-                {group.label}
+          {NAV_GROUPS.map((group) => {
+            const isCollapsed = !!collapsed[group.label];
+            return (
+              <div key={group.label}>
+                <button
+                  onClick={() => toggleGroup(group.label)}
+                  className="w-full flex items-center justify-between px-3 pt-4 pb-1.5 group"
+                >
+                  <span className="text-[10px] font-semibold text-kx-text-3 uppercase tracking-wider select-none">
+                    {group.label}
+                  </span>
+                  {isCollapsed
+                    ? <ChevronRightIcon className="h-3 w-3 text-kx-text-3 group-hover:text-kx-text-2 transition-colors" />
+                    : <ChevronDown className="h-3 w-3 text-kx-text-3 group-hover:text-kx-text-2 transition-colors" />
+                  }
+                </button>
+                {!isCollapsed && group.items.map((item) => {
+                  const isActive = activeSection === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleNavigate(item.id)}
+                      className={[
+                        'w-full flex items-center gap-2.5 h-8 px-2 mx-0 rounded-md text-[12.5px] cursor-pointer transition-colors mb-0.5',
+                        isActive
+                          ? 'bg-kx-surface-2 text-kx-text font-medium'
+                          : 'text-kx-text-2 hover:bg-kx-surface-2 hover:text-kx-text',
+                      ].join(' ')}
+                    >
+                      <div className="relative flex-shrink-0">
+                        <item.icon className="w-4 h-4" strokeWidth={isActive ? 2.2 : 1.8} />
+                        {item.statusIndicator && (
+                          <span
+                            className={[
+                              'absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-kx-surface',
+                              isSessionOpen ? 'bg-kx-green' : 'bg-kx-red',
+                            ].join(' ')}
+                          />
+                        )}
+                      </div>
+                      <span className="flex-1 text-left leading-none">{item.label}</span>
+                    </button>
+                  );
+                })}
               </div>
-              {group.items.map((item) => {
-                const isActive = activeSection === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => handleNavigate(item.id)}
-                    className={[
-                      'w-full flex items-center gap-2.5 h-8 px-2 mx-0 rounded-md text-[12.5px] cursor-pointer transition-colors mb-0.5',
-                      isActive
-                        ? 'bg-kx-surface-2 text-kx-text font-medium'
-                        : 'text-kx-text-2 hover:bg-kx-surface-2 hover:text-kx-text',
-                    ].join(' ')}
-                  >
-                    <div className="relative flex-shrink-0">
-                      <item.icon className="w-4 h-4" strokeWidth={isActive ? 2.2 : 1.8} />
-                      {item.statusIndicator && (
-                        <span
-                          className={[
-                            'absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-kx-surface',
-                            isSessionOpen ? 'bg-kx-green' : 'bg-kx-red',
-                          ].join(' ')}
-                        />
-                      )}
-                    </div>
-                    <span className="flex-1 text-left leading-none">{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+            );
+          })}
         </nav>
 
         {/* User footer */}
