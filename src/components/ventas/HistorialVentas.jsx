@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { Eye, Search, Filter, RefreshCw, AlertCircle, X, Check, ChevronLeft, ChevronRight, Clock, AlertTriangle } from 'lucide-react';
+import { Eye, Search, Filter, RefreshCw, AlertCircle, X, Check, ChevronLeft, ChevronRight, Clock, AlertTriangle, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import SaleDetailModal from './SaleDetailModal';
+import NuevaDevolucionModal from './NuevaDevolucionModal';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import { formatDateAR, formatTimeAR } from '@/lib/dateUtils';
 
@@ -28,8 +29,10 @@ const HistorialVentas = () => {
   const [selectedStatus, setSelectedStatus] = useState('');
 
   // UI State
-  const [selectedSaleId, setSelectedSaleId] = useState(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedSaleId, setSelectedSaleId]   = useState(null);
+  const [showDetailModal, setShowDetailModal]  = useState(false);
+  const [devolucionComp, setDevolucionComp]    = useState(null);
+  const [isDevolucionOpen, setIsDevolucionOpen] = useState(false);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
 
@@ -226,7 +229,7 @@ const HistorialVentas = () => {
                 <th className="p-4 w-28 text-center">Estado</th>
                 <th className="p-4 w-32 text-center">Factura</th>
                 <th className="p-4 w-32 text-right">Total</th>
-                <th className="p-4 w-16 text-center">Ver</th>
+                <th className="p-4 w-36 text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -312,9 +315,31 @@ const HistorialVentas = () => {
                       )}
                     </td>
                     <td className="p-4 text-center">
-                      <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full">
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center justify-center gap-1">
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        {sale.tipo === 'venta' && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="Registrar devolución"
+                            onClick={e => {
+                              e.stopPropagation();
+                              setDevolucionComp({
+                                id:             sale.id,
+                                numero_venta:   sale.numero_venta,
+                                cliente_id:     sale.cliente_id,
+                                cliente_nombre: sale.cliente_nombre,
+                              });
+                              setIsDevolucionOpen(true);
+                            }}
+                            className="h-8 w-8 p-0 text-slate-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-full"
+                          >
+                            <Undo2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -374,6 +399,13 @@ const HistorialVentas = () => {
           </div>
         </div>
       )}
+
+      <NuevaDevolucionModal
+        isOpen={isDevolucionOpen}
+        onClose={() => { setIsDevolucionOpen(false); setDevolucionComp(null); }}
+        onSuccess={() => fetchData()}
+        comprobante={devolucionComp}
+      />
 
       <SaleDetailModal
         open={showDetailModal}

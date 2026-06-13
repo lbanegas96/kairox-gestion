@@ -7,6 +7,7 @@ import CotizacionesSection from '@/components/sections/CotizacionesSection';
 import PedidosSection from '@/components/sections/PedidosSection';
 import EntregasSection from '@/components/ventas/EntregasSection';
 import HistorialVentas from '@/components/ventas/HistorialVentas';
+import DevolucionesSection from '@/components/ventas/DevolucionesSection';
 
 function VentasSection({ initialTab = 'pedidos' }) {
   const [activeTab, setActiveTab]       = useState(initialTab);
@@ -73,10 +74,7 @@ function VentasSection({ initialTab = 'pedidos' }) {
         </TabsContent>
 
         <TabsContent value="devoluciones" className="mt-4">
-          <div className="flex flex-col items-center justify-center py-24 text-center rounded-xl border border-dashed border-kx-border">
-            <p className="font-medium text-kx-text-2">Devoluciones</p>
-            <p className="text-sm text-kx-text-3 mt-1">Disponible en Prompt 4/6</p>
-          </div>
+          <DevolucionesSection />
         </TabsContent>
       </Tabs>
 
