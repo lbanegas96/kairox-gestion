@@ -142,8 +142,8 @@
 - **Vistas:** siempre `WITH (security_invoker = true)` para respetar RLS del usuario.
 - **Multi-pago:** al confirmar venta, insertar en `comprobante_pagos` + `movimientos_caja` por cada pago no-CC + `cuenta_corriente_movimientos` para suma CC.
 - **Límite de crédito:** verificar `saldo_actual + montoCC > limite_credito` antes de confirmar venta CC (cuando limite > 0).
-- **Schema mixto PT/ES:** `comprobante_items` usa columnas portuguesas (`produto_id`, `quantidade`). El código existente funciona; NO cambiar sin migración de BD.
-- **Notas de crédito:** al crear NC, insertar en `comprobante_items` con columnas PT. Revertir stock vía `movimientos_inventario` + RPC `increment_stock`.
+- **`comprobante_items` columnas:** usa `producto_id` (español) y `cantidad` — ⚠️ CONTEXT.md anterior decía `produto_id`/`quantidade` (portugués) pero estaba INCORRECTO. Verificado con `information_schema.columns` en Prompt 2/6 — la columna real es `producto_id`. Usar siempre el nombre español.
+- **Notas de crédito:** al crear NC, insertar en `comprobante_items` con `producto_id`. Revertir stock vía `movimientos_inventario` + RPC `increment_stock`.
 - **Portales:** las secciones `portal_ventas`, `portal_compras`, `portal_finanzas`, `portal_inventario` son entry points — no van en ALL_SECTIONS de permisos.
 - **Lista de precios:** `listaPreciosService.getPrecioMapForCliente(clienteId)` retorna `{producto_id: precio}`. En `NuevaVentaModal`, llamar en `handleSelectClient()`. Items con precio de lista tienen `_precioLista: true` para el badge.
 - **Document Flow:** `documentFlowService.getFlowForComprobante(id)` retorna nodos origen/actual/NC/cobros. Usar `DocumentFlowPanel` pasando `comprobanteId` + `onNavigate`.
@@ -158,6 +158,11 @@
 - **Supabase client lazy:** `customSupabaseClient.js` exporta un getter lazy para evitar TDZ (Temporal Dead Zone) en el bundle de producción. Nunca instanciar Supabase en el top-level de un módulo con `BroadcastChannel`.
 - **PostgREST embedded select:** la sintaxis `.select('*, tabla_relacionada(cols)')` SOLO funciona si existe una FK explícita (`REFERENCES`) en PostgreSQL. Sin FK → 400 Bad Request. Si la FK no existe (o no se puede agregar), usar consulta en dos pasos: query principal → `.in('id', ids)` en tabla relacionada → merge manual en JS.
 - **Dashboard KPIs:** `dashboardService.ts` filtra SIEMPRE con `.eq('empresa_id', empresaId)`. Nunca `user_id` para queries de lectura.
+- **VentasSection navigation (Prompt 3/6):** todos los ítems del sidebar VENTAS (`ventas`, `cotizaciones`, `pedidos`, `entregas`, `historial_ventas`) renderizan `<VentasSection initialTab="...">` via Dashboard. El componente usa `key={activeSection}` heredado del shell → re-monta en cada navegación, respetando `initialTab`.
+- **Document Flow RPCs — tipos de cantidad:** `pedido_items.cantidad` es NUMERIC; `movimientos_inventario.cantidad` es INTEGER. En `crear_entrega` la variable `v_cantidad` es NUMERIC; castear a INTEGER al actualizar stock: `stock_actual - v_cantidad::INTEGER`.
+- **Document Flow — entrega implícita:** toda venta POS (`crear_venta` RPC) genera automáticamente una fila en `entregas` con `origen='implicita'` + sus `entrega_items`. Esto permite que EntregasSection muestre el historial completo (POS + manuales).
+- **NuevaVentaModal prop `pedido`:** acepta `pedido` (con `pedido_items[]`, `cliente_id`). Si se provee, pre-carga carrito idéntico al flujo `cotizacion`. Usar desde PedidosSection al "Facturar" → en `onSaleSuccess`, actualizar `pedidos.estado = 'facturado'` y refrescar.
+- **Sidebar colapsable:** estado en `localStorage('kx-sidebar-collapsed')` como `{VENTAS: true, COMPRAS: false, ...}`. `true` = colapsado. Default: todos expandidos. Toggle hace click en el label del grupo.
 
 ---
 
@@ -306,6 +311,7 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 | 8 | **Cierre formal de períodos contables** | FI Period Close | ✅ Sesión 10-jun-2026 |
 | 9 | **Retenciones IIBB/Ganancias** | FI Withholding | ✅ Sesión 12-jun-2026 |
 | 12 | **IVA real por alícuota + Libro IVA Compras** | FI Tax (RTC) | ✅ Sesión 12-jun-2026 |
+| 13 | **Document Flow transaccional** (entregas/recepciones/devoluciones/ND) — modelo datos + RPCs + UI Ventas | SD Delivery + MM GR | ✅ Sesiones 13-jun-2026 (Prompts 1/6, 2/6, 3/6) |
 
 ### 🟢 Baja prioridad (post-ARCA)
 
