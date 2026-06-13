@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-13 (sesión 4) — Prompt 5/6: UI Compras espejo completo. CompraRapidaSection (renombrado + RPC crear_recepcion_implicita no-bloqueante). Nuevo ComprasSection shell (tabs Órdenes/Recepciones/Facturas/Devoluciones + botón Compra Rápida). RecepcionesSection, FacturasCompraSection, DevolucionesProveedorSection, GenerarRecepcionModal, ProveedorSelector/DrillDown/AltaRapidaModal. DocumentFlow extendido (orden_compra, recepcion, factura_compra). Sidebar COMPRAS reorganizado (6 items). Build ✅ 3141 mód. Deploy a producción.
+**Última actualización:** 2026-06-13 (sesión 5) — Prompt 6/6 SERIE COMPLETA: Document Flow cierre. Chips nota_credito/nota_debito en DocumentFlow. Devoluciones en DocumentFlowPanel (consulta + renderizado). Botón "Ver Factura origen →" en DevolucionesSection (ventas) y DevolucionesProveedorSection (compras). VentasSection: navigateSaleId + handleChildNavigate + handleDocFlowNavigate. HistorialVentas: auto-abre SaleDetailModal cuando navega desde Devoluciones; pasa onNavigate a SaleDetailModal → DocumentFlowPanel. ComprasSection: onNavigate a DevolucionesProveedorSection. Build ✅ 3141 mód. Deploy a producción.
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -44,7 +44,8 @@
 | **Entregas** | `ventas/EntregasSection.jsx` | ✅ **NUEVO Prompt 3/6** Lista entregas con expand inline de ítems + filtro origen (POS/Manual) |
 | **Generar Entrega** | `ventas/GenerarEntregaModal.jsx` | ✅ **NUEVO** Modal: tabla pendientes por item + inputs cantidad → RPC `crear_entrega` |
 | **ClienteSelector** | `shared/ClienteSelector.jsx` | ✅ **NUEVO** Select + DrillDown (popover saldo CC + últimas compras) + Alta Rápida inline |
-| **DocumentFlow** | `shared/DocumentFlow.jsx` | ✅ **NUEVO** Chip chain visual Cotización→Pedido→Entrega→Factura con `onNavigate` callback |
+| **DocumentFlow** | `shared/DocumentFlow.jsx` | ✅ **COMPLETO Prompt 6/6** Chips: Cotización/Pedido/Entrega/Factura/Devolución/Nota Crédito/Nota Débito/OC/Recepción/Fact. Compra |
+| **DocumentFlowPanel** | `ui/DocumentFlowPanel.jsx` | ✅ **COMPLETO Prompt 6/6** Cadena card SAP: origen→actual→NC→cobros CC→devoluciones. Usa `documentFlowService`. Renderizado en SaleDetailModal |
 | Órdenes de Compra | `OrdenesCompraSection.jsx` | ✅ Workflow aprobación + 3-way match + realtime |
 | Caja | `CajaSection.jsx` + `CajaCierre.jsx` | ✅ Arqueo por denominaciones + tab Arqueos |
 | Clientes | `ClientesSection.jsx` | ✅ Form completo + condicion_pago + limite_credito + import CSV |
