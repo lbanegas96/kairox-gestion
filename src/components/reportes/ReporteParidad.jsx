@@ -157,28 +157,28 @@ function ReporteParidad({ onBack }) {
           <ArrowLeft className="h-4 w-4 mr-1" /> Volver
         </Button>
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
             <TrendingUp className="h-6 w-6 text-blue-500" />
             Reporte de Paridad ARS / {monedaParalela}
           </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-0.5">
             Comprobantes con su equivalente en {monedaParalela} al TC del día de cada operación
           </p>
         </div>
       </div>
 
       {/* Filtros */}
-      <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="bg-kx-surface dark:bg-kx-surface p-5 rounded-xl border border-kx-border dark:border-kx-border shadow-sm">
         <div className="flex flex-wrap gap-4 items-end">
           <div className="space-y-1">
-            <Label className="text-xs text-slate-500 dark:text-slate-400 font-medium">Desde</Label>
+            <Label className="text-xs text-slate-500 dark:text-kx-text-2 font-medium">Desde</Label>
             <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-              className="h-9 w-40 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
+              className="h-9 w-40 dark:bg-kx-surface-2 dark:border-kx-border dark:text-kx-text" />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs text-slate-500 dark:text-slate-400 font-medium">Hasta</Label>
+            <Label className="text-xs text-slate-500 dark:text-kx-text-2 font-medium">Hasta</Label>
             <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-              className="h-9 w-40 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
+              className="h-9 w-40 dark:bg-kx-surface-2 dark:border-kx-border dark:text-kx-text" />
           </div>
           <Button onClick={handleGenerate} disabled={loading}
             className="bg-blue-600 hover:bg-blue-700 text-white h-9">
@@ -186,7 +186,7 @@ function ReporteParidad({ onBack }) {
             Generar
           </Button>
           {generated && rows.length > 0 && (
-            <Button variant="outline" onClick={handleExportCSV} className="h-9 dark:border-slate-700 dark:text-slate-300">
+            <Button variant="outline" onClick={handleExportCSV} className="h-9 dark:border-kx-border dark:text-slate-300">
               <Download className="h-4 w-4 mr-1.5" /> Exportar CSV
             </Button>
           )}
@@ -196,33 +196,33 @@ function ReporteParidad({ onBack }) {
       {/* KPI Cards */}
       {generated && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="p-4 dark:bg-slate-900 dark:border-slate-800">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">Total ARS</p>
-            <p className="text-2xl font-black text-slate-800 dark:text-white mt-1 font-mono">
+          <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
+            <p className="text-xs text-kx-text-3 uppercase tracking-wide">Total ARS</p>
+            <p className="text-2xl font-black text-kx-text dark:text-kx-text mt-1 font-mono">
               {fmtARS(totalARS)}
             </p>
-            <p className="text-xs text-slate-400 mt-1">{rows.length} comprobantes</p>
+            <p className="text-xs text-kx-text-3 mt-1">{rows.length} comprobantes</p>
           </Card>
-          <Card className="p-4 dark:bg-slate-900 dark:border-slate-800">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">Total {monedaParalela}</p>
+          <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
+            <p className="text-xs text-kx-text-3 uppercase tracking-wide">Total {monedaParalela}</p>
             <p className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1 font-mono">
               {fmtPar(rowsConTC > 0 ? totalParalelo : null)}
             </p>
-            <p className="text-xs text-slate-400 mt-1">{rowsConTC} con TC · {rowsSinTC} sin TC</p>
+            <p className="text-xs text-kx-text-3 mt-1">{rowsConTC} con TC · {rowsSinTC} sin TC</p>
           </Card>
-          <Card className="p-4 dark:bg-slate-900 dark:border-slate-800">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">TC Promedio</p>
+          <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
+            <p className="text-xs text-kx-text-3 uppercase tracking-wide">TC Promedio</p>
             <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 font-mono">
               {tcPromedio ? fmtARS(tcPromedio) : '—'}
             </p>
-            <p className="text-xs text-slate-400 mt-1">1 {monedaParalela} promedio del período</p>
+            <p className="text-xs text-kx-text-3 mt-1">1 {monedaParalela} promedio del período</p>
           </Card>
-          <Card className="p-4 dark:bg-slate-900 dark:border-slate-800">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">Cobertura TC</p>
-            <p className="text-2xl font-black text-slate-800 dark:text-white mt-1">
+          <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
+            <p className="text-xs text-kx-text-3 uppercase tracking-wide">Cobertura TC</p>
+            <p className="text-2xl font-black text-kx-text dark:text-kx-text mt-1">
               {rows.length > 0 ? Math.round((rowsConTC / rows.length) * 100) : 0}%
             </p>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-kx-text-3 mt-1">
               {rowsSinTC > 0
                 ? <span className="text-amber-500">{rowsSinTC} sin TC del día cargado</span>
                 : <span className="text-emerald-500">Todos con TC ✓</span>}
@@ -244,10 +244,10 @@ function ReporteParidad({ onBack }) {
 
       {/* Tabla */}
       {(generated || loading) && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-kx-surface dark:bg-kx-surface border border-kx-border dark:border-kx-border rounded-xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400">
+              <thead className="bg-kx-surface-2 dark:bg-slate-900/50 border-b border-kx-border dark:border-kx-border text-xs uppercase font-semibold text-slate-500 dark:text-kx-text-2">
                 <tr>
                   <th className="p-4">Nro Venta</th>
                   <th className="p-4">Fecha</th>
@@ -270,7 +270,7 @@ function ReporteParidad({ onBack }) {
                   ))
                 ) : rows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="p-12 text-center text-slate-500 dark:text-slate-400">
+                    <td colSpan={8} className="p-12 text-center text-slate-500 dark:text-kx-text-2">
                       <DollarSign className="h-10 w-10 mx-auto mb-2 opacity-20" />
                       <p>No hay comprobantes en el período seleccionado</p>
                     </td>
@@ -281,13 +281,13 @@ function ReporteParidad({ onBack }) {
                       <td className="p-4 font-mono font-semibold text-blue-600 dark:text-blue-400">
                         {row.numero_venta}
                       </td>
-                      <td className="p-4 text-slate-500 dark:text-slate-400 text-xs">
+                      <td className="p-4 text-slate-500 dark:text-kx-text-2 text-xs">
                         {formatDateAR(row.fecha)}
                       </td>
-                      <td className="p-4 font-medium text-slate-800 dark:text-slate-200">
-                        {row.cliente_nombre || <span className="text-slate-400 italic">Consumidor Final</span>}
+                      <td className="p-4 font-medium text-kx-text dark:text-kx-text">
+                        {row.cliente_nombre || <span className="text-kx-text-3 italic">Consumidor Final</span>}
                       </td>
-                      <td className="p-4 text-slate-600 dark:text-slate-400 text-xs uppercase tracking-wide">
+                      <td className="p-4 text-kx-text-2 dark:text-kx-text-2 text-xs uppercase tracking-wide">
                         {row.forma_pago}
                       </td>
                       <td className="p-4 text-center">
@@ -295,12 +295,12 @@ function ReporteParidad({ onBack }) {
                           {row.estado_pago}
                         </span>
                       </td>
-                      <td className="p-4 text-right font-bold text-slate-700 dark:text-slate-200 font-mono">
+                      <td className="p-4 text-right font-bold text-slate-700 dark:text-kx-text font-mono">
                         {fmtARS(row.total)}
                       </td>
-                      <td className="p-4 text-right text-slate-500 dark:text-slate-400 font-mono text-xs">
+                      <td className="p-4 text-right text-slate-500 dark:text-kx-text-2 font-mono text-xs">
                         {row._tcParalelo ? `$${Number(row._tcParalelo).toLocaleString('es-AR', { maximumFractionDigits: 0 })}` : (
-                          <span className="text-slate-300 dark:text-slate-600">—</span>
+                          <span className="text-slate-300 dark:text-kx-text-2">—</span>
                         )}
                       </td>
                       <td className="p-4 text-right font-bold font-mono">
@@ -309,7 +309,7 @@ function ReporteParidad({ onBack }) {
                             {monedaParalela} {Number(row._montoParalelo).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         ) : (
-                          <span className="flex items-center justify-end gap-1 text-slate-300 dark:text-slate-600">
+                          <span className="flex items-center justify-end gap-1 text-slate-300 dark:text-kx-text-2">
                             <Minus className="h-3 w-3" /> sin TC
                           </span>
                         )}
@@ -321,14 +321,14 @@ function ReporteParidad({ onBack }) {
               {/* Totales */}
               {generated && rows.length > 0 && !loading && (
                 <tfoot>
-                  <tr className="border-t-2 border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/80 font-bold">
-                    <td colSpan={5} className="p-4 text-right text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  <tr className="border-t-2 border-slate-300 dark:border-kx-border bg-kx-surface-2 dark:bg-slate-900/80 font-bold">
+                    <td colSpan={5} className="p-4 text-right text-sm text-slate-500 dark:text-kx-text-2 uppercase tracking-wide">
                       TOTALES
                     </td>
-                    <td className="p-4 text-right font-black text-slate-800 dark:text-white font-mono">
+                    <td className="p-4 text-right font-black text-kx-text dark:text-kx-text font-mono">
                       {fmtARS(totalARS)}
                     </td>
-                    <td className="p-4 text-right text-slate-400">
+                    <td className="p-4 text-right text-kx-text-3">
                       {tcPromedio ? `~$${Math.round(tcPromedio).toLocaleString('es-AR')}` : '—'}
                     </td>
                     <td className="p-4 text-right font-black text-blue-600 dark:text-blue-400 font-mono">

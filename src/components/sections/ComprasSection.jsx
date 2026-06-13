@@ -57,7 +57,7 @@ function ComprasSection({ initialTab = 'ordenes' }) {
             variant="outline"
             size="sm"
             onClick={() => setActiveTab('facturas')}
-            className="gap-1 text-kx-text-2 dark:border-slate-700 dark:text-slate-400"
+            className="gap-1 text-kx-text-2 dark:border-kx-border dark:text-kx-text-2"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
             Volver a Compras

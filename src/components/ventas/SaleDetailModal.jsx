@@ -111,15 +111,15 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl kairox-bg-card kairox-text-primary overflow-hidden flex flex-col max-h-[90vh] dark:bg-slate-950 dark:border-slate-800">
-          <DialogHeader className="border-b border-slate-100 dark:border-slate-800 pb-4">
-            <DialogTitle className="flex justify-between items-center pr-8 dark:text-white">
+        <DialogContent className="max-w-2xl kairox-bg-card kairox-text-primary overflow-hidden flex flex-col max-h-[90vh] dark:bg-kx-bg dark:border-kx-border">
+          <DialogHeader className="border-b border-slate-100 dark:border-kx-border pb-4">
+            <DialogTitle className="flex justify-between items-center pr-8 dark:text-kx-text">
               <span className="flex items-center gap-2">
                 Venta #{sale?.numero_venta || '...'}
-                {loading && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+                {loading && <Loader2 className="h-4 w-4 animate-spin text-kx-text-3" />}
               </span>
             </DialogTitle>
-            <DialogDescription className="dark:text-slate-400">
+            <DialogDescription className="dark:text-kx-text-2">
               Detalle completo de la transacción {sale && `- ${formatDateTimeAR(sale.fecha)}`}
             </DialogDescription>
           </DialogHeader>
@@ -132,21 +132,21 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
             <div className="flex-1 overflow-y-auto p-1">
               {/* STATUS & ACTIONS CARD */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 mt-2">
-                <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border kairox-border space-y-2">
-                  <div className="text-xs text-slate-500 font-bold uppercase tracking-wider dark:text-slate-400">Cliente</div>
-                  <div className="font-medium text-lg text-slate-800 dark:text-slate-200">
+                <div className="bg-kx-surface-2 dark:bg-slate-900/50 p-4 rounded-lg border kairox-border space-y-2">
+                  <div className="text-xs text-slate-500 font-bold uppercase tracking-wider dark:text-kx-text-2">Cliente</div>
+                  <div className="font-medium text-lg text-kx-text dark:text-kx-text">
                     {sale.cliente_nombre || 'Consumidor Final'}
                   </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                  <div className="text-xs text-slate-500 dark:text-kx-text-2">
                     Pago: {sale.forma_pago}
                   </div>
                 </div>
 
-                <div className="bg-slate-50 dark:bg-slate-900/50 p-4 rounded-lg border kairox-border space-y-3">
+                <div className="bg-kx-surface-2 dark:bg-slate-900/50 p-4 rounded-lg border kairox-border space-y-3">
                   <div className="flex justify-between items-start">
-                    <div className="text-xs text-slate-500 font-bold uppercase tracking-wider dark:text-slate-400">Estado de Pago</div>
+                    <div className="text-xs text-slate-500 font-bold uppercase tracking-wider dark:text-kx-text-2">Estado de Pago</div>
                     {!isEditing && (
-                      <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} className="h-6 w-6 p-0 text-slate-400 hover:text-blue-500">
+                      <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} className="h-6 w-6 p-0 text-kx-text-3 hover:text-blue-500">
                         <Edit2 className="h-3 w-3" />
                       </Button>
                     )}
@@ -156,7 +156,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                     <div className="flex flex-col gap-2">
                       <div className="flex gap-2">
                          <select 
-                           className="flex-1 h-9 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm px-2 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
+                           className="flex-1 h-9 rounded border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-bg text-sm px-2 focus:ring-2 focus:ring-blue-500 outline-none dark:text-kx-text"
                            value={newStatus}
                            onChange={(e) => setNewStatus(e.target.value)}
                          >
@@ -165,7 +165,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                            <option value="parcial">Parcial</option>
                            <option value="cancelada">Cancelada</option>
                          </select>
-                         <Button size="icon" variant="ghost" onClick={() => { setIsEditing(false); setNewStatus(sale.estado_pago); }} className="h-9 w-9 text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-800">
+                         <Button size="icon" variant="ghost" onClick={() => { setIsEditing(false); setNewStatus(sale.estado_pago); }} className="h-9 w-9 text-slate-500 hover:bg-slate-200 dark:text-kx-text-2 dark:hover:bg-slate-800">
                             <X className="h-4 w-4" />
                          </Button>
                       </div>
@@ -191,7 +191,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
               {/* PRODUCTS TABLE */}
               <div className="border kairox-border rounded-lg overflow-hidden mb-6">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50 dark:bg-slate-900/50 border-b kairox-border text-xs uppercase text-slate-500 font-semibold">
+                  <thead className="bg-kx-surface-2 dark:bg-slate-900/50 border-b kairox-border text-xs uppercase text-slate-500 font-semibold">
                     <tr>
                       <th className="px-4 py-3 text-left">Producto</th>
                       <th className="px-4 py-3 text-center">Cant</th>
@@ -203,15 +203,15 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                     {items.map((item, i) => (
                       <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/20">
                         <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">{item.producto_nombre}</td>
-                        <td className="px-4 py-3 text-center text-slate-600 dark:text-slate-400">{item.cantidad}</td>
-                        <td className="px-4 py-3 text-right text-slate-600 dark:text-slate-400">${Number(item.precio_unitario).toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-bold text-slate-800 dark:text-slate-200">${Number(item.subtotal).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-center text-kx-text-2 dark:text-kx-text-2">{item.cantidad}</td>
+                        <td className="px-4 py-3 text-right text-kx-text-2 dark:text-kx-text-2">${Number(item.precio_unitario).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-kx-text dark:text-kx-text">${Number(item.subtotal).toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="bg-slate-50 dark:bg-slate-900/50 border-t kairox-border font-bold">
+                  <tfoot className="bg-kx-surface-2 dark:bg-slate-900/50 border-t kairox-border font-bold">
                     <tr>
-                      <td colSpan="3" className="px-4 py-4 text-right text-slate-600 dark:text-slate-400 uppercase text-xs tracking-wider">Total Final</td>
+                      <td colSpan="3" className="px-4 py-4 text-right text-kx-text-2 dark:text-kx-text-2 uppercase text-xs tracking-wider">Total Final</td>
                       <td className="px-4 py-4 text-right text-xl text-blue-600 dark:text-blue-400">${Number(sale.total).toFixed(2)}</td>
                     </tr>
                   </tfoot>
@@ -219,7 +219,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
               </div>
 
               {/* Document Flow */}
-              <div className="border border-slate-100 dark:border-slate-800 rounded-lg p-4 mb-2">
+              <div className="border border-slate-100 dark:border-kx-border rounded-lg p-4 mb-2">
                 <DocumentFlowPanel comprobanteId={saleId} onNavigate={onNavigate} />
               </div>
             </div>
@@ -227,8 +227,8 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
             <div className="p-8 text-center text-slate-500">No se encontraron datos.</div>
           )}
 
-          <DialogFooter className="border-t border-slate-100 dark:border-slate-800 pt-4 flex gap-2 justify-end">
-            <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:text-white dark:border-slate-700 dark:hover:bg-slate-800">
+          <DialogFooter className="border-t border-slate-100 dark:border-kx-border pt-4 flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:text-kx-text dark:border-kx-border dark:hover:bg-slate-800">
               Cerrar
             </Button>
             <Button 

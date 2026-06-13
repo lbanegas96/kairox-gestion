@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowRight, FileText, ClipboardList, Truck, Receipt, RotateCcw, ShoppingBag, Package, MinusCircle, FileWarning } from 'lucide-react';
 
 const CHIP_CONFIG = {
-  cotizacion:    { label: 'Cotización',      Icon: ClipboardList, color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
+  cotizacion:    { label: 'Cotización',      Icon: ClipboardList, color: 'bg-slate-100 text-kx-text-2 dark:bg-kx-surface-2 dark:text-slate-300' },
   pedido:        { label: 'Pedido',          Icon: FileText,      color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'   },
   entrega:       { label: 'Entrega',         Icon: Truck,         color: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' },
   factura:       { label: 'Factura',         Icon: Receipt,       color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },

@@ -41,7 +41,7 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
         value={data.nombre}
         onChange={e => setData({...data, nombre: e.target.value})}
         required
-        className="bg-white dark:bg-slate-950"
+        className="bg-kx-surface dark:bg-kx-bg"
       />
     </div>
     <div className="space-y-2">
@@ -51,7 +51,7 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
         value={data.codigo_sku}
         onChange={e => setData({...data, codigo_sku: e.target.value})}
         required
-        className="bg-white dark:bg-slate-950 font-mono"
+        className="bg-kx-surface dark:bg-kx-bg font-mono"
       />
     </div>
 
@@ -64,7 +64,7 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
           onChange={e => setData({...data, categoria_nombre: e.target.value})}
           list="categories-list"
           placeholder="Escribe o selecciona..."
-          className="bg-white dark:bg-slate-950"
+          className="bg-kx-surface dark:bg-kx-bg"
         />
         <datalist id="categories-list">
           {categories.map(c => <option key={c.id} value={c.nombre} />)}
@@ -78,7 +78,7 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
         value={data.proveedor_id || "none"}
         onValueChange={(val) => setData({...data, proveedor_id: val === "none" ? null : val})}
       >
-        <SelectTrigger id="proveedor" className="bg-white dark:bg-slate-950">
+        <SelectTrigger id="proveedor" className="bg-kx-surface dark:bg-kx-bg">
           <SelectValue placeholder="Seleccionar proveedor" />
         </SelectTrigger>
         <SelectContent>
@@ -99,7 +99,7 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
         placeholder="0,00"
         value={data.costo_compra}
         onChange={e => setData({...data, costo_compra: e.target.value})}
-        className="bg-white dark:bg-slate-950"
+        className="bg-kx-surface dark:bg-kx-bg"
       />
     </div>
 
@@ -113,7 +113,7 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
         value={data.precio_venta}
         onChange={e => setData({...data, precio_venta: e.target.value})}
         required
-        className="bg-white dark:bg-slate-950"
+        className="bg-kx-surface dark:bg-kx-bg"
       />
     </div>
 
@@ -126,7 +126,7 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
         step="1"
         value={data.stock_actual}
         onChange={e => setData({...data, stock_actual: e.target.value.replace(/[^\d]/g, '')})}
-        className="bg-white dark:bg-slate-950"
+        className="bg-kx-surface dark:bg-kx-bg"
       />
     </div>
 
@@ -139,7 +139,7 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
         step="1"
         value={data.stock_minimo}
         onChange={e => setData({...data, stock_minimo: e.target.value.replace(/[^\d]/g, '')})}
-        className="bg-white dark:bg-slate-950"
+        className="bg-kx-surface dark:bg-kx-bg"
       />
     </div>
 
@@ -149,7 +149,7 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
         id="unidad"
         value={data.unidad_medida || 'Unidad'}
         onChange={e => setData({...data, unidad_medida: e.target.value})}
-        className="w-full h-10 px-3 rounded-md border border-slate-200 bg-white text-slate-900 dark:bg-slate-950 dark:border-slate-700 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full h-10 px-3 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-bg dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
         <option value="Unidad">Unidad (un)</option>
         <option value="Kilogramos">Kilogramos (kg)</option>
@@ -171,7 +171,7 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
         id="desc"
         value={data.descripcion}
         onChange={e => setData({...data, descripcion: e.target.value})}
-        className="bg-white dark:bg-slate-950 resize-none h-20"
+        className="bg-kx-surface dark:bg-kx-bg resize-none h-20"
       />
     </div>
 
@@ -533,24 +533,24 @@ const ProductosSection = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
+       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-kx-surface dark:bg-kx-surface p-6 rounded-lg border border-kx-border dark:border-kx-border shadow-sm">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">Inventario</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Gestiona tus productos y control de stock</p>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-kx-text mb-1">Inventario</h2>
+          <p className="text-sm text-slate-500 dark:text-kx-text-2">Gestiona tus productos y control de stock</p>
         </div>
         <div className="flex flex-wrap gap-3">
            {/* Toggle Inactive */}
            <Button
              variant={showInactivos ? "destructive" : "outline"}
              onClick={() => setShowInactivos(v => !v)}
-             className={showInactivos ? "" : "border-slate-300 dark:border-slate-700"}
+             className={showInactivos ? "" : "border-slate-300 dark:border-kx-border"}
            >
              {showInactivos ? <Power className="h-4 w-4 mr-2" /> : <PowerOff className="h-4 w-4 mr-2" />}
              {showInactivos ? `Activos` : `Inactivos${inactivosCount > 0 ? ` (${inactivosCount})` : ''}`}
            </Button>
 
            {/* Import CSV Button */}
-           <Button variant="outline" onClick={() => setIsImportOpen(true)} className="dark:text-white dark:border-slate-700">
+           <Button variant="outline" onClick={() => setIsImportOpen(true)} className="dark:text-kx-text dark:border-kx-border">
              <Upload className="h-4 w-4 mr-2" /> Importar CSV
            </Button>
 
@@ -561,7 +561,7 @@ const ProductosSection = () => {
                 <Plus className="h-4 w-4 mr-2" /> Nuevo Producto
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+            <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border">
                <DialogHeader>
                  <DialogTitle>Nuevo Producto</DialogTitle>
                  <DialogDescription>Ingresa los detalles del nuevo producto para el inventario.</DialogDescription>
@@ -581,7 +581,7 @@ const ProductosSection = () => {
 
        {/* Edit Product Dialog - Triggered programmatically */}
        <Dialog open={isEditProductOpen} onOpenChange={setIsEditProductOpen}>
-          <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+          <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border">
              <DialogHeader>
                <DialogTitle>Editar Producto</DialogTitle>
                <DialogDescription>Modifica los detalles del producto.</DialogDescription>
@@ -599,9 +599,9 @@ const ProductosSection = () => {
        </Dialog>
 
        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-slate-100 dark:bg-slate-800 p-1">
-            <TabsTrigger value="inventory" className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">Inventario</TabsTrigger>
-            <TabsTrigger value="history" className="data-[state=active]:bg-white dark:data-[state=active]:bg-slate-700">Historial de Movimientos</TabsTrigger>
+          <TabsList className="bg-slate-100 dark:bg-kx-surface-2 p-1">
+            <TabsTrigger value="inventory" className="data-[state=active]:bg-kx-surface dark:data-[state=active]:bg-slate-700">Inventario</TabsTrigger>
+            <TabsTrigger value="history" className="data-[state=active]:bg-kx-surface dark:data-[state=active]:bg-slate-700">Historial de Movimientos</TabsTrigger>
           </TabsList>
 
           <TabsContent value="inventory" className="space-y-4">
@@ -613,19 +613,19 @@ const ProductosSection = () => {
              )}
              {/* Search Bar */}
              <div className="relative">
-               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-kx-text-3" />
                <Input
                  placeholder="Buscar por nombre o SKU..."
                  value={searchQuery}
                  onChange={(e) => setSearchQuery(e.target.value)}
-                 className="pl-10 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                 className="pl-10 bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border"
                />
              </div>
 
-             <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+             <div className="rounded-lg border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface overflow-hidden shadow-sm">
                <div className="overflow-x-auto">
                  <table className="w-full text-sm text-left">
-                   <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-medium">
+                   <thead className="bg-kx-surface-2 dark:bg-slate-800/50 border-b border-kx-border dark:border-kx-border text-slate-500 dark:text-kx-text-2 font-medium">
                      <tr>
                        <th className="p-4">Producto</th>
                        <th className="p-4 text-center">Categoría</th>
@@ -644,9 +644,9 @@ const ProductosSection = () => {
                         filteredProducts.map(p => {
                            const isLowStock = p.stock_actual <= p.stock_minimo;
                            return (
-                             <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                             <tr key={p.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/30 transition-colors">
                                 <td className="p-4">
-                                  <div className="font-medium text-slate-900 dark:text-slate-100">{p.nombre}</div>
+                                  <div className="font-medium text-slate-900 dark:text-kx-text">{p.nombre}</div>
                                   <div className="text-xs text-slate-500 font-mono">{p.codigo_sku}</div>
                                 </td>
                                 <td className="p-4 text-center">
@@ -655,7 +655,7 @@ const ProductosSection = () => {
                                       {p.categories.nombre}
                                     </span>
                                   ) : (
-                                    <span className="text-slate-400">-</span>
+                                    <span className="text-kx-text-3">-</span>
                                   )}
                                 </td>
                                 <td className="p-4 text-right">
@@ -667,7 +667,7 @@ const ProductosSection = () => {
                                 <td className="p-4 text-right text-slate-500">
                                   ${p.costo_compra?.toLocaleString('es-AR')}
                                 </td>
-                                <td className="p-4 text-right font-medium text-slate-900 dark:text-white">
+                                <td className="p-4 text-right font-medium text-slate-900 dark:text-kx-text">
                                   ${p.precio_venta?.toLocaleString('es-AR')}
                                 </td>
                                 <td className="p-4 text-right">
@@ -740,7 +740,7 @@ const ProductosSection = () => {
                  value={historyFilters.productId} 
                  onValueChange={(val) => setHistoryFilters({...historyFilters, productId: val})}
                >
-                 <SelectTrigger className="w-[250px] bg-white dark:bg-slate-900">
+                 <SelectTrigger className="w-[250px] bg-kx-surface dark:bg-kx-surface">
                    <SelectValue placeholder="Filtrar por producto" />
                  </SelectTrigger>
                  <SelectContent>
@@ -750,9 +750,9 @@ const ProductosSection = () => {
                </Select>
              </div>
 
-             <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+             <div className="rounded-lg border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface overflow-hidden shadow-sm">
                <table className="w-full text-sm text-left">
-                 <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-medium">
+                 <thead className="bg-kx-surface-2 dark:bg-slate-800/50 border-b border-kx-border dark:border-kx-border text-slate-500 dark:text-kx-text-2 font-medium">
                    <tr>
                      <th className="p-4">Fecha</th>
                      <th className="p-4">Producto</th>
@@ -763,7 +763,7 @@ const ProductosSection = () => {
                  </thead>
                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {movements.map(m => (
-                       <tr key={m.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                       <tr key={m.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/30">
                           <td className="p-4 text-slate-500">{formatDateTimeAR(m.fecha)}</td>
                           <td className="p-4 font-medium">{m.productos?.nombre}</td>
                           <td className="p-4">
@@ -792,7 +792,7 @@ const ProductosSection = () => {
        
        {/* Movement Dialog */}
        <Dialog open={isMovimientoOpen} onOpenChange={setIsMovimientoOpen}>
-         <DialogContent className="sm:max-w-[425px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+         <DialogContent className="sm:max-w-[425px] bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border">
             <DialogHeader>
               <DialogTitle>Registrar Movimiento</DialogTitle>
               <DialogDescription>Ajuste de stock para: <strong>{selectedProductForMov?.nombre}</strong></DialogDescription>
@@ -804,7 +804,7 @@ const ProductosSection = () => {
                    value={movimientoForm.tipo} 
                    onValueChange={val=>setMovimientoForm({...movimientoForm, tipo:val})}
                  >
-                   <SelectTrigger className="bg-white dark:bg-slate-950">
+                   <SelectTrigger className="bg-kx-surface dark:bg-kx-bg">
                      <SelectValue />
                    </SelectTrigger>
                    <SelectContent>
@@ -825,7 +825,7 @@ const ProductosSection = () => {
                    onChange={e=>setMovimientoForm({...movimientoForm, cantidad:e.target.value.replace(/[^\d]/g, '')})}
                    placeholder="0"
                    required
-                   className="bg-white dark:bg-slate-950 font-mono text-lg"
+                   className="bg-kx-surface dark:bg-kx-bg font-mono text-lg"
                  />
                </div>
 
@@ -835,7 +835,7 @@ const ProductosSection = () => {
                    value={movimientoForm.motivo} 
                    onChange={e=>setMovimientoForm({...movimientoForm, motivo:e.target.value})} 
                    placeholder="Ej: Compra mensual, Rotura, etc."
-                   className="bg-white dark:bg-slate-950"
+                   className="bg-kx-surface dark:bg-kx-bg"
                  />
                </div>
 

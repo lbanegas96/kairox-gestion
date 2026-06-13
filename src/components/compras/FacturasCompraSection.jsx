@@ -85,7 +85,7 @@ function FacturasCompraSection() {
         <select
           value={filtroEstado}
           onChange={e => setFiltroEstado(e.target.value)}
-          className="h-10 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-white px-3 text-sm"
+          className="h-10 rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text px-3 text-sm"
         >
           <option value="todos">Todos los estados</option>
           <option value="pagada">Solo pagadas</option>
@@ -175,7 +175,7 @@ function FacturasCompraSection() {
                                   proveedor_nombre:  compra.proveedores?.nombre,
                                 });
                               }}
-                              className="h-8 w-8 p-0 text-slate-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-full"
+                              className="h-8 w-8 p-0 text-kx-text-3 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-full"
                             >
                               <Undo2 className="h-4 w-4" />
                             </Button>

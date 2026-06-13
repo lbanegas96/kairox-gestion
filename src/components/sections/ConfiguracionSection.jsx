@@ -374,20 +374,20 @@ const ConfiguracionSection = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center bg-white dark:bg-transparent p-6 -mx-6 -mt-6 mb-6 border-b border-slate-200 dark:border-none">
+      <div className="flex justify-between items-center bg-kx-surface dark:bg-transparent p-6 -mx-6 -mt-6 mb-6 border-b border-kx-border dark:border-none">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-1 flex items-center gap-2">
+          <h2 className="text-3xl font-bold text-slate-900 dark:text-kx-text mb-1 flex items-center gap-2">
             <Settings className="w-8 h-8 text-blue-600 dark:text-[#00D4FF]" />
             Configuración del Sistema
           </h2>
-          <p className="text-slate-500 dark:text-slate-400">Personaliza la identidad visual de tu empresa</p>
+          <p className="text-slate-500 dark:text-kx-text-2">Personaliza la identidad visual de tu empresa</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Form Card */}
         <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-6 border-b kairox-border pb-2">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-kx-text mb-6 border-b kairox-border pb-2">
             Datos Generales
           </h3>
           
@@ -395,7 +395,7 @@ const ConfiguracionSection = () => {
             <div className="space-y-2">
               <Label className="text-slate-700 dark:text-slate-300">Nombre de la Empresa</Label>
               <div className="relative">
-                <Building className="absolute left-3 top-2.5 h-5 w-5 text-slate-400" />
+                <Building className="absolute left-3 top-2.5 h-5 w-5 text-kx-text-3" />
                 <Input
                   name="nombre_empresa"
                   value={formData.nombre_empresa}
@@ -424,7 +424,7 @@ const ConfiguracionSection = () => {
                     variant="outline" 
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading}
-                    className="w-full border-dashed border-2 border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-[#00D4FF] hover:bg-slate-50 dark:hover:bg-slate-800"
+                    className="w-full border-dashed border-2 border-slate-300 dark:border-kx-border hover:border-blue-500 dark:hover:border-[#00D4FF] hover:bg-kx-surface-2 dark:hover:bg-slate-800"
                   >
                     {uploading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
                     {uploading ? "Subiendo..." : "Subir Logo"}
@@ -444,7 +444,7 @@ const ConfiguracionSection = () => {
                   )}
                 </div>
                 
-                <div className="flex items-start gap-2 text-xs text-slate-500 bg-slate-50 dark:bg-slate-900/50 p-3 rounded border kairox-border">
+                <div className="flex items-start gap-2 text-xs text-slate-500 bg-kx-surface-2 dark:bg-slate-900/50 p-3 rounded border kairox-border">
                    <AlertCircle className="w-4 h-4 shrink-0" />
                    <div>
                      Formatos: PNG, JPG, SVG, WEBP. <br/>
@@ -476,13 +476,13 @@ const ConfiguracionSection = () => {
         </div>
 
         {/* Preview Card */}
-        <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm flex flex-col items-center justify-center text-center space-y-6 bg-slate-50 dark:bg-slate-900/50">
-          <div className="w-full max-w-sm p-6 bg-white dark:bg-slate-900 rounded-lg border kairox-border shadow-md">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Vista Previa</p>
+        <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm flex flex-col items-center justify-center text-center space-y-6 bg-kx-surface-2 dark:bg-slate-900/50">
+          <div className="w-full max-w-sm p-6 bg-kx-surface dark:bg-kx-surface rounded-lg border kairox-border shadow-md">
+            <p className="text-xs font-bold text-kx-text-3 uppercase tracking-widest mb-4">Vista Previa</p>
             
             <div className="flex flex-col items-center gap-4">
               {formData.company_logo ? (
-                <div className="h-32 flex items-center justify-center p-2 border border-dashed border-slate-200 dark:border-slate-800 rounded-lg w-full bg-slate-50/50 dark:bg-slate-950/50">
+                <div className="h-32 flex items-center justify-center p-2 border border-dashed border-kx-border dark:border-kx-border rounded-lg w-full bg-slate-50/50 dark:bg-slate-950/50">
                   <img 
                     src={formData.company_logo} 
                     alt="Logo Preview" 
@@ -490,8 +490,8 @@ const ConfiguracionSection = () => {
                   />
                 </div>
               ) : (
-                <div className="h-32 w-full bg-slate-100 dark:bg-slate-800 rounded-lg flex flex-col items-center justify-center border-2 border-dashed border-slate-300 dark:border-slate-700">
-                  <ImageIcon className="h-10 w-10 text-slate-400 mb-2" />
+                <div className="h-32 w-full bg-slate-100 dark:bg-kx-surface-2 rounded-lg flex flex-col items-center justify-center border-2 border-dashed border-slate-300 dark:border-kx-border">
+                  <ImageIcon className="h-10 w-10 text-kx-text-3 mb-2" />
                   <span className="text-xs text-slate-500">Sin logo configurado</span>
                 </div>
               )}
@@ -517,10 +517,10 @@ const ConfiguracionSection = () => {
             <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-kx-text">
               Moneda Paralela (Tipo de Cambio)
             </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-0.5">
               Similar a "Parallel Currency" en SAP S/4. Cuando está activo, el sistema exige el TC del día
               antes de cualquier movimiento contable y habilita el <strong>Reporte de Paridad ARS / {tcConfig.moneda_paralela}</strong>.
             </p>
@@ -528,18 +528,18 @@ const ConfiguracionSection = () => {
         </div>
 
         {loadingTC ? (
-          <div className="flex items-center gap-2 text-slate-400 py-4">
+          <div className="flex items-center gap-2 text-kx-text-3 py-4">
             <Loader2 className="h-4 w-4 animate-spin" /> Cargando configuración...
           </div>
         ) : (
           <div className="space-y-5">
             {/* Toggle */}
-            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border kairox-border">
+            <div className="flex items-center justify-between p-4 bg-kx-surface-2 dark:bg-slate-900/50 rounded-lg border kairox-border">
               <div>
-                <Label className="text-slate-800 dark:text-slate-200 font-medium">
+                <Label className="text-kx-text dark:text-kx-text font-medium">
                   Activar moneda paralela
                 </Label>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-500 dark:text-kx-text-2 mt-0.5">
                   {tcConfig.usa_tc_paralelo
                     ? 'El TC del día es obligatorio antes de vender, cotizar o registrar pagos.'
                     : 'El TC del día es opcional (solo para operaciones en moneda extranjera).'}
@@ -559,7 +559,7 @@ const ConfiguracionSection = () => {
                   value={tcConfig.moneda_paralela}
                   onValueChange={v => setTcConfig(prev => ({ ...prev, moneda_paralela: v }))}
                 >
-                  <SelectTrigger className="h-9 dark:bg-slate-900 dark:border-slate-700 dark:text-white">
+                  <SelectTrigger className="h-9 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -568,7 +568,7 @@ const ConfiguracionSection = () => {
                     <SelectItem value="BRL">BRL — Real brasileño</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-slate-400 dark:text-slate-500">
+                <p className="text-xs text-kx-text-3 dark:text-kx-text-3">
                   Todos los comprobantes y movimientos se guardarán también en {tcConfig.moneda_paralela} usando el TC del día.
                 </p>
               </div>
@@ -611,12 +611,12 @@ const ConfiguracionSection = () => {
               <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <h3 className="font-semibold text-slate-800 dark:text-slate-200">Facturación Electrónica AFIP/ARCA</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Emití facturas electrónicas con CAE automático</p>
+              <h3 className="font-semibold text-kx-text dark:text-kx-text">Facturación Electrónica AFIP/ARCA</h3>
+              <p className="text-sm text-slate-500 dark:text-kx-text-2">Emití facturas electrónicas con CAE automático</p>
             </div>
           </div>
           {loadingAFIP ? (
-            <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+            <Loader2 className="h-5 w-5 animate-spin text-kx-text-3" />
           ) : (
             <Switch
               checked={afipConfig.usa_factura_electronica ?? false}
@@ -658,9 +658,9 @@ const ConfiguracionSection = () => {
 
       {/* ── Wizard de activación AFIP ─────────────────────────────────────────── */}
       <Dialog open={wizardOpen} onOpenChange={setWizardOpen}>
-        <DialogContent className="sm:max-w-[540px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[540px] bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-slate-800 dark:text-slate-100">
+            <DialogTitle className="flex items-center gap-2 text-kx-text dark:text-kx-text">
               <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               Activar Facturación Electrónica
             </DialogTitle>
@@ -673,7 +673,7 @@ const ConfiguracionSection = () => {
           <div className="flex items-center gap-2 mb-2 mt-2">
             {[1, 2, 3].map(step => (
               <React.Fragment key={step}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${wizardStep >= step ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${wizardStep >= step ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-kx-surface-2 text-kx-text-3'}`}>
                   {wizardStep > step ? <Check className="w-4 h-4" /> : step}
                 </div>
                 {step < 3 && (
@@ -682,7 +682,7 @@ const ConfiguracionSection = () => {
               </React.Fragment>
             ))}
           </div>
-          <div className="text-xs text-slate-400 flex justify-between mb-4">
+          <div className="text-xs text-kx-text-3 flex justify-between mb-4">
             <span>Datos fiscales</span>
             <span>Certificado</span>
             <span>Punto de venta</span>
@@ -691,7 +691,7 @@ const ConfiguracionSection = () => {
           {/* Paso 1 — Datos fiscales */}
           {wizardStep === 1 && (
             <div className="space-y-4">
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <p className="text-sm text-slate-500 dark:text-kx-text-2">
                 Estos datos se usan para emitir tus facturas electrónicas. Solo se configuran una vez.
               </p>
               <div className="space-y-2">
@@ -705,7 +705,7 @@ const ConfiguracionSection = () => {
               <div className="space-y-2">
                 <Label>Condición ante IVA</Label>
                 <Select value={afipForm.condicion_iva} onValueChange={v => setAfipForm(f => ({ ...f, condicion_iva: v }))}>
-                  <SelectTrigger className="dark:bg-slate-900 dark:border-slate-700 dark:text-white"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="RI">Responsable Inscripto — emite Facturas A y B</SelectItem>
                     <SelectItem value="Monotributo">Monotributista — emite solo Facturas C</SelectItem>
@@ -724,7 +724,7 @@ const ConfiguracionSection = () => {
           {/* Paso 2 — Certificado digital */}
           {wizardStep === 2 && (
             <div className="space-y-4">
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <p className="text-sm text-slate-500 dark:text-kx-text-2">
                 KAIROX genera el archivo que necesitás subir a ARCA. Es un proceso de un solo clic.
               </p>
 
@@ -733,7 +733,7 @@ const ConfiguracionSection = () => {
                 <div className="border kairox-border rounded-lg p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs flex items-center justify-center font-medium">1</span>
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Generá tu archivo para ARCA</span>
+                    <span className="text-sm font-medium text-slate-700 dark:text-kx-text">Generá tu archivo para ARCA</span>
                   </div>
                   <p className="text-xs text-slate-500 pl-8">
                     KAIROX crea automáticamente las claves criptográficas. Solo descargás el archivo y lo subís en ARCA.
@@ -757,8 +757,8 @@ const ConfiguracionSection = () => {
               {/* 2b: Instrucciones ARCA */}
               <div className="border kairox-border rounded-lg p-4 space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs flex items-center justify-center font-medium">2</span>
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Subí el archivo en ARCA</span>
+                  <span className="w-6 h-6 rounded-full bg-slate-100 dark:bg-kx-surface-2 text-kx-text-2 dark:text-slate-300 text-xs flex items-center justify-center font-medium">2</span>
+                  <span className="text-sm font-medium text-slate-700 dark:text-kx-text">Subí el archivo en ARCA</span>
                 </div>
                 <ol className="text-xs text-slate-500 pl-8 space-y-1 list-decimal list-inside">
                   <li>Entrá a <a href="https://www.afip.gob.ar" target="_blank" rel="noreferrer" className="text-blue-500 underline">afip.gob.ar</a> con tu CUIT y clave fiscal</li>
@@ -771,15 +771,15 @@ const ConfiguracionSection = () => {
               {/* 2c: Subir el .crt */}
               <div className="border kairox-border rounded-lg p-4 space-y-3">
                 <div className="flex items-center gap-2">
-                  <span className="w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs flex items-center justify-center font-medium">3</span>
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Subí el certificado que te dio ARCA</span>
+                  <span className="w-6 h-6 rounded-full bg-slate-100 dark:bg-kx-surface-2 text-kx-text-2 dark:text-slate-300 text-xs flex items-center justify-center font-medium">3</span>
+                  <span className="text-sm font-medium text-slate-700 dark:text-kx-text">Subí el certificado que te dio ARCA</span>
                 </div>
                 <div className="pl-8">
                   <input
                     type="file"
                     accept=".crt,.pem,.cer"
                     onChange={handleCertUpload}
-                    className="text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:text-sm file:font-medium file:bg-slate-50 file:text-slate-700 hover:file:bg-slate-100 dark:file:bg-slate-800 dark:file:text-slate-200"
+                    className="text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:text-sm file:font-medium file:bg-kx-surface-2 file:text-slate-700 hover:file:bg-slate-100 dark:file:bg-slate-800 dark:file:text-slate-200"
                   />
                   {afipForm.crt_content && (
                     <p className="text-xs text-green-600 dark:text-green-400 mt-1.5 flex items-center gap-1">
@@ -801,7 +801,7 @@ const ConfiguracionSection = () => {
           {/* Paso 3 — Punto de venta */}
           {wizardStep === 3 && (
             <div className="space-y-4">
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <p className="text-sm text-slate-500 dark:text-kx-text-2">
                 El punto de venta es el número que configuraste en ARCA para emitir facturas.
               </p>
               <div className="space-y-2">
@@ -812,7 +812,7 @@ const ConfiguracionSection = () => {
                   onChange={e => setAfipForm(f => ({ ...f, pv_numero: e.target.value }))}
                   placeholder="Ej: 1"
                 />
-                <p className="text-xs text-slate-400">Encontrás este número en ARCA → Administración de Puntos de Venta</p>
+                <p className="text-xs text-kx-text-3">Encontrás este número en ARCA → Administración de Puntos de Venta</p>
               </div>
               <div className="space-y-2">
                 <Label>Nombre del punto de venta (interno)</Label>
@@ -825,7 +825,7 @@ const ConfiguracionSection = () => {
               <div className="space-y-2">
                 <Label>Tipo de comprobante por defecto</Label>
                 <Select value={afipForm.tipo_comprobante_default} onValueChange={v => setAfipForm(f => ({ ...f, tipo_comprobante_default: v }))}>
-                  <SelectTrigger className="dark:bg-slate-900 dark:border-slate-700 dark:text-white"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="B">Factura B (consumidor final / monotributista)</SelectItem>
                     <SelectItem value="A">Factura A (responsable inscripto)</SelectItem>

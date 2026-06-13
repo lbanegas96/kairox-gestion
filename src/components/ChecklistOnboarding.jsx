@@ -76,7 +76,7 @@ export function ChecklistOnboarding({ onNavigate }) {
   };
 
   return (
-    <div className="mb-6 bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-900/50 rounded-xl p-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+    <div className="mb-6 bg-kx-surface dark:bg-kx-surface border border-blue-200 dark:border-blue-900/50 rounded-xl p-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
       {/* Cabecera */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -84,17 +84,17 @@ export function ChecklistOnboarding({ onNavigate }) {
             <Zap className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-slate-800 dark:text-white leading-tight">
+            <h3 className="text-sm font-semibold text-kx-text dark:text-kx-text leading-tight">
               Configuración inicial
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-slate-500 dark:text-kx-text-2">
               {completadas} de 4 pasos completados
             </p>
           </div>
         </div>
         <button
           onClick={handleDismiss}
-          className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors p-1 -mr-1 -mt-1 rounded"
+          className="text-kx-text-3 hover:text-kx-text-2 dark:hover:text-slate-200 transition-colors p-1 -mr-1 -mt-1 rounded"
           aria-label="Ocultar"
         >
           <X className="w-4 h-4" />
@@ -102,7 +102,7 @@ export function ChecklistOnboarding({ onNavigate }) {
       </div>
 
       {/* Barra de progreso */}
-      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mb-3">
+      <div className="w-full bg-slate-100 dark:bg-kx-surface-2 rounded-full h-1.5 mb-3">
         <div
           className="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
           style={{ width: `${(completadas / 4) * 100}%` }}
@@ -121,14 +121,14 @@ export function ChecklistOnboarding({ onNavigate }) {
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-left transition-all
                 ${done
                   ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 cursor-default'
-                  : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-700 dark:hover:text-blue-400 cursor-pointer'
+                  : 'bg-kx-surface-2 dark:bg-kx-surface-2 text-kx-text-2 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-700 dark:hover:text-blue-400 cursor-pointer'
                 }`}
             >
               <span className={`w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center transition-colors
                 ${done ? 'bg-green-500' : 'bg-slate-200 dark:bg-slate-700'}`}>
                 {done
                   ? <Check className="w-3 h-3 text-white" />
-                  : <ChevronRight className="w-3 h-3 text-slate-400" />
+                  : <ChevronRight className="w-3 h-3 text-kx-text-3" />
                 }
               </span>
               <span className={done ? 'line-through opacity-70' : ''}>{accion.label}</span>

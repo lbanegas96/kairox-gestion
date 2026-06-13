@@ -387,7 +387,7 @@ export default function ChequesSection() {
             </div>
             Gestión de Cheques
           </h1>
-          <p className="text-slate-400 text-sm mt-1">Cartera de terceros · Cheques propios</p>
+          <p className="text-kx-text-3 text-sm mt-1">Cartera de terceros · Cheques propios</p>
         </div>
         <Button variant="outline" size="sm" onClick={fetchCheques} disabled={loading}
           className="border-slate-700 text-slate-300 hover:bg-slate-800">
@@ -398,28 +398,28 @@ export default function ChequesSection() {
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
-          <p className="text-xs text-slate-400 mb-1">En Cartera</p>
+          <p className="text-xs text-kx-text-3 mb-1">En Cartera</p>
           <p className="text-xl font-bold text-white truncate">{fmt(kpis.totalCartera)}</p>
           <p className="text-xs text-cyan-400 mt-1">
             {kpis.countCartera} cheque{kpis.countCartera !== 1 ? 's' : ''}
           </p>
         </div>
         <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
-          <p className="text-xs text-slate-400 mb-1">Propios Pendientes</p>
+          <p className="text-xs text-kx-text-3 mb-1">Propios Pendientes</p>
           <p className="text-xl font-bold text-white truncate">{fmt(kpis.totalPropios)}</p>
           <p className="text-xs text-blue-400 mt-1">
             {kpis.countPropios} cheque{kpis.countPropios !== 1 ? 's' : ''}
           </p>
         </div>
         <div className={`border rounded-xl p-4 ${kpis.vencenPronto > 0 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-slate-800/60 border-slate-700'}`}>
-          <p className="text-xs text-slate-400 mb-1">Vencen Esta Semana</p>
+          <p className="text-xs text-kx-text-3 mb-1">Vencen Esta Semana</p>
           <p className={`text-xl font-bold ${kpis.vencenPronto > 0 ? 'text-amber-400' : 'text-white'}`}>
             {kpis.vencenPronto}
           </p>
           <p className="text-xs text-slate-500 mt-1">próximos 7 días</p>
         </div>
         <div className={`border rounded-xl p-4 ${kpis.rechazados > 0 ? 'bg-red-500/10 border-red-500/30' : 'bg-slate-800/60 border-slate-700'}`}>
-          <p className="text-xs text-slate-400 mb-1">Rechazados</p>
+          <p className="text-xs text-kx-text-3 mb-1">Rechazados</p>
           <p className={`text-xl font-bold ${kpis.rechazados > 0 ? 'text-red-400' : 'text-white'}`}>
             {kpis.rechazados}
           </p>
@@ -436,7 +436,7 @@ export default function ChequesSection() {
         <Tabs defaultValue="tercero" className="space-y-4">
           <TabsList className="bg-slate-800 border border-slate-700 p-1">
             <TabsTrigger value="tercero"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-slate-400 gap-2">
+              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-kx-text-3 gap-2">
               Cartera de Terceros
               {kpis.countCartera > 0 && (
                 <span className="ml-1 bg-cyan-500/20 text-cyan-400 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
@@ -445,7 +445,7 @@ export default function ChequesSection() {
               )}
             </TabsTrigger>
             <TabsTrigger value="propio"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-slate-400 gap-2">
+              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-kx-text-3 gap-2">
               Cheques Propios
               {kpis.countPropios > 0 && (
                 <span className="ml-1 bg-blue-500/20 text-blue-400 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
@@ -467,13 +467,13 @@ export default function ChequesSection() {
               <table className="w-full text-sm">
                 <thead className="bg-slate-800">
                   <tr>
-                    <th className="px-4 py-3 text-left text-slate-400 font-medium">Nro.</th>
-                    <th className="px-4 py-3 text-left text-slate-400 font-medium">Banco</th>
-                    <th className="px-4 py-3 text-left text-slate-400 font-medium">Recibido de</th>
-                    <th className="px-4 py-3 text-right text-slate-400 font-medium">Monto</th>
-                    <th className="px-4 py-3 text-left text-slate-400 font-medium">Vencimiento</th>
-                    <th className="px-4 py-3 text-center text-slate-400 font-medium">Estado</th>
-                    <th className="px-4 py-3 text-center text-slate-400 font-medium">Acción</th>
+                    <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Nro.</th>
+                    <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Banco</th>
+                    <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Recibido de</th>
+                    <th className="px-4 py-3 text-right text-kx-text-3 font-medium">Monto</th>
+                    <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Vencimiento</th>
+                    <th className="px-4 py-3 text-center text-kx-text-3 font-medium">Estado</th>
+                    <th className="px-4 py-3 text-center text-kx-text-3 font-medium">Acción</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -511,13 +511,13 @@ export default function ChequesSection() {
               <table className="w-full text-sm">
                 <thead className="bg-slate-800">
                   <tr>
-                    <th className="px-4 py-3 text-left text-slate-400 font-medium">Nro.</th>
-                    <th className="px-4 py-3 text-left text-slate-400 font-medium">Banco / Cuenta</th>
-                    <th className="px-4 py-3 text-left text-slate-400 font-medium">Entregado a</th>
-                    <th className="px-4 py-3 text-right text-slate-400 font-medium">Monto</th>
-                    <th className="px-4 py-3 text-left text-slate-400 font-medium">Vencimiento</th>
-                    <th className="px-4 py-3 text-center text-slate-400 font-medium">Estado</th>
-                    <th className="px-4 py-3 text-center text-slate-400 font-medium">Acción</th>
+                    <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Nro.</th>
+                    <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Banco / Cuenta</th>
+                    <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Entregado a</th>
+                    <th className="px-4 py-3 text-right text-kx-text-3 font-medium">Monto</th>
+                    <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Vencimiento</th>
+                    <th className="px-4 py-3 text-center text-kx-text-3 font-medium">Estado</th>
+                    <th className="px-4 py-3 text-center text-kx-text-3 font-medium">Acción</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -562,13 +562,13 @@ export default function ChequesSection() {
           <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto pr-1">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-slate-400 text-xs">Número *</Label>
+                <Label className="text-kx-text-3 text-xs">Número *</Label>
                 <Input value={terceroForm.numero}
                   onChange={e => setTerceroForm(f => ({ ...f, numero: e.target.value }))}
                   placeholder="00001234" className="mt-1 bg-slate-800 border-slate-700" />
               </div>
               <div>
-                <Label className="text-slate-400 text-xs">Banco emisor *</Label>
+                <Label className="text-kx-text-3 text-xs">Banco emisor *</Label>
                 <Input value={terceroForm.banco}
                   onChange={e => setTerceroForm(f => ({ ...f, banco: e.target.value }))}
                   list="bancos-tercero" placeholder="Banco Galicia"
@@ -580,27 +580,27 @@ export default function ChequesSection() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-slate-400 text-xs">Monto *</Label>
+                <Label className="text-kx-text-3 text-xs">Monto *</Label>
                 <Input value={terceroForm.monto}
                   onChange={e => setTerceroForm(f => ({ ...f, monto: e.target.value }))}
                   placeholder="0,00" inputMode="decimal"
                   className="mt-1 bg-slate-800 border-slate-700" />
               </div>
               <div>
-                <Label className="text-slate-400 text-xs">Fecha vencimiento *</Label>
+                <Label className="text-kx-text-3 text-xs">Fecha vencimiento *</Label>
                 <Input type="date" value={terceroForm.fecha_vencimiento}
                   onChange={e => setTerceroForm(f => ({ ...f, fecha_vencimiento: e.target.value }))}
                   className="mt-1 bg-slate-800 border-slate-700" />
               </div>
             </div>
             <div>
-              <Label className="text-slate-400 text-xs">Fecha emisión</Label>
+              <Label className="text-kx-text-3 text-xs">Fecha emisión</Label>
               <Input type="date" value={terceroForm.fecha_emision}
                 onChange={e => setTerceroForm(f => ({ ...f, fecha_emision: e.target.value }))}
                 className="mt-1 bg-slate-800 border-slate-700" />
             </div>
             <div>
-              <Label className="text-slate-400 text-xs">Cliente (opcional)</Label>
+              <Label className="text-kx-text-3 text-xs">Cliente (opcional)</Label>
               <Select
                 value={terceroForm.cliente_id || '__none__'}
                 onValueChange={v => setTerceroForm(f => ({ ...f, cliente_id: v === '__none__' ? '' : v, comprobante_id: '' }))}
@@ -616,7 +616,7 @@ export default function ChequesSection() {
             </div>
             {terceroForm.cliente_id && comprobantesCliente.length > 0 && (
               <div>
-                <Label className="text-slate-400 text-xs">Comprobante asociado (opcional)</Label>
+                <Label className="text-kx-text-3 text-xs">Comprobante asociado (opcional)</Label>
                 <Select
                   value={terceroForm.comprobante_id || '__none__'}
                   onValueChange={v => setTerceroForm(f => ({ ...f, comprobante_id: v === '__none__' ? '' : v }))}
@@ -636,14 +636,14 @@ export default function ChequesSection() {
               </div>
             )}
             <div>
-              <Label className="text-slate-400 text-xs">Observaciones</Label>
+              <Label className="text-kx-text-3 text-xs">Observaciones</Label>
               <Input value={terceroForm.observaciones}
                 onChange={e => setTerceroForm(f => ({ ...f, observaciones: e.target.value }))}
                 placeholder="Opcional" className="mt-1 bg-slate-800 border-slate-700" />
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="ghost" onClick={() => setShowNuevoTercero(false)} className="text-slate-400">
+            <Button variant="ghost" onClick={() => setShowNuevoTercero(false)} className="text-kx-text-3">
               Cancelar
             </Button>
             <Button onClick={handleGuardarTercero} disabled={savingTercero}
@@ -667,13 +667,13 @@ export default function ChequesSection() {
           <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto pr-1">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-slate-400 text-xs">Número *</Label>
+                <Label className="text-kx-text-3 text-xs">Número *</Label>
                 <Input value={propioForm.numero}
                   onChange={e => setPropioForm(f => ({ ...f, numero: e.target.value }))}
                   placeholder="00001234" className="mt-1 bg-slate-800 border-slate-700" />
               </div>
               <div>
-                <Label className="text-slate-400 text-xs">Banco *</Label>
+                <Label className="text-kx-text-3 text-xs">Banco *</Label>
                 <Input value={propioForm.banco}
                   onChange={e => setPropioForm(f => ({ ...f, banco: e.target.value }))}
                   list="bancos-propio" placeholder="Banco Nación"
@@ -684,7 +684,7 @@ export default function ChequesSection() {
               </div>
             </div>
             <div>
-              <Label className="text-slate-400 text-xs">Cuenta bancaria propia (opcional)</Label>
+              <Label className="text-kx-text-3 text-xs">Cuenta bancaria propia (opcional)</Label>
               <Select
                 value={propioForm.cuenta_bancaria_id || '__none__'}
                 onValueChange={v => setPropioForm(f => ({ ...f, cuenta_bancaria_id: v === '__none__' ? '' : v }))}
@@ -702,27 +702,27 @@ export default function ChequesSection() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-slate-400 text-xs">Monto *</Label>
+                <Label className="text-kx-text-3 text-xs">Monto *</Label>
                 <Input value={propioForm.monto}
                   onChange={e => setPropioForm(f => ({ ...f, monto: e.target.value }))}
                   placeholder="0,00" inputMode="decimal"
                   className="mt-1 bg-slate-800 border-slate-700" />
               </div>
               <div>
-                <Label className="text-slate-400 text-xs">Fecha vencimiento *</Label>
+                <Label className="text-kx-text-3 text-xs">Fecha vencimiento *</Label>
                 <Input type="date" value={propioForm.fecha_vencimiento}
                   onChange={e => setPropioForm(f => ({ ...f, fecha_vencimiento: e.target.value }))}
                   className="mt-1 bg-slate-800 border-slate-700" />
               </div>
             </div>
             <div>
-              <Label className="text-slate-400 text-xs">Fecha emisión</Label>
+              <Label className="text-kx-text-3 text-xs">Fecha emisión</Label>
               <Input type="date" value={propioForm.fecha_emision}
                 onChange={e => setPropioForm(f => ({ ...f, fecha_emision: e.target.value }))}
                 className="mt-1 bg-slate-800 border-slate-700" />
             </div>
             <div>
-              <Label className="text-slate-400 text-xs">Proveedor (opcional)</Label>
+              <Label className="text-kx-text-3 text-xs">Proveedor (opcional)</Label>
               <Select
                 value={propioForm.proveedor_id || '__none__'}
                 onValueChange={v => setPropioForm(f => ({ ...f, proveedor_id: v === '__none__' ? '' : v, compra_id: '' }))}
@@ -738,7 +738,7 @@ export default function ChequesSection() {
             </div>
             {propioForm.proveedor_id && comprasProveedor.length > 0 && (
               <div>
-                <Label className="text-slate-400 text-xs">Compra asociada (opcional)</Label>
+                <Label className="text-kx-text-3 text-xs">Compra asociada (opcional)</Label>
                 <Select
                   value={propioForm.compra_id || '__none__'}
                   onValueChange={v => setPropioForm(f => ({ ...f, compra_id: v === '__none__' ? '' : v }))}
@@ -758,14 +758,14 @@ export default function ChequesSection() {
               </div>
             )}
             <div>
-              <Label className="text-slate-400 text-xs">Observaciones</Label>
+              <Label className="text-kx-text-3 text-xs">Observaciones</Label>
               <Input value={propioForm.observaciones}
                 onChange={e => setPropioForm(f => ({ ...f, observaciones: e.target.value }))}
                 placeholder="Opcional" className="mt-1 bg-slate-800 border-slate-700" />
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="ghost" onClick={() => setShowNuevoPropio(false)} className="text-slate-400">
+            <Button variant="ghost" onClick={() => setShowNuevoPropio(false)} className="text-kx-text-3">
               Cancelar
             </Button>
             <Button onClick={handleGuardarPropio} disabled={savingPropio}
@@ -798,12 +798,12 @@ export default function ChequesSection() {
             )}
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <div className="flex items-center gap-2 text-sm text-slate-400">
+            <div className="flex items-center gap-2 text-sm text-kx-text-3">
               <span>Estado actual:</span>
               {chequeACambiar && renderBadge(chequeACambiar.estado)}
             </div>
             <div>
-              <Label className="text-slate-400 text-xs">Nuevo estado *</Label>
+              <Label className="text-kx-text-3 text-xs">Nuevo estado *</Label>
               <Select value={estadoNuevo} onValueChange={setEstadoNuevo}>
                 <SelectTrigger className="mt-1 bg-slate-800 border-slate-700">
                   <SelectValue />
@@ -816,7 +816,7 @@ export default function ChequesSection() {
               </Select>
             </div>
             <div>
-              <Label className="text-slate-400 text-xs">Observación (opcional)</Label>
+              <Label className="text-kx-text-3 text-xs">Observación (opcional)</Label>
               <Input value={obsEstado}
                 onChange={e => setObsEstado(e.target.value)}
                 placeholder="Ej: Depositado en Bco. Nación"
@@ -826,7 +826,7 @@ export default function ChequesSection() {
           <DialogFooter className="gap-2">
             <Button variant="ghost" disabled={savingEstado}
               onClick={() => { setShowCambioEstado(false); setChequeACambiar(null); setEstadoNuevo(''); setObsEstado(''); }}
-              className="text-slate-400">
+              className="text-kx-text-3">
               Cancelar
             </Button>
             <Button onClick={handleCambiarEstado} disabled={savingEstado || !estadoNuevo}

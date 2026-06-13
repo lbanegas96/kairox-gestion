@@ -146,86 +146,86 @@ function ClientesSection() {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
       {/* Nombre */}
       <div className="space-y-1.5 md:col-span-2">
-        <Label className="dark:text-white">Nombre / Razón Social *</Label>
+        <Label className="dark:text-kx-text">Nombre / Razón Social *</Label>
         <Input value={formData.nombre} onChange={e => setFormData(f => ({ ...f, nombre: e.target.value }))}
-          className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" required />
+          className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" required />
       </div>
       {/* Documento */}
       <div className="space-y-1.5">
-        <Label className="dark:text-white flex items-center gap-1"><Hash className="h-3.5 w-3.5" /> CUIT / DNI</Label>
+        <Label className="dark:text-kx-text flex items-center gap-1"><Hash className="h-3.5 w-3.5" /> CUIT / DNI</Label>
         <Input value={formData.documento} onChange={e => setFormData(f => ({ ...f, documento: e.target.value }))}
-          placeholder="20-12345678-9" className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
+          placeholder="20-12345678-9" className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
       </div>
       {/* Teléfono */}
       <div className="space-y-1.5">
-        <Label className="dark:text-white flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> Teléfono</Label>
+        <Label className="dark:text-kx-text flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> Teléfono</Label>
         <Input value={formData.telefono} onChange={e => setFormData(f => ({ ...f, telefono: e.target.value }))}
-          className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
+          className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
       </div>
       {/* Email */}
       <div className="space-y-1.5">
-        <Label className="dark:text-white flex items-center gap-1"><Mail className="h-3.5 w-3.5" /> Email</Label>
+        <Label className="dark:text-kx-text flex items-center gap-1"><Mail className="h-3.5 w-3.5" /> Email</Label>
         <Input type="email" value={formData.email} onChange={e => setFormData(f => ({ ...f, email: e.target.value }))}
-          className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
+          className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
       </div>
       {/* Dirección */}
       <div className="space-y-1.5">
-        <Label className="dark:text-white flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> Dirección</Label>
+        <Label className="dark:text-kx-text flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> Dirección</Label>
         <Input value={formData.direccion} onChange={e => setFormData(f => ({ ...f, direccion: e.target.value }))}
-          className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
+          className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
       </div>
 
       {/* Separador Crédito */}
-      <div className="md:col-span-2 border-t border-slate-200 dark:border-slate-800 pt-3">
-        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1">
+      <div className="md:col-span-2 border-t border-kx-border dark:border-kx-border pt-3">
+        <p className="text-xs font-semibold text-slate-500 dark:text-kx-text-2 uppercase tracking-wider flex items-center gap-1">
           <CreditCard className="h-3.5 w-3.5" /> Condiciones de Crédito
         </p>
       </div>
       {/* Límite de crédito */}
       <div className="space-y-1.5">
-        <Label className="dark:text-white flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" /> Límite de Crédito ($)</Label>
+        <Label className="dark:text-kx-text flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" /> Límite de Crédito ($)</Label>
         <Input type="number" min="0" step="0.01"
           value={formData.limite_credito}
           onChange={e => setFormData(f => ({ ...f, limite_credito: e.target.value }))}
           placeholder="0 = sin límite"
-          className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
-        <p className="text-xs text-slate-400">0 = sin límite establecido</p>
+          className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+        <p className="text-xs text-kx-text-3">0 = sin límite establecido</p>
       </div>
       {/* Días de crédito */}
       <div className="space-y-1.5">
-        <Label className="dark:text-white flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Días de Crédito</Label>
+        <Label className="dark:text-kx-text flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Días de Crédito</Label>
         <Input type="number" min="0"
           value={formData.dias_credito}
           onChange={e => setFormData(f => ({ ...f, dias_credito: e.target.value }))}
           placeholder="Ej: 30"
-          className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
-        <p className="text-xs text-slate-400">Días hasta vencimiento de facturas CC</p>
+          className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+        <p className="text-xs text-kx-text-3">Días hasta vencimiento de facturas CC</p>
       </div>
       {/* Condiciones */}
       <div className="space-y-1.5 md:col-span-2">
-        <Label className="dark:text-white flex items-center gap-1"><FileText className="h-3.5 w-3.5" /> Condiciones de Pago</Label>
+        <Label className="dark:text-kx-text flex items-center gap-1"><FileText className="h-3.5 w-3.5" /> Condiciones de Pago</Label>
         <Textarea
           value={formData.condiciones_pago}
           onChange={e => setFormData(f => ({ ...f, condiciones_pago: e.target.value }))}
           placeholder="Ej: Pago a 30 días. Descuento 5% por pago anticipado."
-          className="resize-none h-16 dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm"
+          className="resize-none h-16 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm"
         />
       </div>
       {/* Lista de precios */}
       {listasPrecios.filter(l => l.activo).length > 0 && (
         <div className="md:col-span-2 space-y-1.5">
-          <Label className="dark:text-white flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-violet-500" /> Lista de Precios</Label>
+          <Label className="dark:text-kx-text flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-violet-500" /> Lista de Precios</Label>
           <select
             value={formData.lista_precio_id}
             onChange={e => setFormData(f => ({ ...f, lista_precio_id: e.target.value }))}
-            className="w-full h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            className="w-full h-10 rounded-md border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface px-3 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
           >
             <option value="">Sin lista especial (precio estándar)</option>
             {listasPrecios.filter(l => l.activo).map(l => (
               <option key={l.id} value={l.id}>{l.nombre}{l.descripcion ? ` — ${l.descripcion}` : ''}</option>
             ))}
           </select>
-          <p className="text-xs text-slate-400">Al seleccionar un cliente en Ventas, se aplicarán automáticamente sus precios de lista.</p>
+          <p className="text-xs text-kx-text-3">Al seleccionar un cliente en Ventas, se aplicarán automáticamente sus precios de lista.</p>
         </div>
       )}
 
@@ -251,11 +251,11 @@ function ClientesSection() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
-          <h2 className="text-3xl font-bold dark:text-white">Clientes</h2>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-0.5">{clients.length} clientes activos</p>
+          <h2 className="text-3xl font-bold dark:text-kx-text">Clientes</h2>
+          <p className="text-slate-500 dark:text-kx-text-2 text-sm mt-0.5">{clients.length} clientes activos</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setIsImportOpen(true)} className="dark:text-white dark:border-slate-700">
+          <Button variant="outline" onClick={() => setIsImportOpen(true)} className="dark:text-kx-text dark:border-kx-border">
             <Upload className="h-4 w-4 mr-2" /> Importar CSV
           </Button>
           <Button onClick={openAdd} className="bg-blue-600 text-white hover:bg-blue-700">
@@ -266,31 +266,31 @@ function ClientesSection() {
 
       {/* Search */}
       <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-kx-text-3" />
         <Input placeholder="Buscar por nombre, CUIT o teléfono..."
           value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-          className="pl-9 dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
+          className="pl-9 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
       </div>
 
       {/* Table */}
-      <Card className="dark:bg-slate-950 dark:border-slate-800 shadow-sm overflow-hidden">
+      <Card className="dark:bg-kx-bg dark:border-kx-border shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader className="bg-slate-50 dark:bg-slate-900/60">
-              <TableRow className="dark:border-slate-800">
-                <TableHead className="dark:text-slate-400 pl-6">Nombre</TableHead>
-                <TableHead className="dark:text-slate-400">Documento</TableHead>
-                <TableHead className="dark:text-slate-400">Teléfono</TableHead>
-                <TableHead className="text-right dark:text-slate-400">Saldo CC</TableHead>
-                <TableHead className="text-right dark:text-slate-400">Límite</TableHead>
-                <TableHead className="dark:text-slate-400">Condiciones</TableHead>
-                <TableHead className="text-center dark:text-slate-400">Acciones</TableHead>
+            <TableHeader className="bg-kx-surface-2 dark:bg-slate-900/60">
+              <TableRow className="dark:border-kx-border">
+                <TableHead className="dark:text-kx-text-2 pl-6">Nombre</TableHead>
+                <TableHead className="dark:text-kx-text-2">Documento</TableHead>
+                <TableHead className="dark:text-kx-text-2">Teléfono</TableHead>
+                <TableHead className="text-right dark:text-kx-text-2">Saldo CC</TableHead>
+                <TableHead className="text-right dark:text-kx-text-2">Límite</TableHead>
+                <TableHead className="dark:text-kx-text-2">Condiciones</TableHead>
+                <TableHead className="text-center dark:text-kx-text-2">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i} className="dark:border-slate-800">
+                  <TableRow key={i} className="dark:border-kx-border">
                     {Array.from({ length: 7 }).map((_, j) => (
                       <TableCell key={j}><Skeleton className="h-4 w-24" /></TableCell>
                     ))}
@@ -298,7 +298,7 @@ function ClientesSection() {
                 ))
               ) : filteredClients.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center text-slate-400">
+                  <TableCell colSpan={7} className="h-32 text-center text-kx-text-3">
                     {searchQuery ? 'No hay resultados para la búsqueda' : 'No hay clientes aún'}
                   </TableCell>
                 </TableRow>
@@ -309,32 +309,32 @@ function ClientesSection() {
                   const excedido = limite > 0 && saldo > limite;
                   return (
                     <TableRow key={client.id}
-                      className="dark:border-slate-800 dark:hover:bg-slate-900/50 cursor-pointer"
+                      className="dark:border-kx-border dark:hover:bg-slate-900/50 cursor-pointer"
                       onClick={() => { setClientForDetail(client); setDetailModalOpen(true); }}
                     >
-                      <TableCell className="pl-6 font-medium dark:text-slate-200">
+                      <TableCell className="pl-6 font-medium dark:text-kx-text">
                         {client.nombre}
                         {excedido && <AlertTriangle className="inline h-3.5 w-3.5 ml-1 text-amber-500" title="Límite excedido" />}
                       </TableCell>
-                      <TableCell className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+                      <TableCell className="text-xs text-slate-500 dark:text-kx-text-2 font-mono">
                         {client.documento || '—'}
                       </TableCell>
-                      <TableCell className="text-slate-500 dark:text-slate-400 text-sm">
+                      <TableCell className="text-slate-500 dark:text-kx-text-2 text-sm">
                         {client.telefono || '—'}
                       </TableCell>
-                      <TableCell className={`text-right font-mono font-semibold ${saldo > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                      <TableCell className={`text-right font-mono font-semibold ${saldo > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-kx-text-2'}`}>
                         ${saldo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                       </TableCell>
                       <TableCell className="text-right text-sm">
                         {limite > 0 ? (
-                          <span className={`font-mono ${excedido ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
+                          <span className={`font-mono ${excedido ? 'text-amber-600 dark:text-amber-400 font-bold' : 'text-slate-500 dark:text-kx-text-2'}`}>
                             ${limite.toLocaleString('es-AR', { minimumFractionDigits: 0 })}
                           </span>
                         ) : (
-                          <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
+                          <span className="text-slate-300 dark:text-kx-text-2 text-xs">—</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs text-slate-400 max-w-[160px] truncate">
+                      <TableCell className="text-xs text-kx-text-3 max-w-[160px] truncate">
                         {client.condiciones_pago || (client.dias_credito ? `${client.dias_credito} días` : '—')}
                       </TableCell>
                       <TableCell className="text-center" onClick={e => e.stopPropagation()}>
@@ -364,14 +364,14 @@ function ClientesSection() {
 
       {/* Add Modal */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-2xl dark:bg-slate-950 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="dark:text-white">Nuevo Cliente</DialogTitle>
-            <DialogDescription className="dark:text-slate-400">Completá los datos del nuevo cliente.</DialogDescription>
+            <DialogTitle className="dark:text-kx-text">Nuevo Cliente</DialogTitle>
+            <DialogDescription className="dark:text-kx-text-2">Completá los datos del nuevo cliente.</DialogDescription>
           </DialogHeader>
           {renderClientForm({ isEdit: false })}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="dark:text-white dark:border-slate-700">Cancelar</Button>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="dark:text-kx-text dark:border-kx-border">Cancelar</Button>
             <Button onClick={() => handleSave(false)} disabled={saving} className="bg-blue-600 text-white hover:bg-blue-700">
               {saving ? 'Guardando...' : 'Crear Cliente'}
             </Button>
@@ -381,14 +381,14 @@ function ClientesSection() {
 
       {/* Edit Modal */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-2xl dark:bg-slate-950 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="dark:text-white">Editar: {selectedClient?.nombre}</DialogTitle>
-            <DialogDescription className="dark:text-slate-400">Modificá los datos del cliente.</DialogDescription>
+            <DialogTitle className="dark:text-kx-text">Editar: {selectedClient?.nombre}</DialogTitle>
+            <DialogDescription className="dark:text-kx-text-2">Modificá los datos del cliente.</DialogDescription>
           </DialogHeader>
           {renderClientForm({ isEdit: true })}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="dark:text-white dark:border-slate-700">Cancelar</Button>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="dark:text-kx-text dark:border-kx-border">Cancelar</Button>
             <Button onClick={() => handleSave(true)} disabled={saving} className="bg-blue-600 text-white hover:bg-blue-700">
               {saving ? 'Guardando...' : 'Guardar Cambios'}
             </Button>

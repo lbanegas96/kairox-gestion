@@ -13,8 +13,8 @@ function ImpuestosSection({ onNavigate }) {
           <Receipt className="h-6 w-6 text-white" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Impuestos</h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">IVA, retenciones y alícuotas provinciales.</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-kx-text">Impuestos</h1>
+          <p className="text-sm text-slate-500 dark:text-kx-text-2">IVA, retenciones y alícuotas provinciales.</p>
         </div>
       </div>
 

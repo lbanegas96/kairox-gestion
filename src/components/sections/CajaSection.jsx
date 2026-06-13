@@ -330,11 +330,12 @@ function CajaSection() {
       return;
     }
 
-    // Regla: cualquier movimiento requiere caja abierta.
-    if (!isSessionOpen) {
+    // Regla: solo movimientos de efectivo requieren caja abierta.
+    const esEfectivo = (formData.metodo_pago || 'Efectivo') === 'Efectivo';
+    if (!isSessionOpen && esEfectivo) {
       toast({
-        title: '⛔ Caja cerrada',
-        description: 'No se pueden registrar movimientos con la caja cerrada. Abrí la caja para poder operar.',
+        title: 'Caja cerrada',
+        description: 'Abrí la caja para registrar movimientos en efectivo. Otros métodos de pago no requieren caja abierta.',
         variant: 'destructive',
       });
       return;
@@ -487,7 +488,7 @@ function CajaSection() {
   };
 
   const SortIcon = ({ column }) => {
-    if (sortConfig.key !== column) return <ArrowUpDown className="ml-2 h-4 w-4 text-slate-400" />;
+    if (sortConfig.key !== column) return <ArrowUpDown className="ml-2 h-4 w-4 text-kx-text-3" />;
     return sortConfig.direction === 'asc' 
       ? <ArrowUp className="ml-2 h-4 w-4 text-blue-600 dark:text-[#00D4FF]" /> 
       : <ArrowDown className="ml-2 h-4 w-4 text-blue-600 dark:text-[#00D4FF]" />;
@@ -505,20 +506,20 @@ function CajaSection() {
   return (
     <div className="space-y-6">
       {/* HEADER with Session Info & Actions */}
-      <Card className={`border-slate-200 dark:border-slate-800 shadow-sm transition-all overflow-hidden ${isSessionOpen ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-orange-400'}`}>
+      <Card className={`border-kx-border dark:border-kx-border shadow-sm transition-all overflow-hidden ${isSessionOpen ? 'border-l-4 border-l-green-500' : 'border-l-4 border-l-orange-400'}`}>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 py-4 px-6 bg-slate-50/50 dark:bg-slate-900/50">
           <div className="flex items-center gap-4">
             <div className={`p-2 rounded-lg ${isSessionOpen ? 'bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400' : 'bg-orange-100 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400'}`}>
               <Archive className="h-5 w-5" />
             </div>
             <div>
-              <CardTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <CardTitle className="text-base font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
                 {isSessionOpen ? "Caja Abierta" : "Caja Cerrada"}
                 {isSessionOpen && (
                   <span className="flex h-2 w-2 rounded-full bg-green-500 animate-pulse" title="Estado: Activo" />
                 )}
               </CardTitle>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-0.5">
                 {isSessionOpen ? "Operaciones habilitadas" : "Inicia sesión para operar"}
               </p>
             </div>
@@ -527,11 +528,11 @@ function CajaSection() {
           <div className="flex items-center gap-4">
             {isSessionOpen && currentSession && (
               <div className="hidden md:flex flex-col items-end mr-2">
-                <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold">Saldo Inicial</span>
-                <span className="text-lg font-bold font-mono text-slate-800 dark:text-slate-200">
+                <span className="text-xs text-slate-500 dark:text-kx-text-2 uppercase font-semibold">Saldo Inicial</span>
+                <span className="text-lg font-bold font-mono text-kx-text dark:text-kx-text">
                   ${currentSession.monto_inicial?.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                 </span>
-                <span className="text-xs text-slate-400 flex items-center gap-1">
+                <span className="text-xs text-kx-text-3 flex items-center gap-1">
                   <Clock className="w-3 h-3" />
                   {formatDateTimeAR(currentSession.apertura_fecha).split(' ')[1]} hs
                 </span>
@@ -562,35 +563,35 @@ function CajaSection() {
       {isSessionOpen && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Ingresos del turno */}
-          <div className="kairox-bg-card border kairox-border rounded-xl p-5 dark:bg-slate-950 dark:border-slate-800 flex items-center gap-4">
+          <div className="kairox-bg-card border kairox-border rounded-xl p-5 dark:bg-kx-bg dark:border-kx-border flex items-center gap-4">
             <div className="p-3 rounded-lg bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 shrink-0">
               <TrendingUp className="h-5 w-5" />
             </div>
             <div>
-              <div className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold tracking-wider">INGRESOS DEL TURNO</div>
+              <div className="text-xs text-slate-500 dark:text-kx-text-2 uppercase font-semibold tracking-wider">INGRESOS DEL TURNO</div>
               <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
                 ${totals.ingresos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
               </div>
               {tcParalelo.enabled && tcParalelo.tcHoy && (
-                <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                <div className="text-xs text-kx-text-3 dark:text-kx-text-3 mt-0.5">
                   ≈ {(totals.ingresos / tcParalelo.tcHoy).toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
                 </div>
               )}
-              <div className="text-xs text-slate-400 mt-0.5">Desde apertura de caja</div>
+              <div className="text-xs text-kx-text-3 mt-0.5">Desde apertura de caja</div>
             </div>
           </div>
 
           {/* Egresos del turno */}
-          <div className="kairox-bg-card border kairox-border rounded-xl p-5 dark:bg-slate-950 dark:border-slate-800 flex items-center gap-4">
+          <div className="kairox-bg-card border kairox-border rounded-xl p-5 dark:bg-kx-bg dark:border-kx-border flex items-center gap-4">
             <div className="p-3 rounded-lg bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 shrink-0">
               <TrendingDown className="h-5 w-5" />
             </div>
             <div>
-              <div className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold tracking-wider">EGRESOS DEL TURNO</div>
+              <div className="text-xs text-slate-500 dark:text-kx-text-2 uppercase font-semibold tracking-wider">EGRESOS DEL TURNO</div>
               <div className="text-2xl font-bold font-mono text-red-600 dark:text-red-400">
                 ${totals.egresos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
               </div>
-              <div className="text-xs text-slate-400 mt-0.5">Desde apertura de caja</div>
+              <div className="text-xs text-kx-text-3 mt-0.5">Desde apertura de caja</div>
             </div>
           </div>
 
@@ -598,16 +599,16 @@ function CajaSection() {
           {(() => {
             const saldo = (currentSession?.monto_inicial || 0) + totals.ingresos - totals.egresos;
             return (
-              <div className="kairox-bg-card border kairox-border rounded-xl p-5 dark:bg-slate-950 dark:border-slate-800 flex items-center gap-4">
+              <div className="kairox-bg-card border kairox-border rounded-xl p-5 dark:bg-kx-bg dark:border-kx-border flex items-center gap-4">
                 <div className={`p-3 rounded-lg shrink-0 ${saldo >= 0 ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400'}`}>
                   <Scale className="h-5 w-5" />
                 </div>
                 <div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold tracking-wider">SALDO LÍQUIDO DE CAJA</div>
+                  <div className="text-xs text-slate-500 dark:text-kx-text-2 uppercase font-semibold tracking-wider">SALDO LÍQUIDO DE CAJA</div>
                   <div className={`text-2xl font-bold font-mono ${saldo >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>
                     ${saldo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                   </div>
-                  <div className="text-xs text-slate-400 mt-0.5">SI + Ingresos − Egresos</div>
+                  <div className="text-xs text-kx-text-3 mt-0.5">SI + Ingresos − Egresos</div>
                 </div>
               </div>
             );
@@ -617,34 +618,34 @@ function CajaSection() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="bg-transparent p-0 gap-2 mb-6 w-full flex justify-start">
-          <TabsTrigger value="movimientos" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white rounded-md px-4 py-2"><Filter className="w-4 h-4 mr-2"/> Movimientos</TabsTrigger>
-          <TabsTrigger value="nuevo" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white rounded-md px-4 py-2"><Plus className="w-4 h-4 mr-2"/> Nuevo Movimiento</TabsTrigger>
-          <TabsTrigger value="resumen" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white rounded-md px-4 py-2"><Wallet className="w-4 h-4 mr-2"/> Reporte Histórico</TabsTrigger>
+          <TabsTrigger value="movimientos" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-kx-surface text-slate-500 dark:text-kx-text-2 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white rounded-md px-4 py-2"><Filter className="w-4 h-4 mr-2"/> Movimientos</TabsTrigger>
+          <TabsTrigger value="nuevo" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-kx-surface text-slate-500 dark:text-kx-text-2 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white rounded-md px-4 py-2"><Plus className="w-4 h-4 mr-2"/> Nuevo Movimiento</TabsTrigger>
+          <TabsTrigger value="resumen" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-kx-surface text-slate-500 dark:text-kx-text-2 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white rounded-md px-4 py-2"><Wallet className="w-4 h-4 mr-2"/> Reporte Histórico</TabsTrigger>
         </TabsList>
 
         <TabsContent value="movimientos" className="space-y-4">
           <div className="kairox-bg-card border kairox-border p-4 rounded-xl grid grid-cols-1 md:grid-cols-4 gap-4 items-end shadow-sm">
              <div className="space-y-2">
-               <Label className="dark:text-white">Desde</Label>
-               <Input type="date" value={filters.dateStart} onChange={e => setFilters({...filters, dateStart: e.target.value})} className="kairox-input dark:bg-slate-900 dark:border-slate-700 dark:text-white"/>
+               <Label className="dark:text-kx-text">Desde</Label>
+               <Input type="date" value={filters.dateStart} onChange={e => setFilters({...filters, dateStart: e.target.value})} className="kairox-input dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"/>
              </div>
              <div className="space-y-2">
-               <Label className="dark:text-white">Hasta</Label>
-               <Input type="date" value={filters.dateEnd} onChange={e => setFilters({...filters, dateEnd: e.target.value})} className="kairox-input dark:bg-slate-900 dark:border-slate-700 dark:text-white"/>
+               <Label className="dark:text-kx-text">Hasta</Label>
+               <Input type="date" value={filters.dateEnd} onChange={e => setFilters({...filters, dateEnd: e.target.value})} className="kairox-input dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"/>
              </div>
              <div className="space-y-2">
-               <Label className="dark:text-white">Tipo</Label>
-               <select className="w-full h-10 rounded-md kairox-input pl-3 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00D4FF] dark:bg-slate-900 dark:border-slate-700 dark:text-white" value={filters.type} onChange={e => setFilters({...filters, type: e.target.value})}>
+               <Label className="dark:text-kx-text">Tipo</Label>
+               <select className="w-full h-10 rounded-md kairox-input pl-3 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00D4FF] dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" value={filters.type} onChange={e => setFilters({...filters, type: e.target.value})}>
                  <option value="Todos">Todos</option>
                  <option value="Ingreso">Ingresos</option>
                  <option value="Egreso">Egresos</option>
                </select>
              </div>
              <div className="space-y-2">
-               <Label className="dark:text-white">Buscar Concepto</Label>
+               <Label className="dark:text-kx-text">Buscar Concepto</Label>
                <div className="relative">
                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500"/>
-                 <Input placeholder="Buscar..." value={filters.search} onChange={e => setFilters({...filters, search: e.target.value})} className="pl-9 kairox-input dark:bg-slate-900 dark:border-slate-700 dark:text-white"/>
+                 <Input placeholder="Buscar..." value={filters.search} onChange={e => setFilters({...filters, search: e.target.value})} className="pl-9 kairox-input dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"/>
                </div>
              </div>
           </div>
@@ -674,9 +675,9 @@ function CajaSection() {
                     <tr><td colSpan="7" className="p-8 text-center text-slate-500">No se encontraron movimientos</td></tr>
                   ) : (
                     sortedMovimientos.map((m) => (
-                      <tr key={m.id} className="kairox-table-row group h-[60px] hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <tr key={m.id} className="kairox-table-row group h-[60px] hover:bg-kx-surface-2 dark:hover:bg-slate-800/50">
                         <td className="p-4 align-middle font-mono whitespace-nowrap">
-                            <span className="font-bold kairox-text-primary dark:text-slate-200">
+                            <span className="font-bold kairox-text-primary dark:text-kx-text">
                               {formatDateTimeAR(m.fecha)}
                             </span>
                         </td>
@@ -688,7 +689,7 @@ function CajaSection() {
                           )}
                         </td>
                         <td className="p-4 align-middle font-medium kairox-text-primary text-xs dark:text-slate-300">{m.categoria}</td>
-                        <td className="p-4 align-middle kairox-text-primary dark:text-slate-200">
+                        <td className="p-4 align-middle kairox-text-primary dark:text-kx-text">
                           <div className="flex items-center gap-2">
                             {m.is_automatic && (
                               <div title="Automático" className="p-0.5 bg-blue-500/10 rounded text-blue-500 shrink-0 dark:bg-blue-500/20 dark:text-blue-400"><Bot className="w-3 h-3" /></div>
@@ -696,18 +697,18 @@ function CajaSection() {
                             <span className="truncate max-w-[200px]" title={m.concepto}>{m.concepto}</span>
                           </div>
                         </td>
-                        <td className="p-4 align-middle text-xs text-slate-500 dark:text-slate-400">{m.metodo_pago || '-'}</td>
+                        <td className="p-4 align-middle text-xs text-slate-500 dark:text-kx-text-2">{m.metodo_pago || '-'}</td>
                         <td className={`p-4 align-middle text-right font-bold font-mono ${m.tipo === 'ingreso' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
                           <div>{formatAmount(m.monto, m.tipo)}</div>
                           {tcParalelo.enabled && m.monto_paralelo && (
-                            <div className="text-xs font-normal text-slate-400 dark:text-slate-500">
+                            <div className="text-xs font-normal text-kx-text-3 dark:text-kx-text-3">
                               ≈ {Number(m.monto_paralelo).toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
                             </div>
                           )}
                         </td>
                         <td className="p-4 align-middle text-center">
                            {!m.is_automatic && (
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-500 dark:hover:text-red-400 dark:hover:bg-red-900/20" onClick={() => handleRequestDelete(m.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-red-500 dark:hover:text-red-400 dark:hover:bg-red-900/20" onClick={() => handleRequestDelete(m.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                            )}
                         </td>
                       </tr>
@@ -721,18 +722,18 @@ function CajaSection() {
 
         {/* --- TAB: NUEVO MOVIMIENTO --- */}
         <TabsContent value="nuevo" className="max-w-2xl mx-auto">
-          <div className={`kairox-bg-card border kairox-border rounded-xl p-6 shadow-xl transition-all duration-300 dark:bg-slate-950 dark:border-slate-800 ${formData.tipo === 'ingreso' ? 'shadow-green-500/10' : 'shadow-red-500/10'}`}>
+          <div className={`kairox-bg-card border kairox-border rounded-xl p-6 shadow-xl transition-all duration-300 dark:bg-kx-bg dark:border-kx-border ${formData.tipo === 'ingreso' ? 'shadow-green-500/10' : 'shadow-red-500/10'}`}>
             <div className="flex items-center justify-between mb-6">
               <h3 className={`text-xl font-bold flex items-center gap-2 ${currentThemeColor}`}><Plus className="w-5 h-5" />Registrar {formData.tipo === 'ingreso' ? 'Ingreso' : 'Egreso'}</h3>
             </div>
             
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="bg-slate-100 dark:bg-slate-900 p-1 rounded-lg border kairox-border flex gap-2">
-                <label className={`flex-1 cursor-pointer rounded-md px-4 py-3 flex items-center justify-center gap-2 transition-all duration-200 ${formData.tipo === 'ingreso' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-800'}`}>
+              <div className="bg-slate-100 dark:bg-kx-surface p-1 rounded-lg border kairox-border flex gap-2">
+                <label className={`flex-1 cursor-pointer rounded-md px-4 py-3 flex items-center justify-center gap-2 transition-all duration-200 ${formData.tipo === 'ingreso' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-200 dark:text-kx-text-2 dark:hover:bg-slate-800'}`}>
                   <input type="radio" name="tipo" value="ingreso" checked={formData.tipo === 'ingreso'} onChange={handleInputChange} className="hidden"/>
                   <ArrowUpRight className="w-5 h-5" /><span className="font-bold">INGRESO</span>
                 </label>
-                <label className={`flex-1 cursor-pointer rounded-md px-4 py-3 flex items-center justify-center gap-2 transition-all duration-200 ${formData.tipo === 'egreso' ? 'bg-red-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-800'}`}>
+                <label className={`flex-1 cursor-pointer rounded-md px-4 py-3 flex items-center justify-center gap-2 transition-all duration-200 ${formData.tipo === 'egreso' ? 'bg-red-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-200 dark:text-kx-text-2 dark:hover:bg-slate-800'}`}>
                   <input type="radio" name="tipo" value="egreso" checked={formData.tipo === 'egreso'} onChange={handleInputChange} className="hidden"/>
                   <ArrowDownRight className="w-5 h-5" /><span className="font-bold">EGRESO</span>
                 </label>
@@ -743,13 +744,13 @@ function CajaSection() {
                   <Label className={currentThemeColor}>Monto ($)</Label>
                   <div className="relative">
                     <DollarSign className="absolute left-3 top-2.5 h-5 w-5 text-slate-500"/>
-                    <Input type="text" inputMode="decimal" name="monto" value={formData.monto} onChange={handleInputChange} className={`pl-10 h-12 text-xl font-mono font-bold kairox-input dark:bg-slate-900 dark:border-slate-700 dark:text-white ${currentBorderColor}`} placeholder="0,00" required/>
+                    <Input type="text" inputMode="decimal" name="monto" value={formData.monto} onChange={handleInputChange} className={`pl-10 h-12 text-xl font-mono font-bold kairox-input dark:bg-kx-surface dark:border-kx-border dark:text-kx-text ${currentBorderColor}`} placeholder="0,00" required/>
                   </div>
                 </div>
                 
                 <div className="space-y-2">
-                   <Label className="dark:text-white">Método de Pago</Label>
-                   <select name="metodo_pago" value={formData.metodo_pago} onChange={handleInputChange} className={`w-full h-12 rounded-md kairox-input px-3 text-sm focus:outline-none focus:ring-2 dark:bg-slate-900 dark:border-slate-700 dark:text-white ${currentBorderColor}`}>
+                   <Label className="dark:text-kx-text">Método de Pago</Label>
+                   <select name="metodo_pago" value={formData.metodo_pago} onChange={handleInputChange} className={`w-full h-12 rounded-md kairox-input px-3 text-sm focus:outline-none focus:ring-2 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text ${currentBorderColor}`}>
                       <option value="Efectivo">Efectivo</option>
                       <option value="Tarjeta Débito">Tarjeta Débito</option>
                       <option value="Tarjeta Crédito">Tarjeta Crédito</option>
@@ -760,18 +761,18 @@ function CajaSection() {
               </div>
 
               <div className="space-y-2">
-                <Label className="dark:text-white">Categoría</Label>
-                <select name="categoria" value={formData.categoria} onChange={handleInputChange} className={`w-full h-12 rounded-md kairox-input px-3 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 dark:bg-slate-900 dark:border-slate-700 ${currentBorderColor}`}>
+                <Label className="dark:text-kx-text">Categoría</Label>
+                <select name="categoria" value={formData.categoria} onChange={handleInputChange} className={`w-full h-12 rounded-md kairox-input px-3 text-sm text-slate-700 dark:text-kx-text focus:outline-none focus:ring-2 dark:bg-kx-surface dark:border-kx-border ${currentBorderColor}`}>
                   {formData.tipo === 'ingreso' 
-                    ? categoriasIngreso.map(cat => (<option key={cat.value} value={cat.value} disabled={cat.disabled} className={cat.disabled ? 'text-slate-400 italic' : ''}>{cat.label}</option>))
-                    : categoriasEgreso.map(cat => (<option key={cat.value} value={cat.value} disabled={cat.disabled} className={cat.disabled ? 'text-slate-400 italic' : ''}>{cat.label}</option>))
+                    ? categoriasIngreso.map(cat => (<option key={cat.value} value={cat.value} disabled={cat.disabled} className={cat.disabled ? 'text-kx-text-3 italic' : ''}>{cat.label}</option>))
+                    : categoriasEgreso.map(cat => (<option key={cat.value} value={cat.value} disabled={cat.disabled} className={cat.disabled ? 'text-kx-text-3 italic' : ''}>{cat.label}</option>))
                   }
                 </select>
               </div>
 
               <div className="space-y-2">
-                <Label className="dark:text-white">Concepto / Descripción</Label>
-                <Input name="concepto" value={formData.concepto} onChange={handleInputChange} className={`h-12 kairox-input dark:bg-slate-900 dark:border-slate-700 dark:text-white ${currentBorderColor}`} required/>
+                <Label className="dark:text-kx-text">Concepto / Descripción</Label>
+                <Input name="concepto" value={formData.concepto} onChange={handleInputChange} className={`h-12 kairox-input dark:bg-kx-surface dark:border-kx-border dark:text-kx-text ${currentBorderColor}`} required/>
               </div>
 
               <div className="pt-4">
@@ -785,15 +786,15 @@ function CajaSection() {
 
         {/* --- TAB: RESUMEN (Preserved - Historical View) --- */}
         <TabsContent value="resumen" className="space-y-6">
-           <div className="kairox-bg-card p-4 rounded-xl border kairox-border text-center mb-4 dark:bg-slate-950 dark:border-slate-800">
-              <p className="text-sm text-slate-500 dark:text-slate-400">Este resumen muestra datos históricos globales.</p>
+           <div className="kairox-bg-card p-4 rounded-xl border kairox-border text-center mb-4 dark:bg-kx-bg dark:border-kx-border">
+              <p className="text-sm text-slate-500 dark:text-kx-text-2">Este resumen muestra datos históricos globales.</p>
            </div>
            
-           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 kairox-bg-card p-4 rounded-xl border kairox-border dark:bg-slate-950 dark:border-slate-800">
+           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 kairox-bg-card p-4 rounded-xl border kairox-border dark:bg-kx-bg dark:border-kx-border">
              <div className="flex flex-col gap-2 w-full md:w-auto">
                 <div className="flex flex-wrap gap-2">
                   {['today', 'thisWeek', 'thisMonth', 'last30', 'custom'].map((period) => (
-                    <Button key={period} variant={reportPeriod === period ? "default" : "outline"} size="sm" onClick={() => setReportPeriod(period)} className={reportPeriod === period ? 'bg-blue-600 text-white' : 'dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-800'}>
+                    <Button key={period} variant={reportPeriod === period ? "default" : "outline"} size="sm" onClick={() => setReportPeriod(period)} className={reportPeriod === period ? 'bg-blue-600 text-white' : 'dark:text-slate-300 dark:border-kx-border dark:hover:bg-slate-800'}>
                       {getPeriodLabel(period)}
                     </Button>
                   ))}
@@ -801,42 +802,42 @@ function CajaSection() {
                 {reportPeriod === 'custom' && (
                   <div className="flex items-center gap-2 pt-2">
                      <div className="grid grid-cols-2 gap-2">
-                       <Input type="date" value={customDateRange.start} onChange={e => setCustomDateRange(prev => ({...prev, start: e.target.value}))} className="h-8 kairox-input w-36 dark:bg-slate-900 dark:border-slate-700 dark:text-white"/>
-                       <Input type="date" value={customDateRange.end} onChange={e => setCustomDateRange(prev => ({...prev, end: e.target.value}))} className="h-8 kairox-input w-36 dark:bg-slate-900 dark:border-slate-700 dark:text-white"/>
+                       <Input type="date" value={customDateRange.start} onChange={e => setCustomDateRange(prev => ({...prev, start: e.target.value}))} className="h-8 kairox-input w-36 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"/>
+                       <Input type="date" value={customDateRange.end} onChange={e => setCustomDateRange(prev => ({...prev, end: e.target.value}))} className="h-8 kairox-input w-36 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"/>
                      </div>
                   </div>
                 )}
              </div>
              
-             {lastUpdate && (<div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1"><Clock className="w-3 h-3"/> Act: {lastUpdate.toLocaleTimeString()}</div>)}
+             {lastUpdate && (<div className="text-xs text-slate-500 dark:text-kx-text-2 flex items-center gap-1"><Clock className="w-3 h-3"/> Act: {lastUpdate.toLocaleTimeString()}</div>)}
            </div>
  
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div className="kairox-bg-card border kairox-border p-5 rounded-xl dark:bg-slate-950 dark:border-slate-800">
-                 <div className="text-sm text-slate-500 dark:text-slate-400 mb-1">Ingresos</div>
+              <div className="kairox-bg-card border kairox-border p-5 rounded-xl dark:bg-kx-bg dark:border-kx-border">
+                 <div className="text-sm text-slate-500 dark:text-kx-text-2 mb-1">Ingresos</div>
                  <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">${summaryData.ingresosPeriodo.toFixed(2)}</div>
               </div>
-              <div className="kairox-bg-card border kairox-border p-5 rounded-xl dark:bg-slate-950 dark:border-slate-800">
-                 <div className="text-sm text-slate-500 dark:text-slate-400 mb-1">Egresos</div>
+              <div className="kairox-bg-card border kairox-border p-5 rounded-xl dark:bg-kx-bg dark:border-kx-border">
+                 <div className="text-sm text-slate-500 dark:text-kx-text-2 mb-1">Egresos</div>
                  <div className="text-2xl font-bold text-red-600 dark:text-red-400">${summaryData.egresosPeriodo.toFixed(2)}</div>
               </div>
-              <div className="kairox-bg-card border kairox-border p-5 rounded-xl dark:bg-slate-950 dark:border-slate-800">
-                 <div className="text-sm text-slate-500 dark:text-slate-400 mb-1">Balance</div>
+              <div className="kairox-bg-card border kairox-border p-5 rounded-xl dark:bg-kx-bg dark:border-kx-border">
+                 <div className="text-sm text-slate-500 dark:text-kx-text-2 mb-1">Balance</div>
                  <div className={`text-2xl font-bold ${summaryData.balancePeriodo >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>${summaryData.balancePeriodo.toFixed(2)}</div>
               </div>
             </div>
 
             {summaryData.detailedMovements.length === 0 ? (
-               <div className="text-center p-10 text-slate-500 dark:text-slate-400">No hay datos históricos para el periodo seleccionado.</div>
+               <div className="text-center p-10 text-slate-500 dark:text-kx-text-2">No hay datos históricos para el periodo seleccionado.</div>
             ) : (
-               <div className="kairox-bg-card border kairox-border rounded-xl p-6 dark:bg-slate-950 dark:border-slate-800">
-                 <h3 className="font-bold mb-4 dark:text-white">Detalle Histórico</h3>
+               <div className="kairox-bg-card border kairox-border rounded-xl p-6 dark:bg-kx-bg dark:border-kx-border">
+                 <h3 className="font-bold mb-4 dark:text-kx-text">Detalle Histórico</h3>
                  <div className="overflow-x-auto">
                     <table className="w-full text-sm">
-                       <thead><tr><th className="text-left p-2 dark:text-slate-400">Fecha</th><th className="text-left p-2 dark:text-slate-400">Concepto</th><th className="text-right p-2 dark:text-slate-400">Monto</th></tr></thead>
+                       <thead><tr><th className="text-left p-2 dark:text-kx-text-2">Fecha</th><th className="text-left p-2 dark:text-kx-text-2">Concepto</th><th className="text-right p-2 dark:text-kx-text-2">Monto</th></tr></thead>
                        <tbody>
                           {summaryData.detailedMovements.map(m => (
-                             <tr key={m.id} className="border-t border-slate-100 dark:border-slate-800">
+                             <tr key={m.id} className="border-t border-slate-100 dark:border-kx-border">
                                 <td className="p-2 dark:text-slate-300">{formatDateAR(m.fecha)}</td>
                                 <td className="p-2 dark:text-slate-300">{m.concepto}</td>
                                 <td className={`p-2 text-right ${m.tipo === 'ingreso' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{formatAmount(m.monto, m.tipo)}</td>
@@ -852,16 +853,16 @@ function CajaSection() {
 
       {/* MODAL: Abrir Caja */}
       <Dialog open={isAperturaModalOpen} onOpenChange={setIsAperturaModalOpen}>
-        <DialogContent className="sm:max-w-md kairox-bg-card kairox-text-primary p-6 dark:bg-slate-950 dark:border-slate-800">
+        <DialogContent className="sm:max-w-md kairox-bg-card kairox-text-primary p-6 dark:bg-kx-bg dark:border-kx-border">
           <DialogHeader>
-            <DialogTitle className="dark:text-white">Abrir Caja</DialogTitle>
-            <DialogDescription className="dark:text-slate-400">
+            <DialogTitle className="dark:text-kx-text">Abrir Caja</DialogTitle>
+            <DialogDescription className="dark:text-kx-text-2">
               Inicia una nueva sesión de caja. Ingresa el monto inicial en efectivo.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label className="dark:text-white">Saldo Inicial ($)</Label>
+              <Label className="dark:text-kx-text">Saldo Inicial ($)</Label>
               <Input 
                 type="number" 
                 step="0.01" 
@@ -869,12 +870,12 @@ function CajaSection() {
                 placeholder="0.00" 
                 value={saldoInicialInput}
                 onChange={(e) => setSaldoInicialInput(e.target.value)}
-                className="text-lg font-bold dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+                className="text-lg font-bold dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAperturaModalOpen(false)} className="dark:text-white dark:border-slate-700 dark:hover:bg-slate-800">Cancelar</Button>
+            <Button variant="outline" onClick={() => setIsAperturaModalOpen(false)} className="dark:text-kx-text dark:border-kx-border dark:hover:bg-slate-800">Cancelar</Button>
             <Button onClick={handleOpenSession} disabled={isProcessingSession} className="bg-green-600 hover:bg-green-700 text-white">
               {isProcessingSession ? "Abriendo..." : "Confirmar Apertura"}
             </Button>
@@ -884,16 +885,16 @@ function CajaSection() {
 
       {/* MODAL: Cerrar Caja */}
       <Dialog open={isCierreSessionModalOpen} onOpenChange={setIsCierreSessionModalOpen}>
-        <DialogContent className="sm:max-w-md kairox-bg-card kairox-text-primary p-6 dark:bg-slate-950 dark:border-slate-800">
+        <DialogContent className="sm:max-w-md kairox-bg-card kairox-text-primary p-6 dark:bg-kx-bg dark:border-kx-border">
            <CajaCierre onCancel={() => setIsCierreSessionModalOpen(false)} />
         </DialogContent>
       </Dialog>
 
       {/* DELETE DIALOG */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="kairox-bg-card border kairox-border kairox-text-primary dark:bg-slate-950 dark:border-slate-800">
-          <AlertDialogHeader><AlertDialogTitle className="dark:text-white">¿Estás seguro?</AlertDialogTitle><AlertDialogDescription className="dark:text-slate-400">Esta acción es permanente.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel className="dark:text-white dark:border-slate-700 dark:hover:bg-slate-800">Cancelar</AlertDialogCancel><AlertDialogAction className="bg-red-600 text-white hover:bg-red-700" onClick={handleConfirmDelete}>Eliminar</AlertDialogAction></AlertDialogFooter>
+        <AlertDialogContent className="kairox-bg-card border kairox-border kairox-text-primary dark:bg-kx-bg dark:border-kx-border">
+          <AlertDialogHeader><AlertDialogTitle className="dark:text-kx-text">¿Estás seguro?</AlertDialogTitle><AlertDialogDescription className="dark:text-kx-text-2">Esta acción es permanente.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel className="dark:text-kx-text dark:border-kx-border dark:hover:bg-slate-800">Cancelar</AlertDialogCancel><AlertDialogAction className="bg-red-600 text-white hover:bg-red-700" onClick={handleConfirmDelete}>Eliminar</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

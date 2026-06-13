@@ -99,13 +99,13 @@ function NuevaNotaDebitoModal({ isOpen, onClose, onSuccess }) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md dark:bg-slate-950 dark:border-slate-800">
+      <DialogContent className="max-w-md dark:bg-kx-bg dark:border-kx-border">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 dark:text-white">
+          <DialogTitle className="flex items-center gap-2 dark:text-kx-text">
             <FileWarning className="h-5 w-5 text-amber-500" />
             Nueva Nota de Débito
           </DialogTitle>
-          <DialogDescription className="dark:text-slate-400">
+          <DialogDescription className="dark:text-kx-text-2">
             Cargo adicional al cliente — diferencia de precio, intereses, etc.
           </DialogDescription>
         </DialogHeader>
@@ -129,7 +129,7 @@ function NuevaNotaDebitoModal({ isOpen, onClose, onSuccess }) {
               <select
                 value={comprobanteId}
                 onChange={e => setComprobanteId(e.target.value)}
-                className="w-full h-9 rounded-md border border-kx-border bg-transparent px-3 text-sm dark:bg-slate-900 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-[rgb(var(--kx-violet))]"
+                className="w-full h-9 rounded-md border border-kx-border bg-transparent px-3 text-sm dark:bg-kx-surface dark:text-kx-text focus:outline-none focus:ring-1 focus:ring-[rgb(var(--kx-violet))]"
               >
                 <option value="">Sin factura asociada</option>
                 {comprobantes.map(c => (
@@ -148,7 +148,7 @@ function NuevaNotaDebitoModal({ isOpen, onClose, onSuccess }) {
               placeholder="Diferencia de precio, intereses por mora, cargo adicional..."
               value={concepto}
               onChange={e => setConcepto(e.target.value)}
-              className="resize-none h-16 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 text-sm"
+              className="resize-none h-16 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm"
             />
           </div>
 
@@ -161,7 +161,7 @@ function NuevaNotaDebitoModal({ isOpen, onClose, onSuccess }) {
               placeholder="0,00"
               value={montoRaw}
               onChange={e => setMontoRaw(e.target.value)}
-              className="dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200"
+              className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
             />
             <p className="text-xs text-kx-text-3">Punto = separador de miles, coma = decimal (ej: 1.500,00)</p>
           </div>
@@ -169,7 +169,7 @@ function NuevaNotaDebitoModal({ isOpen, onClose, onSuccess }) {
 
         <div className="flex justify-end gap-3 pt-2 border-t border-kx-border">
           <Button variant="outline" onClick={onClose} disabled={saving}
-            className="dark:border-slate-700 dark:text-slate-300">
+            className="dark:border-kx-border dark:text-slate-300">
             Cancelar
           </Button>
           <Button

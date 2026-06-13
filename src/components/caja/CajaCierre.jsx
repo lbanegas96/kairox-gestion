@@ -145,7 +145,7 @@ const CajaCierre = ({ onCancel }) => {
       <form onSubmit={handleSubmit}>
         <CardContent className="px-0 space-y-6">
            {/* Resumen Calculado */}
-           <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-4 space-y-3 border border-slate-200 dark:border-slate-800">
+           <div className="bg-kx-surface-2 dark:bg-kx-surface rounded-lg p-4 space-y-3 border border-kx-border dark:border-kx-border">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-500">Saldo Inicial</span>
                 <span className="font-mono font-medium">${totals.inicial.toFixed(2)}</span>
@@ -160,12 +160,12 @@ const CajaCierre = ({ onCancel }) => {
               </div>
               <Separator className="bg-slate-300 dark:bg-slate-700"/>
               <div className="flex justify-between items-center pt-1">
-                <span className="font-bold text-slate-700 dark:text-slate-200">Saldo Esperado en Caja</span>
+                <span className="font-bold text-slate-700 dark:text-kx-text">Saldo Esperado en Caja</span>
                 <span className="font-mono font-bold text-lg">${totals.esperado.toFixed(2)}</span>
               </div>
               
               {totals.otrosIngresos > 0 && (
-                <div className="text-xs text-slate-400 pt-2 border-t border-dashed border-slate-200 dark:border-slate-800 mt-2">
+                <div className="text-xs text-kx-text-3 pt-2 border-t border-dashed border-kx-border dark:border-kx-border mt-2">
                   * Otros medios de pago (Tarjetas/Transf): ${totals.otrosIngresos.toFixed(2)}
                 </div>
               )}
@@ -205,7 +205,7 @@ const CajaCierre = ({ onCancel }) => {
                   </span>
                 </div>
                 {!isPerfect && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-xs text-slate-500 dark:text-kx-text-2">
                     {isFaltante
                       ? `Faltan $${Math.abs(diferencia).toFixed(2)} en caja. Registrá la observación.`
                       : `Hay $${diferencia.toFixed(2)} de más. Verificá los movimientos.`}

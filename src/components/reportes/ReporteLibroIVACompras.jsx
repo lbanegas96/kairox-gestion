@@ -123,28 +123,28 @@ function ReporteLibroIVACompras({ onBack }) {
           <ArrowLeft className="h-4 w-4 mr-1" /> Volver
         </Button>
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
             <BookOpen className="h-6 w-6 text-emerald-500" />
             Libro IVA Compras
           </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-0.5">
             Compras a proveedores por período · crédito fiscal IVA
           </p>
         </div>
       </div>
 
       {/* Filtros */}
-      <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="bg-kx-surface dark:bg-kx-surface p-5 rounded-xl border border-kx-border dark:border-kx-border shadow-sm">
         <div className="flex flex-wrap gap-4 items-end">
           <div className="space-y-1">
-            <Label className="text-xs text-slate-500 dark:text-slate-400 font-medium">Desde</Label>
+            <Label className="text-xs text-slate-500 dark:text-kx-text-2 font-medium">Desde</Label>
             <Input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
-              className="h-9 w-40 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
+              className="h-9 w-40 dark:bg-kx-surface-2 dark:border-kx-border dark:text-kx-text" />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs text-slate-500 dark:text-slate-400 font-medium">Hasta</Label>
+            <Label className="text-xs text-slate-500 dark:text-kx-text-2 font-medium">Hasta</Label>
             <Input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
-              className="h-9 w-40 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
+              className="h-9 w-40 dark:bg-kx-surface-2 dark:border-kx-border dark:text-kx-text" />
           </div>
           <Button onClick={fetchLibroIVACompras} disabled={loading}
             className="bg-emerald-600 hover:bg-emerald-700 text-white h-9">
@@ -154,7 +154,7 @@ function ReporteLibroIVACompras({ onBack }) {
             Generar
           </Button>
           {generated && compras.length > 0 && (
-            <Button variant="outline" onClick={exportarCSV} className="h-9 dark:border-slate-700 dark:text-slate-300">
+            <Button variant="outline" onClick={exportarCSV} className="h-9 dark:border-kx-border dark:text-slate-300">
               <Download className="h-4 w-4 mr-1.5" /> Exportar CSV
             </Button>
           )}
@@ -175,21 +175,21 @@ function ReporteLibroIVACompras({ onBack }) {
       {/* KPI Cards */}
       {generated && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="p-4 dark:bg-slate-900 dark:border-slate-800">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">Compras</p>
-            <p className="text-2xl font-black text-slate-800 dark:text-white mt-1">{kpis.cantidad}</p>
-            <p className="text-xs text-slate-400 mt-1">comprobantes en el período</p>
+          <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
+            <p className="text-xs text-kx-text-3 uppercase tracking-wide">Compras</p>
+            <p className="text-2xl font-black text-kx-text dark:text-kx-text mt-1">{kpis.cantidad}</p>
+            <p className="text-xs text-kx-text-3 mt-1">comprobantes en el período</p>
           </Card>
-          <Card className="p-4 dark:bg-slate-900 dark:border-slate-800">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">Total Bruto</p>
-            <p className="text-2xl font-black text-slate-800 dark:text-white mt-1 font-mono">{fmtARS(kpis.totalBruto)}</p>
+          <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
+            <p className="text-xs text-kx-text-3 uppercase tracking-wide">Total Bruto</p>
+            <p className="text-2xl font-black text-kx-text dark:text-kx-text mt-1 font-mono">{fmtARS(kpis.totalBruto)}</p>
           </Card>
-          <Card className="p-4 dark:bg-slate-900 dark:border-slate-800">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">Neto Gravado</p>
+          <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
+            <p className="text-xs text-kx-text-3 uppercase tracking-wide">Neto Gravado</p>
             <p className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1 font-mono">{fmtARS(kpis.totalNeto)}</p>
           </Card>
-          <Card className="p-4 dark:bg-slate-900 dark:border-slate-800">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">Crédito Fiscal (IVA)</p>
+          <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
+            <p className="text-xs text-kx-text-3 uppercase tracking-wide">Crédito Fiscal (IVA)</p>
             <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 font-mono">{fmtARS(kpis.totalIVA)}</p>
           </Card>
         </div>
@@ -197,10 +197,10 @@ function ReporteLibroIVACompras({ onBack }) {
 
       {/* Tabla */}
       {(generated || loading) && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-kx-surface dark:bg-kx-surface border border-kx-border dark:border-kx-border rounded-xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400">
+              <thead className="bg-kx-surface-2 dark:bg-slate-900/50 border-b border-kx-border dark:border-kx-border text-xs uppercase font-semibold text-slate-500 dark:text-kx-text-2">
                 <tr>
                   <th className="p-4 w-40">Nro. Factura</th>
                   <th className="p-4">Proveedor</th>
@@ -222,7 +222,7 @@ function ReporteLibroIVACompras({ onBack }) {
                   ))
                 ) : compras.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-12 text-center text-slate-500 dark:text-slate-400">
+                    <td colSpan={7} className="p-12 text-center text-slate-500 dark:text-kx-text-2">
                       <BookOpen className="h-10 w-10 mx-auto mb-2 opacity-20" />
                       <p>No hay compras en el período seleccionado</p>
                     </td>
@@ -233,14 +233,14 @@ function ReporteLibroIVACompras({ onBack }) {
                       <td className="p-4 font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                         {c.numero_factura || '—'}
                       </td>
-                      <td className="p-4 font-medium text-slate-800 dark:text-slate-200">
+                      <td className="p-4 font-medium text-kx-text dark:text-kx-text">
                         {c.proveedor_nombre}
                       </td>
-                      <td className="p-4 text-xs text-slate-500 dark:text-slate-400">{formatDateAR(c.fecha)}</td>
-                      <td className="p-4 text-right font-bold font-mono text-slate-700 dark:text-slate-200">{fmtARS(c.total)}</td>
-                      <td className="p-4 text-right font-mono text-slate-600 dark:text-slate-300">{fmtARS(netoDe(c))}</td>
+                      <td className="p-4 text-xs text-slate-500 dark:text-kx-text-2">{formatDateAR(c.fecha)}</td>
+                      <td className="p-4 text-right font-bold font-mono text-slate-700 dark:text-kx-text">{fmtARS(c.total)}</td>
+                      <td className="p-4 text-right font-mono text-kx-text-2 dark:text-slate-300">{fmtARS(netoDe(c))}</td>
                       <td className="p-4 text-right font-mono text-emerald-600 dark:text-emerald-400">{fmtARS(ivaDe(c))}</td>
-                      <td className="p-4 font-mono text-xs text-slate-500 dark:text-slate-400">{c.proveedor_cuit || '—'}</td>
+                      <td className="p-4 font-mono text-xs text-slate-500 dark:text-kx-text-2">{c.proveedor_cuit || '—'}</td>
                     </tr>
                   ))
                 )}
@@ -248,11 +248,11 @@ function ReporteLibroIVACompras({ onBack }) {
 
               {generated && compras.length > 0 && !loading && (
                 <tfoot>
-                  <tr className="border-t-2 border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/80 font-bold">
-                    <td colSpan={3} className="p-4 text-right text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  <tr className="border-t-2 border-slate-300 dark:border-kx-border bg-kx-surface-2 dark:bg-slate-900/80 font-bold">
+                    <td colSpan={3} className="p-4 text-right text-sm text-slate-500 dark:text-kx-text-2 uppercase tracking-wide">
                       TOTALES ({compras.length} comp.)
                     </td>
-                    <td className="p-4 text-right font-black text-slate-800 dark:text-white font-mono">{fmtARS(kpis.totalBruto)}</td>
+                    <td className="p-4 text-right font-black text-kx-text dark:text-kx-text font-mono">{fmtARS(kpis.totalBruto)}</td>
                     <td className="p-4 text-right font-black text-blue-600 dark:text-blue-400 font-mono">{fmtARS(kpis.totalNeto)}</td>
                     <td className="p-4 text-right font-black text-emerald-600 dark:text-emerald-400 font-mono">{fmtARS(kpis.totalIVA)}</td>
                     <td />
@@ -263,14 +263,14 @@ function ReporteLibroIVACompras({ onBack }) {
           </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800">
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-kx-border">
+              <p className="text-xs text-slate-500 dark:text-kx-text-2">
                 Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, compras.length)} de {compras.length}
               </p>
               <div className="flex gap-1 items-center">
                 <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1} className="h-7 px-2 text-xs">Ant.</Button>
-                <span className="h-7 px-3 flex items-center text-xs text-slate-600 dark:text-slate-400">
+                <span className="h-7 px-3 flex items-center text-xs text-kx-text-2 dark:text-kx-text-2">
                   {page} / {totalPages}
                 </span>
                 <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))}

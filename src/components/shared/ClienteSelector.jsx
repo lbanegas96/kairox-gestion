@@ -29,7 +29,7 @@ function ClienteSelector({ clientes = [], value, onChange, onClienteCreado, clas
         <select
           value={value || ''}
           onChange={e => onChange(e.target.value)}
-          className="flex-1 h-10 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-white px-3 text-sm"
+          className="flex-1 h-10 rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text px-3 text-sm"
         >
           <option value="">Sin cliente</option>
           {clientes.map(c => (

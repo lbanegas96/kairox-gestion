@@ -148,7 +148,7 @@ function TabAlicuotas() {
 
   const fuenteBadge = (fuente) => {
     if (fuente === 'manual')
-      return <span className="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">Manual</span>;
+      return <span className="px-2 py-0.5 rounded text-xs bg-slate-100 text-kx-text-2 dark:bg-kx-surface-2 dark:text-slate-300">Manual</span>;
     return <span className="px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
       {fuente === 'padron_arba' ? 'Padrón ARBA' : 'Padrón AGIP'}
     </span>;
@@ -158,8 +158,8 @@ function TabAlicuotas() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-bold text-slate-900 dark:text-white">Alícuotas de impuestos</h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400">IIBB, Ganancias y otros — usadas para calcular retenciones a proveedores.</p>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-kx-text">Alícuotas de impuestos</h3>
+          <p className="text-sm text-slate-500 dark:text-kx-text-2">IIBB, Ganancias y otros — usadas para calcular retenciones a proveedores.</p>
         </div>
         <Button onClick={abrirNueva} className="bg-blue-600 hover:bg-blue-700 text-white">
           <Plus className="h-4 w-4 mr-1.5" /> Nueva alícuota
@@ -181,10 +181,10 @@ function TabAlicuotas() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+      <div className="bg-kx-surface dark:bg-kx-surface border border-kx-border dark:border-kx-border rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
-            <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400">
+            <thead className="bg-kx-surface-2 dark:bg-slate-900/50 border-b border-kx-border dark:border-kx-border text-xs uppercase font-semibold text-slate-500 dark:text-kx-text-2">
               <tr>
                 <th className="p-4">Impuesto</th>
                 <th className="p-4">Jurisdicción</th>
@@ -198,26 +198,26 @@ function TabAlicuotas() {
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {loading ? (
-                <tr><td colSpan={8} className="p-8 text-center text-slate-400"><RefreshCw className="h-5 w-5 animate-spin mx-auto" /></td></tr>
+                <tr><td colSpan={8} className="p-8 text-center text-kx-text-3"><RefreshCw className="h-5 w-5 animate-spin mx-auto" /></td></tr>
               ) : alicuotas.length === 0 ? (
-                <tr><td colSpan={8} className="p-10 text-center text-slate-500 dark:text-slate-400">
+                <tr><td colSpan={8} className="p-10 text-center text-slate-500 dark:text-kx-text-2">
                   <Percent className="h-8 w-8 mx-auto mb-2 opacity-20" />Sin alícuotas cargadas
                 </td></tr>
               ) : (
                 alicuotas.map(a => (
                   <tr key={a.id} className={`hover:bg-blue-50/40 dark:hover:bg-slate-800/40 transition-colors ${!a.activo ? 'opacity-50' : ''}`}>
-                    <td className="p-4 font-semibold text-slate-800 dark:text-slate-200">{a.impuesto}</td>
-                    <td className="p-4 text-slate-600 dark:text-slate-300">{a.jurisdiccion}</td>
+                    <td className="p-4 font-semibold text-kx-text dark:text-kx-text">{a.impuesto}</td>
+                    <td className="p-4 text-kx-text-2 dark:text-slate-300">{a.jurisdiccion}</td>
                     <td className="p-4 text-right font-mono font-bold text-blue-600 dark:text-blue-400">{Number(a.alicuota)}%</td>
-                    <td className="p-4 text-xs text-slate-500 dark:text-slate-400">{a.concepto || '—'}</td>
-                    <td className="p-4 text-xs text-slate-500 dark:text-slate-400">
+                    <td className="p-4 text-xs text-slate-500 dark:text-kx-text-2">{a.concepto || '—'}</td>
+                    <td className="p-4 text-xs text-slate-500 dark:text-kx-text-2">
                       {formatDateAR(a.vigencia_desde)}{a.vigencia_hasta ? ` → ${formatDateAR(a.vigencia_hasta)}` : ''}
                     </td>
                     <td className="p-4 text-center">{fuenteBadge(a.fuente)}</td>
                     <td className="p-4 text-center">
                       {a.activo
                         ? <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Activa</span>
-                        : <span className="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">Inactiva</span>}
+                        : <span className="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-500 dark:bg-kx-surface-2 dark:text-kx-text-2">Inactiva</span>}
                     </td>
                     <td className="p-4">
                       <div className="flex items-center justify-end gap-1">

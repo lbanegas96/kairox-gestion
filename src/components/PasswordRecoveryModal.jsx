@@ -38,7 +38,7 @@ function PasswordRecoveryModal({ isOpen, onClose, onRecover }) {
       <DialogContent className="bg-slate-900/80 backdrop-blur-xl border-slate-800 text-white sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">Recuperar Contraseña</DialogTitle>
-          <DialogDescription className="text-slate-400">
+          <DialogDescription className="text-kx-text-3">
             Ingresa tu email y te enviaremos un enlace para restablecer tu contraseña.
           </DialogDescription>
         </DialogHeader>

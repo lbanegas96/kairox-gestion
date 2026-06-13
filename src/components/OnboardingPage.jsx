@@ -72,7 +72,7 @@ function OnboardingPage() {
             </div>
 
             <h1 className="text-3xl font-bold text-white mb-2">Configurá tu empresa</h1>
-            <p className="text-slate-400 text-sm">
+            <p className="text-kx-text-3 text-sm">
               Un último paso antes de entrar a tu panel.
             </p>
           </div>

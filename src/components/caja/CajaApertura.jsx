@@ -35,12 +35,12 @@ const CajaApertura = () => {
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
       <div className="w-full max-w-md animate-in fade-in zoom-in-95 duration-300">
-        <Card className="border-slate-200 dark:border-slate-800 shadow-xl">
+        <Card className="border-kx-border dark:border-kx-border shadow-xl">
           <CardHeader className="text-center pb-2">
             <div className="mx-auto w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4">
               <Wallet className="w-6 h-6 text-blue-600 dark:text-blue-400" />
             </div>
-            <CardTitle className="text-2xl font-bold text-slate-900 dark:text-white">Apertura de Caja</CardTitle>
+            <CardTitle className="text-2xl font-bold text-slate-900 dark:text-kx-text">Apertura de Caja</CardTitle>
             <CardDescription>
               Inicia un nuevo turno ingresando el monto inicial en efectivo disponible en caja.
             </CardDescription>
@@ -63,7 +63,7 @@ const CajaApertura = () => {
                     autoFocus
                   />
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-slate-500 dark:text-kx-text-2">
                   Este monto se usará como base para el balance de la sesión.
                 </p>
               </div>

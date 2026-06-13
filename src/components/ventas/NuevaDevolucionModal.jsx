@@ -145,13 +145,13 @@ function NuevaDevolucionModal({ isOpen, onClose, onSuccess, comprobante = null }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl dark:bg-slate-950 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 dark:text-white">
+          <DialogTitle className="flex items-center gap-2 dark:text-kx-text">
             <Undo2 className="h-5 w-5 text-orange-500" />
             Nueva Devolución{comprobante ? ` — ${comprobante.numero_venta}` : ''}
           </DialogTitle>
-          <DialogDescription className="dark:text-slate-400">
+          <DialogDescription className="dark:text-kx-text-2">
             {comprobante
               ? `Devolución de ${comprobante.cliente_nombre || 'Cliente'}`
               : 'Registrar devolución de cliente'}
@@ -188,7 +188,7 @@ function NuevaDevolucionModal({ isOpen, onClose, onSuccess, comprobante = null }
                 <Label className="text-sm font-medium dark:text-slate-300">Ítems a devolver</Label>
                 <div className="border border-kx-border rounded-lg overflow-hidden">
                   <table className="w-full text-sm">
-                    <thead className="bg-slate-50 dark:bg-slate-900 text-xs text-slate-500 uppercase">
+                    <thead className="bg-kx-surface-2 dark:bg-kx-surface text-xs text-slate-500 uppercase">
                       <tr>
                         <th className="text-left px-3 py-2">Producto</th>
                         <th className="text-center px-3 py-2 w-20">Entregado</th>
@@ -203,7 +203,7 @@ function NuevaDevolucionModal({ isOpen, onClose, onSuccess, comprobante = null }
                         const cant   = Number(cantidades[item.id] || 0);
                         return (
                           <tr key={item.id} className="dark:bg-slate-950/50">
-                            <td className="px-3 py-2 font-medium dark:text-slate-200">
+                            <td className="px-3 py-2 font-medium dark:text-kx-text">
                               {item.productos?.nombre || '—'}
                             </td>
                             <td className="px-3 py-2 text-center text-slate-500">{item.cantidad_entregada}</td>
@@ -219,7 +219,7 @@ function NuevaDevolucionModal({ isOpen, onClose, onSuccess, comprobante = null }
                                   const v = Math.min(Math.max(0, parseInt(e.target.value, 10) || 0), maxDev);
                                   setCantidades(p => ({ ...p, [item.id]: v }));
                                 }}
-                                className="w-20 text-center border border-kx-border rounded px-2 py-1 text-sm bg-transparent dark:text-white focus:ring-1 focus:ring-[rgb(var(--kx-violet))] focus:outline-none"
+                                className="w-20 text-center border border-kx-border rounded px-2 py-1 text-sm bg-transparent dark:text-kx-text focus:ring-1 focus:ring-[rgb(var(--kx-violet))] focus:outline-none"
                               />
                             </td>
                             <td className="px-3 py-2 text-right font-mono text-kx-text">
@@ -241,7 +241,7 @@ function NuevaDevolucionModal({ isOpen, onClose, onSuccess, comprobante = null }
           )}
 
           {/* Reingreso de stock */}
-          <div className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-900 rounded-lg">
+          <div className="flex items-start gap-3 p-3 bg-kx-surface-2 dark:bg-kx-surface rounded-lg">
             <Checkbox
               id="reingresa"
               checked={reingresaStock}
@@ -249,7 +249,7 @@ function NuevaDevolucionModal({ isOpen, onClose, onSuccess, comprobante = null }
               className="mt-0.5"
             />
             <div>
-              <Label htmlFor="reingresa" className="cursor-pointer font-medium text-sm dark:text-slate-200">
+              <Label htmlFor="reingresa" className="cursor-pointer font-medium text-sm dark:text-kx-text">
                 Reingresar productos al stock
               </Label>
               <p className="text-xs text-kx-text-3 mt-0.5">
@@ -288,7 +288,7 @@ function NuevaDevolucionModal({ isOpen, onClose, onSuccess, comprobante = null }
                 >
                   <RadioGroupItem value={opt.value} className="mt-0.5" />
                   <div>
-                    <p className="text-sm font-medium dark:text-slate-200">{opt.label}</p>
+                    <p className="text-sm font-medium dark:text-kx-text">{opt.label}</p>
                     <p className="text-xs text-kx-text-3">{opt.desc}</p>
                   </div>
                 </div>
@@ -306,7 +306,7 @@ function NuevaDevolucionModal({ isOpen, onClose, onSuccess, comprobante = null }
                 className="mt-0.5"
               />
               <div>
-                <Label htmlFor="reembolso" className="cursor-pointer font-medium text-sm dark:text-slate-200">
+                <Label htmlFor="reembolso" className="cursor-pointer font-medium text-sm dark:text-kx-text">
                   Reembolsar en efectivo ahora
                 </Label>
                 <p className="text-xs text-kx-text-3 mt-0.5">
@@ -325,14 +325,14 @@ function NuevaDevolucionModal({ isOpen, onClose, onSuccess, comprobante = null }
               placeholder="Producto defectuoso, error en el pedido..."
               value={motivo}
               onChange={e => setMotivo(e.target.value)}
-              className="resize-none h-16 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200 text-sm"
+              className="resize-none h-16 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm"
             />
           </div>
         </div>
 
         <div className="flex justify-end gap-3 pt-2 border-t border-kx-border">
           <Button variant="outline" onClick={onClose} disabled={saving}
-            className="dark:border-slate-700 dark:text-slate-300">
+            className="dark:border-kx-border dark:text-slate-300">
             Cancelar
           </Button>
           <Button

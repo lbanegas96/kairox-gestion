@@ -20,16 +20,16 @@ const ReportTable = ({ columns, data, loading, totals }) => {
 
   if (loading) {
     return (
-      <div className="flex flex-col justify-center items-center h-64 border rounded-md bg-slate-50 dark:bg-slate-800/50 animate-pulse dark:border-slate-700">
+      <div className="flex flex-col justify-center items-center h-64 border rounded-md bg-kx-surface-2 dark:bg-slate-800/50 animate-pulse dark:border-kx-border">
         <Loader2 className="h-10 w-10 animate-spin text-blue-500 mb-3" />
-        <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">Procesando datos del reporte...</p>
+        <p className="text-slate-500 dark:text-kx-text-2 text-sm font-medium">Procesando datos del reporte...</p>
       </div>
     );
   }
 
   if (!data || data.length === 0) {
     return (
-      <div className="flex flex-col justify-center items-center h-64 border rounded-md bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 dark:border-slate-700">
+      <div className="flex flex-col justify-center items-center h-64 border rounded-md bg-kx-surface-2 dark:bg-slate-800/50 text-slate-500 dark:text-kx-text-2 dark:border-kx-border">
         <FileX2 className="h-10 w-10 mb-2 opacity-30" />
         <p className="font-medium">Sin datos para el período seleccionado</p>
         <p className="text-xs opacity-70">Intente ajustar los filtros de fecha</p>
@@ -43,15 +43,15 @@ const ReportTable = ({ columns, data, loading, totals }) => {
   const to = Math.min(page * PAGE_SIZE, data.length);
 
   return (
-    <div className="border rounded-md overflow-hidden bg-white dark:bg-slate-950 shadow-sm dark:border-slate-800">
+    <div className="border rounded-md overflow-hidden bg-kx-surface dark:bg-kx-bg shadow-sm dark:border-kx-border">
       <div className="overflow-x-auto">
         <Table>
-          <TableHeader className="bg-slate-100 dark:bg-slate-900 shadow-sm">
-            <TableRow className="dark:border-slate-800">
+          <TableHeader className="bg-slate-100 dark:bg-kx-surface shadow-sm">
+            <TableRow className="dark:border-kx-border">
               {columns.map((col, idx) => (
                 <TableHead
                   key={idx}
-                  className={`font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap ${col.className || ''}`}
+                  className={`font-bold text-slate-700 dark:text-kx-text whitespace-nowrap ${col.className || ''}`}
                   style={{ textAlign: col.align || 'left' }}
                 >
                   {col.header}
@@ -61,7 +61,7 @@ const ReportTable = ({ columns, data, loading, totals }) => {
           </TableHeader>
           <TableBody>
             {paginated.map((row, rowIdx) => (
-              <TableRow key={rowIdx} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors dark:border-slate-800">
+              <TableRow key={rowIdx} className="hover:bg-kx-surface-2 dark:hover:bg-slate-900/50 transition-colors dark:border-kx-border">
                 {columns.map((col, colIdx) => (
                   <TableCell
                     key={colIdx}
@@ -76,12 +76,12 @@ const ReportTable = ({ columns, data, loading, totals }) => {
           </TableBody>
           {/* Totals always reflect ALL data, not just the current page */}
           {totals && (
-            <tfoot className="bg-slate-100 dark:bg-slate-900 font-bold border-t-2 border-slate-200 dark:border-slate-700">
-              <TableRow className="dark:border-slate-800">
+            <tfoot className="bg-slate-100 dark:bg-kx-surface font-bold border-t-2 border-kx-border dark:border-kx-border">
+              <TableRow className="dark:border-kx-border">
                 {totals.map((cell, idx) => (
                   <TableCell
                     key={idx}
-                    className={`${cell.className || ''} dark:text-white`}
+                    className={`${cell.className || ''} dark:text-kx-text`}
                     colSpan={cell.colSpan || 1}
                     style={{ textAlign: cell.align || 'left' }}
                   >
@@ -95,8 +95,8 @@ const ReportTable = ({ columns, data, loading, totals }) => {
       </div>
 
       {/* Footer: record count + pagination */}
-      <div className="bg-slate-50 dark:bg-slate-900 px-4 py-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
-        <p className="text-xs text-slate-400 dark:text-slate-500">
+      <div className="bg-kx-surface-2 dark:bg-kx-surface px-4 py-2 border-t border-slate-100 dark:border-kx-border flex items-center justify-between gap-4">
+        <p className="text-xs text-kx-text-3 dark:text-kx-text-3">
           {totalPages > 1
             ? `Mostrando ${from}–${to} de ${data.length} registros`
             : `${data.length} registros`}
@@ -122,7 +122,7 @@ const ReportTable = ({ columns, data, loading, totals }) => {
               }, [])
               .map((item, idx) =>
                 item === '...'
-                  ? <span key={`e-${idx}`} className="px-1 text-xs text-slate-400">…</span>
+                  ? <span key={`e-${idx}`} className="px-1 text-xs text-kx-text-3">…</span>
                   : <Button
                       key={item}
                       variant={page === item ? 'default' : 'outline'}

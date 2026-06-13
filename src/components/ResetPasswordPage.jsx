@@ -53,7 +53,7 @@ function ResetPasswordPage({ onDone }) {
             <div className="text-center py-6 space-y-4">
               <CheckCircle2 className="h-16 w-16 text-green-400 mx-auto" />
               <h2 className="text-2xl font-bold text-white">¡Contraseña actualizada!</h2>
-              <p className="text-slate-400">Redirigiendo al sistema...</p>
+              <p className="text-kx-text-3">Redirigiendo al sistema...</p>
             </div>
           ) : (
             <>
@@ -64,7 +64,7 @@ function ResetPasswordPage({ onDone }) {
                   </div>
                 </div>
                 <h1 className="text-3xl font-bold text-white mb-2">Nueva Contraseña</h1>
-                <p className="text-slate-400">Ingresá tu nueva contraseña para acceder al sistema</p>
+                <p className="text-kx-text-3">Ingresá tu nueva contraseña para acceder al sistema</p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-5">

@@ -131,7 +131,7 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
           <DialogDescription>Vista previa del recibo</DialogDescription>
         </DialogHeader>
 
-        <div className="bg-white text-black p-6 rounded-md shadow-sm border border-slate-200" ref={printRef}>
+        <div className="bg-kx-surface text-black p-6 rounded-md shadow-sm border border-kx-border" ref={printRef}>
           <div className="text-center mb-4 border-b border-dashed border-slate-300 pb-4">
             <h2 className="font-bold text-xl uppercase">Ticket de Venta</h2>
             <p className="text-sm text-slate-500">Comprobante No Válido como Factura</p>
@@ -151,7 +151,7 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
               <span className="truncate max-w-[150px]">{comprobante.cliente_nombre || 'Consumidor Final'}</span>
             </div>
             {pagos.length > 1 ? (
-              <div className="pt-1 border-t border-dashed border-slate-200">
+              <div className="pt-1 border-t border-dashed border-kx-border">
                 {pagos.map((p, i) => (
                   <div key={i} className="flex justify-between">
                     <span className="text-slate-500">{p.metodo}:</span>
@@ -221,7 +221,7 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
             );
           })()}
 
-          <div className="mt-6 text-center text-xs text-slate-400">
+          <div className="mt-6 text-center text-xs text-kx-text-3">
             Gracias por su compra
           </div>
         </div>

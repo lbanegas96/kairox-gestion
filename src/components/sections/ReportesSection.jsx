@@ -348,13 +348,13 @@ function ReportesSection() {
 
   return (
     <div className="space-y-8 pb-8 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-transparent p-6 -mx-6 -mt-6 mb-6 border-b border-slate-200 dark:border-none">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-kx-surface dark:bg-transparent p-6 -mx-6 -mt-6 mb-6 border-b border-kx-border dark:border-none">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+          <h2 className="text-3xl font-bold text-slate-900 dark:text-kx-text mb-2 flex items-center gap-2">
              <FileSpreadsheet className="w-8 h-8 text-blue-600 dark:text-[#00D4FF]" />
              Centro de Reportes
           </h2>
-          <p className="text-slate-500 dark:text-slate-400">
+          <p className="text-slate-500 dark:text-kx-text-2">
             Genera y exporta información detallada para la toma de decisiones estratégicas.
           </p>
         </div>
@@ -364,27 +364,27 @@ function ReportesSection() {
         {reports.map((report) => (
           <div
             key={report.id}
-            className="group relative kairox-bg-card border kairox-border hover:border-slate-400 dark:hover:border-slate-600 rounded-xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden cursor-pointer dark:bg-slate-950 dark:border-slate-800"
+            className="group relative kairox-bg-card border kairox-border hover:border-slate-400 dark:hover:border-slate-600 rounded-xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden cursor-pointer dark:bg-kx-bg dark:border-kx-border"
             onClick={() => openReportDialog(report)}
           >
             <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${report.gradient} opacity-5 rounded-bl-[100px] transition-opacity group-hover:opacity-10`} />
 
             <div className="flex items-start justify-between mb-4 relative z-10">
-              <div className="p-3 bg-slate-100 dark:bg-slate-900 rounded-lg border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-700 transition-colors">
+              <div className="p-3 bg-slate-100 dark:bg-kx-surface rounded-lg border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-700 transition-colors">
                 {report.icon}
               </div>
             </div>
 
             <div className="mb-6 relative z-10">
-              <h3 className="text-xl font-bold kairox-text-primary dark:text-white mb-2 group-hover:text-blue-600 dark:group-hover:text-[#00D4FF] transition-colors">
+              <h3 className="text-xl font-bold kairox-text-primary dark:text-kx-text mb-2 group-hover:text-blue-600 dark:group-hover:text-[#00D4FF] transition-colors">
                 {report.title}
               </h3>
-              <p className="kairox-text-secondary dark:text-slate-400 text-sm h-10 line-clamp-2">
+              <p className="kairox-text-secondary dark:text-kx-text-2 text-sm h-10 line-clamp-2">
                 {report.description}
               </p>
             </div>
 
-            <Button className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-500 transition-all relative z-10">
+            <Button className="w-full bg-slate-100 dark:bg-kx-surface-2 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-kx-text border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-500 transition-all relative z-10">
               Ver Reporte
             </Button>
           </div>
@@ -392,16 +392,16 @@ function ReportesSection() {
 
         {/* ── Reporte de Paridad ARS / Moneda Paralela ── */}
         <div
-          className={`group relative kairox-bg-card border rounded-xl p-6 shadow-lg transition-all duration-300 overflow-hidden dark:bg-slate-950 dark:border-slate-800
+          className={`group relative kairox-bg-card border rounded-xl p-6 shadow-lg transition-all duration-300 overflow-hidden dark:bg-kx-bg dark:border-kx-border
             ${tcParaleloEnabled
               ? 'hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-2xl cursor-pointer kairox-border'
-              : 'opacity-60 border-dashed border-slate-300 dark:border-slate-700 cursor-default'}`}
+              : 'opacity-60 border-dashed border-slate-300 dark:border-kx-border cursor-default'}`}
           onClick={() => tcParaleloEnabled && setShowParidad(true)}
           title={!tcParaleloEnabled ? 'Activá la Moneda Paralela en Configuración para usar este reporte' : ''}
         >
           <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-600 to-indigo-600 opacity-5 rounded-bl-[100px] transition-opacity group-hover:opacity-10" />
           <div className="flex items-start justify-between mb-4 relative z-10">
-            <div className="p-3 bg-slate-100 dark:bg-slate-900 rounded-lg border kairox-border">
+            <div className="p-3 bg-slate-100 dark:bg-kx-surface rounded-lg border kairox-border">
               <ArrowLeftRight className="w-8 h-8 text-blue-500" />
             </div>
             {tcParaleloEnabled && (
@@ -411,10 +411,10 @@ function ReportesSection() {
             )}
           </div>
           <div className="mb-6 relative z-10">
-            <h3 className="text-xl font-bold kairox-text-primary dark:text-white mb-2 group-hover:text-blue-600 dark:group-hover:text-[#00D4FF] transition-colors">
+            <h3 className="text-xl font-bold kairox-text-primary dark:text-kx-text mb-2 group-hover:text-blue-600 dark:group-hover:text-[#00D4FF] transition-colors">
               Reporte de Paridad
             </h3>
-            <p className="kairox-text-secondary dark:text-slate-400 text-sm h-10 line-clamp-2">
+            <p className="kairox-text-secondary dark:text-kx-text-2 text-sm h-10 line-clamp-2">
               {tcParaleloEnabled
                 ? `Comparativa ARS / ${monedaParalela} por comprobante al TC histórico.`
                 : 'Activá la Moneda Paralela en Configuración para habilitar este reporte.'}
@@ -422,7 +422,7 @@ function ReportesSection() {
           </div>
           <Button
             disabled={!tcParaleloEnabled}
-            className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-500 transition-all relative z-10 disabled:opacity-50"
+            className="w-full bg-slate-100 dark:bg-kx-surface-2 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-kx-text border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-500 transition-all relative z-10 disabled:opacity-50"
           >
             {tcParaleloEnabled ? 'Ver Reporte' : 'Requiere configuración'}
           </Button>
@@ -430,16 +430,16 @@ function ReportesSection() {
 
         {/* ── Libro IVA Ventas (AFIP) ── */}
         <div
-          className={`group relative kairox-bg-card border rounded-xl p-6 shadow-lg transition-all duration-300 overflow-hidden dark:bg-slate-950 dark:border-slate-800
+          className={`group relative kairox-bg-card border rounded-xl p-6 shadow-lg transition-all duration-300 overflow-hidden dark:bg-kx-bg dark:border-kx-border
             ${afipActivo
               ? 'hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-2xl cursor-pointer kairox-border'
-              : 'opacity-60 border-dashed border-slate-300 dark:border-slate-700 cursor-default'}`}
+              : 'opacity-60 border-dashed border-slate-300 dark:border-kx-border cursor-default'}`}
           onClick={() => afipActivo && setShowLibroIVA(true)}
           title={!afipActivo ? 'Activá la facturación electrónica (AFIP) en Configuración para habilitar este reporte' : ''}
         >
           <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-600 to-violet-600 opacity-5 rounded-bl-[100px] transition-opacity group-hover:opacity-10" />
           <div className="flex items-start justify-between mb-4 relative z-10">
-            <div className="p-3 bg-slate-100 dark:bg-slate-900 rounded-lg border kairox-border">
+            <div className="p-3 bg-slate-100 dark:bg-kx-surface rounded-lg border kairox-border">
               <BookOpen className="w-8 h-8 text-blue-500" />
             </div>
             {afipActivo && (
@@ -449,10 +449,10 @@ function ReportesSection() {
             )}
           </div>
           <div className="mb-6 relative z-10">
-            <h3 className="text-xl font-bold kairox-text-primary dark:text-white mb-2 group-hover:text-blue-600 dark:group-hover:text-[#00D4FF] transition-colors">
+            <h3 className="text-xl font-bold kairox-text-primary dark:text-kx-text mb-2 group-hover:text-blue-600 dark:group-hover:text-[#00D4FF] transition-colors">
               Libro IVA Ventas
             </h3>
-            <p className="kairox-text-secondary dark:text-slate-400 text-sm h-10 line-clamp-2">
+            <p className="kairox-text-secondary dark:text-kx-text-2 text-sm h-10 line-clamp-2">
               {afipActivo
                 ? 'Comprobantes emitidos con CAE, neto gravado e IVA 21% por período.'
                 : 'Activá la facturación electrónica (AFIP) en Configuración para habilitar.'}
@@ -460,7 +460,7 @@ function ReportesSection() {
           </div>
           <Button
             disabled={!afipActivo}
-            className="w-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-500 transition-all relative z-10 disabled:opacity-50"
+            className="w-full bg-slate-100 dark:bg-kx-surface-2 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-kx-text border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-500 transition-all relative z-10 disabled:opacity-50"
           >
             {afipActivo ? 'Ver Reporte' : 'Requiere AFIP activo'}
           </Button>
@@ -468,7 +468,7 @@ function ReportesSection() {
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="kairox-bg-card border kairox-border kairox-text-primary sm:max-w-[900px] flex flex-col max-h-[90vh] dark:bg-slate-950 dark:border-slate-800">
+        <DialogContent className="kairox-bg-card border kairox-border kairox-text-primary sm:max-w-[900px] flex flex-col max-h-[90vh] dark:bg-kx-bg dark:border-kx-border">
           <DialogTitle className="sr-only">{selectedReport?.title ?? 'Reporte'}</DialogTitle>
           <DialogDescription className="sr-only">Visualización y descarga del reporte seleccionado.</DialogDescription>
           {selectedReport && (

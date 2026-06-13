@@ -29,7 +29,7 @@ import DocumentFlow from '@/components/shared/DocumentFlow';
 
 // ── Estados del workflow ───────────────────────────────────────────────────────
 const ESTADOS = [
-  { id: 'borrador',        label: 'Borrador',        color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',           next: 'confirmado'       },
+  { id: 'borrador',        label: 'Borrador',        color: 'bg-slate-100 text-kx-text-2 dark:bg-kx-surface-2 dark:text-slate-300',           next: 'confirmado'       },
   { id: 'confirmado',      label: 'Confirmado',      color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',            next: 'en_preparacion'   },
   { id: 'en_preparacion',  label: 'En Preparación',  color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',        next: 'facturado'        },
   { id: 'facturado',       label: 'Facturado',       color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',        next: null               },
@@ -364,10 +364,10 @@ function PedidosSection() {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold dark:text-white flex items-center gap-3">
+          <h2 className="text-3xl font-bold dark:text-kx-text flex items-center gap-3">
             <ClipboardList className="h-8 w-8 text-blue-600 dark:text-[#00D4FF]" /> Pedidos de Clientes
           </h2>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">Gestioná pedidos desde borrador hasta facturación</p>
+          <p className="text-slate-500 dark:text-kx-text-2 mt-1">Gestioná pedidos desde borrador hasta facturación</p>
         </div>
         <Button onClick={openNew} className="bg-blue-600 hover:bg-blue-700 text-white">
           <Plus className="h-4 w-4 mr-2" /> Nuevo Pedido
@@ -377,7 +377,7 @@ function PedidosSection() {
       {/* KPIs estado */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { estado: 'borrador',       label: 'Borradores',      color: 'bg-slate-100 dark:bg-slate-900', textColor: 'text-slate-700 dark:text-slate-300' },
+          { estado: 'borrador',       label: 'Borradores',      color: 'bg-slate-100 dark:bg-kx-surface', textColor: 'text-slate-700 dark:text-slate-300' },
           { estado: 'confirmado',     label: 'Confirmados',     color: 'bg-blue-50 dark:bg-blue-900/20', textColor: 'text-blue-700 dark:text-blue-300' },
           { estado: 'en_preparacion', label: 'En Preparación',  color: 'bg-amber-50 dark:bg-amber-900/20', textColor: 'text-amber-700 dark:text-amber-300' },
           { estado: 'facturado',      label: 'Facturados',      color: 'bg-green-50 dark:bg-green-900/20', textColor: 'text-green-700 dark:text-green-300' },
@@ -385,7 +385,7 @@ function PedidosSection() {
           <button
             key={estado}
             onClick={() => setFilterEstado(filterEstado === estado ? 'Todos' : estado)}
-            className={`rounded-xl p-4 text-left border transition-all ${color} ${filterEstado === estado ? 'ring-2 ring-blue-400' : 'border-slate-200 dark:border-slate-800 hover:opacity-80'}`}
+            className={`rounded-xl p-4 text-left border transition-all ${color} ${filterEstado === estado ? 'ring-2 ring-blue-400' : 'border-kx-border dark:border-kx-border hover:opacity-80'}`}
           >
             <div className={`text-2xl font-bold ${textColor}`}>{stats[estado]}</div>
             <div className={`text-xs font-medium mt-0.5 ${textColor}`}>{label}</div>
@@ -396,18 +396,18 @@ function PedidosSection() {
       {/* Filtros */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-kx-text-3" />
           <Input
             placeholder="Buscar por número o cliente..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="pl-9 dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+            className="pl-9 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
           />
         </div>
         <select
           value={filterEstado}
           onChange={e => setFilterEstado(e.target.value)}
-          className="h-10 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-white px-3 text-sm"
+          className="h-10 rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text px-3 text-sm"
         >
           <option value="Todos">Todos los estados</option>
           {ESTADOS.map(e => <option key={e.id} value={e.id}>{e.label}</option>)}
@@ -415,19 +415,19 @@ function PedidosSection() {
       </div>
 
       {/* Tabla */}
-      <Card className="dark:bg-slate-950 dark:border-slate-800 overflow-hidden shadow-sm">
+      <Card className="dark:bg-kx-bg dark:border-kx-border overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800">
+            <thead className="bg-kx-surface-2 dark:bg-slate-900/60 border-b border-kx-border dark:border-kx-border">
               <tr>
-                <th className="text-left p-4 font-semibold text-slate-600 dark:text-slate-400">Número</th>
-                <th className="text-left p-4 font-semibold text-slate-600 dark:text-slate-400">Cliente</th>
-                <th className="text-left p-4 font-semibold text-slate-600 dark:text-slate-400">Fecha</th>
-                <th className="text-left p-4 font-semibold text-slate-600 dark:text-slate-400">Entrega</th>
-                <th className="text-right p-4 font-semibold text-slate-600 dark:text-slate-400">Total</th>
-                <th className="text-center p-4 font-semibold text-slate-600 dark:text-slate-400">Progreso</th>
-                <th className="text-center p-4 font-semibold text-slate-600 dark:text-slate-400">Estado</th>
-                <th className="text-center p-4 font-semibold text-slate-600 dark:text-slate-400">Acciones</th>
+                <th className="text-left p-4 font-semibold text-kx-text-2 dark:text-kx-text-2">Número</th>
+                <th className="text-left p-4 font-semibold text-kx-text-2 dark:text-kx-text-2">Cliente</th>
+                <th className="text-left p-4 font-semibold text-kx-text-2 dark:text-kx-text-2">Fecha</th>
+                <th className="text-left p-4 font-semibold text-kx-text-2 dark:text-kx-text-2">Entrega</th>
+                <th className="text-right p-4 font-semibold text-kx-text-2 dark:text-kx-text-2">Total</th>
+                <th className="text-center p-4 font-semibold text-kx-text-2 dark:text-kx-text-2">Progreso</th>
+                <th className="text-center p-4 font-semibold text-kx-text-2 dark:text-kx-text-2">Estado</th>
+                <th className="text-center p-4 font-semibold text-kx-text-2 dark:text-kx-text-2">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -436,14 +436,14 @@ function PedidosSection() {
                   <tr key={i}>
                     {Array.from({ length: 8 }).map((_, j) => (
                       <td key={j} className="p-4">
-                        <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded animate-pulse w-20" />
+                        <div className="h-4 bg-slate-200 dark:bg-kx-surface-2 rounded animate-pulse w-20" />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-12 text-center text-slate-400 dark:text-slate-500">
+                  <td colSpan={8} className="p-12 text-center text-kx-text-3 dark:text-kx-text-3">
                     <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-20" />
                     <p className="font-medium">No hay pedidos{filterEstado !== 'Todos' ? ` en estado "${getEstado(filterEstado).label}"` : ''}</p>
                     <Button variant="link" onClick={openNew} className="mt-2 text-blue-500">
@@ -464,22 +464,22 @@ function PedidosSection() {
 
                   return (
                     <tr key={pedido.id}
-                      className="hover:bg-slate-50 dark:hover:bg-slate-900/40 transition-colors cursor-pointer"
+                      className="hover:bg-kx-surface-2 dark:hover:bg-slate-900/40 transition-colors cursor-pointer"
                       onClick={() => { setDetailPedido(pedido); setIsDetailOpen(true); }}
                     >
                       <td className="p-4 font-mono font-semibold text-blue-600 dark:text-blue-400">
                         {pedido.numero}
                       </td>
-                      <td className="p-4 dark:text-slate-200">
+                      <td className="p-4 dark:text-kx-text">
                         <div className="flex items-center gap-1.5">
-                          <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                          <User className="h-3.5 w-3.5 text-kx-text-3 shrink-0" />
                           {pedido.cliente_nombre}
                         </div>
                       </td>
-                      <td className="p-4 text-slate-500 dark:text-slate-400 text-xs">
+                      <td className="p-4 text-slate-500 dark:text-kx-text-2 text-xs">
                         {formatDateAR(pedido.fecha)}
                       </td>
-                      <td className="p-4 text-slate-500 dark:text-slate-400 text-xs">
+                      <td className="p-4 text-slate-500 dark:text-kx-text-2 text-xs">
                         {pedido.fecha_entrega ? (
                           <span className="flex items-center gap-1">
                             <Calendar className="h-3.5 w-3.5" />
@@ -487,7 +487,7 @@ function PedidosSection() {
                           </span>
                         ) : '—'}
                       </td>
-                      <td className="p-4 text-right font-mono font-bold dark:text-slate-200">
+                      <td className="p-4 text-right font-mono font-bold dark:text-kx-text">
                         ${Number(pedido.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                       </td>
                       <td className="p-4 text-center">
@@ -559,12 +559,12 @@ function PedidosSection() {
 
       {/* ── Modal Nuevo / Editar ──────────────────────────────────────────────── */}
       <Dialog open={isModalOpen} onOpenChange={v => { if (!v) setIsModalOpen(false); }}>
-        <DialogContent className="max-w-3xl dark:bg-slate-950 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="dark:text-white">
+            <DialogTitle className="dark:text-kx-text">
               {editingPedido ? `Editar ${editingPedido.numero}` : 'Nuevo Pedido'}
             </DialogTitle>
-            <DialogDescription className="dark:text-slate-400">
+            <DialogDescription className="dark:text-kx-text-2">
               {editingPedido ? 'Modificá los ítems del pedido en borrador.' : 'Cargá los productos y datos del pedido.'}
             </DialogDescription>
           </DialogHeader>
@@ -573,23 +573,23 @@ function PedidosSection() {
             {/* Cliente + Entrega */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="dark:text-white">Cliente</Label>
+                <Label className="dark:text-kx-text">Cliente</Label>
                 <select
                   value={form.cliente_id}
                   onChange={e => setForm(f => ({ ...f, cliente_id: e.target.value }))}
-                  className="w-full h-10 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-white px-3 text-sm"
+                  className="w-full h-10 rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text px-3 text-sm"
                 >
                   <option value="">Sin cliente</option>
                   {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
-                <Label className="dark:text-white">Fecha de Entrega (opcional)</Label>
+                <Label className="dark:text-kx-text">Fecha de Entrega (opcional)</Label>
                 <Input
                   type="date"
                   value={form.fecha_entrega}
                   onChange={e => setForm(f => ({ ...f, fecha_entrega: e.target.value }))}
-                  className="dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+                  className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
                 />
               </div>
             </div>
@@ -597,13 +597,13 @@ function PedidosSection() {
             {/* Items */}
             <div>
               <div className="flex justify-between items-center mb-2">
-                <Label className="dark:text-white">Ítems del Pedido</Label>
-                <Button variant="outline" size="sm" onClick={addItem} className="h-8 dark:text-white dark:border-slate-700">
+                <Label className="dark:text-kx-text">Ítems del Pedido</Label>
+                <Button variant="outline" size="sm" onClick={addItem} className="h-8 dark:text-kx-text dark:border-kx-border">
                   <Plus className="h-3.5 w-3.5 mr-1" /> Agregar ítem
                 </Button>
               </div>
               <div className="space-y-2">
-                <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400 px-1">
+                <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 dark:text-kx-text-2 px-1">
                   <span className="col-span-4">Producto / Descripción</span>
                   <span className="col-span-3">Descripción libre</span>
                   <span className="col-span-2 text-center">Cantidad</span>
@@ -616,7 +616,7 @@ function PedidosSection() {
                       <select
                         value={item.producto_id}
                         onChange={e => updateItem(i, 'producto_id', e.target.value)}
-                        className="w-full h-9 text-sm rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-white px-2"
+                        className="w-full h-9 text-sm rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text px-2"
                       >
                         <option value="">— sin producto —</option>
                         {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
@@ -627,7 +627,7 @@ function PedidosSection() {
                         placeholder="Descripción"
                         value={item.descripcion}
                         onChange={e => updateItem(i, 'descripcion', e.target.value)}
-                        className="h-9 text-sm dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+                        className="h-9 text-sm dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
                       />
                     </div>
                     <div className="col-span-2">
@@ -635,7 +635,7 @@ function PedidosSection() {
                         type="number" min="1" step="1"
                         value={item.cantidad}
                         onChange={e => updateItem(i, 'cantidad', e.target.value.replace(/[^\d]/g, ''))}
-                        className="h-9 text-sm text-center dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+                        className="h-9 text-sm text-center dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
                       />
                     </div>
                     <div className="col-span-2">
@@ -643,7 +643,7 @@ function PedidosSection() {
                         type="text" inputMode="decimal" placeholder="0,00"
                         value={item.precio_unitario}
                         onChange={e => updateItem(i, 'precio_unitario', e.target.value)}
-                        className="h-9 text-sm text-right dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+                        className="h-9 text-sm text-right dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
                       />
                     </div>
                     <div className="col-span-1 flex justify-center">
@@ -657,25 +657,25 @@ function PedidosSection() {
                   </div>
                 ))}
               </div>
-              <div className="flex justify-end mt-3 text-sm font-bold text-slate-700 dark:text-slate-200">
+              <div className="flex justify-end mt-3 text-sm font-bold text-slate-700 dark:text-kx-text">
                 Total: ${totalForm.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
               </div>
             </div>
 
             {/* Notas */}
             <div className="space-y-1.5">
-              <Label className="dark:text-white">Notas internas</Label>
+              <Label className="dark:text-kx-text">Notas internas</Label>
               <Textarea
                 placeholder="Instrucciones especiales, referencias, etc."
                 value={form.notas}
                 onChange={e => setForm(f => ({ ...f, notas: e.target.value }))}
-                className="resize-none h-20 dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+                className="resize-none h-20 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
               />
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsModalOpen(false)} className="dark:text-white dark:border-slate-700">
+            <Button variant="outline" onClick={() => setIsModalOpen(false)} className="dark:text-kx-text dark:border-kx-border">
               Cancelar
             </Button>
             <Button onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white">
@@ -688,7 +688,7 @@ function PedidosSection() {
 
       {/* ── Modal Detalle ──────────────────────────────────────────────────────── */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-lg dark:bg-slate-950 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
           {detailPedido && (() => {
             const e          = getEstado(detailPedido.estado);
             const items      = detailPedido.pedido_items || [];
@@ -719,11 +719,11 @@ function PedidosSection() {
             return (
               <>
                 <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 dark:text-white">
+                  <DialogTitle className="flex items-center gap-2 dark:text-kx-text">
                     <FileText className="h-5 w-5 text-blue-500" />
                     Pedido {detailPedido.numero}
                   </DialogTitle>
-                  <DialogDescription className="dark:text-slate-400">
+                  <DialogDescription className="dark:text-kx-text-2">
                     Detalle completo del pedido
                   </DialogDescription>
                 </DialogHeader>
@@ -749,7 +749,7 @@ function PedidosSection() {
                           Parcial {totalEnt}/{totalPed} u.
                         </span>
                       ) : (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 dark:bg-kx-surface-2 dark:text-kx-text-2">
                           Sin entregar
                         </span>
                       )}
@@ -758,7 +758,7 @@ function PedidosSection() {
 
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-slate-500">Cliente</span>
-                    <span className="font-medium dark:text-white">{detailPedido.cliente_nombre}</span>
+                    <span className="font-medium dark:text-kx-text">{detailPedido.cliente_nombre}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-slate-500">Fecha</span>
@@ -771,18 +771,18 @@ function PedidosSection() {
                     </div>
                   )}
                   {detailPedido.notas && (
-                    <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 text-sm text-slate-600 dark:text-slate-400">
+                    <div className="bg-kx-surface-2 dark:bg-kx-surface rounded-lg p-3 text-sm text-kx-text-2 dark:text-kx-text-2">
                       {detailPedido.notas}
                     </div>
                   )}
 
                   {/* Document Flow chain */}
                   <div className="space-y-1.5 pt-1">
-                    <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                    <p className="text-[10px] font-semibold text-kx-text-3 dark:text-kx-text-3 uppercase tracking-wider">
                       Flujo del documento
                     </p>
                     {loadingEntregas ? (
-                      <div className="h-5 bg-slate-100 dark:bg-slate-800 rounded-full animate-pulse w-40" />
+                      <div className="h-5 bg-slate-100 dark:bg-kx-surface-2 rounded-full animate-pulse w-40" />
                     ) : (
                       <DocumentFlow chips={flowChips} />
                     )}
@@ -791,7 +791,7 @@ function PedidosSection() {
                   {/* Items */}
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-800">
+                      <tr className="border-b border-kx-border dark:border-kx-border">
                         <th className="text-left pb-2 text-slate-500">Descripción</th>
                         <th className="text-center pb-2 text-slate-500 w-14">Pedido</th>
                         <th className="text-center pb-2 text-slate-500 w-14">Entregado</th>
@@ -805,12 +805,12 @@ function PedidosSection() {
                         const completo = ent >= ped && ped > 0;
                         return (
                           <tr key={it.id} className="border-b border-slate-100 dark:border-slate-800/50">
-                            <td className="py-2 dark:text-slate-200">{it.descripcion}</td>
+                            <td className="py-2 dark:text-kx-text">{it.descripcion}</td>
                             <td className="py-2 text-center text-slate-500">{ped}</td>
-                            <td className={`py-2 text-center font-medium ${completo ? 'text-green-600 dark:text-green-400' : ent > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
+                            <td className={`py-2 text-center font-medium ${completo ? 'text-green-600 dark:text-green-400' : ent > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-kx-text-3'}`}>
                               {ent}
                             </td>
-                            <td className="py-2 text-right font-mono dark:text-slate-200">
+                            <td className="py-2 text-right font-mono dark:text-kx-text">
                               ${Number(it.subtotal).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                             </td>
                           </tr>
@@ -818,7 +818,7 @@ function PedidosSection() {
                       })}
                     </tbody>
                   </table>
-                  <div className="text-right font-bold text-lg dark:text-white">
+                  <div className="text-right font-bold text-lg dark:text-kx-text">
                     Total: ${Number(detailPedido.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                   </div>
 
@@ -866,15 +866,15 @@ function PedidosSection() {
 
       {/* ── Confirm cancelar ─────────────────────────────────────────────────── */}
       <AlertDialog open={!!cancelTarget} onOpenChange={v => !v && setCancelTarget(null)}>
-        <AlertDialogContent className="dark:bg-slate-950 dark:border-slate-800">
+        <AlertDialogContent className="dark:bg-kx-bg dark:border-kx-border">
           <AlertDialogHeader>
-            <AlertDialogTitle className="dark:text-white">¿Cancelar pedido?</AlertDialogTitle>
-            <AlertDialogDescription className="dark:text-slate-400">
+            <AlertDialogTitle className="dark:text-kx-text">¿Cancelar pedido?</AlertDialogTitle>
+            <AlertDialogDescription className="dark:text-kx-text-2">
               El pedido <strong>{cancelTarget?.numero}</strong> se marcará como cancelado. Esta acción no puede deshacerse.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="dark:text-white dark:border-slate-700">Volver</AlertDialogCancel>
+            <AlertDialogCancel className="dark:text-kx-text dark:border-kx-border">Volver</AlertDialogCancel>
             <AlertDialogAction onClick={handleCancelar} className="bg-red-600 hover:bg-red-700 text-white">
               Sí, cancelar
             </AlertDialogAction>

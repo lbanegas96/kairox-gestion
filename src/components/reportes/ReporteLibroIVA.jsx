@@ -127,11 +127,11 @@ function ReporteLibroIVA({ onBack }) {
       return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"><Clock className="w-3 h-3" />Pendiente</span>;
     if (estado === 'error')
       return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"><AlertTriangle className="w-3 h-3" />Error</span>;
-    return <span className="text-xs text-slate-400">{estado}</span>;
+    return <span className="text-xs text-kx-text-3">{estado}</span>;
   };
 
   const tipoBadge = (tipo) => {
-    if (!tipo) return <span className="text-xs text-slate-400">—</span>;
+    if (!tipo) return <span className="text-xs text-kx-text-3">—</span>;
     const colors = {
       A: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
       B: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
@@ -148,33 +148,33 @@ function ReporteLibroIVA({ onBack }) {
           <ArrowLeft className="h-4 w-4 mr-1" /> Volver
         </Button>
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
             <BookOpen className="h-6 w-6 text-blue-500" />
             Libro IVA Ventas
           </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-0.5">
             Comprobantes con CAE por período · cálculo simplificado 21% IVA
           </p>
         </div>
       </div>
 
       {/* Filtros */}
-      <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="bg-kx-surface dark:bg-kx-surface p-5 rounded-xl border border-kx-border dark:border-kx-border shadow-sm">
         <div className="flex flex-wrap gap-4 items-end">
           <div className="space-y-1">
-            <Label className="text-xs text-slate-500 dark:text-slate-400 font-medium">Desde</Label>
+            <Label className="text-xs text-slate-500 dark:text-kx-text-2 font-medium">Desde</Label>
             <Input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
-              className="h-9 w-40 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
+              className="h-9 w-40 dark:bg-kx-surface-2 dark:border-kx-border dark:text-kx-text" />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs text-slate-500 dark:text-slate-400 font-medium">Hasta</Label>
+            <Label className="text-xs text-slate-500 dark:text-kx-text-2 font-medium">Hasta</Label>
             <Input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
-              className="h-9 w-40 dark:bg-slate-800 dark:border-slate-700 dark:text-white" />
+              className="h-9 w-40 dark:bg-kx-surface-2 dark:border-kx-border dark:text-kx-text" />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs text-slate-500 dark:text-slate-400 font-medium">Tipo</Label>
+            <Label className="text-xs text-slate-500 dark:text-kx-text-2 font-medium">Tipo</Label>
             <Select value={filtroTipo} onValueChange={v => { setFiltroTipo(v); setPage(1); }}>
-              <SelectTrigger className="h-9 w-40 dark:bg-slate-800 dark:border-slate-700 dark:text-white">
+              <SelectTrigger className="h-9 w-40 dark:bg-kx-surface-2 dark:border-kx-border dark:text-kx-text">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -186,9 +186,9 @@ function ReporteLibroIVA({ onBack }) {
             </Select>
           </div>
           <div className="space-y-1">
-            <Label className="text-xs text-slate-500 dark:text-slate-400 font-medium">Estado CAE</Label>
+            <Label className="text-xs text-slate-500 dark:text-kx-text-2 font-medium">Estado CAE</Label>
             <Select value={filtroEstado} onValueChange={v => { setFiltroEstado(v); setPage(1); }}>
-              <SelectTrigger className="h-9 w-44 dark:bg-slate-800 dark:border-slate-700 dark:text-white">
+              <SelectTrigger className="h-9 w-44 dark:bg-kx-surface-2 dark:border-kx-border dark:text-kx-text">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -207,7 +207,7 @@ function ReporteLibroIVA({ onBack }) {
             Generar
           </Button>
           {generated && comprobantesFiltrados.length > 0 && (
-            <Button variant="outline" onClick={exportarCSV} className="h-9 dark:border-slate-700 dark:text-slate-300">
+            <Button variant="outline" onClick={exportarCSV} className="h-9 dark:border-kx-border dark:text-slate-300">
               <Download className="h-4 w-4 mr-1.5" /> Exportar CSV
             </Button>
           )}
@@ -228,29 +228,29 @@ function ReporteLibroIVA({ onBack }) {
       {/* KPI Cards */}
       {generated && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="p-4 dark:bg-slate-900 dark:border-slate-800">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">Emitidos</p>
+          <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
+            <p className="text-xs text-kx-text-3 uppercase tracking-wide">Emitidos</p>
             <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
               {kpis.emitidos}
             </p>
-            <p className="text-xs text-slate-400 mt-1">comprobantes con CAE</p>
+            <p className="text-xs text-kx-text-3 mt-1">comprobantes con CAE</p>
           </Card>
-          <Card className="p-4 dark:bg-slate-900 dark:border-slate-800">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">Total Bruto</p>
-            <p className="text-2xl font-black text-slate-800 dark:text-white mt-1 font-mono">
+          <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
+            <p className="text-xs text-kx-text-3 uppercase tracking-wide">Total Bruto</p>
+            <p className="text-2xl font-black text-kx-text dark:text-kx-text mt-1 font-mono">
               {fmtARS(kpis.totalBruto)}
             </p>
-            <p className="text-xs text-slate-400 mt-1">comprobantes emitidos</p>
+            <p className="text-xs text-kx-text-3 mt-1">comprobantes emitidos</p>
           </Card>
-          <Card className="p-4 dark:bg-slate-900 dark:border-slate-800">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">Neto Gravado</p>
+          <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
+            <p className="text-xs text-kx-text-3 uppercase tracking-wide">Neto Gravado</p>
             <p className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1 font-mono">
               {fmtARS(kpis.totalNeto)}
             </p>
-            <p className="text-xs text-slate-400 mt-1">base imponible estimada</p>
+            <p className="text-xs text-kx-text-3 mt-1">base imponible estimada</p>
           </Card>
-          <Card className="p-4 dark:bg-slate-900 dark:border-slate-800">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">IVA 21%</p>
+          <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
+            <p className="text-xs text-kx-text-3 uppercase tracking-wide">IVA 21%</p>
             <p className="text-2xl font-black text-violet-600 dark:text-violet-400 mt-1 font-mono">
               {fmtARS(kpis.totalIVA)}
             </p>
@@ -263,10 +263,10 @@ function ReporteLibroIVA({ onBack }) {
 
       {/* Tabla */}
       {(generated || loading) && (
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-kx-surface dark:bg-kx-surface border border-kx-border dark:border-kx-border rounded-xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400">
+              <thead className="bg-kx-surface-2 dark:bg-slate-900/50 border-b border-kx-border dark:border-kx-border text-xs uppercase font-semibold text-slate-500 dark:text-kx-text-2">
                 <tr>
                   <th className="p-4 w-40">Nro. Comprobante</th>
                   <th className="p-4 w-20 text-center">Tipo</th>
@@ -291,7 +291,7 @@ function ReporteLibroIVA({ onBack }) {
                   ))
                 ) : comprobantesFiltrados.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="p-12 text-center text-slate-500 dark:text-slate-400">
+                    <td colSpan={10} className="p-12 text-center text-slate-500 dark:text-kx-text-2">
                       <BookOpen className="h-10 w-10 mx-auto mb-2 opacity-20" />
                       <p>No hay comprobantes con CAE en el período seleccionado</p>
                     </td>
@@ -308,36 +308,36 @@ function ReporteLibroIVA({ onBack }) {
                           {c.numero_afip ?? c.numero_venta}
                         </td>
                         <td className="p-4 text-center">{tipoBadge(c.tipo_comprobante_afip)}</td>
-                        <td className="p-4 text-xs text-slate-500 dark:text-slate-400">
+                        <td className="p-4 text-xs text-slate-500 dark:text-kx-text-2">
                           {formatDateAR(c.fecha)}
                         </td>
-                        <td className="p-4 font-medium text-slate-800 dark:text-slate-200">
-                          {c.cliente_nombre || <span className="text-slate-400 italic">Consumidor Final</span>}
+                        <td className="p-4 font-medium text-kx-text dark:text-kx-text">
+                          {c.cliente_nombre || <span className="text-kx-text-3 italic">Consumidor Final</span>}
                         </td>
-                        <td className="p-4 text-right font-bold font-mono text-slate-700 dark:text-slate-200">
+                        <td className="p-4 text-right font-bold font-mono text-slate-700 dark:text-kx-text">
                           {fmtARS(c.total)}
                         </td>
-                        <td className="p-4 text-right font-mono text-slate-600 dark:text-slate-300">
+                        <td className="p-4 text-right font-mono text-kx-text-2 dark:text-slate-300">
                           {fmtARS(neto)}
                         </td>
                         <td className="p-4 text-right font-mono text-violet-600 dark:text-violet-400">
                           {fmtARS(iva)}
                         </td>
-                        <td className="p-4 font-mono text-xs text-slate-600 dark:text-slate-400">
+                        <td className="p-4 font-mono text-xs text-kx-text-2 dark:text-kx-text-2">
                           {c.cae
                             ? <span title={c.cae}>{c.cae.slice(0, 8)}…</span>
-                            : <span className="text-slate-300 dark:text-slate-600">—</span>
+                            : <span className="text-slate-300 dark:text-kx-text-2">—</span>
                           }
                         </td>
                         <td className="p-4 text-xs">
                           {c.cae_vencimiento ? (
                             <span className={caeVencido
                               ? 'text-red-600 font-semibold dark:text-red-400'
-                              : 'text-slate-500 dark:text-slate-400'}>
+                              : 'text-slate-500 dark:text-kx-text-2'}>
                               {formatDateAR(c.cae_vencimiento)}
                               {caeVencido && ' ⚠'}
                             </span>
-                          ) : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                          ) : <span className="text-slate-300 dark:text-kx-text-2">—</span>}
                         </td>
                         <td className="p-4 text-center">{caeEstadoBadge(c.cae_estado)}</td>
                       </tr>
@@ -349,11 +349,11 @@ function ReporteLibroIVA({ onBack }) {
               {/* Fila de totales */}
               {generated && comprobantesFiltrados.length > 0 && !loading && (
                 <tfoot>
-                  <tr className="border-t-2 border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/80 font-bold">
-                    <td colSpan={4} className="p-4 text-right text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                  <tr className="border-t-2 border-slate-300 dark:border-kx-border bg-kx-surface-2 dark:bg-slate-900/80 font-bold">
+                    <td colSpan={4} className="p-4 text-right text-sm text-slate-500 dark:text-kx-text-2 uppercase tracking-wide">
                       TOTALES ({comprobantesFiltrados.length} comp.)
                     </td>
-                    <td className="p-4 text-right font-black text-slate-800 dark:text-white font-mono">
+                    <td className="p-4 text-right font-black text-kx-text dark:text-kx-text font-mono">
                       {fmtARS(comprobantesFiltrados.reduce((s, c) => s + Number(c.total), 0))}
                     </td>
                     <td className="p-4 text-right font-black text-blue-600 dark:text-blue-400 font-mono">
@@ -371,14 +371,14 @@ function ReporteLibroIVA({ onBack }) {
 
           {/* Paginación */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800">
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-kx-border">
+              <p className="text-xs text-slate-500 dark:text-kx-text-2">
                 Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, comprobantesFiltrados.length)} de {comprobantesFiltrados.length}
               </p>
               <div className="flex gap-1 items-center">
                 <Button variant="outline" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1} className="h-7 px-2 text-xs">Ant.</Button>
-                <span className="h-7 px-3 flex items-center text-xs text-slate-600 dark:text-slate-400">
+                <span className="h-7 px-3 flex items-center text-xs text-kx-text-2 dark:text-kx-text-2">
                   {page} / {totalPages}
                 </span>
                 <Button variant="outline" size="sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))}

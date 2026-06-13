@@ -110,13 +110,13 @@ function GenerarRecepcionModal({ ocId, onClose, onSuccess }) {
 
   return (
     <Dialog open={isOpen} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-lg dark:bg-slate-950 dark:border-slate-800">
+      <DialogContent className="max-w-lg dark:bg-kx-bg dark:border-kx-border">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 dark:text-white">
+          <DialogTitle className="flex items-center gap-2 dark:text-kx-text">
             <Package className="h-5 w-5 text-[rgb(var(--kx-violet))]" />
             Generar Recepción{oc ? ` — ${oc.numero}` : ''}
           </DialogTitle>
-          <DialogDescription className="dark:text-slate-400">
+          <DialogDescription className="dark:text-kx-text-2">
             Indicá la cantidad a recibir por ítem. El stock se incrementa al confirmar.
           </DialogDescription>
         </DialogHeader>
@@ -158,7 +158,7 @@ function GenerarRecepcionModal({ ocId, onClose, onSuccess }) {
                       const v = Math.max(0, Math.min(it.pendiente, Number(e.target.value) || 0));
                       setCantidades(prev => ({ ...prev, [it.id]: v }));
                     }}
-                    className="h-8 text-sm text-center dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+                    className="h-8 text-sm text-center dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
                   />
                 </div>
               </div>
@@ -167,7 +167,7 @@ function GenerarRecepcionModal({ ocId, onClose, onSuccess }) {
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} className="dark:text-white dark:border-slate-700">
+          <Button variant="outline" onClick={onClose} className="dark:text-kx-text dark:border-kx-border">
             Cancelar
           </Button>
           {!loadingOC && itemsConPendiente.length > 0 && (

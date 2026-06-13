@@ -52,20 +52,20 @@ function ProveedorAltaRapidaModal({ isOpen, onClose, onCreated }) {
 
   return (
     <Dialog open={isOpen} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-sm dark:bg-slate-950 dark:border-slate-800">
+      <DialogContent className="max-w-sm dark:bg-kx-bg dark:border-kx-border">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 dark:text-white">
+          <DialogTitle className="flex items-center gap-2 dark:text-kx-text">
             <Truck className="h-5 w-5 text-[rgb(var(--kx-violet))]" />
             Alta Rápida de Proveedor
           </DialogTitle>
-          <DialogDescription className="dark:text-slate-400">
+          <DialogDescription className="dark:text-kx-text-2">
             Solo el nombre es requerido. Podés completar los datos después.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
-            <Label className="dark:text-white">
+            <Label className="dark:text-kx-text">
               Nombre / Razón Social <span className="text-kx-red">*</span>
             </Label>
             <Input
@@ -74,35 +74,35 @@ function ProveedorAltaRapidaModal({ isOpen, onClose, onCreated }) {
               value={form.nombre}
               onChange={e => set('nombre', e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSave()}
-              className="dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+              className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="dark:text-white">CUIT</Label>
+              <Label className="dark:text-kx-text">CUIT</Label>
               <Input
                 placeholder="30-12345678-9"
                 value={form.cuit}
                 onChange={e => set('cuit', e.target.value)}
-                className="dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="dark:text-white">Teléfono</Label>
+              <Label className="dark:text-kx-text">Teléfono</Label>
               <Input
                 placeholder="+54 11..."
                 value={form.telefono}
                 onChange={e => set('telefono', e.target.value)}
-                className="dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
               />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label className="dark:text-white">Condición IVA</Label>
+            <Label className="dark:text-kx-text">Condición IVA</Label>
             <select
               value={form.condicion_iva}
               onChange={e => set('condicion_iva', e.target.value)}
-              className="w-full h-10 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-white px-3 text-sm"
+              className="w-full h-10 rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text px-3 text-sm"
             >
               <option value="responsable_inscripto">Responsable Inscripto</option>
               <option value="monotributista">Monotributista</option>
@@ -113,7 +113,7 @@ function ProveedorAltaRapidaModal({ isOpen, onClose, onCreated }) {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} className="dark:text-white dark:border-slate-700">
+          <Button variant="outline" onClick={onClose} className="dark:text-kx-text dark:border-kx-border">
             Cancelar
           </Button>
           <Button

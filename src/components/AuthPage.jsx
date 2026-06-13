@@ -150,7 +150,7 @@ function AuthPage() {
               <h1 className="text-3xl font-bold mb-2 text-white">
                 {config?.nombre_empresa || (isLogin ? 'Bienvenido' : 'Crear Cuenta')}
               </h1>
-              <p className="text-slate-400">
+              <p className="text-kx-text-3">
                 {isLogin ? 'Ingresa a tu panel de control' : 'Registra tu empresa y comienza a gestionar'}
               </p>
             </div>
@@ -244,7 +244,7 @@ function AuthPage() {
               
               {isLogin && (
                 <div className="text-right">
-                  <button type="button" onClick={() => setShowRecoveryModal(true)} className="text-sm text-slate-400 hover:text-[#00D4FF] transition-colors" disabled={isLoading}>
+                  <button type="button" onClick={() => setShowRecoveryModal(true)} className="text-sm text-kx-text-3 hover:text-[#00D4FF] transition-colors" disabled={isLoading}>
                     Olvidé mi contraseña
                   </button>
                 </div>
@@ -256,7 +256,7 @@ function AuthPage() {
             </form>
 
             <div className="mt-8 pt-6 border-t border-slate-800 text-center">
-              <p className="text-slate-400 text-sm mb-3">
+              <p className="text-kx-text-3 text-sm mb-3">
                 {isLogin ? '¿Aún no tienes una cuenta?' : '¿Ya tienes una cuenta registrada?'}
               </p>
               <Button variant="outline" onClick={toggleMode} disabled={isLoading} className="border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 w-full">

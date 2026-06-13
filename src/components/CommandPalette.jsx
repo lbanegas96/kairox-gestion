@@ -139,21 +139,21 @@ export function CommandPalette({ open, onClose, onNavigate }) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4" onClick={onClose}>
       <div
-        className="w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden"
+        className="w-full max-w-xl bg-kx-surface dark:bg-kx-surface rounded-2xl shadow-2xl border border-kx-border dark:border-kx-border overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Input */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-          <Search className="w-5 h-5 text-slate-400 shrink-0" />
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-kx-border dark:border-kx-border">
+          <Search className="w-5 h-5 text-kx-text-3 shrink-0" />
           <input
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Buscar productos, clientes, cotizaciones, bancos, módulos..."
-            className="flex-1 bg-transparent text-slate-900 dark:text-white placeholder-slate-400 outline-none text-sm"
+            className="flex-1 bg-transparent text-slate-900 dark:text-kx-text placeholder-slate-400 outline-none text-sm"
           />
-          {loading && <Loader2 className="w-4 h-4 text-slate-400 animate-spin shrink-0" />}
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          {loading && <Loader2 className="w-4 h-4 text-kx-text-3 animate-spin shrink-0" />}
+          <button onClick={onClose} className="text-kx-text-3 hover:text-kx-text-2 dark:hover:text-slate-200">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -161,7 +161,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
         {/* Results */}
         <div className="max-h-80 overflow-y-auto py-2">
           {allItems.length === 0 && !loading && (
-            <div className="px-4 py-8 text-center text-slate-400 text-sm">Sin resultados para "{query}"</div>
+            <div className="px-4 py-8 text-center text-kx-text-3 text-sm">Sin resultados para "{query}"</div>
           )}
           {allItems.map((item, idx) => {
             const showGroup = item.type !== lastType;
@@ -169,7 +169,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
             return (
               <React.Fragment key={`${item.type}-${item.id || item.label}`}>
                 {showGroup && (
-                  <div className="px-4 py-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  <div className="px-4 py-1.5 text-xs font-semibold text-kx-text-3 uppercase tracking-wider">
                     {getGroupLabel(item.type)}
                   </div>
                 )}
@@ -177,15 +177,15 @@ export function CommandPalette({ open, onClose, onNavigate }) {
                   className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
                     idx === selectedIdx
                       ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-kx-surface-2 dark:hover:bg-slate-800/50'
                   }`}
                   onClick={() => handleSelect(item)}
                   onMouseEnter={() => setSelectedIdx(idx)}
                 >
-                  <span className="shrink-0 text-slate-500 dark:text-slate-400">{getIcon(item)}</span>
+                  <span className="shrink-0 text-slate-500 dark:text-kx-text-2">{getIcon(item)}</span>
                   <span className="flex-1 min-w-0">
                     <span className="block text-sm font-medium truncate">{item.label}</span>
-                    {item.sub && <span className="block text-xs text-slate-400 truncate">{item.sub}</span>}
+                    {item.sub && <span className="block text-xs text-kx-text-3 truncate">{item.sub}</span>}
                   </span>
                   {idx === selectedIdx && <ArrowRight className="w-4 h-4 shrink-0 opacity-60" />}
                 </button>
@@ -195,10 +195,10 @@ export function CommandPalette({ open, onClose, onNavigate }) {
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-2 border-t border-slate-200 dark:border-slate-700 flex items-center gap-4 text-xs text-slate-400">
-          <span><kbd className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-xs">↑↓</kbd> navegar</span>
-          <span><kbd className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-xs">Enter</kbd> abrir</span>
-          <span><kbd className="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-xs">Esc</kbd> cerrar</span>
+        <div className="px-4 py-2 border-t border-kx-border dark:border-kx-border flex items-center gap-4 text-xs text-kx-text-3">
+          <span><kbd className="bg-slate-100 dark:bg-kx-surface-2 px-1.5 py-0.5 rounded text-xs">↑↓</kbd> navegar</span>
+          <span><kbd className="bg-slate-100 dark:bg-kx-surface-2 px-1.5 py-0.5 rounded text-xs">Enter</kbd> abrir</span>
+          <span><kbd className="bg-slate-100 dark:bg-kx-surface-2 px-1.5 py-0.5 rounded text-xs">Esc</kbd> cerrar</span>
         </div>
       </div>
     </div>

@@ -20,7 +20,7 @@ import { formatCurrency, MONEDA_SYMBOLS, parseNumberLocale } from '@/lib/currenc
 import { formatDateAR } from '@/lib/dateUtils';
 
 const ESTADOS = {
-  borrador:   { label: 'Borrador',   color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
+  borrador:   { label: 'Borrador',   color: 'bg-slate-100 text-kx-text-2 dark:bg-kx-surface-2 dark:text-slate-300' },
   enviada:    { label: 'Enviada',    color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
   aprobada:   { label: 'Aprobada',   color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
   rechazada:  { label: 'Rechazada',  color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
@@ -234,10 +234,10 @@ function CotizacionesSection() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
             <FileText className="w-6 h-6 text-blue-500" /> Cotizaciones
           </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-1">
             Genera presupuestos y convierte en ventas
           </p>
         </div>
@@ -248,10 +248,10 @@ function CotizacionesSection() {
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="bg-transparent gap-2">
-          <TabsTrigger value="lista" className="data-[state=active]:bg-blue-500 data-[state=active]:text-white bg-slate-100 dark:bg-slate-900 rounded-md px-4 py-2 text-slate-500 dark:text-slate-400">
+          <TabsTrigger value="lista" className="data-[state=active]:bg-blue-500 data-[state=active]:text-white bg-slate-100 dark:bg-kx-surface rounded-md px-4 py-2 text-slate-500 dark:text-kx-text-2">
             <FileText className="w-4 h-4 mr-2" /> Lista
           </TabsTrigger>
-          <TabsTrigger value="nueva" className="data-[state=active]:bg-blue-500 data-[state=active]:text-white bg-slate-100 dark:bg-slate-900 rounded-md px-4 py-2 text-slate-500 dark:text-slate-400">
+          <TabsTrigger value="nueva" className="data-[state=active]:bg-blue-500 data-[state=active]:text-white bg-slate-100 dark:bg-kx-surface rounded-md px-4 py-2 text-slate-500 dark:text-kx-text-2">
             <Plus className="w-4 h-4 mr-2" /> Nueva
           </TabsTrigger>
         </TabsList>
@@ -260,22 +260,22 @@ function CotizacionesSection() {
         <TabsContent value="lista" className="space-y-4">
           <div className="flex gap-3 flex-wrap">
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-              <Input placeholder="Buscar número o cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 dark:bg-slate-900 dark:border-slate-700" />
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-kx-text-3" />
+              <Input placeholder="Buscar número o cliente..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 dark:bg-kx-surface dark:border-kx-border" />
             </div>
             <select
               value={estadoFiltro}
               onChange={e => { setEstadoFiltro(e.target.value); setPage(1); }}
-              className="h-10 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 text-slate-700 dark:text-slate-300"
+              className="h-10 rounded-md border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface text-sm px-3 text-slate-700 dark:text-slate-300"
             >
               <option value="">Todos los estados</option>
               {Object.entries(ESTADOS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
           </div>
 
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+          <div className="rounded-xl border border-kx-border dark:border-kx-border overflow-hidden shadow-sm">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-900/50 text-xs uppercase text-slate-500 dark:text-slate-400">
+              <thead className="bg-kx-surface-2 dark:bg-slate-900/50 text-xs uppercase text-slate-500 dark:text-kx-text-2">
                 <tr>
                   <th className="p-4 text-left">Número</th>
                   <th className="p-4 text-left">Cliente</th>
@@ -288,15 +288,15 @@ function CotizacionesSection() {
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {isLoading ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-slate-400">Cargando...</td></tr>
+                  <tr><td colSpan={7} className="p-8 text-center text-kx-text-3">Cargando...</td></tr>
                 ) : filteredData.length === 0 ? (
-                  <tr><td colSpan={7} className="p-8 text-center text-slate-400">No hay cotizaciones</td></tr>
+                  <tr><td colSpan={7} className="p-8 text-center text-kx-text-3">No hay cotizaciones</td></tr>
                 ) : filteredData.map(cot => (
-                  <tr key={cot.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <tr key={cot.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/40">
                     <td className="p-4 font-mono font-semibold text-blue-600 dark:text-blue-400">{cot.numero}</td>
                     <td className="p-4 text-slate-700 dark:text-slate-300">{cot.cliente_nombre ?? cot.clientes?.nombre ?? '—'}</td>
-                    <td className="p-4 text-slate-500 dark:text-slate-400">{formatDateAR(cot.created_at)}</td>
-                    <td className="p-4 text-slate-500 dark:text-slate-400">
+                    <td className="p-4 text-slate-500 dark:text-kx-text-2">{formatDateAR(cot.created_at)}</td>
+                    <td className="p-4 text-slate-500 dark:text-kx-text-2">
                       {cot.fecha_vencimiento ? formatDateAR(cot.fecha_vencimiento) : '—'}
                     </td>
                     <td className="p-4">
@@ -304,7 +304,7 @@ function CotizacionesSection() {
                         {ESTADOS[cot.estado]?.label ?? cot.estado}
                       </span>
                     </td>
-                    <td className="p-4 text-right font-mono font-bold text-slate-800 dark:text-slate-200">
+                    <td className="p-4 text-right font-mono font-bold text-kx-text dark:text-kx-text">
                       {(() => {
                         const tc = Number(cot.tipo_cambio_tasa) || 1;
                         const esExt = cot.moneda && cot.moneda !== 'ARS' && tc > 0;
@@ -314,20 +314,20 @@ function CotizacionesSection() {
                     </td>
                     <td className="p-4">
                       <div className="flex items-center justify-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-blue-500" onClick={() => setViewId(cot.id)} title="Ver detalle">
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-blue-500" onClick={() => setViewId(cot.id)} title="Ver detalle">
                           <Eye className="w-3.5 h-3.5" />
                         </Button>
                         {cot.estado === 'borrador' && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-blue-600" onClick={() => estadoMutation.mutate({ id: cot.id, estado: 'enviada' })} title="Marcar como enviada">
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-blue-600" onClick={() => estadoMutation.mutate({ id: cot.id, estado: 'enviada' })} title="Marcar como enviada">
                             <Send className="w-3.5 h-3.5" />
                           </Button>
                         )}
                         {cot.estado === 'enviada' && (
                           <>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-green-600" onClick={() => estadoMutation.mutate({ id: cot.id, estado: 'aprobada' })} title="Aprobar">
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-green-600" onClick={() => estadoMutation.mutate({ id: cot.id, estado: 'aprobada' })} title="Aprobar">
                               <CheckCircle className="w-3.5 h-3.5" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-500" onClick={() => estadoMutation.mutate({ id: cot.id, estado: 'rechazada' })} title="Rechazar">
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-red-500" onClick={() => estadoMutation.mutate({ id: cot.id, estado: 'rechazada' })} title="Rechazar">
                               <XCircle className="w-3.5 h-3.5" />
                             </Button>
                           </>
@@ -335,7 +335,7 @@ function CotizacionesSection() {
                         {['aprobada', 'enviada'].includes(cot.estado) && (
                           <Button
                             variant="ghost" size="icon"
-                            className="h-7 w-7 text-slate-400 hover:text-purple-600"
+                            className="h-7 w-7 text-kx-text-3 hover:text-purple-600"
                             onClick={() => handleConvertirClick(cot)}
                             title="Convertir en Venta"
                           >
@@ -348,7 +348,7 @@ function CotizacionesSection() {
                           </span>
                         )}
                         {['borrador', 'rechazada'].includes(cot.estado) && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-500" onClick={() => deleteMutation.mutate(cot.id)} title="Eliminar">
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-red-500" onClick={() => deleteMutation.mutate(cot.id)} title="Eliminar">
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         )}
@@ -392,17 +392,17 @@ function CotizacionesSection() {
             <option value="servicio" />
           </datalist>
           <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl">
-            <Card className="dark:bg-slate-950 dark:border-slate-800">
-              <CardHeader><CardTitle className="text-base dark:text-white">Datos del Cliente</CardTitle></CardHeader>
+            <Card className="dark:bg-kx-bg dark:border-kx-border">
+              <CardHeader><CardTitle className="text-base dark:text-kx-text">Datos del Cliente</CardTitle></CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2 relative" ref={clienteWrapperRef}>
-                  <Label className="dark:text-white">Nombre del Cliente</Label>
+                  <Label className="dark:text-kx-text">Nombre del Cliente</Label>
                   <Input
                     value={form.cliente_nombre}
                     onChange={e => { setForm(f => ({ ...f, cliente_nombre: e.target.value })); setShowClienteDropdown(true); }}
                     onFocus={() => setShowClienteDropdown(true)}
                     placeholder="Buscar cliente existente o escribir uno nuevo"
-                    className="dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+                    className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
                     autoComplete="off"
                   />
                   {showClienteDropdown && (() => {
@@ -411,19 +411,19 @@ function CotizacionesSection() {
                     const shown = filtered.slice(0, 8);
                     if (shown.length === 0) return null;
                     return (
-                      <div className="absolute top-full left-0 right-0 z-30 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl mt-1 max-h-56 overflow-y-auto">
+                      <div className="absolute top-full left-0 right-0 z-30 bg-kx-surface dark:bg-kx-surface border border-kx-border dark:border-kx-border rounded-lg shadow-xl mt-1 max-h-56 overflow-y-auto">
                         {shown.map(c => (
                           <button
                             key={c.id}
                             type="button"
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 dark:text-slate-200"
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-kx-surface-2 dark:hover:bg-slate-800 dark:text-kx-text"
                             onClick={() => { setForm(f => ({ ...f, cliente_nombre: c.nombre })); setShowClienteDropdown(false); }}
                           >
                             {c.nombre}
                           </button>
                         ))}
                         {q && !allClientes.some(c => c.nombre.toLowerCase() === q) && (
-                          <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 italic">
+                          <div className="px-3 py-2 text-xs text-slate-500 dark:text-kx-text-2 border-t border-slate-100 dark:border-kx-border italic">
                             O tipeá un nombre nuevo y se guardará como texto libre.
                           </div>
                         )}
@@ -432,16 +432,16 @@ function CotizacionesSection() {
                   })()}
                 </div>
                 <div className="space-y-2">
-                  <Label className="dark:text-white">Condiciones de Pago</Label>
-                  <Input value={form.condiciones_pago} onChange={e => setForm(f => ({ ...f, condiciones_pago: e.target.value }))} className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
+                  <Label className="dark:text-kx-text">Condiciones de Pago</Label>
+                  <Input value={form.condiciones_pago} onChange={e => setForm(f => ({ ...f, condiciones_pago: e.target.value }))} className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
                 </div>
                 <div className="space-y-2">
-                  <Label className="dark:text-white">Fecha de Vencimiento</Label>
-                  <Input type="date" value={form.fecha_vencimiento} onChange={e => setForm(f => ({ ...f, fecha_vencimiento: e.target.value }))} className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
+                  <Label className="dark:text-kx-text">Fecha de Vencimiento</Label>
+                  <Input type="date" value={form.fecha_vencimiento} onChange={e => setForm(f => ({ ...f, fecha_vencimiento: e.target.value }))} className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
                 </div>
                 <div className="space-y-2">
-                  <Label className="dark:text-white">Notas</Label>
-                  <Input value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} placeholder="Observaciones opcionales" className="dark:bg-slate-900 dark:border-slate-700 dark:text-white" />
+                  <Label className="dark:text-kx-text">Notas</Label>
+                  <Input value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} placeholder="Observaciones opcionales" className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
                 </div>
                 <div className="space-y-2 col-span-2">
                   <MonedaSelector
@@ -455,10 +455,10 @@ function CotizacionesSection() {
               </CardContent>
             </Card>
 
-            <Card className="dark:bg-slate-950 dark:border-slate-800">
+            <Card className="dark:bg-kx-bg dark:border-kx-border">
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-base dark:text-white">Ítems</CardTitle>
-                <Button type="button" variant="outline" size="sm" onClick={addItem} className="dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800">
+                <CardTitle className="text-base dark:text-kx-text">Ítems</CardTitle>
+                <Button type="button" variant="outline" size="sm" onClick={addItem} className="dark:border-kx-border dark:text-slate-300 dark:hover:bg-slate-800">
                   <Plus className="w-3.5 h-3.5 mr-1" /> Agregar ítem
                 </Button>
               </CardHeader>
@@ -466,36 +466,36 @@ function CotizacionesSection() {
                 {items.map((item, idx) => (
                   <div key={idx} className="grid grid-cols-12 gap-2 items-end">
                     <div className="col-span-5 space-y-1 relative" data-prod-row>
-                      <Label className="text-xs dark:text-slate-400">Descripción / Producto</Label>
+                      <Label className="text-xs dark:text-kx-text-2">Descripción / Producto</Label>
                       <Input
                         value={prodSearch[idx] ?? item.descripcion}
                         onChange={e => { searchProducto(idx, e.target.value); updateItem(idx, 'descripcion', e.target.value); setProdOpen(prev => ({ ...prev, [idx]: true })); }}
                         onFocus={() => { searchProducto(idx, prodSearch[idx] ?? item.descripcion ?? ''); setProdOpen(prev => ({ ...prev, [idx]: true })); }}
                         placeholder="Buscar producto o escribir descripción"
-                        className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm"
+                        className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm"
                         autoComplete="off"
                       />
                       {prodOpen[idx] && (prodResults[idx] ?? []).length > 0 && (
-                        <div className="absolute top-full left-0 right-0 z-30 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl mt-1 max-h-56 overflow-y-auto">
+                        <div className="absolute top-full left-0 right-0 z-30 bg-kx-surface dark:bg-kx-surface border border-kx-border dark:border-kx-border rounded-lg shadow-xl mt-1 max-h-56 overflow-y-auto">
                           {prodResults[idx].map(p => (
-                            <button key={p.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800 dark:text-slate-200 flex justify-between items-center" onClick={() => selectProducto(idx, p)}>
+                            <button key={p.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-kx-surface-2 dark:hover:bg-slate-800 dark:text-kx-text flex justify-between items-center" onClick={() => selectProducto(idx, p)}>
                               <span className="truncate">{p.nombre}</span>
-                              <span className="text-slate-400 text-xs ml-2 flex-shrink-0">${Number(p.precio_venta ?? 0).toLocaleString('es-AR')}</span>
+                              <span className="text-kx-text-3 text-xs ml-2 flex-shrink-0">${Number(p.precio_venta ?? 0).toLocaleString('es-AR')}</span>
                             </button>
                           ))}
                         </div>
                       )}
                     </div>
                     <div className="col-span-2 space-y-1">
-                      <Label className="text-xs dark:text-slate-400">Cantidad</Label>
-                      <Input type="number" min="1" step="1" value={item.cantidad} onChange={e => updateItem(idx, 'cantidad', e.target.value.replace(/[^\d]/g, ''))} className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm" />
+                      <Label className="text-xs dark:text-kx-text-2">Cantidad</Label>
+                      <Input type="number" min="1" step="1" value={item.cantidad} onChange={e => updateItem(idx, 'cantidad', e.target.value.replace(/[^\d]/g, ''))} className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
                     </div>
                     <div className="col-span-2 space-y-1">
-                      <Label className="text-xs dark:text-slate-400">Unidad</Label>
+                      <Label className="text-xs dark:text-kx-text-2">Unidad</Label>
                       <select
                         value={item.unidad_medida || ''}
                         onChange={e => updateItem(idx, 'unidad_medida', e.target.value)}
-                        className="w-full h-10 px-2 rounded-md border border-slate-200 bg-white text-slate-900 dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full h-10 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">— Elegí —</option>
                         <option value="Unidad">Unidad (un)</option>
@@ -512,21 +512,21 @@ function CotizacionesSection() {
                       </select>
                     </div>
                     <div className="col-span-2 space-y-1">
-                      <Label className="text-xs dark:text-slate-400">Precio Unit.</Label>
-                      <Input type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unitario} onChange={e => updateItem(idx, 'precio_unitario', e.target.value)} className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm" />
+                      <Label className="text-xs dark:text-kx-text-2">Precio Unit.</Label>
+                      <Input type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unitario} onChange={e => updateItem(idx, 'precio_unitario', e.target.value)} className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
                     </div>
                     <div className="col-span-1 flex justify-end pb-0.5">
-                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-500" onClick={() => removeItem(idx)} disabled={items.length === 1}>
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-kx-text-3 hover:text-red-500" onClick={() => removeItem(idx)} disabled={items.length === 1}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
                   </div>
                 ))}
 
-                <div className="flex justify-end pt-4 border-t border-slate-200 dark:border-slate-800">
+                <div className="flex justify-end pt-4 border-t border-kx-border dark:border-kx-border">
                   <div className="text-right">
-                    <span className="text-sm text-slate-500 dark:text-slate-400 mr-4">Total:</span>
-                    <span className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
+                    <span className="text-sm text-slate-500 dark:text-kx-text-2 mr-4">Total:</span>
+                    <span className="text-2xl font-bold text-slate-900 dark:text-kx-text font-mono">
                       {formatCurrency(total, form.moneda)}
                     </span>
                   </div>
@@ -535,7 +535,7 @@ function CotizacionesSection() {
             </Card>
 
             <div className="flex gap-3 justify-end">
-              <Button type="button" variant="outline" onClick={resetForm} className="dark:border-slate-700 dark:text-slate-300">Limpiar</Button>
+              <Button type="button" variant="outline" onClick={resetForm} className="dark:border-kx-border dark:text-slate-300">Limpiar</Button>
               <Button
                 type="submit"
                 disabled={createMutation.isPending || (form.moneda !== 'ARS' && tcMissing)}
@@ -559,31 +559,31 @@ function CotizacionesSection() {
 
       {/* MODAL DETALLE */}
       <Dialog open={!!viewId} onOpenChange={() => setViewId(null)}>
-        <DialogContent className="max-w-2xl dark:bg-slate-950 dark:border-slate-800">
+        <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border">
           <DialogHeader>
-            <DialogTitle className="dark:text-white flex items-center gap-2">
+            <DialogTitle className="dark:text-kx-text flex items-center gap-2">
               <FileText className="w-5 h-5 text-blue-500" />
               Cotización {detalle?.numero}
             </DialogTitle>
-            <DialogDescription className="dark:text-slate-400">Detalle y líneas de la cotización.</DialogDescription>
+            <DialogDescription className="dark:text-kx-text-2">Detalle y líneas de la cotización.</DialogDescription>
           </DialogHeader>
           {detalle && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-slate-400 dark:text-slate-500 text-xs uppercase">Cliente</span>
-                  <p className="font-medium dark:text-white">{detalle.cliente_nombre ?? detalle.clientes?.nombre ?? '—'}</p>
+                  <span className="text-kx-text-3 dark:text-kx-text-3 text-xs uppercase">Cliente</span>
+                  <p className="font-medium dark:text-kx-text">{detalle.cliente_nombre ?? detalle.clientes?.nombre ?? '—'}</p>
                 </div>
                 <div>
-                  <span className="text-slate-400 dark:text-slate-500 text-xs uppercase">Estado</span>
+                  <span className="text-kx-text-3 dark:text-kx-text-3 text-xs uppercase">Estado</span>
                   <p><span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${ESTADOS[detalle.estado]?.color}`}>{ESTADOS[detalle.estado]?.label}</span></p>
                 </div>
                 <div>
-                  <span className="text-slate-400 dark:text-slate-500 text-xs uppercase">Condiciones</span>
+                  <span className="text-kx-text-3 dark:text-kx-text-3 text-xs uppercase">Condiciones</span>
                   <p className="dark:text-slate-300">{detalle.condiciones_pago ?? '—'}</p>
                 </div>
                 <div>
-                  <span className="text-slate-400 dark:text-slate-500 text-xs uppercase">Vence</span>
+                  <span className="text-kx-text-3 dark:text-kx-text-3 text-xs uppercase">Vence</span>
                   <p className="dark:text-slate-300">{detalle.fecha_vencimiento ? formatDateAR(detalle.fecha_vencimiento) : '—'}</p>
                 </div>
               </div>
@@ -597,11 +597,11 @@ function CotizacionesSection() {
                 const simbolo = esExtranjera ? `${detalle.moneda} ` : '$';
                 return (
                   <table className="w-full text-sm border-collapse">
-                    <thead><tr className="border-b border-slate-200 dark:border-slate-800">
-                      <th className="text-left py-2 text-xs text-slate-400">Descripción</th>
-                      <th className="text-right py-2 text-xs text-slate-400">Cant.</th>
-                      <th className="text-right py-2 text-xs text-slate-400">Precio ({monedaDisp})</th>
-                      <th className="text-right py-2 text-xs text-slate-400">Subtotal ({monedaDisp})</th>
+                    <thead><tr className="border-b border-kx-border dark:border-kx-border">
+                      <th className="text-left py-2 text-xs text-kx-text-3">Descripción</th>
+                      <th className="text-right py-2 text-xs text-kx-text-3">Cant.</th>
+                      <th className="text-right py-2 text-xs text-kx-text-3">Precio ({monedaDisp})</th>
+                      <th className="text-right py-2 text-xs text-kx-text-3">Subtotal ({monedaDisp})</th>
                     </tr></thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {(detalle.cotizacion_items ?? []).map(item => (
@@ -609,22 +609,22 @@ function CotizacionesSection() {
                           <td className="py-2 dark:text-slate-300">{item.descripcion}</td>
                           <td className="py-2 text-right dark:text-slate-300">{item.cantidad} {item.unidad_medida}</td>
                           <td className="py-2 text-right dark:text-slate-300">{simbolo}{fmt(conv(item.precio_unitario))}</td>
-                          <td className="py-2 text-right font-medium dark:text-white">{simbolo}{fmt(conv(item.subtotal))}</td>
+                          <td className="py-2 text-right font-medium dark:text-kx-text">{simbolo}{fmt(conv(item.subtotal))}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr className="border-t-2 border-slate-200 dark:border-slate-700">
-                        <td colSpan={3} className="py-3 text-right font-bold dark:text-white">TOTAL</td>
-                        <td className="py-3 text-right font-bold text-lg dark:text-white">{simbolo}{fmt(conv(detalle.total))}</td>
+                      <tr className="border-t-2 border-kx-border dark:border-kx-border">
+                        <td colSpan={3} className="py-3 text-right font-bold dark:text-kx-text">TOTAL</td>
+                        <td className="py-3 text-right font-bold text-lg dark:text-kx-text">{simbolo}{fmt(conv(detalle.total))}</td>
                       </tr>
                       {esExtranjera && (
                         <>
-                          <tr className="text-xs text-slate-500 dark:text-slate-400">
+                          <tr className="text-xs text-slate-500 dark:text-kx-text-2">
                             <td colSpan={3} className="py-1 text-right">Tipo de cambio</td>
                             <td className="py-1 text-right">1 {detalle.moneda} = ${fmt(tc)}</td>
                           </tr>
-                          <tr className="text-xs text-slate-500 dark:text-slate-400">
+                          <tr className="text-xs text-slate-500 dark:text-kx-text-2">
                             <td colSpan={3} className="py-1 text-right">Equivale a</td>
                             <td className="py-1 text-right">${fmt(Number(detalle.total))} ARS</td>
                           </tr>
@@ -636,7 +636,7 @@ function CotizacionesSection() {
               })()}
 
               {detalle.notas && (
-                <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-lg text-sm text-slate-600 dark:text-slate-400">
+                <div className="p-3 bg-kx-surface-2 dark:bg-kx-surface rounded-lg text-sm text-kx-text-2 dark:text-kx-text-2">
                   <span className="font-medium">Notas: </span>{detalle.notas}
                 </div>
               )}
@@ -649,7 +649,7 @@ function CotizacionesSection() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setViewId(null)} className="dark:border-slate-700 dark:text-slate-300">Cerrar</Button>
+            <Button variant="outline" onClick={() => setViewId(null)} className="dark:border-kx-border dark:text-slate-300">Cerrar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

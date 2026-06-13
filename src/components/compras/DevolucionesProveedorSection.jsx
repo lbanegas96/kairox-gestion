@@ -10,7 +10,7 @@ import { useToast } from '@/components/ui/use-toast';
 const COMPENSACION_LABELS = {
   nota_debito: { label: 'Nota de Débito', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
   reemplazo:   { label: 'Reemplazo',      className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
-  pendiente:   { label: 'Sin definir',    className: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' },
+  pendiente:   { label: 'Sin definir',    className: 'bg-slate-100 text-kx-text-2 dark:bg-kx-surface-2 dark:text-kx-text-2' },
 };
 
 function CompensacionBadge({ comp }) {

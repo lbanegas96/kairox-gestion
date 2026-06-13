@@ -68,7 +68,7 @@ function CuentaNode({ cuenta, depth = 0, onEdit, search }) {
         onClick={() => hasChildren && setOpen(!open)}
       >
         {hasChildren ? (
-          open ? <ChevronDown size={14} className="text-slate-400 flex-shrink-0" /> : <ChevronRight size={14} className="text-slate-400 flex-shrink-0" />
+          open ? <ChevronDown size={14} className="text-kx-text-3 flex-shrink-0" /> : <ChevronRight size={14} className="text-kx-text-3 flex-shrink-0" />
         ) : (
           <span className="w-3.5 flex-shrink-0" />
         )}
@@ -96,7 +96,7 @@ function CuentaNode({ cuenta, depth = 0, onEdit, search }) {
         {cuenta.permite_movimientos && (
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(cuenta); }}
-            className="opacity-0 group-hover:opacity-100 p-1 rounded text-slate-400 hover:text-white transition-all"
+            className="opacity-0 group-hover:opacity-100 p-1 rounded text-kx-text-3 hover:text-white transition-all"
           >
             <Pencil size={12} />
           </button>
@@ -170,12 +170,12 @@ function ModalNuevaCuenta({ open, onClose, cuentasFlat, empresaId, onSuccess }) 
         <div className="space-y-4 py-2">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-slate-400 text-xs">Código *</Label>
+              <Label className="text-kx-text-3 text-xs">Código *</Label>
               <Input value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })}
                 className="bg-slate-800 border-slate-700" placeholder="ej: 1.1.6" />
             </div>
             <div className="space-y-1">
-              <Label className="text-slate-400 text-xs">Tipo *</Label>
+              <Label className="text-kx-text-3 text-xs">Tipo *</Label>
               <Select value={padre ? padre.tipo : form.tipo} onValueChange={(v) => setForm({ ...form, tipo: v })} disabled={!!padre}>
                 <SelectTrigger className="bg-slate-800 border-slate-700">
                   <SelectValue />
@@ -190,13 +190,13 @@ function ModalNuevaCuenta({ open, onClose, cuentasFlat, empresaId, onSuccess }) 
           </div>
 
           <div className="space-y-1">
-            <Label className="text-slate-400 text-xs">Nombre *</Label>
+            <Label className="text-kx-text-3 text-xs">Nombre *</Label>
             <Input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })}
               className="bg-slate-800 border-slate-700" placeholder="Nombre de la cuenta" />
           </div>
 
           <div className="space-y-1">
-            <Label className="text-slate-400 text-xs">Cuenta padre (opcional)</Label>
+            <Label className="text-kx-text-3 text-xs">Cuenta padre (opcional)</Label>
             {/* Radix no permite SelectItem con value="" — usamos sentinel "__none__"
                 y lo convertimos a null al setear el form. */}
             <Select
@@ -235,7 +235,7 @@ function ModalNuevaCuenta({ open, onClose, cuentasFlat, empresaId, onSuccess }) 
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="ghost" onClick={onClose} className="text-slate-400">Cancelar</Button>
+          <Button variant="ghost" onClick={onClose} className="text-kx-text-3">Cancelar</Button>
           <Button onClick={handleSave} disabled={saving}
             className="bg-[#00D4FF] text-black hover:bg-[#00bfe8]">
             {saving ? <Loader2 size={14} className="animate-spin mr-2" /> : <Check size={14} className="mr-2" />}
@@ -305,13 +305,13 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
         <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto pr-1">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-slate-400 text-xs">Fecha *</Label>
+              <Label className="text-kx-text-3 text-xs">Fecha *</Label>
               <Input type="date" value={form.fecha}
                 onChange={(e) => setForm({ ...form, fecha: e.target.value })}
                 className="bg-slate-800 border-slate-700" />
             </div>
             <div className="space-y-1">
-              <Label className="text-slate-400 text-xs">Descripción</Label>
+              <Label className="text-kx-text-3 text-xs">Descripción</Label>
               <Input value={form.descripcion}
                 onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
                 className="bg-slate-800 border-slate-700" placeholder="Concepto del asiento" />
@@ -322,10 +322,10 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
             <table className="w-full text-sm">
               <thead className="bg-slate-800">
                 <tr>
-                  <th className="px-3 py-2 text-left text-slate-400 font-medium">Cuenta</th>
-                  <th className="px-3 py-2 text-left text-slate-400 font-medium">Detalle</th>
-                  <th className="px-3 py-2 text-right text-slate-400 font-medium w-28">Debe</th>
-                  <th className="px-3 py-2 text-right text-slate-400 font-medium w-28">Haber</th>
+                  <th className="px-3 py-2 text-left text-kx-text-3 font-medium">Cuenta</th>
+                  <th className="px-3 py-2 text-left text-kx-text-3 font-medium">Detalle</th>
+                  <th className="px-3 py-2 text-right text-kx-text-3 font-medium w-28">Debe</th>
+                  <th className="px-3 py-2 text-right text-kx-text-3 font-medium w-28">Haber</th>
                   <th className="w-8" />
                 </tr>
               </thead>
@@ -403,7 +403,7 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
         </div>
 
         <DialogFooter className="gap-2">
-          <Button variant="ghost" onClick={onClose} className="text-slate-400">Cancelar</Button>
+          <Button variant="ghost" onClick={onClose} className="text-kx-text-3">Cancelar</Button>
           <Button onClick={handleSave} disabled={saving || !cuadrado}
             className="bg-[#00D4FF] text-black hover:bg-[#00bfe8]">
             {saving ? <Loader2 size={14} className="animate-spin mr-2" /> : <Check size={14} className="mr-2" />}
@@ -445,8 +445,8 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
   if (cuentasFlat.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <BookOpen size={48} className="text-slate-600" />
-        <p className="text-slate-400 text-lg font-medium">Plan de cuentas vacío</p>
+        <BookOpen size={48} className="text-kx-text-2" />
+        <p className="text-kx-text-3 text-lg font-medium">Plan de cuentas vacío</p>
         <p className="text-slate-500 text-sm">Podés inicializarlo con las cuentas estándar para PyMEs argentinas</p>
         <Button onClick={handleSeedCuentas} className="bg-[#00D4FF] text-black hover:bg-[#00bfe8] mt-2">
           <RefreshCw size={16} className="mr-2" /> Inicializar Plan Estándar
@@ -478,7 +478,7 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
         </div>
       </div>
 
-      <p className="text-xs text-slate-600 text-right">{cuentasFlat.length} cuentas en total</p>
+      <p className="text-xs text-kx-text-2 text-right">{cuentasFlat.length} cuentas en total</p>
 
       <ModalNuevaCuenta
         open={showModal}
@@ -498,7 +498,7 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
           {editCuenta && (
             <div className="space-y-3 py-2">
               <div>
-                <Label className="text-slate-400 text-xs">Nombre</Label>
+                <Label className="text-kx-text-3 text-xs">Nombre</Label>
                 <Input value={editCuenta.nombre}
                   onChange={(e) => setEditCuenta({ ...editCuenta, nombre: e.target.value })}
                   className="bg-slate-800 border-slate-700" />
@@ -512,7 +512,7 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
             </div>
           )}
           <DialogFooter className="gap-2">
-            <Button variant="ghost" onClick={() => setEditCuenta(null)} className="text-slate-400">Cancelar</Button>
+            <Button variant="ghost" onClick={() => setEditCuenta(null)} className="text-kx-text-3">Cancelar</Button>
             <Button onClick={async () => {
               try {
                 await planCuentasService.updateCuenta(editCuenta.id, {
@@ -598,13 +598,13 @@ function TabAsientos({ empresaId, userId, cuentasFlat, onRefresh }) {
         <table className="w-full text-sm">
           <thead className="bg-slate-800">
             <tr>
-              <th className="px-4 py-3 text-left text-slate-400 font-medium">Nº</th>
-              <th className="px-4 py-3 text-left text-slate-400 font-medium">Fecha</th>
-              <th className="px-4 py-3 text-left text-slate-400 font-medium">Descripción</th>
-              <th className="px-4 py-3 text-right text-slate-400 font-medium">Debe</th>
-              <th className="px-4 py-3 text-right text-slate-400 font-medium">Haber</th>
-              <th className="px-4 py-3 text-center text-slate-400 font-medium">Estado</th>
-              <th className="px-4 py-3 text-center text-slate-400 font-medium">Acciones</th>
+              <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Nº</th>
+              <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Fecha</th>
+              <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Descripción</th>
+              <th className="px-4 py-3 text-right text-kx-text-3 font-medium">Debe</th>
+              <th className="px-4 py-3 text-right text-kx-text-3 font-medium">Haber</th>
+              <th className="px-4 py-3 text-center text-kx-text-3 font-medium">Estado</th>
+              <th className="px-4 py-3 text-center text-kx-text-3 font-medium">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -633,17 +633,17 @@ function TabAsientos({ empresaId, userId, cuentasFlat, onRefresh }) {
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-center gap-1">
                     <button onClick={() => setDetalle(a)}
-                      className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Ver detalle">
+                      className="p-1.5 rounded text-kx-text-3 hover:text-white hover:bg-slate-700 transition-colors" title="Ver detalle">
                       <Eye size={14} />
                     </button>
                     {a.estado === 'borrador' && (
                       <>
                         <button onClick={() => handleConfirmar(a.id)}
-                          className="p-1.5 rounded text-slate-400 hover:text-green-400 hover:bg-green-500/10 transition-colors" title="Confirmar">
+                          className="p-1.5 rounded text-kx-text-3 hover:text-green-400 hover:bg-green-500/10 transition-colors" title="Confirmar">
                           <CheckCircle2 size={14} />
                         </button>
                         <button onClick={() => handleAnular(a.id)}
-                          className="p-1.5 rounded text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Anular">
+                          className="p-1.5 rounded text-kx-text-3 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Anular">
                           <Ban size={14} />
                         </button>
                       </>
@@ -658,7 +658,7 @@ function TabAsientos({ empresaId, userId, cuentasFlat, onRefresh }) {
 
       {/* Paginación */}
       {data && data.pages > 1 && (
-        <div className="flex items-center justify-between text-sm text-slate-400">
+        <div className="flex items-center justify-between text-sm text-kx-text-3">
           <span>{data.count} asientos</span>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
@@ -696,9 +696,9 @@ function TabAsientos({ empresaId, userId, cuentasFlat, onRefresh }) {
                 <table className="w-full text-xs">
                   <thead className="bg-slate-800">
                     <tr>
-                      <th className="px-3 py-2 text-left text-slate-400">Cuenta</th>
-                      <th className="px-3 py-2 text-right text-slate-400">Debe</th>
-                      <th className="px-3 py-2 text-right text-slate-400">Haber</th>
+                      <th className="px-3 py-2 text-left text-kx-text-3">Cuenta</th>
+                      <th className="px-3 py-2 text-right text-kx-text-3">Debe</th>
+                      <th className="px-3 py-2 text-right text-kx-text-3">Haber</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -716,7 +716,7 @@ function TabAsientos({ empresaId, userId, cuentasFlat, onRefresh }) {
                   </tbody>
                   <tfoot className="bg-slate-800/50">
                     <tr>
-                      <td className="px-3 py-2 text-slate-400 font-medium">Total</td>
+                      <td className="px-3 py-2 text-kx-text-3 font-medium">Total</td>
                       <td className="px-3 py-2 text-right font-mono font-bold text-white">{fmt(detalle.total_debe)}</td>
                       <td className="px-3 py-2 text-right font-mono font-bold text-white">{fmt(detalle.total_haber)}</td>
                     </tr>
@@ -763,12 +763,12 @@ function TabBalance({ empresaId }) {
     <div className="space-y-4">
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <Label className="text-slate-400 text-xs whitespace-nowrap">Desde</Label>
+          <Label className="text-kx-text-3 text-xs whitespace-nowrap">Desde</Label>
           <Input type="date" value={fechaDesde} onChange={(e) => setDesde(e.target.value)}
             className="bg-slate-800 border-slate-700 h-9 text-sm w-36" />
         </div>
         <div className="flex items-center gap-2">
-          <Label className="text-slate-400 text-xs whitespace-nowrap">Hasta</Label>
+          <Label className="text-kx-text-3 text-xs whitespace-nowrap">Hasta</Label>
           <Input type="date" value={fechaHasta} onChange={(e) => setHasta(e.target.value)}
             className="bg-slate-800 border-slate-700 h-9 text-sm w-36" />
         </div>
@@ -782,12 +782,12 @@ function TabBalance({ empresaId }) {
         <table className="w-full text-sm">
           <thead className="bg-slate-800">
             <tr>
-              <th className="px-4 py-3 text-left text-slate-400 font-medium">Código</th>
-              <th className="px-4 py-3 text-left text-slate-400 font-medium">Cuenta</th>
-              <th className="px-4 py-3 text-center text-slate-400 font-medium">Tipo</th>
-              <th className="px-4 py-3 text-right text-slate-400 font-medium">Debe</th>
-              <th className="px-4 py-3 text-right text-slate-400 font-medium">Haber</th>
-              <th className="px-4 py-3 text-right text-slate-400 font-medium">Saldo</th>
+              <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Código</th>
+              <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Cuenta</th>
+              <th className="px-4 py-3 text-center text-kx-text-3 font-medium">Tipo</th>
+              <th className="px-4 py-3 text-right text-kx-text-3 font-medium">Debe</th>
+              <th className="px-4 py-3 text-right text-kx-text-3 font-medium">Haber</th>
+              <th className="px-4 py-3 text-right text-kx-text-3 font-medium">Saldo</th>
             </tr>
           </thead>
           <tbody>
@@ -824,7 +824,7 @@ function TabBalance({ empresaId }) {
           {rows.length > 0 && (
             <tfoot className="bg-slate-800">
               <tr>
-                <td colSpan={3} className="px-4 py-3 text-slate-400 font-semibold">TOTALES</td>
+                <td colSpan={3} className="px-4 py-3 text-kx-text-3 font-semibold">TOTALES</td>
                 <td className={`px-4 py-3 text-right font-mono font-bold ${Math.abs(totalDebe - totalHaber) < 0.01 ? 'text-green-400' : 'text-white'}`}>
                   {fmt(totalDebe)}
                 </td>
@@ -881,12 +881,12 @@ function TabLibroMayor({ empresaId, cuentasFlat }) {
         </Select>
 
         <div className="flex items-center gap-2">
-          <Label className="text-slate-400 text-xs whitespace-nowrap">Desde</Label>
+          <Label className="text-kx-text-3 text-xs whitespace-nowrap">Desde</Label>
           <Input type="date" value={fechaDesde} onChange={e => setDesde(e.target.value)}
             className="bg-slate-800 border-slate-700 h-9 text-sm w-36" />
         </div>
         <div className="flex items-center gap-2">
-          <Label className="text-slate-400 text-xs whitespace-nowrap">Hasta</Label>
+          <Label className="text-kx-text-3 text-xs whitespace-nowrap">Hasta</Label>
           <Input type="date" value={fechaHasta} onChange={e => setHasta(e.target.value)}
             className="bg-slate-800 border-slate-700 h-9 text-sm w-36" />
         </div>
@@ -901,7 +901,7 @@ function TabLibroMayor({ empresaId, cuentasFlat }) {
         <div className="text-center py-20 text-slate-500">
           <BookMarked size={36} className="mx-auto mb-3 opacity-30" />
           <p className="font-medium">Seleccioná una cuenta para ver sus movimientos</p>
-          <p className="text-xs mt-1 text-slate-600">Solo se muestran asientos confirmados</p>
+          <p className="text-xs mt-1 text-kx-text-2">Solo se muestran asientos confirmados</p>
         </div>
       )}
 
@@ -914,7 +914,7 @@ function TabLibroMayor({ empresaId, cuentasFlat }) {
           <span className="font-mono text-[#00D4FF] text-sm">{cuentaSeleccionada.codigo}</span>
           <span className="font-semibold text-white">{cuentaSeleccionada.nombre}</span>
           {rows.length > 0 && (
-            <span className="ml-auto text-slate-400 text-xs">{rows.length} movimiento{rows.length !== 1 ? 's' : ''}</span>
+            <span className="ml-auto text-kx-text-3 text-xs">{rows.length} movimiento{rows.length !== 1 ? 's' : ''}</span>
           )}
         </div>
       )}
@@ -925,12 +925,12 @@ function TabLibroMayor({ empresaId, cuentasFlat }) {
           <table className="w-full text-sm">
             <thead className="bg-slate-800">
               <tr>
-                <th className="px-4 py-3 text-left text-slate-400 font-medium">Fecha</th>
-                <th className="px-4 py-3 text-left text-slate-400 font-medium">Asiento</th>
-                <th className="px-4 py-3 text-left text-slate-400 font-medium">Descripción</th>
-                <th className="px-4 py-3 text-right text-slate-400 font-medium">Debe</th>
-                <th className="px-4 py-3 text-right text-slate-400 font-medium">Haber</th>
-                <th className="px-4 py-3 text-right text-slate-400 font-medium">Saldo</th>
+                <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Fecha</th>
+                <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Asiento</th>
+                <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Descripción</th>
+                <th className="px-4 py-3 text-right text-kx-text-3 font-medium">Debe</th>
+                <th className="px-4 py-3 text-right text-kx-text-3 font-medium">Haber</th>
+                <th className="px-4 py-3 text-right text-kx-text-3 font-medium">Saldo</th>
               </tr>
             </thead>
             <tbody>
@@ -952,7 +952,7 @@ function TabLibroMayor({ empresaId, cuentasFlat }) {
                   <td className="px-4 py-2.5 font-mono text-xs text-[#00D4FF]">
                     {row.asientos_contables.numero}
                   </td>
-                  <td className="px-4 py-2.5 text-slate-400 max-w-xs truncate">
+                  <td className="px-4 py-2.5 text-kx-text-3 max-w-xs truncate">
                     {row.descripcion || row.asientos_contables.descripcion || '—'}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono text-slate-300">
@@ -975,7 +975,7 @@ function TabLibroMayor({ empresaId, cuentasFlat }) {
               return (
                 <tfoot className="bg-slate-800">
                   <tr>
-                    <td colSpan={3} className="px-4 py-3 text-slate-400 font-semibold">SALDO FINAL</td>
+                    <td colSpan={3} className="px-4 py-3 text-kx-text-3 font-semibold">SALDO FINAL</td>
                     <td className="px-4 py-3 text-right font-mono font-bold text-slate-300">{fmt(totalDebe)}</td>
                     <td className="px-4 py-3 text-right font-mono font-bold text-slate-300">{fmt(totalHaber)}</td>
                     <td className={`px-4 py-3 text-right font-mono font-bold text-lg ${last.saldo_acumulado >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>
@@ -1087,7 +1087,7 @@ function TabPeriodos({ empresaId, userId, userRole }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-kx-text-3">
           Los períodos cerrados bloquean nuevos asientos en ese rango de fechas. Los asientos existentes no se modifican.
         </p>
         {isAdmin && (
@@ -1102,12 +1102,12 @@ function TabPeriodos({ empresaId, userId, userRole }) {
         <table className="w-full text-sm">
           <thead className="bg-slate-800">
             <tr>
-              <th className="px-4 py-3 text-left text-slate-400 font-medium">Nombre</th>
-              <th className="px-4 py-3 text-left text-slate-400 font-medium">Inicio</th>
-              <th className="px-4 py-3 text-left text-slate-400 font-medium">Cierre</th>
-              <th className="px-4 py-3 text-center text-slate-400 font-medium">Estado</th>
-              <th className="px-4 py-3 text-left text-slate-400 font-medium">Fecha cierre real</th>
-              {isAdmin && <th className="px-4 py-3 text-center text-slate-400 font-medium">Acciones</th>}
+              <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Nombre</th>
+              <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Inicio</th>
+              <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Cierre</th>
+              <th className="px-4 py-3 text-center text-kx-text-3 font-medium">Estado</th>
+              <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Fecha cierre real</th>
+              {isAdmin && <th className="px-4 py-3 text-center text-kx-text-3 font-medium">Acciones</th>}
             </tr>
           </thead>
           <tbody>
@@ -1134,7 +1134,7 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                     {p.estado}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-xs text-slate-400">
+                <td className="px-4 py-3 text-xs text-kx-text-3">
                   {p.fecha_cierre_real
                     ? new Date(p.fecha_cierre_real).toLocaleDateString('es-AR')
                     : '—'}
@@ -1168,7 +1168,7 @@ function TabPeriodos({ empresaId, userId, userRole }) {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <Label className="text-slate-400 text-xs">Nombre *</Label>
+              <Label className="text-kx-text-3 text-xs">Nombre *</Label>
               <Input value={nuevoForm.nombre}
                 onChange={e => setNuevoForm(f => ({ ...f, nombre: e.target.value }))}
                 placeholder="Ej: Ejercicio 2025 — Enero"
@@ -1176,20 +1176,20 @@ function TabPeriodos({ empresaId, userId, userRole }) {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-slate-400 text-xs">Fecha inicio *</Label>
+                <Label className="text-kx-text-3 text-xs">Fecha inicio *</Label>
                 <Input type="date" value={nuevoForm.fecha_inicio}
                   onChange={e => setNuevoForm(f => ({ ...f, fecha_inicio: e.target.value }))}
                   className="mt-1 bg-slate-800 border-slate-700" />
               </div>
               <div>
-                <Label className="text-slate-400 text-xs">Fecha cierre *</Label>
+                <Label className="text-kx-text-3 text-xs">Fecha cierre *</Label>
                 <Input type="date" value={nuevoForm.fecha_cierre}
                   onChange={e => setNuevoForm(f => ({ ...f, fecha_cierre: e.target.value }))}
                   className="mt-1 bg-slate-800 border-slate-700" />
               </div>
             </div>
             <div>
-              <Label className="text-slate-400 text-xs">Observaciones</Label>
+              <Label className="text-kx-text-3 text-xs">Observaciones</Label>
               <Input value={nuevoForm.observaciones}
                 onChange={e => setNuevoForm(f => ({ ...f, observaciones: e.target.value }))}
                 placeholder="Opcional"
@@ -1197,7 +1197,7 @@ function TabPeriodos({ empresaId, userId, userRole }) {
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="ghost" onClick={() => setShowNuevoModal(false)} className="text-slate-400">Cancelar</Button>
+            <Button variant="ghost" onClick={() => setShowNuevoModal(false)} className="text-kx-text-3">Cancelar</Button>
             <Button onClick={handleCrearPeriodo} className="bg-[#00D4FF] text-black hover:bg-[#00bfe8]">
               <Check size={14} className="mr-2" /> Crear período
             </Button>
@@ -1225,7 +1225,7 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                   {fmtFecha(periodoACerrar.fecha_inicio)} — {fmtFecha(periodoACerrar.fecha_cierre)}
                 </p>
               </div>
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-kx-text-3">
                 No se podrán crear nuevos asientos en ese rango de fechas. Los asientos existentes{' '}
                 <span className="text-white font-medium">no se modifican ni eliminan</span>.
               </p>
@@ -1234,7 +1234,7 @@ function TabPeriodos({ empresaId, userId, userRole }) {
           <DialogFooter className="gap-2">
             <Button variant="ghost" disabled={procesandoCierre}
               onClick={() => { setShowCierre(false); setPeriodoACerrar(null); }}
-              className="text-slate-400">
+              className="text-kx-text-3">
               Cancelar
             </Button>
             <Button onClick={handleCerrarPeriodo} disabled={procesandoCierre}
@@ -1288,7 +1288,7 @@ export default function PlanCuentasSection() {
             </div>
             Plan de Cuentas
           </h1>
-          <p className="text-slate-400 text-sm mt-1">Contabilidad · Libro diario · Balance de comprobación</p>
+          <p className="text-kx-text-3 text-sm mt-1">Contabilidad · Libro diario · Balance de comprobación</p>
         </div>
       </div>
 
@@ -1300,23 +1300,23 @@ export default function PlanCuentasSection() {
         <Tabs defaultValue="cuentas" className="space-y-4">
           <TabsList className="bg-slate-800 border border-slate-700 p-1">
             <TabsTrigger value="cuentas"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-slate-400 gap-2">
+              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-kx-text-3 gap-2">
               <ListOrdered size={14} /> Plan de Cuentas
             </TabsTrigger>
             <TabsTrigger value="asientos"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-slate-400 gap-2">
+              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-kx-text-3 gap-2">
               <FileText size={14} /> Asientos
             </TabsTrigger>
             <TabsTrigger value="balance"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-slate-400 gap-2">
+              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-kx-text-3 gap-2">
               <BarChart2 size={14} /> Balance
             </TabsTrigger>
             <TabsTrigger value="libro_mayor"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-slate-400 gap-2">
+              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-kx-text-3 gap-2">
               <BookMarked size={14} /> Libro Mayor
             </TabsTrigger>
             <TabsTrigger value="periodos"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-slate-400 gap-2">
+              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-kx-text-3 gap-2">
               <Lock size={14} /> Períodos
             </TabsTrigger>
           </TabsList>

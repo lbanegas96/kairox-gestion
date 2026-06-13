@@ -116,14 +116,14 @@ export default function StaffPermissionsModal({ isOpen, onClose, userData, onSav
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !loading && onClose()}>
-      <DialogContent className="max-w-md bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+      <DialogContent className="max-w-md bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             <Shield className="h-5 w-5 text-blue-600" />
             Gestionar Permisos
           </DialogTitle>
           <DialogDescription>
-            Configura el acceso para <span className="font-semibold text-slate-900 dark:text-white">{userData.first_name} {userData.last_name}</span> ({userData.role}).
+            Configura el acceso para <span className="font-semibold text-slate-900 dark:text-kx-text">{userData.first_name} {userData.last_name}</span> ({userData.role}).
           </DialogDescription>
         </DialogHeader>
 
@@ -139,18 +139,18 @@ export default function StaffPermissionsModal({ isOpen, onClose, userData, onSav
           <div className="space-y-4 py-2">
             {/* Presets */}
             <div className="space-y-2">
-              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Presets rápidos</p>
+              <p className="text-xs font-semibold text-slate-500 dark:text-kx-text-2 uppercase tracking-wider">Presets rápidos</p>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" onClick={() => applyPreset('solo_caja')}
-                  className="h-7 text-xs dark:text-slate-300 dark:border-slate-700 border-amber-300 text-amber-700 hover:bg-amber-50">
+                  className="h-7 text-xs dark:text-slate-300 dark:border-kx-border border-amber-300 text-amber-700 hover:bg-amber-50">
                   🏷 Solo Caja
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => applyPreset('vendedor')}
-                  className="h-7 text-xs dark:text-slate-300 dark:border-slate-700 border-blue-300 text-blue-700 hover:bg-blue-50">
+                  className="h-7 text-xs dark:text-slate-300 dark:border-kx-border border-blue-300 text-blue-700 hover:bg-blue-50">
                   🛒 Vendedor
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => applyPreset('completo')}
-                  className="h-7 text-xs dark:text-slate-300 dark:border-slate-700 border-green-300 text-green-700 hover:bg-green-50">
+                  className="h-7 text-xs dark:text-slate-300 dark:border-kx-border border-green-300 text-green-700 hover:bg-green-50">
                   ✅ Acceso completo
                 </Button>
               </div>
@@ -166,7 +166,7 @@ export default function StaffPermissionsModal({ isOpen, onClose, userData, onSav
               {modules.map((module) => (
                 <div 
                   key={module.id} 
-                  className="flex items-start space-x-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-800 cursor-pointer"
+                  className="flex items-start space-x-3 p-2 rounded-lg hover:bg-kx-surface-2 dark:hover:bg-slate-800/50 transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-800 cursor-pointer"
                   onClick={() => handleToggle(module.id)}
                 >
                   <Checkbox 
@@ -178,11 +178,11 @@ export default function StaffPermissionsModal({ isOpen, onClose, userData, onSav
                   <div className="grid gap-0.5 cursor-pointer pointer-events-none">
                     <Label 
                       htmlFor={`perm-modal-${module.id}`} 
-                      className="font-medium text-slate-900 dark:text-slate-100 cursor-pointer"
+                      className="font-medium text-slate-900 dark:text-kx-text cursor-pointer"
                     >
                       {module.label}
                     </Label>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <p className="text-xs text-slate-500 dark:text-kx-text-2">
                       {module.desc}
                     </p>
                   </div>

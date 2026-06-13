@@ -165,10 +165,10 @@ function ListasPrecioSection() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
             <Tag className="w-6 h-6 text-violet-500" /> Listas de Precios
           </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-1">
             Creá listas de precios por segmento (VIP, Mayorista, etc.) y asignálas a clientes
           </p>
         </div>
@@ -179,24 +179,24 @@ function ListasPrecioSection() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <Card className="dark:bg-slate-900 dark:border-slate-800">
+        <Card className="dark:bg-kx-surface dark:border-kx-border">
           <CardContent className="p-4">
-            <p className="text-xs text-slate-400 uppercase mb-1">Listas activas</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white">
+            <p className="text-xs text-kx-text-3 uppercase mb-1">Listas activas</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-kx-text">
               {listas.filter(l => l.activo).length}
             </p>
           </CardContent>
         </Card>
-        <Card className="dark:bg-slate-900 dark:border-slate-800">
+        <Card className="dark:bg-kx-surface dark:border-kx-border">
           <CardContent className="p-4">
-            <p className="text-xs text-slate-400 uppercase mb-1">Total listas</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white">{listas.length}</p>
+            <p className="text-xs text-kx-text-3 uppercase mb-1">Total listas</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-kx-text">{listas.length}</p>
           </CardContent>
         </Card>
-        <Card className="dark:bg-slate-900 dark:border-slate-800">
+        <Card className="dark:bg-kx-surface dark:border-kx-border">
           <CardContent className="p-4">
-            <p className="text-xs text-slate-400 uppercase mb-1">Productos con precio esp.</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white">
+            <p className="text-xs text-kx-text-3 uppercase mb-1">Productos con precio esp.</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-kx-text">
               {listas.reduce((s, l) => s + (l._itemCount ?? 0), 0)}
             </p>
           </CardContent>
@@ -204,26 +204,26 @@ function ListasPrecioSection() {
       </div>
 
       {/* Tabla de listas */}
-      <Card className="dark:bg-slate-950 dark:border-slate-800">
+      <Card className="dark:bg-kx-bg dark:border-kx-border">
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-10 text-center text-slate-400 flex items-center justify-center gap-2">
+            <div className="p-10 text-center text-kx-text-3 flex items-center justify-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" /> Cargando...
             </div>
           ) : listas.length === 0 ? (
             <div className="p-12 text-center flex flex-col items-center gap-3">
               <Tag className="w-10 h-10 text-slate-300 dark:text-slate-700" />
-              <p className="text-slate-500 dark:text-slate-400 font-medium">No hay listas de precios</p>
-              <p className="text-sm text-slate-400 dark:text-slate-500">
+              <p className="text-slate-500 dark:text-kx-text-2 font-medium">No hay listas de precios</p>
+              <p className="text-sm text-kx-text-3 dark:text-kx-text-3">
                 Creá tu primera lista (ej: "Precio Mayorista", "VIP") y asignala a tus clientes
               </p>
-              <Button onClick={openNueva} variant="outline" className="mt-2 gap-2 dark:border-slate-700 dark:text-slate-300">
+              <Button onClick={openNueva} variant="outline" className="mt-2 gap-2 dark:border-kx-border dark:text-slate-300">
                 <Plus className="w-4 h-4" /> Crear primera lista
               </Button>
             </div>
           ) : (
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-900/50 text-xs uppercase text-slate-500 dark:text-slate-400">
+              <thead className="bg-kx-surface-2 dark:bg-slate-900/50 text-xs uppercase text-slate-500 dark:text-kx-text-2">
                 <tr>
                   <th className="p-4 text-left">Nombre</th>
                   <th className="p-4 text-left hidden md:table-cell">Descripción</th>
@@ -234,17 +234,17 @@ function ListasPrecioSection() {
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {listas.map(lista => (
-                  <tr key={lista.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                  <tr key={lista.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/40 transition-colors">
                     <td className="p-4">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-md bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
                           <Tag className="w-3.5 h-3.5 text-violet-500" />
                         </div>
-                        <span className="font-semibold text-slate-800 dark:text-white">{lista.nombre}</span>
+                        <span className="font-semibold text-kx-text dark:text-kx-text">{lista.nombre}</span>
                       </div>
                     </td>
-                    <td className="p-4 text-slate-500 dark:text-slate-400 hidden md:table-cell">
-                      {lista.descripcion ?? <span className="italic text-slate-300 dark:text-slate-600">—</span>}
+                    <td className="p-4 text-slate-500 dark:text-kx-text-2 hidden md:table-cell">
+                      {lista.descripcion ?? <span className="italic text-slate-300 dark:text-kx-text-2">—</span>}
                     </td>
                     <td className="p-4 text-center">
                       <span className="inline-flex items-center gap-1 text-xs font-medium text-violet-600 dark:text-violet-400">
@@ -259,21 +259,21 @@ function ListasPrecioSection() {
                       >
                         {lista.activo
                           ? <ToggleRight className="w-6 h-6 text-emerald-500" />
-                          : <ToggleLeft className="w-6 h-6 text-slate-400" />
+                          : <ToggleLeft className="w-6 h-6 text-kx-text-3" />
                         }
                       </button>
                     </td>
                     <td className="p-4">
                       <div className="flex items-center justify-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-violet-500"
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-violet-500"
                           onClick={() => openItems(lista)} title="Gestionar precios">
                           <DollarSign className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-blue-500"
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-blue-500"
                           onClick={() => openEditar(lista)} title="Editar lista">
                           <Edit className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-500"
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-red-500"
                           onClick={() => deleteLista.mutate(lista.id)} title="Eliminar lista">
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
@@ -289,13 +289,13 @@ function ListasPrecioSection() {
 
       {/* ── MODAL: Nueva / Editar lista ── */}
       <Dialog open={listaModal} onOpenChange={setListaModal}>
-        <DialogContent className="max-w-md dark:bg-slate-950 dark:border-slate-800">
+        <DialogContent className="max-w-md dark:bg-kx-bg dark:border-kx-border">
           <DialogHeader>
-            <DialogTitle className="dark:text-white flex items-center gap-2">
+            <DialogTitle className="dark:text-kx-text flex items-center gap-2">
               <Tag className="w-5 h-5 text-violet-500" />
               {editingLista ? 'Editar lista' : 'Nueva lista de precios'}
             </DialogTitle>
-            <DialogDescription className="dark:text-slate-400">
+            <DialogDescription className="dark:text-kx-text-2">
               {editingLista
                 ? 'Modificá el nombre y descripción de la lista.'
                 : 'Creá una nueva lista y después asignale precios a los productos.'}
@@ -303,27 +303,27 @@ function ListasPrecioSection() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label className="dark:text-white">Nombre *</Label>
+              <Label className="dark:text-kx-text">Nombre *</Label>
               <Input
                 value={formLista.nombre}
                 onChange={e => setFormLista(f => ({ ...f, nombre: e.target.value }))}
                 placeholder="ej: Precio VIP, Mayorista, Distribuidor"
-                className="dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
                 autoFocus
               />
             </div>
             <div className="space-y-2">
-              <Label className="dark:text-white">Descripción <span className="text-slate-400 font-normal">(opcional)</span></Label>
+              <Label className="dark:text-kx-text">Descripción <span className="text-kx-text-3 font-normal">(opcional)</span></Label>
               <Input
                 value={formLista.descripcion}
                 onChange={e => setFormLista(f => ({ ...f, descripcion: e.target.value }))}
                 placeholder="ej: Precios para clientes con cuenta corriente"
-                className="dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setListaModal(false)} className="dark:border-slate-700 dark:text-slate-300">
+            <Button variant="outline" onClick={() => setListaModal(false)} className="dark:border-kx-border dark:text-slate-300">
               Cancelar
             </Button>
             <Button
@@ -340,13 +340,13 @@ function ListasPrecioSection() {
 
       {/* ── MODAL: Gestionar precios de una lista ── */}
       <Dialog open={itemsModal} onOpenChange={setItemsModal}>
-        <DialogContent className="max-w-2xl dark:bg-slate-950 dark:border-slate-800 max-h-[85vh] flex flex-col">
+        <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle className="dark:text-white flex items-center gap-2">
+            <DialogTitle className="dark:text-kx-text flex items-center gap-2">
               <DollarSign className="w-5 h-5 text-violet-500" />
               Precios: {selectedLista?.nombre}
             </DialogTitle>
-            <DialogDescription className="dark:text-slate-400">
+            <DialogDescription className="dark:text-kx-text-2">
               Asigná un precio especial por producto. Solo los productos con precio guardado aparecerán en esta lista.
               Los productos sin precio usarán el precio de venta estándar.
             </DialogDescription>
@@ -354,18 +354,18 @@ function ListasPrecioSection() {
 
           {/* Buscador */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-kx-text-3" />
             <Input
               value={prodSearch}
               onChange={e => setProdSearch(e.target.value)}
               placeholder="Buscar producto..."
-              className="pl-9 dark:bg-slate-900 dark:border-slate-700 dark:text-white"
+              className="pl-9 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
             />
           </div>
 
           <div className="flex-1 overflow-y-auto space-y-1 pr-1">
             {filteredProductos.length === 0 ? (
-              <p className="text-center text-slate-400 py-8 text-sm">Sin resultados</p>
+              <p className="text-center text-kx-text-3 py-8 text-sm">Sin resultados</p>
             ) : filteredProductos.map(prod => {
               const existingItem = itemMap[prod.id];
               const hasPrice = !!existingItem;
@@ -376,18 +376,18 @@ function ListasPrecioSection() {
                   className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
                     hasPrice
                       ? 'bg-violet-50 border-violet-200 dark:bg-violet-900/10 dark:border-violet-800/40'
-                      : 'bg-white border-slate-100 dark:bg-slate-900 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                      : 'bg-kx-surface border-slate-100 dark:bg-kx-surface dark:border-kx-border hover:bg-kx-surface-2 dark:hover:bg-slate-800/50'
                   }`}
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-800 dark:text-white truncate">{prod.nombre}</p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-sm font-medium text-kx-text dark:text-kx-text truncate">{prod.nombre}</p>
+                    <p className="text-xs text-kx-text-3">
                       {prod.codigo_sku} · Precio estándar: ${Number(prod.precio_venta).toLocaleString('es-AR')}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <div className="relative">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-kx-text-3 text-xs">$</span>
                       <input
                         type="number"
                         min="0"
@@ -395,7 +395,7 @@ function ListasPrecioSection() {
                         value={currentPrecioStr}
                         onChange={e => setPrecioEdicion(prev => ({ ...prev, [prod.id]: e.target.value }))}
                         placeholder="0.00"
-                        className="w-28 h-8 pl-6 pr-2 text-right text-sm rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        className="w-28 h-8 pl-6 pr-2 text-right text-sm rounded-md border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text focus:outline-none focus:ring-2 focus:ring-violet-500"
                       />
                     </div>
                     <Button
@@ -415,7 +415,7 @@ function ListasPrecioSection() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="h-8 w-8 text-slate-400 hover:text-red-500"
+                        className="h-8 w-8 text-kx-text-3 hover:text-red-500"
                         onClick={() => deleteItem.mutate(existingItem.id)}
                         title="Quitar precio especial"
                       >
@@ -428,11 +428,11 @@ function ListasPrecioSection() {
             })}
           </div>
 
-          <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800">
-            <span className="text-xs text-slate-400">
+          <div className="flex items-center justify-between pt-2 border-t border-kx-border dark:border-kx-border">
+            <span className="text-xs text-kx-text-3">
               {totalConPrecio} producto{totalConPrecio !== 1 ? 's' : ''} con precio especial
             </span>
-            <Button variant="outline" onClick={() => setItemsModal(false)} className="dark:border-slate-700 dark:text-slate-300">
+            <Button variant="outline" onClick={() => setItemsModal(false)} className="dark:border-kx-border dark:text-slate-300">
               Cerrar
             </Button>
           </div>

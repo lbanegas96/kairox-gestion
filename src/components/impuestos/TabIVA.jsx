@@ -146,8 +146,8 @@ function TabIVA({ onNavigate }) {
       <div>
         <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
           <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Posición IVA del período</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Débito (ventas) menos crédito (compras).</p>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-kx-text">Posición IVA del período</h3>
+            <p className="text-sm text-slate-500 dark:text-kx-text-2">Débito (ventas) menos crédito (compras).</p>
           </div>
           <div className="flex items-end gap-2">
             <div className="space-y-1">
@@ -165,28 +165,28 @@ function TabIVA({ onNavigate }) {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="p-4 dark:bg-slate-900 dark:border-slate-800">
-            <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-wide">
+          <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
+            <div className="flex items-center gap-2 text-xs text-kx-text-3 uppercase tracking-wide">
               <TrendingUp className="h-4 w-4 text-rose-500" /> Débito Fiscal
             </div>
             <p className="text-2xl font-black text-rose-600 dark:text-rose-400 mt-1 font-mono">{fmtARS(posicion.debito)}</p>
-            <p className="text-xs text-slate-400 mt-1">IVA de ventas</p>
+            <p className="text-xs text-kx-text-3 mt-1">IVA de ventas</p>
           </Card>
-          <Card className="p-4 dark:bg-slate-900 dark:border-slate-800">
-            <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-wide">
+          <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
+            <div className="flex items-center gap-2 text-xs text-kx-text-3 uppercase tracking-wide">
               <TrendingDown className="h-4 w-4 text-emerald-500" /> Crédito Fiscal
             </div>
             <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1 font-mono">{fmtARS(posicion.credito)}</p>
-            <p className="text-xs text-slate-400 mt-1">IVA de compras</p>
+            <p className="text-xs text-kx-text-3 mt-1">IVA de compras</p>
           </Card>
-          <Card className="p-4 dark:bg-slate-900 dark:border-slate-800">
-            <div className="flex items-center gap-2 text-xs text-slate-400 uppercase tracking-wide">
+          <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
+            <div className="flex items-center gap-2 text-xs text-kx-text-3 uppercase tracking-wide">
               <Scale className="h-4 w-4 text-blue-500" /> Posición del mes
             </div>
             <p className={`text-2xl font-black mt-1 font-mono ${posicionNeta > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
               {fmtARS(Math.abs(posicionNeta))}
             </p>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-kx-text-3 mt-1">
               {posicionNeta > 0 ? 'Saldo a pagar' : posicionNeta < 0 ? 'Saldo a favor' : 'Equilibrado'}
             </p>
           </Card>
@@ -206,12 +206,12 @@ function TabIVA({ onNavigate }) {
       <div>
         <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
           <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Alícuota de IVA por producto</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">Se aplica automáticamente en cada venta.</p>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-kx-text">Alícuota de IVA por producto</h3>
+            <p className="text-sm text-slate-500 dark:text-kx-text-2">Se aplica automáticamente en cada venta.</p>
           </div>
           <div className="flex items-end gap-2">
             <div className="relative">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-kx-text-3" />
               <Input value={search} onChange={e => setSearch(e.target.value)}
                 placeholder="Buscar por nombre o SKU…" className="h-9 w-56 pl-8" />
             </div>
@@ -221,10 +221,10 @@ function TabIVA({ onNavigate }) {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-kx-surface dark:bg-kx-surface border border-kx-border dark:border-kx-border rounded-xl overflow-hidden shadow-sm">
           <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
             <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800 text-xs uppercase font-semibold text-slate-500 dark:text-slate-400 sticky top-0">
+              <thead className="bg-kx-surface-2 dark:bg-slate-900/50 border-b border-kx-border dark:border-kx-border text-xs uppercase font-semibold text-slate-500 dark:text-kx-text-2 sticky top-0">
                 <tr>
                   <th className="p-3">Producto</th>
                   <th className="p-3 w-32">SKU</th>
@@ -234,15 +234,15 @@ function TabIVA({ onNavigate }) {
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {loadingProd ? (
-                  <tr><td colSpan={4} className="p-8 text-center text-slate-400"><RefreshCw className="h-5 w-5 animate-spin mx-auto" /></td></tr>
+                  <tr><td colSpan={4} className="p-8 text-center text-kx-text-3"><RefreshCw className="h-5 w-5 animate-spin mx-auto" /></td></tr>
                 ) : productosFiltrados.length === 0 ? (
-                  <tr><td colSpan={4} className="p-10 text-center text-slate-500 dark:text-slate-400">Sin productos</td></tr>
+                  <tr><td colSpan={4} className="p-10 text-center text-slate-500 dark:text-kx-text-2">Sin productos</td></tr>
                 ) : (
                   productosFiltrados.map(p => (
                     <tr key={p.id} className="hover:bg-blue-50/40 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="p-3 font-medium text-slate-800 dark:text-slate-200">{p.nombre}</td>
-                      <td className="p-3 font-mono text-xs text-slate-500 dark:text-slate-400">{p.codigo_sku || '—'}</td>
-                      <td className="p-3 text-right font-mono text-slate-600 dark:text-slate-300">{fmtARS(p.precio_venta)}</td>
+                      <td className="p-3 font-medium text-kx-text dark:text-kx-text">{p.nombre}</td>
+                      <td className="p-3 font-mono text-xs text-slate-500 dark:text-kx-text-2">{p.codigo_sku || '—'}</td>
+                      <td className="p-3 text-right font-mono text-kx-text-2 dark:text-slate-300">{fmtARS(p.precio_venta)}</td>
                       <td className="p-3">
                         <Select value={p.alicuota_iva ?? '21'} onValueChange={v => cambiarAlicuota(p, v)}>
                           <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>

@@ -160,13 +160,13 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl kairox-bg-card kairox-text-primary overflow-hidden flex flex-col max-h-[90vh] dark:bg-slate-950 dark:border-slate-800">
-        <DialogHeader className="border-b border-slate-100 dark:border-slate-800 pb-4">
-          <DialogTitle className="flex items-center gap-2 text-xl dark:text-white">
+      <DialogContent className="max-w-4xl kairox-bg-card kairox-text-primary overflow-hidden flex flex-col max-h-[90vh] dark:bg-kx-bg dark:border-kx-border">
+        <DialogHeader className="border-b border-slate-100 dark:border-kx-border pb-4">
+          <DialogTitle className="flex items-center gap-2 text-xl dark:text-kx-text">
              <User className="h-6 w-6 text-blue-600 dark:text-[#00D4FF]" />
              <span>{localClientData?.nombre || 'Detalle Cuenta Corriente'}</span>
           </DialogTitle>
-          <DialogDescription className="dark:text-slate-400">
+          <DialogDescription className="dark:text-kx-text-2">
             Estado de cuenta y movimientos históricos.
           </DialogDescription>
         </DialogHeader>
@@ -197,30 +197,30 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
 
               {/* LÍMITE Y DISPONIBLE */}
               <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                 <div className="bg-white dark:bg-slate-900/50 p-5 rounded-xl border kairox-border flex flex-col justify-center dark:border-slate-800">
-                    <p className="text-sm text-slate-500 font-medium uppercase tracking-wider mb-1 dark:text-slate-400">Límite de Crédito</p>
-                    <p className="text-2xl font-bold text-slate-800 dark:text-slate-200">
+                 <div className="bg-kx-surface dark:bg-slate-900/50 p-5 rounded-xl border kairox-border flex flex-col justify-center dark:border-kx-border">
+                    <p className="text-sm text-slate-500 font-medium uppercase tracking-wider mb-1 dark:text-kx-text-2">Límite de Crédito</p>
+                    <p className="text-2xl font-bold text-kx-text dark:text-kx-text">
                        ${limite.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                     </p>
                  </div>
-                 <div className="bg-white dark:bg-slate-900/50 p-5 rounded-xl border kairox-border flex flex-col justify-center dark:border-slate-800">
-                    <p className="text-sm text-slate-500 font-medium uppercase tracking-wider mb-1 dark:text-slate-400">Disponible para Compras</p>
+                 <div className="bg-kx-surface dark:bg-slate-900/50 p-5 rounded-xl border kairox-border flex flex-col justify-center dark:border-kx-border">
+                    <p className="text-sm text-slate-500 font-medium uppercase tracking-wider mb-1 dark:text-kx-text-2">Disponible para Compras</p>
                     <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                        ${disponible.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                     </p>
                  </div>
                  
                  {/* QUICK PAY FORM INLINE */}
-                 <div className="col-span-1 sm:col-span-2 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border kairox-border flex items-center gap-4 dark:border-slate-800">
+                 <div className="col-span-1 sm:col-span-2 bg-kx-surface-2 dark:bg-slate-800/50 p-4 rounded-xl border kairox-border flex items-center gap-4 dark:border-kx-border">
                     <div className="flex-1">
-                       <Label htmlFor="quick-pay" className="text-xs font-bold text-slate-500 uppercase mb-1 block dark:text-slate-400">Registrar Pago Rápido</Label>
+                       <Label htmlFor="quick-pay" className="text-xs font-bold text-slate-500 uppercase mb-1 block dark:text-kx-text-2">Registrar Pago Rápido</Label>
                        <div className="flex gap-2">
                           <Input 
                              id="quick-pay"
                              type="number" 
                              min="0"
                              placeholder="Monto ($)" 
-                             className="h-10 bg-white dark:bg-slate-950 border-slate-300 dark:border-slate-700 dark:text-white"
+                             className="h-10 bg-kx-surface dark:bg-kx-bg border-slate-300 dark:border-kx-border dark:text-kx-text"
                              value={paymentAmount}
                              onChange={(e) => setPaymentAmount(e.target.value)}
                           />
@@ -241,12 +241,12 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
 
            {/* MOVEMENTS HISTORY */}
            <div>
-              <h4 className="font-semibold text-slate-700 dark:text-slate-200 text-sm mb-3 flex items-center gap-2 uppercase tracking-wider">
-                 <Clock className="h-4 w-4 text-slate-400" /> Historial de Movimientos
+              <h4 className="font-semibold text-slate-700 dark:text-kx-text text-sm mb-3 flex items-center gap-2 uppercase tracking-wider">
+                 <Clock className="h-4 w-4 text-kx-text-3" /> Historial de Movimientos
               </h4>
-              <div className="border kairox-border rounded-lg overflow-hidden bg-white dark:bg-transparent shadow-sm dark:border-slate-800">
+              <div className="border kairox-border rounded-lg overflow-hidden bg-kx-surface dark:bg-transparent shadow-sm dark:border-kx-border">
                  <table className="w-full text-sm text-left">
-                    <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500 font-semibold border-b kairox-border dark:border-slate-800 dark:text-slate-400">
+                    <thead className="bg-kx-surface-2 dark:bg-slate-800/50 text-xs uppercase text-slate-500 font-semibold border-b kairox-border dark:border-kx-border dark:text-kx-text-2">
                        <tr>
                           <th className="px-4 py-3 w-32">Fecha</th>
                           <th className="px-4 py-3 w-24 text-center">Tipo</th>
@@ -263,10 +263,10 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
                           movements.map((mov) => {
                              const isDebe = mov.tipo === 'DEBE'; // Sale = Debt Increase
                              return (
-                                <tr key={mov.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/30 transition-colors">
-                                   <td className="px-4 py-3 text-slate-600 dark:text-slate-400 font-mono text-xs">
+                                <tr key={mov.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-900/30 transition-colors">
+                                   <td className="px-4 py-3 text-kx-text-2 dark:text-kx-text-2 font-mono text-xs">
                                       {formatDateAR(mov.created_at || mov.fecha)}
-                                      <div className="text-[10px] text-slate-400">{formatTimeAR(mov.created_at || mov.fecha)}</div>
+                                      <div className="text-[10px] text-kx-text-3">{formatTimeAR(mov.created_at || mov.fecha)}</div>
                                    </td>
                                    <td className="px-4 py-3 text-center">
                                       <Badge variant={isDebe ? "outline" : "default"} className={`text-[10px] h-5 ${isDebe ? 'text-red-600 border-red-200 bg-red-50 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/50' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/30'}`}>
@@ -290,8 +290,8 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
 
         </div>
 
-        <DialogFooter className="border-t border-slate-100 dark:border-slate-800 pt-4">
-          <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:text-white dark:border-slate-700 dark:hover:bg-slate-800">
+        <DialogFooter className="border-t border-slate-100 dark:border-kx-border pt-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:text-kx-text dark:border-kx-border dark:hover:bg-slate-800">
             Cerrar
           </Button>
         </DialogFooter>

@@ -139,14 +139,14 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
     <div className="space-y-6">
       
       {/* ADVANCED FILTERS SECTION */}
-      <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border kairox-border shadow-sm space-y-4">
+      <div className="bg-kx-surface dark:bg-kx-surface p-5 rounded-xl border kairox-border shadow-sm space-y-4">
         <div className="flex justify-between items-center mb-2">
-           <h3 className="font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+           <h3 className="font-semibold text-slate-700 dark:text-kx-text flex items-center gap-2">
              <Filter className="h-4 w-4" /> Filtros Avanzados
-             {activeFiltersCount > 0 && <Badge variant="secondary" className="ml-1 px-1.5 h-5 min-w-[20px] dark:bg-slate-800 dark:text-slate-300">{activeFiltersCount}</Badge>}
+             {activeFiltersCount > 0 && <Badge variant="secondary" className="ml-1 px-1.5 h-5 min-w-[20px] dark:bg-kx-surface-2 dark:text-slate-300">{activeFiltersCount}</Badge>}
            </h3>
            {activeFiltersCount > 0 && (
-             <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-xs text-slate-500 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400">
+             <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-xs text-slate-500 hover:text-red-500 dark:text-kx-text-2 dark:hover:text-red-400">
                <X className="h-3 w-3 mr-1" /> Limpiar filtros
              </Button>
            )}
@@ -154,17 +154,17 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="space-y-1">
-             <Label className="text-xs text-slate-500 font-medium dark:text-slate-400">Desde</Label>
+             <Label className="text-xs text-slate-500 font-medium dark:text-kx-text-2">Desde</Label>
              <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-9 kairox-input text-sm" />
           </div>
           <div className="space-y-1">
-             <Label className="text-xs text-slate-500 font-medium dark:text-slate-400">Hasta</Label>
+             <Label className="text-xs text-slate-500 font-medium dark:text-kx-text-2">Hasta</Label>
              <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-9 kairox-input text-sm" />
           </div>
           <div className="space-y-1">
-             <Label className="text-xs text-slate-500 font-medium dark:text-slate-400">Cliente</Label>
+             <Label className="text-xs text-slate-500 font-medium dark:text-kx-text-2">Cliente</Label>
              <select 
-               className="w-full h-9 rounded-md border border-slate-300 dark:border-slate-700 bg-transparent px-3 text-sm dark:bg-slate-900 dark:text-slate-200"
+               className="w-full h-9 rounded-md border border-slate-300 dark:border-kx-border bg-transparent px-3 text-sm dark:bg-kx-surface dark:text-kx-text"
                value={selectedClient}
                onChange={e => setSelectedClient(e.target.value)}
              >
@@ -173,9 +173,9 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
              </select>
           </div>
           <div className="space-y-1">
-             <Label className="text-xs text-slate-500 font-medium dark:text-slate-400">Medio de Pago</Label>
+             <Label className="text-xs text-slate-500 font-medium dark:text-kx-text-2">Medio de Pago</Label>
              <select 
-               className="w-full h-9 rounded-md border border-slate-300 dark:border-slate-700 bg-transparent px-3 text-sm dark:bg-slate-900 dark:text-slate-200"
+               className="w-full h-9 rounded-md border border-slate-300 dark:border-kx-border bg-transparent px-3 text-sm dark:bg-kx-surface dark:text-kx-text"
                value={selectedPayment}
                onChange={e => setSelectedPayment(e.target.value)}
              >
@@ -187,9 +187,9 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
              </select>
           </div>
           <div className="space-y-1">
-             <Label className="text-xs text-slate-500 font-medium dark:text-slate-400">Estado</Label>
+             <Label className="text-xs text-slate-500 font-medium dark:text-kx-text-2">Estado</Label>
              <select 
-               className="w-full h-9 rounded-md border border-slate-300 dark:border-slate-700 bg-transparent px-3 text-sm dark:bg-slate-900 dark:text-slate-200"
+               className="w-full h-9 rounded-md border border-slate-300 dark:border-kx-border bg-transparent px-3 text-sm dark:bg-kx-surface dark:text-kx-text"
                value={selectedStatus}
                onChange={e => setSelectedStatus(e.target.value)}
              >
@@ -211,12 +211,12 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                 <Check className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Ventas Filtradas</p>
-                <p className="text-2xl font-bold text-slate-800 dark:text-white">{filteredSales.length}</p>
+                <p className="text-sm text-slate-500 dark:text-kx-text-2 font-medium">Ventas Filtradas</p>
+                <p className="text-2xl font-bold text-kx-text dark:text-kx-text">{filteredSales.length}</p>
               </div>
             </div>
-            <div className="text-center sm:text-right border-t sm:border-t-0 sm:border-l border-blue-200 dark:border-slate-700 pt-4 sm:pt-0 sm:pl-8 w-full sm:w-auto">
-               <p className="text-sm text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider mb-1">Total Vendido</p>
+            <div className="text-center sm:text-right border-t sm:border-t-0 sm:border-l border-blue-200 dark:border-kx-border pt-4 sm:pt-0 sm:pl-8 w-full sm:w-auto">
+               <p className="text-sm text-slate-500 dark:text-kx-text-2 font-medium uppercase tracking-wider mb-1">Total Vendido</p>
                <p className="text-3xl font-black text-blue-600 dark:text-blue-400 tabular-nums">
                  ${totalPeriodo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                </p>
@@ -228,7 +228,7 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
       <div className="kairox-bg-card border kairox-border rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
-            <thead className="bg-slate-50 dark:bg-slate-900/50 border-b kairox-border text-xs uppercase font-semibold text-slate-500">
+            <thead className="bg-kx-surface-2 dark:bg-slate-900/50 border-b kairox-border text-xs uppercase font-semibold text-slate-500">
               <tr>
                 <th className="p-4 w-32">Nro Venta</th>
                 <th className="p-4 w-40">Fecha</th>
@@ -278,13 +278,13 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                     <td className="p-4 font-mono font-medium text-slate-700 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400">
                       {sale.numero_venta}
                     </td>
-                    <td className="p-4 text-slate-500 text-xs dark:text-slate-400">
-                      {formatDateAR(sale.fecha)} <span className="text-slate-400 ml-1">{formatTimeAR(sale.fecha)}</span>
+                    <td className="p-4 text-slate-500 text-xs dark:text-kx-text-2">
+                      {formatDateAR(sale.fecha)} <span className="text-kx-text-3 ml-1">{formatTimeAR(sale.fecha)}</span>
                     </td>
-                    <td className="p-4 font-medium text-slate-800 dark:text-slate-200">
-                      {sale.cliente_nombre || <span className="text-slate-400 italic">Consumidor Final</span>}
+                    <td className="p-4 font-medium text-kx-text dark:text-kx-text">
+                      {sale.cliente_nombre || <span className="text-kx-text-3 italic">Consumidor Final</span>}
                     </td>
-                    <td className="p-4 text-slate-600 dark:text-slate-400 text-xs font-medium uppercase tracking-wide">
+                    <td className="p-4 text-kx-text-2 dark:text-kx-text-2 text-xs font-medium uppercase tracking-wide">
                       {sale.forma_pago}
                     </td>
                     <td className="p-4 text-center">
@@ -310,13 +310,13 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                           }
                         </span>
                       ) : (
-                        <span className="text-xs text-slate-300 dark:text-slate-600">—</span>
+                        <span className="text-xs text-slate-300 dark:text-kx-text-2">—</span>
                       )}
                     </td>
-                    <td className="p-4 text-right font-bold text-slate-700 dark:text-slate-200 group-hover:text-emerald-600 transition-colors">
+                    <td className="p-4 text-right font-bold text-slate-700 dark:text-kx-text group-hover:text-emerald-600 transition-colors">
                       ${Number(sale.total).toFixed(2)}
                       {sale.moneda && sale.moneda !== 'ARS' && Number(sale.tipo_cambio_tasa) > 0 && (
-                        <div className="text-[10px] font-normal text-slate-500 dark:text-slate-400 mt-0.5">
+                        <div className="text-[10px] font-normal text-slate-500 dark:text-kx-text-2 mt-0.5">
                           <span className="inline-block bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-bold mr-1">{sale.moneda}</span>
                           {sale.moneda} {(Number(sale.total) / Number(sale.tipo_cambio_tasa)).toFixed(2)} · TC ${Number(sale.tipo_cambio_tasa).toLocaleString('es-AR')}
                         </div>
@@ -324,7 +324,7 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                     </td>
                     <td className="p-4 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full">
+                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-kx-text-3 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full">
                           <Eye className="h-4 w-4" />
                         </Button>
                         {sale.tipo === 'venta' && (
@@ -342,7 +342,7 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                               });
                               setIsDevolucionOpen(true);
                             }}
-                            className="h-8 w-8 p-0 text-slate-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-full"
+                            className="h-8 w-8 p-0 text-kx-text-3 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-full"
                           >
                             <Undo2 className="h-4 w-4" />
                           </Button>
@@ -360,7 +360,7 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
       {/* PAGINATION */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-2">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+          <p className="text-sm text-slate-500 dark:text-kx-text-2">
             Mostrando {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredSales.length)} de {filteredSales.length} ventas
           </p>
           <div className="flex items-center gap-1">
@@ -382,7 +382,7 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
               }, [])
               .map((item, idx) =>
                 item === '...' ? (
-                  <span key={`ellipsis-${idx}`} className="px-2 text-slate-400">…</span>
+                  <span key={`ellipsis-${idx}`} className="px-2 text-kx-text-3">…</span>
                 ) : (
                   <Button
                     key={item}

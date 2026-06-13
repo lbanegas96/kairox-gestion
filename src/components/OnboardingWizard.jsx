@@ -169,7 +169,7 @@ export function OnboardingWizard({ open, onComplete }) {
     <Dialog open={open} onOpenChange={() => {}}>
       <DialogContent
         hideCloseButton
-        className="max-w-lg dark:bg-slate-950 dark:border-slate-800 overflow-y-auto max-h-[90vh]"
+        className="max-w-lg dark:bg-kx-bg dark:border-kx-border overflow-y-auto max-h-[90vh]"
       >
         {/* Stepper */}
         <div className="flex items-center gap-2 mb-6">
@@ -178,7 +178,7 @@ export function OnboardingWizard({ open, onComplete }) {
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors flex-shrink-0
                 ${step > s  ? 'bg-green-600 text-white'
                   : step === s ? 'bg-blue-600 text-white'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                  : 'bg-slate-100 dark:bg-kx-surface-2 text-kx-text-3'
                 }`}>
                 {step > s ? <Check className="w-4 h-4" /> : s}
               </div>
@@ -199,7 +199,7 @@ export function OnboardingWizard({ open, onComplete }) {
                 <Store className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold dark:text-white">Bienvenido a KAIROX</h2>
+                <h2 className="text-lg font-semibold dark:text-kx-text">Bienvenido a KAIROX</h2>
                 <p className="text-sm text-slate-500">Contanos un poco sobre tu negocio</p>
               </div>
             </div>
@@ -234,7 +234,7 @@ export function OnboardingWizard({ open, onComplete }) {
               </div>
 
               <div>
-                <Label>CUIT <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                <Label>CUIT <span className="text-kx-text-3 text-xs">(opcional)</span></Label>
                 <Input
                   value={empresaForm.cuit}
                   onChange={e => setEmpresaForm(f => ({ ...f, cuit: e.target.value }))}
@@ -245,7 +245,7 @@ export function OnboardingWizard({ open, onComplete }) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Teléfono <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                  <Label>Teléfono <span className="text-kx-text-3 text-xs">(opcional)</span></Label>
                   <Input
                     value={empresaForm.telefono}
                     onChange={e => setEmpresaForm(f => ({ ...f, telefono: e.target.value }))}
@@ -254,7 +254,7 @@ export function OnboardingWizard({ open, onComplete }) {
                   />
                 </div>
                 <div>
-                  <Label>Ciudad <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                  <Label>Ciudad <span className="text-kx-text-3 text-xs">(opcional)</span></Label>
                   <Input
                     value={empresaForm.direccion}
                     onChange={e => setEmpresaForm(f => ({ ...f, direccion: e.target.value }))}
@@ -284,7 +284,7 @@ export function OnboardingWizard({ open, onComplete }) {
                 <Package className="w-5 h-5 text-green-600" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold dark:text-white">Cargá tu primer producto</h2>
+                <h2 className="text-lg font-semibold dark:text-kx-text">Cargá tu primer producto</h2>
                 <p className="text-sm text-slate-500">Necesitás al menos uno para poder vender</p>
               </div>
             </div>
@@ -327,7 +327,7 @@ export function OnboardingWizard({ open, onComplete }) {
               </div>
 
               <div>
-                <Label>Código / SKU <span className="text-slate-400 text-xs">(opcional)</span></Label>
+                <Label>Código / SKU <span className="text-kx-text-3 text-xs">(opcional)</span></Label>
                 <Input
                   value={productoForm.codigo_sku}
                   onChange={e => setProductoForm(f => ({ ...f, codigo_sku: e.target.value }))}
@@ -365,7 +365,7 @@ export function OnboardingWizard({ open, onComplete }) {
               <Rocket className="w-8 h-8 text-green-600" />
             </div>
             <div>
-              <h2 className="text-xl font-bold dark:text-white mb-1">
+              <h2 className="text-xl font-bold dark:text-kx-text mb-1">
                 ¡{empresaForm.nombre || 'Tu negocio'} está listo!
               </h2>
               <p className="text-slate-500 text-sm">
@@ -373,7 +373,7 @@ export function OnboardingWizard({ open, onComplete }) {
               </p>
             </div>
 
-            <div className="bg-slate-50 dark:bg-slate-900 rounded-xl p-4 text-left space-y-2">
+            <div className="bg-kx-surface-2 dark:bg-kx-surface rounded-xl p-4 text-left space-y-2">
               <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
                 ¿Qué podés hacer ahora?
               </p>
@@ -383,7 +383,7 @@ export function OnboardingWizard({ open, onComplete }) {
                 { icon: '👥', text: 'Agregar clientes con cuenta corriente' },
                 { icon: '📊', text: 'Ver el Dashboard con tus KPIs' },
               ].map((item, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+                <div key={i} className="flex items-center gap-2 text-sm text-kx-text-2 dark:text-kx-text-2">
                   <span>{item.icon}</span>
                   <span>{item.text}</span>
                 </div>
@@ -401,7 +401,7 @@ export function OnboardingWizard({ open, onComplete }) {
           </div>
         )}
 
-        <p className="text-center text-xs text-slate-400 mt-2">
+        <p className="text-center text-xs text-kx-text-3 mt-2">
           🎉 Estás en tu período de prueba — acceso completo por 14 días
         </p>
       </DialogContent>

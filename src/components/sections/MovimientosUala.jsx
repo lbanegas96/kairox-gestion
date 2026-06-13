@@ -72,14 +72,14 @@ function MovimientosUala() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
             <Wallet className="h-6 w-6 text-violet-500" />
             Movimientos Ualá
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-1">
             Transferencias sincronizadas automáticamente desde Gmail
             {lastUpdate && (
-              <span className="ml-2 text-xs text-slate-400">
+              <span className="ml-2 text-xs text-kx-text-3">
                 · Act. {lastUpdate.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
               </span>
             )}
@@ -98,17 +98,17 @@ function MovimientosUala() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Card className="border-l-4 border-l-violet-500 bg-violet-50/30 dark:bg-violet-900/10 dark:border-slate-800">
+        <Card className="border-l-4 border-l-violet-500 bg-violet-50/30 dark:bg-violet-900/10 dark:border-kx-border">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold tracking-wider">
+                <p className="text-xs text-slate-500 dark:text-kx-text-2 uppercase font-semibold tracking-wider">
                   Total egresado
                 </p>
                 <p className="text-3xl font-bold text-violet-600 dark:text-violet-400 font-mono mt-1">
                   {formatARS(totalEgresado)}
                 </p>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-kx-text-3 mt-1">
                   {movimientos.length} transferencia{movimientos.length !== 1 ? 's' : ''} registrada{movimientos.length !== 1 ? 's' : ''}
                 </p>
               </div>
@@ -117,30 +117,30 @@ function MovimientosUala() {
           </CardContent>
         </Card>
 
-        <Card className="dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+        <Card className="dark:border-kx-border bg-slate-50/50 dark:bg-slate-900/50">
           <CardContent className="p-5 flex flex-col justify-center h-full">
-            <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold tracking-wider">
+            <p className="text-xs text-slate-500 dark:text-kx-text-2 uppercase font-semibold tracking-wider">
               Última transferencia
             </p>
             {movimientos.length > 0 ? (
               <>
-                <p className="text-lg font-bold text-slate-800 dark:text-slate-200 mt-1">
+                <p className="text-lg font-bold text-kx-text dark:text-kx-text mt-1">
                   {formatARS(movimientos[0].monto)}
                 </p>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
+                <p className="text-sm text-slate-500 dark:text-kx-text-2">
                   {movimientos[0].destinatario} · {formatFecha(movimientos[0].fecha)}
                 </p>
               </>
             ) : (
-              <p className="text-sm text-slate-400 mt-1">Sin datos</p>
+              <p className="text-sm text-kx-text-3 mt-1">Sin datos</p>
             )}
           </CardContent>
         </Card>
       </div>
 
-      <Card className="dark:border-slate-800 shadow-sm">
+      <Card className="dark:border-kx-border shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base font-semibold text-slate-800 dark:text-slate-200">
+          <CardTitle className="text-base font-semibold text-kx-text dark:text-kx-text">
             Historial de transferencias
           </CardTitle>
         </CardHeader>
@@ -153,14 +153,14 @@ function MovimientosUala() {
           )}
 
           {loading && !error && (
-            <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-kx-text-3">
               <RefreshCw className="h-8 w-8 animate-spin" />
               <p className="text-sm">Cargando movimientos...</p>
             </div>
           )}
 
           {!loading && !error && movimientos.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-400">
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-kx-text-3">
               <Inbox className="h-10 w-10 opacity-40" />
               <p className="text-sm font-medium">Sin movimientos registrados</p>
               <p className="text-xs text-center max-w-xs">
@@ -173,20 +173,20 @@ function MovimientosUala() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="hover:bg-transparent border-b dark:border-slate-700">
-                    <TableHead className="text-xs uppercase text-slate-500 dark:text-slate-400 font-semibold w-44">Fecha</TableHead>
-                    <TableHead className="text-xs uppercase text-slate-500 dark:text-slate-400 font-semibold">Destinatario</TableHead>
-                    <TableHead className="text-xs uppercase text-slate-500 dark:text-slate-400 font-semibold text-right w-36">Monto</TableHead>
+                  <TableRow className="hover:bg-transparent border-b dark:border-kx-border">
+                    <TableHead className="text-xs uppercase text-slate-500 dark:text-kx-text-2 font-semibold w-44">Fecha</TableHead>
+                    <TableHead className="text-xs uppercase text-slate-500 dark:text-kx-text-2 font-semibold">Destinatario</TableHead>
+                    <TableHead className="text-xs uppercase text-slate-500 dark:text-kx-text-2 font-semibold text-right w-36">Monto</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {movimientos.map((m) => (
-                    <TableRow key={m.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b dark:border-slate-800 last:border-0">
-                      <TableCell className="font-mono text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap py-3">
+                    <TableRow key={m.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/50 border-b dark:border-kx-border last:border-0">
+                      <TableCell className="font-mono text-sm text-kx-text-2 dark:text-kx-text-2 whitespace-nowrap py-3">
                         {formatFecha(m.fecha)}
                       </TableCell>
-                      <TableCell className="text-sm text-slate-800 dark:text-slate-200 py-3">
-                        {m.destinatario || <span className="text-slate-400 italic">—</span>}
+                      <TableCell className="text-sm text-kx-text dark:text-kx-text py-3">
+                        {m.destinatario || <span className="text-kx-text-3 italic">—</span>}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm font-semibold text-red-500 dark:text-red-400 py-3">
                         -{formatARS(m.monto)}
@@ -196,8 +196,8 @@ function MovimientosUala() {
                 </TableBody>
               </Table>
 
-              <div className="flex justify-end items-center gap-3 px-4 py-3 border-t dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
-                <span className="text-sm text-slate-500 dark:text-slate-400 font-medium">Total egresado:</span>
+              <div className="flex justify-end items-center gap-3 px-4 py-3 border-t dark:border-kx-border bg-slate-50/50 dark:bg-slate-900/50">
+                <span className="text-sm text-slate-500 dark:text-kx-text-2 font-medium">Total egresado:</span>
                 <span className="text-lg font-bold font-mono text-red-500 dark:text-red-400">
                   -{formatARS(totalEgresado)}
                 </span>

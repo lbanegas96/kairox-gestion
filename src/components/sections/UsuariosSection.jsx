@@ -277,9 +277,9 @@ function UsuariosSection() {
 
   if (!isAdmin()) {
       return (
-          <div className="flex flex-col items-center justify-center h-64 text-slate-500 dark:text-slate-400 animate-in fade-in">
-              <Shield className="h-12 w-12 mb-4 text-slate-300 dark:text-slate-600" />
-              <h3 className="text-lg font-semibold dark:text-slate-200">Acceso Restringido</h3>
+          <div className="flex flex-col items-center justify-center h-64 text-slate-500 dark:text-kx-text-2 animate-in fade-in">
+              <Shield className="h-12 w-12 mb-4 text-slate-300 dark:text-kx-text-2" />
+              <h3 className="text-lg font-semibold dark:text-kx-text">Acceso Restringido</h3>
               <p>No tienes permisos para gestionar usuarios.</p>
           </div>
       );
@@ -287,10 +287,10 @@ function UsuariosSection() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-kx-surface dark:bg-kx-surface p-6 rounded-lg border border-kx-border dark:border-kx-border shadow-sm gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-1">Equipo y Usuarios</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Gestiona los miembros de tu organización y sus permisos.</p>
+          <h2 className="text-2xl font-bold text-slate-900 dark:text-kx-text mb-1">Equipo y Usuarios</h2>
+          <p className="text-sm text-slate-500 dark:text-kx-text-2">Gestiona los miembros de tu organización y sus permisos.</p>
         </div>
         <div className="flex gap-2">
             <Button variant="outline" onClick={loadUsers} disabled={loading}>
@@ -302,9 +302,9 @@ function UsuariosSection() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 shadow-sm space-y-4">
+      <div className="bg-kx-surface dark:bg-kx-surface border border-kx-border dark:border-kx-border rounded-xl p-4 shadow-sm space-y-4">
         <div className="flex items-center gap-2 max-w-md">
-            <Search className="h-4 w-4 text-slate-400" />
+            <Search className="h-4 w-4 text-kx-text-3" />
             <Input 
                 placeholder="Buscar por nombre o email..." 
                 value={searchTerm}
@@ -313,10 +313,10 @@ function UsuariosSection() {
             />
         </div>
 
-        <div className="rounded-md border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="rounded-md border border-kx-border dark:border-kx-border overflow-hidden">
             <Table>
                 <TableHeader>
-                    <TableRow className="bg-slate-50 dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-950">
+                    <TableRow className="bg-kx-surface-2 dark:bg-kx-bg hover:bg-kx-surface-2 dark:hover:bg-slate-950">
                         <TableHead>Usuario</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Rol</TableHead>
@@ -330,12 +330,12 @@ function UsuariosSection() {
                     {loading ? (
                        [...Array(3)].map((_, i) => (
                            <TableRow key={i}>
-                               <TableCell><div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" /></TableCell>
-                               <TableCell><div className="h-4 w-40 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" /></TableCell>
-                               <TableCell><div className="h-4 w-20 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" /></TableCell>
-                               <TableCell><div className="h-4 w-16 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" /></TableCell>
-                               <TableCell><div className="h-4 w-24 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" /></TableCell>
-                               <TableCell><div className="h-8 w-8 ml-auto bg-slate-200 dark:bg-slate-800 rounded animate-pulse" /></TableCell>
+                               <TableCell><div className="h-4 w-32 bg-slate-200 dark:bg-kx-surface-2 rounded animate-pulse" /></TableCell>
+                               <TableCell><div className="h-4 w-40 bg-slate-200 dark:bg-kx-surface-2 rounded animate-pulse" /></TableCell>
+                               <TableCell><div className="h-4 w-20 bg-slate-200 dark:bg-kx-surface-2 rounded animate-pulse" /></TableCell>
+                               <TableCell><div className="h-4 w-16 bg-slate-200 dark:bg-kx-surface-2 rounded animate-pulse" /></TableCell>
+                               <TableCell><div className="h-4 w-24 bg-slate-200 dark:bg-kx-surface-2 rounded animate-pulse" /></TableCell>
+                               <TableCell><div className="h-8 w-8 ml-auto bg-slate-200 dark:bg-kx-surface-2 rounded animate-pulse" /></TableCell>
                            </TableRow>
                        ))
                     ) : filteredUsers.length === 0 ? (
@@ -353,7 +353,7 @@ function UsuariosSection() {
                                 <TableRow key={u.id} className="group">
                                     <TableCell className="font-medium">
                                         <div className="flex items-center gap-2">
-                                            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-600 dark:text-slate-300">
+                                            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-kx-surface-2 flex items-center justify-center text-xs font-bold text-kx-text-2 dark:text-slate-300">
                                                 {(u.first_name?.[0] || 'U').toUpperCase()}
                                             </div>
                                             <span>{u.first_name} {u.last_name}</span>
@@ -364,7 +364,7 @@ function UsuariosSection() {
                                         <Badge variant="outline" className={`uppercase text-[10px] font-bold ${
                                             u.role === 'admin' 
                                             ? 'border-purple-200 text-purple-700 bg-purple-50 dark:border-purple-900 dark:text-purple-400 dark:bg-purple-900/20' 
-                                            : 'border-slate-200 text-slate-600 bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:bg-slate-800'
+                                            : 'border-kx-border text-kx-text-2 bg-kx-surface-2 dark:border-kx-border dark:text-kx-text-2 dark:bg-kx-surface-2'
                                         }`}>
                                             {u.role === 'admin' ? 'Admin' : 'Staff'}
                                         </Badge>
@@ -376,7 +376,7 @@ function UsuariosSection() {
                                                 onCheckedChange={() => handleToggleStatus(u.id, u.active)}
                                                 disabled={u.id === user.id}
                                             />
-                                            <span className={`text-xs font-medium ${u.active ? 'text-green-600' : 'text-slate-400'}`}>
+                                            <span className={`text-xs font-medium ${u.active ? 'text-green-600' : 'text-kx-text-3'}`}>
                                                 {u.active ? 'Activo' : 'Inactivo'}
                                             </span>
                                         </div>
@@ -396,7 +396,7 @@ function UsuariosSection() {
                                             </Badge>
                                         )}
                                     </TableCell>
-                                    <TableCell className="text-xs text-slate-400">
+                                    <TableCell className="text-xs text-kx-text-3">
                                         {u.last_login_at
                                           ? new Date(u.last_login_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' })
                                           : <span className="italic text-slate-500">Nunca</span>
@@ -417,7 +417,7 @@ function UsuariosSection() {
                                                     variant="ghost"
                                                     size="sm"
                                                     onClick={() => handleDelete(u.id)}
-                                                    className="hover:text-red-600 text-slate-400"
+                                                    className="hover:text-red-600 text-kx-text-3"
                                                     title="Eliminar Usuario"
                                                 >
                                                     <Trash2 className="h-4 w-4" />
@@ -447,12 +447,12 @@ function UsuariosSection() {
 
       {/* Create User Dialog */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="max-w-2xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh]">
+        <DialogContent className="max-w-2xl bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border flex flex-col max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <DialogTitle className="text-xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
               <Send className="h-5 w-5 text-blue-500" /> Invitar Usuario
             </DialogTitle>
-            <DialogDescription className="dark:text-slate-400">
+            <DialogDescription className="dark:text-kx-text-2">
               El usuario recibirá un email con un link para crear su propia contraseña y acceder al sistema.
             </DialogDescription>
           </DialogHeader>
@@ -460,7 +460,7 @@ function UsuariosSection() {
           <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
                 <div className="space-y-4">
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wide border-b border-slate-100 dark:border-slate-800 pb-2">Datos del Invitado</h4>
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-kx-text uppercase tracking-wide border-b border-slate-100 dark:border-kx-border pb-2">Datos del Invitado</h4>
 
                     <div className="space-y-3">
                         <div className="grid grid-cols-2 gap-2">
@@ -487,29 +487,29 @@ function UsuariosSection() {
                 </div>
 
                 <div className="space-y-4">
-                    <h4 className="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wide border-b border-slate-100 dark:border-slate-800 pb-2">Rol y Permisos</h4>
+                    <h4 className="font-bold text-sm text-slate-900 dark:text-kx-text uppercase tracking-wide border-b border-slate-100 dark:border-kx-border pb-2">Rol y Permisos</h4>
                     
                     <div className="space-y-4">
                         <RadioGroup value={formData.role} onValueChange={(val) => setFormData({...formData, role: val})} className="flex gap-4">
-                            <div className={`flex items-center space-x-2 border p-3 rounded-lg cursor-pointer transition-all ${formData.role === 'admin' ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' : 'border-slate-200 dark:border-slate-800'}`}>
+                            <div className={`flex items-center space-x-2 border p-3 rounded-lg cursor-pointer transition-all ${formData.role === 'admin' ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20' : 'border-kx-border dark:border-kx-border'}`}>
                                 <RadioGroupItem value="admin" id="r-admin" />
                                 <Label htmlFor="r-admin" className="cursor-pointer font-semibold">Admin</Label>
                             </div>
-                            <div className={`flex items-center space-x-2 border p-3 rounded-lg cursor-pointer transition-all ${formData.role === 'staff' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-200 dark:border-slate-800'}`}>
+                            <div className={`flex items-center space-x-2 border p-3 rounded-lg cursor-pointer transition-all ${formData.role === 'staff' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-kx-border dark:border-kx-border'}`}>
                                 <RadioGroupItem value="staff" id="r-staff" />
                                 <Label htmlFor="r-staff" className="cursor-pointer font-semibold">Staff</Label>
                             </div>
                         </RadioGroup>
 
                         {formData.role === 'staff' ? (
-                            <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-200 dark:border-slate-800">
-                                <Label className="text-xs uppercase text-slate-500 dark:text-slate-400 font-bold mb-3 block">Módulos Permitidos</Label>
+                            <div className="bg-kx-surface-2 dark:bg-slate-800/50 p-4 rounded-lg border border-kx-border dark:border-kx-border">
+                                <Label className="text-xs uppercase text-slate-500 dark:text-kx-text-2 font-bold mb-3 block">Módulos Permitidos</Label>
                                 <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1 custom-scrollbar">
                                     {modules.map(module => (
                                     /* OJO: solo UN handler de toggle para evitar el doble disparo
                                        (antes el div y el Checkbox disparaban juntos cuando clickeabas
                                        sobre el cuadradito, se cancelaban entre sí y parecía bloqueado). */
-                                    <div key={module.id} className="flex items-center space-x-2 hover:bg-white dark:hover:bg-slate-800 p-1.5 rounded transition-colors cursor-pointer" onClick={() => handlePermissionChange(module.id)}>
+                                    <div key={module.id} className="flex items-center space-x-2 hover:bg-kx-surface dark:hover:bg-slate-800 p-1.5 rounded transition-colors cursor-pointer" onClick={() => handlePermissionChange(module.id)}>
                                         <Checkbox
                                             checked={!!formData.permissions[module.id]}
                                             className="pointer-events-none"
@@ -533,7 +533,7 @@ function UsuariosSection() {
             </div>
           </div>
 
-          <DialogFooter className="border-t border-slate-100 dark:border-slate-800 pt-4 mt-2">
+          <DialogFooter className="border-t border-slate-100 dark:border-kx-border pt-4 mt-2">
             <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)} disabled={processing}>Cancelar</Button>
             <Button onClick={submitCreateUser} disabled={processing} className="bg-blue-600 hover:bg-blue-700 text-white">
               {processing

@@ -98,7 +98,7 @@ function EntregasSection() {
         <select
           value={filtroOrigen}
           onChange={e => setFiltroOrigen(e.target.value)}
-          className="h-10 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-white px-3 text-sm"
+          className="h-10 rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text px-3 text-sm"
         >
           <option value="todos">Todas las entregas</option>
           <option value="manual">Solo manuales</option>

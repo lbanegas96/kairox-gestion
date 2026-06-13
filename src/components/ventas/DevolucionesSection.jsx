@@ -18,7 +18,7 @@ function CompensacionBadge({ value }) {
   const cfg = {
     nota_credito: { cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',   label: 'NC' },
     reemplazo:    { cls: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400', label: 'Reemplazo' },
-    pendiente:    { cls: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',   label: 'Pendiente' },
+    pendiente:    { cls: 'bg-slate-100 text-kx-text-2 dark:bg-kx-surface-2 dark:text-kx-text-2',   label: 'Pendiente' },
   };
   const { cls, label } = cfg[value] ?? cfg.pendiente;
   return (
@@ -104,7 +104,7 @@ function DevolucionesTab({ onNavigate }) {
       ) : (
         <div className="border border-kx-border rounded-xl overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900 text-xs uppercase text-slate-500 font-semibold">
+            <thead className="bg-kx-surface-2 dark:bg-kx-surface text-xs uppercase text-slate-500 font-semibold">
               <tr>
                 <th className="px-4 py-2.5 text-left w-8" />
                 <th className="px-4 py-2.5 text-left">Número</th>
@@ -154,7 +154,7 @@ function DevolucionesTab({ onNavigate }) {
                         ? <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                             <Check className="h-3 w-3" /> Sí
                           </span>
-                        : <span className="text-xs text-slate-400">No</span>
+                        : <span className="text-xs text-kx-text-3">No</span>
                       }
                     </td>
                     <td className="px-4 py-3 text-center">
@@ -171,7 +171,7 @@ function DevolucionesTab({ onNavigate }) {
                   </tr>
 
                   {expanded[dev.id] && (
-                    <tr className="bg-slate-50 dark:bg-slate-900/50">
+                    <tr className="bg-kx-surface-2 dark:bg-slate-900/50">
                       <td colSpan={8} className="px-8 py-3">
                         {dev.motivo && (
                           <p className="text-xs text-kx-text-2 italic mb-2">Motivo: {dev.motivo}</p>
@@ -283,7 +283,7 @@ function NotasDebitoTab() {
       ) : (
         <div className="border border-kx-border rounded-xl overflow-hidden">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-900 text-xs uppercase text-slate-500 font-semibold">
+            <thead className="bg-kx-surface-2 dark:bg-kx-surface text-xs uppercase text-slate-500 font-semibold">
               <tr>
                 <th className="px-4 py-2.5 text-left">Número</th>
                 <th className="px-4 py-2.5 text-left">Fecha</th>

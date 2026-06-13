@@ -441,12 +441,13 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
       pagosFinales = [{ metodo: singleMethod, monto: total }];
     }
 
-    // ── Bloquear cualquier venta si la caja está cerrada ─────────────────────
-    // Regla: la caja debe estar abierta para registrar ventas (cualquier método).
-    if (!isSessionOpen) {
+    // ── Bloquear venta si incluye Efectivo y la caja está cerrada ───────────
+    // Solo Efectivo requiere caja abierta. Transferencia/Tarjeta/CC operan sin caja.
+    const incluyeEfectivo = pagosFinales.some(p => p.metodo === 'Efectivo' && p.monto > 0);
+    if (!isSessionOpen && incluyeEfectivo) {
       return toast({
-        title: '⛔ Caja cerrada',
-        description: 'No se pueden registrar ventas con la caja cerrada. Abrí la caja para poder operar.',
+        title: 'Caja cerrada',
+        description: 'Abrí la caja para cobrar en efectivo. Podés usar Transferencia, Tarjeta o Cuenta Corriente sin abrir la caja.',
         variant: 'destructive',
       });
     }

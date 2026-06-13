@@ -143,35 +143,35 @@
     text-wrap: balance;
   }
 
-  /* KAIROX Theme Utilities for Light/Dark mode consistency */
+  /* KAIROX Legacy Theme Utilities — ahora apuntan a tokens kx-* */
   .kairox-bg-base {
-    @apply bg-white dark:bg-[#0F172A]; 
+    @apply bg-kx-bg;
   }
   .kairox-bg-card {
-    @apply bg-slate-50 dark:bg-[#1E293B] border-slate-200 dark:border-slate-800;
+    @apply bg-kx-surface border-kx-border;
   }
   .kairox-text-primary {
-    @apply text-slate-900 dark:text-white;
+    @apply text-kx-text;
   }
   .kairox-text-secondary {
-    @apply text-slate-600 dark:text-slate-400;
+    @apply text-kx-text-2;
   }
   .kairox-border {
-    @apply border-slate-200 dark:border-slate-800;
+    @apply border-kx-border;
   }
   .kairox-input {
-    @apply bg-white dark:bg-[#1E293B] border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:border-blue-500 dark:focus:border-[#00D4FF];
+    @apply bg-kx-surface border-kx-border text-kx-text placeholder:text-kx-text-3 focus:border-blue-500;
   }
-  
+
   /* Table Utilities */
   .kairox-table-header {
-    @apply bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-300;
+    @apply bg-kx-surface-2 text-kx-text;
   }
   .kairox-table-row {
-    @apply bg-white dark:bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/30 text-slate-800 dark:text-slate-200 even:bg-slate-50/50 dark:even:bg-transparent;
+    @apply bg-kx-surface hover:bg-kx-surface-2 text-kx-text transition-colors;
   }
   .kairox-cell-text {
-    @apply text-slate-800 dark:text-slate-300;
+    @apply text-kx-text;
   }
 }
 

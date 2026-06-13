@@ -348,8 +348,8 @@ function CuentaCorrienteSection() {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Cuenta Corriente</h2>
-          <p className="text-slate-500 dark:text-slate-400">Control de saldos y movimientos de clientes</p>
+          <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-kx-text">Cuenta Corriente</h2>
+          <p className="text-slate-500 dark:text-kx-text-2">Control de saldos y movimientos de clientes</p>
         </div>
         {!isSessionOpen && (
            <div className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-4 py-2 rounded-lg flex items-center gap-2 border border-red-200 dark:border-red-800 text-sm font-bold shadow-sm">
@@ -360,7 +360,7 @@ function CuentaCorrienteSection() {
 
       {/* Metrics Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
+        <Card className="bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wider">Total Deuda (Filtrada)</CardTitle>
             <DollarSign className="h-4 w-4 text-red-500" />
@@ -370,7 +370,7 @@ function CuentaCorrienteSection() {
               ${metrics.totalAdeudado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
             </div>
             {tcParalelo.enabled && tcParalelo.tcHoy && metrics.totalAdeudado > 0 && (
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-kx-text-3 mt-0.5">
                 ≈ {(metrics.totalAdeudado / tcParalelo.tcHoy).toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
               </p>
             )}
@@ -378,26 +378,26 @@ function CuentaCorrienteSection() {
           </CardContent>
         </Card>
         
-        <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
+        <Card className="bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wider">Clientes con Deuda</CardTitle>
             <ArrowDownCircle className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white">
+            <div className="text-2xl font-bold text-slate-900 dark:text-kx-text">
               {metrics.countConDeuda}
             </div>
             <p className="text-xs text-slate-500 mt-1">Clientes que deben dinero</p>
           </CardContent>
         </Card>
         
-        <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
+        <Card className="bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wider">Clientes Al Día</CardTitle>
             <ArrowUpCircle className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-slate-900 dark:text-white">
+            <div className="text-2xl font-bold text-slate-900 dark:text-kx-text">
               {metrics.countAlDia}
             </div>
             <p className="text-xs text-slate-500 mt-1">Sin deuda o con saldo a favor</p>
@@ -408,40 +408,40 @@ function CuentaCorrienteSection() {
       {/* ── Tabs: Clientes / Antigüedad ──────────────────────────────────────── */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="bg-transparent p-0 gap-2 mb-4 flex justify-start">
-          <TabsTrigger value="clientes" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md px-4 py-2">
+          <TabsTrigger value="clientes" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-kx-surface text-slate-500 dark:text-kx-text-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md px-4 py-2">
             <Users className="w-4 h-4 mr-2" /> Clientes
           </TabsTrigger>
-          <TabsTrigger value="antigüedad" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md px-4 py-2">
+          <TabsTrigger value="antigüedad" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-kx-surface text-slate-500 dark:text-kx-text-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md px-4 py-2">
             <Clock className="w-4 h-4 mr-2" /> Antigüedad de Deuda
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="clientes">
       {/* Filter & Search Bar */}
-      <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
+      <Card className="bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border shadow-sm">
         <CardContent className="p-4">
            <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
               <div className="relative w-full md:max-w-md">
-                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-kx-text-3" />
                  <Input 
                    placeholder="Buscar cliente por nombre..." 
                    value={searchTerm}
                    onChange={(e) => setSearchTerm(e.target.value)}
-                   className="pl-9 bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700"
+                   className="pl-9 bg-kx-surface-2 dark:bg-slate-800/50 border-kx-border dark:border-kx-border"
                  />
                  {searchTerm && (
-                   <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                   <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-kx-text-3 hover:text-kx-text-2">
                      <X className="h-4 w-4" />
                    </button>
                  )}
               </div>
               
-              <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 p-1 rounded-lg border border-slate-200 dark:border-slate-700 w-full md:w-auto overflow-x-auto">
+              <div className="flex items-center gap-2 bg-kx-surface-2 dark:bg-slate-800/50 p-1 rounded-lg border border-kx-border dark:border-kx-border w-full md:w-auto overflow-x-auto">
                  <Button 
                    variant="ghost" 
                    size="sm" 
                    onClick={() => setStatusFilter('Todos')}
-                   className={`h-8 rounded-md px-3 text-xs font-medium ${statusFilter === 'Todos' ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-sm border border-slate-200 dark:border-slate-600' : 'text-slate-500 hover:text-slate-700'}`}
+                   className={`h-8 rounded-md px-3 text-xs font-medium ${statusFilter === 'Todos' ? 'bg-kx-surface dark:bg-slate-700 text-blue-600 shadow-sm border border-kx-border dark:border-slate-600' : 'text-slate-500 hover:text-slate-700'}`}
                  >
                    Todos
                  </Button>
@@ -467,15 +467,15 @@ function CuentaCorrienteSection() {
       </Card>
 
       {/* Main Table */}
-      <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+      <Card className="bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+            <TableHeader className="bg-kx-surface-2 dark:bg-slate-800/50 border-b border-kx-border dark:border-kx-border">
               <TableRow>
-                <TableHead className="w-[300px] pl-6 font-semibold text-slate-600 dark:text-slate-300">Nombre Cliente</TableHead>
-                <TableHead className="text-right font-semibold text-slate-600 dark:text-slate-300">Saldo Total</TableHead>
-                <TableHead className="text-center font-semibold text-slate-600 dark:text-slate-300">Estado</TableHead>
-                <TableHead className="text-center w-[150px] font-semibold text-slate-600 dark:text-slate-300">Acciones</TableHead>
+                <TableHead className="w-[300px] pl-6 font-semibold text-kx-text-2 dark:text-slate-300">Nombre Cliente</TableHead>
+                <TableHead className="text-right font-semibold text-kx-text-2 dark:text-slate-300">Saldo Total</TableHead>
+                <TableHead className="text-center font-semibold text-kx-text-2 dark:text-slate-300">Estado</TableHead>
+                <TableHead className="text-center w-[150px] font-semibold text-kx-text-2 dark:text-slate-300">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -512,20 +512,20 @@ function CuentaCorrienteSection() {
                       key={client.id}
                       className={`
                         group cursor-pointer transition-colors
-                        ${hasDebt ? 'bg-red-50/30 hover:bg-red-50/60 dark:bg-red-900/5 dark:hover:bg-red-900/10' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}
+                        ${hasDebt ? 'bg-red-50/30 hover:bg-red-50/60 dark:bg-red-900/5 dark:hover:bg-red-900/10' : 'hover:bg-kx-surface-2 dark:hover:bg-slate-800/50'}
                       `}
                       onClick={() => openDetailModal(client)}
                     >
-                      <TableCell className="pl-6 font-medium text-slate-800 dark:text-slate-200">
+                      <TableCell className="pl-6 font-medium text-kx-text dark:text-kx-text">
                         {client.nombre}
-                        {client.telefono && <div className="text-xs text-slate-400 font-normal mt-0.5 flex items-center gap-1"><span className="text-slate-300">|</span> {client.telefono}</div>}
+                        {client.telefono && <div className="text-xs text-kx-text-3 font-normal mt-0.5 flex items-center gap-1"><span className="text-slate-300">|</span> {client.telefono}</div>}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className={`font-mono font-bold text-lg ${hasDebt ? 'text-red-600 dark:text-red-400' : (client.saldo_actual || 0) < 0 ? 'text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                        <div className={`font-mono font-bold text-lg ${hasDebt ? 'text-red-600 dark:text-red-400' : (client.saldo_actual || 0) < 0 ? 'text-blue-600 dark:text-blue-400' : 'text-kx-text-2 dark:text-kx-text-2'}`}>
                           {(client.saldo_actual || 0) < 0 ? '-' : ''}${Math.abs(client.saldo_actual || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                         </div>
                         {tcParalelo.enabled && tcParalelo.tcHoy && hasDebt && (
-                          <div className="text-xs text-slate-400 mt-0.5">
+                          <div className="text-xs text-kx-text-3 mt-0.5">
                             ≈ {(Number(client.saldo_actual) / tcParalelo.tcHoy).toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
                           </div>
                         )}
@@ -592,18 +592,18 @@ function CuentaCorrienteSection() {
           </div>
 
           {/* Tabla detallada */}
-          <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+          <Card className="bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                <thead className="bg-kx-surface-2 dark:bg-slate-800/50 border-b border-kx-border dark:border-kx-border">
                   <tr>
-                    <th className="text-left p-4 font-semibold text-slate-600 dark:text-slate-300">Comprobante</th>
-                    <th className="text-left p-4 font-semibold text-slate-600 dark:text-slate-300">Cliente</th>
-                    <th className="text-right p-4 font-semibold text-slate-600 dark:text-slate-300">Monto</th>
-                    <th className="text-center p-4 font-semibold text-slate-600 dark:text-slate-300">Fecha</th>
-                    <th className="text-center p-4 font-semibold text-slate-600 dark:text-slate-300">Antigüedad</th>
-                    <th className="text-center p-4 font-semibold text-slate-600 dark:text-slate-300">Banda</th>
-                    <th className="text-center p-4 font-semibold text-slate-600 dark:text-slate-300">Acciones</th>
+                    <th className="text-left p-4 font-semibold text-kx-text-2 dark:text-slate-300">Comprobante</th>
+                    <th className="text-left p-4 font-semibold text-kx-text-2 dark:text-slate-300">Cliente</th>
+                    <th className="text-right p-4 font-semibold text-kx-text-2 dark:text-slate-300">Monto</th>
+                    <th className="text-center p-4 font-semibold text-kx-text-2 dark:text-slate-300">Fecha</th>
+                    <th className="text-center p-4 font-semibold text-kx-text-2 dark:text-slate-300">Antigüedad</th>
+                    <th className="text-center p-4 font-semibold text-kx-text-2 dark:text-slate-300">Banda</th>
+                    <th className="text-center p-4 font-semibold text-kx-text-2 dark:text-slate-300">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -621,7 +621,7 @@ function CuentaCorrienteSection() {
                     ))
                   ) : agingData.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-10 text-center text-slate-400 dark:text-slate-500">
+                      <td colSpan={7} className="p-10 text-center text-kx-text-3 dark:text-kx-text-3">
                         <TrendingDown className="w-10 h-10 mx-auto mb-2 opacity-30" />
                         <p>No hay comprobantes pendientes ✓</p>
                       </td>
@@ -636,20 +636,20 @@ function CuentaCorrienteSection() {
                       };
                       const bColors = bandaColors[comp.color] || bandaColors.green;
                       return (
-                        <tr key={comp.comprobante_id} className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${bColors.row}`}>
+                        <tr key={comp.comprobante_id} className={`hover:bg-kx-surface-2 dark:hover:bg-slate-800/50 transition-colors ${bColors.row}`}>
                           <td className="p-4 font-mono text-sm font-bold text-slate-700 dark:text-slate-300">
                             #{comp.numero_venta}
                           </td>
-                          <td className="p-4 font-medium text-slate-800 dark:text-slate-200">
+                          <td className="p-4 font-medium text-kx-text dark:text-kx-text">
                             {comp.cliente_nombre}
                           </td>
                           <td className="p-4 text-right font-mono font-bold text-red-600 dark:text-red-400">
                             ${comp.total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                           </td>
-                          <td className="p-4 text-center text-slate-500 dark:text-slate-400 text-sm">
+                          <td className="p-4 text-center text-slate-500 dark:text-kx-text-2 text-sm">
                             {formatDateAR(comp.fecha)}
                           </td>
-                          <td className="p-4 text-center font-mono text-slate-600 dark:text-slate-400">
+                          <td className="p-4 text-center font-mono text-kx-text-2 dark:text-kx-text-2">
                             {comp.dias} días
                           </td>
                           <td className="p-4 text-center">
@@ -699,7 +699,7 @@ function CuentaCorrienteSection() {
 
       {/* QUICK PAYMENT DIALOG (From list view) */}
       <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-        <DialogContent className="sm:max-w-[425px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800">
+        <DialogContent className="sm:max-w-[425px] bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                <Banknote className="h-5 w-5" /> Registrar Cobro
@@ -709,13 +709,13 @@ function CuentaCorrienteSection() {
             </DialogDescription>
           </DialogHeader>
           
-          <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-slate-700 mb-2">
+          <div className="p-4 bg-kx-surface-2 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-kx-border mb-2">
             <div className="flex justify-between items-center text-sm mb-1">
               <span className="text-slate-500">Deuda Actual:</span>
               <span className="font-bold text-red-600">${selectedClient?.saldo_actual?.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
             </div>
             {tcParalelo.enabled && tcParalelo.tcHoy && Number(selectedClient?.saldo_actual) > 0 && (
-              <div className="flex justify-between items-center text-xs text-slate-400">
+              <div className="flex justify-between items-center text-xs text-kx-text-3">
                 <span>Equivalente:</span>
                 <span>≈ {(Number(selectedClient.saldo_actual) / tcParalelo.tcHoy).toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}</span>
               </div>
@@ -740,7 +740,7 @@ function CuentaCorrienteSection() {
                <Label htmlFor="method-list">Método de Pago</Label>
                <select 
                  id="method-list"
-                 className="flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                 className="flex h-10 w-full rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-bg px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                  value={paymentData.metodo}
                  onChange={(e) => setPaymentData({...paymentData, metodo: e.target.value})}
                >

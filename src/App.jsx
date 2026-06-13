@@ -46,7 +46,7 @@ function App() {
         </div>
         
         {longLoad && (
-          <div className="text-sm text-slate-500 dark:text-slate-400 max-w-xs text-center animate-in fade-in slide-in-from-bottom-2">
+          <div className="text-sm text-slate-500 dark:text-kx-text-2 max-w-xs text-center animate-in fade-in slide-in-from-bottom-2">
             Esto está tardando más de lo esperado. <br/>Verificando conexión...
           </div>
         )}
@@ -60,7 +60,7 @@ function App() {
         <title>KAIROX Gestión - Sistema de Gestión Empresarial</title>
         <meta name="description" content="Sistema completo de gestión empresarial para productos, ventas, compras y caja" />
       </Helmet>
-      <div className="min-h-screen kairox-bg-base transition-colors duration-300 text-slate-900 dark:text-slate-100">
+      <div className="min-h-screen kairox-bg-base transition-colors duration-300 text-slate-900 dark:text-kx-text">
         {needsPasswordReset ? (
           <ResetPasswordPage onDone={() => setNeedsPasswordReset(false)} />
         ) : !user ? (
