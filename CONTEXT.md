@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-13 (sesión 3) — Prompt 4/6: Devoluciones + Notas de Débito UI. Migration 037 aplicada (crear_devolucion + crear_nota_debito RPCs). DevolucionesSection + NuevaDevolucionModal + NuevaNotaDebitoModal creados. Botón Devolver en HistorialVentas. Deploy a producción.
+**Última actualización:** 2026-06-13 (sesión 4) — Prompt 5/6: UI Compras espejo completo. CompraRapidaSection (renombrado + RPC crear_recepcion_implicita no-bloqueante). Nuevo ComprasSection shell (tabs Órdenes/Recepciones/Facturas/Devoluciones + botón Compra Rápida). RecepcionesSection, FacturasCompraSection, DevolucionesProveedorSection, GenerarRecepcionModal, ProveedorSelector/DrillDown/AltaRapidaModal. DocumentFlow extendido (orden_compra, recepcion, factura_compra). Sidebar COMPRAS reorganizado (6 items). Build ✅ 3141 mód. Deploy a producción.
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -32,7 +32,13 @@
 | Historial Ventas | `HistorialVentas.jsx` | ✅ Filtros avanzados + estado_pago CC + paginación 50/pág + **botón Devolver** (Undo2) por fila tipo=venta |
 | Comprobantes | `ComprobantePrintModal.jsx` | ✅ Toggle Comprobante / Remito sin precios |
 | Inventario | `ProductosSection.jsx` | ✅ Soft delete + import CSV + Análisis ABC |
-| Compras | `ComprasSection.jsx` | ✅ Funcional + asiento auto + paginación 50/pág |
+| **Compras (shell)** | `ComprasSection.jsx` | ✅ **Prompt 5/6** Tab shell: Órdenes de Compra · Recepciones · Facturas · Devoluciones + botón Compra Rápida + `initialTab` prop |
+| **Compra Rápida** | `CompraRapidaSection.jsx` | ✅ **Prompt 5/6** Formulario POS compras + asiento auto + call no-bloqueante `crear_recepcion_implicita` RPC |
+| **Recepciones** | `compras/RecepcionesSection.jsx` | ✅ **Prompt 5/6** Lista recepciones (tabla `recepciones`) con expand inline ítems + filtro origen |
+| **Facturas de Compra** | `compras/FacturasCompraSection.jsx` | ✅ **Prompt 5/6** Historial compras con expand inline detalle ítems |
+| **Devoluciones Proveedor** | `compras/DevolucionesProveedorSection.jsx` | ✅ **Prompt 5/6** Sub-tabs: Devoluciones a Proveedor (tipo='proveedor') + Notas de Débito Recibidas |
+| **GenerarRecepcionModal** | `compras/GenerarRecepcionModal.jsx` | ✅ **Prompt 5/6** Espejo de GenerarEntregaModal — llama RPC `crear_recepcion`, carga OC con items internamente |
+| **ProveedorSelector** | `shared/ProveedorSelector.jsx` | ✅ **Prompt 5/6** Espejo de ClienteSelector — Select + DrillDown (CC proveedor + últimas OC) + Alta Rápida |
 | Cotizaciones | `CotizacionesSection.jsx` | ✅ Funcional + convertir a venta + TC obligatorio |
 | **Pedidos (OC Clientes)** | `PedidosSection.jsx` | ✅ Workflow borrador→facturado + **badges progreso entrega** + **botón Generar Entrega** (llama `crear_entrega` RPC) + **botón Facturar** (abre NuevaVentaModal pre-cargado → actualiza estado a 'facturado') |
 | **Entregas** | `ventas/EntregasSection.jsx` | ✅ **NUEVO Prompt 3/6** Lista entregas con expand inline de ítems + filtro origen (POS/Manual) |
@@ -175,14 +181,14 @@ El rediseño v3 (2026-06-12) reemplazó el Launchpad Fiori + Portales por una na
 Sidebar 7 grupos:
 ├── GENERAL       → dashboard, reportes
 ├── VENTAS        → ventas (POS), cotizaciones, pedidos, entregas, historial_ventas, clientes, cuentacorriente, listas_precio
-├── COMPRAS       → proveedores, ordenes_compra, compras
+├── COMPRAS       → compra_rapida, ordenes_compra, recepciones_compra, facturas_compra, devoluciones_proveedor, proveedores
 ├── INVENTARIO    → productos
 ├── FINANZAS      → caja (con status dot abierta/cerrada), bancos, cheques
 ├── CONTABILIDAD  → plan_cuentas, impuestos
 └── ADMINISTRACIÓN→ usuarios, configuracion
 ```
 
-- **Sidebar:** `src/components/Sidebar.jsx` — array `NAV_GROUPS` con grupos + íconos, `fixed md:relative`, `bg-kx-surface/80 backdrop-blur-md`. **Prompt 3/6:** grupos colapsables con toggle y persistencia en `localStorage('kx-sidebar-collapsed')`. Nuevos items VENTAS: `entregas` (Box), `historial_ventas` (ScrollText). Navegación a `entregas`/`historial_ventas` → `<VentasSection initialTab="...">` via Dashboard routing.
+- **Sidebar:** `src/components/Sidebar.jsx` — array `NAV_GROUPS` con grupos + íconos, `fixed md:relative`, `bg-kx-surface/80 backdrop-blur-md`. **Prompt 3/6:** grupos colapsables + persistencia en `localStorage('kx-sidebar-collapsed')`. **Prompt 5/6:** grupo COMPRAS reorganizado: `compra_rapida` (ShoppingCart) · `ordenes_compra` (ShoppingBag) · `recepciones_compra` (Package) · `facturas_compra` (Receipt) · `devoluciones_proveedor` (RotateCcw) · `proveedores` (Truck). Todos los ítems COMPRAS → `<ComprasSection initialTab="...">` via Dashboard.
 - **Header:** `src/components/Header.jsx` — h-14, breadcrumb `empresa · sección`, búsqueda (⌘K), toggle tema, Bell notificaciones, CTA "Nueva Venta", Avatar dropdown.
 - **Shell:** `src/components/Dashboard.jsx` — flex layout, `AuroraBackground` fixed z-10, no más `ml-{x}`.
 - **Portales legacy:** `portalService.ts` + `portals/*.jsx` se mantienen en código pero ya no son accesibles desde el sidebar. El módulo `DashboardSection.jsx` es ahora el punto de entrada principal.
