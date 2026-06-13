@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-13 — Document Flow Prompt 1/6: migration 035, modelo de datos completo (entregas, recepciones, devoluciones, notas_debito, contadores en items existentes, función `siguiente_numero_documento`).
+**Última actualización:** 2026-06-13 — Document Flow Prompt 2/6: migration 036, RPCs de negocio (`crear_venta` + entrega implícita, `crear_entrega`, `crear_recepcion`, `crear_recepcion_implicita`, `crear_factura_desde_entrega`).
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -92,6 +92,7 @@
 | **`migrations/033_crear_venta_iva.sql`** | RPC `crear_venta` recalcula `neto_gravado`/`iva_discriminado` por ítem según su `alicuota_iva` (snapshot), fallback 21%. Copia íntegra de la lógica de 024 + cálculo IVA | ✅ Aplicada via MCP |
 | **`migrations/034_retenciones.sql`** | Tabla `retenciones` (sufrida/practicada, IIBB/Ganancias/SUSS/IVA/Otro, trazabilidad a comprobante/compra) + RLS + índice + vista `retenciones_acumulado_mensual` (security_invoker) | ✅ Aplicada via MCP |
 | **`migrations/035_document_flow_modelo_datos.sql`** | Document Flow Prompt 1/6 — contadores en items existentes (`cantidad_entregada`, `cantidad_devuelta`, `cantidad_facturada`, `cantidad_recibida`); tablas `entregas`+`entrega_items`, `recepciones`+`recepcion_items`, `devoluciones`+`devolucion_items`, `notas_debito`; función `siguiente_numero_documento(empresa_id, tabla, columna, prefijo)` SECURITY DEFINER | ✅ Aplicada via MCP |
+| **`migrations/036_document_flow_rpcs.sql`** | Document Flow Prompt 2/6 — `crear_venta` actualizada (+ entrega implícita `ENT-YYYY-NNNN` al final de cada POS); `crear_entrega` (camino largo desde Pedido, descuenta stock); `crear_recepcion` (camino largo desde OC, suma stock); `crear_recepcion_implicita` (compras directas, solo documental, NO toca stock); `crear_factura_desde_entrega` (factura desde entrega existente, sin stock) | ✅ Aplicada via MCP |
 
 ### SQL adicional ejecutado directamente
 
@@ -311,6 +312,32 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-13 — Document Flow Prompt 2/6: RPCs de negocio
+**Branch:** `master`
+
+**Objetivo:** dar vida al modelo de datos del Prompt 1/6 con RPCs transaccionales. Regla de oro: leer `crear_venta` completa desde la DB antes de modificarla.
+
+**Hallazgos de schema verificados:**
+- `movimientos_inventario.tipo` = `'salida'` / `'ingreso'` (no 'egreso'), tiene `tenant_id` (= empresa_id)
+- `comprobante_items.producto_id` (no `produto_id` — CONTEXT.md anterior era inexacto)
+- `crear_compra` RPC → NO existe; compras son INSERTs directos desde frontend
+- `pedidos.cliente_id` ✅ · `ordenes_compra.proveedor_id` ✅ · `compras.proveedor_id` ✅
+
+**`crear_venta` (modificada):**
+- Copia exacta de la función v033 + 2 variables nuevas en DECLARE (`v_entrega_id`, `v_numero_entrega`)
+- Bloque nuevo entre UPDATE neto_gravado y loop de pagos: genera `ENT-YYYY-NNNN` en `entregas` con `origen='implicita'` + `entrega_items` por item + actualiza `comprobante_items.cantidad_entregada`
+- Stock NO vuelve a tocarse en el nuevo bloque (ya fue decrementado en el loop de items)
+
+**Funciones nuevas (aditivas):**
+- `crear_entrega(empresa_id, user_id, pedido_id, items)` — camino largo: lock+check stock, `UPDATE productos` (decremento), `movimientos_inventario tipo='salida'`, `entrega_items`, `pedido_items.cantidad_entregada +=`
+- `crear_recepcion(empresa_id, user_id, orden_compra_id, items)` — espejo: `UPDATE productos` (incremento), `movimientos_inventario tipo='ingreso'`, `recepcion_items`, `ordenes_compra_items.cantidad_recibida +=`
+- `crear_recepcion_implicita(empresa_id, user_id, compra_id)` — solo documental: lee `detalle_compras`, crea `recepciones`+`recepcion_items`, actualiza `detalle_compras.cantidad_recibida`; NO toca stock (ya actualizado por frontend al guardar la compra)
+- `crear_factura_desde_entrega(...)` — idéntica firma a `crear_venta` pero sin stock/movimientos; sets `comprobante_items.cantidad_entregada = cantidad`; vincula `entregas.comprobante_id`; actualiza `pedido_items.cantidad_facturada` si viene `pedido_item_id`
+
+**Smoke test:** funciones compilaron correctamente (5/5 en pg_proc). Test funcional desde browser pendiente (hacer venta → verificar fila en `entregas` con `origen='implicita'`).
+
+---
 
 ### Sesión 2026-06-13 — Document Flow Prompt 1/6: Modelo de datos
 **Branch:** `master`
