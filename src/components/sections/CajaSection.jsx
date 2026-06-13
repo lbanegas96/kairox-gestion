@@ -559,21 +559,21 @@ function CajaSection() {
         </CardHeader>
       </Card>
 
-      {/* ── Indicadores de turno (BUG 2 FIX) ─────────────────────────────── */}
+      {/* ── Indicadores de turno ─────────────────────────────────────────── */}
       {isSessionOpen && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
           {/* Ingresos del turno */}
-          <div className="kairox-bg-card border kairox-border rounded-xl p-5 dark:bg-kx-bg dark:border-kx-border flex items-center gap-4">
-            <div className="p-3 rounded-lg bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 shrink-0">
+          <div className="bg-kx-surface p-5 flex items-center gap-4 border-t-2 border-t-kx-green">
+            <div className="p-3 rounded-xl bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 shrink-0">
               <TrendingUp className="h-5 w-5" />
             </div>
             <div>
-              <div className="text-xs text-slate-500 dark:text-kx-text-2 uppercase font-semibold tracking-wider">INGRESOS DEL TURNO</div>
-              <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+              <div className="text-[11px] text-kx-text-2 uppercase font-medium tracking-wide">Ingresos del turno</div>
+              <div className="text-2xl font-bold font-mono text-kx-green tabular-nums">
                 ${totals.ingresos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
               </div>
               {tcParalelo.enabled && tcParalelo.tcHoy && (
-                <div className="text-xs text-kx-text-3 dark:text-kx-text-3 mt-0.5">
+                <div className="text-xs text-kx-text-3 mt-0.5">
                   ≈ {(totals.ingresos / tcParalelo.tcHoy).toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
                 </div>
               )}
@@ -582,13 +582,13 @@ function CajaSection() {
           </div>
 
           {/* Egresos del turno */}
-          <div className="kairox-bg-card border kairox-border rounded-xl p-5 dark:bg-kx-bg dark:border-kx-border flex items-center gap-4">
-            <div className="p-3 rounded-lg bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 shrink-0">
+          <div className="bg-kx-surface p-5 flex items-center gap-4 border-t-2 border-t-kx-red">
+            <div className="p-3 rounded-xl bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 shrink-0">
               <TrendingDown className="h-5 w-5" />
             </div>
             <div>
-              <div className="text-xs text-slate-500 dark:text-kx-text-2 uppercase font-semibold tracking-wider">EGRESOS DEL TURNO</div>
-              <div className="text-2xl font-bold font-mono text-red-600 dark:text-red-400">
+              <div className="text-[11px] text-kx-text-2 uppercase font-medium tracking-wide">Egresos del turno</div>
+              <div className="text-2xl font-bold font-mono text-kx-red tabular-nums">
                 ${totals.egresos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
               </div>
               <div className="text-xs text-kx-text-3 mt-0.5">Desde apertura de caja</div>
@@ -599,13 +599,13 @@ function CajaSection() {
           {(() => {
             const saldo = (currentSession?.monto_inicial || 0) + totals.ingresos - totals.egresos;
             return (
-              <div className="kairox-bg-card border kairox-border rounded-xl p-5 dark:bg-kx-bg dark:border-kx-border flex items-center gap-4">
-                <div className={`p-3 rounded-lg shrink-0 ${saldo >= 0 ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400'}`}>
+              <div className={`bg-kx-surface p-5 flex items-center gap-4 border-t-2 ${saldo >= 0 ? 'border-t-kx-blue' : 'border-t-kx-amber'}`}>
+                <div className={`p-3 rounded-xl shrink-0 ${saldo >= 0 ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : 'bg-orange-100 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400'}`}>
                   <Scale className="h-5 w-5" />
                 </div>
                 <div>
-                  <div className="text-xs text-slate-500 dark:text-kx-text-2 uppercase font-semibold tracking-wider">SALDO LÍQUIDO DE CAJA</div>
-                  <div className={`text-2xl font-bold font-mono ${saldo >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>
+                  <div className="text-[11px] text-kx-text-2 uppercase font-medium tracking-wide">Saldo líquido de caja</div>
+                  <div className={`text-2xl font-bold font-mono tabular-nums ${saldo >= 0 ? 'text-kx-blue' : 'text-kx-amber'}`}>
                     ${saldo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                   </div>
                   <div className="text-xs text-kx-text-3 mt-0.5">SI + Ingresos − Egresos</div>

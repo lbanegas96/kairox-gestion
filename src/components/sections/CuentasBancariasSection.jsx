@@ -619,36 +619,32 @@ function CuentasBancariasSection() {
       </div>
 
       {/* KPI global */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="sm:col-span-1 border-l-4 border-l-indigo-500 dark:border-kx-border">
-          <CardContent className="p-5">
-            <p className="text-xs text-slate-500 dark:text-kx-text-2 uppercase font-semibold tracking-wider">Saldo total</p>
-            <p className={`text-3xl font-bold font-mono mt-1 ${totalGeneral >= 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-red-500'}`}>
-              {formatMoney(totalGeneral)}
-            </p>
-            <p className="text-xs text-kx-text-3 mt-1">{cuentas.length} cuenta{cuentas.length !== 1 ? 's' : ''} activa{cuentas.length !== 1 ? 's' : ''}</p>
-          </CardContent>
-        </Card>
-        <Card className="sm:col-span-2 dark:border-kx-border">
-          <CardContent className="p-5">
-            <p className="text-xs text-slate-500 dark:text-kx-text-2 uppercase font-semibold tracking-wider mb-3">Saldo por cuenta</p>
-            <div className="space-y-2">
-              {cuentas.length === 0 && <p className="text-sm text-kx-text-3">Sin cuentas configuradas</p>}
-              {cuentas.map(c => (
-                <div key={c.id} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Building2 className="w-4 h-4 text-kx-text-3 flex-shrink-0" />
-                    <span className="text-sm text-slate-700 dark:text-slate-300 truncate">{c.nombre}</span>
-                    <Badge variant="outline" className="text-xs shrink-0">{c.banco}</Badge>
-                  </div>
-                  <span className={`text-sm font-mono font-semibold shrink-0 ml-2 ${(saldos.get(c.id) ?? 0) >= 0 ? 'text-kx-text dark:text-kx-text' : 'text-red-500'}`}>
-                    {formatMoney(saldos.get(c.id) ?? 0)}
-                  </span>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
+        <div className="bg-kx-surface p-5 border-t-2 border-t-kx-blue hover:bg-kx-surface-2 transition-colors duration-200">
+          <p className="text-[11px] text-kx-text-2 uppercase font-medium tracking-wide">Saldo total</p>
+          <p className={`text-3xl font-bold font-mono mt-2 tabular-nums ${totalGeneral >= 0 ? 'text-kx-blue' : 'text-kx-red'}`}>
+            {formatMoney(totalGeneral)}
+          </p>
+          <p className="text-xs text-kx-text-3 mt-1">{cuentas.length} cuenta{cuentas.length !== 1 ? 's' : ''} activa{cuentas.length !== 1 ? 's' : ''}</p>
+        </div>
+        <div className="bg-kx-surface p-5 sm:col-span-2 border-t-2 border-t-kx-text-3">
+          <p className="text-[11px] text-kx-text-2 uppercase font-medium tracking-wide mb-3">Saldo por cuenta</p>
+          <div className="space-y-2">
+            {cuentas.length === 0 && <p className="text-sm text-kx-text-3">Sin cuentas configuradas</p>}
+            {cuentas.map(c => (
+              <div key={c.id} className="flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Building2 className="w-4 h-4 text-kx-text-3 flex-shrink-0" />
+                  <span className="text-sm text-kx-text truncate">{c.nombre}</span>
+                  <Badge variant="outline" className="text-xs shrink-0">{c.banco}</Badge>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                <span className={`text-sm font-mono font-semibold shrink-0 ml-2 ${(saldos.get(c.id) ?? 0) >= 0 ? 'text-kx-text' : 'text-kx-red'}`}>
+                  {formatMoney(saldos.get(c.id) ?? 0)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Tabs */}

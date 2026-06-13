@@ -359,14 +359,14 @@ function CuentaCorrienteSection() {
       </div>
 
       {/* Metrics Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wider">Total Deuda (Filtrada)</CardTitle>
-            <DollarSign className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-black text-red-600 dark:text-red-400">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
+        <div className="bg-kx-surface p-5 flex flex-col justify-between border-t-2 border-t-kx-amber hover:bg-kx-surface-2 transition-colors duration-200">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Total Deuda (Filtrada)</span>
+            <DollarSign className="h-4 w-4 text-kx-amber" />
+          </div>
+          <div>
+            <div className="text-2xl font-black text-kx-red tabular-nums">
               ${metrics.totalAdeudado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
             </div>
             {tcParalelo.enabled && tcParalelo.tcHoy && metrics.totalAdeudado > 0 && (
@@ -374,35 +374,31 @@ function CuentaCorrienteSection() {
                 ≈ {(metrics.totalAdeudado / tcParalelo.tcHoy).toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
               </p>
             )}
-            <p className="text-xs text-slate-500 mt-1">Suma de saldos pendientes en vista actual</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wider">Clientes con Deuda</CardTitle>
-            <ArrowDownCircle className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900 dark:text-kx-text">
-              {metrics.countConDeuda}
-            </div>
-            <p className="text-xs text-slate-500 mt-1">Clientes que deben dinero</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wider">Clientes Al Día</CardTitle>
-            <ArrowUpCircle className="h-4 w-4 text-emerald-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-slate-900 dark:text-kx-text">
-              {metrics.countAlDia}
-            </div>
-            <p className="text-xs text-slate-500 mt-1">Sin deuda o con saldo a favor</p>
-          </CardContent>
-        </Card>
+            <p className="text-xs text-kx-text-3 mt-1">Suma de saldos pendientes</p>
+          </div>
+        </div>
+
+        <div className="bg-kx-surface p-5 flex flex-col justify-between border-t-2 border-t-kx-red hover:bg-kx-surface-2 transition-colors duration-200">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Clientes con Deuda</span>
+            <ArrowDownCircle className="h-4 w-4 text-kx-red" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-kx-text tabular-nums">{metrics.countConDeuda}</div>
+            <p className="text-xs text-kx-text-3 mt-1">Clientes que deben dinero</p>
+          </div>
+        </div>
+
+        <div className="bg-kx-surface p-5 flex flex-col justify-between border-t-2 border-t-kx-green hover:bg-kx-surface-2 transition-colors duration-200">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Clientes Al Día</span>
+            <ArrowUpCircle className="h-4 w-4 text-kx-green" />
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-kx-text tabular-nums">{metrics.countAlDia}</div>
+            <p className="text-xs text-kx-text-3 mt-1">Sin deuda o con saldo a favor</p>
+          </div>
+        </div>
       </div>
 
       {/* ── Tabs: Clientes / Antigüedad ──────────────────────────────────────── */}

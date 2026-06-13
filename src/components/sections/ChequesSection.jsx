@@ -381,7 +381,7 @@ export default function ChequesSection() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-kx-text flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg">
               <FileCheck size={18} className="text-white" />
             </div>
@@ -390,40 +390,40 @@ export default function ChequesSection() {
           <p className="text-kx-text-3 text-sm mt-1">Cartera de terceros · Cheques propios</p>
         </div>
         <Button variant="outline" size="sm" onClick={fetchCheques} disabled={loading}
-          className="border-slate-700 text-slate-300 hover:bg-slate-800">
+          className="border-kx-border text-kx-text-2 hover:bg-kx-surface-2">
           <RefreshCw size={14} className={`mr-1 ${loading ? 'animate-spin' : ''}`} /> Actualizar
         </Button>
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
-          <p className="text-xs text-kx-text-3 mb-1">En Cartera</p>
-          <p className="text-xl font-bold text-white truncate">{fmt(kpis.totalCartera)}</p>
-          <p className="text-xs text-cyan-400 mt-1">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
+        <div className="bg-kx-surface p-4 border-t-2 border-t-kx-green hover:bg-kx-surface-2 transition-colors duration-200">
+          <p className="text-[11px] text-kx-text-2 uppercase font-medium tracking-wide mb-1">En Cartera</p>
+          <p className="text-xl font-bold text-kx-text tabular-nums">{fmt(kpis.totalCartera)}</p>
+          <p className="text-xs text-kx-green mt-1">
             {kpis.countCartera} cheque{kpis.countCartera !== 1 ? 's' : ''}
           </p>
         </div>
-        <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
-          <p className="text-xs text-kx-text-3 mb-1">Propios Pendientes</p>
-          <p className="text-xl font-bold text-white truncate">{fmt(kpis.totalPropios)}</p>
-          <p className="text-xs text-blue-400 mt-1">
+        <div className="bg-kx-surface p-4 border-t-2 border-t-kx-blue hover:bg-kx-surface-2 transition-colors duration-200">
+          <p className="text-[11px] text-kx-text-2 uppercase font-medium tracking-wide mb-1">Propios Pendientes</p>
+          <p className="text-xl font-bold text-kx-text tabular-nums">{fmt(kpis.totalPropios)}</p>
+          <p className="text-xs text-kx-blue mt-1">
             {kpis.countPropios} cheque{kpis.countPropios !== 1 ? 's' : ''}
           </p>
         </div>
-        <div className={`border rounded-xl p-4 ${kpis.vencenPronto > 0 ? 'bg-amber-500/10 border-amber-500/30' : 'bg-slate-800/60 border-slate-700'}`}>
-          <p className="text-xs text-kx-text-3 mb-1">Vencen Esta Semana</p>
-          <p className={`text-xl font-bold ${kpis.vencenPronto > 0 ? 'text-amber-400' : 'text-white'}`}>
+        <div className="bg-kx-surface p-4 border-t-2 border-t-kx-amber hover:bg-kx-surface-2 transition-colors duration-200">
+          <p className="text-[11px] text-kx-text-2 uppercase font-medium tracking-wide mb-1">Vencen Esta Semana</p>
+          <p className={`text-xl font-bold tabular-nums ${kpis.vencenPronto > 0 ? 'text-kx-amber' : 'text-kx-text'}`}>
             {kpis.vencenPronto}
           </p>
-          <p className="text-xs text-slate-500 mt-1">próximos 7 días</p>
+          <p className="text-xs text-kx-text-3 mt-1">próximos 7 días</p>
         </div>
-        <div className={`border rounded-xl p-4 ${kpis.rechazados > 0 ? 'bg-red-500/10 border-red-500/30' : 'bg-slate-800/60 border-slate-700'}`}>
-          <p className="text-xs text-kx-text-3 mb-1">Rechazados</p>
-          <p className={`text-xl font-bold ${kpis.rechazados > 0 ? 'text-red-400' : 'text-white'}`}>
+        <div className="bg-kx-surface p-4 border-t-2 border-t-kx-red hover:bg-kx-surface-2 transition-colors duration-200">
+          <p className="text-[11px] text-kx-text-2 uppercase font-medium tracking-wide mb-1">Rechazados</p>
+          <p className={`text-xl font-bold tabular-nums ${kpis.rechazados > 0 ? 'text-kx-red' : 'text-kx-text'}`}>
             {kpis.rechazados}
           </p>
-          <p className="text-xs text-slate-500 mt-1">historial</p>
+          <p className="text-xs text-kx-text-3 mt-1">historial</p>
         </div>
       </div>
 
@@ -434,21 +434,21 @@ export default function ChequesSection() {
         </div>
       ) : (
         <Tabs defaultValue="tercero" className="space-y-4">
-          <TabsList className="bg-slate-800 border border-slate-700 p-1">
+          <TabsList className="bg-transparent p-0 gap-2">
             <TabsTrigger value="tercero"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-kx-text-3 gap-2">
+              className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-kx-surface-2 text-kx-text-2 hover:bg-kx-surface-2 rounded-md px-4 py-2 gap-2">
               Cartera de Terceros
               {kpis.countCartera > 0 && (
-                <span className="ml-1 bg-cyan-500/20 text-cyan-400 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                <span className="ml-1 bg-kx-surface border border-kx-border text-kx-text text-[10px] px-1.5 py-0.5 rounded-full font-bold">
                   {kpis.countCartera}
                 </span>
               )}
             </TabsTrigger>
             <TabsTrigger value="propio"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-kx-text-3 gap-2">
+              className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-kx-surface-2 text-kx-text-2 hover:bg-kx-surface-2 rounded-md px-4 py-2 gap-2">
               Cheques Propios
               {kpis.countPropios > 0 && (
-                <span className="ml-1 bg-blue-500/20 text-blue-400 text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                <span className="ml-1 bg-kx-surface border border-kx-border text-kx-text text-[10px] px-1.5 py-0.5 rounded-full font-bold">
                   {kpis.countPropios}
                 </span>
               )}
@@ -463,9 +463,9 @@ export default function ChequesSection() {
                 <Plus size={14} className="mr-1" /> Registrar cheque recibido
               </Button>
             </div>
-            <div className="rounded-xl border border-slate-700 overflow-hidden">
+            <div className="rounded-2xl border border-kx-border overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-slate-800">
+                <thead className="bg-kx-surface-2 border-b border-kx-border">
                   <tr>
                     <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Nro.</th>
                     <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Banco</th>
@@ -478,17 +478,17 @@ export default function ChequesSection() {
                 </thead>
                 <tbody>
                   {chequesTercero.length === 0 && (
-                    <tr><td colSpan={7} className="text-center py-12 text-slate-500">
+                    <tr><td colSpan={7} className="text-center py-12 text-kx-text-3">
                       No hay cheques de terceros registrados
                     </td></tr>
                   )}
                   {chequesTercero.map(c => (
-                    <tr key={c.id} className={`border-t border-slate-800 transition-colors
-                      ${c.estado === 'rechazado' ? 'bg-red-500/5' : 'hover:bg-slate-800/30'}`}>
-                      <td className="px-4 py-3 font-mono text-xs text-[#00D4FF]">{c.numero}</td>
-                      <td className="px-4 py-3 text-slate-300 text-xs">{c.banco}</td>
-                      <td className="px-4 py-3 text-slate-300">{c.clientes?.nombre ?? '—'}</td>
-                      <td className="px-4 py-3 text-right font-mono font-medium text-slate-200">{fmt(c.monto)}</td>
+                    <tr key={c.id} className={`border-t border-kx-border transition-colors
+                      ${c.estado === 'rechazado' ? 'bg-red-500/5' : 'hover:bg-kx-surface-2'}`}>
+                      <td className="px-4 py-3 font-mono text-xs text-kx-blue">{c.numero}</td>
+                      <td className="px-4 py-3 text-kx-text-2 text-xs">{c.banco}</td>
+                      <td className="px-4 py-3 text-kx-text">{c.clientes?.nombre ?? '—'}</td>
+                      <td className="px-4 py-3 text-right font-mono font-medium text-kx-text">{fmt(c.monto)}</td>
                       <td className="px-4 py-3">{renderFechaVto(c.fecha_vencimiento, c.estado)}</td>
                       <td className="px-4 py-3 text-center">{renderBadge(c.estado)}</td>
                       <td className="px-4 py-3 text-center">{renderAcciones(c)}</td>
@@ -507,9 +507,9 @@ export default function ChequesSection() {
                 <Plus size={14} className="mr-1" /> Registrar cheque emitido
               </Button>
             </div>
-            <div className="rounded-xl border border-slate-700 overflow-hidden">
+            <div className="rounded-2xl border border-kx-border overflow-hidden">
               <table className="w-full text-sm">
-                <thead className="bg-slate-800">
+                <thead className="bg-kx-surface-2 border-b border-kx-border">
                   <tr>
                     <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Nro.</th>
                     <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Banco / Cuenta</th>
@@ -522,22 +522,22 @@ export default function ChequesSection() {
                 </thead>
                 <tbody>
                   {chequesPropios.length === 0 && (
-                    <tr><td colSpan={7} className="text-center py-12 text-slate-500">
+                    <tr><td colSpan={7} className="text-center py-12 text-kx-text-3">
                       No hay cheques propios registrados
                     </td></tr>
                   )}
                   {chequesPropios.map(c => (
-                    <tr key={c.id} className={`border-t border-slate-800 transition-colors
-                      ${c.estado === 'rechazado' ? 'bg-red-500/5' : 'hover:bg-slate-800/30'}`}>
-                      <td className="px-4 py-3 font-mono text-xs text-[#00D4FF]">{c.numero}</td>
+                    <tr key={c.id} className={`border-t border-kx-border transition-colors
+                      ${c.estado === 'rechazado' ? 'bg-red-500/5' : 'hover:bg-kx-surface-2'}`}>
+                      <td className="px-4 py-3 font-mono text-xs text-kx-blue">{c.numero}</td>
                       <td className="px-4 py-3 text-xs">
-                        <div className="text-slate-300">{c.banco}</div>
+                        <div className="text-kx-text">{c.banco}</div>
                         {c.cuentas_bancarias && (
-                          <div className="text-slate-500">{c.cuentas_bancarias.nombre}</div>
+                          <div className="text-kx-text-3">{c.cuentas_bancarias.nombre}</div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-slate-300">{c.proveedores?.nombre ?? '—'}</td>
-                      <td className="px-4 py-3 text-right font-mono font-medium text-slate-200">{fmt(c.monto)}</td>
+                      <td className="px-4 py-3 text-kx-text">{c.proveedores?.nombre ?? '—'}</td>
+                      <td className="px-4 py-3 text-right font-mono font-medium text-kx-text">{fmt(c.monto)}</td>
                       <td className="px-4 py-3">{renderFechaVto(c.fecha_vencimiento, c.estado)}</td>
                       <td className="px-4 py-3 text-center">{renderBadge(c.estado)}</td>
                       <td className="px-4 py-3 text-center">{renderAcciones(c)}</td>

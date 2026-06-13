@@ -375,20 +375,21 @@ function PedidosSection() {
       </div>
 
       {/* KPIs estado */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
         {[
-          { estado: 'borrador',       label: 'Borradores',      color: 'bg-slate-100 dark:bg-kx-surface', textColor: 'text-slate-700 dark:text-slate-300' },
-          { estado: 'confirmado',     label: 'Confirmados',     color: 'bg-blue-50 dark:bg-blue-900/20', textColor: 'text-blue-700 dark:text-blue-300' },
-          { estado: 'en_preparacion', label: 'En Preparación',  color: 'bg-amber-50 dark:bg-amber-900/20', textColor: 'text-amber-700 dark:text-amber-300' },
-          { estado: 'facturado',      label: 'Facturados',      color: 'bg-green-50 dark:bg-green-900/20', textColor: 'text-green-700 dark:text-green-300' },
-        ].map(({ estado, label, color, textColor }) => (
+          { estado: 'borrador',       label: 'Borradores',     accent: 'border-t-kx-text-3' },
+          { estado: 'confirmado',     label: 'Confirmados',    accent: 'border-t-kx-blue'   },
+          { estado: 'en_preparacion', label: 'En Preparación', accent: 'border-t-kx-amber'  },
+          { estado: 'facturado',      label: 'Facturados',     accent: 'border-t-kx-green'  },
+        ].map(({ estado, label, accent }) => (
           <button
             key={estado}
             onClick={() => setFilterEstado(filterEstado === estado ? 'Todos' : estado)}
-            className={`rounded-xl p-4 text-left border transition-all ${color} ${filterEstado === estado ? 'ring-2 ring-blue-400' : 'border-kx-border dark:border-kx-border hover:opacity-80'}`}
+            className={`p-4 text-left border-t-2 ${accent} transition-colors duration-200
+              ${filterEstado === estado ? 'bg-kx-surface-2' : 'bg-kx-surface hover:bg-kx-surface-2'}`}
           >
-            <div className={`text-2xl font-bold ${textColor}`}>{stats[estado]}</div>
-            <div className={`text-xs font-medium mt-0.5 ${textColor}`}>{label}</div>
+            <div className="text-2xl font-bold text-kx-text tabular-nums">{stats[estado]}</div>
+            <div className="text-xs font-medium mt-0.5 text-kx-text-2">{label}</div>
           </button>
         ))}
       </div>

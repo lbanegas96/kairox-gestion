@@ -52,40 +52,40 @@ function ReportesSection() {
       id: 'ventas',
       title: 'Reporte de Ventas',
       description: 'Detalle de ventas por período con totales.',
-      icon: <BarChart3 className="w-8 h-8 text-blue-500" />,
-      gradient: 'from-blue-600 to-blue-500',
+      icon: <BarChart3 className="w-8 h-8 text-kx-violet" />,
+      borderClass: 'border-t-kx-violet',
       requiresDate: true
     },
     {
       id: 'compras',
       title: 'Historial de Compras',
       description: 'Registro detallado de compras a proveedores.',
-      icon: <ShoppingCart className="w-8 h-8 text-rose-500" />,
-      gradient: 'from-rose-600 to-red-500',
+      icon: <ShoppingCart className="w-8 h-8 text-kx-blue" />,
+      borderClass: 'border-t-kx-blue',
       requiresDate: true
     },
     {
       id: 'clientes',
       title: 'Cartera de Clientes',
       description: 'Estado de cuentas y saldos de clientes.',
-      icon: <Users className="w-8 h-8 text-emerald-500" />,
-      gradient: 'from-emerald-600 to-emerald-500',
-      requiresDate: false 
+      icon: <Users className="w-8 h-8 text-kx-green" />,
+      borderClass: 'border-t-kx-green',
+      requiresDate: false
     },
     {
       id: 'cuenta_corriente',
       title: 'Movimientos Cta. Corriente',
       description: 'Flujo de pagos y deudas global.',
-      icon: <CreditCard className="w-8 h-8 text-violet-500" />,
-      gradient: 'from-violet-600 to-purple-500',
+      icon: <CreditCard className="w-8 h-8 text-kx-amber" />,
+      borderClass: 'border-t-kx-amber',
       requiresDate: true
     },
-     {
+    {
       id: 'financiero',
       title: 'Reporte Financiero',
       description: 'Balance de ingresos y egresos de caja.',
-      icon: <Banknote className="w-8 h-8 text-amber-500" />,
-      gradient: 'from-amber-500 to-orange-500',
+      icon: <Banknote className="w-8 h-8 text-kx-green" />,
+      borderClass: 'border-t-kx-green',
       requiresDate: true
     },
   ];
@@ -360,31 +360,31 @@ function ReportesSection() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {reports.map((report) => (
           <div
             key={report.id}
-            className="group relative kairox-bg-card border kairox-border hover:border-slate-400 dark:hover:border-slate-600 rounded-xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden cursor-pointer dark:bg-kx-bg dark:border-kx-border"
+            className={`group bg-kx-surface border border-kx-border rounded-2xl p-6 shadow-sm dark:shadow-none
+              hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer
+              border-t-2 ${report.borderClass}`}
             onClick={() => openReportDialog(report)}
           >
-            <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${report.gradient} opacity-5 rounded-bl-[100px] transition-opacity group-hover:opacity-10`} />
-
-            <div className="flex items-start justify-between mb-4 relative z-10">
-              <div className="p-3 bg-slate-100 dark:bg-kx-surface rounded-lg border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-700 transition-colors">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-kx-surface-2 rounded-xl border border-kx-border">
                 {report.icon}
               </div>
             </div>
 
-            <div className="mb-6 relative z-10">
-              <h3 className="text-xl font-bold kairox-text-primary dark:text-kx-text mb-2 group-hover:text-blue-600 dark:group-hover:text-[#00D4FF] transition-colors">
+            <div className="mb-5">
+              <h3 className="text-lg font-bold text-kx-text mb-1.5 group-hover:text-kx-violet transition-colors">
                 {report.title}
               </h3>
-              <p className="kairox-text-secondary dark:text-kx-text-2 text-sm h-10 line-clamp-2">
+              <p className="text-kx-text-2 text-sm line-clamp-2">
                 {report.description}
               </p>
             </div>
 
-            <Button className="w-full bg-slate-100 dark:bg-kx-surface-2 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-kx-text border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-500 transition-all relative z-10">
+            <Button className="w-full bg-kx-surface-2 hover:bg-kx-border text-kx-text border border-kx-border transition-all">
               Ver Reporte
             </Button>
           </div>
@@ -392,17 +392,15 @@ function ReportesSection() {
 
         {/* ── Reporte de Paridad ARS / Moneda Paralela ── */}
         <div
-          className={`group relative kairox-bg-card border rounded-xl p-6 shadow-lg transition-all duration-300 overflow-hidden dark:bg-kx-bg dark:border-kx-border
-            ${tcParaleloEnabled
-              ? 'hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-2xl cursor-pointer kairox-border'
-              : 'opacity-60 border-dashed border-slate-300 dark:border-kx-border cursor-default'}`}
+          className={`group bg-kx-surface border border-kx-border rounded-2xl p-6 shadow-sm dark:shadow-none
+            border-t-2 border-t-kx-blue transition-all duration-200
+            ${tcParaleloEnabled ? 'hover:shadow-md hover:-translate-y-0.5 cursor-pointer' : 'opacity-60 cursor-default'}`}
           onClick={() => tcParaleloEnabled && setShowParidad(true)}
           title={!tcParaleloEnabled ? 'Activá la Moneda Paralela en Configuración para usar este reporte' : ''}
         >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-600 to-indigo-600 opacity-5 rounded-bl-[100px] transition-opacity group-hover:opacity-10" />
-          <div className="flex items-start justify-between mb-4 relative z-10">
-            <div className="p-3 bg-slate-100 dark:bg-kx-surface rounded-lg border kairox-border">
-              <ArrowLeftRight className="w-8 h-8 text-blue-500" />
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 bg-kx-surface-2 rounded-xl border border-kx-border">
+              <ArrowLeftRight className="w-8 h-8 text-kx-blue" />
             </div>
             {tcParaleloEnabled && (
               <span className="text-xs font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">
@@ -410,11 +408,11 @@ function ReportesSection() {
               </span>
             )}
           </div>
-          <div className="mb-6 relative z-10">
-            <h3 className="text-xl font-bold kairox-text-primary dark:text-kx-text mb-2 group-hover:text-blue-600 dark:group-hover:text-[#00D4FF] transition-colors">
+          <div className="mb-5">
+            <h3 className="text-lg font-bold text-kx-text mb-1.5 group-hover:text-kx-violet transition-colors">
               Reporte de Paridad
             </h3>
-            <p className="kairox-text-secondary dark:text-kx-text-2 text-sm h-10 line-clamp-2">
+            <p className="text-kx-text-2 text-sm line-clamp-2">
               {tcParaleloEnabled
                 ? `Comparativa ARS / ${monedaParalela} por comprobante al TC histórico.`
                 : 'Activá la Moneda Paralela en Configuración para habilitar este reporte.'}
@@ -422,7 +420,7 @@ function ReportesSection() {
           </div>
           <Button
             disabled={!tcParaleloEnabled}
-            className="w-full bg-slate-100 dark:bg-kx-surface-2 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-kx-text border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-500 transition-all relative z-10 disabled:opacity-50"
+            className="w-full bg-kx-surface-2 hover:bg-kx-border text-kx-text border border-kx-border transition-all disabled:opacity-50"
           >
             {tcParaleloEnabled ? 'Ver Reporte' : 'Requiere configuración'}
           </Button>
@@ -430,17 +428,15 @@ function ReportesSection() {
 
         {/* ── Libro IVA Ventas (AFIP) ── */}
         <div
-          className={`group relative kairox-bg-card border rounded-xl p-6 shadow-lg transition-all duration-300 overflow-hidden dark:bg-kx-bg dark:border-kx-border
-            ${afipActivo
-              ? 'hover:border-blue-400 dark:hover:border-blue-600 hover:shadow-2xl cursor-pointer kairox-border'
-              : 'opacity-60 border-dashed border-slate-300 dark:border-kx-border cursor-default'}`}
+          className={`group bg-kx-surface border border-kx-border rounded-2xl p-6 shadow-sm dark:shadow-none
+            border-t-2 border-t-kx-violet transition-all duration-200
+            ${afipActivo ? 'hover:shadow-md hover:-translate-y-0.5 cursor-pointer' : 'opacity-60 cursor-default'}`}
           onClick={() => afipActivo && setShowLibroIVA(true)}
           title={!afipActivo ? 'Activá la facturación electrónica (AFIP) en Configuración para habilitar este reporte' : ''}
         >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-600 to-violet-600 opacity-5 rounded-bl-[100px] transition-opacity group-hover:opacity-10" />
-          <div className="flex items-start justify-between mb-4 relative z-10">
-            <div className="p-3 bg-slate-100 dark:bg-kx-surface rounded-lg border kairox-border">
-              <BookOpen className="w-8 h-8 text-blue-500" />
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 bg-kx-surface-2 rounded-xl border border-kx-border">
+              <BookOpen className="w-8 h-8 text-kx-violet" />
             </div>
             {afipActivo && (
               <span className="text-xs font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">
@@ -448,11 +444,11 @@ function ReportesSection() {
               </span>
             )}
           </div>
-          <div className="mb-6 relative z-10">
-            <h3 className="text-xl font-bold kairox-text-primary dark:text-kx-text mb-2 group-hover:text-blue-600 dark:group-hover:text-[#00D4FF] transition-colors">
+          <div className="mb-5">
+            <h3 className="text-lg font-bold text-kx-text mb-1.5 group-hover:text-kx-violet transition-colors">
               Libro IVA Ventas
             </h3>
-            <p className="kairox-text-secondary dark:text-kx-text-2 text-sm h-10 line-clamp-2">
+            <p className="text-kx-text-2 text-sm line-clamp-2">
               {afipActivo
                 ? 'Comprobantes emitidos con CAE, neto gravado e IVA 21% por período.'
                 : 'Activá la facturación electrónica (AFIP) en Configuración para habilitar.'}
@@ -460,7 +456,7 @@ function ReportesSection() {
           </div>
           <Button
             disabled={!afipActivo}
-            className="w-full bg-slate-100 dark:bg-kx-surface-2 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-kx-text border kairox-border group-hover:border-slate-300 dark:group-hover:border-slate-500 transition-all relative z-10 disabled:opacity-50"
+            className="w-full bg-kx-surface-2 hover:bg-kx-border text-kx-text border border-kx-border transition-all disabled:opacity-50"
           >
             {afipActivo ? 'Ver Reporte' : 'Requiere AFIP activo'}
           </Button>

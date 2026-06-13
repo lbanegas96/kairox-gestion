@@ -270,19 +270,25 @@ function OrdenesCompraSection() {
       </div>
 
       {/* Stats rápidas */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {['borrador', 'enviada', 'recibida_parcial', 'recibida'].map(est => {
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
+        {[
+          { est: 'borrador',         accent: 'border-t-kx-text-3' },
+          { est: 'enviada',          accent: 'border-t-kx-blue'   },
+          { est: 'recibida_parcial', accent: 'border-t-kx-amber'  },
+          { est: 'recibida',         accent: 'border-t-kx-green'  },
+        ].map(({ est, accent }) => {
           const count = (listData?.data ?? []).filter(o => o.estado === est).length;
           const cfg = ESTADOS[est];
           const Icon = cfg.icon;
           return (
             <button key={est} onClick={() => { setEstadoFiltro(estadoFiltro === est ? '' : est); setPage(1); }}
-              className={`p-3 rounded-xl border text-left transition-all ${estadoFiltro === est ? 'ring-2 ring-indigo-500' : 'hover:shadow-md'} bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border`}>
-              <div className="flex items-center justify-between mb-1">
+              className={`p-4 text-left border-t-2 ${accent} transition-colors duration-200
+                ${estadoFiltro === est ? 'bg-kx-surface-2' : 'bg-kx-surface hover:bg-kx-surface-2'}`}>
+              <div className="flex items-center justify-between mb-2">
                 <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${cfg.color}`}>{cfg.label}</span>
                 <Icon className="w-4 h-4 text-kx-text-3" />
               </div>
-              <p className="text-2xl font-bold text-kx-text dark:text-kx-text">{count}</p>
+              <p className="text-2xl font-bold text-kx-text tabular-nums">{count}</p>
             </button>
           );
         })}
