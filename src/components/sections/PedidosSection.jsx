@@ -25,6 +25,7 @@ import { getNowAR, getTodayAR, formatDateAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import GenerarEntregaModal from '@/components/ventas/GenerarEntregaModal';
 import NuevaVentaModal from '@/components/ventas/NuevaVentaModal';
+import DocumentFlow from '@/components/shared/DocumentFlow';
 
 // ── Estados del workflow ───────────────────────────────────────────────────────
 const ESTADOS = [
@@ -92,6 +93,11 @@ function PedidosSection() {
   const [isFacturarOpen, setIsFacturarOpen] = useState(false);
   const [pedidoToFacturar, setPedidoToFacturar] = useState(null);
 
+  // Entregas del pedido abierto en el modal de detalle
+  const [entregasDetalle, setEntregasDetalle] = useState([]);
+  const [loadingEntregas, setLoadingEntregas] = useState(false);
+  const [entregasRefreshKey, setEntregasRefreshKey] = useState(0);
+
   // Form state
   const emptyForm = () => ({
     cliente_id: '',
@@ -105,6 +111,25 @@ function PedidosSection() {
   useEffect(() => {
     if (user?.empresa_id) fetchAll();
   }, [user]);
+
+  // Fetch entregas del pedido abierto en el modal de detalle
+  useEffect(() => {
+    if (!isDetailOpen || !detailPedido?.id || !user?.empresa_id) {
+      setEntregasDetalle([]);
+      return;
+    }
+    setLoadingEntregas(true);
+    supabase
+      .from('entregas')
+      .select('id, numero_entrega, estado, comprobante_id, comprobantes(numero_venta)')
+      .eq('pedido_id', detailPedido.id)
+      .eq('empresa_id', user.empresa_id)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => {
+        setEntregasDetalle(data || []);
+        setLoadingEntregas(false);
+      });
+  }, [isDetailOpen, detailPedido?.id, user?.empresa_id, entregasRefreshKey]);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -300,6 +325,7 @@ function PedidosSection() {
 
   const handleEntregaSuccess = (numeroEntrega) => {
     fetchAll();
+    setEntregasRefreshKey(k => k + 1); // refresca el DocumentFlow del modal de detalle
   };
 
   const handleCancelar = async () => {
@@ -662,14 +688,33 @@ function PedidosSection() {
 
       {/* ── Modal Detalle ──────────────────────────────────────────────────────── */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-lg dark:bg-slate-950 dark:border-slate-800">
+        <DialogContent className="max-w-lg dark:bg-slate-950 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
           {detailPedido && (() => {
-            const e = getEstado(detailPedido.estado);
-            const items    = detailPedido.pedido_items || [];
-            const totalPed = items.reduce((s, i) => s + Number(i.cantidad || 0), 0);
-            const totalEnt = items.reduce((s, i) => s + Number(i.cantidad_entregada || 0), 0);
-            const hayPendiente = totalEnt < totalPed;
-            const puedeEntrega = ['confirmado', 'en_preparacion'].includes(detailPedido.estado) && hayPendiente;
+            const e          = getEstado(detailPedido.estado);
+            const items      = detailPedido.pedido_items || [];
+            const totalPed   = items.reduce((s, i) => s + Number(i.cantidad || 0), 0);
+            const totalEnt   = items.reduce((s, i) => s + Number(i.cantidad_entregada || 0), 0);
+            const estaCompleto = totalPed > 0 && totalEnt >= totalPed;
+            const estaParcial  = totalEnt > 0 && totalEnt < totalPed;
+            const puedeEntrega = ['confirmado', 'en_preparacion'].includes(detailPedido.estado) && totalEnt < totalPed;
+
+            // Chips del Document Flow
+            const entregaConFactura = entregasDetalle.find(e => e.comprobante_id);
+            const flowChips = [
+              { tipo: 'pedido', id: detailPedido.id, numero: detailPedido.numero, active: true },
+              ...entregasDetalle.map(ent => ({
+                tipo: 'entrega',
+                id: ent.id,
+                numero: ent.numero_entrega,
+                active: false,
+              })),
+              ...(entregaConFactura ? [{
+                tipo: 'factura',
+                id: entregaConFactura.comprobante_id,
+                numero: entregaConFactura.comprobantes?.numero_venta,
+                active: false,
+              }] : []),
+            ];
 
             return (
               <>
@@ -683,13 +728,34 @@ function PedidosSection() {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-2">
+                  {/* Estado + Progreso */}
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-slate-500">Estado</span>
                     <div className="flex items-center gap-2">
                       <EstadoBadge estado={detailPedido.estado} />
-                      <ProgressoBadge items={items} />
                     </div>
                   </div>
+
+                  {/* Badge de progreso de entrega (verbose) */}
+                  {totalPed > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-slate-500">Entrega</span>
+                      {estaCompleto ? (
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-semibold">
+                          <Check className="h-3 w-3" /> Completo ({totalEnt}/{totalPed} u.)
+                        </span>
+                      ) : estaParcial ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-semibold">
+                          Parcial {totalEnt}/{totalPed} u.
+                        </span>
+                      ) : (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                          Sin entregar
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-slate-500">Cliente</span>
                     <span className="font-medium dark:text-white">{detailPedido.cliente_nombre}</span>
@@ -700,7 +766,7 @@ function PedidosSection() {
                   </div>
                   {detailPedido.fecha_entrega && (
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-slate-500">Entrega</span>
+                      <span className="text-sm text-slate-500">Fecha entrega</span>
                       <span className="text-sm dark:text-slate-300">{formatDateAR(detailPedido.fecha_entrega)}</span>
                     </div>
                   )}
@@ -710,27 +776,46 @@ function PedidosSection() {
                     </div>
                   )}
 
+                  {/* Document Flow chain */}
+                  <div className="space-y-1.5 pt-1">
+                    <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                      Flujo del documento
+                    </p>
+                    {loadingEntregas ? (
+                      <div className="h-5 bg-slate-100 dark:bg-slate-800 rounded-full animate-pulse w-40" />
+                    ) : (
+                      <DocumentFlow chips={flowChips} />
+                    )}
+                  </div>
+
                   {/* Items */}
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 dark:border-slate-800">
                         <th className="text-left pb-2 text-slate-500">Descripción</th>
-                        <th className="text-center pb-2 text-slate-500 w-16">Cant.</th>
-                        <th className="text-center pb-2 text-slate-500 w-16">Ent.</th>
+                        <th className="text-center pb-2 text-slate-500 w-14">Pedido</th>
+                        <th className="text-center pb-2 text-slate-500 w-14">Entregado</th>
                         <th className="text-right pb-2 text-slate-500">Subtotal</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map(it => (
-                        <tr key={it.id} className="border-b border-slate-100 dark:border-slate-800/50">
-                          <td className="py-2 dark:text-slate-200">{it.descripcion}</td>
-                          <td className="py-2 text-center text-slate-500">{it.cantidad}</td>
-                          <td className="py-2 text-center text-slate-500">{Number(it.cantidad_entregada || 0)}</td>
-                          <td className="py-2 text-right font-mono dark:text-slate-200">
-                            ${Number(it.subtotal).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                          </td>
-                        </tr>
-                      ))}
+                      {items.map(it => {
+                        const ent = Number(it.cantidad_entregada || 0);
+                        const ped = Number(it.cantidad || 0);
+                        const completo = ent >= ped && ped > 0;
+                        return (
+                          <tr key={it.id} className="border-b border-slate-100 dark:border-slate-800/50">
+                            <td className="py-2 dark:text-slate-200">{it.descripcion}</td>
+                            <td className="py-2 text-center text-slate-500">{ped}</td>
+                            <td className={`py-2 text-center font-medium ${completo ? 'text-green-600 dark:text-green-400' : ent > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
+                              {ent}
+                            </td>
+                            <td className="py-2 text-right font-mono dark:text-slate-200">
+                              ${Number(it.subtotal).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                   <div className="text-right font-bold text-lg dark:text-white">
