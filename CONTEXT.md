@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-12 (noche) — Rediseño v3 completo: sistema de tokens CSS `--kx-*`, Aurora background animada, Sidebar 7 grupos de navegación, Header moderno, DashboardSection Hero+KPI rows; polish visual con acentos `border-t-2` por categoría + hover elevation; light mode v2 Stripe-style (fondo gris #f6f6f8, cards blancas flotando, acentos saturados, sombras reales, dark mode intacto).
+**Última actualización:** 2026-06-13 — Document Flow Prompt 1/6: migration 035, modelo de datos completo (entregas, recepciones, devoluciones, notas_debito, contadores en items existentes, función `siguiente_numero_documento`).
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -91,6 +91,7 @@
 | **`migrations/032_impuestos_infraestructura.sql`** | IVA real: `alicuota_iva` en `productos`/`comprobante_items`/`detalle_compras` (CHECK 21/10.5/0/exento/no_gravado) + `neto_gravado`/`iva_discriminado` en `comprobantes` y `compras` + tabla `alicuotas_impuestos` (RLS, índice) | ✅ Aplicada via MCP |
 | **`migrations/033_crear_venta_iva.sql`** | RPC `crear_venta` recalcula `neto_gravado`/`iva_discriminado` por ítem según su `alicuota_iva` (snapshot), fallback 21%. Copia íntegra de la lógica de 024 + cálculo IVA | ✅ Aplicada via MCP |
 | **`migrations/034_retenciones.sql`** | Tabla `retenciones` (sufrida/practicada, IIBB/Ganancias/SUSS/IVA/Otro, trazabilidad a comprobante/compra) + RLS + índice + vista `retenciones_acumulado_mensual` (security_invoker) | ✅ Aplicada via MCP |
+| **`migrations/035_document_flow_modelo_datos.sql`** | Document Flow Prompt 1/6 — contadores en items existentes (`cantidad_entregada`, `cantidad_devuelta`, `cantidad_facturada`, `cantidad_recibida`); tablas `entregas`+`entrega_items`, `recepciones`+`recepcion_items`, `devoluciones`+`devolucion_items`, `notas_debito`; función `siguiente_numero_documento(empresa_id, tabla, columna, prefijo)` SECURITY DEFINER | ✅ Aplicada via MCP |
 
 ### SQL adicional ejecutado directamente
 
@@ -310,6 +311,40 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-13 — Document Flow Prompt 1/6: Modelo de datos
+**Branch:** `master`
+
+**Objetivo:** crear exclusivamente el modelo de datos del Document Flow SAP-style (ningún archivo React tocado, ninguna RPC existente modificada).
+
+**Parte 1 — Contadores en items existentes:**
+- `comprobante_items`: +`cantidad_entregada`, +`cantidad_devuelta`
+- `pedido_items`: +`cantidad_entregada`, +`cantidad_facturada`
+- `detalle_compras`: +`cantidad_recibida`, +`cantidad_devuelta`
+- `ordenes_compra_items`: `cantidad_recibida` ya existía (3-way match migration 012) → solo +`cantidad_facturada`, +`cantidad_devuelta`
+
+**Parte 2 — Tabla `entregas` + `entrega_items`:**
+- Flujo Ventas: Pedido → Entrega → Factura. `origen IN ('implicita','manual')`, `estado IN ('pendiente','entregado','parcial','anulado')`. FK a `pedidos`, `comprobantes`, `clientes`.
+- `entrega_items`: FK a `pedido_items` (trazabilidad línea a línea).
+
+**Parte 3 — Tabla `recepciones` + `recepcion_items`:**
+- Flujo Compras: OC → Recepción → Factura Compra. FK a `ordenes_compra`, `compras`, `proveedores`.
+- `recepcion_items.orden_compra_item_id` → `ordenes_compra_items(id)` (nombre real con "es").
+
+**Parte 4 — Tabla `devoluciones` + `devolucion_items`:**
+- Tipo `('cliente','proveedor')`. Compensación `('nota_credito','reemplazo','pendiente')`.
+- `nota_credito_id REFERENCES public.comprobantes(id)` — en KAIROX las NCs son filas de `comprobantes` con `tipo='nota_credito'`, no tabla separada.
+- Referencias de reemplazo: `entrega_reemplazo_id`, `recepcion_reemplazo_id`.
+
+**Parte 5 — Tabla `notas_debito`:**
+- Tipo `('emitida','recibida')`. `cc_movimiento_id` FK suave (sin constraint) — se completa al procesar.
+
+**Parte 6 — Función `siguiente_numero_documento(empresa_id, tabla, columna, prefijo)`:**
+- Genera correlativo tipo `ENT-2026-0001`. COUNT por empresa+año+prefijo. SECURITY DEFINER, solo `authenticated`.
+
+**Ajuste clave detectado en schema real:** `ordenes_compra_items` (plural) vs spec que decía `orden_compra_items` (singular). Verificado con `information_schema` antes de escribir la migration.
+
+---
 
 ### Sesión 2026-06-12 (noche) — Light mode v2: Stripe-style contrast + acentos saturados + sombras reales
 **Branch:** `master` (commit `69d9f38`)
