@@ -16,6 +16,7 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { ordenesCompraService, OC_KEYS } from '@/services/ordenesCompraService';
 import { supabase } from '@/lib/customSupabaseClient';
 import { MonedaSelector } from '@/components/ui/MonedaSelector';
+import GenerarRecepcionModal from '@/components/compras/GenerarRecepcionModal';
 import { formatCurrency } from '@/lib/currencyUtils';
 import { formatDateAR } from '@/lib/dateUtils';
 
@@ -45,7 +46,8 @@ function OrdenesCompraSection() {
   const [page, setPage] = useState(1);
 
   // modales
-  const [detalleId, setDetalleId] = useState(null);
+  const [detalleId, setDetalleId]   = useState(null);
+  const [genRecepId, setGenRecepId] = useState(null);
   const [recepcionId, setRecepcionId] = useState(null);
   const [recepciones, setRecepciones] = useState({});   // { [itemId]: cantidad }
   const [facturaModal, setFacturaModal] = useState(false);
@@ -368,8 +370,8 @@ function OrdenesCompraSection() {
 
                           {['enviada', 'recibida_parcial'].includes(oc.estado) && (
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-green-600"
-                              onClick={() => setRecepcionId(oc.id)} title="Registrar recepción de mercadería">
-                              <Truck className="w-3.5 h-3.5" />
+                              onClick={() => setGenRecepId(oc.id)} title="Generar Recepción">
+                              <Package className="w-3.5 h-3.5" />
                             </Button>
                           )}
 
@@ -866,6 +868,16 @@ function OrdenesCompraSection() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* ── MODAL: Generar Recepción (nuevo flujo via crear_recepcion RPC) ── */}
+      <GenerarRecepcionModal
+        ocId={genRecepId}
+        onClose={() => setGenRecepId(null)}
+        onSuccess={() => {
+          setGenRecepId(null);
+          qc.invalidateQueries({ queryKey: OC_KEYS.list(empresaId) });
+        }}
+      />
     </div>
   );
 }

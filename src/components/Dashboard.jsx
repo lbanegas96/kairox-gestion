@@ -12,7 +12,6 @@ import CuentaCorrienteSection from '@/components/sections/CuentaCorrienteSection
 import ReportesSection from '@/components/sections/ReportesSection';
 import UsuariosSection from '@/components/sections/UsuariosSection';
 import ConfiguracionSection from '@/components/sections/ConfiguracionSection';
-import OrdenesCompraSection from '@/components/sections/OrdenesCompraSection';
 import ListasPrecioSection from '@/components/sections/ListasPrecioSection';
 import PlanCuentasSection from '@/components/sections/PlanCuentasSection';
 import CuentasBancariasSection from '@/components/sections/CuentasBancariasSection';
@@ -51,8 +50,12 @@ function Dashboard({ user, onLogout }) {
       case 'entregas':         return <VentasSection initialTab="entregas" />;
       case 'historial_ventas': return <VentasSection initialTab="historial" />;
       case 'listas_precio': return <ListasPrecioSection />;
-      case 'ordenes_compra':return <OrdenesCompraSection />;
-      case 'compras':       return <ComprasSection />;
+      case 'compra_rapida':          return <ComprasSection initialTab="rapida" />;
+      case 'ordenes_compra':         return <ComprasSection initialTab="ordenes" />;
+      case 'recepciones_compra':     return <ComprasSection initialTab="recepciones" />;
+      case 'facturas_compra':        return <ComprasSection initialTab="facturas" />;
+      case 'devoluciones_proveedor': return <ComprasSection initialTab="devoluciones" />;
+      case 'compras':                return <ComprasSection initialTab="rapida" />;
       case 'caja':          return <CajaSection />;
       case 'clientes':      return <ClientesSection />;
       case 'cuentacorriente':return <CuentaCorrienteSection />;

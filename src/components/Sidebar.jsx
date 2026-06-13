@@ -32,9 +32,12 @@ const NAV_GROUPS = [
   {
     label: 'COMPRAS',
     items: [
-      { id: 'proveedores',    label: 'Proveedores',       icon: Truck },
-      { id: 'ordenes_compra', label: 'Órdenes de Compra', icon: ShoppingBag },
-      { id: 'compras',        label: 'Compras',           icon: ArrowLeftRight },
+      { id: 'compra_rapida',          label: 'Compra Rápida',      icon: ShoppingCart },
+      { id: 'ordenes_compra',         label: 'Órdenes de Compra',  icon: ShoppingBag },
+      { id: 'recepciones_compra',     label: 'Recepciones',        icon: Package },
+      { id: 'facturas_compra',        label: 'Facturas de Compra', icon: Receipt },
+      { id: 'devoluciones_proveedor', label: 'Devoluciones',       icon: RotateCcw },
+      { id: 'proveedores',            label: 'Proveedores',        icon: Truck },
     ],
   },
   {
