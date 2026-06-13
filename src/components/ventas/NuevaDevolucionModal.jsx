@@ -86,8 +86,11 @@ function NuevaDevolucionModal({ isOpen, onClose, onSuccess, comprobante = null }
   }, 0);
 
   const handleConfirm = async () => {
-    const efectivoClienteId = clienteId || comprobante?.cliente_id;
-    if (!efectivoClienteId) {
+    const efectivoClienteId = clienteId || comprobante?.cliente_id || null;
+    // Solo exigir cliente en modo standalone (sin comprobante de origen).
+    // Si hay comprobante, una venta a Consumidor Final tiene cliente_id null y
+    // la devolución debe seguir siendo posible.
+    if (!comprobante && !efectivoClienteId) {
       toast({ title: 'Seleccioná un cliente', variant: 'destructive' });
       return;
     }

@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Receipt, Search, ChevronDown, ChevronRight } from 'lucide-react';
+import { Receipt, Search, ChevronDown, ChevronRight, Undo2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { formatDateAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
+import NuevaDevolucionProveedorModal from './NuevaDevolucionProveedorModal';
 
 const ESTADO_LABELS = {
   pagada:   { label: 'Pagada',   className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
@@ -27,6 +29,7 @@ function FacturasCompraSection() {
   const [search, setSearch]     = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [expanded, setExpanded] = useState({});
+  const [devolverCompra, setDevolverCompra] = useState(null);
 
   const fetchCompras = async () => {
     if (!user?.empresa_id) return;
@@ -35,7 +38,7 @@ function FacturasCompraSection() {
       const { data, error } = await supabase
         .from('compras')
         .select(`
-          id, fecha, numero_factura, total, forma_pago, estado_pago, moneda, created_at,
+          id, fecha, numero_factura, total, forma_pago, estado_pago, moneda, created_at, proveedor_id,
           proveedores(nombre),
           detalle_compras(id, cantidad, costo_unitario, subtotal, productos(nombre))
         `)
@@ -102,13 +105,14 @@ function FacturasCompraSection() {
                 <th className="text-left p-3 font-semibold text-kx-text-2">Forma Pago</th>
                 <th className="text-right p-3 font-semibold text-kx-text-2">Total</th>
                 <th className="text-center p-3 font-semibold text-kx-text-2">Estado</th>
+                <th className="text-center p-3 font-semibold text-kx-text-2 w-20">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-kx-border">
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 8 }).map((_, j) => (
                       <td key={j} className="p-3">
                         <div className="h-4 bg-kx-surface-2 rounded animate-pulse w-20" />
                       </td>
@@ -117,7 +121,7 @@ function FacturasCompraSection() {
                 ))
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-12 text-center text-kx-text-3">
+                  <td colSpan={8} className="p-12 text-center text-kx-text-3">
                     <Receipt className="w-10 h-10 mx-auto mb-3 opacity-20" />
                     <p className="font-medium text-kx-text-2">
                       {filtroEstado !== 'todos' || search
@@ -156,12 +160,33 @@ function FacturasCompraSection() {
                         <td className="p-3 text-center">
                           <EstadoBadge estado={compra.estado_pago} />
                         </td>
+                        <td className="p-3 text-center">
+                          {compra.estado_pago !== 'anulada' && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title="Registrar devolución a proveedor"
+                              onClick={e => {
+                                e.stopPropagation();
+                                setDevolverCompra({
+                                  id:                compra.id,
+                                  numero_factura:    compra.numero_factura,
+                                  proveedor_id:      compra.proveedor_id,
+                                  proveedor_nombre:  compra.proveedores?.nombre,
+                                });
+                              }}
+                              className="h-8 w-8 p-0 text-slate-400 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-full"
+                            >
+                              <Undo2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </td>
                       </tr>
 
                       {isOpen && items.length > 0 && (
                         <tr>
                           <td />
-                          <td colSpan={6} className="pb-3 pr-3">
+                          <td colSpan={7} className="pb-3 pr-3">
                             <div className="bg-kx-surface-2 rounded-lg border border-kx-border p-3">
                               <p className="text-xs font-semibold text-kx-text-3 uppercase mb-2">
                                 Detalle de ítems
@@ -191,6 +216,13 @@ function FacturasCompraSection() {
           </table>
         </div>
       </Card>
+
+      <NuevaDevolucionProveedorModal
+        isOpen={!!devolverCompra}
+        onClose={() => setDevolverCompra(null)}
+        onSuccess={() => fetchCompras()}
+        compra={devolverCompra}
+      />
     </div>
   );
 }

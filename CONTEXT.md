@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-13 (sesión 5) — Prompt 6/6 SERIE COMPLETA: Document Flow cierre. Chips nota_credito/nota_debito en DocumentFlow. Devoluciones en DocumentFlowPanel (consulta + renderizado). Botón "Ver Factura origen →" en DevolucionesSection (ventas) y DevolucionesProveedorSection (compras). VentasSection: navigateSaleId + handleChildNavigate + handleDocFlowNavigate. HistorialVentas: auto-abre SaleDetailModal cuando navega desde Devoluciones; pasa onNavigate a SaleDetailModal → DocumentFlowPanel. ComprasSection: onNavigate a DevolucionesProveedorSection. Build ✅ 3141 mód. Deploy a producción.
+**Última actualización:** 2026-06-13 (sesión 6 — Nadia) — Testeo del trabajo de Luciano (17 commits) + fixes integrales: migration 037 `movimientos_inventario.user_id` (FK profiles) + 038 ampliación CHECK tipo a `['entrada','salida','ajuste','ingreso','egreso']`; NuevaDevolucionModal permite Consumidor Final (cliente_id null); ListasPrecioSection invalida `LISTAS_KEY` al guardar/borrar precio (contador `_itemCount` actualizado en vivo); TabRetenciones.recalcMonto devuelve formato es-AR (coma decimal) compatible con parseNumberLocale estricto; CREADO `NuevaDevolucionProveedorModal.jsx` + botón Undo2 en FacturasCompraSection (acción "Devolver" con compra origen → genera devolución a proveedor); restaurado logo Kairox real en Sidebar (Luciano lo había reemplazado con "K" placeholder).
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -105,6 +105,8 @@
 | **`migrations/034_retenciones.sql`** | Tabla `retenciones` (sufrida/practicada, IIBB/Ganancias/SUSS/IVA/Otro, trazabilidad a comprobante/compra) + RLS + índice + vista `retenciones_acumulado_mensual` (security_invoker) | ✅ Aplicada via MCP |
 | **`migrations/035_document_flow_modelo_datos.sql`** | Document Flow Prompt 1/6 — contadores en items existentes (`cantidad_entregada`, `cantidad_devuelta`, `cantidad_facturada`, `cantidad_recibida`); tablas `entregas`+`entrega_items`, `recepciones`+`recepcion_items`, `devoluciones`+`devolucion_items`, `notas_debito`; función `siguiente_numero_documento(empresa_id, tabla, columna, prefijo)` SECURITY DEFINER | ✅ Aplicada via MCP |
 | **`migrations/036_document_flow_rpcs.sql`** | Document Flow Prompt 2/6 — `crear_venta` actualizada (+ entrega implícita `ENT-YYYY-NNNN` al final de cada POS); `crear_entrega` (camino largo desde Pedido, descuenta stock); `crear_recepcion` (camino largo desde OC, suma stock); `crear_recepcion_implicita` (compras directas, solo documental, NO toca stock); `crear_factura_desde_entrega` (factura desde entrega existente, sin stock) | ✅ Aplicada via MCP |
+| **`037_movimientos_inventario_add_user_id`** (MCP) | `ALTER TABLE movimientos_inventario ADD COLUMN user_id uuid REFERENCES profiles(id)` + NOTIFY pgrst — necesario para el RPC `crear_devolucion` de Luciano | ✅ Aplicada via MCP |
+| **`038_movimientos_inventario_tipo_check_extend`** (MCP) | Drop + recrear `movimientos_inventario_tipo_check` aceptando `['entrada','salida','ajuste','ingreso','egreso']` — sinónimos para compatibilidad con RPCs nuevos y viejos | ✅ Aplicada via MCP |
 | **`migrations/037_devoluciones_nd_rpcs.sql`** | Prompt 4/6 — `ALTER cuenta_corriente_movimientos`: `cliente_id` nullable + `proveedor_id` FK. RPC `crear_devolucion(empresa_id, user_id, tipo, items, ...)` → devoluciones + devolucion_items + NC opcional en comprobantes + CC movimiento + stock (ingreso si reingresa_stock) + caja (egreso si reembolso_efectivo). RPC `crear_nota_debito(empresa_id, user_id, tipo, concepto, monto, ...)` → notas_debito + CC movimiento DEBE. Correlativo DEV-YYYY-NNNN / NC-YYYY-NNNN / ND-YYYY-NNNN vía `siguiente_numero_documento`. SECURITY DEFINER + GRANT authenticated | ✅ Aplicada via MCP |
 
 ### SQL adicional ejecutado directamente
@@ -330,6 +332,65 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-13 (sesión 6 — Nadia) — Testeo Document Flow + Fixes integrales + Devolución a Proveedor UI
+
+**Objetivo:** después de pullear las 17 contribuciones de Luciano (Aurora redesign, Document Flow Prompts 1-6, Compra Rápida), recorrer secciones y arreglar bugs encontrados.
+
+**Bugs detectados y fixes aplicados:**
+
+1. **NuevaDevolucionModal exigía cliente incluso para Consumidor Final** ([NuevaDevolucionModal.jsx:88-96](src/components/ventas/NuevaDevolucionModal.jsx:88))
+   - Síntoma: una venta a "Consumidor Final" (comprobante.cliente_id = null) no podía devolverse porque la validación bloqueaba.
+   - Fix: si hay `comprobante` de origen, el cliente_id se obtiene de ahí (puede ser null y el RPC lo acepta). Solo exigir cliente en modo standalone.
+
+2. **`movimientos_inventario.user_id` no existía** — pero el RPC `crear_devolucion` (migration 036 de Luciano) lo intenta insertar.
+   - Fix: **migration 037** `ALTER TABLE movimientos_inventario ADD COLUMN user_id uuid REFERENCES profiles(id)` + NOTIFY pgrst.
+
+3. **CHECK constraint `movimientos_inventario_tipo_check` solo aceptaba 'entrada'/'salida'/'ajuste'** — el RPC de Luciano usa `'ingreso'`/`'egreso'`.
+   - Fix: **migration 038** DROP + RECREATE constraint con `['entrada','salida','ajuste','ingreso','egreso']`.
+
+4. **ListasPrecioSection: contador `_itemCount` no se actualizaba en vivo**
+   - Síntoma: al cargar precios especiales por producto y cerrar el modal, la tabla de listas seguía mostrando "0 productos".
+   - Causa: al guardar/borrar item, solo invalidaba `ITEMS_KEY(listaId)` pero no `LISTAS_KEY(empresaId)` que es la query que carga el conteo.
+   - Fix: invalidar AMBAS keys en `handleSaveItemPrecio` y `deleteItem.onSuccess`.
+
+5. **TabRetenciones: no se podía guardar "Retención Practicada"** ([TabRetenciones.jsx:410-415](src/components/impuestos/TabRetenciones.jsx:410))
+   - Síntoma: toast "Datos incompletos" aunque todos los campos estaban llenos.
+   - Causa: `recalcMonto` devolvía formato US (`"4800.00"`) usando `.toFixed(2)` → `parseNumberLocale` estricto es-AR rechaza el punto como decimal → guardado interpreta el monto como NaN/0.
+   - Fix: `recalcMonto` ahora aplica `.replace('.', ',')` para devolver formato es-AR (`"4800,00"`) compatible con el parser estricto.
+
+**Feature nuevo: Devolución a Proveedor con UI completa**
+
+Luciano había implementado el RPC `crear_devolucion(p_tipo='proveedor')` y la sección de listado `DevolucionesProveedorSection`, pero **no creó el modal ni el botón disparador**. Faltaba la mitad del feature.
+
+- **CREADO** [src/components/compras/NuevaDevolucionProveedorModal.jsx](src/components/compras/NuevaDevolucionProveedorModal.jsx) — espejo del modal de cliente:
+  - Carga `detalle_compras` de la factura (no `comprobante_items`).
+  - Filtra ítems con saldo pendiente (`cantidad - cantidad_devuelta > 0`).
+  - Checkbox "Descontar del stock" (default `true` para devolución a proveedor — la mercadería sale).
+  - Compensación: Nota de Débito a proveedor / Reemplazo / Sin compensación.
+  - Envía `p_tipo='proveedor'`, `p_compra_id`, `p_proveedor_id` al RPC `crear_devolucion`.
+- **MODIFICADO** [FacturasCompraSection.jsx](src/components/compras/FacturasCompraSection.jsx): nueva columna "Acciones" + ícono `Undo2` (mismo que `HistorialVentas` para consistencia visual) en cada fila → abre el modal con la compra precargada.
+- Al guardar, la devolución aparece automáticamente en **Compras → Devoluciones → Devoluciones a Proveedor**.
+
+**Restaurado logo Kairox en Sidebar:** Luciano había reemplazado el logo real (`/kairox-logo.png`) por un placeholder con la letra "K" gradient en el rediseño Aurora. Sustituido por el `<img>` original manteniendo el estilo del nuevo Sidebar.
+
+**Testeo manual realizado (todas OK):**
+
+Dashboard, Sidebar con grupos colapsables (persiste en localStorage), Pedidos con KPIs, Devoluciones de cliente (con fixes), Listas de Precios (con fix de contador), Plan de Cuentas (Nueva Cuenta + Nuevo Asiento + Períodos), Impuestos > Alícuotas + Retenciones Practicadas (con fix), Cheques > Registrar cheque recibido, Compras > Facturas con nuevo botón Devolver, Inventario > Nuevo Producto, Proveedores > Nuevo Proveedor con ficha completa.
+
+**Convenciones nuevas / refuerzos:**
+- **Cálculos numéricos en el frontend:** cualquier valor calculado que vaya a un input controlado por `parseNumberLocale` debe devolverse en formato es-AR (coma decimal). NO usar `String(n.toFixed(2))` directamente — usar `.toFixed(2).replace('.', ',')`.
+- **`movimientos_inventario.tipo`:** acepta sinónimos `entrada↔ingreso` y `salida↔egreso`. Los RPCs nuevos pueden usar cualquiera.
+- **Devoluciones a Consumidor Final:** son válidas. El sistema debe permitir `cliente_id = null` cuando hay comprobante de origen.
+- **TanStack Query invalidación:** cuando una mutación afecta a más de una key (ej: items + conteo en lista padre), invalidar **TODAS** las queries afectadas en `onSuccess`. No asumir que actualizar items refresca el padre.
+- **UI espejada (Ventas ↔ Compras):** si Ventas tiene un patrón (ícono Undo2 para devolver en historial), Compras debe replicarlo en su sección equivalente (Facturas). Coherencia visual.
+
+**Pendiente próxima sesión:**
+- Probar el flujo end-to-end Document Flow completo (Pedido → Entrega → Venta → Devolución → NC) para asegurar la nav cruzada.
+- Continuar parseNumberLocale en: ComprasSection cart, PlanCuentasSection monto asiento, ProveedoresSection pago, OnboardingWizard.
+- Redeploy de `emitir-cae` con alícuotas reales por línea (homologación AFIP).
+
+---
 
 ### Sesión 2026-06-13 (sesión 3) — Document Flow Prompt 4/6: Devoluciones + Notas de Débito UI
 **Branch:** `master` (commit `10080de`)

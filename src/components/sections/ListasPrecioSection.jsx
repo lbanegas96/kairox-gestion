@@ -104,7 +104,10 @@ function ListasPrecioSection() {
 
   const deleteItem = useMutation({
     mutationFn: (itemId) => listaPreciosService.deleteItem(itemId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ITEMS_KEY(selectedLista?.id) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ITEMS_KEY(selectedLista?.id) });
+      qc.invalidateQueries({ queryKey: LISTAS_KEY(empresaId) });
+    },
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
@@ -138,6 +141,7 @@ function ListasPrecioSection() {
     try {
       await listaPreciosService.upsertItem(selectedLista.id, empresaId, productoId, precio);
       qc.invalidateQueries({ queryKey: ITEMS_KEY(selectedLista.id) });
+      qc.invalidateQueries({ queryKey: LISTAS_KEY(empresaId) });
       toast({ title: 'Precio guardado ✓', className: 'bg-green-600 text-white' });
     } catch (e) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });

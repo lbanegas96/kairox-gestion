@@ -407,10 +407,11 @@ function SubTabPracticadas() {
   const abrirNueva = () => { setForm({ ...emptyForm, fecha: getTodayAR() }); setModalOpen(true); };
 
   // Recalcular monto al cambiar base o alícuota.
+  // Devuelve el resultado en formato es-AR (coma decimal) para que el parser estricto lo acepte.
   const recalcMonto = (base, alic) => {
     const b = parseNumberLocale(base);
     const a = parseNumberLocale(alic);
-    if (b && a) return String((b * a / 100).toFixed(2));
+    if (b && a) return (b * a / 100).toFixed(2).replace('.', ',');
     return '';
   };
 

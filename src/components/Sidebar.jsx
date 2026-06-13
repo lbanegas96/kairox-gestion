@@ -122,9 +122,11 @@ function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen }) {
       >
         {/* Logo */}
         <div className="px-5 py-4 flex items-center gap-2.5 border-b border-kx-border flex-shrink-0">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
-            K
-          </div>
+          <img
+            src="/kairox-logo.png"
+            alt="Kairox"
+            className="w-7 h-7 flex-shrink-0 object-contain"
+          />
           <span className="text-sm font-semibold text-kx-text tracking-tight">KAIROX</span>
         </div>
 
