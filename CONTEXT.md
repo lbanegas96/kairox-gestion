@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-13 — Document Flow Prompt 3/6: UI Ventas — VentasSection tab shell + EntregasSection + GenerarEntregaModal + PedidosSection (badges progreso + Generar Entrega + Facturar) + shared (ClienteSelector, ClienteDrillDown, ClienteAltaRapidaModal, DocumentFlow) + Sidebar colapsable + Dashboard routing.
+**Última actualización:** 2026-06-13 (sesión 2) — Fix 3.1: DocumentFlow chip chain + verbose progress badge integrados en modal detalle de Pedido. Deploy Vercel disparado manualmente (auto-deploy roto desde commit 69d9f38 — confirmado y corregido).
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -272,15 +272,14 @@ Cuando `enabled = true`, los siguientes módulos guardan `monto_paralelo` + `tc_
 #### Pendientes Fase 7
 - Configurar Supabase Auth URLs (Site URL + Redirect URLs → `https://kairox-gestion.vercel.app/**`)
 - Extender TC obligatorio a módulos Caja + Cuenta Corriente + Compras (columnas DB ya listas)
-- ✅ ~~Investigar error 400 en consola~~ — **RESUELTO** sesión PM·3: auditados todos los usos de `toISOString()` contra columnas DATE; fixes en `useNotifications.js` (getNowAR), `ReporteParidad.jsx` (AR-local-as-UTC), `tipoCambioService.ts` (import + getTodayAR)
-- **Tests manuales pendientes:**
-  - POS: hacer venta y verificar stock decrementa correctamente (RPC 022)
-  - CC cobro Transferencia con caja cerrada → debe aprobar
-  - CC cobro Efectivo con caja cerrada → debe bloquear
-  - Aging: cliente con deuda vieja pagada + deuda nueva → banda correcta
-  - Carrito POS: ingresar cantidad mayor al stock → toast de advertencia
-  - OC en USD sin TC → botón deshabilitado + mensaje ⚠
-- **Deploy a producción** — todos los fixes comiteados y pusheados a master; pendiente deploy Vercel
+- ✅ ~~Investigar error 400 en consola~~ — **RESUELTO** sesión PM·3
+- ✅ ~~Deploy a producción~~ — **RESUELTO** 2026-06-13 sesión 2: auto-deploy de Vercel estaba roto desde commit `69d9f38` (5 commits sin deployar). Deploy manual disparado via MCP Vercel — URL: https://kairox-gestion.vercel.app
+- **Tests manuales pendientes (Document Flow):**
+  - POS: hacer venta → verificar fila en `entregas` con `origen='implicita'` aparece en EntregasSection
+  - Pedido → Generar Entrega → verificar stock decrementado + fila en `entregas`
+  - Pedido `en_preparacion` → Facturar → NuevaVentaModal pre-cargado → venta → pedido pasa a `facturado`
+  - EntregasSection: expandir row → ver items con nombre de producto
+  - Modal detalle Pedido: abrir pedido facturado → DocumentFlow muestra chip Pedido + chip Entrega + chip Factura
 
 ---
 
@@ -323,6 +322,38 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-13 (sesión 2) — Fix 3.1: DocumentFlow + badge verbose en modal detalle Pedido
+**Branch:** `master` (commit `0b0ce67`)
+
+**Objetivo:** enriquecer el modal de detalle del Pedido (Dialog inline en `PedidosSection.jsx`) con visualización del Document Flow y badge de progreso de entrega más descriptivo.
+
+**Problema:** al abrir un pedido, el modal mostraba estado, cliente, fecha, y tabla de items. Faltaba: badge verbose de progreso de entrega, chip chain `<DocumentFlow />` con cadena Pedido → Entrega(s) → Factura, colores en columna de entregado.
+
+**Patrón IIFE del modal:** el modal usa `{detailPedido && (() => {...})()}` — no es un sub-componente, por lo que los hooks deben vivir en el scope del componente padre (`PedidosSection`) y ser leídos por closures dentro del IIFE. Se aplicó en dos partes (contexto anterior + esta sesión):
+
+**Parte 1 (sesión anterior, ya aplicada):**
+- Import de `DocumentFlow` de `@/components/shared/DocumentFlow`
+- 3 estados nuevos: `entregasDetalle`, `loadingEntregas`, `entregasRefreshKey`
+- `useEffect` que fetcha `entregas + comprobantes(numero_venta)` filtrado por `pedido_id` cuando el modal abre, con `entregasRefreshKey` como dependencia de refresh
+- `handleEntregaSuccess` actualizado para hacer `setEntregasRefreshKey(k => k+1)` además del `fetchAll()`
+
+**Parte 2 (esta sesión — Edit 5/5):**
+- **Badge verbose de entrega:** tres variantes según `totalEnt` vs `totalPed`:
+  - `totalEnt >= totalPed && totalPed > 0` → badge verde "✓ Completo (X/Y u.)"
+  - `totalEnt > 0 && totalEnt < totalPed` → badge ámbar "Parcial X/Y u."
+  - Sin entrega → badge gris "Sin entregar"
+- **DocumentFlow chip chain:** construida desde `detailPedido` + `entregasDetalle`. Chips: `pedido` (active), un chip `entrega` por cada fila en `entregasDetalle`, más un chip `factura` si alguna entrega tiene `comprobante_id`. Sin `onNavigate` (informational-only — chips render como `cursor-default opacity-60`).
+- **Tabla de items:** columnas renombradas a "Pedido" / "Entregado". La columna "Entregado" muestra en verde si completo, ámbar si parcial, gris si 0.
+- **Modal scrolleable:** `max-h-[90vh] overflow-y-auto` para pedidos con muchos ítems.
+
+**Build verificado:** `vite build --mode development` → ✅ 3130 módulos, sin errores.
+
+**Pedidos históricos sin entregas:** `entregasDetalle` queda `[]` → DocumentFlow muestra solo el chip del Pedido (sin crash ni errores).
+
+**Vercel deploy roto detectado:** al revisar Vercel, el último deploy automático correspondía a commit `69d9f38` (light mode v2). Los 5 commits siguientes (Document Flow Prompts 1/2/3 + CONTEXT.md fixes + Fix 3.1) NUNCA se deployaron. Se disparó deploy manual via MCP Vercel.
+
+---
 
 ### Sesión 2026-06-13 — Document Flow Prompt 3/6: UI Ventas
 **Branch:** `master`
