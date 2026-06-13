@@ -30,7 +30,7 @@ function CompensacionBadge({ value }) {
 
 // ── Tab: Devoluciones de Clientes ─────────────────────────────────────────────
 
-function DevolucionesTab() {
+function DevolucionesTab({ onNavigate }) {
   const { user } = useAuth();
   const [devoluciones, setDevoluciones] = useState([]);
   const [loading, setLoading]           = useState(true);
@@ -138,7 +138,16 @@ function DevolucionesTab() {
                       {dev.clientes?.nombre || '—'}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-kx-text-2">
-                      {dev.factura_origen?.numero_venta || '—'}
+                      {dev.comprobante_id && onNavigate ? (
+                        <button
+                          className="font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                          onClick={e => { e.stopPropagation(); onNavigate('comprobante', dev.comprobante_id); }}
+                        >
+                          {dev.factura_origen?.numero_venta || 'Ver →'}
+                        </button>
+                      ) : (
+                        dev.factura_origen?.numero_venta || '—'
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       {dev.reingresa_stock
@@ -319,7 +328,7 @@ function NotasDebitoTab() {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-function DevolucionesSection() {
+function DevolucionesSection({ onNavigate }) {
   const [activeTab, setActiveTab] = useState('devoluciones');
 
   return (
@@ -346,7 +355,7 @@ function DevolucionesSection() {
         </TabsList>
 
         <TabsContent value="devoluciones" className="mt-4">
-          <DevolucionesTab />
+          <DevolucionesTab onNavigate={onNavigate} />
         </TabsContent>
 
         <TabsContent value="notas_debito" className="mt-4">

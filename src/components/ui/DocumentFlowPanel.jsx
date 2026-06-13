@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { FileText, ShoppingCart, ClipboardList, PackageCheck, MinusCircle, CreditCard, ArrowRight, Loader2, GitBranch } from 'lucide-react';
+import { FileText, ShoppingCart, ClipboardList, PackageCheck, MinusCircle, CreditCard, ArrowRight, Loader2, GitBranch, RotateCcw } from 'lucide-react';
 import { documentFlowService } from '@/services/documentFlowService';
 import { formatDateAR } from '@/lib/dateUtils';
 
 const TIPO_CONFIG = {
-  cotizacion:   { label: 'Cotización',    icon: ClipboardList, color: 'text-violet-500', bg: 'bg-violet-50 border-violet-200 dark:bg-violet-900/20 dark:border-violet-800' },
-  pedido:       { label: 'Pedido',        icon: PackageCheck,  color: 'text-blue-500',   bg: 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800' },
-  venta:        { label: 'Venta',         icon: ShoppingCart,  color: 'text-emerald-500',bg: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800' },
-  nota_credito: { label: 'Nota de Crédito', icon: MinusCircle, color: 'text-rose-500',   bg: 'bg-rose-50 border-rose-200 dark:bg-rose-900/20 dark:border-rose-800' },
-  cobro_cc:     { label: 'Cobro CC',      icon: CreditCard,    color: 'text-amber-500',  bg: 'bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800' },
+  cotizacion:   { label: 'Cotización',      icon: ClipboardList, color: 'text-violet-500', bg: 'bg-violet-50 border-violet-200 dark:bg-violet-900/20 dark:border-violet-800' },
+  pedido:       { label: 'Pedido',          icon: PackageCheck,  color: 'text-blue-500',   bg: 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800' },
+  venta:        { label: 'Venta',           icon: ShoppingCart,  color: 'text-emerald-500',bg: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800' },
+  nota_credito: { label: 'Nota de Crédito', icon: MinusCircle,   color: 'text-rose-500',   bg: 'bg-rose-50 border-rose-200 dark:bg-rose-900/20 dark:border-rose-800' },
+  cobro_cc:     { label: 'Cobro CC',        icon: CreditCard,    color: 'text-amber-500',  bg: 'bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800' },
+  devolucion:   { label: 'Devolución',      icon: RotateCcw,     color: 'text-orange-500', bg: 'bg-orange-50 border-orange-200 dark:bg-orange-900/20 dark:border-orange-800' },
 };
 
 function DocNode({ node, isActual = false, onNavigate }) {
@@ -78,7 +79,7 @@ export function DocumentFlowPanel({ comprobanteId, onNavigate }) {
 
   const hasFlow =
     flow &&
-    (flow.origen || flow.fuente_nc || flow.notas_credito.length > 0 || flow.cobros_cc.length > 0);
+    (flow.origen || flow.fuente_nc || flow.notas_credito.length > 0 || flow.cobros_cc.length > 0 || (flow.devoluciones?.length ?? 0) > 0);
 
   if (!hasFlow && flow) {
     return (
@@ -126,6 +127,13 @@ export function DocumentFlowPanel({ comprobanteId, onNavigate }) {
           <React.Fragment key={cobro.id}>
             <Arrow />
             <DocNode node={cobro} onNavigate={onNavigate} />
+          </React.Fragment>
+        ))}
+        {/* Devoluciones de cliente */}
+        {(flow.devoluciones ?? []).map(dev => (
+          <React.Fragment key={dev.id}>
+            <Arrow />
+            <DocNode node={dev} onNavigate={onNavigate} />
           </React.Fragment>
         ))}
       </div>

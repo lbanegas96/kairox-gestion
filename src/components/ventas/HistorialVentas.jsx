@@ -13,7 +13,7 @@ import NuevaDevolucionModal from './NuevaDevolucionModal';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import { formatDateAR, formatTimeAR } from '@/lib/dateUtils';
 
-const HistorialVentas = () => {
+const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
   const { user } = useAuth();
   
   // Data State
@@ -41,6 +41,14 @@ const HistorialVentas = () => {
       fetchData();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (navigateSaleId) {
+      setSelectedSaleId(navigateSaleId);
+      setShowDetailModal(true);
+      onNavigated?.();
+    }
+  }, [navigateSaleId]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -412,6 +420,7 @@ const HistorialVentas = () => {
         onOpenChange={setShowDetailModal}
         saleId={selectedSaleId}
         onUpdateSale={handleSaleUpdate}
+        onNavigate={onNavigate}
       />
     </div>
   );

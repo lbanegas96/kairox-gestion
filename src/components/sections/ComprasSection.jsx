@@ -20,6 +20,10 @@ function ComprasSection({ initialTab = 'ordenes' }) {
     initialTab === 'rapida' ? 'rapida' : initialTab
   );
 
+  const handleDevolucionNavigate = (tipo) => {
+    if (tipo === 'factura_compra') setActiveTab('facturas');
+  };
+
   const tabClass = [
     'rounded-none rounded-t-sm px-4 py-2 text-sm border-b-2 transition-colors',
     'data-[state=active]:border-[rgb(var(--kx-violet))] data-[state=active]:text-kx-text data-[state=active]:font-semibold',
@@ -84,7 +88,7 @@ function ComprasSection({ initialTab = 'ordenes' }) {
           </TabsContent>
 
           <TabsContent value="devoluciones" className="mt-4">
-            <DevolucionesProveedorSection />
+            <DevolucionesProveedorSection onNavigate={handleDevolucionNavigate} />
           </TabsContent>
         </Tabs>
       )}

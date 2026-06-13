@@ -13,8 +13,23 @@ function VentasSection({ initialTab = 'pedidos' }) {
   const [activeTab, setActiveTab]       = useState(initialTab);
   const [isNewSaleOpen, setIsNewSaleOpen] = useState(false);
   const [refreshKey, setRefreshKey]     = useState(0);
+  const [navigateSaleId, setNavigateSaleId] = useState(null);
 
   const handleSaleSuccess = () => setRefreshKey(k => k + 1);
+
+  // Called from DevolucionesSection: (tipo, id)
+  const handleChildNavigate = (tipo, id) => {
+    if (tipo === 'comprobante') {
+      setActiveTab('historial');
+      setNavigateSaleId(id);
+    }
+  };
+
+  // Called from DocumentFlowPanel chip clicks (section string)
+  const handleDocFlowNavigate = (seccion) => {
+    const map = { cotizaciones: 'cotizaciones', pedidos: 'pedidos', ventas: 'historial', historial: 'historial', devoluciones: 'devoluciones' };
+    if (map[seccion]) setActiveTab(map[seccion]);
+  };
 
   return (
     <div className="space-y-4">
@@ -70,11 +85,16 @@ function VentasSection({ initialTab = 'pedidos' }) {
         </TabsContent>
 
         <TabsContent value="historial" className="mt-4">
-          <HistorialVentas key={refreshKey} />
+          <HistorialVentas
+            key={refreshKey}
+            navigateSaleId={navigateSaleId}
+            onNavigated={() => setNavigateSaleId(null)}
+            onNavigate={handleDocFlowNavigate}
+          />
         </TabsContent>
 
         <TabsContent value="devoluciones" className="mt-4">
-          <DevolucionesSection />
+          <DevolucionesSection onNavigate={handleChildNavigate} />
         </TabsContent>
       </Tabs>
 

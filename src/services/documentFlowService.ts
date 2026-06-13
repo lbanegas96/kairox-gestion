@@ -5,7 +5,8 @@ export type DocFlowTipo =
   | 'pedido'
   | 'venta'
   | 'nota_credito'
-  | 'cobro_cc';
+  | 'cobro_cc'
+  | 'devolucion';
 
 export interface DocFlowNode {
   id: string;
@@ -25,6 +26,7 @@ export interface DocumentFlow {
   notas_credito: DocFlowNode[];    // NC emitidas contra este comprobante
   cobros_cc: DocFlowNode[];        // cobros CC que refieren este comprobante
   fuente_nc: DocFlowNode | null;   // si el actual es una NC, muestra la venta original
+  devoluciones: DocFlowNode[];     // devoluciones de cliente contra este comprobante
 }
 
 export const documentFlowService = {
@@ -140,6 +142,22 @@ export const documentFlowService = {
       seccion: 'cuentacorriente',
     }));
 
-    return { origen, actual, notas_credito, cobros_cc, fuente_nc };
+    // 6. Devoluciones de cliente emitidas contra este comprobante
+    const { data: devs } = await supabase
+      .from('devoluciones')
+      .select('id, numero_devolucion, fecha, compensacion, devolucion_items(subtotal)')
+      .eq('comprobante_id', comprobanteId)
+      .eq('tipo', 'cliente');
+    const devoluciones: DocFlowNode[] = (devs ?? []).map((dev: any) => ({
+      id: dev.id,
+      tipo: 'devolucion' as DocFlowTipo,
+      numero: dev.numero_devolucion,
+      fecha: dev.fecha,
+      monto: (dev.devolucion_items || []).reduce((s: number, i: any) => s + Number(i.subtotal || 0), 0),
+      estado: dev.compensacion,
+      seccion: 'devoluciones',
+    }));
+
+    return { origen, actual, notas_credito, cobros_cc, fuente_nc, devoluciones };
   },
 };

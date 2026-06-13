@@ -18,7 +18,7 @@ function CompensacionBadge({ comp }) {
   return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cfg.className}`}>{cfg.label}</span>;
 }
 
-function DevolucionesTab() {
+function DevolucionesTab({ onNavigate }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [devoluciones, setDevoluciones] = useState([]);
@@ -32,7 +32,9 @@ function DevolucionesTab() {
       .from('devoluciones')
       .select(`
         id, numero_devolucion, fecha, tipo, reingresa_stock, compensacion, motivo,
+        compra_id,
         proveedores(nombre),
+        factura_compra:compras!compra_id(numero_factura),
         devolucion_items(id, cantidad, precio_unitario, subtotal, productos(nombre))
       `)
       .eq('empresa_id', user.empresa_id)
@@ -57,6 +59,7 @@ function DevolucionesTab() {
               <th className="text-left p-3 font-semibold text-kx-text-2">Número</th>
               <th className="text-left p-3 font-semibold text-kx-text-2">Fecha</th>
               <th className="text-left p-3 font-semibold text-kx-text-2">Proveedor</th>
+              <th className="text-left p-3 font-semibold text-kx-text-2">Factura origen</th>
               <th className="text-left p-3 font-semibold text-kx-text-2">Compensación</th>
               <th className="text-left p-3 font-semibold text-kx-text-2">Stock</th>
               <th className="text-center p-3 font-semibold text-kx-text-2">Ítems</th>
@@ -66,7 +69,7 @@ function DevolucionesTab() {
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <tr key={i}>
-                  {Array.from({ length: 7 }).map((_, j) => (
+                  {Array.from({ length: 8 }).map((_, j) => (
                     <td key={j} className="p-3">
                       <div className="h-4 bg-kx-surface-2 rounded animate-pulse w-16" />
                     </td>
@@ -75,7 +78,7 @@ function DevolucionesTab() {
               ))
             ) : devoluciones.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-12 text-center text-kx-text-3">
+                <td colSpan={8} className="p-12 text-center text-kx-text-3">
                   <RotateCcw className="w-10 h-10 mx-auto mb-3 opacity-20" />
                   <p className="font-medium text-kx-text-2">No hay devoluciones a proveedores</p>
                 </td>
@@ -98,6 +101,18 @@ function DevolucionesTab() {
                       </td>
                       <td className="p-3 text-kx-text-2 text-xs">{formatDateAR(dev.fecha)}</td>
                       <td className="p-3 text-kx-text">{dev.proveedores?.nombre || '—'}</td>
+                      <td className="p-3 font-mono text-xs text-kx-text-2">
+                        {dev.compra_id && onNavigate ? (
+                          <button
+                            className="font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                            onClick={e => { e.stopPropagation(); onNavigate('factura_compra', dev.compra_id); }}
+                          >
+                            {dev.factura_compra?.numero_factura || 'Ver →'}
+                          </button>
+                        ) : (
+                          dev.factura_compra?.numero_factura || '—'
+                        )}
+                      </td>
                       <td className="p-3"><CompensacionBadge comp={dev.compensacion} /></td>
                       <td className="p-3 text-xs text-kx-text-2">
                         {dev.reingresa_stock ? 'Egresó stock' : 'Sin movimiento'}
@@ -108,7 +123,7 @@ function DevolucionesTab() {
                     {isOpen && items.length > 0 && (
                       <tr>
                         <td />
-                        <td colSpan={6} className="pb-3 pr-3">
+                        <td colSpan={7} className="pb-3 pr-3">
                           <div className="bg-kx-surface-2 rounded-lg border border-kx-border p-3">
                             <p className="text-xs font-semibold text-kx-text-3 uppercase mb-2">Ítems devueltos</p>
                             <div className="space-y-1">
@@ -217,7 +232,7 @@ function NotasDebitoRecibidas() {
   );
 }
 
-function DevolucionesProveedorSection() {
+function DevolucionesProveedorSection({ onNavigate }) {
   const [tab, setTab] = useState('devoluciones');
 
   const tabClass = [
@@ -242,7 +257,7 @@ function DevolucionesProveedorSection() {
         </TabsList>
 
         <TabsContent value="devoluciones" className="mt-4">
-          <DevolucionesTab />
+          <DevolucionesTab onNavigate={onNavigate} />
         </TabsContent>
 
         <TabsContent value="notas_debito" className="mt-4">
