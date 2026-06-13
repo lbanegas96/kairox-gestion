@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-13 (sesión 2) — Fix 3.1: DocumentFlow chip chain + verbose progress badge integrados en modal detalle de Pedido. Deploy Vercel disparado manualmente (auto-deploy roto desde commit 69d9f38 — confirmado y corregido).
+**Última actualización:** 2026-06-13 (sesión 3) — Prompt 4/6: Devoluciones + Notas de Débito UI. Migration 037 aplicada (crear_devolucion + crear_nota_debito RPCs). DevolucionesSection + NuevaDevolucionModal + NuevaNotaDebitoModal creados. Botón Devolver en HistorialVentas. Deploy a producción.
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -26,10 +26,10 @@
 | Portal Compras | `portals/ComprasPortal.jsx` | ✅ 5 KPIs + módulos |
 | Portal Finanzas | `portals/FinanzasPortal.jsx` | ✅ 5 KPIs + posición neta CxC-CxP |
 | Portal Inventario | `portals/InventarioPortal.jsx` | ✅ 5 KPIs + barra salud stock |
-| **Ventas (shell)** | `VentasSection.jsx` | ✅ **Prompt 3/6** Tab shell: Cotizaciones · Pedidos · Entregas · Facturas · Devoluciones + botón POS flotante + `initialTab` prop para nav externa |
+| **Ventas (shell)** | `VentasSection.jsx` | ✅ **Prompt 4/6** Tab shell: Cotizaciones · Pedidos · Entregas · Facturas · Devoluciones (real) + botón POS flotante + `initialTab` prop para nav externa |
 | **Ventas (POS)** | `NuevaVentaModal.jsx` | ✅ Multi-pago + check límite crédito + Moneda Paralela + **`pedido` prop** para pre-carga desde Pedido |
 | Notas de Crédito | `NotaCreditoModal.jsx` + `notaCreditoService.ts` | ✅ Devolución parcial/total + reversión stock/CC/caja |
-| Historial Ventas | `HistorialVentas.jsx` | ✅ Filtros avanzados + estado_pago CC + paginación 50/pág |
+| Historial Ventas | `HistorialVentas.jsx` | ✅ Filtros avanzados + estado_pago CC + paginación 50/pág + **botón Devolver** (Undo2) por fila tipo=venta |
 | Comprobantes | `ComprobantePrintModal.jsx` | ✅ Toggle Comprobante / Remito sin precios |
 | Inventario | `ProductosSection.jsx` | ✅ Soft delete + import CSV + Análisis ABC |
 | Compras | `ComprasSection.jsx` | ✅ Funcional + asiento auto + paginación 50/pág |
@@ -98,6 +98,7 @@
 | **`migrations/034_retenciones.sql`** | Tabla `retenciones` (sufrida/practicada, IIBB/Ganancias/SUSS/IVA/Otro, trazabilidad a comprobante/compra) + RLS + índice + vista `retenciones_acumulado_mensual` (security_invoker) | ✅ Aplicada via MCP |
 | **`migrations/035_document_flow_modelo_datos.sql`** | Document Flow Prompt 1/6 — contadores en items existentes (`cantidad_entregada`, `cantidad_devuelta`, `cantidad_facturada`, `cantidad_recibida`); tablas `entregas`+`entrega_items`, `recepciones`+`recepcion_items`, `devoluciones`+`devolucion_items`, `notas_debito`; función `siguiente_numero_documento(empresa_id, tabla, columna, prefijo)` SECURITY DEFINER | ✅ Aplicada via MCP |
 | **`migrations/036_document_flow_rpcs.sql`** | Document Flow Prompt 2/6 — `crear_venta` actualizada (+ entrega implícita `ENT-YYYY-NNNN` al final de cada POS); `crear_entrega` (camino largo desde Pedido, descuenta stock); `crear_recepcion` (camino largo desde OC, suma stock); `crear_recepcion_implicita` (compras directas, solo documental, NO toca stock); `crear_factura_desde_entrega` (factura desde entrega existente, sin stock) | ✅ Aplicada via MCP |
+| **`migrations/037_devoluciones_nd_rpcs.sql`** | Prompt 4/6 — `ALTER cuenta_corriente_movimientos`: `cliente_id` nullable + `proveedor_id` FK. RPC `crear_devolucion(empresa_id, user_id, tipo, items, ...)` → devoluciones + devolucion_items + NC opcional en comprobantes + CC movimiento + stock (ingreso si reingresa_stock) + caja (egreso si reembolso_efectivo). RPC `crear_nota_debito(empresa_id, user_id, tipo, concepto, monto, ...)` → notas_debito + CC movimiento DEBE. Correlativo DEV-YYYY-NNNN / NC-YYYY-NNNN / ND-YYYY-NNNN vía `siguiente_numero_documento`. SECURITY DEFINER + GRANT authenticated | ✅ Aplicada via MCP |
 
 ### SQL adicional ejecutado directamente
 
@@ -310,7 +311,7 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 | 8 | **Cierre formal de períodos contables** | FI Period Close | ✅ Sesión 10-jun-2026 |
 | 9 | **Retenciones IIBB/Ganancias** | FI Withholding | ✅ Sesión 12-jun-2026 |
 | 12 | **IVA real por alícuota + Libro IVA Compras** | FI Tax (RTC) | ✅ Sesión 12-jun-2026 |
-| 13 | **Document Flow transaccional** (entregas/recepciones/devoluciones/ND) — modelo datos + RPCs + UI Ventas | SD Delivery + MM GR | ✅ Sesiones 13-jun-2026 (Prompts 1/6, 2/6, 3/6) |
+| 13 | **Document Flow transaccional** (entregas/recepciones/devoluciones/ND) — modelo datos + RPCs + UI Ventas + Devoluciones | SD Delivery + MM GR | ✅ Sesiones 13-jun-2026 (Prompts 1/6, 2/6, 3/6, 4/6) |
 
 ### 🟢 Baja prioridad (post-ARCA)
 
@@ -322,6 +323,30 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-13 (sesión 3) — Document Flow Prompt 4/6: Devoluciones + Notas de Débito UI
+**Branch:** `master` (commit `10080de`)
+
+**Objetivo:** construir la UI completa de Devoluciones de Clientes y Notas de Débito que consume las RPCs de migration 037.
+
+**Archivos creados:**
+- `src/components/ventas/NuevaDevolucionModal.jsx` — modal de devolución con dos modos: (a) pre-cargado desde comprobante (props `comprobante.id/numero_venta/cliente_id`) → fetcha `comprobante_items` filtrando `cantidad_entregada > cantidad_devuelta`, muestra tabla con inputs cantidad bounded por `maxDevolver`; (b) standalone con `ClienteSelector`. Opciones: `reingresa_stock` (checkbox, default false), `compensacion` (RadioGroup: nota_credito/reemplazo/pendiente), `reembolso_efectivo` (checkbox, solo visible si NC). Llama RPC `crear_devolucion`. Toast con número DEV + NC si aplica.
+- `src/components/ventas/NuevaNotaDebitoModal.jsx` — modal ND: ClienteSelector, select de facturas del cliente (opcional), `concepto` (Textarea), `monto` (Input con parser AR 1.500,00). Llama RPC `crear_nota_debito tipo='emitida'`.
+- `src/components/ventas/DevolucionesSection.jsx` — 2 sub-tabs: "Devoluciones de Clientes" (query `devoluciones WHERE tipo='cliente'` con expand inline de `devolucion_items`, badge CompensacionBadge, indicador stock, número NC) + "Notas de Débito" (query `notas_debito WHERE tipo='emitida'`). Botones "Nueva Devolución" (naranja) y "Nueva Nota de Débito" (ámbar).
+
+**Archivos modificados:**
+- `src/components/sections/VentasSection.jsx` — import `DevolucionesSection`; reemplaza placeholder `<div>Disponible en Prompt 4/6</div>` por `<DevolucionesSection />`.
+- `src/components/ventas/HistorialVentas.jsx` — import `NuevaDevolucionModal` + `Undo2`; 2 estados nuevos (`devolucionComp`, `isDevolucionOpen`); columna "Ver" → "Acciones" (w-36); fila: botón `Eye` (detalle) + botón `Undo2` (solo si `sale.tipo === 'venta'`, stopPropagation). Click Undo2 setea `devolucionComp={id, numero_venta, cliente_id, cliente_nombre}` y abre modal.
+
+**Fix crítico de build:** los nuevos modales importaban `toast` de `'sonner'` (no instalado). Corregido a `useToast` de `'@/components/ui/use-toast'` (patrón shadcn usado por todo el proyecto).
+
+**PostgREST FK disambiguation:** DevolucionesSection usa `factura_origen:comprobantes!comprobante_id(numero_venta)` + `nota_credito:comprobantes!nota_credito_id(numero_venta)` para resolver las dos FKs que apuntan a la misma tabla `comprobantes`.
+
+**Build verificado:** `vite build --mode development` → ✅ 3136 módulos, sin errores.
+
+**Deploy:** `npx vercel deploy --prod --yes` → READY. https://kairox-gestion.vercel.app
+
+---
 
 ### Sesión 2026-06-13 (sesión 2) — Fix 3.1: DocumentFlow + badge verbose en modal detalle Pedido
 **Branch:** `master` (commit `0b0ce67`)
