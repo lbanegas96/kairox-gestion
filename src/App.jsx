@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet';
 import AuthPage from '@/components/AuthPage';
 import Dashboard from '@/components/Dashboard';
 import ResetPasswordPage from '@/components/ResetPasswordPage';
+import ModoCajaLayout from '@/components/caja/ModoCajaLayout';
 import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -67,7 +68,10 @@ function App() {
           <AuthPage />
         ) : (
           <CajaProvider>
-            <Dashboard user={user} onLogout={signOut} />
+            {(user?.role === 'solo_caja' || user?.modo_caja === true)
+              ? <ModoCajaLayout onLogout={signOut} />
+              : <Dashboard user={user} onLogout={signOut} />
+            }
           </CajaProvider>
         )}
       </div>

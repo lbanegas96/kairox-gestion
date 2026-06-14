@@ -96,7 +96,7 @@ function UsuariosSection() {
 
         const { data, error } = await supabase
             .from('profiles')
-            .select('id, first_name, last_name, email, role, permissions, active, created_at, last_login_at')
+            .select('id, first_name, last_name, email, role, permissions, active, modo_caja, created_at, last_login_at')
             .eq('empresa_id', user.empresa_id)
             .order('created_at', { ascending: false });
         
@@ -270,6 +270,27 @@ function UsuariosSection() {
     }
   };
 
+  const handleToggleModosCaja = async (userId, currentValue) => {
+    // Optimistic update
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, modo_caja: !currentValue } : u));
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ modo_caja: !currentValue })
+        .eq('id', userId)
+        .eq('empresa_id', user.empresa_id);
+      if (error) throw error;
+      toast({
+        title: !currentValue ? 'Modo Caja activado' : 'Modo Caja desactivado',
+        className: !currentValue ? 'bg-green-600 text-white' : 'bg-slate-800 text-white',
+      });
+    } catch (error) {
+      // Revert
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, modo_caja: currentValue } : u));
+      toast({ title: 'Error', description: 'No se pudo actualizar el Modo Caja.', variant: 'destructive' });
+    }
+  };
+
   const openPermissionsModal = (userToEdit) => {
     setSelectedUserForPermissions(userToEdit);
     setIsPermissionsModalOpen(true);
@@ -322,6 +343,7 @@ function UsuariosSection() {
                         <TableHead>Rol</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead>Permisos</TableHead>
+                        <TableHead>Modo Caja</TableHead>
                         <TableHead><span className="flex items-center gap-1"><Clock className="h-3 w-3" />Último acceso</span></TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
@@ -335,12 +357,13 @@ function UsuariosSection() {
                                <TableCell><div className="h-4 w-20 bg-slate-200 dark:bg-kx-surface-2 rounded animate-pulse" /></TableCell>
                                <TableCell><div className="h-4 w-16 bg-slate-200 dark:bg-kx-surface-2 rounded animate-pulse" /></TableCell>
                                <TableCell><div className="h-4 w-24 bg-slate-200 dark:bg-kx-surface-2 rounded animate-pulse" /></TableCell>
+                               <TableCell><div className="h-5 w-10 bg-slate-200 dark:bg-kx-surface-2 rounded-full animate-pulse" /></TableCell>
                                <TableCell><div className="h-8 w-8 ml-auto bg-slate-200 dark:bg-kx-surface-2 rounded animate-pulse" /></TableCell>
                            </TableRow>
                        ))
                     ) : filteredUsers.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={6} className="h-32 text-center text-slate-500">
+                            <TableCell colSpan={7} className="h-32 text-center text-slate-500">
                                 {searchTerm ? 'No se encontraron resultados.' : 'No hay usuarios registrados.'}
                             </TableCell>
                         </TableRow>
@@ -394,6 +417,17 @@ function UsuariosSection() {
                                             >
                                                 {permissionCount}/{totalPermissions} Permisos
                                             </Badge>
+                                        )}
+                                    </TableCell>
+                                    <TableCell>
+                                        {u.role !== 'admin' ? (
+                                            <Switch
+                                                checked={u.modo_caja ?? false}
+                                                onCheckedChange={() => handleToggleModosCaja(u.id, u.modo_caja ?? false)}
+                                                title="Activar Modo Caja — solo verá el POS al iniciar sesión"
+                                            />
+                                        ) : (
+                                            <span className="text-xs text-kx-text-3 italic">N/A</span>
                                         )}
                                     </TableCell>
                                     <TableCell className="text-xs text-kx-text-3">
