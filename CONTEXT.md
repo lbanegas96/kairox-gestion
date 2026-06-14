@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-14 (sesión 10 — Luciano) — Prompt 10: Modo Caja POS pantalla completa para cajeros. Commit `0735923`. Migration 039 aplicada en Supabase (modo_caja BOOLEAN en profiles).
+**Última actualización:** 2026-06-14 (sesión 11 — Luciano) — Prompt 11: Submódulo Facturación Compras (espejo de Ventas). Sin migrations — usa tablas existentes.
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -70,6 +70,11 @@
 | **HistorialTurnoModal** | `caja/HistorialTurnoModal.jsx` | ✅ **Prompt 10** KPIs turno + tabla ventas filtrada por cajero y apertura_fecha. |
 | **useConfirmarVenta** | `hooks/useConfirmarVenta.js` | ✅ **Prompt 10** Hook que encapsula `crear_venta` RPC (ARS only) + asientos contables fire&forget. |
 | Usuarios | `UsuariosSection.jsx` | ✅ Invitación + último acceso + activar/desactivar + preset Solo Caja + **toggle Modo Caja** por usuario staff |
+| **NuevaFacturaProveedorModal** | `compras/NuevaFacturaProveedorModal.jsx` | ✅ **Prompt 11** Factura proveedor standalone. ProveedorSelector + ítems (PROD→`detalle_compras`, SERV→`observaciones`). Pago: Efectivo/Transferencia/CC Proveedor. CC→`cuenta_corriente_proveedores` HABER. Sin AFIP. |
+| **NuevaNCProveedorModal** | `compras/NuevaNCProveedorModal.jsx` | ✅ **Prompt 11** NC financiera de proveedor (sin stock). INSERT en `cuenta_corriente_proveedores` DEBE (reduce deuda). Opción reembolso efectivo. NuevaDevolucionProveedorModal cubre el caso físico. |
+| **NuevaNDProveedorModal** | `compras/NuevaNDProveedorModal.jsx` | ✅ **Prompt 11** ND recibida de proveedor (nos cobra más). Llama RPC `crear_nota_debito(tipo='recibida')` + INSERT manual `cuenta_corriente_proveedores` HABER (el RPC no inserta CC para 'recibida'). |
+| **FacturasCompraSection** | `compras/FacturasCompraSection.jsx` | ✅ **Prompt 11** + DropdownMenu por fila (Ver detalle / NC / ND / Devolver / Mapa) + botón "Nueva Factura de Proveedor" + todos los modales integrados. |
+| **MapaRelaciones** | `shared/MapaRelaciones.jsx` | ✅ **Prompt 11** Extendido con prop `compraId`. Modo compra: Recepción→FacturaCompra→PagosCC + derivados (Dev.Prov / NC financiera / ND recibida). Modo venta intacto. |
 | Configuración | `ConfiguracionSection.jsx` | ✅ Logo + toggle OC + datos de ejemplo + **Moneda Paralela SAP-style** + **Wizard AFIP/ARCA** |
 
 ---
