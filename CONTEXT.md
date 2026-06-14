@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-13 (sesión 8 — Luciano) — Prompt 8: uniformidad visual v3 en todos los módulos. Patrón v3 Dashboard (`gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden` grid + divs internos `bg-kx-surface border-t-2 border-t-kx-{color} hover:bg-kx-surface-2`) aplicado a: CuentaCorrienteSection (amber/red/green), PedidosSection (4 estados), ReportesSection (cards + Paridad + LibroIVA), OrdenesCompraSection (4 estados), CajaSection (ingresos/egresos/saldo), CuentasBancariasSection (saldo total/por cuenta), ChequesSection (migración completa dark-only → kx-*: header + KPI + Tabs + tablas). Regla: accent color por categoría: violet=ventas, green=caja/saldo/cartera, amber=deuda/alertas/parcial, red=gastos/rechazados/deuda, blue=compras/bancos. Commit 6be054c.
+**Última actualización:** 2026-06-14 (sesión 9 — Luciano) — Prompt 9: Submódulo Facturación (NuevaFactura + NC/ND aisladas + Mapa de Relaciones). Commits: `7420ba5` (ComprobantePrintModal + TicketPDF/FacturaPDF/empresaUtils), `c21352a` (NuevaFacturaModal, NuevaNCModal, MapaRelaciones, HistorialVentas dropdown, NuevaNotaDebitoModal defaults, VentasSection "Nueva Factura").
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -29,8 +29,11 @@
 | **Ventas (shell)** | `VentasSection.jsx` | ✅ **Prompt 4/6** Tab shell: Cotizaciones · Pedidos · Entregas · Facturas · Devoluciones (real) + botón POS flotante + `initialTab` prop para nav externa |
 | **Ventas (POS)** | `NuevaVentaModal.jsx` | ✅ Multi-pago + check límite crédito + Moneda Paralela + **`pedido` prop** para pre-carga desde Pedido |
 | Notas de Crédito | `NotaCreditoModal.jsx` + `notaCreditoService.ts` | ✅ Devolución parcial/total + reversión stock/CC/caja |
-| Historial Ventas | `HistorialVentas.jsx` | ✅ Filtros avanzados + estado_pago CC + paginación 50/pág + **botón Devolver** (Undo2) por fila tipo=venta |
-| Comprobantes | `ComprobantePrintModal.jsx` | ✅ Toggle Comprobante / Remito sin precios |
+| Historial Ventas | `HistorialVentas.jsx` | ✅ Filtros avanzados + estado_pago CC + paginación 50/pág + **DropdownMenu por fila** (Ver detalle / Mapa relaciones / Copiar a NC / Copiar a ND / Devolver) |
+| **Nueva Factura** | `ventas/NuevaFacturaModal.jsx` | ✅ **Prompt 9** Factura standalone sin descuento stock. FAC-YYYYMMDD-NNN. Multi-pago, CC→DEBE, Efectivo→movimientos_caja, AFIP+asientos fire&forget. Acepta `comprobanteOrigen` para pre-carga. |
+| **Nueva NC** | `ventas/NuevaNCModal.jsx` | ✅ **Prompt 9** NC aislada NC-YYYYMMDD-NNN, tipo='nota_credito', origenLocked mode (cliente no editable), HABER en CC. |
+| **Mapa de Relaciones** | `shared/MapaRelaciones.jsx` | ✅ **Prompt 9** Árbol SAP B1-style: cadena ascendente (pedido→entrega→factura) + derivados (NCs, NDs, cobros CC, devoluciones). Colores kx-* por tipo. |
+| Comprobantes | `ComprobantePrintModal.jsx` | ✅ **Prompt 9** PDF Profesional: `getEmpresaParaPDF` hook, lazy TicketPDF/FacturaPDF según CAE estado. Toggle Comprobante / Remito sin precios. |
 | Inventario | `ProductosSection.jsx` | ✅ Soft delete + import CSV + Análisis ABC |
 | **Compras (shell)** | `ComprasSection.jsx` | ✅ **Prompt 5/6** Tab shell: Órdenes de Compra · Recepciones · Facturas · Devoluciones + botón Compra Rápida + `initialTab` prop |
 | **Compra Rápida** | `CompraRapidaSection.jsx` | ✅ **Prompt 5/6** Formulario POS compras + asiento auto + call no-bloqueante `crear_recepcion_implicita` RPC |
