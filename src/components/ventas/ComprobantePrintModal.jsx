@@ -2,10 +2,10 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Printer, X, FileText, Download, Loader2 } from 'lucide-react';
-import { getNowAR, formatDateTimeAR } from '@/lib/dateUtils';
-import { supabase } from '@/lib/customSupabaseClient';
+import { formatDateTimeAR } from '@/lib/dateUtils';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
+import { getEmpresaParaPDF } from '@/lib/empresaUtils';
 
 const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos = [] }) => {
   const { user } = useAuth();
@@ -16,47 +16,64 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
 
   useEffect(() => {
     if (!open || !user?.empresa_id) return;
-    supabase
-      .from('empresas')
-      .select('nombre, afip_cuit, condicion_iva, direccion')
-      .eq('id', user.empresa_id)
-      .single()
-      .then(({ data }) => setEmpresaData(data));
+    getEmpresaParaPDF(user.empresa_id)
+      .then(setEmpresaData)
+      .catch((err) => console.error('[ComprobantePrintModal] empresa fetch:', err));
   }, [open, user?.empresa_id]);
 
   const handleDownloadPDF = async () => {
     if (!comprobante) return;
     setGeneratingPDF(true);
     try {
-      // Lazy-load las librerías pesadas solo cuando se necesitan
-      const [{ pdf }, { ComprobantePDF }, { generateAfipQR }] = await Promise.all([
-        import('@react-pdf/renderer'),
-        import('./pdf/ComprobantePDF'),
-        import('@/lib/afipQR'),
-      ]);
+      const { pdf } = await import('@react-pdf/renderer');
+      const { generateAfipQR } = await import('@/lib/afipQR');
 
-      let qrDataUrl = null;
-      if (comprobante.cae_estado === 'emitido' && comprobante.cae) {
+      const usarFactura =
+        empresaData?.usa_factura_electronica &&
+        comprobante.cae_estado === 'emitido' &&
+        comprobante.cae;
+
+      let blob;
+      let filename;
+
+      if (usarFactura) {
         const pvNumero = comprobante.numero_afip
           ? parseInt(comprobante.numero_afip.split('-')[0])
           : 1;
-        qrDataUrl = await generateAfipQR(comprobante, empresaData?.afip_cuit, pvNumero);
-      }
+        const qrDataUrl = await generateAfipQR(
+          comprobante,
+          empresaData.afip_cuit ?? empresaData.cuit,
+          pvNumero
+        );
 
-      const blob = await pdf(
-        <ComprobantePDF
-          comprobante={comprobante}
-          items={items}
-          pagos={pagos}
-          empresaData={empresaData}
-          qrDataUrl={qrDataUrl}
-        />
-      ).toBlob();
+        const { FacturaPDF } = await import('./pdf/FacturaPDF');
+        blob = await pdf(
+          <FacturaPDF
+            comprobante={comprobante}
+            items={items}
+            pagos={pagos}
+            empresa={empresaData}
+            qrDataUrl={qrDataUrl}
+          />
+        ).toBlob();
+        filename = `Factura_${comprobante.numero_afip ?? comprobante.numero_venta}.pdf`;
+      } else {
+        const { TicketPDF } = await import('./pdf/TicketPDF');
+        blob = await pdf(
+          <TicketPDF
+            comprobante={comprobante}
+            items={items}
+            pagos={pagos}
+            empresa={empresaData}
+          />
+        ).toBlob();
+        filename = `Ticket_${comprobante.numero_venta}.pdf`;
+      }
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${comprobante.numero_afip ?? comprobante.numero_venta}.pdf`;
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -116,52 +133,83 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
     }
   };
 
-  // Renderizar detalle de pagos
   const pagoLabel = pagos.length > 1
     ? pagos.map(p => `${p.metodo}: $${Number(p.monto).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`).join(' | ')
     : comprobante?.forma_pago || '';
+
+  const usarFacturaPreview =
+    empresaData?.usa_factura_electronica &&
+    comprobante?.cae_estado === 'emitido' &&
+    comprobante?.cae;
 
   if (!comprobante) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md kairox-bg-card kairox-text-primary">
+      <DialogContent className="max-w-md bg-kx-surface border-kx-border text-kx-text">
         <DialogHeader>
-          <DialogTitle>Comprobante de Venta</DialogTitle>
-          <DialogDescription>Vista previa del recibo</DialogDescription>
+          <DialogTitle>
+            {usarFacturaPreview
+              ? `Factura ${comprobante.tipo_comprobante_afip ?? ''}`
+              : 'Ticket de Venta'}
+          </DialogTitle>
+          <DialogDescription className="text-kx-text-2">Vista previa del comprobante</DialogDescription>
         </DialogHeader>
 
-        <div className="bg-kx-surface text-black p-6 rounded-md shadow-sm border border-kx-border" ref={printRef}>
-          <div className="text-center mb-4 border-b border-dashed border-slate-300 pb-4">
-            <h2 className="font-bold text-xl uppercase">Ticket de Venta</h2>
-            <p className="text-sm text-slate-500">Comprobante No Válido como Factura</p>
+        <div className="bg-kx-surface border border-kx-border rounded-xl p-5 font-mono text-sm" ref={printRef}>
+          {/* Logo + empresa */}
+          <div className="text-center mb-4 border-b border-dashed border-kx-border pb-4">
+            {empresaData?.logo && (
+              <img
+                src={empresaData.logo}
+                alt="Logo"
+                className="h-10 object-contain mx-auto mb-2"
+              />
+            )}
+            <h2 className="font-bold text-base">
+              {empresaData?.nombre ?? 'Mi Empresa'}
+            </h2>
+            {usarFacturaPreview ? (
+              <p className="text-xs text-kx-text-2 mt-0.5">
+                Factura {comprobante.tipo_comprobante_afip} — {comprobante.numero_afip}
+              </p>
+            ) : (
+              <p className="text-xs text-kx-text-3 mt-0.5">
+                Ticket · No válido como factura
+              </p>
+            )}
           </div>
 
-          <div className="space-y-1 text-sm mb-4 font-mono">
+          {/* Datos del comprobante */}
+          <div className="space-y-1 text-sm mb-4">
             <div className="flex justify-between">
-              <span className="text-slate-500">Nro:</span>
+              <span className="text-kx-text-2">Nro:</span>
               <span className="font-bold">{comprobante.numero_venta}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Fecha:</span>
+              <span className="text-kx-text-2">Fecha:</span>
               <span>{formatDateTimeAR(comprobante.fecha)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Cliente:</span>
-              <span className="truncate max-w-[150px]">{comprobante.cliente_nombre || 'Consumidor Final'}</span>
+              <span className="text-kx-text-2">Cliente:</span>
+              <span className="truncate max-w-[150px]">
+                {comprobante.cliente_nombre || 'Consumidor Final'}
+              </span>
             </div>
             {pagos.length > 1 ? (
               <div className="pt-1 border-t border-dashed border-kx-border">
                 {pagos.map((p, i) => (
                   <div key={i} className="flex justify-between">
-                    <span className="text-slate-500">{p.metodo}:</span>
-                    <span className="font-semibold">${Number(p.monto).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span className="text-kx-text-2">{p.metodo}:</span>
+                    <span className="font-semibold">
+                      ${Number(p.monto).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
                   </div>
                 ))}
               </div>
             ) : (
               <div className="flex justify-between">
-                <span className="text-slate-500">Pago:</span>
+                <span className="text-kx-text-2">Pago:</span>
                 <span>{comprobante.forma_pago}</span>
               </div>
             )}
@@ -180,7 +228,7 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
               <>
                 <table className="w-full text-xs font-mono mb-4">
                   <thead>
-                    <tr className="border-b border-slate-300">
+                    <tr className="border-b border-kx-border">
                       <th className="text-left py-1">Producto</th>
                       <th className="text-center py-1">Cant</th>
                       <th className="text-right py-1 price-col">Precio ({monedaDisp})</th>
@@ -192,20 +240,24 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
                       <tr key={i}>
                         <td className="py-1 truncate max-w-[120px]">{item.producto_nombre}</td>
                         <td className="text-center py-1">{item.cantidad}</td>
-                        <td className="text-right py-1 price-col">{simbolo}{fmt(conv(item.precio_unitario))}</td>
-                        <td className="text-right py-1 font-bold price-col">{simbolo}{fmt(conv(item.subtotal))}</td>
+                        <td className="text-right py-1 price-col">
+                          {simbolo}{fmt(conv(item.precio_unitario))}
+                        </td>
+                        <td className="text-right py-1 font-bold price-col">
+                          {simbolo}{fmt(conv(item.subtotal))}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
 
-                <div className="border-t border-dashed border-slate-300 pt-2 total-row">
+                <div className="border-t border-dashed border-kx-border pt-2 total-row">
                   <div className="flex justify-between items-baseline">
-                    <span className="text-sm">TOTAL:</span>
+                    <span className="text-sm text-kx-text-2">TOTAL:</span>
                     <span className="text-2xl font-bold">{simbolo}{fmt(totalDisp)}</span>
                   </div>
                   {esExtranjera && (
-                    <div className="mt-2 pt-2 border-t border-dashed border-slate-300 text-[10px] font-mono text-slate-500 space-y-0.5">
+                    <div className="mt-2 pt-2 border-t border-dashed border-kx-border text-[10px] text-kx-text-3 space-y-0.5">
                       <div className="flex justify-between">
                         <span>Tipo de cambio:</span>
                         <span>1 {comprobante.moneda} = ${fmt(tc)}</span>
@@ -221,7 +273,22 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
             );
           })()}
 
-          <div className="mt-6 text-center text-xs text-kx-text-3">
+          {usarFacturaPreview && comprobante.cae && (
+            <div className="mt-4 pt-3 border-t border-kx-border text-[10px] text-kx-text-3">
+              <div className="flex justify-between">
+                <span>CAE:</span>
+                <span className="font-mono">{comprobante.cae}</span>
+              </div>
+              {comprobante.cae_vencimiento && (
+                <div className="flex justify-between mt-0.5">
+                  <span>Vto. CAE:</span>
+                  <span>{comprobante.cae_vencimiento}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="mt-4 text-center text-xs text-kx-text-3">
             Gracias por su compra
           </div>
         </div>
@@ -231,10 +298,19 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
             <X className="w-4 h-4 mr-2" /> Cerrar
           </Button>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => handlePrint({ remito: true })} className="border-slate-300 text-slate-700 dark:text-slate-300 dark:border-slate-600">
+            <Button
+              variant="outline"
+              onClick={() => handlePrint({ remito: true })}
+              className="border-kx-border text-kx-text-2 hover:bg-kx-surface-2"
+            >
               <FileText className="w-4 h-4 mr-2" /> Remito
             </Button>
-            <Button variant="outline" onClick={handleDownloadPDF} disabled={generatingPDF} className="border-slate-300 text-slate-700 dark:text-slate-300 dark:border-slate-600">
+            <Button
+              variant="outline"
+              onClick={handleDownloadPDF}
+              disabled={generatingPDF}
+              className="border-kx-border text-kx-text-2 hover:bg-kx-surface-2"
+            >
               {generatingPDF
                 ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generando...</>
                 : <><Download className="w-4 h-4 mr-2" /> Descargar PDF</>
