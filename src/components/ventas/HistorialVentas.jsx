@@ -1,15 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { Eye, Search, Filter, RefreshCw, AlertCircle, X, Check, ChevronLeft, ChevronRight, Clock, AlertTriangle, Undo2 } from 'lucide-react';
+import { Eye, Filter, AlertCircle, X, Check, ChevronLeft, ChevronRight, Clock, AlertTriangle, Undo2, MoreHorizontal, FileText, Network, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import SaleDetailModal from './SaleDetailModal';
 import NuevaDevolucionModal from './NuevaDevolucionModal';
+import NuevaNCModal from './NuevaNCModal';
+import NuevaNotaDebitoModal from './NuevaNotaDebitoModal';
+import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import { formatDateAR, formatTimeAR } from '@/lib/dateUtils';
 
@@ -33,6 +40,12 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
   const [showDetailModal, setShowDetailModal]  = useState(false);
   const [devolucionComp, setDevolucionComp]    = useState(null);
   const [isDevolucionOpen, setIsDevolucionOpen] = useState(false);
+  const [ncOrigen, setNcOrigen]               = useState(null);
+  const [isNcOpen, setIsNcOpen]               = useState(false);
+  const [ndOrigen, setNdOrigen]               = useState(null);
+  const [isNdOpen, setIsNdOpen]               = useState(false);
+  const [mapaCompId, setMapaCompId]           = useState(null);
+  const [isMapaOpen, setIsMapaOpen]           = useState(false);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
 
@@ -322,32 +335,78 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                         </div>
                       )}
                     </td>
-                    <td className="p-4 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-kx-text-3 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        {sale.tipo === 'venta' && (
+                    <td className="p-4 text-center" onClick={e => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
                           <Button
                             size="sm"
                             variant="ghost"
-                            title="Registrar devolución"
-                            onClick={e => {
-                              e.stopPropagation();
-                              setDevolucionComp({
-                                id:             sale.id,
-                                numero_venta:   sale.numero_venta,
-                                cliente_id:     sale.cliente_id,
-                                cliente_nombre: sale.cliente_nombre,
-                              });
-                              setIsDevolucionOpen(true);
-                            }}
-                            className="h-8 w-8 p-0 text-kx-text-3 hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-full"
+                            className="h-8 w-8 p-0 text-kx-text-3 hover:text-kx-text hover:bg-kx-surface-2 rounded-full"
                           >
-                            <Undo2 className="h-4 w-4" />
+                            <MoreHorizontal className="h-4 w-4" />
                           </Button>
-                        )}
-                      </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="bg-kx-surface border-kx-border text-kx-text text-sm w-48">
+                          <DropdownMenuItem
+                            onClick={() => { setSelectedSaleId(sale.id); setShowDetailModal(true); }}
+                            className="gap-2 cursor-pointer"
+                          >
+                            <Eye className="h-3.5 w-3.5 text-kx-blue" /> Ver detalle
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => { setMapaCompId(sale.id); setIsMapaOpen(true); }}
+                            className="gap-2 cursor-pointer"
+                          >
+                            <Network className="h-3.5 w-3.5 text-kx-violet" /> Mapa de relaciones
+                          </DropdownMenuItem>
+                          {sale.tipo === 'venta' && (
+                            <>
+                              <DropdownMenuSeparator className="bg-kx-border" />
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setNcOrigen({
+                                    id:             sale.id,
+                                    numero_venta:   sale.numero_venta,
+                                    cliente_id:     sale.cliente_id,
+                                    cliente_nombre: sale.cliente_nombre,
+                                  });
+                                  setIsNcOpen(true);
+                                }}
+                                className="gap-2 cursor-pointer"
+                              >
+                                <Copy className="h-3.5 w-3.5 text-kx-amber" /> Copiar a NC
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setNdOrigen({
+                                    clienteId:     sale.cliente_id,
+                                    comprobanteId: sale.id,
+                                  });
+                                  setIsNdOpen(true);
+                                }}
+                                className="gap-2 cursor-pointer"
+                              >
+                                <FileText className="h-3.5 w-3.5 text-kx-red" /> Copiar a ND
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator className="bg-kx-border" />
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setDevolucionComp({
+                                    id:             sale.id,
+                                    numero_venta:   sale.numero_venta,
+                                    cliente_id:     sale.cliente_id,
+                                    cliente_nombre: sale.cliente_nombre,
+                                  });
+                                  setIsDevolucionOpen(true);
+                                }}
+                                className="gap-2 cursor-pointer text-orange-500 focus:text-orange-500"
+                              >
+                                <Undo2 className="h-3.5 w-3.5" /> Devolver mercadería
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 ))
@@ -413,6 +472,31 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
         onClose={() => { setIsDevolucionOpen(false); setDevolucionComp(null); }}
         onSuccess={() => fetchData()}
         comprobante={devolucionComp}
+      />
+
+      <NuevaNCModal
+        open={isNcOpen}
+        onOpenChange={v => { setIsNcOpen(v); if (!v) setNcOrigen(null); }}
+        comprobanteOrigen={ncOrigen}
+        onSuccess={() => fetchData()}
+      />
+
+      <NuevaNotaDebitoModal
+        isOpen={isNdOpen}
+        onClose={() => { setIsNdOpen(false); setNdOrigen(null); }}
+        onSuccess={() => fetchData()}
+        defaultClienteId={ndOrigen?.clienteId ?? null}
+        defaultComprobanteId={ndOrigen?.comprobanteId ?? null}
+      />
+
+      <MapaRelaciones
+        open={isMapaOpen}
+        onOpenChange={v => { setIsMapaOpen(v); if (!v) setMapaCompId(null); }}
+        comprobanteId={mapaCompId}
+        onNavigate={(tipo, id) => {
+          if (tipo === 'comprobante') { setSelectedSaleId(id); setShowDetailModal(true); }
+          else onNavigate?.(tipo, id);
+        }}
       />
 
       <SaleDetailModal

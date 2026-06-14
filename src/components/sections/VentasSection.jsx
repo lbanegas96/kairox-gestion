@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Zap } from 'lucide-react';
+import { Zap, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import NuevaVentaModal from '@/components/ventas/NuevaVentaModal';
+import NuevaFacturaModal from '@/components/ventas/NuevaFacturaModal';
 import CotizacionesSection from '@/components/sections/CotizacionesSection';
 import PedidosSection from '@/components/sections/PedidosSection';
 import EntregasSection from '@/components/ventas/EntregasSection';
@@ -10,9 +11,10 @@ import HistorialVentas from '@/components/ventas/HistorialVentas';
 import DevolucionesSection from '@/components/ventas/DevolucionesSection';
 
 function VentasSection({ initialTab = 'pedidos' }) {
-  const [activeTab, setActiveTab]       = useState(initialTab);
-  const [isNewSaleOpen, setIsNewSaleOpen] = useState(false);
-  const [refreshKey, setRefreshKey]     = useState(0);
+  const [activeTab, setActiveTab]           = useState(initialTab);
+  const [isNewSaleOpen, setIsNewSaleOpen]   = useState(false);
+  const [showNuevaFactura, setShowNuevaFactura] = useState(false);
+  const [refreshKey, setRefreshKey]         = useState(0);
   const [navigateSaleId, setNavigateSaleId] = useState(null);
 
   const handleSaleSuccess = () => setRefreshKey(k => k + 1);
@@ -85,6 +87,16 @@ function VentasSection({ initialTab = 'pedidos' }) {
         </TabsContent>
 
         <TabsContent value="historial" className="mt-4">
+          <div className="flex justify-end mb-4">
+            <Button
+              onClick={() => setShowNuevaFactura(true)}
+              size="sm"
+              className="bg-[rgb(var(--kx-green))] hover:opacity-90 text-white gap-2 h-8 px-3 text-xs font-medium"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Nueva Factura
+            </Button>
+          </div>
           <HistorialVentas
             key={refreshKey}
             navigateSaleId={navigateSaleId}
@@ -102,6 +114,12 @@ function VentasSection({ initialTab = 'pedidos' }) {
         isOpen={isNewSaleOpen}
         onOpenChange={setIsNewSaleOpen}
         onSaleSuccess={handleSaleSuccess}
+      />
+
+      <NuevaFacturaModal
+        open={showNuevaFactura}
+        onOpenChange={setShowNuevaFactura}
+        onSuccess={handleSaleSuccess}
       />
     </div>
   );

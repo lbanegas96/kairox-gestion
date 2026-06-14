@@ -17,7 +17,7 @@ function parseMontoAR(str) {
   return parseFloat(cleaned) || 0;
 }
 
-function NuevaNotaDebitoModal({ isOpen, onClose, onSuccess }) {
+function NuevaNotaDebitoModal({ isOpen, onClose, onSuccess, defaultClienteId = null, defaultComprobanteId = null }) {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -39,6 +39,12 @@ function NuevaNotaDebitoModal({ isOpen, onClose, onSuccess }) {
       .order('nombre')
       .then(({ data }) => setClientes(data || []));
   }, [isOpen, user?.empresa_id]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (defaultClienteId)     setClienteId(defaultClienteId);
+    if (defaultComprobanteId) setComprobanteId(defaultComprobanteId);
+  }, [isOpen, defaultClienteId, defaultComprobanteId]);
 
   // Cargar facturas del cliente seleccionado
   useEffect(() => {
