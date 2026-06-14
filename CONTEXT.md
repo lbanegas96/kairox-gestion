@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-14 (sesión 9 — Luciano) — Prompt 9: Submódulo Facturación (NuevaFactura + NC/ND aisladas + Mapa de Relaciones). Commits: `7420ba5` (ComprobantePrintModal + TicketPDF/FacturaPDF/empresaUtils), `c21352a` (NuevaFacturaModal, NuevaNCModal, MapaRelaciones, HistorialVentas dropdown, NuevaNotaDebitoModal defaults, VentasSection "Nueva Factura").
+**Última actualización:** 2026-06-14 (sesión 10 — Luciano) — Prompt 10: Modo Caja POS pantalla completa para cajeros. Commit `0735923`. Migration 039 aplicada en Supabase (modo_caja BOOLEAN en profiles).
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -63,7 +63,13 @@
 | Reportes | `ReportesSection.jsx` | ✅ 5 reportes + Reporte de Paridad ARS/USD + paginación 100/pág |
 | **Tipo de Cambio** | `TipoCambioModal.jsx` + `tipoCambioService.js` | ✅ **NUEVO** TC diario centralizado + upsert por empresa/moneda/fecha |
 | **Reporte de Paridad** | `reportes/ReporteParidad.jsx` | ✅ **NUEVO** Comparativa ARS/USD por comprobante + CSV export |
-| Usuarios | `UsuariosSection.jsx` | ✅ Invitación + último acceso + activar/desactivar + preset Solo Caja |
+| **Modo Caja** | `caja/ModoCajaLayout.jsx` | ✅ **Prompt 10** Layout POS pantalla completa sin sidebar. Topbar minimal (logo, empresa, estado caja, turno). Activado si `user.role==='solo_caja'` OR `user.modo_caja===true`. |
+| **PanelProductos** | `caja/PanelProductos.jsx` | ✅ **Prompt 10** Grid buscador con `autoFocus`, stock badges (ok=verde / bajo=ámbar / sin_stock=rojo deshabilitado). |
+| **AlertasStockBanner** | `caja/AlertasStockBanner.jsx` | ✅ **Prompt 10** Banner colapsable ámbar para stock bajo. Botón "Avisar" → inserta en `audit_log` tipo `aviso_cajero_stock` (no existe tabla notificaciones). |
+| **PanelCarrito** | `caja/PanelCarrito.jsx` | ✅ **Prompt 10** Carrito + 4 métodos pago + confirmar venta vía `useConfirmarVenta` hook. |
+| **HistorialTurnoModal** | `caja/HistorialTurnoModal.jsx` | ✅ **Prompt 10** KPIs turno + tabla ventas filtrada por cajero y apertura_fecha. |
+| **useConfirmarVenta** | `hooks/useConfirmarVenta.js` | ✅ **Prompt 10** Hook que encapsula `crear_venta` RPC (ARS only) + asientos contables fire&forget. |
+| Usuarios | `UsuariosSection.jsx` | ✅ Invitación + último acceso + activar/desactivar + preset Solo Caja + **toggle Modo Caja** por usuario staff |
 | Configuración | `ConfiguracionSection.jsx` | ✅ Logo + toggle OC + datos de ejemplo + **Moneda Paralela SAP-style** + **Wizard AFIP/ARCA** |
 
 ---
@@ -111,6 +117,7 @@
 | **`037_movimientos_inventario_add_user_id`** (MCP) | `ALTER TABLE movimientos_inventario ADD COLUMN user_id uuid REFERENCES profiles(id)` + NOTIFY pgrst — necesario para el RPC `crear_devolucion` de Luciano | ✅ Aplicada via MCP |
 | **`038_movimientos_inventario_tipo_check_extend`** (MCP) | Drop + recrear `movimientos_inventario_tipo_check` aceptando `['entrada','salida','ajuste','ingreso','egreso']` — sinónimos para compatibilidad con RPCs nuevos y viejos | ✅ Aplicada via MCP |
 | **`migrations/037_devoluciones_nd_rpcs.sql`** | Prompt 4/6 — `ALTER cuenta_corriente_movimientos`: `cliente_id` nullable + `proveedor_id` FK. RPC `crear_devolucion(empresa_id, user_id, tipo, items, ...)` → devoluciones + devolucion_items + NC opcional en comprobantes + CC movimiento + stock (ingreso si reingresa_stock) + caja (egreso si reembolso_efectivo). RPC `crear_nota_debito(empresa_id, user_id, tipo, concepto, monto, ...)` → notas_debito + CC movimiento DEBE. Correlativo DEV-YYYY-NNNN / NC-YYYY-NNNN / ND-YYYY-NNNN vía `siguiente_numero_documento`. SECURITY DEFINER + GRANT authenticated | ✅ Aplicada via MCP |
+| **`migrations/039_modo_caja.sql`** | Prompt 10 — `ADD COLUMN IF NOT EXISTS modo_caja BOOLEAN NOT NULL DEFAULT false` en `profiles` + índice parcial `idx_profiles_modo_caja(empresa_id, modo_caja) WHERE modo_caja = true` | ✅ Aplicada via MCP |
 
 ### SQL adicional ejecutado directamente
 
