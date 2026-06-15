@@ -591,6 +591,11 @@ function CajaSection() {
               <div className="text-2xl font-bold font-mono text-kx-red tabular-nums">
                 ${totals.egresos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
               </div>
+              {tcParalelo.enabled && tcParalelo.tcHoy && (
+                <div className="text-xs text-kx-text-3 mt-0.5">
+                  ≈ {(totals.egresos / tcParalelo.tcHoy).toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
+                </div>
+              )}
               <div className="text-xs text-kx-text-3 mt-0.5">Desde apertura de caja</div>
             </div>
           </div>
@@ -608,6 +613,11 @@ function CajaSection() {
                   <div className={`text-2xl font-bold font-mono tabular-nums ${saldo >= 0 ? 'text-kx-blue' : 'text-kx-amber'}`}>
                     ${saldo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                   </div>
+                  {tcParalelo.enabled && tcParalelo.tcHoy && (
+                    <div className="text-xs text-kx-text-3 mt-0.5">
+                      ≈ {(saldo / tcParalelo.tcHoy).toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
+                    </div>
+                  )}
                   <div className="text-xs text-kx-text-3 mt-0.5">SI + Ingresos − Egresos</div>
                 </div>
               </div>
@@ -659,20 +669,23 @@ function CajaSection() {
                       <div className="flex items-center">Hora <SortIcon column="fecha" /></div>
                     </th>
                     <th className="p-4 w-[10%]">Tipo</th>
-                    <th className="p-4 w-[15%]">Categoría</th>
-                    <th className="p-4 w-[25%]">Concepto</th>
+                    <th className="p-4 w-[12%]">Categoría</th>
+                    <th className="p-4 w-[20%]">Concepto</th>
                     <th className="p-4 w-[10%]">Pago</th>
-                    <th className="p-4 w-[15%] text-right cursor-pointer hover:text-blue-600 transition-colors" onClick={() => handleSort('monto')}>
+                    <th className="p-4 w-[13%] text-right cursor-pointer hover:text-blue-600 transition-colors" onClick={() => handleSort('monto')}>
                        <div className="flex items-center justify-end">Monto <SortIcon column="monto" /></div>
                     </th>
+                    {tcParalelo.enabled && (
+                      <th className="p-4 w-[10%] text-right text-kx-text-2">{tcParalelo.monedaParalela}</th>
+                    )}
                     <th className="p-4 w-[5%] text-center"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                   {loading ? (
-                    <tr><td colSpan="7" className="p-8 text-center text-slate-500">Cargando movimientos...</td></tr>
+                    <tr><td colSpan={tcParalelo.enabled ? 8 : 7} className="p-8 text-center text-slate-500">Cargando movimientos...</td></tr>
                   ) : sortedMovimientos.length === 0 ? (
-                    <tr><td colSpan="7" className="p-8 text-center text-slate-500">No se encontraron movimientos</td></tr>
+                    <tr><td colSpan={tcParalelo.enabled ? 8 : 7} className="p-8 text-center text-slate-500">No se encontraron movimientos</td></tr>
                   ) : (
                     sortedMovimientos.map((m) => (
                       <tr key={m.id} className="kairox-table-row group h-[60px] hover:bg-kx-surface-2 dark:hover:bg-slate-800/50">
@@ -699,13 +712,19 @@ function CajaSection() {
                         </td>
                         <td className="p-4 align-middle text-xs text-slate-500 dark:text-kx-text-2">{m.metodo_pago || '-'}</td>
                         <td className={`p-4 align-middle text-right font-bold font-mono ${m.tipo === 'ingreso' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
-                          <div>{formatAmount(m.monto, m.tipo)}</div>
-                          {tcParalelo.enabled && m.monto_paralelo && (
-                            <div className="text-xs font-normal text-kx-text-3 dark:text-kx-text-3">
-                              ≈ {Number(m.monto_paralelo).toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
-                            </div>
-                          )}
+                          {formatAmount(m.monto, m.tipo)}
                         </td>
+                        {tcParalelo.enabled && (
+                          <td className="p-4 align-middle text-right text-xs text-kx-text-2 tabular-nums">
+                            {(() => {
+                              if (m.monto_paralelo) {
+                                return `≈ ${Number(m.monto_paralelo).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
+                              }
+                              const calc = tcParalelo.calcParalelo(Number(m.monto), 'ARS', 1);
+                              return calc !== null ? `≈ ${calc.toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—';
+                            })()}
+                          </td>
+                        )}
                         <td className="p-4 align-middle text-center">
                            {!m.is_automatic && (
                               <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-red-500 dark:hover:text-red-400 dark:hover:bg-red-900/20" onClick={() => handleRequestDelete(m.id)}><Trash2 className="h-3.5 w-3.5" /></Button>

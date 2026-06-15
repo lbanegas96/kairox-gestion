@@ -580,6 +580,11 @@ function CuentaCorrienteSection() {
                   <CardContent className="p-4">
                     <div className="text-xs font-semibold uppercase tracking-wider mb-2">{banda}</div>
                     <div className="text-xl font-bold font-mono">${info.monto.toLocaleString('es-AR', { minimumFractionDigits: 0 })}</div>
+                    {tcParalelo.enabled && tcParalelo.tcHoy && info.monto > 0 && (
+                      <div className="text-xs mt-0.5 opacity-70">
+                        ≈ {(info.monto / tcParalelo.tcHoy).toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
+                      </div>
+                    )}
                     <div className="text-xs mt-1">{info.count} comprobante{info.count !== 1 ? 's' : ''}</div>
                   </CardContent>
                 </Card>
@@ -731,6 +736,16 @@ function CuentaCorrienteSection() {
                 className="font-mono text-lg"
                 autoFocus
               />
+              {tcParalelo.enabled && tcParalelo.tcHoy && paymentData.monto && parseNumberLocale(paymentData.monto) > 0 && (
+                <div className="text-xs text-kx-text-2 p-2 bg-kx-surface-2 rounded-lg border border-kx-border flex items-center justify-between">
+                  <span>
+                    Equivalente: <span className="font-mono font-semibold text-kx-text">
+                      {tcParalelo.calcParalelo(parseNumberLocale(paymentData.monto), 'ARS', 1)?.toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
+                    </span>
+                  </span>
+                  <span className="text-kx-text-3">TC: {tcParalelo.tcHoy.toLocaleString('es-AR')}</span>
+                </div>
+              )}
             </div>
             <div className="grid gap-2">
                <Label htmlFor="method-list">Método de Pago</Label>

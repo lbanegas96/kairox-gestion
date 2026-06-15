@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-15 (sesión 12 — Luciano) — Prompt 12: Migrations retroactivas 040-042 (tipos_cambio, moneda paralela, audit/triggers).
+**Última actualización:** 2026-06-15 (sesión 13 — Luciano) — Prompt 13: Moneda Paralela UI en Caja y Cuenta Corriente.
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -246,7 +246,9 @@ const { enabled, monedaParalela, tcHoy, tcMissing, loading, calcParalelo, setTC 
 Cuando `enabled = true`, los siguientes módulos guardan `monto_paralelo` + `tc_paralelo`:
 - **Ventas (NuevaVentaModal):** banner naranja si TC ARS→USD falta; badge verde si cargado
 - **Cotizaciones:** bloqueo TC si moneda extranjera
-- **Caja, Cuenta Corriente, Compras:** columnas ready en DB (implementación pendiente UI)
+- **Caja (`CajaSection`):** ✅ KPIs Ingresos/Egresos/Saldo muestran equivalente; tabla separada columna moneda paralela con fallback calcParalelo(); INSERT guarda monto_paralelo+tc_paralelo
+- **Cuenta Corriente (`CuentaCorrienteSection`):** ✅ KPI Total Deuda, tabla clientes, dialog cobro (deuda + monto siendo cobrado); aging bandas con equivalente; INSERT CC y movimientos_caja guardan monto_paralelo+tc_paralelo
+- **Compras:** columnas ready en DB (implementación pendiente UI)
 
 ### Reporte de Paridad — `src/components/reportes/ReporteParidad.jsx`
 - Filtro por rango de fechas

@@ -345,4 +345,12 @@ function ReporteParidad({ onBack }) {
   );
 }
 
+// TODO: extender ReporteParidad con Caja
+// Agregar sección "Movimientos de Caja en período" que incluya:
+// - total ARS de ingresos/egresos con monto_paralelo ya guardado
+// - fallback: calcParalelo(monto, 'ARS', tcHoy) para movimientos sin monto_paralelo
+// - KPIs: total ARS, equivalente monedaParalela, TC promedio del período
+// - requiere query a movimientos_caja con join a tipos_cambio por fecha
+// Precedencia: monto_paralelo guardado > calculado con TC del mismo día > '—'
+
 export default ReporteParidad;
