@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-15 (sesión 13 — Luciano) — Prompt 13: Moneda Paralela UI en Caja y Cuenta Corriente.
+**Última actualización:** 2026-06-15 (sesión 14 — Luciano) — Prompt 14: Reestructuración ConfiguracionSection en 8 tabs SAP Administración-style.
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -75,7 +75,8 @@
 | **NuevaNDProveedorModal** | `compras/NuevaNDProveedorModal.jsx` | ✅ **Prompt 11** ND recibida de proveedor (nos cobra más). Llama RPC `crear_nota_debito(tipo='recibida')` + INSERT manual `cuenta_corriente_proveedores` HABER (el RPC no inserta CC para 'recibida'). |
 | **FacturasCompraSection** | `compras/FacturasCompraSection.jsx` | ✅ **Prompt 11** + DropdownMenu por fila (Ver detalle / NC / ND / Devolver / Mapa) + botón "Nueva Factura de Proveedor" + todos los modales integrados. |
 | **MapaRelaciones** | `shared/MapaRelaciones.jsx` | ✅ **Prompt 11** Extendido con prop `compraId`. Modo compra: Recepción→FacturaCompra→PagosCC + derivados (Dev.Prov / NC financiera / ND recibida). Modo venta intacto. |
-| Configuración | `ConfiguracionSection.jsx` | ✅ Logo + toggle OC + datos de ejemplo + **Moneda Paralela SAP-style** + **Wizard AFIP/ARCA** |
+| **Configuración** | `ConfiguracionSection.jsx` | ✅ **Prompt 14** 8 tabs SAP Administración-style: **Empresa** (nombre+logo+email+dir+rubro+cp) · **Finanzas** (Moneda Paralela + placeholder condiciones pago) · **Facturación** (Wizard AFIP/ARCA + placeholders tipos comprobante/pie doc) · **Inventario** (placeholders FIFO/unidades/stock mínimo) · **Integraciones** (`IntegracionCard` reutilizable: MP/Ualá/AFIP/WA/Sheets) · **Alertas** (4 toggles + umbrales → `configuracion` table) · **Usuarios** (embed `<UsuariosSection />`) · **Sistema** (versión + empresa_id + placeholder datos demo). Acepta prop `initialTab` para deep-link. |
+| `IntegracionCard` | `shared/IntegracionCard.jsx` | ✅ **Prompt 14** Card reutilizable para integraciones: nombre, descripción, logo emoji, estado (activo/inactivo/proximamente/error), botón "Configurar" opcional con `onConfigure` callback. |
 
 ---
 
@@ -151,6 +152,7 @@
 
 ## Convenciones (REGLAS DE ORO)
 
+- **REGLA DE ORO — KAIROX:** Toda configuración vive en `ConfiguracionSection`. Los módulos operativos (Ventas, Compras, Bancos, Caja, Inventario) solo muestran y procesan datos. **Nunca contienen opciones de configuración del sistema.** Si hay algo configurable → va a un tab de `ConfiguracionSection`.
 - **Multi-tenant:** TODAS las queries deben filtrar `.eq('empresa_id', user.empresa_id)`. Nunca `user_id` para filtrar (solo para INSERTs como autor).
 - **INSERTs:** siempre incluir `empresa_id: user.empresa_id` + `user_id: user.id`.
 - **Timezone:** usar siempre `getNowAR()` / `formatDateAR()` / `formatDateTimeAR()` de `dateUtils.js`. Nunca `toLocaleString()`.
@@ -200,7 +202,7 @@ Sidebar 7 grupos:
 ├── INVENTARIO    → productos
 ├── FINANZAS      → caja (con status dot abierta/cerrada), bancos, cheques
 ├── CONTABILIDAD  → plan_cuentas, impuestos
-└── ADMINISTRACIÓN→ usuarios, configuracion
+└── ADMINISTRACIÓN→ configuracion  ← usuarios removido del sidebar (ahora en Tab 7 de Configuración)
 ```
 
 - **Sidebar:** `src/components/Sidebar.jsx` — array `NAV_GROUPS` con grupos + íconos, `fixed md:relative`, `bg-kx-surface/80 backdrop-blur-md`. **Prompt 3/6:** grupos colapsables + persistencia en `localStorage('kx-sidebar-collapsed')`. **Prompt 5/6:** grupo COMPRAS reorganizado: `compra_rapida` (ShoppingCart) · `ordenes_compra` (ShoppingBag) · `recepciones_compra` (Package) · `facturas_compra` (Receipt) · `devoluciones_proveedor` (RotateCcw) · `proveedores` (Truck). Todos los ítems COMPRAS → `<ComprasSection initialTab="...">` via Dashboard.

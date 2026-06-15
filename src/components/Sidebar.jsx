@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   LayoutDashboard, Package, ShoppingCart, ArrowLeftRight, Wallet, FileText,
-  Users, Settings, LogOut, Contact, CreditCard, ClipboardList, ShoppingBag,
+  Settings, LogOut, Contact, CreditCard, ClipboardList, ShoppingBag,
   BookOpen, Landmark, Truck, PackageCheck, Tag, FileCheck, Receipt,
   Box, ScrollText, RotateCcw, ChevronDown, ChevronRight as ChevronRightIcon,
 } from 'lucide-react';
@@ -64,7 +64,6 @@ const NAV_GROUPS = [
   {
     label: 'ADMINISTRACIÓN',
     items: [
-      { id: 'usuarios',      label: 'Usuarios',      icon: Users },
       { id: 'configuracion', label: 'Configuración', icon: Settings },
     ],
   },

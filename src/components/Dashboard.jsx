@@ -60,7 +60,7 @@ function Dashboard({ user, onLogout }) {
       case 'clientes':      return <ClientesSection />;
       case 'cuentacorriente':return <CuentaCorrienteSection />;
       case 'reportes':      return <ReportesSection />;
-      case 'usuarios':      return <UsuariosSection />;
+      case 'usuarios':      return <ConfiguracionSection initialTab="usuarios" />;
       case 'configuracion': return <ConfiguracionSection />;
       case 'plan_cuentas':  return <PlanCuentasSection />;
       case 'bancos':        return <CuentasBancariasSection />;
