@@ -293,13 +293,16 @@ Cuando `enabled = true`, los siguientes módulos guardan `monto_paralelo` + `tc_
 3. ✅ **TC del día centralizado** — tabla `tipos_cambio` + `TipoCambioModal` + `MonedaSelector` reescrito + bloqueo operaciones
 4. ✅ **Moneda Paralela SAP-style** — toggle config + hook `useTCParalelo` + `monto_paralelo`/`tc_paralelo` en 4 tablas + Reporte Paridad
 5. ✅ **ARCA/AFIP** + Libro IVA — **Fases 1-5 COMPLETAS**: infra DB (migration 025) + Edge Functions `generar-csr`/`emitir-cae` + Wizard de activación UI (ConfiguracionSection) + integración CAE en flujo post-venta (Fase 3) + PDF con QR fiscal RG 4291/2018 (Fase 4) + Libro IVA Ventas digital (Fase 5).
-6. ⏳ **Membresías** / MercadoPago · Modelo de licencias Starter/Pro/Business
+6. ✅ **Moneda Paralela UI — Caja y Cuenta Corriente** (Prompt 13) — KPIs equivalente, columna separada en tabla Caja con fallback `calcParalelo`, dialog cobro CC con equivalente en tiempo real, aging bandas CC con equivalente.
+7. ✅ **ConfiguracionSection SAP Administración-style** (Prompt 14) — 8 tabs centralizados + IntegracionCard + usuarios embebido en Tab 7 + REGLA DE ORO documentada.
+8. ⏳ **Membresías** / MercadoPago · Modelo de licencias Starter/Pro/Business
 
 #### Pendientes Fase 7
 - Configurar Supabase Auth URLs (Site URL + Redirect URLs → `https://kairox-gestion.vercel.app/**`)
-- Extender TC obligatorio a módulos Caja + Cuenta Corriente + Compras (columnas DB ya listas)
+- ✅ ~~Extender TC paralelo a Caja + Cuenta Corriente~~ — **RESUELTO** Prompt 13 (Compras UI pendiente aún)
 - ✅ ~~Investigar error 400 en consola~~ — **RESUELTO** sesión PM·3
 - ✅ ~~Deploy a producción~~ — **RESUELTO** 2026-06-13 sesión 2: auto-deploy de Vercel estaba roto desde commit `69d9f38` (5 commits sin deployar). Deploy manual disparado via MCP Vercel — URL: https://kairox-gestion.vercel.app
+- Moneda Paralela UI en módulo **Compras** (columnas DB ya listas, UI pendiente)
 - **Tests manuales pendientes (Document Flow):**
   - POS: hacer venta → verificar fila en `entregas` con `origen='implicita'` aparece en EntregasSection
   - Pedido → Generar Entrega → verificar stock decrementado + fila en `entregas`
@@ -337,6 +340,8 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 | 9 | **Retenciones IIBB/Ganancias** | FI Withholding | ✅ Sesión 12-jun-2026 |
 | 12 | **IVA real por alícuota + Libro IVA Compras** | FI Tax (RTC) | ✅ Sesión 12-jun-2026 |
 | 13 | **Document Flow transaccional** (entregas/recepciones/devoluciones/ND) — modelo datos + RPCs + UI Ventas + Devoluciones | SD Delivery + MM GR | ✅ Sesiones 13-jun-2026 (Prompts 1/6, 2/6, 3/6, 4/6) |
+| 14 | **Moneda Paralela UI — Caja y Cuenta Corriente** (Prompt 13) — KPIs equivalente + columna tabla + dialog cobro + aging bandas | FI Parallel Currency Reporting | ✅ Sesión 15-jun-2026 |
+| 15 | **ConfiguracionSection SAP Administración-style** (Prompt 14) — 8 tabs centralizados, REGLA DE ORO, IntegracionCard, usuarios en Tab 7 | SAP B1 Administration Module | ✅ Sesión 15-jun-2026 |
 
 ### 🟢 Baja prioridad (post-ARCA)
 
@@ -348,6 +353,36 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-15 (sesión 14 — Luciano) — Prompt 14: Reestructuración ConfiguracionSection SAP Administración-style
+**Branch:** `master` (commit `8cf1765`)
+
+**Objetivo:** centralizar toda la configuración del sistema en un único módulo con 8 tabs al estilo SAP B1 Administration, aplicando la REGLA DE ORO: *"Toda configuración vive en ConfiguracionSection. Los módulos operativos solo muestran y procesan datos."*
+
+**Archivos creados:**
+- `src/components/shared/IntegracionCard.jsx` — componente reutilizable para tarjetas de integración. Props: `nombre`, `descripcion`, `logo` (emoji), `estado` (`activo | inactivo | proximamente | error`), `onConfigure` (callback opcional). Se opaca al 60% cuando es "próximamente".
+
+**Archivos modificados:**
+- `src/components/sections/ConfiguracionSection.jsx` — **reescrito completo** con 8 tabs usando shadcn/ui `Tabs`:
+  - **Tab 1 — Empresa:** nombre + logo (lógica intacta) + nuevos campos email, dirección, localidad, CP, provincia, rubro (todos en tabla `configuracion` via `updateConfig`). Muestra CUIT/condicion_iva como read-only desde `empresas` (se gestionan en Tab 3).
+  - **Tab 2 — Finanzas y Moneda:** sección Moneda Paralela movida aquí (lógica idéntica) + placeholder "Condiciones de Pago".
+  - **Tab 3 — Facturación y Documentos:** Wizard AFIP/ARCA movido aquí (lógica idéntica, toggle + stepper 3 pasos) + placeholders Tipos de Comprobante y Pie de Documento.
+  - **Tab 4 — Inventario:** placeholders FIFO/LIFO/PPP, Unidades de Medida, Stock Mínimo Global.
+  - **Tab 5 — Integraciones:** grid de `IntegracionCard` para MP, Ualá, AFIP (estado real), WhatsApp Business, Google Sheets.
+  - **Tab 6 — Alertas:** 4 toggles con umbrales numéricos (stock bajo, vencimiento CC, apertura caja, cheques) → `upsert` en tabla `configuracion` con `onConflict: 'empresa_id,clave'`.
+  - **Tab 7 — Usuarios y Roles:** embed directo de `<UsuariosSection />` sin reescribir nada.
+  - **Tab 8 — Sistema:** info versión (1.4.0), empresa_id, email usuario, estado DB + placeholder datos demo.
+  - Acepta prop `initialTab` (string) para deep-link programático a cualquier tab.
+- `src/components/Sidebar.jsx` — eliminado `{ id: 'usuarios', label: 'Usuarios', icon: Users }` de ADMINISTRACIÓN. Ahora solo tiene `configuracion`. Import `Users` removido.
+- `src/components/Dashboard.jsx` — `case 'usuarios'` redirige a `<ConfiguracionSection initialTab="usuarios" />` en lugar de `<UsuariosSection />` (sin romper bookmarks/links existentes).
+- `CONTEXT.md` — REGLA DE ORO documentada en Convenciones, tabla módulos actualizada, arquitectura de navegación actualizada (usuarios fuera del sidebar).
+
+**Convenciones nuevas:**
+- **REGLA DE ORO:** cualquier setting del sistema va en `ConfiguracionSection`. Los módulos operativos NO tienen settings internos.
+- **`initialTab` prop:** cuando se necesita navegar a un tab específico de Configuración desde código externo (ej: redirect `usuarios → configuracion`), pasar `initialTab="<tab_id>"`. Tab IDs: `empresa | finanzas | facturacion | inventario | integraciones | alertas | usuarios | sistema`.
+- **IntegracionCard:** para agregar una nueva integración, importar de `@/components/shared/IntegracionCard` y pasarle el `estado` correcto. Cuando esté live: cambiar `estado="proximamente"` a `estado="activo"` + agregar `onConfigure` callback si aplica.
+
+---
 
 ### Sesión 2026-06-13 (sesión 6 — Nadia) — Testeo Document Flow + Fixes integrales + Devolución a Proveedor UI
 
