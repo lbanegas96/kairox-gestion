@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-15 (sesión 14 — Luciano) — Prompt 14: Reestructuración ConfiguracionSection en 8 tabs SAP Administración-style.
+**Última actualización:** 2026-06-15 (sesión 15 — Luciano) — Prompt 15: Integración Mercado Pago — webhook automático de pagos.
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -75,8 +75,10 @@
 | **NuevaNDProveedorModal** | `compras/NuevaNDProveedorModal.jsx` | ✅ **Prompt 11** ND recibida de proveedor (nos cobra más). Llama RPC `crear_nota_debito(tipo='recibida')` + INSERT manual `cuenta_corriente_proveedores` HABER (el RPC no inserta CC para 'recibida'). |
 | **FacturasCompraSection** | `compras/FacturasCompraSection.jsx` | ✅ **Prompt 11** + DropdownMenu por fila (Ver detalle / NC / ND / Devolver / Mapa) + botón "Nueva Factura de Proveedor" + todos los modales integrados. |
 | **MapaRelaciones** | `shared/MapaRelaciones.jsx` | ✅ **Prompt 11** Extendido con prop `compraId`. Modo compra: Recepción→FacturaCompra→PagosCC + derivados (Dev.Prov / NC financiera / ND recibida). Modo venta intacto. |
-| **Configuración** | `ConfiguracionSection.jsx` | ✅ **Prompt 14** 8 tabs SAP Administración-style: **Empresa** (nombre+logo+email+dir+rubro+cp) · **Finanzas** (Moneda Paralela + placeholder condiciones pago) · **Facturación** (Wizard AFIP/ARCA + placeholders tipos comprobante/pie doc) · **Inventario** (placeholders FIFO/unidades/stock mínimo) · **Integraciones** (`IntegracionCard` reutilizable: MP/Ualá/AFIP/WA/Sheets) · **Alertas** (4 toggles + umbrales → `configuracion` table) · **Usuarios** (embed `<UsuariosSection />`) · **Sistema** (versión + empresa_id + placeholder datos demo). Acepta prop `initialTab` para deep-link. |
+| **Configuración** | `ConfiguracionSection.jsx` | ✅ **Prompt 14** 8 tabs SAP Administración-style. **Prompt 15:** Tab 5 Integraciones actualizado — card Mercado Pago con estado real (conectado/sin configurar), webhook URL con botón copiar, último sync; abre `ConfigMercadoPagoModal`. |
 | `IntegracionCard` | `shared/IntegracionCard.jsx` | ✅ **Prompt 14** Card reutilizable para integraciones: nombre, descripción, logo emoji, estado (activo/inactivo/proximamente/error), botón "Configurar" opcional con `onConfigure` callback. |
+| **Mercado Pago Webhook** | `supabase/functions/mp-webhook/index.ts` | ✅ **Prompt 15** Edge Function `--no-verify-jwt`. Valida firma HMAC-SHA256 (x-signature), consulta `GET /v1/payments/{id}`, solo procesa `status=approved`, deduplicación por `descripcion LIKE 'MP #ID%'`, llama RPC `insertar_movimiento_bancario_externo`, actualiza `ultimo_sync`. Deploy: `supabase functions deploy mp-webhook --no-verify-jwt`. URL: `{SUPABASE_URL}/functions/v1/mp-webhook?empresa_id=EMPRESA_UUID` |
+| **ConfigMercadoPagoModal** | `bancos/ConfigMercadoPagoModal.jsx` | ✅ **Prompt 15** Modal configuración MP: Access Token (valida formato APP_USR- + GET /users/me), select cuenta bancaria destino, webhook secret opcional. Pasos de instrucciones inline. URL webhook con botón copiar. Upsert en `integraciones_bancarias` con `onConflict: 'empresa_id,proveedor'`. |
 
 ---
 
@@ -140,7 +142,7 @@
 - **Supabase URL:** `https://wuznppxeonmhfcvnqfbf.supabase.co`
 - **Supabase Project ID:** `wuznppxeonmhfcvnqfbf` (org: NALUX)
 - **SMTP:** Resend.com — `smtp.resend.com:465` · user: `resend` · sender: KAIROX Gestión ✅
-- **Edge Functions deployadas:** `create-user` · `delete-user` · `invite-user` · `generar-csr` · `emitir-cae` ✅
+- **Edge Functions deployadas:** `create-user` · `delete-user` · `invite-user` · `generar-csr` · `emitir-cae` · `mp-webhook` (`--no-verify-jwt`) ✅
 - **Supabase Vault:** extensión `supabase_vault` 0.3.1 activa. Secretos AFIP por empresa: `afip_key_<empresa_id>` (clave privada, generada en `generar-csr` acción `generate`) y `afip_cert_<empresa_id>` (certificado .crt, subido vía `generar-csr` acción `store_cert`). Acceso solo vía RPC `vault_secret_upsert`/`vault_secret_read` (service_role).
 - **Timezone:** Argentina (UTC-3) — helpers en `src/lib/dateUtils.js`
 - **Multi-tenancy:** RLS via `get_my_empresa_id()` + `empresa_id` en todas las tablas
@@ -295,7 +297,8 @@ Cuando `enabled = true`, los siguientes módulos guardan `monto_paralelo` + `tc_
 5. ✅ **ARCA/AFIP** + Libro IVA — **Fases 1-5 COMPLETAS**: infra DB (migration 025) + Edge Functions `generar-csr`/`emitir-cae` + Wizard de activación UI (ConfiguracionSection) + integración CAE en flujo post-venta (Fase 3) + PDF con QR fiscal RG 4291/2018 (Fase 4) + Libro IVA Ventas digital (Fase 5).
 6. ✅ **Moneda Paralela UI — Caja y Cuenta Corriente** (Prompt 13) — KPIs equivalente, columna separada en tabla Caja con fallback `calcParalelo`, dialog cobro CC con equivalente en tiempo real, aging bandas CC con equivalente.
 7. ✅ **ConfiguracionSection SAP Administración-style** (Prompt 14) — 8 tabs centralizados + IntegracionCard + usuarios embebido en Tab 7 + REGLA DE ORO documentada.
-8. ⏳ **Membresías** / MercadoPago · Modelo de licencias Starter/Pro/Business
+8. ✅ **Integración Mercado Pago** (Prompt 15) — Edge Function `mp-webhook` + `ConfigMercadoPagoModal` + Tab 5 Integraciones con estado real + webhook URL dinámica.
+9. ⏳ **Membresías** / Modelo de licencias Starter/Pro/Business
 
 #### Pendientes Fase 7
 - Configurar Supabase Auth URLs (Site URL + Redirect URLs → `https://kairox-gestion.vercel.app/**`)
@@ -342,6 +345,7 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 | 13 | **Document Flow transaccional** (entregas/recepciones/devoluciones/ND) — modelo datos + RPCs + UI Ventas + Devoluciones | SD Delivery + MM GR | ✅ Sesiones 13-jun-2026 (Prompts 1/6, 2/6, 3/6, 4/6) |
 | 14 | **Moneda Paralela UI — Caja y Cuenta Corriente** (Prompt 13) — KPIs equivalente + columna tabla + dialog cobro + aging bandas | FI Parallel Currency Reporting | ✅ Sesión 15-jun-2026 |
 | 15 | **ConfiguracionSection SAP Administración-style** (Prompt 14) — 8 tabs centralizados, REGLA DE ORO, IntegracionCard, usuarios en Tab 7 | SAP B1 Administration Module | ✅ Sesión 15-jun-2026 |
+| 16 | **Integración Mercado Pago** (Prompt 15) — Edge Function `mp-webhook` (HMAC-SHA256, dedup, solo `approved`), `ConfigMercadoPagoModal` (token verify, webhook URL, cuenta destino), Tab 5 Integraciones con estado real | SAP B1 Payment Engine / Integration Framework | ✅ Sesión 15-jun-2026 |
 
 ### 🟢 Baja prioridad (post-ARCA)
 
@@ -353,6 +357,35 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-15 (sesión 15 — Luciano) — Prompt 15: Integración Mercado Pago — webhook automático de pagos
+
+**Branch:** `master` (pendiente commit)
+
+**Objetivo:** registrar automáticamente en KAIROX los cobros aprobados de Mercado Pago sin intervención manual, vía webhook Edge Function. Integración completa: backend (validación de firma, deduplicación, inserción vía RPC existente) + frontend (modal de configuración + estado real en Tab 5 de Configuración).
+
+**Archivos creados:**
+- `supabase/functions/mp-webhook/index.ts` — Edge Function Deno `--no-verify-jwt`. Flujo: valida firma HMAC-SHA256 del header `x-signature` (solo si `webhook_secret` configurado), ignora eventos que no sean `payment` con `status=approved`, consulta `GET /v1/payments/{id}` con el `access_token` de la empresa, deduplicación por `LIKE 'MP #ID%'` en `movimientos_bancarios`, llama RPC `insertar_movimiento_bancario_externo`, actualiza `ultimo_sync`. URL: `{SUPABASE_URL}/functions/v1/mp-webhook?empresa_id=EMPRESA_UUID`. Deploy: `supabase functions deploy mp-webhook --no-verify-jwt`.
+- `src/components/bancos/ConfigMercadoPagoModal.jsx` — Modal de configuración MP con: pasos de instrucciones inline, webhook URL con botón copiar, campo Access Token (type=password) con verificación inline contra `GET /users/me` MP API, Select cuenta bancaria destino (carga `cuentas_bancarias` activas de la empresa), campo Webhook Secret opcional. `handleGuardar` valida formato `APP_USR-`, re-verifica si no fue verificado en sesión, hace upsert en `integraciones_bancarias` con `onConflict: 'empresa_id,proveedor'`.
+
+**Archivos modificados:**
+- `src/components/sections/ConfiguracionSection.jsx` — Tab 5 (Integraciones) actualizado: card MP rich inline (logo azul MP, estado real conectado/sin configurar, webhook URL con copy button, último sync con `formatDateAR`, botón Conectar/Editar). State nuevo: `integracionMP`, `showConfigMP`, `supabaseUrl`. useEffect que carga integración de `integraciones_bancarias`. `reloadIntegracionMP()` callback. `<ConfigMercadoPagoModal>` renderizado al final del componente. Imports añadidos: `Copy`, `ConfigMercadoPagoModal`, `formatDateAR`.
+
+**Constraints críticos aplicados:**
+- `--no-verify-jwt` en el deploy — MP no envía JWT de Supabase
+- Deduplicación: MP puede enviar el mismo evento más de una vez
+- Solo pagos `approved`: `pending`/`in_process`/`rejected` se ignoran silenciosamente
+- `access_token` empieza con `APP_USR-` — se valida formato antes de guardar
+- `access_token` en texto plano por ahora (protegido por RLS). Futuro: Supabase Vault
+
+**Checklist de testing manual:**
+- Configurar con Access Token de sandbox de MP Developers
+- Simular pago aprobado desde el panel de MP Developers
+- Verificar que aparece en `movimientos_bancarios` con `origen='mercadopago'`
+- Verificar que se muestra en BancosSection como movimiento normal
+- Enviar mismo `payment_id` dos veces → solo un insert (deduplicación OK)
+
+---
 
 ### Sesión 2026-06-15 (sesión 14 — Luciano) — Prompt 14: Reestructuración ConfiguracionSection SAP Administración-style
 **Branch:** `master` (commit `8cf1765`)

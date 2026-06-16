@@ -3,7 +3,7 @@ import {
   Settings, Save, Building, Image as ImageIcon, Loader2, Upload, Trash2,
   AlertCircle, TrendingUp, CheckCircle2, FileText, Check, Download,
   Users, Puzzle, Bell, Package2, Info, Mail, MapPin, Hash,
-  CreditCard, Warehouse, BarChart3, Cpu,
+  CreditCard, Warehouse, BarChart3, Cpu, Copy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,8 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import UsuariosSection from '@/components/sections/UsuariosSection';
 import IntegracionCard from '@/components/shared/IntegracionCard';
+import ConfigMercadoPagoModal from '@/components/bancos/ConfigMercadoPagoModal';
+import { formatDateAR } from '@/lib/dateUtils';
 
 const formatCuit = (raw) => {
   const d = String(raw ?? '').replace(/\D/g, '');
@@ -95,6 +97,11 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [csrGenerado, setCsrGenerado] = useState(null);
   const [generandoCsr, setGenerandoCsr] = useState(false);
   const [subiendoConfig, setSubiendoConfig] = useState(false);
+
+  // ── Tab 5: Integraciones — Mercado Pago ──────────────────────────────────
+  const [integracionMP,  setIntegracionMP]  = useState(null);
+  const [showConfigMP,   setShowConfigMP]   = useState(false);
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
   // ── Tab 6: Alertas ────────────────────────────────────────────────────────
   const ALERTA_KEYS = [
@@ -223,6 +230,28 @@ const ConfiguracionSection = ({ initialTab }) => {
     };
     loadAlertas();
   }, [user?.empresa_id]);
+
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    supabase
+      .from('integraciones_bancarias')
+      .select('*')
+      .eq('empresa_id', user.empresa_id)
+      .eq('proveedor', 'mercadopago')
+      .maybeSingle()
+      .then(({ data }) => setIntegracionMP(data ?? null));
+  }, [user?.empresa_id]);
+
+  const reloadIntegracionMP = () => {
+    if (!user?.empresa_id) return;
+    supabase
+      .from('integraciones_bancarias')
+      .select('*')
+      .eq('empresa_id', user.empresa_id)
+      .eq('proveedor', 'mercadopago')
+      .maybeSingle()
+      .then(({ data }) => setIntegracionMP(data ?? null));
+  };
 
   // ─────────────────────────────────────────────────────────────────────────
   // Tab 1 handlers
@@ -824,12 +853,67 @@ const ConfiguracionSection = ({ initialTab }) => {
         ═══════════════════════════════════════════════════════════════════ */}
         <TabsContent value="integraciones">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <IntegracionCard
-              nombre="Mercado Pago"
-              descripcion="Procesamiento de pagos con tarjeta, QR y billetera virtual directamente desde el POS."
-              estado="proximamente"
-              logo="🛒"
-            />
+
+            {/* ── Mercado Pago — card rica con estado real ── */}
+            <div className="kairox-bg-card border kairox-border p-5 rounded-xl shadow-sm flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#009EE3] flex items-center justify-center text-white font-bold text-sm shrink-0">
+                    MP
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-kx-text text-sm">Mercado Pago</h4>
+                    {integracionMP?.activo ? (
+                      <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 mt-1">
+                        ✓ Conectado
+                      </span>
+                    ) : (
+                      <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border bg-kx-surface-2 text-kx-text-3 border-kx-border mt-1">
+                        Sin configurar
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <Button size="sm" variant="outline" className="text-xs h-8 shrink-0" onClick={() => setShowConfigMP(true)}>
+                  {integracionMP ? 'Editar' : 'Conectar'}
+                </Button>
+              </div>
+
+              <p className="text-xs text-kx-text-2 leading-relaxed">
+                Sincronización automática de cobros via QR, link de pago y tarjeta. Los pagos aprobados se registran en Bancos sin intervención manual.
+              </p>
+
+              {integracionMP?.ultimo_sync && (
+                <p className="text-xs text-kx-text-3">
+                  Último sync: {formatDateAR(integracionMP.ultimo_sync)}
+                </p>
+              )}
+
+              {integracionMP?.activo && (
+                <div className="p-3 bg-kx-surface-2 rounded-lg border border-kx-border space-y-1.5">
+                  <p className="text-xs font-medium text-kx-text-2">URL del Webhook (configurar en MP Developers)</p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-[10px] text-kx-text flex-1 break-all leading-relaxed">
+                      {`${supabaseUrl}/functions/v1/mp-webhook?empresa_id=${user?.empresa_id}`}
+                    </code>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0 shrink-0"
+                      onClick={() => {
+                        navigator.clipboard.writeText(
+                          `${supabaseUrl}/functions/v1/mp-webhook?empresa_id=${user?.empresa_id}`
+                        );
+                        toast({ title: '✓ URL copiada al portapapeles' });
+                      }}
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <IntegracionCard
               nombre="Ualá"
               descripcion="Pagos con QR Ualá desde la pantalla de caja. Cobros instantáneos sin hardware adicional."
@@ -1165,6 +1249,14 @@ const ConfiguracionSection = ({ initialTab }) => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ── Modal configuración Mercado Pago ──────────────────────────────── */}
+      <ConfigMercadoPagoModal
+        open={showConfigMP}
+        onOpenChange={setShowConfigMP}
+        integracion={integracionMP}
+        onSuccess={reloadIntegracionMP}
+      />
     </div>
   );
 };
