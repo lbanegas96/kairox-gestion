@@ -93,12 +93,12 @@ function NuevaNDProveedorModal({ open, onOpenChange, compraOrigen = null, onSucc
       const now = getNowAR().toISOString();
       const numeroNd = data?.numero_nd || 'ND';
 
-      // 2. INSERT cuenta_corriente_proveedores (HABER — aumenta lo que les debemos)
+      // 2. INSERT cuenta_corriente_proveedores — ND aumenta lo que les debemos
       await supabase.from('cuenta_corriente_proveedores').insert([{
         empresa_id:      user.empresa_id,
         user_id:         user.id,
         proveedor_id:    proveedorId,
-        tipo:            'HABER',
+        tipo:            'nota_debito',
         monto,
         descripcion:     `ND ${numeroNd} recibida — ${concepto.trim()}`,
         referencia_id:   data?.nota_debito_id || null,

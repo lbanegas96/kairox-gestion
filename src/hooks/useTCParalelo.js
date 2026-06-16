@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { tipoCambioService } from '@/services/tipoCambioService';
 
 /**
- * Hook para el sistema de Moneda Paralela (similar a "Parallel Currency" en SAP S/4).
+ * Hook para el sistema de Moneda Paralela.
  *
  * Cuando `enabled = true`:
  *  - Todas las transacciones deben registrar su equivalente en `monedaParalela` (ej. USD).

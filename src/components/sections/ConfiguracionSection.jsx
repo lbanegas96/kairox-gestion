@@ -268,6 +268,38 @@ const ConfiguracionSection = ({ initialTab }) => {
     reader.readAsDataURL(file);
   });
 
+  // Redimensiona y comprime el logo en el browser antes de guardarlo.
+  // Objetivo: que el base64 final pese <300KB para que los PDFs (@react-pdf/renderer)
+  // no se cuelguen renderizando imágenes gigantes.
+  const resizeImageToBase64 = (file, { maxSide = 400, quality = 0.85 } = {}) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('No se pudo decodificar la imagen'));
+        img.onload = () => {
+          const ratio = Math.min(maxSide / img.width, maxSide / img.height, 1);
+          const w = Math.round(img.width * ratio);
+          const h = Math.round(img.height * ratio);
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          // PNG conserva transparencia; JPEG si no la necesita. Probamos PNG primero,
+          // si pesa demasiado caemos a JPEG comprimido.
+          let out = canvas.toDataURL('image/png');
+          if (out.length > 300_000) {
+            out = canvas.toDataURL('image/jpeg', quality);
+          }
+          resolve(out);
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
   const handleFileSelect = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -276,15 +308,23 @@ const ConfiguracionSection = ({ initialTab }) => {
       toast({ title: 'Formato no soportado', description: 'Sube una imagen PNG, JPG, SVG o WEBP.', variant: 'destructive' });
       return;
     }
-    if (file.size > 2 * 1024 * 1024) {
-      toast({ title: 'Archivo muy grande', description: 'El logo debe pesar menos de 2MB. Comprime la imagen e intentá de nuevo.', variant: 'destructive' });
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: 'Archivo muy grande', description: 'El logo debe pesar menos de 5MB. Comprime la imagen e intentá de nuevo.', variant: 'destructive' });
       return;
     }
     try {
       setUploading(true);
-      const base64 = await convertToBase64(file);
+      // SVG no necesita resize (suele ser chico y vectorial). El resto va al canvas.
+      const base64 = file.type === 'image/svg+xml'
+        ? await convertToBase64(file)
+        : await resizeImageToBase64(file, { maxSide: 400 });
       setFormData(prev => ({ ...prev, company_logo: base64, logo_base64: base64 }));
-      toast({ title: 'Logo cargado', description: 'Hacé clic en Guardar para aplicar el cambio.', className: 'bg-blue-600 text-white border-blue-500' });
+      const kb = Math.round(base64.length / 1024);
+      toast({
+        title: 'Logo cargado',
+        description: `Redimensionado a ${kb}KB. Hacé clic en Guardar para aplicar.`,
+        className: 'bg-blue-600 text-white border-blue-500',
+      });
     } catch (error) {
       toast({ title: 'Error al cargar el logo', description: error.message, variant: 'destructive' });
     } finally {
@@ -664,8 +704,8 @@ const ConfiguracionSection = ({ initialTab }) => {
                 <div>
                   <h3 className="text-lg font-bold text-slate-900 dark:text-kx-text">Moneda Paralela (Tipo de Cambio)</h3>
                   <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-0.5">
-                    Similar a "Parallel Currency" en SAP S/4. Cuando está activo, el sistema exige el TC del día
-                    antes de cualquier movimiento contable y habilita el <strong>Reporte de Paridad ARS / {tcConfig.moneda_paralela}</strong>.
+                    Cuando está activo, el sistema exige el TC del día antes de cualquier movimiento contable y
+                    habilita el <strong>Reporte de Paridad ARS / {tcConfig.moneda_paralela}</strong>.
                   </p>
                 </div>
               </div>

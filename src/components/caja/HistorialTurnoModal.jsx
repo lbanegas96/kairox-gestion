@@ -39,14 +39,20 @@ function HistorialTurnoModal({ open, onOpenChange }) {
   const fetchVentas = async () => {
     setLoading(true);
     try {
+      // Las ventas no tienen user_id (no existe la columna). Filtramos por turno:
+      // todas las ventas con fecha >= apertura del turno actual. Si el turno está
+      // cerrado, también respetamos cierre_fecha como tope.
       const inicioDeTurno = currentSession?.apertura_fecha ?? new Date(0).toISOString();
-      const { data } = await supabase
+      let q = supabase
         .from('comprobantes')
         .select('id, numero_venta, total, fecha, cliente_nombre, forma_pago, estado_pago, moneda')
         .eq('empresa_id', user.empresa_id)
-        .eq('user_id', user.id)
         .gte('fecha', inicioDeTurno)
         .order('fecha', { ascending: false });
+      if (currentSession?.cierre_fecha) {
+        q = q.lte('fecha', currentSession.cierre_fecha);
+      }
+      const { data } = await q;
       setVentas(data ?? []);
     } finally {
       setLoading(false);

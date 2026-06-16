@@ -185,22 +185,28 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
       const now        = getNowAR().toISOString();
       const clienteObj = clientes.find(c => c.id === clienteId);
 
+      // Tipo de comprobante AFIP (A/B/C/E o null para Ticket).
+      // Se guarda SIEMPRE, sin importar si AFIP está activo, para poder mostrarlo
+      // en el historial aunque la factura sea no electrónica.
+      const tipoAfipInsert = tipoDoc === 'Ticket' ? null : tipoDoc.replace('Factura ', '');
+
       // 1. INSERT comprobante — sin user_id (no existe en comprobantes)
       const { data: comp, error: compErr } = await supabase.from('comprobantes').insert([{
-        empresa_id:       user.empresa_id,
-        tenant_id:        user.empresa_id,
-        numero_venta:     numero,
-        fecha:            now,
-        cliente_id:       clienteId || null,
-        cliente_nombre:   clienteObj?.nombre ?? 'Consumidor Final',
+        empresa_id:            user.empresa_id,
+        tenant_id:             user.empresa_id,
+        numero_venta:          numero,
+        fecha:                 now,
+        cliente_id:            clienteId || null,
+        cliente_nombre:        clienteObj?.nombre ?? 'Consumidor Final',
         total,
-        neto_gravado:     subtotalNeto,
-        iva_discriminado: totalIva,
-        forma_pago:       formaPago,
-        estado_pago:      isCC ? 'pendiente' : 'pagada',
-        moneda:           'ARS',
-        tipo_cambio_tasa: 1,
-        tipo:             'venta',
+        neto_gravado:          subtotalNeto,
+        iva_discriminado:      totalIva,
+        forma_pago:            formaPago,
+        estado_pago:           isCC ? 'pendiente' : 'pagada',
+        moneda:                'ARS',
+        tipo_cambio_tasa:      1,
+        tipo:                  'venta',
+        tipo_comprobante_afip: tipoAfipInsert,
       }]).select('id').single();
       if (compErr) throw compErr;
 
@@ -416,8 +422,8 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
                         </td>
                         <td className="px-2 py-1.5">
                           <Input
-                            type="number" min="0.001" step="0.001" value={item.cantidad}
-                            onChange={e => updateItem(item._id, 'cantidad', e.target.value)}
+                            type="number" min="1" step="1" value={item.cantidad}
+                            onChange={e => updateItem(item._id, 'cantidad', e.target.value.replace(/[^\d]/g, ''))}
                             className="h-8 text-xs text-center bg-transparent border-kx-border text-kx-text w-full"
                           />
                         </td>

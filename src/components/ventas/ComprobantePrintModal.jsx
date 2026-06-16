@@ -24,6 +24,15 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
   const handleDownloadPDF = async () => {
     if (!comprobante) return;
     setGeneratingPDF(true);
+
+    // Wrapper de timeout: si pdf().toBlob() se cuelga (típicamente por <Image> con src
+    // inválido o demasiado grande), abortamos a los 30s en vez de quedar "Generando..." infinito.
+    const withTimeout = (promise, ms) =>
+      Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout: la generación tardó más de ${ms / 1000}s. Probá re-subir el logo desde Configuración o sacarlo.`)), ms)),
+      ]);
+
     try {
       const { pdf } = await import('@react-pdf/renderer');
       const { generateAfipQR } = await import('@/lib/afipQR');
@@ -47,28 +56,37 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
         );
 
         const { FacturaPDF } = await import('./pdf/FacturaPDF');
-        blob = await pdf(
-          <FacturaPDF
-            comprobante={comprobante}
-            items={items}
-            pagos={pagos}
-            empresa={empresaData}
-            qrDataUrl={qrDataUrl}
-          />
-        ).toBlob();
+        blob = await withTimeout(
+          pdf(
+            <FacturaPDF
+              comprobante={comprobante}
+              items={items}
+              pagos={pagos}
+              empresa={empresaData}
+              qrDataUrl={qrDataUrl}
+            />
+          ).toBlob(),
+          30000
+        );
         filename = `Factura_${comprobante.numero_afip ?? comprobante.numero_venta}.pdf`;
       } else {
         const { TicketPDF } = await import('./pdf/TicketPDF');
-        blob = await pdf(
-          <TicketPDF
-            comprobante={comprobante}
-            items={items}
-            pagos={pagos}
-            empresa={empresaData}
-          />
-        ).toBlob();
+        blob = await withTimeout(
+          pdf(
+            <TicketPDF
+              comprobante={comprobante}
+              items={items}
+              pagos={pagos}
+              empresa={empresaData}
+            />
+          ).toBlob(),
+          30000
+        );
         filename = `Ticket_${comprobante.numero_venta}.pdf`;
       }
+
+      // Guard: si por alguna razón el blob no se generó, abortar.
+      if (!blob) throw new Error('No se pudo generar el PDF (timeout o error de render).');
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

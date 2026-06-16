@@ -132,7 +132,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
 
         comp.pedido_id
           ? supabase.from('pedidos')
-              .select('id, numero, fecha_pedido, total, estado')
+              .select('id, numero, fecha, total, estado')
               .eq('id', comp.pedido_id).eq('empresa_id', user.empresa_id).maybeSingle()
           : Promise.resolve({ data: null }),
 
@@ -304,7 +304,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
             )}
           </DialogTitle>
           <DialogDescription className="text-kx-text-2 text-xs">
-            Árbol de documentos vinculados — estilo SAP B1 Document Flow
+            Árbol de documentos vinculados
           </DialogDescription>
         </DialogHeader>
 
@@ -361,7 +361,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
                           id:     mapa.pedido.id,
                           tipo:   'pedido',
                           numero: mapa.pedido.numero,
-                          fecha:  mapa.pedido.fecha_pedido,
+                          fecha:  mapa.pedido.fecha,
                           total:  mapa.pedido.total,
                           estado: mapa.pedido.estado,
                         }}

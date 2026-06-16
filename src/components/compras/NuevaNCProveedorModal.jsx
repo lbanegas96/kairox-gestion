@@ -102,12 +102,12 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, onSucc
       const now        = getNowAR().toISOString();
       const descripcion = `NC recibida — ${motivoFinal}${compraOrigen?.numero_factura ? ` (Fac. ${compraOrigen.numero_factura})` : ''}`;
 
-      // 1. INSERT cuenta_corriente_proveedores (DEBE — reduce lo que les debemos)
+      // 1. INSERT cuenta_corriente_proveedores — NC reduce lo que les debemos
       await supabase.from('cuenta_corriente_proveedores').insert([{
         empresa_id:      user.empresa_id,
         user_id:         user.id,
         proveedor_id:    proveedorId,
-        tipo:            'DEBE',
+        tipo:            'nota_credito',
         monto,
         descripcion,
         referencia_id:   compraOrigen?.id || null,

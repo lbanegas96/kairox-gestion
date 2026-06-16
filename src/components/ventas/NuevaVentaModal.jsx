@@ -39,7 +39,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   const [showParaleloTCModal, setShowParaleloTCModal] = useState(false);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
 
-  // ── Moneda Paralela (SAP-style parallel currency) ───────────────────────────
+  // ── Moneda Paralela ─────────────────────────────────────────────────────────
   const tcParalelo = useTCParalelo();
 
   // ── Configuración AFIP (stale 5 min — no cambia frecuente) ─────────────────

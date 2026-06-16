@@ -15,13 +15,13 @@ function ProveedorDrillDown({ proveedor }) {
     if (!proveedor?.id || !user?.empresa_id) return;
     setLoading(true);
     try {
-      const [{ data: cc }, { data: ocs }] = await Promise.all([
+      // Proveedores no tiene saldo_actual; lo calculamos sumando movimientos.
+      const [{ data: movs }, { data: ocs }] = await Promise.all([
         supabase
           .from('cuenta_corriente_proveedores')
-          .select('saldo, limite_credito')
+          .select('tipo, monto')
           .eq('empresa_id', user.empresa_id)
-          .eq('proveedor_id', proveedor.id)
-          .single(),
+          .eq('proveedor_id', proveedor.id),
         supabase
           .from('ordenes_compra')
           .select('numero, created_at, total')
@@ -30,7 +30,12 @@ function ProveedorDrillDown({ proveedor }) {
           .order('created_at', { ascending: false })
           .limit(3),
       ]);
-      setInfo({ cc: cc || null, ocs: ocs || [] });
+      const saldo = (movs ?? []).reduce((acc, m) => {
+        if (m.tipo === 'compra' || m.tipo === 'nota_debito') return acc + Number(m.monto);
+        if (m.tipo === 'pago'   || m.tipo === 'nota_credito') return acc - Number(m.monto);
+        return acc;
+      }, 0);
+      setInfo({ cc: { saldo }, ocs: ocs || [] });
     } catch {
       setInfo({ cc: null, ocs: [] });
     } finally {

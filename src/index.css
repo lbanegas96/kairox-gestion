@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * FIX GLOBAL — Radix UI deja stuck pointer-events: none + aria-hidden=true
+ * en <body> y <div #root> cuando un DropdownMenu y un Dialog interactúan,
+ * congelando toda la página hasta recargar.
+ *
+ * Estos overrides garantizan que la página NUNCA quede no interactiva por un
+ * estilo inline residual de Radix.
+ */
+body[style*="pointer-events: none"] { pointer-events: auto !important; }
+html { pointer-events: auto !important; }
+
 @layer base {
   :root {
     --background: 0 0% 100%; /* #FFFFFF */

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ShoppingCart, Trash2, Plus, Minus, CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -61,6 +61,18 @@ function PanelCarrito({ carrito, onModificarCarrito, onVentaExitosa }) {
   const [selectedClient, setSelectedClient] = useState(null);
   const [metodo, setMetodo]         = useState('Efectivo');
   const { confirmar, loading }      = useConfirmarVenta();
+
+  // Cargar clientes de la empresa al montar
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    supabase
+      .from('clientes')
+      .select('id, nombre, condicion_iva, documento, telefono, limite_credito, saldo_actual')
+      .eq('empresa_id', user.empresa_id)
+      .neq('activo', false)
+      .order('nombre')
+      .then(({ data }) => setClientes(data || []));
+  }, [user?.empresa_id]);
 
   const total = useMemo(
     () => carrito.reduce((sum, i) => sum + i.precio_venta * i.cantidad, 0),

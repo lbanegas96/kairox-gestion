@@ -77,9 +77,13 @@ export const formatDateLocaleAR = (isoStr, options = {}) => {
   return local.toLocaleDateString('es-AR', defaultOpts);
 };
 
-// Converts YYYY-MM-DD input string to ISO at 12:00 AR time to avoid boundary issues.
+// Converts YYYY-MM-DD input string to ISO.
+// - Si la fecha es HOY (en AR) → usa la hora actual (operación en tiempo real).
+// - Si es otro día (pasado o futuro) → fija 12:00 para evitar boundary issues
+//   entre zonas horarias y mostrar una hora "neutra" en el listado.
 export const getDateFromInputAR = (dateString) => {
   if (!dateString) return getNowAR().toISOString();
+  if (dateString === getTodayAR()) return getNowAR().toISOString();
   const [y, m, d] = dateString.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d, 12, 0, 0, 0)).toISOString();
 };

@@ -20,19 +20,19 @@ function AlertasStockBanner({ productos }) {
       // No existe tabla notificaciones — se registra en audit_log con tipo especial.
       // El admin puede filtrar por tipo 'aviso_cajero_stock' en la tabla de auditoría.
       await supabase.from('audit_log').insert([{
-        empresa_id:   user.empresa_id,
-        user_id:      user.id,
-        action:       'aviso_cajero_stock',
-        table_name:   'productos',
-        record_id:    producto.id,
-        new_values:   {
+        empresa_id:  user.empresa_id,
+        user_id:     user.id,
+        operacion:   'aviso_cajero_stock',
+        tabla:       'productos',
+        registro_id: producto.id,
+        new_data:    {
           producto_nombre: producto.nombre,
           stock_actual:    producto.stock_actual,
           stock_minimo:    producto.stock_minimo,
           cajero_nombre:   `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim() || user.email,
           mensaje:         `Stock bajo: quedan ${producto.stock_actual} u. (mín: ${producto.stock_minimo})`,
         },
-        created_at:   new Date().toISOString(),
+        created_at:  new Date().toISOString(),
       }]);
       toast({
         title: 'Encargado notificado',

@@ -38,6 +38,40 @@ function App() {
     return () => clearTimeout(timer);
   }, [loading]);
 
+  /*
+   * FIX GLOBAL — Radix UI a veces deja stuck `aria-hidden=true` y
+   * `pointer-events: none` en <body> y <div #root> cuando un DropdownMenu y
+   * un Dialog interactúan (race condition de focus management). Esto congela
+   * la página entera hasta recargar.
+   *
+   * Este observer detecta esos atributos colgados y los limpia cuando ya no
+   * hay ningún Radix dialog/popper realmente abierto. Es defensivo: si no
+   * hay nada stuck, no hace nada.
+   */
+  useEffect(() => {
+    const cleanup = () => {
+      const hayDialogAbierto = document.querySelector('[role="dialog"][data-state="open"], [data-radix-popper-content-wrapper][data-state="open"]');
+      if (hayDialogAbierto) return;
+      const root = document.getElementById('root');
+      if (root?.getAttribute('aria-hidden') === 'true') {
+        root.removeAttribute('aria-hidden');
+        root.removeAttribute('data-aria-hidden');
+      }
+      if (document.body.style.pointerEvents === 'none') {
+        document.body.style.pointerEvents = '';
+      }
+    };
+
+    const obs = new MutationObserver(cleanup);
+    obs.observe(document.body, {
+      attributes: true,
+      childList: true,
+      subtree: true,
+      attributeFilter: ['aria-hidden', 'data-state', 'style'],
+    });
+    return () => obs.disconnect();
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen kairox-bg-base flex flex-col items-center justify-center transition-colors duration-300 gap-6">

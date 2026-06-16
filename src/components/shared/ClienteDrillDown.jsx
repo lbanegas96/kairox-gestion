@@ -20,23 +20,25 @@ function ClienteDrillDown({ cliente }) {
     if (!cliente?.id || !user?.empresa_id) return;
     setLoading(true);
     try {
-      const [{ data: cc }, { data: ventas }] = await Promise.all([
+      // Saldo y límite vienen de `clientes` (no hay tabla cuenta_corriente_clientes).
+      const [{ data: cli }, { data: ventas }] = await Promise.all([
         supabase
-          .from('cuenta_corriente_clientes')
-          .select('saldo, limite_credito')
+          .from('clientes')
+          .select('saldo_actual, limite_credito')
           .eq('empresa_id', user.empresa_id)
-          .eq('cliente_id', cliente.id)
+          .eq('id', cliente.id)
           .single(),
         supabase
           .from('comprobantes')
           .select('numero_venta, fecha, total')
           .eq('empresa_id', user.empresa_id)
           .eq('cliente_id', cliente.id)
-          .in('tipo', ['factura', 'ticket'])
+          .eq('tipo', 'venta')
           .order('fecha', { ascending: false })
           .limit(3),
       ]);
-      setInfo({ cc: cc || null, ventas: ventas || [] });
+      const cc = cli ? { saldo: cli.saldo_actual, limite_credito: cli.limite_credito } : null;
+      setInfo({ cc, ventas: ventas || [] });
     } catch {
       setInfo({ cc: null, ventas: [] });
     } finally {

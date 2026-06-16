@@ -16,6 +16,7 @@ import { generatePDF } from '@/lib/pdfUtils';
 import ReportHeader from '@/components/reports/ReportHeader';
 import ReportTable from '@/components/reports/ReportTable';
 import { formatDateAR } from '@/lib/dateUtils';
+import { formatCurrency } from '@/lib/currencyUtils';
 
 function ReportesSection() {
   const { user } = useAuth();
@@ -257,12 +258,12 @@ function ReportesSection() {
           { header: 'Cliente', key: 'cliente', align: 'left' },
           { header: 'Pago', key: 'metodo_pago', align: 'center' },
           { header: 'Items', key: 'items', align: 'center' },
-          { header: 'Total', key: 'total', align: 'right', render: (r) => `$${Number(r.total).toFixed(2)}`, pdfRender: (r) => `$${Number(r.total).toFixed(2)}` }
+          { header: 'Total', key: 'total', align: 'right', render: (r) => formatCurrency(r.total), pdfRender: (r) => formatCurrency(r.total) }
         ],
         totals: [
           { content: 'TOTALES', colSpan: 3, align: 'right' },
           { content: data.length, align: 'center' },
-          { content: `$${totalAmount.toFixed(2)}`, align: 'right' }
+          { content: formatCurrency(totalAmount), align: 'right' }
         ]
       };
     }
@@ -274,11 +275,11 @@ function ReportesSection() {
           { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
           { header: 'Proveedor', key: 'proveedor', align: 'left' },
           { header: 'N° Factura', key: 'numero_factura', align: 'left' },
-          { header: 'Total', key: 'total', align: 'right', render: (r) => `$${Number(r.total).toFixed(2)}`, pdfRender: (r) => `$${Number(r.total).toFixed(2)}` }
+          { header: 'Total', key: 'total', align: 'right', render: (r) => formatCurrency(r.total), pdfRender: (r) => formatCurrency(r.total) }
         ],
         totals: [
           { content: 'TOTAL COMPRAS', colSpan: 3, align: 'right' },
-          { content: `$${totalAmount.toFixed(2)}`, align: 'right' }
+          { content: formatCurrency(totalAmount), align: 'right' }
         ]
       };
     }
@@ -290,11 +291,11 @@ function ReportesSection() {
           { header: 'Nombre', key: 'nombre', align: 'left' },
           { header: 'Email', key: 'email', align: 'left', render: (r) => r.email || '-' },
           { header: 'Teléfono', key: 'telefono', align: 'left', render: (r) => r.telefono || '-' },
-          { header: 'Saldo Actual', key: 'saldo', align: 'right', render: (r) => <span className={r.saldo > 0 ? 'text-red-600 font-bold' : 'text-green-600 dark:text-green-400'}>${Number(r.saldo).toFixed(2)}</span>, pdfRender: (r) => `$${Number(r.saldo).toFixed(2)}` }
+          { header: 'Saldo Actual', key: 'saldo', align: 'right', render: (r) => <span className={r.saldo > 0 ? 'text-red-600 font-bold' : 'text-green-600 dark:text-green-400'}>{formatCurrency(r.saldo)}</span>, pdfRender: (r) => formatCurrency(r.saldo) }
         ],
         totals: [
           { content: 'TOTAL CARTERA', colSpan: 3, align: 'right' },
-          { content: `$${totalBalance.toFixed(2)}`, align: 'right' }
+          { content: formatCurrency(totalBalance), align: 'right' }
         ]
        };
     }
@@ -310,10 +311,10 @@ function ReportesSection() {
            { header: 'Cliente', key: 'cliente', align: 'left' },
            { header: 'Tipo', key: 'tipo', align: 'center', render: (r) => <span className={`px-2 py-1 rounded text-xs font-bold ${r.tipo === 'DEBE' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'}`}>{r.tipo}</span> },
            { header: 'Descripción', key: 'descripcion', align: 'left' },
-           { header: 'Monto', key: 'monto', align: 'right', render: (r) => `$${Number(r.monto).toFixed(2)}`, pdfRender: (r) => `$${Number(r.monto).toFixed(2)}` }
+           { header: 'Monto', key: 'monto', align: 'right', render: (r) => formatCurrency(r.monto), pdfRender: (r) => formatCurrency(r.monto) }
          ],
          totals: [
-            { content: `DEBE: $${totalDebe.toFixed(2)} | HABER: $${totalHaber.toFixed(2)} | NETO: $${balance.toFixed(2)}`, colSpan: 5, align: 'right' }
+            { content: `DEBE: ${formatCurrency(totalDebe)} | HABER: ${formatCurrency(totalHaber)} | NETO: ${formatCurrency(balance)}`, colSpan: 5, align: 'right' }
          ]
        };
     }
@@ -327,10 +328,10 @@ function ReportesSection() {
              { header: 'Tipo', key: 'tipo', align: 'center', render: (r) => r.tipo.toUpperCase() },
              { header: 'Categoría', key: 'categoria', align: 'left' },
              { header: 'Concepto', key: 'concepto', align: 'left' },
-             { header: 'Monto', key: 'monto', align: 'right', render: (r) => `$${Number(r.monto).toFixed(2)}`, pdfRender: (r) => `$${Number(r.monto).toFixed(2)}` }
+             { header: 'Monto', key: 'monto', align: 'right', render: (r) => formatCurrency(r.monto), pdfRender: (r) => formatCurrency(r.monto) }
           ],
           totals: [
-             { content: `INGRESOS: $${ingresos.toFixed(2)} | EGRESOS: $${egresos.toFixed(2)} | BALANCE: $${(ingresos - egresos).toFixed(2)}`, colSpan: 5, align: 'right' }
+             { content: `INGRESOS: ${formatCurrency(ingresos)} | EGRESOS: ${formatCurrency(egresos)} | BALANCE: ${formatCurrency(ingresos - egresos)}`, colSpan: 5, align: 'right' }
           ]
         };
     }

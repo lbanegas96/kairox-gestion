@@ -16,9 +16,15 @@ export async function getEmpresaParaPDF(empresaId) {
   ]);
 
   const logoRaw = logoRow?.valor ?? null;
-  const logo = logoRaw
+  let logo = logoRaw
     ? (logoRaw.startsWith('data:') ? logoRaw : `data:image/png;base64,${logoRaw}`)
     : null;
+
+  // @react-pdf/renderer se cuelga con imágenes >500KB en base64. Skip si es demasiado grande.
+  if (logo && logo.length > 500_000) {
+    console.warn(`[getEmpresaParaPDF] Logo omitido por tamaño (${Math.round(logo.length / 1024)}KB). Re-subí un logo más chico desde Configuración.`);
+    logo = null;
+  }
 
   return {
     logo,

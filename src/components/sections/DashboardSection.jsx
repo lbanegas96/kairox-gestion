@@ -80,37 +80,48 @@ function DashboardSection({ onNavigate }) {
   });
 
   // ── Queries ────────────────────────────────────────────────────────────────
+  // Política de refresco del Dashboard:
+  // - `refetchOnMount: 'always'` → cada vez que el usuario entra al Dashboard,
+  //   se refetchea (aunque venga del cache).
+  // - `refetchOnWindowFocus: true` → si el usuario cambia de tab y vuelve, se refresca.
+  // - `refetchInterval: 30s` → si el usuario está parado en el Dashboard, se actualiza solo.
+  // - `staleTime: 0` → los datos siempre se consideran "viejos", así no se sirven desde cache.
+  const dashboardOpts = {
+    enabled:             !!empresaId,
+    staleTime:           0,
+    refetchOnMount:      'always',
+    refetchOnWindowFocus: true,
+    refetchInterval:     1000 * 30,
+  };
+
   const { data: kpis, isLoading: kpisLoading, error: kpisError, refetch: refetchKpis } = useQuery({
     queryKey: DASHBOARD_KEYS.kpis(empresaId),
     queryFn:  () => dashboardService.getKPIs(empresaId),
-    enabled:  !!empresaId,
-    staleTime: 1000 * 60,
+    ...dashboardOpts,
   });
 
   const { data: ventasDia = [], isLoading: ventasLoading } = useQuery({
     queryKey: DASHBOARD_KEYS.ventasPorDia(empresaId, 7),
     queryFn:  () => dashboardService.getVentasPorDia(empresaId, 7),
-    enabled:  !!empresaId,
+    ...dashboardOpts,
   });
 
   const { data: flujoCaja = [], isLoading: flujoLoading } = useQuery({
     queryKey: DASHBOARD_KEYS.flujoCaja(empresaId, 6),
     queryFn:  () => dashboardService.getFlujoCajaMensual(empresaId, 6),
-    enabled:  !!empresaId,
+    ...dashboardOpts,
   });
 
   const { data: cotStats, isLoading: cotLoading } = useQuery({
     queryKey: DASHBOARD_KEYS.cotizaciones(empresaId),
     queryFn:  () => dashboardService.getCotizacionesStats(empresaId),
-    enabled:  !!empresaId,
-    staleTime: 1000 * 60,
+    ...dashboardOpts,
   });
 
   const { data: alertasCC } = useQuery({
     queryKey: DASHBOARD_KEYS.alertasCC(empresaId),
     queryFn:  () => dashboardService.getAlertasCC(empresaId),
-    enabled:  !!empresaId,
-    staleTime: 1000 * 60 * 5,
+    ...dashboardOpts,
   });
 
   const loading = kpisLoading;

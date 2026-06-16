@@ -31,8 +31,10 @@ const newItem = () => ({
 });
 
 const calcNeto = (item) => {
-  const n = Number(item.cantidad) * Number(item.precio_unit);
-  return isNaN(n) ? 0 : n;
+  const c = Number(item.cantidad);
+  const p = Number(item.precio_unit);
+  if (!Number.isFinite(c) || !Number.isFinite(p)) return 0;
+  return c * p;
 };
 
 function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess }) {
@@ -105,7 +107,15 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
   }, [open]);
 
   const updateItem = (id, field, value) =>
-    setItems(prev => prev.map(i => i._id === id ? { ...i, [field]: value } : i));
+    setItems(prev => prev.map(i => {
+      if (i._id !== id) return i;
+      // Para campos numéricos: si el value es string vacío o no parseable, mantener 0
+      // en vez de string. Esto evita que `Number("")` quede como NaN en cálculos.
+      if (field === 'cantidad' || field === 'precio_unit' || field === 'alicuota_iva') {
+        return { ...i, [field]: value === '' ? '' : Number(value) };
+      }
+      return { ...i, [field]: value };
+    }));
   const removeItem = (id) => setItems(prev => prev.filter(i => i._id !== id));
   const addItem    = ()   => setItems(prev => [...prev, newItem()]);
 
@@ -323,8 +333,8 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
                       </td>
                       <td className="px-2 py-1.5">
                         <Input
-                          type="number" min="0.001" step="0.001" value={item.cantidad}
-                          onChange={e => updateItem(item._id, 'cantidad', e.target.value)}
+                          type="number" min="1" step="1" value={item.cantidad}
+                          onChange={e => updateItem(item._id, 'cantidad', e.target.value.replace(/[^\d]/g, ''))}
                           className="h-8 text-xs text-center bg-transparent border-kx-border text-kx-text"
                         />
                       </td>

@@ -22,7 +22,7 @@ function ClienteAltaRapidaModal({ isOpen, onClose, onCreated }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ nombre: '', cuit: '', telefono: '', condicion_iva: 'consumidor_final' });
+  const [form, setForm] = useState({ nombre: '', cuit: '', telefono: '', condicion_iva: 'CF' });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -38,7 +38,7 @@ function ClienteAltaRapidaModal({ isOpen, onClose, onCreated }) {
         .insert([{
           empresa_id:    user.empresa_id,
           nombre:        form.nombre.trim(),
-          cuit:          form.cuit.trim() || null,
+          documento:     form.cuit.trim() || null,
           telefono:      form.telefono.trim() || null,
           condicion_iva: form.condicion_iva,
           activo:        true,
@@ -49,7 +49,7 @@ function ClienteAltaRapidaModal({ isOpen, onClose, onCreated }) {
       toast({ title: `Cliente "${data.nombre}" creado` });
       onCreated(data);
       onClose();
-      setForm({ nombre: '', cuit: '', telefono: '', condicion_iva: 'consumidor_final' });
+      setForm({ nombre: '', cuit: '', telefono: '', condicion_iva: 'CF' });
     } catch (err) {
       toast({ title: 'Error al crear cliente', description: err.message, variant: 'destructive' });
     } finally {
@@ -111,10 +111,10 @@ function ClienteAltaRapidaModal({ isOpen, onClose, onCreated }) {
               onChange={e => set('condicion_iva', e.target.value)}
               className="w-full h-10 rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text px-3 text-sm"
             >
-              <option value="consumidor_final">Consumidor Final</option>
-              <option value="responsable_inscripto">Responsable Inscripto</option>
-              <option value="monotributista">Monotributista</option>
-              <option value="exento">Exento</option>
+              <option value="CF">Consumidor Final</option>
+              <option value="RI">Responsable Inscripto</option>
+              <option value="Monotributo">Monotributista</option>
+              <option value="Exento">Exento</option>
             </select>
           </div>
         </div>

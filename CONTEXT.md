@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-15 (sesión 15 — Luciano) — Prompt 15: Integración Mercado Pago — webhook automático de pagos.
+**Última actualización:** 2026-06-16 (sesión 16 — Nadia) — Sesión larga de testeo end-to-end de Document Flow, Facturación, Modo Caja, Mercado Pago y Reportes. Fixes integrales: PDF de venta con timeout + skip de logo gigante + downscale 400×400 en upload de logo; HistorialVentas trae NDs de la tabla `notas_debito` y merge con `comprobantes`; columna FACTURA muestra "Factura B" (no electrónica) + Ticket genérico; tipo_comprobante_afip guardado SIEMPRE; fix global Radix UI (CSS body + MutationObserver en App) — congelamiento de página resuelto; setTimeout(0) en DropdownMenuItem del Historial; getDateFromInputAR usa getNowAR() si la fecha es hoy; Dashboard refetch agresivo (onMount/onFocus/30s); formatos es-AR en reportes (formatCurrency). 11 bugs de Luciano detectados/corregidos por análisis estático: NC/ND Proveedor (tipo CHECK), AlertasStockBanner (columnas audit_log), MapaRelaciones (pedidos.fecha_pedido), ClienteDrillDown (tabla inexistente), ProveedorDrillDown (saldo no existe), ProveedorAltaRapidaModal (condicion_iva valores), ClienteAltaRapidaModal (cuit→documento + CF), HistorialTurnoModal (user_id no existe en comprobantes), PanelCarrito (sin fetch clientes), NuevaFacturaProveedorModal (precio_costo→costo_compra). Cero referencias "SAP" en código.
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -357,6 +357,127 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-16 (sesión 16 — Nadia) — Testeo end-to-end del trabajo de Luciano + fixes integrales
+
+**Objetivo:** después de pullear 15 commits de Luciano (Aurora redesign, Document Flow Prompts 1-15, Modo Caja, Facturación, Mercado Pago), recorrer toda la app sección por sección, arreglar bugs encontrados y dejar el sistema listo para producción.
+
+**Bugs detectados y corregidos en runtime (mientras la user testeaba):**
+
+1. **PDF de venta se quedaba "Generando..." infinito** — `@react-pdf/renderer` se cuelga con imágenes >500KB.
+   - Fix runtime: en [empresaUtils.js](src/lib/empresaUtils.js) skip de logo si pesa >500KB + timeout 30s en [ComprobantePrintModal.jsx](src/components/ventas/ComprobantePrintModal.jsx).
+   - Fix raíz: downscale automático a 400×400 + compresión PNG/JPEG en upload de logo desde [ConfiguracionSection.jsx](src/components/sections/ConfiguracionSection.jsx). Logo previo de 1.4 MB → ahora <100KB tras resubirlo.
+
+2. **Columna "FACTURA" del Historial mostraba "—"** — `NuevaFacturaModal` solo guardaba `tipo_comprobante_afip` si AFIP estaba activo.
+   - Fix: guardar SIEMPRE A/B/C (o null para Ticket) en el INSERT inicial.
+   - `HistorialVentas` ahora muestra badge "Factura B" (no electrónica), "Factura B + CAE" (electrónica) o "Ticket".
+
+3. **Modales colgaban toda la página al cerrar** (mouse no respondía, había que recargar). Bug raíz de Radix UI con DropdownMenu + Dialog.
+   - Fix global #1: CSS en [index.css](src/index.css) que fuerza `pointer-events: auto !important` en body/html si quedan stuck.
+   - Fix global #2: `MutationObserver` en [App.jsx](src/App.jsx) que detecta `aria-hidden=true` colgado en `<div #root>` y lo limpia automáticamente.
+   - Fix puntual: cambiar `onClick` → `onSelect + e.preventDefault() + setTimeout(0)` en todos los `DropdownMenuItem` de [HistorialVentas.jsx](src/components/ventas/HistorialVentas.jsx) para que el dropdown cierre limpio ANTES de abrir el dialog.
+
+4. **Notas de Débito no aparecían en el Historial de Ventas** — se guardan en tabla separada `notas_debito`, no en `comprobantes`.
+   - Fix: `HistorialVentas.fetchData` ahora hace fetch paralelo de ambas tablas, normaliza ND al formato de comprobante (`tipo='nota_debito'`) y merge ordenado por fecha.
+
+5. **Cliente VIP "0 productos" después de cargar precios** — `ListasPrecioSection` solo invalidaba `ITEMS_KEY`, no la lista padre.
+   - Fix: invalidar AMBAS keys (`ITEMS_KEY` + `LISTAS_KEY`) en `handleSaveItemPrecio` y `deleteItem.onSuccess`. Contador `_itemCount` ahora se actualiza en vivo.
+
+6. **Retención Practicada no guardaba** — `recalcMonto` devolvía formato US (`"4800.00"`) que parseNumberLocale es-AR rechaza.
+   - Fix: `recalcMonto` aplica `.replace('.', ',')` → devuelve `"4800,00"`.
+
+7. **Caja cerrada permitía hacer ventas** — la validación solo bloqueaba efectivo.
+   - Fix: bloquear TODA venta y TODO movimiento con caja cerrada, sin importar el método de pago.
+
+8. **Crear cliente desde Modo Caja fallaba** con `clientes.cuit does not exist`.
+   - Fix: en [ClienteAltaRapidaModal.jsx](src/components/shared/ClienteAltaRapidaModal.jsx) mapear `cuit` → columna `documento`.
+
+9. **CHECK constraint clientes.condicion_iva** falla con `'consumidor_final'`.
+   - Fix: usar códigos cortos `'CF'/'RI'/'Monotributo'/'Exento'` que coinciden con el CHECK de la DB.
+
+10. **HistorialTurnoModal en Modo Caja vacío** — query a `comprobantes.user_id` que no existe.
+    - Fix: filtrar por turno (fecha apertura/cierre) en lugar de user_id.
+
+11. **PanelCarrito sin clientes** — nunca hacía fetch, array vacío hasta crear uno via Alta Rápida.
+    - Fix: agregar `useEffect` que carga clientes de la empresa al montar.
+
+12. **NuevaFacturaProveedorModal autocompletado vacío** — query `precio_costo` (columna no existe).
+    - Fix: usar `costo_compra` (la columna real).
+
+13. **Devolución a Consumidor Final bloqueada** — `NuevaDevolucionModal` exigía cliente.
+    - Fix: si hay `comprobante` de origen, permitir `cliente_id=null` (Consumidor Final).
+
+14. **`movimientos_inventario.user_id` no existía** + CHECK `tipo` muy restrictivo.
+    - Migration 037 + 038: `ADD COLUMN user_id` + ampliar CHECK a `['entrada','salida','ajuste','ingreso','egreso']`.
+
+15. **`movimientos_inventario_tipo_check` violado por RPC `crear_devolucion`** — usaba `'ingreso'`.
+    - Resuelto por migration 038.
+
+16. **Compras `moneda` + `tipo_cambio_tasa` faltantes** → INSERT explotaba.
+    - Migrations 030 + 031: `ALTER TABLE ADD COLUMN`.
+
+17. **ChequesSection `comprobantes.created_at` no existe**.
+    - Fix: `.order('fecha', ...)` en lugar de `created_at`.
+
+18. **NuevaVentaModal productos vacíos al abrir** — race condition: `init()` ejecutaba `setProducts([])` después del search.
+    - Fix: eliminar el `setProducts([])` redundante en `init()`.
+
+19. **PlanCuentas dialogs sin DialogDescription** — warnings de accesibilidad Radix.
+    - Fix: agregar `DialogDescription` a Nueva Cuenta + Nuevo Asiento.
+
+20. **Logo Kairox reemplazado por "K" placeholder** en rediseño Aurora.
+    - Fix: restaurar `<img src="/kairox-logo.png" />` en [Sidebar.jsx](src/components/Sidebar.jsx).
+
+21. **Hora "12:00" en compras nuevas** — `getDateFromInputAR` siempre forzaba 12:00 UTC.
+    - Fix: si la fecha del input es HOY → usa `getNowAR()` con hora actual. Si es otro día → mantiene 12:00 (default neutro).
+
+22. **Dashboard no se actualizaba en tiempo real** — staleTime 60s sin invalidación.
+    - Fix: `refetchOnMount: 'always'`, `refetchOnWindowFocus: true`, `refetchInterval: 30s`, `staleTime: 0`.
+
+23. **Reportes con formato US `$150000.00`** — el user pidió formato es-AR.
+    - Fix: reemplazo de `toFixed(2)` por `formatCurrency()` en [ReportesSection.jsx](src/components/sections/ReportesSection.jsx) (8 ocurrencias).
+
+24. **NUEVO FEATURE: Devolución a Proveedor con UI completa**.
+    - Creado [NuevaDevolucionProveedorModal.jsx](src/components/compras/NuevaDevolucionProveedorModal.jsx) (espejo del de cliente) + botón Undo2 en [FacturasCompraSection.jsx](src/components/compras/FacturasCompraSection.jsx).
+
+**Bugs detectados por análisis estático (antes de que el user los disparara):**
+
+25. **NuevaNCProveedorModal**: `tipo: 'DEBE'` viola CHECK `cuenta_corriente_proveedores_tipo_check` → cambiado a `'nota_credito'`.
+26. **NuevaNDProveedorModal**: `tipo: 'HABER'` viola mismo CHECK → cambiado a `'nota_debito'`.
+27. **AlertasStockBanner**: columnas `action`/`table_name`/`record_id`/`new_values` no existen en `audit_log` → mapeo correcto a `operacion`/`tabla`/`registro_id`/`new_data`.
+28. **MapaRelaciones**: pide `pedidos.fecha_pedido` (no existe, es `fecha`) → corregido en select + render.
+29. **ClienteDrillDown**: tabla `cuenta_corriente_clientes` no existe + filtro `tipo IN ('factura','ticket')` cuando los tipos válidos son `'venta'/'nota_credito'` → reescrito para usar `clientes.saldo_actual`.
+30. **ProveedorDrillDown**: pide `saldo`/`limite_credito` en `cuenta_corriente_proveedores` (columnas inexistentes) → reescrito para calcular saldo sumando movimientos.
+31. **ProveedorAltaRapidaModal**: `condicion_iva: 'responsable_inscripto'` viola CHECK → mapeo a códigos cortos (RI/Monotributo/Exento/CF/No Categorizado).
+
+**Limpieza adicional:**
+- **Cero referencias a "SAP" en el código fuente.** Limpiados 7 archivos: MapaRelaciones, ConfiguracionSection, ReporteParidad, DocumentFlowPanel, MonedaSelector, NuevaVentaModal, useTCParalelo.
+- **parseNumberLocale estricto es-AR** consolidado: rechaza puntos como decimal, exige coma. Aplicado en Caja, NuevaVenta multi-pago, ProductosSection, CotizacionesSection, PedidosSection, OrdenesCompraSection. Pendiente próxima sesión: ComprasSection, ClientDetailModal, ListasPrecioSection, PlanCuentasSection, ProveedoresSection.
+- **Display de moneda en ticket/PDF/cotización**: cuando la operación es en USD/EUR/BRL, todo el documento se muestra en esa moneda con TC + equivalente ARS como referencia chiquita.
+
+**Migraciones aplicadas:**
+- **037** — `movimientos_inventario.user_id` (FK profiles).
+- **038** — CHECK `movimientos_inventario.tipo` ampliado.
+
+**Convenciones nuevas:**
+- **`movimientos_inventario.tipo`** acepta sinónimos `entrada↔ingreso` y `salida↔egreso`.
+- **Cálculos numéricos**: si el resultado va a un input controlado por `parseNumberLocale`, devolverlo en formato es-AR (coma decimal). NO usar `.toFixed(2)` directo — usar `.toFixed(2).replace('.', ',')`.
+- **TanStack Query**: cuando una mutación afecta a más de una key (items + conteo padre), invalidar AMBAS en `onSuccess`.
+- **Radix Dialog + DropdownMenu**: usar `onSelect={(e) => { e.preventDefault(); setTimeout(fn, 0); }}` para evitar race conditions de focus management.
+- **Devoluciones a Consumidor Final**: válidas. El sistema debe permitir `cliente_id=null` cuando hay comprobante de origen.
+- **Display de moneda**: internamente ARS; la vista convierte a la moneda registrada usando `tipo_cambio_tasa`.
+- **Caja cerrada = NADA**. No hacer excepciones por método de pago.
+- **Nada de menciones a SAP**: en código, comentarios ni UI. Es deuda de marca.
+
+**Estado actual del repo**: production-ready. Build verde. Sin bugs conocidos en flujos críticos (Ventas POS, Factura formal, NC, ND, Devoluciones, Compra Rápida, Modo Caja, Configuración 8 tabs, Reportes).
+
+**Pendientes para próxima sesión:**
+- Probar Pedido → Entrega → Factura end-to-end con la nav cruzada del Document Flow.
+- Continuar parseNumberLocale en las secciones pendientes.
+- Redeploy de Edge Function `emitir-cae` con alícuotas reales (homologación AFIP).
+- Probar Mercado Pago con credenciales reales en sandbox.
+
+---
 
 ### Sesión 2026-06-15 (sesión 15 — Luciano) — Prompt 15: Integración Mercado Pago — webhook automático de pagos
 

@@ -15,7 +15,7 @@ import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { getTodayAR, formatDateAR } from '@/lib/dateUtils';
 
 /**
- * Reporte de Paridad ARS / Moneda Paralela (estilo SAP "Currency Translation Report").
+ * Reporte de Paridad ARS / Moneda Paralela.
  * Muestra cada comprobante con su monto en ARS y su equivalente en la moneda paralela,
  * calculado al TC del día de cada operación.
  *

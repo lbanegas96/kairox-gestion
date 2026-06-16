@@ -96,7 +96,7 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
   const loadProductos = async () => {
     if (productosCache.length > 0) return;
     const { data } = await supabase.from('productos')
-      .select('id, nombre, precio_costo, alicuota_iva')
+      .select('id, nombre, costo_compra, alicuota_iva')
       .eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre').limit(500);
     setProductosCache(data || []);
   };
@@ -110,7 +110,7 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
     setItems(prev => prev.map(i =>
       i._id === rowId
         ? { ...i, producto_id: producto.id, descripcion: producto.nombre,
-            precio_unit: Number(producto.precio_costo || 0),
+            precio_unit: Number(producto.costo_compra || 0),
             alicuota_iva: Number(producto.alicuota_iva ?? 21) }
         : i
     ));
@@ -359,8 +359,8 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
                         </td>
                         <td className="px-2 py-1.5">
                           <Input
-                            type="number" min="0.001" step="0.001" value={item.cantidad}
-                            onChange={e => updateItem(item._id, 'cantidad', e.target.value)}
+                            type="number" min="1" step="1" value={item.cantidad}
+                            onChange={e => updateItem(item._id, 'cantidad', e.target.value.replace(/[^\d]/g, ''))}
                             className="h-8 text-xs text-center bg-transparent border-kx-border text-kx-text w-full"
                           />
                         </td>

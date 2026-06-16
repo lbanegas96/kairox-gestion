@@ -66,28 +66,56 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch Comprobantes
-      const { data: salesData, error: salesError } = await supabase
-        .from('comprobantes')
-        .select('*')
-        .order('fecha', { ascending: false });
+      // Fetch Comprobantes (ventas + NC) y Notas de Débito emitidas en paralelo.
+      // Las ND se guardan en una tabla separada `notas_debito`, así que las
+      // traemos y normalizamos al formato de comprobantes para mostrarlas en el listado.
+      const [{ data: salesData, error: salesError }, { data: ndData, error: ndError }] = await Promise.all([
+        supabase.from('comprobantes').select('*').order('fecha', { ascending: false }),
+        supabase
+          .from('notas_debito')
+          .select('id, numero_nd, fecha, cliente_id, comprobante_id, monto, moneda, concepto, observaciones, tipo')
+          .eq('tipo', 'emitida')
+          .order('fecha', { ascending: false }),
+      ]);
 
       if (salesError) throw salesError;
+      if (ndError)    throw ndError;
 
-      // Ensure estado_pago exists
-      const processedSales = (salesData || []).map(s => ({
-         ...s,
-         estado_pago: s.estado_pago || (s.forma_pago === 'Cuenta Corriente' ? 'pendiente' : 'pagada')
+      // Normalizar ND para que tengan la misma forma que un comprobante
+      const ndAsComprobantes = (ndData || []).map(nd => ({
+        id:             nd.id,
+        numero_venta:   nd.numero_nd,
+        fecha:          nd.fecha,
+        cliente_id:     nd.cliente_id,
+        cliente_nombre: null, // se rellena con la lookup más abajo si hace falta
+        total:          Number(nd.monto || 0),
+        forma_pago:     'Nota de Débito',
+        estado_pago:    'pagada',
+        moneda:         nd.moneda || 'ARS',
+        tipo:           'nota_debito',
+        motivo_nc:      nd.concepto || nd.observaciones || null,
+        comprobante_origen_id: nd.comprobante_id,
       }));
 
-      setComprobantes(processedSales);
+      // Merge y ordenar por fecha desc
+      const merged = [...(salesData || []), ...ndAsComprobantes]
+        .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
-      // Fetch Clients for Dropdown
+      // Fetch Clients antes de procesar para poder resolver nombres de las ND
       const { data: clientsData } = await supabase
         .from('clientes')
         .select('id, nombre')
         .order('nombre');
-      
+
+      const clienteNombrePorId = Object.fromEntries((clientsData || []).map(c => [c.id, c.nombre]));
+
+      const processedSales = merged.map(s => ({
+         ...s,
+         cliente_nombre: s.cliente_nombre || (s.cliente_id ? clienteNombrePorId[s.cliente_id] : null) || null,
+         estado_pago:    s.estado_pago    || (s.forma_pago === 'Cuenta Corriente' ? 'pendiente' : 'pagada'),
+      }));
+
+      setComprobantes(processedSales);
       setClients(clientsData || []);
 
     } catch (error) {
@@ -316,14 +344,20 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                           {sale.cae_estado === 'pendiente' && <Clock className="w-3 h-3" />}
                           {sale.cae_estado === 'error' && <AlertTriangle className="w-3 h-3" />}
                           {sale.cae_estado === 'emitido'
-                            ? `CAE ${sale.numero_afip ?? ''}`.trim()
+                            ? `Factura ${sale.tipo_comprobante_afip ?? ''} ${sale.numero_afip ?? ''}`.trim()
                             : sale.cae_estado === 'pendiente'
-                            ? 'CAE pend.'
+                            ? `Factura ${sale.tipo_comprobante_afip ?? ''} (CAE pend.)`.trim()
                             : 'Error CAE'
                           }
                         </span>
+                      ) : sale.tipo_comprobante_afip ? (
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                          Factura {sale.tipo_comprobante_afip}
+                        </span>
                       ) : (
-                        <span className="text-xs text-slate-300 dark:text-kx-text-2">—</span>
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                          Ticket
+                        </span>
                       )}
                     </td>
                     <td className="p-4 text-right font-bold text-slate-700 dark:text-kx-text group-hover:text-emerald-600 transition-colors">
@@ -347,14 +381,26 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="bg-kx-surface border-kx-border text-kx-text text-sm w-48">
+                          {/*
+                            Workaround Radix: usar onSelect + setTimeout para que el
+                            DropdownMenu termine su cleanup de focus ANTES de abrir el
+                            Dialog. Sin esto, aria-hidden y pointer-events: none quedan
+                            stuck en el <div #root> y la página entera se congela.
+                          */}
                           <DropdownMenuItem
-                            onClick={() => { setSelectedSaleId(sale.id); setShowDetailModal(true); }}
+                            onSelect={(e) => {
+                              e.preventDefault();
+                              setTimeout(() => { setSelectedSaleId(sale.id); setShowDetailModal(true); }, 0);
+                            }}
                             className="gap-2 cursor-pointer"
                           >
                             <Eye className="h-3.5 w-3.5 text-kx-blue" /> Ver detalle
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => { setMapaCompId(sale.id); setIsMapaOpen(true); }}
+                            onSelect={(e) => {
+                              e.preventDefault();
+                              setTimeout(() => { setMapaCompId(sale.id); setIsMapaOpen(true); }, 0);
+                            }}
                             className="gap-2 cursor-pointer"
                           >
                             <Network className="h-3.5 w-3.5 text-kx-violet" /> Mapa de relaciones
@@ -363,26 +409,32 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                             <>
                               <DropdownMenuSeparator className="bg-kx-border" />
                               <DropdownMenuItem
-                                onClick={() => {
-                                  setNcOrigen({
-                                    id:             sale.id,
-                                    numero_venta:   sale.numero_venta,
-                                    cliente_id:     sale.cliente_id,
-                                    cliente_nombre: sale.cliente_nombre,
-                                  });
-                                  setIsNcOpen(true);
+                                onSelect={(e) => {
+                                  e.preventDefault();
+                                  setTimeout(() => {
+                                    setNcOrigen({
+                                      id:             sale.id,
+                                      numero_venta:   sale.numero_venta,
+                                      cliente_id:     sale.cliente_id,
+                                      cliente_nombre: sale.cliente_nombre,
+                                    });
+                                    setIsNcOpen(true);
+                                  }, 0);
                                 }}
                                 className="gap-2 cursor-pointer"
                               >
                                 <Copy className="h-3.5 w-3.5 text-kx-amber" /> Copiar a NC
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => {
-                                  setNdOrigen({
-                                    clienteId:     sale.cliente_id,
-                                    comprobanteId: sale.id,
-                                  });
-                                  setIsNdOpen(true);
+                                onSelect={(e) => {
+                                  e.preventDefault();
+                                  setTimeout(() => {
+                                    setNdOrigen({
+                                      clienteId:     sale.cliente_id,
+                                      comprobanteId: sale.id,
+                                    });
+                                    setIsNdOpen(true);
+                                  }, 0);
                                 }}
                                 className="gap-2 cursor-pointer"
                               >
@@ -390,14 +442,17 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                               </DropdownMenuItem>
                               <DropdownMenuSeparator className="bg-kx-border" />
                               <DropdownMenuItem
-                                onClick={() => {
-                                  setDevolucionComp({
-                                    id:             sale.id,
-                                    numero_venta:   sale.numero_venta,
-                                    cliente_id:     sale.cliente_id,
-                                    cliente_nombre: sale.cliente_nombre,
-                                  });
-                                  setIsDevolucionOpen(true);
+                                onSelect={(e) => {
+                                  e.preventDefault();
+                                  setTimeout(() => {
+                                    setDevolucionComp({
+                                      id:             sale.id,
+                                      numero_venta:   sale.numero_venta,
+                                      cliente_id:     sale.cliente_id,
+                                      cliente_nombre: sale.cliente_nombre,
+                                    });
+                                    setIsDevolucionOpen(true);
+                                  }, 0);
                                 }}
                                 className="gap-2 cursor-pointer text-orange-500 focus:text-orange-500"
                               >

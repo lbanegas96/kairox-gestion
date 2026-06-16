@@ -10,7 +10,7 @@ import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 import { CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 
 /**
- * Selector de moneda con tipo de cambio del día centralizado (estilo SAP).
+ * Selector de moneda con tipo de cambio del día centralizado.
  *
  * Comportamiento:
  *   - Al seleccionar una moneda extranjera, consulta automáticamente si hay TC

@@ -48,7 +48,6 @@ function Arrow() {
 
 /**
  * DocumentFlowPanel — muestra la cadena de documentos relacionados a un comprobante.
- * Inspirado en SAP SD Document Flow.
  *
  * Props:
  *  - comprobanteId: string
