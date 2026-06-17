@@ -24,7 +24,7 @@ import CSVImportModal from '@/components/ui/CSVImportModal';
 const emptyForm = () => ({
   nombre: '', documento: '', telefono: '', email: '', direccion: '',
   limite_credito: '', condiciones_pago: '', dias_credito: '',
-  bloquear_en_limite: false, lista_precio_id: '',
+  bloquear_en_limite: false, lista_precio_id: '', condicion_pago_id: '',
 });
 
 function ClientesSection() {
@@ -48,6 +48,20 @@ function ClientesSection() {
   const { data: listasPrecios = [] } = useQuery({
     queryKey: ['listas_precio', user?.empresa_id],
     queryFn: () => listaPreciosService.getAll(user.empresa_id),
+    enabled: !!user?.empresa_id,
+  });
+
+  const { data: condicionesPago = [] } = useQuery({
+    queryKey: ['condiciones_pago', user?.empresa_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('condiciones_pago')
+        .select('*')
+        .eq('empresa_id', user.empresa_id)
+        .order('dias_credito');
+      if (error) throw error;
+      return data ?? [];
+    },
     enabled: !!user?.empresa_id,
   });
 
@@ -87,6 +101,7 @@ function ClientesSection() {
       dias_credito:       client.dias_credito != null ? String(client.dias_credito) : '',
       bloquear_en_limite: client.bloquear_en_limite || false,
       lista_precio_id:    client.lista_precio_id || '',
+      condicion_pago_id:  client.condicion_pago_id || '',
     });
     setIsEditDialogOpen(true);
   };
@@ -106,6 +121,7 @@ function ClientesSection() {
         dias_credito:       formData.dias_credito !== '' ? parseInt(formData.dias_credito) : 0,
         bloquear_en_limite: formData.bloquear_en_limite,
         lista_precio_id:    formData.lista_precio_id || null,
+        condicion_pago_id:  formData.condicion_pago_id || null,
       };
 
       if (isEdit) {
@@ -191,6 +207,31 @@ function ClientesSection() {
           className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
         <p className="text-xs text-kx-text-3">0 = sin límite establecido</p>
       </div>
+      {/* Condición de pago (maestro) */}
+      {condicionesPago.filter(c => c.activo).length > 0 && (
+        <div className="space-y-1.5">
+          <Label className="dark:text-kx-text flex items-center gap-1"><CreditCard className="h-3.5 w-3.5" /> Condición de Pago</Label>
+          <select
+            value={formData.condicion_pago_id}
+            onChange={e => {
+              const id = e.target.value;
+              const condicion = condicionesPago.find(c => c.id === id);
+              setFormData(f => ({
+                ...f,
+                condicion_pago_id: id,
+                dias_credito: condicion ? String(condicion.dias_credito) : f.dias_credito,
+              }));
+            }}
+            className="w-full h-10 rounded-md border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface px-3 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-violet-500"
+          >
+            <option value="">Sin asignar (días manuales)</option>
+            {condicionesPago.filter(c => c.activo).map(c => (
+              <option key={c.id} value={c.id}>{c.nombre} ({c.dias_credito} días)</option>
+            ))}
+          </select>
+          <p className="text-xs text-kx-text-3">Al seleccionar, completa automáticamente los días de crédito.</p>
+        </div>
+      )}
       {/* Días de crédito */}
       <div className="space-y-1.5">
         <Label className="dark:text-kx-text flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Días de Crédito</Label>

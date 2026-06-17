@@ -1,5 +1,6 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-16 (sesión 16 — Nadia) — Sesión larga de testeo end-to-end de Document Flow, Facturación, Modo Caja, Mercado Pago y Reportes. Fixes integrales: PDF de venta con timeout + skip de logo gigante + downscale 400×400 en upload de logo; HistorialVentas trae NDs de la tabla `notas_debito` y merge con `comprobantes`; columna FACTURA muestra "Factura B" (no electrónica) + Ticket genérico; tipo_comprobante_afip guardado SIEMPRE; fix global Radix UI (CSS body + MutationObserver en App) — congelamiento de página resuelto; setTimeout(0) en DropdownMenuItem del Historial; getDateFromInputAR usa getNowAR() si la fecha es hoy; Dashboard refetch agresivo (onMount/onFocus/30s); formatos es-AR en reportes (formatCurrency). 11 bugs de Luciano detectados/corregidos por análisis estático: NC/ND Proveedor (tipo CHECK), AlertasStockBanner (columnas audit_log), MapaRelaciones (pedidos.fecha_pedido), ClienteDrillDown (tabla inexistente), ProveedorDrillDown (saldo no existe), ProveedorAltaRapidaModal (condicion_iva valores), ClienteAltaRapidaModal (cuit→documento + CF), HistorialTurnoModal (user_id no existe en comprobantes), PanelCarrito (sin fetch clientes), NuevaFacturaProveedorModal (precio_costo→costo_compra). Cero referencias "SAP" en código.
+**Última actualización:** 2026-06-16 (sesión 17) — Maestros reales: Unidades de Medida (Tab 4) + Condiciones de Pago (Tab 2) en ConfiguracionSection, con seed automático por trigger para empresas nuevas y Select conectado en ClientesSection.
+**Sesiones previas:** sesión 16 (Nadia) — testeo end-to-end de Document Flow, Facturación, Modo Caja, Mercado Pago y Reportes. Fixes integrales: PDF de venta con timeout + skip de logo gigante + downscale 400×400 en upload de logo; HistorialVentas trae NDs de la tabla `notas_debito` y merge con `comprobantes`; columna FACTURA muestra "Factura B" (no electrónica) + Ticket genérico; tipo_comprobante_afip guardado SIEMPRE; fix global Radix UI (CSS body + MutationObserver en App) — congelamiento de página resuelto; setTimeout(0) en DropdownMenuItem del Historial; getDateFromInputAR usa getNowAR() si la fecha es hoy; Dashboard refetch agresivo (onMount/onFocus/30s); formatos es-AR en reportes (formatCurrency). 11 bugs de Luciano detectados/corregidos por análisis estático.
 **Branch:** `master` → `origin/master` (GitHub: lbanegas96/kairox-gestion)
 **Producción:** https://kairox-gestion.vercel.app
 
@@ -46,7 +47,7 @@
 | **DocumentFlowPanel** | `ui/DocumentFlowPanel.jsx` | ✅ **COMPLETO Prompt 6/6** Cadena card SAP: origen→actual→NC→cobros CC→devoluciones. Usa `documentFlowService`. Renderizado en SaleDetailModal |
 | Órdenes de Compra | `OrdenesCompraSection.jsx` | ✅ Workflow aprobación + 3-way match + realtime |
 | Caja | `CajaSection.jsx` + `CajaCierre.jsx` | ✅ Arqueo por denominaciones + tab Arqueos |
-| Clientes | `ClientesSection.jsx` | ✅ Form completo + condicion_pago + limite_credito + import CSV |
+| Clientes | `ClientesSection.jsx` | ✅ Form completo + limite_credito + import CSV. **Sesión 17:** select "Condición de Pago" conectado al maestro `condiciones_pago` (FK `condicion_pago_id`), sincroniza `dias_credito` automáticamente al elegir. |
 | Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Tab Antigüedad de Deuda (FIFO 30/60/90/+90 días) |
 | Detalle Cta. Cte. | `ClientDetailModal.jsx` | ✅ Open Item Management SAP-style |
 | Contabilidad | `PlanCuentasSection.jsx` | ✅ 5 tabs: Plan/Asientos/Balance/LibroMayor/**Períodos** — ⏳ P&L y Balance General en roadmap |
@@ -70,7 +71,7 @@
 | **NuevaNDProveedorModal** | `compras/NuevaNDProveedorModal.jsx` | ✅ **Prompt 11** ND recibida de proveedor (nos cobra más). Llama RPC `crear_nota_debito(tipo='recibida')` + INSERT manual `cuenta_corriente_proveedores` HABER (el RPC no inserta CC para 'recibida'). |
 | **FacturasCompraSection** | `compras/FacturasCompraSection.jsx` | ✅ **Prompt 11** + DropdownMenu por fila (Ver detalle / NC / ND / Devolver / Mapa) + botón "Nueva Factura de Proveedor" + todos los modales integrados. |
 | **MapaRelaciones** | `shared/MapaRelaciones.jsx` | ✅ **Prompt 11** Extendido con prop `compraId`. Modo compra: Recepción→FacturaCompra→PagosCC + derivados (Dev.Prov / NC financiera / ND recibida). Modo venta intacto. |
-| **Configuración** | `ConfiguracionSection.jsx` | ✅ **Prompt 14** 8 tabs SAP Administración-style. **Prompt 15:** Tab 5 Integraciones actualizado — card Mercado Pago con estado real (conectado/sin configurar), webhook URL con botón copiar, último sync; abre `ConfigMercadoPagoModal`. |
+| **Configuración** | `ConfiguracionSection.jsx` | ✅ **Prompt 14** 8 tabs SAP Administración-style. **Prompt 15:** Tab 5 Integraciones — card Mercado Pago con estado real, webhook URL con botón copiar, último sync; abre `ConfigMercadoPagoModal`. **Sesión 17:** Tab 4 (Inventario) — CRUD real de Unidades de Medida (tabla `unidades_medida`, sin hard delete, solo `activo=false`). Tab 2 (Finanzas) — CRUD real de Condiciones de Pago (tabla `condiciones_pago`: nombre, días, descuento %). "Método de Valoración de Stock" y "Stock Mínimo Global" siguen como placeholder (fuera de scope). |
 | `IntegracionCard` | `shared/IntegracionCard.jsx` | ✅ **Prompt 14** Card reutilizable para integraciones: nombre, descripción, logo emoji, estado (activo/inactivo/proximamente/error), botón "Configurar" opcional con `onConfigure` callback. |
 | **Mercado Pago Webhook** | `supabase/functions/mp-webhook/index.ts` | ✅ **Prompt 15** Edge Function `--no-verify-jwt`. Valida firma HMAC-SHA256 (x-signature), consulta `GET /v1/payments/{id}`, solo procesa `status=approved`, deduplicación por `descripcion LIKE 'MP #ID%'`, llama RPC `insertar_movimiento_bancario_externo`, actualiza `ultimo_sync`. Deploy: `supabase functions deploy mp-webhook --no-verify-jwt`. URL: `{SUPABASE_URL}/functions/v1/mp-webhook?empresa_id=EMPRESA_UUID` |
 | **ConfigMercadoPagoModal** | `bancos/ConfigMercadoPagoModal.jsx` | ✅ **Prompt 15** Modal configuración MP: Access Token (valida formato APP_USR- + GET /users/me), select cuenta bancaria destino, webhook secret opcional. Pasos de instrucciones inline. URL webhook con botón copiar. Upsert en `integraciones_bancarias` con `onConflict: 'empresa_id,proveedor'`. |
@@ -129,6 +130,7 @@
 | **`migrations/040_retroactive_tipos_cambio.sql`** | Tabla `tipos_cambio` (`id` gen_random_uuid, `moneda` DEFAULT 'USD', UNIQUE empresa+moneda+fecha) + 2 índices + 2 policies RLS (`tc_all`, `tipos_cambio_empresa_all`) + `trg_audit_tipos_cambio` | ✅ Solo documental |
 | **`migrations/041_retroactive_moneda_paralela.sql`** | `empresas`: `usa_tc_paralelo`/`moneda_paralela`. `comprobantes`: `estado_pago`/`monto_paralelo`/`tc_paralelo`/`comprobante_origen_id`. `movimientos_caja` + `compras`: `monto_paralelo`/`tc_paralelo`. `cuenta_corriente_movimientos`: `comprobante_id`/`metodo_cobro`/`monto_paralelo`/`tc_paralelo` | ✅ Solo documental |
 | **`migrations/042_retroactive_audit_y_triggers.sql`** | `fn_audit_trigger` (migrada de `row_to_json` → `to_jsonb`) + `fn_update_cliente_saldo` + trigger `trg_update_cliente_saldo` en `cuenta_corriente_movimientos` + vista `v_saldo_proveedores` | ✅ Solo documental |
+| **`supabase/migrations/043_maestros_unidades_condiciones_pago.sql`** | Tablas `unidades_medida` + `condiciones_pago` (RLS por empresa) + FK `clientes.condicion_pago_id` + función `seed_maestros_default(empresa_id)` (mismo patrón que `seed_plan_cuentas`) + trigger nuevo `trg_empresa_seed_maestros` en `empresas` (AFTER INSERT, independiente de `trg_empresa_caja_principal`) + seed retroactivo a las 3 empresas existentes | ✅ Aplicada via MCP |
 
 ---
 
@@ -184,6 +186,8 @@
 - **Document Flow — entrega implícita:** toda venta POS (`crear_venta` RPC) genera automáticamente una fila en `entregas` con `origen='implicita'` + sus `entrega_items`. Esto permite que EntregasSection muestre el historial completo (POS + manuales).
 - **NuevaVentaModal prop `pedido`:** acepta `pedido` (con `pedido_items[]`, `cliente_id`). Si se provee, pre-carga carrito idéntico al flujo `cotizacion`. Usar desde PedidosSection al "Facturar" → en `onSaleSuccess`, actualizar `pedidos.estado = 'facturado'` y refrescar.
 - **Sidebar colapsable:** estado en `localStorage('kx-sidebar-collapsed')` como `{VENTAS: true, COMPRAS: false, ...}`. `true` = colapsado. Default: todos expandidos. Toggle hace click en el label del grupo.
+- **⚠️ `clientes` tiene DOS columnas de texto parecidas — no confundir:** `condiciones_pago` (plural, TEXT, Textarea de notas libres tipo "Pago a 30 días, 5% desc.", **en uso activo** en `ClientesSection.jsx`) y `condicion_pago` (singular, TEXT, **columna huérfana sin ninguna referencia en código**, verificado con grep sobre todo `src/`). Sesión 17 agregó además `condicion_pago_id` (UUID, FK a la nueva tabla `condiciones_pago` maestro) — un tercer campo, distinto de los dos anteriores. El Select de "Condición de Pago" en `ClientesSection.jsx` solo escribe `condicion_pago_id` + sincroniza `dias_credito`; no toca ni `condiciones_pago` (notas libres del usuario) ni el huérfano `condicion_pago`.
+- **Seed de maestros NO es uniforme entre módulos:** `seed_plan_cuentas` (plan de cuentas) es **manual** — botón "Inicializar" en `PlanCuentasSection` → `planCuentasService.seedCuentas()`. No hay ningún trigger que lo dispare al crear una empresa. En cambio, `seed_maestros_default` (unidades de medida + condiciones de pago, sesión 17) **sí es automático** vía trigger `trg_empresa_seed_maestros` (AFTER INSERT en `empresas`, independiente de `trg_empresa_caja_principal`). Si se agrega un maestro nuevo, decidir explícitamente si su seed debe ser manual o automático — no asumir que sigue el patrón de plan de cuentas por defecto.
 
 ---
 
@@ -293,7 +297,8 @@ Cuando `enabled = true`, los siguientes módulos guardan `monto_paralelo` + `tc_
 6. ✅ **Moneda Paralela UI — Caja y Cuenta Corriente** (Prompt 13) — KPIs equivalente, columna separada en tabla Caja con fallback `calcParalelo`, dialog cobro CC con equivalente en tiempo real, aging bandas CC con equivalente.
 7. ✅ **ConfiguracionSection SAP Administración-style** (Prompt 14) — 8 tabs centralizados + IntegracionCard + usuarios embebido en Tab 7 + REGLA DE ORO documentada.
 8. ✅ **Integración Mercado Pago** (Prompt 15) — Edge Function `mp-webhook` + `ConfigMercadoPagoModal` + Tab 5 Integraciones con estado real + webhook URL dinámica.
-9. ⏳ **Membresías** / Modelo de licencias Starter/Pro/Business
+9. ✅ **Maestros: Unidades de Medida + Condiciones de Pago** (Sesión 17) — CRUD real Tab 4/Tab 2 + seed automático por trigger + Select conectado en Clientes.
+10. ⏳ **Membresías** / Modelo de licencias Starter/Pro/Business
 
 #### Pendientes Fase 7
 - Configurar Supabase Auth URLs (Site URL + Redirect URLs → `https://kairox-gestion.vercel.app/**`)
@@ -341,6 +346,7 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 | 14 | **Moneda Paralela UI — Caja y Cuenta Corriente** (Prompt 13) — KPIs equivalente + columna tabla + dialog cobro + aging bandas | FI Parallel Currency Reporting | ✅ Sesión 15-jun-2026 |
 | 15 | **ConfiguracionSection SAP Administración-style** (Prompt 14) — 8 tabs centralizados, REGLA DE ORO, IntegracionCard, usuarios en Tab 7 | SAP B1 Administration Module | ✅ Sesión 15-jun-2026 |
 | 16 | **Integración Mercado Pago** (Prompt 15) — Edge Function `mp-webhook` (HMAC-SHA256, dedup, solo `approved`), `ConfigMercadoPagoModal` (token verify, webhook URL, cuenta destino), Tab 5 Integraciones con estado real | SAP B1 Payment Engine / Integration Framework | ✅ Sesión 15-jun-2026 |
+| 17 | **Maestros: Unidades de Medida + Condiciones de Pago** (Sesión 17) — tablas reales multi-tenant, CRUD en Tab 4/Tab 2, seed automático por trigger en empresas nuevas, Select conectado en ficha de Cliente | MM Units of Measure + FI Terms of Payment | ✅ Sesión 16-jun-2026 |
 
 ### 🟢 Baja prioridad (post-ARCA)
 
@@ -352,6 +358,30 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-16 (sesión 17) — Maestros reales: Unidades de Medida + Condiciones de Pago
+
+**Objetivo:** reemplazar los placeholders "Próximamente" de Tab 4 (Inventario) y Tab 2 (Finanzas) de `ConfiguracionSection` por maestros reales multi-tenant, siguiendo la REGLA DE ORO.
+
+**Migration `043_maestros_unidades_condiciones_pago.sql`** (aplicada via MCP, archivo guardado en `supabase/migrations/`):
+- Tablas `unidades_medida` (`codigo`, `descripcion`, `activo`) y `condiciones_pago` (`nombre`, `dias_credito`, `descuento_pct`, `activo`), ambas con RLS por `empresa_id = get_my_empresa_id()` y UNIQUE compuesto.
+- FK aditiva `clientes.condicion_pago_id` → `condiciones_pago.id`.
+- Función `seed_maestros_default(empresa_id)` — 11 unidades + 5 condiciones de pago default, `ON CONFLICT DO NOTHING`.
+- Seed retroactivo ejecutado para las 3 empresas existentes (11 unidades cada una, verificado).
+
+**Hallazgos de schema que cambiaron el plan original:**
+1. El prompt asumía que `seed_plan_cuentas` se dispara automáticamente al crear una empresa nueva. Verificado en código: es **100% manual** (botón en `PlanCuentasSection`). El único trigger real `AFTER INSERT` en `empresas` es `trg_empresa_caja_principal` (crea "Caja Principal"). Para que los maestros nuevos sí sean automáticos, se agregó un **trigger independiente** `trg_empresa_seed_maestros` en lugar de modificar `create_caja_principal()` — evita arriesgar una función que ya funciona en producción.
+2. El prompt asumía que `clientes.condicion_pago` (singular) era el campo de texto libre en uso. Verificado en DB: existen **dos** columnas de texto distintas — `condiciones_pago` (plural, Textarea de notas libres, activamente usada en `ClientesSection.jsx`) y `condicion_pago` (singular, **columna huérfana sin ninguna referencia en código**). Se documentó la distinción en Convenciones; el Select nuevo no escribe en ninguna de las dos, solo en la nueva FK `condicion_pago_id` + sincroniza `dias_credito` (columna real ya en uso).
+
+**Archivos modificados:**
+- `src/components/sections/ConfiguracionSection.jsx` — Tab 4: CRUD real de Unidades de Medida (tabla + modal alta/edición + toggle `activo`, sin hard delete). Tab 2: CRUD real de Condiciones de Pago (tabla + modal + toggle `activo`). Ambos modales viven fuera de `<Tabs>` (mismo patrón que el wizard AFIP y `ConfigMercadoPagoModal`) para no desmontarse al cambiar de tab.
+- `src/components/sections/ClientesSection.jsx` — nuevo Select "Condición de Pago" en el form (estilo `<select>` nativo, igual al de Lista de Precios ya existente) que lee de `condiciones_pago` vía `useQuery`, escribe `condicion_pago_id` y autocompleta `dias_credito` al elegir. Campo `dias_credito` sigue editable manualmente después (override posible).
+
+**Parte 5 (cálculo automático de vencimiento) — NO implementada, documentada como TODO:** requeriría tocar `crear_venta` u otra RPC crítica para calcular `fecha_vencimiento` a partir de `condicion_pago.dias_credito`. Se prioriza no arriesgar una RPC en producción; queda pendiente para una sesión dedicada.
+
+**Verificación:** build de producción (`npx vite build`) exitoso sin errores, sintaxis JSX validada con Babel en ambos archivos modificados, advisors de seguridad de Supabase sin warnings nuevos para las tablas/funciones creadas.
+
+---
 
 ### Sesión 2026-06-16 — Auditoría Launchpad Fiori vs nueva estructura de módulos
 

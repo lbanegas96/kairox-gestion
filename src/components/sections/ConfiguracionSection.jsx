@@ -3,7 +3,7 @@ import {
   Settings, Save, Building, Image as ImageIcon, Loader2, Upload, Trash2,
   AlertCircle, TrendingUp, CheckCircle2, FileText, Check, Download,
   Users, Puzzle, Bell, Package2, Info, Mail, MapPin, Hash,
-  CreditCard, Warehouse, BarChart3, Cpu, Copy,
+  CreditCard, Warehouse, BarChart3, Cpu, Copy, Pencil,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -74,6 +74,14 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [loadingTC, setLoadingTC] = useState(false);
   const [savingTC, setSavingTC] = useState(false);
 
+  // ── Tab 2: Condiciones de Pago ───────────────────────────────────────────
+  const [condicionesPago, setCondicionesPago] = useState([]);
+  const [loadingCondiciones, setLoadingCondiciones] = useState(true);
+  const [showCondicionModal, setShowCondicionModal] = useState(false);
+  const [editingCondicion, setEditingCondicion] = useState(null);
+  const [condicionForm, setCondicionForm] = useState({ nombre: '', dias_credito: '', descuento_pct: '' });
+  const [savingCondicion, setSavingCondicion] = useState(false);
+
   // ── Tab 3: Facturación ────────────────────────────────────────────────────
   const [afipConfig, setAfipConfig] = useState({
     usa_factura_electronica: false,
@@ -97,6 +105,14 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [csrGenerado, setCsrGenerado] = useState(null);
   const [generandoCsr, setGenerandoCsr] = useState(false);
   const [subiendoConfig, setSubiendoConfig] = useState(false);
+
+  // ── Tab 4: Unidades de Medida ─────────────────────────────────────────────
+  const [unidadesMedida, setUnidadesMedida] = useState([]);
+  const [loadingUM, setLoadingUM] = useState(true);
+  const [showUMModal, setShowUMModal] = useState(false);
+  const [editingUM, setEditingUM] = useState(null);
+  const [umForm, setUmForm] = useState({ codigo: '', descripcion: '' });
+  const [savingUM, setSavingUM] = useState(false);
 
   // ── Tab 5: Integraciones — Mercado Pago ──────────────────────────────────
   const [integracionMP,  setIntegracionMP]  = useState(null);
@@ -252,6 +268,46 @@ const ConfiguracionSection = ({ initialTab }) => {
       .maybeSingle()
       .then(({ data }) => setIntegracionMP(data ?? null));
   };
+
+  const fetchUnidadesMedida = async () => {
+    if (!user?.empresa_id) return;
+    setLoadingUM(true);
+    try {
+      const { data, error } = await supabase
+        .from('unidades_medida')
+        .select('*')
+        .eq('empresa_id', user.empresa_id)
+        .order('codigo');
+      if (error) throw error;
+      setUnidadesMedida(data ?? []);
+    } catch (e) {
+      console.error('[Unidades de Medida] Error al cargar:', e);
+    } finally {
+      setLoadingUM(false);
+    }
+  };
+
+  useEffect(() => { fetchUnidadesMedida(); }, [user?.empresa_id]);
+
+  const fetchCondicionesPago = async () => {
+    if (!user?.empresa_id) return;
+    setLoadingCondiciones(true);
+    try {
+      const { data, error } = await supabase
+        .from('condiciones_pago')
+        .select('*')
+        .eq('empresa_id', user.empresa_id)
+        .order('dias_credito');
+      if (error) throw error;
+      setCondicionesPago(data ?? []);
+    } catch (e) {
+      console.error('[Condiciones de Pago] Error al cargar:', e);
+    } finally {
+      setLoadingCondiciones(false);
+    }
+  };
+
+  useEffect(() => { fetchCondicionesPago(); }, [user?.empresa_id]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Tab 1 handlers
@@ -516,6 +572,117 @@ const ConfiguracionSection = ({ initialTab }) => {
   };
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Tab 4: Unidades de Medida — handlers
+  // ─────────────────────────────────────────────────────────────────────────
+  const openNuevaUM = () => {
+    setEditingUM(null);
+    setUmForm({ codigo: '', descripcion: '' });
+    setShowUMModal(true);
+  };
+
+  const openEditarUM = (u) => {
+    setEditingUM(u);
+    setUmForm({ codigo: u.codigo, descripcion: u.descripcion });
+    setShowUMModal(true);
+  };
+
+  const toggleActivoUM = async (id, activo) => {
+    const { error } = await supabase.from('unidades_medida').update({ activo }).eq('id', id);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
+    }
+    fetchUnidadesMedida();
+  };
+
+  const handleGuardarUM = async () => {
+    if (!umForm.codigo.trim() || !umForm.descripcion.trim()) {
+      toast({ title: 'Completá código y descripción', variant: 'destructive' });
+      return;
+    }
+    setSavingUM(true);
+    try {
+      const payload = {
+        codigo: umForm.codigo.trim().toUpperCase(),
+        descripcion: umForm.descripcion.trim(),
+      };
+      if (editingUM) {
+        const { error } = await supabase.from('unidades_medida').update(payload).eq('id', editingUM.id);
+        if (error) throw error;
+        toast({ title: 'Unidad actualizada' });
+      } else {
+        const { error } = await supabase.from('unidades_medida').insert({ ...payload, empresa_id: user.empresa_id });
+        if (error) throw error;
+        toast({ title: 'Unidad creada' });
+      }
+      setShowUMModal(false);
+      fetchUnidadesMedida();
+    } catch (e) {
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingUM(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Tab 2: Condiciones de Pago — handlers
+  // ─────────────────────────────────────────────────────────────────────────
+  const openNuevaCondicion = () => {
+    setEditingCondicion(null);
+    setCondicionForm({ nombre: '', dias_credito: '', descuento_pct: '' });
+    setShowCondicionModal(true);
+  };
+
+  const openEditarCondicion = (c) => {
+    setEditingCondicion(c);
+    setCondicionForm({
+      nombre: c.nombre,
+      dias_credito: String(c.dias_credito ?? 0),
+      descuento_pct: String(c.descuento_pct ?? 0),
+    });
+    setShowCondicionModal(true);
+  };
+
+  const toggleActivoCondicion = async (id, activo) => {
+    const { error } = await supabase.from('condiciones_pago').update({ activo }).eq('id', id);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
+    }
+    fetchCondicionesPago();
+  };
+
+  const handleGuardarCondicion = async () => {
+    if (!condicionForm.nombre.trim()) {
+      toast({ title: 'El nombre es obligatorio', variant: 'destructive' });
+      return;
+    }
+    setSavingCondicion(true);
+    try {
+      const payload = {
+        nombre: condicionForm.nombre.trim(),
+        dias_credito: condicionForm.dias_credito !== '' ? parseInt(condicionForm.dias_credito, 10) : 0,
+        descuento_pct: condicionForm.descuento_pct !== '' ? parseFloat(condicionForm.descuento_pct) : 0,
+      };
+      if (editingCondicion) {
+        const { error } = await supabase.from('condiciones_pago').update(payload).eq('id', editingCondicion.id);
+        if (error) throw error;
+        toast({ title: 'Condición de pago actualizada' });
+      } else {
+        const { error } = await supabase.from('condiciones_pago').insert({ ...payload, empresa_id: user.empresa_id });
+        if (error) throw error;
+        toast({ title: 'Condición de pago creada' });
+      }
+      setShowCondicionModal(false);
+      fetchCondicionesPago();
+    } catch (e) {
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingCondicion(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Render
   // ─────────────────────────────────────────────────────────────────────────
   return (
@@ -766,14 +933,43 @@ const ConfiguracionSection = ({ initialTab }) => {
               )}
             </div>
 
-            {/* Condiciones de pago — placeholder */}
-            <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm opacity-60">
-              <div className="flex items-center gap-2 mb-3">
-                <CreditCard className="w-5 h-5 text-kx-text-3" />
-                <h3 className="font-semibold text-kx-text">Condiciones de Pago</h3>
-                <span className="text-xs bg-kx-surface-2 text-kx-text-3 px-2 py-0.5 rounded-full border border-kx-border">Próximamente</span>
+            {/* Condiciones de pago */}
+            <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-kx-text-3" />
+                  <h3 className="font-semibold text-kx-text">Condiciones de Pago</h3>
+                </div>
+                <Button size="sm" onClick={openNuevaCondicion}>+ Nueva</Button>
               </div>
-              <p className="text-sm text-kx-text-2">Configuración de plazos (contado, 30/60/90 días, etc.) para clientes y proveedores.</p>
+              <p className="text-sm text-kx-text-2 mb-4">Plazos disponibles para clientes y proveedores. Se usan al asignar la condición de pago de un cliente.</p>
+
+              {loadingCondiciones ? (
+                <div className="flex items-center gap-2 text-kx-text-3 py-4">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Cargando...
+                </div>
+              ) : condicionesPago.length === 0 ? (
+                <p className="text-sm text-kx-text-3 py-4 text-center">No hay condiciones de pago cargadas.</p>
+              ) : (
+                <div className="border border-kx-border rounded-xl overflow-hidden">
+                  {condicionesPago.map(c => (
+                    <div key={c.id} className="flex items-center justify-between px-4 py-2.5 border-b border-kx-border last:border-0">
+                      <div>
+                        <span className="text-sm font-medium text-kx-text">{c.nombre}</span>
+                        <span className="text-xs text-kx-text-2 ml-2">
+                          {c.dias_credito} días{c.descuento_pct > 0 ? ` · ${c.descuento_pct}% desc.` : ''}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch checked={c.activo} onCheckedChange={(v) => toggleActivoCondicion(c.id, v)} />
+                        <Button size="sm" variant="ghost" onClick={() => openEditarCondicion(c)}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </TabsContent>
@@ -868,13 +1064,43 @@ const ConfiguracionSection = ({ initialTab }) => {
               <p className="text-sm text-kx-text-2">FIFO, LIFO o Precio Promedio Ponderado. El método afecta el cálculo del costo de ventas.</p>
             </div>
 
-            <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm opacity-60">
-              <div className="flex items-center gap-2 mb-3">
-                <Package2 className="w-5 h-5 text-kx-text-3" />
-                <h3 className="font-semibold text-kx-text">Unidades de Medida</h3>
-                <span className="text-xs bg-kx-surface-2 text-kx-text-3 px-2 py-0.5 rounded-full border border-kx-border">Próximamente</span>
+            <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Package2 className="w-5 h-5 text-kx-text-3" />
+                  <h3 className="font-semibold text-kx-text">Unidades de Medida</h3>
+                </div>
+                <Button size="sm" onClick={openNuevaUM}>+ Nueva</Button>
               </div>
-              <p className="text-sm text-kx-text-2">Definición de unidades personalizadas (kg, lt, m², caja de 12, etc.) con factores de conversión.</p>
+              <p className="text-sm text-kx-text-2 mb-4">Unidades disponibles para productos, compras, OC y cotizaciones.</p>
+
+              {loadingUM ? (
+                <div className="flex items-center gap-2 text-kx-text-3 py-4">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Cargando...
+                </div>
+              ) : unidadesMedida.length === 0 ? (
+                <p className="text-sm text-kx-text-3 py-4 text-center">No hay unidades de medida cargadas.</p>
+              ) : (
+                <div className="border border-kx-border rounded-xl overflow-hidden">
+                  {unidadesMedida.map(u => (
+                    <div key={u.id} className="flex items-center justify-between px-4 py-2.5 border-b border-kx-border last:border-0">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-mono bg-kx-surface-2 px-2 py-0.5 rounded">{u.codigo}</span>
+                        <span className="text-sm text-kx-text">{u.descripcion}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={u.activo}
+                          onCheckedChange={(v) => toggleActivoUM(u.id, v)}
+                        />
+                        <Button size="sm" variant="ghost" onClick={() => openEditarUM(u)}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm opacity-60">
@@ -1130,6 +1356,94 @@ const ConfiguracionSection = ({ initialTab }) => {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          MODAL — Nueva/Editar Condición de Pago (fuera del sistema de tabs)
+      ═══════════════════════════════════════════════════════════════════ */}
+      <Dialog open={showCondicionModal} onOpenChange={setShowCondicionModal}>
+        <DialogContent className="sm:max-w-[420px] bg-kx-surface border-kx-border">
+          <DialogHeader>
+            <DialogTitle className="text-kx-text">{editingCondicion ? 'Editar' : 'Nueva'} Condición de Pago</DialogTitle>
+            <DialogDescription>Plazo y descuento aplicable a clientes/proveedores.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-kx-text">Nombre *</Label>
+              <Input
+                value={condicionForm.nombre}
+                onChange={e => setCondicionForm(f => ({ ...f, nombre: e.target.value }))}
+                placeholder="Ej: 45 días"
+                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-kx-text">Días de crédito</Label>
+              <Input
+                type="number" min="0"
+                value={condicionForm.dias_credito}
+                onChange={e => setCondicionForm(f => ({ ...f, dias_credito: e.target.value }))}
+                placeholder="0"
+                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-kx-text">Descuento % (opcional)</Label>
+              <Input
+                type="number" min="0" max="100" step="0.01"
+                value={condicionForm.descuento_pct}
+                onChange={e => setCondicionForm(f => ({ ...f, descuento_pct: e.target.value }))}
+                placeholder="0"
+                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-2 border-t border-kx-border">
+            <Button variant="outline" onClick={() => setShowCondicionModal(false)}>Cancelar</Button>
+            <Button onClick={handleGuardarCondicion} disabled={savingCondicion}>
+              {savingCondicion ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Guardando...</> : 'Guardar'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          MODAL — Nueva/Editar Unidad de Medida (fuera del sistema de tabs)
+      ═══════════════════════════════════════════════════════════════════ */}
+      <Dialog open={showUMModal} onOpenChange={setShowUMModal}>
+        <DialogContent className="sm:max-w-[380px] bg-kx-surface border-kx-border">
+          <DialogHeader>
+            <DialogTitle className="text-kx-text">{editingUM ? 'Editar' : 'Nueva'} Unidad de Medida</DialogTitle>
+            <DialogDescription>Código corto + descripción para usar en productos, compras y ventas.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-kx-text">Código *</Label>
+              <Input
+                value={umForm.codigo}
+                onChange={e => setUmForm(f => ({ ...f, codigo: e.target.value }))}
+                placeholder="Ej: TN"
+                maxLength={10}
+                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text font-mono uppercase"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-kx-text">Descripción *</Label>
+              <Input
+                value={umForm.descripcion}
+                onChange={e => setUmForm(f => ({ ...f, descripcion: e.target.value }))}
+                placeholder="Ej: Tonelada"
+                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-2 border-t border-kx-border">
+            <Button variant="outline" onClick={() => setShowUMModal(false)}>Cancelar</Button>
+            <Button onClick={handleGuardarUM} disabled={savingUM}>
+              {savingUM ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Guardando...</> : 'Guardar'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ═══════════════════════════════════════════════════════════════════
           WIZARD AFIP (fuera del sistema de tabs — persiste al navegar)
