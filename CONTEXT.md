@@ -19,13 +19,8 @@
 
 | Módulo | Archivo principal | Estado |
 |---|---|---|
-| Launchpad (Home) | `LaunchpadSection.jsx` | ✅ Tiles por área + KPIs + accesos rápidos |
 | **Listas de Precios** | `ListasPrecioSection.jsx` + `listaPreciosService.ts` | ✅ CRUD listas + items por producto + asignación a cliente |
-| Dashboard Ejecutivo | `DashboardSection.jsx` | ✅ 8 KPIs + 2 gráficos (accesible desde Portal Finanzas) |
-| Portal Ventas | `portals/VentasPortal.jsx` | ✅ 6 KPIs + módulos |
-| Portal Compras | `portals/ComprasPortal.jsx` | ✅ 5 KPIs + módulos |
-| Portal Finanzas | `portals/FinanzasPortal.jsx` | ✅ 5 KPIs + posición neta CxC-CxP |
-| Portal Inventario | `portals/InventarioPortal.jsx` | ✅ 5 KPIs + barra salud stock |
+| **Dashboard (Home)** | `DashboardSection.jsx` | ✅ **Pantalla de inicio única del sistema.** `activeSection` arranca en `'dashboard'` → `Dashboard.jsx` renderiza `<DashboardSection onNavigate={setActiveSection} />`. 8 KPIs + 2 gráficos + accesos rápidos. |
 | **Ventas (shell)** | `VentasSection.jsx` | ✅ **Prompt 4/6** Tab shell: Cotizaciones · Pedidos · Entregas · Facturas · Devoluciones (real) + botón POS flotante + `initialTab` prop para nav externa |
 | **Ventas (POS)** | `NuevaVentaModal.jsx` | ✅ Multi-pago + check límite crédito + Moneda Paralela + **`pedido` prop** para pre-carga desde Pedido |
 | Notas de Crédito | `NotaCreditoModal.jsx` + `notaCreditoService.ts` | ✅ Devolución parcial/total + reversión stock/CC/caja |
@@ -210,7 +205,7 @@ Sidebar 7 grupos:
 - **Sidebar:** `src/components/Sidebar.jsx` — array `NAV_GROUPS` con grupos + íconos, `fixed md:relative`, `bg-kx-surface/80 backdrop-blur-md`. **Prompt 3/6:** grupos colapsables + persistencia en `localStorage('kx-sidebar-collapsed')`. **Prompt 5/6:** grupo COMPRAS reorganizado: `compra_rapida` (ShoppingCart) · `ordenes_compra` (ShoppingBag) · `recepciones_compra` (Package) · `facturas_compra` (Receipt) · `devoluciones_proveedor` (RotateCcw) · `proveedores` (Truck). Todos los ítems COMPRAS → `<ComprasSection initialTab="...">` via Dashboard.
 - **Header:** `src/components/Header.jsx` — h-14, breadcrumb `empresa · sección`, búsqueda (⌘K), toggle tema, Bell notificaciones, CTA "Nueva Venta", Avatar dropdown.
 - **Shell:** `src/components/Dashboard.jsx` — flex layout, `AuroraBackground` fixed z-10, no más `ml-{x}`.
-- **Portales legacy:** `portalService.ts` + `portals/*.jsx` se mantienen en código pero ya no son accesibles desde el sidebar. El módulo `DashboardSection.jsx` es ahora el punto de entrada principal.
+- **Launchpad/Portales — NUNCA llegaron a producción:** el feature "Launchpad Fiori + 4 Portales" (`LaunchpadSection.jsx`, `portals/*.jsx`, `portalService.ts`, commit `d2d50fb`) se desarrolló íntegramente dentro de un worktree aislado de un agente (`.claude/worktrees/...`) y nunca se mergeó a la ruta real `src/`. Auditado en sesión 16 (Prompt auditoría Launchpad): cero referencias a `LaunchpadSection`, `portals/`, `portalService` o `portal_ventas/compras/finanzas/inventario` en todo `src/`. **`DashboardSection.jsx` es y fue siempre la única pantalla de inicio real** — no hay ambigüedad ni migración pendiente entre Launchpad y Dashboard.
 
 ---
 
@@ -357,6 +352,23 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 ---
 
 ## Historial de sesiones
+
+### Sesión 2026-06-16 — Auditoría Launchpad Fiori vs nueva estructura de módulos
+
+**Objetivo:** auditar si `LaunchpadSection.jsx` y los 4 Portales de área (Ventas/Compras/Finanzas/Inventario) tenían navegación rota tras la reestructuración del Document Flow (sesiones 13-15).
+
+**Hallazgo principal:** la premisa de la auditoría era inválida — **el feature nunca llegó a producción.** `LaunchpadSection.jsx`, `portals/*.jsx` y `portalService.ts` (commit `d2d50fb`, "feat: portales por área + Launchpad") se crearon enteramente dentro de un worktree aislado de un agente (`.claude/worktrees/suspicious-panini-6cb9e5/`) que se commiteó por error al repo raíz, pero **nunca se mergeó a la ruta real `src/`**. Verificado con `git ls-tree -r HEAD -- src/` y `grep -ri "LaunchpadSection\|portals/\|portalService"` sobre todo `src/`: 0 resultados. No hay ni un solo `case 'portal_*'` en `Dashboard.jsx`.
+
+**Conclusión:** no había tiles que corregir porque el archivo no existe en código vivo. `DashboardSection.jsx` (`case 'dashboard'` en `Dashboard.jsx`, default de `activeSection`) es y fue siempre la única pantalla de inicio. No hay ni hubo ambigüedad Launchpad vs Dashboard en producción.
+
+**Acciones:**
+- Corregida tabla de módulos en CONTEXT.md (eliminadas 6 entradas falsas: Launchpad + 4 Portales con estado `✅` ficticio).
+- Corregida sección "Arquitectura de navegación" — eliminada afirmación falsa de que los portales "se mantienen en código pero ya no son accesibles desde el sidebar".
+- Limpieza: eliminados del repo los 183 archivos huérfanos bajo `.claude/worktrees/suspicious-panini-6cb9e5/` (snapshot congelado de principios de junio, incluye ese mismo Launchpad/Portales nunca mergeado + CONTEXT.md/migraciones viejas). Ver commit de cleanup.
+
+**Convención nueva:** si una sesión de agente trabaja en un worktree aislado (`isolation: "worktree"`), verificar antes de cerrar la sesión que el worktree NO haya quedado trackeado por error en el repo principal (`.claude/worktrees/` no estaba en `.gitignore`).
+
+---
 
 ### Sesión 2026-06-16 (sesión 16 — Nadia) — Testeo end-to-end del trabajo de Luciano + fixes integrales
 
