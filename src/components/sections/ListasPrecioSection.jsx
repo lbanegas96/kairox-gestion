@@ -14,6 +14,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { listaPreciosService } from '@/services/listaPreciosService';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 
 const LISTAS_KEY = (eid) => ['listas_precio', eid];
 const ITEMS_KEY  = (lid) => ['lista_precio_items', lid];
@@ -132,7 +133,7 @@ function ListasPrecioSection() {
   };
 
   const handleSaveItemPrecio = async (productoId) => {
-    const precio = parseFloat(precioEdicion[productoId]);
+    const precio = parseNumberLocale(precioEdicion[productoId]);
     if (isNaN(precio) || precio <= 0) {
       toast({ title: 'Precio inválido', variant: 'destructive' });
       return;
@@ -389,12 +390,11 @@ function ListasPrecioSection() {
                     <div className="relative">
                       <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-kx-text-3 text-xs">$</span>
                       <input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                        type="text"
+                        inputMode="decimal"
                         value={currentPrecioStr}
                         onChange={e => setPrecioEdicion(prev => ({ ...prev, [prod.id]: e.target.value }))}
-                        placeholder="0.00"
+                        placeholder="0,00"
                         className="w-28 h-8 pl-6 pr-2 text-right text-sm rounded-md border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text focus:outline-none focus:ring-2 focus:ring-violet-500"
                       />
                     </div>

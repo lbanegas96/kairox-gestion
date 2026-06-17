@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { planCuentasService, asientosService, PLAN_CUENTAS_KEYS } from '@/services/planCuentasService';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -256,8 +257,8 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
-  const totalDebe  = lineas.reduce((s, l) => s + (parseFloat(l.debe)  || 0), 0);
-  const totalHaber = lineas.reduce((s, l) => s + (parseFloat(l.haber) || 0), 0);
+  const totalDebe  = lineas.reduce((s, l) => s + (parseNumberLocale(l.debe)  || 0), 0);
+  const totalHaber = lineas.reduce((s, l) => s + (parseNumberLocale(l.haber) || 0), 0);
   const cuadrado   = Math.abs(totalDebe - totalHaber) < 0.001 && totalDebe > 0;
 
   const updateLinea = (i, field, value) => {
@@ -270,8 +271,8 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
     const items = lineas.filter((l) => l.cuenta_id).map((l) => ({
       cuenta_id: l.cuenta_id,
       descripcion: l.descripcion || null,
-      debe: parseFloat(l.debe) || 0,
-      haber: parseFloat(l.haber) || 0,
+      debe: parseNumberLocale(l.debe) || 0,
+      haber: parseNumberLocale(l.haber) || 0,
     }));
     if (items.length < 2) { toast({ title: 'Mínimo 2 líneas con cuenta', variant: 'destructive' }); return; }
 
@@ -350,14 +351,14 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
                         className="bg-slate-800 border-slate-700 h-8 text-xs" placeholder="Detalle" />
                     </td>
                     <td className="px-2 py-1.5">
-                      <Input type="number" value={l.debe}
+                      <Input type="text" inputMode="decimal" value={l.debe}
                         onChange={(e) => updateLinea(i, 'debe', e.target.value)}
-                        className="bg-slate-800 border-slate-700 h-8 text-xs text-right" placeholder="0.00" />
+                        className="bg-slate-800 border-slate-700 h-8 text-xs text-right" placeholder="0,00" />
                     </td>
                     <td className="px-2 py-1.5">
-                      <Input type="number" value={l.haber}
+                      <Input type="text" inputMode="decimal" value={l.haber}
                         onChange={(e) => updateLinea(i, 'haber', e.target.value)}
-                        className="bg-slate-800 border-slate-700 h-8 text-xs text-right" placeholder="0.00" />
+                        className="bg-slate-800 border-slate-700 h-8 text-xs text-right" placeholder="0,00" />
                     </td>
                     <td className="px-1">
                       {lineas.length > 2 && (

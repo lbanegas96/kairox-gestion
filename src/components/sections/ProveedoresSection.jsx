@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { proveedoresService, PROV_KEYS } from '@/services/proveedoresService';
 import { formatDateAR } from '@/lib/dateUtils';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const CONDICIONES_IVA = ['RI', 'Monotributo', 'Exento', 'CF', 'No Categorizado'];
@@ -148,7 +149,7 @@ function ProveedoresSection() {
 
   const handlePago = (e) => {
     e.preventDefault();
-    const monto = parseFloat(pagoForm.monto);
+    const monto = parseNumberLocale(pagoForm.monto);
     if (!monto || monto <= 0) return toast({ title: 'Ingresá un monto válido', variant: 'destructive' });
     pagoMutation.mutate({ monto, descripcion: pagoForm.descripcion || `Pago a ${detalle?.nombre}` });
   };
@@ -529,9 +530,9 @@ function ProveedoresSection() {
           <form onSubmit={handlePago} className="space-y-4">
             <div className="space-y-1">
               <Label className="dark:text-kx-text">Monto *</Label>
-              <Input type="number" min="0.01" step="0.01" value={pagoForm.monto}
+              <Input type="text" inputMode="decimal" value={pagoForm.monto}
                 onChange={e => setPagoForm(p => ({ ...p, monto: e.target.value }))}
-                placeholder="0.00" className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+                placeholder="0,00" className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
             </div>
             <div className="space-y-1">
               <Label className="dark:text-kx-text">Descripción</Label>

@@ -215,18 +215,18 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
                     <div className="flex-1">
                        <Label htmlFor="quick-pay" className="text-xs font-bold text-slate-500 uppercase mb-1 block dark:text-kx-text-2">Registrar Pago Rápido</Label>
                        <div className="flex gap-2">
-                          <Input 
+                          <Input
                              id="quick-pay"
-                             type="number" 
-                             min="0"
-                             placeholder="Monto ($)" 
+                             type="text"
+                             inputMode="decimal"
+                             placeholder="0,00"
                              className="h-10 bg-kx-surface dark:bg-kx-bg border-slate-300 dark:border-kx-border dark:text-kx-text"
                              value={paymentAmount}
                              onChange={(e) => setPaymentAmount(e.target.value)}
                           />
-                          <Button 
+                          <Button
                              onClick={handleRegisterPayment}
-                             disabled={isSubmittingPayment || !paymentAmount || parseFloat(paymentAmount) <= 0 || !isSessionOpen}
+                             disabled={isSubmittingPayment || !paymentAmount || !(parseNumberLocale(paymentAmount) > 0) || !isSessionOpen}
                              className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 dark:bg-emerald-700 dark:hover:bg-emerald-600"
                           >
                              {isSubmittingPayment ? <Loader2 className="h-4 w-4 animate-spin"/> : <Banknote className="h-4 w-4 mr-2"/>}
@@ -277,7 +277,7 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
                                       {mov.descripcion}
                                    </td>
                                    <td className={`px-4 py-3 text-right font-mono font-bold ${isDebe ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                                      {isDebe ? '+' : '-'}${Number(mov.monto).toFixed(2)}
+                                      {isDebe ? '+' : '-'}${Number(mov.monto).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                                    </td>
                                 </tr>
                              );
