@@ -84,6 +84,21 @@ function OrdenesCompraSection() {
     enabled: !!recepcionId,
   });
 
+  const { data: unidadesMedida = [] } = useQuery({
+    queryKey: ['unidades_medida', empresaId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('unidades_medida')
+        .select('*')
+        .eq('empresa_id', empresaId)
+        .eq('activo', true)
+        .order('codigo');
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!empresaId,
+  });
+
   // Fix TanStack Query v5: onSuccess no existe en useQuery — usar useEffect
   useEffect(() => {
     if (!detalleRecepcion) return;
@@ -514,17 +529,9 @@ function OrdenesCompraSection() {
                         className="w-full h-10 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">— Elegí —</option>
-                        <option value="Unidad">Unidad (un)</option>
-                        <option value="Kilogramos">Kilogramos (kg)</option>
-                        <option value="Gramos">Gramos (gr)</option>
-                        <option value="Litros">Litros (lt)</option>
-                        <option value="Mililitros">Mililitros (ml)</option>
-                        <option value="Metros">Metros (m)</option>
-                        <option value="Centimetros">Centímetros (cm)</option>
-                        <option value="Caja">Caja</option>
-                        <option value="Pack">Pack</option>
-                        <option value="Docena">Docena</option>
-                        <option value="Bolsa">Bolsa</option>
+                        {unidadesMedida.map(u => (
+                          <option key={u.id} value={u.descripcion}>{u.descripcion} ({u.codigo.toLowerCase()})</option>
+                        ))}
                       </select>
                     </div>
                     <div className="col-span-2">

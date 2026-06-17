@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
   Package, Search, Filter, Plus, Edit, Tag, Archive, AlertCircle, 
   DollarSign, MoreVertical, Truck, Loader2, Power, PowerOff, Trash2, 
@@ -32,7 +32,17 @@ import CSVImportModal from '@/components/ui/CSVImportModal';
 // Defined outside ProductosSection to keep a stable component identity across renders.
 // If defined inside, React creates a new function reference every render, causing
 // Radix UI portal (Select, Dialog) DOM nodes to unmount/remount and throw removeChild errors.
-const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categories, isSubmitting }) => (
+const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categories, isSubmitting, unidadesMedida = [] }) => {
+  // En alta (no edit), si todavía no se eligió unidad y ya cargó el maestro, default a "Unidad".
+  useEffect(() => {
+    if (!isEdit && !data.unidad_medida_id && unidadesMedida.length > 0) {
+      const def = unidadesMedida.find(u => u.descripcion === 'Unidad') || unidadesMedida[0];
+      if (def) setData(prev => ({ ...prev, unidad_medida_id: def.id, unidad_medida: def.descripcion }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, unidadesMedida]);
+
+  return (
   <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
     <div className="space-y-2">
       <Label htmlFor="nombre">Nombre del Producto *</Label>
@@ -147,22 +157,28 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
       <Label htmlFor="unidad">Unidad de Medida</Label>
       <select
         id="unidad"
-        value={data.unidad_medida || 'Unidad'}
-        onChange={e => setData({...data, unidad_medida: e.target.value})}
+        value={data.unidad_medida_id || ''}
+        onChange={e => {
+          const id = e.target.value;
+          const um = unidadesMedida.find(u => u.id === id);
+          setData({
+            ...data,
+            unidad_medida_id: id || null,
+            unidad_medida: um?.descripcion ?? data.unidad_medida,
+          });
+        }}
         className="w-full h-10 px-3 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-bg dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
-        <option value="Unidad">Unidad (un)</option>
-        <option value="Kilogramos">Kilogramos (kg)</option>
-        <option value="Gramos">Gramos (gr)</option>
-        <option value="Litros">Litros (lt)</option>
-        <option value="Mililitros">Mililitros (ml)</option>
-        <option value="Metros">Metros (m)</option>
-        <option value="Centimetros">Centímetros (cm)</option>
-        <option value="Caja">Caja</option>
-        <option value="Pack">Pack</option>
-        <option value="Docena">Docena</option>
-        <option value="Bolsa">Bolsa</option>
+        <option value="">— Elegí —</option>
+        {unidadesMedida.map(u => (
+          <option key={u.id} value={u.id}>{u.codigo} — {u.descripcion}</option>
+        ))}
       </select>
+      {!data.unidad_medida_id && data.unidad_medida && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">
+          Valor actual: "{data.unidad_medida}" — no coincide con el maestro, seleccioná una unidad.
+        </p>
+      )}
     </div>
 
     <div className="col-span-1 md:col-span-2 space-y-2">
@@ -186,7 +202,8 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
       </Button>
     </div>
   </form>
-);
+  );
+};
 
 const ProductosSection = () => {
   const { user } = useAuth();
@@ -219,10 +236,25 @@ const ProductosSection = () => {
   // Selection State
   const [selectedProductForMov, setSelectedProductForMov] = useState(null);
 
+  const { data: unidadesMedida = [] } = useQuery({
+    queryKey: ['unidades_medida', user?.empresa_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('unidades_medida')
+        .select('*')
+        .eq('empresa_id', user.empresa_id)
+        .eq('activo', true)
+        .order('codigo');
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!user?.empresa_id,
+  });
+
   // Forms
   const initialProductState = {
     nombre: '', codigo_sku: '', categoria_nombre: '', proveedor_id: '',
-    unidad_medida: 'Unidad', costo_compra: '', precio_venta: '',
+    unidad_medida: 'Unidad', unidad_medida_id: '', costo_compra: '', precio_venta: '',
     stock_actual: '', stock_minimo: 5, descripcion: ''
   };
 
@@ -375,6 +407,7 @@ const ProductosSection = () => {
         categoria_id: categoryId,
         proveedor_id: newProduct.proveedor_id || null,
         unidad_medida: newProduct.unidad_medida,
+        unidad_medida_id: newProduct.unidad_medida_id || null,
         descripcion: newProduct.descripcion,
         activo: true,
         fecha_creacion: getNowAR().toISOString()
@@ -413,6 +446,7 @@ const ProductosSection = () => {
         categoria_id: categoryId,
         proveedor_id: editProduct.proveedor_id || null,
         unidad_medida: editProduct.unidad_medida,
+        unidad_medida_id: editProduct.unidad_medida_id || null,
         costo_compra: parseNumberLocale(editProduct.costo_compra) || 0,
         precio_venta: parseNumberLocale(editProduct.precio_venta) || 0,
         stock_actual: parseInt(editProduct.stock_actual) || 0,
@@ -573,6 +607,7 @@ const ProductosSection = () => {
                   providers={providers}
                   categories={categories}
                   isSubmitting={isSubmitting}
+                  unidadesMedida={unidadesMedida}
                />
             </DialogContent>
            </Dialog>
@@ -594,6 +629,7 @@ const ProductosSection = () => {
                 providers={providers}
                 categories={categories}
                 isSubmitting={isSubmitting}
+                unidadesMedida={unidadesMedida}
              />
           </DialogContent>
        </Dialog>
