@@ -239,6 +239,9 @@ function ComprasSection() {
   const updateCartItem = (cartItemId, field, value) => {
     setCart(cart.map(item => {
       if (item.cartItemId === cartItemId) {
+        if (field === 'costo_unitario') {
+          return { ...item, costo_unitario: value };
+        }
         const val = parseFloat(value);
         return { ...item, [field]: isNaN(val) ? '' : val };
       }
@@ -253,7 +256,7 @@ function ComprasSection() {
   const calculateTotal = () => {
     return cart.reduce((sum, item) => {
       const qty = Number(item.cantidad) || 0;
-      const cost = Number(item.costo_unitario) || 0;
+      const cost = parseNumberLocale(item.costo_unitario) || 0;
       return sum + (qty * cost);
     }, 0);
   };
@@ -282,7 +285,7 @@ function ComprasSection() {
     return (
       purchaseForm.proveedor_id &&
       cart.length > 0 &&
-      cart.every(item => item.cantidad > 0 && item.costo_unitario >= 0)
+      cart.every(item => item.cantidad > 0 && (parseNumberLocale(item.costo_unitario) || 0) >= 0)
     );
   };
 
@@ -340,8 +343,8 @@ function ComprasSection() {
         empresa_id: user.empresa_id,
         producto_id: item.id,
         cantidad: parseInt(item.cantidad),
-        costo_unitario: parseFloat(item.costo_unitario),
-        subtotal: parseInt(item.cantidad) * parseFloat(item.costo_unitario)
+        costo_unitario: parseNumberLocale(item.costo_unitario),
+        subtotal: parseInt(item.cantidad) * parseNumberLocale(item.costo_unitario)
       }));
 
       const { error: detailsError } = await supabase
@@ -372,7 +375,7 @@ function ComprasSection() {
            await supabase.from('productos')
              .update({
                stock_actual: (prod.stock_actual || 0) + parseInt(item.cantidad),
-               costo_compra: parseFloat(item.costo_unitario)
+               costo_compra: parseNumberLocale(item.costo_unitario)
              })
              .eq('id', item.id);
          }
@@ -504,6 +507,9 @@ function ComprasSection() {
   const updateEditItem = (internalId, field, value) => {
     setEditItems(editItems.map(item => {
       if (item.internalId === internalId) {
+        if (field === 'costo_unitario') {
+          return { ...item, costo_unitario: value };
+        }
         const val = parseFloat(value);
         return { ...item, [field]: isNaN(val) ? '' : val };
       }
@@ -517,7 +523,7 @@ function ComprasSection() {
 
   const calculateEditTotal = () => {
     return editItems.reduce((sum, item) => {
-      return sum + ((Number(item.cantidad) || 0) * (Number(item.costo_unitario) || 0));
+      return sum + ((Number(item.cantidad) || 0) * (parseNumberLocale(item.costo_unitario) || 0));
     }, 0);
   };
 
@@ -563,8 +569,8 @@ function ComprasSection() {
             compra_id: editForm.id,
             producto_id: item.producto_id,
             cantidad: Number(item.cantidad),
-            costo_unitario: Number(item.costo_unitario),
-            subtotal: Number(item.cantidad) * Number(item.costo_unitario)
+            costo_unitario: parseNumberLocale(item.costo_unitario),
+            subtotal: Number(item.cantidad) * parseNumberLocale(item.costo_unitario)
           });
         } else {
           // Existing Item: Check for changes
@@ -582,15 +588,15 @@ function ComprasSection() {
             // Always update record in case cost changed
             await supabase.from('detalle_compras').update({
               cantidad: Number(item.cantidad),
-              costo_unitario: Number(item.costo_unitario),
-              subtotal: Number(item.cantidad) * Number(item.costo_unitario)
+              costo_unitario: parseNumberLocale(item.costo_unitario),
+              subtotal: Number(item.cantidad) * parseNumberLocale(item.costo_unitario)
             }).eq('id', item.id);
           }
         }
 
         // Update Product Cost (Last purchase cost logic)
         await supabase.from('productos')
-          .update({ costo_compra: Number(item.costo_unitario) })
+          .update({ costo_compra: parseNumberLocale(item.costo_unitario) })
           .eq('id', item.producto_id);
       }
 
@@ -659,17 +665,17 @@ function ComprasSection() {
 
           <div className="kairox-bg-card border kairox-border p-6 rounded-xl flex flex-col relative min-h-[400px] shadow-sm dark:bg-kx-bg dark:border-kx-border">
             <div className="flex justify-between items-center mb-4"><h3 className="text-lg font-bold text-blue-800 dark:text-[#00D4FF] flex items-center gap-2"><PackageOpen className="h-5 w-5" /> PRODUCTOS</h3>{cart.length > 0 && (<div className="bg-slate-100 dark:bg-kx-surface-2 kairox-text-primary text-xs px-3 py-1 rounded-full border kairox-border font-medium shadow-sm dark:text-slate-300 dark:border-kx-border">{cart.length} filas | {calculateTotalUnits()} unidades</div>)}</div>
-            <div className="relative mb-4 z-20"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-kx-text-3" /><Input ref={searchInputRef} placeholder="Buscar producto por nombre o SKU..." value={productSearch} onChange={e => {setProductSearch(e.target.value); setShowAutocomplete(true);}} onKeyDown={handleSearchKeyDown} onFocus={() => setShowAutocomplete(true)} className="pl-9 focus:border-blue-500 dark:focus:border-[#00D4FF] kairox-input dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"/>{showAutocomplete && (<div className="absolute top-full left-0 w-full kairox-bg-card border kairox-border rounded-md mt-1 shadow-xl max-h-60 overflow-y-auto dark:bg-kx-bg dark:border-kx-border">{filteredProducts.length === 0 ? (<div className="p-3 text-slate-500 text-sm text-center">No se encontraron productos</div>) : (filteredProducts.slice(0, 30).map(p => {const shortUnit = getShortUnit(p.unidad_medida); return (<div key={p.id} className="p-3 flex justify-between items-center border-b kairox-border last:border-0 hover:bg-kx-surface-2 dark:hover:bg-slate-800 cursor-pointer transition-colors dark:border-kx-border" onClick={() => addToCart(p)}><div><div className="font-medium kairox-text-primary dark:text-kx-text">{p.nombre}</div><div className="text-xs text-slate-500 dark:text-kx-text-2">{p.codigo_sku} | {p.unidad_medida || 'Unidad'}</div></div><div className="text-right text-kx-text-2 dark:text-kx-text-2 text-xs">Costo Actual: ${p.costo_compra?.toFixed(2)}<div className="text-slate-500 dark:text-kx-text-3">Stock: {p.stock_actual} {shortUnit}</div></div></div>)}))}</div>)}{showAutocomplete && (<div className="fixed inset-0 z-[-1]" onClick={() => setShowAutocomplete(false)}></div>)}</div>
+            <div className="relative mb-4 z-20"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-kx-text-3" /><Input ref={searchInputRef} placeholder="Buscar producto por nombre o SKU..." value={productSearch} onChange={e => {setProductSearch(e.target.value); setShowAutocomplete(true);}} onKeyDown={handleSearchKeyDown} onFocus={() => setShowAutocomplete(true)} className="pl-9 focus:border-blue-500 dark:focus:border-[#00D4FF] kairox-input dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"/>{showAutocomplete && (<div className="absolute top-full left-0 w-full kairox-bg-card border kairox-border rounded-md mt-1 shadow-xl max-h-60 overflow-y-auto dark:bg-kx-bg dark:border-kx-border">{filteredProducts.length === 0 ? (<div className="p-3 text-slate-500 text-sm text-center">No se encontraron productos</div>) : (filteredProducts.slice(0, 30).map(p => {const shortUnit = getShortUnit(p.unidad_medida); return (<div key={p.id} className="p-3 flex justify-between items-center border-b kairox-border last:border-0 hover:bg-kx-surface-2 dark:hover:bg-slate-800 cursor-pointer transition-colors dark:border-kx-border" onClick={() => addToCart(p)}><div><div className="font-medium kairox-text-primary dark:text-kx-text">{p.nombre}</div><div className="text-xs text-slate-500 dark:text-kx-text-2">{p.codigo_sku} | {p.unidad_medida || 'Unidad'}</div></div><div className="text-right text-kx-text-2 dark:text-kx-text-2 text-xs">Costo Actual: ${p.costo_compra?.toLocaleString('es-AR', { minimumFractionDigits: 2 })}<div className="text-slate-500 dark:text-kx-text-3">Stock: {p.stock_actual} {shortUnit}</div></div></div>)}))}</div>)}{showAutocomplete && (<div className="fixed inset-0 z-[-1]" onClick={() => setShowAutocomplete(false)}></div>)}</div>
             <div className="border kairox-border rounded-lg overflow-hidden bg-slate-50/50 dark:bg-slate-950/30 flex-grow dark:border-kx-border">
               <table className="w-full text-sm text-left"><thead className="kairox-table-header border-b kairox-border dark:bg-slate-900/50 dark:text-slate-300 dark:border-kx-border"><tr><th className="p-4">Producto</th><th className="p-4 text-center w-32">Cantidad</th><th className="p-4 text-right w-40">Costo Unit. ($)</th><th className="p-4 text-right">Subtotal</th><th className="p-4 w-16 text-center">Acción</th></tr></thead>
-                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">{cart.length === 0 ? (<tr><td colSpan="5" className="p-12 text-center text-slate-500 dark:text-kx-text-2"><ShoppingBag className="w-12 h-12 mx-auto mb-3 opacity-20"/>Agrega productos a la compra usando el buscador</td></tr>) : (cart.map(item => (<tr key={item.cartItemId} className="group hover:bg-slate-100 dark:hover:bg-slate-900/50"><td className="p-4 font-medium kairox-text-primary dark:text-kx-text">{item.nombre}<div className="text-xs text-slate-500 dark:text-kx-text-2 font-mono flex items-center gap-1">{item.codigo_sku}<span className="text-kx-text-3 dark:text-kx-text-2">|</span>{getShortUnit(item.unidad_medida)}</div></td><td className="p-4 text-center"><Input type="number" min="1" value={item.cantidad} onChange={(e) => updateCartItem(item.cartItemId, 'cantidad', e.target.value)} className="w-24 mx-auto text-center h-8 focus:bg-kx-surface dark:focus:bg-slate-700 kairox-input dark:bg-kx-surface-2 dark:border-kx-border dark:text-kx-text"/></td><td className="p-4 text-right"><Input type="number" min="0" step="0.01" value={item.costo_unitario} onChange={(e) => updateCartItem(item.cartItemId, 'costo_unitario', e.target.value)} className="w-32 ml-auto text-right h-8 focus:bg-kx-surface dark:focus:bg-slate-700 kairox-input dark:bg-kx-surface-2 dark:border-kx-border dark:text-kx-text"/></td><td className="p-4 text-right font-bold kairox-text-primary dark:text-emerald-400">${((Number(item.cantidad) || 0) * (Number(item.costo_unitario) || 0)).toFixed(2)}</td><td className="p-4 text-center"><Button size="icon" variant="ghost" onClick={() => removeFromCart(item.cartItemId)} className="h-8 w-8 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-300"><X className="h-4 w-4" /></Button></td></tr>)))}</tbody>
+                <tbody className="divide-y divide-slate-200 dark:divide-slate-800">{cart.length === 0 ? (<tr><td colSpan="5" className="p-12 text-center text-slate-500 dark:text-kx-text-2"><ShoppingBag className="w-12 h-12 mx-auto mb-3 opacity-20"/>Agrega productos a la compra usando el buscador</td></tr>) : (cart.map(item => (<tr key={item.cartItemId} className="group hover:bg-slate-100 dark:hover:bg-slate-900/50"><td className="p-4 font-medium kairox-text-primary dark:text-kx-text">{item.nombre}<div className="text-xs text-slate-500 dark:text-kx-text-2 font-mono flex items-center gap-1">{item.codigo_sku}<span className="text-kx-text-3 dark:text-kx-text-2">|</span>{getShortUnit(item.unidad_medida)}</div></td><td className="p-4 text-center"><Input type="number" min="1" value={item.cantidad} onChange={(e) => updateCartItem(item.cartItemId, 'cantidad', e.target.value)} className="w-24 mx-auto text-center h-8 focus:bg-kx-surface dark:focus:bg-slate-700 kairox-input dark:bg-kx-surface-2 dark:border-kx-border dark:text-kx-text"/></td><td className="p-4 text-right"><Input type="text" inputMode="decimal" placeholder="0,00" value={item.costo_unitario} onChange={(e) => updateCartItem(item.cartItemId, 'costo_unitario', e.target.value)} className="w-32 ml-auto text-right h-8 focus:bg-kx-surface dark:focus:bg-slate-700 kairox-input dark:bg-kx-surface-2 dark:border-kx-border dark:text-kx-text"/></td><td className="p-4 text-right font-bold kairox-text-primary dark:text-emerald-400">${((Number(item.cantidad) || 0) * (parseNumberLocale(item.costo_unitario) || 0)).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td><td className="p-4 text-center"><Button size="icon" variant="ghost" onClick={() => removeFromCart(item.cartItemId)} className="h-8 w-8 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-300"><X className="h-4 w-4" /></Button></td></tr>)))}</tbody>
               </table>
             </div>
           </div>
 
           <div className="flex flex-col md:flex-row gap-4 justify-end items-center pt-4">
             <div className="kairox-bg-card border kairox-border rounded-xl p-6 flex items-center gap-6 shadow-lg w-full md:w-auto justify-between md:justify-start dark:bg-kx-bg dark:border-kx-border">
-              <div className="text-right"><div className="text-slate-500 dark:text-kx-text-2 text-sm font-medium uppercase tracking-wider">Total de Compra</div><div className="text-3xl font-black bg-gradient-to-r from-blue-600 to-purple-600 dark:from-[#00D4FF] dark:to-[#A855F7] bg-clip-text text-transparent font-mono">${calculateTotal().toFixed(2)}</div></div>
+              <div className="text-right"><div className="text-slate-500 dark:text-kx-text-2 text-sm font-medium uppercase tracking-wider">Total de Compra</div><div className="text-3xl font-black bg-gradient-to-r from-blue-600 to-purple-600 dark:from-[#00D4FF] dark:to-[#A855F7] bg-clip-text text-transparent font-mono">${calculateTotal().toLocaleString('es-AR', { minimumFractionDigits: 2 })}</div></div>
               <div className="h-12 w-px bg-slate-200 dark:bg-slate-700 mx-2 hidden md:block"></div>
               <div className="flex gap-2 w-full md:w-auto">
                  <Button variant="destructive" onClick={() => setShowClearConfirm(true)} className="h-14 px-4 bg-red-100 hover:bg-red-200 text-red-600 border border-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 dark:border-red-900/50 w-full md:w-auto" disabled={isSubmitting || cart.length === 0}><Trash2 className="w-5 h-5" /></Button>
@@ -1011,16 +1017,17 @@ function ComprasSection() {
                           />
                         </td>
                         <td className="p-3 text-right">
-                          <Input 
-                            type="number" 
-                            step="0.01" 
-                            value={item.costo_unitario} 
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="0,00"
+                            value={item.costo_unitario}
                             onChange={(e) => updateEditItem(item.internalId, 'costo_unitario', e.target.value)}
                             className="h-8 text-right kairox-input dark:bg-kx-surface-2 dark:border-kx-border dark:text-kx-text"
                           />
                         </td>
                         <td className="p-3 text-right font-medium dark:text-kx-text">
-                          ${((Number(item.cantidad) || 0) * (Number(item.costo_unitario) || 0)).toFixed(2)}
+                          ${((Number(item.cantidad) || 0) * (parseNumberLocale(item.costo_unitario) || 0)).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                         </td>
                         <td className="p-3 text-center">
                           <Button 
@@ -1046,7 +1053,7 @@ function ComprasSection() {
           <DialogFooter className="flex justify-between items-center mt-6 pt-4 border-t kairox-border dark:border-kx-border">
              <div className="mr-auto">
                <span className="text-sm font-bold text-slate-500 mr-2 dark:text-kx-text-2">NUEVO TOTAL:</span>
-               <span className="text-xl font-bold kairox-text-primary dark:text-kx-text">${calculateEditTotal().toFixed(2)}</span>
+               <span className="text-xl font-bold kairox-text-primary dark:text-kx-text">${calculateEditTotal().toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
              </div>
              <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setIsEditModalOpen(false)} disabled={isSavingEdit} className="dark:text-kx-text dark:border-kx-border dark:hover:bg-slate-800">Cancelar</Button>
