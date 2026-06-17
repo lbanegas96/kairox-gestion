@@ -13,8 +13,10 @@ import { asientosAutoService } from '@/services/planCuentasService';
 import ComprobantePrintModal from './ComprobantePrintModal';
 import { MonedaSelector } from '@/components/ui/MonedaSelector';
 import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
-import { formatCurrency, parseNumberLocale } from '@/lib/currencyUtils';
+import { formatCurrency } from '@/lib/currencyUtils';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
+import { useMultipago } from '@/hooks/useMultipago';
+import { useCreditoCliente } from '@/hooks/useCreditoCliente';
 import { listaPreciosService } from '@/services/listaPreciosService';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -29,9 +31,6 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   const [productSearch, setProductSearch] = useState('');
   const [cart, setCart] = useState([]);
   const [selectedClient, setSelectedClient] = useState(null);
-  // Multi-pago: Set de métodos activos + montos por método
-  const [selectedMethods, setSelectedMethods] = useState(new Set(['Efectivo']));
-  const [methodAmounts, setMethodAmounts] = useState({});
   const [moneda, setMoneda] = useState('ARS');
   const [tipoCambioTasa, setTipoCambioTasa] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -199,8 +198,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   const resetForm = () => {
     setCart([]);
     setSelectedClient(null);
-    setSelectedMethods(new Set(['Efectivo']));
-    setMethodAmounts({});
+    multipago.reset();
     setMoneda('ARS');
     setTipoCambioTasa(1);
     setTcMissing(false);
@@ -260,45 +258,20 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     return totalARS / tipoCambioTasa;
   };
 
-  // ── Helpers multi-pago ──────────────────────────────────────────────────────
-  const isCC = selectedMethods.has('Cuenta Corriente');
-  const isMultiPago = !isCC && selectedMethods.size > 1;
+  // ── Multi-pago (hook) ────────────────────────────────────────────────────────
+  const multipago = useMultipago(calculateTotal());
+  const {
+    selectedMethods,
+    methodAmounts,
+    setMethodAmounts,
+    isCC,
+    isMultiPago,
+    restante,
+    toggleMethod,
+  } = multipago;
 
-  const totalPagado = useMemo(() => {
-    if (!isMultiPago) return 0;
-    return Array.from(selectedMethods).reduce(
-      (sum, m) => sum + (parseFloat(methodAmounts[m]) || 0), 0
-    );
-  }, [isMultiPago, selectedMethods, methodAmounts]);
-
-  const restante = calculateTotal() - totalPagado;
-
-  const toggleMethod = (method) => {
-    if (method === 'Cuenta Corriente') {
-      setSelectedMethods(new Set(['Cuenta Corriente']));
-      setMethodAmounts({});
-      return;
-    }
-    // Salir de CC
-    if (selectedMethods.has('Cuenta Corriente')) {
-      setSelectedMethods(new Set([method]));
-      setMethodAmounts({});
-      return;
-    }
-    if (selectedMethods.has(method)) {
-      if (selectedMethods.size === 1) return; // No deseleccionar el último
-      const next = new Set(selectedMethods);
-      next.delete(method);
-      setSelectedMethods(next);
-      setMethodAmounts(prev => {
-        const copy = { ...prev };
-        delete copy[method];
-        return copy;
-      });
-    } else {
-      setSelectedMethods(new Set([...selectedMethods, method]));
-    }
-  };
+  // ── Crédito de cliente (hook) ────────────────────────────────────────────────
+  const credito = useCreditoCliente();
 
   const filteredProducts = useMemo(() => {
     let result = products;
@@ -417,36 +390,9 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
 
     // Validar multi-pago
     const total = calculateTotal();
-    let pagosFinales;
-    if (isCC) {
-      pagosFinales = [{ metodo: 'Cuenta Corriente', monto: total }];
-    } else if (isMultiPago) {
-      pagosFinales = Array.from(selectedMethods).map(m => {
-        const parsed = parseNumberLocale(methodAmounts[m]);
-        return { metodo: m, monto: isNaN(parsed) ? 0 : parsed };
-      });
-      const invalido = Array.from(selectedMethods).some(m => {
-        const v = methodAmounts[m];
-        return v && v !== '' && isNaN(parseNumberLocale(v));
-      });
-      if (invalido) {
-        return toast({
-          title: 'Monto inválido',
-          description: 'Usá formato argentino: punto para miles y coma para decimales (ej: 50.000,00).',
-          variant: 'destructive',
-        });
-      }
-      const suma = pagosFinales.reduce((s, p) => s + p.monto, 0);
-      if (Math.abs(suma - total) > 0.01) {
-        return toast({
-          title: "Pago incompleto",
-          description: `Asignado: $${suma.toFixed(2)} de $${total.toFixed(2)}. Completá todos los montos.`,
-          variant: "destructive",
-        });
-      }
-    } else {
-      const [singleMethod] = Array.from(selectedMethods);
-      pagosFinales = [{ metodo: singleMethod, monto: total }];
+    const { pagos: pagosFinales, error: pagoError } = multipago.construirPagosFinales();
+    if (pagoError) {
+      return toast({ ...pagoError, variant: 'destructive' });
     }
 
     // ── Bloquear venta si incluye Efectivo y la caja está cerrada ───────────
@@ -462,26 +408,20 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
 
     // ── Verificar límite de crédito (CC) ────────────────────────────────────
     if (isCC && selectedClient) {
-      const { data: clienteActual } = await supabase
-        .from('clientes').select('saldo_actual, limite_credito, bloquear_en_limite')
-        .eq('id', selectedClient.id).single();
-      const limite = Number(clienteActual?.limite_credito || 0);
-      if (limite > 0) {
-        const nuevoSaldo = Number(clienteActual?.saldo_actual || 0) + total;
-        if (nuevoSaldo > limite) {
-          if (clienteActual?.bloquear_en_limite) {
-            return toast({
-              title: '⛔ Límite de crédito excedido',
-              description: `${selectedClient.nombre} tiene un límite de $${limite.toLocaleString('es-AR')}. Saldo actual: $${Number(clienteActual.saldo_actual).toLocaleString('es-AR')}.`,
-              variant: 'destructive',
-            });
-          } else {
-            // Solo advertencia, no bloquea
-            toast({
-              title: '⚠ Atención: Límite de crédito',
-              description: `La venta supera el límite de $${limite.toLocaleString('es-AR')} para ${selectedClient.nombre}.`,
-            });
-          }
+      const verif = await credito.verificarLimite(selectedClient.id, total);
+      if (verif.aplica && verif.excede) {
+        if (verif.bloquea) {
+          return toast({
+            title: '⛔ Límite de crédito excedido',
+            description: `${selectedClient.nombre} tiene un límite de $${verif.limite.toLocaleString('es-AR')}. Saldo actual: $${verif.saldoActual.toLocaleString('es-AR')}.`,
+            variant: 'destructive',
+          });
+        } else {
+          // Solo advertencia, no bloquea
+          toast({
+            title: '⚠ Atención: Límite de crédito',
+            description: `La venta supera el límite de $${verif.limite.toLocaleString('es-AR')} para ${selectedClient.nombre}.`,
+          });
         }
       }
     }
