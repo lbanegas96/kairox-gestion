@@ -30,7 +30,7 @@ function EstadoBadge({ estado }) {
   return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.className}`}>{cfg.label}</span>;
 }
 
-function EntregasSection() {
+function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -65,6 +65,19 @@ function EntregasSection() {
   };
 
   useEffect(() => { fetchEntregas(); }, [user?.empresa_id]);
+
+  useEffect(() => {
+    if (!navigateEntregaId || entregas.length === 0) return;
+    const ent = entregas.find(e => e.id === navigateEntregaId);
+    if (ent) {
+      setSearch(ent.numero_entrega || '');
+      setExpanded(prev => ({ ...prev, [ent.id]: true }));
+      setTimeout(() => {
+        document.getElementById(`entrega-row-${ent.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+    }
+    onNavigated?.();
+  }, [navigateEntregaId, entregas]);
 
   const filtered = useMemo(() => {
     let r = entregas;
@@ -153,6 +166,7 @@ function EntregasSection() {
                   return (
                     <React.Fragment key={entrega.id}>
                       <tr
+                        id={`entrega-row-${entrega.id}`}
                         className="hover:bg-kx-surface-2 cursor-pointer transition-colors"
                         onClick={() => toggleExpand(entrega.id)}
                       >

@@ -16,6 +16,7 @@ function VentasSection({ initialTab = 'pedidos' }) {
   const [showNuevaFactura, setShowNuevaFactura] = useState(false);
   const [refreshKey, setRefreshKey]         = useState(0);
   const [navigateSaleId, setNavigateSaleId] = useState(null);
+  const [navigateEntregaId, setNavigateEntregaId] = useState(null);
 
   const handleSaleSuccess = () => setRefreshKey(k => k + 1);
 
@@ -75,15 +76,18 @@ function VentasSection({ initialTab = 'pedidos' }) {
         </TabsList>
 
         <TabsContent value="cotizaciones" className="mt-4">
-          <CotizacionesSection />
+          <CotizacionesSection onNavigateToSale={(id) => { setActiveTab('historial'); setNavigateSaleId(id); }} />
         </TabsContent>
 
         <TabsContent value="pedidos" className="mt-4">
-          <PedidosSection />
+          <PedidosSection onNavigate={(tipo, id) => {
+            if (tipo === 'entrega') { setActiveTab('entregas'); setNavigateEntregaId(id); }
+            else if (tipo === 'factura' || tipo === 'comprobante') { setActiveTab('historial'); setNavigateSaleId(id); }
+          }} />
         </TabsContent>
 
         <TabsContent value="entregas" className="mt-4">
-          <EntregasSection />
+          <EntregasSection navigateEntregaId={navigateEntregaId} onNavigated={() => setNavigateEntregaId(null)} />
         </TabsContent>
 
         <TabsContent value="historial" className="mt-4">

@@ -113,10 +113,18 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         if (sinProducto > 0) {
           toast({ title: `${sinProducto} ítem(s) sin producto vinculado no se cargaron automáticamente.`, variant: 'destructive' });
         }
-        if (cotizacion.cliente_id) {
-          const client = (clis || []).find(c => c.id === cotizacion.cliente_id);
-          if (client) setSelectedClient(client);
+      }
+
+      // Pre-seleccionar cliente de la cotización (fuera del check de items por si
+      // la cotización no tiene ítems, y con fallback a DB si el cliente está inactivo).
+      if (cotizacion?.cliente_id) {
+        let client = (clis || []).find(c => c.id === cotizacion.cliente_id);
+        if (!client) {
+          const { data: clienteCot } = await supabase
+            .from('clientes').select('*').eq('id', cotizacion.cliente_id).maybeSingle();
+          client = clienteCot;
         }
+        if (client) handleSelectClient(client);
       }
 
       // Pre-llenar carrito desde pedido
@@ -538,6 +546,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         p_pagos:            pagosPayload,
         p_es_cc:            isCC,
         p_caja_sesion_id:   currentSession?.id ?? null,
+        p_pedido_id:        pedido?.id ?? null,
       });
 
       if (rpcError) throw rpcError;

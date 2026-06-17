@@ -2,13 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Search, Plus, Edit, Eye, Upload, X, AlertTriangle, Shield, CreditCard,
-  FileText, Phone, Mail, MapPin, Hash, DollarSign, Clock, Tag
+  Phone, Mail, MapPin, Hash, DollarSign, Clock, Tag
 } from 'lucide-react';
 import { listaPreciosService } from '@/services/listaPreciosService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -23,7 +22,7 @@ import CSVImportModal from '@/components/ui/CSVImportModal';
 
 const emptyForm = () => ({
   nombre: '', documento: '', telefono: '', email: '', direccion: '',
-  limite_credito: '', condiciones_pago: '', dias_credito: '',
+  limite_credito: '', dias_credito: '',
   bloquear_en_limite: false, lista_precio_id: '', condicion_pago_id: '',
 });
 
@@ -97,7 +96,6 @@ function ClientesSection() {
       email:              client.email || '',
       direccion:          client.direccion || '',
       limite_credito:     client.limite_credito != null ? String(client.limite_credito) : '',
-      condiciones_pago:   client.condiciones_pago || '',
       dias_credito:       client.dias_credito != null ? String(client.dias_credito) : '',
       bloquear_en_limite: client.bloquear_en_limite || false,
       lista_precio_id:    client.lista_precio_id || '',
@@ -117,7 +115,6 @@ function ClientesSection() {
         email:              formData.email.trim(),
         direccion:          formData.direccion.trim(),
         limite_credito:     formData.limite_credito !== '' ? parseFloat(formData.limite_credito) : 0,
-        condiciones_pago:   formData.condiciones_pago.trim(),
         dias_credito:       formData.dias_credito !== '' ? parseInt(formData.dias_credito) : 0,
         bloquear_en_limite: formData.bloquear_en_limite,
         lista_precio_id:    formData.lista_precio_id || null,
@@ -208,7 +205,15 @@ function ClientesSection() {
         <p className="text-xs text-kx-text-3">0 = sin límite establecido</p>
       </div>
       {/* Condición de pago (maestro) */}
-      {condicionesPago.filter(c => c.activo).length > 0 && (
+      {condicionesPago.filter(c => c.activo).length === 0 ? (
+        <div className="space-y-1.5">
+          <Label className="dark:text-kx-text flex items-center gap-1"><CreditCard className="h-3.5 w-3.5" /> Condición de Pago</Label>
+          <div className="w-full h-10 rounded-md border border-dashed border-kx-border px-3 flex items-center text-xs text-kx-text-3">
+            Sin condiciones activas —
+            <a className="ml-1 text-violet-400 underline cursor-pointer">configurar en Finanzas</a>
+          </div>
+        </div>
+      ) : (
         <div className="space-y-1.5">
           <Label className="dark:text-kx-text flex items-center gap-1"><CreditCard className="h-3.5 w-3.5" /> Condición de Pago</Label>
           <select
@@ -241,16 +246,6 @@ function ClientesSection() {
           placeholder="Ej: 30"
           className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
         <p className="text-xs text-kx-text-3">Días hasta vencimiento de facturas CC</p>
-      </div>
-      {/* Condiciones */}
-      <div className="space-y-1.5 md:col-span-2">
-        <Label className="dark:text-kx-text flex items-center gap-1"><FileText className="h-3.5 w-3.5" /> Condiciones de Pago</Label>
-        <Textarea
-          value={formData.condiciones_pago}
-          onChange={e => setFormData(f => ({ ...f, condiciones_pago: e.target.value }))}
-          placeholder="Ej: Pago a 30 días. Descuento 5% por pago anticipado."
-          className="resize-none h-16 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm"
-        />
       </div>
       {/* Lista de precios */}
       {listasPrecios.filter(l => l.activo).length > 0 && (
@@ -376,7 +371,13 @@ function ClientesSection() {
                         )}
                       </TableCell>
                       <TableCell className="text-xs text-kx-text-3 max-w-[160px] truncate">
-                        {client.condiciones_pago || (client.dias_credito ? `${client.dias_credito} días` : '—')}
+                        {(() => {
+                          if (client.condicion_pago_id) {
+                            const cp = condicionesPago.find(c => c.id === client.condicion_pago_id);
+                            if (cp) return cp.nombre;
+                          }
+                          return client.condiciones_pago || (client.dias_credito ? `${client.dias_credito} días` : '—');
+                        })()}
                       </TableCell>
                       <TableCell className="text-center" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1">
@@ -404,7 +405,10 @@ function ClientesSection() {
         clientId={clientForDetail?.id} clientData={clientForDetail} onUpdate={fetchClients} />
 
       {/* Add Modal */}
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+      <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+        setIsAddDialogOpen(open);
+        if (!open) document.activeElement?.blur();
+      }}>
         <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="dark:text-kx-text">Nuevo Cliente</DialogTitle>
@@ -421,7 +425,10 @@ function ClientesSection() {
       </Dialog>
 
       {/* Edit Modal */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+      <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+        setIsEditDialogOpen(open);
+        if (!open) document.activeElement?.blur();
+      }}>
         <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="dark:text-kx-text">Editar: {selectedClient?.nombre}</DialogTitle>

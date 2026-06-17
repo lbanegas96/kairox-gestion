@@ -30,7 +30,7 @@ const ESTADOS = {
 
 const EMPTY_ITEM = { descripcion: '', cantidad: 1, precio_unitario: '', producto_id: null, unidad_medida: '' };
 
-function CotizacionesSection() {
+function CotizacionesSection({ onNavigateToSale } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -343,9 +343,14 @@ function CotizacionesSection() {
                           </Button>
                         )}
                         {cot.estado === 'convertida' && cot.comprobante_id && (
-                          <span className="text-xs text-purple-500 font-medium flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => onNavigateToSale?.(cot.comprobante_id)}
+                            className="text-xs text-purple-500 hover:text-purple-400 font-medium flex items-center gap-1 hover:underline cursor-pointer"
+                            title="Ver venta generada"
+                          >
                             <ExternalLink className="w-3 h-3" /> Venta
-                          </span>
+                          </button>
                         )}
                         {['borrador', 'rechazada'].includes(cot.estado) && (
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-red-500" onClick={() => deleteMutation.mutate(cot.id)} title="Eliminar">

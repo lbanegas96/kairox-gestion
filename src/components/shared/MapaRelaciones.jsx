@@ -136,10 +136,16 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
               .eq('id', comp.pedido_id).eq('empresa_id', user.empresa_id).maybeSingle()
           : Promise.resolve({ data: null }),
 
-        supabase.from('entregas')
-          .select('id, numero_entrega, fecha, estado')
-          .eq('comprobante_id', comprobanteId)
-          .eq('empresa_id', user.empresa_id),
+        // Entregas: las que apuntan al comprobante (POS implícita) Y las que apuntan al pedido (manual)
+        comp.pedido_id
+          ? supabase.from('entregas')
+              .select('id, numero_entrega, fecha, estado, origen, pedido_id')
+              .or(`comprobante_id.eq.${comprobanteId},pedido_id.eq.${comp.pedido_id}`)
+              .eq('empresa_id', user.empresa_id)
+          : supabase.from('entregas')
+              .select('id, numero_entrega, fecha, estado, origen, pedido_id')
+              .eq('comprobante_id', comprobanteId)
+              .eq('empresa_id', user.empresa_id),
 
         supabase.from('comprobantes')
           .select('id, numero_venta, numero_afip, tipo, total, fecha, estado_pago')
@@ -167,12 +173,46 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
       const safe    = (res) => res.status === 'fulfilled' ? (res.value.data ?? null) : null;
       const safeArr = (res) => res.status === 'fulfilled' ? (res.value.data ?? []) : [];
 
+      // Dedupe + priorización
+      const entregasRaw = safeArr(entregasRes);
+      const seen = new Set();
+      const entregasDedup = entregasRaw.filter(e => seen.has(e.id) ? false : (seen.add(e.id), true));
+
+      // Si el comprobante viene de un pedido, priorizar la entrega manual vinculada a ese pedido
+      // y descartar todas las implícitas (para evitar la duplicación POS).
+      let entregas;
+      if (comp.pedido_id) {
+        const manualesDelPedido = entregasDedup.filter(e => e.pedido_id === comp.pedido_id && e.origen === 'manual');
+        if (manualesDelPedido.length > 0) {
+          entregas = manualesDelPedido;
+        } else {
+          // Sin manual del pedido: caer al criterio general (manual gana a implícita si coexisten)
+          const hayManual = entregasDedup.some(e => e.origen === 'manual');
+          entregas = hayManual ? entregasDedup.filter(e => e.origen !== 'implicita') : entregasDedup;
+        }
+      } else {
+        const hayManual = entregasDedup.some(e => e.origen === 'manual');
+        entregas = hayManual ? entregasDedup.filter(e => e.origen !== 'implicita') : entregasDedup;
+      }
+
+      // Fallback de pedido: si el comprobante no lo trae, tomar el de la primera entrega que tenga pedido_id
+      let pedido = safe(pedidoRes);
+      if (!pedido) {
+        const pedIdDesdeEntrega = entregas.find(e => e.pedido_id)?.pedido_id;
+        if (pedIdDesdeEntrega) {
+          const { data: ped } = await supabase.from('pedidos')
+            .select('id, numero, fecha, total, estado')
+            .eq('id', pedIdDesdeEntrega).eq('empresa_id', user.empresa_id).maybeSingle();
+          pedido = ped;
+        }
+      }
+
       setMapa({
         modo:         'venta',
         comp,
         origen:       safe(origenRes),
-        pedido:       safe(pedidoRes),
-        entregas:     safeArr(entregasRes),
+        pedido,
+        entregas,
         ncs:          safeArr(ncsRes),
         nds:          safeArr(ndsRes),
         devoluciones: safeArr(devRes),

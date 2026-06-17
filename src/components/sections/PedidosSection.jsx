@@ -63,7 +63,7 @@ function ProgressoBadge({ items = [] }) {
 }
 
 // ── Componente principal ───────────────────────────────────────────────────────
-function PedidosSection() {
+function PedidosSection({ onNavigate } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -785,7 +785,11 @@ function PedidosSection() {
                     {loadingEntregas ? (
                       <div className="h-5 bg-slate-100 dark:bg-kx-surface-2 rounded-full animate-pulse w-40" />
                     ) : (
-                      <DocumentFlow chips={flowChips} />
+                      <DocumentFlow chips={flowChips} onNavigate={(tipo, id) => {
+                        if (tipo === 'pedido') return; // ya estamos acá
+                        setDetailPedido(null);
+                        onNavigate?.(tipo, id);
+                      }} />
                     )}
                   </div>
 
@@ -803,6 +807,8 @@ function PedidosSection() {
                       {items.map(it => {
                         const ent = Number(it.cantidad_entregada || 0);
                         const ped = Number(it.cantidad || 0);
+                        const precio = Number(it.precio_unitario || 0);
+                        const subEntregado = ent * precio;
                         const completo = ent >= ped && ped > 0;
                         return (
                           <tr key={it.id} className="border-b border-slate-100 dark:border-slate-800/50">
@@ -812,7 +818,7 @@ function PedidosSection() {
                               {ent}
                             </td>
                             <td className="py-2 text-right font-mono dark:text-kx-text">
-                              ${Number(it.subtotal).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                              ${subEntregado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                             </td>
                           </tr>
                         );
@@ -820,7 +826,10 @@ function PedidosSection() {
                     </tbody>
                   </table>
                   <div className="text-right font-bold text-lg dark:text-kx-text">
-                    Total: ${Number(detailPedido.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    Total entregado: ${items.reduce((s, it) => s + (Number(it.cantidad_entregada || 0) * Number(it.precio_unitario || 0)), 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    <div className="text-xs font-normal text-kx-text-3">
+                      Total pedido: ${Number(detailPedido.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    </div>
                   </div>
 
                   {/* Workflow buttons */}

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -954,11 +955,12 @@ const ConfiguracionSection = ({ initialTab }) => {
                 <div className="border border-kx-border rounded-xl overflow-hidden">
                   {condicionesPago.map(c => (
                     <div key={c.id} className="flex items-center justify-between px-4 py-2.5 border-b border-kx-border last:border-0">
-                      <div>
+                      <div className={`flex items-center gap-2 ${!c.activo ? 'opacity-40' : ''}`}>
                         <span className="text-sm font-medium text-kx-text">{c.nombre}</span>
-                        <span className="text-xs text-kx-text-2 ml-2">
+                        <span className="text-xs text-kx-text-2">
                           {c.dias_credito} días{c.descuento_pct > 0 ? ` · ${c.descuento_pct}% desc.` : ''}
                         </span>
+                        {!c.activo && <Badge variant="outline" className="text-xs text-slate-400">Inactiva</Badge>}
                       </div>
                       <div className="flex items-center gap-2">
                         <Switch checked={c.activo} onCheckedChange={(v) => toggleActivoCondicion(c.id, v)} />
@@ -1084,9 +1086,10 @@ const ConfiguracionSection = ({ initialTab }) => {
                 <div className="border border-kx-border rounded-xl overflow-hidden">
                   {unidadesMedida.map(u => (
                     <div key={u.id} className="flex items-center justify-between px-4 py-2.5 border-b border-kx-border last:border-0">
-                      <div className="flex items-center gap-3">
+                      <div className={`flex items-center gap-3 ${!u.activo ? 'opacity-40' : ''}`}>
                         <span className="text-xs font-mono bg-kx-surface-2 px-2 py-0.5 rounded">{u.codigo}</span>
                         <span className="text-sm text-kx-text">{u.descripcion}</span>
+                        {!u.activo && <Badge variant="outline" className="text-xs text-slate-400">Inactiva</Badge>}
                       </div>
                       <div className="flex items-center gap-2">
                         <Switch
