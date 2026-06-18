@@ -370,7 +370,7 @@ function ListasPrecioSection() {
             ) : filteredProductos.map(prod => {
               const existingItem = itemMap[prod.id];
               const hasPrice = !!existingItem;
-              const currentPrecioStr = precioEdicion[prod.id] ?? (existingItem ? String(existingItem.precio) : '');
+              const currentPrecioStr = precioEdicion[prod.id] ?? (existingItem ? Number(existingItem.precio).toLocaleString('es-AR') : '');
 
               return (
                 <div key={prod.id}

@@ -18,7 +18,7 @@ import ReportTable from '@/components/reports/ReportTable';
 import { formatDateAR } from '@/lib/dateUtils';
 import { formatCurrency } from '@/lib/currencyUtils';
 
-function ReportesSection() {
+function ReportesSection({ initialView = null, onNavigate } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const { enabled: tcParaleloEnabled, monedaParalela } = useTCParalelo();
@@ -28,7 +28,22 @@ function ReportesSection() {
   const [loading, setLoading] = useState(false);
   const [showParidad, setShowParidad] = useState(false);
   const [showLibroIVA, setShowLibroIVA] = useState(false);
+  const [libroIVAOrigen, setLibroIVAOrigen] = useState(null);
   const [afipActivo, setAfipActivo] = useState(false);
+
+  useEffect(() => {
+    if (initialView === 'libro_iva') {
+      setShowLibroIVA(true);
+      setLibroIVAOrigen('impuestos');
+    }
+  }, [initialView]);
+
+  const handleLibroIVABack = () => {
+    setShowLibroIVA(false);
+    const origen = libroIVAOrigen;
+    setLibroIVAOrigen(null);
+    if (origen === 'impuestos') onNavigate?.('impuestos');
+  };
 
   useEffect(() => {
     if (!user?.empresa_id) return;
@@ -344,7 +359,7 @@ function ReportesSection() {
     return <ReporteParidad onBack={() => setShowParidad(false)} />;
   }
   if (showLibroIVA) {
-    return <ReporteLibroIVA onBack={() => setShowLibroIVA(false)} />;
+    return <ReporteLibroIVA onBack={handleLibroIVABack} />;
   }
 
   return (
@@ -429,11 +444,10 @@ function ReportesSection() {
 
         {/* ── Libro IVA Ventas (AFIP) ── */}
         <div
-          className={`group bg-kx-surface border border-kx-border rounded-2xl p-6 shadow-sm dark:shadow-none
+          className="group bg-kx-surface border border-kx-border rounded-2xl p-6 shadow-sm dark:shadow-none
             border-t-2 border-t-kx-violet transition-all duration-200
-            ${afipActivo ? 'hover:shadow-md hover:-translate-y-0.5 cursor-pointer' : 'opacity-60 cursor-default'}`}
-          onClick={() => afipActivo && setShowLibroIVA(true)}
-          title={!afipActivo ? 'Activá la facturación electrónica (AFIP) en Configuración para habilitar este reporte' : ''}
+            hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+          onClick={() => { setShowLibroIVA(true); setLibroIVAOrigen('reportes'); }}
         >
           <div className="flex items-center justify-between mb-4">
             <div className="p-3 bg-kx-surface-2 rounded-xl border border-kx-border">
@@ -450,16 +464,13 @@ function ReportesSection() {
               Libro IVA Ventas
             </h3>
             <p className="text-kx-text-2 text-sm line-clamp-2">
-              {afipActivo
-                ? 'Comprobantes emitidos con CAE, neto gravado e IVA 21% por período.'
-                : 'Activá la facturación electrónica (AFIP) en Configuración para habilitar.'}
+              Comprobantes emitidos con neto gravado e IVA discriminado por período.
             </p>
           </div>
           <Button
-            disabled={!afipActivo}
-            className="w-full bg-kx-surface-2 hover:bg-kx-border text-kx-text border border-kx-border transition-all disabled:opacity-50"
+            className="w-full bg-kx-surface-2 hover:bg-kx-border text-kx-text border border-kx-border transition-all"
           >
-            {afipActivo ? 'Ver Reporte' : 'Requiere AFIP activo'}
+            Ver Libro IVA Ventas
           </Button>
         </div>
       </div>

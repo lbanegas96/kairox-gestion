@@ -24,9 +24,15 @@ import { OnboardingWizard } from '@/components/OnboardingWizard';
 
 function Dashboard({ user, onLogout }) {
   const [activeSection, setActiveSection]     = useState('dashboard');
+  const [sectionParams, setSectionParams]     = useState({});
   const [isSidebarOpen, setIsSidebarOpen]     = useState(false);
   const { open: cmdOpen, setOpen: setCmdOpen } = useCommandPalette();
   const [showOnboarding, setShowOnboarding]   = useState(false);
+
+  const navigateTo = (section, params = {}) => {
+    setActiveSection(section);
+    setSectionParams(params);
+  };
 
   useEffect(() => {
     if (!user?.empresa_id) return;
@@ -59,13 +65,13 @@ function Dashboard({ user, onLogout }) {
       case 'caja':          return <CajaSection />;
       case 'clientes':      return <ClientesSection />;
       case 'cuentacorriente':return <CuentaCorrienteSection />;
-      case 'reportes':      return <ReportesSection />;
+      case 'reportes':      return <ReportesSection initialView={sectionParams.initialView ?? null} onNavigate={navigateTo} />;
       case 'usuarios':      return <ConfiguracionSection initialTab="usuarios" />;
       case 'configuracion': return <ConfiguracionSection />;
       case 'plan_cuentas':  return <PlanCuentasSection />;
       case 'bancos':        return <CuentasBancariasSection />;
       case 'cheques':       return <ChequesSection />;
-      case 'impuestos':     return <ImpuestosSection onNavigate={setActiveSection} />;
+      case 'impuestos':     return <ImpuestosSection onNavigate={navigateTo} />;
       case 'proveedores':   return <ProveedoresSection />;
       default:              return <DashboardSection onNavigate={setActiveSection} />;
     }

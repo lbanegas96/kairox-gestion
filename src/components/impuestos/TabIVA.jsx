@@ -193,7 +193,7 @@ function TabIVA({ onNavigate }) {
         </div>
 
         <div className="flex flex-wrap gap-2 mt-3">
-          <Button variant="outline" size="sm" onClick={() => onNavigate?.('reportes')}>
+          <Button variant="outline" size="sm" onClick={() => onNavigate?.('reportes', { initialView: 'libro_iva' })}>
             <BookOpen className="h-4 w-4 mr-1.5" /> Ver Libro IVA Ventas <ArrowRight className="h-3.5 w-3.5 ml-1" />
           </Button>
           <Button variant="outline" size="sm" onClick={() => setShowLibroCompras(true)}>
