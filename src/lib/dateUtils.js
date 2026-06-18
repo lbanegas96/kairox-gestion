@@ -77,6 +77,16 @@ export const formatDateLocaleAR = (isoStr, options = {}) => {
   return local.toLocaleDateString('es-AR', defaultOpts);
 };
 
+// Adds N days to a stored ISO string/Date and returns a YYYY-MM-DD date string
+// (Argentina-local date, read via UTC parts per the convention above).
+export const addDaysAR = (isoStrOrDate, days) => {
+  const d = new Date(isoStrOrDate);
+  const result = new Date(Date.UTC(
+    d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + Number(days || 0)
+  ));
+  return result.toISOString().split('T')[0];
+};
+
 // Converts YYYY-MM-DD input string to ISO.
 // - Si la fecha es HOY (en AR) → usa la hora actual (operación en tiempo real).
 // - Si es otro día (pasado o futuro) → fija 12:00 para evitar boundary issues

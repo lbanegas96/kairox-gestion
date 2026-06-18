@@ -14,7 +14,7 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { parseNumberLocale } from '@/lib/currencyUtils';
-import { getNowAR, formatDateAR, formatTimeAR } from '@/lib/dateUtils';
+import { getNowAR, getTodayAR, formatDateAR, formatTimeAR } from '@/lib/dateUtils';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 
 const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate }) => {
@@ -58,7 +58,7 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
       if (!cError && cData) setLocalClientData(cData);
 
       // 2. Fetch Movements History
-      // We want to show sales, payments, adjustments. 
+      // We want to show sales, payments, adjustments.
       // Current table 'cuenta_corriente_movimientos' tracks debits/credits.
       // We'll use this.
       const { data: movs, error: movsError } = await supabase
@@ -69,7 +69,23 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
         .limit(50); // Reasonable limit for modal
 
       if (movsError) throw movsError;
-      setMovements(movs || []);
+
+      // 3. Vencimiento: traer fecha_vencimiento/estado_pago de los comprobantes
+      // referenciados (solo los movimientos DEBE de venta tienen comprobante_id).
+      const comprobanteIds = [...new Set((movs || []).map(m => m.comprobante_id).filter(Boolean))];
+      let comprobantesMap = {};
+      if (comprobanteIds.length > 0) {
+        const { data: comps } = await supabase
+          .from('comprobantes')
+          .select('id, fecha_vencimiento, estado_pago')
+          .in('id', comprobanteIds);
+        comprobantesMap = Object.fromEntries((comps || []).map(c => [c.id, c]));
+      }
+
+      setMovements((movs || []).map(m => ({
+        ...m,
+        _comprobante: m.comprobante_id ? comprobantesMap[m.comprobante_id] : null,
+      })));
 
     } catch (error) {
       console.error("Error loading details:", error);
@@ -251,14 +267,15 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
                           <th className="px-4 py-3 w-32">Fecha</th>
                           <th className="px-4 py-3 w-24 text-center">Tipo</th>
                           <th className="px-4 py-3">Descripción</th>
+                          <th className="px-4 py-3 w-32">Vence</th>
                           <th className="px-4 py-3 text-right w-32">Monto</th>
                        </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                        {loading ? (
-                          <tr><td colSpan="4" className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-500"/></td></tr>
+                          <tr><td colSpan="5" className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-500"/></td></tr>
                        ) : movements.length === 0 ? (
-                          <tr><td colSpan="4" className="p-8 text-center text-slate-500 italic flex flex-col items-center gap-2"><AlertCircle className="h-8 w-8 text-slate-200 dark:text-slate-700"/>Sin movimientos registrados</td></tr>
+                          <tr><td colSpan="5" className="p-8 text-center text-slate-500 italic flex flex-col items-center gap-2"><AlertCircle className="h-8 w-8 text-slate-200 dark:text-slate-700"/>Sin movimientos registrados</td></tr>
                        ) : (
                           movements.map((mov) => {
                              const isDebe = mov.tipo === 'DEBE'; // Sale = Debt Increase
@@ -275,6 +292,18 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
                                    </td>
                                    <td className="px-4 py-3 text-slate-700 dark:text-slate-300 font-medium">
                                       {mov.descripcion}
+                                   </td>
+                                   <td className="px-4 py-3 text-xs">
+                                      {mov._comprobante?.fecha_vencimiento ? (
+                                         <div className="flex items-center gap-1.5">
+                                            <span className="text-kx-text-2 dark:text-kx-text-2 font-mono">{formatDateAR(mov._comprobante.fecha_vencimiento)}</span>
+                                            {mov._comprobante.estado_pago === 'pendiente' && mov._comprobante.fecha_vencimiento < getTodayAR() && (
+                                               <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-transparent text-[10px] h-5 dark:bg-red-900/30 dark:text-red-400">Vencido</Badge>
+                                            )}
+                                         </div>
+                                      ) : (
+                                         <span className="text-slate-400 dark:text-kx-text-3">—</span>
+                                      )}
                                    </td>
                                    <td className={`px-4 py-3 text-right font-mono font-bold ${isDebe ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                                       {isDebe ? '+' : '-'}${Number(mov.monto).toLocaleString('es-AR', { minimumFractionDigits: 2 })}

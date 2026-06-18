@@ -10,7 +10,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { useToast } from '@/components/ui/use-toast';
-import { getTodayAR, getNowAR } from '@/lib/dateUtils';
+import { getTodayAR, getNowAR, addDaysAR } from '@/lib/dateUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
 import ClienteSelector from '@/components/shared/ClienteSelector';
 
@@ -60,7 +60,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
   useEffect(() => {
     if (!open || !user?.empresa_id) return;
 
-    supabase.from('clientes').select('id, nombre')
+    supabase.from('clientes').select('id, nombre, dias_credito')
       .eq('empresa_id', user.empresa_id).neq('activo', false).order('nombre')
       .then(({ data }) => setClientes(data || []));
 
@@ -189,6 +189,9 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
       const numero     = await generateNumero();
       const now        = getNowAR().toISOString();
       const clienteObj = clientes.find(c => c.id === clienteId);
+      // Mismo criterio que la RPC crear_venta: vencimiento = fecha de venta + dias_credito
+      // del cliente (0/null → vence el mismo día). Se calcula siempre, no solo en CC.
+      const fechaVencimiento = addDaysAR(now, clienteObj?.dias_credito ?? 0);
 
       // Tipo de comprobante AFIP (A/B/C/E o null para Ticket).
       // Se guarda SIEMPRE, sin importar si AFIP está activo, para poder mostrarlo
@@ -212,6 +215,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
         tipo_cambio_tasa:      1,
         tipo:                  'venta',
         tipo_comprobante_afip: tipoAfipInsert,
+        fecha_vencimiento:     fechaVencimiento,
       }]).select('id').single();
       if (compErr) throw compErr;
 
