@@ -1,5 +1,6 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-17 (sesión 22) — Deuda técnica: extraídos `useMultipago` y `useCreditoCliente` de `NuevaVentaModal.jsx` (864→804 líneas). Refactor puro, cero cambios de comportamiento — lógica de multi-pago y verificación de límite de crédito movida a hooks, mismos mensajes/orden/validaciones exactos. `PanelCarrito.jsx`/`NuevaFacturaModal.jsx` tienen modelos de pago distintos (no Set+methodAmounts) — no se forzó la reutilización ahí. `NuevaVentaModal` sigue en descomposición parcial: `useAfipIntegration` queda pendiente para sesión futura.
+**Última actualización:** 2026-06-17 (sesión 23) — Reparada la contradicción real de la regla de Caja: auditados los 9 puntos de enforcement del sistema, encontrados 2 con comportamiento inconsistente (`CompraRapidaSection.jsx` bloqueaba TODO método de pago; `NuevaFacturaModal.jsx` no bloqueaba ninguno), ambos corregidos a "solo Efectivo bloquea" — la regla dominante y deliberada desde commit `6d645ed` (Prompt 7). CONTEXT.md y memoria persistente actualizados sin contradicciones. Además: unificadas las 2 carpetas de migrations en `supabase/migrations/` (33 archivos movidos con `git mv`, sin colisiones); verificado que la CORS whitelist dinámica SÍ está deployada en producción (no era deuda); descubierto que `mp-webhook` nunca se deployó pese a figurar como deployada.
+**Sesión 22** — Deuda técnica: extraídos `useMultipago` y `useCreditoCliente` de `NuevaVentaModal.jsx` (864→804 líneas). Refactor puro, cero cambios de comportamiento — lógica de multi-pago y verificación de límite de crédito movida a hooks, mismos mensajes/orden/validaciones exactos. `PanelCarrito.jsx`/`NuevaFacturaModal.jsx` tienen modelos de pago distintos (no Set+methodAmounts) — no se forzó la reutilización ahí. `NuevaVentaModal` sigue en descomposición parcial: `useAfipIntegration` queda pendiente para sesión futura.
 **Sesión 21** — Impuestos Fase B (padrón ARBA): investigación completa, **bloqueada por diseño antes de escribir código** (decisión del usuario). Hallazgo clave: el webservice oficial de ARBA (`dfe.arba.gov.ar`) requiere credencial CIT que ARBA solo emite a empresas designadas "Agente de Recaudación" — estatus que el público objetivo de KAIROX (micro PyMEs) casi nunca tiene. Sin código nuevo de Impuestos esta sesión; ver Historial para el detalle completo de la investigación y las 3 opciones evaluadas. **Además:** se cerró en paralelo el pendiente de `CompraRapidaSection.jsx` (carrito) flageado al final de sesión 20 — formato es-AR aplicado: inputs de costo unitario a `type=text inputMode=decimal`, `parseFloat`→`parseNumberLocale` (8 puntos), `.toFixed(2)`→`toLocaleString('es-AR')` en los 4 displays de total (autocomplete, total carrito, total fila, total edición).
 **Sesión 20** — Formato es-AR: cierre de los 5 módulos pendientes (`ClientDetailModal`, `ListasPrecioSection`, `PlanCuentasSection`, `ProveedoresSection`, `OnboardingWizard`). 4 de 5 tenían deuda real (inputs `type="number"` y/o `parseFloat`/`.toFixed(2)` en vez de `parseNumberLocale`/`toLocaleString('es-AR')`); `OnboardingWizard` ya estaba 100% correcto. Hallazgo: `CompraRapidaSection.jsx` (carrito de Compra Rápida) **NO** estaba resuelto pese a asumirse cerrado por Document Flow — queda flageado como tarea separada.
 **Sesión 19:** Unidades de Medida Parte 2: FK `productos.unidad_medida_id` (migration 045, 11/11 productos auto-mapeados), Select conectado en `ProductosSection`, 2 dropdowns hardcodeados duplicados migrados (`OrdenesCompraSection`, `CotizacionesSection`).
@@ -90,55 +91,55 @@
 | Archivo | Contenido | Estado |
 |---|---|---|
 | `schema.sql` | Schema base completo + RLS + triggers | ✅ |
-| `migrations/001_audit_log.sql` | Tabla audit_log + fn_audit_trigger | ✅ |
-| `migrations/002_cotizaciones.sql` | Cotizaciones + cotizacion_items | ✅ |
-| `migrations/003_ordenes_compra.sql` | Órdenes de compra + items | ✅ |
-| `migrations/004_plan_cuentas.sql` | Plan cuentas + asientos + seed | ✅ |
-| `migrations/005_configuracion_rls_fix.sql` | Fix RLS tabla configuracion | ✅ |
-| `migrations/009_cajas.sql` | Tabla cajas + FK caja_sesiones | ✅ |
-| `migrations/010_drop_ventas_legacy.sql` | Backup + DROP ventas legacy | ✅ |
-| `migrations/011_cuentas_bancarias.sql` | Cuentas bancarias + movimientos | ✅ |
-| `migrations/012_facturas_proveedor.sql` | 3-way match OC | ✅ |
-| `migrations/013_multi_moneda.sql` | Tabla tipos_cambio + columnas tipo_cambio_tasa | ✅ |
-| `migrations/014_proveedores.sql` | Ficha completa proveedores + cuenta_corriente_proveedores | ✅ |
-| `migrations/015_conciliacion_bancaria.sql` | extractos_bancarios + extracto_lineas + trigger sync | ✅ |
-| `migrations/016_security_hardening.sql` | is_admin() + RLS config + rate_limit + audit triggers | ✅ |
-| `migrations/017_multi_pago.sql` | Tabla comprobante_pagos + RLS + índices | ✅ |
-| `migrations/018_condicion_pago.sql` | condicion_pago + dias_credito en clientes | ✅ |
-| `migrations/019_pedidos.sql` | pedidos + pedido_items + RLS + audit trigger | ✅ |
-| `migrations/020_notas_credito.sql` | tipo + estado_pago + comprobante_origen_id + motivo_nc en comprobantes | ✅ |
-| `migrations/021_listas_precio.sql` | listas_precio + lista_precio_items + lista_precio_id en clientes + cotizacion_id/pedido_id en comprobantes | ✅ |
+| `supabase/migrations/001_audit_log.sql` | Tabla audit_log + fn_audit_trigger | ✅ |
+| `supabase/migrations/002_cotizaciones.sql` | Cotizaciones + cotizacion_items | ✅ |
+| `supabase/migrations/003_ordenes_compra.sql` | Órdenes de compra + items | ✅ |
+| `supabase/migrations/004_plan_cuentas.sql` | Plan cuentas + asientos + seed | ✅ |
+| `supabase/migrations/005_configuracion_rls_fix.sql` | Fix RLS tabla configuracion | ✅ |
+| `supabase/migrations/009_cajas.sql` | Tabla cajas + FK caja_sesiones | ✅ |
+| `supabase/migrations/010_drop_ventas_legacy.sql` | Backup + DROP ventas legacy | ✅ |
+| `supabase/migrations/011_cuentas_bancarias.sql` | Cuentas bancarias + movimientos | ✅ |
+| `supabase/migrations/012_facturas_proveedor.sql` | 3-way match OC | ✅ |
+| `supabase/migrations/013_multi_moneda.sql` | Tabla tipos_cambio + columnas tipo_cambio_tasa | ✅ |
+| `supabase/migrations/014_proveedores.sql` | Ficha completa proveedores + cuenta_corriente_proveedores | ✅ |
+| `supabase/migrations/015_conciliacion_bancaria.sql` | extractos_bancarios + extracto_lineas + trigger sync | ✅ |
+| `supabase/migrations/016_security_hardening.sql` | is_admin() + RLS config + rate_limit + audit triggers | ✅ |
+| `supabase/migrations/017_multi_pago.sql` | Tabla comprobante_pagos + RLS + índices | ✅ |
+| `supabase/migrations/018_condicion_pago.sql` | condicion_pago + dias_credito en clientes | ✅ |
+| `supabase/migrations/019_pedidos.sql` | pedidos + pedido_items + RLS + audit trigger | ✅ |
+| `supabase/migrations/020_notas_credito.sql` | tipo + estado_pago + comprobante_origen_id + motivo_nc en comprobantes | ✅ |
+| `supabase/migrations/021_listas_precio.sql` | listas_precio + lista_precio_items + lista_precio_id en clientes + cotizacion_id/pedido_id en comprobantes | ✅ |
 | **`create_tipos_cambio`** (SQL directo) | Tabla `tipos_cambio` — UNIQUE(empresa_id, moneda, fecha) + RLS via get_my_empresa_id() + índice | ✅ |
 | **`add_moneda_paralela`** (SQL directo) | Columnas `usa_tc_paralelo`/`moneda_paralela` en empresas + `monto_paralelo`/`tc_paralelo` en comprobantes, movimientos_caja, cuenta_corriente_movimientos, compras | ✅ |
-| **`migrations/022_rpc_decrement_stock.sql`** | RPC `decrement_stock(p_producto_id, p_cantidad)` — UPDATE atómico con check stock ≥ 0, SECURITY DEFINER | ✅ Aplicada via MCP |
-| **`migrations/023_indices_faltantes.sql`** | 4 índices: `idx_comprobantes_estado_pago`, `idx_comprobantes_fecha`, `idx_cta_cte_empresa_cliente_tipo`, `idx_mov_inv_fecha` | ✅ Aplicada via MCP |
-| **`migrations/024_rpc_crear_venta.sql`** | RPC `crear_venta` — venta transaccional atómica (comprobante + items + stock FOR UPDATE + mov_inventario + mov_caja + CC) con rollback automático, SECURITY DEFINER | ✅ Aplicada via MCP |
-| **`migrations/025_afip_infraestructura.sql`** | AFIP Fase 1: columnas fiscales en `empresas` + `clientes.condicion_iva` + tabla `puntos_venta` (RLS) + columnas CAE en `comprobantes` + wrappers Vault `vault_secret_upsert`/`vault_secret_read` (SECURITY DEFINER, solo service_role) | ✅ Aplicada via MCP |
-| **`migrations/026_onboarding.sql`** | Columna `onboarding_completado` en `empresas` + lógica de wizard de bienvenida | ✅ Aplicada |
-| **`migrations/027_cierre_periodos.sql`** | Tabla `periodos_contables` (admin create/close) + RPC `fecha_en_periodo_cerrado(empresa_id, fecha DATE) RETURNS BOOLEAN` SECURITY DEFINER STABLE | ✅ Aplicada via MCP |
-| **`migrations/028_cheques.sql`** | Tablas `cheques` + `cheques_historial` + RLS por `get_my_empresa_id()` + 3 índices (tipo, estado, vencimiento parcial) | ✅ Aplicada via MCP |
-| **`migrations/029_fix_tenant_id_fkeys.sql`** | Fix FK: `comprobantes.tenant_id`, `caja_sesiones.tenant_id`, `movimientos_inventario.tenant_id` apuntaban a `profiles(id)` — ahora apuntan a `empresas(id)`. DROP constraints → UPDATE data → ADD constraints | ✅ Aplicada via MCP |
+| **`supabase/migrations/022_rpc_decrement_stock.sql`** | RPC `decrement_stock(p_producto_id, p_cantidad)` — UPDATE atómico con check stock ≥ 0, SECURITY DEFINER | ✅ Aplicada via MCP |
+| **`supabase/migrations/023_indices_faltantes.sql`** | 4 índices: `idx_comprobantes_estado_pago`, `idx_comprobantes_fecha`, `idx_cta_cte_empresa_cliente_tipo`, `idx_mov_inv_fecha` | ✅ Aplicada via MCP |
+| **`supabase/migrations/024_rpc_crear_venta.sql`** | RPC `crear_venta` — venta transaccional atómica (comprobante + items + stock FOR UPDATE + mov_inventario + mov_caja + CC) con rollback automático, SECURITY DEFINER | ✅ Aplicada via MCP |
+| **`supabase/migrations/025_afip_infraestructura.sql`** | AFIP Fase 1: columnas fiscales en `empresas` + `clientes.condicion_iva` + tabla `puntos_venta` (RLS) + columnas CAE en `comprobantes` + wrappers Vault `vault_secret_upsert`/`vault_secret_read` (SECURITY DEFINER, solo service_role) | ✅ Aplicada via MCP |
+| **`supabase/migrations/026_onboarding.sql`** | Columna `onboarding_completado` en `empresas` + lógica de wizard de bienvenida | ✅ Aplicada |
+| **`supabase/migrations/027_cierre_periodos.sql`** | Tabla `periodos_contables` (admin create/close) + RPC `fecha_en_periodo_cerrado(empresa_id, fecha DATE) RETURNS BOOLEAN` SECURITY DEFINER STABLE | ✅ Aplicada via MCP |
+| **`supabase/migrations/028_cheques.sql`** | Tablas `cheques` + `cheques_historial` + RLS por `get_my_empresa_id()` + 3 índices (tipo, estado, vencimiento parcial) | ✅ Aplicada via MCP |
+| **`supabase/migrations/029_fix_tenant_id_fkeys.sql`** | Fix FK: `comprobantes.tenant_id`, `caja_sesiones.tenant_id`, `movimientos_inventario.tenant_id` apuntaban a `profiles(id)` — ahora apuntan a `empresas(id)`. DROP constraints → UPDATE data → ADD constraints | ✅ Aplicada via MCP |
 | **`030_compras_add_moneda`** (MCP) | `ALTER TABLE compras ADD COLUMN moneda text NOT NULL DEFAULT 'ARS'` + NOTIFY pgrst | ✅ Aplicada via MCP |
 | **`031_compras_add_tipo_cambio_tasa`** (MCP) | `ALTER TABLE compras ADD COLUMN tipo_cambio_tasa numeric NOT NULL DEFAULT 1` + NOTIFY pgrst | ✅ Aplicada via MCP |
-| **`migrations/032_impuestos_infraestructura.sql`** | IVA real: `alicuota_iva` en `productos`/`comprobante_items`/`detalle_compras` (CHECK 21/10.5/0/exento/no_gravado) + `neto_gravado`/`iva_discriminado` en `comprobantes` y `compras` + tabla `alicuotas_impuestos` (RLS, índice) | ✅ Aplicada via MCP |
-| **`migrations/033_crear_venta_iva.sql`** | RPC `crear_venta` recalcula `neto_gravado`/`iva_discriminado` por ítem según su `alicuota_iva` (snapshot), fallback 21%. Copia íntegra de la lógica de 024 + cálculo IVA | ✅ Aplicada via MCP |
-| **`migrations/034_retenciones.sql`** | Tabla `retenciones` (sufrida/practicada, IIBB/Ganancias/SUSS/IVA/Otro, trazabilidad a comprobante/compra) + RLS + índice + vista `retenciones_acumulado_mensual` (security_invoker) | ✅ Aplicada via MCP |
-| **`migrations/035_document_flow_modelo_datos.sql`** | Document Flow Prompt 1/6 — contadores en items existentes (`cantidad_entregada`, `cantidad_devuelta`, `cantidad_facturada`, `cantidad_recibida`); tablas `entregas`+`entrega_items`, `recepciones`+`recepcion_items`, `devoluciones`+`devolucion_items`, `notas_debito`; función `siguiente_numero_documento(empresa_id, tabla, columna, prefijo)` SECURITY DEFINER | ✅ Aplicada via MCP |
-| **`migrations/036_document_flow_rpcs.sql`** | Document Flow Prompt 2/6 — `crear_venta` actualizada (+ entrega implícita `ENT-YYYY-NNNN` al final de cada POS); `crear_entrega` (camino largo desde Pedido, descuenta stock); `crear_recepcion` (camino largo desde OC, suma stock); `crear_recepcion_implicita` (compras directas, solo documental, NO toca stock); `crear_factura_desde_entrega` (factura desde entrega existente, sin stock) | ✅ Aplicada via MCP |
+| **`supabase/migrations/032_impuestos_infraestructura.sql`** | IVA real: `alicuota_iva` en `productos`/`comprobante_items`/`detalle_compras` (CHECK 21/10.5/0/exento/no_gravado) + `neto_gravado`/`iva_discriminado` en `comprobantes` y `compras` + tabla `alicuotas_impuestos` (RLS, índice) | ✅ Aplicada via MCP |
+| **`supabase/migrations/033_crear_venta_iva.sql`** | RPC `crear_venta` recalcula `neto_gravado`/`iva_discriminado` por ítem según su `alicuota_iva` (snapshot), fallback 21%. Copia íntegra de la lógica de 024 + cálculo IVA | ✅ Aplicada via MCP |
+| **`supabase/migrations/034_retenciones.sql`** | Tabla `retenciones` (sufrida/practicada, IIBB/Ganancias/SUSS/IVA/Otro, trazabilidad a comprobante/compra) + RLS + índice + vista `retenciones_acumulado_mensual` (security_invoker) | ✅ Aplicada via MCP |
+| **`supabase/migrations/035_document_flow_modelo_datos.sql`** | Document Flow Prompt 1/6 — contadores en items existentes (`cantidad_entregada`, `cantidad_devuelta`, `cantidad_facturada`, `cantidad_recibida`); tablas `entregas`+`entrega_items`, `recepciones`+`recepcion_items`, `devoluciones`+`devolucion_items`, `notas_debito`; función `siguiente_numero_documento(empresa_id, tabla, columna, prefijo)` SECURITY DEFINER | ✅ Aplicada via MCP |
+| **`supabase/migrations/036_document_flow_rpcs.sql`** | Document Flow Prompt 2/6 — `crear_venta` actualizada (+ entrega implícita `ENT-YYYY-NNNN` al final de cada POS); `crear_entrega` (camino largo desde Pedido, descuenta stock); `crear_recepcion` (camino largo desde OC, suma stock); `crear_recepcion_implicita` (compras directas, solo documental, NO toca stock); `crear_factura_desde_entrega` (factura desde entrega existente, sin stock) | ✅ Aplicada via MCP |
 | **`037_movimientos_inventario_add_user_id`** (MCP) | `ALTER TABLE movimientos_inventario ADD COLUMN user_id uuid REFERENCES profiles(id)` + NOTIFY pgrst — necesario para el RPC `crear_devolucion` de Luciano | ✅ Aplicada via MCP |
 | **`038_movimientos_inventario_tipo_check_extend`** (MCP) | Drop + recrear `movimientos_inventario_tipo_check` aceptando `['entrada','salida','ajuste','ingreso','egreso']` — sinónimos para compatibilidad con RPCs nuevos y viejos | ✅ Aplicada via MCP |
-| **`migrations/037_devoluciones_nd_rpcs.sql`** | Prompt 4/6 — `ALTER cuenta_corriente_movimientos`: `cliente_id` nullable + `proveedor_id` FK. RPC `crear_devolucion(empresa_id, user_id, tipo, items, ...)` → devoluciones + devolucion_items + NC opcional en comprobantes + CC movimiento + stock (ingreso si reingresa_stock) + caja (egreso si reembolso_efectivo). RPC `crear_nota_debito(empresa_id, user_id, tipo, concepto, monto, ...)` → notas_debito + CC movimiento DEBE. Correlativo DEV-YYYY-NNNN / NC-YYYY-NNNN / ND-YYYY-NNNN vía `siguiente_numero_documento`. SECURITY DEFINER + GRANT authenticated | ✅ Aplicada via MCP |
-| **`migrations/039_modo_caja.sql`** | Prompt 10 — `ADD COLUMN IF NOT EXISTS modo_caja BOOLEAN NOT NULL DEFAULT false` en `profiles` + índice parcial `idx_profiles_modo_caja(empresa_id, modo_caja) WHERE modo_caja = true` | ✅ Aplicada via MCP |
+| **`supabase/migrations/037_devoluciones_nd_rpcs.sql`** | Prompt 4/6 — `ALTER cuenta_corriente_movimientos`: `cliente_id` nullable + `proveedor_id` FK. RPC `crear_devolucion(empresa_id, user_id, tipo, items, ...)` → devoluciones + devolucion_items + NC opcional en comprobantes + CC movimiento + stock (ingreso si reingresa_stock) + caja (egreso si reembolso_efectivo). RPC `crear_nota_debito(empresa_id, user_id, tipo, concepto, monto, ...)` → notas_debito + CC movimiento DEBE. Correlativo DEV-YYYY-NNNN / NC-YYYY-NNNN / ND-YYYY-NNNN vía `siguiente_numero_documento`. SECURITY DEFINER + GRANT authenticated | ✅ Aplicada via MCP |
+| **`supabase/migrations/039_modo_caja.sql`** | Prompt 10 — `ADD COLUMN IF NOT EXISTS modo_caja BOOLEAN NOT NULL DEFAULT false` en `profiles` + índice parcial `idx_profiles_modo_caja(empresa_id, modo_caja) WHERE modo_caja = true` | ✅ Aplicada via MCP |
 
 ### Migrations retroactivas (documentación de SQL directo)
 
 | Archivo | Contenido | Estado |
 |---|---|---|
-| **`migrations/040_retroactive_tipos_cambio.sql`** | Tabla `tipos_cambio` (`id` gen_random_uuid, `moneda` DEFAULT 'USD', UNIQUE empresa+moneda+fecha) + 2 índices + 2 policies RLS (`tc_all`, `tipos_cambio_empresa_all`) + `trg_audit_tipos_cambio` | ✅ Solo documental |
-| **`migrations/041_retroactive_moneda_paralela.sql`** | `empresas`: `usa_tc_paralelo`/`moneda_paralela`. `comprobantes`: `estado_pago`/`monto_paralelo`/`tc_paralelo`/`comprobante_origen_id`. `movimientos_caja` + `compras`: `monto_paralelo`/`tc_paralelo`. `cuenta_corriente_movimientos`: `comprobante_id`/`metodo_cobro`/`monto_paralelo`/`tc_paralelo` | ✅ Solo documental |
-| **`migrations/042_retroactive_audit_y_triggers.sql`** | `fn_audit_trigger` (migrada de `row_to_json` → `to_jsonb`) + `fn_update_cliente_saldo` + trigger `trg_update_cliente_saldo` en `cuenta_corriente_movimientos` + vista `v_saldo_proveedores` | ✅ Solo documental |
+| **`supabase/migrations/040_retroactive_tipos_cambio.sql`** | Tabla `tipos_cambio` (`id` gen_random_uuid, `moneda` DEFAULT 'USD', UNIQUE empresa+moneda+fecha) + 2 índices + 2 policies RLS (`tc_all`, `tipos_cambio_empresa_all`) + `trg_audit_tipos_cambio` | ✅ Solo documental |
+| **`supabase/migrations/041_retroactive_moneda_paralela.sql`** | `empresas`: `usa_tc_paralelo`/`moneda_paralela`. `comprobantes`: `estado_pago`/`monto_paralelo`/`tc_paralelo`/`comprobante_origen_id`. `movimientos_caja` + `compras`: `monto_paralelo`/`tc_paralelo`. `cuenta_corriente_movimientos`: `comprobante_id`/`metodo_cobro`/`monto_paralelo`/`tc_paralelo` | ✅ Solo documental |
+| **`supabase/migrations/042_retroactive_audit_y_triggers.sql`** | `fn_audit_trigger` (migrada de `row_to_json` → `to_jsonb`) + `fn_update_cliente_saldo` + trigger `trg_update_cliente_saldo` en `cuenta_corriente_movimientos` + vista `v_saldo_proveedores` | ✅ Solo documental |
 | **`supabase/migrations/043_maestros_unidades_condiciones_pago.sql`** | Tablas `unidades_medida` + `condiciones_pago` (RLS por empresa) + FK `clientes.condicion_pago_id` + función `seed_maestros_default(empresa_id)` (mismo patrón que `seed_plan_cuentas`) + trigger nuevo `trg_empresa_seed_maestros` en `empresas` (AFTER INSERT, independiente de `trg_empresa_caja_principal`) + seed retroactivo a las 3 empresas existentes | ✅ Aplicada via MCP |
-| **`migrations/044_crear_venta_reutilizar_entrega_manual.sql`** | RPC `crear_venta` recibe `p_pedido_id UUID DEFAULT NULL`. Si hay entrega `origen='manual', estado='entregado'` para ese pedido, la vincula al nuevo comprobante en vez de crear una implícita duplicada; sincroniza `comprobante_items.cantidad_entregada`. Si no, crea implícita (ahora también con `pedido_id`). Elimina la duplicación POS+Pedido visible en EntregasSection y MapaRelaciones. | ✅ Aplicada via MCP |
+| **`supabase/migrations/044_crear_venta_reutilizar_entrega_manual.sql`** | RPC `crear_venta` recibe `p_pedido_id UUID DEFAULT NULL`. Si hay entrega `origen='manual', estado='entregado'` para ese pedido, la vincula al nuevo comprobante en vez de crear una implícita duplicada; sincroniza `comprobante_items.cantidad_entregada`. Si no, crea implícita (ahora también con `pedido_id`). Elimina la duplicación POS+Pedido visible en EntregasSection y MapaRelaciones. | ✅ Aplicada via MCP |
 | **`supabase/migrations/045_unidades_medida_productos.sql`** | FK `productos.unidad_medida_id` → `unidades_medida.id` (ON DELETE SET NULL) + mapeo automático por `LOWER(TRIM(unidad_medida)) = LOWER(codigo\|descripcion)`. Resultado real: 11/11 productos auto-mapeados, 0 sin mapear. | ✅ Aplicada via MCP |
 
 ---
@@ -148,7 +149,8 @@
 - **Supabase URL:** `https://wuznppxeonmhfcvnqfbf.supabase.co`
 - **Supabase Project ID:** `wuznppxeonmhfcvnqfbf` (org: NALUX)
 - **SMTP:** Resend.com — `smtp.resend.com:465` · user: `resend` · sender: KAIROX Gestión ✅
-- **Edge Functions deployadas:** `create-user` · `delete-user` · `invite-user` · `generar-csr` · `emitir-cae` · `mp-webhook` (`--no-verify-jwt`) ✅
+- **Edge Functions deployadas (verificado via MCP, Sesión 23):** `create-user` (v3) · `delete-user` (v2) · `invite-user` (v3) · `generar-csr` (v2) · `emitir-cae` (v2) — todas `ACTIVE`. **⚠️ `mp-webhook` NO está deployada** (existe el código en `supabase/functions/mp-webhook/` desde Prompt 15, pero nunca se corrió `supabase functions deploy mp-webhook --no-verify-jwt` — confirmado que no aparece en `list_edge_functions`). La integración Mercado Pago no es funcional en producción hasta que se deploye.
+- **CORS whitelist dinámica:** ✅ implementada y **deployada en producción** (`supabase/functions/_shared/auth.ts` → `buildCorsHeaders(req)`, consumida por las 5 funciones de arriba; verificado Sesión 23 que el código deployado en `create-user` es idéntico byte a byte al del repo). No es una Edge Function separada — es código compartido importado por las demás. `mp-webhook` no la usa porque es un webhook server-to-server (MP→KAIROX), no una llamada desde el browser; CORS no aplica ahí.
 - **Supabase Vault:** extensión `supabase_vault` 0.3.1 activa. Secretos AFIP por empresa: `afip_key_<empresa_id>` (clave privada, generada en `generar-csr` acción `generate`) y `afip_cert_<empresa_id>` (certificado .crt, subido vía `generar-csr` acción `store_cert`). Acceso solo vía RPC `vault_secret_upsert`/`vault_secret_read` (service_role).
 - **Timezone:** Argentina (UTC-3) — helpers en `src/lib/dateUtils.js`
 - **Multi-tenancy:** RLS via `get_my_empresa_id()` + `empresa_id` en todas las tablas
@@ -168,7 +170,7 @@
 - **TanStack Query v5:** `onSuccess` en `useQuery` no existe. Usar `useEffect`.
 - **RLS en tablas nuevas:** `ENABLE ROW LEVEL SECURITY` + policy `get_my_empresa_id()` + audit trigger + `DROP POLICY IF EXISTS` antes de `CREATE POLICY`.
 - **Radix UI Dialogs:** nunca `if (!open) return null` — dejar que Radix maneje show/hide con prop `open`.
-- **Caja:** solo cobros en Efectivo requieren caja abierta. Transferencia/Tarjeta/Cheque no.
+- **Caja:** solo cobros/movimientos en Efectivo requieren caja abierta. Transferencia/Tarjeta/Cheque/CC no. **Regla única y definitiva — auditada y unificada en Sesión 23** en los 9 puntos de enforcement del sistema (antes había 2 excepciones reales: `CompraRapidaSection.jsx` bloqueaba todo, `NuevaFacturaModal.jsx` no bloqueaba nada — ambas corregidas). Ver Historial sesión 23 para el detalle completo, incluyendo por qué el CONTEXT.md tuvo dos secciones contradictorias por un tiempo.
 - **Open Items:** al cobrar CC, siempre referenciar `comprobante_id` en el movimiento HABER.
 - **Migrations:** siempre idempotentes — `IF NOT EXISTS`, `DROP POLICY/TRIGGER IF EXISTS`, `CREATE OR REPLACE`.
 - **Vistas:** siempre `WITH (security_invoker = true)` para respetar RLS del usuario.
@@ -197,7 +199,7 @@
 - **Sidebar colapsable:** estado en `localStorage('kx-sidebar-collapsed')` como `{VENTAS: true, COMPRAS: false, ...}`. `true` = colapsado. Default: todos expandidos. Toggle hace click en el label del grupo.
 - **⚠️ `clientes` tiene DOS columnas de texto parecidas — no confundir:** `condiciones_pago` (plural, TEXT, Textarea de notas libres tipo "Pago a 30 días, 5% desc.", **en uso activo** en `ClientesSection.jsx`) y `condicion_pago` (singular, TEXT, **columna huérfana sin ninguna referencia en código**, verificado con grep sobre todo `src/`). Sesión 17 agregó además `condicion_pago_id` (UUID, FK a la nueva tabla `condiciones_pago` maestro) — un tercer campo, distinto de los dos anteriores. El Select de "Condición de Pago" en `ClientesSection.jsx` solo escribe `condicion_pago_id` + sincroniza `dias_credito`; no toca ni `condiciones_pago` (notas libres del usuario) ni el huérfano `condicion_pago`.
 - **Seed de maestros NO es uniforme entre módulos:** `seed_plan_cuentas` (plan de cuentas) es **manual** — botón "Inicializar" en `PlanCuentasSection` → `planCuentasService.seedCuentas()`. No hay ningún trigger que lo dispare al crear una empresa. En cambio, `seed_maestros_default` (unidades de medida + condiciones de pago, sesión 17) **sí es automático** vía trigger `trg_empresa_seed_maestros` (AFTER INSERT en `empresas`, independiente de `trg_empresa_caja_principal`). Si se agrega un maestro nuevo, decidir explícitamente si su seed debe ser manual o automático — no asumir que sigue el patrón de plan de cuentas por defecto.
-- **⚠️ Dos carpetas de migrations en paralelo, sin convención única:** `migrations/` (top-level, históricamente la principal, usada por la sesión 18 para `044_...`) y `supabase/migrations/` (usada desde sesión 16 en adelante por convención CLI de Supabase, `039` a `043` y `045`). Ambas conviven; antes de crear una migration nueva, revisar **las dos carpetas** para sacar el próximo número correcto (no alcanza con mirar una sola). No es bloqueante (todas se aplican igual via MCP), pero es deuda técnica pendiente de unificar.
+- **Carpeta única de migrations: `supabase/migrations/`.** Unificada en Sesión 23 — los 33 archivos que vivían en `migrations/` (top-level) se movieron ahí con `git mv` (preserva historial de git, sin renumerar ninguno). No había colisión de números entre ambas carpetas (`migrations/` tenía 001-036+044, `supabase/migrations/` tenía 039-043+045) así que la unificación fue directa. `migrations/` ya no existe. Antes de crear una migration nueva, el próximo número es simplemente el más alto en `supabase/migrations/`.
 - **Dropdowns de unidad de medida — antes de sesión 19 había 3 copias hardcodeadas distintas, no una sola fuente:** `ProductosSection.jsx`, `OrdenesCompraSection.jsx` y `CotizacionesSection.jsx` tenían cada uno su propia lista de 11 `<option>` escritos a mano (idénticos entre sí pero NO importados de `src/lib/unidadesMedida.js` — ese archivo nunca tuvo ningún import real en todo el código, verificado con grep). Las 3 fueron migradas en sesión 19 para leer de la tabla `unidades_medida`. `src/lib/unidadesMedida.js` se mantiene en el repo sin uso activo (solo referencia histórica) — no eliminar, pero no agregarle nuevos consumidores.
 
 ---
@@ -374,6 +376,52 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 
 ## Historial de sesiones
 
+### Sesión 2026-06-17 (sesión 23) — Reparar contradicción regla de Caja + cerrar hallazgos pendientes
+
+**Objetivo:** el propio CONTEXT.md tenía dos secciones contradictorias sobre la regla de Caja ("solo Efectivo bloquea" en REGLAS DE ORO vs. "Caja cerrada = NADA" en notas de sesión 16). Auditar el código real antes de tocar nada, porque toca control financiero.
+
+#### Parte 1 — Auditoría de los 9 puntos de enforcement de Caja (sin tocar código)
+
+| # | Archivo | Flujo | Comportamiento real encontrado |
+|---|---|---|---|
+| 1 | `NuevaVentaModal.jsx` | Venta POS | Solo Efectivo bloquea |
+| 2 | `useConfirmarVenta.js` | Venta Modo Caja (`PanelCarrito`) | Solo Efectivo bloquea |
+| 3 | `CajaSection.jsx` | Movimiento manual de caja | Solo Efectivo bloquea |
+| 4 | `NuevaFacturaProveedorModal.jsx` | Factura de compra a proveedor | Solo Efectivo bloquea |
+| 5 | `NuevaNCProveedorModal.jsx` | NC a proveedor (reembolso) | Solo Efectivo bloquea (`reembolsoEfectivo`) |
+| 6 | `CuentaCorrienteSection.jsx` | Cobro CC a cliente | Solo Efectivo bloquea |
+| 7 | `ClientDetailModal.jsx` | Cobro rápido | Bloquea siempre, pero el flujo solo admite Efectivo (hardcoded) — no es una excepción real |
+| 8 | `CompraRapidaSection.jsx` | Compra rápida | ⚠️ **Bloqueaba TODO** sin importar método (Transferencia/Tarjeta/CC incluidos) |
+| 9 | `NuevaFacturaModal.jsx` | Factura de venta standalone | ⚠️ **No bloqueaba nada** — ni Efectivo. Solo omitía en silencio el movimiento de caja si estaba cerrada |
+| — | RPC `crear_venta` (servidor) | — | No valida caja del lado servidor; confía 100% en el frontend |
+
+**Causa raíz encontrada (git history):** la regla "bloquea todo" se introdujo el 2026-06-12 (commits `ade5e7f`/`22c8d66`). Al día siguiente, el commit **`6d645ed`** ("Prompt 7", 2026-06-13) la **revirtió deliberadamente**: *"fix: NuevaVentaModal — solo bloquea si pagosFinales incluye Efectivo" / "fix: CajaSection — solo movimientos de Efectivo requieren caja abierta"*. Esa reversión nunca se propagó a `CompraRapidaSection.jsx` (quedó con la regla vieja) ni se aplicó nunca a `NuevaFacturaModal.jsx` (nunca tuvo ningún bloqueo). Sesión 16 (2026-06-16, 3 días después) volvió a encontrar el comportamiento "solo Efectivo" durante testeo, lo trató como un bug nuevo, y escribió en CONTEXT.md un "fix" para bloquear todo — **pero ese fix nunca se implementó en código** (el commit real de sesión 16, `470d506`, solo tocó un comentario en `NuevaVentaModal.jsx`). Resultado: documentación describiendo un fix fantasma, contradiciendo la regla real vigente.
+
+**Conclusión:** Caso B confirmado — inconsistencia real de comportamiento, no solo de documentación. Se presentó la tabla completa a Luciano antes de tocar código.
+
+**Decisión del usuario:** "Solo Efectivo bloquea" (la regla dominante en 6/8 archivos, y la decisión deliberada y más reciente).
+
+#### Parte 3 — Aplicación uniforme
+
+- **`CompraRapidaSection.jsx`**: el check incondicional `if (!isSessionOpen)` pasó a `if (!isSessionOpen && esEfectivo)` con `esEfectivo = purchaseForm.forma_pago === 'Efectivo'`. Banner de header corregido (de rojo "no se pueden registrar compras" a ámbar "Efectivo no disponible, podés comprar con Transferencia/Tarjeta/CC"). Botón "Registrar Compra" ya no se deshabilita preventivamente por caja cerrada — sigue el mismo patrón que `NuevaVentaModal.jsx` (deja hacer click, el toast bloquea si corresponde).
+- **`NuevaFacturaModal.jsx`**: agregado el check faltante `if (formaPago === 'Efectivo' && !isSessionOpen)` antes de `setLoading(true)`, con el mismo mensaje que `NuevaFacturaProveedorModal.jsx`.
+- **`CONTEXT.md`**: REGLAS DE ORO actualizada con la regla única confirmada. Las 3 menciones históricas de "Caja cerrada = NADA" (sesión 16 bug #7, su "Convención nueva", y la sección "2026-06-12 tarde" que la introdujo originalmente) se dejaron **intactas como registro histórico** pero con una anotación clara de que fueron revertidas/nunca implementadas — no se reescribió la historia, se la corrigió con contexto.
+- **Memoria persistente** (`project_caja_regla_efectivo.md`) actualizada con la historia completa y los 9 archivos que deben seguir el patrón.
+
+**Build de producción verificado** (`vite build --config vite.config.prod.js`) tras los 2 fixes.
+
+#### Parte 2a — Unificar carpetas de migrations
+
+Listado completo de ambas carpetas confirmó **cero colisiones de número** (`migrations/` tenía 001-036+044, `supabase/migrations/` tenía 039-043+045). Se movieron los 33 archivos de `migrations/` a `supabase/migrations/` con `git mv` (preserva historial de git como rename, no como delete+create). `migrations/` ya no existe. Se verificó primero que ningún código del repo referenciara la ruta `migrations/` antes de mover nada. Tabla de migraciones en CONTEXT.md actualizada (35 referencias de ruta corregidas).
+
+#### Parte 2b — Estado real de la CORS whitelist dinámica
+
+**Hallazgo: ya estaba resuelta, no era deuda.** `supabase/functions/_shared/auth.ts` tiene `buildCorsHeaders(req)` con whitelist de orígenes (producción + localhost:3000/3001/5173), consumida por las 5 funciones de usuarios/AFIP (`create-user`, `delete-user`, `invite-user`, `generar-csr`, `emitir-cae`). Verificado vía MCP (`get_edge_function`) que el código **deployado en producción** de `create-user` es **idéntico byte a byte** al del repo — no hay nada pendiente de deployar. El prompt asumía que podía faltar porque no aparece como una "Edge Function" separada en la lista — en realidad es código compartido importado por las demás, nunca fue pensada como función independiente.
+
+**Hallazgo no buscado, descubierto en el camino:** `mp-webhook` (Mercado Pago, creada en Prompt 15) **nunca se deployó** — no aparece en `list_edge_functions`, pese a que CONTEXT.md la listaba como deployada. La integración Mercado Pago no es funcional en producción hasta correr `supabase functions deploy mp-webhook --no-verify-jwt`.
+
+---
+
 ### Sesión 2026-06-17 (sesión 22) — Deuda técnica: extraer useMultipago y useCreditoCliente de NuevaVentaModal
 
 **Objetivo:** continuar la descomposición de `NuevaVentaModal.jsx` (el componente más crítico del sistema) iniciada con `useConfirmarVenta` (Prompt Modo Caja), extrayendo dos hooks más: `useMultipago` y `useCreditoCliente`. Refactor puro — cero cambios de comportamiento, regla de oro del prompt.
@@ -530,7 +578,8 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
    - Fix: `recalcMonto` aplica `.replace('.', ',')` → devuelve `"4800,00"`.
 
 7. **Caja cerrada permitía hacer ventas** — la validación solo bloqueaba efectivo.
-   - Fix: bloquear TODA venta y TODO movimiento con caja cerrada, sin importar el método de pago.
+   - Fix propuesto en su momento: bloquear TODA venta y TODO movimiento con caja cerrada, sin importar el método de pago.
+   - **⚠️ CORRECCIÓN (Sesión 23):** este fix nunca se implementó en código — el commit de esta sesión (`470d506`) solo tocó un comentario en `NuevaVentaModal.jsx`, no la lógica de bloqueo. Lo que esta entrada describía como bug en realidad era la decisión deliberada del commit `6d645ed` (Prompt 7, 2026-06-13, 3 días antes) que había revertido conscientemente "bloquea todo" → "solo Efectivo". La auditoría de Sesión 23 confirmó "solo Efectivo" como la regla vigente y la dejó uniforme en todo el sistema. Esta entrada queda como registro histórico de la confusión, no como guía vigente.
 
 8. **Crear cliente desde Modo Caja fallaba** con `clientes.cuit does not exist`.
    - Fix: en [ClienteAltaRapidaModal.jsx](src/components/shared/ClienteAltaRapidaModal.jsx) mapear `cuit` → columna `documento`.
@@ -609,7 +658,7 @@ En la última sesión el conector de Supabase en claude.ai estaba autenticado co
 - **Radix Dialog + DropdownMenu**: usar `onSelect={(e) => { e.preventDefault(); setTimeout(fn, 0); }}` para evitar race conditions de focus management.
 - **Devoluciones a Consumidor Final**: válidas. El sistema debe permitir `cliente_id=null` cuando hay comprobante de origen.
 - **Display de moneda**: internamente ARS; la vista convierte a la moneda registrada usando `tipo_cambio_tasa`.
-- **Caja cerrada = NADA**. No hacer excepciones por método de pago.
+- ~~**Caja cerrada = NADA**. No hacer excepciones por método de pago.~~ **SUPERADO (Sesión 23):** esta convención nunca se implementó realmente (ver corrección en bug #7 arriba) y contradecía la regla vigente. La regla única y definitiva es "solo Efectivo requiere caja abierta" — ver Convenciones (REGLAS DE ORO) al inicio del archivo.
 - **Nada de menciones a SAP**: en código, comentarios ni UI. Es deuda de marca.
 
 **Estado actual del repo**: production-ready. Build verde. Sin bugs conocidos en flujos críticos (Ventas POS, Factura formal, NC, ND, Devoluciones, Compra Rápida, Modo Caja, Configuración 8 tabs, Reportes).
@@ -989,8 +1038,9 @@ Array `NAV_GROUPS` con 7 grupos (GENERAL/VENTAS/COMPRAS/INVENTARIO/FINANZAS/CONT
 #### 1. Caja cerrada bloquea TODO
 
 - **Antes:** la regla histórica era "solo Efectivo requiere caja abierta". Esto generaba confusión porque dejaba registrar ventas Transferencia/Tarjeta/Cheque con caja cerrada.
-- **Ahora:** cualquier venta o movimiento requiere caja abierta, sin importar el método. Caja abierta = todo permitido.
+- **Ahora (en esta sesión):** cualquier venta o movimiento requiere caja abierta, sin importar el método. Caja abierta = todo permitido.
 - Archivos: [src/components/ventas/NuevaVentaModal.jsx](src/components/ventas/NuevaVentaModal.jsx) y [src/components/sections/CajaSection.jsx](src/components/sections/CajaSection.jsx) — validación temprana con toast "⛔ Caja cerrada".
+- **⚠️ REVERTIDO (commit `6d645ed`, Prompt 7, 2026-06-13, un día después):** "fix: NuevaVentaModal — solo bloquea si pagosFinales incluye Efectivo" / "fix: CajaSection — solo movimientos de Efectivo requieren caja abierta". Fue una decisión deliberada y consciente, no un descuido. **La regla vigente desde Prompt 7 (y confirmada/unificada en Sesión 23) es "solo Efectivo bloquea"** — ver Convenciones (REGLAS DE ORO).
 
 #### 2. `parseNumberLocale` estricto formato es-AR
 
@@ -1063,7 +1113,7 @@ El user vio una caja abierta con `monto_inicial=$300` después de mis fixes. La 
 - **Inputs de plata:** SIEMPRE `type="text" inputMode="decimal" placeholder="0,00"` + parsear con `parseNumberLocale()` en submit. Nunca `type="number"` para campos monetarios.
 - **Inputs de cantidad:** `type="number" min="1" step="1"` + `onChange={e.target.value.replace(/[^\d]/g, '')}`. Sin decimales.
 - **Display de moneda:** internamente ARS; la vista (ticket, PDF, cotización detalle) convierte a la moneda registrada del comprobante usando `tipo_cambio_tasa`.
-- **Caja cerrada = nada se puede hacer.** No hacer excepciones por método de pago.
+- ~~**Caja cerrada = nada se puede hacer.** No hacer excepciones por método de pago.~~ **REVERTIDO al día siguiente** (commit `6d645ed`, ver corrección arriba en esta misma sesión) — regla vigente: solo Efectivo bloquea.
 - **Helpers compartidos** para unidades de medida (`src/lib/unidadesMedida.js`) — si una sección necesita un dropdown de unidades, importar de ahí.
 
 ---

@@ -178,6 +178,11 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
       toast({ title: 'El total debe ser mayor a cero', variant: 'destructive' });
       return;
     }
+    // Regla: solo cobros en Efectivo requieren caja abierta. Transferencia/Tarjeta/CC no.
+    if (formaPago === 'Efectivo' && !isSessionOpen) {
+      toast({ title: 'Abrí la caja para registrar el cobro en Efectivo', variant: 'destructive' });
+      return;
+    }
 
     setLoading(true);
     try {

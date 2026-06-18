@@ -290,14 +290,15 @@ function ComprasSection() {
   };
 
   const handleRegisterPurchase = async () => {
-    // 1. Session Check
-    if (!isSessionOpen) {
-      toast({ 
-        variant: 'destructive', 
-        title: 'Caja cerrada', 
-        description: 'Debe abrir caja antes de registrar compras' 
+    // Regla: solo movimientos de Efectivo requieren caja abierta. Transferencia/Tarjeta/CC no.
+    const esEfectivo = purchaseForm.forma_pago === 'Efectivo';
+    if (!isSessionOpen && esEfectivo) {
+      toast({
+        variant: 'destructive',
+        title: 'Caja cerrada',
+        description: 'Abrí la caja para registrar compras en efectivo. Podés usar Transferencia, Tarjeta o Cuenta Corriente sin abrir la caja.'
       });
-      return; 
+      return;
     }
 
     if (!isPurchaseValid()) return;
@@ -626,9 +627,9 @@ function ComprasSection() {
           <p className="text-slate-500 dark:text-kx-text-2">Registro y control de compras a proveedores</p>
         </div>
         {!isSessionOpen && (
-           <div className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-4 py-2 rounded-lg flex items-center gap-2 border border-red-200 dark:border-red-800">
+           <div className="bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-4 py-2 rounded-lg flex items-center gap-2 border border-amber-200 dark:border-amber-800">
               <AlertTriangle className="h-5 w-5" />
-              <span className="font-bold">CAJA CERRADA: No se pueden registrar compras</span>
+              <span className="font-bold">CAJA CERRADA: Efectivo no disponible. Podés comprar con Transferencia, Tarjeta o Cuenta Corriente.</span>
            </div>
         )}
       </div>
@@ -682,10 +683,10 @@ function ComprasSection() {
                 <div className="flex flex-col items-end gap-1 w-full md:w-auto">
                   <Button
                     onClick={handleRegisterPurchase}
-                    disabled={!isPurchaseValid() || isSubmitting || !isSessionOpen || (moneda !== 'ARS' && tcMissing)}
-                    className={`h-14 px-8 text-lg font-bold text-white shadow-lg border-0 transition-all w-full md:w-auto ${!isSessionOpen ? 'bg-slate-400 cursor-not-allowed dark:bg-slate-600' : 'bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 shadow-blue-900/20 hover:scale-105 dark:from-[#00D4FF] dark:to-[#A855F7]'}`}
+                    disabled={!isPurchaseValid() || isSubmitting || (moneda !== 'ARS' && tcMissing)}
+                    className="h-14 px-8 text-lg font-bold text-white shadow-lg border-0 transition-all w-full md:w-auto bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 shadow-blue-900/20 hover:scale-105 dark:from-[#00D4FF] dark:to-[#A855F7]"
                   >
-                    {isSubmitting ? 'REGISTRANDO...' : !isSessionOpen ? 'CAJA CERRADA' : 'REGISTRAR COMPRA'}
+                    {isSubmitting ? 'REGISTRANDO...' : 'REGISTRAR COMPRA'}
                   </Button>
                   {moneda !== 'ARS' && tcMissing && (
                     <p className="text-xs text-amber-600 dark:text-amber-400">
