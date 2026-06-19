@@ -14,6 +14,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { formatDateAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
+import { useTCParalelo } from '@/hooks/useTCParalelo';
 import NuevaDevolucionProveedorModal from './NuevaDevolucionProveedorModal';
 import NuevaNCProveedorModal from './NuevaNCProveedorModal';
 import NuevaNDProveedorModal from './NuevaNDProveedorModal';
@@ -38,6 +39,7 @@ function EstadoBadge({ estado }) {
 function FacturasCompraSection() {
   const { user }  = useAuth();
   const { toast } = useToast();
+  const tcParalelo = useTCParalelo();
 
   const [compras, setCompras]     = useState([]);
   const [loading, setLoading]     = useState(true);
@@ -63,7 +65,8 @@ function FacturasCompraSection() {
       const { data, error } = await supabase
         .from('compras')
         .select(`
-          id, fecha, numero_factura, total, forma_pago, estado_pago, moneda, created_at, proveedor_id,
+          id, fecha, numero_factura, total, forma_pago, estado_pago, moneda, tipo_cambio_tasa,
+          monto_paralelo, tc_paralelo, created_at, proveedor_id,
           proveedores(nombre),
           detalle_compras(id, cantidad, costo_unitario, subtotal, productos(nombre))
         `)
@@ -184,6 +187,9 @@ function FacturasCompraSection() {
                 <th className="text-left p-3 font-semibold text-kx-text-2">N° Factura</th>
                 <th className="text-left p-3 font-semibold text-kx-text-2">Forma Pago</th>
                 <th className="text-right p-3 font-semibold text-kx-text-2">Total</th>
+                {tcParalelo.enabled && (
+                  <th className="text-right p-3 font-semibold text-kx-text-2">{tcParalelo.monedaParalela}</th>
+                )}
                 <th className="text-center p-3 font-semibold text-kx-text-2">Estado</th>
                 <th className="text-center p-3 font-semibold text-kx-text-2 w-14">Acc.</th>
               </tr>
@@ -192,7 +198,7 @@ function FacturasCompraSection() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
+                    {Array.from({ length: tcParalelo.enabled ? 9 : 8 }).map((_, j) => (
                       <td key={j} className="p-3">
                         <div className="h-4 bg-kx-surface-2 rounded animate-pulse w-20" />
                       </td>
@@ -201,7 +207,7 @@ function FacturasCompraSection() {
                 ))
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-12 text-center text-kx-text-3">
+                  <td colSpan={tcParalelo.enabled ? 9 : 8} className="p-12 text-center text-kx-text-3">
                     <Receipt className="w-10 h-10 mx-auto mb-3 opacity-20" />
                     <p className="font-medium text-kx-text-2">
                       {filtroEstado !== 'todos' || search
@@ -238,6 +244,17 @@ function FacturasCompraSection() {
                           {compra.moneda !== 'ARS' ? `${compra.moneda} ` : ''}
                           ${Number(compra.total || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                         </td>
+                        {tcParalelo.enabled && (
+                          <td className="p-3 text-right text-xs text-kx-text-2 font-mono">
+                            {(() => {
+                              if (compra.monto_paralelo) {
+                                return `≈ ${Number(compra.monto_paralelo).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
+                              }
+                              const calc = tcParalelo.calcParalelo(Number(compra.total), compra.moneda ?? 'ARS', Number(compra.tipo_cambio_tasa) || 1);
+                              return calc !== null ? `≈ ${calc.toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—';
+                            })()}
+                          </td>
+                        )}
                         <td className="p-3 text-center">
                           <EstadoBadge estado={compra.estado_pago} />
                         </td>
@@ -303,7 +320,7 @@ function FacturasCompraSection() {
                       {isOpen && items.length > 0 && (
                         <tr>
                           <td />
-                          <td colSpan={7} className="pb-3 pr-3">
+                          <td colSpan={tcParalelo.enabled ? 8 : 7} className="pb-3 pr-3">
                             <div className="bg-kx-surface-2 rounded-lg border border-kx-border p-3">
                               <p className="text-xs font-semibold text-kx-text-3 uppercase mb-2">
                                 Detalle de ítems

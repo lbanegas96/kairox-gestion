@@ -5,12 +5,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Plus, Trash2, FileText, Info, AlertTriangle } from 'lucide-react';
+import { Loader2, Plus, Trash2, FileText, Info, AlertTriangle, Check } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { useToast } from '@/components/ui/use-toast';
 import { getTodayAR, getNowAR } from '@/lib/dateUtils';
+import { useTCParalelo } from '@/hooks/useTCParalelo';
+import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 import ProveedorSelector from '@/components/shared/ProveedorSelector';
 
 const ALICUOTAS = [
@@ -50,6 +52,8 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
   const [productosCache, setProductosCache] = useState([]);
   const [searchFocusId, setSearchFocusId] = useState(null);
   const [loading, setLoading]             = useState(false);
+  const tcParalelo                        = useTCParalelo();
+  const [showParaleloTCModal, setShowParaleloTCModal] = useState(false);
 
   // ── Carga al abrir ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -154,6 +158,11 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
       const now = getNowAR().toISOString();
       const provNombre = proveedores.find(p => p.id === proveedorId)?.nombre || 'Proveedor';
 
+      // Moneda paralela: equivalente en la moneda paralela de la empresa (este flujo es ARS-only)
+      const montoParaleloValue = tcParalelo.enabled && tcParalelo.tcHoy
+        ? tcParalelo.calcParalelo(total, 'ARS', 1)
+        : null;
+
       // Items sin producto (servicios) → descripción en observaciones
       const serviciosDesc = itemsValidos
         .filter(i => !i.producto_id)
@@ -175,6 +184,10 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
         moneda:           'ARS',
         tipo_cambio_tasa: 1,
         observaciones:    serviciosDesc || null,
+        ...(montoParaleloValue !== null ? {
+          monto_paralelo: montoParaleloValue,
+          tc_paralelo:    tcParalelo.tcHoy,
+        } : {}),
       }]).select('id').single();
       if (compraErr) throw compraErr;
 
@@ -223,6 +236,10 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
           metodo_pago:    'Efectivo',
           is_automatic:   true,
           fecha:          now,
+          ...(montoParaleloValue !== null ? {
+            monto_paralelo: montoParaleloValue,
+            tc_paralelo:    tcParalelo.tcHoy,
+          } : {}),
         }]);
       }
 
@@ -421,6 +438,12 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
                 <span>TOTAL A PAGAR</span>
                 <span className="tabular-nums text-kx-blue">${fmt(total)}</span>
               </div>
+              {tcParalelo.enabled && tcParalelo.tcHoy && total > 0 && (
+                <div className="flex justify-between text-xs text-kx-text-3">
+                  <span>Equivalente:</span>
+                  <span>≈ {fmt(tcParalelo.calcParalelo(total, 'ARS', 1))} {tcParalelo.monedaParalela}</span>
+                </div>
+              )}
             </div>
 
             <div className="bg-kx-surface-2 rounded-xl border border-kx-border p-4 space-y-3">
@@ -447,6 +470,25 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
                   Genera deuda en Cuenta Corriente del proveedor
                 </div>
               )}
+              {/* Banner de paridad: visible cuando la empresa usa moneda paralela */}
+              {tcParalelo.enabled && !tcParalelo.loading && (
+                tcParalelo.tcMissing ? (
+                  <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2 border border-amber-200 dark:border-amber-800">
+                    <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span>Sin TC de paridad {tcParalelo.monedaParalela} del día</span>
+                    <Button type="button" size="sm" variant="outline"
+                      className="ml-auto h-6 text-xs px-2 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                      onClick={() => setShowParaleloTCModal(true)}>
+                      Cargar TC
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg px-3 py-2 border border-emerald-200 dark:border-emerald-800">
+                    <Check className="h-3.5 w-3.5 flex-shrink-0" />
+                    Paridad {tcParalelo.monedaParalela}: 1 {tcParalelo.monedaParalela} = ${Number(tcParalelo.tcHoy || 0).toLocaleString('es-AR')} ARS
+                  </div>
+                )
+              )}
             </div>
           </div>
         </div>
@@ -470,6 +512,13 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
           </div>
         </DialogFooter>
       </DialogContent>
+
+      <TipoCambioModal
+        open={showParaleloTCModal}
+        onOpenChange={setShowParaleloTCModal}
+        moneda={tcParalelo.monedaParalela}
+        onConfirm={(t) => { tcParalelo.setTC(t); setShowParaleloTCModal(false); }}
+      />
     </Dialog>
   );
 }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Calendar, Filter, Eye, ShoppingBag, Search, Eraser, PackageOpen, X, FileText, User, Clock, Loader2, Trash2, AlertTriangle, Edit, Save, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -76,6 +77,7 @@ function ComprasSection() {
   const [tipoCambioTasa, setTipoCambioTasa] = useState(1);
   const [tcMissing, setTcMissing] = useState(false);
   const tcParalelo = useTCParalelo();
+  const [showParaleloTCModal, setShowParaleloTCModal] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -660,6 +662,27 @@ function ComprasSection() {
                   onTasaChange={v => setTipoCambioTasa(v)}
                   onTCMissingChange={setTcMissing}
                 />
+                {/* Banner de paridad: visible cuando la empresa usa moneda paralela y la operación es en ARS */}
+                {tcParalelo.enabled && moneda === 'ARS' && !tcParalelo.loading && (
+                  <div className="mt-2">
+                    {tcParalelo.tcMissing ? (
+                      <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2 border border-amber-200 dark:border-amber-800">
+                        <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                        <span>Sin TC de paridad {tcParalelo.monedaParalela} del día</span>
+                        <Button type="button" size="sm" variant="outline"
+                          className="ml-auto h-6 text-xs px-2 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                          onClick={() => setShowParaleloTCModal(true)}>
+                          Cargar TC
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg px-3 py-2 border border-emerald-200 dark:border-emerald-800">
+                        <Check className="h-3.5 w-3.5 flex-shrink-0" />
+                        Paridad {tcParalelo.monedaParalela}: 1 {tcParalelo.monedaParalela} = ${Number(tcParalelo.tcHoy || 0).toLocaleString('es-AR')} ARS
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -676,7 +699,15 @@ function ComprasSection() {
 
           <div className="flex flex-col md:flex-row gap-4 justify-end items-center pt-4">
             <div className="kairox-bg-card border kairox-border rounded-xl p-6 flex items-center gap-6 shadow-lg w-full md:w-auto justify-between md:justify-start dark:bg-kx-bg dark:border-kx-border">
-              <div className="text-right"><div className="text-slate-500 dark:text-kx-text-2 text-sm font-medium uppercase tracking-wider">Total de Compra</div><div className="text-3xl font-black bg-gradient-to-r from-blue-600 to-purple-600 dark:from-[#00D4FF] dark:to-[#A855F7] bg-clip-text text-transparent font-mono">${calculateTotal().toLocaleString('es-AR', { minimumFractionDigits: 2 })}</div></div>
+              <div className="text-right">
+                <div className="text-slate-500 dark:text-kx-text-2 text-sm font-medium uppercase tracking-wider">Total de Compra</div>
+                <div className="text-3xl font-black bg-gradient-to-r from-blue-600 to-purple-600 dark:from-[#00D4FF] dark:to-[#A855F7] bg-clip-text text-transparent font-mono">${calculateTotal().toLocaleString('es-AR', { minimumFractionDigits: 2 })}</div>
+                {tcParalelo.enabled && tcParalelo.tcHoy && calculateTotal() > 0 && (
+                  <p className="text-xs text-kx-text-3 mt-0.5">
+                    ≈ {tcParalelo.calcParalelo(calculateTotal(), moneda, tipoCambioTasa)?.toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
+                  </p>
+                )}
+              </div>
               <div className="h-12 w-px bg-slate-200 dark:bg-slate-700 mx-2 hidden md:block"></div>
               <div className="flex gap-2 w-full md:w-auto">
                  <Button variant="destructive" onClick={() => setShowClearConfirm(true)} className="h-14 px-4 bg-red-100 hover:bg-red-200 text-red-600 border border-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 dark:border-red-900/50 w-full md:w-auto" disabled={isSubmitting || cart.length === 0}><Trash2 className="w-5 h-5" /></Button>
@@ -799,6 +830,9 @@ function ComprasSection() {
                     <th className="p-4 w-32">Forma Pago</th>
                     <th className="p-4 w-28 text-center">Estado</th>
                     <th className="p-4 w-32 text-right">Total</th>
+                    {tcParalelo.enabled && (
+                      <th className="p-4 w-28 text-right text-kx-text-2">{tcParalelo.monedaParalela}</th>
+                    )}
                     <th className="p-4 w-24 text-center">Acciones</th>
                   </tr>
                 </thead>
@@ -812,12 +846,13 @@ function ComprasSection() {
                         <td className="p-4"><Skeleton className="h-4 w-20" /></td>
                         <td className="p-4"><Skeleton className="h-6 w-16 mx-auto rounded-full" /></td>
                         <td className="p-4"><Skeleton className="h-4 w-16 ml-auto" /></td>
+                        {tcParalelo.enabled && <td className="p-4"><Skeleton className="h-4 w-16 ml-auto" /></td>}
                         <td className="p-4"><Skeleton className="h-8 w-8 mx-auto" /></td>
                       </tr>
                     ))
                   ) : filteredCompras.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="p-12 text-center text-slate-500 bg-slate-50/50 dark:bg-slate-900/20 dark:text-kx-text-2">
+                      <td colSpan={tcParalelo.enabled ? 8 : 7} className="p-12 text-center text-slate-500 bg-slate-50/50 dark:bg-slate-900/20 dark:text-kx-text-2">
                         <div className="flex flex-col items-center gap-2">
                            <AlertTriangle className="h-10 w-10 text-slate-300" />
                            <p className="font-medium">
@@ -855,6 +890,17 @@ function ComprasSection() {
                             </span>
                           )}
                         </td>
+                        {tcParalelo.enabled && (
+                          <td className="p-4 text-right text-xs text-kx-text-2 tabular-nums">
+                            {(() => {
+                              if (compra.monto_paralelo) {
+                                return `≈ ${Number(compra.monto_paralelo).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
+                              }
+                              const calc = tcParalelo.calcParalelo(Number(compra.total), compra.moneda ?? 'ARS', Number(compra.tipo_cambio_tasa) || 1);
+                              return calc !== null ? `≈ ${calc.toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—';
+                            })()}
+                          </td>
+                        )}
                         <td className="p-4 text-center">
                           <div className="flex justify-center gap-1">
                              <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-kx-text-3 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full">
@@ -1073,6 +1119,13 @@ function ComprasSection() {
           <DialogFooter className="mt-4 gap-2 sm:gap-0"><Button variant="ghost" onClick={() => setShowClearConfirm(false)} className="text-kx-text-2 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancelar</Button><Button variant="destructive" onClick={handleClearAll} className="bg-red-600 hover:bg-red-700">Sí, limpiar todo</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <TipoCambioModal
+        open={showParaleloTCModal}
+        onOpenChange={setShowParaleloTCModal}
+        moneda={tcParalelo.monedaParalela}
+        onConfirm={(t) => { tcParalelo.setTC(t); setShowParaleloTCModal(false); }}
+      />
     </div>
   );
 }
