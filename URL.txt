@@ -1,69 +1,55 @@
 KAIROX GESTIÓN — Producción y Deploy
 ======================================
 
-URL de producción: https://kairox-gestion.vercel.app
+URL de producción: https://kairox-gestion-chi.vercel.app
 
-Cuenta de Vercel: nalux2430@gmail.com (compartida entre Luciano y el colaborador nalux-Ar)
+Cuenta de Vercel: lucianobanegas96@gmail.com (Luciano, dueño del repo de GitHub)
+Equipo/Team de Vercel: k-gestion
 Proyecto: kairox-gestion
 Repo de GitHub: https://github.com/lbanegas96/kairox-gestion (rama master)
 
 ------------------------------------------------------
-CÓMO SUBIR CAMBIOS A PRODUCCIÓN
+CÓMO SUBIR CAMBIOS A PRODUCCIÓN (sesión 25, ahora SÍ automático)
 ------------------------------------------------------
-El auto-deploy de GitHub NO está conectado (ver motivo abajo). Cada deploy es manual:
+Esta vez el repositorio de GitHub quedó CONECTADO directamente al proyecto de
+Vercel, porque la cuenta de Vercel está logueada con la cuenta de GitHub que
+realmente es DUEÑA del repo (lbanegas96). Cada `git push` a la rama `master`
+dispara un deploy automático a producción — no hace falta correr nada a mano.
+
+Si en algún momento hace falta forzar un deploy manual igual:
 
     cd <carpeta del proyecto>
     npx vercel deploy --prod --yes
 
-(Normalmente esto lo hace Claude Code después de cada tarea — no hace falta correrlo a mano salvo que se necesite con urgencia.)
-
 ------------------------------------------------------
 REGLA DE ORO PARA NO ROMPER ESTO DE NUEVO
 ------------------------------------------------------
-NO BORRAR la cuenta de Vercel (nalux2430@gmail.com) ni el proyecto "kairox-gestion" sin
-avisar antes. Si se borra, hay que reconstruir todo desde cero (proyecto nuevo, variables
-de entorno de nuevo, etc.) — pasó una vez (sesión 25, 2026-06-18) y costó mucho tiempo
-resolverlo.
+NO BORRAR la cuenta de Vercel (lucianobanegas96@gmail.com), el equipo "k-gestion"
+ni el proyecto "kairox-gestion" sin avisar antes. Si se borra, hay que reconstruir
+todo desde cero (proyecto nuevo, variables de entorno de nuevo, reconectar Git,
+actualizar CORS de las Edge Functions, etc.) — pasó DOS veces en la sesión 25
+(2026-06-18) y costó mucho tiempo resolverlo cada vez.
 
 ------------------------------------------------------
-POR QUÉ EL AUTO-DEPLOY DE GITHUB NO FUNCIONA (Y NO ES UN BUG)
+HISTORIAL DEL PROBLEMA (por qué hubo 3 proyectos de Vercel en un día)
 ------------------------------------------------------
-Vercel plan Hobby (gratis) exige que la cuenta de GitHub conectada a Vercel sea la
-DUEÑA del repositorio (o tenga la app de Vercel instalada como tal). Como hay más de
-una persona/identidad escribiendo código en este repo (Luciano + colaborador + agentes
-de IA), Vercel lo trata como "colaboración" y no lo permite en Hobby. Ser colaborador
-con rol Admin en el repo NO alcanza — GitHub Apps instaladas por una cuenta solo pueden
-acceder a repos que esa cuenta posee, no a repos de otra persona aunque seas admin ahí.
+1. Cuenta original "iakairox1-1051" se borró por error a mitad de sesión →
+   hubo que reconstruir todo.
+2. Se probó con la cuenta del colaborador (nalux2430@gmail.com) — el deploy
+   manual por CLI funcionaba, pero el auto-deploy de GitHub NUNCA se pudo
+   conectar: la GitHub App instalada en la cuenta de un usuario SOLO puede
+   acceder a repos que esa cuenta POSEE. Un repo de otra persona (lbanegas96)
+   nunca aparece en el selector, sin importar el rol de colaborador (se probó
+   con rol Admin, tampoco alcanzó). Conclusión: no se puede arreglar desde la
+   cuenta de un colaborador, solo desde la cuenta del dueño real del repo.
+3. Solución final: cuenta de Vercel logueada directamente como lbanegas96
+   (dueño real del repo) → el Git Integration conectó sin problemas y el
+   auto-deploy empezó a funcionar de inmediato.
 
-Esto NO se arregla:
-  - verificando el email en GitHub (ya se probó, no alcanza)
-  - dándole rol de Admin a un colaborador en el repo (ya se probó, no alcanza)
-  - creando una cuenta de Vercel nueva con otro email (mismo límite, se repite igual)
-
-Esto SÍ se arregla:
-  - Actualizando el equipo de Vercel a plan Pro (~USD 20/mes) — permite múltiples
-    colaboradores y reconecta el auto-deploy de GitHub sin restricciones.
-  - O seguir deployando manual por CLI como ahora (gratis, funciona bien, solo
-    requiere un comando después de cada cambio).
-
-------------------------------------------------------
-SI UN DEPLOY QUEDA "BLOCKED" (commit email no coincide con cuenta de GitHub)
-------------------------------------------------------
-A veces `vercel deploy --prod --yes` queda en estado BLOCKED con el mensaje
-"The deployment was blocked because the commit email ... could not be matched
-to a GitHub account." Es intermitente — no depende de tener o no Git conectado
-(se probó sin Git conectado y bloqueó igual).
-
-Workaround que funciona siempre (probado en sesión 25): hacer que el autor del
-commit que se va a deployar coincida con el email de la cuenta de Vercel que
-deploya (nalux2430@gmail.com), SOLO localmente, sin pushear ese cambio:
-
-    git commit --amend --author="nalux2430-3969 <nalux2430@gmail.com>" --no-edit
-    npx vercel deploy --prod --yes
-    git reset --hard <sha original del commit>   # vuelve todo a como estaba, sin tocar GitHub
-
-Importante: el `git reset --hard` final es obligatorio — sin eso el repo local
-queda con un commit reescrito que no coincide con lo pusheado a GitHub.
+Nota aparte: con la cuenta del colaborador, además, deploys puntuales por CLI
+quedaban en estado "BLOCKED" de forma intermitente ("commit email could not be
+matched to a GitHub account"). Con la cuenta del dueño del repo este problema
+no volvió a aparecer.
 
 ------------------------------------------------------
 VARIABLES DE ENTORNO NECESARIAS EN VERCEL
@@ -73,4 +59,12 @@ VITE_SUPABASE_ANON_KEY=sb_publishable_m5DnQrhXxAXlDygc7C9ndA_CREsTHd5
 
 (la anon key es pública por diseño, no es un secreto — se expone igual en el navegador)
 
-Última actualización: 2026-06-18 (sesión 25)
+------------------------------------------------------
+WHITELIST DE CORS EN EDGE FUNCTIONS DE SUPABASE
+------------------------------------------------------
+El archivo supabase/functions/_shared/auth.ts tiene una whitelist de orígenes
+permitidos (ALLOWED_ORIGINS). Si la URL de producción vuelve a cambiar, hay que
+agregar la nueva ahí y redeployar las funciones: create-user, delete-user,
+invite-user, generar-csr, emitir-cae (mp-webhook no está deployada).
+
+Última actualización: 2026-06-18/19 (sesión 25)
