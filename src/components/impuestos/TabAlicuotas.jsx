@@ -101,10 +101,16 @@ function TabAlicuotas() {
     setModalOpen(true);
   };
 
+  const rangoInvalido = !!(form.vigencia_hasta && form.vigencia_desde && form.vigencia_hasta < form.vigencia_desde);
+
   const guardar = async () => {
     const alicuotaNum = parseNumberLocale(form.alicuota);
     if (!form.jurisdiccion.trim() || !alicuotaNum || alicuotaNum <= 0) {
       toast({ title: 'Datos incompletos', description: 'Jurisdicción y alícuota (> 0) son obligatorios.', variant: 'destructive' });
+      return;
+    }
+    if (rangoInvalido) {
+      toast({ title: 'Rango de vigencia inválido', description: 'La fecha de fin no puede ser anterior a la fecha de inicio.', variant: 'destructive' });
       return;
     }
     setSaving(true);
@@ -215,9 +221,17 @@ function TabAlicuotas() {
                     </td>
                     <td className="p-4 text-center">{fuenteBadge(a.fuente)}</td>
                     <td className="p-4 text-center">
-                      {a.activo
-                        ? <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Activa</span>
-                        : <span className="px-2 py-0.5 rounded-full text-xs bg-slate-100 text-slate-500 dark:bg-kx-surface-2 dark:text-kx-text-2">Inactiva</span>}
+                      {(() => {
+                        if (!a.activo) {
+                          return <span className="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">Inactiva</span>;
+                        }
+                        const hoy = getTodayAR();
+                        const vencida = a.vigencia_hasta && a.vigencia_hasta < hoy;
+                        if (vencida) {
+                          return <span className="px-2 py-0.5 rounded-full text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" title={`Vigencia terminó el ${formatDateAR(a.vigencia_hasta)}`}>Vencida</span>;
+                        }
+                        return <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Activa</span>;
+                      })()}
                     </td>
                     <td className="p-4">
                       <div className="flex items-center justify-end gap-1">
@@ -288,13 +302,19 @@ function TabAlicuotas() {
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Vigencia hasta (opcional)</Label>
-                <Input type="date" value={form.vigencia_hasta} onChange={e => setForm(f => ({ ...f, vigencia_hasta: e.target.value }))} />
+                <Input type="date" value={form.vigencia_hasta} onChange={e => setForm(f => ({ ...f, vigencia_hasta: e.target.value }))}
+                  className={rangoInvalido ? 'border-red-500 focus-visible:ring-red-500' : ''} />
               </div>
             </div>
+            {rangoInvalido && (
+              <p className="text-xs text-red-600 dark:text-red-400">
+                La fecha de fin no puede ser anterior a la fecha de inicio.
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-            <Button onClick={guardar} disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Button onClick={guardar} disabled={saving || rangoInvalido} className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50">
               {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : (form.id ? 'Guardar' : 'Crear')}
             </Button>
           </DialogFooter>

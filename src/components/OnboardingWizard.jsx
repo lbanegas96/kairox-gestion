@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -171,6 +171,8 @@ export function OnboardingWizard({ open, onComplete }) {
         hideCloseButton
         className="max-w-lg dark:bg-kx-bg dark:border-kx-border overflow-y-auto max-h-[90vh]"
       >
+        <DialogTitle className="sr-only">Asistente de bienvenida a KAIROX</DialogTitle>
+        <DialogDescription className="sr-only">Configurá tu empresa, cargá tu primer producto y completá la configuración inicial.</DialogDescription>
         {/* Stepper */}
         <div className="flex items-center gap-2 mb-6">
           {[1, 2, 3].map(s => (

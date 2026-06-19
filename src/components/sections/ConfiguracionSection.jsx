@@ -65,6 +65,8 @@ const ConfiguracionSection = ({ initialTab }) => {
     provincia: '',
     localidad: '',
     cp: '',
+    afip_cuit: '',
+    condicion_iva: '',
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -184,7 +186,8 @@ const ConfiguracionSection = ({ initialTab }) => {
 
   useEffect(() => {
     if (config) {
-      setFormData({
+      setFormData(prev => ({
+        ...prev,
         nombre_empresa:  config.nombre_empresa  || '',
         company_logo:    config.company_logo    || config.logo_base64 || '',
         email_empresa:   config.email_empresa   || '',
@@ -193,9 +196,18 @@ const ConfiguracionSection = ({ initialTab }) => {
         provincia:       config.provincia       || '',
         localidad:       config.localidad       || '',
         cp:              config.cp              || '',
-      });
+      }));
     }
   }, [config]);
+
+  // Hidratar afip_cuit/condicion_iva en el form cuando llega desde empresas
+  useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      afip_cuit:     empresaDatos.afip_cuit     ? formatCuit(empresaDatos.afip_cuit) : '',
+      condicion_iva: empresaDatos.condicion_iva ?? '',
+    }));
+  }, [empresaDatos.afip_cuit, empresaDatos.condicion_iva]);
 
   useEffect(() => {
     if (!user?.empresa_id) return;
@@ -400,15 +412,33 @@ const ConfiguracionSection = ({ initialTab }) => {
     e.preventDefault();
     setSaving(true);
     try {
-      const result = await updateConfig(formData);
-      if (result.success) {
-        toast({ title: 'Configuración guardada', description: 'Los datos de la empresa se han actualizado correctamente.', className: 'bg-green-600 text-white border-green-500' });
-      } else {
-        throw new Error('No se pudo guardar en la base de datos.');
+      // 1. Guardar tabla `configuracion` (datos generales)
+      const { afip_cuit, condicion_iva, ...configFields } = formData;
+      const result = await updateConfig(configFields);
+      if (!result.success) throw new Error('No se pudo guardar en la base de datos.');
+
+      // 2. Guardar `empresas.afip_cuit` y `empresas.condicion_iva` (misma fuente que el wizard AFIP)
+      if (user?.empresa_id) {
+        const cuitDigits = (afip_cuit || '').replace(/\D/g, '');
+        if (cuitDigits && cuitDigits.length !== 11) {
+          toast({ title: 'CUIT inválido', description: 'Debe tener 11 dígitos. Se guardó el resto de los datos.', variant: 'destructive' });
+        } else {
+          const { error: empErr } = await supabase
+            .from('empresas')
+            .update({
+              afip_cuit:     cuitDigits || null,
+              condicion_iva: condicion_iva || null,
+            })
+            .eq('id', user.empresa_id);
+          if (empErr) throw empErr;
+          setEmpresaDatos({ afip_cuit: cuitDigits || null, condicion_iva: condicion_iva || null });
+        }
       }
+
+      toast({ title: 'Configuración guardada', description: 'Los datos de la empresa se han actualizado correctamente.', className: 'bg-green-600 text-white border-green-500' });
     } catch (error) {
       console.error(error);
-      toast({ title: 'Error al guardar', description: 'Hubo un problema al guardar la configuración.', variant: 'destructive' });
+      toast({ title: 'Error al guardar', description: error.message || 'Hubo un problema al guardar la configuración.', variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -774,24 +804,42 @@ const ConfiguracionSection = ({ initialTab }) => {
                   <Input name="provincia" value={formData.provincia} onChange={handleChange} placeholder="Buenos Aires" className="kairox-input" />
                 </div>
 
-                {/* CUIT / condicion_iva — read-only, gestionados desde pestaña Facturación */}
-                {(empresaDatos.afip_cuit || empresaDatos.condicion_iva) && (
-                  <div className="p-3 bg-kx-surface-2 rounded-lg border border-kx-border">
-                    <p className="text-xs font-medium text-kx-text-2 mb-2">Datos fiscales AFIP — configurados en la pestaña Facturación</p>
-                    <div className="flex gap-4 text-xs">
-                      {empresaDatos.afip_cuit && (
-                        <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                          <Check className="w-3 h-3" /> CUIT {formatCuit(empresaDatos.afip_cuit)}
-                        </span>
-                      )}
-                      {empresaDatos.condicion_iva && (
-                        <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                          <Check className="w-3 h-3" /> {empresaDatos.condicion_iva}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
+                {/* CUIT — editable, escribe directo a empresas.afip_cuit */}
+                <div className="space-y-2">
+                  <Label className="text-slate-700 dark:text-slate-300">CUIT</Label>
+                  <Input
+                    name="afip_cuit"
+                    value={formData.afip_cuit}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
+                      setFormData(prev => ({ ...prev, afip_cuit: digits.length === 11 ? formatCuit(digits) : digits }));
+                    }}
+                    placeholder="XX-XXXXXXXX-X"
+                    inputMode="numeric"
+                    className="kairox-input"
+                  />
+                  {formData.afip_cuit && formData.afip_cuit.replace(/\D/g, '').length !== 11 && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400">El CUIT debe tener 11 dígitos.</p>
+                  )}
+                </div>
+
+                {/* Condición frente al IVA — editable, escribe directo a empresas.condicion_iva */}
+                <div className="space-y-2">
+                  <Label className="text-slate-700 dark:text-slate-300">Condición frente al IVA</Label>
+                  <select
+                    name="condicion_iva"
+                    value={formData.condicion_iva}
+                    onChange={(e) => setFormData(prev => ({ ...prev, condicion_iva: e.target.value }))}
+                    className="w-full h-10 rounded-md border border-kx-border bg-kx-surface dark:bg-kx-surface px-3 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">— Sin especificar —</option>
+                    <option value="RI">Responsable Inscripto</option>
+                    <option value="Monotributo">Monotributista</option>
+                    <option value="Exento">Exento</option>
+                    <option value="CF">Consumidor Final</option>
+                  </select>
+                  <p className="text-[11px] text-kx-text-3">Se usa en certificados de retención y facturas. Si activás AFIP, se usa el mismo dato.</p>
+                </div>
 
                 {/* Logo */}
                 <div className="space-y-2">
