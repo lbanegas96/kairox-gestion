@@ -262,6 +262,10 @@ export const PLAN_CUENTAS_KEYS = {
     ['balance_comprobacion', empresaId, desde, hasta] as const,
   libroMayor: (empresaId: string, cuentaId: string, desde?: string, hasta?: string) =>
     ['libro_mayor', empresaId, cuentaId, desde, hasta] as const,
+  estadoResultados: (empresaId: string, desde?: string, hasta?: string) =>
+    ['estado_resultados', empresaId, desde, hasta] as const,
+  balanceGeneral: (empresaId: string, fechaCorte?: string) =>
+    ['balance_general', empresaId, fechaCorte] as const,
 };
 
 // ─── Asientos automáticos ────────────────────────────────────────────────────

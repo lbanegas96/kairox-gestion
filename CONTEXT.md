@@ -1,5 +1,26 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-19 (sesión 26, Nadia) — Cierre Impuestos + Testing Fecha de Vencimiento CC.
+**Última actualización:** 2026-06-19 (sesión 28) — Contabilidad: Estado de Resultados + Balance General en `PlanCuentasSection.jsx`.
+
+`PlanCuentasSection.jsx` pasa de 5 a **7 tabs**. Las 2 vistas nuevas reutilizan `asientosService.getBalanceComprobacion(empresaId, desde, hasta)` sin tocarla ni tocar los tabs Balance (Sumas y Saldos)/Libro Mayor — solo filtran las filas devueltas por `tipo` en el cliente:
+1. **Estado de Resultados** (tab "resultados") — filtro Desde/Hasta (igual que Libro Mayor), agrupa cuentas `tipo='ingreso'` y `tipo='egreso'`, calcula Resultado del Período = Ingresos − Egresos, badge Ganancia/Pérdida, export CSV con BOM UTF-8.
+2. **Balance General** (tab "balance_general") — una sola "Fecha de corte" (snapshot, no rango), agrupa `tipo IN ('activo','pasivo','patrimonio')`. La cuenta seedeada "Resultado del Ejercicio" (código 3.3) se excluye del listado genérico de Patrimonio y se reemplaza por una línea calculada = Ingresos−Egresos acumulados a la fecha de corte (+ cualquier saldo manual que ya tuviera esa cuenta). Badge verde/rojo "Balanceado" si `|Activo − (Pasivo + Patrimonio)| < 0.01`.
+
+**Por qué cierra matemáticamente sin asiento de cierre de ejercicio:** por partida doble, `Σdebe = Σhaber` global en cualquier corte de fecha (ya que cada asiento confirmado está balanceado). Agrupando por naturaleza: `Activo + Egresos(deudoras) = Pasivo + Patrimonio_raw + Ingresos(acreedoras)` → `Activo = Pasivo + Patrimonio_raw + (Ingresos − Egresos)`. Esto vale sin importar si la cuenta "Resultado del Ejercicio" tiene movimientos o no. Validado con datos reales (empresa `cbc4db74-...`, 93 asientos confirmados): Activo $5.754.500,00 = Pasivo $30.000,00 + Patrimonio $5.724.500,00 (= Resultado del Ejercicio calculado) → **diferencia $0,00, balanceado**.
+
+Archivos tocados: `PlanCuentasSection.jsx` (2 componentes de tab nuevos `TabEstadoResultados`/`TabBalanceGeneral` + 2 entradas en `TabsList`/`TabsContent` + helper `csvDownload`), `planCuentasService.ts` (2 query keys nuevas `estadoResultados`/`balanceGeneral`, additive, sin tocar funciones existentes).
+
+---
+
+**Sesión 27** — Moneda Paralela UI en módulo Compras (cierre del pendiente desde Prompt 13).
+
+Replicado el patrón ya usado en Caja/Cuenta Corriente (`useTCParalelo()`, banner naranja/verde de paridad, columna con fallback `calcParalelo()`, guard `monto_paralelo !== null` en cada INSERT) en los 2 puntos de entrada reales que insertan en `compras` (confirmados vía grep — `ComprasSection.jsx`/`ComprasSection` shell no inserta directo, y `OrdenesCompraSection.jsx` no toca `compras` en absoluto, solo `ordenes_compra`, que no tiene las columnas paralelas):
+1. **`CompraRapidaSection.jsx`** (componente interno `ComprasSection`, tab "Nueva Compra"/"Historial") — el cálculo e INSERT con guard ya estaban hechos de una sesión previa; se agregó lo que faltaba: banner de paridad bajo el `MonedaSelector`, equivalente bajo "Total de Compra", columna "[moneda paralela]" en la tabla de Historial con fallback `calcParalelo()`, y el `TipoCambioModal` para cargar el TC faltante.
+2. **`NuevaFacturaProveedorModal.jsx`** (Compras → Facturas → Nueva Factura de Proveedor) — no tenía NADA de moneda paralela (es un flujo 100% ARS, sin `MonedaSelector`). Agregado completo: `useTCParalelo()`, cálculo del equivalente, guard en el INSERT a `compras` y en el INSERT a `movimientos_caja` (solo si Efectivo + caja abierta), banner de paridad, equivalente bajo "TOTAL A PAGAR", `TipoCambioModal`.
+3. **`FacturasCompraSection.jsx`** (listado de Facturas de Proveedor) — agregada columna "[moneda paralela]" con el mismo fallback, ya que lista TODAS las compras (de ambos orígenes), no solo las de su propio modal.
+
+**No tocado a propósito:** `OrdenesCompraSection.jsx` (no inserta en `compras`/`movimientos_caja`, las columnas paralelas no existen en `ordenes_compra` — confirmado contra migration 041) y la lógica de `MonedaSelector`/TC obligatorio operacional (es independiente del sistema de moneda paralela).
+
+**Sesión 26** — Cierre Impuestos + Testing Fecha de Vencimiento CC.
 
 ### Parte 1 — Cierre testing módulo Impuestos (continuación sesión 24)
 
@@ -126,7 +147,7 @@ Archivos modificados en sesión 24: `ReportesSection.jsx` (3 fixes navegación L
 | Clientes | `ClientesSection.jsx` | ✅ Form completo + limite_credito + import CSV. **Sesión 17:** select "Condición de Pago" conectado al maestro `condiciones_pago` (FK `condicion_pago_id`), sincroniza `dias_credito` automáticamente al elegir. |
 | Cuenta Corriente | `CuentaCorrienteSection.jsx` | ✅ Tab Antigüedad de Deuda (FIFO 30/60/90/+90 días) |
 | Detalle Cta. Cte. | `ClientDetailModal.jsx` | ✅ Open Item Management SAP-style. **Sesión 20:** input de pago rápido a formato es-AR (`type=number`→`text+inputMode=decimal`, `parseFloat`→`parseNumberLocale`), historial de movimientos `.toFixed(2)`→`toLocaleString('es-AR')` |
-| Contabilidad | `PlanCuentasSection.jsx` | ✅ 5 tabs: Plan/Asientos/Balance/LibroMayor/**Períodos** — ⏳ P&L y Balance General en roadmap. **Sesión 20:** inputs Debe/Haber del asiento manual a formato es-AR; display en las 7 vistas ya estaba correcto (helper `fmt()` con `Intl.NumberFormat('es-AR')`) |
+| Contabilidad | `PlanCuentasSection.jsx` | ✅ **Sesión 28:** 7 tabs: Plan/Asientos/Balance/**Estado de Resultados**/**Balance General**/LibroMayor/Períodos. **Sesión 20:** inputs Debe/Haber del asiento manual a formato es-AR; display ya estaba correcto (helper `fmt()` con `Intl.NumberFormat('es-AR')`) |
 | **Impuestos** | `ImpuestosSection.jsx` + `impuestos/Tab*.jsx` | ✅ **NUEVO** 3 tabs: IVA (alícuota por producto + posición IVA mensual + Libros IVA) · Retenciones (sufridas/practicadas + certificado PDF) · Alícuotas (CRUD IIBB/Ganancias) |
 | Proveedores | `ProveedoresSection.jsx` + `proveedoresService.ts` | ✅ Ficha completa + Cta. Cte. + Historial OC + Pago inline. **Sesión 20:** input de pago a formato es-AR. `condicion_pago`/`plazo_pago_dias` son campos propios del proveedor (texto+entero), NO usan el maestro `condiciones_pago` de Clientes — no se tocó esa lógica, solo el monto |
 | Bancos | `CuentasBancariasSection.jsx` | ✅ Import CSV + conciliación auto/manual |
@@ -334,7 +355,7 @@ Cuando `enabled = true`, los siguientes módulos guardan `monto_paralelo` + `tc_
 - **Cotizaciones:** bloqueo TC si moneda extranjera
 - **Caja (`CajaSection`):** ✅ KPIs Ingresos/Egresos/Saldo muestran equivalente; tabla separada columna moneda paralela con fallback calcParalelo(); INSERT guarda monto_paralelo+tc_paralelo
 - **Cuenta Corriente (`CuentaCorrienteSection`):** ✅ KPI Total Deuda, tabla clientes, dialog cobro (deuda + monto siendo cobrado); aging bandas con equivalente; INSERT CC y movimientos_caja guardan monto_paralelo+tc_paralelo
-- **Compras:** columnas ready en DB (implementación pendiente UI)
+- **Compras (`CompraRapidaSection`, `NuevaFacturaProveedorModal`, `FacturasCompraSection`):** ✅ Sesión 27 — banner de paridad en los 2 formularios de carga, columna con fallback calcParalelo() en los 2 listados, INSERT a `compras` y `movimientos_caja` guardan monto_paralelo+tc_paralelo. `OrdenesCompraSection` queda afuera a propósito (no inserta en esas tablas).
 
 ### Reporte de Paridad — `src/components/reportes/ReporteParidad.jsx`
 - Filtro por rango de fechas
@@ -385,13 +406,15 @@ Cuando `enabled = true`, los siguientes módulos guardan `monto_paralelo` + `tc_
 11. 🔴 **Impuestos Fase B (padrón ARBA)** — BLOQUEADA por decisión de producto (Sesión 21). Investigación completa (endpoint, protocolo, auth confirmados), pero el webservice oficial solo es usable por empresas designadas "Agente de Recaudación" por ARBA — estatus que el público objetivo de KAIROX (micro PyMEs) casi nunca tiene. Sin código escrito a la espera de definir si vale la pena para la base de clientes real. Detalle completo en Historial de sesiones.
 12. ✅ **Deuda técnica — descomposición de NuevaVentaModal, Parte 2** (Sesión 22) — `useMultipago` + `useCreditoCliente` extraídos (864→804 líneas), refactor puro sin cambios de comportamiento. Pendiente: `useAfipIntegration` (emisión CAE sigue inline) para una sesión futura.
 13. ⏳ **Membresías** / Modelo de licencias Starter/Pro/Business
+14. ✅ **Moneda Paralela UI — Compras** (Sesión 27) — banner de paridad + columna con fallback `calcParalelo` en `CompraRapidaSection`, `NuevaFacturaProveedorModal` (no tenía moneda paralela en absoluto) y `FacturasCompraSection`; INSERT a `compras`/`movimientos_caja` con guard condicional. `OrdenesCompraSection` fuera de alcance (no inserta en esas tablas).
+15. ✅ **Contabilidad: Estado de Resultados + Balance General** (Sesión 28) — `PlanCuentasSection.jsx` pasa de 5 a 7 tabs. Ambas vistas reutilizan `asientosService.getBalanceComprobacion()` tal cual (sin tocar Balance/Libro Mayor), filtrando por `plan_cuentas.tipo` en el cliente. La cuenta seedeada "Resultado del Ejercicio" (código 3.3, tipo patrimonio) se excluye del listado de Patrimonio y se reemplaza por el resultado P&L calculado dinámicamente (Ingresos − Egresos acumulados a la fecha de corte) — cierra por partida doble sin necesitar asiento de cierre de ejercicio. Validado con datos reales (empresa `cbc4db74-...`, 93 asientos confirmados): Activo $5.754.500 = Pasivo $30.000 + Patrimonio $5.724.500, diferencia $0,00. Export CSV con BOM UTF-8 en ambas vistas.
 
 #### Pendientes Fase 7
 - Configurar Supabase Auth URLs (Site URL + Redirect URLs → `https://kairox-gestion.vercel.app/**`)
-- ✅ ~~Extender TC paralelo a Caja + Cuenta Corriente~~ — **RESUELTO** Prompt 13 (Compras UI pendiente aún)
+- ✅ ~~Extender TC paralelo a Caja + Cuenta Corriente~~ — **RESUELTO** Prompt 13
+- ✅ ~~Moneda Paralela UI en módulo Compras~~ — **RESUELTO** Sesión 27
 - ✅ ~~Investigar error 400 en consola~~ — **RESUELTO** sesión PM·3
 - ✅ ~~Deploy a producción~~ — **RESUELTO** 2026-06-13 sesión 2: auto-deploy de Vercel estaba roto desde commit `69d9f38` (5 commits sin deployar). Deploy manual disparado via MCP Vercel — URL: https://kairox-gestion.vercel.app
-- Moneda Paralela UI en módulo **Compras** (columnas DB ya listas, UI pendiente)
 - **Tests manuales pendientes (Document Flow):**
   - POS: hacer venta → verificar fila en `entregas` con `origen='implicita'` aparece en EntregasSection
   - Pedido → Generar Entrega → verificar stock decrementado + fila en `entregas`
@@ -1450,7 +1473,7 @@ Dashboard, Inventario (productos + Historial Movimientos), Ventas (Nueva + Histo
 **Pendientes que siguen abiertos:**
 - ⚠️ **BRL TC corrupto (tasa 3.6 del 08-jun)** — el DELETE en producción requiere autorización del usuario. SQL listo: `DELETE FROM tipos_cambio WHERE moneda = 'BRL' AND tasa = 3.6;` — al borrarlo, el sistema vuelve a pedir el TC con el modal (flujo correcto).
 - ⚠️ **Tests automatizados** — sigue sin haber ninguno; proyecto aparte.
-- ⏳ **Implementar P&L / Balance General / Períodos** en Contabilidad (feature, no bug).
+- ✅ ~~Implementar P&L / Balance General / Períodos~~ en Contabilidad — **RESUELTO** Sesión 28 (P&L + Balance General); Períodos ya estaba implementado desde antes.
 - ⏳ Continuar TESTING_2026-06-10.md desde el punto 1.
 
 ### Sesión 2026-06-10 (tarde — Nadia) — Fix crítico crear_venta + UX POS
@@ -1720,7 +1743,7 @@ Dashboard, Inventario (productos + Historial Movimientos), Ventas (Nueva + Histo
 **Pendientes identificados (no resueltos hoy):**
 
 - ✅ **Deploy Edge Functions** (create-user v3, invite-user v3, delete-user v2) — desplegadas vía MCP en sesión PM·3. CORS dinámico con whitelist `buildCorsHeaders(req)` activo. `Vary: Origin` incluido.
-- ⚠️ **Tabs Contabilidad faltantes**: CONTEXT decía 7 tabs (Plan, Asientos, Balance, LibroMayor, P&L, BalanceGeneral, Períodos) pero solo hay 4. P&L, Balance General y Períodos NUNCA se implementaron. Actualizar feature list o implementar.
+- ✅ **Tabs Contabilidad faltantes** — **RESUELTO**: Períodos se agregó en sesión posterior; P&L y Balance General implementados en Sesión 28. `PlanCuentasSection.jsx` tiene ahora los 7 tabs reales: Plan, Asientos, Balance, Estado de Resultados, Balance General, Libro Mayor, Períodos.
 - ⚠️ **Invalidación notifs en CC y Caja**: pendiente aplicar el mismo patrón de `invalidateNotifs()` en `CuentaCorrienteSection` (cobrar deuda) y `CajaSection` (cerrar caja). Sino esas notifs quedan stale 30s tras resolver.
 - ⚠️ **BRL TC = 3.6**: el valor es bajo (real argentino actualmente ~$240-300 ARS). Usuario debería recargarlo manualmente con valor real.
 - ⚠️ **Tests automatizados**: nada. Toda la verificación es manual por el usuario. Riesgo alto de regresiones.
