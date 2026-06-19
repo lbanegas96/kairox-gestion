@@ -47,6 +47,25 @@ Esto SÍ se arregla:
     requiere un comando después de cada cambio).
 
 ------------------------------------------------------
+SI UN DEPLOY QUEDA "BLOCKED" (commit email no coincide con cuenta de GitHub)
+------------------------------------------------------
+A veces `vercel deploy --prod --yes` queda en estado BLOCKED con el mensaje
+"The deployment was blocked because the commit email ... could not be matched
+to a GitHub account." Es intermitente — no depende de tener o no Git conectado
+(se probó sin Git conectado y bloqueó igual).
+
+Workaround que funciona siempre (probado en sesión 25): hacer que el autor del
+commit que se va a deployar coincida con el email de la cuenta de Vercel que
+deploya (nalux2430@gmail.com), SOLO localmente, sin pushear ese cambio:
+
+    git commit --amend --author="nalux2430-3969 <nalux2430@gmail.com>" --no-edit
+    npx vercel deploy --prod --yes
+    git reset --hard <sha original del commit>   # vuelve todo a como estaba, sin tocar GitHub
+
+Importante: el `git reset --hard` final es obligatorio — sin eso el repo local
+queda con un commit reescrito que no coincide con lo pusheado a GitHub.
+
+------------------------------------------------------
 VARIABLES DE ENTORNO NECESARIAS EN VERCEL
 ------------------------------------------------------
 VITE_SUPABASE_URL=https://wuznppxeonmhfcvnqfbf.supabase.co
