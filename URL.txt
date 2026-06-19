@@ -1,0 +1,57 @@
+KAIROX GESTIÓN — Producción y Deploy
+======================================
+
+URL de producción: https://kairox-gestion.vercel.app
+
+Cuenta de Vercel: nalux2430@gmail.com (compartida entre Luciano y el colaborador nalux-Ar)
+Proyecto: kairox-gestion
+Repo de GitHub: https://github.com/lbanegas96/kairox-gestion (rama master)
+
+------------------------------------------------------
+CÓMO SUBIR CAMBIOS A PRODUCCIÓN
+------------------------------------------------------
+El auto-deploy de GitHub NO está conectado (ver motivo abajo). Cada deploy es manual:
+
+    cd <carpeta del proyecto>
+    npx vercel deploy --prod --yes
+
+(Normalmente esto lo hace Claude Code después de cada tarea — no hace falta correrlo a mano salvo que se necesite con urgencia.)
+
+------------------------------------------------------
+REGLA DE ORO PARA NO ROMPER ESTO DE NUEVO
+------------------------------------------------------
+NO BORRAR la cuenta de Vercel (nalux2430@gmail.com) ni el proyecto "kairox-gestion" sin
+avisar antes. Si se borra, hay que reconstruir todo desde cero (proyecto nuevo, variables
+de entorno de nuevo, etc.) — pasó una vez (sesión 25, 2026-06-18) y costó mucho tiempo
+resolverlo.
+
+------------------------------------------------------
+POR QUÉ EL AUTO-DEPLOY DE GITHUB NO FUNCIONA (Y NO ES UN BUG)
+------------------------------------------------------
+Vercel plan Hobby (gratis) exige que la cuenta de GitHub conectada a Vercel sea la
+DUEÑA del repositorio (o tenga la app de Vercel instalada como tal). Como hay más de
+una persona/identidad escribiendo código en este repo (Luciano + colaborador + agentes
+de IA), Vercel lo trata como "colaboración" y no lo permite en Hobby. Ser colaborador
+con rol Admin en el repo NO alcanza — GitHub Apps instaladas por una cuenta solo pueden
+acceder a repos que esa cuenta posee, no a repos de otra persona aunque seas admin ahí.
+
+Esto NO se arregla:
+  - verificando el email en GitHub (ya se probó, no alcanza)
+  - dándole rol de Admin a un colaborador en el repo (ya se probó, no alcanza)
+  - creando una cuenta de Vercel nueva con otro email (mismo límite, se repite igual)
+
+Esto SÍ se arregla:
+  - Actualizando el equipo de Vercel a plan Pro (~USD 20/mes) — permite múltiples
+    colaboradores y reconecta el auto-deploy de GitHub sin restricciones.
+  - O seguir deployando manual por CLI como ahora (gratis, funciona bien, solo
+    requiere un comando después de cada cambio).
+
+------------------------------------------------------
+VARIABLES DE ENTORNO NECESARIAS EN VERCEL
+------------------------------------------------------
+VITE_SUPABASE_URL=https://wuznppxeonmhfcvnqfbf.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_m5DnQrhXxAXlDygc7C9ndA_CREsTHd5
+
+(la anon key es pública por diseño, no es un secreto — se expone igual en el navegador)
+
+Última actualización: 2026-06-18 (sesión 25)
