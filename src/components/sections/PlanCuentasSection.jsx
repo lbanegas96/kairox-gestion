@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   BookOpen, BookMarked, Plus, ChevronRight, ChevronDown, Check, X, AlertTriangle,
   FileText, BarChart2, ListOrdered, Search, Loader2, CheckCircle2,
-  Ban, RefreshCw, Eye, Pencil, ChevronLeft, Lock,
+  Ban, RefreshCw, Eye, Pencil, ChevronLeft, Lock, Unlock,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { planCuentasService, asientosService, PLAN_CUENTAS_KEYS } from '@/services/planCuentasService';
@@ -1002,6 +1002,8 @@ function TabPeriodos({ empresaId, userId, userRole }) {
   const [showCierreConfirm, setShowCierre]    = useState(false);
   const [periodoACerrar, setPeriodoACerrar]   = useState(null);
   const [procesandoCierre, setProcesando]     = useState(false);
+  const [showReabrirConfirm, setShowReabrir]  = useState(false);
+  const [periodoAReabrir, setPeriodoAReabrir] = useState(null);
   const [nuevoForm, setNuevoForm]             = useState({ nombre: '', fecha_inicio: '', fecha_cierre: '', observaciones: '' });
   const { toast } = useToast();
   const isAdmin = userRole === 'admin';
@@ -1032,6 +1034,12 @@ function TabPeriodos({ empresaId, userId, userRole }) {
     }
     if (nuevoForm.fecha_cierre < nuevoForm.fecha_inicio) {
       toast({ title: 'La fecha de cierre debe ser posterior a la de inicio', variant: 'destructive' }); return;
+    }
+    // Validar solape con períodos existentes (overlap = inicio_a <= cierre_b AND cierre_a >= inicio_b)
+    const solape = periodos.find(p => nuevoForm.fecha_inicio <= p.fecha_cierre && nuevoForm.fecha_cierre >= p.fecha_inicio);
+    if (solape) {
+      toast({ title: 'Solape detectado', description: `El rango se superpone con "${solape.nombre}" (${solape.fecha_inicio} → ${solape.fecha_cierre}).`, variant: 'destructive' });
+      return;
     }
     try {
       const { error } = await supabase.from('periodos_contables').insert([{
@@ -1078,6 +1086,30 @@ function TabPeriodos({ empresaId, userId, userRole }) {
       fetchPeriodos();
     } catch (e) {
       toast({ title: 'Error al cerrar período', description: e.message, variant: 'destructive' });
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const handleReabrirPeriodo = async () => {
+    if (!periodoAReabrir) return;
+    setProcesando(true);
+    try {
+      const { error } = await supabase
+        .from('periodos_contables')
+        .update({ estado: 'abierto', cerrado_por: null, fecha_cierre_real: null })
+        .eq('id', periodoAReabrir.id);
+      if (error) throw error;
+      toast({
+        title: 'Período reabierto',
+        description: `"${periodoAReabrir.nombre}" vuelve a aceptar nuevos asientos.`,
+        className: 'bg-green-900 border-green-700 text-white',
+      });
+      setShowReabrir(false);
+      setPeriodoAReabrir(null);
+      fetchPeriodos();
+    } catch (e) {
+      toast({ title: 'Error al reabrir período', description: e.message, variant: 'destructive' });
     } finally {
       setProcesando(false);
     }
@@ -1142,12 +1174,19 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                 </td>
                 {isAdmin && (
                   <td className="px-4 py-3 text-center">
-                    {p.estado === 'abierto' && (
+                    {p.estado === 'abierto' ? (
                       <button
                         onClick={() => { setPeriodoACerrar(p); setShowCierre(true); }}
                         className="flex items-center gap-1 mx-auto px-3 py-1.5 rounded text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 border border-amber-500/30 transition-colors"
                       >
                         <Lock size={12} /> Cerrar
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => { setPeriodoAReabrir(p); setShowReabrir(true); }}
+                        className="flex items-center gap-1 mx-auto px-3 py-1.5 rounded text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 border border-emerald-500/30 transition-colors"
+                      >
+                        <Unlock size={12} /> Reabrir
                       </button>
                     )}
                   </td>
@@ -1244,6 +1283,49 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                 ? <Loader2 size={14} className="animate-spin mr-2" />
                 : <Lock size={14} className="mr-2" />}
               Confirmar cierre
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Confirmar reabrir */}
+      <Dialog
+        open={showReabrirConfirm}
+        onOpenChange={v => { if (!procesandoCierre) { setShowReabrir(v); if (!v) setPeriodoAReabrir(null); } }}
+      >
+        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-400">
+              <Unlock size={18} /> Reabrir período contable
+            </DialogTitle>
+            <DialogDescription>Se podrán generar nuevos asientos en este rango de fechas.</DialogDescription>
+          </DialogHeader>
+          {periodoAReabrir && (
+            <div className="space-y-3 py-2">
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
+                <p className="text-sm font-semibold text-emerald-300 mb-1">{periodoAReabrir.nombre}</p>
+                <p className="text-xs text-emerald-400">
+                  {fmtFecha(periodoAReabrir.fecha_inicio)} — {fmtFecha(periodoAReabrir.fecha_cierre)}
+                </p>
+              </div>
+              <p className="text-sm text-kx-text-3">
+                Los asientos existentes <span className="text-white font-medium">no se modifican</span>.
+                Se limpia la fecha de cierre real y vuelve a estado <span className="text-white font-medium">abierto</span>.
+              </p>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" disabled={procesandoCierre}
+              onClick={() => { setShowReabrir(false); setPeriodoAReabrir(null); }}
+              className="text-kx-text-3">
+              Cancelar
+            </Button>
+            <Button onClick={handleReabrirPeriodo} disabled={procesandoCierre}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              {procesandoCierre
+                ? <Loader2 size={14} className="animate-spin mr-2" />
+                : <Unlock size={14} className="mr-2" />}
+              Confirmar reapertura
             </Button>
           </DialogFooter>
         </DialogContent>

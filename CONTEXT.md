@@ -1,5 +1,52 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-18 (sesión 25) — Cálculo automático de Fecha de Vencimiento en Cuenta Corriente (Clientes).
+**Última actualización:** 2026-06-19 (sesión 26, Nadia) — Cierre Impuestos + Testing Fecha de Vencimiento CC.
+
+### Parte 1 — Cierre testing módulo Impuestos (continuación sesión 24)
+
+Tab Retenciones y Percepciones — probado (Sufridas + Practicadas), 2 fixes:
+1. **ConfiguracionSection.jsx** — agregados campos CUIT y Condición frente al IVA en tab Empresa (Identidad y Datos de Contacto). Leen/escriben sobre `empresas.afip_cuit` y `empresas.condicion_iva` (misma fuente que el wizard de AFIP — sin duplicar datos). Antes, el certificado de retención practicada mostraba "CUIT: —" porque no había forma de cargarlo fuera del wizard.
+2. Fix de constraint: el `<select>` de condición_iva usaba valores de texto completo ("Responsable Inscripto") que no matcheaban el constraint `empresas_condicion_iva_check`. Ajustado a los códigos correctos (RI, Monotributo, Exento, CF) — mismos que usa el wizard de AFIP.
+
+Warning de accesibilidad (DialogTitle/Description) — investigado y resuelto. Causa real: OnboardingWizard.jsx usaba `<h2>` plano en vez de DialogTitle/DialogDescription, y se monta oculto detrás del Dashboard cuando `onboarding_completado=false`. Fix: agregado DialogTitle/DialogDescription con clase `sr-only` (accesible, invisible visualmente).
+
+Tab Alícuotas — probado, 1 fix:
+3. **TabAlicuotas.jsx** — Validación de rango de vigencia: bloquea guardar si "Vigencia hasta" es anterior a "Vigencia desde" (mensaje inline + botón deshabilitado). Badge de 3 estados en la tabla: Activa (verde, vigente), Vencida (ámbar, vigencia_hasta < hoy), Inactiva (rojo, toggle manual). El campo `activo` en DB no se toca automáticamente — el estado "Vencida" es cálculo visual.
+
+### Parte 2 — Testing Sesión 25 de Luciano (Fecha de Vencimiento en CC)
+
+🔴 **Bug crítico — Regresión:** volvió el error `column "descripcion" of relation "comprobante_items" does not exist` al crear cualquier venta. Causa: Migration 047 (cálculo fecha_vencimiento) se escribió sobre una base de código anterior al fix de sesión 19, y el `CREATE OR REPLACE` de la función `crear_venta` reintrodujo el INSERT roto con la columna `descripcion` inexistente. **Fix: Migration 048** — preserva toda la lógica de cálculo de fecha_vencimiento (dias_credito) de la 047, remueve la columna `descripcion` rota del INSERT a comprobante_items. ⚠️ Nota para Luciano: confirmar que siempre arranca desde `git pull` actualizado antes de escribir migraciones sobre RPCs compartidas — es la segunda vez que pasa este mismo tipo de regresión.
+
+🔴 **Bug crítico — Período contable:** "Ejercicio 2026 - Enero" tenía fechas 18/6→4/7/2026 (mal nombrado, eran fechas de junio/julio) y estaba CERRADO, dejando un agujero sin cobertura entre el 18/06 y 30/06 — bloqueaba la generación de asientos contables de cualquier venta en ese rango. **Fix:**
+- Renombrado a "Ejercicio 2026 - Junio", rango ajustado a 1/6→30/6/2026, reabierto (estado=abierto, fecha_cierre_real=null). Ahora hay cobertura continua: Junio (1-30/6) + Julio (1-31/7), sin solape.
+- Mejora de producto agregada en PlanCuentasSection.jsx: botón "Reabrir" en la columna Acciones para períodos cerrados (antes no existía ninguna acción posible ahí, forzando edición manual en Supabase). Modal de confirmación antes de reabrir.
+- Validación de solape de fechas agregada al crear un período nuevo (handleCrearPeriodo) — evita que se repita este tipo de error a futuro.
+
+✅ **Feature Fecha de Vencimiento en CC — Verificado funcionando:**
+- RPC `crear_venta` (flujo POS/Modo Caja): cálculo correcto confirmado con venta a Carlos Perez (30 días crédito) → vencimiento 19/07/2026 ✅
+- NuevaFacturaModal (flujo client-side): cálculo correcto confirmado con factura a Jhon V. (7 días crédito) → vencimiento 26/06/2026 ✅. Ambos cálculos coinciden — no hay desincronización entre RPC y client-side.
+- Columna "Vence" en ClientDetailModal: funciona correctamente
+- Badge "Vencido": verificado con fecha de prueba (revertida después)
+- Casos borde verificados sin errores: pagos HABER sin comprobante_id → "—", comprobantes históricos sin fecha_vencimiento (anteriores a Migration 046) → "—", ningún caso rompe ni marca falsos "Vencido"
+
+### Punto de producto — NO resuelto, requiere sesión de planificación
+
+⚠️ **Aging de Cuenta Corriente vs. Fecha de Vencimiento:** la vista "Antigüedad de Deuda" en CuentaCorrienteSection sigue calculando por antigüedad del DEBE (fecha de la venta), no por fecha_vencimiento. Esto genera lectura incoherente ahora que existe el concepto de vencimiento: una deuda de hoy con vencimiento en 7 días aparece en el mismo balde "0-30 días" que una con vencimiento en 90 días. Decisión de producto pendiente: dejar el aging como está (antigüedad contable pura) y agregar info de vencimiento en otro lado, vs. cambiar el criterio de cálculo del aging — impacta reportes y KPIs existentes, evaluar con cuidado.
+
+### Pendientes sin cambios (heredados de sesiones anteriores)
+
+- Libro IVA Ventas solo muestra comprobantes con CAE — revisar alcance cuando se implemente AFIP
+- 38 warnings de accesibilidad genérica (inputs sin id/name, labels no asociados) repartidos por el sistema — deuda técnica transversal, requiere sesión dedicada
+
+### Archivos modificados en sesión 26
+
+- `ConfiguracionSection.jsx` — campos CUIT/Condición IVA en tab Empresa
+- `OnboardingWizard.jsx` — DialogTitle/Description accesibles
+- `TabAlicuotas.jsx` — validación de vigencia + badge 3 estados
+- Migration 048 (Supabase) — fix RPC crear_venta (columna descripcion)
+- Período contable (SQL directo) — renombrado y reabierto Ejercicio 2026 Junio
+- `PlanCuentasSection.jsx` — botón Reabrir + validación de solape de fechas
+
+**Sesión 25 (Luciano)** — Cálculo automático de Fecha de Vencimiento en Cuenta Corriente (Clientes).
 1. **Migration 046** (`fecha_vencimiento_comprobantes.sql`) — nueva columna `comprobantes.fecha_vencimiento DATE`, nullable. **No confundir con `cae_vencimiento`** (vencimiento del CAE de AFIP — concepto totalmente distinto). Comprobantes históricos (anteriores a esta sesión) quedan en `NULL` — no se intenta backfill retroactivo.
 2. **Migration 047** (`crear_venta_fecha_vencimiento.sql`) — RPC `crear_venta` (vigente desde migration 044) ahora calcula `fecha_vencimiento = p_fecha + clientes.dias_credito` (SELECT nuevo de `clientes`, la RPC no traía esa fila previamente) y la guarda en el INSERT de `comprobantes` que ya existía. Cambio puramente aditivo — cero líneas de la lógica existente tocadas. Cubre automáticamente POS (`NuevaVentaModal.jsx`) y Modo Caja (`useConfirmarVenta.js`) sin tocar esos archivos, porque ambos ya llaman a `crear_venta` con `p_cliente_id`/`p_fecha`.
 3. **`NuevaFacturaModal.jsx`** (flujo client-side, no pasa por la RPC) — mismo cálculo: agregado `dias_credito` al select de `clientes`, nuevo helper `addDaysAR()` en `dateUtils.js`, `fecha_vencimiento` seteado en el INSERT directo a `comprobantes`.
