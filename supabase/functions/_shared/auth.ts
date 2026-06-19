@@ -14,6 +14,7 @@ export const adminClient = createClient(SUPABASE_URL, SERVICE_KEY);
 /** Lista de orígenes permitidos: producción + dev local en cualquier puerto Vite común */
 const ALLOWED_ORIGINS = new Set<string>([
   Deno.env.get('SITE_URL') || '',
+  'https://kairox-gestion-chi.vercel.app',
   'https://kairox-gestion.vercel.app',
   'http://localhost:3000',
   'http://localhost:3001',
