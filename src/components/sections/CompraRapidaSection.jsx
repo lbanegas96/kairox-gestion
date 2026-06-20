@@ -528,6 +528,40 @@ function ComprasSection() {
   const handleSaveEdit = async () => {
     setIsSavingEdit(true);
     try {
+      // Bajo Promedio Ponderado, el costo de un ítem ya registrado quedó mezclado
+      // con el costo previo en el momento de la compra original — no hay forma no
+      // ambigua de "revertir" ese promedio sin rejugar todas las operaciones de
+      // stock que pasaron desde entonces. Por eso, en ese modo bloqueamos el cambio
+      // de cantidad/costo en ítems PREEXISTENTES (no en altas ni bajas, que solo
+      // mueven stock sin tocar costo_compra). Sugerimos un ajuste de stock manual.
+      const { data: empresaData } = await supabase
+        .from('empresas')
+        .select('metodo_valoracion_stock')
+        .eq('id', user.empresa_id)
+        .single();
+      const metodoValoracion = empresaData?.metodo_valoracion_stock ?? 'ultimo_costo';
+
+      if (metodoValoracion === 'promedio_ponderado') {
+        const itemsBloqueados = editItems.filter(item => {
+          if (item.is_new) return false;
+          const orig = originalItems.find(o => o.id === item.id);
+          if (!orig) return false;
+          const cantidadCambio = Number(item.cantidad) !== Number(orig.cantidad);
+          const costoCambio = parseNumberLocale(item.costo_unitario) !== parseNumberLocale(orig.costo_unitario);
+          return cantidadCambio || costoCambio;
+        });
+
+        if (itemsBloqueados.length > 0) {
+          toast({
+            title: "No se puede editar cantidad/costo con Promedio Ponderado activo",
+            description: `${itemsBloqueados.map(i => i.nombre).join(', ')}: revertí el cambio o usá un ajuste de stock manual desde Productos. El promedio ya quedó aplicado al registrar esta compra y no se puede recalcular en forma retroactiva.`,
+            variant: "destructive",
+          });
+          setIsSavingEdit(false);
+          return;
+        }
+      }
+
       const newTotal = calculateEditTotal();
 
       // 1. Update Purchase Header
@@ -544,14 +578,15 @@ function ComprasSection() {
       if (headerError) throw headerError;
 
       // 2. Process Items (Diff Logic)
-      
+
       // A. Deleted Items: Existed in Original but not in Edit
       const deletedItems = originalItems.filter(orig => !editItems.find(curr => curr.id === orig.id));
-      
+
       for (const item of deletedItems) {
         // Reverse Stock: Subtract the OLD quantity (since purchase adds stock, deleting it removes stock)
-        await supabase.rpc('increment_stock', { row_id: item.producto_id, quantity: -Number(item.cantidad) });
-        
+        const { error: revError } = await supabase.rpc('increment_stock', { row_id: item.producto_id, quantity: -Number(item.cantidad) });
+        if (revError) throw revError;
+
         // Delete record
         await supabase.from('detalle_compras').delete().eq('id', item.id);
       }
@@ -559,9 +594,15 @@ function ComprasSection() {
       // B. New & Modified Items
       for (const item of editItems) {
         if (item.is_new) {
-          // New Item: Add full quantity to stock
-          await supabase.rpc('increment_stock', { row_id: item.producto_id, quantity: Number(item.cantidad) });
-          
+          // Ítem agregado durante la edición = una compra nueva en los hechos.
+          // Respeta metodo_valoracion_stock igual que el flujo "Nueva Compra".
+          const { error: aplicarError } = await supabase.rpc('aplicar_compra_producto', {
+            p_producto_id: item.producto_id,
+            p_cantidad: Number(item.cantidad),
+            p_costo_nuevo: parseNumberLocale(item.costo_unitario),
+          });
+          if (aplicarError) throw aplicarError;
+
           // Insert record
           await supabase.from('detalle_compras').insert({
             compra_id: editForm.id,
@@ -575,12 +616,13 @@ function ComprasSection() {
           const orig = originalItems.find(o => o.id === item.id);
           if (orig) {
             const diff = Number(item.cantidad) - Number(orig.cantidad);
-            
+
             // Only update stock if quantity changed
             // If new qty (15) > old qty (10), diff is +5. We add 5 to stock.
             // If new qty (5) < old qty (10), diff is -5. We subtract 5 from stock.
             if (diff !== 0) {
-              await supabase.rpc('increment_stock', { row_id: item.producto_id, quantity: diff });
+              const { error: incError } = await supabase.rpc('increment_stock', { row_id: item.producto_id, quantity: diff });
+              if (incError) throw incError;
             }
 
             // Always update record in case cost changed
@@ -589,13 +631,14 @@ function ComprasSection() {
               costo_unitario: parseNumberLocale(item.costo_unitario),
               subtotal: Number(item.cantidad) * parseNumberLocale(item.costo_unitario)
             }).eq('id', item.id);
+
+            // Costo "último costo" — seguro también bajo PPP, porque la validación de
+            // arriba ya garantiza que cantidad/costo no cambiaron para este ítem en ese modo.
+            await supabase.from('productos')
+              .update({ costo_compra: parseNumberLocale(item.costo_unitario) })
+              .eq('id', item.producto_id);
           }
         }
-
-        // Update Product Cost (Last purchase cost logic)
-        await supabase.from('productos')
-          .update({ costo_compra: parseNumberLocale(item.costo_unitario) })
-          .eq('id', item.producto_id);
       }
 
       toast({ title: "Cambios guardados", description: "La compra y el stock han sido actualizados." });
