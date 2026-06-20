@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/customSupabaseClient';
-import type { OrdenCompra, OrdenCompraEstado, OrdenCompraItem, PaginatedResult, EstadoPago, FacturaProveedor } from '@/types';
+import type { OrdenCompra, OrdenCompraEstado, PaginatedResult, EstadoPago, FacturaProveedor } from '@/types';
 
 interface GetAllFilters {
   estado?: OrdenCompraEstado;
@@ -121,41 +121,6 @@ export const ordenesCompraService = {
       .single();
     if (error) throw new Error(error.message);
     return data as OrdenCompra;
-  },
-
-  /** Recepción parcial o total de ítems — el trigger DB actualiza stock automáticamente */
-  async recibirItems(
-    ordenId: string,
-    recepciones: { itemId: string; cantidadRecibida: number }[]
-  ): Promise<void> {
-    for (const rec of recepciones) {
-      const { error } = await supabase
-        .from('ordenes_compra_items')
-        .update({ cantidad_recibida: rec.cantidadRecibida })
-        .eq('id', rec.itemId);
-      if (error) throw new Error(error.message);
-    }
-
-    // Calcular nuevo estado global de la OC
-    const { data: items, error: fetchError } = await supabase
-      .from('ordenes_compra_items')
-      .select('cantidad_pedida, cantidad_recibida')
-      .eq('orden_id', ordenId);
-    if (fetchError) throw new Error(fetchError.message);
-
-    const allItems = (items ?? []) as Pick<OrdenCompraItem, 'cantidad_pedida' | 'cantidad_recibida'>[];
-    const totalPedido = allItems.reduce((s, i) => s + Number(i.cantidad_pedida), 0);
-    const totalRecibido = allItems.reduce((s, i) => s + Number(i.cantidad_recibida), 0);
-
-    let nuevoEstado: OrdenCompraEstado;
-    if (totalRecibido === 0) nuevoEstado = 'enviada';
-    else if (totalRecibido >= totalPedido) nuevoEstado = 'recibida';
-    else nuevoEstado = 'recibida_parcial';
-
-    await supabase
-      .from('ordenes_compra')
-      .update({ estado: nuevoEstado })
-      .eq('id', ordenId);
   },
 
   async cancelar(id: string): Promise<void> {

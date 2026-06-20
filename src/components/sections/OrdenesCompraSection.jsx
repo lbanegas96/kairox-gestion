@@ -48,8 +48,6 @@ function OrdenesCompraSection() {
   // modales
   const [detalleId, setDetalleId]   = useState(null);
   const [genRecepId, setGenRecepId] = useState(null);
-  const [recepcionId, setRecepcionId] = useState(null);
-  const [recepciones, setRecepciones] = useState({});   // { [itemId]: cantidad }
   const [facturaModal, setFacturaModal] = useState(false);
   const [facturaForm, setFacturaForm] = useState({ numero_factura: '', fecha_factura: '', fecha_vencimiento: '', monto_total: '', notas: '' });
 
@@ -78,12 +76,6 @@ function OrdenesCompraSection() {
     enabled: !!detalleId,
   });
 
-  const { data: detalleRecepcion } = useQuery({
-    queryKey: OC_KEYS.detail(recepcionId),
-    queryFn: () => ordenesCompraService.getById(recepcionId),
-    enabled: !!recepcionId,
-  });
-
   const { data: unidadesMedida = [] } = useQuery({
     queryKey: ['unidades_medida', empresaId],
     queryFn: async () => {
@@ -98,16 +90,6 @@ function OrdenesCompraSection() {
     },
     enabled: !!empresaId,
   });
-
-  // Fix TanStack Query v5: onSuccess no existe en useQuery — usar useEffect
-  useEffect(() => {
-    if (!detalleRecepcion) return;
-    const init = {};
-    (detalleRecepcion.ordenes_compra_items ?? []).forEach(i => {
-      init[i.id] = i.cantidad_recibida ?? 0;
-    });
-    setRecepciones(init);
-  }, [detalleRecepcion]);
 
   const { data: factura } = useQuery({
     queryKey: OC_KEYS.factura(detalleId),
@@ -177,17 +159,6 @@ function OrdenesCompraSection() {
   const cancelarMutation = useMutation({
     mutationFn: (id) => ordenesCompraService.cancelar(id),
     onSuccess: invalidateOCAndNotifs,
-  });
-
-  const recibirMutation = useMutation({
-    mutationFn: ({ ordenId, recepciones: recs }) =>
-      ordenesCompraService.recibirItems(ordenId, Object.entries(recs).map(([itemId, qty]) => ({ itemId, cantidadRecibida: Number(qty) }))),
-    onSuccess: () => {
-      invalidateOCAndNotifs();
-      toast({ title: 'Stock actualizado ✓', description: 'Recepción registrada. El inventario fue actualizado automáticamente.', className: 'bg-green-600 text-white' });
-      setRecepcionId(null);
-    },
-    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
   // ── Helpers de form ───────────────────────────────────────────────────────────
@@ -755,56 +726,11 @@ function OrdenesCompraSection() {
           <DialogFooter className="gap-2">
             {detalle && ['enviada', 'recibida_parcial'].includes(detalle.estado) && (
               <Button className="bg-green-600 hover:bg-green-700 text-white gap-2"
-                onClick={() => { setDetalleId(null); setRecepcionId(detalle.id); }}>
+                onClick={() => { setDetalleId(null); setGenRecepId(detalle.id); }}>
                 <Truck className="w-4 h-4" /> Registrar Recepción
               </Button>
             )}
             <Button variant="outline" onClick={() => setDetalleId(null)} className="dark:border-kx-border dark:text-slate-300">Cerrar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── MODAL: Recepción de mercadería ── */}
-      <Dialog open={!!recepcionId} onOpenChange={() => setRecepcionId(null)}>
-        <DialogContent className="max-w-xl dark:bg-kx-bg dark:border-kx-border">
-          <DialogHeader>
-            <DialogTitle className="dark:text-kx-text flex items-center gap-2">
-              <Truck className="w-5 h-5 text-green-500" /> Registrar Recepción
-            </DialogTitle>
-            <DialogDescription className="dark:text-kx-text-2">
-              Ingresá las cantidades recibidas. El stock se actualizará automáticamente al confirmar.
-            </DialogDescription>
-          </DialogHeader>
-
-          {detalleRecepcion && (
-            <div className="space-y-3">
-              {(detalleRecepcion.ordenes_compra_items ?? []).map(item => (
-                <div key={item.id} className="flex items-center gap-4 p-3 rounded-lg bg-kx-surface-2 dark:bg-kx-surface border border-kx-border dark:border-kx-border">
-                  <Package className="w-5 h-5 text-kx-text-3 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm dark:text-kx-text truncate">{item.descripcion}</p>
-                    <p className="text-xs text-kx-text-3">Pedido: {item.cantidad_pedida} {item.unidad_medida} — Ya recibido: {item.cantidad_recibida}</p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Label className="text-xs text-slate-500 dark:text-kx-text-2 whitespace-nowrap">A recibir:</Label>
-                    <Input type="number" min="0" max={item.cantidad_pedida}
-                      value={recepciones[item.id] ?? item.cantidad_recibida}
-                      onChange={e => setRecepciones(r => ({ ...r, [item.id]: e.target.value }))}
-                      className="w-20 text-center dark:bg-kx-surface-2 dark:border-kx-border dark:text-kx-text text-sm" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setRecepcionId(null)} className="dark:border-kx-border dark:text-slate-300">Cancelar</Button>
-            <Button className="bg-green-600 hover:bg-green-700 text-white gap-2"
-              disabled={recibirMutation.isPending}
-              onClick={() => recibirMutation.mutate({ ordenId: recepcionId, recepciones })}>
-              <CheckCircle className="w-4 h-4" />
-              {recibirMutation.isPending ? 'Actualizando stock...' : 'Confirmar Recepción'}
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
