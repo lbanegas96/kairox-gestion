@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-20 (sesión 33) — Fix de los 2 hallazgos CRÍTICOS de la auditoría de estabilización (sesión 32).
+**Última actualización:** 2026-06-20 (sesión 33) — Fix de los 2 hallazgos CRÍTICOS de la auditoría de estabilización (sesión 32) + fix colateral de cobros MP (migration 055, aplicada y verificada).
 
 ## Sesión 33 — Fix CRÍTICOS de estabilización
 
@@ -42,9 +42,9 @@ Hallazgo colateral del test 2/3 del Fix 2: el CHECK `movimientos_bancarios_orige
 
 La migration 055 **no toca** la RPC ni el guard multi-tenant de la 054 — solo el constraint de la tabla. Se actualizó también el tipo TS `MovimientoBancario.origen` en `cuentasBancariasService.ts` para incluir `'mercadopago'`. El webhook (`p_origen: 'mercadopago'`) quedó sin cambios.
 
-**Pendiente de aplicar:** la migration 055 está creada pero **no aplicada a la base** (esta sesión no tuvo Supabase MCP). Aplicar con `supabase db push` o el SQL editor, y verificar con un INSERT de prueba que `origen='mercadopago'` ahora pasa el CHECK.
+**Aplicada y verificada en la base real** (proyecto Supabase `wuznppxeonmhfcvnqfbf`): la 055 corrió sin errores vía SQL editor. Verificación con INSERT directo a `movimientos_bancarios` (`origen='mercadopago'`, dentro de `BEGIN`/`ROLLBACK`, no persistido) pasó el CHECK sin el error 23514. Se probó también la RPC completa vía MCP — bloqueó con `'No autorizado'`, comportamiento esperado porque esa conexión no corre como `service_role` (confirma que el guard de la 054 sigue activo); el webhook real sí corre con `SERVICE_ROLE_KEY` y llegará al INSERT sin problema.
 
-Archivos: `supabase/migrations/054_guard_insertar_movimiento_bancario_externo.sql` (nuevo), `supabase/migrations/055_ampliar_check_origen_movimientos_bancarios.sql` (nuevo), `CompraRapidaSection.jsx`, `src/services/cuentasBancariasService.ts`.
+Archivos: `supabase/migrations/054_guard_insertar_movimiento_bancario_externo.sql` (nuevo), `supabase/migrations/055_ampliar_check_origen_movimientos_bancarios.sql` (nuevo, aplicada), `CompraRapidaSection.jsx`, `src/services/cuentasBancariasService.ts`.
 
 ---
 
