@@ -1,5 +1,75 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-20 (sesión 31) — Fix doble incremento de stock al recibir contra una Orden de Compra.
+**Última actualización:** 2026-06-20 (sesión 33) — Fix de los 2 hallazgos CRÍTICOS de la auditoría de estabilización (sesión 32).
+
+## Sesión 33 — Fix CRÍTICOS de estabilización
+
+### Fix 1 — `aplicar_compra_producto` tragaba el error (fallo silencioso de stock)
+
+[CompraRapidaSection.jsx](src/components/sections/CompraRapidaSection.jsx) → `handleRegisterPurchase`, loop de "Nueva Compra": el RPC que actualiza stock+costo se llamaba con `if (aplicarError) console.error(...)` — logueaba pero seguía, mostrando "Compra registrada ✓" aunque el stock no se hubiera movido (mismo patrón #1 de la auditoría: `.rpc()` resuelve `{data,error}`, no rechaza).
+
+**Decisión "rollback vs frenar-y-avisar" (el prompt pedía evaluar antes de elegir): se eligió frenar-y-avisar, NO rollback manual.** Razones:
+- No hay transacción DB real en este flujo — son llamadas REST independientes (`INSERT compras` → `INSERT detalle_compras` → RPC `crear_recepcion_implicita` → loop `aplicar_compra_producto` → `INSERT movimientos_caja`). Un rollback manual desde el front es él mismo no-atómico: cada DELETE/reverse compensatorio puede fallar y dejar un estado peor.
+- Revertir el stock ya aplicado bajo Promedio Ponderado es matemáticamente lossy (mismo motivo por el que en sesión 31 se bloqueó editar cantidad/costo de compras pasadas en modo PPP).
+- El fallo realista es transitorio (los productos del carrito son de la propia empresa, recién seleccionados — "producto no encontrado/sin permiso" casi no puede pasar), así que reintentar simplemente funciona.
+- El fix atómico correcto sería mover toda la compra a una sola RPC `crear_compra` server-side (transacción única) — refactor L, fuera del alcance de esta tarea de fixes críticos. Un rollback manual a medias sería trabajo descartable.
+
+**Implementación:** se intentan TODOS los ítems del carrito acumulando los que fallan (minimiza la brecha si uno falla a mitad), y si `stockErrors.length > 0` se hace `throw` con un mensaje claro ("La compra quedó registrada pero NO se pudo actualizar el stock de: X, Y. Revisá manualmente.") ANTES del `INSERT` de caja y del toast de éxito. El `catch` existente lo muestra como toast destructivo. Ya no hay éxito silencioso con stock sin mover.
+
+### Fix 2 — Guard multi-tenant en `insertar_movimiento_bancario_externo` (migration 054)
+
+RPC SECURITY DEFINER granteada a anon+authenticated que insertaba en `movimientos_bancarios` validando que la cuenta perteneciera al `p_empresa_id` **pasado por el caller**, pero sin comparar contra `get_my_empresa_id()` → un usuario autenticado de Empresa A con el UUID de una cuenta de Empresa B podía inyectar movimientos en la conciliación de B.
+
+**Decisión sobre el grant `anon` (el prompt pedía confirmar antes de tocar): NO se tocó el grant.** Se confirmó que el único caller legítimo es `supabase/functions/mp-webhook/index.ts`, que usa la **SERVICE_ROLE_KEY** (no anon, no JWT de usuario) y pasa el `empresa_id` por query param del webhook de MP. El grant a `anon` no tiene ningún caller real — queda flageado para una limpieza de grants más amplia, sin removerlo a ciegas. El guard nuevo ya neutraliza el riesgo de anon de todos modos.
+
+**El guard tuvo que ser service_role-aware**, no el `IF p_empresa_id IS DISTINCT FROM get_my_empresa_id()` ingenuo: bajo service_role `get_my_empresa_id()` devuelve NULL, así que el guard ingenuo habría roto TODOS los cobros de MercadoPago en producción. Solución:
+```sql
+IF auth.role() IS DISTINCT FROM 'service_role'
+   AND p_empresa_id IS DISTINCT FROM get_my_empresa_id() THEN
+  RAISE EXCEPTION 'No autorizado: empresa_id no coincide con el usuario autenticado';
+END IF;
+```
+`auth.role()` lee el claim del JWT (independiente del cambio de rol de SECURITY DEFINER). El webhook ya valida la empresa y deriva la cuenta de su propia fila de `integraciones_bancarias`, así que el camino service_role es seguro sin el chequeo.
+
+**Validado con 3 escenarios reales (transaccional/no-persistente):** (1) usuario Empresa A → su propia cuenta: pasa el guard ✓; (2) usuario Empresa A → cuenta de Empresa B: `RAISE 'No autorizado'` ✓ (hueco cerrado); (3) service_role → cualquier empresa: pasa el guard y llega al INSERT ✓ (webhook preservado). Build de producción sin errores.
+
+### Fix 3 — CHECK `origen` rechazaba 'mercadopago' (cobros MP fallaban con 500) — migration 055
+
+Hallazgo colateral del test 2/3 del Fix 2: el CHECK `movimientos_bancarios_origen_check` (definido en migration 011) solo admite `('manual','csv','email','webhook')`, pero el `mp-webhook` llama a la RPC `insertar_movimiento_bancario_externo` con `p_origen='mercadopago'`. Ese valor no está en el CHECK → el INSERT interno de la RPC falla con **error 23514 (check_violation)**, la RPC propaga la excepción y el webhook responde **500**. Efecto: **TODOS los cobros aprobados de MercadoPago venían fallando silenciosamente** al registrarse como movimiento bancario; MP reintenta el webhook y siempre recibe 500. La sincronización automática de cobros MP — feature estrella de la integración — estaba rota. (Era `task_02f2207b`.)
+
+**Decisión "ampliar CHECK vs degradar webhook" (el prompt pedía evaluar ambas):** se eligió **Opción A — ampliar el CHECK** para incluir `'mercadopago'`, NO la Opción B (cambiar el webhook a `p_origen='webhook'`, ya permitido). Razones: `'webhook'` es genérico y pierde la pasarela que originó el movimiento; el sistema ya distingue MercadoPago en otros lados (la descripción arranca con `"MP #..."`), así que registrar el origen real a nivel de columna es mejor para reportes/trazabilidad. La migration hace `DROP CONSTRAINT IF EXISTS` + `ADD CONSTRAINT` con la lista ampliada.
+
+**`'uala'` NO se incluyó** (confirmado con el usuario): no hay caller de Ualá hoy, se agrega en su propia migration cuando esa integración exista. Set mínimo necesario. Se verificó que el único caller de la RPC con origen fuera del set es el `mp-webhook` (`'mercadopago'`); no hay otras pasarelas rompiendo el constraint.
+
+La migration 055 **no toca** la RPC ni el guard multi-tenant de la 054 — solo el constraint de la tabla. Se actualizó también el tipo TS `MovimientoBancario.origen` en `cuentasBancariasService.ts` para incluir `'mercadopago'`. El webhook (`p_origen: 'mercadopago'`) quedó sin cambios.
+
+**Pendiente de aplicar:** la migration 055 está creada pero **no aplicada a la base** (esta sesión no tuvo Supabase MCP). Aplicar con `supabase db push` o el SQL editor, y verificar con un INSERT de prueba que `origen='mercadopago'` ahora pasa el CHECK.
+
+Archivos: `supabase/migrations/054_guard_insertar_movimiento_bancario_externo.sql` (nuevo), `supabase/migrations/055_ampliar_check_origen_movimientos_bancarios.sql` (nuevo), `CompraRapidaSection.jsx`, `src/services/cuentasBancariasService.ts`.
+
+---
+
+## Sesión 32 — Auditoría de recepción de OC + unificación de caminos
+
+## Sesión 32 — Auditoría de recepción de OC + unificación de caminos
+
+El usuario reportó "BUG CRÍTICO — corrupción de datos activa: cada recepción de OC duplica el incremento de stock" y pidió auditar TODO antes de tocar nada (triggers reales vía `pg_trigger`, no por nombre de migration; confirmar qué llama realmente el botón "Recibir"; mapear el flujo completo).
+
+**Resultado de la auditoría — el bug mecánico original ya estaba resuelto** (migration 053, sesión 31): se releyó la definición viva de `crear_recepcion()` y el `IF v_oc_item_id IS NULL THEN` que gatea el UPDATE directo está intacto. Se listaron TODOS los triggers reales sobre `ordenes_compra_items`/`recepciones`/`recepcion_items`/`productos` vía `pg_trigger` — solo existe `trg_oc_stock` (uno solo, sin duplicados fantasma). Cruce contra datos reales (8 ítems de OC con `cantidad_recibida > 0`) no mostró evidencia de doble conteo activo hoy.
+
+**Hallazgo nuevo, no contemplado en la sesión 31:** existían **2 caminos UI completamente independientes** para recibir contra la misma OC, ambos habilitados en los mismos estados (`enviada`/`recibida_parcial`) dentro de `OrdenesCompraSection.jsx`:
+- **Camino A** (ícono 📦 en la fila de la lista) → `GenerarRecepcionModal` → RPC `crear_recepcion` → escribe `recepciones`+`recepcion_items`+`cantidad_recibida` (incremental). Auditado, con registro en `movimientos_inventario`.
+- **Camino B** ("Ver detalle" → "Registrar Recepción") → `ordenesCompraService.recibirItems()` → solo `UPDATE ordenes_compra_items SET cantidad_recibida = <valor>` (**absoluto**, no incremental) → sin fila en `recepciones`, sin `movimientos_inventario`.
+
+Cruce con datos reales: **7 de 8 ítems de OC ya recibidos pasaron por el Camino B** (el viejo) — es el camino que de hecho usa la operación real, no el nuevo y auditado. El campo del Camino B se pre-llenaba con `item.cantidad_recibida` (lo YA recibido) bajo la etiqueta engañosa "A recibir", guardando ese valor como el nuevo total absoluto — un usuario que lo interpretara como "cuánto llegó ahora" en vez de "total acumulado" podía inflar (duplicar) o deflactar (restar) `stock_actual` sin ningún error visible, y sin dejar rastro en `movimientos_inventario`.
+
+**Decisión (consultada con el usuario vía pregunta directa, no asumida):** unificar a un solo camino. Se eliminó por completo el Camino B:
+- `OrdenesCompraSection.jsx`: removidos el estado `recepcionId`/`recepciones`, la query `detalleRecepcion`, el `useEffect` que la sincronizaba, `recibirMutation`, y el Dialog "MODAL: Recepción de mercadería" entero. El botón "Registrar Recepción" dentro del modal de detalle ahora abre `GenerarRecepcionModal` (`setGenRecepId`) en vez del modal viejo — un solo flujo, accesible desde los 2 puntos de entrada (ícono de fila y detalle).
+- `ordenesCompraService.ts`: eliminado `recibirItems()` (sin otros callers, confirmado por grep) y el import sin uso de `OrdenCompraItem`.
+- No se tocó `crear_recepcion`, `fn_oc_update_stock`, ni `crear_recepcion_implicita`.
+
+Build de producción sin errores. No quedan referencias colgantes a los identificadores eliminados (verificado por grep).
+
+---
 
 ## Sesión 31 — Fix doble incremento de stock en Recepción de OC
 

@@ -370,13 +370,28 @@ function ComprasSection() {
       // Update Stock + Costo (Create Mode: Always Add)
       // aplicar_compra_producto centraliza el cálculo del nuevo costo según
       // empresas.metodo_valoracion_stock (último costo o promedio ponderado).
+      // Se intentan TODOS los ítems (para minimizar la brecha si uno falla) y se
+      // acumulan los errores; si hubo alguno, se corta el flujo ANTES de la caja y
+      // del toast de éxito — el stock NO puede quedar "actualizado" en silencio.
+      // (Fix sesión 33: antes era `console.error` que tragaba el error y reportaba
+      // éxito aunque el stock no se moviera.)
+      const stockErrors = [];
       for (const item of cart) {
         const { error: aplicarError } = await supabase.rpc('aplicar_compra_producto', {
           p_producto_id: item.id,
           p_cantidad: parseInt(item.cantidad),
           p_costo_nuevo: parseNumberLocale(item.costo_unitario),
         });
-        if (aplicarError) console.error('Error al aplicar compra al producto:', aplicarError);
+        if (aplicarError) {
+          console.error('Error al aplicar compra al producto:', aplicarError);
+          stockErrors.push(item.nombre || item.codigo_sku || item.id);
+        }
+      }
+      if (stockErrors.length > 0) {
+        throw new Error(
+          `La compra quedó registrada pero NO se pudo actualizar el stock de: ${stockErrors.join(', ')}. ` +
+          `Revisá el stock de esos productos manualmente antes de seguir operando.`
+        );
       }
 
       // Caja

@@ -21,7 +21,7 @@ export interface MovimientoBancario {
   descripcion: string;
   monto: number;
   tipo: 'ingreso' | 'egreso';
-  origen: 'manual' | 'csv' | 'email' | 'webhook';
+  origen: 'manual' | 'csv' | 'email' | 'webhook' | 'mercadopago';
   conciliado: boolean;
   asiento_id?: string | null;
   created_at: string;
