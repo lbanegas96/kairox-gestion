@@ -152,15 +152,12 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
 
   // ── Generación de número correlativo ────────────────────────────────────────
   const generateNumero = async () => {
-    const todayStr = getTodayAR().replace(/-/g, '');
-    const prefix   = `FAC-${todayStr}`;
-    const { data } = await supabase.from('comprobantes').select('numero_venta')
-      .eq('empresa_id', user.empresa_id).ilike('numero_venta', `${prefix}-%`)
-      .order('numero_venta', { ascending: false }).limit(1);
-    const seq = data?.length > 0
-      ? (parseInt(data[0].numero_venta.split('-').pop()) || 0) + 1
-      : 1;
-    return `${prefix}-${String(seq).padStart(3, '0')}`;
+    const { data, error } = await supabase.rpc('obtener_proximo_numero', {
+      p_empresa_id: user.empresa_id,
+      p_tipo_documento: 'factura',
+    });
+    if (error) throw error;
+    return data;
   };
 
   // ── Confirmar ───────────────────────────────────────────────────────────────

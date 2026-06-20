@@ -327,11 +327,12 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   };
 
   const generateVentaNumber = async () => {
-    const todayStr = getTodayAR().replace(/-/g, '');
-    const { data } = await supabase.from('comprobantes').select('numero_venta').eq('empresa_id', user.empresa_id).ilike('numero_venta', `${todayStr}-%`).order('numero_venta', { ascending: false }).limit(1);
-    let sequence = 1;
-    if (data && data.length > 0) sequence = parseInt(data[0].numero_venta.split('-')[1]) + 1;
-    return `${todayStr}-${String(sequence).padStart(3, '0')}`;
+    const { data, error } = await supabase.rpc('obtener_proximo_numero', {
+      p_empresa_id: user.empresa_id,
+      p_tipo_documento: 'venta',
+    });
+    if (error) throw error;
+    return data;
   };
 
   const determinarTipoComprobante = (emisorCondicion, receptorCondicion) => {

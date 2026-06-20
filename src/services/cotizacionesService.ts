@@ -56,7 +56,7 @@ export const cotizacionesService = {
     { cliente, items, notas, condicionesPago, fechaVencimiento, moneda = 'ARS', tipoCambioTasa = 1 }: CreateCotizacionPayload
   ): Promise<Cotizacion> {
     const { data: numData, error: numError } = await supabase
-      .rpc('next_cotizacion_number', { p_empresa_id: empresaId });
+      .rpc('obtener_proximo_numero', { p_empresa_id: empresaId, p_tipo_documento: 'cotizacion' });
     if (numError) throw new Error(numError.message);
 
     const subtotal = items.reduce(

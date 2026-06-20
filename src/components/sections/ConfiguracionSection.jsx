@@ -20,7 +20,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import UsuariosSection from '@/components/sections/UsuariosSection';
 import IntegracionCard from '@/components/shared/IntegracionCard';
 import ConfigMercadoPagoModal from '@/components/bancos/ConfigMercadoPagoModal';
-import { formatDateAR } from '@/lib/dateUtils';
+import { formatDateAR, getTodayAR } from '@/lib/dateUtils';
 
 const formatCuit = (raw) => {
   const d = String(raw ?? '').replace(/\D/g, '');
@@ -29,6 +29,18 @@ const formatCuit = (raw) => {
 };
 
 const TAB_IDS = ['empresa', 'finanzas', 'facturacion', 'inventario', 'integraciones', 'alertas', 'usuarios', 'sistema'];
+
+const TIPO_DOCUMENTO_LABEL = {
+  venta:         'Venta',
+  factura:       'Factura',
+  nota_credito:  'Nota de Crédito',
+  nota_debito:   'Nota de Débito',
+  orden_compra:  'Orden de Compra',
+  cotizacion:    'Cotización',
+  pedido:        'Pedido',
+  entrega:       'Entrega',
+  recepcion:     'Recepción',
+};
 
 const TABS = [
   { id: 'empresa',        label: 'Empresa',       Icon: Building    },
@@ -81,6 +93,11 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [valoracionStock, setValoracionStock] = useState('ultimo_costo');
   const [loadingValoracion, setLoadingValoracion] = useState(false);
   const [savingValoracion, setSavingValoracion] = useState(false);
+
+  // ── Tab 3: Series de Numeración ───────────────────────────────────────────
+  const [seriesNumeracion, setSeriesNumeracion] = useState([]);
+  const [loadingSeries, setLoadingSeries] = useState(false);
+  const [savingSerieId, setSavingSerieId] = useState(null);
 
   // ── Tab 2: Condiciones de Pago ───────────────────────────────────────────
   const [condicionesPago, setCondicionesPago] = useState([]);
@@ -252,6 +269,26 @@ const ConfiguracionSection = ({ initialTab }) => {
       }
     };
     loadValoracion();
+  }, [user?.empresa_id]);
+
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    const loadSeries = async () => {
+      setLoadingSeries(true);
+      try {
+        const { data } = await supabase
+          .from('series_numeracion')
+          .select('*')
+          .eq('empresa_id', user.empresa_id)
+          .order('tipo_documento');
+        setSeriesNumeracion(data ?? []);
+      } catch (e) {
+        console.error('[Series Numeración] Error al cargar:', e);
+      } finally {
+        setLoadingSeries(false);
+      }
+    };
+    loadSeries();
   }, [user?.empresa_id]);
 
   useEffect(() => {
@@ -519,6 +556,44 @@ const ConfiguracionSection = ({ initialTab }) => {
     } finally {
       setSavingValoracion(false);
     }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Tab 3 handlers — Series de Numeración
+  // ─────────────────────────────────────────────────────────────────────────
+  const updateSerieLocal = (id, field, value) => {
+    setSeriesNumeracion(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
+  };
+
+  const handleSaveSerie = async (serie) => {
+    setSavingSerieId(serie.id);
+    try {
+      const proximoNumero = parseInt(serie.proximo_numero, 10);
+      if (isNaN(proximoNumero) || proximoNumero < 1) {
+        toast({ title: 'Próximo número inválido', description: 'Tiene que ser un entero mayor o igual a 1.', variant: 'destructive' });
+        return;
+      }
+      const { error } = await supabase
+        .from('series_numeracion')
+        .update({ prefijo: serie.prefijo, proximo_numero: proximoNumero })
+        .eq('id', serie.id);
+      if (error) throw error;
+      toast({ title: 'Serie actualizada', className: 'bg-green-600 text-white border-green-700' });
+    } catch (e) {
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingSerieId(null);
+    }
+  };
+
+  const previewProximoNumero = (serie) => {
+    const todayStr = getTodayAR().replace(/-/g, '');
+    let periodo = '';
+    if (serie.formato_fecha === 'YYYYMMDD') periodo = `${todayStr}-`;
+    else if (serie.formato_fecha === 'YYYY') periodo = `${todayStr.slice(0, 4)}-`;
+    const n = parseInt(serie.proximo_numero, 10);
+    const numeroStr = isNaN(n) ? '?' : String(n).padStart(serie.digitos, '0');
+    return `${serie.prefijo ?? ''}${periodo}${numeroStr}`;
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1129,14 +1204,91 @@ const ConfiguracionSection = ({ initialTab }) => {
               )}
             </div>
 
-            {/* Tipos de comprobante — placeholder */}
-            <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm opacity-60">
-              <div className="flex items-center gap-2 mb-3">
-                <FileText className="w-5 h-5 text-kx-text-3" />
-                <h3 className="font-semibold text-kx-text">Tipos de Comprobante</h3>
-                <span className="text-xs bg-kx-surface-2 text-kx-text-3 px-2 py-0.5 rounded-full border border-kx-border">Próximamente</span>
+            {/* Series de Numeración */}
+            <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg mt-0.5">
+                  <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-kx-text">Series de Numeración</h3>
+                  <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-0.5">
+                    Prefijo y próximo número de cada tipo de comprobante. Venta/Factura/NC/Pedido reinician su
+                    secuencia cada día; Entrega/Recepción/Nota de Débito cada año; Cotización/Orden de Compra nunca.
+                  </p>
+                </div>
               </div>
-              <p className="text-sm text-kx-text-2">Configurar series, numeración y habilitación por tipo (A, B, C, remito, etc.).</p>
+
+              {loadingSeries ? (
+                <div className="flex items-center gap-2 text-kx-text-3 py-4">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Cargando configuración...
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 mb-4">
+                    <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    Cambiar el próximo número puede generar números repetidos o saltos en la numeración — usar con cuidado.
+                  </div>
+
+                  <div className="rounded-xl border border-kx-border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-kx-surface-2 dark:bg-slate-900/50">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3">Tipo</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3">Prefijo</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3">Próximo número</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3">Preview</th>
+                          <th className="px-3 py-2 text-center text-xs font-medium text-kx-text-3 w-20">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {seriesNumeracion.map((serie) => (
+                          <tr key={serie.id} className="border-t border-kx-border">
+                            <td className="px-3 py-2 text-kx-text font-medium whitespace-nowrap">
+                              {TIPO_DOCUMENTO_LABEL[serie.tipo_documento] ?? serie.tipo_documento}
+                            </td>
+                            <td className="px-3 py-2">
+                              <Input
+                                value={serie.prefijo}
+                                onChange={(e) => updateSerieLocal(serie.id, 'prefijo', e.target.value)}
+                                className="h-8 w-24 text-xs dark:bg-kx-surface dark:border-kx-border"
+                              />
+                            </td>
+                            <td className="px-3 py-2">
+                              <Input
+                                type="number"
+                                min={1}
+                                value={serie.proximo_numero}
+                                onChange={(e) => updateSerieLocal(serie.id, 'proximo_numero', e.target.value)}
+                                className="h-8 w-24 text-xs dark:bg-kx-surface dark:border-kx-border"
+                              />
+                            </td>
+                            <td className="px-3 py-2 font-mono text-xs text-blue-600 dark:text-blue-400 whitespace-nowrap">
+                              {previewProximoNumero(serie)}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={savingSerieId === serie.id}
+                                onClick={() => handleSaveSerie(serie)}
+                                className="h-7 text-xs dark:border-kx-border"
+                              >
+                                {savingSerieId === serie.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* NOTA FUTURA (Q3 2026): cuando lleguen las series específicas por tipo de
+                      comprobante AFIP (A/B/C/E), esta tabla es el punto de extensión natural —
+                      agregar una fila por combinación tipo_documento + letra AFIP en vez de una
+                      serie única por tipo_documento. No implementado todavía, a propósito. */}
+                </>
+              )}
             </div>
 
             {/* Pie de documento — placeholder */}

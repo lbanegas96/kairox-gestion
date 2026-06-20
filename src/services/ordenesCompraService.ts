@@ -64,7 +64,7 @@ export const ordenesCompraService = {
   async create(empresaId: string, userId: string, payload: CreateOCPayload): Promise<OrdenCompra> {
     // Generar número correlativo
     const { data: numero, error: numError } = await supabase
-      .rpc('next_oc_number', { p_empresa_id: empresaId });
+      .rpc('obtener_proximo_numero', { p_empresa_id: empresaId, p_tipo_documento: 'orden_compra' });
     if (numError) throw new Error(numError.message);
 
     const subtotal = payload.items.reduce(

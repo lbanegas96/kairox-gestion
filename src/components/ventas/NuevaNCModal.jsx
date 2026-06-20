@@ -9,7 +9,7 @@ import { Loader2, Plus, Trash2, FileMinus, Info } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
-import { getTodayAR, getNowAR } from '@/lib/dateUtils';
+import { getNowAR } from '@/lib/dateUtils';
 import ClienteSelector from '@/components/shared/ClienteSelector';
 
 const MOTIVOS_NC = [
@@ -127,15 +127,12 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
 
   // ── Número correlativo NC ───────────────────────────────────────────────────
   const generateNCNumber = async () => {
-    const todayStr = getTodayAR().replace(/-/g, '');
-    const prefix   = `NC-${todayStr}`;
-    const { data } = await supabase.from('comprobantes').select('numero_venta')
-      .eq('empresa_id', user.empresa_id).ilike('numero_venta', `${prefix}-%`)
-      .order('numero_venta', { ascending: false }).limit(1);
-    const seq = data?.length > 0
-      ? (parseInt(data[0].numero_venta.split('-').pop()) || 0) + 1
-      : 1;
-    return `${prefix}-${String(seq).padStart(3, '0')}`;
+    const { data, error } = await supabase.rpc('obtener_proximo_numero', {
+      p_empresa_id: user.empresa_id,
+      p_tipo_documento: 'nota_credito',
+    });
+    if (error) throw error;
+    return data;
   };
 
   // ── Confirmar ───────────────────────────────────────────────────────────────

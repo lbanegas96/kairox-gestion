@@ -21,7 +21,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { getNowAR, getTodayAR, formatDateAR } from '@/lib/dateUtils';
+import { getNowAR, formatDateAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import GenerarEntregaModal from '@/components/ventas/GenerarEntregaModal';
 import NuevaVentaModal from '@/components/ventas/NuevaVentaModal';
@@ -154,14 +154,12 @@ function PedidosSection({ onNavigate } = {}) {
   };
 
   const generateNumero = async () => {
-    const todayStr = getTodayAR().replace(/-/g, '');
-    const { data } = await supabase
-      .from('pedidos').select('numero').eq('empresa_id', user.empresa_id)
-      .ilike('numero', `PED-${todayStr}-%`)
-      .order('numero', { ascending: false }).limit(1);
-    let seq = 1;
-    if (data?.length) seq = parseInt(data[0].numero.split('-')[2] || '0') + 1;
-    return `PED-${todayStr}-${String(seq).padStart(3, '0')}`;
+    const { data, error } = await supabase.rpc('obtener_proximo_numero', {
+      p_empresa_id: user.empresa_id,
+      p_tipo_documento: 'pedido',
+    });
+    if (error) throw error;
+    return data;
   };
 
   // ── Form helpers ────────────────────────────────────────────────────────────

@@ -1,5 +1,45 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-19 (sesión 29) — Método de Valoración de Stock (Último Costo / Promedio Ponderado) en Configuración → Inventario.
+**Última actualización:** 2026-06-20 (sesión 30) — Series de Numeración (SAP Number Ranges) parametrizables, reemplazando 9 generadores de número duplicados por una única fuente atómica.
+
+## Sesión 30 — Series de Numeración
+
+**Problema real encontrado en la inspección previa:** ninguno de los 9 puntos de numeración existentes era genuinamente atómico. 4 (Venta/Factura/NC/Pedido) generaban el número en el FRONTEND vía `SELECT MAX(...) + 1` (race condition entre dos pestañas/usuarios simultáneos). Los otros 5 (Entrega/Recepción×2/ND/Cotización/OC) usaban funciones SQL que parecían seguras por estar server-side, pero `siguiente_numero_documento()` (Entrega/Recepción/ND) hacía `COUNT(*) WHERE columna LIKE patrón` SIN lock — no solo repetible en concurrencia, sino que si se borraba una fila el conteo bajaba y el siguiente número generado podía COLISIONAR con uno ya emitido. `next_cotizacion_number()`/`next_oc_number()` usaban `MAX(REGEXP...)+1` también sin lock.
+
+**Tabla `series_numeracion`** (migration 051): `empresa_id`, `tipo_documento` (9 valores, CHECK), `prefijo`, `formato_fecha` (`'YYYYMMDD'|'YYYY'|'ninguno'`), `digitos`, `proximo_numero`, y **`periodo_actual`** (columna agregada más allá de lo pedido literalmente — necesaria para que Venta/Factura/NC/Pedido sigan reiniciando su secuencia cada DÍA y Entrega/Recepción/ND cada AÑO, exactamente como ya hacían; sin trackear a qué período corresponde `proximo_numero`, un contador puramente incremental habría cambiado el formato visible al cliente de un día para el otro). RLS por `get_my_empresa_id()`, `UNIQUE(empresa_id, tipo_documento)`.
+
+**`seed_series_numeracion(empresa_id)`** — mismo patrón que `seed_maestros_default` (trigger `AFTER INSERT ON empresas`, + seed retroactivo para las 3 empresas existentes). Valores DEFAULT por tipo, reproduciendo el formato actual exacto de cada uno:
+
+| tipo_documento | prefijo | formato_fecha | dígitos | formato resultante |
+|---|---|---|---|---|
+| venta | `''` | YYYYMMDD | 3 | `20260620-001` |
+| factura | `FAC-` | YYYYMMDD | 3 | `FAC-20260620-001` |
+| nota_credito | `NC-` | YYYYMMDD | 3 | `NC-20260620-001` |
+| pedido | `PED-` | YYYYMMDD | 3 | `PED-20260620-001` |
+| nota_debito | `ND-` | YYYY | 4 | `ND-2026-0001` |
+| entrega | `ENT-` | YYYY | 4 | `ENT-2026-0001` |
+| recepcion | `REC-` | YYYY | 4 | `REC-2026-0001` |
+| orden_compra | `OC-` | ninguno | 5 | `OC-00001` |
+| cotizacion | `COT-` | ninguno | 5 | `COT-00001` |
+
+**Backfill retroactivo** (parte de migration 051, una sola vez, NO repetible) — calculó, por empresa y por tipo, el `proximo_numero`/`periodo_actual` exacto para continuar sin pisar ni repetir nada ya emitido (parseando el último número real de cada tabla con regex). Validado contra empresa real `cbc4db74-...`: cotización 16→17, entrega 41→42, OC 9→10, ND 3→4, recepción 4→5; venta/factura/NC/pedido en 1 porque ninguno se emitió hoy (20260620) todavía.
+
+**RPC `obtener_proximo_numero(p_empresa_id, p_tipo_documento)`** — única fuente de numeración de ahora en más. `SELECT ... FOR UPDATE` (bloquea la fila hasta el commit — el lock real que `siguiente_numero_documento()` nunca tuvo), reinicia a 1 si cambió el período (día/año según `formato_fecha`, timezone fijo UTC-3 igual que `getNowAR()`/`getTodayAR()` del frontend), arma el string final y hace el `UPDATE proximo_numero+1` en la misma transacción.
+
+**Call-sites migrados (9 de 9 en alcance):**
+- Frontend (reemplazó `SELECT MAX`/`generateXNumber()` por 1 llamada RPC): `NuevaVentaModal.jsx` (`generateVentaNumber`), `NuevaFacturaModal.jsx` (`generateNumero`), `NuevaNCModal.jsx` (`generateNCNumber`), `PedidosSection.jsx` (`generateNumero`), `cotizacionesService.ts` (antes llamaba `next_cotizacion_number`), `ordenesCompraService.ts` (antes llamaba `next_oc_number`).
+- SQL (migration 052, reemplazó la línea de `siguiente_numero_documento(...)` dentro de cada RPC, sin tocar el resto de su lógica de negocio — stock, items, CC): `crear_entrega()`, `crear_recepcion()`, `crear_recepcion_implicita()`, `crear_nota_debito()`.
+
+**Fuera de alcance a propósito:** `crear_devolucion()` (tipo `'devolucion'` no estaba en la lista pedida) sigue usando `siguiente_numero_documento()` sin cambios — esa función NO se borró ni se modificó, sigue viva solo para Devoluciones. `crear_factura_desde_entrega()` recibe el número como parámetro pero no tiene ningún caller real en `src/` (RPC sin uso, dead code preexistente, no tocado). `next_cotizacion_number`/`next_oc_number` quedan en la base sin caller (no se borraron, por si algo más las referenciara — riesgo cero de dejarlas).
+
+**Nota para Q3 2026** (dejada como comentario en el código, no implementada): cuando lleguen las series específicas por tipo de comprobante AFIP (A/B/C/E), el punto de extensión natural es agregar una clave compuesta (tipo_documento + letra AFIP) a `series_numeracion` en vez de una serie única por tipo.
+
+**UI** (`ConfiguracionSection.jsx`, tab Facturación y Documentos): reemplazó el placeholder "Tipos de Comprobante — Próximamente" por una tabla editable de 9 filas (prefijo + próximo número editables, preview en tiempo real calculado en JS con la misma fórmula que el RPC, advertencia de "puede generar números repetidos o saltos", guardado por fila).
+
+**Validado con datos reales, sin tocar la empresa de producción `cbc4db74-...`** (se usó la empresa de test `db21dfad-...`, sin historial previo, en transacciones separadas — no una sola transacción con lock, para probar atomicidad real entre transacciones distintas): 2 llamadas consecutivas a `venta` → `20260620-001` luego `20260620-002` (sin repetir); `cotizacion` → `COT-00001` (`proximo_numero` 1→2); `entrega` → `ENT-2026-0001` (`proximo_numero` 1→2). Build de producción sin errores.
+
+Archivos: `supabase/migrations/051_series_numeracion.sql`, `supabase/migrations/052_series_numeracion_callsites.sql` (nuevos), `ConfiguracionSection.jsx`, `NuevaVentaModal.jsx`, `NuevaFacturaModal.jsx`, `NuevaNCModal.jsx`, `PedidosSection.jsx`, `cotizacionesService.ts`, `ordenesCompraService.ts`.
+
+---
 
 `empresas.metodo_valoracion_stock` (migration 049, TEXT NOT NULL DEFAULT `'ultimo_costo'`, `CHECK IN ('ultimo_costo','promedio_ponderado')`). 'fifo' queda fuera del CHECK a propósito — roadmap Fase B, sin lógica de capas/lotes implementada todavía.
 
