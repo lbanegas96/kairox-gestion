@@ -59,6 +59,14 @@ Archivo: `supabase/migrations/053_fix_doble_incremento_stock_recepcion_oc.sql` (
 
 Archivos: `supabase/migrations/051_series_numeracion.sql`, `supabase/migrations/052_series_numeracion_callsites.sql` (nuevos), `ConfiguracionSection.jsx`, `NuevaVentaModal.jsx`, `NuevaFacturaModal.jsx`, `NuevaNCModal.jsx`, `PedidosSection.jsx`, `cotizacionesService.ts`, `ordenesCompraService.ts`.
 
+### Fix aparte (mismo día): doble incremento de stock en `crear_recepcion`
+
+Encontrado al leer `crear_recepcion()` durante la migración de numeración (no relacionado, reportado como tarea separada y resuelto en background — `migration 053`). `crear_recepcion()` hacía, para cada ítem vinculado a un `ordenes_compra_items`: (1) `UPDATE productos SET stock_actual = stock_actual + cantidad` directo, y (2) `UPDATE ordenes_compra_items SET cantidad_recibida = cantidad_recibida + cantidad` — pero ese UPDATE dispara el trigger `trg_oc_stock` → `fn_oc_update_stock()` (migration 003, redefinida en 049), que TAMBIÉN suma `cantidad` a `stock_actual`. Resultado: el stock quedaba el DOBLE de lo recibido en cada recepción contra una OC. Peor todavía: desde la migration 049, `fn_oc_update_stock()` también recalcula `costo_compra` bajo Promedio Ponderado usando `stock_actual` como "stock previo" — pero para cuando el trigger corre, ese stock ya estaba inflado por el UPDATE directo de la misma función, así que el bug también corrompía el cálculo de PPP (usaba un "stock previo" que no era el previo real).
+
+**No afecta** a `crear_recepcion_implicita()` (compras directas sin OC vía `CompraRapidaSection`) — esa función nunca toca `ordenes_compra_items`.
+
+**Fix:** el UPDATE directo de `productos.stock_actual` en `crear_recepcion()` ahora corre SOLO cuando `v_oc_item_id IS NULL` (recepción sin ítem de OC vinculado, caso en que el trigger nunca se dispara). Cuando sí hay vínculo, `trg_oc_stock` queda como única fuente de verdad para stock y costo — sin tocar `fn_oc_update_stock()` ni `fn_calcular_costo_valoracion()`. Verificado aplicado en producción.
+
 ---
 
 `empresas.metodo_valoracion_stock` (migration 049, TEXT NOT NULL DEFAULT `'ultimo_costo'`, `CHECK IN ('ultimo_costo','promedio_ponderado')`). 'fifo' queda fuera del CHECK a propósito — roadmap Fase B, sin lógica de capas/lotes implementada todavía.
