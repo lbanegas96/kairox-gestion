@@ -1,5 +1,25 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-20 (sesión 30) — Series de Numeración (SAP Number Ranges) parametrizables, reemplazando 9 generadores de número duplicados por una única fuente atómica.
+**Última actualización:** 2026-06-20 (sesión 31) — Fix doble incremento de stock al recibir contra una Orden de Compra.
+
+## Sesión 31 — Fix doble incremento de stock en Recepción de OC
+
+**Encontrado sin buscarlo**, durante la inspección de la sesión 30 (numeración) — fuera de ese alcance, no tocado hasta ahora.
+
+`crear_recepcion()` (RPC del camino largo de Compras, recibir contra una OC desde `OrdenesCompraSection.jsx` → `GenerarRecepcionModal.jsx`), para cada item con `orden_compra_item_id` vinculado, hacía DOS escrituras que terminaban incrementando lo mismo:
+1. `UPDATE productos SET stock_actual = stock_actual + v_cantidad` — directo, dentro del loop de items.
+2. `UPDATE ordenes_compra_items SET cantidad_recibida = cantidad_recibida + v_cantidad` — dispara `trg_oc_stock` → `fn_oc_update_stock()` (migration 003, redefinida en 049 para Valoración de Stock), que TAMBIÉN hace `UPDATE productos SET stock_actual = stock_actual + delta` con `delta` = el mismo `v_cantidad`.
+
+Resultado: `productos.stock_actual` quedaba incrementado el DOBLE de lo realmente recibido, en cada recepción contra una OC con item vinculado. Además, desde la 049 el trigger también recalcula `costo_compra` bajo Promedio Ponderado usando `stock_actual` como "stock previo" — pero para cuando corre el trigger ese stock ya fue inflado por el UPDATE directo del paso 1 (misma función, misma transacción), así que el bug no solo duplicaba cantidad: también corrompía el cálculo de PPP. `movimientos_inventario` nunca se vio afectado — se inserta una sola vez con el `v_cantidad` correcto, fue la pista que permitió aislar cuál de las dos escrituras sobre `productos` era la espuria.
+
+**No afecta** a `crear_recepcion_implicita()` (compras directas sin OC, vía `CompraRapidaSection`) — esa función no toca `ordenes_compra_items` en ningún punto.
+
+**Fix** (migration 053): el `UPDATE productos` directo dentro de `crear_recepcion()` ahora se ejecuta solo si `v_oc_item_id IS NULL` (item de recepción sin vínculo a OC — el único caso en que el trigger nunca se dispara y el UPDATE directo sigue siendo necesario). Cuando hay item de OC vinculado, `trg_oc_stock`/`fn_oc_update_stock()` queda como única fuente de verdad para `stock_actual` y `costo_compra` — no se tocó el trigger ni `fn_calcular_costo_valoracion()`. Resto de `crear_recepcion()` (numeración vía `obtener_proximo_numero`, `movimientos_inventario`, `recepcion_items`) idéntico a la versión vigente desde migration 052.
+
+**Aplicado a la base real** (proyecto `wuznppxeonmhfcvnqfbf`) — el usuario pegó la migration en el SQL Editor de Supabase. Verificado después vía `pg_get_functiondef('crear_recepcion')`: la función viva ya tiene el `IF v_oc_item_id IS NULL THEN` gating el UPDATE directo, idéntico al archivo del repo. Pendiente (no bloqueante): confirmar con una recepción real contra OC que `stock_actual` incrementa exactamente una vez (comparar antes/después vs `recepcion_items.cantidad`).
+
+Archivo: `supabase/migrations/053_fix_doble_incremento_stock_recepcion_oc.sql` (nuevo).
+
+---
 
 ## Sesión 30 — Series de Numeración
 
