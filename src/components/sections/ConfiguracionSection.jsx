@@ -77,6 +77,11 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [loadingTC, setLoadingTC] = useState(false);
   const [savingTC, setSavingTC] = useState(false);
 
+  // ── Tab 4: Inventario — Método de Valoración de Stock ────────────────────
+  const [valoracionStock, setValoracionStock] = useState('ultimo_costo');
+  const [loadingValoracion, setLoadingValoracion] = useState(false);
+  const [savingValoracion, setSavingValoracion] = useState(false);
+
   // ── Tab 2: Condiciones de Pago ───────────────────────────────────────────
   const [condicionesPago, setCondicionesPago] = useState([]);
   const [loadingCondiciones, setLoadingCondiciones] = useState(true);
@@ -227,6 +232,26 @@ const ConfiguracionSection = ({ initialTab }) => {
       }
     };
     loadTC();
+  }, [user?.empresa_id]);
+
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    const loadValoracion = async () => {
+      setLoadingValoracion(true);
+      try {
+        const { data } = await supabase
+          .from('empresas')
+          .select('metodo_valoracion_stock')
+          .eq('id', user.empresa_id)
+          .single();
+        if (data) setValoracionStock(data.metodo_valoracion_stock ?? 'ultimo_costo');
+      } catch (e) {
+        console.error('[Valoración Stock] Error al cargar config:', e);
+      } finally {
+        setLoadingValoracion(false);
+      }
+    };
+    loadValoracion();
   }, [user?.empresa_id]);
 
   useEffect(() => {
@@ -467,6 +492,32 @@ const ConfiguracionSection = ({ initialTab }) => {
       toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
     } finally {
       setSavingTC(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Tab 4 handlers — Método de Valoración de Stock
+  // ─────────────────────────────────────────────────────────────────────────
+  const handleSaveValoracion = async () => {
+    if (!user?.empresa_id) return;
+    setSavingValoracion(true);
+    try {
+      const { error } = await supabase
+        .from('empresas')
+        .update({ metodo_valoracion_stock: valoracionStock })
+        .eq('id', user.empresa_id);
+      if (error) throw error;
+      toast({
+        title: 'Método de valoración guardado',
+        description: valoracionStock === 'promedio_ponderado'
+          ? 'A partir de ahora, cada compra recalcula el costo como promedio ponderado.'
+          : 'A partir de ahora, cada compra actualiza el costo al valor más reciente.',
+        className: 'bg-green-600 text-white border-green-700',
+      });
+    } catch (e) {
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingValoracion(false);
     }
   };
 
@@ -1105,13 +1156,85 @@ const ConfiguracionSection = ({ initialTab }) => {
         ═══════════════════════════════════════════════════════════════════ */}
         <TabsContent value="inventario">
           <div className="space-y-6 max-w-2xl">
-            <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm opacity-60">
-              <div className="flex items-center gap-2 mb-3">
-                <Warehouse className="w-5 h-5 text-kx-text-3" />
-                <h3 className="font-semibold text-kx-text">Método de Valoración de Stock</h3>
-                <span className="text-xs bg-kx-surface-2 text-kx-text-3 px-2 py-0.5 rounded-full border border-kx-border">Próximamente</span>
+            <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg mt-0.5">
+                  <Warehouse className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-kx-text">Método de Valoración de Stock</h3>
+                  <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-0.5">
+                    Define cómo se actualiza el costo de tus productos en cada compra. No cambia cómo se calculan tus ventas
+                    ni tus márgenes — eso siempre lee el costo ya actualizado, sin importar qué método lo generó.
+                  </p>
+                </div>
               </div>
-              <p className="text-sm text-kx-text-2">FIFO, LIFO o Precio Promedio Ponderado. El método afecta el cálculo del costo de ventas.</p>
+
+              {loadingValoracion ? (
+                <div className="flex items-center gap-2 text-kx-text-3 py-4">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Cargando configuración...
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => setValoracionStock('ultimo_costo')}
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
+                      valoracionStock === 'ultimo_costo'
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                        : 'border-kx-border hover:bg-kx-surface-2'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-kx-text">Último Costo</span>
+                      {valoracionStock === 'ultimo_costo' && <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />}
+                    </div>
+                    <p className="text-xs text-kx-text-2 mt-1">
+                      El costo de tus productos se actualiza con cada compra al precio más reciente. Simple y rápido.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setValoracionStock('promedio_ponderado')}
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-colors ${
+                      valoracionStock === 'promedio_ponderado'
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                        : 'border-kx-border hover:bg-kx-surface-2'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-kx-text">Promedio Ponderado</span>
+                      {valoracionStock === 'promedio_ponderado' && <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />}
+                    </div>
+                    <p className="text-xs text-kx-text-2 mt-1">
+                      El costo se calcula como un promedio entre lo que tenías y lo que compraste. Más preciso si tus
+                      precios de compra varían seguido.
+                    </p>
+                  </button>
+
+                  <div className="w-full text-left p-4 rounded-lg border-2 border-kx-border opacity-50 cursor-not-allowed">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-kx-text flex items-center gap-2">
+                        FIFO
+                        <span className="text-[10px] bg-kx-surface-2 text-kx-text-3 px-2 py-0.5 rounded-full border border-kx-border">
+                          Próximamente
+                        </span>
+                      </span>
+                    </div>
+                    <p className="text-xs text-kx-text-2 mt-1">
+                      Próximamente — calcula el costo según el orden real de entrada de mercadería. Ideal para mayor
+                      precisión contable.
+                    </p>
+                  </div>
+
+                  <Button onClick={handleSaveValoracion} disabled={savingValoracion} className="bg-blue-600 hover:bg-blue-700 text-white mt-2">
+                    {savingValoracion
+                      ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</>
+                      : <><Save className="mr-2 h-4 w-4" /> Guardar método de valoración</>}
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">

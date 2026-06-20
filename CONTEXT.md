@@ -1,5 +1,23 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-19 (sesión 28) — Contabilidad: Estado de Resultados + Balance General en `PlanCuentasSection.jsx`.
+**Última actualización:** 2026-06-19 (sesión 29) — Método de Valoración de Stock (Último Costo / Promedio Ponderado) en Configuración → Inventario.
+
+`empresas.metodo_valoracion_stock` (migration 049, TEXT NOT NULL DEFAULT `'ultimo_costo'`, `CHECK IN ('ultimo_costo','promedio_ponderado')`). 'fifo' queda fuera del CHECK a propósito — roadmap Fase B, sin lógica de capas/lotes implementada todavía.
+
+**Inspección previa (corrigió 2 supuestos del prompt original):**
+- `NuevaFacturaProveedorModal.jsx` y `OrdenesCompraSection.jsx` (creación de OC) **NO escriben** `productos.costo_compra` — solo lo leen para prefill/display. Los únicos 2 puntos reales de escritura son: (1) `CompraRapidaSection.jsx` → "Nueva Compra" (frontend) y (2) `fn_oc_update_stock()` → trigger de recepción de OC (DB-side, ya existía desde migration 003).
+- `supabase.rpc('increment_stock', ...)` que usa el modal de **edición** de una compra ya registrada (`CompraRapidaSection.jsx` → `handleSaveEdit`) llama a una función que **no existe en la base** (solo existe `decrement_stock`) — bug preexistente, no de esta sesión. No se tocó ese flujo (sigue actualizando `costo_compra` con semántica "último costo" fija, sin importar el método configurado, porque un ajuste retroactivo de una compra pasada no tiene una definición no ambigua bajo PPP). Bug reportado como tarea separada (`task_341111ea`).
+
+**Centralización (SQL, no JS)** — dado que uno de los 2 write points reales es un trigger DB y el otro es frontend, la fórmula vive en una única función SQL pura `fn_calcular_costo_valoracion(p_metodo, p_stock_previo, p_costo_previo, p_cantidad, p_costo_nuevo)`, reutilizada por:
+1. `fn_oc_update_stock()` (trigger, modificado — antes pisaba `costo_compra = NEW.costo_unitario` directo).
+2. `aplicar_compra_producto(p_producto_id, p_cantidad, p_costo_nuevo)` — RPC nueva (`SECURITY DEFINER`, valida tenant vía `get_my_empresa_id()`, mismo patrón que `decrement_stock`). `CompraRapidaSection.jsx` (flujo "Nueva Compra", antes hacía fetch+update manual de `stock_actual`/`costo_compra` desde el frontend) ahora llama esta RPC — además de centralizar el cálculo, lo hace atómico.
+
+Fórmula PPP: `nuevo_costo = (stock_previo × costo_previo + cantidad × costo_nuevo) / (stock_previo + cantidad)`, usando el stock **previo** a la operación (se lee antes del UPDATE, en ambos puntos).
+
+**UI** (`ConfiguracionSection.jsx`, tab Inventario): reemplazó la tarjeta placeholder "Próximamente" por un selector de 3 opciones (Último Costo / Promedio Ponderado / FIFO grisado con badge "Próximamente"), mismo patrón de carga/guardado directo sobre columna de `empresas` que ya usaba Moneda Paralela (`tcConfig`/`handleSaveTC`) en el tab Finanzas.
+
+**Validado con datos reales** (producto "Mouse Vertical", empresa `cbc4db74-...`, dentro de una transacción con ROLLBACK — producción intacta): stock previo 98 u. a $5.000,00, compra de 10 u. a $6.000,00 → cuenta a mano `(98×5000+10×6000)/108 = $5.092,5925...` → sistema devolvió `$5.092,59` (redondeo a 2 decimales de `numeric(12,2)`). Coincide exactamente. Modo `ultimo_costo` verificado sin cambios de comportamiento (devuelve `costo_nuevo` tal cual).
+
+Archivos: `supabase/migrations/049_metodo_valoracion_stock.sql` (nuevo), `ConfiguracionSection.jsx` (selector + load/save), `CompraRapidaSection.jsx` (reemplaza fetch+update manual por RPC `aplicar_compra_producto`). No se tocó `unidades_medida` ni ningún otro maestro, ni ningún flujo de venta/P&L/márgenes.
 
 `PlanCuentasSection.jsx` pasa de 5 a **7 tabs**. Las 2 vistas nuevas reutilizan `asientosService.getBalanceComprobacion(empresaId, desde, hasta)` sin tocarla ni tocar los tabs Balance (Sumas y Saldos)/Libro Mayor — solo filtran las filas devueltas por `tipo` en el cliente:
 1. **Estado de Resultados** (tab "resultados") — filtro Desde/Hasta (igual que Libro Mayor), agrupa cuentas `tipo='ingreso'` y `tipo='egreso'`, calcula Resultado del Período = Ingresos − Egresos, badge Ganancia/Pérdida, export CSV con BOM UTF-8.
@@ -806,7 +824,7 @@ Listado completo de ambas carpetas confirmó **cero colisiones de número** (`mi
   - **Tab 1 — Empresa:** nombre + logo (lógica intacta) + nuevos campos email, dirección, localidad, CP, provincia, rubro (todos en tabla `configuracion` via `updateConfig`). Muestra CUIT/condicion_iva como read-only desde `empresas` (se gestionan en Tab 3).
   - **Tab 2 — Finanzas y Moneda:** sección Moneda Paralela movida aquí (lógica idéntica) + placeholder "Condiciones de Pago".
   - **Tab 3 — Facturación y Documentos:** Wizard AFIP/ARCA movido aquí (lógica idéntica, toggle + stepper 3 pasos) + placeholders Tipos de Comprobante y Pie de Documento.
-  - **Tab 4 — Inventario:** placeholders FIFO/LIFO/PPP, Unidades de Medida, Stock Mínimo Global.
+  - **Tab 4 — Inventario:** placeholders FIFO/LIFO/PPP, Unidades de Medida, Stock Mínimo Global. **Sesión 29:** el placeholder de valoración se reemplazó por el selector real Último Costo / Promedio Ponderado (FIFO sigue como placeholder "Próximamente") — ver entrada de Sesión 29 al principio del documento.
   - **Tab 5 — Integraciones:** grid de `IntegracionCard` para MP, Ualá, AFIP (estado real), WhatsApp Business, Google Sheets.
   - **Tab 6 — Alertas:** 4 toggles con umbrales numéricos (stock bajo, vencimiento CC, apertura caja, cheques) → `upsert` en tabla `configuracion` con `onConflict: 'empresa_id,clave'`.
   - **Tab 7 — Usuarios y Roles:** embed directo de `<UsuariosSection />` sin reescribir nada.

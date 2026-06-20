@@ -367,21 +367,16 @@ function ComprasSection() {
         console.error('Error al generar recepción implícita:', err);
       }
 
-      // Update Stock (Create Mode: Always Add)
+      // Update Stock + Costo (Create Mode: Always Add)
+      // aplicar_compra_producto centraliza el cálculo del nuevo costo según
+      // empresas.metodo_valoracion_stock (último costo o promedio ponderado).
       for (const item of cart) {
-         const { data: prod } = await supabase
-           .from('productos')
-           .select('stock_actual')
-           .eq('id', item.id)
-           .single();
-         if (prod != null) {
-           await supabase.from('productos')
-             .update({
-               stock_actual: (prod.stock_actual || 0) + parseInt(item.cantidad),
-               costo_compra: parseNumberLocale(item.costo_unitario)
-             })
-             .eq('id', item.id);
-         }
+        const { error: aplicarError } = await supabase.rpc('aplicar_compra_producto', {
+          p_producto_id: item.id,
+          p_cantidad: parseInt(item.cantidad),
+          p_costo_nuevo: parseNumberLocale(item.costo_unitario),
+        });
+        if (aplicarError) console.error('Error al aplicar compra al producto:', aplicarError);
       }
 
       // Caja
