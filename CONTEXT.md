@@ -1,5 +1,48 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-21 (sesión 39) — Cierre de los 4 riesgos latentes restantes del Mapa de escritores de `stock_actual`: la auditoría de estabilización de sesión 32 queda 100% cerrada.
+**Última actualización:** 2026-06-21 (sesión 40) — Infraestructura de tests de base de datos con pgTAP + primer test real (`obtener_proximo_numero`), 9/9 + concurrencia real verificada manualmente, todo en verde.
+
+## Sesión 40 — Infraestructura de tests pgTAP + primer test real: `obtener_proximo_numero`
+
+Primer test de base de datos del proyecto. Se eligió `obtener_proximo_numero` porque es el riesgo de mayor severidad de toda la auditoría de estabilización (sesión 30: la numeración de comprobantes usaba `COUNT(*)` sin lock, causaba números repetidos bajo concurrencia; el fix con `series_numeracion` + `SELECT...FOR UPDATE` nunca tuvo un test automatizado).
+
+**Setup:**
+- Extensión `pgtap` (1.3.3) habilitada — migration `061_enable_pgtap.sql`.
+- `supabase/tests/obtener_proximo_numero.test.sql` — test canónico, formato pgTAP estándar (`plan()`/`is()`/`skip()`/`finish()`), pensado para correr con `supabase test db` cuando haya Docker disponible.
+- `supabase/tests/README.md` — cómo correr los tests, y la regla de oro: **nunca contra una empresa real** (se nombra explícitamente `db21dfad-...` y `cbc4db74-...` como prohibidas). Cada test crea y destruye sus propios tenants sintéticos.
+
+**Limitación real de este entorno (documentada, no oculta):** no hay Docker ni `psql` instalados acá, así que `supabase test db` no se pudo ejecutar literalmente. Como pgTAP es solo SQL, el mismo archivo se corrió pegando su contenido vía el MCP de Supabase contra el proyecto remoto, siempre dentro de `BEGIN...ROLLBACK` (los tenants sintéticos —`__PGTAP_TEST__ Tenant A/B`— nunca se persistieron; verificado con un `SELECT count(*)` después de cada corrida, siempre 0).
+
+**Resultado real de los Casos 1, 3 y 4 (corridos de verdad, vía pgTAP, dentro de `ROLLBACK`):**
+```
+1..10
+ok 1 - Caso 1a: primer numero de venta para Tenant A es 001
+ok 2 - Caso 1b: segundo numero es 002 (consecutivo, no repite ni salta)
+ok 3 # SKIP Concurrencia real requiere 2+ conexiones simultaneas - verificado por separado
+ok 4 - Caso 3a: Tenant A primer pedido es 001
+ok 5 - Caso 3b: Tenant B primer pedido TAMBIEN es 001
+ok 6 - Caso 3c: Tenant A segundo pedido es 002
+ok 7 - Caso 3d: Tenant B segundo pedido es 002
+ok 8 - Caso 4a: cambio de periodo reinicia el numero a 001
+ok 9 - Caso 4b: periodo_actual se actualiza al periodo nuevo
+ok 10 - Caso 4c: proximo_numero avanza a 2 tras consumir el 1 del periodo nuevo
+```
+**9/9 en verde** (el test #3 es un `skip()` intencional, no una falla). Nota honesta: la primera corrida tuvo 4 "not ok" — error propio del test (me faltó el prefijo `'PED-'` en el string esperado del Caso 3), no un bug de la función; corregido y vuelto a correr con el resultado de arriba.
+
+**Caso 2 — concurrencia real, verificada por separado (pgTAP no puede, corre en una sola conexión):** se pidió autorización explícita (acción bloqueada por el clasificador de modo automático por ser una escritura persistente fuera de `ROLLBACK`) antes de crear un tenant sintético persistente (`__PGTAP_CONCURRENCY_TEST__ Tenant C`). Se dispararon **5 llamadas reales en paralelo** (5 tool calls concurrentes, 5 conexiones separadas) a `obtener_proximo_numero` para el mismo tenant + `tipo_documento='venta'`, arrancando desde `proximo_numero=1`. Resultado real:
+
+| Llamada | Resultado |
+|---|---|
+| 1 | `20260621-001` |
+| 2 | `20260621-002` |
+| 3 | `20260621-003` |
+| 4 | `20260621-004` |
+| 5 | `20260621-005` |
+
+5 números únicos, consecutivos, sin huecos ni repetidos. `proximo_numero` quedó en 6 tras las 5 llamadas (1+5). Esto confirma que el `SELECT...FOR UPDATE` serializa correctamente las llamadas concurrentes — exactamente lo que se esperaba dado que es el mismo patrón de lock ya verificado en sesiones anteriores (`crear_venta`, `ajustar_stock_manual`, etc.). El tenant `Tenant C` se borró inmediatamente después (4 `DELETE` + verificación de 0 filas restantes).
+
+**Archivos:** `supabase/migrations/061_enable_pgtap.sql` (nuevo), `supabase/tests/obtener_proximo_numero.test.sql` (nuevo), `supabase/tests/README.md` (nuevo).
+
+---
 
 ## Sesión 39 — Cierre de los 4 riesgos latentes de `stock_actual` (migration 060)
 
