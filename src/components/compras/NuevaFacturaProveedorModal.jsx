@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { useToast } from '@/components/ui/use-toast';
 import { getTodayAR, getNowAR } from '@/lib/dateUtils';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 import ProveedorSelector from '@/components/shared/ProveedorSelector';
@@ -34,7 +35,7 @@ const newItem = () => ({
 });
 
 const calcNeto = (item) => {
-  const n = Number(item.cantidad) * Number(item.precio_unit);
+  const n = Number(item.cantidad) * (parseNumberLocale(item.precio_unit) || 0);
   return isNaN(n) ? 0 : n;
 };
 
@@ -200,7 +201,7 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
             empresa_id:     user.empresa_id,
             producto_id:    i.producto_id,
             cantidad:       Number(i.cantidad),
-            costo_unitario: Number(i.precio_unit),
+            costo_unitario: parseNumberLocale(i.precio_unit) || 0,
             subtotal:       calcNeto(i),
             alicuota_iva:   String(i.alicuota_iva),
           }))
@@ -383,7 +384,7 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
                         </td>
                         <td className="px-2 py-1.5">
                           <Input
-                            type="number" min="0" step="0.01" value={item.precio_unit}
+                            type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unit}
                             onChange={e => updateItem(item._id, 'precio_unit', e.target.value)}
                             className="h-8 text-xs text-right bg-transparent border-kx-border text-kx-text w-full"
                           />

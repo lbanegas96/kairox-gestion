@@ -17,7 +17,7 @@ import { ordenesCompraService, OC_KEYS } from '@/services/ordenesCompraService';
 import { supabase } from '@/lib/customSupabaseClient';
 import { MonedaSelector } from '@/components/ui/MonedaSelector';
 import GenerarRecepcionModal from '@/components/compras/GenerarRecepcionModal';
-import { formatCurrency } from '@/lib/currencyUtils';
+import { formatCurrency, parseNumberLocale } from '@/lib/currencyUtils';
 import { formatDateAR } from '@/lib/dateUtils';
 
 // ─── Helpers de estado ────────────────────────────────────────────────────────
@@ -128,7 +128,7 @@ function OrdenesCompraSection() {
       numero_factura: facturaForm.numero_factura,
       fecha_factura: facturaForm.fecha_factura,
       fecha_vencimiento: facturaForm.fecha_vencimiento || null,
-      monto_total: parseFloat(facturaForm.monto_total),
+      monto_total: parseNumberLocale(facturaForm.monto_total) || 0,
       notas: facturaForm.notas || null,
     });
   };
@@ -208,11 +208,11 @@ function OrdenesCompraSection() {
     setItems(updated);
   };
 
-  const total = items.reduce((s, i) => s + (parseFloat(i.cantidad_pedida) || 0) * (parseFloat(i.costo_unitario) || 0), 0);
+  const total = items.reduce((s, i) => s + (parseFloat(i.cantidad_pedida) || 0) * (parseNumberLocale(i.costo_unitario) || 0), 0);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const validItems = items.filter(i => i.descripcion && i.cantidad_pedida > 0 && i.costo_unitario > 0);
+    const validItems = items.filter(i => i.descripcion && i.cantidad_pedida > 0 && (parseNumberLocale(i.costo_unitario) || 0) > 0);
     if (!validItems.length) { toast({ title: 'Agrega al menos un ítem válido', variant: 'destructive' }); return; }
     createMutation.mutate({
       proveedor_id: selectedProv?.id ?? null,
@@ -226,7 +226,7 @@ function OrdenesCompraSection() {
         producto_id: i.producto_id ?? null,
         descripcion: i.descripcion,
         cantidad_pedida: parseFloat(i.cantidad_pedida),
-        costo_unitario: parseFloat(i.costo_unitario),
+        costo_unitario: parseNumberLocale(i.costo_unitario) || 0,
         unidad_medida: i.unidad_medida || null,
       })),
     });
@@ -506,7 +506,7 @@ function OrdenesCompraSection() {
                       </select>
                     </div>
                     <div className="col-span-2">
-                      <Input type="number" min="0" step="0.01" value={item.costo_unitario} placeholder="0.00"
+                      <Input type="text" inputMode="decimal" value={item.costo_unitario} placeholder="0,00"
                         onChange={e => updateItem(idx, 'costo_unitario', e.target.value)}
                         className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
                     </div>
@@ -679,7 +679,7 @@ function OrdenesCompraSection() {
                         {matchOk ? <BadgeCheck className="w-4 h-4 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 flex-shrink-0" />}
                         {matchOk
                           ? 'Match perfecto — OC, recepción y factura coinciden.'
-                          : `Diferencia de $${diff.toFixed(2)} entre recibido y factura.`}
+                          : `Diferencia de $${diff.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} entre recibido y factura.`}
                       </div>
                     )}
 
@@ -709,7 +709,7 @@ function OrdenesCompraSection() {
                             setFacturaForm({
                               numero_factura: '', fecha_factura: '',
                               fecha_vencimiento: '',
-                              monto_total: totalRecibido.toFixed(2),
+                              monto_total: totalRecibido.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
                               notas: ''
                             });
                             setFacturaModal(true);
@@ -778,9 +778,9 @@ function OrdenesCompraSection() {
               </div>
               <div className="col-span-2">
                 <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Monto Total Facturado *</label>
-                <input type="number" min="0.01" step="0.01"
+                <input type="text" inputMode="decimal"
                   className="mt-1 w-full rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-kx-text"
-                  placeholder="0.00"
+                  placeholder="0,00"
                   value={facturaForm.monto_total}
                   onChange={e => setFacturaForm(p => ({ ...p, monto_total: e.target.value }))}
                   required

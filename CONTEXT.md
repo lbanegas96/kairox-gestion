@@ -1,5 +1,123 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-20 (sesión 33) — Fix de los 2 hallazgos CRÍTICOS de la auditoría de estabilización (sesión 32) + fix colateral de cobros MP (migration 055, aplicada y verificada).
+**Última actualización:** 2026-06-21 (sesión 38) — Unificación del ajuste manual de stock (`ProductosSection.jsx`) en una RPC atómica, resolviendo el riesgo latente #4 de la sesión 36.
+
+## Sesión 38 — Unificar caminos de ajuste manual de stock en `ajustar_stock_manual`
+
+Aplica la misma solución que la sesión 32 (unificación de caminos de recepción de OC) al riesgo latente #4 documentado en la sesión 36: existían 2 implementaciones redundantes para el mismo "ajuste manual de stock" — `productosService.adjustStock()` (sin caller, semántica de `ajuste` como delta) y el inline `handleSubmitMovimiento` de `ProductosSection.jsx` (el que la UI usaba de verdad: leía `stock_actual` del estado de React ya cargado, sin lock, sin validar negativo, semántica de `ajuste` como valor absoluto).
+
+**Fix — migration 059** (`ajustar_stock_manual(p_producto_id, p_tipo, p_cantidad, p_motivo)`):
+- `SELECT stock_actual ... FOR UPDATE` (lock real antes de decidir, no solo `UPDATE` relativo) + valida `empresa_id = get_my_empresa_id()`.
+- `entrada` → delta `+cantidad`; `salida` → delta `-cantidad`; `ajuste` → valor absoluto (inventario físico) — se preservó la semántica que ya usaba la UI, no la de `adjustStock()`.
+- Guard `v_nuevo_stock < 0 → RAISE EXCEPTION` para `salida` y `ajuste`, antes del `UPDATE`.
+- Valida `p_tipo` contra la lista permitida y `p_cantidad >= 0`.
+- Inserta en `movimientos_inventario` dentro de la misma función (misma transacción que el `UPDATE` de stock).
+
+**Frontend:** `productosService.adjustStock()` ahora es un wrapper delgado de `supabase.rpc('ajustar_stock_manual', ...)` (se volvió el único punto de entrada, ya no dead code) y `ProductosSection.jsx → handleSubmitMovimiento` llama a `productosService.adjustStock()` en vez de hacer el `UPDATE`+`INSERT` inline. Ya no hay 2 implementaciones.
+
+**Verificado con `BEGIN...ROLLBACK`** sobre un producto real con `stock_actual = 0`: `salida` de 5 → bloqueada (`Stock insuficiente`); `entrada` de 5 → stock pasa a 5; `ajuste` a 2 → stock pasa a 2 (confirma semántica absoluta); `cantidad` negativa → bloqueada; `tipo` inválido → bloqueado. Tras el `ROLLBACK`, `stock_actual` volvió a 0 (sin persistir nada). Build de producción sin errores.
+
+Archivos tocados: `supabase/migrations/059_rpc_ajustar_stock_manual.sql` (nuevo), `src/services/productosService.ts`, `src/components/sections/ProductosSection.jsx`.
+
+No se tocó `decrement_stock`, `increment_stock`, `aplicar_compra_producto` ni `fn_oc_update_stock` — fuera de alcance de esta tarea.
+
+---
+
+## Sesión 37 — Fix parseo es-AR en `ModoCajaLayout.jsx` (monto apertura/cierre de caja)
+
+Cierra el pendiente reportado aparte en la sesión 35 (`task_14b11792`): `ModoCajaLayout.jsx` (modal de apertura/cierre de caja del modo cajero, `role='solo_caja'`/`modo_caja=true`) tenía su PROPIO parseo manual roto, distinto al de `CajaSection.jsx`/`CajaApertura.jsx`:
+
+```js
+const monto = parseFloat(montoApertura.replace(',', '.')) || 0;
+```
+
+`.replace(',', '.')` solo reemplaza la PRIMERA coma — con separador de miles real es-AR ("1.500,50") el resultado quedaba "1.500.50", y `parseFloat` se detenía en el segundo punto → devolvía `1.5`. Un cajero que abría con $1.500,50 registraba $1,50, sin ningún error visible. Mismo bug en el cierre (`montoCierre`).
+
+**Fix:** alineado al patrón ya usado en `CajaApertura.jsx` (referencia exacta). Input cambiado de `type="number"` a `type="text" inputMode="decimal"` (sin parsear en cada keystroke, se guarda el string crudo) y `parseFloat(x.replace(',','.'))` reemplazado por `parseNumberLocale(x)` (import de `@/lib/currencyUtils`) en `handleAbrirCaja`/`handleCerrarCaja`. No se tocó `openSession`/`closeSession` en `CajaContext.jsx` (ya corregidas en la sesión 35 — el problema era exclusivamente el valor ya roto que `ModoCajaLayout.jsx` les pasaba antes de llegar ahí).
+
+Archivo tocado: `src/components/caja/ModoCajaLayout.jsx`.
+
+---
+
+## Sesión 36 — Mapa de escritores de `stock_actual`
+
+Tarea puramente de documentación (NO se tocó código) pedida porque esta columna ya causó 2 bugs reales (doble incremento en recepción de OC — sesión 31 — y fallo silencioso en `aplicar_compra_producto` — sesión 33). Releído con grep fresco sobre `pg_proc.prosrc` (SQL) y sobre `src/` (frontend) — la lista terminó siendo **10 escritores reales, no los 5 conocidos**: se sumaron `crear_venta`, `crear_devolucion`, `decrement_stock`, y dos escritores 100% frontend (`productosService.adjustStock` y el inline de `ProductosSection.jsx`) que no estaban en el radar de ninguna auditoría anterior.
+
+### Tabla de escritores
+
+| Función / trigger | Tipo | Dispara desde | Atómico¹ | Valida stock negativo | Notas |
+|---|---|---|---|---|---|
+| `crear_venta` | RPC (SQL) | `NuevaVentaModal.jsx` → venta POS | ✅ `SELECT...FOR UPDATE` + `UPDATE stock_actual = stock_actual - x` | ✅ `RAISE` si `stock < cantidad`, antes de decrementar | El más seguro del sistema — lock + validación + update relativo, todo en una transacción. |
+| `crear_entrega` | RPC (SQL) | `GenerarEntregaModal.jsx` → Pedido→Entrega manual | ✅ `SELECT...FOR UPDATE` + `UPDATE` relativo | ✅ `RAISE` si insuficiente | Mismo patrón que `crear_venta`. |
+| `crear_recepcion` | RPC (SQL) | `GenerarRecepcionModal.jsx` → recibir contra OC | ⚠️ `UPDATE` relativo sin lock previo, solo cuando NO hay `orden_compra_item_id` vinculado | N/A (incremento) | Cuando SÍ hay item de OC vinculado, no escribe directo — delega en el `UPDATE cantidad_recibida` que dispara `trg_oc_stock` (ver fila siguiente). Fix sesión 31 (migration 053) eliminó el doble incremento que tenía antes. |
+| `fn_oc_update_stock` (trigger `trg_oc_stock`) | Trigger `AFTER UPDATE OF cantidad_recibida ON ordenes_compra_items` | `crear_recepcion` (cuando hay item de OC) o cualquier otro UPDATE futuro a esa columna | ⚠️ Lee `stock_actual`/`costo_compra` SIN lock antes de calcular el costo PPP; el `UPDATE stock_actual = stock_actual + delta` final SÍ es relativo (seguro contra lost-update en el stock en sí) | N/A (incremento) | El costo PPP (`fn_calcular_costo_valoracion`) se calcula sobre un read no bloqueado — ver riesgo latente más abajo. `delta` puede ser negativo si algo bajara `cantidad_recibida` (ningún flujo de UI lo hace hoy, pero el trigger no lo impide). |
+| `crear_devolucion` | RPC (SQL) | `NuevaDevolucionModal.jsx` (cliente) / `NuevaDevolucionProveedorModal.jsx` (proveedor) | ⚠️ `UPDATE` relativo, **sin** `SELECT...FOR UPDATE` previo | ❌ Ninguna validación — la rama "devolución a proveedor" decrementa sin chequear que no quede negativo | Solo corre si `p_reingresa_stock = true`. Riesgo latente real (ver abajo). |
+| `decrement_stock` | RPC pública (SQL) | **Ningún caller en `src/`** | ✅ `UPDATE` relativo + valida negativo DESPUÉS (si negativo, `RAISE` revierte toda la función) | ✅ | Dead code hoy — existía para un uso que ya no está cableado (el comentario de su migration menciona "Notas de Crédito", que hoy usa `crear_devolucion`). |
+| `increment_stock` | RPC pública (SQL) | `CompraRapidaSection.jsx` → edición de una compra ya registrada (`handleSaveEdit`) | ✅ `UPDATE` relativo (acepta `quantity` negativo para revertir) | ❌ Sin ningún chequeo, ni siquiera post-hoc como `decrement_stock` | Inconsistencia frente a `decrement_stock`: con `quantity` negativo grande podría dejar `stock_actual < 0` sin aviso. |
+| `aplicar_compra_producto` | RPC pública (SQL) | `CompraRapidaSection.jsx` → "Nueva Compra" y edición de compra (ítems nuevos) | ⚠️ Lee `stock_actual`/`costo_compra` SIN lock antes de calcular costo PPP; el `UPDATE stock_actual = stock_actual + p_cantidad` final es relativo (seguro en el stock) | N/A (incremento) | Mismo patrón de riesgo que `fn_oc_update_stock` en el cálculo de costo. Ya tuvo 1 bug confirmado (fallo silencioso por `console.error` en vez de `throw` — sesión 33, ya arreglado). |
+| `ajustar_stock_manual` (RPC, ex `productosService.adjustStock()` + inline `ProductosSection.jsx`) | RPC (SQL) | `productosService.adjustStock()` ← `ProductosSection.jsx → handleSubmitMovimiento` (Modal "Movimiento de Stock") | ✅ `SELECT...FOR UPDATE` + decisión y `UPDATE` en la misma transacción | ✅ `RAISE` si `salida`/`ajuste` dejarían stock negativo, antes de escribir | **Unificado en sesión 38** (migration 059) — reemplaza las 2 implementaciones redundantes que documentó esta sesión (ver histórico abajo). Único punto de entrada ahora; ya no hay caminos duplicados para este flujo. |
+
+¹ "Atómico" acá significa: el incremento/decremento de `stock_actual` en sí usa la forma relativa `SET stock_actual = stock_actual ± x` (que Postgres garantiza libre de *lost updates* por el lock de fila implícito de cualquier `UPDATE`) **y/o** la decisión de permitir la operación se toma bajo `SELECT...FOR UPDATE`. ⚠️ marca los casos donde el stock en sí está a salvo de *lost update* pero una validación o un cálculo dependiente (costo PPP, "hay suficiente stock") se basa en una lectura sin lock — riesgo de usar datos obsoletos bajo concurrencia, no de perder el incremento de stock en sí. ❌ marca lectura-cálculo-escritura completo sin ninguna protección.
+
+**Excluidos de la tabla a propósito** (no son escritores en el sentido de "compiten por una fila existente" — son `INSERT` de productos nuevos, sin contención posible): `ProductosSection.jsx` "Nuevo Producto", `OnboardingWizard.jsx` (alta de producto demo), `CSVImportModal.jsx` (import masivo). Tampoco se incluyó `NuevaVentaModal.jsx` línea ~432 (`SELECT stock_actual` antes de confirmar la venta) — es solo una validación de UX previa a llamar `crear_venta`, no escribe nada; el RPC es la autoridad real.
+
+### Riesgos latentes (no son bugs confirmados — patrones frágiles para tener en el radar)
+
+1. **`crear_devolucion` puede dejar `stock_actual` negativo** en la rama "devolución a proveedor" (`p_tipo != 'cliente'`) — no hay ningún chequeo antes de decrementar. Un dato mal ingresado (devolver más de lo que hay) lo dejaría en negativo sin ningún error.
+2. **`increment_stock` no valida negativo**, a diferencia de `decrement_stock` — inconsistencia entre dos RPCs con el mismo propósito (genérico, signo libre). Usado hoy desde la edición de una compra (`CompraRapidaSection.jsx`).
+3. **Cálculo de costo PPP sin lock** en `fn_oc_update_stock` y en `aplicar_compra_producto`: ambos leen `stock_actual`/`costo_compra` sin `FOR UPDATE` antes de calcular el nuevo costo promedio ponderado. Si dos compras o recepciones del MISMO producto se procesan en paralelo, el costo resultante puede quedar calculado sobre un "stock previo" desactualizado — análogo al problema de numeración sin lock que causó el bug de la sesión 30 (`siguiente_numero_documento` con `COUNT(*)` sin lock), pero acá afecta el costo unitario, no la numeración.
+4. ~~**Dos implementaciones redundantes de "ajuste manual de stock"**~~ — ✅ **RESUELTO en sesión 38**: unificadas en la RPC `ajustar_stock_manual` (migration 059), ver fila correspondiente en la tabla arriba.
+5. **`decrement_stock` es dead code** — si algún día se le agrega un caller nuevo sin revisar, hereda automáticamente el patrón seguro (lock implícito + validación post-hoc), pero conviene confirmarlo en el momento en que se le agregue un uso real.
+
+---
+
+## Sesión 35 — Patrón es-AR en campos monetarios pendientes (ítem 4 de la auditoría, sesión 32)
+
+Aplicado el patrón ya usado en `CotizacionesSection`/`CompraRapidaSection` (`type="text" inputMode="decimal"` + estado string crudo sin parsear en cada keystroke + `parseNumberLocale()` al usar el valor) a los 6 archivos reportados. Releído cada uno puntualmente antes de tocarlo — 2 de los 6 resultaron tener más alcance del que decía el informe (un campo no listado individualmente, o falsos positivos).
+
+**1. `CajaSection.jsx` — Saldo Inicial:** real, corregido. El input pasó a `type="text" inputMode="decimal"`. La validación al abrir caja pasó de `parseFloat` a `parseNumberLocale`. El parseo real (`monto_inicial`) vive en `CajaContext.jsx` → `openSession()`, compartida por 3 componentes (`CajaSection.jsx`, `ModoCajaLayout.jsx`, `CajaApertura.jsx`) — se corrigió ahí (`parseFloat` → `parseNumberLocale`), beneficiando a los 3 callers sin duplicar lógica. `CajaApertura.jsx` ya pasaba un número limpio (parseado con `parseNumberLocale` propio); `ModoCajaLayout.jsx` tiene su PROPIO parseo roto (`parseFloat(monto.replace(',','.'))`, se rompe con separador de miles real) — fuera de alcance de esta tarea, reportado aparte (`task_14b11792`).
+
+**2. `NuevaFacturaModal.jsx` — precio_unit:** real, corregido. Además del input, `calcNeto()` y el INSERT a `comprobante_items` usaban `Number(item.precio_unit)` en vez de `parseNumberLocale()` — con el input ya en formato es-AR, `Number("1.500,50")` da `NaN`. Corregidos los 2 puntos de uso, no solo el input.
+
+**3. `NuevaNCModal.jsx` — precio_unit:** real, corregido. Mismo problema que NuevaFacturaModal en `calcNeto()`/INSERT, **más uno adicional**: `updateItem()` hacía `Number(value)` en CADA keystroke para `precio_unit` (anti-patrón explícito que la tarea pedía evitar) — separado en su propia rama para guardar el string crudo sin parsear.
+
+**4. `NuevaFacturaProveedorModal.jsx` — costo_unitario:** real, corregido. Internamente el campo se llama `precio_unit` (mapea a la columna `costo_unitario` recién en el INSERT) — mismo patrón y mismos 2 puntos de uso (`calcNeto`, INSERT a `detalle_compras`) corregidos.
+
+**5. `OrdenesCompraSection.jsx` — costo_unitario:** real, corregido (input, `total` del formulario, validación de ítem válido, payload de `createMutation`). **Se encontró un segundo campo monetario no listado individualmente**, tal como anticipaba la consigna: "Monto Total Facturado" del modal "Registrar Factura del Proveedor" (`facturaForm.monto_total`) — también `type="number"` con `parseFloat`. Corregido igual (input + `parseNumberLocale` en el submit), y sus 2 `.toFixed(2)` de visualización (`diff`, prefill de `monto_total`) pasados a `toLocaleString('es-AR', {minimumFractionDigits: 2})`. La lectura de `costo_unitario` en el cálculo de 3-way match (línea 636) NO se tocó: viene de `detalle.ordenes_compra_items`, dato ya numérico desde la DB, no un string tipeado por el usuario.
+
+**6. `ProductosSection.jsx` — precio_venta y costo_compra:** **falso positivo, no se tocó nada.** Ambos campos ya estaban implementados correctamente (`type="text" inputMode="decimal"` + `parseNumberLocale()` en el submit + `toLocaleString('es-AR')` en la grilla) — el hallazgo de la auditoría ya no aplicaba. `stock_actual`/`stock_minimo` (cantidades enteras) y el campo "Cantidad" del modal de movimiento de stock están correctamente en `type="number"`, no son monetarios — no se tocaron.
+
+Build de producción sin errores. Ningún cambio tocó lógica de negocio, cálculos de backend ni RPCs — solo formato de entrada/visualización en frontend.
+
+Archivos tocados: `CajaSection.jsx`, `CajaContext.jsx`, `NuevaFacturaModal.jsx`, `NuevaNCModal.jsx`, `NuevaFacturaProveedorModal.jsx`, `OrdenesCompraSection.jsx`. `ProductosSection.jsx` sin cambios (falso positivo).
+
+---
+
+## Sesión 34 — Cierre de hallazgos MEDIO/BAJO de la auditoría (sesión 32)
+
+### Tarea 1 — Triggers duplicados en `pedidos` (migration 056)
+Confirmado vía `pg_trigger` (no por nombre de migration): existían 2 pares idénticos — `audit_pedidos`/`trg_audit_pedidos` (ambos → `fn_audit_trigger`) y `set_pedidos_updated_at`/`trg_pedidos_updated_at` (ambos → `fn_set_updated_at`). Se dropearon `audit_pedidos` y `set_pedidos_updated_at` (de `017_pedidos_condiciones.sql`, anteriores a la convención `trg_*`) y se conservaron los `trg_*` — confirmado que son la convención sin excepción del resto del sistema (`trg_audit_ordenes_compra`, `trg_oc_updated_at`, etc., migrations 001/016) y que los nombres sin prefijo no tenían ninguna referencia especial fuera de la migration que los creó.
+
+**Verificación con datos reales (transacción con ROLLBACK):** INSERT + UPDATE de un pedido de prueba → `audit_log` recibió **exactamente 1 fila por operación** (antes del fix hubieran sido 2). Transacción revertida, sin datos huérfanos.
+
+### Tarea 2 — Guard de tenant en funciones de seed (migration 057)
+`seed_maestros_default`/`seed_series_numeracion` son SECURITY DEFINER, granteadas a `authenticated`, sin guard. **Contexto de ejecución confirmado antes de elegir el guard (no asumido):** ninguna tiene caller directo en `src/` — su único invocador real son los triggers `AFTER INSERT ON empresas`, disparados dentro de `create_tenant()` por el usuario que se está dando de alta. En ese momento `auth.uid()` existe (usuario autenticado real, nunca service_role — `create_tenant()` exige `auth.uid() IS NOT NULL`), pero `get_my_empresa_id()` devuelve NULL: `handle_new_user()` crea el profile con `empresa_id` NULL en el signup, y el `INSERT INTO empresas` (que dispara el trigger) ocurre ANTES de que `create_tenant()` vincule el profile a la empresa nueva. Confirmado además que ese INSERT solo ocurre cuando `profiles.empresa_id` ya es NULL (`create_tenant()` retorna temprano si el usuario ya tiene empresa).
+
+**Por eso el guard NO es el service_role-aware de la migration 054** (el caller nunca es service_role, esa excepción sería irrelevante) — se eligió uno más simple, adaptado al contexto real: permitir si `p_empresa_id = get_my_empresa_id()` **O** si el usuario autenticado todavía no tiene ninguna empresa asignada (`profiles.empresa_id IS NULL`, el caso de alta de tenant nuevo). Riesgo residual aceptado y documentado: un usuario sin empresa aún podría llamar con el UUID de una empresa ajena ya seedeada, pero ambas funciones usan `ON CONFLICT DO NOTHING` — resultado: no-op, sin lectura ni sobrescritura ni borrado.
+
+**Validado con 3 escenarios reales (transaccional, ROLLBACK):** (A) usuario sin empresa asignada → pasa ✓ (onboarding no se rompe); (B) usuario Empresa A → su propia empresa → pasa ✓; (C) usuario Empresa A → empresa B ajena → `RAISE 'No autorizado'` ✓ (hueco cerrado).
+
+### Tarea 3 — Dead code cleanup (migration 058)
+Re-verificado con grep fresco en `src/` + chequeo de callers internos en SQL (`pg_proc.prosrc`) + triggers — sin reusar el hallazgo de la auditoría sin re-chequear. Dropeadas 5 funciones sin ningún caller: `next_cotizacion_number`, `next_oc_number`, `next_pedido_number` (reemplazadas por `obtener_proximo_numero`, migration 051 — `siguiente_numero_documento` NO se tocó, la siguen usando `crear_devolucion`/`crear_venta`), `crear_factura_desde_entrega` (nunca cableada a ningún componente), `get_tasa_cambio` (sin caller).
+
+Dropeada la columna `clientes.condicion_pago` (singular, huérfana) — **doble-check importante:** el nombre es ambiguo, `proveedores.condicion_pago` es una columna DISTINTA en una tabla DISTINTA y está activa (`ProveedoresSection.jsx`, NO se tocó); `clientes.condicion_pago_id` (FK) y `clientes.condiciones_pago` (plural, texto libre) también están activas en `ClientesSection.jsx` y NO se tocaron. Solo la singular sin sufijo, sin ninguna referencia, fue eliminada.
+
+**Rollback script:** las 3 migrations (056/057/058) incluyen al final, comentado, el `CREATE TRIGGER`/`CREATE OR REPLACE FUNCTION`/`ALTER TABLE ADD COLUMN` exacto para revertir cada cambio si hiciera falta.
+
+Build de producción sin errores (ningún cambio tocó `src/`, solo SQL).
+
+Archivos: `supabase/migrations/056_drop_triggers_duplicados_pedidos.sql`, `057_guard_seed_functions.sql`, `058_dead_code_cleanup.sql` (nuevos).
+
+---
 
 ## Sesión 33 — Fix CRÍTICOS de estabilización
 

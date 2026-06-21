@@ -1,0 +1,152 @@
+-- =============================================================================
+-- MIGRATION 058 — Dead code cleanup: 5 RPCs sin caller + columna huérfana
+-- =============================================================================
+-- Re-verificado con grep fresco en src/ (no se reusa el hallazgo de la
+-- auditoría de la sesión 32 sin chequear de nuevo) + chequeo de callers
+-- internos en SQL (pg_proc.prosrc) y de triggers (pg_trigger) — cero
+-- referencias en cualquiera de los 3 lugares para las 5 funciones:
+--
+--   next_cotizacion_number, next_oc_number, next_pedido_number — reemplazadas
+--     por obtener_proximo_numero() desde la migration 051 (Series de
+--     Numeración). siguiente_numero_documento() SIGUE viva (la usan
+--     internamente crear_devolucion() y crear_venta()) — NO se toca.
+--   crear_factura_desde_entrega — RPC del flujo largo "Factura desde Entrega"
+--     que nunca se cableó a ningún componente de src/.
+--   get_tasa_cambio — sin caller en src/ ni interno.
+--
+-- Columna huérfana — re-verificada con cuidado porque el nombre es ambiguo:
+--   clientes.condicion_pago (singular, TEXT) — SIN ninguna referencia en src/.
+--   Distinta de (NO se tocan, confirmadas activas):
+--     - clientes.condicion_pago_id (FK uuid -> condiciones_pago, activa en
+--       ClientesSection.jsx)
+--     - clientes.condiciones_pago (plural, TEXT libre, activa en
+--       ClientesSection.jsx línea ~379)
+--     - proveedores.condicion_pago — tabla DISTINTA, en uso activo en
+--       ProveedoresSection.jsx (esta migration NO toca proveedores).
+-- =============================================================================
+
+DROP FUNCTION IF EXISTS public.next_cotizacion_number(uuid);
+DROP FUNCTION IF EXISTS public.next_oc_number(uuid);
+DROP FUNCTION IF EXISTS public.next_pedido_number(uuid);
+DROP FUNCTION IF EXISTS public.get_tasa_cambio(uuid, text, date);
+DROP FUNCTION IF EXISTS public.crear_factura_desde_entrega(
+  uuid, uuid, text, timestamptz, uuid, uuid, text, numeric, text, text, text,
+  numeric, numeric, numeric, jsonb, jsonb, boolean, uuid
+);
+
+ALTER TABLE public.clientes DROP COLUMN IF EXISTS condicion_pago;
+
+-- ─── ROLLBACK (si hace falta revertir) ────────────────────────────────────────
+-- CREATE OR REPLACE FUNCTION public.next_cotizacion_number(p_empresa_id uuid)
+-- RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+-- DECLARE next_num INT;
+-- BEGIN
+--   SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(numero, '[^0-9]', '', 'g') AS INT)), 0) + 1
+--   INTO next_num FROM public.cotizaciones WHERE empresa_id = p_empresa_id;
+--   RETURN 'COT-' || LPAD(next_num::TEXT, 5, '0');
+-- END;
+-- $$;
+--
+-- CREATE OR REPLACE FUNCTION public.next_oc_number(p_empresa_id uuid)
+-- RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+-- DECLARE next_num INT;
+-- BEGIN
+--   SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(numero, '[^0-9]', '', 'g') AS INT)), 0) + 1
+--   INTO next_num FROM public.ordenes_compra WHERE empresa_id = p_empresa_id;
+--   RETURN 'OC-' || LPAD(next_num::TEXT, 5, '0');
+-- END;
+-- $$;
+--
+-- CREATE OR REPLACE FUNCTION public.next_pedido_number(p_empresa_id uuid)
+-- RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+-- DECLARE next_num INT;
+-- BEGIN
+--   SELECT COALESCE(MAX(CAST(REGEXP_REPLACE(numero, '[^0-9]', '', 'g') AS INT)), 0) + 1
+--   INTO next_num FROM public.pedidos WHERE empresa_id = p_empresa_id;
+--   RETURN 'PED-' || LPAD(next_num::TEXT, 5, '0');
+-- END;
+-- $$;
+--
+-- CREATE OR REPLACE FUNCTION public.get_tasa_cambio(p_empresa_id uuid, p_moneda text, p_fecha date DEFAULT CURRENT_DATE)
+-- RETURNS numeric LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $$
+--   SELECT tasa FROM public.tipos_cambio
+--   WHERE empresa_id = p_empresa_id AND moneda = p_moneda AND fecha <= p_fecha
+--   ORDER BY fecha DESC LIMIT 1;
+-- $$;
+--
+-- CREATE OR REPLACE FUNCTION public.crear_factura_desde_entrega(p_empresa_id uuid, p_user_id uuid, p_numero_venta text, p_fecha timestamp with time zone, p_entrega_id uuid, p_cliente_id uuid, p_cliente_nombre text, p_total numeric, p_forma_pago text, p_estado_pago text, p_moneda text, p_tipo_cambio_tasa numeric, p_monto_paralelo numeric, p_tc_paralelo numeric, p_items jsonb, p_pagos jsonb, p_es_cc boolean, p_caja_sesion_id uuid)
+-- RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path TO 'public' AS $$
+-- DECLARE
+--   v_comprobante_id  UUID;
+--   v_item            JSONB;
+--   v_pago            JSONB;
+--   v_alicuota        TEXT;
+--   v_factor          NUMERIC;
+--   v_subtotal        NUMERIC;
+--   v_neto_total      NUMERIC := 0;
+--   v_iva_total       NUMERIC := 0;
+--   v_entrega         RECORD;
+-- BEGIN
+--   IF p_empresa_id IS DISTINCT FROM get_my_empresa_id() THEN
+--     RAISE EXCEPTION 'Acceso denegado: empresa_id no coincide con el usuario autenticado';
+--   END IF;
+--   SELECT * INTO v_entrega FROM public.entregas WHERE id = p_entrega_id AND empresa_id = p_empresa_id;
+--   IF v_entrega IS NULL THEN
+--     RAISE EXCEPTION 'Entrega no encontrada o no pertenece a la empresa: %', p_entrega_id;
+--   END IF;
+--   INSERT INTO public.comprobantes (
+--     empresa_id, tenant_id, numero_venta, fecha, cliente_id, cliente_nombre, total, forma_pago,
+--     estado_pago, moneda, tipo_cambio_tasa, monto_paralelo, tc_paralelo, tipo
+--   ) VALUES (
+--     p_empresa_id, p_empresa_id, p_numero_venta, p_fecha, p_cliente_id, p_cliente_nombre, p_total, p_forma_pago,
+--     p_estado_pago, p_moneda, p_tipo_cambio_tasa, p_monto_paralelo, p_tc_paralelo, 'venta'
+--   ) RETURNING id INTO v_comprobante_id;
+--   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
+--     v_subtotal := (v_item->>'subtotal')::NUMERIC;
+--     v_alicuota := COALESCE(v_item->>'alicuota_iva', '21');
+--     v_factor := CASE v_alicuota WHEN '21' THEN 0.21 WHEN '10.5' THEN 0.105 ELSE 0 END;
+--     IF v_factor > 0 THEN
+--       v_neto_total := v_neto_total + (v_subtotal / (1 + v_factor));
+--       v_iva_total  := v_iva_total  + (v_subtotal - (v_subtotal / (1 + v_factor)));
+--     ELSE
+--       v_neto_total := v_neto_total + v_subtotal;
+--     END IF;
+--     INSERT INTO public.comprobante_items (
+--       comprobante_id, empresa_id, producto_id, cantidad, precio_unitario, subtotal, alicuota_iva, cantidad_entregada
+--     ) VALUES (
+--       v_comprobante_id, p_empresa_id, (v_item->>'producto_id')::UUID, (v_item->>'cantidad')::INTEGER,
+--       (v_item->>'precio_unitario')::NUMERIC, v_subtotal, v_alicuota, (v_item->>'cantidad')::NUMERIC
+--     );
+--     IF (v_item->>'pedido_item_id') IS NOT NULL AND (v_item->>'pedido_item_id') != '' THEN
+--       UPDATE public.pedido_items SET cantidad_facturada = cantidad_facturada + (v_item->>'cantidad')::NUMERIC
+--       WHERE id = (v_item->>'pedido_item_id')::UUID AND empresa_id = p_empresa_id;
+--     END IF;
+--   END LOOP;
+--   UPDATE public.comprobantes SET neto_gravado = ROUND(v_neto_total, 2), iva_discriminado = ROUND(v_iva_total, 2)
+--   WHERE id = v_comprobante_id;
+--   UPDATE public.entregas SET comprobante_id = v_comprobante_id WHERE id = p_entrega_id;
+--   FOR v_pago IN SELECT * FROM jsonb_array_elements(p_pagos) LOOP
+--     IF (v_pago->>'metodo') IS DISTINCT FROM 'Cuenta Corriente' THEN
+--       INSERT INTO public.movimientos_caja (
+--         empresa_id, user_id, caja_sesion_id, tipo, categoria, concepto, monto, metodo_pago, fecha, is_automatic,
+--         monto_paralelo, tc_paralelo
+--       ) VALUES (
+--         p_empresa_id, p_user_id, p_caja_sesion_id, 'ingreso', 'Venta', 'Venta #' || p_numero_venta,
+--         (v_pago->>'monto')::NUMERIC, v_pago->>'metodo', p_fecha, true,
+--         NULLIF(v_pago->>'monto_paralelo', '')::NUMERIC, NULLIF(v_pago->>'tc_paralelo', '')::NUMERIC
+--       );
+--     END IF;
+--   END LOOP;
+--   IF p_es_cc AND p_cliente_id IS NOT NULL THEN
+--     INSERT INTO public.cuenta_corriente_movimientos (
+--       empresa_id, user_id, cliente_id, tipo, monto, descripcion, fecha, comprobante_id, monto_paralelo, tc_paralelo
+--     ) VALUES (
+--       p_empresa_id, p_user_id, p_cliente_id, 'DEBE', p_total, 'Venta #' || p_numero_venta, p_fecha,
+--       v_comprobante_id, p_monto_paralelo, p_tc_paralelo
+--     );
+--   END IF;
+--   RETURN jsonb_build_object('comprobante_id', v_comprobante_id, 'numero_venta', p_numero_venta);
+-- END;
+-- $$;
+--
+-- ALTER TABLE public.clientes ADD COLUMN IF NOT EXISTS condicion_pago TEXT;

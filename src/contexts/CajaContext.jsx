@@ -3,6 +3,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { getNowAR } from '@/lib/dateUtils';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 
 const CajaContext = createContext(undefined);
 
@@ -117,7 +118,7 @@ export const CajaProvider = ({ children }) => {
           tenant_id: user.tenant_id,
           user_id: user.id,
           abierto_por: user.id,
-          monto_inicial: parseFloat(montoInicial),
+          monto_inicial: parseNumberLocale(montoInicial),
           estado: 'abierta',
           apertura_fecha: nowAR,
         }])

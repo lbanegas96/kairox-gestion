@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 import PanelProductos from './PanelProductos';
 import PanelCarrito from './PanelCarrito';
 import HistorialTurnoModal from './HistorialTurnoModal';
@@ -78,7 +79,7 @@ function ModoCajaLayout({ onLogout }) {
   };
 
   const handleAbrirCaja = async () => {
-    const monto = parseFloat(montoApertura.replace(',', '.')) || 0;
+    const monto = parseNumberLocale(montoApertura) || 0;
     setSavingCaja(true);
     const ok = await openSession(monto);
     setSavingCaja(false);
@@ -89,7 +90,7 @@ function ModoCajaLayout({ onLogout }) {
   };
 
   const handleCerrarCaja = async () => {
-    const monto = parseFloat(montoCierre.replace(',', '.')) || 0;
+    const monto = parseNumberLocale(montoCierre) || 0;
     setSavingCaja(true);
     const ok = await closeSession(monto, '', 0, 0);
     setSavingCaja(false);
@@ -187,9 +188,9 @@ function ModoCajaLayout({ onLogout }) {
                 {isSessionOpen ? 'Monto final real ($)' : 'Monto de apertura ($)'}
               </Label>
               <Input
-                type="number"
+                type="text"
                 inputMode="decimal"
-                placeholder="0.00"
+                placeholder="0,00"
                 value={isSessionOpen ? montoCierre : montoApertura}
                 onChange={e => isSessionOpen
                   ? setMontoCierre(e.target.value)

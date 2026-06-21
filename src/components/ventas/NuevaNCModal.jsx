@@ -10,6 +10,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { getNowAR } from '@/lib/dateUtils';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 import ClienteSelector from '@/components/shared/ClienteSelector';
 
 const MOTIVOS_NC = [
@@ -32,7 +33,7 @@ const newItem = () => ({
 
 const calcNeto = (item) => {
   const c = Number(item.cantidad);
-  const p = Number(item.precio_unit);
+  const p = parseNumberLocale(item.precio_unit) || 0;
   if (!Number.isFinite(c) || !Number.isFinite(p)) return 0;
   return c * p;
 };
@@ -109,9 +110,14 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
   const updateItem = (id, field, value) =>
     setItems(prev => prev.map(i => {
       if (i._id !== id) return i;
-      // Para campos numéricos: si el value es string vacío o no parseable, mantener 0
-      // en vez de string. Esto evita que `Number("")` quede como NaN en cálculos.
-      if (field === 'cantidad' || field === 'precio_unit' || field === 'alicuota_iva') {
+      // Monto: guardar el string crudo tal como lo tipea el usuario (formato es-AR,
+      // ej "1.500,50") — se parsea con parseNumberLocale() recién al usar el valor.
+      if (field === 'precio_unit') {
+        return { ...i, [field]: value };
+      }
+      // Para campos numéricos no monetarios: si el value es string vacío o no parseable,
+      // mantener 0 en vez de string. Esto evita que `Number("")` quede como NaN en cálculos.
+      if (field === 'cantidad' || field === 'alicuota_iva') {
         return { ...i, [field]: value === '' ? '' : Number(value) };
       }
       return { ...i, [field]: value };
@@ -185,7 +191,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
           empresa_id:      user.empresa_id,
           producto_id:     i.producto_id || null,
           cantidad:        Number(i.cantidad),
-          precio_unitario: Number(i.precio_unit),
+          precio_unitario: parseNumberLocale(i.precio_unit) || 0,
           subtotal:        calcNeto(i),
           alicuota_iva:    String(i.alicuota_iva),
         }))
@@ -337,7 +343,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
                       </td>
                       <td className="px-2 py-1.5">
                         <Input
-                          type="number" min="0" step="0.01" value={item.precio_unit}
+                          type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unit}
                           onChange={e => updateItem(item._id, 'precio_unit', e.target.value)}
                           className="h-8 text-xs text-right bg-transparent border-kx-border text-kx-text"
                         />

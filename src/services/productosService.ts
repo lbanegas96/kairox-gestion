@@ -13,7 +13,6 @@ interface AdjustStockOptions {
   cantidad: number;
   tipo: 'entrada' | 'salida' | 'ajuste';
   motivo: string;
-  empresaId: string;
 }
 
 export const productosService = {
@@ -90,29 +89,14 @@ export const productosService = {
     if (error) throw new Error(error.message);
   },
 
-  async adjustStock({ id, cantidad, tipo, motivo, empresaId }: AdjustStockOptions): Promise<void> {
-    const { data: prod, error: pe } = await supabase
-      .from('productos')
-      .select('stock_actual')
-      .eq('id', id)
-      .single();
-    if (pe) throw new Error(pe.message);
-
-    const delta = tipo === 'entrada' ? cantidad : tipo === 'salida' ? -cantidad : cantidad;
-    const newStock = ((prod as Producto).stock_actual ?? 0) + delta;
-
-    const [{ error: e1 }, { error: e2 }] = await Promise.all([
-      supabase.from('productos').update({ stock_actual: newStock }).eq('id', id),
-      supabase.from('movimientos_inventario').insert([{
-        producto_id: id,
-        user_id: empresaId,
-        tipo,
-        cantidad: Math.abs(cantidad),
-        motivo,
-      }]),
-    ]);
-    if (e1) throw new Error(e1.message);
-    if (e2) throw new Error(e2.message);
+  async adjustStock({ id, cantidad, tipo, motivo }: AdjustStockOptions): Promise<void> {
+    const { error } = await supabase.rpc('ajustar_stock_manual', {
+      p_producto_id: id,
+      p_tipo: tipo,
+      p_cantidad: cantidad,
+      p_motivo: motivo,
+    });
+    if (error) throw new Error(error.message);
   },
 };
 

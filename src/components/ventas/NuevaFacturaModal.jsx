@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { useToast } from '@/components/ui/use-toast';
 import { getTodayAR, getNowAR, addDaysAR } from '@/lib/dateUtils';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
 import ClienteSelector from '@/components/shared/ClienteSelector';
 
@@ -35,7 +36,7 @@ const newItem = () => ({
 });
 
 const calcNeto = (item) => {
-  const bruto = Number(item.cantidad) * Number(item.precio_unit);
+  const bruto = Number(item.cantidad) * (parseNumberLocale(item.precio_unit) || 0);
   const neto  = bruto * (1 - Number(item.descuento_pct) / 100);
   return isNaN(neto) ? 0 : neto;
 };
@@ -223,7 +224,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
           empresa_id:      user.empresa_id,
           producto_id:     i.producto_id || null,
           cantidad:        Number(i.cantidad),
-          precio_unitario: Number(i.precio_unit),
+          precio_unitario: parseNumberLocale(i.precio_unit) || 0,
           subtotal:        calcNeto(i),
           alicuota_iva:    String(i.alicuota_iva),
         }))
@@ -435,7 +436,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
                         </td>
                         <td className="px-2 py-1.5">
                           <Input
-                            type="number" min="0" step="0.01" value={item.precio_unit}
+                            type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unit}
                             onChange={e => updateItem(item._id, 'precio_unit', e.target.value)}
                             className="h-8 text-xs text-right bg-transparent border-kx-border text-kx-text w-full"
                           />

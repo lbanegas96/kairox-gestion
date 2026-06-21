@@ -23,6 +23,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
 } from "@/components/ui/select";
 import { supabase } from '@/lib/customSupabaseClient';
+import { productosService } from '@/services/productosService';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { getNowAR, formatDateTimeAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
@@ -484,31 +485,12 @@ const ProductosSection = () => {
        const cantidad = parseInt(movimientoForm.cantidad);
        if (isNaN(cantidad) || cantidad <= 0) throw new Error("Cantidad inválida");
 
-       let newStock = selectedProductForMov.stock_actual;
-       if (movimientoForm.tipo === 'entrada') newStock += cantidad;
-       else if (movimientoForm.tipo === 'salida') newStock -= cantidad;
-       else newStock = cantidad; // ajuste
-
-       // Update Product Stock
-       const { error: prodError } = await supabase.from('productos')
-         .update({ stock_actual: newStock })
-         .eq('id', selectedProductForMov.id)
-         .eq('empresa_id', user.empresa_id);
-       
-       if (prodError) throw prodError;
-
-       // Record Movement
-       const { error: movError } = await supabase.from('movimientos_inventario').insert([{
-         tenant_id: user.tenant_id,
-         empresa_id: user.empresa_id,
-         producto_id: selectedProductForMov.id,
+       await productosService.adjustStock({
+         id: selectedProductForMov.id,
+         cantidad,
          tipo: movimientoForm.tipo,
-         cantidad: cantidad,
          motivo: movimientoForm.motivo,
-         fecha: getNowAR().toISOString()
-       }]);
-
-       if (movError) throw movError;
+       });
 
        toast({ title: "Movimiento registrado", description: "Stock actualizado correctamente." });
        setIsMovimientoOpen(false);

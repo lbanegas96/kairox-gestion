@@ -144,7 +144,8 @@ function CajaSection() {
   // --- Handlers using Context ---
 
   const handleOpenSession = async () => {
-    if (!saldoInicialInput || parseFloat(saldoInicialInput) < 0) {
+    const saldoInicial = parseNumberLocale(saldoInicialInput);
+    if (!saldoInicialInput || isNaN(saldoInicial) || saldoInicial < 0) {
       toast({ title: "Error", description: "Ingrese un saldo inicial válido.", variant: "destructive" });
       return;
     }
@@ -882,11 +883,10 @@ function CajaSection() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label className="dark:text-kx-text">Saldo Inicial ($)</Label>
-              <Input 
-                type="number" 
-                step="0.01" 
-                min="0"
-                placeholder="0.00" 
+              <Input
+                type="text"
+                inputMode="decimal"
+                placeholder="0,00"
                 value={saldoInicialInput}
                 onChange={(e) => setSaldoInicialInput(e.target.value)}
                 className="text-lg font-bold dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
