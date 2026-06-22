@@ -1,5 +1,17 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-22 (sesión 50, Luciano) — Cierre completo de los 2 gaps funcionales de la sección 2 del plan: estado de OC automático (trigger nuevo) + guard de sobre-recepción en `crear_recepcion`. Sección 2 del `PLAN_SEMANA.md` queda 100% resuelta.
+**Última actualización:** 2026-06-22 (sesión 50, Luciano) — 2 de los 3 quick wins de performance de la sección 3 del plan resueltos: 5 policies RLS sin re-evaluación por fila + 2 índices duplicados eliminados. Confirmado con `get_advisors`: 218 → 208 lints.
+
+## Sesión 50 (continuación 2) — Sección 3 del plan: performance (2 de 3 quick wins)
+
+**Migration 067.** Reescritas 5 policies RLS (`profiles_select`, `profiles_insert`, `profiles_admin_delete`, `profiles_self_update`, `movimientos_uala."usuarios autenticados pueden leer"`) envolviendo `auth.uid()`/`auth.role()` en `(select ...)` — exactamente la misma lógica, solo permite que el planner cachee el resultado (`InitPlan`) en vez de re-evaluar la función por fila. Dropeados los 2 índices duplicados (`idx_prov_empresa`, `idx_tc_empresa_moneda_fecha`).
+
+**Verificado con `BEGIN...ROLLBACK`:** un usuario sigue viendo solo su propio profile (RLS intacto) tras el cambio de las 5 policies. **Verificado con `get_advisors`:** 218 → 208 lints de performance — los lints `auth_rls_initplan` (5) y `duplicate_index` (2) desaparecieron del reporte. `npm run build` exit 0.
+
+**Pendiente de la sección 3 (no se tocó, requiere decisión de Luciano sobre datos):** `ventas_backup`/`detalle_ventas_backup` — 2 tablas backup con RLS sin policy y sin PK, 5 y 9 filas respectivamente. Parecen un backup puntual viejo, no una tabla operativa activa, pero no se asumió nada — queda para confirmar antes de `DROP`.
+
+Archivo: `supabase/migrations/067_performance_rls_initplan_y_indices_duplicados.sql` (nuevo). Ningún archivo de código frontend tocado.
+
+---
 
 ## Sesión 50 (continuación) — 2.1 y 2.2: estado de OC automático + guard de sobre-recepción
 
