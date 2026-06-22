@@ -599,12 +599,14 @@ function ComprasSection() {
 
       for (const item of deletedItems) {
         // Reverse Stock: Subtract the OLD quantity (since purchase adds stock, deleting it removes stock)
-        const { error: revError } = await supabase.rpc('increment_stock', {
-          row_id: item.producto_id,
-          quantity: -Number(item.cantidad),
-          p_motivo: `Reversión por eliminación de ítem en edición de compra ${editForm.numero_factura || editForm.id}`
+        const { error: stockError } = await supabase.rpc('decrement_stock', {
+          p_producto_id: item.producto_id,
+          p_cantidad: Number(item.cantidad),
+          p_motivo: 'Reversión por eliminación de ítem en edición de compra'
         });
-        if (revError) throw revError;
+        if (stockError) {
+          console.warn(`[Stock] No se pudo revertir stock de ítem eliminado: ${stockError.message}`);
+        }
 
         // Delete record
         await supabase.from('detalle_compras').delete().eq('id', item.id);
@@ -623,13 +625,18 @@ function ComprasSection() {
           if (aplicarError) throw aplicarError;
 
           // Insert record
-          await supabase.from('detalle_compras').insert({
+          const { error: insertError } = await supabase.from('detalle_compras').insert({
             compra_id: editForm.id,
             producto_id: item.producto_id,
             cantidad: Number(item.cantidad),
             costo_unitario: parseNumberLocale(item.costo_unitario),
-            subtotal: Number(item.cantidad) * parseNumberLocale(item.costo_unitario)
+            subtotal: Number(item.cantidad) * parseNumberLocale(item.costo_unitario),
+            empresa_id: user.empresa_id
           });
+          if (insertError) {
+            console.error('[Edit Compra] Error insertando ítem nuevo:', insertError);
+            throw insertError;
+          }
         } else {
           // Existing Item: Check for changes
           const orig = originalItems.find(o => o.id === item.id);
@@ -640,12 +647,18 @@ function ComprasSection() {
             // If new qty (15) > old qty (10), diff is +5. We add 5 to stock.
             // If new qty (5) < old qty (10), diff is -5. We subtract 5 from stock.
             if (diff !== 0) {
-              const { error: incError } = await supabase.rpc('increment_stock', {
-                row_id: item.producto_id,
-                quantity: diff,
-                p_motivo: `Ajuste de cantidad por edición de compra ${editForm.numero_factura || editForm.id}`
-              });
-              if (incError) throw incError;
+              if (diff > 0) {
+                await supabase.rpc('increment_stock', { row_id: item.producto_id, quantity: diff });
+              } else {
+                const { error: stockError } = await supabase.rpc('decrement_stock', {
+                  p_producto_id: item.producto_id,
+                  p_cantidad: Math.abs(diff),
+                  p_motivo: 'Ajuste de cantidad por edición de compra'
+                });
+                if (stockError) {
+                  console.warn(`[Stock] No se pudo ajustar stock por cambio de cantidad: ${stockError.message}`);
+                }
+              }
             }
 
             // Always update record in case cost changed

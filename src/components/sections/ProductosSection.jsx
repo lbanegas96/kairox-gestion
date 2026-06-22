@@ -499,7 +499,16 @@ const ProductosSection = () => {
       invalidateNotifs();
     } catch (error) {
        console.error("Movimiento error:", error);
-       toast({ title: "Error", description: error.message, variant: "destructive" });
+
+       let description = error.message;
+
+       if (error.message?.toLowerCase().includes('stock insuficiente')) {
+         description = `Stock insuficiente. El stock disponible de "${selectedProductForMov?.nombre}" es ${selectedProductForMov?.stock_actual} unidades.`;
+       } else if (error.message?.toLowerCase().includes('cantidad inválida') || error.message?.toLowerCase().includes('cantidad inv')) {
+         description = 'La cantidad ingresada no es válida. Ingresá un número entero mayor a cero.';
+       }
+
+       toast({ title: "Error", description, variant: "destructive" });
     } finally {
        setIsSubmitting(false);
     }

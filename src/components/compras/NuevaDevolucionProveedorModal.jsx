@@ -106,8 +106,16 @@ function NuevaDevolucionProveedorModal({ isOpen, onClose, onSuccess, compra = nu
       toast({ title: msg });
       onSuccess?.(data);
       onClose();
-    } catch (err) {
-      toast({ title: err.message || 'Error al registrar la devolución', variant: 'destructive' });
+    } catch (error) {
+      console.error('Devolución error:', error);
+
+      let description = error.message;
+
+      if (error.message?.toLowerCase().includes('stock insuficiente')) {
+        description = 'Stock insuficiente para realizar la devolución. Verificá que los productos a devolver tengan stock disponible en el inventario.';
+      }
+
+      toast({ title: 'Error', description, variant: 'destructive' });
     } finally {
       setSaving(false);
     }
