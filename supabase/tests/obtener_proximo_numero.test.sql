@@ -32,14 +32,16 @@ INSERT INTO public.empresas (id, nombre) VALUES
   ('00000000-aaaa-0000-0000-000000000001', '__PGTAP_TEST__ Tenant A'),
   ('00000000-bbbb-0000-0000-000000000002', '__PGTAP_TEST__ Tenant B');
 
-INSERT INTO auth.users (id, instance_id, aud, role, email, created_at, updated_at, confirmed_at)
+INSERT INTO auth.users (id, instance_id, aud, role, email, created_at, updated_at, email_confirmed_at)
 VALUES
   ('00000000-aaaa-0000-0000-00000000000a', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'pgtap-test-a@kairox.test', now(), now(), now()),
   ('00000000-bbbb-0000-0000-00000000000b', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'pgtap-test-b@kairox.test', now(), now(), now());
 
-INSERT INTO public.profiles (id, empresa_id, email) VALUES
-  ('00000000-aaaa-0000-0000-00000000000a', '00000000-aaaa-0000-0000-000000000001', 'pgtap-test-a@kairox.test'),
-  ('00000000-bbbb-0000-0000-00000000000b', '00000000-bbbb-0000-0000-000000000002', 'pgtap-test-b@kairox.test');
+-- El trigger on_auth_user_created ya insertó la fila en profiles (con
+-- empresa_id NULL) al insertar en auth.users arriba — solo hace falta
+-- completarla, no insertar de nuevo (insertar de nuevo viola la PK).
+UPDATE public.profiles SET empresa_id = '00000000-aaaa-0000-0000-000000000001' WHERE id = '00000000-aaaa-0000-0000-00000000000a';
+UPDATE public.profiles SET empresa_id = '00000000-bbbb-0000-0000-000000000002' WHERE id = '00000000-bbbb-0000-0000-00000000000b';
 
 -- ───────────────────────────────────────────────────────────────────────────
 -- Caso 1: secuencia simple, mismo tenant, mismo tipo_documento.

@@ -28,9 +28,11 @@ VALUES
   ('00000000-feeb-0000-0000-00000000000f', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'pgtap-test-p@kairox.test', now(), now(), now()),
   ('00000000-deed-0000-0000-00000000000d', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'pgtap-test-q@kairox.test', now(), now(), now());
 
-INSERT INTO public.profiles (id, empresa_id, email) VALUES
-  ('00000000-feeb-0000-0000-00000000000f', '00000000-feeb-0000-0000-000000000001', 'pgtap-test-p@kairox.test'),
-  ('00000000-deed-0000-0000-00000000000d', '00000000-deed-0000-0000-000000000002', 'pgtap-test-q@kairox.test');
+-- El trigger on_auth_user_created ya insertó la fila en profiles (con
+-- empresa_id NULL) al insertar en auth.users arriba — solo hace falta
+-- completarla, no insertar de nuevo (insertar de nuevo viola la PK).
+UPDATE public.profiles SET empresa_id = '00000000-feeb-0000-0000-000000000001' WHERE id = '00000000-feeb-0000-0000-00000000000f';
+UPDATE public.profiles SET empresa_id = '00000000-deed-0000-0000-000000000002' WHERE id = '00000000-deed-0000-0000-00000000000d';
 
 INSERT INTO public.clientes (id, empresa_id, nombre) VALUES
   ('00000000-feeb-0000-0000-0000000000c1', '00000000-feeb-0000-0000-000000000001', '__PGTAP_TEST__ Cliente P1');

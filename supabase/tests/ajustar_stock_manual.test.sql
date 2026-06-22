@@ -30,9 +30,11 @@ VALUES
   ('00000000-beef-0000-0000-00000000000b', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'pgtap-test-h@kairox.test', now(), now(), now()),
   ('00000000-feed-0000-0000-00000000000f', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'pgtap-test-i@kairox.test', now(), now(), now());
 
-INSERT INTO public.profiles (id, empresa_id, email) VALUES
-  ('00000000-beef-0000-0000-00000000000b', '00000000-beef-0000-0000-000000000001', 'pgtap-test-h@kairox.test'),
-  ('00000000-feed-0000-0000-00000000000f', '00000000-feed-0000-0000-000000000002', 'pgtap-test-i@kairox.test');
+-- El trigger on_auth_user_created ya insertó la fila en profiles (con
+-- empresa_id NULL) al insertar en auth.users arriba — solo hace falta
+-- completarla, no insertar de nuevo (insertar de nuevo viola la PK).
+UPDATE public.profiles SET empresa_id = '00000000-beef-0000-0000-000000000001' WHERE id = '00000000-beef-0000-0000-00000000000b';
+UPDATE public.profiles SET empresa_id = '00000000-feed-0000-0000-000000000002' WHERE id = '00000000-feed-0000-0000-00000000000f';
 
 INSERT INTO public.productos (id, empresa_id, nombre, stock_actual) VALUES
   ('00000000-beef-0000-0000-00000000aa01', '00000000-beef-0000-0000-000000000001', '__PGTAP_TEST__ Producto H1 (stock 10, entrada)', 10),

@@ -120,11 +120,11 @@ npx supabase test db
 ```
 Si funciona así, mejor — es la vía estándar y vas a poder correr todo de una con `pg_prove` en vez de uno por uno.
 
-**No cubierto todavía (Fase 2, sugerida si hay tiempo esta semana):**
-- Efectos colaterales de `crear_venta` que no son `stock_actual`: `movimientos_caja`, `cuenta_corriente_movimientos`, entrega implícita.
-- Edge function `emitir-cae` (emisión de CAE/AFIP) — sin test automatizado.
-- Conciliación bancaria / integración Uala.
-- Caja: apertura/cierre, arqueo.
+**Fase 2 — en progreso (sesión 51):**
+- ✅ **RESUELTO:** efectos colaterales de `crear_venta` (`movimientos_caja`, `cuenta_corriente_movimientos`, entrega implícita/reconciliación con entrega manual). Nuevo archivo `supabase/tests/crear_venta_efectos_colaterales.test.sql`, 10/10 verde. Cubre: pago no-CC genera movimiento de caja, pago "Cuenta Corriente" no lo genera, `es_cc=true` genera el DEBE en cuenta corriente, `es_cc=false` no lo genera aunque haya cliente, venta sin pedido genera su propia entrega implícita ya entregada, venta con `p_pedido_id` de una entrega manual preexistente reconcilia (vincula `comprobante_id`) en vez de duplicar.
+- **Pendiente todavía:** edge function `emitir-cae` (emisión de CAE/AFIP) sin test automatizado; conciliación bancaria / integración Uala sin test; Caja (apertura/cierre, arqueo) sin test.
+
+**Hallazgo de regresión (sesión 51), ya resuelto:** al escribir el test nuevo, el fixture estándar (`INSERT INTO auth.users` seguido de `INSERT INTO public.profiles`) que usan los 9 archivos de Fase 1 rompía con `duplicate key value violates unique constraint "profiles_pkey"`. Causa: el trigger `on_auth_user_created` (función `handle_new_user`, existe desde antes de sesión 36) ya inserta la fila en `profiles` automáticamente al insertar en `auth.users` — el segundo `INSERT` explícito viola la PK. Esto significa que los 9 tests de Fase 1 estaban rotos hoy si se los volvía a correr literal (no es un problema de mi test nuevo, es un problema de fixture compartido). **Se corrigieron los 9 archivos** (reemplazado el `INSERT INTO public.profiles` por un `UPDATE ... SET empresa_id = ... WHERE id = ...`, ya que la fila la crea el trigger con `empresa_id` NULL) y se re-corrió cada uno de punta a punta: los 9 siguen 100% en verde con el fix. De paso se corrigió un segundo bug pre-existente y no relacionado en `obtener_proximo_numero.test.sql` (usaba la columna `confirmed_at`, que hoy es una columna generada en `auth.users` — se cambió a `email_confirmed_at` como los demás archivos).
 
 ---
 
@@ -153,7 +153,7 @@ Si funciona así, mejor — es la vía estándar y vas a poder correr todo de un
 | Día | Foco |
 |---|---|
 | 1 | ~~Sección 1~~ ✅, ~~Sección 5~~ ✅, ~~Sección 0~~ ✅, ~~Sección 2~~ ✅ y ~~Sección 3 (completa)~~ ✅ — todas resueltas salvo 1.2 (toggle Dashboard, 2 min). |
-| 2 | Fase 2 de tests (sección 4) |
+| 2 | Fase 2 de tests (sección 4) — en progreso: `crear_venta` (efectos colaterales) ✅. Falta `emitir-cae`, conciliación Uala, Caja. |
 | 3 | Regression pass completo, `npm run build`, commit/push final, deploy |
 
 Cualquier duda sobre el por qué de una decisión técnica (por qué `ajuste` es absoluto y no delta, por qué `increment_stock` decide el tipo de movimiento por signo y no por nombre de función, etc.) está razonada en detalle en `CONTEXT.md` — está ordenado por sesión, de más reciente a más vieja.
