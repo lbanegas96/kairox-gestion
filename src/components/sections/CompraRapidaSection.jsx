@@ -599,7 +599,11 @@ function ComprasSection() {
 
       for (const item of deletedItems) {
         // Reverse Stock: Subtract the OLD quantity (since purchase adds stock, deleting it removes stock)
-        const { error: revError } = await supabase.rpc('increment_stock', { row_id: item.producto_id, quantity: -Number(item.cantidad) });
+        const { error: revError } = await supabase.rpc('increment_stock', {
+          row_id: item.producto_id,
+          quantity: -Number(item.cantidad),
+          p_motivo: `Reversión por eliminación de ítem en edición de compra ${editForm.numero_factura || editForm.id}`
+        });
         if (revError) throw revError;
 
         // Delete record
@@ -636,7 +640,11 @@ function ComprasSection() {
             // If new qty (15) > old qty (10), diff is +5. We add 5 to stock.
             // If new qty (5) < old qty (10), diff is -5. We subtract 5 from stock.
             if (diff !== 0) {
-              const { error: incError } = await supabase.rpc('increment_stock', { row_id: item.producto_id, quantity: diff });
+              const { error: incError } = await supabase.rpc('increment_stock', {
+                row_id: item.producto_id,
+                quantity: diff,
+                p_motivo: `Ajuste de cantidad por edición de compra ${editForm.numero_factura || editForm.id}`
+              });
               if (incError) throw incError;
             }
 

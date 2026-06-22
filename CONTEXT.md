@@ -1,5 +1,148 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-21 (sesión 40) — Infraestructura de tests de base de datos con pgTAP + primer test real (`obtener_proximo_numero`), 9/9 + concurrencia real verificada manualmente, todo en verde.
+**Última actualización:** 2026-06-21 (sesión 44) — **Test de regresión del bug de sesión 32** (`crear_recepcion`): 16/16 en verde, el fix de migration 053 sigue intacto. 2 hallazgos nuevos no-críticos (sin duplicación de stock).
+
+## Sesión 44 — Test pgTAP de regresión: `crear_recepcion` (el bug de mayor severidad de la auditoría)
+
+Este test existe específicamente para blindar contra una regresión del bug de la sesión 32: 2 caminos UI redundantes para recepcionar una OC causaban doble incremento de `stock_actual` (87% de las recepciones reales pasaban por el camino no auditado). El fix (migration 053) hizo que `crear_recepcion` NO actualice `stock_actual` directamente cuando el ítem está vinculado a un `ordenes_compra_items` (el caso real siempre, vía `GenerarRecepcionModal.jsx`) — delega 100% en el trigger `trg_oc_stock`/`fn_oc_update_stock`.
+
+**Confirmado antes de escribir el test (grep fresco, no se asumió nada):**
+- `GenerarRecepcionModal.jsx` es el **único** caller real de `crear_recepcion`. `OrdenesCompraSection.jsx` solo renderiza ese modal, no llama la RPC directo.
+- `CompraRapidaSection.jsx` llama una función **distinta**, `crear_recepcion_implicita` (coincidencia de nombre por substring en el grep, no es el mismo camino) — releída su definición completa: NO toca `stock_actual` en absoluto, solo crea el registro de `recepciones`/`recepcion_items` para trazabilidad de "Compra Rápida" (el stock de ese flujo ya se ajusta por separado vía `aplicar_compra_producto`).
+- **Conclusión: un solo camino vivo confirmado. No hay hallazgo crítico de caminos duplicados que reportar** — el fix de sesión 32 se mantiene.
+
+**`supabase/tests/crear_recepcion.test.sql` — 16/16 en verde, primera corrida limpia (sin errores propios del test esta vez):**
+```
+ok 1 - Caso 1 (REGRESION sesion 32): recibir 10 de una OC de 10 deja stock_actual=10, NO 20
+ok 2 - Caso 1: ordenes_compra_items.cantidad_recibida=10 tras recibir 10
+ok 3 - Caso 2: recepcion parcial de 6 (de 10 pedidos) deja stock_actual=6
+ok 4 - Caso 2: cantidad_recibida=6 tras la recepcion parcial
+ok 5 - Caso 2 (HALLAZGO): estado de la OC NO se actualiza automaticamente
+ok 6 - Caso 3: completar la recepcion parcial (4 mas) deja stock_actual=10 acumulado, no mas
+ok 7 - Caso 3: cantidad_recibida=10 (6+4) tras completar la recepcion
+ok 8 - Caso 3 (HALLAZGO): estado sigue sin actualizarse con el 100% recibido
+ok 9 - Caso 4 (HALLAZGO): recibir 8 de una OC de 5 NO falla, cantidad_recibida=8
+ok 10 - Caso 4: el stock tambien sube los 8 completos, sin tope
+ok 11 - Caso 5a: exactamente 1 fila en recepciones para la OC del Caso 1
+ok 12 - Caso 5b: exactamente 1 fila en recepcion_items
+ok 13 - Caso 5c: exactamente 1 movimiento de inventario tipo ingreso cantidad 10
+ok 14 - Caso 6: crear_recepcion bloquea recepcion cross-tenant
+ok 15 - Caso 7a: stock_actual sube de 20 a 30, una sola vez
+ok 16 - Caso 7b: costo PPP recalculado correctamente una sola vez
+```
+
+**El Caso 1 es la prueba directa del bug histórico: ninguna señal de duplicación en ningún caso.** Sin esto, el test no valdría nada — y dio el resultado esperado: stock exactamente 10 (no 20), exactamente 1 fila en `recepciones`/`recepcion_items`/`movimientos_inventario` por evento (Caso 5), y el costo PPP recalculado una sola vez incluso en el camino vinculado a OC (Caso 7, cruza con `fn_oc_update_stock`).
+
+**2 hallazgos nuevos, NO relacionados con duplicación de stock (confirmados por lectura de código antes de asumir, no por sorpresa en el test):**
+1. **`ordenes_compra.estado` nunca se actualiza automáticamente** a `'recibida_parcial'` ni `'recibida'` tras una recepción — ni `crear_recepcion` ni ningún trigger lo hacen (confirmado: solo existen `trg_audit_ordenes_compra` y `trg_oc_updated_at` sobre esa tabla, ninguno toca `estado`). La UI (`OrdenesCompraSection.jsx`) tiene toda la lógica de visualización para esos 2 estados (badges, filtros, colores) pero nada los dispara — la OC queda visualmente en `'enviada'` para siempre, sin importar cuánto se reciba. Impacto: el usuario no tiene forma de ver en la lista de OCs cuáles están parcial/completamente recibidas.
+2. **`crear_recepcion` no valida que la cantidad recibida no supere lo pedido** — el único límite es client-side (atributo `max` del `Input` en `GenerarRecepcionModal.jsx`). Llamar la RPC directo (o un bug futuro en el cálculo del frontend) puede dejar `cantidad_recibida` y `stock_actual` por encima de `cantidad_pedida` sin ningún error.
+
+Ninguno de los 2 se arregló en esta sesión — son hallazgos para priorizar, no bugs de duplicación (que es lo único que ameritaba parar la tarea según la consigna).
+
+Archivo: `supabase/tests/crear_recepcion.test.sql` (nuevo). Ningún archivo de código tocado.
+
+---
+
+## Sesión 43 — Test pgTAP: `ajustar_stock_manual` (Fase 1 continuada)
+
+Mismo patrón de las sesiones 40-42: pgTAP, `BEGIN...ROLLBACK`, tenants sintéticos (Tenant H/I) creados y destruidos dentro de la transacción. Cero datos reales tocados (verificado con `count(*)` = 0 después de correr).
+
+**`supabase/tests/ajustar_stock_manual.test.sql` — 11/11 en verde:**
+```
+ok 1 - Caso 1: ajustar_stock_manual entrada(5) sobre stock=10 deja stock_actual=15
+ok 2 - Caso 2: ajustar_stock_manual salida(3) sobre stock=10 deja stock_actual=7
+ok 3 - Caso 3a: ajustar_stock_manual bloquea salida que dejaria stock negativo
+ok 4 - Caso 3b: stock_actual de H3 no cambio tras el intento bloqueado (sigue en 2)
+ok 5 - Caso 4: ajustar_stock_manual ajuste(2) sobre stock=10 deja stock_actual=2 (valor absoluto, no delta)
+ok 6 - Caso 5a: ajustar_stock_manual bloquea cantidad negativa
+ok 7 - Caso 5b: stock_actual de H4 no cambio tras el intento bloqueado (sigue en 2)
+ok 8 - Caso 6: ajustar_stock_manual bloquea cross-tenant
+ok 9 - Caso 7a: ajustar_stock_manual genera un movimiento de inventario tipo entrada cantidad 5
+ok 10 - Caso 7b: el motivo pasado como parametro queda guardado en el movimiento
+ok 11 - Caso 8: ajustar_stock_manual bloquea tipo invalido con mensaje claro
+```
+
+Sin hallazgos nuevos — `ajustar_stock_manual` ya nació completa en la sesión 38 (lock, guard de negativo, guard de tenant, motivo, trazabilidad), a diferencia de `decrement_stock`/`increment_stock` que necesitaron el fix de la sesión 42. Único detalle no obvio confirmado: el guard de `p_cantidad < 0` corre **antes** de tocar el producto (no depende del `tipo`), así que el mensaje para `ajuste` con cantidad negativa es `'Cantidad inválida: %'`, no `'Stock insuficiente...'` — el Caso 5 quedó escrito contra ese mensaje real.
+
+Nota lateral (no es un hallazgo, es un error propio al escribir los fixtures): los primeros IDs de producto usaban el sufijo `p1`...`p5`, pero `'p'` no es un dígito hexadecimal válido para UUID — Postgres rechazó el INSERT (`invalid input syntax for type uuid`). Corregido a `aa01`...`aa05` antes de la corrida que dio el resultado de arriba.
+
+Archivo: `supabase/tests/ajustar_stock_manual.test.sql` (nuevo). Ningún archivo de código tocado.
+
+---
+
+## Sesión 42 — Fix: trazabilidad faltante en `decrement_stock` / `increment_stock`
+
+Cierra el hallazgo de la sesión 41. **Migration 062** agrega un parámetro `p_motivo text DEFAULT NULL` a ambas funciones + un `INSERT INTO movimientos_inventario` dentro de la misma transacción que el `UPDATE` de `stock_actual`:
+- `decrement_stock` → siempre `tipo='salida'` (solo decrementa).
+- `increment_stock` → el tipo se decide por el **signo real** de `quantity`, no fijo en `'entrada'`: `quantity >= 0` → `'entrada'`, `quantity < 0` → `'salida'` (la cantidad se guarda en valor absoluto). Decisión deliberada distinta a la sugerencia original de "siempre `'entrada'`": revertir una compra (cantidad negativa) físicamente RETIRA stock, y el historial debe reflejar lo que pasó de verdad, no el nombre de la función que lo causó.
+- Si no se pasa `p_motivo`, cae a un texto genérico identificable (`'Ajuste de stock (decrement_stock)'` / `'(increment_stock)'`).
+
+**Callers confirmados antes de tocar la firma** (grep fresco, frontend + `pg_proc.prosrc`): `decrement_stock` sin ningún caller (dead code, agregar el parámetro es 100% compatible); `increment_stock` con exactamente 2 callers, ambos en `CompraRapidaSection.jsx` (`handleSaveEdit`) — ambos actualizados para pasar un motivo real (`Reversión por eliminación de ítem en edición de compra <numero_factura>` / `Ajuste de cantidad por edición de compra <numero_factura>`) en vez de depender del fallback genérico.
+
+**Detalle no obvio:** `CREATE OR REPLACE FUNCTION` con un parámetro nuevo no reemplaza la función vieja — crea un *overload* adicional, porque la firma (cantidad de argumentos) cambió. Quedaron 2 versiones de cada función y las llamadas con 2 argumentos se volvieron ambiguas (`function is not unique`). Hubo que `DROP FUNCTION` explícito de las firmas viejas (`decrement_stock(uuid, integer)` / `increment_stock(uuid, numeric)`) antes de que las nuevas quedaran como única versión.
+
+**Verificado con `BEGIN...ROLLBACK`** sobre un tenant sintético: `decrement_stock(3, 'motivo')` → movimiento `salida/3/motivo` correcto; `increment_stock(5, 'motivo')` → `entrada/5/motivo`; `increment_stock(-4, 'motivo')` → `salida/4/motivo` (confirma la lógica por signo); `decrement_stock` sin motivo → cae al fallback genérico. Stock final tras la secuencia de prueba (10−3+5−4−1=7) coincidió exactamente.
+
+**Tests actualizados y corridos de verdad — ambos en verde:**
+```
+supabase/tests/decrement_stock.test.sql — 6/6
+ok 1 - Caso 1: decrement_stock(3) sobre stock=10 deja stock_actual=7
+ok 2 - Caso 2a: decrement_stock bloquea si el resultado seria negativo
+ok 3 - Caso 2b: stock_actual de D2 no cambio tras el intento bloqueado (sigue en 2)
+ok 4 - Caso 3: decrement_stock bloquea cross-tenant
+ok 5 - Caso 4a: decrement_stock genera un movimiento de inventario tipo salida cantidad 3
+ok 6 - Caso 4b: el motivo pasado como parametro queda guardado en el movimiento
+
+supabase/tests/increment_stock.test.sql — 8/8
+ok 1 - Caso 1: increment_stock(5) sobre stock=10 deja stock_actual=15
+ok 2 - Caso 2: increment_stock(-3) sobre stock=10 deja stock_actual=7
+ok 3 - Caso 2b: increment_stock bloquea cantidad negativa excesiva
+ok 4 - Caso 2b: stock_actual de F2 no cambio (sigue en 7)
+ok 5 - Caso 3: increment_stock bloquea cross-tenant
+ok 6 - Caso 4a: increment_stock(+5) genera un movimiento tipo entrada cantidad 5
+ok 7 - Caso 4b: el motivo pasado como parametro queda guardado en el movimiento
+ok 8 - Caso 4c: increment_stock(-3) genera un movimiento tipo salida cantidad 3
+```
+
+Build de producción sin errores. Archivos: `supabase/migrations/062_trazabilidad_decrement_increment_stock.sql` (nuevo), `src/components/sections/CompraRapidaSection.jsx` (2 call-sites de `increment_stock` con motivo real), `supabase/tests/decrement_stock.test.sql` y `supabase/tests/increment_stock.test.sql` (actualizados).
+
+---
+
+## Sesión 41 — Tests pgTAP: `decrement_stock` e `increment_stock` (Fase 1 continuada)
+
+Mismo patrón validado en la sesión 40 (`obtener_proximo_numero.test.sql`): pgTAP, `BEGIN...ROLLBACK`, tenants sintéticos creados y destruidos dentro de la transacción (Tenant D/E para `decrement_stock`, Tenant F/G para `increment_stock`). Ningún dato real tocado — verificado con `count(*)` de `empresas` con nombre `__PGTAP_TEST__%` = 0 después de correr ambos.
+
+**`supabase/tests/decrement_stock.test.sql` — 4/5 en verde:**
+```
+ok 1 - Caso 1: decrement_stock(3) sobre stock=10 deja stock_actual=7
+ok 2 - Caso 2a: decrement_stock bloquea si el resultado seria negativo
+ok 3 - Caso 2b: stock_actual de D2 no cambio tras el intento bloqueado (sigue en 2)
+ok 4 - Caso 3: decrement_stock bloquea cross-tenant
+not ok 5 - Caso 4: decrement_stock genera un movimiento de inventario tipo salida cantidad 3
+        have: 0
+        want: 1
+```
+
+**`supabase/tests/increment_stock.test.sql` — 5/6 en verde:**
+```
+ok 1 - Caso 1: increment_stock(5) sobre stock=10 deja stock_actual=15
+ok 2 - Caso 2: increment_stock(-3) sobre stock=10 deja stock_actual=7 (revertir funciona)
+ok 3 - Caso 2b: increment_stock bloquea cantidad negativa excesiva
+ok 4 - Caso 2b: stock_actual de F2 no cambio (sigue en 7)
+ok 5 - Caso 3: increment_stock bloquea cross-tenant
+not ok 6 - Caso 4: increment_stock genera un movimiento de inventario tipo entrada cantidad 5
+        have: 0
+        want: 1
+```
+
+**Hallazgo real (NO arreglado en esta sesión — reportado para que Luciano priorice):** ni `decrement_stock` ni `increment_stock` insertan en `movimientos_inventario`. Esto es consistente con lo que ya leía el código (releído fresco antes de escribir los tests: ninguna de las 2 funciones tiene un `INSERT INTO movimientos_inventario`), a diferencia de `crear_venta`, `crear_entrega`, `crear_devolucion` y `ajustar_stock_manual`, que sí lo hacen dentro de la misma transacción. Impacto: si algo usa estas 2 RPC (hoy `increment_stock` sí tiene caller real en `CompraRapidaSection.jsx`), el movimiento de stock no queda trazado en el historial de `movimientos_inventario` — solo se ve el `stock_actual` final, sin el registro intermedio. No es un bug de concurrencia ni de seguridad (el guard de negativo y el aislamiento de tenant funcionan correctamente en ambas, confirmado por los otros 4-5 casos en verde), es una laguna de trazabilidad/auditoría.
+
+> ✅ **RESUELTO en sesión 42** (migration 062) — ver sección arriba.
+
+Todo lo demás verificado en verde: guard de stock negativo (con el resultado sin modificar tras el bloqueo, confirmando que el `RAISE` revierte el `UPDATE` parcial), guard de aislamiento multi-tenant (mensaje exacto `'Producto no encontrado o sin permiso: %'` en ambas), y la semántica de `increment_stock` con cantidad negativa (revertir funciona si el resultado no queda negativo, se bloquea si sí).
+
+Archivos: `supabase/tests/decrement_stock.test.sql` (nuevo), `supabase/tests/increment_stock.test.sql` (nuevo). Ningún archivo de código tocado — esta sesión fue 100% tests + el hallazgo quedó documentado, no resuelto.
+
+---
 
 ## Sesión 40 — Infraestructura de tests pgTAP + primer test real: `obtener_proximo_numero`
 
