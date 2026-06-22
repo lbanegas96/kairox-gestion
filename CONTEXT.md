@@ -1,5 +1,21 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-22 (sesión 50, Luciano) — Revisión del commit de Nadia (sesión 49) + cierre de los 3 hallazgos urgentes: dato real restaurado, aclaración del ícono de Devolver, y el patrón de fallo silencioso reintroducido vuelto a `throw`.
+**Última actualización:** 2026-06-22 (sesión 50, Luciano) — Cierre completo de los 2 gaps funcionales de la sección 2 del plan: estado de OC automático (trigger nuevo) + guard de sobre-recepción en `crear_recepcion`. Sección 2 del `PLAN_SEMANA.md` queda 100% resuelta.
+
+## Sesión 50 (continuación) — 2.1 y 2.2: estado de OC automático + guard de sobre-recepción
+
+Decisiones confirmadas por Luciano: trigger automático para 2.1, bloquear para 2.2. **Migration 066**:
+
+**2.1** — `fn_oc_recalcular_estado()` + trigger `trg_oc_recalcular_estado` (`AFTER UPDATE OF cantidad_recibida ON ordenes_compra_items`, separado de `trg_oc_stock` — responsabilidad distinta). Recalcula el estado del `ordenes_compra` padre comparando `SUM(cantidad_recibida)` vs `SUM(cantidad_pedida)` de todos sus items. No toca OCs en `borrador`/`pendiente_aprobacion`/`cancelada`.
+
+**2.2** — `crear_recepcion` ahora hace `SELECT cantidad_pedida, cantidad_recibida ... FOR UPDATE` + `RAISE EXCEPTION` si `cantidad_recibida + cantidad > cantidad_pedida`, antes de cualquier `INSERT` del loop. `CREATE OR REPLACE FUNCTION` preserva los `GRANT`/`REVOKE` existentes — confirmado que `anon` sigue sin poder ejecutarla después del cambio (`has_function_privilege` → `false`).
+
+**Verificado con `BEGIN...ROLLBACK`** (7 asserts ad-hoc + reescritura completa de `crear_recepcion.test.sql`, ahora 17/17 — los Casos 2, 3 y 4 documentaban estos 2 gaps como hallazgos pendientes, ahora confirman el comportamiento nuevo): OC enviada → recibir 6/10 → `recibida_parcial` → recibir 4 más → `recibida`; intentar recibir 8 de una OC de 5 → bloquea con `'La cantidad a recibir (8) superaria lo pedido...'`, sin modificar `cantidad_recibida` ni `stock_actual`. `npm run build` exit 0.
+
+Con esto, la sección 2 del `PLAN_SEMANA.md` (gaps funcionales de sesión 44) queda 100% resuelta — solo quedan las secciones 3 (performance) y 4 (Fase 2 de tests).
+
+Archivos: `supabase/migrations/066_estado_oc_automatico_y_guard_sobrerecepcion.sql` (nuevo), `supabase/tests/crear_recepcion.test.sql` (actualizado), `PLAN_SEMANA.md`. Ningún archivo de código frontend tocado.
+
+---
 
 ## Sesión 50 — Revisión del trabajo de Nadia + cierre de los 3 urgentes de la sección 0 del plan
 

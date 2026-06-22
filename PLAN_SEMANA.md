@@ -79,15 +79,17 @@ Configuración de Supabase Auth (Dashboard → Authentication → Policies), no 
 
 Estos NO son bugs de duplicación (ya confirmado que no hay ninguno) — son funcionalidad incompleta, documentados con test real:
 
-### 2.1 — `ordenes_compra.estado` nunca se actualiza solo
+### 2.1 — ✅ RESUELTO (sesión 50, migration 066): `ordenes_compra.estado` ahora se actualiza solo
 
-Ni `crear_recepcion` ni ningún trigger actualizan el estado de la OC a `recibida_parcial`/`recibida` después de recibir mercadería. La UI (`OrdenesCompraSection.jsx`) tiene toda la lógica visual para esos 2 estados (badges, filtros, colores) pero nada los dispara — una OC queda visualmente en `enviada` para siempre sin importar cuánto se reciba.
+Trigger nuevo `trg_oc_recalcular_estado` (función `fn_oc_recalcular_estado`) en `ordenes_compra_items`, `AFTER UPDATE OF cantidad_recibida`: recalcula el estado del `ordenes_compra` padre comparando `SUM(cantidad_recibida)` vs `SUM(cantidad_pedida)` de todos sus items — `0` recibido → se mantiene `enviada`; `0 < recibido < pedido` → `recibida_parcial`; `recibido >= pedido` → `recibida`. No toca OCs en `borrador`/`pendiente_aprobacion` (todavía no enviadas) ni `cancelada` (no las revive). Separado de `trg_oc_stock` (responsabilidad distinta: estado vs stock/costo).
 
-**Sugerencia de fix:** un trigger `AFTER UPDATE OF cantidad_recibida ON ordenes_compra_items` (puede ser el mismo `trg_oc_stock` extendido, o uno nuevo) que recalcule el estado del `ordenes_compra` padre comparando `SUM(cantidad_recibida)` vs `SUM(cantidad_pedida)` de todos sus items: si `0 < recibido < pedido` → `recibida_parcial`; si `recibido >= pedido` → `recibida`.
+Verificado con `BEGIN...ROLLBACK`: OC enviada → recibir 6 de 10 → `recibida_parcial` → recibir los 4 restantes → `recibida`. Test pgTAP `crear_recepcion.test.sql` actualizado (los Casos 2 y 3, que antes documentaban el gap, ahora confirman la transición automática).
 
-### 2.2 — `crear_recepcion` no valida sobre-recepción
+### 2.2 — ✅ RESUELTO (sesión 50, migration 066): `crear_recepcion` ahora bloquea la sobre-recepción
 
-No hay guard server-side contra recibir más de lo pedido — el único límite es el atributo `max` de un `<Input>` en `GenerarRecepcionModal.jsx` (puenteable llamando la RPC directo). Decidir: ¿bloquear con `RAISE` si `cantidad_recibida + cantidad > cantidad_pedida`, o permitirlo a propósito (algunos negocios reciben de más y ajustan después)? Si se decide bloquear, replicar el patrón de guard ya usado en el resto de las RPC de stock (ver sección 4).
+Decisión confirmada: bloquear (no permitir recibir más de lo pedido). Agregado `SELECT cantidad_pedida, cantidad_recibida ... FOR UPDATE` + `RAISE EXCEPTION` si `cantidad_recibida + cantidad > cantidad_pedida`, antes de cualquier `INSERT` del loop (falla rápido, sin nada a medio insertar). Mismo patrón de lock que el resto de las RPC de stock — evita que 2 recepciones concurrentes del mismo ítem superen el límite pasando ambas el chequeo antes de que cualquiera confirme.
+
+Verificado: recibir 8 de una OC de 5 ahora lanza `'La cantidad a recibir (8) superaria lo pedido...'`, sin modificar `cantidad_recibida` ni `stock_actual`. Test pgTAP actualizado (Caso 4, que antes documentaba el gap, ahora confirma el bloqueo).
 
 ### 2.3 — `decrement_stock` ya NO es dead code (actualizado, sesión 49)
 
@@ -140,7 +142,7 @@ Si funciona así, mejor — es la vía estándar y vas a poder correr todo de un
 
 ## 6. Convenciones a seguir (para no romper lo que ya está hecho)
 
-- **Migrations:** numeración secuencial, la última aplicada es `065`. Antes de crear una nueva: `ls supabase/migrations | tail -5` para confirmar el próximo número libre — si están trabajando los 2 en paralelo, avisarse para no colisionar.
+- **Migrations:** numeración secuencial, la última aplicada es `066`. Antes de crear una nueva: `ls supabase/migrations | tail -5` para confirmar el próximo número libre — si están trabajando los 2 en paralelo, avisarse para no colisionar.
 - **Tests:** `supabase/tests/README.md` tiene la regla de oro — nunca correr un test contra una empresa real (ni `db21dfad-...` ni `cbc4db74-...` ni ninguna otra con datos de un cliente). Usar tenants sintéticos dentro de `BEGIN...ROLLBACK`. Si un caso necesita persistencia real entre conexiones (como el test de concurrencia de `obtener_proximo_numero`), pedir confirmación antes de crear datos persistentes y borrarlos apenas termine la verificación.
 - **Patrón de cualquier RPC nueva que toque `stock_actual`:** `SELECT...FOR UPDATE` antes de decidir + guard de stock negativo + guard de tenant (`empresa_id = get_my_empresa_id()`) + `INSERT` en `movimientos_inventario` con motivo real, todo en la misma transacción. Está documentado con el detalle de las 8 RPC existentes en `CONTEXT.md`, buscar "Mapa de escritores de stock_actual" (sesión 36).
 
@@ -150,8 +152,8 @@ Si funciona así, mejor — es la vía estándar y vas a poder correr todo de un
 
 | Día | Foco |
 |---|---|
-| 1 | ~~Sección 1 (seguridad)~~ ✅ y ~~Sección 5 (manuales)~~ ✅ — ya resueltas. Hoy: sección 0 (urgente, dato real + fix fail-fast) + decidir 2.1/2.2 |
-| 2 | Implementar lo que se decidió en 2.1/2.2 + sección 3 (performance, los 3 quick wins) |
+| 1 | ~~Sección 1~~ ✅, ~~Sección 5~~ ✅, ~~Sección 0~~ ✅ y ~~Sección 2 (2.1+2.2)~~ ✅ — todas resueltas. |
+| 2 | Sección 3 (performance, los 3 quick wins) |
 | 3 | Fase 2 de tests (sección 4) |
 | 4 | Regression pass completo, `npm run build`, commit/push final, deploy |
 

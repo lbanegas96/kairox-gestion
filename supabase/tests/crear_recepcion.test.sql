@@ -27,7 +27,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(16);
+SELECT plan(17);
 
 -- ───────────────────────────────────────────────────────────────────────────
 -- Fixtures: Tenant J (todos los casos salvo el guard de tenant) + Tenant K
@@ -103,8 +103,8 @@ SELECT is(
 
 -- ───────────────────────────────────────────────────────────────────────────
 -- Caso 2: recepción parcial. OC con ítem de cantidad 10, recibir 6 → stock
--- sube 6, cantidad_recibida=6. Se confirma el estado REAL de la OC (no se
--- asume 'recibida_parcial' sin confirmar primero).
+-- sube 6, cantidad_recibida=6, estado pasa a 'recibida_parcial' (sesión 50,
+-- migration 066 — trigger automático, antes era un gap documentado).
 -- ───────────────────────────────────────────────────────────────────────────
 
 SELECT public.crear_recepcion(
@@ -128,14 +128,14 @@ SELECT is(
 
 SELECT is(
   (SELECT estado FROM public.ordenes_compra WHERE id = '00000000-dead-0000-0000-0000000000c2'),
-  'enviada',
-  'Caso 2 (HALLAZGO, no bug del test): el estado de la OC NO se actualiza automaticamente a recibida_parcial — sigue en enviada'
+  'recibida_parcial',
+  'Caso 2 (sesion 50): el estado de la OC pasa solo a recibida_parcial'
 );
 
 -- ───────────────────────────────────────────────────────────────────────────
 -- Caso 3: segunda recepción sobre la misma OC, completando lo parcial (4
 -- restantes) → stock sube 4 MAS (total acumulado 10, no mas), cantidad_recibida
--- =10. Se confirma de nuevo el estado real (no se asume 'recibida').
+-- =10, estado pasa a 'recibida' (sesión 50).
 -- ───────────────────────────────────────────────────────────────────────────
 
 SELECT public.crear_recepcion(
@@ -159,35 +159,37 @@ SELECT is(
 
 SELECT is(
   (SELECT estado FROM public.ordenes_compra WHERE id = '00000000-dead-0000-0000-0000000000c2'),
-  'enviada',
-  'Caso 3 (HALLAZGO, no bug del test): el estado de la OC sigue sin actualizarse a recibida ni con el 100% recibido'
+  'recibida',
+  'Caso 3 (sesion 50): con el 100% recibido, el estado pasa solo a recibida'
 );
 
 -- ───────────────────────────────────────────────────────────────────────────
--- Caso 4: intentar recibir MAS de lo pendiente. Comportamiento REAL confirmado
--- por lectura de codigo antes de escribir este test: crear_recepcion NO valida
--- cantidad contra cantidad_pedida — el limite es 100% client-side (atributo
--- `max` del Input en GenerarRecepcionModal.jsx). Se documenta el
--- comportamiento real (acepta y sobre-recibe), NO se asume que deberia fallar.
+-- Caso 4 (sesion 50, migration 066): intentar recibir MAS de lo pendiente
+-- ahora debe bloquear. Antes de la migration 066 esto se permitia (hallazgo
+-- documentado en sesion 44) — decision confirmada: bloquear, no permitir.
 -- ───────────────────────────────────────────────────────────────────────────
 
-SELECT public.crear_recepcion(
-  '00000000-dead-0000-0000-000000000001'::uuid,
-  '00000000-dead-0000-0000-00000000000d'::uuid,
-  '00000000-dead-0000-0000-0000000000c4'::uuid,
-  '[{"orden_compra_item_id":"00000000-dead-0000-0000-0000000000d4","producto_id":"00000000-dead-0000-0000-0000000000a4","cantidad":8}]'::jsonb
+SELECT throws_like(
+  $$ SELECT public.crear_recepcion(
+       '00000000-dead-0000-0000-000000000001'::uuid,
+       '00000000-dead-0000-0000-00000000000d'::uuid,
+       '00000000-dead-0000-0000-0000000000c4'::uuid,
+       '[{"orden_compra_item_id":"00000000-dead-0000-0000-0000000000d4","producto_id":"00000000-dead-0000-0000-0000000000a4","cantidad":8}]'::jsonb
+     ) $$,
+  'La cantidad a recibir%superaria lo pedido%',
+  'Caso 4a (sesion 50): recibir 8 de una OC de 5 pedidos ahora bloquea'
 );
 
 SELECT is(
   (SELECT cantidad_recibida::int FROM public.ordenes_compra_items WHERE id = '00000000-dead-0000-0000-0000000000d4'),
-  8,
-  'Caso 4 (HALLAZGO, no bug del test): recibir 8 de una OC de 5 pedidos NO falla, cantidad_recibida queda en 8 (excede lo pedido)'
+  0,
+  'Caso 4b: cantidad_recibida sigue en 0 tras el intento bloqueado'
 );
 
 SELECT is(
   (SELECT stock_actual FROM public.productos WHERE id = '00000000-dead-0000-0000-0000000000a4'),
-  8,
-  'Caso 4: el stock tambien sube los 8 completos, sin tope contra lo pedido'
+  0,
+  'Caso 4c: el stock tambien sigue en 0 tras el intento bloqueado'
 );
 
 -- ───────────────────────────────────────────────────────────────────────────
