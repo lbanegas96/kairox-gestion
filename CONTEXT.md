@@ -1,5 +1,73 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-21 (sesión 44) — **Test de regresión del bug de sesión 32** (`crear_recepcion`): 16/16 en verde, el fix de migration 053 sigue intacto. 2 hallazgos nuevos no-críticos (sin duplicación de stock).
+**Última actualización:** 2026-06-21 (sesión 46) — **Fase 1 de tests pgTAP completa**: los 3 escritores de `stock_actual` que faltaban (`crear_venta`, `crear_entrega`, `crear_devolucion`) quedan cubiertos, 18/18 en verde. Las 8 RPC SECURITY DEFINER del Mapa de escritores de sesión 36 tienen ahora test pgTAP propio.
+
+## Sesión 46 — Frente 6: guards multi-tenant en `crear_venta` / `crear_entrega` / `crear_devolucion` — cierre de Fase 1
+
+Completa la Fase 1 de tests automatizados. Mismo patrón de las sesiones 40-45 en los 3 archivos: pgTAP, `BEGIN...ROLLBACK`, tenants sintéticos, 0 datos reales tocados (verificado con `count(*)` = 0 en los 3 casos).
+
+**`supabase/tests/crear_venta.test.sql` — 5/5 en verde:**
+```
+ok 1 - Caso 1: crear_venta(3) sobre stock=10 deja stock_actual=7
+ok 2 - Caso 2a: crear_venta bloquea si no hay stock suficiente
+ok 3 - Caso 2b: stock_actual de N2 no cambio tras el intento bloqueado
+ok 4 - Caso 3: crear_venta bloquea si p_empresa_id no coincide con el usuario autenticado
+ok 5 - Caso 4: crear_venta genera exactamente 1 movimiento de inventario tipo salida cantidad 3
+```
+Alcance acotado a propósito a lo que documentó el Mapa de sesión 36 (lock + guard de stock + guard de tenant + trazabilidad) — no se testearon los efectos colaterales de caja/cuenta corriente/entrega implícita (se pasa `p_pagos` vacío y `p_es_cc=false` para no necesitar esos fixtures, fuera de la auditoría de `stock_actual`).
+
+**`supabase/tests/crear_entrega.test.sql` — 5/5 en verde:**
+```
+ok 1 - Caso 1: crear_entrega(3) sobre stock=10 deja stock_actual=7
+ok 2 - Caso 2a: crear_entrega bloquea si no hay stock suficiente
+ok 3 - Caso 2b: stock_actual de P2 no cambio tras el intento bloqueado
+ok 4 - Caso 3: crear_entrega bloquea si p_empresa_id no coincide con el usuario autenticado
+ok 5 - Caso 4: crear_entrega genera exactamente 1 movimiento de inventario tipo salida cantidad 3
+```
+Mismo patrón que `crear_venta` (SELECT...FOR UPDATE + guard + UPDATE relativo). Único caller real confirmado por grep: `GenerarEntregaModal.jsx`.
+
+**`supabase/tests/crear_devolucion.test.sql` — 8/8 en verde:**
+```
+ok 1 - Caso 1: devolucion de cliente con reingreso deja stock_actual=13 (10+3)
+ok 2 - Caso 2: devolucion a proveedor normal deja stock_actual=6 (10-4)
+ok 3 - Caso 3a (REGRESION sesion 39): crear_devolucion bloquea devolucion a proveedor negativa
+ok 4 - Caso 3b: stock_actual de R3 no cambio tras el intento bloqueado
+ok 5 - Caso 4: crear_devolucion bloquea cross-tenant
+ok 6 - Caso 5: con reingresa_stock=false, stock_actual NO cambia
+ok 7 - Caso 6a: devolucion de cliente genera exactamente 1 movimiento tipo ingreso cantidad 3
+ok 8 - Caso 6b: devolucion a proveedor genera exactamente 1 movimiento tipo salida cantidad 4
+```
+El Caso 3 es la versión automatizada de lo que se arregló a mano en la sesión 39 (migration 060): la rama "devolución a proveedor" ya no puede dejar `stock_actual` negativo — confirmado que el fix sigue intacto. Caso 5 confirma que `reingresa_stock=false` omite la rama de stock por completo (sin tocar nada). Se usó `p_compensacion='pendiente'` (default) en todos los casos para no necesitar fixtures de nota de crédito/caja — fuera de alcance.
+
+**Cierre de Fase 1:** con estos 3 archivos, las 8 funciones SQL del Mapa de escritores de `stock_actual` (sesión 36) tienen test pgTAP propio: `obtener_proximo_numero`, `decrement_stock`, `increment_stock`, `ajustar_stock_manual`, `crear_recepcion` (test de regresión del bug de sesión 32), `aplicar_compra_producto`, `crear_venta`, `crear_entrega`, `crear_devolucion` — 9 archivos en total (incluyendo el de numeración, que motivó toda la Fase 1). Todos corridos de verdad contra el proyecto remoto, todos en verde salvo los hallazgos ya documentados y resueltos en sesiones anteriores (trazabilidad de `decrement_stock`/`increment_stock`, sesión 42) o documentados como pendientes de decisión (estado de OC no se actualiza, sin guard de sobre-recepción — sesión 44).
+
+Archivos: `supabase/tests/crear_venta.test.sql`, `supabase/tests/crear_entrega.test.sql`, `supabase/tests/crear_devolucion.test.sql` (los 3 nuevos). Ningún archivo de código tocado.
+
+---
+
+## Sesión 45 — Test pgTAP: `aplicar_compra_producto` (frente 5 de Fase 1)
+
+Mismo patrón de las sesiones 40-44: pgTAP, `BEGIN...ROLLBACK`, tenants sintéticos (Tenant L/M) creados y destruidos dentro de la transacción.
+
+**`supabase/tests/aplicar_compra_producto.test.sql` — 9/9 en verde:**
+```
+ok 1 - Caso 1a: aplicar_compra_producto(5) sobre stock=10 deja stock_actual=15
+ok 2 - Caso 1b: con metodo ultimo_costo, costo_compra pasa a 80
+ok 3 - Caso 2a: aplicar_compra_producto(10) sobre stock=20 deja stock_actual=30
+ok 4 - Caso 2b: costo PPP = (20*100+10*200)/30 = 133.33
+ok 5 - Caso 3: aplicar_compra_producto bloquea cross-tenant
+ok 6 - Caso 4a: segunda compra encadenada deja stock_actual=35 (30+5)
+ok 7 - Caso 4b: el segundo costo PPP parte del costo YA actualizado por la primera llamada
+ok 8 - Caso 5a: el RETURN de aplicar_compra_producto es 999 (ultimo_costo)
+ok 9 - Caso 5b: el costo_compra guardado coincide con el valor devuelto por RETURN
+```
+
+Cubre: cálculo de costo con `ultimo_costo` (passthrough, sin promediar) y `promedio_ponderado` (PPP correcto), guard de tenant, y el Caso 4 versiona específicamente lo que se verificó a mano en la sesión 39 — el `FOR UPDATE` agregado en migration 060 no rompe la secuencia normal de llamadas encadenadas (el segundo cálculo de PPP parte del costo ya actualizado por la primera, no de un valor obsoleto). Caso 5 confirma que el valor `RETURN` de la función coincide exactamente con lo que queda persistido en `costo_compra`.
+
+Sin hallazgos nuevos. Error propio corregido antes del resultado final: el primer intento comparó `costo_compra` (columna `numeric`) contra un literal entero sin cast (`is(costo_compra, 80, ...)`) — pgTAP's `is()` exige tipos coincidentes, Postgres no la resuelve sola con polimorfismo; corregido a `80::numeric`.
+
+Archivo: `supabase/tests/aplicar_compra_producto.test.sql` (nuevo). Ningún archivo de código tocado.
+
+---
 
 ## Sesión 44 — Test pgTAP de regresión: `crear_recepcion` (el bug de mayor severidad de la auditoría)
 
