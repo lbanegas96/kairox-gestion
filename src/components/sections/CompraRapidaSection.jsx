@@ -602,11 +602,9 @@ function ComprasSection() {
         const { error: stockError } = await supabase.rpc('decrement_stock', {
           p_producto_id: item.producto_id,
           p_cantidad: Number(item.cantidad),
-          p_motivo: 'Reversión por eliminación de ítem en edición de compra'
+          p_motivo: `Reversión por eliminación de ítem en edición de compra ${editForm.numero_factura || editForm.id}`
         });
-        if (stockError) {
-          console.warn(`[Stock] No se pudo revertir stock de ítem eliminado: ${stockError.message}`);
-        }
+        if (stockError) throw stockError;
 
         // Delete record
         await supabase.from('detalle_compras').delete().eq('id', item.id);
@@ -648,16 +646,19 @@ function ComprasSection() {
             // If new qty (5) < old qty (10), diff is -5. We subtract 5 from stock.
             if (diff !== 0) {
               if (diff > 0) {
-                await supabase.rpc('increment_stock', { row_id: item.producto_id, quantity: diff });
+                const { error: stockError } = await supabase.rpc('increment_stock', {
+                  row_id: item.producto_id,
+                  quantity: diff,
+                  p_motivo: `Ajuste de cantidad por edición de compra ${editForm.numero_factura || editForm.id}`
+                });
+                if (stockError) throw stockError;
               } else {
                 const { error: stockError } = await supabase.rpc('decrement_stock', {
                   p_producto_id: item.producto_id,
                   p_cantidad: Math.abs(diff),
-                  p_motivo: 'Ajuste de cantidad por edición de compra'
+                  p_motivo: `Ajuste de cantidad por edición de compra ${editForm.numero_factura || editForm.id}`
                 });
-                if (stockError) {
-                  console.warn(`[Stock] No se pudo ajustar stock por cambio de cantidad: ${stockError.message}`);
-                }
+                if (stockError) throw stockError;
               }
             }
 

@@ -23,6 +23,26 @@ Las últimas ~15 sesiones fueron una auditoría exhaustiva de **todo lo que escr
 
 ---
 
+## 0. 🔥 URGENTE — de la revisión del commit de Nadia (sesión 49), antes que nada
+
+Nadia hizo testing manual en el navegador (sección 5 de este plan) y corrigió 5 bugs reales (`e9120e5`, `19d9932`) — overall buen trabajo, la sección 5 queda prácticamente cerrada. Revisando su diff aparecieron 3 cosas que necesitan acción inmediata:
+
+### 0.1 — ✅ RESUELTO: dato real de cliente restaurado
+
+`productos.stock_actual = 0` para **"Maquina de afeitar para hombres"** (`8b5f3bd4-812d-4ecd-ac4b-382818f9ba2d`, empresa `cbc4db74-...`). Reconstruí la causa exacta desde `movimientos_inventario`: a las 19:55:01 del 22/06 hay un movimiento `tipo='ajuste', cantidad=1, motivo=''` — un "Ajuste por Inventario Físico" de prueba en el modal de Productos, que con la semántica de `ajustar_stock_manual` **pisa el stock a un valor absoluto** (no resta/suma) — sea cual fuera el stock real en ese momento, quedó en 1. 17 segundos después, otro movimiento `salida, cantidad=1, motivo='Devolucion a proveedor DEV-2026-0010'` lo dejó en 0.
+
+No se pudo reconstruir matemáticamente el valor correcto desde `movimientos_inventario` (las compras de este producto se aplicaron vía `aplicar_compra_producto`, que por diseño no inserta movimiento — sesión 36). Luciano confirmó el stock físico real: **10 unidades**. Aplicado con `ajustar_stock_manual('8b5f3bd4-...', 'ajuste', 10, 'Corrección post-testing manual sesión 49 (stock real confirmado por Luciano)')` — la misma RPC, usada como corresponde. Verificado: `stock_actual = 10`.
+
+### 0.2 — "Ícono de Devolver no aparece" — no es un bug, está en otro módulo
+
+Confirmé en el código: el botón "Devolver a proveedor" vive en `FacturasCompraSection.jsx` (línea ~305), dentro del menú de acciones (⋮) de cada factura de compra — **no** en `OrdenesCompraSection.jsx`, que es donde Nadia lo buscaba (tiene sentido que no lo haya encontrado ahí). Además solo se muestra si `compra.estado_pago !== 'anulada'`. No hace falta ningún fix de código — solo avisarle a Nadia dónde está. Sin acción pendiente más que esa aclaración.
+
+### 0.3 — ✅ RESUELTO: patrón de "fallo silencioso" reintroducido en `CompraRapidaSection.jsx`
+
+En el fix del bug #3 (parámetros de `decrement_stock`), el branch de "ítem eliminado al editar una compra" había cambiado de `throw` a `console.warn` si fallaba la reversión de stock — el `DELETE` de `detalle_compras` seguía de largo igual. Restaurado a `throw` (mismo patrón que sesión 33) en los 2 puntos (ítem eliminado, ajuste de cantidad), y restaurado el `p_motivo` descriptivo con el número de factura en las 2 llamadas a `increment_stock`/`decrement_stock` del branch "ítem existente modificado" (se había perdido en el caso `increment_stock`, que además ni capturaba el error). Build verificado, exit 0.
+
+---
+
 ## 1. 🔴 CRÍTICO — seguridad, antes de cualquier otra cosa
 
 > ✅ **Secciones 1.1, 1.3 y 1.4 RESUELTAS el mismo día** (sesión 47, después de armar este plan — se decidió no esperar a la semana). Falta solo **1.2** (config de Supabase Auth, requiere acceso al Dashboard). Detalle de lo aplicado abajo de cada sub-hallazgo.
@@ -69,9 +89,9 @@ Ni `crear_recepcion` ni ningún trigger actualizan el estado de la OC a `recibid
 
 No hay guard server-side contra recibir más de lo pedido — el único límite es el atributo `max` de un `<Input>` en `GenerarRecepcionModal.jsx` (puenteable llamando la RPC directo). Decidir: ¿bloquear con `RAISE` si `cantidad_recibida + cantidad > cantidad_pedida`, o permitirlo a propósito (algunos negocios reciben de más y ajustan después)? Si se decide bloquear, replicar el patrón de guard ya usado en el resto de las RPC de stock (ver sección 4).
 
-### 2.3 — `decrement_stock` es dead code
+### 2.3 — `decrement_stock` ya NO es dead code (actualizado, sesión 49)
 
-Sin caller en `src/`. Decidir: ¿eliminarla (con migration de DROP + rollback comentado, como se hizo con las 5 RPC muertas de la sesión 30) o dejarla documentada como utilidad de reserva? Si se mantiene, ya hereda el patrón seguro (confirmado por test).
+El commit de Nadia le agregó 2 callers reales en `CompraRapidaSection.jsx` (edición de compras: revertir ítem eliminado, reducir cantidad de un ítem existente) — correctamente, con los parámetros nuevos (`p_producto_id`, `p_cantidad`, `p_motivo`). Ya no hace falta decidir si eliminarla. Sigue heredando el patrón seguro (lock + guard de negativo, confirmado por `decrement_stock.test.sql`) — pero ver **0.3** arriba: el caller nuevo no propaga el error si la RPC falla.
 
 ---
 
@@ -106,21 +126,21 @@ Si funciona así, mejor — es la vía estándar y vas a poder correr todo de un
 
 ---
 
-## 5. 🖱️ Pruebas manuales en navegador — NO se hicieron esta sesión (todo fue backend/SQL)
+## 5. ✅ Pruebas manuales en navegador — hechas por Nadia (sesión 49)
 
-Toda la auditoría de las últimas sesiones se hizo a nivel SQL/RPC vía MCP, sin abrir la app en el navegador ni una vez. Antes de decir "100% funcional" hace falta probar esto a mano:
+> Nadia cubrió los 5 puntos de esta sección y corrigió lo que encontró (ver sección 0 arriba para lo que su revisión dejó pendiente).
 
-1. **Modal "Movimiento de Stock" en Productos** — confirmar que entrada/salida/ajuste funcionan visualmente y que el mensaje de error se ve claro si el guard bloquea (stock insuficiente, cantidad inválida).
-2. **Editar una compra en `CompraRapidaSection`** (agregar ítem, borrar ítem, cambiar cantidad) — confirmar que el motivo nuevo (`Reversión por eliminación de ítem...` / `Ajuste de cantidad por edición...`) no rompe nada visualmente y que el stock se ve correcto después.
-3. **Recepción de OC** completa y parcial — recibir una OC en 2 pasos, confirmar que el stock sube correctamente las 2 veces (no debería duplicarse — ya confirmado por test, pero confirmar también la experiencia visual). Tener en cuenta el gap de la sección 2.1: el estado de la OC NO va a cambiar solo, no es un bug nuevo que encuentres.
-4. **Devolución a proveedor que excede el stock disponible** — confirmar que el error se muestra de forma clara al usuario, no solo como un toast genérico de Supabase.
-5. **`npm run build`** sin errores (ya se corrió varias veces en sesiones anteriores tras cada cambio, pero corré de nuevo tras cualquier cambio que hagas esta semana).
+1. ✅ **Modal "Movimiento de Stock" en Productos** — probado, encontró el mensaje de error con UUID crudo y lo arregló (bug #1).
+2. ✅ **Editar una compra en `CompraRapidaSection`** — probado, encontró y arregló 3 bugs reales (#2, #3, #4: `empresa_id` faltante, parámetros incorrectos de `decrement_stock`, `increment_stock` con negativo).
+3. ✅ **Recepción de OC** completa y parcial — probado, confirmado que el stock no se duplica (consistente con el test pgTAP de sesión 44).
+4. ✅ **Devolución a proveedor que excede el stock** — probado, encontró y arregló el mensaje de error con UUID crudo (bug #5).
+5. ✅ **`npm run build`** — verificado, exit 0.
 
 ---
 
 ## 6. Convenciones a seguir (para no romper lo que ya está hecho)
 
-- **Migrations:** numeración secuencial, la última aplicada es `062`. Antes de crear una nueva: `ls supabase/migrations | tail -5` para confirmar el próximo número libre — si están trabajando los 2 en paralelo, avisarse para no colisionar.
+- **Migrations:** numeración secuencial, la última aplicada es `065`. Antes de crear una nueva: `ls supabase/migrations | tail -5` para confirmar el próximo número libre — si están trabajando los 2 en paralelo, avisarse para no colisionar.
 - **Tests:** `supabase/tests/README.md` tiene la regla de oro — nunca correr un test contra una empresa real (ni `db21dfad-...` ni `cbc4db74-...` ni ninguna otra con datos de un cliente). Usar tenants sintéticos dentro de `BEGIN...ROLLBACK`. Si un caso necesita persistencia real entre conexiones (como el test de concurrencia de `obtener_proximo_numero`), pedir confirmación antes de crear datos persistentes y borrarlos apenas termine la verificación.
 - **Patrón de cualquier RPC nueva que toque `stock_actual`:** `SELECT...FOR UPDATE` antes de decidir + guard de stock negativo + guard de tenant (`empresa_id = get_my_empresa_id()`) + `INSERT` en `movimientos_inventario` con motivo real, todo en la misma transacción. Está documentado con el detalle de las 8 RPC existentes en `CONTEXT.md`, buscar "Mapa de escritores de stock_actual" (sesión 36).
 
@@ -130,10 +150,9 @@ Toda la auditoría de las últimas sesiones se hizo a nivel SQL/RPC vía MCP, si
 
 | Día | Foco |
 |---|---|
-| 1 | ~~Sección 1 (seguridad)~~ — ✅ ya resuelta el mismo día salvo 1.2 (toggle de Dashboard, 2 min) |
-| 2 | Sección 5 (pruebas manuales) + decidir sección 2.1/2.2 (gaps de OC) |
-| 3 | Implementar lo que se decidió en 2.1/2.2 + sección 3 (performance, los 3 quick wins) |
-| 4 | Fase 2 de tests (sección 4) si da el tiempo, sino seguir con manuales |
-| 5 | Regression pass completo, `npm run build`, commit/push final, deploy |
+| 1 | ~~Sección 1 (seguridad)~~ ✅ y ~~Sección 5 (manuales)~~ ✅ — ya resueltas. Hoy: sección 0 (urgente, dato real + fix fail-fast) + decidir 2.1/2.2 |
+| 2 | Implementar lo que se decidió en 2.1/2.2 + sección 3 (performance, los 3 quick wins) |
+| 3 | Fase 2 de tests (sección 4) |
+| 4 | Regression pass completo, `npm run build`, commit/push final, deploy |
 
 Cualquier duda sobre el por qué de una decisión técnica (por qué `ajuste` es absoluto y no delta, por qué `increment_stock` decide el tipo de movimiento por signo y no por nombre de función, etc.) está razonada en detalle en `CONTEXT.md` — está ordenado por sesión, de más reciente a más vieja.

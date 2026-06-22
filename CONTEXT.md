@@ -1,5 +1,21 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-22 (sesión 49, Nadia) — Testing manual browser sobre el plan de la semana (PLAN_SEMANA.md sección 5). 5 bugs corregidos en flujos de edición de compra y devolución a proveedor; recepción parcial de OC y `npm run build` verificados OK.
+**Última actualización:** 2026-06-22 (sesión 50, Luciano) — Revisión del commit de Nadia (sesión 49) + cierre de los 3 hallazgos urgentes: dato real restaurado, aclaración del ícono de Devolver, y el patrón de fallo silencioso reintroducido vuelto a `throw`.
+
+## Sesión 50 — Revisión del trabajo de Nadia + cierre de los 3 urgentes de la sección 0 del plan
+
+Pull de los 2 commits de Nadia (`e9120e5`, `19d9932`). Revisión del diff completo (no solo el mensaje de commit) encontró 3 cosas que la sección 0 nueva de `PLAN_SEMANA.md` documenta y que se cerraron en esta misma sesión:
+
+**0.1 — Dato real de cliente restaurado.** El stock de "Maquina de afeitar para hombres" (`8b5f3bd4-...`, empresa `cbc4db74-...`) había quedado en 0 por una secuencia de pruebas de Nadia: un "ajuste por inventario físico" de prueba (tipo `ajuste` de `ajustar_stock_manual` es **valor absoluto**, no delta) lo pisó a 1 sin importar el valor real, y una devolución de prueba inmediatamente después lo dejó en 0. No se pudo reconstruir el valor correcto desde `movimientos_inventario` (las compras de ese producto se aplicaron vía `aplicar_compra_producto`, que por diseño no deja movimiento — sesión 36). Luciano confirmó el stock físico real (10 unidades); restaurado con la misma RPC: `ajustar_stock_manual(..., 'ajuste', 10, 'Corrección post-testing manual sesión 49 (stock real confirmado por Luciano)')`.
+
+**0.2 — Aclarado, no era un bug.** El botón "Devolver a proveedor" que Nadia no encontró en `OrdenesCompraSection.jsx` vive en `FacturasCompraSection.jsx` (dentro del menú de acciones ⋮ de cada factura, oculto si `estado_pago = 'anulada'`) — son módulos distintos. Sin cambios de código.
+
+**0.3 — Patrón de fallo silencioso revertido.** El fix de Nadia para los parámetros de `decrement_stock` (bug #3 de su sesión) había cambiado, en el branch de "ítem eliminado al editar una compra", `throw` por `console.warn` — el `DELETE` de `detalle_compras` seguía de largo aunque el stock no se revirtiera. Mismo patrón que se cerró a propósito en sesión 33 para `aplicar_compra_producto` (fail-fast, no fallo silencioso), reintroducido acá en otro punto de `CompraRapidaSection.jsx`. Revertido a `throw` en los 2 puntos (ítem eliminado + ajuste de cantidad), y restaurado el `p_motivo` descriptivo con el número de factura en las 2 llamadas que lo habían perdido (`increment_stock` en el branch de aumentar cantidad ni siquiera capturaba el error antes). `npm run build` verificado, exit 0.
+
+`PLAN_SEMANA.md` actualizado: sección 0 completa, sección 2.3 corregida (`decrement_stock` ya no es dead code, Nadia le agregó 2 callers reales), sección 5 marcada como hecha por Nadia, sección 7 (orden de la semana) comprimida a 4 días reflejando lo ya resuelto.
+
+Archivo de código tocado: `src/components/sections/CompraRapidaSection.jsx`. Ningún archivo de test ni migration nueva esta sesión — el fix de datos (0.1) fue una llamada RPC directa sobre el producto real, no una migration.
+
+---
 
 ## Sesión 49 (Nadia) — Testing manual browser sobre PLAN_SEMANA.md
 
