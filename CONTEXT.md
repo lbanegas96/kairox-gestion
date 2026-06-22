@@ -1,5 +1,39 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-21 (sesión 48) — Cerrado el crítico de seguridad de la sesión 47 el mismo día: 31 funciones con `EXECUTE` revocado de `anon`, 9 con `search_path` fijo, y un hallazgo más grave de lo documentado (cualquiera podía insertar en `movimientos_uala` sin login) resuelto también.
+**Última actualización:** 2026-06-22 (sesión 49, Nadia) — Testing manual browser sobre el plan de la semana (PLAN_SEMANA.md sección 5). 5 bugs corregidos en flujos de edición de compra y devolución a proveedor; recepción parcial de OC y `npm run build` verificados OK.
+
+## Sesión 49 (Nadia) — Testing manual browser sobre PLAN_SEMANA.md
+
+### Bugs corregidos
+
+1. **ProductosSection** — Modal "Registrar Movimiento": mensaje de error al superar stock mostraba UUID crudo. Corregido para mostrar nombre del producto y stock disponible (catch de `handleSubmitMovimiento` detecta "stock insuficiente" / "cantidad inválida" y arma description amigable usando `selectedProductForMov.nombre` y `.stock_actual`).
+
+2. **CompraRapidaSection** — Edición de compras: faltaba `empresa_id` en INSERT a `detalle_compras`, lo que impedía que ítems nuevos se persistieran en DB. Agregado `empresa_id: user.empresa_id` al payload + captura de `insertError` con `console.error` + `throw`.
+
+3. **CompraRapidaSection** — Edición de compras: `decrement_stock` se llamaba con parámetros incorrectos (`row_id`/`quantity` en lugar de `p_producto_id`/`p_cantidad`/`p_motivo`). Corregido en las dos ocurrencias (eliminación de ítem + reducción de cantidad), con motivos descriptivos.
+
+4. **CompraRapidaSection** — Edición de compras: al reducir cantidad de un ítem existente se usaba `increment_stock` con valor negativo (anti-patrón confirmado en sesión 48). Reemplazado por condicional explícito: `diff > 0` → `increment_stock`, `diff < 0` → `decrement_stock(Math.abs(diff))`. Mismo patrón para el branch de "Deleted Items".
+
+5. **NuevaDevolucionProveedorModal** — Devolución a proveedor con stock insuficiente mostraba UUID en el toast de error. Catch reescrito con `console.error` + detección de "stock insuficiente" + mensaje legible ("Verificá que los productos a devolver tengan stock disponible en el inventario").
+
+### Verificado sin bugs
+
+- ✅ Recepción parcial de OC en 2 pasos: stock no se duplica (consistente con el test pgTAP de sesión 44 que blinda contra el bug histórico de doble incremento).
+- ✅ `npm run build`: exit code 0, sin errores de compilación, `dist/` 3.84 MB en 11 archivos.
+
+### Pendiente para Luciano
+
+- ⚠️ Restaurar stock de "Máquina de afeitar para hombres" (quedó en 0 por una prueba de testing manual — dato de cliente, no sintético).
+- ⚠️ Revisar por qué el ícono de "Devolver" en OCs no aparece en la UI — puede haberse removido en algún commit reciente.
+- Gap conocido (sección 2.1 del PLAN_SEMANA.md, sin cambios): estado de OC no cambia automáticamente al completar recepción (sigue en "Enviada").
+
+### Archivos modificados
+- `src/components/sections/ProductosSection.jsx`
+- `src/components/sections/CompraRapidaSection.jsx`
+- `src/components/compras/NuevaDevolucionProveedorModal.jsx`
+
+Commit: `e9120e5` en `origin/master`.
+
+---
 
 ## Sesión 48 — Cierre del crítico de seguridad (mismo día que la auditoría)
 
