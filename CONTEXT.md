@@ -1,5 +1,31 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-22 (sesión 51, continuación, Luciano) — Fase 2 de tests: conciliación Uala cubierta (`sync_uala_to_caja`, 5/5 verde). `emitir-cae` y Caja quedan fuera de alcance de pgTAP (edge function con AFIP real / lógica 100% frontend sin RPC).
+**Última actualización:** 2026-06-22 (sesión 51, continuación 2, Luciano) — Ualá pasó de "Caja" a "Bancos": migration 069 + `ConfigUalaModal.jsx` + test `sync_uala_to_bancos.test.sql` (6/6 verde). Sienta el patrón canónico para cualquier integración bancaria/fintech futura del sistema.
+
+## Sesión 51 (continuación 2) — Ualá de Caja a Bancos: arquitectura correcta, no solo un test
+
+**Contexto:** al cerrar el test de `sync_uala_to_caja` (continuación anterior), Luciano hizo una pregunta de fondo: ¿por qué una transferencia de Ualá impacta en Caja en vez de en una cuenta bancaria? Pidió explícitamente respaldarse en la skill `sap-reference` y en cómo lo resuelven sistemas de primer mundo, con la intención de que el resultado se aplique como patrón general a todo el sistema.
+
+**Investigación (antes de tocar nada):** la skill `sap-reference` confirma el principio (Bancos y Caja son módulos separados — arqueo de efectivo físico vs. conciliación bancaria). Pero lo más importante: **KAIROX ya tenía la arquitectura correcta construida y en uso real** — `cuentas_bancarias` (con `plan_cuenta_id`, ligada al plan de cuentas) + `movimientos_bancarios` (libro con flag `conciliado`) + `integraciones_bancarias` (mapea empresa+proveedor→cuenta) + la RPC `insertar_movimiento_bancario_externo` (punto de entrada seguro para integraciones externas, con guard multi-tenant que exceptúa `service_role`). Mercado Pago ya usa exactamente este camino (`mp-webhook` → la RPC → `movimientos_bancarios`). Ualá simplemente nunca se conectó a él — quedó con un atajo directo a `movimientos_caja` (el trigger `sync_uala_to_caja`, documentado pero no corregido en la continuación anterior). Confirmado además que `'uala'` ya estaba habilitado en `integraciones_bancarias_proveedor_check` desde sesión 39, con una nota explícita: "se agrega en su propia migration cuando esa integración exista" — ese momento era ahora.
+
+**Decisiones confirmadas con Luciano (AskUserQuestion) antes de implementar:** (1) reemplazo completo del camino viejo, no mantenerlo en paralelo; (2) construir un modal de configuración en la UI (no setear la cuenta a mano por SQL) para que cualquier empresa pueda activar Ualá sola.
+
+**Migration 069:**
+1. `movimientos_bancarios_origen_check` ampliado con `'uala'`.
+2. `DROP` del trigger/función viejos (`trigger_uala_to_caja` / `sync_uala_to_caja`).
+3. Función nueva `sync_uala_to_bancos()`: resuelve `cuenta_bancaria_id` vía `integraciones_bancarias WHERE empresa_id=NEW.empresa_id AND proveedor='uala' AND activo=true`; si la encuentra, llama `insertar_movimiento_bancario_externo(p_tipo:='egreso', p_origen:='uala', p_descripcion:='Ualá → '||COALESCE(destinatario,'Desconocido'))`. Si no la encuentra, no hace nada — **a propósito**: un trigger `AFTER INSERT` que lance una excepción haría rollback de la fila que el Apps Script ya insertó en `movimientos_uala`, perdiendo el dato de origen. El nuevo trigger ya **no usa `user_id` ni `caja_sesiones`** — la transferencia ya no depende de si hay un cajero con turno abierto.
+4. `movimientos_uala` (la tabla de aterrizaje del Apps Script que sincroniza desde Gmail) **no se tocó** — sigue recibiendo las filas exactamente igual, cambia solo qué pasa después.
+
+**Verificado con `BEGIN...ROLLBACK`** (con `set_config` simulando `service_role`, el único rol con permiso de `INSERT` en `movimientos_uala` desde la migration 065 — confirmado por `information_schema.role_table_grants` que es el único camino posible para el Apps Script real): la RPC funciona correctamente vía el trigger nuevo.
+
+**UI:** `src/components/bancos/ConfigUalaModal.jsx` (nuevo) — espejo simplificado de `ConfigMercadoPagoModal.jsx`, sin token ni verificación (Ualá no tiene API, es 100% Gmail-parsing por Apps Script): solo un `Select` de `cuentas_bancarias` de la empresa, `upsert` en `integraciones_bancarias` (`onConflict: 'empresa_id,proveedor'`). Card nueva en `ConfiguracionSection.jsx` → tab Integraciones, con estado real (`integracionUala`/`showConfigUala`/`reloadIntegracionUala`, mismo patrón que `integracionMP`). **Importante:** ya existía una card placeholder "Ualá" para una función DISTINTA (cobro con QR en caja, `estado="proximamente"`) — se renombró a "Ualá QR" para no confundirla con la nueva card real "Ualá (conciliación)".
+
+**Test:** `supabase/tests/sync_uala_to_bancos.test.sql` reemplaza a `sync_uala_to_caja.test.sql` (renombrado). 6/6 verde: con integración configurada genera 1 `movimiento_bancario` egreso imputado a la cuenta correcta (Caso 1a/1b); destinatario NULL cae al fallback (Caso 2); confirma que ya NO toca `movimientos_caja` en absoluto (Caso 3); sin integración configurada no genera nada y no lanza error (Caso 4, documentado); tampoco cae al camino viejo como fallback (Caso 5). Fixtures mucho más simples que la versión vieja — ya no hace falta `auth.users`/`profiles`/`caja_sesiones`, solo `empresas`/`cuentas_bancarias`/`integraciones_bancarias`.
+
+**Dato real sin tocar:** la empresa real `db21dfad-...` tiene 15 filas históricas en `movimientos_uala` (30/05 al 03/06, sin actividad desde entonces) — esas no se reprocesan retroactivamente; sus `movimientos_caja` históricos (si los generó el trigger viejo en su momento) quedan como están, ya forman parte de arqueos pasados. El cambio rige solo para transferencias nuevas, y solo una vez que esa empresa configure su integración Ualá desde la card nueva.
+
+**Patrón establecido para todo el sistema (pedido explícito de Luciano):** cualquier integración bancaria/fintech futura (otra billetera, otro banco, lo que sea) debe conectarse a `integraciones_bancarias` + `insertar_movimiento_bancario_externo` → `movimientos_bancarios`. Nunca un atajo directo a `movimientos_caja`. Documentado en `PLAN_SEMANA.md` sección 4.
+
+`npm run build` exit 0. Archivos: `supabase/migrations/069_uala_de_caja_a_bancos.sql` (nuevo), `src/components/bancos/ConfigUalaModal.jsx` (nuevo), `src/components/sections/ConfiguracionSection.jsx` (modificado), `supabase/tests/sync_uala_to_bancos.test.sql` (reemplaza a `sync_uala_to_caja.test.sql`).
 
 ## Sesión 51 (continuación) — Fase 2 de tests: conciliación Uala (`sync_uala_to_caja`)
 

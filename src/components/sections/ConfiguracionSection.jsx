@@ -20,6 +20,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import UsuariosSection from '@/components/sections/UsuariosSection';
 import IntegracionCard from '@/components/shared/IntegracionCard';
 import ConfigMercadoPagoModal from '@/components/bancos/ConfigMercadoPagoModal';
+import ConfigUalaModal from '@/components/bancos/ConfigUalaModal';
 import { formatDateAR, getTodayAR } from '@/lib/dateUtils';
 
 const formatCuit = (raw) => {
@@ -142,6 +143,8 @@ const ConfiguracionSection = ({ initialTab }) => {
   // ── Tab 5: Integraciones — Mercado Pago ──────────────────────────────────
   const [integracionMP,  setIntegracionMP]  = useState(null);
   const [showConfigMP,   setShowConfigMP]   = useState(false);
+  const [integracionUala, setIntegracionUala] = useState(null);
+  const [showConfigUala,  setShowConfigUala]  = useState(false);
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
   // ── Tab 6: Alertas ────────────────────────────────────────────────────────
@@ -343,6 +346,19 @@ const ConfiguracionSection = ({ initialTab }) => {
       .maybeSingle()
       .then(({ data }) => setIntegracionMP(data ?? null));
   };
+
+  const reloadIntegracionUala = () => {
+    if (!user?.empresa_id) return;
+    supabase
+      .from('integraciones_bancarias')
+      .select('*')
+      .eq('empresa_id', user.empresa_id)
+      .eq('proveedor', 'uala')
+      .maybeSingle()
+      .then(({ data }) => setIntegracionUala(data ?? null));
+  };
+
+  useEffect(() => { reloadIntegracionUala(); }, [user?.empresa_id]);
 
   const fetchUnidadesMedida = async () => {
     if (!user?.empresa_id) return;
@@ -1506,11 +1522,41 @@ const ConfiguracionSection = ({ initialTab }) => {
               )}
             </div>
 
+            {/* ── Ualá (conciliación) — card rica con estado real ── */}
+            <div className="kairox-bg-card border kairox-border p-5 rounded-xl shadow-sm flex flex-col gap-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-violet-500 flex items-center justify-center text-white text-base shrink-0">
+                    💳
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-kx-text text-sm">Ualá (conciliación)</h4>
+                    {integracionUala?.activo ? (
+                      <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 mt-1">
+                        ✓ Conectado
+                      </span>
+                    ) : (
+                      <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border bg-kx-surface-2 text-kx-text-3 border-kx-border mt-1">
+                        Sin configurar
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <Button size="sm" variant="outline" className="text-xs h-8 shrink-0" onClick={() => setShowConfigUala(true)}>
+                  {integracionUala ? 'Editar' : 'Conectar'}
+                </Button>
+              </div>
+
+              <p className="text-xs text-kx-text-2 leading-relaxed">
+                Las transferencias de Ualá sincronizadas desde Gmail por el Apps Script se registran automáticamente en Bancos (no en Caja) una vez que elegís a qué cuenta bancaria corresponden.
+              </p>
+            </div>
+
             <IntegracionCard
-              nombre="Ualá"
+              nombre="Ualá QR"
               descripcion="Pagos con QR Ualá desde la pantalla de caja. Cobros instantáneos sin hardware adicional."
               estado="proximamente"
-              logo="💳"
+              logo="📱"
             />
             <IntegracionCard
               nombre="AFIP / ARCA"
@@ -1936,6 +1982,14 @@ const ConfiguracionSection = ({ initialTab }) => {
         onOpenChange={setShowConfigMP}
         integracion={integracionMP}
         onSuccess={reloadIntegracionMP}
+      />
+
+      {/* ── Modal configuración Ualá (conciliación) ───────────────────────── */}
+      <ConfigUalaModal
+        open={showConfigUala}
+        onOpenChange={setShowConfigUala}
+        integracion={integracionUala}
+        onSuccess={reloadIntegracionUala}
       />
     </div>
   );
