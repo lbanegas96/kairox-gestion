@@ -1,5 +1,46 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-21 (sesión 46) — **Fase 1 de tests pgTAP completa**: los 3 escritores de `stock_actual` que faltaban (`crear_venta`, `crear_entrega`, `crear_devolucion`) quedan cubiertos, 18/18 en verde. Las 8 RPC SECURITY DEFINER del Mapa de escritores de sesión 36 tienen ahora test pgTAP propio.
+**Última actualización:** 2026-06-21 (sesión 48) — Cerrado el crítico de seguridad de la sesión 47 el mismo día: 31 funciones con `EXECUTE` revocado de `anon`, 9 con `search_path` fijo, y un hallazgo más grave de lo documentado (cualquiera podía insertar en `movimientos_uala` sin login) resuelto también.
+
+## Sesión 48 — Cierre del crítico de seguridad (mismo día que la auditoría)
+
+El usuario decidió no esperar a la semana y atacar el hallazgo 🔴 crítico de la sesión 47 de inmediato. Resultado:
+
+**Migration 063** — `REVOKE EXECUTE ... FROM PUBLIC, anon` en 28 funciones (las de la lista original del plan) + `ALTER FUNCTION ... SET search_path TO 'public'` en las 9 que no lo tenían (incluida `fn_calcular_costo_valoracion`).
+
+**Migration 064 (auto-corrección):** al re-correr `get_advisors` después de 063 para confirmar la reducción, aparecieron **3 funciones que se habían escapado de la primera extracción** — `crear_devolucion`, `crear_nota_debito`, `crear_venta` — seguían ejecutables por `anon`. La lista original se armó con un grep sobre un resumen parcial, no sobre el advisor completo; quedó incompleta. Corregido: revocadas también. Confirmado con `has_function_privilege('anon', oid, 'EXECUTE')` sobre las 32 que la única que queda con acceso `anon` es `email_exists_in_system` (la excepción a propósito, pre-signup).
+
+**Migration 065 (hallazgo más grave de lo documentado):** al revisar el `TO` real de la policy `movimientos_uala."service role puede insertar"` (que el plan solo pedía "confirmar"), se encontró que **no** estaba scoped a `service_role` — estaba en `PUBLIC` a pesar del nombre — y la tabla tenía además `GRANT INSERT` a nivel tabla para `anon` y `authenticated`. Significaba que cualquiera, **incluso sin login**, podía insertar filas arbitrarias en una tabla de conciliación bancaria. Confirmado por grep que el frontend (`MovimientosUala.jsx`) solo hace `SELECT`. Revocado `INSERT` de `anon`/`authenticated` a nivel tabla y recreada la policy explícitamente `TO service_role`. Verificado con `pg_policy` que `roles = {service_role}` después del fix.
+
+**Regresión real, no asumida:** corrida de `ajustar_stock_manual.test.sql` completo (11/11 verde) y de `crear_recepcion`/`crear_venta` (versión reducida, 2 asserts cada uno) después de aplicar los `REVOKE` — confirma que `authenticated` sigue funcionando exactamente igual, y que el trigger `fn_oc_update_stock` sigue disparando bien a pesar de tener `EXECUTE` revocado (los triggers no necesitan el grant, los ejecuta el motor de Postgres directamente). También se confirmó empíricamente que `anon` ahora recibe `permission denied for function ...` real (capa de permisos) en vez de fallar por lógica interna (`get_my_empresa_id()` devolviendo `NULL`).
+
+**Pendiente de la sección 1 del plan: solo queda 1.2** (activar "Leaked Password Protection" en el Dashboard de Supabase — Authentication → Policies — no se puede hacer por SQL/migration).
+
+`PLAN_SEMANA.md` actualizado marcando 1.1, 1.3 y 1.4 como resueltas con el detalle real de lo aplicado (incluido el hallazgo más grave que lo documentado en 1.3).
+
+Archivos: `supabase/migrations/063_revocar_anon_y_search_path.sql`, `064_revocar_anon_funciones_faltantes.sql`, `065_fix_rls_movimientos_uala.sql` (los 3 nuevos). Ningún archivo de código frontend tocado — todo el fix fue a nivel de permisos/policies en Postgres.
+
+---
+
+## Sesión 47 — Auditoría de arquitectura + Advisors + plan de la semana
+
+Cierre de la Fase 1 de stock_actual (sesión 46) y pedido explícito de revisar el sistema "de arriba a abajo" antes de una semana de estabilización. Se corrió `get_advisors` (security + performance) sobre el proyecto, se aplicó el checklist de deuda técnica del skill `saas-architect`, y se armó **[PLAN_SEMANA.md](PLAN_SEMANA.md)** — documento de acción para el colaborador, con todo priorizado (crítico/importante/performance/testing/manual).
+
+**Hallazgos nuevos de seguridad (no resueltos en esta sesión, quedan en el plan):**
+1. **27 funciones `SECURITY DEFINER` ejecutables por el rol `anon`** (sin autenticar) vía REST — incluye RPCs financieras/de stock que claramente no deberían ser invocables sin sesión (`ajustar_stock_manual`, `aplicar_compra_producto`, `crear_entrega`, `crear_recepcion`, `decrement_stock`, `increment_stock`, `insertar_movimiento_bancario_externo`, etc.). Protegidas hoy "por casualidad" porque internamente chequean `get_my_empresa_id()`, no por diseño de permisos. Lista completa y plan de `REVOKE` en `PLAN_SEMANA.md` sección 1.1.
+2. "Leaked Password Protection" desactivado en Supabase Auth (config, no código).
+3. Policy RLS de `movimientos_uala` (INSERT) con `WITH CHECK` siempre `true` — confirmar que está scoped a `service_role`.
+4. 9 funciones sin `SET search_path`, incluida `fn_calcular_costo_valoracion` (el cálculo central de PPP).
+5. `ventas_backup`/`detalle_ventas_backup`: tablas backup con RLS habilitado sin policy y sin PK — confirmar si siguen siendo necesarias.
+
+**Hallazgos de performance (no bloqueantes, backlog):** 5 policies RLS re-evalúan `auth.uid()` por fila en vez de una vez por query (`profiles` x4, `movimientos_uala` x1) — fix rápido envolviendo en `(select auth.uid())`; 2 índices duplicados (`proveedores`, `tipos_cambio`); 90 warnings de políticas RLS permisivas múltiples y 75 FKs sin índice — backlog real, no urgente.
+
+**Edge functions auditadas (`invite-user`, `create-user`, `delete-user`, `generar-csr`, `emitir-cae`):** confirmado que las 5 usan `verifyAdmin()` (helper compartido en `_shared/auth.ts`) para validar JWT + rol admin manualmente, a pesar de tener `verify_jwt:false` a nivel plataforma — patrón correcto e intencional, NO es un hallazgo. `mp-webhook` ya estaba auditado (sesión 33, valida firma de MercadoPago).
+
+**Confirmado sin billing/suscripciones implementado** (no hay tabla `suscripciones`/`planes` en el schema) — anti-patrón "Billing no implementado" del checklist del arquitecto. Es una decisión de negocio de Kairox IA, no parte del alcance de "sistema funcional esta semana", se deja anotado para discutir aparte.
+
+No se tocó código ni se aplicó ningún `REVOKE`/fix en esta sesión — es auditoría pura, todo queda priorizado en `PLAN_SEMANA.md` para que el colaborador lo ejecute.
+
+---
 
 ## Sesión 46 — Frente 6: guards multi-tenant en `crear_venta` / `crear_entrega` / `crear_devolucion` — cierre de Fase 1
 
