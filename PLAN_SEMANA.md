@@ -103,7 +103,7 @@ El commit de Nadia le agregó 2 callers reales en `CompraRapidaSection.jsx` (edi
 
 - ✅ **RESUELTO (sesión 50, migration 067):** 5 policies RLS que re-evaluaban `auth.uid()`/`auth.role()` por fila (4 en `profiles`, 1 en `movimientos_uala`) — reescritas con `(select auth.uid())`/`(select auth.role())`, misma lógica exacta, verificado con `BEGIN...ROLLBACK` (un usuario sigue viendo solo su propio profile) y con `get_advisors` (el lint `auth_rls_initplan` bajó de 5 a 0).
 - ✅ **RESUELTO (sesión 50, migration 067):** 2 índices duplicados — `idx_prov_empresa` (duplicaba `idx_proveedores_empresa`) y `idx_tc_empresa_moneda_fecha` (duplicaba `idx_tipos_cambio_empresa_fecha`), ambos dropeados. Confirmado con `get_advisors` (lint `duplicate_index` bajó de 2 a 0).
-- **`ventas_backup` / `detalle_ventas_backup`**: 2 tablas backup con RLS habilitado pero SIN policy y SIN primary key (aparecen en security Y en performance advisors). Tienen 5 y 9 filas respectivamente — pocas, parecen un backup puntual viejo, no una tabla operativa activa. **Pendiente: confirmar con Luciano si siguen siendo necesarias antes de tocarlas** (no se tocaron esta sesión, requieren su confirmación explícita por ser una decisión sobre datos, no solo performance).
+- ✅ **RESUELTO (sesión 50, migration 068):** `ventas_backup` / `detalle_ventas_backup` — confirmado por contenido (Luciano revisó las filas): eran restos del esquema viejo `ventas`/`detalle_ventas` previo a la migración a `comprobantes`, de los primeros días del sistema (fechas 02-03/06), ya reemplazados por 8 comprobantes reales de la misma empresa en ese mismo rango. Sin ninguna FK de otra tabla apuntando a estas 2 (confirmado por `pg_constraint` antes de borrar). `DROP TABLE` de ambas — el contenido completo (14 filas en total) queda embebido en el comentario de rollback de la migration, 100% recuperable desde el historial de git si algún día hiciera falta.
 - **90 warnings de "multiple permissive policies"** y **75 FKs sin índice** y **44 índices sin uso**: backlog real, pero no es bloqueante para "sistema funcional esta semana" — anotarlo para una sesión de performance dedicada más adelante, no la prioricen ahora salvo que algo concreto esté lento.
 
 ---
@@ -142,7 +142,7 @@ Si funciona así, mejor — es la vía estándar y vas a poder correr todo de un
 
 ## 6. Convenciones a seguir (para no romper lo que ya está hecho)
 
-- **Migrations:** numeración secuencial, la última aplicada es `067`. Antes de crear una nueva: `ls supabase/migrations | tail -5` para confirmar el próximo número libre — si están trabajando los 2 en paralelo, avisarse para no colisionar.
+- **Migrations:** numeración secuencial, la última aplicada es `068`. Antes de crear una nueva: `ls supabase/migrations | tail -5` para confirmar el próximo número libre — si están trabajando los 2 en paralelo, avisarse para no colisionar.
 - **Tests:** `supabase/tests/README.md` tiene la regla de oro — nunca correr un test contra una empresa real (ni `db21dfad-...` ni `cbc4db74-...` ni ninguna otra con datos de un cliente). Usar tenants sintéticos dentro de `BEGIN...ROLLBACK`. Si un caso necesita persistencia real entre conexiones (como el test de concurrencia de `obtener_proximo_numero`), pedir confirmación antes de crear datos persistentes y borrarlos apenas termine la verificación.
 - **Patrón de cualquier RPC nueva que toque `stock_actual`:** `SELECT...FOR UPDATE` antes de decidir + guard de stock negativo + guard de tenant (`empresa_id = get_my_empresa_id()`) + `INSERT` en `movimientos_inventario` con motivo real, todo en la misma transacción. Está documentado con el detalle de las 8 RPC existentes en `CONTEXT.md`, buscar "Mapa de escritores de stock_actual" (sesión 36).
 
@@ -152,7 +152,7 @@ Si funciona así, mejor — es la vía estándar y vas a poder correr todo de un
 
 | Día | Foco |
 |---|---|
-| 1 | ~~Sección 1~~ ✅, ~~Sección 5~~ ✅, ~~Sección 0~~ ✅, ~~Sección 2~~ ✅ y ~~Sección 3 (2 de 3)~~ ✅ — todas resueltas salvo 1.2 (toggle Dashboard) y la decisión sobre las tablas backup. |
+| 1 | ~~Sección 1~~ ✅, ~~Sección 5~~ ✅, ~~Sección 0~~ ✅, ~~Sección 2~~ ✅ y ~~Sección 3 (completa)~~ ✅ — todas resueltas salvo 1.2 (toggle Dashboard, 2 min). |
 | 2 | Fase 2 de tests (sección 4) |
 | 3 | Regression pass completo, `npm run build`, commit/push final, deploy |
 

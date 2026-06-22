@@ -1,5 +1,17 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-22 (sesión 50, Luciano) — 2 de los 3 quick wins de performance de la sección 3 del plan resueltos: 5 policies RLS sin re-evaluación por fila + 2 índices duplicados eliminados. Confirmado con `get_advisors`: 218 → 208 lints.
+**Última actualización:** 2026-06-22 (sesión 50, Luciano) — Sección 3 del plan (performance) 100% cerrada: `ventas_backup`/`detalle_ventas_backup` (restos del esquema pre-`comprobantes`) eliminadas tras confirmar contenido con Luciano. Solo queda 1.2 (toggle de Dashboard) de todo lo crítico/funcional/performance del `PLAN_SEMANA.md`.
+
+## Sesión 50 (continuación 3) — `DROP` de `ventas_backup`/`detalle_ventas_backup`
+
+Tercer y último quick win de la sección 3. Luciano no sabía qué eran estas 2 tablas — se le mostró el contenido completo (solo `SELECT`, sin tocar nada) antes de decidir: 5 filas en `ventas_backup` (columnas `cliente`/`metodo_pago`/`subtotal`/`descuento`/`total` — el esquema viejo de ventas, anterior al modelo actual `comprobantes`/`comprobante_items`) y 9 en `detalle_ventas_backup`, todas con fecha 2026-06-02/03 (los primeros días del sistema). Confirmado que ya existen 8 `comprobantes` reales de la misma empresa en ese mismo rango de fechas — son datos de la transición de esquema, ya reemplazados. Confirmado también vía `pg_constraint` que ninguna otra tabla tiene FK hacia estas 2.
+
+**Migration 068** — `DROP TABLE` de ambas. El contenido completo (14 filas en total) quedó embebido como `INSERT` comentado en el rollback de la migration — no se generó un backup aparte en Supabase porque con esto alcanza para recuperarlo si algún día hiciera falta, sin depender de una herramienta externa.
+
+Con esto, **la sección 3 del `PLAN_SEMANA.md` (performance) queda 100% resuelta** — los 3 quick wins (RLS initplan, índices duplicados, tablas backup) cerrados en la misma sesión. De todo lo crítico/funcional/performance del plan original, solo falta **1.2** (activar "Leaked Password Protection" — toggle de 2 minutos en el Dashboard de Supabase, no se puede hacer por SQL).
+
+`npm run build` exit 0. Archivo: `supabase/migrations/068_drop_tablas_backup_ventas.sql` (nuevo). Ningún archivo de código frontend tocado.
+
+---
 
 ## Sesión 50 (continuación 2) — Sección 3 del plan: performance (2 de 3 quick wins)
 

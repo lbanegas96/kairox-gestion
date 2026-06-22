@@ -1,0 +1,53 @@
+-- Sesión 50: cierra el 3er quick win de performance/seguridad del
+-- PLAN_SEMANA.md sección 3 — decisión confirmada por Luciano tras revisar
+-- el contenido (solo lectura) de las 2 tablas.
+--
+-- ventas_backup (5 filas) / detalle_ventas_backup (9 filas): restos del
+-- esquema viejo "ventas"/"detalle_ventas" (columnas cliente/metodo_pago/
+-- subtotal/descuento/total — anteriores al modelo actual comprobantes/
+-- comprobante_items). Fechas 2026-06-02/03, los primeros días del sistema.
+-- Confirmado: ya hay 8 comprobantes reales de la misma empresa en ese mismo
+-- rango de fechas en el esquema nuevo — son datos de la transición, ya
+-- reemplazados. Confirmado también que ninguna otra tabla tiene FK hacia
+-- estas 2 (pg_constraint, confrelid) — drop seguro.
+--
+-- Tenían RLS habilitado pero sin policy (hallazgo de seguridad, sesión 47) y
+-- sin primary key (hallazgo de performance, sesión 50) — ambos aparecían en
+-- get_advisors. Se DROPean en vez de agregarles policy/PK porque ya no
+-- representan datos vigentes.
+
+DROP TABLE IF EXISTS public.detalle_ventas_backup;
+DROP TABLE IF EXISTS public.ventas_backup;
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- Rollback (comentado) — contenido completo de las 2 tablas al momento del
+-- DROP, por si algún día hace falta recuperarlas. No se guardó en un backup
+-- de Supabase aparte porque son solo 14 filas en total; con esto alcanza.
+-- ───────────────────────────────────────────────────────────────────────────
+
+-- CREATE TABLE public.ventas_backup (
+--   id uuid, empresa_id uuid, user_id uuid, cliente_id uuid,
+--   fecha timestamptz, cliente text, metodo_pago text,
+--   subtotal numeric, descuento numeric, total numeric
+-- );
+-- INSERT INTO public.ventas_backup VALUES
+--   ('823a5510-2c1a-4bd9-ad91-0ff67c5b9c54', 'cbc4db74-ec31-4324-bd36-207b7a7bd99a', 'c55324d2-b6bb-4ea1-b1ed-a3c801b8df45', NULL, '2026-06-02 18:13:47.179+00', 'Consumidor Final', 'Tarjeta', 80000.00, 0.00, 80000.00),
+--   ('907c517f-e7d6-4ee0-8bb4-6102be7ee6fa', 'cbc4db74-ec31-4324-bd36-207b7a7bd99a', 'c55324d2-b6bb-4ea1-b1ed-a3c801b8df45', NULL, '2026-06-02 18:33:58.81+00',  'Consumidor Final', 'Efectivo', 128000.00, 0.00, 128000.00),
+--   ('07f06b5c-e8d3-4e8e-9d85-463a26a11028', 'cbc4db74-ec31-4324-bd36-207b7a7bd99a', 'c55324d2-b6bb-4ea1-b1ed-a3c801b8df45', NULL, '2026-06-02 18:43:18.779+00', 'Consumidor Final', 'Efectivo', 100000.00, 0.00, 100000.00),
+--   ('5685401b-c7b6-43f8-ac65-5e476a544d3a', 'cbc4db74-ec31-4324-bd36-207b7a7bd99a', 'c55324d2-b6bb-4ea1-b1ed-a3c801b8df45', '06e54412-2e8a-4229-957f-f2d3c0792329', '2026-06-02 20:21:12.689+00', 'Nadia Tecera', 'Cuenta Corriente', 150000.00, 0.00, 150000.00),
+--   ('d5c2be9e-004e-4076-ace6-69fef4bf2a05', 'cbc4db74-ec31-4324-bd36-207b7a7bd99a', 'c55324d2-b6bb-4ea1-b1ed-a3c801b8df45', NULL, '2026-06-03 16:01:47.178+00', 'Consumidor Final', 'Efectivo', 28000.00, 0.00, 28000.00);
+--
+-- CREATE TABLE public.detalle_ventas_backup (
+--   id uuid, empresa_id uuid, venta_id uuid, producto_id uuid,
+--   cantidad integer, precio_unitario numeric, subtotal numeric
+-- );
+-- INSERT INTO public.detalle_ventas_backup VALUES
+--   ('218f3a4d-4ca6-4781-a14b-08c41ca38c6b', 'cbc4db74-ec31-4324-bd36-207b7a7bd99a', '07f06b5c-e8d3-4e8e-9d85-463a26a11028', '503333c6-c682-4643-9261-19188cae7081', 1, 80000.00, 80000.00),
+--   ('ee928d84-c2fa-4654-92c5-d53bf5fc9051', 'cbc4db74-ec31-4324-bd36-207b7a7bd99a', '07f06b5c-e8d3-4e8e-9d85-463a26a11028', 'd4796b96-6e57-4cdc-a208-8a425626dac4', 1, 20000.00, 20000.00),
+--   ('d27cf1c2-dce6-4c1f-b600-7d0ac3159b51', 'cbc4db74-ec31-4324-bd36-207b7a7bd99a', '5685401b-c7b6-43f8-ac65-5e476a544d3a', '01438463-4e89-41c5-af01-866aeb0fb916', 2, 75000.00, 150000.00),
+--   ('5394914b-2a98-46ec-bfeb-c84f1348b5a2', 'cbc4db74-ec31-4324-bd36-207b7a7bd99a', '823a5510-2c1a-4bd9-ad91-0ff67c5b9c54', '503333c6-c682-4643-9261-19188cae7081', 1, 80000.00, 80000.00),
+--   ('561a5840-02bc-42b4-b0e7-050cb36712c5', 'cbc4db74-ec31-4324-bd36-207b7a7bd99a', '907c517f-e7d6-4ee0-8bb4-6102be7ee6fa', '503333c6-c682-4643-9261-19188cae7081', 1, 80000.00, 80000.00),
+--   ('a7d080e0-169c-4eab-9a48-8dac4013a917', 'cbc4db74-ec31-4324-bd36-207b7a7bd99a', '907c517f-e7d6-4ee0-8bb4-6102be7ee6fa', 'cd27077c-24a6-42a4-b195-a8a5fdd31b1d', 1, 8000.00, 8000.00),
+--   ('e53c1a55-f0ba-4a0b-a118-b2c138a45fbb', 'cbc4db74-ec31-4324-bd36-207b7a7bd99a', '907c517f-e7d6-4ee0-8bb4-6102be7ee6fa', 'd4796b96-6e57-4cdc-a208-8a425626dac4', 2, 20000.00, 40000.00),
+--   ('ca40ecfd-cd13-4b72-959e-15e33b0cd040', 'cbc4db74-ec31-4324-bd36-207b7a7bd99a', 'd5c2be9e-004e-4076-ace6-69fef4bf2a05', 'd4796b96-6e57-4cdc-a208-8a425626dac4', 1, 20000.00, 20000.00),
+--   ('1e72ff83-85bb-44cc-a8dd-86a4a87a52d0', 'cbc4db74-ec31-4324-bd36-207b7a7bd99a', 'd5c2be9e-004e-4076-ace6-69fef4bf2a05', 'cd27077c-24a6-42a4-b195-a8a5fdd31b1d', 1, 8000.00, 8000.00);
