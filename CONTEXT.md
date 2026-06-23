@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-22 (sesión 52, Luciano) — Segunda auditoría (más allá de `stock_actual`): encontrados y corregidos 2 hallazgos reales de RLS — fuga cross-tenant en `movimientos_uala` (migration 071, CRÍTICO) y `profiles` que bloqueaba a los admins de ver a sus colegas (migration 072). Build OK, en progreso.
+**Última actualización:** 2026-06-22 (sesión 52, Luciano) — Segunda auditoría (más allá de `stock_actual`): encontrados y corregidos 2 hallazgos reales de RLS — fuga cross-tenant en `movimientos_uala` (migration 071, CRÍTICO) y `profiles` que bloqueaba a los admins de ver a sus colegas (migration 072). Ambos commiteados y pusheados (`a25dded`). **Sesión pausada por créditos** — queda un plan de continuación detallado en `PLAN_AUDITORIA_2.md` para cuando se reanude.
 
 ## Sesión 52 — Segunda auditoría: RLS más allá de `stock_actual`
 
