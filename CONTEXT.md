@@ -1,5 +1,33 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-22 (sesión 51, continuación 4, Luciano) — sección 1.2 del plan ("Leaked Password Protection") investigada a fondo: el toggle correcto está en Authentication → Iniciar sesión/Proveedores → Email → "Prevent use of leaked passwords", pero **requiere plan Pro de Supabase** — el proyecto está en plan Gratis y Supabase bloqueó el guardado pidiendo upgrade. Queda como riesgo aceptado documentado, no como tarea técnica pendiente.
+**Última actualización:** 2026-06-22 (sesión 52, Luciano) — Segunda auditoría (más allá de `stock_actual`): encontrados y corregidos 2 hallazgos reales de RLS — fuga cross-tenant en `movimientos_uala` (migration 071, CRÍTICO) y `profiles` que bloqueaba a los admins de ver a sus colegas (migration 072). Build OK, en progreso.
+
+## Sesión 52 — Segunda auditoría: RLS más allá de `stock_actual`
+
+A pedido explícito de Luciano: auditoría de arriba a abajo de TODO lo que las sesiones 36-51 no cubrieron (esas se centraron en `stock_actual`, exposición de RPCs a `anon`, y performance). Invocadas las skills `sap-reference` (marco funcional ERP) y `saas-architect` (esta última resultó mayormente sobre estrategia de negocio AaaS/agentes IA, no aplicable a un ERP tradicional — lo único usable fue su checklist de arquitectura multi-tenant, que ya se sigue en KAIROX).
+
+**Metodología:** en vez de confiar en memoria o asumir que "todo debería estar bien", se consultó `pg_class`/`pg_policy` directamente para mapear la cobertura REAL de RLS en las ~50 tablas con `empresa_id`, en vez de revisar tabla por tabla a ojo.
+
+### Hallazgo 1 (CRÍTICO, resuelto) — fuga cross-tenant real en `movimientos_uala`
+
+Query de cobertura (`pg_policy` + `pg_get_expr` sobre `polqual`/`polwithcheck`) mostró que `movimientos_uala` tenía una policy de SELECT que NO mencionaba `empresa_id` en absoluto: `"usuarios autenticados pueden leer"` con `USING ((select auth.role()) = 'authenticated')`. Confirmado que `MovimientosUala.jsx` tampoco filtra por `empresa_id` en el cliente (`grep` confirmó: la query es `supabase.from('movimientos_uala').select(...).order('fecha', ...)`, sin ningún `.eq('empresa_id', ...)`) — dependía 100% de RLS para el aislamiento, y RLS no lo hacía.
+
+**Verificado con `BEGIN...ROLLBACK` (no hipotético):** Tenant X insertando "Secreto de Tenant X" y Tenant Y insertando "Secreto de Tenant Y" — impersonando al usuario de Tenant X, la query devolvía **ambas filas**, incluida la de Tenant Y. Esto es una fuga real de datos financieros entre empresas, no un lint teórico — y hay datos reales en la tabla (empresa `db21dfad-...`, 15 filas).
+
+**Fix (migration 071):** `DROP` de la policy vieja, `CREATE POLICY "usuarios autenticados pueden leer su empresa" ... USING (empresa_id = (select get_my_empresa_id()))`, mismo patrón que el resto del sistema. Re-verificado con el mismo escenario: Tenant X ahora ve únicamente su propia fila.
+
+### Hallazgo 2 (resuelto) — `profiles` bloqueaba a los admins de ver a sus colegas (caso inverso: under-permisivo, no fuga)
+
+Mismo barrido de `pg_policy` sobre `profiles` mostró 6 policies, ninguna combinación de las cuales permite a un usuario ver perfiles de OTROS usuarios — la única policy de SELECT (`profiles_select`) es `USING (id = auth.uid())`. Las policies `profiles_admin_update/insert/delete` sí permiten operar sobre colegas de la misma empresa (`is_admin() AND empresa_id = get_my_empresa_id()`), pero no había ninguna equivalente para SELECT.
+
+**Verificado con `BEGIN...ROLLBACK`:** un admin consultando `profiles WHERE empresa_id = su_empresa` recibía exactamente **1 fila** (la propia), nunca la de su colega — confirmado antes Y después del fix (antes: 1 fila; después: 2 filas). `UsuariosSection.jsx` (la pantalla de "Usuarios y Roles", gateada a `isAdmin` vía `useUserPermissions`) depende de esta query para listar el equipo — hoy en producción esa lista muestra solo al usuario logueado, nunca a sus compañeros, para CUALQUIER empresa del sistema.
+
+**Investigación de alcance (agente Explore, solo lectura):** grep exhaustivo de todo `src/` confirmó que `UsuariosSection.jsx` es el ÚNICO lugar que necesita ver perfiles de otros usuarios — ningún otro componente/hook/servicio (`cotizacionesService`, `pedidos`, `audit_log`, `dashboardService`, `useNotifications`, `CajaSection`) intenta resolver nombre/email de otro usuario vía `profiles`. Esto acotó el fix al mínimo necesario.
+
+**Fix (migration 072):** nueva policy `profiles_admin_select` (`is_admin() AND empresa_id = get_my_empresa_id()`), mismo patrón que las otras 3 policies de admin sobre `profiles`. No se amplió a todos los usuarios autenticados — solo admins, que es el único caso de uso real.
+
+`npm run build` exit 0 después de ambos fixes. Archivos nuevos: `supabase/migrations/071_fix_rls_movimientos_uala_select_sin_tenant.sql`, `072_fix_profiles_admin_select_colegas.sql`. Ningún archivo de frontend tocado (ambos fixes son 100% a nivel de policy RLS).
+
+**Pendiente en esta auditoría (sin empezar todavía):** guards de tenant en RPCs no relacionadas a stock (notas de crédito/débito, cheques, retenciones, conciliación bancaria, plan de cuentas/asientos); precisión de cálculos financieros (redondeo de IVA/totales/TC paralelo); patrones de manejo de errores fuera de `stock_actual` (más casos de `console.error` silencioso como los ya encontrados).
 
 ## Sesión 51 (continuación 4) — 1.2: "Leaked Password Protection" bloqueado por plan, no por configuración
 

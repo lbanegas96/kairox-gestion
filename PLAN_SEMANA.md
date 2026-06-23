@@ -159,6 +159,28 @@ Si funciona así, mejor — es la vía estándar y vas a poder correr todo de un
 |---|---|
 | 1 | ~~Sección 1~~ ✅, ~~Sección 5~~ ✅, ~~Sección 0~~ ✅, ~~Sección 2~~ ✅ y ~~Sección 3 (completa)~~ ✅ — todas resueltas salvo 1.2 (🔒 bloqueado por plan Supabase, no por configuración — ver detalle). |
 | 2 | Fase 2 de tests (sección 4) — en progreso: `crear_venta` (efectos colaterales) ✅, conciliación Uala ✅. `emitir-cae` y Caja quedan fuera de alcance de pgTAP (ver sección 4). |
-| 3 | Regression pass completo, `npm run build`, commit/push final, deploy |
+| 3 | Regression pass completo, `npm run build`, commit/push final, deploy — ✅ hecho, deploy disparado a producción. |
+| 3+ | Segunda auditoría (sección 8, sesión 52) — en progreso. |
+
+---
+
+## 8. 🔴 Segunda auditoría (sesión 52) — más allá de `stock_actual`
+
+A pedido explícito: revisión de arriba a abajo de TODO lo que NO se auditó en las sesiones 36-51 (esas se centraron en `stock_actual` + exposición de RPCs a `anon` + performance). Esta ronda cubre: cobertura de RLS en TODAS las tablas multi-tenant (no solo las de stock), guards de tenant en RPCs no relacionadas a stock, precisión de cálculos financieros, y patrones de manejo de errores. Metodología: consulta directa a `pg_policy`/`pg_class` para mapear cobertura real (no asumida), + grep dirigido en frontend, + verificación con `BEGIN...ROLLBACK` de cada hallazgo antes y después del fix.
+
+### 8.1 — ✅ RESUELTO (CRÍTICO): fuga cross-tenant real en `movimientos_uala`
+
+**Migration 071.** La policy de SELECT (`"usuarios autenticados pueden leer"`) solo chequeaba `auth.role() = 'authenticated'`, sin filtrar por `empresa_id`. Confirmado con `BEGIN...ROLLBACK` (no hipotético): un usuario autenticado de la Empresa X podía leer los movimientos Ualá de la Empresa Y completos (destinatario, monto, fecha) — `MovimientosUala.jsx` tampoco filtra por `empresa_id` en el cliente, dependía 100% de RLS. Reescrita a `empresa_id = get_my_empresa_id()`, mismo patrón que las ~50 tablas multi-tenant del sistema. Verificado: usuario de Tenant X ya no ve la fila de Tenant Y.
+
+### 8.2 — ✅ RESUELTO: `profiles` no permitía a un admin ver a sus colegas
+
+**Migration 072.** La única policy SELECT de `profiles` era `id = auth.uid()` — no existía ninguna policy que permitiera ver perfiles de OTROS usuarios de la misma empresa. Confirmado con `BEGIN...ROLLBACK`: un admin que consulta `profiles WHERE empresa_id = su_empresa` recibía **solo su propia fila**, nunca la de sus compañeros — `UsuariosSection.jsx` (gestión de usuarios, pantalla solo para admins) depende de esto y hoy muestra la lista de usuarios vacía/incompleta en producción. Es el caso inverso al 8.1: no es una fuga, es una restricción excesiva que rompe funcionalidad real. Agregada policy `profiles_admin_select` (`is_admin() AND empresa_id = get_my_empresa_id()`), mismo patrón que `profiles_admin_update/insert/delete`. Grep confirmó que ningún otro componente del sistema necesita ver perfiles de otros usuarios — no se amplió más allá de lo necesario. Verificado: admin ahora ve 2 filas (la propia + la del colega), un `staff` sigue viendo solo 1.
+
+### Pendiente en esta auditoría
+
+- Guards de tenant en RPCs `SECURITY DEFINER` no relacionadas a `stock_actual` (las de venta/compra ya se auditaron en sesión 36-46 — falta el resto: notas de crédito/débito, cheques, retenciones, conciliación bancaria, plan de cuentas/asientos).
+- Precisión de cálculos financieros (redondeo de IVA, totales, tipo de cambio paralelo).
+- Patrones de manejo de errores fuera de `stock_actual` (¿hay más `console.error`/`console.warn` silenciosos como los ya encontrados en `CompraRapidaSection.jsx`?).
+- Edge functions: ya auditadas `invite-user`, `create-user`, `delete-user`, `generar-csr`, `emitir-cae`, `mp-webhook` (sesión 47-48) — falta nada nuevo salvo que se agregue una.
 
 Cualquier duda sobre el por qué de una decisión técnica (por qué `ajuste` es absoluto y no delta, por qué `increment_stock` decide el tipo de movimiento por signo y no por nombre de función, etc.) está razonada en detalle en `CONTEXT.md` — está ordenado por sesión, de más reciente a más vieja.
