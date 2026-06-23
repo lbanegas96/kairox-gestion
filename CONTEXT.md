@@ -1,5 +1,13 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-22 (sesión 51, continuación 3, Luciano) — Día 3 del plan: regression pass con `get_advisors`. Detectado y corregido un descuido propio (migration 070): `sync_uala_to_bancos()` había nacido con `EXECUTE` abierto a `anon`/`PUBLIC` por ser función nueva (no heredó el `REVOKE` de la vieja). Sin hallazgos nuevos de performance. Build OK.
+**Última actualización:** 2026-06-22 (sesión 51, continuación 4, Luciano) — sección 1.2 del plan ("Leaked Password Protection") investigada a fondo: el toggle correcto está en Authentication → Iniciar sesión/Proveedores → Email → "Prevent use of leaked passwords", pero **requiere plan Pro de Supabase** — el proyecto está en plan Gratis y Supabase bloqueó el guardado pidiendo upgrade. Queda como riesgo aceptado documentado, no como tarea técnica pendiente.
+
+## Sesión 51 (continuación 4) — 1.2: "Leaked Password Protection" bloqueado por plan, no por configuración
+
+Guié a Luciano paso a paso por el Dashboard de Supabase (2 intentos fallidos antes de dar con el lugar correcto: no es "Políticas" —eso es RLS— ni "Contraseñas" —eso es WebAuthn/passkeys—). El toggle real está en **Authentication → Iniciar sesión / Proveedores → Email → "Prevent use of leaked passwords"** (la letra chica ya avisaba "Solo disponible en el plan Pro y superiores", pero el switch se deja activar visualmente en la UI). Luciano lo activó y al intentar guardar, Supabase mostró un cartel pidiendo upgradear de plan — confirmado: **no se puede activar en el plan Gratis actual**.
+
+**Resultado:** esto NO es un pendiente de configuración de 2 minutos como se documentó originalmente — es una decisión de negocio (pagar el plan Pro de Supabase o no) bloqueada por un límite comercial de la plataforma, no por falta de tiempo o de acceso. `PLAN_SEMANA.md` sección 1.2 actualizada para reflejar esto con precisión. Riesgo real si queda sin activar: los usuarios pueden registrarse o cambiar su contraseña a una que ya esté en bases de datos de contraseñas filtradas (HaveIBeenPwned) — no es explotable directamente por un atacante externo, solo reduce una capa de defensa contra el reuso de credenciales ya comprometidas en otros sitios.
+
+Con esto, de todo lo crítico/funcional/performance auditado en estas ~15 sesiones, **el único punto sin cerrar es éste, y está fuera del control técnico del proyecto** (depende de upgradear el plan de Supabase). Sin cambios de código ni migrations en esta continuación.
 
 ## Sesión 51 (continuación 3) — Día 3: regression pass con `get_advisors`
 
