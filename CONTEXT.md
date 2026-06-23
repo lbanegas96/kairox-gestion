@@ -1,5 +1,15 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-22 (sesión 51, continuación 2, Luciano) — Ualá pasó de "Caja" a "Bancos": migration 069 + `ConfigUalaModal.jsx` + test `sync_uala_to_bancos.test.sql` (6/6 verde). Sienta el patrón canónico para cualquier integración bancaria/fintech futura del sistema.
+**Última actualización:** 2026-06-22 (sesión 51, continuación 3, Luciano) — Día 3 del plan: regression pass con `get_advisors`. Detectado y corregido un descuido propio (migration 070): `sync_uala_to_bancos()` había nacido con `EXECUTE` abierto a `anon`/`PUBLIC` por ser función nueva (no heredó el `REVOKE` de la vieja). Sin hallazgos nuevos de performance. Build OK.
+
+## Sesión 51 (continuación 3) — Día 3: regression pass con `get_advisors`
+
+Tras cerrar Ualá→Bancos, correspondía el "regression pass completo" de la sección 7 del plan. Los 11 archivos de `supabase/tests/` ya habían sido re-verificados de punta a punta dentro de esta misma sesión (9 de Fase 1 al corregir el bug de `profiles_pkey`, más los 2 de Fase 2) — no hacía falta repetirlo, nada tocado después los afecta. Se corrió `get_advisors` (security + performance) como verificación adicional, que las corridas de pgTAP no cubren:
+
+**Hallazgo (security, propio, no del diseño de Ualá en sí):** `sync_uala_to_bancos()` apareció ejecutable por `anon` y `authenticated` vía REST. Causa: se creó con `DROP FUNCTION` + `CREATE` (no un `CREATE OR REPLACE` puro sobre la misma función), así que nació con los grants default de Postgres en vez de heredar el `REVOKE EXECUTE FROM PUBIC, anon` que la vieja `sync_uala_to_caja()` tenía desde la migration 063. **Migration 070:** mismo revoke, mismo patrón — deja `authenticated` igual que el resto de las funciones trigger ya aceptadas (`fn_oc_update_stock`, `handle_new_user`, etc., que migration 063 tampoco le revocó a `authenticated` porque no hace falta: llamarlas directo via RPC falla solo, `NEW`/`OLD` no están definidos fuera de un trigger real). Re-verificado con `has_function_privilege`: `anon=false`, `authenticated=true` (igual que sus pares), `service_role=true`. Re-corrido el flujo completo con `BEGIN...ROLLBACK` tras el revoke — el trigger sigue disparando normal (no necesita el grant, lo dispara el motor).
+
+**Performance:** sin hallazgos nuevos. Los únicos 2 lints sobre `movimientos_bancarios` (FK `asiento_id` sin índice, índice `idx_mb_fecha` sin uso todavía) son genéricos de cualquier tabla con poco tráfico real aún — mismo backlog ya documentado en sección 3 del plan (90 multiple_permissive_policies / 75 FKs sin índice / 40 índices sin uso), no accionable ahora.
+
+`npm run build` exit 0. Archivo: `supabase/migrations/070_revocar_anon_sync_uala_to_bancos.sql` (nuevo). Con esto, el regression pass del Día 3 queda cerrado — solo falta **1.2** (toggle "Leaked Password Protection" en el Dashboard de Supabase, requiere acceso humano) y la decisión de deploy.
 
 ## Sesión 51 (continuación 2) — Ualá de Caja a Bancos: arquitectura correcta, no solo un test
 
