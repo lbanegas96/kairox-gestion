@@ -84,7 +84,9 @@ export function useTCParalelo() {
 
     // Si la operación es en otra moneda extranjera → ARS primero, luego a paralela
     const inARS = monedaOp === 'ARS' ? Number(monto) : Number(monto) * Number(tasaOp);
-    return inARS / tcUsed;
+    // Redondeo a 2 decimales en JS para limitar el error binario de IEEE 754
+    // antes de persistir (la columna en DB es numeric(14,4) desde migration 076).
+    return Math.round((inARS / tcUsed) * 100) / 100;
   }, [enabled, tcHoy, monedaParalela]);
 
   return {

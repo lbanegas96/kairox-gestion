@@ -1,5 +1,76 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-22 (sesión 52, Luciano) — Segunda auditoría (más allá de `stock_actual`): encontrados y corregidos 2 hallazgos reales de RLS — fuga cross-tenant en `movimientos_uala` (migration 071, CRÍTICO) y `profiles` que bloqueaba a los admins de ver a sus colegas (migration 072). Ambos commiteados y pusheados (`a25dded`). **Sesión pausada por créditos** — queda un plan de continuación detallado en `PLAN_AUDITORIA_2.md` para cuando se reanude.
+**Última actualización:** 2026-06-23 (sesión 53, Nadia) — Reanudada `PLAN_AUDITORIA_2.md` desde el punto donde Luciano la pausó. Las 3 secciones pendientes cerradas: **Sección 1** (guards de tenant en RPCs no-stock) — 3 hallazgos reales confirmados con `BEGIN...ROLLBACK` y resueltos (migrations 073, 074, 075); **Sección 2** (precisión cálculos financieros) — 0 bugs reales, 2 endurecimientos preventivos aplicados aprovechando la ventana sin data (migration 076); **Sección 3** (errores silenciosos) — auditoría de 33 archivos, 0 hallazgos accionables, todos los `console.error`/`console.warn` justificados.
+
+## Sesión 53 — Reanudación y cierre de `PLAN_AUDITORIA_2.md` (Nadia)
+
+### Sección 1 — Guards de tenant en RPCs no relacionadas a `stock_actual`
+
+Listadas las 36 funciones `SECURITY DEFINER` del schema `public`. Triage: 8 RPCs de stock + auxiliares ya auditadas (sesiones 36-48), triggers no necesitan guard (los dispara el motor), seeds/sistema corren en contexto controlado. Pendientes reales: `crear_nota_debito`, `insertar_movimiento_bancario_externo`, `fecha_en_periodo_cerrado`, `siguiente_numero_documento`.
+
+**Hallazgo metodológico:** las áreas que el plan mencionaba — cheques, retenciones, plan de cuentas/asientos — **no tienen RPCs `SECURITY DEFINER`**. Toda esa lógica vive en cliente con INSERT/UPDATE directos. La seguridad de esas áreas depende 100% de las policies RLS de las tablas (cobertura ya mapeada en sesión 52). No hay deuda de auditoría adicional ahí.
+
+**`insertar_movimiento_bancario_externo` — referencia perfecta, sin hallazgo:** tenant guard + excepción a `service_role` + validación de `cuenta_bancaria_id` contra empresa. Es el patrón a copiar.
+
+#### Migration 073 — `crear_nota_debito`: validar IDs relacionados cross-tenant
+
+**Vector confirmado con `BEGIN...ROLLBACK`:** Tenant T (atacante) llama la RPC con su propio `p_empresa_id=T` (pasa el guard de tenant) pero pasa `p_cliente_id` y `p_comprobante_id` de Tenant U. La fila se insertaba en `notas_debito` con `empresa_id=T` pero `cliente_id`/`comprobante_id` apuntando a recursos de U. Lo mismo en el INSERT a `cuenta_corriente_movimientos`. Resultado verificado: `{"empresa_id":"T","cliente_id":"U","comprobante_id":"U","descripcion":"ND ND-2026-0001 - ATAQUE CROSS-TENANT"}`. Severidad: cross-tenant integrity corruption (no leak pasivo, requiere atacante activo).
+
+**Fix:** 4 validaciones `IF NOT EXISTS (SELECT 1 FROM ... WHERE id = $1 AND empresa_id = $2)` para `p_cliente_id`, `p_proveedor_id`, `p_comprobante_id`, `p_compra_id` antes de cualquier INSERT. Verificación post-fix: el ataque ahora falla con `cliente_id no pertenece a la empresa`.
+
+#### Migration 074 — `fecha_en_periodo_cerrado`: agregar guard de tenant
+
+**Vector confirmado:** Tenant V autenticado consulta el calendario contable de Tenant W (`p_empresa_id` de W) y la función devolvía `true`/`false` según el período de W. Severidad: muy baja (read-only bool, info de calendario), pero rompe consistencia con el patrón del resto del sistema.
+
+**Fix:** convertir de `SQL STABLE` a `PLPGSQL STABLE` para poder usar `RAISE EXCEPTION` + guard de tenant idéntico al de `insertar_movimiento_bancario_externo`. Verificación post-fix: el ataque ahora falla con `No autorizado: empresa_id no coincide con el usuario autenticado`.
+
+#### Migration 075 — `siguiente_numero_documento`: guard de tenant + whitelist
+
+**Vector confirmado:** Tenant X consulta `siguiente_numero_documento('Tenant_Y', 'entregas', 'numero_entrega', 'ENT')` y obtiene `ENT-2026-0005`, revelando que Y tiene exactamente 4 entregas. Info disclosure de conteo. Adicional: `EXECUTE format('SELECT COUNT(*) FROM public.%I WHERE empresa_id = $1 AND %I LIKE $2', p_tabla, p_columna)` con `%I` (quote_ident) mitiga SQL injection clásico, pero permite apuntar a **cualquier tabla** del schema con columna `empresa_id` — info disclosure indirecto.
+
+**Fix:** guard de tenant + whitelist explícita de las 2 únicas combinaciones reales (confirmado con grep en `pg_proc`):
+- `crear_venta`: `('entregas', 'numero_entrega', 'ENT')`
+- `crear_devolucion`: `('devoluciones', 'numero_devolucion', 'DEV')`
+
+Verificación post-fix: ataque con `empresa_id` ajeno → `No autorizado`; combinación arbitraria con `empresa_id` propio (ej. `'comprobantes', 'numero_venta', 'X'`) → `Combinación (tabla, columna, prefijo) no permitida`; camino feliz con `('entregas', 'numero_entrega', 'ENT')` y empresa propia → devuelve `ENT-2026-0001` correctamente.
+
+### Sección 2 — Precisión de cálculos financieros
+
+**0 bugs reales encontrados.** La aritmética de IVA en `crear_venta` es matemáticamente correcta — `ROUND(SUM, 2)` aplicado solo al final del LOOP, una vez por columna. Verificado empíricamente: con 3 items de subtotal 33.33 al 21%, `Σ neto + Σ iva = 99.99 = total`. Con casos mixtos (21% + 10.5%), también cierra. Toda la math en SQL `numeric` exacto, nunca pasa por JS `Math.round`. `crear_nota_debito` no hace aritmética, solo persiste `p_monto` tal cual. Todos los campos monetarios `(monto, total, subtotal, precio_*, costo_compra, iva_*, neto_gravado)` son `numeric(12,2)` consistentes.
+
+**2 oportunidades de endurecimiento preventivo aplicadas** (migration 076), aprovechando que cero data real las usa:
+
+1. **Drift de PPP por persistencia a 2 decimales:** `fn_calcular_costo_valoracion` devuelve `numeric` sin bounds (preserva ~20 dígitos), pero `productos.costo_compra` era `numeric(12,2)`. En modo `promedio_ponderado`, cada compra encadenada partía de un costo truncado. Verificado: PPP exacto `1.00004950...` → persistido `1.00` → siguiente PPP parte de `1.00` en vez de `1.0001`, drift acumulado de ~0.0001 por compra. Fix: `costo_compra → numeric(14,4)`. La UI sigue mostrando 2dp vía `formatCurrency`.
+
+2. **Moneda paralela sin precisión definida:** 4 columnas `monto_paralelo` (`comprobantes`, `movimientos_caja`, `cuenta_corriente_movimientos`, `compras`) eran `numeric` sin precision/scale. `calcParalelo` en JS hacía `inARS / tcUsed` puro IEEE 754, introduciendo ε de ~1e-13 por operación. Cero filas con `monto_paralelo` en producción al momento del fix → ventana óptima. Fix: las 4 columnas a `numeric(14,4)` + `Math.round((inARS / tcUsed) * 100) / 100` en `useTCParalelo.calcParalelo` para limitar a 2dp en source.
+
+### Sección 3 — Patrones de manejo de errores silenciosos
+
+Auditoría de 33 archivos en `src/` con `console.error`/`console.warn`. **Cero hallazgos accionables.** Cero catches vacíos en todo el código. Clasificación final:
+
+- **Fetch/read silenciado (OK):** `CajaContext`, `ConfigContext`, `useTCParalelo`, `ReporteParidad`, `HistorialVentas`, `ProductosSection` (×4 fetches), `ConfiguracionSection` (×6 cargas de config). Si el fetch falla, la pantalla queda en estado anterior — no hay write a medio camino.
+- **Write con toast destructive + return natural (OK):** `NuevaVentaModal:576-578`, `NuevaFacturaModal:293-295`, `NuevaNCModal:233-235`, `CompraDetailModal:60-66/86-88`, `SaleDetailModal:69-75/99-101`, `ComprobantePrintModal:97-99`. El catch notifica al usuario y el flujo se corta naturalmente.
+- **Telemetría no crítica (OK):** `AlertasStockBanner:41` (insert a `audit_log` silenciado).
+- **Fixes recientes ya verificados:** `CompraRapidaSection.handleSaveEdit` (sesiones 49+53), `NuevaDevolucionProveedorModal` (sesión 49), `ProductosSection.handleSubmitMovimiento` (sesión 49).
+
+**Decisiones de diseño explícitamente documentadas (NO son bugs):**
+1. `CompraRapidaSection.jsx:359-368` — recepción implícita "no bloqueante — solo documental". Si falla, solo se pierde la trazabilidad documental para MapaRelaciones.
+2. `NuevaVentaModal.jsx:518` — asiento contable fire & forget fuera de la transacción.
+3. `NuevaVentaModal.jsx:520-548` — emisión CAE AFIP fire & forget.
+
+**🟡 Observación de UX (NO bug, requiere decisión de producto):** los puntos 2 y 3 son técnicamente correctos pero generan desincronización silenciosa entre ventas y libro contable/CAE. Una empresa con AFIP activo podría no enterarse de que un CAE falló sin revisar el `HistorialVentas`. Recomendación futura: agregar badge/alerta en `HistorialVentas` para comprobantes con `cae_estado='pendiente'` o sin asiento asociado. Afecta UI/UX, no integridad de datos críticos — conversar con Luciano sobre cuán visible debería ser ese estado.
+
+### Estado total de PLAN_AUDITORIA_2.md (cerrado)
+
+| Sección | Resultado | Migrations |
+|---|---|---|
+| 0. Ya hecho (sesión 52) | ✅ Heredado | 071, 072 |
+| 1. Guards de tenant en RPCs no-stock | ✅ 3 hallazgos confirmados y cerrados | **073, 074, 075** |
+| 2. Precisión cálculos financieros | ✅ 0 bugs, 2 endurecimientos preventivos | **076** + `useTCParalelo.js` |
+| 3. Errores silenciosos | ✅ 0 hallazgos accionables, 1 observación de UX | — |
+
+**Build verificado:** `npm run build` exit 0 después de cada migration y del cambio JS. `dist/` 3.84 MB en 11 archivos. **Ningún view ni función dependiente de `costo_compra` o `monto_paralelo` afectada** (verificado con `pg_views`).
+
+**Archivos nuevos:** `supabase/migrations/073_crear_nota_debito_validar_ids_relacionados.sql`, `074_fecha_en_periodo_cerrado_guard_tenant.sql`, `075_siguiente_numero_documento_guard_y_whitelist.sql`, `076_precision_costo_y_moneda_paralela.sql`. **Modificado:** `src/hooks/useTCParalelo.js`.
 
 ## Sesión 52 — Segunda auditoría: RLS más allá de `stock_actual`
 
