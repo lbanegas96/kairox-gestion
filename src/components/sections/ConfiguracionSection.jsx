@@ -159,6 +159,7 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [errorDetailModal, setErrorDetailModal] = useState(null); // { mensaje }
   const [reintentandoId, setReintentandoId] = useState(null);
   const [resolviendoId, setResolviendoId] = useState(null);
+  const [probandoConexion, setProbandoConexion] = useState(false);
 
   // ── Tab 4: Unidades de Medida ─────────────────────────────────────────────
   const [unidadesMedida, setUnidadesMedida] = useState([]);
@@ -339,6 +340,31 @@ const ConfiguracionSection = ({ initialTab }) => {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
     } finally {
       setResolviendoId(null);
+    }
+  };
+
+  const handleProbarConexion = async () => {
+    setProbandoConexion(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('probar-conexion-afip', { method: 'POST' });
+      if (error) throw new Error(error.message);
+      if (data?.ok) {
+        toast({
+          title: 'Conexión exitosa con ARCA',
+          description: `CUIT ${data.cuit} · PdV ${data.pvNumero} · Último Nro. FC emitida: ${data.lastNumber}`,
+          className: 'bg-green-600 text-white border-green-500',
+        });
+      } else {
+        toast({
+          title: 'Error de conexión ARCA',
+          description: data?.error ?? 'Error desconocido',
+          variant: 'destructive',
+        });
+      }
+    } catch (e) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setProbandoConexion(false);
     }
   };
 
@@ -1499,8 +1525,11 @@ const ConfiguracionSection = ({ initialTab }) => {
                   <Button size="sm" variant="outline" onClick={() => { setCertForm({ cert: '', key: '' }); setCertModalOpen(true); }}>
                     <Shield className="w-3.5 h-3.5 mr-1.5" /> {certStatus ? 'Actualizar certificado' : 'Configurar certificado'}
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => toast({ title: 'Probar conexión — Próximamente', description: 'Esta función estará disponible cuando se implemente el backend ARCA.' })}>
-                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Probar conexión
+                  <Button size="sm" variant="outline" onClick={handleProbarConexion} disabled={probandoConexion}>
+                    {probandoConexion
+                      ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                      : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+                    {probandoConexion ? 'Probando...' : 'Probar conexión'}
                   </Button>
                 </div>
               </div>

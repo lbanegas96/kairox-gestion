@@ -164,6 +164,26 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginTop: 2,
   },
+  caeErrorSection: {
+    marginTop: 16,
+    paddingTop: 10,
+    paddingBottom: 10,
+    paddingLeft: 12,
+    paddingRight: 12,
+    borderTop: '1pt solid #fca5a5',
+    backgroundColor: '#fef2f2',
+    borderRadius: 4,
+  },
+  caeErrorLabel: {
+    fontSize: 8,
+    color: '#dc2626',
+    fontFamily: 'Helvetica-Bold',
+    marginBottom: 3,
+  },
+  caeErrorText: {
+    fontSize: 8,
+    color: '#b91c1c',
+  },
   qrImage: {
     width: 80,
     height: 80,
@@ -362,6 +382,16 @@ export function FacturaPDF({ comprobante, items, pagos, empresa, qrDataUrl }) {
             {qrDataUrl ? (
               <Image src={qrDataUrl} style={styles.qrImage} />
             ) : null}
+          </View>
+        ) : (comprobante.cae_estado === 'error' || comprobante.cae_estado === 'error_definitivo') ? (
+          <View style={styles.caeErrorSection}>
+            <Text style={styles.caeErrorLabel}>DOCUMENTO SIN VALIDEZ FISCAL</Text>
+            <Text style={styles.caeErrorText}>
+              Este comprobante no tiene CAE emitido por AFIP/ARCA y no es válido como factura electrónica.
+              {comprobante.cae_estado === 'error_definitivo'
+                ? ' Los reintentos automáticos se agotaron — es necesaria intervención manual.'
+                : ' La emisión del CAE está pendiente o falló — verificar en el sistema.'}
+            </Text>
           </View>
         ) : null}
 

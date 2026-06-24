@@ -45,11 +45,12 @@ const SECTION_LABELS = {
 };
 
 const NOTIF_CONFIG = {
-  stock_bajo:      { icon: Package,     color: 'text-amber-500',  bg: 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/30' },
-  deuda_vencida:   { icon: CreditCard,  color: 'text-rose-500',   bg: 'bg-rose-50 dark:bg-rose-900/10 border-rose-200 dark:border-rose-800/30' },
-  oc_pendiente:    { icon: ShoppingBag, color: 'text-blue-500',   bg: 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800/30' },
-  caja_sin_cerrar: { icon: Wallet,      color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800/30' },
-  caes_pendientes: { icon: FileText,    color: 'text-violet-500', bg: 'bg-violet-50 dark:bg-violet-900/10 border-violet-200 dark:border-violet-800/30' },
+  facturas_error_cae: { icon: AlertCircle, color: 'text-red-500',    bg: 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/30' },
+  stock_bajo:         { icon: Package,     color: 'text-amber-500',  bg: 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800/30' },
+  deuda_vencida:      { icon: CreditCard,  color: 'text-rose-500',   bg: 'bg-rose-50 dark:bg-rose-900/10 border-rose-200 dark:border-rose-800/30' },
+  oc_pendiente:       { icon: ShoppingBag, color: 'text-blue-500',   bg: 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800/30' },
+  caja_sin_cerrar:    { icon: Wallet,      color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800/30' },
+  caes_pendientes:    { icon: FileText,    color: 'text-violet-500', bg: 'bg-violet-50 dark:bg-violet-900/10 border-violet-200 dark:border-violet-800/30' },
 };
 
 function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch, activeSection }) {
@@ -157,6 +158,8 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch, activ
                               queryClient.invalidateQueries({ queryKey: ['notif'] });
                             }).catch(err => console.warn('[AFIP]', err.message));
                           });
+                        } else if (item.action === 'tab-facturacion') {
+                          onNavigate?.(item.seccion, { initialTab: 'facturacion' });
                         } else {
                           onNavigate?.(item.seccion);
                         }

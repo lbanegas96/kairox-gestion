@@ -67,7 +67,7 @@ function Dashboard({ user, onLogout }) {
       case 'cuentacorriente':return <CuentaCorrienteSection />;
       case 'reportes':      return <ReportesSection initialView={sectionParams.initialView ?? null} onNavigate={navigateTo} />;
       case 'usuarios':      return <ConfiguracionSection initialTab="usuarios" />;
-      case 'configuracion': return <ConfiguracionSection />;
+      case 'configuracion': return <ConfiguracionSection initialTab={sectionParams.initialTab} />;
       case 'plan_cuentas':  return <PlanCuentasSection />;
       case 'bancos':        return <CuentasBancariasSection />;
       case 'cheques':       return <ChequesSection />;
@@ -95,7 +95,7 @@ function Dashboard({ user, onLogout }) {
             user={user}
             onLogout={onLogout}
             toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-            onNavigate={setActiveSection}
+            onNavigate={navigateTo}
             onOpenSearch={() => setCmdOpen(true)}
             activeSection={activeSection}
           />

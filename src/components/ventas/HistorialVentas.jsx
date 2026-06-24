@@ -343,10 +343,13 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                           {sale.cae_estado === 'emitido' && <Check className="w-3 h-3" />}
                           {sale.cae_estado === 'pendiente' && <Clock className="w-3 h-3" />}
                           {sale.cae_estado === 'error' && <AlertTriangle className="w-3 h-3" />}
+                          {sale.cae_estado === 'error_definitivo' && <AlertCircle className="w-3 h-3" />}
                           {sale.cae_estado === 'emitido'
                             ? `Factura ${sale.tipo_comprobante_afip ?? ''} ${sale.numero_afip ?? ''}`.trim()
                             : sale.cae_estado === 'pendiente'
                             ? `Factura ${sale.tipo_comprobante_afip ?? ''} (CAE pend.)`.trim()
+                            : sale.cae_estado === 'error_definitivo'
+                            ? 'Error definitivo'
                             : 'Error CAE'
                           }
                         </span>
