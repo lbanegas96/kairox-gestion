@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-24 (sesión 58 Luciano) — Cierre del ciclo async AFIP/ARCA: migrations 086-087 + arca-worker Edge Function + UI gestión facturas con error + notificación "facturas error definitivo". **Última migration aplicada: 087.** Build ✅.
+**Última actualización:** 2026-06-24 (sesión 60 Luciano) — Emisión CAE async completa vía trigger: migration 089 extiende fn_queue_factura_arca para encolar en 'pendiente' (primera emisión). Eliminada la llamada directa a ARCA desde el browser en NuevaVentaModal, NuevaFacturaModal y NuevaNCModal. **Última migration aplicada: 089.** Build ✅. Deploy Vercel ✅.
 
 ## Sesión 29 (Nadia) — Testing post-Luciano + 3 fixes server-side críticos
 
@@ -76,6 +76,120 @@ Hallazgo adicional descubierto al verificar 084: la protección "no cambiar tu p
 - `src/components/ventas/NuevaVentaModal.jsx`
 - `src/components/sections/CajaSection.jsx`
 - `src/services/planCuentasService.ts` (extendido con `crearAsientoMovimientoCaja`)
+
+---
+
+## Sesión 60 — Emisión CAE async completa: fn_queue_factura_arca en 'pendiente' (Luciano)
+
+### Patrón implementado (SAP S/4HANA async document posting)
+
+El arca-worker es la **única** fuente de verdad para llamar a ARCA. Ningún flujo del frontend
+llama directamente a la Edge Function `emitir-cae` — esa función queda como herramienta manual de
+emergencia.
+
+### Migration 089 (`089_trigger_queue_on_pendiente.sql`) — aplicada a producción
+
+**Problema resuelto:** el trigger `fn_queue_factura_arca` (migration 087) solo se activaba cuando
+`cae_estado` cambiaba a `'error'`. La primera emisión (al crear la factura) nunca llegaba a la
+cola — el frontend tenía que llamar `emitirCAE` directamente desde el navegador, arriesgando doble
+emisión si el worker ya estaba reintentando.
+
+**Cambios:**
+1. Condición ampliada: `IN ('pendiente', 'error')` en vez de `= 'error'`.
+2. `proximo_intento = now()` para `'pendiente'` (primera emisión, inmediato).
+   `proximo_intento = now() + 1 minute` para `'error'` (backoff mínimo tras fallo).
+3. Guard explícito: `IF NEW.punto_venta_id IS NULL THEN RETURN NEW; END IF;` — sin PdV no hay emisión.
+4. **Fix bug migration 087:** `ON CONFLICT ON CONSTRAINT uq_fpa_comprobante_activo` era incorrecto
+   (`uq_fpa_comprobante_activo` es un partial UNIQUE INDEX, no una constraint nombrada).
+   Corregido a `ON CONFLICT (comprobante_id) WHERE comprobante_id IS NOT NULL AND estado NOT IN ('emitida','error_definitivo') DO NOTHING`.
+
+Verificado en producción via `pg_get_functiondef`: función activa con las nuevas condiciones.
+
+### Frontend — eliminado `emitirCAE` directo desde los 3 modales
+
+| Archivo | Cambio |
+|---|---|
+| `NuevaVentaModal.jsx` | Eliminado bloque `emitirCAE` (44 líneas). Solo queda el UPDATE a `cae_estado='pendiente'`. |
+| `NuevaFacturaModal.jsx` | Eliminado bloque `emitirCAE`. Solo queda el UPDATE a `cae_estado='pendiente'`. |
+| `NuevaNCModal.jsx` | Eliminado bloque `emitirCAE`. Solo queda el UPDATE a `cae_estado='pendiente'`. |
+
+`emitirCAE` sigue exportada en `afipService.ts` como herramienta de emergencia (no la usamos).
+
+### Flujo completo al cierre de sesión 60
+
+```
+Factura / NC creada (NuevaVentaModal / NuevaFacturaModal / NuevaNCModal)
+    ↓ UPDATE comprobantes SET cae_estado='pendiente', punto_venta_id, tipo_comprobante_afip
+    ↓ Trigger fn_queue_factura_arca (AFTER UPDATE) → INSERT facturas_pendientes_arca
+         proximo_intento = now() (inmediato)
+    ↓ arca-worker (cron */5 min) → procesa cola
+         ↓ getLastVoucherNumber() — nunca usar contador local ✅
+         ↓ callArcaEmit() → CAE emitido
+              ↓ Éxito → cae_estado='emitido', CAE guardado ✅
+              ↓ Error datos → estado='error_datos', NO reintentar ✅
+              ↓ Error transient → backoff [1,5,15,30,60]min, hasta 5 intentos ✅
+              ↓ Max intentos → estado='error_definitivo' ✅
+              ↓ Estado ambiguo → getLastVoucherNumber() → error_definitivo "verificar manualmente" ✅
+    ↓ UI gestión (ConfiguracionSection tab Facturación) → usuario puede reintentar ✅
+    ↓ Notificación crítica si hay error_datos/error_definitivo ✅
+```
+
+El path "error" sigue funcionando igual que antes: si el worker actualiza `cae_estado='error'`,
+el mismo trigger dispara y re-encola con `proximo_intento = now() + 1 minute`.
+
+### Archivos modificados / creados
+
+- `supabase/migrations/089_trigger_queue_on_pendiente.sql` (nueva)
+- `src/components/ventas/NuevaVentaModal.jsx` (eliminado bloque emitirCAE)
+- `src/components/ventas/NuevaFacturaModal.jsx` (eliminado bloque emitirCAE)
+- `src/components/ventas/NuevaNCModal.jsx` (eliminado bloque emitirCAE)
+
+Build ✅ — 3170 módulos, sin errores. Pusheado a `master` (commit `f0d8c29`). Deploy Vercel ✅.
+
+---
+
+## Sesión 59 — Polish AFIP/ARCA + reintento masivo vía worker (Luciano)
+
+### Migration 088 (`088_reencolar_caes_pendientes.sql`) — aplicada a producción
+
+RPC `reencolar_caes_pendientes(p_empresa_id uuid) RETURNS integer` — SECURITY DEFINER.
+- Guard multi-tenant: `p_empresa_id <> get_my_empresa_id()` → RAISE EXCEPTION.
+- Por cada comprobante con `cae_estado IN ('pendiente','error')` (hasta 50):
+  - Reset de fila activa/recuperable en `facturas_pendientes_arca` a `estado='pendiente'`.
+  - Si no existe fila → INSERT nueva (ON CONFLICT con predicado del partial index, DO NOTHING si hay una fila 'procesando').
+  - Reset `comprobantes.cae_estado='pendiente'`.
+- REVOKE FROM PUBLIC, anon. GRANT TO authenticated.
+- Verificado: SECURITY DEFINER=true, authenticated:EXECUTE, sin acceso anon.
+
+### `afipService.ts` — `reintentarCAEsPendientes` reescrita
+
+Antes: llamaba `emitirCAE` en loop desde el browser (riesgo doble emisión).
+Ahora: llama `supabase.rpc('reencolar_caes_pendientes', { p_empresa_id })` y devuelve el conteo.
+El arca-worker procesa los comprobantes re-encolados.
+
+### Edge Function `probar-conexion-afip` — desplegada
+
+Valida el pipeline completo (Vault → cert → ARCA) llamando `getLastVoucherNumber()` y devuelve
+`{ ok, lastNumber, pvNumero, cuit }`. Botón "Probar conexión" en ConfiguracionSection.
+
+### UI — polish notificaciones y navegación
+
+- `Header.jsx`: tipo `facturas_error_cae` en `NOTIF_CONFIG` + branch `tab-facturacion` en onClick.
+- `Dashboard.jsx`: `onNavigate` pasa a ser `navigateTo` (acepta `section + params`), `ConfiguracionSection` recibe `initialTab`.
+- `HistorialVentas.jsx`: icono `AlertCircle` para `cae_estado='error_definitivo'`.
+- `FacturaPDF.jsx`: bloque "DOCUMENTO SIN VALIDEZ FISCAL" cuando no hay CAE.
+- `ConfiguracionSection.jsx`: "Probar conexión" llama la Edge Function real (antes era toast "próximamente").
+
+### Archivos modificados / creados (sesión 59)
+
+- `supabase/migrations/088_reencolar_caes_pendientes.sql`
+- `supabase/functions/probar-conexion-afip/index.ts` (nueva Edge Function)
+- `src/components/Header.jsx`
+- `src/components/Dashboard.jsx`
+- `src/components/ventas/HistorialVentas.jsx`
+- `src/components/ventas/pdf/FacturaPDF.jsx`
+- `src/components/sections/ConfiguracionSection.jsx`
+- `src/services/afipService.ts`
 
 ---
 
