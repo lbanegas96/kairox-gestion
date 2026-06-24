@@ -261,7 +261,10 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
         }]);
       }
 
-      // 5. AFIP (fire & forget — no bloquea ni revierte)
+      // 5. AFIP — encolar en facturas_pendientes_arca vía trigger (SAP async posting).
+      // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca, que inserta
+      // en la cola. El arca-worker (cron */5 * * * *) es la única fuente de verdad
+      // para llamar a ARCA — nunca desde el frontend.
       const afipActivo = afipConfig?.usa_factura_electronica && afipConfig?.punto_venta;
       if (afipActivo && tipoDoc !== 'Ticket') {
         const tipoAfip = tipoDoc.replace('Factura ', '');
@@ -269,13 +272,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
           tipo_comprobante_afip: tipoAfip,
           punto_venta_id:        afipConfig.punto_venta.id,
           cae_estado:            'pendiente',
-        }).eq('id', comp.id).then(() => {
-          import('@/services/afipService').then(({ emitirCAE }) => {
-            emitirCAE(comp.id)
-              .then(r => { if (r.success) toast({ title: `✓ CAE emitido: ${r.cae}`, duration: 5000 }); })
-              .catch(e => console.warn('[AFIP Factura]', e.message));
-          });
-        });
+        }).eq('id', comp.id).catch(e => console.warn('[AFIP queue]', e.message));
       }
 
       // 6. Asiento contable (fire & forget)

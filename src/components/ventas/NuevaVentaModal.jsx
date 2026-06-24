@@ -531,7 +531,10 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         }
       ).catch(e => console.warn('[Contabilidad] Asiento venta (no crítico):', e.message));
 
-      // ── Emisión CAE (fire & forget — no bloquea ni revierte la venta) ────────────
+      // ── Encolar CAE vía trigger (SAP async posting — no bloquea la venta) ──────
+      // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca, que inserta
+      // en facturas_pendientes_arca. El arca-worker (cron */5 * * * *) es la única
+      // fuente de verdad para llamar a ARCA — nunca desde el frontend.
       if (afipActivo && comprobante?.id) {
         const tipoComp = determinarTipoComprobante(
           afipConfig.condicion_iva,
@@ -541,41 +544,8 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           tipo_comprobante_afip: tipoComp,
           punto_venta_id: afipConfig.punto_venta.id,
           cae_estado: 'pendiente',
-        }).eq('id', comprobante.id).then(({ error }) => {
-          if (error) {
-            console.warn('[AFIP] No se pudo actualizar tipo comprobante:', error.message);
-            return;
-          }
-          import('@/services/afipService').then(({ emitirCAE }) => {
-            emitirCAE(comprobante.id).then(result => {
-              if (result.success) {
-                toast({
-                  title: '✓ Factura electrónica emitida',
-                  description: `CAE: ${result.cae} · Nro: ${result.numero_afip}`,
-                  duration: 6000,
-                });
-                queryClient.invalidateQueries({ queryKey: ['ventas'] });
-              } else {
-                toast({
-                  title: '⚠ Factura pendiente de CAE',
-                  description: 'La venta quedó registrada. El CAE se reintentará automáticamente.',
-                  variant: 'default',
-                  duration: 8000,
-                });
-              }
-            }).catch(err => {
-              console.warn('[AFIP] Error al emitir CAE (no crítico):', err.message);
-              toast({
-                title: '⚠ Factura pendiente de CAE',
-                description: 'AFIP no está disponible en este momento. El CAE se reintentará automáticamente.',
-                variant: 'default',
-                duration: 8000,
-              });
-            });
-          });
-        });
+        }).eq('id', comprobante.id).catch(e => console.warn('[AFIP queue]', e.message));
       }
-      // ─────────────────────────────────────────────────────────────────────────────
 
       toast({ title: "¡Venta Exitosa!", description: `Comprobante ${saleNumber} generado.` });
       setLastComprobante(comprobante);
