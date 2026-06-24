@@ -4,10 +4,12 @@ import {
   AlertCircle, TrendingUp, CheckCircle2, FileText, Check, Download,
   Users, Puzzle, Bell, Package2, Info, Mail, MapPin, Hash,
   CreditCard, Warehouse, BarChart3, Cpu, Copy, Pencil,
+  Plus, Shield, RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -132,6 +134,25 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [generandoCsr, setGenerandoCsr] = useState(false);
   const [subiendoConfig, setSubiendoConfig] = useState(false);
 
+  // ── Tab 3: Puntos de Venta + Credenciales AFIP (gestión completa) ────────
+  const [allPuntosVenta, setAllPuntosVenta] = useState([]);
+  const [certStatus, setCertStatus] = useState(null);
+  const [certModalOpen, setCertModalOpen] = useState(false);
+  const [certForm, setCertForm] = useState({ cert: '', key: '' });
+  const [savingCert, setSavingCert] = useState(false);
+  const [showPvModal, setShowPvModal] = useState(false);
+  const [editingPv, setEditingPv] = useState(null);
+  const [pvForm, setPvForm] = useState({
+    numero: '', nombre: 'Punto de Venta Principal', tipo: 'web',
+    cai_remito: '', cai_remito_vencimiento: '', proximo_numero_remito: 1,
+    es_default: false, activo: true,
+  });
+  const [savingPv, setSavingPv] = useState(false);
+  const [selectedPvId, setSelectedPvId] = useState(null);
+  const [tiposComprobante, setTiposComprobante] = useState([]);
+  const [loadingTipos, setLoadingTipos] = useState(false);
+  const [savingTipoId, setSavingTipoId] = useState(null);
+
   // ── Tab 4: Unidades de Medida ─────────────────────────────────────────────
   const [unidadesMedida, setUnidadesMedida] = useState([]);
   const [loadingUM, setLoadingUM] = useState(true);
@@ -200,6 +221,25 @@ const ConfiguracionSection = ({ initialTab }) => {
         .eq('activo', true)
         .order('numero');
       setPuntosVenta(pvs ?? []);
+
+      const { data: allPvs } = await supabase
+        .from('puntos_venta')
+        .select('*')
+        .eq('empresa_id', user.empresa_id)
+        .order('numero');
+      setAllPuntosVenta(allPvs ?? []);
+      if (allPvs?.length > 0) {
+        setSelectedPvId(prev => prev ?? allPvs[0].id);
+      }
+
+      try {
+        const { data: certVal } = await supabase.rpc('vault_secret_read', {
+          p_name: `arca_cert_${user.empresa_id}`,
+        });
+        setCertStatus(certVal != null && certVal !== '');
+      } catch {
+        setCertStatus(false);
+      }
     } catch (e) {
       console.error('[AFIP] Error al cargar config:', e);
     } finally {
@@ -208,6 +248,28 @@ const ConfiguracionSection = ({ initialTab }) => {
   };
 
   useEffect(() => { reloadAFIP(); }, [user?.empresa_id]);
+
+  const reloadTipos = async (pvId) => {
+    if (!pvId || !user?.empresa_id) return;
+    setLoadingTipos(true);
+    try {
+      const { data } = await supabase
+        .from('tipos_comprobante_afip')
+        .select('*')
+        .eq('empresa_id', user.empresa_id)
+        .eq('punto_venta_id', pvId)
+        .order('tipo_interno');
+      setTiposComprobante(data ?? []);
+    } catch (e) {
+      console.error('[Tipos Comprobante AFIP] Error:', e);
+    } finally {
+      setLoadingTipos(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedPvId) reloadTipos(selectedPvId);
+  }, [selectedPvId]);
 
   useEffect(() => {
     if (config) {
@@ -721,6 +783,110 @@ const ConfiguracionSection = ({ initialTab }) => {
   };
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Tab 3: Credenciales cert ARCA
+  // ─────────────────────────────────────────────────────────────────────────
+  const handleSaveCert = async () => {
+    if (!certForm.cert.trim() || !certForm.key.trim()) {
+      toast({ title: 'Ingresá el certificado y la clave privada', variant: 'destructive' }); return;
+    }
+    setSavingCert(true);
+    try {
+      await supabase.rpc('vault_secret_upsert', {
+        p_name: `arca_cert_${user.empresa_id}`,
+        p_secret: certForm.cert.trim(),
+        p_description: `ARCA cert empresa ${user.empresa_id}`,
+      });
+      await supabase.rpc('vault_secret_upsert', {
+        p_name: `arca_key_${user.empresa_id}`,
+        p_secret: certForm.key.trim(),
+        p_description: `ARCA private key empresa ${user.empresa_id}`,
+      });
+      setCertStatus(true);
+      setCertModalOpen(false);
+      setCertForm({ cert: '', key: '' });
+      toast({ title: 'Credenciales guardadas en vault', className: 'bg-green-600 text-white border-green-700' });
+    } catch (e) {
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingCert(false);
+    }
+  };
+
+  const openAddPv = () => {
+    setEditingPv(null);
+    setPvForm({ numero: '', nombre: 'Nuevo Punto de Venta', tipo: 'web', cai_remito: '', cai_remito_vencimiento: '', proximo_numero_remito: 1, es_default: false, activo: true });
+    setShowPvModal(true);
+  };
+
+  const openEditPv = (pv) => {
+    setEditingPv(pv);
+    setPvForm({
+      numero: String(pv.numero),
+      nombre: pv.nombre,
+      tipo: pv.tipo ?? 'web',
+      cai_remito: pv.cai_remito ?? '',
+      cai_remito_vencimiento: pv.cai_remito_vencimiento ?? '',
+      proximo_numero_remito: pv.proximo_numero_remito ?? 1,
+      es_default: pv.es_default ?? false,
+      activo: pv.activo ?? true,
+    });
+    setShowPvModal(true);
+  };
+
+  const handleSavePv = async () => {
+    const numero = parseInt(pvForm.numero, 10);
+    if (isNaN(numero) || numero < 1 || numero > 9999) {
+      toast({ title: 'Número inválido (1–9999)', variant: 'destructive' }); return;
+    }
+    if (!pvForm.nombre.trim()) {
+      toast({ title: 'El nombre es obligatorio', variant: 'destructive' }); return;
+    }
+    setSavingPv(true);
+    try {
+      const { error } = await supabase
+        .from('puntos_venta')
+        .upsert({
+          empresa_id: user.empresa_id,
+          numero,
+          nombre: pvForm.nombre.trim(),
+          tipo: pvForm.tipo,
+          cai_remito: pvForm.cai_remito || null,
+          cai_remito_vencimiento: pvForm.cai_remito_vencimiento || null,
+          proximo_numero_remito: Number(pvForm.proximo_numero_remito) || 1,
+          es_default: pvForm.es_default,
+          activo: pvForm.activo,
+        }, { onConflict: 'empresa_id,numero' });
+      if (error) throw error;
+      toast({ title: editingPv ? 'Punto de venta actualizado' : 'Punto de venta creado', className: 'bg-green-600 text-white border-green-700' });
+      setShowPvModal(false);
+      await reloadAFIP();
+    } catch (e) {
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingPv(false);
+    }
+  };
+
+  const handleSaveTipoProximoNumero = async (tipo) => {
+    setSavingTipoId(tipo.id);
+    try {
+      const { error } = await supabase
+        .from('tipos_comprobante_afip')
+        .update({ proximo_numero: tipo.proximo_numero })
+        .eq('id', tipo.id);
+      if (error) throw error;
+      toast({ title: 'Próximo número guardado', className: 'bg-green-600 text-white border-green-700' });
+    } catch (e) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingTipoId(null);
+    }
+  };
+
+  const updateTipoLocal = (id, field, value) =>
+    setTiposComprobante(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Tab 6 handlers
   // ─────────────────────────────────────────────────────────────────────────
   const handleSaveAlertas = async () => {
@@ -1219,6 +1385,218 @@ const ConfiguracionSection = ({ initialTab }) => {
                 </div>
               )}
             </div>
+
+            {/* ── Sección 1: Credenciales AFIP/ARCA ─────────────────────────── */}
+            {afipConfig.usa_factura_electronica && (
+              <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg mt-0.5">
+                    <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-kx-text">Credenciales AFIP/ARCA</h3>
+                    <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-0.5">Datos fiscales y certificado digital para la emisión de CAE.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                  <div className="bg-kx-surface-2 dark:bg-slate-900/50 rounded-lg p-3 border kairox-border">
+                    <p className="text-xs text-kx-text-3 mb-1">CUIT</p>
+                    <p className="text-sm font-mono font-medium text-kx-text">
+                      {afipConfig.afip_cuit ? formatCuit(afipConfig.afip_cuit) : <span className="text-kx-text-3 italic">Sin configurar</span>}
+                    </p>
+                  </div>
+                  <div className="bg-kx-surface-2 dark:bg-slate-900/50 rounded-lg p-3 border kairox-border">
+                    <p className="text-xs text-kx-text-3 mb-1">Condición IVA</p>
+                    <p className="text-sm font-medium text-kx-text">
+                      {afipConfig.condicion_iva ?? <span className="text-kx-text-3 italic">Sin configurar</span>}
+                    </p>
+                  </div>
+                  <div className="bg-kx-surface-2 dark:bg-slate-900/50 rounded-lg p-3 border kairox-border">
+                    <p className="text-xs text-kx-text-3 mb-1">Certificado digital</p>
+                    {certStatus === null ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-kx-text-3"><Loader2 className="w-3 h-3 animate-spin" /> Verificando...</span>
+                    ) : certStatus ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400"><Check className="w-3 h-3" /> Configurado</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400"><AlertCircle className="w-3 h-3" /> Sin certificado</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={() => { setCertForm({ cert: '', key: '' }); setCertModalOpen(true); }}>
+                    <Shield className="w-3.5 h-3.5 mr-1.5" /> {certStatus ? 'Actualizar certificado' : 'Configurar certificado'}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => toast({ title: 'Probar conexión — Próximamente', description: 'Esta función estará disponible cuando se implemente el backend ARCA.' })}>
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Probar conexión
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* ── Sección 2: Puntos de Venta ────────────────────────────────── */}
+            {afipConfig.usa_factura_electronica && (
+              <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-kx-text">Puntos de Venta</h3>
+                      <p className="text-sm text-slate-500 dark:text-kx-text-2">Configurados en ARCA para emitir comprobantes electrónicos.</p>
+                    </div>
+                  </div>
+                  <Button size="sm" onClick={openAddPv} className="bg-blue-600 hover:bg-blue-700 text-white">
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Nuevo PdV
+                  </Button>
+                </div>
+
+                {allPuntosVenta.length === 0 ? (
+                  <p className="text-sm text-kx-text-3 text-center py-4">No hay puntos de venta configurados. Usá el botón "Completar configuración" o "+  Nuevo PdV".</p>
+                ) : (
+                  <div className="rounded-xl border border-kx-border overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-kx-surface-2 dark:bg-slate-900/50">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3 w-12">Nº</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3">Nombre</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3 hidden sm:table-cell">Tipo</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3 hidden md:table-cell">CAI Remito</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3 hidden md:table-cell">Venc. CAI</th>
+                          <th className="px-3 py-2 text-center text-xs font-medium text-kx-text-3 w-16">Default</th>
+                          <th className="px-3 py-2 text-center text-xs font-medium text-kx-text-3 w-16">Activo</th>
+                          <th className="px-3 py-2 w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allPuntosVenta.map((pv) => {
+                          const diasVenc = pv.cai_remito_vencimiento
+                            ? Math.ceil((new Date(pv.cai_remito_vencimiento) - new Date()) / 86400000)
+                            : null;
+                          const caiAlert = diasVenc !== null && diasVenc >= 0 && diasVenc < 30;
+                          return (
+                            <tr key={pv.id} className="border-t border-kx-border hover:bg-kx-surface-2/50">
+                              <td className="px-3 py-2 font-mono text-kx-text font-medium">{pv.numero}</td>
+                              <td className="px-3 py-2 text-kx-text">{pv.nombre}</td>
+                              <td className="px-3 py-2 text-kx-text-2 hidden sm:table-cell capitalize">{pv.tipo ?? 'web'}</td>
+                              <td className="px-3 py-2 text-kx-text-2 font-mono text-xs hidden md:table-cell">
+                                {pv.cai_remito ? pv.cai_remito.slice(0, 12) + '…' : '—'}
+                              </td>
+                              <td className="px-3 py-2 hidden md:table-cell">
+                                {pv.cai_remito_vencimiento ? (
+                                  <span className={`text-xs font-medium ${caiAlert ? 'text-amber-600 dark:text-amber-400' : 'text-kx-text-2'}`}>
+                                    {caiAlert && <AlertCircle className="w-3 h-3 inline mr-0.5" />}
+                                    {formatDateAR(pv.cai_remito_vencimiento)}
+                                  </span>
+                                ) : '—'}
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                {pv.es_default && <Check className="w-4 h-4 text-emerald-500 mx-auto" />}
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                <span className={`inline-block w-2 h-2 rounded-full ${pv.activo ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />
+                              </td>
+                              <td className="px-3 py-2">
+                                <Button size="sm" variant="ghost" onClick={() => openEditPv(pv)}>
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {allPuntosVenta.some(pv => pv.cai_remito_vencimiento && Math.ceil((new Date(pv.cai_remito_vencimiento) - new Date()) / 86400000) < 30 && Math.ceil((new Date(pv.cai_remito_vencimiento) - new Date()) / 86400000) >= 0) && (
+                  <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 mt-3">
+                    <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                    Uno o más CAI de remito vencen en menos de 30 días. Renovalos en ARCA antes de que expiren.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Sección 3: Tipos de Comprobante ───────────────────────────── */}
+            {afipConfig.usa_factura_electronica && allPuntosVenta.length > 0 && (
+              <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg mt-0.5">
+                    <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-kx-text">Tipos de Comprobante AFIP</h3>
+                    <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-0.5">
+                      Próximo Nº es referencial — ARCA es siempre la fuente de verdad antes de emitir.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 mb-4">
+                  <Label className="text-kx-text-3 text-xs shrink-0">Punto de venta:</Label>
+                  <Select value={selectedPvId ?? ''} onValueChange={setSelectedPvId}>
+                    <SelectTrigger className="h-8 text-xs w-56 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text">
+                      <SelectValue placeholder="Seleccioná un PdV" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allPuntosVenta.map(pv => (
+                        <SelectItem key={pv.id} value={pv.id}>
+                          PdV {pv.numero} — {pv.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {loadingTipos ? (
+                  <div className="flex items-center gap-2 text-kx-text-3 py-4"><Loader2 className="w-4 h-4 animate-spin" /> Cargando...</div>
+                ) : tiposComprobante.length === 0 ? (
+                  <p className="text-sm text-kx-text-3 py-4 text-center">Este punto de venta no tiene tipos de comprobante. Se siembran automáticamente al crear un PdV nuevo.</p>
+                ) : (
+                  <div className="rounded-xl border border-kx-border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-kx-surface-2 dark:bg-slate-900/50">
+                        <tr>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3">Tipo</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3 w-20">Cód. AFIP</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3 w-32">Próximo Nº (ref.)</th>
+                          <th className="px-3 py-2 text-center text-xs font-medium text-kx-text-3 w-20">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tiposComprobante.map((t) => (
+                          <tr key={t.id} className={`border-t border-kx-border ${!t.habilitado ? 'opacity-40' : ''}`}>
+                            <td className="px-3 py-2 font-mono text-xs font-medium text-kx-text">{t.tipo_interno}</td>
+                            <td className="px-3 py-2 text-kx-text-2 text-xs">{t.codigo_afip ?? '—'}</td>
+                            <td className="px-3 py-2">
+                              <Input
+                                type="number" min={1}
+                                value={t.proximo_numero}
+                                onChange={e => updateTipoLocal(t.id, 'proximo_numero', parseInt(e.target.value, 10) || 1)}
+                                className="h-7 w-24 text-xs dark:bg-kx-surface dark:border-kx-border"
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <Button
+                                size="sm" variant="outline"
+                                disabled={savingTipoId === t.id}
+                                onClick={() => handleSaveTipoProximoNumero(t)}
+                                className="h-7 text-xs dark:border-kx-border"
+                              >
+                                {savingTipoId === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Series de Numeración */}
             <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
@@ -1728,6 +2106,144 @@ const ConfiguracionSection = ({ initialTab }) => {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          MODAL — Certificado ARCA
+      ═══════════════════════════════════════════════════════════════════ */}
+      <Dialog open={certModalOpen} onOpenChange={setCertModalOpen}>
+        <DialogContent className="sm:max-w-[560px] bg-kx-surface border-kx-border max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-kx-text">
+              <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              Configurar Certificado Digital ARCA
+            </DialogTitle>
+            <DialogDescription>
+              Pegá el certificado (.crt) y la clave privada (.key) que obtuviste de ARCA. Se guardan en Vault encriptados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-kx-text">Certificado (.crt / PEM) *</Label>
+              <Textarea
+                value={certForm.cert}
+                onChange={e => setCertForm(f => ({ ...f, cert: e.target.value }))}
+                placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                className="font-mono text-xs h-28 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text resize-none"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-kx-text">Clave privada (.key / PEM) *</Label>
+              <Textarea
+                value={certForm.key}
+                onChange={e => setCertForm(f => ({ ...f, key: e.target.value }))}
+                placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
+                className="font-mono text-xs h-28 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text resize-none"
+              />
+            </div>
+            <div className="flex items-start gap-2 text-xs text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2">
+              <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              Las credenciales se guardan encriptadas en Vault de Supabase con las claves <code className="font-mono">arca_cert_{'{empresa_id}'}</code> y <code className="font-mono">arca_key_{'{empresa_id}'}</code>. Nunca se almacenan en texto plano.
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-2 border-t border-kx-border">
+            <Button variant="outline" onClick={() => setCertModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveCert} disabled={savingCert} className="bg-blue-600 hover:bg-blue-700 text-white">
+              {savingCert ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Guardando...</> : <><Shield className="w-4 h-4 mr-2" /> Guardar en Vault</>}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          MODAL — Nuevo/Editar Punto de Venta
+      ═══════════════════════════════════════════════════════════════════ */}
+      <Dialog open={showPvModal} onOpenChange={setShowPvModal}>
+        <DialogContent className="sm:max-w-[480px] bg-kx-surface border-kx-border">
+          <DialogHeader>
+            <DialogTitle className="text-kx-text">{editingPv ? 'Editar' : 'Nuevo'} Punto de Venta</DialogTitle>
+            <DialogDescription>Registrá el punto de venta tal como está configurado en ARCA.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-kx-text">Número (1–9999) *</Label>
+                <Input
+                  type="number" min={1} max={9999}
+                  value={pvForm.numero}
+                  onChange={e => setPvForm(f => ({ ...f, numero: e.target.value }))}
+                  placeholder="1"
+                  disabled={!!editingPv}
+                  className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-kx-text">Tipo</Label>
+                <Select value={pvForm.tipo} onValueChange={v => setPvForm(f => ({ ...f, tipo: v }))}>
+                  <SelectTrigger className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="web">Web</SelectItem>
+                    <SelectItem value="manual">Manual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-kx-text">Nombre interno *</Label>
+              <Input
+                value={pvForm.nombre}
+                onChange={e => setPvForm(f => ({ ...f, nombre: e.target.value }))}
+                placeholder="Ej: Caja Principal"
+                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-kx-text">CAI Remito</Label>
+              <Input
+                value={pvForm.cai_remito}
+                onChange={e => setPvForm(f => ({ ...f, cai_remito: e.target.value }))}
+                placeholder="Número de CAI"
+                className="font-mono dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-kx-text">Vencimiento CAI</Label>
+                <Input
+                  type="date"
+                  value={pvForm.cai_remito_vencimiento}
+                  onChange={e => setPvForm(f => ({ ...f, cai_remito_vencimiento: e.target.value }))}
+                  className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-kx-text">Próx. Nº Remito</Label>
+                <Input
+                  type="number" min={1}
+                  value={pvForm.proximo_numero_remito}
+                  onChange={e => setPvForm(f => ({ ...f, proximo_numero_remito: e.target.value }))}
+                  className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2">
+                <Switch checked={pvForm.es_default} onCheckedChange={v => setPvForm(f => ({ ...f, es_default: v }))} />
+                <Label className="text-kx-text text-sm">PdV por defecto</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={pvForm.activo} onCheckedChange={v => setPvForm(f => ({ ...f, activo: v }))} />
+                <Label className="text-kx-text text-sm">Activo</Label>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-2 border-t border-kx-border">
+            <Button variant="outline" onClick={() => setShowPvModal(false)}>Cancelar</Button>
+            <Button onClick={handleSavePv} disabled={savingPv} className="bg-blue-600 hover:bg-blue-700 text-white">
+              {savingPv ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Guardando...</> : 'Guardar'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ═══════════════════════════════════════════════════════════════════
           MODAL — Nueva/Editar Condición de Pago (fuera del sistema de tabs)

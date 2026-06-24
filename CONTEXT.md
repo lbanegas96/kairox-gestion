@@ -1,5 +1,45 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-24 (sesión 56, Luciano) — **Reportería de primer nivel + Dashboard KPIs de salud financiera.** Segmentación de cobros MP por tipo (CVU/QR/tarjeta), panel de Cobranzas con aging, Top Clientes del mes, DSO con semáforo, PDF corporativo con banda azul + cajas KPI. TypeScript 0 errores. Build ✅. Commits `56ca28a` + `9ed6671` en master.
+**Última actualización:** 2026-06-24 (sesión 57, Luciano) — **Base AFIP/ARCA: 3 migrations + 3 secciones UI en Tab Facturación.** Puntos de Venta con CAI/vencimiento, Tipos de Comprobante (9 tipos, seed automático por trigger), Credenciales vault + modal cert, facturas_pendientes_arca cola async. Build ✅ 3170 módulos.
+
+## Sesión 57 — Integración Base AFIP/ARCA (Luciano)
+
+### Auditoría previa — hallazgos clave
+- `puntos_venta` ya existía en DB con columnas `tipo_comprobante_default`, `ultimo_numero_a/b/c` (usadas por wizard existente). Se mantienen por retrocompatibilidad.
+- `vault_secret_upsert(p_name, p_secret, p_description)` y `vault_secret_read(p_name)` → RPCs activos en el schema público.
+- Trigger `fn_set_updated_at` disponible para `updated_at`.
+- `tipos_comprobante_afip` y `facturas_pendientes_arca` NO existían → creadas en esta sesión.
+
+### Migrations aplicadas
+- **080** (`080_puntos_venta_afip_columns.sql`): columnas nuevas en `puntos_venta`: `tipo` (web/manual), `es_default`, `cai_remito`, `cai_remito_vencimiento`, `proximo_numero_remito`, `updated_at` + trigger updated_at.
+- **081** (`081_tipos_comprobante_afip.sql`): tabla `tipos_comprobante_afip` con 9 tipos por PdV (FA/FB/FC/NCA/NCB/NCC/NDA/NDB/NDC + códigos AFIP). RLS tenant isolation. Trigger `trg_seed_tipos_comprobante_afip` (AFTER INSERT ON puntos_venta → siembra automáticamente los 9 tipos). Verificado con BEGIN...ROLLBACK.
+- **082** (`082_facturas_pendientes_arca.sql`): cola async `facturas_pendientes_arca` (estados: pendiente/procesando/emitida/error_datos/reintentando/error_definitivo). INDEX en (empresa_id, estado, proximo_intento) para worker de ARCA.
+
+### UI — Tab Facturación (secciones nuevas sobre "Series de Numeración")
+Condicional a `afipConfig.usa_factura_electronica`. Se mantuvo INTACTO el wizard existente y la sección "Series de Numeración".
+
+**Sección 1 — Credenciales AFIP/ARCA:**
+- Cards readonly: CUIT (de `empresas.afip_cuit`), Condición IVA, estado del certificado (badge verde/amber via `vault_secret_read`).
+- Botón "Configurar certificado" → modal con 2 Textareas (cert PEM + key PEM) → guarda via `vault_secret_upsert` con keys `arca_cert_{empresa_id}` + `arca_key_{empresa_id}`.
+- Botón "Probar conexión" → placeholder toast.
+
+**Sección 2 — Puntos de Venta:**
+- Tabla de TODOS los PdV (activos + inactivos). Columnas: Nº, Nombre, Tipo, CAI Remito, Vencimiento CAI, Default, Activo.
+- Botón "+ Nuevo PdV" → modal con campos numero/nombre/tipo/cai_remito/cai_remito_vencimiento/proximo_numero_remito/es_default/activo. Upsert via onConflict `empresa_id,numero`.
+- Alert si CAI vence en < 30 días.
+
+**Sección 3 — Tipos de Comprobante por PdV:**
+- Select de PdV → tabla de 9 tipos con columnas: Tipo, Código AFIP, Próximo Nº (editable, referencial), Acción (guardar).
+- `proximo_numero` es REFERENCIAL — ARCA es fuente de verdad antes de emitir.
+
+### Estado de tablas AFIP
+- `puntos_venta`: RLS activa, policy `puntos_venta_all` ALL con `empresa_id = get_my_empresa_id()`.
+- `tipos_comprobante_afip`: RLS activa, policy tenant.
+- `facturas_pendientes_arca`: RLS activa, policy tenant. Tabla vacía — se llenará cuando se implemente el módulo de emisión de CAE.
+
+### Próximos pasos AFIP (pendiente)
+- Edge Function o RPC `emitir_cae` que: lee cert/key de vault, construye XML para ARCA, llama API ARCA, guarda CAE en `facturas_pendientes_arca`.
+- Conectar emisión de CAE desde `NuevaFacturaModal.jsx` cuando el PdV tiene AFIP configurado.
+- Worker de reintentos para `facturas_pendientes_arca` estado `reintentando`.
 
 ## Sesión 56 — Reportería de primer nivel + Dashboard KPIs financieros (Luciano)
 
