@@ -1,5 +1,91 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-23 (sesión 54, Luciano) — **Cierre definitivo de la segunda auditoría.** Migration 077: revoke EXECUTE de `fn_oc_recalcular_estado` para `anon` — último hallazgo de `get_advisors`. Estado final de advisors: 0 warnings de nivel anon accionables (solo `email_exists_in_system` queda en anon, intencional para flujo de invitación). Todos los warnings `authenticated` restantes son RPCs operativas con guards internos o trigger functions que fallan solas sin contexto de trigger — aceptados. Build ✅. Repo sincronizado. Auditoría 2 cerrada por completo.
+**Última actualización:** 2026-06-24 (sesión 56, Luciano) — **Reportería de primer nivel + Dashboard KPIs de salud financiera.** Segmentación de cobros MP por tipo (CVU/QR/tarjeta), panel de Cobranzas con aging, Top Clientes del mes, DSO con semáforo, PDF corporativo con banda azul + cajas KPI. TypeScript 0 errores. Build ✅. Commits `56ca28a` + `9ed6671` en master.
+
+## Sesión 56 — Reportería de primer nivel + Dashboard KPIs financieros (Luciano)
+
+### Segmentación MercadoPago por tipo de cobro
+
+**Contexto del cliente:** el estudio contable necesita separar los ingresos de MP por canal: CVU/transferencia, QR/billetera digital, tarjeta de crédito y tarjeta de débito.
+
+**Flujo real de MP explicado y validado:** el webhook recibe `payment_id` → llama a `/v1/payments/{id}` en la API de MP → el objeto devuelve `payment_type_id` (`bank_transfer`, `account_money`, `credit_card`, `debit_card`).
+
+**Implementación completa:**
+- **Migration 078** (`movimientos_bancarios_add_subtipo.sql`): columna `subtipo TEXT NULL` en `movimientos_bancarios`.
+- **Migration 079** (`insertar_movimiento_bancario_externo_add_subtipo.sql`): RPC `insertar_movimiento_bancario_externo` recibe `p_subtipo TEXT DEFAULT NULL` — retrocompatible con Ualá y otros callers que no pasan subtipo.
+- **Edge Function `mp-webhook` v2**: mapeo `SUBTIPO_MAP { bank_transfer→'transferencia', account_money→'qr', credit_card→'tarjeta_credito', debit_card→'tarjeta_debito' }` + pasa `p_subtipo` a la RPC.
+- **`ReportesSection.jsx`**: nuevo card "MercadoPago por Tipo" con badge `MP`, query a `movimientos_bancarios WHERE origen='mercadopago'`, tabla con chips de color por subtipo + resumen de totales por tipo.
+
+### Dashboard — KPIs de Salud Financiera (nueva fila)
+
+**Fuente de datos:** `comprobantes` del mes (accrual basis) + `ordenes_compra` activas (no recibidas ni canceladas).
+
+**4 nuevos KPIs:**
+| KPI | Fórmula | Semáforo |
+|---|---|---|
+| **DSO** (días en cobrar) | `(deuda_clientes / facturado_mes) × 30` | Verde ≤30, Amber 30-60, Rojo >60 |
+| **Facturas del mes** | `COUNT(comprobantes WHERE mes_actual)` | — |
+| **Ticket promedio** | `facturasMesTotal / facturasMesCount` | — |
+| **OC pendientes** | `COUNT(ordenes_compra WHERE estado NOT IN ('recibida','cancelada'))` | Amber si >0 |
+
+**Archivos modificados:**
+- `src/types/index.ts`: `DashboardKPIs` extendido con `dso`, `facturasMesCount`, `facturasMesTotal`, `ocPendientes`, `ticketPromedio`. Nueva interface `TopCliente { nombre, total, count }`.
+- `src/services/dashboardService.ts`: `getKPIs()` agrega 2 queries paralelas (comprobantes + ordenes_compra), computa los 5 campos nuevos. Nuevo método `getTopClientes()` (agrupa comprobantes del mes por `cliente_nombre`, top 5 por total). `DASHBOARD_KEYS.topClientes` agregado.
+
+### Dashboard — Panel Cobranzas con aging
+
+**Reemplaza el panel "Cotizaciones Aprobadas"** en el grid inferior derecho (las cotizaciones se mantienen en la fila de KPIs de abajo).
+
+**Aging buckets** calculados desde `alertasCC`:
+- 30-60 días: `vencidos30 - vencidos60`
+- 60-90 días: `vencidos60 - vencidos90`
+- +90 días: `vencidos90`
+
+**Lista de top deudores** con `diasVencido` + badge urgente (>60 días) + total vencido al pie.
+
+### Dashboard — Panel "Top Clientes del Mes"
+
+**5 tarjetas en grid** (1 col en mobile, 5 en XL) con:
+- Rank numerado (#1 dorado, #2 plata, #3 bronce)
+- Nombre del cliente
+- Total facturado en el mes
+- Barra de progreso proporcional al líder
+- Cantidad de comprobantes
+
+### PDF de primer nivel — pdfUtils.js
+
+**Reescritura completa de `generatePDF`:**
+- **Banda de header azul corporativo** (`rgb(37,99,235)`) con nombre empresa (blanco, negrita) + título del reporte + período + fecha generado (alineado a la derecha).
+- **Bloque de métricas KPI** (opcional, hasta 4 cajas en fila): fondo `slate-100`, borde `slate-200`, label arriba en gris, valor abajo en negrita.
+- **Tabla con `theme: 'grid'`** (líneas en todas las celdas, más limpio que `striped`), colores `slate` para separadores.
+- **Footer profesional**: línea divisoria + "KAIROX Gestión — Sistema Integral" (izquierda) + "Página X de Y" (derecha).
+
+**Nuevo parámetro `summaryMetrics`** (`{label, value}[]`) — computado en `ReportesSection.buildSummaryMetrics()` según el tipo de reporte:
+| Reporte | Métricas en el PDF |
+|---|---|
+| Ventas | Total, Cantidad, Ticket Promedio, Mayor Venta |
+| Compras | Total, Cantidad, Promedio |
+| Clientes | Total Clientes, Con deuda, Total Deuda |
+| Financiero | Ingresos, Egresos, Balance, Registros |
+| Cuenta Corriente | Total DEBE, Total HABER, Balance, Movimientos |
+| MP por Tipo | Total MP, Transferencias, QR/Billetera, Tarjetas |
+
+**`companyName`** tomado de `config.nombre_empresa` (contexto empresa) — el PDF muestra el nombre real del cliente en lugar de "KAIROX Gestión" hardcodeado.
+
+### Fix de tipos TypeScript
+
+Errores `TS7006 (any implícito)` corregidos en:
+- `dashboardService.ts` → cast `CotRow` explícito en `getCotizacionesStats`
+- `conciliacionService.ts` → tipo inline en callback filter de candidatos
+- `proveedoresService.ts` → tipo inline en reduce de saldo proveedores
+
+**Resultado:** `tsc --noEmit` → 0 errores. Build → ✅ 3170 módulos.
+
+### Commits de la sesión
+| Hash | Descripción |
+|---|---|
+| `723f9c0` | feat: segmentar cobros MP por tipo (transferencia/QR/tarjeta) + reporte |
+| `56ca28a` | feat: dashboard KPIs de salud financiera + top clientes + panel cobranzas + PDF corporativo |
+| `9ed6671` | fix: types implícitos any en dashboardService, conciliacionService, proveedoresService |
 
 ## Sesión 54 — Cierre definitivo de la segunda auditoría (Luciano)
 
