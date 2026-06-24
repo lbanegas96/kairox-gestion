@@ -31,6 +31,7 @@ import { useCaja } from '@/contexts/CajaContext';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { getNowAR, getTodayAR, getStartOfDayAR, getEndOfDayAR, getDateFromInputAR, formatDateTimeAR, formatDateAR } from '@/lib/dateUtils';
+import { asientosAutoService } from '@/services/planCuentasService';
 import CajaCierre from '@/components/caja/CajaCierre';
 
 function CajaSection() {
@@ -351,7 +352,7 @@ function CajaSection() {
         ? tcParalelo.calcParalelo(montoNum, 'ARS', 1)
         : null;
 
-      const { error } = await supabase.from('movimientos_caja').insert([{
+      const { data: movInsertado, error } = await supabase.from('movimientos_caja').insert([{
         user_id: user.id,
         empresa_id: user.empresa_id,
         caja_sesion_id: isSessionOpen ? currentSession?.id : null,
@@ -366,11 +367,27 @@ function CajaSection() {
           monto_paralelo: montoParaleloValue,
           tc_paralelo: tcParalelo.tcHoy,
         } : {}),
-      }]);
+      }]).select('id').single();
 
       if (error) throw error;
 
-      toast({ 
+      // Asiento contable automático — fire & forget (no bloquea el movimiento)
+      // Mismo patrón que crearAsientoVenta en NuevaVentaModal. Si el plan de
+      // cuentas no está seedeado o el período está cerrado, sale silenciosamente.
+      asientosAutoService.crearAsientoMovimientoCaja(
+        user.empresa_id,
+        user.id,
+        {
+          movimientoId: movInsertado.id,
+          tipo:         formData.tipo,
+          categoria:    formData.categoria,
+          monto:        montoNum,
+          fecha:        formData.fecha,
+          descripcion:  `${formData.tipo === 'egreso' ? 'Egreso' : 'Ingreso'} de caja — ${formData.concepto}`,
+        }
+      ).catch(e => console.warn('[Contabilidad] Asiento mov. caja (no crítico):', e.message));
+
+      toast({
         title: "Movimiento registrado", 
         description: isSessionOpen ? "Operación guardada en el turno actual." : "Operación guardada (sin turno).",
         className: "bg-green-600 text-white border-green-500"
@@ -535,7 +552,10 @@ function CajaSection() {
                 </span>
                 <span className="text-xs text-kx-text-3 flex items-center gap-1">
                   <Clock className="w-3 h-3" />
-                  {formatDateTimeAR(currentSession.apertura_fecha).split(' ')[1]} hs
+                  {(() => {
+                    const [fecha, hora] = formatDateTimeAR(currentSession.apertura_fecha).split(' ');
+                    return `${fecha} · ${hora} hs`;
+                  })()}
                 </span>
               </div>
             )}
@@ -905,6 +925,8 @@ function CajaSection() {
       {/* MODAL: Cerrar Caja */}
       <Dialog open={isCierreSessionModalOpen} onOpenChange={setIsCierreSessionModalOpen}>
         <DialogContent className="sm:max-w-md kairox-bg-card kairox-text-primary p-6 dark:bg-kx-bg dark:border-kx-border">
+           <DialogTitle className="sr-only">Arqueo y Cierre de Caja</DialogTitle>
+           <DialogDescription className="sr-only">Registrá el monto final contado y las observaciones para cerrar el turno de caja.</DialogDescription>
            <CajaCierre onCancel={() => setIsCierreSessionModalOpen(false)} />
         </DialogContent>
       </Dialog>

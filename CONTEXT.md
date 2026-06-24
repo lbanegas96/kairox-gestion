@@ -1,5 +1,83 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-24 (sesión 57, Luciano) — **Base AFIP/ARCA: 3 migrations + 3 secciones UI en Tab Facturación.** Puntos de Venta con CAI/vencimiento, Tipos de Comprobante (9 tipos, seed automático por trigger), Credenciales vault + modal cert, facturas_pendientes_arca cola async. Build ✅ 3170 módulos.
+**Última actualización:** 2026-06-24 (sesión 29 Nadia) — Testing end-to-end de todo el trabajo de Luciano (sesiones 54-57) + 3 bugs server-side resueltos (race condition en numeración, recursión RLS, escalación de privilegios) + 4 fixes UI + 1 mejora contable + 1 feature grande flageada para sesión dedicada. **Última migration aplicada: 085.** Build ✅.
+
+## Sesión 29 (Nadia) — Testing post-Luciano + 3 fixes server-side críticos
+
+### Bugs resueltos con migration
+
+**Migration 083 — Race condition ENT duplicada (crítico, observado en prod)**
+ENT-2026-0042 fue asignado a 2 entregas distintas (Pedido + POS) por la empresa `cbc4db74...`. Causa raíz: los 2 caminos NO compartían el mismo source de numeración — `crear_entrega` (Pedido) usaba `obtener_proximo_numero('entrega')` (atómico via `FOR UPDATE` sobre `series_numeracion`), mientras que `crear_venta` (POS, rama entrega implícita) usaba `siguiente_numero_documento(... 'entregas' ...)` que hace `SELECT COUNT(*)` sin lock. Fix: 1 línea en `crear_venta` para usar `obtener_proximo_numero('entrega')` igual que su par. El tipo `'entrega'` ya estaba registrado en `series_numeracion` desde migration 051. Verificado post-fix: `proximo_numero` vs `MAX(numero)` en sync para las 3 empresas. **Pendiente futuro:** `crear_devolucion` todavía usa `siguiente_numero_documento` — race latente para devoluciones simultáneas.
+
+**Migration 084 — Recursión infinita 42P17 en policy `profiles_self_update`**
+Error en consola del browser: `"infinite recursion detected in policy for relation profiles"`. Causa raíz: el `WITH CHECK` de la policy hacía `(role = (SELECT role FROM profiles WHERE id = auth.uid()))` — subquery directo a la misma tabla, fuerza re-evaluación de las policies SELECT, Postgres detecta el loop y aborta. Fix: nueva función `get_my_role()` SECURITY DEFINER (mismo patrón que `get_my_empresa_id()`), policy recreada usando esa función. `REVOKE EXECUTE FROM anon` para consistencia con migration 063.
+
+**Migration 085 — Trigger BEFORE UPDATE para proteger `profiles.role`**
+Hallazgo adicional descubierto al verificar 084: la protección "no cambiar tu propio rol" del `WITH CHECK` **nunca funcionó** ni con la versión nueva ni con la vieja — Postgres evalúa el `WITH CHECK` después del UPDATE, entonces cualquier comparación contra `role` actual ve el valor nuevo y siempre se cumple. La recursión histórica lo enmascaraba (los UPDATEs explotaban antes de evaluar la lógica). Bug preexistente: un staff podía hacer `UPDATE profiles SET role='admin'` sobre sí mismo. Fix: trigger BEFORE UPDATE OF role con `OLD.role` vs `NEW.role` (los triggers operan sobre los valores del row, no consultan la tabla bajo policies → cero recursión). Permite el cambio solo si: `auth.uid() IS NULL` (migrations/seeds) OR `auth.role() = 'service_role'` OR `is_admin()`. Los 3 escenarios verificados con `BEGIN...ROLLBACK`: staff escalando → bloqueado, admin promoviendo a colega → pasa, staff editando first_name → pasa (trigger no se dispara, usa `BEFORE UPDATE OF role`).
+
+### Fixes UI
+
+- **`CotizacionesSection.jsx`** — cuando el usuario seleccionaba un cliente del dropdown, el form solo guardaba `cliente_nombre` (texto), nunca el `cliente_id`. Resultado: el 100% de las cotizaciones nuevas iban a DB con `cliente_id = null`, y al convertir a venta el POS no podía pre-cargar el cliente. Fix: agregado `cliente_id: ''` al form state + reset + onChange clear + dropdown onClick setea ambos campos + payload del mutate pasa `{ id: form.cliente_id || null, nombre: form.cliente_nombre }`. El service ya estaba correcto (`cliente_id: cliente?.id ?? null`). `||` con `null` para no enviar string vacío a columna uuid.
+
+- **`NuevaVentaModal.jsx`** — pre-carga de cliente desde cotización reforzada con 3 niveles de fallback: 1) match por `cotizacion.cliente_id` en la lista local, 2) fallback a DB si el cliente está inactivo (`.maybeSingle()`), 3) fallback por `cliente_nombre` (case-insensitive, trim) — cubre cotizaciones legacy que se crearon sin id antes del fix de CotizacionesSection. Las cotizaciones nuevas pasan por el path 1 (rápido + sin ambigüedad); las viejas por el path 3 (es frágil si hay clientes con mismo nombre, pero sigue funcionando).
+
+- **`CajaSection.jsx`** — header de caja abierta mostraba solo `"11:04 hs"`. Cambiado a `"24/06/2026 · 11:04 hs"` usando `formatDateTimeAR()` que ya estaba importado. Cero imports nuevos.
+
+- **`CajaSection.jsx`** — modal "Cerrar Caja" (línea 926) carecía de `DialogTitle` y `DialogDescription` (warning de accesibilidad de Radix). Agregados con clase `sr-only` (mismo patrón que sesión 53 aplicó a `OnboardingWizard`): el screen reader anuncia "Arqueo y Cierre de Caja" al abrir, pero visualmente se mantiene el heading interno de `CajaCierre` sin duplicar. No introduje `@radix-ui/react-visually-hidden` como dependencia — `sr-only` de Tailwind ya cumple.
+
+### Mejora — Asientos contables desde Caja
+
+`handleSubmit` de `CajaSection.jsx` insertaba en `movimientos_caja` pero no generaba asiento contable (los movimientos de venta y compra sí lo hacían vía `asientosAutoService`). Implementado:
+
+- Nueva función **`asientosAutoService.crearAsientoMovimientoCaja(empresaId, userId, params)`** en `planCuentasService.ts`. Mismo patrón estructural que `crearAsientoVenta`/`crearAsientoCompra` (check de período cerrado fire & forget, find por código, silencioso si no hay plan de cuentas seedeado).
+- **Mapeo categoría → cuenta:**
+  - Egreso `Sueldos` → `5.2` Gastos de Personal · HABER `1.1.1` Caja y Bancos
+  - Egreso `Servicios`/`Alquiler`/`Mantenimiento` → `5.4` Gastos de Administración · HABER `1.1.1`
+  - Egreso `Impuestos` → `5.6` Impuestos y Tasas · HABER `1.1.1`
+  - Egreso `Otro Egreso` → `5.8` Otros Gastos · HABER `1.1.1`
+  - Ingreso `Cobro`/`Inversión`/`Otro Ingreso` → DEBE `1.1.1` · HABER `4.3` Otros Ingresos
+- `origen='movimiento_caja'` + `origen_id` para trazabilidad.
+- `handleSubmit` captura el `id` del INSERT y llama la función fire & forget post-insert (mismo patrón que `NuevaVentaModal.jsx:518`). Si falla, el movimiento queda guardado y solo se logea console.warn.
+- **No requirió migration** — las cuentas ya están seedeadas en `plan_cuentas` por el trigger al crear empresa.
+
+### Testing manual realizado — todos los módulos verificados funcionando
+
+| Módulo | Estado |
+|---|---|
+| Dashboard nuevo (KPIs, aging, top clientes, PDF) | ✅ |
+| Configuración AFIP (Credenciales, PdV, Tipos de Comprobante) | ✅ |
+| Reportes (Ventas, Financiero, MercadoPago, Libro IVA) | ✅ |
+| Caja (apertura, movimientos manuales, asientos auto, cierre) | ✅ |
+| Compras y Proveedores | ✅ |
+| Inventario (nuevo producto Jamón Cocido SKU `JAMON-001`, unidad GR) | ✅ |
+
+### Errores externos descartados
+
+`"A listener indicated an asynchronous response by returning true, but the message channel closed"` en consola — verificado: cero referencias a `chrome.runtime`/`browser.runtime`/`onMessage`/`sendMessage` en todo `src/`, `index.html` y `public/`. Es 100% ruido de extensiones del browser (Claude, Grammarly, password managers, etc.). El patrón "incremento al navegar" es la firma típica. Confirmación rápida: abrir en ventana Incógnito sin extensiones desaparece.
+
+### Pendientes para próximas sesiones
+
+⚠️ **Venta al peso/volumen** (feature grande, requiere sesión dedicada): que el carrito del POS acepte decimales (0.5 kg, 200 gr, etc.) cuando el producto tiene unidad `GR`/`KG`/`LT`/`ML`/`MT`. Investigado: schema heterogéneo — `cotizacion_items`, `pedido_items`, `entrega_items`, `recepcion_items`, `devolucion_items` ya son `numeric(10/12, 3)`, pero `comprobante_items.cantidad`, `detalle_compras.cantidad`, `movimientos_inventario.cantidad`, `productos.stock_actual`, `productos.stock_minimo` siguen siendo `integer`. Para soportar el feature: **Migration 086** ALTER las 5 columnas a `numeric(12,3)` + recrear las 7 RPCs del mapa de escritores de stock (`crear_venta`, `crear_entrega`, `crear_devolucion`, `decrement_stock`, `increment_stock`, `ajustar_stock_manual`, `aplicar_compra_producto` — todas declaran `v_cantidad INTEGER`) + tocar frontend (`NuevaVentaModal`, `CompraRapidaSection`, `ProductosSection` modal movimiento de stock, ticket PDF) + ajustar los 9 tests pgTAP (algunos `is(stock_actual, 7)` asumen integer). Hacerlo "frontend only" es engañoso: el cast `(v_item->>'cantidad')::INTEGER` revienta con `0.5`. **Recomendación: NO hacer hasta confirmar con el cliente que realmente necesita venta al peso, no productos con SKUs múltiples ("100gr azúcar" como SKU separado).**
+
+⚠️ **Aging de Cuenta Corriente por fecha de vencimiento**: el aging hoy se calcula por antigüedad del DEBE (fecha de venta). Ahora que existe `comprobantes.fecha_vencimiento` (sesión 25), tendría más sentido calcular por vencimiento. Heredado de sesión 26, sin tocar — decisión de producto (impacta KPIs históricos).
+
+⚠️ **Race condition en `crear_devolucion`** — usa `siguiente_numero_documento('devoluciones', 'numero_devolucion', 'DEV')` que cuenta filas sin lock, mismo patrón que tenía `crear_venta` antes de migration 083. `'devolucion'` NO está registrado en `series_numeracion` todavía. Cuando dos devoluciones simultáneas ocurran, van a colisionar. Migration futura: agregar `'devolucion'` a `series_numeracion` + recrear `crear_devolucion` para usar `obtener_proximo_numero('devolucion')`.
+
+⚠️ **Errores 401/500 en producción**: investigar si persisten después de migrations 084-085 (la recursión 42P17 probablemente causaba 500s al hacer UPDATE de profiles).
+
+### Archivos modificados / creados
+
+**Nuevas migrations (3):**
+- `supabase/migrations/083_crear_venta_unificar_numeracion_entrega_atomica.sql`
+- `supabase/migrations/084_fix_profiles_self_update_recursion.sql`
+- `supabase/migrations/085_protect_profile_role_trigger.sql`
+
+**Frontend:**
+- `src/components/sections/CotizacionesSection.jsx`
+- `src/components/ventas/NuevaVentaModal.jsx`
+- `src/components/sections/CajaSection.jsx`
+- `src/services/planCuentasService.ts` (extendido con `crearAsientoMovimientoCaja`)
+
+---
 
 ## Sesión 57 — Integración Base AFIP/ARCA (Luciano)
 

@@ -382,4 +382,95 @@ export const asientosAutoService = {
     );
     await asientosService.confirmarAsiento(asiento.id);
   },
+
+  /**
+   * Crea y confirma el asiento de un movimiento de caja MANUAL
+   * (ingresos/egresos cargados a mano desde CajaSection).
+   *
+   * No se invoca para movimientos automáticos (Venta/Compra) — esos ya tienen
+   * sus propios asientos en `crearAsientoVenta`/`crearAsientoCompra`.
+   *
+   * Egreso → DEBE cuenta de gasto (según categoría), HABER 1.1.1 Caja y Bancos.
+   * Ingreso → DEBE 1.1.1 Caja y Bancos, HABER cuenta de ingreso (4.3 Otros Ingresos).
+   * Si la empresa no tiene plan de cuentas, sale silenciosamente (mismo patrón
+   * que crearAsientoVenta).
+   */
+  async crearAsientoMovimientoCaja(
+    empresaId: string,
+    userId: string,
+    params: {
+      movimientoId: string;
+      tipo: 'ingreso' | 'egreso';
+      categoria: string;
+      monto: number;
+      fecha: string;       // YYYY-MM-DD
+      descripcion: string;
+    }
+  ): Promise<void> {
+    // Map categoría → código de cuenta (contrapartida de Caja y Bancos)
+    // Egresos: cada categoría va a su cuenta de gasto correspondiente.
+    // Ingresos manuales: todos a 4.3 Otros Ingresos (la venta operativa va por
+    // crearAsientoVenta — acá solo caen cobros sueltos, aportes, etc.).
+    const MAPA_EGRESO: Record<string, string> = {
+      'Sueldos':       '5.2', // Gastos de Personal
+      'Servicios':     '5.4', // Gastos de Administración
+      'Alquiler':      '5.4',
+      'Mantenimiento': '5.4',
+      'Impuestos':     '5.6', // Impuestos y Tasas
+      'Otro Egreso':   '5.8', // Otros Gastos
+    };
+    const MAPA_INGRESO: Record<string, string> = {
+      'Cobro':        '4.3', // Otros Ingresos
+      'Inversión':    '4.3',
+      'Otro Ingreso': '4.3',
+    };
+
+    const codigoContrapartida = params.tipo === 'egreso'
+      ? (MAPA_EGRESO[params.categoria] ?? '5.8')
+      : (MAPA_INGRESO[params.categoria] ?? '4.3');
+
+    // Non-critical period check — RPC errors never block the cash movement
+    try {
+      const { data: cerrado, error: rpcErr } = await supabase.rpc('fecha_en_periodo_cerrado', {
+        p_empresa_id: empresaId,
+        p_fecha: params.fecha,
+      });
+      if (rpcErr) {
+        console.warn('[asientosAutoService] período check failed:', rpcErr.message);
+      } else if (cerrado) {
+        throw new Error(`Período cerrado: la fecha ${params.fecha} pertenece a un período contable cerrado.`);
+      }
+    } catch (e: any) {
+      if (e.message?.startsWith('Período cerrado:')) throw e;
+      console.warn('[asientosAutoService] período check error:', e);
+    }
+
+    const [cuentaCaja, cuentaContra] = await Promise.all([
+      findCuentaByCodigo(empresaId, '1.1.1'),
+      findCuentaByCodigo(empresaId, codigoContrapartida),
+    ]);
+    if (!cuentaCaja || !cuentaContra) return; // empresa sin plan de cuentas
+
+    const items = params.tipo === 'egreso'
+      ? [
+          { cuenta_id: cuentaContra, debe: params.monto, haber: 0,           descripcion: params.categoria },
+          { cuenta_id: cuentaCaja,   debe: 0,            haber: params.monto, descripcion: 'Salida de caja' },
+        ]
+      : [
+          { cuenta_id: cuentaCaja,   debe: params.monto, haber: 0,           descripcion: 'Entrada a caja' },
+          { cuenta_id: cuentaContra, debe: 0,            haber: params.monto, descripcion: params.categoria },
+        ];
+
+    const asiento = await asientosService.createAsiento(
+      empresaId, userId,
+      {
+        fecha: params.fecha,
+        descripcion: params.descripcion,
+        origen: 'movimiento_caja',
+        origen_id: params.movimientoId,
+      },
+      items
+    );
+    await asientosService.confirmarAsiento(asiento.id);
+  },
 };

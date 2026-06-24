@@ -42,6 +42,7 @@ function CotizacionesSection({ onNavigateToSale } = {}) {
 
   // Form state
   const [form, setForm] = useState({
+    cliente_id: '',
     cliente_nombre: '',
     notas: '',
     condiciones_pago: 'Pago a 30 días',
@@ -173,7 +174,7 @@ function CotizacionesSection({ onNavigateToSale } = {}) {
   };
 
   const resetForm = () => {
-    setForm({ cliente_nombre: '', notas: '', condiciones_pago: 'Pago a 30 días', fecha_vencimiento: '', moneda: 'ARS', tipoCambioTasa: 1 });
+    setForm({ cliente_id: '', cliente_nombre: '', notas: '', condiciones_pago: 'Pago a 30 días', fecha_vencimiento: '', moneda: 'ARS', tipoCambioTasa: 1 });
     setItems([{ ...EMPTY_ITEM }]);
     setTcMissing(false);
   };
@@ -231,7 +232,7 @@ function CotizacionesSection({ onNavigateToSale } = {}) {
       return toast({ title: 'Ítems inválidos', description: 'Revisá cantidades y precios (usar coma para decimales).', variant: 'destructive' });
     }
     createMutation.mutate({
-      cliente: form.cliente_nombre ? { nombre: form.cliente_nombre } : null,
+      cliente: form.cliente_nombre ? { id: form.cliente_id || null, nombre: form.cliente_nombre } : null,
       items: validItems,
       notas: form.notas,
       condicionesPago: form.condiciones_pago,
@@ -419,7 +420,7 @@ function CotizacionesSection({ onNavigateToSale } = {}) {
                   <Label className="dark:text-kx-text">Nombre del Cliente</Label>
                   <Input
                     value={form.cliente_nombre}
-                    onChange={e => { setForm(f => ({ ...f, cliente_nombre: e.target.value })); setShowClienteDropdown(true); }}
+                    onChange={e => { setForm(f => ({ ...f, cliente_nombre: e.target.value, cliente_id: '' })); setShowClienteDropdown(true); }}
                     onFocus={() => setShowClienteDropdown(true)}
                     placeholder="Buscar cliente existente o escribir uno nuevo"
                     className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
@@ -437,7 +438,7 @@ function CotizacionesSection({ onNavigateToSale } = {}) {
                             key={c.id}
                             type="button"
                             className="w-full text-left px-3 py-2 text-sm hover:bg-kx-surface-2 dark:hover:bg-slate-800 dark:text-kx-text"
-                            onClick={() => { setForm(f => ({ ...f, cliente_nombre: c.nombre })); setShowClienteDropdown(false); }}
+                            onClick={() => { setForm(f => ({ ...f, cliente_id: c.id, cliente_nombre: c.nombre })); setShowClienteDropdown(false); }}
                           >
                             {c.nombre}
                           </button>

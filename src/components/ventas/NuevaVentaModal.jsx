@@ -115,14 +115,28 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
       }
 
       // Pre-seleccionar cliente de la cotización (fuera del check de items por si
-      // la cotización no tiene ítems, y con fallback a DB si el cliente está inactivo).
-      if (cotizacion?.cliente_id) {
-        let client = (clis || []).find(c => c.id === cotizacion.cliente_id);
-        if (!client) {
-          const { data: clienteCot } = await supabase
-            .from('clientes').select('*').eq('id', cotizacion.cliente_id).maybeSingle();
-          client = clienteCot;
+      // la cotización no tiene ítems).
+      // Estrategia: 1) match por cliente_id; 2) fallback a DB si está inactivo;
+      // 3) fallback por cliente_nombre (las cotizaciones viejas guardan solo el
+      // texto libre sin id — ver CotizacionesSection línea 234).
+      if (cotizacion?.cliente_id || cotizacion?.cliente_nombre) {
+        let client = null;
+
+        if (cotizacion.cliente_id) {
+          client = (clis || []).find(c => c.id === cotizacion.cliente_id);
+          if (!client) {
+            const { data: clienteCot } = await supabase
+              .from('clientes').select('*').eq('id', cotizacion.cliente_id).maybeSingle();
+            client = clienteCot;
+          }
         }
+
+        // Fallback: buscar por nombre (case-insensitive, trim) en la lista
+        if (!client && cotizacion.cliente_nombre) {
+          const target = cotizacion.cliente_nombre.trim().toLowerCase();
+          client = (clis || []).find(c => (c.nombre || '').trim().toLowerCase() === target);
+        }
+
         if (client) handleSelectClient(client);
       }
 
