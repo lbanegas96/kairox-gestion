@@ -5,6 +5,14 @@ const SUPABASE_URL     = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const MP_API_BASE      = 'https://api.mercadopago.com';
 
+// Mapeo MP payment_type_id → subtipo interno KAIROX
+const SUBTIPO_MAP: Record<string, string> = {
+  'bank_transfer':  'transferencia',   // CVU / transferencia bancaria
+  'account_money':  'qr',              // QR / billetera MP
+  'credit_card':    'tarjeta_credito',
+  'debit_card':     'tarjeta_debito',
+};
+
 serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
@@ -93,7 +101,10 @@ serve(async (req) => {
       );
     }
 
-    // ── Insertar en KAIROX via RPC existente ─────────────────────────────────
+    // ── Mapear tipo de cobro ─────────────────────────────────────────────────
+    const subtipo = SUBTIPO_MAP[pago.payment_type_id] ?? null;
+
+    // ── Insertar en KAIROX via RPC ───────────────────────────────────────────
     const descripcion = [
       `MP #${paymentId}`,
       pago.payment_method_id,
@@ -110,6 +121,7 @@ serve(async (req) => {
         p_monto:              pago.transaction_amount,
         p_tipo:               'ingreso',
         p_origen:             'mercadopago',
+        p_subtipo:            subtipo,
       }
     );
 
@@ -128,7 +140,7 @@ serve(async (req) => {
       console.warn('[mp-webhook] No se pudo actualizar ultimo_sync:', syncError.message);
     }
 
-    console.log('[mp-webhook] ✓ Pago registrado:', paymentId, '— movimiento id:', resultado?.id);
+    console.log('[mp-webhook] ✓ Pago registrado:', paymentId, '— subtipo:', subtipo, '— movimiento id:', resultado?.id);
     return new Response(
       JSON.stringify({ ok: true, id: resultado?.id }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }

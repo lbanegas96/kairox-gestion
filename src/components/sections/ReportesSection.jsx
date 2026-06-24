@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 import {
   BarChart3, Package, TrendingUp, Banknote, ShoppingCart,
-  Users, CreditCard, FileSpreadsheet, ArrowLeftRight, BookOpen
+  Users, CreditCard, FileSpreadsheet, ArrowLeftRight, BookOpen, Smartphone
 } from 'lucide-react';
 import ReporteParidad from '@/components/reportes/ReporteParidad';
 import ReporteLibroIVA from '@/components/reportes/ReporteLibroIVA';
@@ -17,6 +17,20 @@ import ReportHeader from '@/components/reports/ReportHeader';
 import ReportTable from '@/components/reports/ReportTable';
 import { formatDateAR } from '@/lib/dateUtils';
 import { formatCurrency } from '@/lib/currencyUtils';
+
+const SUBTIPO_LABEL = {
+  'transferencia':   'CVU / Transferencia',
+  'qr':              'QR / Billetera',
+  'tarjeta_credito': 'Tarjeta Crédito',
+  'tarjeta_debito':  'Tarjeta Débito',
+};
+
+const SUBTIPO_COLORS = {
+  'transferencia':   'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  'qr':              'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  'tarjeta_credito': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  'tarjeta_debito':  'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+};
 
 function ReportesSection({ initialView = null, onNavigate } = {}) {
   const { user } = useAuth();
@@ -54,11 +68,11 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
       .single()
       .then(({ data }) => setAfipActivo(data?.usa_factura_electronica === true));
   }, [user?.empresa_id]);
-  
+
   // Filters
   const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
-  
+
   // Data
   const [reportData, setReportData] = useState([]);
 
@@ -103,6 +117,15 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
       icon: <Banknote className="w-8 h-8 text-kx-green" />,
       borderClass: 'border-t-kx-green',
       requiresDate: true
+    },
+    {
+      id: 'mp_movimientos',
+      title: 'MercadoPago por Tipo',
+      description: 'Cobros de MP segmentados: CVU/transferencia, QR/billetera, tarjeta crédito y débito.',
+      icon: <Smartphone className="w-8 h-8 text-kx-blue" />,
+      borderClass: 'border-t-kx-blue',
+      requiresDate: true,
+      badge: 'MP',
     },
   ];
 
@@ -228,6 +251,21 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
          data = fins;
       }
 
+      // 6. MERCADOPAGO POR TIPO
+      else if (selectedReport.id === 'mp_movimientos') {
+        const { data: movs, error } = await supabase
+          .from('movimientos_bancarios')
+          .select('id, fecha, descripcion, subtipo, monto')
+          .eq('empresa_id', user.empresa_id)
+          .eq('origen', 'mercadopago')
+          .gte('fecha', start)
+          .lte('fecha', end)
+          .order('fecha', { ascending: false });
+
+        if (error) throw error;
+        data = movs;
+      }
+
       setReportData(data);
       if (data.length === 0) {
         toast({ description: "No se encontraron datos para el período.", duration: 3000 });
@@ -245,7 +283,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   const handleDownloadPDF = () => {
     try {
       const { columns, totals } = getTableConfig(selectedReport.id, reportData);
-      
+
       generatePDF({
         title: selectedReport.title,
         startDate: startDate,
@@ -255,7 +293,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         totals: totals ? totals.map(t => t.content) : null,
         filename: selectedReport.id
       });
-      
+
       toast({ title: "Éxito", description: "PDF generado correctamente.", className: "bg-green-600 text-white" });
     } catch (error) {
       console.error(error);
@@ -282,7 +320,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         ]
       };
     }
-    
+
     if (reportId === 'compras') {
       const totalAmount = data.reduce((acc, curr) => acc + (curr.total || 0), 0);
       return {
@@ -319,7 +357,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
        const totalDebe = data.filter(d => d.tipo === 'DEBE').reduce((acc, c) => acc + c.monto, 0);
        const totalHaber = data.filter(d => d.tipo === 'HABER').reduce((acc, c) => acc + c.monto, 0);
        const balance = totalDebe - totalHaber;
-       
+
        return {
          columns: [
            { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
@@ -349,6 +387,50 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
              { content: `INGRESOS: ${formatCurrency(ingresos)} | EGRESOS: ${formatCurrency(egresos)} | BALANCE: ${formatCurrency(ingresos - egresos)}`, colSpan: 5, align: 'right' }
           ]
         };
+    }
+
+    if (reportId === 'mp_movimientos') {
+      const total = data.reduce((acc, m) => acc + (m.monto || 0), 0);
+
+      // Totales por subtipo
+      const bySubtipo = {};
+      data.forEach(m => {
+        const key = m.subtipo || 'otro';
+        bySubtipo[key] = (bySubtipo[key] || 0) + (m.monto || 0);
+      });
+
+      const resumenPartes = Object.entries(bySubtipo).map(
+        ([k, v]) => `${SUBTIPO_LABEL[k] || 'Otro'}: ${formatCurrency(v)}`
+      );
+      const resumen = [...resumenPartes, `TOTAL: ${formatCurrency(total)}`].join(' | ');
+
+      return {
+        columns: [
+          {
+            header: 'Fecha', key: 'fecha', align: 'left',
+            render: (r) => formatDateAR(r.fecha),
+            pdfRender: (r) => formatDateAR(r.fecha),
+          },
+          { header: 'Descripción', key: 'descripcion', align: 'left' },
+          {
+            header: 'Tipo de cobro', key: 'subtipo', align: 'center',
+            render: (r) => (
+              <span className={`px-2 py-0.5 rounded text-xs font-semibold ${SUBTIPO_COLORS[r.subtipo] || 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}>
+                {SUBTIPO_LABEL[r.subtipo] || 'Otro'}
+              </span>
+            ),
+            pdfRender: (r) => SUBTIPO_LABEL[r.subtipo] || 'Otro',
+          },
+          {
+            header: 'Monto', key: 'monto', align: 'right',
+            render: (r) => formatCurrency(r.monto),
+            pdfRender: (r) => formatCurrency(r.monto),
+          },
+        ],
+        totals: [
+          { content: resumen, colSpan: 4, align: 'right' }
+        ]
+      };
     }
 
     return { columns: [], totals: [] };
@@ -389,6 +471,11 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
               <div className="p-3 bg-kx-surface-2 rounded-xl border border-kx-border">
                 {report.icon}
               </div>
+              {report.badge && (
+                <span className="text-xs font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">
+                  {report.badge}
+                </span>
+              )}
             </div>
 
             <div className="mb-5">
@@ -482,7 +569,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
           {selectedReport && (
              <>
                <div className="flex-none">
-                 <ReportHeader 
+                 <ReportHeader
                     title={selectedReport.title}
                     startDate={startDate}
                     setStartDate={setStartDate}
@@ -495,9 +582,9 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
                     onDownloadPDF={handleDownloadPDF}
                  />
                </div>
-               
+
                <div className="flex-1 overflow-y-auto mt-4 min-h-[300px]">
-                 <ReportTable 
+                 <ReportTable
                     columns={getTableConfig(selectedReport.id, reportData).columns}
                     data={reportData}
                     loading={loading}
