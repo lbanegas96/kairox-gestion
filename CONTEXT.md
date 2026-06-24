@@ -1,5 +1,33 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-23 (sesión 53, Nadia) — Reanudada `PLAN_AUDITORIA_2.md` desde el punto donde Luciano la pausó. Las 3 secciones pendientes cerradas: **Sección 1** (guards de tenant en RPCs no-stock) — 3 hallazgos reales confirmados con `BEGIN...ROLLBACK` y resueltos (migrations 073, 074, 075); **Sección 2** (precisión cálculos financieros) — 0 bugs reales, 2 endurecimientos preventivos aplicados aprovechando la ventana sin data (migration 076); **Sección 3** (errores silenciosos) — auditoría de 33 archivos, 0 hallazgos accionables, todos los `console.error`/`console.warn` justificados.
+**Última actualización:** 2026-06-23 (sesión 54, Luciano) — **Cierre definitivo de la segunda auditoría.** Migration 077: revoke EXECUTE de `fn_oc_recalcular_estado` para `anon` — último hallazgo de `get_advisors`. Estado final de advisors: 0 warnings de nivel anon accionables (solo `email_exists_in_system` queda en anon, intencional para flujo de invitación). Todos los warnings `authenticated` restantes son RPCs operativas con guards internos o trigger functions que fallan solas sin contexto de trigger — aceptados. Build ✅. Repo sincronizado. Auditoría 2 cerrada por completo.
+
+## Sesión 54 — Cierre definitivo de la segunda auditoría (Luciano)
+
+### Migration 077 — `fn_oc_recalcular_estado`: revocar EXECUTE de anon
+
+**Hallazgo (detectado en `get_advisors` al retomar la sesión):** `fn_oc_recalcular_estado()` era callable por el rol `anon` vía `/rest/v1/rpc/fn_oc_recalcular_estado`. Es una función SECURITY DEFINER que hace DML sobre `ordenes_compra` (`UPDATE estado`). Aunque llamarla sin trigger context hace que `NEW` sea `NULL` y la función retorne temprano sin hacer nada, el grant en sí es incorrecto.
+
+**Fix:** `REVOKE EXECUTE ON FUNCTION public.fn_oc_recalcular_estado() FROM PUBLIC, anon` (migration 077). Mismo patrón que migrations 063 y 070. Verificación post-fix: `anon=false`, `authenticated=true`, `service_role=true`. Trigger `trg_oc_recalcular_estado` sigue habilitado (`tgenabled=O`).
+
+### Estado final de advisors de seguridad (2026-06-23)
+
+| Función | Rol | Estado | Justificación |
+|---|---|---|---|
+| `email_exists_in_system` | anon | ✅ Aceptado | Intencional: invite-user edge function necesita verificar si el email ya existe antes de invitar |
+| Todas las RPCs operativas | authenticated | ✅ Aceptado | Diseño: son el contrato público del sistema, con guards de tenant internos |
+| Funciones trigger (`fn_audit_trigger`, `fn_oc_update_stock`, `fn_sync_conciliado`, `fn_update_cliente_saldo`, `handle_new_user`, `sync_uala_to_bancos`, `trg_fn_seed_maestros_empresa`, `trg_fn_seed_series_numeracion`) | authenticated | ✅ Aceptado | Sin contexto de trigger, `NEW`/`OLD` son NULL y fallan solas — documentado en sesión 51 |
+| Leaked Password Protection | — | ⏳ Pendiente de negocio | Requiere plan Pro de Supabase — no es bloqueante técnico |
+
+### Cierre completo de la segunda auditoría
+
+**Todas las áreas cubiertas (sesiones 52, 53, 54):**
+- ✅ Cobertura de RLS en ~50 tablas multi-tenant — 2 hallazgos críticos cerrados (migrations 071, 072)
+- ✅ Guards de tenant en 36 RPCs SECURITY DEFINER — 3 hallazgos cerrados (migrations 073, 074, 075)
+- ✅ Precisión financiera (IVA, PPP, moneda paralela) — 0 bugs, 2 endurecimientos (migration 076)
+- ✅ Errores silenciosos — 33 archivos, 0 hallazgos accionables
+- ✅ Exposición de funciones a anon — 1 hallazgo cerrado (migration 077)
+
+**Migration final: 077. Repo: limpio y sincronizado con origin/master.**
 
 ## Sesión 53 — Reanudación y cierre de `PLAN_AUDITORIA_2.md` (Nadia)
 
