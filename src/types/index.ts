@@ -363,6 +363,18 @@ export interface DashboardKPIs {
   margenBruto: number;
   deudaClientes: number;
   productosStockBajo: Pick<Producto, 'id' | 'nombre' | 'stock_actual' | 'stock_minimo' | 'unidad_medida'>[];
+  // Salud financiera
+  dso: number | null;
+  facturasMesCount: number;
+  facturasMesTotal: number;
+  ocPendientes: number;
+  ticketPromedio: number;
+}
+
+export interface TopCliente {
+  nombre: string;
+  total: number;
+  count: number;
 }
 
 export interface VentasPorDia {

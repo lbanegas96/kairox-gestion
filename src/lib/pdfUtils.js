@@ -1,6 +1,23 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
+const BRAND_BLUE  = [37, 99, 235];   // blue-600
+const BRAND_DARK  = [15, 23, 42];    // slate-900
+const GRAY_LIGHT  = [241, 245, 249]; // slate-100
+const GRAY_TEXT   = [100, 116, 139]; // slate-500
+
+/**
+ * @param {object}   opts
+ * @param {string}   opts.title
+ * @param {string}   opts.startDate
+ * @param {string}   opts.endDate
+ * @param {object[]} opts.columns        – { header, key, align?, pdfRender? }
+ * @param {object[]} opts.data
+ * @param {any[]|null} opts.totals       – row for foot section (raw cell values)
+ * @param {string}   opts.filename
+ * @param {string}   [opts.companyName]  – nombre de empresa (de config)
+ * @param {{label:string, value:string}[]} [opts.summaryMetrics]  – cajas KPI antes de la tabla
+ */
 export const generatePDF = ({
   title,
   startDate,
@@ -8,84 +25,131 @@ export const generatePDF = ({
   columns,
   data,
   totals = null,
-  filename = 'reporte'
+  filename = 'reporte',
+  companyName = 'KAIROX Gestión',
+  summaryMetrics = null,
 }) => {
-  const doc = new jsPDF();
-  const pageWidth = doc.internal.pageSize.width;
-  
-  // Header
-  // Logo placeholder or text
-  doc.setFontSize(22);
-  doc.setTextColor(0, 51, 102); // Dark blue
-  doc.text('KAIROX Gestión', 14, 20);
-  
-  // Report Title
-  doc.setFontSize(14);
-  doc.setTextColor(100);
-  doc.text(title, 14, 30);
-  
-  // Metadata
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const pw  = doc.internal.pageSize.width;
+  const ph  = doc.internal.pageSize.height;
+
+  // ── Header band ───────────────────────────────────────────────────────────
+  doc.setFillColor(...BRAND_BLUE);
+  doc.rect(0, 0, pw, 28, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text(companyName, 14, 12);
+
   doc.setFontSize(10);
-  doc.setTextColor(80);
-  doc.text(`Período: ${startDate} al ${endDate}`, 14, 38);
-  doc.text(`Generado: ${new Date().toLocaleString('es-AR')}`, 14, 44);
+  doc.setFont('helvetica', 'normal');
+  doc.text(title, 14, 20);
 
-  // Line Separator
-  doc.setLineWidth(0.5);
-  doc.setDrawColor(200);
-  doc.line(14, 48, pageWidth - 14, 48);
+  // Fecha generado — derecha del header
+  const genLabel = `Generado: ${new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}`;
+  doc.setFontSize(8);
+  doc.text(genLabel, pw - 14, 12, { align: 'right' });
 
-  // Prepare body data based on keys in columns
-  const bodyData = data.map(row => {
-    return columns.map(col => {
-      // Handle custom render logic if it was simple string, but for PDF we usually need raw values.
-      // We assume data objects have keys corresponding to col.key
-      // If data has a 'renderPDF' property for a column, use that, otherwise use col.key
-      if (col.pdfRender) return col.pdfRender(row);
-      return row[col.key];
+  const periodoLabel = `Período: ${startDate} → ${endDate}`;
+  doc.text(periodoLabel, pw - 14, 20, { align: 'right' });
+
+  // ── Summary metrics (KPI boxes) ───────────────────────────────────────────
+  let cursorY = 34;
+
+  if (summaryMetrics?.length) {
+    const cols      = Math.min(summaryMetrics.length, 4);
+    const boxW      = (pw - 28 - (cols - 1) * 4) / cols;
+    const boxH      = 18;
+    const startX    = 14;
+
+    summaryMetrics.slice(0, 4).forEach((m, i) => {
+      const x = startX + i * (boxW + 4);
+
+      doc.setFillColor(...GRAY_LIGHT);
+      doc.roundedRect(x, cursorY, boxW, boxH, 2, 2, 'F');
+
+      doc.setDrawColor(210, 218, 230);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(x, cursorY, boxW, boxH, 2, 2, 'S');
+
+      doc.setTextColor(...GRAY_TEXT);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.text(m.label, x + boxW / 2, cursorY + 5.5, { align: 'center' });
+
+      doc.setTextColor(...BRAND_DARK);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(String(m.value), x + boxW / 2, cursorY + 13, { align: 'center' });
     });
-  });
 
-  // Table
+    cursorY += boxH + 6;
+  }
+
+  // Separator line
+  doc.setLineWidth(0.3);
+  doc.setDrawColor(203, 213, 225);
+  doc.line(14, cursorY, pw - 14, cursorY);
+  cursorY += 4;
+
+  // ── Table ─────────────────────────────────────────────────────────────────
+  const bodyData = data.map(row =>
+    columns.map(col => (col.pdfRender ? col.pdfRender(row) : row[col.key]))
+  );
+
+  const columnStyles = columns.reduce((acc, col, idx) => {
+    if (col.align) acc[idx] = { halign: col.align };
+    return acc;
+  }, {});
+
   doc.autoTable({
-    startY: 55,
-    head: [columns.map(c => c.header)],
-    body: bodyData,
-    theme: 'striped',
-    headStyles: { 
-      fillColor: [41, 128, 185],
-      textColor: 255,
-      fontStyle: 'bold',
-      halign: 'center'
+    startY: cursorY,
+    head:   [columns.map(c => c.header)],
+    body:   bodyData,
+    theme:  'grid',
+    headStyles: {
+      fillColor:  BRAND_BLUE,
+      textColor:  [255, 255, 255],
+      fontStyle:  'bold',
+      fontSize:   8.5,
+      halign:     'center',
+      cellPadding: 3.5,
     },
-    styles: { 
-      fontSize: 9,
+    styles: {
+      fontSize:    8.5,
       cellPadding: 3,
-      valign: 'middle'
+      valign:      'middle',
+      textColor:   BRAND_DARK,
+      lineColor:   [226, 232, 240],
+      lineWidth:   0.2,
     },
-    columnStyles: columns.reduce((acc, col, index) => {
-      if (col.align) acc[index] = { halign: col.align };
-      return acc;
-    }, {}),
+    columnStyles,
     alternateRowStyles: {
-      fillColor: [245, 245, 245]
+      fillColor: [248, 250, 252], // slate-50
     },
     foot: totals ? [totals] : undefined,
     footStyles: {
-      fillColor: [220, 220, 220],
-      textColor: [0, 0, 0],
-      fontStyle: 'bold',
-      halign: 'right' // Default right align for totals often looks best
+      fillColor:  [226, 232, 240],
+      textColor:  BRAND_DARK,
+      fontStyle:  'bold',
+      fontSize:   8.5,
     },
-    didDrawPage: (data) => {
-      // Footer
-      const str = 'Página ' + doc.internal.getNumberOfPages();
-      doc.setFontSize(8);
-      doc.setTextColor(150);
-      doc.text(str, pageWidth - 30, doc.internal.pageSize.height - 10);
-      doc.text("KAIROX Gestión - Sistema Integral", 14, doc.internal.pageSize.height - 10);
-    }
+    didDrawPage: ({ pageNumber }) => {
+      const totalPages = doc.internal.getNumberOfPages();
+
+      // Footer line
+      doc.setLineWidth(0.3);
+      doc.setDrawColor(203, 213, 225);
+      doc.line(14, ph - 14, pw - 14, ph - 14);
+
+      doc.setFontSize(7.5);
+      doc.setTextColor(...GRAY_TEXT);
+      doc.setFont('helvetica', 'normal');
+      doc.text('KAIROX Gestión — Sistema Integral de Gestión', 14, ph - 8);
+      doc.text(`Página ${pageNumber} de ${totalPages}`, pw - 14, ph - 8, { align: 'right' });
+    },
   });
 
-  doc.save(`${filename}_${new Date().toISOString().slice(0,10)}.pdf`);
+  doc.save(`${filename}_${new Date().toISOString().slice(0, 10)}.pdf`);
 };

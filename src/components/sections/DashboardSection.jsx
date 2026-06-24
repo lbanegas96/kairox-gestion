@@ -4,7 +4,8 @@ import {
   TrendingUp, TrendingDown, ShoppingCart, Package, AlertCircle, ArrowUpRight,
   DollarSign, Calendar, CreditCard, FileText, UserPlus,
   Wallet, BarChart3, RefreshCw, Archive, History, Percent,
-  ClipboardList, ShoppingBag, CheckCircle2, Clock,
+  ClipboardList, ShoppingBag, CheckCircle2, Clock, Timer, Receipt,
+  Users, AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -27,7 +28,20 @@ function saludoSegunHora() {
   return 'Buenas noches';
 }
 
-const fmt = (n) => (n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 });
+const fmt  = (n) => (n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 });
+const fmtK = (n) => {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000)     return `$${(n / 1_000).toFixed(0)}k`;
+  return `$${fmt(n)}`;
+};
+
+// DSO health thresholds (días en cobrar)
+const getDSOHealth = (dso) => {
+  if (dso === null) return { color: 'text-kx-text-3', border: 'border-t-kx-border', label: 'Sin datos', icon: null };
+  if (dso <= 30)   return { color: 'text-kx-green',  border: 'border-t-kx-green',  label: 'Saludable',   icon: <CheckCircle2 className="w-3.5 h-3.5" /> };
+  if (dso <= 60)   return { color: 'text-kx-amber',  border: 'border-t-kx-amber',  label: 'Por mejorar', icon: <Timer className="w-3.5 h-3.5" /> };
+  return             { color: 'text-kx-red',   border: 'border-t-kx-red',   label: 'Crítico',     icon: <AlertTriangle className="w-3.5 h-3.5" /> };
+};
 
 // ── Tooltip chart ─────────────────────────────────────────────────────────────
 const ChartTooltip = ({ active, payload, label }) => {
@@ -80,18 +94,12 @@ function DashboardSection({ onNavigate }) {
   });
 
   // ── Queries ────────────────────────────────────────────────────────────────
-  // Política de refresco del Dashboard:
-  // - `refetchOnMount: 'always'` → cada vez que el usuario entra al Dashboard,
-  //   se refetchea (aunque venga del cache).
-  // - `refetchOnWindowFocus: true` → si el usuario cambia de tab y vuelve, se refresca.
-  // - `refetchInterval: 30s` → si el usuario está parado en el Dashboard, se actualiza solo.
-  // - `staleTime: 0` → los datos siempre se consideran "viejos", así no se sirven desde cache.
   const dashboardOpts = {
-    enabled:             !!empresaId,
-    staleTime:           0,
-    refetchOnMount:      'always',
+    enabled:              !!empresaId,
+    staleTime:            0,
+    refetchOnMount:       'always',
     refetchOnWindowFocus: true,
-    refetchInterval:     1000 * 30,
+    refetchInterval:      1000 * 30,
   };
 
   const { data: kpis, isLoading: kpisLoading, error: kpisError, refetch: refetchKpis } = useQuery({
@@ -124,6 +132,12 @@ function DashboardSection({ onNavigate }) {
     ...dashboardOpts,
   });
 
+  const { data: topClientes = [], isLoading: topLoading } = useQuery({
+    queryKey: DASHBOARD_KEYS.topClientes(empresaId),
+    queryFn:  () => dashboardService.getTopClientes(empresaId),
+    ...dashboardOpts,
+  });
+
   const loading = kpisLoading;
 
   const handleRefresh = () => qc.invalidateQueries({ queryKey: ['dashboard', empresaId] });
@@ -131,6 +145,13 @@ function DashboardSection({ onNavigate }) {
   const variacion      = kpis?.variacionVentas ?? 0;
   const variacionLabel = `${variacion >= 0 ? '+' : ''}${variacion.toFixed(1)}% vs ayer`;
   const balanceNeto    = (kpis?.ventasMes ?? 0) - (kpis?.gastosMes ?? 0);
+  const dsoHealth      = getDSOHealth(kpis?.dso ?? null);
+
+  // Aging buckets cobranzas
+  const aging30 = (alertasCC?.vencidos30 ?? 0) - (alertasCC?.vencidos60 ?? 0);
+  const aging60 = (alertasCC?.vencidos60 ?? 0) - (alertasCC?.vencidos90 ?? 0);
+  const aging90 = alertasCC?.vencidos90 ?? 0;
+  const maxTopTotal = topClientes[0]?.total ?? 1;
 
   if (kpisError && !loading) {
     return (
@@ -187,9 +208,7 @@ function DashboardSection({ onNavigate }) {
                 ${fmt(kpis?.ventasMes)}
               </div>
               <div className={`text-xs flex items-center gap-1.5 ${variacion >= 0 ? 'text-kx-green' : 'text-kx-red'}`}>
-                {variacion >= 0
-                  ? <TrendingUp  className="w-3.5 h-3.5" />
-                  : <TrendingDown className="w-3.5 h-3.5" />}
+                {variacion >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
                 {variacionLabel}
               </div>
             </>
@@ -238,15 +257,14 @@ function DashboardSection({ onNavigate }) {
         </div>
       </div>
 
-      {/* ── KPI row — 4 cards ──────────────────────────────────────────────── */}
+      {/* ── KPI row — Operaciones ──────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
         {/* Ventas del día */}
         <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-violet hover:bg-kx-surface-2 transition-colors duration-200">
           <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Ventas del día</div>
           <div>
-            {loading
-              ? <Skeleton className="h-6 w-28 mb-1" />
-              : <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">${fmt(kpis?.ventasHoy)}</div>}
+            {loading ? <Skeleton className="h-6 w-28 mb-1" /> :
+              <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">${fmt(kpis?.ventasHoy)}</div>}
             <div className={`text-[11.5px] flex items-center gap-1 ${variacion >= 0 ? 'text-kx-green' : 'text-kx-red'}`}>
               {variacion >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
               {variacionLabel}
@@ -258,9 +276,8 @@ function DashboardSection({ onNavigate }) {
         <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-red hover:bg-kx-surface-2 transition-colors duration-200">
           <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Gastos del mes</div>
           <div>
-            {loading
-              ? <Skeleton className="h-6 w-28 mb-1" />
-              : <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">${fmt(kpis?.gastosMes)}</div>}
+            {loading ? <Skeleton className="h-6 w-28 mb-1" /> :
+              <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">${fmt(kpis?.gastosMes)}</div>}
             <div className="text-[11.5px] text-kx-text-3">Egresos acumulados</div>
           </div>
         </div>
@@ -269,11 +286,10 @@ function DashboardSection({ onNavigate }) {
         <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-green hover:bg-kx-surface-2 transition-colors duration-200">
           <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Balance neto</div>
           <div>
-            {loading
-              ? <Skeleton className="h-6 w-28 mb-1" />
-              : <div className={`text-xl font-semibold tracking-tight tabular-nums mb-1 ${balanceNeto >= 0 ? 'text-kx-green' : 'text-kx-red'}`}>
-                  ${fmt(balanceNeto)}
-                </div>}
+            {loading ? <Skeleton className="h-6 w-28 mb-1" /> :
+              <div className={`text-xl font-semibold tracking-tight tabular-nums mb-1 ${balanceNeto >= 0 ? 'text-kx-green' : 'text-kx-red'}`}>
+                ${fmt(balanceNeto)}
+              </div>}
             <div className={`text-[11.5px] flex items-center gap-1 ${balanceNeto >= 0 ? 'text-kx-green' : 'text-kx-red'}`}>
               {balanceNeto >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
               {balanceNeto >= 0 ? 'Superávit' : 'Déficit'}
@@ -288,9 +304,8 @@ function DashboardSection({ onNavigate }) {
         >
           <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Deuda clientes</div>
           <div>
-            {loading
-              ? <Skeleton className="h-6 w-28 mb-1" />
-              : <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">${fmt(kpis?.deudaClientes)}</div>}
+            {loading ? <Skeleton className="h-6 w-28 mb-1" /> :
+              <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">${fmt(kpis?.deudaClientes)}</div>}
             <div className="text-[11.5px] text-kx-text-3 flex items-center gap-1">
               Cuentas corrientes <ArrowUpRight className="w-3 h-3" />
             </div>
@@ -298,8 +313,74 @@ function DashboardSection({ onNavigate }) {
         </div>
       </div>
 
-      {/* ── Bottom grid ────────────────────────────────────────────────────── */}
+      {/* ── KPI row — Salud Financiera ─────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
+
+        {/* DSO — Días en cobrar */}
+        <div className={`bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 ${dsoHealth.border} hover:bg-kx-surface-2 transition-colors duration-200`}>
+          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium flex items-center gap-1">
+            DSO
+            <span className="text-[9px] normal-case font-normal text-kx-text-3">(días en cobrar)</span>
+          </div>
+          <div>
+            {loading ? <Skeleton className="h-6 w-20 mb-1" /> :
+              <div className={`text-xl font-semibold tracking-tight tabular-nums mb-1 ${dsoHealth.color}`}>
+                {kpis?.dso !== null && kpis?.dso !== undefined ? `${kpis.dso} días` : '—'}
+              </div>}
+            <div className={`text-[11.5px] flex items-center gap-1 ${dsoHealth.color}`}>
+              {dsoHealth.icon}
+              {dsoHealth.label}
+            </div>
+          </div>
+        </div>
+
+        {/* Facturas del mes */}
+        <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-violet hover:bg-kx-surface-2 transition-colors duration-200">
+          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium flex items-center gap-1">
+            <Receipt className="w-3 h-3" /> Facturas del mes
+          </div>
+          <div>
+            {loading ? <Skeleton className="h-6 w-16 mb-1" /> :
+              <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">
+                {kpis?.facturasMesCount ?? 0}
+              </div>}
+            <div className="text-[11.5px] text-kx-text-3">{fmtK(kpis?.facturasMesTotal ?? 0)} facturado</div>
+          </div>
+        </div>
+
+        {/* Ticket promedio */}
+        <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-blue hover:bg-kx-surface-2 transition-colors duration-200">
+          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Ticket promedio</div>
+          <div>
+            {loading ? <Skeleton className="h-6 w-24 mb-1" /> :
+              <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">
+                {kpis?.ticketPromedio ? fmtK(kpis.ticketPromedio) : '—'}
+              </div>}
+            <div className="text-[11.5px] text-kx-text-3">por comprobante</div>
+          </div>
+        </div>
+
+        {/* OC pendientes */}
+        <div
+          className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between cursor-pointer border-t-2 border-t-kx-amber hover:bg-kx-surface-2 transition-colors duration-200"
+          onClick={() => onNavigate?.('ordenes_compra')}
+        >
+          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">OC pendientes</div>
+          <div>
+            {loading ? <Skeleton className="h-6 w-10 mb-1" /> :
+              <div className={`text-xl font-semibold tracking-tight tabular-nums mb-1 ${(kpis?.ocPendientes ?? 0) > 0 ? 'text-kx-amber' : 'text-kx-text'}`}>
+                {kpis?.ocPendientes ?? 0}
+              </div>}
+            <div className="text-[11.5px] text-kx-text-3 flex items-center gap-1">
+              Órdenes activas <ArrowUpRight className="w-3 h-3" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Bottom grid — Stock + Cobranzas ───────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-4">
+
         {/* Panel izquierdo: Alertas de Stock */}
         <div className="bg-kx-surface border border-kx-border rounded-2xl p-5 shadow-sm dark:shadow-none transition-all duration-200 ease-out hover:shadow-lg dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:-translate-y-0.5 hover:border-kx-border-hover">
           <div className="flex items-center justify-between mb-4">
@@ -314,9 +395,7 @@ function DashboardSection({ onNavigate }) {
             </button>
           </div>
           {loading ? (
-            <div className="space-y-2">
-              {[1,2,3,4].map(i => <Skeleton key={i} className="h-10 w-full" />)}
-            </div>
+            <div className="space-y-2">{[1,2,3,4].map(i => <Skeleton key={i} className="h-10 w-full" />)}</div>
           ) : (kpis?.productosStockBajo?.length ?? 0) === 0 ? (
             <div className="flex flex-col items-center py-8 text-kx-text-3">
               <CheckCircle2 className="w-8 h-8 mb-2 opacity-40" />
@@ -340,71 +419,124 @@ function DashboardSection({ onNavigate }) {
           )}
         </div>
 
-        {/* Panel derecho: Actividad reciente */}
+        {/* Panel derecho: Cobranzas con aging */}
         <div className="bg-kx-surface border border-kx-border rounded-2xl p-5 flex flex-col shadow-sm dark:shadow-none transition-all duration-200 ease-out hover:shadow-lg dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:-translate-y-0.5 hover:border-kx-border-hover">
           <div className="flex items-center justify-between mb-4">
             <span className="text-[13px] font-semibold text-kx-text flex items-center gap-2">
-              <ClipboardList className="w-4 h-4 text-kx-blue" /> Cotizaciones Aprobadas
+              <Clock className="w-4 h-4 text-kx-amber" /> Cobranzas
             </span>
             <button
-              onClick={() => onNavigate?.('cotizaciones')}
+              onClick={() => onNavigate?.('cuentacorriente')}
               className="text-xs text-kx-text-2 hover:text-kx-text transition-colors flex items-center gap-1"
             >
-              Ver todas <ArrowUpRight className="w-3 h-3" />
+              Ver CC <ArrowUpRight className="w-3 h-3" />
             </button>
           </div>
 
-          <div className="flex-1">
-            {cotLoading ? (
-              <div className="space-y-2">
-                {[1,2,3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
-              </div>
-            ) : (cotStats?.pendientes?.length ?? 0) === 0 ? (
-              <div className="flex flex-col items-center py-6 text-kx-text-3">
-                <CheckCircle2 className="w-7 h-7 mb-2 opacity-40" />
-                <p className="text-sm">Sin cotizaciones pendientes ✓</p>
+          {/* Aging buckets */}
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            <div className="text-center p-2.5 rounded-xl bg-kx-surface-2 border border-kx-border">
+              <div className="text-[10px] text-kx-text-3 mb-1">30-60 días</div>
+              <div className={`text-xl font-bold tabular-nums ${aging30 > 0 ? 'text-kx-amber' : 'text-kx-text-3'}`}>{aging30}</div>
+              <div className="text-[9.5px] text-kx-text-3">clientes</div>
+            </div>
+            <div className="text-center p-2.5 rounded-xl bg-kx-surface-2 border border-kx-border">
+              <div className="text-[10px] text-kx-text-3 mb-1">60-90 días</div>
+              <div className={`text-xl font-bold tabular-nums ${aging60 > 0 ? 'text-orange-500 dark:text-orange-400' : 'text-kx-text-3'}`}>{aging60}</div>
+              <div className="text-[9.5px] text-kx-text-3">clientes</div>
+            </div>
+            <div className="text-center p-2.5 rounded-xl bg-kx-surface-2 border border-kx-border">
+              <div className="text-[10px] text-kx-text-3 mb-1">+90 días</div>
+              <div className={`text-xl font-bold tabular-nums ${aging90 > 0 ? 'text-kx-red' : 'text-kx-text-3'}`}>{aging90}</div>
+              <div className="text-[9.5px] text-kx-text-3">clientes</div>
+            </div>
+          </div>
+
+          {/* Top deudores */}
+          <div className="flex-1 space-y-1.5 overflow-y-auto max-h-36">
+            {(alertasCC?.lista?.length ?? 0) === 0 ? (
+              <div className="flex flex-col items-center py-4 text-kx-text-3">
+                <CheckCircle2 className="w-7 h-7 mb-1.5 opacity-40" />
+                <p className="text-sm">Sin deudas vencidas ✓</p>
               </div>
             ) : (
-              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                {(cotStats?.pendientes ?? []).map(c => (
-                  <div
-                    key={c.id}
-                    onClick={() => onNavigate?.('cotizaciones')}
-                    className="flex items-center justify-between p-2.5 rounded-lg bg-kx-surface-2 hover:bg-kx-border cursor-pointer transition-colors"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-[12.5px] font-medium text-kx-text truncate">{c.numero}</p>
-                      <p className="text-xs text-kx-text-3 truncate">{c.cliente ?? 'Sin cliente'}</p>
-                    </div>
-                    <span className="text-sm font-bold text-kx-blue flex-shrink-0 ml-2 tabular-nums">
-                      ${Number(c.total).toLocaleString('es-AR', { minimumFractionDigits: 0 })}
-                    </span>
+              alertasCC.lista.map(c => (
+                <div
+                  key={c.id}
+                  onClick={() => onNavigate?.('cuentacorriente')}
+                  className="flex items-center justify-between p-2.5 rounded-lg bg-kx-surface-2 hover:bg-kx-border cursor-pointer transition-colors"
+                >
+                  <div className="min-w-0">
+                    <p className="text-[12.5px] font-medium text-kx-text truncate">{c.nombre}</p>
+                    <p className={`text-[10.5px] font-medium ${c.urgente ? 'text-kx-red' : 'text-kx-amber'}`}>
+                      {c.diasVencido} días vencido
+                    </p>
                   </div>
-                ))}
-              </div>
+                  <span className="text-sm font-bold text-kx-text flex-shrink-0 ml-2 tabular-nums">
+                    ${Number(c.saldo).toLocaleString('es-AR', { minimumFractionDigits: 0 })}
+                  </span>
+                </div>
+              ))
             )}
           </div>
 
-          {/* Alerta CC vencida al pie */}
-          {(alertasCC?.total ?? 0) > 0 && (
-            <div className="flex items-center gap-2.5 px-3.5 py-3 rounded-xl mt-4 bg-kx-amber/[0.06] border border-kx-amber/20">
-              <AlertCircle className="w-4 h-4 text-kx-amber flex-shrink-0" />
-              <div className="flex-1 text-[12.5px] text-kx-text min-w-0">
-                {alertasCC.total} cliente{alertasCC.total !== 1 ? 's' : ''} con deuda vencida{' '}
-                <span className="text-kx-text-2">(${alertasCC.montoTotal?.toLocaleString('es-AR', { minimumFractionDigits: 0 })})</span>
-              </div>
-              <button
-                onClick={() => onNavigate?.('cuentacorriente')}
-                className="text-xs text-kx-amber font-medium flex-shrink-0 hover:underline"
-              >
-                Revisar →
-              </button>
+          {/* Total vencido */}
+          {(alertasCC?.montoTotal ?? 0) > 0 && (
+            <div className="mt-3 pt-3 border-t border-kx-border flex items-center justify-between">
+              <span className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Total vencido</span>
+              <span className="text-sm font-bold text-kx-red tabular-nums">
+                ${(alertasCC.montoTotal).toLocaleString('es-AR', { minimumFractionDigits: 0 })}
+              </span>
             </div>
           )}
         </div>
       </div>
 
-      {/* ── KPIs Cotizaciones (preservado) ─────────────────────────────────── */}
+      {/* ── Top Clientes del mes ───────────────────────────────────────────── */}
+      <div className="bg-kx-surface border border-kx-border rounded-2xl p-5 shadow-sm dark:shadow-none transition-all duration-200 ease-out hover:shadow-lg dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:-translate-y-0.5 hover:border-kx-border-hover">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-[13px] font-semibold text-kx-text flex items-center gap-2">
+            <Users className="w-4 h-4 text-kx-violet" /> Top Clientes del Mes
+          </span>
+          <button
+            onClick={() => onNavigate?.('clientes')}
+            className="text-xs text-kx-text-2 hover:text-kx-text transition-colors flex items-center gap-1"
+          >
+            Ver clientes <ArrowUpRight className="w-3 h-3" />
+          </button>
+        </div>
+
+        {topLoading ? (
+          <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-8 w-full" />)}</div>
+        ) : topClientes.length === 0 ? (
+          <div className="flex flex-col items-center py-6 text-kx-text-3">
+            <Users className="w-7 h-7 mb-2 opacity-30" />
+            <p className="text-sm">Sin ventas a clientes identificados este mes</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+            {topClientes.map((c, i) => {
+              const pct = (c.total / maxTopTotal) * 100;
+              const rankColors = ['text-yellow-500','text-slate-400','text-amber-600','text-kx-text-3','text-kx-text-3'];
+              return (
+                <div key={c.nombre} className="bg-kx-surface-2 rounded-xl p-3 border border-kx-border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`text-xs font-bold tabular-nums ${rankColors[i] ?? 'text-kx-text-3'}`}>#{i + 1}</span>
+                    <span className="text-[12px] font-semibold text-kx-text truncate">{c.nombre}</span>
+                  </div>
+                  <div className="text-sm font-bold text-kx-text tabular-nums mb-1.5">${c.total.toLocaleString('es-AR', { minimumFractionDigits: 0 })}</div>
+                  <div className="h-1.5 bg-kx-border rounded-full overflow-hidden">
+                    <div className="h-full bg-kx-violet rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="text-[10px] text-kx-text-3 mt-1">{c.count} comprobante{c.count !== 1 ? 's' : ''}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── KPIs Cotizaciones ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
         <div
           className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between cursor-pointer border-t-2 border-t-kx-violet hover:bg-kx-surface-2 transition-colors duration-200"
@@ -412,20 +544,18 @@ function DashboardSection({ onNavigate }) {
         >
           <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Cotizaciones / mes</div>
           <div>
-            {cotLoading ? <Skeleton className="h-6 w-12 mb-1" /> : (
-              <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">{cotStats?.totalMes ?? 0}</div>
-            )}
+            {cotLoading ? <Skeleton className="h-6 w-12 mb-1" /> :
+              <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">{cotStats?.totalMes ?? 0}</div>}
             <div className="text-[11.5px] text-kx-text-3">${(cotStats?.montoMes ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 })} cotizado</div>
           </div>
         </div>
         <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-green hover:bg-kx-surface-2 transition-colors duration-200">
           <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Tasa de conversión</div>
           <div>
-            {cotLoading ? <Skeleton className="h-6 w-16 mb-1" /> : (
+            {cotLoading ? <Skeleton className="h-6 w-16 mb-1" /> :
               <div className={`text-xl font-semibold tracking-tight tabular-nums mb-1 ${(cotStats?.tasaConversion ?? 0) >= 50 ? 'text-kx-green' : 'text-kx-amber'}`}>
                 {(cotStats?.tasaConversion ?? 0).toFixed(0)}%
-              </div>
-            )}
+              </div>}
             <div className="text-[11.5px] text-kx-text-3">{cotStats?.convertidas ?? 0} convertidas</div>
           </div>
         </div>
@@ -435,11 +565,10 @@ function DashboardSection({ onNavigate }) {
         >
           <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Aprobadas pendientes</div>
           <div>
-            {cotLoading ? <Skeleton className="h-6 w-10 mb-1" /> : (
+            {cotLoading ? <Skeleton className="h-6 w-10 mb-1" /> :
               <div className={`text-xl font-semibold tracking-tight tabular-nums mb-1 ${(cotStats?.aprobadas ?? 0) > 0 ? 'text-kx-violet' : 'text-kx-text'}`}>
                 {cotStats?.aprobadas ?? 0}
-              </div>
-            )}
+              </div>}
             <div className="text-[11.5px] text-kx-text-3 flex items-center gap-1">
               {(cotStats?.aprobadas ?? 0) > 0 ? 'Listas para convertir' : 'Sin pendientes ✓'}
             </div>
@@ -448,11 +577,10 @@ function DashboardSection({ onNavigate }) {
         <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-amber hover:bg-kx-surface-2 transition-colors duration-200">
           <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Monto convertido</div>
           <div>
-            {cotLoading ? <Skeleton className="h-6 w-28 mb-1" /> : (
+            {cotLoading ? <Skeleton className="h-6 w-28 mb-1" /> :
               <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">
                 ${(cotStats?.montoConvertido ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 })}
-              </div>
-            )}
+              </div>}
             <div className="text-[11.5px] text-kx-text-3">
               de ${(cotStats?.montoMes ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 0 })} cotizado
             </div>
@@ -460,7 +588,7 @@ function DashboardSection({ onNavigate }) {
         </div>
       </div>
 
-      {/* ── Gráficos (preservados) ──────────────────────────────────────────── */}
+      {/* ── Gráficos ────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-kx-surface border border-kx-border rounded-2xl p-5 shadow-sm dark:shadow-none transition-all duration-200 ease-out hover:shadow-lg dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:-translate-y-0.5 hover:border-kx-border-hover">
           <div className="text-[13px] font-semibold text-kx-text mb-4">Ventas — Últimos 7 días</div>
@@ -507,7 +635,7 @@ function DashboardSection({ onNavigate }) {
         </div>
       </div>
 
-      {/* ── Acciones rápidas (preservadas) ─────────────────────────────────── */}
+      {/* ── Acciones rápidas ────────────────────────────────────────────────── */}
       <div className="bg-kx-surface border border-kx-border rounded-2xl p-5 shadow-sm dark:shadow-none transition-all duration-200 ease-out hover:shadow-lg dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:-translate-y-0.5 hover:border-kx-border-hover">
         <div className="text-[13px] font-semibold text-kx-text mb-4">Acciones Rápidas</div>
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">

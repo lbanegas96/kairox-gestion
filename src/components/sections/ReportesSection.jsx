@@ -10,6 +10,7 @@ import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useConfig } from '@/contexts/ConfigContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { generatePDF } from '@/lib/pdfUtils';
@@ -34,6 +35,7 @@ const SUBTIPO_COLORS = {
 
 function ReportesSection({ initialView = null, onNavigate } = {}) {
   const { user } = useAuth();
+  const { config } = useConfig();
   const { toast } = useToast();
   const { enabled: tcParaleloEnabled, monedaParalela } = useTCParalelo();
 
@@ -280,18 +282,85 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   };
 
   // --- PDF DOWNLOAD ---
+  const buildSummaryMetrics = (reportId, data) => {
+    const fc = (n) => `$${Number(n).toLocaleString('es-AR', { minimumFractionDigits: 0 })}`;
+    if (reportId === 'ventas') {
+      const total = data.reduce((s, r) => s + (r.total || 0), 0);
+      const max   = data.length ? Math.max(...data.map(r => r.total || 0)) : 0;
+      return [
+        { label: 'Total Ventas',    value: fc(total) },
+        { label: 'Cantidad',        value: data.length },
+        { label: 'Ticket Promedio', value: data.length ? fc(total / data.length) : '—' },
+        { label: 'Venta Mayor',     value: fc(max) },
+      ];
+    }
+    if (reportId === 'compras') {
+      const total = data.reduce((s, r) => s + (r.total || 0), 0);
+      return [
+        { label: 'Total Compras', value: fc(total) },
+        { label: 'Cantidad',      value: data.length },
+        { label: 'Promedio',      value: data.length ? fc(total / data.length) : '—' },
+      ];
+    }
+    if (reportId === 'clientes') {
+      const deuda = data.reduce((s, r) => s + (r.saldo || 0), 0);
+      const conDeuda = data.filter(r => r.saldo > 0).length;
+      return [
+        { label: 'Total Clientes', value: data.length },
+        { label: 'Con deuda',      value: conDeuda },
+        { label: 'Total Deuda',    value: fc(deuda) },
+      ];
+    }
+    if (reportId === 'financiero') {
+      const ing = data.filter(r => r.tipo === 'ingreso').reduce((s, r) => s + r.monto, 0);
+      const egr = data.filter(r => r.tipo === 'egreso').reduce((s, r) => s + r.monto, 0);
+      return [
+        { label: 'Ingresos',  value: fc(ing) },
+        { label: 'Egresos',   value: fc(egr) },
+        { label: 'Balance',   value: fc(ing - egr) },
+        { label: 'Registros', value: data.length },
+      ];
+    }
+    if (reportId === 'cuenta_corriente') {
+      const debe  = data.filter(r => r.tipo === 'DEBE').reduce((s, r) => s + r.monto, 0);
+      const haber = data.filter(r => r.tipo === 'HABER').reduce((s, r) => s + r.monto, 0);
+      return [
+        { label: 'Total DEBE',  value: fc(debe) },
+        { label: 'Total HABER', value: fc(haber) },
+        { label: 'Balance',     value: fc(debe - haber) },
+        { label: 'Movimientos', value: data.length },
+      ];
+    }
+    if (reportId === 'mp_movimientos') {
+      const total = data.reduce((s, r) => s + (r.monto || 0), 0);
+      const transf = data.filter(r => r.subtipo === 'transferencia').reduce((s, r) => s + (r.monto || 0), 0);
+      const qr     = data.filter(r => r.subtipo === 'qr').reduce((s, r) => s + (r.monto || 0), 0);
+      const tarj   = data.filter(r => ['tarjeta_credito','tarjeta_debito'].includes(r.subtipo)).reduce((s, r) => s + (r.monto || 0), 0);
+      return [
+        { label: 'Total MP',        value: fc(total) },
+        { label: 'Transferencias',  value: fc(transf) },
+        { label: 'QR / Billetera',  value: fc(qr) },
+        { label: 'Tarjetas',        value: fc(tarj) },
+      ];
+    }
+    return null;
+  };
+
   const handleDownloadPDF = () => {
     try {
       const { columns, totals } = getTableConfig(selectedReport.id, reportData);
+      const summaryMetrics = buildSummaryMetrics(selectedReport.id, reportData);
 
       generatePDF({
-        title: selectedReport.title,
-        startDate: startDate,
-        endDate: endDate,
-        columns: columns,
-        data: reportData,
-        totals: totals ? totals.map(t => t.content) : null,
-        filename: selectedReport.id
+        title:           selectedReport.title,
+        startDate:       startDate,
+        endDate:         endDate,
+        columns:         columns,
+        data:            reportData,
+        totals:          totals ? totals.map(t => t.content) : null,
+        filename:        selectedReport.id,
+        companyName:     config?.nombre_empresa || 'KAIROX Gestión',
+        summaryMetrics,
       });
 
       toast({ title: "Éxito", description: "PDF generado correctamente.", className: "bg-green-600 text-white" });
