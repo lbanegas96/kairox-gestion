@@ -245,11 +245,12 @@ export const dashboardService = {
 
     if (error) throw new Error(error.message);
 
-    const todas = data ?? [];
-    const convertidas = todas.filter(c => c.estado === 'convertida');
-    const aprobadas   = todas.filter(c => c.estado === 'aprobada');
-    const montoTotal  = todas.reduce((s, c) => s + Number(c.total), 0);
-    const montoConvertido = convertidas.reduce((s, c) => s + Number(c.total), 0);
+    type CotRow = { id: string; estado: string; total: number; numero: string; cliente_nombre: string | null; created_at: string };
+    const todas = (data ?? []) as CotRow[];
+    const convertidas = todas.filter((c: CotRow) => c.estado === 'convertida');
+    const aprobadas   = todas.filter((c: CotRow) => c.estado === 'aprobada');
+    const montoTotal  = todas.reduce((s: number, c: CotRow) => s + Number(c.total), 0);
+    const montoConvertido = convertidas.reduce((s: number, c: CotRow) => s + Number(c.total), 0);
     const tasaConversion  = todas.length > 0 ? (convertidas.length / todas.length) * 100 : 0;
 
     return {
@@ -259,7 +260,7 @@ export const dashboardService = {
       montoConvertido,
       aprobadas:      aprobadas.length,
       tasaConversion,
-      pendientes:     aprobadas.slice(0, 5).map(c => ({ id: c.id, numero: c.numero, cliente: c.cliente_nombre, total: c.total })),
+      pendientes:     aprobadas.slice(0, 5).map((c: CotRow) => ({ id: c.id, numero: c.numero, cliente: c.cliente_nombre, total: c.total })),
     };
   },
 };

@@ -196,7 +196,7 @@ export async function autoMatch(extractoId: string, empresaId: string, cuentaId:
   let matched = 0;
 
   for (const linea of pendientes) {
-    const candidatos = movimientos.filter(m => {
+    const candidatos = movimientos.filter((m: { tipo: string; monto: number; fecha: string }) => {
       if (m.tipo !== linea.tipo) return false;
       if (Math.abs(Number(m.monto) - linea.monto) > 0.01) return false;
       const diff = Math.abs(new Date(m.fecha).getTime() - new Date(linea.fecha).getTime());

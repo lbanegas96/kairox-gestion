@@ -142,7 +142,7 @@ export async function getSaldoProveedor(proveedorId: string, empresaId: string):
     .eq('proveedor_id', proveedorId)
     .eq('empresa_id', empresaId);
 
-  return (data ?? []).reduce((acc, m) => {
+  return (data ?? []).reduce((acc: number, m: { tipo: string; monto: number }) => {
     if (m.tipo === 'compra' || m.tipo === 'nota_debito')  return acc + Number(m.monto);
     if (m.tipo === 'pago'   || m.tipo === 'nota_credito') return acc - Number(m.monto);
     return acc;
