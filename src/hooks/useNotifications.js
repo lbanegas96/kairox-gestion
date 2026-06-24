@@ -160,8 +160,39 @@ export function useNotifications() {
     ...REFETCH_OPTS,
   });
 
+  // ── Facturas con error definitivo (requieren intervención humana) ─────────
+  // Cubre error_datos (dato inválido — no se reintenta) y error_definitivo
+  // (agotó los 5 intentos). El worker no puede recuperarlas solo.
+  const { data: facturasErrorDefinitivo = [] } = useQuery({
+    queryKey: ['notif', 'facturas_error_definitivo', empresaId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('facturas_pendientes_arca')
+        .select('id, estado, comprobante_id, error_mensaje')
+        .eq('empresa_id', empresaId)
+        .in('estado', ['error_datos', 'error_definitivo'])
+        .limit(10);
+      if (error) return [];
+      return data ?? [];
+    },
+    enabled: !!empresaId,
+    ...REFETCH_OPTS,
+  });
+
   // ── Armar lista unificada ──────────────────────────────────────────────────
   const items = [
+    ...(facturasErrorDefinitivo.length > 0 ? [{
+      id: 'facturas-error-definitivo',
+      tipo: 'facturas_error_cae',
+      titulo: `${facturasErrorDefinitivo.length} factura${facturasErrorDefinitivo.length > 1 ? 's' : ''} con error CAE definitivo`,
+      detalle: facturasErrorDefinitivo.some(f => f.estado === 'error_datos')
+        ? 'Datos inválidos o reintentos agotados — revisión manual requerida.'
+        : 'Reintentos agotados — verificar en portal ARCA o corregir datos.',
+      nivel: 'critico',
+      seccion: 'configuracion',
+      action: 'tab-facturacion',
+      raw: facturasErrorDefinitivo,
+    }] : []),
     ...(chequesProximos.length > 0 ? [{
       id: 'cheques-proximos',
       tipo: 'cheques_proximos',
@@ -236,6 +267,7 @@ export function useNotifications() {
     ocPendientes,
     cajaSinCerrar,
     caesPendientes,
+    facturasErrorDefinitivo,
     chequesProximos,
     retencionesPracticadas,
     hasNotifications: items.length > 0,

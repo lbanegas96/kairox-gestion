@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-24 (sesión 29 Nadia) — Testing end-to-end de todo el trabajo de Luciano (sesiones 54-57) + 3 bugs server-side resueltos (race condition en numeración, recursión RLS, escalación de privilegios) + 4 fixes UI + 1 mejora contable + 1 feature grande flageada para sesión dedicada. **Última migration aplicada: 085.** Build ✅.
+**Última actualización:** 2026-06-24 (sesión 58 Luciano) — Cierre del ciclo async AFIP/ARCA: migrations 086-087 + arca-worker Edge Function + UI gestión facturas con error + notificación "facturas error definitivo". **Última migration aplicada: 087.** Build ✅.
 
 ## Sesión 29 (Nadia) — Testing post-Luciano + 3 fixes server-side críticos
 
@@ -60,7 +60,7 @@ Hallazgo adicional descubierto al verificar 084: la protección "no cambiar tu p
 
 ⚠️ **Aging de Cuenta Corriente por fecha de vencimiento**: el aging hoy se calcula por antigüedad del DEBE (fecha de venta). Ahora que existe `comprobantes.fecha_vencimiento` (sesión 25), tendría más sentido calcular por vencimiento. Heredado de sesión 26, sin tocar — decisión de producto (impacta KPIs históricos).
 
-⚠️ **Race condition en `crear_devolucion`** — usa `siguiente_numero_documento('devoluciones', 'numero_devolucion', 'DEV')` que cuenta filas sin lock, mismo patrón que tenía `crear_venta` antes de migration 083. `'devolucion'` NO está registrado en `series_numeracion` todavía. Cuando dos devoluciones simultáneas ocurran, van a colisionar. Migration futura: agregar `'devolucion'` a `series_numeracion` + recrear `crear_devolucion` para usar `obtener_proximo_numero('devolucion')`.
+✅ **Race condition en `crear_devolucion`** — **RESUELTO en migration 086 (sesión 58)**. `'devolucion'` agregado a `series_numeracion` con backfill de proximo_numero. `crear_devolucion` recreada usando `obtener_proximo_numero('devolucion')` (FOR UPDATE).
 
 ⚠️ **Errores 401/500 en producción**: investigar si persisten después de migrations 084-085 (la recursión 42P17 probablemente causaba 500s al hacer UPDATE de profiles).
 
@@ -76,6 +76,111 @@ Hallazgo adicional descubierto al verificar 084: la protección "no cambiar tu p
 - `src/components/ventas/NuevaVentaModal.jsx`
 - `src/components/sections/CajaSection.jsx`
 - `src/services/planCuentasService.ts` (extendido con `crearAsientoMovimientoCaja`)
+
+---
+
+## Sesión 58 — Cierre ciclo async AFIP/ARCA: worker + UI + notificaciones (Luciano)
+
+### Migrations aplicadas
+
+**Migration 086** (`086_fix_crear_devolucion_numeracion_atomica.sql`):
+- Agrega `'devolucion'` al CHECK constraint de `series_numeracion.tipo_documento`.
+- `seed_series_numeracion()` actualizada para incluir la serie DEV (prefijo `DEV-`, formato `YYYY`, 4 dígitos).
+- Backfill de `series_numeracion` para empresas existentes con `proximo_numero = MAX(correlativo) + 1`.
+- `crear_devolucion` recreada: única línea cambiada, de `siguiente_numero_documento('devoluciones', 'numero_devolucion', 'DEV')` (COUNT sin lock) a `obtener_proximo_numero(p_empresa_id, 'devolucion')` (FOR UPDATE atómico).
+
+**Migration 087** (`087_trigger_queue_factura_arca.sql`):
+- Amplía CHECK de `comprobantes.cae_estado` para incluir `'error_definitivo'` (el worker lo pone al agotar los 5 intentos).
+- Índice UNIQUE parcial `uq_fpa_comprobante_activo` en `facturas_pendientes_arca(comprobante_id)` WHERE estado NOT IN ('emitida','error_definitivo') — evita encolar el mismo comprobante dos veces.
+- Función `fn_queue_factura_arca()` SECURITY DEFINER: trigger AFTER UPDATE OF cae_estado ON comprobantes — cuando `cae_estado` cambia a `'error'` por primera vez, inserta en `facturas_pendientes_arca` con `proximo_intento = now() + 1 minute`. ON CONFLICT DO NOTHING (idempotente).
+- Backfill de comprobantes existentes con `cae_estado='error'`.
+
+### Fix crítico vault key (completado en sesión 57, documentado aquí para claridad)
+
+`ConfiguracionSection.jsx` guardaba vault secrets como `arca_cert_{empresa_id}` / `arca_key_{empresa_id}`, pero `emitir-cae/index.ts` los leía como `afip_cert_{empresa_id}` / `afip_key_{empresa_id}`. Corrección: 3 ocurrencias en ConfiguracionSection actualizadas a las keys correctas.
+
+### Edge Function `arca-worker`
+
+**`supabase/functions/arca-worker/index.ts`** — worker cron `*/5 * * * *` (definido en `supabase/config.toml`):
+- Auth: `adminClient` (service_role) — no requiere usuario autenticado.
+- Lee hasta 10 registros de `facturas_pendientes_arca WHERE estado IN ('pendiente','reintentando') AND proximo_intento <= now()`.
+- CAS lock: `UPDATE estado='procesando' WHERE id=fpa.id AND estado=fpa.estado` — previene doble procesamiento si dos instancias del worker corren al mismo tiempo.
+
+**4 casos críticos implementados:**
+
+| Caso | Detección | Acción |
+|---|---|---|
+| ARCA caído / 503 / network | `classifyArcaError` → `'transient'` | `estado='reintentando'`, backoff exponencial [1,5,15,30,60]min, máx 5 intentos |
+| Error de datos | `classifyArcaError` → `'data'` | `estado='error_datos'` directo, NO reintentar |
+| Estado ambiguo / timeout | `getLastVoucherNumber()` ANTES de emitir | Si ARCA ya emitió → `error_definitivo` "verificar manualmente" |
+| Numeración | SIEMPRE `getLastVoucherNumber()` | Nunca usar contador local |
+
+**`supabase/functions/_shared/afip.ts`** — helpers compartidos (sin Supabase client, lógica pura):
+- `voucherTypeAfip()`, `alicuotaPct()`, `docTipoAfip()`
+- `getLastVoucherNumber()` — consulta WSFE via arca-sdk
+- `callArcaEmit()` — llama WSFE y obtiene número correlativo real post-emisión
+- `classifyArcaError()` — clasifica el error de ARCA en `'data' | 'transient' | 'ambiguous'`
+- `backoffMinutes()` — schedule [1,5,15,30,60]
+
+Deploy: desplegado via MCP → status `ACTIVE`, version 1 (2026-06-24).
+
+### UI — Sección "Facturas con Error CAE" (ConfiguracionSection tab Facturación)
+
+Nueva sección condicional a `afipConfig.usa_factura_electronica`. Se inserta entre "Tipos de Comprobante" y "Series de Numeración".
+
+- Lee `facturas_pendientes_arca WHERE estado IN ('pendiente','reintentando','error_datos','error_definitivo','procesando')` JOIN `comprobantes`.
+- Tabla: Comprobante | Fecha | Cliente | Total | Estado (badge color) | Intentos | Acciones.
+- **Acción "Reintentar"** (disponible si estado ≠ 'error_datos'): reset `intentos=0, estado='pendiente', proximo_intento=now()` + `comprobantes.cae_estado='pendiente'`.
+- **Acción "Ver error"**: Dialog con el mensaje de error de ARCA en `<pre>` (monospace).
+- **Acción "Resuelta"**: marca `estado='emitida'` + `comprobantes.cae_estado='emitido'` (para correcciones manuales vía portal ARCA).
+- Botón Refresh (RefreshCw). Estado vacío: checkmark verde "Sin facturas con error".
+
+### `useNotifications` — alerta "facturas error CAE definitivo"
+
+Nueva query `facturasErrorDefinitivo` en `useNotifications.js`:
+- Lee `facturas_pendientes_arca WHERE estado IN ('error_datos', 'error_definitivo')`.
+- Item de tipo `'facturas_error_cae'`, nivel `'critico'`.
+- Navega a `seccion: 'configuracion'`, `action: 'tab-facturacion'`.
+- Se diferencia de `caesPendientes` (que cubre los in-progress en `comprobantes`): esta alerta solo dispara cuando el worker no puede recuperar las facturas solo y se requiere intervención humana.
+
+### Estado del ciclo AFIP/ARCA al cierre de sesión 58
+
+```
+Factura creada
+    ↓ emitir-cae (Edge Function, user-triggered desde NuevaFacturaModal)
+    ↓ ARCA responde → CAE guardado en comprobantes ✅ (happy path)
+    ↓ ARCA falla → comprobantes.cae_estado='error'
+         ↓ trigger fn_queue_factura_arca → INSERT facturas_pendientes_arca ✅ (migration 087)
+         ↓ arca-worker (cron */5 min) → procesa cola
+              ↓ Éxito → estado='emitida', CAE guardado ✅
+              ↓ Error datos → estado='error_datos', NO reintentar ✅
+              ↓ Error transient → backoff [1,5,15,30,60]min, hasta 5 intentos ✅
+              ↓ Max intentos → estado='error_definitivo' ✅
+              ↓ Estado ambiguo → getLastVoucherNumber() → error_definitivo "verificar manualmente" ✅
+         ↓ UI gestión (ConfiguracionSection tab Facturación) → usuario puede reintentar/marcar resuelta ✅
+         ↓ Notificación critica en useNotifications si hay error_datos/error_definitivo ✅
+```
+
+### Archivos modificados / creados
+
+**Nuevas migrations:**
+- `supabase/migrations/086_fix_crear_devolucion_numeracion_atomica.sql`
+- `supabase/migrations/087_trigger_queue_factura_arca.sql`
+
+**Nuevas Edge Functions:**
+- `supabase/functions/arca-worker/index.ts` (cron */5 min, verify_jwt=false)
+- `supabase/functions/_shared/afip.ts` (helpers compartidos)
+- `supabase/config.toml` (schedule arca-worker)
+
+**Frontend:**
+- `src/components/sections/ConfiguracionSection.jsx` — vault key fix (arca→afip) + sección "Facturas con Error CAE" + modal detalle error
+- `src/hooks/useNotifications.js` — nueva query + item `facturas_error_cae`
+
+### Pendientes para próximas sesiones
+
+⚠️ **Errores 401/500 en producción**: verificar en browser si persisten post-migrations 084-087 (la recursión 42P17 probablemente causaba los 500s).
+⚠️ **Confirmar scheduler activo**: verificar en Supabase Dashboard → Edge Functions → arca-worker que el cron aparece como scheduled. El config.toml define el schedule pero puede requerir activación manual en el dashboard si el proyecto está en free tier.
+⚠️ **Venta al peso/volumen** (feature grande, requiere sesión dedicada) — ver detalle en sesión 29 Nadia.
 
 ---
 
@@ -115,9 +220,9 @@ Condicional a `afipConfig.usa_factura_electronica`. Se mantuvo INTACTO el wizard
 - `facturas_pendientes_arca`: RLS activa, policy tenant. Tabla vacía — se llenará cuando se implemente el módulo de emisión de CAE.
 
 ### Próximos pasos AFIP (pendiente)
-- Edge Function o RPC `emitir_cae` que: lee cert/key de vault, construye XML para ARCA, llama API ARCA, guarda CAE en `facturas_pendientes_arca`.
-- Conectar emisión de CAE desde `NuevaFacturaModal.jsx` cuando el PdV tiene AFIP configurado.
-- Worker de reintentos para `facturas_pendientes_arca` estado `reintentando`.
+- ✅ Edge Function `emitir-cae` — creada en sesión 57, con vault keys `afip_cert_{empresa_id}` / `afip_key_{empresa_id}`.
+- Conectar emisión de CAE desde `NuevaFacturaModal.jsx` cuando el PdV tiene AFIP configurado. (pendiente — requiere que el cliente tenga cert AFIP configurado)
+- ✅ Worker de reintentos `arca-worker` — implementado en sesión 58 (migrations 086-087 + Edge Function + UI).
 
 ## Sesión 56 — Reportería de primer nivel + Dashboard KPIs financieros (Luciano)
 

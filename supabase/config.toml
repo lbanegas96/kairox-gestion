@@ -1,0 +1,9 @@
+# supabase/config.toml — Configuración de Edge Functions y scheduler
+# Proyecto: KAIROX Gestión (wuznppxeonmhfcvnqfbf)
+# Este archivo se usa con Supabase CLI para configurar schedules y opciones de deploy.
+
+[functions.arca-worker]
+verify_jwt = false   # el worker es un proceso interno (service_role), sin JWT de usuario
+
+[functions.arca-worker.cron]
+schedule = "*/5 * * * *"   # cada 5 minutos

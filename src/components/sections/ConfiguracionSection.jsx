@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Settings, Save, Building, Image as ImageIcon, Loader2, Upload, Trash2,
-  AlertCircle, TrendingUp, CheckCircle2, FileText, Check, Download,
+  AlertCircle, AlertTriangle, TrendingUp, CheckCircle2, CheckCircle, FileText, Check, Download,
   Users, Puzzle, Bell, Package2, Info, Mail, MapPin, Hash,
   CreditCard, Warehouse, BarChart3, Cpu, Copy, Pencil,
   Plus, Shield, RefreshCw,
@@ -153,6 +153,13 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [loadingTipos, setLoadingTipos] = useState(false);
   const [savingTipoId, setSavingTipoId] = useState(null);
 
+  // ── Tab 3b: Facturas con Error CAE ────────────────────────────────────────
+  const [facturasError, setFacturasError] = useState([]);
+  const [loadingFacturasError, setLoadingFacturasError] = useState(false);
+  const [errorDetailModal, setErrorDetailModal] = useState(null); // { mensaje }
+  const [reintentandoId, setReintentandoId] = useState(null);
+  const [resolviendoId, setResolviendoId] = useState(null);
+
   // ── Tab 4: Unidades de Medida ─────────────────────────────────────────────
   const [unidadesMedida, setUnidadesMedida] = useState([]);
   const [loadingUM, setLoadingUM] = useState(true);
@@ -234,7 +241,7 @@ const ConfiguracionSection = ({ initialTab }) => {
 
       try {
         const { data: certVal } = await supabase.rpc('vault_secret_read', {
-          p_name: `arca_cert_${user.empresa_id}`,
+          p_name: `afip_cert_${user.empresa_id}`,
         });
         setCertStatus(certVal != null && certVal !== '');
       } catch {
@@ -270,6 +277,70 @@ const ConfiguracionSection = ({ initialTab }) => {
   useEffect(() => {
     if (selectedPvId) reloadTipos(selectedPvId);
   }, [selectedPvId]);
+
+  const reloadFacturasError = async () => {
+    if (!user?.empresa_id) return;
+    setLoadingFacturasError(true);
+    try {
+      const { data } = await supabase
+        .from('facturas_pendientes_arca')
+        .select('id, estado, intentos, max_intentos, proximo_intento, error_mensaje, created_at, comprobante_id, comprobantes(numero_venta, fecha, total, cliente_nombre)')
+        .eq('empresa_id', user.empresa_id)
+        .in('estado', ['pendiente', 'reintentando', 'error_datos', 'error_definitivo', 'procesando'])
+        .order('created_at', { ascending: false })
+        .limit(50);
+      setFacturasError(data ?? []);
+    } catch (e) {
+      console.error('[FacturasError ARCA] Error al cargar:', e);
+    } finally {
+      setLoadingFacturasError(false);
+    }
+  };
+
+  useEffect(() => {
+    if (afipConfig?.usa_factura_electronica) reloadFacturasError();
+  }, [user?.empresa_id, afipConfig?.usa_factura_electronica]);
+
+  const handleReintentarFactura = async (fpa) => {
+    setReintentandoId(fpa.id);
+    try {
+      await supabase.from('facturas_pendientes_arca').update({
+        estado: 'pendiente',
+        intentos: 0,
+        proximo_intento: new Date().toISOString(),
+        error_mensaje: null,
+      }).eq('id', fpa.id);
+      await supabase.from('comprobantes').update({
+        cae_estado: 'pendiente',
+        error_afip: null,
+      }).eq('id', fpa.comprobante_id);
+      toast({ title: 'Factura encolada', description: 'El worker la procesará en los próximos minutos.', className: 'bg-green-600 text-white border-green-500' });
+      reloadFacturasError();
+    } catch (e) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setReintentandoId(null);
+    }
+  };
+
+  const handleMarcarResuelta = async (fpa) => {
+    setResolviendoId(fpa.id);
+    try {
+      await supabase.from('facturas_pendientes_arca').update({
+        estado: 'emitida',
+      }).eq('id', fpa.id);
+      await supabase.from('comprobantes').update({
+        cae_estado: 'emitido',
+        error_afip: null,
+      }).eq('id', fpa.comprobante_id);
+      toast({ title: 'Marcada como resuelta', description: 'La factura fue marcada como emitida externamente.', className: 'bg-green-600 text-white border-green-500' });
+      reloadFacturasError();
+    } catch (e) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setResolviendoId(null);
+    }
+  };
 
   useEffect(() => {
     if (config) {
@@ -792,14 +863,14 @@ const ConfiguracionSection = ({ initialTab }) => {
     setSavingCert(true);
     try {
       await supabase.rpc('vault_secret_upsert', {
-        p_name: `arca_cert_${user.empresa_id}`,
+        p_name: `afip_cert_${user.empresa_id}`,
         p_secret: certForm.cert.trim(),
-        p_description: `ARCA cert empresa ${user.empresa_id}`,
+        p_description: `AFIP/ARCA cert empresa ${user.empresa_id}`,
       });
       await supabase.rpc('vault_secret_upsert', {
-        p_name: `arca_key_${user.empresa_id}`,
+        p_name: `afip_key_${user.empresa_id}`,
         p_secret: certForm.key.trim(),
-        p_description: `ARCA private key empresa ${user.empresa_id}`,
+        p_description: `AFIP/ARCA private key empresa ${user.empresa_id}`,
       });
       setCertStatus(true);
       setCertModalOpen(false);
@@ -1598,6 +1669,112 @@ const ConfiguracionSection = ({ initialTab }) => {
               </div>
             )}
 
+            {/* ── Sección 4: Facturas con Error CAE ─────────────────────────── */}
+            {afipConfig.usa_factura_electronica && (
+              <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg mt-0.5">
+                      <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-kx-text">Facturas con Error CAE</h3>
+                      <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-0.5">
+                        Comprobantes que fallaron en la emisión electrónica. El worker las reintenta automáticamente cada 5 minutos.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={reloadFacturasError}
+                    className="p-2 rounded-lg border kairox-border hover:bg-slate-100 dark:hover:bg-kx-surface-2 transition-colors"
+                    title="Recargar"
+                  >
+                    <RefreshCw className={`w-4 h-4 text-kx-text-2 ${loadingFacturasError ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+
+                {loadingFacturasError ? (
+                  <div className="flex items-center gap-2 text-kx-text-3 py-4"><Loader2 className="w-4 h-4 animate-spin" /> Cargando...</div>
+                ) : facturasError.length === 0 ? (
+                  <div className="flex items-center gap-2 text-green-600 dark:text-green-400 py-3 text-sm">
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Sin facturas con error. Todos los CAE fueron emitidos correctamente.</span>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs text-kx-text-3 uppercase tracking-wide">
+                          <th className="px-3 py-2">Comprobante</th>
+                          <th className="px-3 py-2">Fecha</th>
+                          <th className="px-3 py-2">Cliente</th>
+                          <th className="px-3 py-2 text-right">Total</th>
+                          <th className="px-3 py-2">Estado</th>
+                          <th className="px-3 py-2">Intentos</th>
+                          <th className="px-3 py-2">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {facturasError.map((fpa) => {
+                          const comp = fpa.comprobantes;
+                          const puedeReintentar = !['error_datos'].includes(fpa.estado);
+                          const estadoBadge = {
+                            pendiente:       'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                            reintentando:    'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                            procesando:      'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+                            error_datos:     'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+                            error_definitivo:'bg-red-200 text-red-800 dark:bg-red-900/50 dark:text-red-300',
+                          }[fpa.estado] ?? 'bg-slate-100 text-slate-600';
+                          return (
+                            <tr key={fpa.id} className="border-t border-kx-border">
+                              <td className="px-3 py-2 font-mono text-xs text-kx-text font-medium">{comp?.numero_venta ?? '—'}</td>
+                              <td className="px-3 py-2 text-kx-text-2 whitespace-nowrap">{comp?.fecha ? new Date(comp.fecha).toLocaleDateString('es-AR') : '—'}</td>
+                              <td className="px-3 py-2 text-kx-text-2 max-w-[140px] truncate">{comp?.cliente_nombre ?? 'Consumidor Final'}</td>
+                              <td className="px-3 py-2 text-kx-text text-right font-medium">
+                                {comp?.total != null ? new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(comp.total) : '—'}
+                              </td>
+                              <td className="px-3 py-2">
+                                <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${estadoBadge}`}>
+                                  {fpa.estado.replace('_', ' ')}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-center text-kx-text-2 text-xs">{fpa.intentos}/{fpa.max_intentos}</td>
+                              <td className="px-3 py-2">
+                                <div className="flex items-center gap-1">
+                                  {puedeReintentar && (
+                                    <button
+                                      onClick={() => handleReintentarFactura(fpa)}
+                                      disabled={reintentandoId === fpa.id}
+                                      className="text-xs px-2 py-1 rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
+                                    >
+                                      {reintentandoId === fpa.id ? <Loader2 className="w-3 h-3 animate-spin inline" /> : 'Reintentar'}
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => setErrorDetailModal({ mensaje: fpa.error_mensaje ?? 'Sin detalle de error.' })}
+                                    className="text-xs px-2 py-1 rounded border border-kx-border text-kx-text-2 hover:bg-slate-100 dark:hover:bg-kx-surface-2 transition-colors"
+                                  >
+                                    Ver error
+                                  </button>
+                                  <button
+                                    onClick={() => handleMarcarResuelta(fpa)}
+                                    disabled={resolviendoId === fpa.id}
+                                    className="text-xs px-2 py-1 rounded border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 transition-colors"
+                                  >
+                                    {resolviendoId === fpa.id ? <Loader2 className="w-3 h-3 animate-spin inline" /> : 'Resuelta'}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Series de Numeración */}
             <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
               <div className="flex items-start gap-3 mb-4">
@@ -2142,7 +2319,7 @@ const ConfiguracionSection = ({ initialTab }) => {
             </div>
             <div className="flex items-start gap-2 text-xs text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2">
               <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-              Las credenciales se guardan encriptadas en Vault de Supabase con las claves <code className="font-mono">arca_cert_{'{empresa_id}'}</code> y <code className="font-mono">arca_key_{'{empresa_id}'}</code>. Nunca se almacenan en texto plano.
+              Las credenciales se guardan encriptadas en Vault de Supabase con las claves <code className="font-mono">afip_cert_{'{empresa_id}'}</code> y <code className="font-mono">afip_key_{'{empresa_id}'}</code>. Nunca se almacenan en texto plano.
             </div>
           </div>
           <div className="flex gap-2 justify-end pt-2 border-t border-kx-border">
@@ -2507,6 +2684,26 @@ const ConfiguracionSection = ({ initialTab }) => {
         integracion={integracionUala}
         onSuccess={reloadIntegracionUala}
       />
+
+      {/* ── Modal detalle error ARCA ───────────────────────────────────────── */}
+      <Dialog open={!!errorDetailModal} onOpenChange={(o) => !o && setErrorDetailModal(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+              <AlertTriangle className="w-5 h-5" />
+              Detalle del error ARCA
+            </DialogTitle>
+            <DialogDescription>
+              Mensaje de error devuelto por el servicio WSFE de AFIP/ARCA.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-3 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+            <pre className="text-sm text-red-800 dark:text-red-300 whitespace-pre-wrap break-words font-mono">
+              {errorDetailModal?.mensaje ?? ''}
+            </pre>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
