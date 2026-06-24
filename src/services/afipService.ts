@@ -46,21 +46,20 @@ export async function emitirCAE(comprobante_id: string): Promise<CAEResult> {
 }
 
 /**
- * Reintenta la emisión de CAE para comprobantes en estado 'pendiente' o 'error'.
- * Procesa hasta 10 por corrida con un rate-limit suave entre llamadas.
+ * Reintento masivo de CAEs pendientes/con error.
+ *
+ * NO emite desde el frontend: re-encola los comprobantes en
+ * `facturas_pendientes_arca` vía la RPC atómica `reencolar_caes_pendientes`
+ * y deja que el `arca-worker` (única fuente de verdad para emitir) los procese.
+ * Esto evita la doble emisión que se daba al llamar `emitir-cae` en loop mientras
+ * el worker ya estaba reintentando la misma factura.
+ *
+ * Devuelve la cantidad de comprobantes re-encolados.
  */
-export async function reintentarCAEsPendientes(empresa_id: string): Promise<void> {
-  const { data: pendientes } = await supabase
-    .from('comprobantes')
-    .select('id')
-    .eq('empresa_id', empresa_id)
-    .in('cae_estado', ['pendiente', 'error'])
-    .limit(10);
-
-  if (!pendientes?.length) return;
-
-  for (const comp of pendientes) {
-    await emitirCAE(comp.id);
-    await new Promise((r) => setTimeout(r, 500)); // rate limiting suave
-  }
+export async function reintentarCAEsPendientes(empresa_id: string): Promise<number> {
+  const { data, error } = await supabase.rpc('reencolar_caes_pendientes', {
+    p_empresa_id: empresa_id,
+  });
+  if (error) throw error;
+  return (data as number) ?? 0;
 }

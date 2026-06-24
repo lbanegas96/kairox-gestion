@@ -2654,7 +2654,7 @@ Dashboard, Inventario (productos + Historial Movimientos), Ventas (Nueva + Histo
 **Pendientes Fases 3-5:**
 - ⚠️ IVA diferencial (10.5%, 27%) — hardcodeado 21% en Fase 3.
 - ⚠️ Comprobantes tipo A (responsables inscriptos) — requiere datos CUIT receptor válidos.
-- ⏳ Reintento masivo CAEs pendientes — `afipService.reintentarCAEsPendientes()` implementado pero sin UI.
+- ✅ Reintento masivo CAEs pendientes — **sesión 59**: `afipService.reintentarCAEsPendientes()` reescrito para llamar la RPC `reencolar_caes_pendientes` (migration 088) en vez de emitir desde el frontend. Re-encola en `facturas_pendientes_arca` y deja que el `arca-worker` emita (única fuente de verdad). Accionable desde la notificación `caes_pendientes` en el Header. Elimina el riesgo de doble emisión que tenía el loop de `emitir-cae` frontend.
 
 ---
 
@@ -2750,7 +2750,7 @@ Dashboard, Inventario (productos + Historial Movimientos), Ventas (Nueva + Histo
 - IVA hardcodeado 21% (Fase 1). Ambiente default `sandbox` (env `AFIP_ENVIRONMENT` opcional; en producción setear `=production`).
 
 #### 4. Frontend `src/services/afipService.ts`
-- `generarCSR(cuit, razonSocial)`, `emitirCAE(comprobante_id)`, `reintentarCAEsPendientes(empresa_id)` (procesa pendiente|error, rate-limit 500ms).
+- `generarCSR(cuit, razonSocial)`, `emitirCAE(comprobante_id)`, `reintentarCAEsPendientes(empresa_id)` (sesión 59: ahora llama la RPC `reencolar_caes_pendientes` y re-encola para el worker — ya NO emite en loop desde el frontend).
 
 **Convenciones nuevas:**
 - **SDKs npm Node-only en Edge Functions:** si un paquete depende de `soap`/módulos Node que no cargan en Deno, importarlo DINÁMICAMENTE (`await import()`) dentro del handler, nunca top-level — así la función bootea y el fallo se aísla a su ruta de uso.

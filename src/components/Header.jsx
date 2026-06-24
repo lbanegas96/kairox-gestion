@@ -152,11 +152,16 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch, activ
                       onClick={() => {
                         if (item.action === 'reintentar-cae') {
                           import('@/services/afipService').then(({ reintentarCAEsPendientes }) => {
-                            reintentarCAEsPendientes(user.empresa_id).then(() => {
-                              toast({ title: 'Reintentando emisión de CAEs...' });
+                            reintentarCAEsPendientes(user.empresa_id).then((n) => {
+                              toast({
+                                title: `${n} factura${n === 1 ? '' : 's'} re-encolada${n === 1 ? '' : 's'}`,
+                                description: 'El worker emitirá los CAE en los próximos minutos.',
+                              });
                               queryClient.invalidateQueries({ queryKey: ['ventas'] });
                               queryClient.invalidateQueries({ queryKey: ['notif'] });
-                            }).catch(err => console.warn('[AFIP]', err.message));
+                            }).catch(err => {
+                              toast({ title: 'No se pudo re-encolar', description: err.message, variant: 'destructive' });
+                            });
                           });
                         } else if (item.action === 'tab-facturacion') {
                           onNavigate?.(item.seccion, { initialTab: 'facturacion' });
