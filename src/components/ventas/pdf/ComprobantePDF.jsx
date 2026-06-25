@@ -337,7 +337,7 @@ export function ComprobantePDF({ comprobante, items, pagos, empresaData, qrDataU
 
         {/* PIE */}
         <Text style={styles.footer}>
-          {'Generado por KAIROX Gestión · ' + formatFecha(new Date().toISOString())}
+          {empresaData?.pie_documento ? empresaData.pie_documento + '\n' : ''}{'Generado por KAIROX Gestión · ' + formatFecha(new Date().toISOString())}
         </Text>
 
       </Page>

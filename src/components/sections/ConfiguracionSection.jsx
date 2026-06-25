@@ -97,6 +97,12 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [loadingValoracion, setLoadingValoracion] = useState(false);
   const [savingValoracion, setSavingValoracion] = useState(false);
 
+  // ── Tab 3: Pie de Documento + Tab 4: Stock Mínimo Global ─────────────────
+  const [pieDoc, setPieDoc] = useState('');
+  const [savingPieDoc, setSavingPieDoc] = useState(false);
+  const [stockMinimoGlobal, setStockMinimoGlobal] = useState(5);
+  const [savingStockMin, setSavingStockMin] = useState(false);
+
   // ── Tab 3: Series de Numeración ───────────────────────────────────────────
   const [seriesNumeracion, setSeriesNumeracion] = useState([]);
   const [loadingSeries, setLoadingSeries] = useState(false);
@@ -435,6 +441,19 @@ const ConfiguracionSection = ({ initialTab }) => {
 
   useEffect(() => {
     if (!user?.empresa_id) return;
+    supabase.from('empresas')
+      .select('pie_documento, stock_minimo_global')
+      .eq('id', user.empresa_id).single()
+      .then(({ data }) => {
+        if (data) {
+          setPieDoc(data.pie_documento ?? '');
+          setStockMinimoGlobal(data.stock_minimo_global ?? 5);
+        }
+      });
+  }, [user?.empresa_id]);
+
+  useEffect(() => {
+    if (!user?.empresa_id) return;
     const loadSeries = async () => {
       setLoadingSeries(true);
       try {
@@ -704,6 +723,38 @@ const ConfiguracionSection = ({ initialTab }) => {
       toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
     } finally {
       setSavingTC(false);
+    }
+  };
+
+  const handleSavePieDoc = async () => {
+    if (!user?.empresa_id) return;
+    setSavingPieDoc(true);
+    try {
+      const { error } = await supabase.from('empresas')
+        .update({ pie_documento: pieDoc.trim() || null })
+        .eq('id', user.empresa_id);
+      if (error) throw error;
+      toast({ title: 'Pie de documento guardado', className: 'bg-green-600 text-white border-green-700' });
+    } catch (e) {
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingPieDoc(false);
+    }
+  };
+
+  const handleSaveStockMin = async () => {
+    if (!user?.empresa_id) return;
+    setSavingStockMin(true);
+    try {
+      const { error } = await supabase.from('empresas')
+        .update({ stock_minimo_global: stockMinimoGlobal })
+        .eq('id', user.empresa_id);
+      if (error) throw error;
+      toast({ title: 'Stock mínimo global guardado', className: 'bg-green-600 text-white border-green-700' });
+    } catch (e) {
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingStockMin(false);
     }
   };
 
@@ -1891,14 +1942,27 @@ const ConfiguracionSection = ({ initialTab }) => {
               )}
             </div>
 
-            {/* Pie de documento — placeholder */}
-            <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm opacity-60">
+            {/* Pie de documento */}
+            <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <FileText className="w-5 h-5 text-kx-text-3" />
                 <h3 className="font-semibold text-kx-text">Pie de Documento</h3>
-                <span className="text-xs bg-kx-surface-2 text-kx-text-3 px-2 py-0.5 rounded-full border border-kx-border">Próximamente</span>
               </div>
-              <p className="text-sm text-kx-text-2">Texto libre que aparece al pie de facturas, remitos y cotizaciones impresas.</p>
+              <p className="text-sm text-kx-text-2 mb-3">Texto que aparece al pie de facturas, remitos y cotizaciones impresas.</p>
+              <textarea
+                value={pieDoc}
+                onChange={e => setPieDoc(e.target.value)}
+                maxLength={300}
+                rows={3}
+                placeholder="Ej: KAIROX S.A. · CUIT 30-12345678-9 · Lun-Vie 9-18hs"
+                className="w-full px-3 py-2 rounded-lg border border-kx-border bg-kx-surface text-kx-text text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              />
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-xs text-kx-text-3">{pieDoc.length}/300</span>
+                <Button onClick={handleSavePieDoc} disabled={savingPieDoc} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
+                  {savingPieDoc ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Guardar'}
+                </Button>
+              </div>
             </div>
           </div>
         </TabsContent>
@@ -2029,13 +2093,26 @@ const ConfiguracionSection = ({ initialTab }) => {
               )}
             </div>
 
-            <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm opacity-60">
+            <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
               <div className="flex items-center gap-2 mb-3">
                 <BarChart3 className="w-5 h-5 text-kx-text-3" />
                 <h3 className="font-semibold text-kx-text">Stock Mínimo Global</h3>
-                <span className="text-xs bg-kx-surface-2 text-kx-text-3 px-2 py-0.5 rounded-full border border-kx-border">Próximamente</span>
               </div>
-              <p className="text-sm text-kx-text-2">Umbral global para alertas de stock bajo (puede sobreescribirse por producto).</p>
+              <p className="text-sm text-kx-text-2 mb-4">Umbral de stock para alertas. Se aplica a productos sin mínimo individual — si el producto tiene su propio valor configurado, ese tiene prioridad.</p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min={0}
+                  max={9999}
+                  value={stockMinimoGlobal}
+                  onChange={e => setStockMinimoGlobal(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="w-24 px-3 py-2 rounded-lg border border-kx-border bg-kx-surface text-kx-text text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                />
+                <span className="text-sm text-kx-text-2">unidades</span>
+                <Button onClick={handleSaveStockMin} disabled={savingStockMin} size="sm" className="ml-auto bg-blue-600 hover:bg-blue-700 text-white">
+                  {savingStockMin ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Guardar'}
+                </Button>
+              </div>
             </div>
           </div>
         </TabsContent>

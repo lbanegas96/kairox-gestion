@@ -228,7 +228,7 @@ export function TicketPDF({ comprobante, items, pagos, empresa }) {
 
         {/* Pie */}
         <Text style={styles.footer}>
-          Gracias por su compra · {empresa?.nombre ?? ''} · Generado por KAIROX Gestión
+          {empresa?.pie_documento ? empresa.pie_documento + '\n' : ''}Gracias por su compra · {empresa?.nombre ?? ''} · Generado por KAIROX Gestión
         </Text>
 
       </Page>

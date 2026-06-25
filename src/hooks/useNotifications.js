@@ -23,9 +23,25 @@ export function useNotifications() {
   const { user } = useAuth();
   const empresaId = user?.empresa_id;
 
+  // ── Stock mínimo global (config de empresa) ────────────────────────────────
+  const { data: stockMinimoGlobal = 5 } = useQuery({
+    queryKey: ['notif', 'stock_minimo_global', empresaId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('empresas')
+        .select('stock_minimo_global')
+        .eq('id', empresaId)
+        .single();
+      return data?.stock_minimo_global ?? 5;
+    },
+    enabled: !!empresaId,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+  });
+
   // ── Stock bajo ─────────────────────────────────────────────────────────────
   const { data: stockBajo = [] } = useQuery({
-    queryKey: ['notif', 'stock_bajo', empresaId],
+    queryKey: ['notif', 'stock_bajo', empresaId, stockMinimoGlobal],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('productos')
@@ -33,7 +49,7 @@ export function useNotifications() {
         .eq('empresa_id', empresaId)
         .eq('activo', true);
       if (error) return [];
-      return (data ?? []).filter(p => (p.stock_actual ?? 0) <= (p.stock_minimo ?? 5));
+      return (data ?? []).filter(p => (p.stock_actual ?? 0) <= (p.stock_minimo ?? stockMinimoGlobal));
     },
     enabled: !!empresaId,
     ...REFETCH_OPTS,
