@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Landmark, History, LogOut, Loader2, X, CheckCircle } from 'lucide-react';
+import { Landmark, History, LogOut, Loader2, X, CheckCircle, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,7 +15,7 @@ import HistorialTurnoModal from './HistorialTurnoModal';
 
 // Layout pantalla completa para usuarios cajeros (role='solo_caja' o modo_caja=true).
 // No tiene sidebar ni header estándar.
-function ModoCajaLayout({ onLogout }) {
+function ModoCajaLayout({ onLogout, onBack = null }) {
   const { user }                                       = useAuth();
   const { isSessionOpen, currentSession, openSession,
           closeSession, loading: cajaLoading }          = useCaja();
@@ -145,15 +145,27 @@ function ModoCajaLayout({ onLogout }) {
             <span className="hidden sm:inline">Mi turno</span>
           </Button>
 
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={onLogout}
-            className="h-7 text-xs text-kx-text-3 hover:text-kx-red gap-1"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Salir</span>
-          </Button>
+          {onBack ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onBack}
+              className="h-7 text-xs text-kx-text-2 hover:text-kx-text gap-1"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Volver al panel</span>
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onLogout}
+              className="h-7 text-xs text-kx-text-3 hover:text-kx-red gap-1"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Salir</span>
+            </Button>
+          )}
         </div>
       </div>
 

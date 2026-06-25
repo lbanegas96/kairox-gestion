@@ -14,6 +14,7 @@ function App() {
   const { user, loading, signOut, needsPasswordReset, setNeedsPasswordReset } = useAuth();
   const { theme } = useTheme();
   const [longLoad, setLongLoad] = useState(false);
+  const [showPOS, setShowPOS] = useState(false);
   const { toast } = useToast();
 
   // Detectar error en el hash (ej: link vencido)
@@ -104,7 +105,9 @@ function App() {
           <CajaProvider>
             {(user?.role === 'solo_caja' || user?.modo_caja === true)
               ? <ModoCajaLayout onLogout={signOut} />
-              : <Dashboard user={user} onLogout={signOut} />
+              : showPOS
+                ? <ModoCajaLayout onLogout={signOut} onBack={() => setShowPOS(false)} />
+                : <Dashboard user={user} onLogout={signOut} onEnterPOS={() => setShowPOS(true)} />
             }
           </CajaProvider>
         )}

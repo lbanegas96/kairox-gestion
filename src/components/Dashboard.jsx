@@ -22,11 +22,10 @@ import { CommandPalette, useCommandPalette } from '@/components/CommandPalette';
 import { supabase } from '@/lib/customSupabaseClient';
 import { OnboardingWizard } from '@/components/OnboardingWizard';
 
-function Dashboard({ user, onLogout }) {
+function Dashboard({ user, onLogout, onEnterPOS }) {
   const [activeSection, setActiveSection]     = useState('dashboard');
   const [sectionParams, setSectionParams]     = useState({});
   const [isSidebarOpen, setIsSidebarOpen]     = useState(false);
-  const [posOpenNonce, setPosOpenNonce]       = useState(0);
   const { open: cmdOpen, setOpen: setCmdOpen } = useCommandPalette();
   const [showOnboarding, setShowOnboarding]   = useState(false);
 
@@ -35,11 +34,8 @@ function Dashboard({ user, onLogout }) {
     setSectionParams(params);
   };
 
-  // Sidebar handler: si selecciona "Nueva Venta (POS)" (id 'ventas'),
-  // además de navegar a Ventas/Historial, incrementa un nonce que
-  // VentasSection escucha para auto-abrir el modal de venta.
   const handleSidebarSelect = (section) => {
-    if (section === 'ventas') setPosOpenNonce(n => n + 1);
+    if (section === 'pos') { onEnterPOS?.(); return; }
     setActiveSection(section);
   };
 
@@ -59,7 +55,7 @@ function Dashboard({ user, onLogout }) {
     switch (activeSection) {
       case 'dashboard':     return <DashboardSection onNavigate={setActiveSection} />;
       case 'productos':     return <ProductosSection />;
-      case 'ventas':           return <VentasSection initialTab="historial" autoOpenSaleNonce={posOpenNonce} />;
+      case 'ventas':           return <VentasSection initialTab="historial" />;
       case 'cotizaciones':     return <VentasSection initialTab="cotizaciones" />;
       case 'pedidos':          return <VentasSection initialTab="pedidos" />;
       case 'entregas':         return <VentasSection initialTab="entregas" />;
