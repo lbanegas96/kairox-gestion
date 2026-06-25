@@ -3278,6 +3278,27 @@ Dashboard, Inventario (productos + Historial Movimientos), Ventas (Nueva + Histo
 - Confirmado migraciones 018, 019, 020 aplicadas en Supabase ✅
 - Fix conector MCP Supabase: reconectado a cuenta NALUX vía OAuth
 
+### Sesión 2026-06-25 — Capa C numeración + Guards RPCs + POS página completa
+
+**Commits:** `5d259c0` · `62dacdd` · `b2c9c68` · `85bad7e` · `618720f`
+
+- **Label NC/ND + botón Devolver en OCs** (`5d259c0`):
+  - `NuevaDevolucionProveedorModal.jsx`: prop `oc = null` (dual-path), label corregido a "Nota de Crédito del proveedor", `handleConfirm` usa `compra?.id || null`, post-RPC actualiza `cantidad_devuelta` en `ordenes_compra_items`
+  - `OrdenesCompraSection.jsx`: botón RotateCcw naranja en filas `recibida`/`recibida_parcial`, botón "Devolver" en footer de detalle, modal `NuevaDevolucionProveedorModal` con prop `oc`
+- **Migration 094 — UNIQUE (empresa_id, numero) en 8 tablas** (`62dacdd`):
+  - Borró phantom entrega `1659043e` (sin movimiento de stock, duplicado por race condition en COUNT*)
+  - Constraints en: `entregas.numero_entrega`, `devoluciones.numero_devolucion`, `comprobantes.numero_venta`, `pedidos.numero`, `cotizaciones.numero`, `ordenes_compra.numero`, `recepciones.numero_recepcion`, `notas_debito.numero_nd`
+- **Migration 095 — REVOKE anon overload Ualá** (`b2c9c68`):
+  - `insertar_movimiento_bancario_externo` 8-arg (con `p_subtipo`, agregado en migration Ualá) tenía anon=true ❌ → corregido; original 7-arg ya estaba protegido
+- **Migration 096 — NC en crear_devolucion usa obtener_proximo_numero** (`85bad7e`):
+  - Antes: `siguiente_numero_documento` (COUNT* sin lock → podía generar NC- duplicados)
+  - Ahora: `obtener_proximo_numero(p_empresa_id, 'nota_credito')` → FOR UPDATE en `series_numeracion`
+- **POS como página completa para admin** (`618720f`):
+  - `ModoCajaLayout.jsx`: prop `onBack = null`; si onBack → "← Volver al panel", si null → "Salir" (solo_caja)
+  - `App.jsx`: state `showPOS`; 3 ramas: `solo_caja/modo_caja` → ModoCajaLayout(onLogout), `showPOS` → ModoCajaLayout(onBack), default → Dashboard(onEnterPOS)
+  - `Dashboard.jsx`: `handleSidebarSelect` intercepta section='pos' → llama `onEnterPOS()`, removido `posOpenNonce`
+  - `Sidebar.jsx`: primer item VENTAS: `{ id: 'pos', label: 'Punto de Venta', icon: Monitor }`
+
 ### Sesión 2026-06-07 — Fase 5 completa
 - `ProveedoresSection.jsx` + `proveedoresService.ts` — ficha completa, CC, OC, pago inline
 - `LaunchpadSection.jsx` + `portalService.ts` — home Fiori-style con 4 portales por área
