@@ -246,13 +246,13 @@ const ConfiguracionSection = ({ initialTab }) => {
         setSelectedPvId(prev => prev ?? allPvs[0].id);
       }
 
-      try {
-        const { data: certVal } = await supabase.rpc('vault_secret_read', {
-          p_name: `afip_cert_${user.empresa_id}`,
-        });
-        setCertStatus(certVal != null && certVal !== '');
-      } catch {
+      const { data: certVal, error: certErr } = await supabase.rpc('vault_secret_read', {
+        p_name: `afip_cert_${user.empresa_id}`,
+      });
+      if (certErr) {
         setCertStatus(false);
+      } else {
+        setCertStatus(certVal != null && certVal !== '');
       }
     } catch (e) {
       console.error('[AFIP] Error al cargar config:', e);
@@ -261,7 +261,9 @@ const ConfiguracionSection = ({ initialTab }) => {
     }
   };
 
-  useEffect(() => { reloadAFIP(); }, [user?.empresa_id]);
+  useEffect(() => {
+    if (activeTab === 'facturacion') reloadAFIP();
+  }, [user?.empresa_id, activeTab]);
 
   const reloadTipos = async (pvId) => {
     if (!pvId || !user?.empresa_id) return;
@@ -282,8 +284,8 @@ const ConfiguracionSection = ({ initialTab }) => {
   };
 
   useEffect(() => {
-    if (selectedPvId) reloadTipos(selectedPvId);
-  }, [selectedPvId]);
+    if (activeTab === 'facturacion' && selectedPvId) reloadTipos(selectedPvId);
+  }, [selectedPvId, activeTab]);
 
   const reloadFacturasError = async () => {
     if (!user?.empresa_id) return;
@@ -305,8 +307,10 @@ const ConfiguracionSection = ({ initialTab }) => {
   };
 
   useEffect(() => {
-    if (afipConfig?.usa_factura_electronica) reloadFacturasError();
-  }, [user?.empresa_id, afipConfig?.usa_factura_electronica]);
+    if (activeTab === 'facturacion' && afipConfig?.usa_factura_electronica) {
+      reloadFacturasError();
+    }
+  }, [user?.empresa_id, afipConfig?.usa_factura_electronica, activeTab]);
 
   const handleReintentarFactura = async (fpa) => {
     setReintentandoId(fpa.id);

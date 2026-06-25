@@ -1,5 +1,51 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-24 (sesión 60 Luciano) — AFIP async completo + Quick wins: migration 090 agrega `pie_documento` y `stock_minimo_global` a empresas. Cards activos en ConfiguracionSection. Los 3 PDFs muestran pie_documento. useNotifications usa stock_minimo_global como fallback dinámico. **Última migration aplicada: 090.** Build ✅. Deploy Vercel ✅.
+**Última actualización:** 2026-06-25 (sesión 30 Nadia) — Testing post-sesión 60 Luciano: 3 fixes server-side (migrations 091-093) + 5 fixes UI. Race condition de auth en ConfigContext resuelta. Bug de duplicación de numeración devoluciones por backfill faltante de migration 086 cerrado. **Última migration aplicada: 093.** Build ✅.
+
+## Sesión 30 (Nadia) — Testing post-sesión 60: race auth, vault grant, numeración devoluciones, UX ventas
+
+### Bugs resueltos con migration
+
+**Migration 091 — `vault_secret_read` sin GRANT EXECUTE a `authenticated`**
+Síntoma: 403 `permission denied for function vault_secret_read` al abrir Configuración → Facturación (`reloadAFIP` en `ConfiguracionSection.jsx` intenta chequear si el certificado AFIP está cargado). Causa raíz: la función ya era `SECURITY DEFINER` con `search_path=public,vault`, pero `proacl` solo tenía `{postgres=X, service_role=X}`. Probable colateral de migrations 063/064 (REVOKE masivo de `anon`). Fix: `REVOKE ALL ... FROM PUBLIC, anon` + `GRANT EXECUTE ... TO authenticated`. Idempotente. `get_my_empresa_id` (alarma falsa relacionada) ya tenía `authenticated=X`, no se tocó.
+
+**Migration 092 — Whitelist `siguiente_numero_documento` incompleto para NC**
+Síntoma al registrar devolución a proveedor con compensación NC: `Combinación (tabla, columna, prefijo) no permitida: (comprobantes, numero_venta, NC)`. Causa raíz: migration 086 introdujo un 3er callsite de `siguiente_numero_documento` para numerar la NC de compensación dentro de `crear_devolucion`, pero el whitelist creado en migration 075 solo contemplaba `(entregas, numero_entrega, ENT)` y `(devoluciones, numero_devolucion, DEV)`. Fix: agregar `(comprobantes, numero_venta, NC)` al whitelist. Hotfix mínimo — preserva el formato legacy `NC-YYYY-NNNN` que ya está en producción. **Deuda técnica:** el callsite sigue usando `COUNT(*)` sin lock; el fix definitivo es migrar a `obtener_proximo_numero(p_empresa_id, 'nota_credito')`, requiere decisión de producto sobre el formato (YYYY/4 vs YYYYMMDD/3 — hoy conviven ambos: 7 NCs legacy + 2 nuevas).
+
+**Migration 093 — Backfill `series_numeracion.proximo_numero` para tipos YYYY**
+Síntoma: tras emitir DEV-2026-0010 el 22-jun (función legacy), el 25-jun salieron DEV-2026-0001 y DEV-2026-0002 duplicadas. Causa raíz: migration 086 cambió `crear_devolucion` para usar `obtener_proximo_numero('devolucion')` (atómico via `FOR UPDATE` sobre `series_numeracion`) sin incluir el backfill de las filas `series_numeracion` existentes — `proximo_numero=1, periodo_actual=null` desde el seed inicial. La primera llamada del 25-jun: `v_periodo='2026' IS DISTINCT FROM null` → reinicia a 1 → emite duplicado. Fix: UPDATE idempotente para `devolucion`, `entrega`, `recepcion`, `nota_debito` (los 4 tipos YYYY) alineando `proximo_numero = max(real)+1` y `periodo_actual = año actual`. Verificación post-fix: cbc4 quedó en `devolucion=11` (antes 3), el resto ya estaba alineado. **Mismo patrón de bug latente para NC** si en el futuro se migra a `obtener_proximo_numero` sin backfill — quedó documentado.
+
+**Limpieza manual previa al backfill:** las 2 DEVs duplicadas del 25-jun + las 2 NCs asociadas + 12 movimientos de inventario + 3 movimientos de caja + 1 movimiento CC se borraron transaccionalmente. Stock revertido sumando lo restado. Datos de prueba, no se revirtieron contadores `cantidad_devuelta` en líneas origen.
+
+### Bugs frontend
+
+- **`ConfigContext.jsx`** — race condition al cargar Dashboard en modo incógnito: 401 al fetchear `configuracion` antes de que la sesión de Supabase termine de hidratar. `fetchConfig` corría en `useEffect([])` sin esperar a `getSession()`. Fix: `supabase.auth.getSession().then()` antes del fetch + `onAuthStateChange` para re-fetch en login y reset en logout. Resuelve los 3 errores reportados de consola: 401 `configuracion?clave=...`, "Error fetching config", y el 401 secundario derivado.
+
+- **`ConfiguracionSection.jsx`** — 3 `useEffect` (`reloadAFIP`, `reloadTipos`, `reloadFacturasError`) corrían al montar, disparando llamadas RPC a vault/AFIP aunque el usuario no estuviera en la tab Facturación. Gateados con `if (activeTab === 'facturacion')` + dependencia `activeTab`. Además: `try/catch` alrededor de `vault_secret_read` no atrapaba el 403 (supabase-js no lanza excepción para PostgrestError, devuelve `{data, error}`). Reescrito para chequear `certErr` y degradar a `certStatus=false` silenciosamente.
+
+- **`NuevaDevolucionProveedorModal.jsx`** — toast de confirmación decía "Nota de Débito" pero el documento generado era una NC (`crear_devolucion` solo tiene rama para `p_compensacion = 'nota_credito'`). Cambiado a "Nota de Crédito". **Heads-up no resuelto:** el label/dropdown de compensación del modal probablemente sigue diciendo "Nota de Débito" enviando `nota_credito` al backend — pendiente decisión contable (devolución a proveedor: ¿emitís NC o ND?).
+
+- **`Dashboard.jsx` + `VentasSection.jsx`** — UX "dos pantallas iguales": el ítem "Ventas" del sidebar y el ítem "Pedidos" abrían ambos la tab Pedidos. Cambio: `case 'ventas' → initialTab="historial"` en Dashboard + default del prop `initialTab` en VentasSection. Coherente con el mapping interno (`handleDocFlowNavigate` ya trataba `'ventas'` como sinónimo de `'historial'`) y con el label "Facturas" de la tab Historial.
+
+- **`Dashboard.jsx` + `VentasSection.jsx`** — UX "Nueva Venta (POS)" requería 2 clics (navegar + abrir modal). Implementado nonce `posOpenNonce` en Dashboard, incrementado por `handleSidebarSelect` cuando `section === 'ventas'`. Pasado como `autoOpenSaleNonce` a VentasSection, que con `useEffect([autoOpenSaleNonce])` abre el modal automáticamente. Uso de nonce (no boolean) para que cada clic reabra el modal si se cerró. Scope: solo sidebar — DashboardSection quick action y CommandPalette siguen igual (mejora futura).
+
+### Auditoría de integridad de numeración
+
+Antes del fix 093, barrido completo: encontrados 3 duplicados (2 en devoluciones del 25-jun + 1 en entregas del 23-jun, `ENT-2026-0042`). El de entregas es histórico (race condition real, ya alineada `series.entrega.proximo_numero=45`); los 2 de devoluciones se limpiaron. **No hay UNIQUE constraints** en `(empresa_id, numero_*)` en ninguna tabla — pendiente Capa C: agregar constraints para que la DB nunca permita duplicados a futuro, sin importar bugs de RPC. Requiere limpiar duplicado de entregas antes (no resuelto hoy).
+
+### Verificación AFIP/ARCA (sin cambios)
+
+Análisis de las edge functions: las 3 (`arca-worker`, `emitir-cae`, `probar-conexion-afip`) leen `Deno.env.get('AFIP_ENVIRONMENT')` y caen a `'sandbox'` si no es exactamente `'production'`. Verificado: 0 empresas con `usa_factura_electronica=true`, `facturas_pendientes_arca` vacía, sin logs recientes de edge functions. Triple candado contra emisión accidental. **Pendiente Luciano:** verificar en Supabase Dashboard → Edge Functions → Secrets si existe `AFIP_ENVIRONMENT` y su valor (no expuesto via MCP por diseño de seguridad).
+
+### Pendientes próxima sesión
+
+- **POS como página completa** (no modal) — demo aprobada en sesión.
+- **Verificar secret `AFIP_ENVIRONMENT`** en Supabase Dashboard (Luciano).
+- **Aria-hidden warning** en modal de devoluciones (Luciano).
+- **Capa C de numeración:** UNIQUE constraints en `(empresa_id, numero_*)` tras limpiar el duplicado histórico `ENT-2026-0042`.
+- **NC en `crear_devolucion`:** migrar a `obtener_proximo_numero('nota_credito')` después de decidir formato (YYYY/4 vs YYYYMMDD/3).
+- **Revisar dropdown "Nota de Débito"** en `NuevaDevolucionProveedorModal.jsx` — label vs payload incoherentes.
+
+---
 
 ## Sesión 29 (Nadia) — Testing post-Luciano + 3 fixes server-side críticos
 

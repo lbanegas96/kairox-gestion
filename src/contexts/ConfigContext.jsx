@@ -66,7 +66,33 @@ export const ConfigProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    fetchConfig();
+    let mounted = true;
+
+    // Espera la sesión antes de fetchear; si no hay, no toca la DB.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
+      if (session) {
+        fetchConfig();
+      } else {
+        setLoading(false);
+      }
+    });
+
+    // Re-fetch en login/logout para mantener config sincronizada
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+      if (event === 'SIGNED_IN' && session) {
+        fetchConfig();
+      } else if (event === 'SIGNED_OUT') {
+        setConfig({ nombre_empresa: 'KAIROX Gestión', logo_base64: '', company_logo: '' });
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (

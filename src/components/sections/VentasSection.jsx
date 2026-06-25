@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Zap, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,13 +10,19 @@ import EntregasSection from '@/components/ventas/EntregasSection';
 import HistorialVentas from '@/components/ventas/HistorialVentas';
 import DevolucionesSection from '@/components/ventas/DevolucionesSection';
 
-function VentasSection({ initialTab = 'pedidos' }) {
+function VentasSection({ initialTab = 'historial', autoOpenSaleNonce = 0 }) {
   const [activeTab, setActiveTab]           = useState(initialTab);
   const [isNewSaleOpen, setIsNewSaleOpen]   = useState(false);
   const [showNuevaFactura, setShowNuevaFactura] = useState(false);
   const [refreshKey, setRefreshKey]         = useState(0);
   const [navigateSaleId, setNavigateSaleId] = useState(null);
   const [navigateEntregaId, setNavigateEntregaId] = useState(null);
+
+  // Si el sidebar dispara "Nueva Venta (POS)", abrir el modal automáticamente.
+  // Usa un nonce (no boolean) para que cada clic vuelva a abrirlo si se cerró.
+  useEffect(() => {
+    if (autoOpenSaleNonce > 0) setIsNewSaleOpen(true);
+  }, [autoOpenSaleNonce]);
 
   const handleSaleSuccess = () => setRefreshKey(k => k + 1);
 

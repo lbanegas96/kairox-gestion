@@ -26,12 +26,21 @@ function Dashboard({ user, onLogout }) {
   const [activeSection, setActiveSection]     = useState('dashboard');
   const [sectionParams, setSectionParams]     = useState({});
   const [isSidebarOpen, setIsSidebarOpen]     = useState(false);
+  const [posOpenNonce, setPosOpenNonce]       = useState(0);
   const { open: cmdOpen, setOpen: setCmdOpen } = useCommandPalette();
   const [showOnboarding, setShowOnboarding]   = useState(false);
 
   const navigateTo = (section, params = {}) => {
     setActiveSection(section);
     setSectionParams(params);
+  };
+
+  // Sidebar handler: si selecciona "Nueva Venta (POS)" (id 'ventas'),
+  // además de navegar a Ventas/Historial, incrementa un nonce que
+  // VentasSection escucha para auto-abrir el modal de venta.
+  const handleSidebarSelect = (section) => {
+    if (section === 'ventas') setPosOpenNonce(n => n + 1);
+    setActiveSection(section);
   };
 
   useEffect(() => {
@@ -50,7 +59,7 @@ function Dashboard({ user, onLogout }) {
     switch (activeSection) {
       case 'dashboard':     return <DashboardSection onNavigate={setActiveSection} />;
       case 'productos':     return <ProductosSection />;
-      case 'ventas':           return <VentasSection initialTab="pedidos" />;
+      case 'ventas':           return <VentasSection initialTab="historial" autoOpenSaleNonce={posOpenNonce} />;
       case 'cotizaciones':     return <VentasSection initialTab="cotizaciones" />;
       case 'pedidos':          return <VentasSection initialTab="pedidos" />;
       case 'entregas':         return <VentasSection initialTab="entregas" />;
@@ -85,7 +94,7 @@ function Dashboard({ user, onLogout }) {
       <div className="flex h-full relative z-10">
         <Sidebar
           activeSection={activeSection}
-          setActiveSection={setActiveSection}
+          setActiveSection={handleSidebarSelect}
           isOpen={isSidebarOpen}
           setIsOpen={setIsSidebarOpen}
         />

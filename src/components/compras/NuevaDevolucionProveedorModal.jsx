@@ -101,7 +101,7 @@ function NuevaDevolucionProveedorModal({ isOpen, onClose, onSuccess, compra = nu
       if (error) throw error;
 
       const msg = compensacion === 'nota_credito'
-        ? `Devolución ${data.numero_devolucion} registrada — Nota de Débito ${data.numero_nc || ''} generada`
+        ? `Devolución ${data.numero_devolucion} registrada — Nota de Crédito ${data.numero_nc || ''} generada`
         : `Devolución ${data.numero_devolucion} registrada`;
       toast({ title: msg });
       onSuccess?.(data);
