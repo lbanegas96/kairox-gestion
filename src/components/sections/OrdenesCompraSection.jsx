@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, ShoppingBag, Search, Eye, Truck, XCircle,
   Send, CheckCircle, Clock, AlertCircle, Package,
-  ChevronRight, Trash2, ArrowRight, Receipt, AlertTriangle, BadgeCheck, Banknote
+  ChevronRight, Trash2, ArrowRight, Receipt, AlertTriangle, BadgeCheck, Banknote, RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ import { ordenesCompraService, OC_KEYS } from '@/services/ordenesCompraService';
 import { supabase } from '@/lib/customSupabaseClient';
 import { MonedaSelector } from '@/components/ui/MonedaSelector';
 import GenerarRecepcionModal from '@/components/compras/GenerarRecepcionModal';
+import NuevaDevolucionProveedorModal from '@/components/compras/NuevaDevolucionProveedorModal';
 import { formatCurrency, parseNumberLocale } from '@/lib/currencyUtils';
 import { formatDateAR } from '@/lib/dateUtils';
 
@@ -48,6 +49,7 @@ function OrdenesCompraSection() {
   // modales
   const [detalleId, setDetalleId]   = useState(null);
   const [genRecepId, setGenRecepId] = useState(null);
+  const [devolverOC, setDevolverOC] = useState(null);
   const [facturaModal, setFacturaModal] = useState(false);
   const [facturaForm, setFacturaForm] = useState({ numero_factura: '', fecha_factura: '', fecha_vencimiento: '', monto_total: '', notas: '' });
 
@@ -371,6 +373,13 @@ function OrdenesCompraSection() {
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-red-500"
                               onClick={() => cancelarMutation.mutate(oc.id)} title="Cancelar OC">
                               <XCircle className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+
+                          {['recibida', 'recibida_parcial'].includes(oc.estado) && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-orange-500"
+                              onClick={() => setDevolverOC(oc)} title="Devolver al proveedor">
+                              <RotateCcw className="w-3.5 h-3.5" />
                             </Button>
                           )}
                         </div>
@@ -724,6 +733,12 @@ function OrdenesCompraSection() {
             </div>
           )}
           <DialogFooter className="gap-2">
+            {detalle && ['recibida', 'recibida_parcial'].includes(detalle.estado) && (
+              <Button variant="outline" className="gap-2 text-orange-600 border-orange-200 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-900/20"
+                onClick={() => { setDetalleId(null); setDevolverOC(detalle); }}>
+                <RotateCcw className="w-4 h-4" /> Devolver
+              </Button>
+            )}
             {detalle && ['enviada', 'recibida_parcial'].includes(detalle.estado) && (
               <Button className="bg-green-600 hover:bg-green-700 text-white gap-2"
                 onClick={() => { setDetalleId(null); setGenRecepId(detalle.id); }}>
@@ -814,6 +829,17 @@ function OrdenesCompraSection() {
         onClose={() => setGenRecepId(null)}
         onSuccess={() => {
           setGenRecepId(null);
+          qc.invalidateQueries({ queryKey: OC_KEYS.list(empresaId) });
+        }}
+      />
+
+      {/* ── MODAL: Devolución al Proveedor desde OC ── */}
+      <NuevaDevolucionProveedorModal
+        isOpen={!!devolverOC}
+        onClose={() => setDevolverOC(null)}
+        oc={devolverOC}
+        onSuccess={() => {
+          setDevolverOC(null);
           qc.invalidateQueries({ queryKey: OC_KEYS.list(empresaId) });
         }}
       />

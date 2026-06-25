@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { RotateCcw, Loader2, AlertCircle } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 
-function NuevaDevolucionProveedorModal({ isOpen, onClose, onSuccess, compra = null }) {
+function NuevaDevolucionProveedorModal({ isOpen, onClose, onSuccess, compra = null, oc = null }) {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -23,28 +23,52 @@ function NuevaDevolucionProveedorModal({ isOpen, onClose, onSuccess, compra = nu
   const [loadingItems, setLoadingItems]     = useState(false);
   const [saving, setSaving]                 = useState(false);
 
-  // Cargar ítems de la compra
+  // Cargar ítems — desde detalle_compras (factura) o desde ordenes_compra_items (OC)
   useEffect(() => {
-    if (!isOpen || !compra?.id || !user?.empresa_id) return;
+    if (!isOpen || (!compra?.id && !oc?.id) || !user?.empresa_id) return;
     setLoadingItems(true);
-    supabase
-      .from('detalle_compras')
-      .select('id, producto_id, cantidad, costo_unitario, cantidad_devuelta, productos(nombre)')
-      .eq('compra_id', compra.id)
-      .eq('empresa_id', user.empresa_id)
-      .then(({ data }) => {
-        const disponibles = (data || []).filter(
-          i => Number(i.cantidad || 0) > Number(i.cantidad_devuelta || 0)
-        );
-        setItems(disponibles);
-        const initCants = {};
-        disponibles.forEach(i => {
-          initCants[i.id] = Number(i.cantidad || 0) - Number(i.cantidad_devuelta || 0);
+
+    if (compra?.id) {
+      supabase
+        .from('detalle_compras')
+        .select('id, producto_id, cantidad, costo_unitario, cantidad_devuelta, productos(nombre)')
+        .eq('compra_id', compra.id)
+        .eq('empresa_id', user.empresa_id)
+        .then(({ data }) => {
+          const disponibles = (data || []).filter(
+            i => Number(i.cantidad || 0) > Number(i.cantidad_devuelta || 0)
+          );
+          setItems(disponibles);
+          const initCants = {};
+          disponibles.forEach(i => {
+            initCants[i.id] = Number(i.cantidad || 0) - Number(i.cantidad_devuelta || 0);
+          });
+          setCantidades(initCants);
+          setLoadingItems(false);
         });
-        setCantidades(initCants);
-        setLoadingItems(false);
-      });
-  }, [isOpen, compra?.id, user?.empresa_id]);
+    } else {
+      supabase
+        .from('ordenes_compra_items')
+        .select('id, producto_id, cantidad_pedida, cantidad_recibida, costo_unitario, cantidad_devuelta, productos(nombre)')
+        .eq('orden_id', oc.id)
+        .eq('empresa_id', user.empresa_id)
+        .then(({ data }) => {
+          const disponibles = (data || [])
+            .map(i => ({
+              ...i,
+              cantidad: Number(i.cantidad_recibida || i.cantidad_pedida || 0),
+            }))
+            .filter(i => i.cantidad > Number(i.cantidad_devuelta || 0));
+          setItems(disponibles);
+          const initCants = {};
+          disponibles.forEach(i => {
+            initCants[i.id] = i.cantidad - Number(i.cantidad_devuelta || 0);
+          });
+          setCantidades(initCants);
+          setLoadingItems(false);
+        });
+    }
+  }, [isOpen, compra?.id, oc?.id, user?.empresa_id]);
 
   // Reset al cerrar
   useEffect(() => {
@@ -64,18 +88,18 @@ function NuevaDevolucionProveedorModal({ isOpen, onClose, onSuccess, compra = nu
   }, 0);
 
   const handleConfirm = async () => {
-    if (!compra?.id) {
-      toast({ title: 'No hay factura de compra seleccionada', variant: 'destructive' });
+    if (!compra?.id && !oc?.id) {
+      toast({ title: 'No hay compra u OC seleccionada', variant: 'destructive' });
       return;
     }
 
     const itemsToReturn = items
       .filter(i => Number(cantidades[i.id] || 0) > 0)
       .map(i => ({
-        producto_id:         i.producto_id,
-        cantidad:            Number(cantidades[i.id]),
-        precio_unitario:     Number(i.costo_unitario),
-        detalle_compra_id:   i.id,
+        producto_id:            i.producto_id,
+        cantidad:               Number(cantidades[i.id]),
+        precio_unitario:        Number(i.costo_unitario),
+        ...(compra?.id ? { detalle_compra_id: i.id } : {}),
       }));
 
     if (itemsToReturn.length === 0) {
@@ -90,13 +114,27 @@ function NuevaDevolucionProveedorModal({ isOpen, onClose, onSuccess, compra = nu
         p_user_id:            user.id,
         p_tipo:               'proveedor',
         p_items:              itemsToReturn,
-        p_compra_id:          compra.id,
-        p_proveedor_id:       compra.proveedor_id || null,
+        p_compra_id:          compra?.id || null,
+        p_proveedor_id:       compra?.proveedor_id || oc?.proveedor_id || null,
         p_reingresa_stock:    reingresaStock,
         p_compensacion:       compensacion,
         p_reembolso_efectivo: reembolsoEfectivo,
         p_motivo:             motivo.trim() || null,
       });
+
+      // Si la devolución viene de una OC, actualizar cantidad_devuelta en ordenes_compra_items
+      if (oc?.id && data && !error) {
+        for (const item of itemsToReturn) {
+          const ocItem = items.find(i => i.producto_id === item.producto_id);
+          if (ocItem) {
+            await supabase
+              .from('ordenes_compra_items')
+              .update({ cantidad_devuelta: Number(ocItem.cantidad_devuelta || 0) + item.cantidad })
+              .eq('id', ocItem.id)
+              .eq('empresa_id', user.empresa_id);
+          }
+        }
+      }
 
       if (error) throw error;
 
@@ -130,12 +168,14 @@ function NuevaDevolucionProveedorModal({ isOpen, onClose, onSuccess, compra = nu
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 dark:text-kx-text">
             <RotateCcw className="h-5 w-5 text-orange-500" />
-            Devolución a Proveedor{compra ? ` — ${compra.numero_factura || 'S/N'}` : ''}
+            Devolución a Proveedor{compra ? ` — ${compra.numero_factura || 'S/N'}` : oc ? ` — OC ${oc.numero || ''}` : ''}
           </DialogTitle>
           <DialogDescription className="dark:text-kx-text-2">
             {compra?.proveedor_nombre
               ? `Proveedor: ${compra.proveedor_nombre}`
-              : 'Registrar devolución sobre una compra'}
+              : oc?.proveedor_nombre
+                ? `Proveedor: ${oc.proveedor_nombre}`
+                : 'Registrar devolución'}
           </DialogDescription>
         </DialogHeader>
 
@@ -148,7 +188,7 @@ function NuevaDevolucionProveedorModal({ isOpen, onClose, onSuccess, compra = nu
           ) : !tieneItems ? (
             <div className="flex items-center gap-2 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-amber-700 dark:text-amber-400 text-sm">
               <AlertCircle className="h-4 w-4 shrink-0" />
-              No hay ítems con saldo pendiente de devolución en esta factura.
+              No hay ítems con saldo pendiente de devolución.
             </div>
           ) : (
             <div className="space-y-2">
@@ -233,8 +273,8 @@ function NuevaDevolucionProveedorModal({ isOpen, onClose, onSuccess, compra = nu
               {[
                 {
                   value: 'nota_credito',
-                  label: 'Nota de Débito a proveedor',
-                  desc:  'Genera una ND que reduce lo que le debés al proveedor en cuenta corriente',
+                  label: 'Nota de Crédito del proveedor',
+                  desc:  'El proveedor te emite una NC que reduce lo que le debés en cuenta corriente',
                 },
                 {
                   value: 'reemplazo',
