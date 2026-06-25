@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-24 (sesión 60 Luciano) — Emisión CAE async completa vía trigger: migration 089 extiende fn_queue_factura_arca para encolar en 'pendiente' (primera emisión). Eliminada la llamada directa a ARCA desde el browser en NuevaVentaModal, NuevaFacturaModal y NuevaNCModal. **Última migration aplicada: 089.** Build ✅. Deploy Vercel ✅.
+**Última actualización:** 2026-06-24 (sesión 60 Luciano) — AFIP async completo + Quick wins: migration 090 agrega `pie_documento` y `stock_minimo_global` a empresas. Cards activos en ConfiguracionSection. Los 3 PDFs muestran pie_documento. useNotifications usa stock_minimo_global como fallback dinámico. **Última migration aplicada: 090.** Build ✅. Deploy Vercel ✅.
 
 ## Sesión 29 (Nadia) — Testing post-Luciano + 3 fixes server-side críticos
 
@@ -145,6 +145,41 @@ el mismo trigger dispara y re-encola con `proximo_intento = now() + 1 minute`.
 - `src/components/ventas/NuevaNCModal.jsx` (eliminado bloque emitirCAE)
 
 Build ✅ — 3170 módulos, sin errores. Pusheado a `master` (commit `f0d8c29`). Deploy Vercel ✅.
+
+### Quick wins — Pie de Documento + Stock Mínimo Global (migration 090)
+
+**Migration 090 (`090_pie_documento_stock_minimo_global.sql`) — aplicada a producción:**
+```sql
+ALTER TABLE public.empresas
+  ADD COLUMN IF NOT EXISTS pie_documento TEXT,
+  ADD COLUMN IF NOT EXISTS stock_minimo_global INTEGER DEFAULT 5;
+```
+
+**ConfiguracionSection.jsx:**
+- Tab Facturación → card "Pie de Documento": textarea (max 300 chars) + guardar → UPDATE `empresas.pie_documento`.
+- Tab Inventario → card "Stock Mínimo Global": input numérico + guardar → UPDATE `empresas.stock_minimo_global`.
+- Ambas cards removidas el badge "Próximamente" y el `opacity-60`.
+- useEffect de carga unificado: `supabase.from('empresas').select('pie_documento, stock_minimo_global')`.
+
+**PDFs — FacturaPDF / TicketPDF / ComprobantePDF:**
+- Todos leen `empresa?.pie_documento` (o `empresaData?.pie_documento` en ComprobantePDF).
+- Si tiene valor: se muestra primero, separado del texto del sistema con `\n`.
+- Si está vacío: se comporta exactamente como antes.
+
+**useNotifications.js:**
+- Nuevo `useQuery` para `empresas.stock_minimo_global` (staleTime 5 min, no refetch on focus).
+- La query de `stock_bajo` incluye `stockMinimoGlobal` en el `queryKey` → se re-evalúa si el usuario cambia el umbral.
+- Filtro: `p.stock_minimo ?? stockMinimoGlobal` (producto propio tiene prioridad; global es fallback).
+
+**Archivos modificados:**
+- `supabase/migrations/090_pie_documento_stock_minimo_global.sql` (nueva)
+- `src/components/sections/ConfiguracionSection.jsx`
+- `src/components/ventas/pdf/FacturaPDF.jsx`
+- `src/components/ventas/pdf/TicketPDF.jsx`
+- `src/components/ventas/pdf/ComprobantePDF.jsx`
+- `src/hooks/useNotifications.js`
+
+Build ✅. Pusheado a `master` (commit `ffb606a`). Deploy Vercel ✅.
 
 ---
 
