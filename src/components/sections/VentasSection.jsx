@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Zap, FileText } from 'lucide-react';
+import React, { useState } from 'react';
+import { FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import NuevaVentaModal from '@/components/ventas/NuevaVentaModal';
 import NuevaFacturaModal from '@/components/ventas/NuevaFacturaModal';
 import CotizacionesSection from '@/components/sections/CotizacionesSection';
 import PedidosSection from '@/components/sections/PedidosSection';
@@ -10,19 +9,12 @@ import EntregasSection from '@/components/ventas/EntregasSection';
 import HistorialVentas from '@/components/ventas/HistorialVentas';
 import DevolucionesSection from '@/components/ventas/DevolucionesSection';
 
-function VentasSection({ initialTab = 'historial', autoOpenSaleNonce = 0 }) {
+function VentasSection({ initialTab = 'historial' }) {
   const [activeTab, setActiveTab]           = useState(initialTab);
-  const [isNewSaleOpen, setIsNewSaleOpen]   = useState(false);
   const [showNuevaFactura, setShowNuevaFactura] = useState(false);
   const [refreshKey, setRefreshKey]         = useState(0);
   const [navigateSaleId, setNavigateSaleId] = useState(null);
   const [navigateEntregaId, setNavigateEntregaId] = useState(null);
-
-  // Si el sidebar dispara "Nueva Venta (POS)", abrir el modal automáticamente.
-  // Usa un nonce (no boolean) para que cada clic vuelva a abrirlo si se cerró.
-  useEffect(() => {
-    if (autoOpenSaleNonce > 0) setIsNewSaleOpen(true);
-  }, [autoOpenSaleNonce]);
 
   const handleSaleSuccess = () => setRefreshKey(k => k + 1);
 
@@ -43,18 +35,9 @@ function VentasSection({ initialTab = 'historial', autoOpenSaleNonce = 0 }) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-kx-text">Ventas</h2>
-          <p className="text-sm text-kx-text-2">Cotizaciones, Pedidos, Entregas e Historial</p>
-        </div>
-        <Button
-          onClick={() => setIsNewSaleOpen(true)}
-          className="bg-[rgb(var(--kx-violet))] hover:opacity-90 text-white gap-2 h-9 px-4 text-sm font-medium"
-        >
-          <Zap className="w-4 h-4" />
-          Nueva Venta (POS)
-        </Button>
+      <div>
+        <h2 className="text-2xl font-bold text-kx-text">Ventas</h2>
+        <p className="text-sm text-kx-text-2">Cotizaciones, Pedidos, Entregas e Historial</p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -119,12 +102,6 @@ function VentasSection({ initialTab = 'historial', autoOpenSaleNonce = 0 }) {
           <DevolucionesSection onNavigate={handleChildNavigate} />
         </TabsContent>
       </Tabs>
-
-      <NuevaVentaModal
-        isOpen={isNewSaleOpen}
-        onOpenChange={setIsNewSaleOpen}
-        onSaleSuccess={handleSaleSuccess}
-      />
 
       <NuevaFacturaModal
         open={showNuevaFactura}

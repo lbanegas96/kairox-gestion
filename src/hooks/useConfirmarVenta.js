@@ -9,6 +9,30 @@ import { asientosAutoService } from '@/services/planCuentasService';
 // Hook compartido entre NuevaVentaModal (en el futuro) y PanelCarrito.
 // Encapsula la llamada a crear_venta RPC + asientos contables.
 // Soporta modo ARS únicamente (para PanelCarrito del Modo Caja).
+//
+// ⚠️ PENDIENTE CRÍTICO — falta integración AFIP en el POS (sesión 31, 2026-06-27).
+// Hoy las ventas hechas desde el POS (sidebar "Punto de Venta") NO encolan en
+// facturas_pendientes_arca aunque la empresa tenga usa_factura_electronica=true
+// y certificado cargado. Resultado: toda venta POS queda como Ticket sin CAE.
+// Por contraste, NuevaVentaModal sí lo hace en líneas 538-548:
+//   UPDATE comprobantes SET cae_estado='pendiente',
+//                            tipo_comprobante_afip = determinarTipoComprobante(...),
+//                            punto_venta_id = afipConfig.punto_venta.id
+//   WHERE id = comprobante.id
+// El trigger fn_queue_factura_arca (migration 087) se dispara por ese UPDATE.
+//
+// Lo que hace falta para cerrar el gap (revisar con Luciano):
+//   1. Cargar afipConfig en PanelCarrito/POS (cuit, condicion_iva, PdV, cert ok).
+//      Conviene extraer a hook useAfipConfig y reusar entre POS y NuevaVentaModal.
+//   2. Enriquecer selectedClient con condicion_iva (hoy solo viaja {id, nombre}).
+//   3. Después del crear_venta acá, replicar el UPDATE de NuevaVentaModal:538-548.
+//   4. Decisión de producto: ¿POS emite siempre electrónico si AFIP activo, o
+//      cajero elige Ticket vs Factura A/B/C como en NuevaFacturaModal?
+//
+// Bug adicional (no relacionado pero a fixear junto): generateVentaNumber abajo
+// usa MAX+1 sin lock — mismo patrón inseguro que migration 083 erradicó del
+// resto. La numeración debería venir de obtener_proximo_numero('venta') dentro
+// de crear_venta, no armarse en el frontend.
 export function useConfirmarVenta() {
   const { user }                       = useAuth();
   const { isSessionOpen, currentSession } = useCaja();

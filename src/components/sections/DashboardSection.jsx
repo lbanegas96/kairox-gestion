@@ -1,5 +1,5 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   TrendingUp, TrendingDown, ShoppingCart, Package, AlertCircle, ArrowUpRight,
   DollarSign, Calendar, CreditCard, FileText, UserPlus,
@@ -17,7 +17,6 @@ import {
 } from 'recharts';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { dashboardService, DASHBOARD_KEYS } from '@/services/dashboardService';
-import { useQueryClient } from '@tanstack/react-query';
 import { ChecklistOnboarding } from '@/components/ChecklistOnboarding';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -640,7 +639,7 @@ function DashboardSection({ onNavigate }) {
         <div className="text-[13px] font-semibold text-kx-text mb-4">Acciones Rápidas</div>
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
           <QuickActionButton icon={ShoppingCart} label="Nueva Venta"
-            onClick={() => onNavigate?.('ventas')} gradient="from-blue-600 to-blue-500"
+            onClick={() => onNavigate?.('pos')} gradient="from-blue-600 to-blue-500"
             disabled={!canAccessSection('ventas')} />
           <QuickActionButton icon={ClipboardList} label="Cotización"
             onClick={() => onNavigate?.('cotizaciones')} gradient="from-indigo-600 to-indigo-500"

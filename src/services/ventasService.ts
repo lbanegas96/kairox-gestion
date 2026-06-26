@@ -19,10 +19,10 @@ export const ventasService = {
       .from('comprobantes')
       .select('*, clientes(nombre)', { count: 'exact' })
       .eq('empresa_id', empresaId)
-      .order('created_at', { ascending: false });
+      .order('fecha', { ascending: false });
 
-    if (fechaDesde) query = query.gte('created_at', getStartOfDayAR(new Date(fechaDesde)));
-    if (fechaHasta) query = query.lte('created_at', getEndOfDayAR(new Date(fechaHasta)));
+    if (fechaDesde) query = query.gte('fecha', getStartOfDayAR(new Date(fechaDesde)));
+    if (fechaHasta) query = query.lte('fecha', getEndOfDayAR(new Date(fechaHasta)));
     if (clienteId) query = query.eq('cliente_id', clienteId);
 
     const from = (page - 1) * pageSize;
@@ -50,10 +50,10 @@ export const ventasService = {
 
     const { data, error } = await supabase
       .from('comprobantes')
-      .select('total, created_at')
+      .select('total, fecha')
       .eq('empresa_id', empresaId)
-      .gte('created_at', start)
-      .lte('created_at', end);
+      .gte('fecha', start)
+      .lte('fecha', end);
 
     if (error) throw new Error(error.message);
     const totalHoy = (data ?? []).reduce((s: number, v: { total: number }) => s + Number(v.total), 0);

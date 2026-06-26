@@ -1,5 +1,49 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-26 (sesión 63 Luciano) — **ARCA en marcha real.** Configuración end-to-end de homologación AFIP para Nalux (CSR→cert→autorización wsfe). **Hallazgo mayor:** el SDK `@nicoo01x/arca-sdk` NO funciona en Edge Runtime (resolver `npm:` roto + arma mal el TRA). **Reemplazado por implementación manual WSAA+WSFE** (`wsaa.ts`+`wsfe.ts`), validada contra homologación: autentica y consulta último comprobante OK. Migration 099 (cache TA). **Pendiente mañana:** redeploy `arca-worker` + probar emisión real de CAE. **Última migration aplicada: 099.**
+**Última actualización:** 2026-06-27 (sesión 31 Nadia) — Testing post-sesión 63 Luciano (ARCA homologación). Cleanup POS página completa (limpieza código muerto sesión 30 + 4 entry points unificados), 7 fixes formato $ es-AR en historial, badge Factura verde, cliente_id en POS, validación invite-user, columna `comprobantes.fecha`. **Pendiente crítico para próxima sesión con Luciano:** el POS no encola CAE en `facturas_pendientes_arca` aunque AFIP esté activo — toda venta POS queda como Ticket. Comentario detallado en [src/hooks/useConfirmarVenta.js](src/hooks/useConfirmarVenta.js). **Última migration aplicada: 099.** Build ✅.
+
+## Sesión 31 (Nadia) — POS página completa, fixes UX historial, fix cliente POS, fix invite-user
+
+### Fixes aplicados
+
+- **POS página completa cerrado:** Luciano dejó el patrón base en sesión 63 (`App.jsx` con `showPOS` + `ModoCajaLayout` reutilizado con prop `onBack`). Limpieza de código muerto sesión 30 en `VentasSection.jsx` (remover `autoOpenSaleNonce` + botón "Nueva Venta POS" del header + import NuevaVentaModal).
+- **4 entry points unificados al POS** (sidebar, header CTA "Nueva Venta", DashboardSection QuickAction, CommandPalette). En `Dashboard.jsx` el intercept `'pos' → onEnterPOS()` se generalizó a `navigateTo` (antes solo `handleSidebarSelect` lo manejaba); los otros 3 entry points ahora también pasan por `navigateTo`.
+- **CommandPalette separado en 2 ítems:** "Punto de Venta" (id `pos`, abre POS página completa, keywords pos/caja/cobrar/vender) y "Ventas (Historial)" (id `ventas`, lleva a tab Historial, keywords factura/historial/comprobante).
+- **Fix `created_at` → `fecha` en `comprobantes`** (7 cambios): `CommandPalette.jsx:73,93` (select y consumer del render) y `ventasService.ts` (`getAll` order + filtros, `getMetricsToday` select + filtros). La columna `comprobantes.created_at` no existe en el schema, solo `fecha`. `ventasService` está sin consumidores (dead code) pero igual fixeado por higiene.
+- **Fix cliente perdido en POS:** al elegir cliente del dropdown del POS, la venta se registraba como "Consumidor Final" porque `PanelCarrito.jsx` solo actualizaba `clienteId` (string) en el `onChange` del `ClienteSelector` pero no `selectedClient` (el objeto que viaja a `useConfirmarVenta`). Fix: `onChange` ahora hace `clientes.find(c => c.id === id)` y actualiza ambos estados.
+- **Formato argentino en totales** (7 cambios): `toFixed(2)` → `toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2})` en `HistorialVentas.jsx` (col Total + total moneda extranjera), `SaleDetailModal.jsx` (precio unitario, subtotal, total final), `NuevaVentaModal.jsx` (subtotal item, "Restante a asignar"). Antes mostraba `$30000.00`, ahora `$30.000,00`.
+- **Badge "Factura" en historial: azul → verde** para coherencia visual con el caso "CAE emitido". Final: Ticket = gris / Factura (con o sin CAE) = verde / pendiente = ámbar / error = rojo.
+- **Fix `invite-user` edge function:** mismatch camelCase vs snake_case — frontend mandaba `firstName`/`lastName`, edge function leía `first_name`/`last_name`. Fix en `UsuariosSection.jsx:176-177`. Bloqueaba toda invitación de usuario.
+- **Toast `NuevaDevolucionProveedorModal`:** decía "Nota de Débito" cuando se generaba NC. Cambiado a "Nota de Crédito" (rama `compensacion === 'nota_credito'`).
+- **Import duplicado en `DashboardSection.jsx`:** `useQuery` y `useQueryClient` venían en dos imports separados de `@tanstack/react-query`. Consolidados en uno solo.
+
+### Auditoría AFIP Nalux (tenant cbc4)
+
+Verificado estado post-commit `bc1cf9e` de Luciano:
+- `usa_factura_electronica=true` ✅
+- `afip_cuit=20393249006` ✅
+- Vault: `afip_cert_cbc4db74...` (1653 chars) + `afip_key_cbc4db74...` (2346 chars), cargados 2026-06-26 ✅
+- PdV #1 "Punto de Venta Principal" activo ✅
+- `AFIP_ENVIRONMENT`: no verificable via MCP (Supabase no expone Edge Function Secrets por API). Evidencia indirecta (Luciano testeó "ARCA homologación funcionando") sugiere sandbox — confirmar manualmente.
+
+### Falso positivo de auditoría — corregido en este resumen
+
+Durante el barrido pre-commit reporté que `caja_sesiones.cerrado_por` nunca se seteaba. **Es incorrecto** — el `UPDATE` de cierre en [CajaContext.jsx:150](src/contexts/CajaContext.jsx:150) sí lo incluye correctamente (`cerrado_por: user.id`). Lo busqué en `CajaSection.jsx` y no estaba ahí, pero el cierre vive en el Context. No es un pendiente.
+
+### Pendientes críticos para próxima sesión con Luciano
+
+- **🔴 POS no encola CAE (deuda silenciosa):** `useConfirmarVenta.js` no replica el bloque AFIP de `NuevaVentaModal.jsx:538-548`. Toda venta hecha por POS queda como Ticket aunque la empresa tenga `usa_factura_electronica=true` y cert cargado. Análisis completo en comentario al tope del archivo. Hace falta: hook `useAfipConfig` reusable, enriquecer `selectedClient` con `condicion_iva`, agregar el UPDATE a `cae_estado='pendiente'` post-venta, decidir si POS pregunta o emite automático.
+- **🔴 `generateVentaNumber` en useConfirmarVenta.js:** usa `MAX(numero_venta)+1` sin lock — mismo patrón inseguro que migration 083 erradicó del resto. Debería venir de `obtener_proximo_numero('venta')` dentro de `crear_venta`. Fix natural junto con el de AFIP.
+- **🟡 No hay UI para reintentar CAE desde el historial:** las opciones "Reintentar CAE" / "Convertir Ticket en Factura" sólo están en Configuración → Facturación. Conviene agregar al menú de tres puntitos del historial (HistorialVentas dropdown).
+- **🟡 `AFIP_ENVIRONMENT` confirmar valor** en Supabase Dashboard → Edge Functions → Secrets (pendiente desde sesión 30).
+- **🟡 Aria-hidden warning** en modal devoluciones (pendiente desde sesión 30, originalmente reportado por Luciano).
+- **🟡 Dropdown "Nota de Débito"** en `NuevaDevolucionProveedorModal` sigue mandando `nota_credito` al backend — incoherencia label/payload, decisión contable pendiente (¿devolución a proveedor debe emitir NC o ND?).
+
+### Pendientes secundarios
+
+- **NC en `crear_devolucion`:** migration 096 ya migró a `obtener_proximo_numero('nota_credito')`. Verificar formato emitido (hoy conviven `NC-YYYY-NNNN` legacy + `NC-YYYYMMDD-NNN` nuevos) y que no haya regresiones.
+- **Turno por cajero:** modelo de datos listo (`caja_sesiones.user_id, abierto_por, cerrado_por`) pero `CajaContext.fetchCurrentSession` no filtra por `user_id` — todos los cajeros comparten el mismo turno abierto. Análisis completo en sesión, sin implementación. Fix mínimo: agregar `.eq('user_id', user.id)` al fetch + permitir múltiples sesiones abiertas en la misma caja.
+
+---
 
 ## Sesión 63 (Luciano) — Integración ARCA real: reemplazo del SDK por WSAA+WSFE manual
 

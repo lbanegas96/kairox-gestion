@@ -354,7 +354,7 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                           }
                         </span>
                       ) : sale.tipo_comprobante_afip ? (
-                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                           Factura {sale.tipo_comprobante_afip}
                         </span>
                       ) : (
@@ -364,11 +364,11 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                       )}
                     </td>
                     <td className="p-4 text-right font-bold text-slate-700 dark:text-kx-text group-hover:text-emerald-600 transition-colors">
-                      ${Number(sale.total).toFixed(2)}
+                      ${Number(sale.total).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       {sale.moneda && sale.moneda !== 'ARS' && Number(sale.tipo_cambio_tasa) > 0 && (
                         <div className="text-[10px] font-normal text-slate-500 dark:text-kx-text-2 mt-0.5">
                           <span className="inline-block bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-bold mr-1">{sale.moneda}</span>
-                          {sale.moneda} {(Number(sale.total) / Number(sale.tipo_cambio_tasa)).toFixed(2)} · TC ${Number(sale.tipo_cambio_tasa).toLocaleString('es-AR')}
+                          {sale.moneda} {(Number(sale.total) / Number(sale.tipo_cambio_tasa)).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · TC ${Number(sale.tipo_cambio_tasa).toLocaleString('es-AR')}
                         </div>
                       )}
                     </td>

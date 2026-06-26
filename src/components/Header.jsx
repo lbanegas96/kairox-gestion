@@ -206,7 +206,7 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch, activ
 
         {/* Nueva Venta CTA */}
         <button
-          onClick={() => onNavigate?.('ventas')}
+          onClick={() => onNavigate?.('pos')}
           className="hidden sm:flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-[12.5px] font-semibold bg-kx-text text-kx-bg hover:opacity-85 transition-opacity"
         >
           <Plus className="w-3.5 h-3.5" /> Nueva Venta

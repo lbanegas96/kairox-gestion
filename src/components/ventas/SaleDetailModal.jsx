@@ -204,15 +204,15 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                       <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/20">
                         <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">{item.producto_nombre}</td>
                         <td className="px-4 py-3 text-center text-kx-text-2 dark:text-kx-text-2">{item.cantidad}</td>
-                        <td className="px-4 py-3 text-right text-kx-text-2 dark:text-kx-text-2">${Number(item.precio_unitario).toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right font-bold text-kx-text dark:text-kx-text">${Number(item.subtotal).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right text-kx-text-2 dark:text-kx-text-2">${Number(item.precio_unitario).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-3 text-right font-bold text-kx-text dark:text-kx-text">${Number(item.subtotal).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot className="bg-kx-surface-2 dark:bg-slate-900/50 border-t kairox-border font-bold">
                     <tr>
                       <td colSpan="3" className="px-4 py-4 text-right text-kx-text-2 dark:text-kx-text-2 uppercase text-xs tracking-wider">Total Final</td>
-                      <td className="px-4 py-4 text-right text-xl text-blue-600 dark:text-blue-400">${Number(sale.total).toFixed(2)}</td>
+                      <td className="px-4 py-4 text-right text-xl text-blue-600 dark:text-blue-400">${Number(sale.total).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     </tr>
                   </tfoot>
                 </table>

@@ -10,7 +10,8 @@ import {
 
 const SECCIONES = [
   { id: 'dashboard',       label: 'Dashboard',         icon: LayoutDashboard, keywords: ['inicio', 'home'] },
-  { id: 'ventas',          label: 'Ventas',             icon: Receipt,         keywords: ['pos', 'factura', 'vender'] },
+  { id: 'pos',             label: 'Punto de Venta',     icon: ShoppingCart,    keywords: ['pos', 'caja', 'cobrar', 'vender', 'venta nueva'] },
+  { id: 'ventas',          label: 'Ventas (Historial)', icon: Receipt,         keywords: ['factura', 'historial', 'comprobante'] },
   { id: 'productos',       label: 'Inventario',         icon: Package,         keywords: ['stock', 'producto', 'almacen'] },
   { id: 'compras',         label: 'Compras',            icon: ShoppingCart,    keywords: ['proveedor', 'comprar'] },
   { id: 'caja',            label: 'Caja',               icon: DollarSign,      keywords: ['efectivo', 'dinero', 'sesion'] },
@@ -69,7 +70,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
     const [{ data: prods }, { data: clientes }, { data: ventas }, { data: cotizaciones }, { data: bancos }] = await Promise.all([
       supabase.from('productos').select('id, nombre, stock_actual, codigo_sku').eq('empresa_id', user.empresa_id).eq('activo', true).ilike('nombre', `%${q}%`).limit(5),
       supabase.from('clientes').select('id, nombre, documento, saldo_actual').eq('empresa_id', user.empresa_id).neq('activo', false).ilike('nombre', `%${q}%`).limit(5),
-      supabase.from('comprobantes').select('id, numero_venta, total, created_at').eq('empresa_id', user.empresa_id).ilike('numero_venta', `%${q}%`).limit(3),
+      supabase.from('comprobantes').select('id, numero_venta, total, fecha').eq('empresa_id', user.empresa_id).ilike('numero_venta', `%${q}%`).limit(3),
       supabase.from('cotizaciones').select('id, numero, cliente_nombre, total, estado').eq('empresa_id', user.empresa_id).or(`numero.ilike.%${q}%,cliente_nombre.ilike.%${q}%`).limit(4),
       supabase.from('cuentas_bancarias').select('id, nombre, banco').eq('empresa_id', user.empresa_id).eq('activo', true).ilike('nombre', `%${q}%`).limit(3),
     ]);
@@ -89,7 +90,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
     ...results.secciones.map(s => ({ type: 'seccion', ...s })),
     ...results.productos.map(p => ({ type: 'producto', id: p.id, label: p.nombre, sub: `SKU: ${p.codigo_sku || '-'} | Stock: ${p.stock_actual}`, section: 'productos' })),
     ...results.clientes.map(c => ({ type: 'cliente', id: c.id, label: c.nombre, sub: `Doc: ${c.documento || '-'} | Saldo: $${Number(c.saldo_actual).toFixed(2)}`, section: 'clientes' })),
-    ...results.ventas.map(v => ({ type: 'venta', id: v.id, label: `Venta #${v.numero_venta}`, sub: `$${Number(v.total).toFixed(2)} — ${formatDateAR(v.created_at)}`, section: 'ventas' })),
+    ...results.ventas.map(v => ({ type: 'venta', id: v.id, label: `Venta #${v.numero_venta}`, sub: `$${Number(v.total).toFixed(2)} — ${formatDateAR(v.fecha)}`, section: 'ventas' })),
     ...results.cotizaciones.map(c => ({ type: 'cotizacion', id: c.id, label: `Cotización ${c.numero}`, sub: `${c.cliente_nombre ?? 'Sin cliente'} — $${Number(c.total).toFixed(2)} · ${c.estado}`, section: 'cotizaciones' })),
     ...results.bancos.map(b => ({ type: 'banco', id: b.id, label: b.nombre, sub: `Banco: ${b.banco}`, section: 'bancos' })),
   ];

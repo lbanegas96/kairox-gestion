@@ -30,13 +30,9 @@ function Dashboard({ user, onLogout, onEnterPOS }) {
   const [showOnboarding, setShowOnboarding]   = useState(false);
 
   const navigateTo = (section, params = {}) => {
-    setActiveSection(section);
-    setSectionParams(params);
-  };
-
-  const handleSidebarSelect = (section) => {
     if (section === 'pos') { onEnterPOS?.(); return; }
     setActiveSection(section);
+    setSectionParams(params);
   };
 
   useEffect(() => {
@@ -53,7 +49,7 @@ function Dashboard({ user, onLogout, onEnterPOS }) {
 
   const renderSection = () => {
     switch (activeSection) {
-      case 'dashboard':     return <DashboardSection onNavigate={setActiveSection} />;
+      case 'dashboard':     return <DashboardSection onNavigate={navigateTo} />;
       case 'productos':     return <ProductosSection />;
       case 'ventas':           return <VentasSection initialTab="historial" />;
       case 'cotizaciones':     return <VentasSection initialTab="cotizaciones" />;
@@ -78,7 +74,7 @@ function Dashboard({ user, onLogout, onEnterPOS }) {
       case 'cheques':       return <ChequesSection />;
       case 'impuestos':     return <ImpuestosSection onNavigate={navigateTo} />;
       case 'proveedores':   return <ProveedoresSection />;
-      default:              return <DashboardSection onNavigate={setActiveSection} />;
+      default:              return <DashboardSection onNavigate={navigateTo} />;
     }
   };
 
@@ -90,7 +86,7 @@ function Dashboard({ user, onLogout, onEnterPOS }) {
       <div className="flex h-full relative z-10">
         <Sidebar
           activeSection={activeSection}
-          setActiveSection={handleSidebarSelect}
+          setActiveSection={navigateTo}
           isOpen={isSidebarOpen}
           setIsOpen={setIsSidebarOpen}
         />
@@ -116,7 +112,7 @@ function Dashboard({ user, onLogout, onEnterPOS }) {
       <CommandPalette
         open={cmdOpen}
         onClose={() => setCmdOpen(false)}
-        onNavigate={(section) => { setActiveSection(section); setCmdOpen(false); }}
+        onNavigate={(section) => { navigateTo(section); setCmdOpen(false); }}
       />
 
       <OnboardingWizard

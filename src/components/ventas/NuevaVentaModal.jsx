@@ -621,7 +621,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
                             </div>
                           </td>
                           <td className="py-3 text-center"><Input type="number" value={item.cantidad} onChange={(e) => updateQuantity(item.id, e.target.value)} className="h-8 w-16 text-center mx-auto dark:bg-slate-800 dark:border-slate-700" /></td>
-                          <td className="py-3 text-right font-bold">${(item.precio_venta * item.cantidad).toFixed(2)}</td>
+                          <td className="py-3 text-right font-bold">${(item.precio_venta * item.cantidad).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                           <td className="py-3 text-right pr-2"><Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => removeFromCart(item.id)}><Trash2 className="h-4 w-4" /></Button></td>
                         </tr>
                       ))}
@@ -716,7 +716,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
                    }`}>
                      {Math.abs(restante) < 0.01
                        ? '✓ Pago completo'
-                       : `Restante a asignar: $${restante.toFixed(2)}`}
+                       : `Restante a asignar: $${restante.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                    </div>
                  )}
                </div>

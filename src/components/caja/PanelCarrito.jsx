@@ -124,7 +124,7 @@ function PanelCarrito({ carrito, onModificarCarrito, onVentaExitosa }) {
           value={clienteId}
           onChange={(id) => {
             setClienteId(id);
-            if (!id) setSelectedClient(null);
+            setSelectedClient(id ? (clientes.find(c => c.id === id) ?? null) : null);
           }}
           onClienteCreado={async (c) => {
             setClientes(p => [...p, c]);

@@ -173,8 +173,8 @@ function UsuariosSection() {
       const { data, error } = await supabase.functions.invoke('invite-user', {
         body: {
           email: formData.email,
-          firstName: formData.first_name,
-          lastName: formData.last_name,
+          first_name: formData.first_name,
+          last_name: formData.last_name,
           role: formData.role,
           permissions: formData.permissions,
           empresa_id: user.empresa_id,
