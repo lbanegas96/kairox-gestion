@@ -3278,6 +3278,20 @@ Dashboard, Inventario (productos + Historial Movimientos), Ventas (Nueva + Histo
 - Confirmado migraciones 018, 019, 020 aplicadas en Supabase ✅
 - Fix conector MCP Supabase: reconectado a cuenta NALUX vía OAuth
 
+### Sesión 2026-06-25 (continuación) — Barrido técnico autónomo: security + performance
+
+**Commits:** `37ba5a0`
+
+- **Migration 097 — REVOKE anon en 4 funciones internas** (`37ba5a0`):
+  - `fn_calcular_costo_valoracion`, `next_numero_asiento`, `recalcular_saldo_cuenta` — escaparon de migration 063 (no eran RPCs visibles para PostgREST pero tenían `has_function_privilege('anon')=true`)
+  - `fn_seed_tipos_comprobante_afip` — seed de tipos AFIP, nunca debería ser pública
+  - `crear_devolucion` — migration 096 (CREATE OR REPLACE) perdió el `SET search_path TO 'public'`; restaurado con `ALTER FUNCTION`
+  - Verificado: único anon=true restante es `email_exists_in_system` (intencional — pre-signup)
+- **Migration 098 — Performance: 75 FK indexes + 38 unused index drops** (`37ba5a0`):
+  - 75 `CREATE INDEX IF NOT EXISTS` sobre columnas FK que no tenían índice de cobertura (todas las tablas principales del sistema)
+  - 38 `DROP INDEX IF EXISTS` sobre índices sin uso confirmados por Supabase Performance Advisors
+  - Net: +37 índices (nuevos FK - eliminados sin uso) → menos overhead de escritura, mejor lookup en JOINs
+
 ### Sesión 2026-06-25 — Capa C numeración + Guards RPCs + POS página completa
 
 **Commits:** `5d259c0` · `62dacdd` · `b2c9c68` · `85bad7e` · `618720f`
