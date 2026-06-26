@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { Eye, Filter, AlertCircle, X, Check, ChevronLeft, ChevronRight, Clock, AlertTriangle, Undo2, MoreHorizontal, FileText, Network, Copy } from 'lucide-react';
+import { Eye, Filter, AlertCircle, X, Check, ChevronLeft, ChevronRight, Clock, AlertTriangle, Undo2, MoreHorizontal, FileText, Network, Copy, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,9 +19,11 @@ import NuevaNotaDebitoModal from './NuevaNotaDebitoModal';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import { formatDateAR, formatTimeAR } from '@/lib/dateUtils';
+import { useToast } from '@/components/ui/use-toast';
 
 const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
   const { user } = useAuth();
+  const { toast } = useToast();
   
   // Data State
   const [comprobantes, setComprobantes] = useState([]);
@@ -46,6 +48,7 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
   const [isNdOpen, setIsNdOpen]               = useState(false);
   const [mapaCompId, setMapaCompId]           = useState(null);
   const [isMapaOpen, setIsMapaOpen]           = useState(false);
+  const [reintentandoCaeId, setReintentandoCaeId] = useState(null);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
 
@@ -128,6 +131,38 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
   const handleSaleUpdate = () => {
     // Refresh list when a sale is updated in modal
     fetchData();
+  };
+
+  // Reintento de CAE por comprobante (estados 'error' / 'error_definitivo').
+  // NO emite desde el frontend: re-encola en facturas_pendientes_arca y deja que
+  // el arca-worker (única fuente de verdad) lo procese. Mismo patrón que
+  // ConfiguracionSection.handleReintentarFactura, pero a partir del comprobante.
+  // ORDEN CRÍTICO: primero la fila de cola, después el comprobante — así, cuando el
+  // UPDATE del comprobante dispara fn_queue_factura_arca, la fila ya está 'pendiente'
+  // (dentro del índice único parcial) y el INSERT del trigger hace ON CONFLICT DO
+  // NOTHING en vez de crear una fila duplicada.
+  const handleReintentarCae = async (sale) => {
+    setReintentandoCaeId(sale.id);
+    try {
+      await supabase.from('facturas_pendientes_arca').update({
+        estado:          'pendiente',
+        intentos:        0,
+        proximo_intento: new Date().toISOString(),
+        error_mensaje:   null,
+      }).eq('comprobante_id', sale.id);
+
+      await supabase.from('comprobantes').update({
+        cae_estado: 'pendiente',
+        error_afip: null,
+      }).eq('id', sale.id);
+
+      toast({ title: 'CAE reencolado', description: 'El worker reintentará la emisión en los próximos minutos.' });
+      fetchData();
+    } catch (e) {
+      toast({ title: 'Error al reintentar', description: e.message, variant: 'destructive' });
+    } finally {
+      setReintentandoCaeId(null);
+    }
   };
 
   const clearFilters = () => {
@@ -408,6 +443,21 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                           >
                             <Network className="h-3.5 w-3.5 text-kx-violet" /> Mapa de relaciones
                           </DropdownMenuItem>
+                          {(sale.cae_estado === 'error' || sale.cae_estado === 'error_definitivo') && (
+                            <>
+                              <DropdownMenuSeparator className="bg-kx-border" />
+                              <DropdownMenuItem
+                                disabled={reintentandoCaeId === sale.id}
+                                onSelect={(e) => {
+                                  e.preventDefault();
+                                  setTimeout(() => handleReintentarCae(sale), 0);
+                                }}
+                                className="gap-2 cursor-pointer text-kx-blue focus:text-kx-blue"
+                              >
+                                <RefreshCw className={`h-3.5 w-3.5 ${reintentandoCaeId === sale.id ? 'animate-spin' : ''}`} /> Reintentar CAE
+                              </DropdownMenuItem>
+                            </>
+                          )}
                           {sale.tipo === 'venta' && (
                             <>
                               <DropdownMenuSeparator className="bg-kx-border" />

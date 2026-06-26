@@ -1,5 +1,29 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-27 (sesión 31 Nadia) — Testing post-sesión 63 Luciano (ARCA homologación). Cleanup POS página completa (limpieza código muerto sesión 30 + 4 entry points unificados), 7 fixes formato $ es-AR en historial, badge Factura verde, cliente_id en POS, validación invite-user, columna `comprobantes.fecha`. **Pendiente crítico para próxima sesión con Luciano:** el POS no encola CAE en `facturas_pendientes_arca` aunque AFIP esté activo — toda venta POS queda como Ticket. Comentario detallado en [src/hooks/useConfirmarVenta.js](src/hooks/useConfirmarVenta.js). **Última migration aplicada: 099.** Build ✅.
+**Última actualización:** 2026-06-26 (sesión 64 Luciano) — **Cierre del circuito POS→CAE.** Se resolvió el pendiente crítico de Nadia (sesión 31): el POS ahora SÍ encola CAE. Nuevo hook `useAfipConfig` (config AFIP + tipo de comprobante, compartido POS↔NuevaVentaModal) con **fix fiscal: Exento → Factura C** (antes caía a B). `useConfirmarVenta` ahora usa `obtener_proximo_numero('venta')` (atómico) y encola CAE post-venta. `arca-worker` **redeployado v3** con la implementación manual WSAA+WSFE (antes v2 usaba el SDK roto) — smoke test OK. Función legacy `emitir-cae` **deprecada** (stub 410, era código muerto + SDK). UI: **Reintentar CAE** por fila en el historial. **Última migration aplicada: 099** (sin cambios de schema esta sesión). Build ✅.
+
+## Sesión 64 (Luciano) — Cierre POS→CAE, fix fiscal Exento→C, redeploy worker, deprecación emitir-cae
+
+### Lo que se cerró (todo sin depender de pruebas manuales)
+
+- **Hook `useAfipConfig`** ([src/hooks/useAfipConfig.js](src/hooks/useAfipConfig.js)): centraliza la query de config AFIP (empresa + PdV activo) y `determinarTipoComprobante`, compartido entre el POS (`useConfirmarVenta`) y `NuevaVentaModal` (queryKey `['afip-config', empresa_id]` → react-query dedupe). **Fix fiscal:** un **Exento emite Factura C** (no B). Antes `determinarTipoComprobante` sólo contemplaba Monotributo→C y RI→A/B, y el Exento caía al default 'B' — incorrecto (sólo el RI emite A/B). Nalux es Exento → ahora emite C correctamente.
+- **Gap POS→CAE cerrado** ([src/hooks/useConfirmarVenta.js](src/hooks/useConfirmarVenta.js)): tras `crear_venta`, si `afipActivo`, hace el UPDATE a `cae_estado='pendiente'` + `tipo_comprobante_afip` + `punto_venta_id` que dispara `fn_queue_factura_arca` → encola en `facturas_pendientes_arca`. Antes toda venta POS quedaba como Ticket aunque AFIP estuviera activo.
+- **Numeración POS atómica**: `generateVentaNumber` ahora llama `obtener_proximo_numero('venta')` (RPC con lock) en vez de `MAX(numero_venta)+1` en el frontend — mismo patrón seguro que `NuevaVentaModal`.
+- **`NuevaVentaModal` refactorizado** para consumir `useAfipConfig` (DRY): se eliminó la query inline + el `determinarTipoComprobante` local (que tenía el bug del Exento). Quitado el import `useQuery` (quedó `useQueryClient`).
+- **`arca-worker` redeployado (v3)** con la implementación manual WSAA+WSFE (`_shared/afip.ts`+`wsaa.ts`+`wsfe.ts`+`auth.ts`). El v2 deployado todavía usaba `npm:@nicoo01x/arca-sdk` (roto en Edge) con las firmas viejas. **Smoke test OK**: invocación manual con cola vacía → `{"procesados":0,"mensaje":"Cola vacía"}` HTTP 200 (el bundle nuevo arranca sin errores de import).
+- **`emitir-cae` deprecada** (v5, stub 410): emisión SÍNCRONA de CAE, era **código muerto** (la única que la llamaba, `afipService.emitirCAE`, no la usaba ningún componente) y dependía del SDK roto + arrastraba el `auth.ts` viejo (sin el fix de `verifyAdmin`). Eliminado `emitirCAE` + `CAEResult` de [afipService.ts](src/services/afipService.ts). El path vivo es el worker (`reintentarCAEsPendientes` → `reencolar_caes_pendientes` RPC).
+- **UI Reintentar CAE en el historial** ([src/components/ventas/HistorialVentas.jsx](src/components/ventas/HistorialVentas.jsx)): nuevo ítem en el menú de tres puntitos, visible sólo si `cae_estado IN ('error','error_definitivo')`. Re-encola (no emite desde el front) replicando el patrón de `ConfiguracionSection.handleReintentarFactura`, **orden cola-primero** para que el trigger haga ON CONFLICT DO NOTHING en vez de duplicar fila.
+
+### Decisión fiscal resuelta
+
+Quedaba pendiente (sesión 63) la inconsistencia "Nalux es Exento pero el wizard dice Factura B". **Resuelto:** un Exento emite **Factura C** (no discrimina IVA). El `tipo_comprobante_default='B'` del PdV de Nalux quedó vestigial — el path real ahora estampa 'C' vía `determinarTipoComprobante`. (No se tocó dato de la empresa; si se quiere, actualizar el default del PdV a 'C' por prolijidad.)
+
+### Pendiente PARA PROBAR CON LUCIANO (no bloqueante)
+
+- **🔴 Emisión real de CAE end-to-end**: crear venta de prueba en Nalux (POS o NuevaVenta) → ver que encola en `facturas_pendientes_arca` → worker emite → CAE escrito en `comprobantes`. El tramo `feCAESolicitar` (FECAESolicitar) aún NO se probó de verdad — sólo WSAA + FECompUltimoAutorizado.
+- **🟡 Convertir Ticket en Factura** desde el historial: NO implementado (decisión de negocio: un ticket no-fiscal pasando a factura fiscal post-hoc). El POS ya encola al vender, así que sólo aplica a tickets viejos.
+- **🟡 `AFIP_ENVIRONMENT`** confirmar valor en Dashboard → Edge Functions → Secrets (pendiente desde sesión 30).
+- **🟡 Camino a producción**: cert real (no homologación) + PdV real + `AFIP_ENVIRONMENT=production`.
+- **🟡 Borrar `arca-diag` y (opcional) `emitir-cae`** del Dashboard — no se pueden eliminar vía MCP, sólo neutralizar.
 
 ## Sesión 31 (Nadia) — POS página completa, fixes UX historial, fix cliente POS, fix invite-user
 

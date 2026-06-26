@@ -5,57 +5,41 @@ import { useCaja } from '@/contexts/CajaContext';
 import { useToast } from '@/components/ui/use-toast';
 import { getNowAR, getTodayAR } from '@/lib/dateUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
+import { useAfipConfig } from '@/hooks/useAfipConfig';
 
-// Hook compartido entre NuevaVentaModal (en el futuro) y PanelCarrito.
-// Encapsula la llamada a crear_venta RPC + asientos contables.
-// Soporta modo ARS únicamente (para PanelCarrito del Modo Caja).
+// Hook compartido entre el POS (PanelCarrito) y cualquier flujo de venta ARS rápido.
+// Encapsula crear_venta RPC + asiento contable + encolado de CAE (facturación
+// electrónica). Soporta modo ARS únicamente (el POS del Modo Caja).
 //
-// ⚠️ PENDIENTE CRÍTICO — falta integración AFIP en el POS (sesión 31, 2026-06-27).
-// Hoy las ventas hechas desde el POS (sidebar "Punto de Venta") NO encolan en
-// facturas_pendientes_arca aunque la empresa tenga usa_factura_electronica=true
-// y certificado cargado. Resultado: toda venta POS queda como Ticket sin CAE.
-// Por contraste, NuevaVentaModal sí lo hace en líneas 538-548:
-//   UPDATE comprobantes SET cae_estado='pendiente',
-//                            tipo_comprobante_afip = determinarTipoComprobante(...),
-//                            punto_venta_id = afipConfig.punto_venta.id
-//   WHERE id = comprobante.id
-// El trigger fn_queue_factura_arca (migration 087) se dispara por ese UPDATE.
+// Facturación electrónica (AFIP): si la empresa tiene usa_factura_electronica=true
+// y un PdV activo, tras crear_venta se hace el UPDATE a cae_estado='pendiente' que
+// dispara fn_queue_factura_arca (migration 087) → encola en facturas_pendientes_arca.
+// El arca-worker (cron */5) es la ÚNICA fuente de verdad que llama a ARCA — nunca
+// desde el frontend. La config se obtiene de useAfipConfig (compartido con
+// NuevaVentaModal). El tipo de comprobante sale de determinarTipoComprobante
+// (emisor=empresa.condicion_iva, receptor=cliente.condicion_iva ?? 'CF').
 //
-// Lo que hace falta para cerrar el gap (revisar con Luciano):
-//   1. Cargar afipConfig en PanelCarrito/POS (cuit, condicion_iva, PdV, cert ok).
-//      Conviene extraer a hook useAfipConfig y reusar entre POS y NuevaVentaModal.
-//   2. Enriquecer selectedClient con condicion_iva (hoy solo viaja {id, nombre}).
-//   3. Después del crear_venta acá, replicar el UPDATE de NuevaVentaModal:538-548.
-//   4. Decisión de producto: ¿POS emite siempre electrónico si AFIP activo, o
-//      cajero elige Ticket vs Factura A/B/C como en NuevaFacturaModal?
-//
-// Bug adicional (no relacionado pero a fixear junto): generateVentaNumber abajo
-// usa MAX+1 sin lock — mismo patrón inseguro que migration 083 erradicó del
-// resto. La numeración debería venir de obtener_proximo_numero('venta') dentro
-// de crear_venta, no armarse en el frontend.
+// La numeración usa obtener_proximo_numero('venta') (RPC atómica con lock) — nunca
+// MAX+1 en el frontend (patrón inseguro que migration 083 erradicó del resto).
 export function useConfirmarVenta() {
   const { user }                       = useAuth();
   const { isSessionOpen, currentSession } = useCaja();
   const { toast }                      = useToast();
+  const { afipConfig, afipActivo, determinarTipoComprobante } = useAfipConfig();
   const [loading, setLoading]          = useState(false);
   const [lastComprobante, setLastComprobante] = useState(null);
 
   const generateVentaNumber = async () => {
-    const todayStr = getTodayAR().replace(/-/g, '');
-    const { data } = await supabase
-      .from('comprobantes')
-      .select('numero_venta')
-      .eq('empresa_id', user.empresa_id)
-      .ilike('numero_venta', `${todayStr}-%`)
-      .order('numero_venta', { ascending: false })
-      .limit(1);
-    let seq = 1;
-    if (data?.length > 0) seq = parseInt(data[0].numero_venta.split('-')[1]) + 1;
-    return `${todayStr}-${String(seq).padStart(3, '0')}`;
+    const { data, error } = await supabase.rpc('obtener_proximo_numero', {
+      p_empresa_id: user.empresa_id,
+      p_tipo_documento: 'venta',
+    });
+    if (error) throw error;
+    return data;
   };
 
   // pagos: Array<{ metodo: string, monto: number }>
-  // selectedClient: null | { id, nombre }
+  // selectedClient: null | { id, nombre, condicion_iva? }  ← condicion_iva define A/B/C
   const confirmar = useCallback(async ({ cart, selectedClient, pagos }) => {
     if (!cart?.length) {
       toast({ title: 'Carrito vacío', variant: 'destructive' });
@@ -144,6 +128,24 @@ export function useConfirmarVenta() {
         esCredito:   isCC,
       }).catch(e => console.warn('[Contabilidad] asiento venta:', e.message));
 
+      // ── Encolar CAE vía trigger (SAP async posting — no bloquea la venta) ──────
+      // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca, que inserta
+      // en facturas_pendientes_arca. El arca-worker (cron */5 * * * *) es la única
+      // fuente de verdad para llamar a ARCA — nunca desde el frontend.
+      if (afipActivo && comprobante?.id) {
+        const tipoComp = determinarTipoComprobante(
+          afipConfig.condicion_iva,
+          selectedClient?.condicion_iva ?? 'CF'
+        );
+        supabase.from('comprobantes').update({
+          tipo_comprobante_afip: tipoComp,
+          punto_venta_id: afipConfig.punto_venta.id,
+          cae_estado: 'pendiente',
+        }).eq('id', comprobante.id).then(({ error }) => {
+          if (error) console.warn('[AFIP queue]', error.message);
+        });
+      }
+
       toast({ title: '¡Venta Exitosa!', description: `Comprobante ${saleNumber} generado.` });
       setLastComprobante(comprobante);
       return comprobante;
@@ -154,7 +156,7 @@ export function useConfirmarVenta() {
     } finally {
       setLoading(false);
     }
-  }, [user, isSessionOpen, currentSession, toast]);
+  }, [user, isSessionOpen, currentSession, toast, afipActivo, afipConfig, determinarTipoComprobante]);
 
   return { confirmar, loading, lastComprobante };
 }

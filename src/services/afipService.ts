@@ -1,13 +1,5 @@
 import { supabase } from '@/lib/customSupabaseClient';
 
-export interface CAEResult {
-  success: boolean;
-  cae?: string;
-  numero_afip?: string;
-  vencimiento?: string;
-  error?: string;
-}
-
 export interface CSRResult {
   success: boolean;
   csr?: string;
@@ -27,19 +19,6 @@ export async function generarCSR(cuit: string, razonSocial: string): Promise<CSR
     });
     if (error) throw error;
     return data as CSRResult;
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
-/** Emite el CAE de un comprobante llamando a la Edge Function `emitir-cae`. */
-export async function emitirCAE(comprobante_id: string): Promise<CAEResult> {
-  try {
-    const { data, error } = await supabase.functions.invoke('emitir-cae', {
-      body: { comprobante_id },
-    });
-    if (error) throw error;
-    return data as CAEResult;
   } catch (err: any) {
     return { success: false, error: err.message };
   }

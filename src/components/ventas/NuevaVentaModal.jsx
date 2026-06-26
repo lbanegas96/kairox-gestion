@@ -18,7 +18,8 @@ import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { useMultipago } from '@/hooks/useMultipago';
 import { useCreditoCliente } from '@/hooks/useCreditoCliente';
 import { listaPreciosService } from '@/services/listaPreciosService';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAfipConfig } from '@/hooks/useAfipConfig';
 
 const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = null, onConvertSuccess, pedido = null }) => {
   const { user } = useAuth();
@@ -41,30 +42,8 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   // ── Moneda Paralela ─────────────────────────────────────────────────────────
   const tcParalelo = useTCParalelo();
 
-  // ── Configuración AFIP (stale 5 min — no cambia frecuente) ─────────────────
-  const { data: afipConfig } = useQuery({
-    queryKey: ['afip-config', user?.empresa_id],
-    queryFn: async () => {
-      if (!user?.empresa_id) return null;
-      const { data: empresa } = await supabase
-        .from('empresas')
-        .select('usa_factura_electronica, condicion_iva, afip_cuit')
-        .eq('id', user.empresa_id)
-        .single();
-      if (!empresa?.usa_factura_electronica) return null;
-      const { data: pv } = await supabase
-        .from('puntos_venta')
-        .select('id, numero, tipo_comprobante_default')
-        .eq('empresa_id', user.empresa_id)
-        .eq('activo', true)
-        .limit(1)
-        .maybeSingle();
-      return { ...empresa, punto_venta: pv };
-    },
-    enabled: !!user?.empresa_id,
-    staleTime: 5 * 60 * 1000,
-  });
-  const afipActivo = afipConfig?.usa_factura_electronica === true && !!afipConfig?.punto_venta;
+  // ── Configuración AFIP (hook compartido con el POS / useConfirmarVenta) ─────
+  const { afipConfig, afipActivo, determinarTipoComprobante } = useAfipConfig();
   const [lastComprobante, setLastComprobante] = useState(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [lastItems, setLastItems] = useState([]);
@@ -347,12 +326,6 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     });
     if (error) throw error;
     return data;
-  };
-
-  const determinarTipoComprobante = (emisorCondicion, receptorCondicion) => {
-    if (emisorCondicion === 'Monotributo') return 'C';
-    if (emisorCondicion === 'RI') return receptorCondicion === 'RI' ? 'A' : 'B';
-    return 'B';
   };
 
   const handleConfirmSale = async () => {
