@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-26 (sesión 64 Luciano) — **Cierre del circuito POS→CAE.** Se resolvió el pendiente crítico de Nadia (sesión 31): el POS ahora SÍ encola CAE. Nuevo hook `useAfipConfig` (config AFIP + tipo de comprobante, compartido POS↔NuevaVentaModal) con **fix fiscal: Exento → Factura C** (antes caía a B). `useConfirmarVenta` ahora usa `obtener_proximo_numero('venta')` (atómico) y encola CAE post-venta. `arca-worker` **redeployado v3** con la implementación manual WSAA+WSFE (antes v2 usaba el SDK roto) — smoke test OK. Función legacy `emitir-cae` **deprecada** (stub 410, era código muerto + SDK). UI: **Reintentar CAE** por fila en el historial. **Última migration aplicada: 099** (sin cambios de schema esta sesión). Build ✅.
+**Última actualización:** 2026-06-26 (sesión 64 Luciano) — **Cierre del circuito POS→CAE + EMISIÓN REAL DE CAE VALIDADA EN VIVO.** Se resolvió el pendiente crítico de Nadia (sesión 31): el POS ahora SÍ encola CAE. Nuevo hook `useAfipConfig` (config AFIP + tipo de comprobante, compartido POS↔NuevaVentaModal) con **fix fiscal: Exento → Factura C** (antes caía a B). `useConfirmarVenta` ahora usa `obtener_proximo_numero('venta')` (atómico) y encola CAE post-venta. `arca-worker` **redeployado v3** con la implementación manual WSAA+WSFE (antes v2 usaba el SDK roto). Función legacy `emitir-cae` **deprecada** (stub 410, era código muerto + SDK). UI: **Reintentar CAE** por fila en el historial. **✅ TEST E2E REAL EN HOMOLOGACIÓN:** se emitió un CAE de verdad contra ARCA (Factura C, CAE `86260498891462`, vto 2026-07-06, número AFIP `0001-00000001`) — el tramo `feCAESolicitar` quedó validado, el circuito completo funciona. **Última migration aplicada: 099** (sin cambios de schema esta sesión). Build ✅.
 
 ## Sesión 64 (Luciano) — Cierre POS→CAE, fix fiscal Exento→C, redeploy worker, deprecación emitir-cae
 
@@ -17,9 +17,12 @@
 
 Quedaba pendiente (sesión 63) la inconsistencia "Nalux es Exento pero el wizard dice Factura B". **Resuelto:** un Exento emite **Factura C** (no discrimina IVA). El `tipo_comprobante_default='B'` del PdV de Nalux quedó vestigial — el path real ahora estampa 'C' vía `determinarTipoComprobante`. (No se tocó dato de la empresa; si se quiere, actualizar el default del PdV a 'C' por prolijidad.)
 
-### Pendiente PARA PROBAR CON LUCIANO (no bloqueante)
+### Test E2E ✅ (hecho en vivo esta sesión)
 
-- **🔴 Emisión real de CAE end-to-end**: crear venta de prueba en Nalux (POS o NuevaVenta) → ver que encola en `facturas_pendientes_arca` → worker emite → CAE escrito en `comprobantes`. El tramo `feCAESolicitar` (FECAESolicitar) aún NO se probó de verdad — sólo WSAA + FECompUltimoAutorizado.
+- **✅ Emisión real de CAE end-to-end** validada: se creó un comprobante de prueba en Nalux (Factura C), el trigger `trg_queue_factura_arca` (AFTER UPDATE OF cae_estado) lo encoló, se invocó el worker (`POST /functions/v1/arca-worker`) y emitió contra ARCA homologación. Resultado: **CAE `86260498891462`, vto 2026-07-06, número AFIP `0001-00000001`**, `cae_estado='emitido'`, contador `puntos_venta.ultimo_numero_c` sincronizado a 1. El comprobante de prueba se borró tras validar (el correlativo en ARCA homologación arranca en 2 la próxima — consistente). `feCAESolicitar` queda validado: el circuito completo WSAA→FECompUltimoAutorizado→FECAESolicitar funciona.
+- **Falta probar desde la UI real** (no bloqueante, lo verá Luciano): hacer una venta real desde el POS / NuevaVenta en la app deployada y ver el badge verde "Factura C ####" en el historial.
+
+### Pendiente PARA PRÓXIMAS SESIONES (no bloqueante)
 - **🟡 Convertir Ticket en Factura** desde el historial: NO implementado (decisión de negocio: un ticket no-fiscal pasando a factura fiscal post-hoc). El POS ya encola al vender, así que sólo aplica a tickets viejos.
 - **🟡 `AFIP_ENVIRONMENT`** confirmar valor en Dashboard → Edge Functions → Secrets (pendiente desde sesión 30).
 - **🟡 Camino a producción**: cert real (no homologación) + PdV real + `AFIP_ENVIRONMENT=production`.
