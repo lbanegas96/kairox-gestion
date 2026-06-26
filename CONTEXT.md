@@ -1,5 +1,50 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-25 (sesión 30 Nadia) — Testing post-sesión 60 Luciano: 3 fixes server-side (migrations 091-093) + 5 fixes UI. Race condition de auth en ConfigContext resuelta. Bug de duplicación de numeración devoluciones por backfill faltante de migration 086 cerrado. **Última migration aplicada: 093.** Build ✅.
+**Última actualización:** 2026-06-26 (sesión 63 Luciano) — **ARCA en marcha real.** Configuración end-to-end de homologación AFIP para Nalux (CSR→cert→autorización wsfe). **Hallazgo mayor:** el SDK `@nicoo01x/arca-sdk` NO funciona en Edge Runtime (resolver `npm:` roto + arma mal el TRA). **Reemplazado por implementación manual WSAA+WSFE** (`wsaa.ts`+`wsfe.ts`), validada contra homologación: autentica y consulta último comprobante OK. Migration 099 (cache TA). **Pendiente mañana:** redeploy `arca-worker` + probar emisión real de CAE. **Última migration aplicada: 099.**
+
+## Sesión 63 (Luciano) — Integración ARCA real: reemplazo del SDK por WSAA+WSFE manual
+
+### Configuración de homologación AFIP (Nalux, CUIT 20-39324900-6)
+
+Flujo completo guiado y ejecutado contra ARCA **homologación** (testing, CAE sin valor fiscal):
+1. Secret `AFIP_ENVIRONMENT=sandbox` en Supabase → Edge Functions → Secrets.
+2. Wizard de la app: datos fiscales (CUIT personal = CUIT de persona física, Exento → Factura B), generar CSR.
+3. Portal WSASS homologación: crear DN (`Naluxhomo`, sin guiones — solo alfanumérico) + pegar CSR → descargar cert x509. **El cert se entrega como texto en el campo "Resultado", NO como descarga.**
+4. WSASS → "Crear autorización a servicio" → servicio **`wsfe`** (Facturación Electrónica). Sin esto el cert existe pero no puede facturar.
+5. Subir el `.crt` en el wizard (acción `store_cert` → Vault `afip_cert_{empresa_id}`), PdV = 1 (homologación acepta el 1 sin alta formal).
+
+### Bugs corregidos en el camino
+
+- **`_shared/auth.ts` — 500 en vez de 401 con token expirado.** `verifyAdmin` hacía `const { data: { user } } = await getUser()`; con refresh token inválido `data` viene `null` → TypeError → caía en catch como 500. Fix: `const user = data?.user`. Afecta a TODAS las edge functions que usan `verifyAdmin`.
+- **`generar-csr/index.ts` — reescrito sin `@peculiar/x509`.** Esa librería no cargaba bien en Edge. Reemplazada por construcción manual del CSR PKCS#10 con ASN.1/DER puro + Web Crypto (RSA-2048, SHA-256). Validado con OpenSSL: `self-signature verify OK`, Subject `C=AR, O=Nalux, CN=Nalux, serialNumber=CUIT ...`.
+
+### HALLAZGO MAYOR: el SDK `@nicoo01x/arca-sdk` no sirve en Edge Runtime
+
+Síntomas en cascada al probar conexión (cada fix destapó el siguiente):
+1. `npm:@nicoo01x/arca-sdk@3` → **"path not found"** (`dist/index.mjs`). El resolver `npm:` de Supabase no encuentra el entry point. **esm.sh sí lo resuelve** (`https://esm.sh/@nicoo01x/arca-sdk@3.1.0`).
+2. `import(variable)` → **"Module not found"**. El bundler eszip solo empaqueta `import()` con **string literal estático**, no variables.
+3. Constructor: faltaba `serviceScopes: ['wsfe']` (requerido) y el campo correcto es `key`, no `privateKey`. El método es `getLastVoucherNumber({pointOfSale, voucherType})`, no `getLastVoucher(a,b)`.
+4. Tras todo eso → **"Authentication failed"** genérico. Diagnóstico manual del WSAA reveló la causa raíz: **el SDK arma mal el TRA** (pone `<service>` dentro de `<header>`; debe ir como hijo directo de `loginTicketRequest`). AFIP responde *"No se ha podido interpretar el XML contra el SCHEMA"*.
+
+**Conclusión: el SDK es inutilizable.** Se reemplaza por implementación manual.
+
+### Solución: WSAA + WSFE manual (sin SDK)
+
+Validado contra homologación (`wsaahomo`/`wswhomo`): **login OK + último comprobante (PV1, FC C) = 0, sin errores.**
+
+- **`_shared/wsaa.ts`** — login WSAA: construye TRA (service fuera del header), firma CMS/PKCS#7 con `node-forge` (carga bien vía esm.sh), postea a LoginCms, parsea token+sign+expiration. **Cache de TA** en tabla `afip_tickets` (TTL ~12h; AFIP rechaza pedir TA nuevo si hay uno válido).
+- **`_shared/wsfe.ts`** — `feCompUltimoAutorizado` (último número) + `feCAESolicitar` (emitir CAE). Maneja Factura C (sin discriminar IVA: ImpNeto=Total, sin nodo `<Iva>`) vs A/B (con nodo Iva).
+- **`_shared/afip.ts`** — reescrito: `getLastVoucherNumber` y `callArcaEmit` usan WSAA+WSFE. **Nuevas firmas:** ahora reciben `(admin, empresaId, ...)` para el cache de TA.
+- **Migration 099** `afip_tickets` — cache del TA. RLS habilitado SIN políticas → solo `service_role` (edge functions). PK `(empresa_id, service)`.
+- **`probar-conexion-afip`** (deployado v5) y **`arca-worker`** (código actualizado a nuevas firmas) ajustados.
+- **`arca-diag`** — función de diagnóstico temporal, **neutralizada** (v9, `verify_jwt:true`, devuelve 410, no lee Vault). Borrar desde el Dashboard cuando se pueda.
+
+### Pendiente próxima sesión (mañana)
+
+- **Redeploy `arca-worker`** con la implementación nueva (hoy el deployado v2 aún usa el SDK; seguro porque la cola está vacía + sandbox, pero el código en git ya está actualizado).
+- **Probar emisión real de CAE** end-to-end: crear factura de prueba → cola `facturas_pendientes_arca` → worker emite → CAE escrito en `comprobantes`. Validar `feCAESolicitar` contra homologación (es el camino que aún NO se probó de verdad).
+- **`emitir-cae`** (función legacy) — revisar si sigue usando el SDK; alinear o deprecar.
+- **Incoherencia fiscal a decidir:** Nalux es Exento pero el wizard dice "emite Facturas B". Un Exento normalmente emite **Factura C**. Definir antes de producción.
+- **Paso a producción:** cert real (Administración de Certificados Digitales, NO homologación) + PdV real dado de alta + `AFIP_ENVIRONMENT=production`.
 
 ## Sesión 30 (Nadia) — Testing post-sesión 60: race auth, vault grant, numeración devoluciones, UX ventas
 

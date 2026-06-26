@@ -73,7 +73,8 @@ export async function verifyAdmin(req: Request): Promise<AuthResult> {
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
 
-  const { data: { user }, error: userError } = await userClient.auth.getUser();
+  const { data, error: userError } = await userClient.auth.getUser();
+  const user = data?.user;
   if (userError || !user) {
     return { ok: false, error: 'Token inválido' };
   }

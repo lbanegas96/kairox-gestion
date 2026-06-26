@@ -1,9 +1,16 @@
 /**
- * Shared AFIP/ARCA helpers — usados por emitir-cae y arca-worker.
- * Contiene solo lógica pura (sin I/O, sin Supabase client).
- * El SDK de ARCA (@nicoo01x/arca-sdk) se importa dinámicamente en cada
- * función que lo necesite (es Node-only, no carga en Deno a nivel top-level).
+ * Helpers AFIP/ARCA — usados por arca-worker y probar-conexion-afip.
+ *
+ * Implementación MANUAL de los web services (WSAA + WSFE), SIN el SDK
+ * @nicoo01x/arca-sdk (que armaba mal el TRA → "XML contra el SCHEMA").
+ * Verificado contra homologación en sesión 63.
+ *
+ * Las funciones que llaman a AFIP reciben `admin` (SupabaseClient service_role)
+ * y `empresaId` para cachear el Ticket de Acceso en afip_tickets.
  */
+import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getValidTA } from './wsaa.ts';
+import { feCompUltimoAutorizado, feCAESolicitar, type WsfeAuth } from './wsfe.ts';
 
 /** Mapea tipo interno KAIROX (A/B/C) al código AFIP de WSFE. */
 export function voucherTypeAfip(tipo: string): number {
@@ -19,6 +26,14 @@ export function alicuotaPct(alicuota: string | null): number {
   return 21;
 }
 
+/** Mapea un porcentaje de IVA al Id de alícuota de AFIP. */
+function ivaIdFromPct(pct: number): number {
+  if (pct === 0) return 3;      // 0%
+  if (pct === 10.5) return 4;   // 10.5%
+  if (pct === 27) return 6;     // 27%
+  return 5;                     // 21% (default)
+}
+
 /** Determina tipo de documento AFIP a partir del documento del receptor. */
 export function docTipoAfip(documento: string | null): { tipo: number; nro: string } {
   const d = (documento ?? '').replace(/\D/g, '');
@@ -28,6 +43,7 @@ export function docTipoAfip(documento: string | null): { tipo: number; nro: stri
 }
 
 export interface ArcaEmitParams {
+  empresaId: string;
   cuit: string;
   certPem: string;
   keyPem: string;
@@ -45,17 +61,23 @@ export interface ArcaEmitParams {
 
 export interface ArcaEmitResult {
   cae: string;
-  caeExpirationDate: string | null;
-  /** Número correlativo real que ARCA asignó (getLastVoucherNumber). */
+  caeExpirationDate: string | null;  // ISO YYYY-MM-DD
   numeroCorrelativo: number;
 }
 
+/** Convierte YYYYMMDD → YYYY-MM-DD (o null si vacío). */
+function fchToIso(yyyymmdd: string): string | null {
+  if (!yyyymmdd || yyyymmdd.length !== 8) return null;
+  return `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
+}
+
 /**
- * Consulta el último número de comprobante emitido en ARCA para un PdV y tipo.
- * Se usa ANTES de emitir en retry para verificar si ARCA ya procesó la solicitud
- * (caso de timeout sin respuesta — evita emitir duplicado).
+ * Último número de comprobante autorizado en ARCA para un PdV y tipo.
+ * Usa TA cacheado (afip_tickets). 0 si no hay ninguno.
  */
 export async function getLastVoucherNumber(
+  admin: SupabaseClient,
+  empresaId: string,
   cuit: string,
   certPem: string,
   keyPem: string,
@@ -63,93 +85,88 @@ export async function getLastVoucherNumber(
   pvNumero: number,
   voucherType: number,
 ): Promise<number> {
-  const { ArcaClient } = await import('npm:@nicoo01x/arca-sdk@3');
-  const client = new ArcaClient({ cuit, cert: certPem, privateKey: keyPem, environment });
-  const last = await client.invoice?.getLastVoucher(pvNumero, voucherType);
-  return last?.number ?? 0;
+  const ta = await getValidTA(admin, empresaId, environment, certPem, keyPem);
+  const auth: WsfeAuth = { token: ta.token, sign: ta.sign, cuit };
+  return await feCompUltimoAutorizado(environment, auth, pvNumero, voucherType);
 }
 
 /**
- * Llama a ARCA para emitir el comprobante.
- * Importa el SDK dinámicamente para aislar la incompatibilidad Node-only.
- * Lanza Error en cualquier caso de fallo (ARCA caído, datos inválidos, etc.).
- * El caller es responsable de clasificar el error según el mensaje.
+ * Emite el CAE de un comprobante contra ARCA.
+ * 1. Obtiene TA (cacheado), 2. consulta último número, 3. emite el siguiente.
+ * Lanza Error si AFIP rechaza (el caller clasifica con classifyArcaError).
  */
-export async function callArcaEmit(params: ArcaEmitParams): Promise<ArcaEmitResult> {
-  const { ArcaClient } = await import('npm:@nicoo01x/arca-sdk@3');
-  const client = new ArcaClient({
-    cuit:        params.cuit,
-    cert:        params.certPem,
-    privateKey:  params.keyPem,
-    environment: params.environment,
+export async function callArcaEmit(
+  admin: SupabaseClient,
+  params: ArcaEmitParams,
+): Promise<ArcaEmitResult> {
+  const ta = await getValidTA(admin, params.empresaId, params.environment, params.certPem, params.keyPem);
+  const auth: WsfeAuth = { token: ta.token, sign: ta.sign, cuit: params.cuit };
+
+  // Próximo número real (nunca el contador local)
+  const ultimo = await feCompUltimoAutorizado(params.environment, auth, params.pvNumero, params.voucherType);
+  const cbteNro = ultimo + 1;
+
+  // Factura C (11) no discrimina IVA: ImpNeto = ImpTotal, ImpIVA = 0, sin nodo Iva.
+  const esFacturaC = params.voucherType === 11;
+  const impNeto = esFacturaC ? params.total : params.neto;
+  const impIVA  = esFacturaC ? 0 : params.iva;
+  const ivaId   = esFacturaC ? null : ivaIdFromPct(params.iva > 0 && params.neto > 0
+    ? Math.round((params.iva / params.neto) * 1000) / 10
+    : 21);
+
+  const result = await feCAESolicitar(params.environment, auth, {
+    ptoVta:   params.pvNumero,
+    cbteTipo: params.voucherType,
+    concepto: 1,
+    docTipo:  params.customerDocType,
+    docNro:   params.customerDocNro,
+    cbteNro,
+    cbteFch:  params.issueDate,
+    impTotal: params.total,
+    impNeto,
+    impIVA,
+    ivaId,
   });
-
-  const result = await client.invoice?.createInvoice({
-    pointOfSale:            params.pvNumero,
-    voucherType:            params.voucherType,
-    concept:                1,
-    customerDocumentType:   params.customerDocType,
-    customerDocumentNumber: params.customerDocNro,
-    issueDate:              params.issueDate,
-    currency:               'PES',
-    currencyRate:           1,
-    items:                  params.items,
-    totals: {
-      netAmount:   params.neto,
-      ivaAmount:   params.iva,
-      totalAmount: params.total,
-    },
-  });
-
-  if (!result?.cae) throw new Error('ARCA no retornó CAE');
-
-  // Obtener el número correlativo real que ARCA usó
-  const numeroCorrelativo = await getLastVoucherNumber(
-    params.cuit, params.certPem, params.keyPem, params.environment,
-    params.pvNumero, params.voucherType,
-  );
 
   return {
     cae:               result.cae,
-    caeExpirationDate: result.caeExpirationDate ?? null,
-    numeroCorrelativo,
+    caeExpirationDate: fchToIso(result.caeVto),
+    numeroCorrelativo: result.cbteNro,
   };
 }
 
 /**
- * Clasifica el error de ARCA para decidir si reintentar o no.
- * 'transient' → ARCA caído/timeout → reintentar con backoff.
- * 'data'      → ARCA rechazó por dato inválido → no reintentar, usuario debe corregir.
- * 'ambiguous' → timeout sin respuesta → consultar getLastVoucherNumber antes de reintentar.
+ * Clasifica el error de ARCA para decidir si reintentar.
+ * 'transient' → red/timeout/ARCA caído → reintentar con backoff.
+ * 'data'      → ARCA rechazó por dato inválido → no reintentar.
+ * 'ambiguous' → timeout sin respuesta → verificar antes de reintentar.
  */
 export function classifyArcaError(errorMessage: string): 'transient' | 'data' | 'ambiguous' {
   const msg = errorMessage.toLowerCase();
-  // Errores de datos que ARCA devuelve explícitamente (códigos de error WSFE)
+
+  // Rechazo explícito de WSFE por datos del comprobante
   if (
+    msg.includes('rechazó el comprobante') ||
+    msg.includes('rechazo el comprobante') ||
     msg.includes('dato inv') ||
-    msg.includes('cuit inválido') ||
-    msg.includes('punto de venta inexistente') ||
-    msg.includes('comprobante inválido') ||
+    msg.includes('cuit inv') ||
+    msg.includes('punto de venta') ||
+    msg.includes('comprobante inv') ||
     msg.includes('no autorizado') ||
     msg.includes('certificado') ||
     msg.includes('error_datos') ||
-    msg.includes('10000') || // código error WSFE negocio
-    msg.includes('10001') ||
-    msg.includes('10002') ||
-    msg.includes('10003') ||
-    msg.includes('10004')
+    /\b1000[0-9]\b/.test(msg) ||
+    /\b1001[0-9]\b/.test(msg)
   ) {
     return 'data';
   }
-  // Timeout sin respuesta clara → estado ambiguo
   if (msg.includes('timeout') || msg.includes('timed out')) {
     return 'ambiguous';
   }
-  // Resto: ARCA caído, 503, network error → reintentar
   return 'transient';
 }
 
-/** Calcula el proximo_intento con backoff exponencial por número de intento (0-based). */
+/** Backoff exponencial por número de intento (0-based): [1,5,15,30,60] min. */
 export function backoffMinutes(intentos: number): number {
   const SCHEDULE = [1, 5, 15, 30, 60];
   return SCHEDULE[intentos] ?? 60;

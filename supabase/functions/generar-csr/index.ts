@@ -106,8 +106,9 @@ Deno.serve(async (req) => {
       { headers: { ...cors, 'Content-Type': 'application/json' } },
     );
   } catch (err) {
+    console.error('[generar-csr] ERROR:', err);
     return new Response(
-      JSON.stringify({ error: (err as Error).message }),
+      JSON.stringify({ error: (err as Error).message ?? String(err) }),
       { status: 500, headers: { ...cors, 'Content-Type': 'application/json' } },
     );
   }

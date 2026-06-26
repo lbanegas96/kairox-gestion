@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
       // Verifica si ARCA ya emitió (estado ambiguo por timeout previo) y
       // obtiene el próximo número real (nunca usar el contador local).
       const lastNumber = await getLastVoucherNumber(
-        empresa.afip_cuit, certPem, keyPem, environment, pv.numero, voucherType,
+        adminClient, comp.empresa_id, empresa.afip_cuit, certPem, keyPem, environment, pv.numero, voucherType,
       );
 
       // Checar si ARCA ya emitió el CAE para este comprobante
@@ -180,7 +180,8 @@ Deno.serve(async (req) => {
       }
 
       // ── 6. Emitir contra ARCA ────────────────────────────────────────────────
-      const arcaResult = await callArcaEmit({
+      const arcaResult = await callArcaEmit(adminClient, {
+        empresaId: comp.empresa_id,
         cuit: empresa.afip_cuit, certPem, keyPem, environment,
         pvNumero:        pv.numero,
         voucherType,
