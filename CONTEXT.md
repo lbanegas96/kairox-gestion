@@ -3589,6 +3589,42 @@ Dashboard, Inventario (productos + Historial Movimientos), Ventas (Nueva + Histo
 
 **CAEA — Decisión de alcance final**: AFIP requiere habilitación especial para CAEA (grandes superficies, zonas sin conectividad, alto volumen). Las PyMEs típicas de KAIROX **no califican**. El backend (migration 103+104 + 3 Edge Functions) queda como infraestructura durmiente para clientes grandes futuros. **Frontend CAEA descartado del roadmap cercano.** El roadmap gira a mejorar UX de CAE online.
 
+### Sesión 2026-06-27 — MercadoPago: CORS fix + HMAC fix + mp-sync (sesión 66)
+
+**Commits:** `2d0bec9` · `14f37c5`
+
+**Contexto:** Pagos reales de MP (link de cobro, QR, transferencias CVU) no impactaban en el módulo Bancos de KAIROX.
+
+**Edge Functions deployadas/actualizadas:**
+
+- **`mp-verify-token`** (nuevo — fix CORS): `ConfigMercadoPagoModal.jsx` llamaba `api.mercadopago.com/users/me` directo desde el browser → CORS blocked. Fix: proxy server-side en Edge Function; el modal ahora usa `supabase.functions.invoke('mp-verify-token', ...)`.
+- **`mp-webhook`** (fix HMAC): La firma usaba `request-id:;` (vacío) pero MP incluye el header `x-request-id` en el mensaje firmado: `id:{id};request-id:{requestId};ts:{ts};`. Fix: leer `req.headers.get('x-request-id')` y pasarlo a `validarFirmaMP`. Deploy con `--no-verify-jwt`.
+- **`mp-sync`** (nuevo — safety net): Polling periódico de `GET /v1/payments/search?status=approved&begin_date={ultimo_sync}` para todas las integraciones activas. Inserta via RPC `insertar_movimiento_bancario_externo`, deduplica por `descripcion LIKE 'MP #%'`, actualiza `ultimo_sync`.
+
+**Migration 106:** `integraciones_bancarias.ultimo_sync TIMESTAMPTZ` — tracking del último sync.
+
+**Migration 107 + pg_cron:** Job `mp-sync-every-30-min` (`*/30 * * * *`), activo, `jobid=2`.
+
+**SUBTIPO_MAP** (compartido en mp-webhook y mp-sync):
+```
+bank_transfer → transferencia | account_money → qr | credit_card → tarjeta_credito | debit_card → tarjeta_debito
+```
+
+**Estado DB al cierre:**
+- `integraciones_bancarias`: row activo empresa `cbc4db74`, token `APP_USR-2115...`, `cuenta_bancaria_id=aca3fd2f`, `ultimo_sync=null`
+- `movimientos_bancarios`: 12 entradas `origen='manual'`, 0 `origen='mercadopago'` (mp-sync aún no corrió)
+- Crons activos: `arca-worker` (*/5, jobid=1) + `mp-sync` (*/30, jobid=2)
+
+**Diagnóstico — pago de $5 (link) no impactó:**
+1. **mp-webhook:** No llegó ningún webhook de MP para el pago. Los cobros por enlace pueden no disparar webhooks si los eventos no están configurados correctamente en MP Developers → App → Webhooks.
+2. **mp-sync:** Recién deployado. `ultimo_sync=null` → primer ciclo escanea últimas 72 horas → **debería encontrar el $5 y los $10.000 de la sesión anterior** en el próximo tick de 30 min.
+
+**Pendiente sesión 67:**
+- Verificar `movimientos_bancarios` para confirmar que mp-sync capturó los pagos pendientes
+- Si no: revisar logs de `mp-sync` en Supabase Edge Functions dashboard
+- Investigar configuración de webhooks en panel MP (evento "Pagos" activo en producción)
+- Opcional: botón "Sincronizar ahora" en `ConfigMercadoPagoModal` para sync manual on-demand
+
 ---
 
 ## 3 grandes proyectos al final
