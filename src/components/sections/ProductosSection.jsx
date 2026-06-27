@@ -66,6 +66,18 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
       />
     </div>
 
+    {/* SCANNER — código de barras leído por scanner USB/Bluetooth en el POS */}
+    <div className="space-y-2">
+      <Label htmlFor="codigo_barras">Código de barras (EAN/UPC)</Label>
+      <Input
+        id="codigo_barras"
+        value={data.codigo_barras || ''}
+        onChange={e => setData({...data, codigo_barras: e.target.value})}
+        placeholder="Ej: 7790895000443"
+        className="bg-kx-surface dark:bg-kx-bg font-mono"
+      />
+    </div>
+
     <div className="space-y-2">
       <Label htmlFor="categoria">Categoría</Label>
       <div className="relative">
@@ -254,7 +266,7 @@ const ProductosSection = () => {
 
   // Forms
   const initialProductState = {
-    nombre: '', codigo_sku: '', categoria_nombre: '', proveedor_id: '',
+    nombre: '', codigo_sku: '', codigo_barras: '', categoria_nombre: '', proveedor_id: '',
     unidad_medida: 'Unidad', unidad_medida_id: '', costo_compra: '', precio_venta: '',
     stock_actual: '', stock_minimo: 5, descripcion: ''
   };
@@ -399,7 +411,8 @@ const ProductosSection = () => {
       const payload = {
         nombre: newProduct.nombre,
         codigo_sku: autoSku,
-        user_id: user.id, 
+        codigo_barras: newProduct.codigo_barras?.trim() || null,  // SCANNER
+        user_id: user.id,
         empresa_id: user.empresa_id,
         costo_compra: parseNumberLocale(newProduct.costo_compra) || 0,
         precio_venta: parseNumberLocale(newProduct.precio_venta) || 0,
@@ -444,6 +457,7 @@ const ProductosSection = () => {
       const updates = {
         nombre: editProduct.nombre,
         codigo_sku: editProduct.codigo_sku,
+        codigo_barras: editProduct.codigo_barras?.trim() || null,  // SCANNER
         categoria_id: categoryId,
         proveedor_id: editProduct.proveedor_id || null,
         unidad_medida: editProduct.unidad_medida,

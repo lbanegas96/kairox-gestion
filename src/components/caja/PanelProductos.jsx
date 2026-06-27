@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, Package } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useToast } from '@/components/ui/use-toast';
 import AlertasStockBanner from './AlertasStockBanner';
 
 const fmt = (n) =>
@@ -61,6 +62,7 @@ function ProductoCard({ producto, onAgregar }) {
 
 function PanelProductos({ onAgregarAlCarrito }) {
   const { user }         = useAuth();
+  const { toast }        = useToast();
   const [productos, setProductos]  = useState([]);
   const [search, setSearch]        = useState('');
   const [loading, setLoading]      = useState(true);
@@ -105,6 +107,51 @@ function PanelProductos({ onAgregarAlCarrito }) {
     setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
 
+  // SCANNER — refocus permanente del input de búsqueda mientras el POS esté abierto.
+  // Si el cajero hace clic en cualquier parte (agregar al carrito, cambiar pago, etc.)
+  // el foco vuelve al buscador después de 300ms para que el siguiente escaneo entre acá.
+  // Excepciones: hay un modal Radix abierto, o el activeElement es un campo editable
+  // distinto del propio (input cantidad/precio, dropdown cliente, etc.).
+  useEffect(() => {
+    const refocus = () => setTimeout(() => {
+      if (document.querySelector('[role="dialog"][data-state="open"]')) return;
+      const active = document.activeElement;
+      const editableTags = ['INPUT', 'TEXTAREA', 'SELECT'];
+      if (active && editableTags.includes(active.tagName) && active !== inputRef.current) return;
+      inputRef.current?.focus();
+    }, 300);
+    document.addEventListener('click', refocus);
+    return () => document.removeEventListener('click', refocus);
+  }, []);
+
+  // SCANNER — Enter en el buscador intenta primero match exacto por codigo_barras.
+  // Si hay match → agregar al carrito, toast breve, limpiar input y refocusear.
+  // Si no hay match → no hacer nada (la búsqueda debounceada por nombre/SKU ya
+  // está mostrando resultados en el grid de abajo; el cajero clickea uno).
+  // El "mismo producto dos veces incrementa cantidad" ya lo maneja
+  // ModoCajaLayout.handleAgregarAlCarrito — no hace falta lógica extra acá.
+  const handleKeyDown = async (e) => {
+    if (e.key !== 'Enter') return;
+    const code = search.trim();
+    if (!code) return;
+    e.preventDefault();
+
+    const { data: producto } = await supabase
+      .from('productos')
+      .select('*')
+      .eq('empresa_id', user.empresa_id)
+      .eq('codigo_barras', code)
+      .eq('activo', true)
+      .maybeSingle();
+
+    if (producto) {
+      onAgregarAlCarrito(producto);
+      toast({ title: `✓ ${producto.nombre} × 1`, duration: 1500 });
+      setSearch('');
+      inputRef.current?.focus();
+    }
+  };
+
   const productosConAlerta = productos.filter(p => getStockLevel(p) !== 'ok');
 
   return (
@@ -118,6 +165,7 @@ function PanelProductos({ onAgregarAlCarrito }) {
             autoFocus
             value={search}
             onChange={e => setSearch(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Buscar por nombre o código..."
             className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-kx-surface border border-kx-border
                        text-kx-text text-sm focus:outline-none focus:border-[rgb(var(--kx-violet))]

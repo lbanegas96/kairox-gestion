@@ -1,5 +1,57 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-26 (sesión 65 Luciano — cierre) — **CAEA backend + decisión de alcance + inicio UX CAE.** CAEA descartado del frontend: AFIP requiere habilitación especial (grandes superficies/zonas sin conectividad), PyMEs típicas no califican. Backend queda como infraestructura durmiente. Roadmap gira a UX de CAE: mejorar experiencia de error/reintento + subida de certificado desde UI. **Última migration aplicada: 104**.
+**Última actualización:** 2026-06-27 (sesión 32 Nadia — cierre) — **Scanner de código de barras + Impresión de ticket post-venta.** Migration 105 agrega columna `codigo_barras` a productos + índice parcial. POS soporta lectores USB/Bluetooth (refocus permanente + Enter handler con query exacta). Modal de éxito post-venta nuevo con botones Ticket 80mm / Imprimir A4. Componente `TicketPrint` headless con CSS dinámico inyectado al imprimir. **Última migration aplicada: 105**.
+
+## Sesión 32 — Nadia (2026-06-27) — Scanner + Impresión ticket
+
+### Migration aplicada
+- **105** — `codigo_barras varchar(50)` en tabla `productos` + índice parcial
+  `(empresa_id, codigo_barras) WHERE codigo_barras IS NOT NULL`
+
+### Archivos modificados
+- `src/components/caja/PanelProductos.jsx` — 3 bloques // SCANNER:
+  refocus global (excepto modales Radix y inputs editables),
+  Enter handler con query exacta por `codigo_barras`, toast 1.5s
+- `src/components/sections/ProductosSection.jsx` — campo "Código de barras
+  (EAN/UPC)" en form alta/edición, `codigo_barras` en initialState +
+  payloads create/update
+- `src/components/caja/TicketPrint.jsx` — **NUEVO** — componente headless
+  oculto via `position:absolute left:-10000px`, layout 80mm (monospace)
+  y A4 (sans-serif), muestra datos empresa (nombre, CUIT, dirección, tel),
+  detalle de items, totales, forma de pago, nota CAE pendiente si
+  `usa_factura_electronica=true`
+- `src/components/caja/ModoCajaLayout.jsx` — fetch empresa extendido a
+  `nombre, afip_cuit, direccion, telefono, usa_factura_electronica`,
+  state `ventaExitosa` + `formatoTicket`, `handlePrint(fmt)` con CSS
+  inyectado dinámicamente (visibility:hidden, no display:none por bug
+  de cascada en #root), Dialog de éxito post-venta con resumen +
+  botones "Ticket 80mm" / "Imprimir A4" / "Nueva venta",
+  mount permanente de `<TicketPrint>`
+- `src/components/caja/PanelCarrito.jsx` — `onVentaExitosa` ahora recibe
+  `{ comprobante: result, items: itemsSnapshot }` — snapshot tomado
+  ANTES de `onModificarCarrito([])`
+
+### Validado en browser (localhost:3000)
+- Scanner: tipear código de barras + Enter agrega producto al carrito
+  sin mostrar dropdown, campo se vacía y refocusea
+- Producto repetido: incrementa cantidad (× 2), no duplica línea
+- Refocus global: clic en carrito → foco vuelve al buscador en 300ms
+- Modal éxito: aparece tras confirmar venta con comprobante, total,
+  cliente y forma de pago
+- Ticket 80mm: preview de impresión correcto con items, totales,
+  datos empresa y nota CAE pendiente
+- Ticket A4: preview correcto
+
+### Nota técnica
+CSS de impresión usa `visibility:hidden` en `body` + `visibility:visible`
+en `#kx-ticket-print` en vez de `display:none` — evita bug donde el
+padre `#root` con `display:none` cascadea y oculta el ticket anidado.
+
+### Pendiente para próximas sesiones (Fase 2)
+- Motor de ofertas configurable (descuentos por producto/categoría/
+  medio de cobro/día/monto mínimo con vigencia) — Complejidad M
+- Billing MercadoPago Suscripciones (Starter/Pro/Business) — Complejidad M-L
+- Programa de fidelización puntos — Complejidad M
+- Multi-sucursal — Complejidad L — requiere coordinar schema con Luciano
 
 ## Sesión 65 (Luciano) — Fix duplicate key + permission denied + simulación circuito cotización
 

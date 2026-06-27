@@ -104,11 +104,14 @@ function PanelCarrito({ carrito, onModificarCarrito, onVentaExitosa }) {
     const pagos = [{ metodo, monto: total }];
     const result = await confirmar({ cart: carrito, selectedClient, pagos });
     if (result) {
+      // TICKET-PRINT — snapshot del carrito ANTES de limpiar; el parent lo
+      // necesita para renderizar el detalle del ticket.
+      const itemsSnapshot = carrito;
       onModificarCarrito([]);
       setSelectedClient(null);
       setClienteId('');
       setMetodo('Efectivo');
-      onVentaExitosa?.(result);
+      onVentaExitosa?.({ comprobante: result, items: itemsSnapshot });
     }
   };
 
