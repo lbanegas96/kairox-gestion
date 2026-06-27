@@ -57,11 +57,10 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
     setVerificando(true);
     setTokenValido(null);
     try {
-      const res = await fetch('https://api.mercadopago.com/users/me', {
-        headers: { Authorization: `Bearer ${accessToken}` },
+      const { data, error } = await supabase.functions.invoke('mp-verify-token', {
+        body: { access_token: accessToken },
       });
-      if (res.ok) {
-        const data = await res.json();
+      if (!error && data?.valid) {
         setTokenValido(true);
         toast({
           title: `✓ Token válido — ${data.nickname ?? data.email ?? 'cuenta verificada'}`,
@@ -69,11 +68,11 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
         });
       } else {
         setTokenValido(false);
-        toast({ title: 'Token inválido o expirado', description: 'Verificá que copiaste el token de producción correctamente.', variant: 'destructive' });
+        toast({ title: 'Token inválido o expirado', description: data?.error ?? 'Verificá que copiaste el token de producción correctamente.', variant: 'destructive' });
       }
     } catch {
       setTokenValido(false);
-      toast({ title: 'Error de red al verificar el token', variant: 'destructive' });
+      toast({ title: 'Error al verificar el token', variant: 'destructive' });
     } finally {
       setVerificando(false);
     }
@@ -92,11 +91,11 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
     try {
       // Verificar contra MP si no fue verificado en esta sesión
       if (tokenValido !== true) {
-        const res = await fetch('https://api.mercadopago.com/users/me', {
-          headers: { Authorization: `Bearer ${accessToken}` },
+        const { data: vData, error: vError } = await supabase.functions.invoke('mp-verify-token', {
+          body: { access_token: accessToken },
         });
-        if (!res.ok) {
-          toast({ title: 'Access Token inválido o expirado', variant: 'destructive' });
+        if (vError || !vData?.valid) {
+          toast({ title: 'Access Token inválido o expirado', description: vData?.error, variant: 'destructive' });
           return;
         }
       }
