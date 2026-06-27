@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-26 (sesión 65 Luciano) — **Fix bugs de facturación + simulación circuito cotización→venta.** Dos bugs diagnosticados y resueltos: (1) `duplicate key` en `numero_venta` (migration 100: self-heal en `obtener_proximo_numero` para tipo 'venta', aplicada ✅); (2) `permission denied for function get_my_empresa_id` spam en logs (migration 101: GRANT EXECUTE TO anon, aplicada ✅). Circuito completo **COT→crear_venta→convertir** simulado en ROLLBACK: numeración correcta (`20260626-006`), stock decrementado, entrega implícita creada, caja registrada, cotización marcada 'convertida' — todo revertido limpiamente. **Última migration aplicada: 101**.
+**Última actualización:** 2026-06-26 (sesión 65 Luciano — continuación) — **CAEA backend completo.** Migration 103+104: tablas `caea_registros`/`caea_comprobantes`, RPC `usar_caea_en_venta`, columnas en `comprobantes`/`empresas`. Bug crítico detectado y corregido (migration 104): `cae_estado='pendiente_caea'` violaba CHECK constraint — corregido a `'no_aplica'`. 4 métodos CAEA en `_shared/wsfe.ts`. 3 Edge Functions deployadas y ACTIVE: `solicitar-caea`, `informar-caea`, `verificar-caea-vigente`. Documentación `CAEA_IMPLEMENTACION.md`. Frontend CAEA pendiente. **Última migration aplicada: 104**.
 
 ## Sesión 65 (Luciano) — Fix duplicate key + permission denied + simulación circuito cotización
 
@@ -3504,6 +3504,41 @@ Dashboard, Inventario (productos + Historial Movimientos), Ventas (Nueva + Histo
 
 ### Sesión 2026-06-04 — Setup + Open Item Management
 - Open Item CC SAP-style, trigger saldo cliente, bugfixes
+
+### Sesión 2026-06-26 — CAEA backend completo (sesión 65 continuación)
+
+**Commits:** `cd69c22` · `aa2c206`
+
+**Migration 103** — Tablas + RPC CAEA:
+- `caea_registros`: un CAEA por empresa+quincena+tipo+PdV; RLS `get_my_empresa_id()`; índice sobre `(empresa_id, estado, fecha_hasta)`
+- `caea_comprobantes`: cola de comprobantes offline pendientes de informar; RLS; FK a `comprobantes`
+- `comprobantes.modo_autorizacion` varchar(10) DEFAULT `'CAE'`; `comprobantes.caea_registro_id` FK
+- `empresas.afip_usa_caea` + `afip_caea_auto_solicitar` boolean
+- RPC `usar_caea_en_venta` — SECURITY DEFINER, guard multi-tenant explícito, REVOKE anon/public
+
+**Migration 104 — Bug fix crítico detectado en revisión**:
+- `usar_caea_en_venta` ponía `cae_estado='pendiente_caea'` → CHECK violation en producción
+- Fix: `cae_estado='no_aplica'` (los comprobantes CAEA no necesitan CAE individual)
+- `modo_autorizacion='CAEA'` + `caea_registro_id` los identifican; `caea_comprobantes.estado_informado` rastrea el ciclo AFIP
+- Agregado `CHECK (modo_autorizacion IN ('CAE','CAEA'))` que faltaba en migration 103
+
+**`_shared/wsfe.ts`** — 4 métodos CAEA nuevos:
+`feCAEASolicitar` · `feCAEAConsultar` · `feCAEAInformarComprobante` · `feCAEASinMovimiento`
+
+**3 Edge Functions deployadas ACTIVE (verify_jwt=true)**:
+- `solicitar-caea`: quincena auto-calculada por fecha ARS, maneja 15004 (ya solicitado) y 15008 (no habilitado aún), upsert idempotente
+- `informar-caea`: batch de 250 comprobantes, fallback `SinMovimiento` si sin movimiento, reintentable si falla parcialmente
+- `verificar-caea-vigente`: solo-DB, sin AFIP, responde <100ms — para POS offline
+
+**`CAEA_IMPLEMENTACION.md`**: guía completa de test en homologación AFIP, errores conocidos, flujo de estados, pendientes frontend.
+
+**Flujo de estados**:
+`solicitar-caea` → `caea_registros.estado='activo'` → `usar_caea_en_venta` (N veces) → `informar-caea` → `FECAEAInformarComprobante | FECAEASinMovimiento` → `estado='informado'`
+
+**Pendiente frontend (próxima sesión)**:
+- UI en ConfiguracionSection tab Facturación: card "CAEA Vigente" con botones Solicitar/Informar
+- Lógica en `useConfirmarVenta`/`NuevaVentaModal` para modo CAEA cuando AFIP no responde
+- Alerta proactiva cuando la quincena está por vencer con comprobantes sin informar
 
 ---
 
