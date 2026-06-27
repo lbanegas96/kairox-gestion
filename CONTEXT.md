@@ -1,5 +1,55 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-26 (sesión 64 Luciano) — **Cierre del circuito POS→CAE + EMISIÓN REAL DE CAE VALIDADA EN VIVO.** Se resolvió el pendiente crítico de Nadia (sesión 31): el POS ahora SÍ encola CAE. Nuevo hook `useAfipConfig` (config AFIP + tipo de comprobante, compartido POS↔NuevaVentaModal) con **fix fiscal: Exento → Factura C** (antes caía a B). `useConfirmarVenta` ahora usa `obtener_proximo_numero('venta')` (atómico) y encola CAE post-venta. `arca-worker` **redeployado v3** con la implementación manual WSAA+WSFE (antes v2 usaba el SDK roto). Función legacy `emitir-cae` **deprecada** (stub 410, era código muerto + SDK). UI: **Reintentar CAE** por fila en el historial. **✅ TEST E2E REAL EN HOMOLOGACIÓN:** se emitió un CAE de verdad contra ARCA (Factura C, CAE `86260498891462`, vto 2026-07-06, número AFIP `0001-00000001`) — el tramo `feCAESolicitar` quedó validado, el circuito completo funciona. **Última migration aplicada: 099** (sin cambios de schema esta sesión). Build ✅.
+**Última actualización:** 2026-06-26 (sesión 65 Luciano) — **Fix bugs de facturación + simulación circuito cotización→venta.** Dos bugs diagnosticados y resueltos: (1) `duplicate key` en `numero_venta` (migration 100: self-heal en `obtener_proximo_numero` para tipo 'venta', aplicada ✅); (2) `permission denied for function get_my_empresa_id` spam en logs (migration 101: GRANT EXECUTE TO anon, aplicada ✅). Circuito completo **COT→crear_venta→convertir** simulado en ROLLBACK: numeración correcta (`20260626-006`), stock decrementado, entrega implícita creada, caja registrada, cotización marcada 'convertida' — todo revertido limpiamente. **Última migration aplicada: 101**.
+
+## Sesión 65 (Luciano) — Fix duplicate key + permission denied + simulación circuito cotización
+
+### Bugs resueltos
+
+- **`duplicate key value violates unique constraint "comprobantes_empresa_id_numero_venta_key"`** (CRÍTICO):
+  - **Causa raíz**: `series_numeracion.proximo_numero` para Nalux/venta estaba desincronizado. El POS viejo (`useConfirmarVenta`) usaba `MAX+1` en el frontend SIN incrementar la serie, mientras `NuevaVentaModal` sí llamaba a `obtener_proximo_numero`. Cuando esta sesión unificó el POS a la RPC atómica, el contador ya estaba detrás del máximo real en `comprobantes` → colisión.
+  - **Fix inmediato** (sesión 64): `UPDATE series_numeracion SET proximo_numero=6 WHERE...` — devolvió `nuevo_proximo=6`.
+  - **Fix durable** ([migration 100](supabase/migrations/100_obtener_proximo_numero_self_heal_venta.sql), **aplicada ✅**): `obtener_proximo_numero` para tipo 'venta' ahora verifica `MAX(numero_venta)` del período actual en `comprobantes` y usa `GREATEST(contador, max+1)` — sólo sube, nunca baja. Imposible colisionar aunque el contador quede atrás por cualquier motivo (import, fix manual, etc.). One-shot UPDATE resincronizó todas las series 'venta' ya desfasadas.
+  - **Verificación**: con contador forzado a 2, la RPC devolvió `20260626-006` correctamente (no `20260626-002`). ✅
+
+- **`permission denied for function get_my_empresa_id`** (spam en logs):
+  - **Causa raíz**: [migration 063](supabase/migrations/063_revocar_anon_y_search_path.sql) revocó EXECUTE de PUBLIC/anon sobre `get_my_empresa_id`. Pero ~30 políticas RLS en tablas como `comprobantes`, `productos`, `clientes`, `caja`, etc. usan `empresa_id = get_my_empresa_id()` y aplican a PUBLIC (todos los roles, incluido anon). Cuando una query llega en contexto anon (realtime, sesión sin JWT), la policy intenta ejecutar la función → "permission denied" → la query ERRORA en vez de devolver 0 filas.
+  - **Por qué es seguro re-grantar**: `get_my_empresa_id` hace `SELECT empresa_id FROM profiles WHERE id = auth.uid()`. Para anon, `auth.uid()` = NULL → devuelve NULL → `empresa_id = NULL` es false → 0 filas. Correcto. Anon NUNCA puede obtener el empresa_id de otro.
+  - **Fix** ([migration 101](supabase/migrations/101_grant_get_my_empresa_id_anon.sql), **aplicada ✅**): `GRANT EXECUTE ON FUNCTION public.get_my_empresa_id() TO anon; GRANT ... TO authenticated;`
+
+### Simulación circuito cotización → venta ✅
+
+Flujo verificado en ROLLBACK como usuario Nalux autenticado:
+
+```
+COT-00013 (Celulares x1 $30.000, aprobada)
+    ↓ obtener_proximo_numero('venta')   → 20260626-006  ✅
+    ↓ crear_venta RPC (Celulares x1)   → comprobante_id creado  ✅
+    ↓ stock_actual 45 → 44              ✅
+    ↓ entrega implícita (origen='implicita', estado='entregado')  ✅
+    ↓ movimiento_caja (Transferencia $30.000)  ✅
+    ↓ UPDATE cotizaciones SET estado='convertida', comprobante_id=...  ✅
+    ↓ ROLLBACK — todo revertido: serie=6, stock=45, cot.estado='aprobada'  ✅
+```
+
+No hay errores de duplicate key ni de permissions. El circuito completo funciona.
+
+### Series de numeración Nalux (estado actual)
+
+| tipo_documento | proximo_numero | periodo_actual |
+|---|---|---|
+| cotizacion | 18 | — |
+| venta | 6 | 20260626 |
+| pedido | 2 | 20260626 |
+| entrega | 50 | 2026 |
+| recepcion | 9 | 2026 |
+| devolucion | 12 | 2026 |
+| nota_debito | 4 | 2026 |
+
+### Pendientes de esta sesión (para próximas)
+- **🟡 Probar en la UI real**: hacer una venta desde cotización en producción y verificar que no aparezca el duplicate key (debería estar resuelto con migration 100).
+- **🟡 Integración MercadoPago** — planeado para esta sesión, pospuesto por los bugs de facturación.
+- **🟡 Confirmar `AFIP_ENVIRONMENT`** en Dashboard → Edge Functions → Secrets.
+- **🟡 Borrar `arca-diag`** del Dashboard (no se puede vía MCP).
 
 ## Sesión 64 (Luciano) — Cierre POS→CAE, fix fiscal Exento→C, redeploy worker, deprecación emitir-cae
 
