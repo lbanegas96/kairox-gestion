@@ -107,6 +107,215 @@ export interface CaeResponse {
   cbteNro: number;
 }
 
+// ── CAEA — Métodos de Código de Autorización Electrónica Anticipado ─────────
+
+export interface CaeaResponse {
+  caea: string;           // 14 dígitos
+  periodo: string;        // YYYYMM
+  orden: 1 | 2;
+  fechaDesde: string;     // YYYY-MM-DD
+  fechaHasta: string;     // YYYY-MM-DD
+  fechaTopeInf: string;   // YYYY-MM-DD — último día para informar
+  fechaProceso: string;   // YYYY-MM-DD
+}
+
+/**
+ * FECAEASolicitar — solicita un CAEA para una quincena.
+ * Error AFIP 15008 = "No existe CAEA para el período" (aún no habilitado).
+ * Error AFIP 15004 = CAEA ya solicitado para ese periodo/orden.
+ */
+export async function feCAEASolicitar(
+  environment: 'production' | 'sandbox',
+  auth: WsfeAuth,
+  ptoVta: number,
+  cbteTipo: number,
+): Promise<CaeaResponse> {
+  const body =
+    `<ar:FECAEASolicitar>${authBlock(auth)}` +
+    `<ar:PtoVta>${ptoVta}</ar:PtoVta>` +
+    `<ar:CbteTipo>${cbteTipo}</ar:CbteTipo>` +
+    `</ar:FECAEASolicitar>`;
+
+  const text = await postSoap(environment, 'FECAEASolicitar', body);
+
+  const errors = collectMsgs(text.match(/<Errors>([\s\S]*?)<\/Errors>/)?.[1] ?? null);
+  if (errors) throw new Error(`WSFE FECAEASolicitar: ${errors}`);
+
+  const caea     = tag(text, 'CAEA');
+  const periodo  = tag(text, 'Periodo');
+  const orden    = tag(text, 'Orden');
+  const fchDesde = tag(text, 'FchVigDesde');
+  const fchHasta = tag(text, 'FchVigHasta');
+  const fchTope  = tag(text, 'FchTopeInf');
+  const fchProc  = tag(text, 'FchProceso');
+
+  if (!caea) throw new Error('WSFE FECAEASolicitar: respuesta sin CAEA');
+
+  return {
+    caea,
+    periodo:       periodo ?? '',
+    orden:         (parseInt(orden ?? '1', 10) as 1 | 2),
+    fechaDesde:    fchToIso(fchDesde ?? '') ?? '',
+    fechaHasta:    fchToIso(fchHasta ?? '') ?? '',
+    fechaTopeInf:  fchToIso(fchTope  ?? '') ?? '',
+    fechaProceso:  fchToIso(fchProc  ?? '') ?? '',
+  };
+}
+
+/**
+ * FECAEAConsultar — consulta si existe CAEA para un periodo/orden.
+ * Devuelve null si no hay CAEA para ese período.
+ */
+export async function feCAEAConsultar(
+  environment: 'production' | 'sandbox',
+  auth: WsfeAuth,
+  periodo: string,
+  orden: 1 | 2,
+): Promise<CaeaResponse | null> {
+  const body =
+    `<ar:FECAEAConsultar>${authBlock(auth)}` +
+    `<ar:Periodo>${periodo}</ar:Periodo>` +
+    `<ar:Orden>${orden}</ar:Orden>` +
+    `</ar:FECAEAConsultar>`;
+
+  const text = await postSoap(environment, 'FECAEAConsultar', body);
+
+  // Error 15008 = no existe CAEA → devolver null en vez de lanzar
+  const errBlock = text.match(/<Errors>([\s\S]*?)<\/Errors>/)?.[1] ?? null;
+  if (errBlock) {
+    const code15008 = errBlock.includes('15008');
+    if (code15008) return null;
+    const errors = collectMsgs(errBlock);
+    throw new Error(`WSFE FECAEAConsultar: ${errors}`);
+  }
+
+  const caea = tag(text, 'CAEA');
+  if (!caea) return null;
+
+  return {
+    caea,
+    periodo:      tag(text, 'Periodo') ?? periodo,
+    orden:        (parseInt(tag(text, 'Orden') ?? String(orden), 10) as 1 | 2),
+    fechaDesde:   fchToIso(tag(text, 'FchVigDesde') ?? '') ?? '',
+    fechaHasta:   fchToIso(tag(text, 'FchVigHasta') ?? '') ?? '',
+    fechaTopeInf: fchToIso(tag(text, 'FchTopeInf')  ?? '') ?? '',
+    fechaProceso: fchToIso(tag(text, 'FchProceso')  ?? '') ?? '',
+  };
+}
+
+export interface CaeaComprobanteItem {
+  docTipo: number;
+  docNro: string;
+  cbteDesde: number;
+  cbteHasta: number;
+  cbteFch: string;    // YYYYMMDD
+  impTotal: number;
+  impNeto: number;
+  impIVA: number;
+  ivaId: number | null;
+}
+
+/**
+ * FECAEAInformarComprobante — informa a AFIP comprobantes emitidos offline.
+ * Envía hasta 250 detalles en un único request (batch).
+ * Lanza Error si AFIP rechaza el batch completo.
+ */
+export async function feCAEAInformarComprobante(
+  environment: 'production' | 'sandbox',
+  auth: WsfeAuth,
+  caea: string,
+  ptoVta: number,
+  cbteTipo: number,
+  items: CaeaComprobanteItem[],
+): Promise<void> {
+  const f2 = (n: number) => n.toFixed(2);
+
+  const detalles = items.map((it, i) => {
+    const ivaNode = it.ivaId != null
+      ? `<ar:Iva><ar:AlicIva><ar:Id>${it.ivaId}</ar:Id>` +
+        `<ar:BaseImp>${f2(it.impNeto)}</ar:BaseImp>` +
+        `<ar:Importe>${f2(it.impIVA)}</ar:Importe>` +
+        `</ar:AlicIva></ar:Iva>`
+      : '';
+
+    return (
+      `<ar:FECAEADetRequest>` +
+      `<ar:Concepto>1</ar:Concepto>` +
+      `<ar:DocTipo>${it.docTipo}</ar:DocTipo>` +
+      `<ar:DocNro>${it.docNro}</ar:DocNro>` +
+      `<ar:CbteDesde>${it.cbteDesde}</ar:CbteDesde>` +
+      `<ar:CbteHasta>${it.cbteHasta}</ar:CbteHasta>` +
+      `<ar:CbteFch>${it.cbteFch}</ar:CbteFch>` +
+      `<ar:ImpTotal>${f2(it.impTotal)}</ar:ImpTotal>` +
+      `<ar:ImpTotConc>0.00</ar:ImpTotConc>` +
+      `<ar:ImpNeto>${f2(it.impNeto)}</ar:ImpNeto>` +
+      `<ar:ImpOpEx>0.00</ar:ImpOpEx>` +
+      `<ar:ImpIVA>${f2(it.impIVA)}</ar:ImpIVA>` +
+      `<ar:ImpTrib>0.00</ar:ImpTrib>` +
+      `<ar:MonId>PES</ar:MonId>` +
+      `<ar:MonCotiz>1.00</ar:MonCotiz>` +
+      ivaNode +
+      `</ar:FECAEADetRequest>`
+    );
+  }).join('');
+
+  const body =
+    `<ar:FECAEAInformarComprobante>${authBlock(auth)}` +
+    `<ar:FeCAEARegInfReq>` +
+    `<ar:Id>1</ar:Id>` +
+    `<ar:CAEA>${caea}</ar:CAEA>` +
+    `<ar:PtoVta>${ptoVta}</ar:PtoVta>` +
+    `<ar:CbteTipo>${cbteTipo}</ar:CbteTipo>` +
+    `<ar:FeCAEADetRequest>${detalles}</ar:FeCAEADetRequest>` +
+    `</ar:FeCAEARegInfReq>` +
+    `</ar:FECAEAInformarComprobante>`;
+
+  const text = await postSoap(environment, 'FECAEAInformarComprobante', body);
+
+  const errors = collectMsgs(text.match(/<Errors>([\s\S]*?)<\/Errors>/)?.[1] ?? null);
+  if (errors) throw new Error(`WSFE FECAEAInformarComprobante: ${errors}`);
+
+  const resultado = tag(text, 'Resultado');
+  if (resultado && resultado !== 'A') {
+    const obs = collectMsgs(text.match(/<Observaciones>([\s\S]*?)<\/Observaciones>/)?.[1] ?? null);
+    throw new Error(`WSFE FECAEAInformarComprobante rechazado (${resultado}): ${obs}`);
+  }
+}
+
+/**
+ * FECAEASinMovimiento — informa a AFIP que una quincena no tuvo movimiento.
+ * Obligatorio si se solicitó un CAEA y no se emitió ningún comprobante con él.
+ */
+export async function feCAEASinMovimiento(
+  environment: 'production' | 'sandbox',
+  auth: WsfeAuth,
+  caea: string,
+  ptoVta: number,
+  cbteTipo: number,
+): Promise<void> {
+  const body =
+    `<ar:FECAEASinMovimiento>${authBlock(auth)}` +
+    `<ar:Movi>` +
+    `<ar:CAEA>${caea}</ar:CAEA>` +
+    `<ar:PtoVta>${ptoVta}</ar:PtoVta>` +
+    `<ar:CbteTipo>${cbteTipo}</ar:CbteTipo>` +
+    `</ar:Movi>` +
+    `</ar:FECAEASinMovimiento>`;
+
+  const text = await postSoap(environment, 'FECAEASinMovimiento', body);
+
+  const errors = collectMsgs(text.match(/<Errors>([\s\S]*?)<\/Errors>/)?.[1] ?? null);
+  if (errors) throw new Error(`WSFE FECAEASinMovimiento: ${errors}`);
+}
+
+/** Convierte YYYYMMDD → YYYY-MM-DD (local, reutilizada por CAEA). */
+function fchToIso(yyyymmdd: string): string | null {
+  if (!yyyymmdd || yyyymmdd.length !== 8) return null;
+  return `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
+}
+
+// ── CAE (existente) ──────────────────────────────────────────────────────────
+
 /** Emite el CAE de un comprobante. Lanza Error si AFIP lo rechaza (con el detalle). */
 export async function feCAESolicitar(
   environment: 'production' | 'sandbox',
