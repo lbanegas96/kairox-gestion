@@ -1,0 +1,116 @@
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL      = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const MP_API_BASE       = 'https://api.mercadopago.com';
+
+const SUBTIPO_MAP: Record<string, string> = {
+  'bank_transfer':  'transferencia',
+  'account_money':  'qr',
+  'credit_card':    'tarjeta_credito',
+  'debit_card':     'tarjeta_debito',
+};
+
+serve(async () => {
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+
+  const { data: integraciones, error: errInt } = await supabase
+    .from('integraciones_bancarias')
+    .select('empresa_id, access_token, cuenta_bancaria_id, ultimo_sync')
+    .eq('proveedor', 'mercadopago')
+    .eq('activo', true);
+
+  if (errInt || !integraciones?.length) {
+    console.log('[mp-sync] Sin integraciones MP activas');
+    return new Response(JSON.stringify({ ok: true, synced: 0 }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  let totalInsertados = 0;
+
+  for (const integ of integraciones) {
+    try {
+      // Si no hay último sync, tomar últimas 72 horas
+      const desde = integ.ultimo_sync
+        ? new Date(integ.ultimo_sync).toISOString()
+        : new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
+      const hasta = new Date().toISOString();
+
+      const mpRes = await fetch(
+        `${MP_API_BASE}/v1/payments/search?sort=date_created&criteria=asc&status=approved&begin_date=${desde}&end_date=${hasta}&limit=100`,
+        { headers: { Authorization: `Bearer ${integ.access_token}` } },
+      );
+
+      if (!mpRes.ok) {
+        console.error('[mp-sync] Error MP API empresa:', integ.empresa_id, mpRes.status);
+        continue;
+      }
+
+      const { results } = await mpRes.json();
+      if (!results?.length) {
+        // Igual actualizamos ultimo_sync para no reescanear
+        await supabase
+          .from('integraciones_bancarias')
+          .update({ ultimo_sync: hasta })
+          .eq('empresa_id', integ.empresa_id)
+          .eq('proveedor', 'mercadopago');
+        continue;
+      }
+
+      for (const pago of results) {
+        const paymentId = String(pago.id);
+
+        // Deduplicar por descripcion
+        const { data: existente } = await supabase
+          .from('movimientos_bancarios')
+          .select('id')
+          .eq('empresa_id', integ.empresa_id)
+          .like('descripcion', `MP #${paymentId}%`)
+          .maybeSingle();
+
+        if (existente) continue;
+
+        const subtipo    = SUBTIPO_MAP[pago.payment_type_id] ?? null;
+        const descripcion = [
+          `MP #${paymentId}`,
+          pago.payment_method_id,
+          pago.payer?.email ?? pago.payer?.identification?.number ?? 'Pagador desconocido',
+        ].filter(Boolean).join(' — ');
+
+        const { error: errRPC } = await supabase.rpc('insertar_movimiento_bancario_externo', {
+          p_empresa_id:         integ.empresa_id,
+          p_cuenta_bancaria_id: integ.cuenta_bancaria_id,
+          p_fecha:              pago.date_approved ?? pago.date_created,
+          p_descripcion:        descripcion,
+          p_monto:              pago.transaction_amount,
+          p_tipo:               'ingreso',
+          p_origen:             'mercadopago',
+          p_subtipo:            subtipo,
+        });
+
+        if (errRPC) {
+          console.error('[mp-sync] Error RPC pago:', paymentId, errRPC);
+        } else {
+          totalInsertados++;
+          console.log('[mp-sync] ✓ Insertado:', paymentId, 'subtipo:', subtipo, 'empresa:', integ.empresa_id);
+        }
+      }
+
+      await supabase
+        .from('integraciones_bancarias')
+        .update({ ultimo_sync: hasta })
+        .eq('empresa_id', integ.empresa_id)
+        .eq('proveedor', 'mercadopago');
+
+    } catch (err) {
+      console.error('[mp-sync] Error empresa:', integ.empresa_id, err);
+    }
+  }
+
+  console.log(`[mp-sync] Completado. Insertados: ${totalInsertados}`);
+  return new Response(JSON.stringify({ ok: true, synced: totalInsertados }), {
+    headers: { 'Content-Type': 'application/json' },
+  });
+});

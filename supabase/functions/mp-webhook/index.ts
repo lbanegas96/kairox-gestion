@@ -54,9 +54,10 @@ serve(async (req) => {
 
     // ── Validar firma HMAC-SHA256 (opcional, si el comercio configuró webhook_secret) ──
     const signature     = req.headers.get('x-signature');
+    const requestId     = req.headers.get('x-request-id') ?? '';
     const webhookSecret = integracion.config?.webhook_secret;
     if (webhookSecret && signature) {
-      const isValid = await validarFirmaMP(signature, paymentId, webhookSecret);
+      const isValid = await validarFirmaMP(signature, paymentId, webhookSecret, requestId);
       if (!isValid) {
         console.error('[mp-webhook] Firma inválida para pago:', paymentId);
         return new Response('Unauthorized', { status: 401 });
@@ -161,6 +162,7 @@ async function validarFirmaMP(
   signatureHeader: string,
   paymentId: string,
   secret: string,
+  requestId = '',
 ): Promise<boolean> {
   try {
     const parts = signatureHeader.split(',');
@@ -168,7 +170,7 @@ async function validarFirmaMP(
     const v1 = parts.find(p => p.startsWith('v1='))?.split('=')[1];
     if (!ts || !v1) return false;
 
-    const message = `id:${paymentId};request-id:;ts:${ts};`;
+    const message = `id:${paymentId};request-id:${requestId};ts:${ts};`;
     const encoder = new TextEncoder();
 
     const key = await crypto.subtle.importKey(
