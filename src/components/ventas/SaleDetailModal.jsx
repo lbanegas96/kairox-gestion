@@ -4,11 +4,11 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Printer, X, Save, Edit2, Loader2, Check } from 'lucide-react';
+import { Printer, X, Save, Edit2, Loader2, Check, RefreshCw, ShieldCheck, ShieldAlert, Clock, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import ComprobantePrintModal from './ComprobantePrintModal';
-import { formatDateTimeAR } from '@/lib/dateUtils';
+import { formatDateTimeAR, formatDateAR } from '@/lib/dateUtils';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import { DocumentFlowPanel } from '@/components/ui/DocumentFlowPanel';
 
@@ -23,6 +23,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
   const [isEditing, setIsEditing] = useState(false);
   const [newStatus, setNewStatus] = useState('');
   const [saving, setSaving] = useState(false);
+  const [reintentandoCae, setReintentandoCae] = useState(false);
 
   useEffect(() => {
     if (open && saleId) {
@@ -101,6 +102,29 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
       toast({ title: "Error", description: "No se pudo actualizar el estado.", variant: "destructive" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleReintentarCae = async () => {
+    setReintentandoCae(true);
+    try {
+      await supabase.from('facturas_pendientes_arca').update({
+        estado: 'pendiente', intentos: 0,
+        proximo_intento: new Date().toISOString(),
+        error_mensaje: null,
+      }).eq('comprobante_id', sale.id);
+
+      await supabase.from('comprobantes').update({
+        cae_estado: 'pendiente', error_afip: null,
+      }).eq('id', sale.id);
+
+      toast({ title: 'CAE reencolado', description: 'El worker reintentará la emisión en los próximos minutos.' });
+      fetchSaleDetails();
+      onUpdateSale?.();
+    } catch (e) {
+      toast({ title: 'Error al reintentar', description: e.message, variant: 'destructive' });
+    } finally {
+      setReintentandoCae(false);
     }
   };
 
@@ -187,6 +211,85 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                   )}
                 </div>
               </div>
+
+              {/* CAE / AFIP PANEL — solo si la empresa usa facturación electrónica */}
+              {sale.cae_estado && sale.cae_estado !== 'no_aplica' && (
+                <div className="bg-kx-surface-2 dark:bg-slate-900/50 p-4 rounded-lg border kairox-border mb-6">
+                  <div className="flex justify-between items-center mb-3">
+                    <div className="text-xs text-slate-500 font-bold uppercase tracking-wider dark:text-kx-text-2">
+                      Facturación Electrónica AFIP
+                    </div>
+                    {sale.cae_estado === 'emitido' && (
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                        <ShieldCheck className="w-3 h-3" /> CAE emitido
+                      </span>
+                    )}
+                    {sale.cae_estado === 'pendiente' && (
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                        <Clock className="w-3 h-3" /> CAE pendiente
+                      </span>
+                    )}
+                    {(sale.cae_estado === 'error' || sale.cae_estado === 'error_definitivo') && (
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                        <ShieldAlert className="w-3 h-3" />
+                        {sale.cae_estado === 'error_definitivo' ? 'Error definitivo' : 'Error CAE'}
+                      </span>
+                    )}
+                  </div>
+
+                  {sale.cae_estado === 'emitido' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                      {sale.cae && (
+                        <div>
+                          <span className="text-xs text-slate-500 dark:text-kx-text-2 block mb-0.5">Número CAE</span>
+                          <span className="font-mono font-semibold text-kx-text dark:text-kx-text">{sale.cae}</span>
+                        </div>
+                      )}
+                      {sale.cae_vencimiento && (
+                        <div>
+                          <span className="text-xs text-slate-500 dark:text-kx-text-2 block mb-0.5">Vencimiento</span>
+                          <span className="text-kx-text dark:text-kx-text">{formatDateAR(sale.cae_vencimiento)}</span>
+                        </div>
+                      )}
+                      {sale.tipo_comprobante_afip && (
+                        <div>
+                          <span className="text-xs text-slate-500 dark:text-kx-text-2 block mb-0.5">Tipo comprobante</span>
+                          <span className="text-kx-text dark:text-kx-text">Factura {sale.tipo_comprobante_afip} · Nro {sale.numero_afip ?? '—'}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {sale.cae_estado === 'pendiente' && (
+                    <p className="text-sm text-amber-600 dark:text-amber-400">
+                      El CAE será procesado automáticamente en los próximos minutos. Podés recargar la página para ver el estado actualizado.
+                    </p>
+                  )}
+
+                  {(sale.cae_estado === 'error' || sale.cae_estado === 'error_definitivo') && (
+                    <div className="space-y-3">
+                      {sale.error_afip && (
+                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3 text-xs text-red-700 dark:text-red-400 font-mono leading-relaxed">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                            <span>{sale.error_afip}</span>
+                          </div>
+                        </div>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-2 text-blue-600 border-blue-300 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-700 dark:hover:bg-blue-900/20"
+                        onClick={handleReintentarCae}
+                        disabled={reintentandoCae}
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${reintentandoCae ? 'animate-spin' : ''}`} />
+                        {reintentandoCae ? 'Reencolando...' : 'Reintentar CAE'}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* PRODUCTS TABLE */}
               <div className="border kairox-border rounded-lg overflow-hidden mb-6">

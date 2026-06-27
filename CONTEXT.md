@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-26 (sesión 65 Luciano — continuación) — **CAEA backend completo.** Migration 103+104: tablas `caea_registros`/`caea_comprobantes`, RPC `usar_caea_en_venta`, columnas en `comprobantes`/`empresas`. Bug crítico detectado y corregido (migration 104): `cae_estado='pendiente_caea'` violaba CHECK constraint — corregido a `'no_aplica'`. 4 métodos CAEA en `_shared/wsfe.ts`. 3 Edge Functions deployadas y ACTIVE: `solicitar-caea`, `informar-caea`, `verificar-caea-vigente`. Documentación `CAEA_IMPLEMENTACION.md`. Frontend CAEA pendiente. **Última migration aplicada: 104**.
+**Última actualización:** 2026-06-26 (sesión 65 Luciano — cierre) — **CAEA backend + decisión de alcance + inicio UX CAE.** CAEA descartado del frontend: AFIP requiere habilitación especial (grandes superficies/zonas sin conectividad), PyMEs típicas no califican. Backend queda como infraestructura durmiente. Roadmap gira a UX de CAE: mejorar experiencia de error/reintento + subida de certificado desde UI. **Última migration aplicada: 104**.
 
 ## Sesión 65 (Luciano) — Fix duplicate key + permission denied + simulación circuito cotización
 
@@ -3535,10 +3535,7 @@ Dashboard, Inventario (productos + Historial Movimientos), Ventas (Nueva + Histo
 **Flujo de estados**:
 `solicitar-caea` → `caea_registros.estado='activo'` → `usar_caea_en_venta` (N veces) → `informar-caea` → `FECAEAInformarComprobante | FECAEASinMovimiento` → `estado='informado'`
 
-**Pendiente frontend (próxima sesión)**:
-- UI en ConfiguracionSection tab Facturación: card "CAEA Vigente" con botones Solicitar/Informar
-- Lógica en `useConfirmarVenta`/`NuevaVentaModal` para modo CAEA cuando AFIP no responde
-- Alerta proactiva cuando la quincena está por vencer con comprobantes sin informar
+**CAEA — Decisión de alcance final**: AFIP requiere habilitación especial para CAEA (grandes superficies, zonas sin conectividad, alto volumen). Las PyMEs típicas de KAIROX **no califican**. El backend (migration 103+104 + 3 Edge Functions) queda como infraestructura durmiente para clientes grandes futuros. **Frontend CAEA descartado del roadmap cercano.** El roadmap gira a mejorar UX de CAE online.
 
 ---
 

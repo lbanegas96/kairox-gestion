@@ -194,8 +194,14 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
       // Payment Method
       if (selectedPayment && sale.forma_pago !== selectedPayment) return false;
 
-      // Status
-      if (selectedStatus && (sale.estado_pago || 'pagada') !== selectedStatus) return false;
+      // Status (incluye filtros especiales de CAE)
+      if (selectedStatus === 'cae_error') {
+        if (!['error', 'error_definitivo'].includes(sale.cae_estado)) return false;
+      } else if (selectedStatus === 'cae_pendiente') {
+        if (sale.cae_estado !== 'pendiente') return false;
+      } else if (selectedStatus && (sale.estado_pago || 'pagada') !== selectedStatus) {
+        return false;
+      }
 
       return true;
     });
@@ -274,6 +280,9 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                <option value="pendiente">Pendiente</option>
                <option value="parcial">Parcial</option>
                <option value="cancelada">Cancelada</option>
+               <option disabled>──────────</option>
+               <option value="cae_error">⚠ Error CAE</option>
+               <option value="cae_pendiente">⏳ CAE pendiente</option>
              </select>
           </div>
         </div>
