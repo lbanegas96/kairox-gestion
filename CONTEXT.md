@@ -3615,14 +3615,22 @@ bank_transfer → transferencia | account_money → qr | credit_card → tarjeta
 - `movimientos_bancarios`: 12 entradas `origen='manual'`, 0 `origen='mercadopago'` (mp-sync aún no corrió)
 - Crons activos: `arca-worker` (*/5, jobid=1) + `mp-sync` (*/30, jobid=2)
 
-**Diagnóstico — pago de $5 (link) no impactó:**
-1. **mp-webhook:** No llegó ningún webhook de MP para el pago. Los cobros por enlace pueden no disparar webhooks si los eventos no están configurados correctamente en MP Developers → App → Webhooks.
-2. **mp-sync:** Recién deployado. `ultimo_sync=null` → primer ciclo escanea últimas 72 horas → **debería encontrar el $5 y los $10.000 de la sesión anterior** en el próximo tick de 30 min.
+**Resultado confirmado al cierre de sesión (mp-sync corrió y capturó todo):**
+
+| Payment ID | Subtipo | Monto | Email pagador | Fecha MP |
+|---|---|---|---|---|
+| `166125731472` | qr | $5.000 | nadiatecera13@gmail.com | 27/06 22:23 |
+| `165295269275` | qr | $5.000 | nadiatecera13@gmail.com | 27/06 22:17 |
+| `165293907565` | qr | $10.000 | Pagador desconocido | 27/06 22:11 |
+| `165294062397` | transferencia | $10.000 | lucianoismael15@hotmail.com | 27/06 22:10 |
+
+Movimientos visibles en KAIROX Bancos con badge "Mercadopago" ✅. Cuenta "Mercado Pago personal" con saldo $115.200.
+
+**Diagnóstico — webhooks:** Los webhooks de MP no llegaron para estos pagos (no hay hits de mp-webhook en logs excepto la simulación). mp-sync actúa como safety net completo; los webhooks serían solo una optimización de latencia.
 
 **Pendiente sesión 67:**
-- Verificar `movimientos_bancarios` para confirmar que mp-sync capturó los pagos pendientes
-- Si no: revisar logs de `mp-sync` en Supabase Edge Functions dashboard
-- Investigar configuración de webhooks en panel MP (evento "Pagos" activo en producción)
+- Ajustes de detalle en la descripción de movimientos MP (ej: mostrar nombre en lugar de email, formatear account_money como "Billetera MP")
+- Investigar por qué los webhooks de MP no llegaron (bajo impacto dado que mp-sync funciona)
 - Opcional: botón "Sincronizar ahora" en `ConfigMercadoPagoModal` para sync manual on-demand
 
 ---
