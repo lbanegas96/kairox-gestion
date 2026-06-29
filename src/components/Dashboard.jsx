@@ -13,6 +13,7 @@ import ReportesSection from '@/components/sections/ReportesSection';
 import UsuariosSection from '@/components/sections/UsuariosSection';
 import ConfiguracionSection from '@/components/sections/ConfiguracionSection';
 import ListasPrecioSection from '@/components/sections/ListasPrecioSection';
+import OfertasSection from '@/components/sections/OfertasSection';
 import PlanCuentasSection from '@/components/sections/PlanCuentasSection';
 import CuentasBancariasSection from '@/components/sections/CuentasBancariasSection';
 import ChequesSection from '@/components/sections/ChequesSection';
@@ -57,6 +58,7 @@ function Dashboard({ user, onLogout, onEnterPOS }) {
       case 'entregas':         return <VentasSection initialTab="entregas" />;
       case 'historial_ventas': return <VentasSection initialTab="historial" />;
       case 'listas_precio': return <ListasPrecioSection />;
+      case 'ofertas':       return <OfertasSection />;
       case 'compra_rapida':          return <ComprasSection initialTab="rapida" />;
       case 'ordenes_compra':         return <ComprasSection initialTab="ordenes" />;
       case 'recepciones_compra':     return <ComprasSection initialTab="recepciones" />;

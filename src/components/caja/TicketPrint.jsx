@@ -1,18 +1,5 @@
 import React from 'react';
 
-// TICKET-PRINT — componente headless usado por ModoCajaLayout para imprimir
-// el comprobante del POS. Vive permanentemente en el DOM (montado al lado del
-// Layout) pero está posicionado fuera de pantalla. Solo se vuelve visible
-// cuando ModoCajaLayout.handlePrint inyecta el <style> @media print y dispara
-// window.print().
-//
-// Props:
-//   - venta:    { id, numero_venta, fecha, total, descuento?, cliente_nombre,
-//                 forma_pago, cae?, cae_vencimiento? }
-//   - items:    [{ nombre, cantidad, precio_venta }]  (snapshot del carrito)
-//   - empresa:  { nombre, afip_cuit?, direccion?, telefono?, usa_factura_electronica? }
-//   - formato:  '80mm' | 'A4'
-
 const formatARS = (n) =>
   Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -27,27 +14,38 @@ const formatFechaHora = (iso) => {
   return `${fecha} ${hora}`;
 };
 
-// TICKET-PRINT — separador horizontal con el ancho correcto según formato
 function Divider({ is80 }) {
   return <div className="my-1">{is80 ? '─'.repeat(40) : <hr className="border-black" />}</div>;
 }
 
-function TicketPrint({ venta, items = [], empresa = {}, formato = '80mm' }) {
+function TicketPrint({ venta, items = [], empresa = {}, formato = '80mm', ofertasCarrito = {} }) {
   if (!venta) return null;
 
   const is80 = formato === '80mm';
-  const subtotal = items.reduce(
+
+  // OFERTAS — calcular subtotal bruto y descuento total desde ofertasCarrito
+  const subtotalBruto = items.reduce(
     (s, it) => s + Number(it.cantidad || 0) * Number(it.precio_venta ?? it.precio_unitario ?? 0),
     0,
   );
-  const descuento = Number(venta.descuento || 0);
+  const descuentoTotal = items.reduce((sum, it) => {
+    const oferta = ofertasCarrito[it.id];
+    if (!oferta) return sum;
+    return sum + (oferta.descuento_monto * Number(it.cantidad || 0));
+  }, 0);
+
   const showCAE = Boolean(venta.cae);
   const caePendiente = !showCAE && empresa.usa_factura_electronica;
+
+  // OFERTAS — helper para obtener precio unitario (con descuento si aplica)
+  const getPunit = (it) => {
+    const oferta = ofertasCarrito[it.id];
+    return oferta ? oferta.precio_final : Number(it.precio_venta ?? it.precio_unitario ?? 0);
+  };
 
   return (
     <div
       id="kx-ticket-print"
-      // TICKET-PRINT — siempre off-screen en pantalla; el @media print lo reposiciona
       style={{ position: 'absolute', left: '-10000px', top: 0 }}
       className={is80
         ? 'kx-print-80mm font-mono text-[11px] leading-tight text-black bg-white'
@@ -83,7 +81,6 @@ function TicketPrint({ venta, items = [], empresa = {}, formato = '80mm' }) {
 
         {/* DETALLE */}
         {is80 ? (
-          // TICKET-PRINT — 80mm: grid monospace para alinear columnas
           <div>
             <div className="grid grid-cols-[3ch_1fr_9ch_9ch] gap-1 font-bold">
               <span>Cant</span>
@@ -93,20 +90,27 @@ function TicketPrint({ venta, items = [], empresa = {}, formato = '80mm' }) {
             </div>
             {items.map((it, idx) => {
               const cant = Number(it.cantidad || 0);
-              const punit = Number(it.precio_venta ?? it.precio_unitario ?? 0);
+              const punit = getPunit(it);
               const sub = cant * punit;
+              const oferta = ofertasCarrito[it.id];
               return (
-                <div key={idx} className="grid grid-cols-[3ch_1fr_9ch_9ch] gap-1">
-                  <span>{cant}</span>
-                  <span className="break-words">{it.nombre || it.descripcion}</span>
-                  <span className="text-right">${formatARS(punit)}</span>
-                  <span className="text-right">${formatARS(sub)}</span>
-                </div>
+                <React.Fragment key={idx}>
+                  <div className="grid grid-cols-[3ch_1fr_9ch_9ch] gap-1">
+                    <span>{cant}</span>
+                    <span className="break-words">{it.nombre || it.descripcion}</span>
+                    <span className="text-right">${formatARS(punit)}</span>
+                    <span className="text-right">${formatARS(sub)}</span>
+                  </div>
+                  {oferta && (
+                    <div className="pl-2 text-[9px]">
+                      &gt; {oferta.oferta_nombre}: -${formatARS(oferta.descuento_monto * cant)}
+                    </div>
+                  )}
+                </React.Fragment>
               );
             })}
           </div>
         ) : (
-          // TICKET-PRINT — A4: tabla
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b-2 border-black">
@@ -119,15 +123,28 @@ function TicketPrint({ venta, items = [], empresa = {}, formato = '80mm' }) {
             <tbody>
               {items.map((it, idx) => {
                 const cant = Number(it.cantidad || 0);
-                const punit = Number(it.precio_venta ?? it.precio_unitario ?? 0);
+                const punit = getPunit(it);
                 const sub = cant * punit;
+                const oferta = ofertasCarrito[it.id];
                 return (
-                  <tr key={idx} className="border-b border-gray-300">
-                    <td className="py-1">{cant}</td>
-                    <td className="py-1">{it.nombre || it.descripcion}</td>
-                    <td className="py-1 text-right">${formatARS(punit)}</td>
-                    <td className="py-1 text-right">${formatARS(sub)}</td>
-                  </tr>
+                  <React.Fragment key={idx}>
+                    <tr className="border-b border-gray-300">
+                      <td className="py-1">{cant}</td>
+                      <td className="py-1">{it.nombre || it.descripcion}</td>
+                      <td className="py-1 text-right">${formatARS(punit)}</td>
+                      <td className="py-1 text-right">${formatARS(sub)}</td>
+                    </tr>
+                    {oferta && (
+                      <tr>
+                        <td colSpan={3} className="py-0 text-xs text-gray-500 pl-6">
+                          {oferta.oferta_nombre}
+                        </td>
+                        <td className="py-0 text-xs text-right text-gray-500">
+                          -${formatARS(oferta.descuento_monto * cant)}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -138,14 +155,21 @@ function TicketPrint({ venta, items = [], empresa = {}, formato = '80mm' }) {
 
         {/* TOTALES */}
         <div className={is80 ? '' : 'flex flex-col items-end'}>
-          <div className={is80 ? 'flex justify-between' : 'w-64 flex justify-between'}>
-            <span>Subtotal:</span>
-            <span>${formatARS(subtotal)}</span>
-          </div>
-          {descuento > 0 && (
+          {descuentoTotal > 0 ? (
+            <>
+              <div className={is80 ? 'flex justify-between' : 'w-64 flex justify-between'}>
+                <span>Subtotal:</span>
+                <span>${formatARS(subtotalBruto)}</span>
+              </div>
+              <div className={is80 ? 'flex justify-between' : 'w-64 flex justify-between'}>
+                <span>Descuentos:</span>
+                <span>-${formatARS(descuentoTotal)}</span>
+              </div>
+            </>
+          ) : (
             <div className={is80 ? 'flex justify-between' : 'w-64 flex justify-between'}>
-              <span>Descuento:</span>
-              <span>${formatARS(descuento)}</span>
+              <span>Subtotal:</span>
+              <span>${formatARS(subtotalBruto)}</span>
             </div>
           )}
           <div className={is80
@@ -160,7 +184,7 @@ function TicketPrint({ venta, items = [], empresa = {}, formato = '80mm' }) {
           </div>
         </div>
 
-        {/* CAE — solo si está autorizado */}
+        {/* CAE */}
         {showCAE && (
           <>
             <Divider is80={is80} />
@@ -173,9 +197,6 @@ function TicketPrint({ venta, items = [], empresa = {}, formato = '80mm' }) {
           </>
         )}
 
-        {/* TICKET-PRINT — aviso si la factura electrónica está activa pero el
-            CAE todavía no fue autorizado por el worker (es async). El cajero
-            puede re-imprimir desde el Historial cuando el CAE esté listo. */}
         {caePendiente && (
           <>
             <Divider is80={is80} />

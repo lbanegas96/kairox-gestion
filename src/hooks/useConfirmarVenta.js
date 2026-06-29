@@ -40,7 +40,7 @@ export function useConfirmarVenta() {
 
   // pagos: Array<{ metodo: string, monto: number }>
   // selectedClient: null | { id, nombre, condicion_iva? }  ← condicion_iva define A/B/C
-  const confirmar = useCallback(async ({ cart, selectedClient, pagos }) => {
+  const confirmar = useCallback(async ({ cart, selectedClient, pagos, ofertasCarrito = {}, descuentosManuales = {} }) => {
     if (!cart?.length) {
       toast({ title: 'Carrito vacío', variant: 'destructive' });
       return null;
@@ -62,7 +62,19 @@ export function useConfirmarVenta() {
       return null;
     }
 
-    const total = cart.reduce((sum, item) => sum + item.precio_venta * item.cantidad, 0);
+    // OFERTAS — calcular total con descuentos aplicados
+    const total = cart.reduce((sum, item) => {
+      const oferta = ofertasCarrito[item.id];
+      const descManual = descuentosManuales[item.id] || 0;
+      let precio = item.precio_venta;
+      if (oferta) {
+        precio = oferta.precio_final;
+        if (oferta.acumulable && descManual > 0) precio = precio * (1 - descManual / 100);
+      } else if (descManual > 0) {
+        precio = precio * (1 - descManual / 100);
+      }
+      return sum + Math.round(precio * 100) / 100 * item.cantidad;
+    }, 0);
 
     setLoading(true);
     try {
@@ -72,13 +84,43 @@ export function useConfirmarVenta() {
         ? pagos.map(p => p.metodo).join(' + ')
         : pagos[0].metodo;
 
-      const itemsPayload = cart.map(item => ({
-        producto_id:     item.id,
-        cantidad:        item.cantidad,
-        precio_unitario: item.precio_venta,
-        subtotal:        item.precio_venta * item.cantidad,
-        alicuota_iva:    item.alicuota_iva ?? '21',
-      }));
+      // OFERTAS — itemsPayload con campos de descuento para crear_venta v2
+      const itemsPayload = cart.map(item => {
+        const oferta = ofertasCarrito[item.id];
+        const descManualPct = descuentosManuales[item.id] || 0;
+        const precioOriginal = item.precio_venta;
+        let precioFinal = precioOriginal;
+        let descuentoPct = 0;
+        let descuentoMonto = 0;
+        let ofertaId = null;
+
+        if (oferta) {
+          precioFinal = oferta.precio_final;
+          descuentoPct = oferta.valor_descuento;
+          descuentoMonto = oferta.descuento_monto;
+          ofertaId = oferta.oferta_id;
+          if (oferta.acumulable && descManualPct > 0) {
+            precioFinal = precioFinal * (1 - descManualPct / 100);
+          }
+        } else if (descManualPct > 0) {
+          precioFinal = precioOriginal * (1 - descManualPct / 100);
+        }
+
+        precioFinal = Math.round(precioFinal * 100) / 100;
+
+        return {
+          producto_id:          item.id,
+          cantidad:             item.cantidad,
+          precio_unitario:      precioFinal,
+          subtotal:             precioFinal * item.cantidad,
+          alicuota_iva:         item.alicuota_iva ?? '21',
+          precio_original:      precioOriginal,
+          descuento_pct:        descuentoPct,
+          descuento_monto:      Math.round(descuentoMonto * 100) / 100,
+          oferta_id:            ofertaId,
+          descuento_manual_pct: descManualPct,
+        };
+      });
 
       const pagosPayload = pagos.map(p => ({
         metodo:         p.metodo,

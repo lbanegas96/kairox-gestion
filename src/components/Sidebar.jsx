@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, ArrowLeftRight, Wallet, FileText,
   Settings, LogOut, Contact, CreditCard, ClipboardList, ShoppingBag,
   BookOpen, Landmark, Truck, PackageCheck, Tag, FileCheck, Receipt,
-  Box, ScrollText, RotateCcw, ChevronDown, ChevronRight as ChevronRightIcon, Monitor,
+  Box, ScrollText, RotateCcw, ChevronDown, ChevronRight as ChevronRightIcon, Monitor, Percent,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
@@ -27,6 +27,7 @@ const NAV_GROUPS = [
       { id: 'clientes',          label: 'Clientes',           icon: Contact },
       { id: 'cuentacorriente',   label: 'Cta. Corriente',    icon: CreditCard },
       { id: 'listas_precio',     label: 'Listas de Precios', icon: Tag },
+      { id: 'ofertas',            label: 'Ofertas',            icon: Percent },
     ],
   },
   {

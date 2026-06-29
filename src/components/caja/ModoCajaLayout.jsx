@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Landmark, History, LogOut, Loader2, X, CheckCircle, ArrowLeft, Printer, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +35,10 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
   // TICKET-PRINT — payload de la última venta exitosa (comprobante + items snapshot)
   const [ventaExitosa, setVentaExitosa] = useState(null);
   const [formatoTicket, setFormatoTicket] = useState('80mm');
+  // OFERTAS — estado del motor de descuentos
+  const [ofertasCarrito, setOfertasCarrito] = useState({});
+  const [descuentosManuales, setDescuentosManuales] = useState({});
+  const [medioPagoSeleccionado, setMedioPagoSeleccionado] = useState('Efectivo');
 
   // Cargar logo y nombre empresa
   useEffect(() => {
@@ -56,6 +60,41 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
       if (empresa) setEmpresaData(empresa);
     });
   }, [user?.empresa_id]);
+
+  // OFERTAS — llamar al RPC cuando cambia el carrito o medio de pago
+  const calcularOfertas = useCallback(async (carritoActual, medioPago) => {
+    if (!carritoActual.length || !user?.empresa_id) {
+      setOfertasCarrito({});
+      return;
+    }
+    const items = carritoActual.map(item => ({
+      producto_id: item.id,
+      categoria_nombre: item.categorias?.nombre ?? null,
+      precio_unitario: item.precio_venta,
+      cantidad: item.cantidad,
+    }));
+    const totalCarrito = carritoActual.reduce(
+      (sum, i) => sum + i.precio_venta * i.cantidad, 0
+    );
+    const { data, error } = await supabase.rpc('calcular_ofertas_carrito', {
+      p_empresa_id: user.empresa_id,
+      p_items: items,
+      p_medio_pago: medioPago || null,
+      p_total_carrito: totalCarrito,
+    });
+    if (!error && data) {
+      const map = {};
+      data.forEach(r => { if (r.oferta_id) map[r.producto_id] = r; });
+      setOfertasCarrito(map);
+    }
+  }, [user?.empresa_id]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      calcularOfertas(carrito, medioPagoSeleccionado);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [carrito, medioPagoSeleccionado, calcularOfertas]);
 
   const horaInicio = currentSession?.apertura_fecha
     ? new Date(currentSession.apertura_fecha).toLocaleTimeString('es-AR', {
@@ -213,7 +252,19 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
         <PanelCarrito
           carrito={carrito}
           onModificarCarrito={setCarrito}
-          onVentaExitosa={(payload) => setVentaExitosa(payload)}
+          ofertasCarrito={ofertasCarrito}
+          descuentosManuales={descuentosManuales}
+          onDescuentoManualChange={(productoId, pct) =>
+            setDescuentosManuales(prev => ({ ...prev, [productoId]: pct }))
+          }
+          medioPago={medioPagoSeleccionado}
+          onMedioPagoChange={setMedioPagoSeleccionado}
+          onVentaExitosa={(payload) => {
+            setVentaExitosa({ ...payload, ofertasCarrito: { ...ofertasCarrito } });
+            setOfertasCarrito({});
+            setDescuentosManuales({});
+            setMedioPagoSeleccionado('Efectivo');
+          }}
         />
       </div>
 
@@ -361,6 +412,7 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
         items={ventaExitosa?.items}
         empresa={empresaData}
         formato={formatoTicket}
+        ofertasCarrito={ventaExitosa?.ofertasCarrito ?? {}}
       />
     </div>
   );

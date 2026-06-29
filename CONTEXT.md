@@ -1,5 +1,56 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-27 (sesión 32 Nadia — cierre) — **Scanner de código de barras + Impresión de ticket post-venta.** Migration 105 agrega columna `codigo_barras` a productos + índice parcial. POS soporta lectores USB/Bluetooth (refocus permanente + Enter handler con query exacta). Modal de éxito post-venta nuevo con botones Ticket 80mm / Imprimir A4. Componente `TicketPrint` headless con CSS dinámico inyectado al imprimir. **Última migration aplicada: 105**.
+**Última actualización:** 2026-06-29 (sesión 33 Nadia — motor de ofertas)
+
+## Sesión 33 — Nadia (2026-06-29) — Motor de Ofertas completo
+
+### Migrations aplicadas
+- **108** — tabla `ofertas` + RLS + índices parciales + 5 columnas nuevas 
+  en `comprobante_items` + 2 columnas en `comprobantes` + RPC 
+  `calcular_ofertas_carrito` + `crear_venta` v2 backward compatible
+  (106 y 107 ya estaban ocupadas por Luciano con mp-sync)
+
+### Archivos nuevos
+- `src/components/sections/OfertasSection.jsx` — panel admin completo:
+  guard de rol admin, stats row, tabla con badges/chips/toggle, 
+  modal crear/editar con 14 campos (nombre, tipo descuento, valor, 
+  producto, categoría, medio de pago, días semana, monto mínimo, 
+  cantidad mínima, vigencia, prioridad, acumulable)
+
+### Archivos modificados
+- `src/components/Sidebar.jsx` — entrada "Ofertas" con ícono Percent en grupo VENTAS
+- `src/components/Dashboard.jsx` — import + case 'ofertas' en renderSection
+- `src/components/caja/ModoCajaLayout.jsx` — states ofertasCarrito + 
+  descuentosManuales + medioPagoSeleccionado, función calcularOfertas 
+  con debounce 300ms, useEffect recalcula al cambiar carrito o medio de pago,
+  snapshot ofertasCarrito en handleVentaExitosa, reset en venta exitosa,
+  prop ofertasCarrito en TicketPrint
+- `src/components/caja/PanelCarrito.jsx` — state metodo subido a 
+  ModoCajaLayout como prop, helper getPrecioConDescuento(), precios 
+  con descuento + precio original tachado + badge oferta, input descuento 
+  manual por item (visible si oferta es acumulable o no hay oferta), 
+  total/totalSinDescuento con línea de ahorro, handleConfirmar pasa 
+  ofertasCarrito y descuentosManuales
+- `src/hooks/useConfirmarVenta.js` — recibe ofertasCarrito y descuentosManuales,
+  itemsPayload incluye precio_original/descuento_pct/descuento_monto/
+  oferta_id/descuento_manual_pct, total calculado con precios finales
+- `src/components/caja/TicketPrint.jsx` — prop ofertasCarrito, getPunit() 
+  usa precio_final de oferta, línea indentada con nombre oferta y monto 
+  en 80mm, fila extra en A4, sección Subtotal/Descuentos/TOTAL cuando 
+  hay descuento
+
+### Validado en browser
+- Oferta "Descuento transferencia 10%" creada y activa
+- POS: precio tachado + precio final verde + badge oferta + ahorro visible
+- Descuento aplicado automáticamente al seleccionar medio de pago Transferencia
+- Venta confirmada con total correcto ($67.500 sobre $75.000)
+- Ticket 80mm y A4: nombre oferta + monto descontado + Subtotal/Descuentos/TOTAL
+- Mi Turno: montos registrados correctamente
+
+### Pendiente para próximas sesiones
+- Vista mobile optimizada — complejidad S (diagnóstico pendiente)
+- Programa de fidelización por puntos — complejidad M
+- Multi-sucursal — complejidad L, coordinar con Luciano
+- Fase 3: Asistente IA, Tiendanube/ML, API pública REST
 
 ## Sesión 32 — Nadia (2026-06-27) — Scanner + Impresión ticket
 
