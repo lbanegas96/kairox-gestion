@@ -29,6 +29,22 @@
 ### 🧹 Limpieza
 - Borrada carpeta `./migrations` vacía (residuo del split histórico; la real es `supabase/migrations`).
 
+### 🟢 Performance (tanda 1)
+- **Migration 116 (aplicada ✅)** — 18 índices btree en foreign keys que no tenían índice de
+  cobertura (cotizaciones.cliente_id, pedidos.cliente_id, productos.categoria_id,
+  comprobante_items.oferta_id, etc.) → joins y DELETE/cascade más rápidos.
+- **Migration 117 (PENDIENTE de aprobación)** — drop del constraint UNIQUE duplicado
+  `uq_comprobantes_empresa_numero` (idéntico al original `comprobantes_empresa_id_numero_venta_key`).
+  Frenado por el guard (cambio destructivo en tabla crítica) — esperar OK de Luciano.
+- **Migration 118 (PENDIENTE de aprobación)** — consolidar políticas RLS redundantes en
+  cuenta_corriente_movimientos / proveedores / tipos_cambio (2 policies con USING idéntico → 1).
+  Elimina 60 de los 95 warnings multiple_permissive_policies. Esperar OK.
+- **NO tocado:** `profiles` (policies admin/self distintas a propósito); `configuracion`
+  (⚠️ las policies admin-only `config_delete/insert/update` están **anuladas** por `configuracion_all`
+  FOR ALL — decisión de negocio: ¿escritura de config solo admin? pendiente de definir).
+- **NO tocado (deliberado):** 78 unused_index — en DB joven "sin uso" suele ser "no ejercitado aún";
+  dropearlos a ciegas es riesgoso. Monitorear con tráfico real antes de borrar.
+
 ### Auditoría completa — pendientes detectados (NO resueltos aún, para priorizar)
 - **Seguridad:** `afip_tickets` con RLS sin policy (1 fila); `auth_leaked_password_protection`
   desactivado (toggle de panel); `pg_net` en schema public.
