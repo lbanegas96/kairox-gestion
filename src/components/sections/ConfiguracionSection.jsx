@@ -252,13 +252,13 @@ const ConfiguracionSection = ({ initialTab }) => {
         setSelectedPvId(prev => prev ?? allPvs[0].id);
       }
 
-      const { data: certVal, error: certErr } = await supabase.rpc('vault_secret_read', {
-        p_name: `afip_cert_${user.empresa_id}`,
-      });
+      // Estado del certificado AFIP: usamos afip_cert_status() que devuelve solo
+      // un booleano scoped a la empresa del caller — NO expone el secreto del vault.
+      const { data: certExists, error: certErr } = await supabase.rpc('afip_cert_status');
       if (certErr) {
         setCertStatus(false);
       } else {
-        setCertStatus(certVal != null && certVal !== '');
+        setCertStatus(certExists === true);
       }
     } catch (e) {
       console.error('[AFIP] Error al cargar config:', e);

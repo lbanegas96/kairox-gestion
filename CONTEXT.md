@@ -1,5 +1,45 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-30 (sesión 35 Luciano — Puente Caja↔Bancos + responsive fix + mp-sync descripciones + motor ofertas E2E)
+**Última actualización:** 2026-06-30 (sesión 36 Luciano — auditoría general + fixes de seguridad críticos)
+
+## Sesión 36 — Luciano (2026-06-30) — Auditoría general del sistema + hardening
+
+### 🔴 CRÍTICO resuelto — fuga cross-tenant de claves AFIP
+- **Migration 113** — `vault_secret_read(text)` tenía EXECUTE para `authenticated` (migration 091)
+  y hacía `SELECT decrypted_secret ... WHERE name = p_name` SIN filtro de empresa. Cualquier
+  usuario logueado podía leer la clave privada AFIP (`afip_key_<otra_empresa>`) o el certificado
+  de CUALQUIER empresa vía `/rest/v1/rpc/vault_secret_read` → suplantación fiscal.
+- **Fix:** nueva función `afip_cert_status()` (SECURITY DEFINER) que devuelve SOLO un booleano
+  scoped a `get_my_empresa_id()`, sin exponer el secreto. REVOKE de `vault_secret_read` a
+  authenticated/public/anon → vuelve a ser service_role-only (invariante restaurado).
+- **Frontend:** [ConfiguracionSection.jsx:255](src/components/sections/ConfiguracionSection.jsx)
+  ahora llama `afip_cert_status` en vez de leer el secreto. Verificado: ACL = solo postgres/service_role.
+
+### 🟠 Hardening — funciones-trigger no invocables como RPC
+- **Migration 114** — REVOKE EXECUTE de 15 funciones que devuelven `trigger`
+  (`fn_update_cliente_saldo`, `handle_new_user`, `fn_oc_update_stock`, `sync_uala_to_bancos`,
+  `fn_queue_factura_arca`, etc.) a PUBLIC/anon/authenticated. Una función-trigger nunca debe ser
+  RPC-callable. SEGURO: la ejecución de un trigger no chequea EXECUTE. Verificado: 0 trigger-fns expuestas.
+
+### 🟢 Performance — saldo bancario agregado en SQL
+- **Migration 115** — RPC `saldos_bancarios()` calcula `Σ(ingreso) − Σ(egreso)` por cuenta en la
+  base (antes: traía TODOS los movimientos al cliente y sumaba en JS). SECURITY DEFINER scoped a empresa.
+- `cuentasBancariasService.getSaldos()` nuevo método; `CuentasBancariasSection` usa la RPC.
+  `computeSaldos` queda como helper (sin uso directo).
+
+### 🧹 Limpieza
+- Borrada carpeta `./migrations` vacía (residuo del split histórico; la real es `supabase/migrations`).
+
+### Auditoría completa — pendientes detectados (NO resueltos aún, para priorizar)
+- **Seguridad:** `afip_tickets` con RLS sin policy (1 fila); `auth_leaked_password_protection`
+  desactivado (toggle de panel); `pg_net` en schema public.
+- **Performance advisors (192):** 95 multiple_permissive_policies, 78 unused_index,
+  18 unindexed_foreign_keys, 1 duplicate_index.
+- **Residuos:** edge functions muertas (`arca-diag`, `emitir-cae` stub 410, `mp-verify-token`);
+  ~12 .md en root posiblemente obsoletos; 91 console.log en 35 archivos; 26 vulnerabilidades npm.
+- **Deuda:** AFIP a producción (cert real + `AFIP_ENVIRONMENT=production`); bundle 3,26 MB sin
+  code-splitting; sin tests automatizados de RLS multi-tenant; retiros/egresos MP; webhook MP.
+
+---
 
 ## Sesión 35 — Luciano (2026-06-30) — Puente Caja↔Bancos + Fixes varios
 

@@ -139,6 +139,18 @@ export const movimientosService = {
     if (count === 0) throw new Error('No se encontró el movimiento o no tenés permiso para eliminarlo.');
   },
 
+  // Saldo agregado por cuenta calculado en SQL (RPC saldos_bancarios).
+  // Reemplaza al patrón de traer todos los movimientos y sumar en el cliente.
+  async getSaldos(): Promise<Map<string, number>> {
+    const { data, error } = await supabase.rpc('saldos_bancarios');
+    if (error) throw new Error(error.message);
+    return new Map<string, number>(
+      (data ?? []).map((r: { cuenta_bancaria_id: string; saldo: number | string }) =>
+        [r.cuenta_bancaria_id, Number(r.saldo)]
+      )
+    );
+  },
+
   computeSaldos(
     cuentas: CuentaBancaria[],
     movimientos: MovimientoBancario[]

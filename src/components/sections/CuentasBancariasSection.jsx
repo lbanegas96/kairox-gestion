@@ -569,19 +569,14 @@ function CuentasBancariasSection() {
     enabled: !!empresaId,
   });
 
-  // FIX-SALDO-REAL — query sin filtros, fuente de verdad para los saldos
-  // TODO: optimizar a futuro con RPC que calcule SUM agregado en SQL
-  // en vez de traer todos los movimientos al cliente (FIX-SALDO-REAL)
-  const { data: movimientosParaSaldo = [] } = useQuery({
+  // FIX-SALDO-REAL — saldo agregado por cuenta calculado en SQL (RPC saldos_bancarios).
+  // Antes se traían TODOS los movimientos al cliente y se sumaba en JS; ahora la base
+  // devuelve un saldo por cuenta. Es la fuente de verdad de los saldos (sin filtros de tabla).
+  const { data: saldos = new Map() } = useQuery({
     queryKey: CB_KEYS.movimientosSaldo(empresaId),
-    queryFn: () => movimientosService.getAll(empresaId, {}),
+    queryFn: () => movimientosService.getSaldos(),
     enabled: !!empresaId,
   });
-
-  const saldos = useMemo(
-    () => movimientosService.computeSaldos(cuentas, movimientosParaSaldo),
-    [cuentas, movimientosParaSaldo]
-  );
 
   const totalGeneral = useMemo(
     () => [...saldos.values()].reduce((a, b) => a + b, 0),
