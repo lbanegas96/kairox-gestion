@@ -29,19 +29,20 @@
 ### 🧹 Limpieza
 - Borrada carpeta `./migrations` vacía (residuo del split histórico; la real es `supabase/migrations`).
 
-### 🟢 Performance (tanda 1)
-- **Migration 116 (aplicada ✅)** — 18 índices btree en foreign keys que no tenían índice de
-  cobertura (cotizaciones.cliente_id, pedidos.cliente_id, productos.categoria_id,
-  comprobante_items.oferta_id, etc.) → joins y DELETE/cascade más rápidos.
-- **Migration 117 (PENDIENTE de aprobación)** — drop del constraint UNIQUE duplicado
-  `uq_comprobantes_empresa_numero` (idéntico al original `comprobantes_empresa_id_numero_venta_key`).
-  Frenado por el guard (cambio destructivo en tabla crítica) — esperar OK de Luciano.
-- **Migration 118 (PENDIENTE de aprobación)** — consolidar políticas RLS redundantes en
-  cuenta_corriente_movimientos / proveedores / tipos_cambio (2 policies con USING idéntico → 1).
-  Elimina 60 de los 95 warnings multiple_permissive_policies. Esperar OK.
-- **NO tocado:** `profiles` (policies admin/self distintas a propósito); `configuracion`
-  (⚠️ las policies admin-only `config_delete/insert/update` están **anuladas** por `configuracion_all`
-  FOR ALL — decisión de negocio: ¿escritura de config solo admin? pendiente de definir).
+### 🟢 Performance (tanda 1 — toda aplicada ✅)
+- **Migration 116** — 18 índices btree en foreign keys que no tenían índice de cobertura
+  (cotizaciones.cliente_id, pedidos.cliente_id, productos.categoria_id, comprobante_items.oferta_id,
+  etc.) → joins y DELETE/cascade más rápidos.
+- **Migration 117** — drop del constraint UNIQUE duplicado `uq_comprobantes_empresa_numero`
+  (idéntico al original `comprobantes_empresa_id_numero_venta_key`, que se mantiene). Unicidad intacta.
+- **Migration 118** — consolidadas políticas RLS redundantes en cuenta_corriente_movimientos /
+  proveedores / tipos_cambio (2 policies con USING idéntico → 1). Sin cambio de permisos efectivos.
+- **Migration 119** — `configuracion`: reescritas 9 policies solapadas → 4 limpias.
+  **Cambio de comportamiento (decidido por Luciano):** lectura abierta a la empresa, pero
+  **escritura (insert/update/delete) ahora SOLO admin** (`is_admin()`). Antes cualquier usuario de
+  la empresa podía editar config. ⚠️ Follow-up sugerido: gatear ConfiguracionSection en la UI a
+  admins (hoy un no-admin que abra Configuración y guarde recibirá error RLS).
+- **NO tocado:** `profiles` (policies admin/self distintas a propósito).
 - **NO tocado (deliberado):** 78 unused_index — en DB joven "sin uso" suele ser "no ejercitado aún";
   dropearlos a ciegas es riesgoso. Monitorear con tráfico real antes de borrar.
 
