@@ -1,5 +1,39 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-30 (sesión 34 Nadia — responsive mobile + fixes bancos/MP)
+**Última actualización:** 2026-06-30 (sesión 35 Luciano — Puente Caja↔Bancos + responsive fix + mp-sync descripciones + motor ofertas E2E)
+
+## Sesión 35 — Luciano (2026-06-30) — Puente Caja↔Bancos + Fixes varios
+
+### Migrations aplicadas
+- **110** — REVOKE anon en `calcular_ofertas_carrito` (SECURITY DEFINER sin REVOKE en migration 108)
+- **111** — tabla `metodo_pago_cuenta_bancaria`: mapea métodos de pago del POS a cuentas bancarias
+- **112** — `crear_venta` v3: puente Caja↔Bancos — inserta `movimiento_bancario` automático cuando hay mapeo activo en migration 111. Efectivo y CC nunca crean movimiento bancario.
+
+### Archivos modificados
+- `supabase/functions/mp-sync/index.ts` — `METHOD_LABEL` map: `account_money` → "Billetera MercadoPago", `cvu` → "Transferencia CVU", etc. Deployada como v4 (ACTIVE).
+- `src/components/sections/ConfiguracionSection.jsx` — nueva sección "Puente Caja → Bancos" en tab Integraciones: dropdown Transferencia/Tarjeta → cuenta bancaria, upsert/delete con toggle.
+- `src/components/sections/ProductosSection.jsx` — responsive fix tabla movimientos inventario: wrapper `overflow-x-auto` + `whitespace-nowrap` en th.
+
+### Validado
+- `calcular_ofertas_carrito` RPC: Termo Stanley $65.000 → desc $6.500 (10%) → $58.500 ✅
+- Build producción: exit 0 ✅
+- mp-sync v4 deployada y activa en Supabase ✅
+- Vercel deploy: READY ✅
+
+### Cómo usar el Puente Caja↔Bancos
+1. Ir a Configuración → Integraciones → sección "Puente Caja → Bancos"
+2. Para cada método (Transferencia, Tarjeta) seleccionar la cuenta bancaria destino
+3. Click "Guardar mapeo"
+4. Desde ese momento, cada venta confirmada con ese método creará un `movimiento_bancario` automático con `origen='caja'`
+
+### Pendiente para próximas sesiones
+- **AFIP camino a producción**: cert real + PdV real + `AFIP_ENVIRONMENT=production` en Supabase Secrets
+- **Probar venta real desde UI** con el puente bancario activo (configurar mapeo y hacer venta de prueba)
+- **Webhook MP**: registrar URL en panel MP Developers (decisión de Luciano)
+- **Retiros/egresos MP**: Released Money report API — arquitectura pendiente
+- **Programa de fidelización por puntos** — Complejidad M
+- **Multi-sucursal** — Complejidad L, requiere coordinación de schema
+
+---
 
 ## Sesión 34 — Nadia (2026-06-30) — Responsive mobile + Fixes Bancos/MP
 

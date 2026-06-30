@@ -182,6 +182,12 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [showConfigUala,  setShowConfigUala]  = useState(false);
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
+  // ── Puente Caja ↔ Bancos ──────────────────────────────────────────────────
+  const METODOS_BANCARIOS = ['Transferencia', 'Tarjeta'];
+  const [mapeosCuentas, setMapeosCuentas] = useState({});
+  const [cuentasBancariasLista, setCuentasBancariasLista] = useState([]);
+  const [savingMapeos, setSavingMapeos] = useState(false);
+
   // ── Tab 6: Alertas ────────────────────────────────────────────────────────
   const ALERTA_KEYS = [
     'alerta_stock_bajo', 'alerta_stock_umbral',
@@ -541,6 +547,44 @@ const ConfiguracionSection = ({ initialTab }) => {
   };
 
   useEffect(() => { reloadIntegracionUala(); }, [user?.empresa_id]);
+
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    supabase.from('cuentas_bancarias').select('id, nombre, banco')
+      .eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre')
+      .then(({ data }) => setCuentasBancariasLista(data ?? []));
+    supabase.from('metodo_pago_cuenta_bancaria').select('metodo_pago, cuenta_bancaria_id')
+      .eq('empresa_id', user.empresa_id)
+      .then(({ data }) => {
+        const m = {};
+        (data ?? []).forEach(r => { m[r.metodo_pago] = r.cuenta_bancaria_id; });
+        setMapeosCuentas(m);
+      });
+  }, [user?.empresa_id]);
+
+  const handleSaveMapeos = async () => {
+    if (!user?.empresa_id) return;
+    setSavingMapeos(true);
+    try {
+      for (const metodo of METODOS_BANCARIOS) {
+        const cuentaId = mapeosCuentas[metodo];
+        if (cuentaId) {
+          await supabase.from('metodo_pago_cuenta_bancaria').upsert(
+            { empresa_id: user.empresa_id, metodo_pago: metodo, cuenta_bancaria_id: cuentaId, activo: true },
+            { onConflict: 'empresa_id,metodo_pago' }
+          );
+        } else {
+          await supabase.from('metodo_pago_cuenta_bancaria')
+            .delete().eq('empresa_id', user.empresa_id).eq('metodo_pago', metodo);
+        }
+      }
+      toast({ title: '✓ Mapeo guardado', description: 'Las ventas acreditarán automáticamente en la cuenta configurada.' });
+    } catch (e) {
+      toast({ title: 'Error al guardar mapeo', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingMapeos(false);
+    }
+  };
 
   const fetchUnidadesMedida = async () => {
     if (!user?.empresa_id) return;
@@ -2242,6 +2286,45 @@ const ConfiguracionSection = ({ initialTab }) => {
               estado="proximamente"
               logo="📊"
             />
+          </div>
+
+          {/* ── Puente Caja ↔ Bancos ── */}
+          <div className="mt-6 kairox-bg-card border kairox-border rounded-xl shadow-sm p-5">
+            <h4 className="font-semibold text-kx-text text-sm mb-1 flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-kx-accent" />
+              Puente Caja → Bancos
+            </h4>
+            <p className="text-xs text-kx-text-2 mb-4 leading-relaxed">
+              Cuando se confirma una venta con estos métodos de pago, se crea automáticamente un movimiento
+              en la cuenta bancaria seleccionada. Efectivo y Cuenta Corriente nunca se acreditan en Bancos.
+            </p>
+            <div className="space-y-3">
+              {METODOS_BANCARIOS.map(metodo => (
+                <div key={metodo} className="flex items-center gap-3">
+                  <span className="w-32 text-sm font-medium text-kx-text shrink-0">{metodo}</span>
+                  <Select
+                    value={mapeosCuentas[metodo] ?? '__none__'}
+                    onValueChange={v => setMapeosCuentas(prev => ({ ...prev, [metodo]: v === '__none__' ? '' : v }))}
+                  >
+                    <SelectTrigger className="flex-1 h-9 text-sm kairox-input">
+                      <SelectValue placeholder="— Sin acreditación bancaria —" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Sin acreditación bancaria —</SelectItem>
+                      {cuentasBancariasLista.map(cb => (
+                        <SelectItem key={cb.id} value={cb.id}>{cb.nombre} ({cb.banco})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button size="sm" onClick={handleSaveMapeos} disabled={savingMapeos} className="gap-2">
+                {savingMapeos ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                Guardar mapeo
+              </Button>
+            </div>
           </div>
         </TabsContent>
 

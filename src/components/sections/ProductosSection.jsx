@@ -792,14 +792,15 @@ const ProductosSection = () => {
              </div>
 
              <div className="rounded-lg border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface overflow-hidden shadow-sm">
+               <div className="overflow-x-auto">
                <table className="w-full text-sm text-left">
                  <thead className="bg-kx-surface-2 dark:bg-slate-800/50 border-b border-kx-border dark:border-kx-border text-slate-500 dark:text-kx-text-2 font-medium">
                    <tr>
-                     <th className="p-4">Fecha</th>
-                     <th className="p-4">Producto</th>
-                     <th className="p-4">Tipo</th>
-                     <th className="p-4">Motivo</th>
-                     <th className="p-4 text-right">Cantidad</th>
+                     <th className="p-4 whitespace-nowrap">Fecha</th>
+                     <th className="p-4 whitespace-nowrap">Producto</th>
+                     <th className="p-4 whitespace-nowrap">Tipo</th>
+                     <th className="p-4 whitespace-nowrap">Motivo</th>
+                     <th className="p-4 text-right whitespace-nowrap">Cantidad</th>
                    </tr>
                  </thead>
                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -827,6 +828,7 @@ const ProductosSection = () => {
                     )}
                  </tbody>
                </table>
+               </div>
              </div>
           </TabsContent>
        </Tabs>
