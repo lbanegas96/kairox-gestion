@@ -181,7 +181,7 @@ function PanelCarrito({
 
   return (
     <div
-      className="w-[360px] lg:w-[420px] flex-shrink-0 flex flex-col"
+      className="w-full md:w-[360px] lg:w-[420px] flex-shrink-0 flex flex-col"
       style={{ borderLeft: '1px solid rgb(var(--kx-border))' }}
     >
       {/* Selector de cliente */}

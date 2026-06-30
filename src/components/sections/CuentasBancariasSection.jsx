@@ -202,6 +202,7 @@ function MovimientoModal({ open, onClose, cuentas, empresaId, defaultCuentaId })
       // Invalidar usando solo el prefijo para que matchee con cualquier queryKey
       // que tenga filters aplicados (CB_KEYS.movimientos arma [..., empresaId, filters]).
       qc.invalidateQueries({ queryKey: ['movimientos_bancarios', empresaId] });
+      qc.invalidateQueries({ queryKey: CB_KEYS.movimientosSaldo(empresaId) }); // FIX-SALDO-REAL
       toast({ title: 'Movimiento registrado', className: 'bg-green-600 text-white' });
       onClose();
     },
@@ -404,6 +405,7 @@ function ImportCSVModal({ open, onClose, cuentas, empresaId }) {
       // Invalidar usando solo el prefijo para que matchee con cualquier queryKey
       // que tenga filters aplicados (CB_KEYS.movimientos arma [..., empresaId, filters]).
       qc.invalidateQueries({ queryKey: ['movimientos_bancarios', empresaId] });
+      qc.invalidateQueries({ queryKey: CB_KEYS.movimientosSaldo(empresaId) }); // FIX-SALDO-REAL
       toast({ title: `${count} movimientos importados`, className: 'bg-green-600 text-white' });
       onClose();
     } catch (e) {
@@ -545,6 +547,7 @@ function CuentasBancariasSection() {
   const [cuentaModal, setCuentaModal] = useState({ open: false, cuenta: null });
   const [movModal, setMovModal] = useState({ open: false, cuentaId: '' });
   const [csvModal, setCsvModal] = useState(false);
+  const [syncing, setSyncing] = useState(false); // FIX-MP-SYNC
 
   const movFilters = useMemo(() => ({
     cuentaId: filterCuentaId !== 'todas' ? filterCuentaId : undefined,
@@ -559,15 +562,25 @@ function CuentasBancariasSection() {
     enabled: !!empresaId,
   });
 
-  const { data: movimientos = [], isLoading: loadingMovs } = useQuery({
+  // FIX-SALDO-REAL — query con filtros SOLO para la tabla de movimientos
+  const { data: movimientosTabla = [], isLoading: loadingMovs } = useQuery({
     queryKey: CB_KEYS.movimientos(empresaId, movFilters),
     queryFn: () => movimientosService.getAll(empresaId, movFilters),
     enabled: !!empresaId,
   });
 
+  // FIX-SALDO-REAL — query sin filtros, fuente de verdad para los saldos
+  // TODO: optimizar a futuro con RPC que calcule SUM agregado en SQL
+  // en vez de traer todos los movimientos al cliente (FIX-SALDO-REAL)
+  const { data: movimientosParaSaldo = [] } = useQuery({
+    queryKey: CB_KEYS.movimientosSaldo(empresaId),
+    queryFn: () => movimientosService.getAll(empresaId, {}),
+    enabled: !!empresaId,
+  });
+
   const saldos = useMemo(
-    () => movimientosService.computeSaldos(cuentas, movimientos),
-    [cuentas, movimientos]
+    () => movimientosService.computeSaldos(cuentas, movimientosParaSaldo),
+    [cuentas, movimientosParaSaldo]
   );
 
   const totalGeneral = useMemo(
@@ -579,6 +592,7 @@ function CuentasBancariasSection() {
     mutationFn: (id) => movimientosService.delete(id, empresaId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['movimientos_bancarios', empresaId] });
+      qc.invalidateQueries({ queryKey: CB_KEYS.movimientosSaldo(empresaId) }); // FIX-SALDO-REAL
       toast({ title: 'Movimiento eliminado', className: 'bg-green-600 text-white' });
     },
     onError: (e) => toast({ title: 'Error al eliminar', description: e.message, variant: 'destructive' }),
@@ -592,6 +606,28 @@ function CuentasBancariasSection() {
     },
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
+
+  // FIX-MP-SYNC — sincronización manual de pagos MercadoPago
+  // NOTA: mp-sync ignora el body y sincroniza TODAS las integraciones activas.
+  // Se pasa empresa_id igual para forward-compat si la función filtra por empresa
+  // a futuro (refactor pendiente con Luciano).
+  const handleSyncMP = async () => {
+    setSyncing(true);
+    try {
+      const { error } = await supabase.functions.invoke('mp-sync', {
+        body: { empresa_id: empresaId },
+      });
+      if (error) throw error;
+      qc.invalidateQueries({ queryKey: ['movimientos_bancarios', empresaId] });
+      qc.invalidateQueries({ queryKey: CB_KEYS.movimientosSaldo(empresaId) });
+      qc.invalidateQueries({ queryKey: CB_KEYS.cuentas(empresaId) });
+      toast({ title: 'Movimientos actualizados', className: 'bg-green-600 text-white' });
+    } catch (e) {
+      toast({ title: 'Error al actualizar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   if (!empresaId) return null;
 
@@ -609,6 +645,11 @@ function CuentasBancariasSection() {
           </p>
         </div>
         <div className="flex gap-2">
+          {/* FIX-MP-SYNC */}
+          <Button variant="outline" size="sm" onClick={handleSyncMP} disabled={syncing}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Actualizando...' : 'Actualizar'}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setCsvModal(true)}>
             <Upload className="w-4 h-4 mr-2" /> Importar CSV
           </Button>
@@ -651,7 +692,7 @@ function CuentasBancariasSection() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="cuentas">Cuentas ({cuentas.length})</TabsTrigger>
-          <TabsTrigger value="movimientos">Movimientos ({movimientos.length})</TabsTrigger>
+          <TabsTrigger value="movimientos">Movimientos ({movimientosTabla.length})</TabsTrigger>
           <TabsTrigger value="conciliacion">Conciliación</TabsTrigger>
         </TabsList>
 
@@ -763,7 +804,7 @@ function CuentasBancariasSection() {
           {/* Tabla */}
           {loadingMovs ? (
             <div className="flex justify-center py-12"><RefreshCw className="w-6 h-6 animate-spin text-kx-text-3" /></div>
-          ) : movimientos.length === 0 ? (
+          ) : movimientosTabla.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-kx-text-3">
               <Wallet className="w-10 h-10 opacity-30" />
               <p className="text-sm font-medium">Sin movimientos</p>
@@ -785,7 +826,7 @@ function CuentasBancariasSection() {
                     </tr>
                   </thead>
                   <tbody className="divide-y dark:divide-slate-800">
-                    {movimientos.map(m => (
+                    {movimientosTabla.map(m => (
                       <tr key={m.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/40 transition-colors">
                         <td className="px-4 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">
                           {formatDateAR(m.fecha)}

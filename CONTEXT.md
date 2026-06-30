@@ -1,5 +1,42 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-29 (sesión 33 Nadia — motor de ofertas)
+**Última actualización:** 2026-06-30 (sesión 34 Nadia — responsive mobile + fixes bancos/MP)
+
+## Sesión 34 — Nadia (2026-06-30) — Responsive mobile + Fixes Bancos/MP
+
+### Migrations aplicadas
+- **109** — cron mp-sync cada 2 minutos (antes 30 min, migration 107)
+
+### Archivos modificados
+- `src/components/caja/ModoCajaLayout.jsx` — POS mobile: state tabMobile,
+  tab bar md:hidden con badge contador, wrapper flex-col md:flex-row,
+  wrappers condicionales para PanelProductos y PanelCarrito, botón 
+  flotante "Ver carrito" con total y contador
+- `src/components/caja/PanelCarrito.jsx` — w-full md:w-[360px] lg:w-[420px]
+- `src/components/sections/DashboardSection.jsx` — hero row: 
+  grid-cols-1 sm:grid-cols-[1.4fr_1fr_1fr]
+- `src/services/cuentasBancariasService.ts` — nuevo key 
+  CB_KEYS.movimientosSaldo para query sin filtros
+- `src/components/sections/CuentasBancariasSection.jsx` — query 
+  movimientosParaSaldo separada (FIX-SALDO-REAL), botón Actualizar 
+  con handler handleSyncMP (FIX-MP-SYNC)
+- `supabase/functions/mp-sync/index.ts` — CORS headers + OPTIONS 
+  temprano (FIX-CORS-MP-SYNC), redeployada como v2
+
+### Validado en browser
+- POS mobile: tabs Productos/Carrito funcionando en iPhone SE 375px,
+  botón flotante aparece al agregar producto, desktop sin cambios
+- Dashboard mobile: hero row apila en 1 columna en mobile
+- Bancos: saldo total se mantiene fijo al aplicar filtro Tipo=Ingresos
+- Botón Actualizar: toast verde, sin error CORS, sync manual funcional
+- Transferencia real de prueba a MP captada correctamente como ingreso
+
+### Pendiente para próximas sesiones
+- Webhook MP: registrar URL en panel MP Developers — decisión de Luciano
+- Retiros/egresos de MP: Released Money report API — arquitectura pendiente
+- Puente Caja ↔ Cuentas Bancarias: cuando Caja registra Transferencia/
+  Tarjeta, debería impactar la cuenta bancaria correspondiente, no Caja
+- Responsive tablas: Historial/Clientes/Inventario con scroll visible
+- Auditoría seguridad: datos bancarios/financieros (CBU, tokens MP)
 
 ## Sesión 33 — Nadia (2026-06-29) — Motor de Ofertas completo
 

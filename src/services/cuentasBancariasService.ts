@@ -43,6 +43,9 @@ export const CB_KEYS = {
   cuentas: (empresaId: string) => ['cuentas_bancarias', empresaId] as const,
   movimientos: (empresaId: string, filters?: MovimientoFilters) =>
     ['movimientos_bancarios', empresaId, filters] as const,
+  // FIX-SALDO-REAL
+  movimientosSaldo: (empresaId: string) =>
+    ['cuentas-bancarias', 'movimientos-saldo', empresaId] as const,
 };
 
 export const cuentasService = {

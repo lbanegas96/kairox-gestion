@@ -5,6 +5,12 @@ const SUPABASE_URL      = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const MP_API_BASE       = 'https://api.mercadopago.com';
 
+// FIX-CORS-MP-SYNC — permite invocar mp-sync desde el browser (botón "Actualizar")
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 const SUBTIPO_MAP: Record<string, string> = {
   'bank_transfer':  'transferencia',
   'account_money':  'qr',
@@ -12,7 +18,12 @@ const SUBTIPO_MAP: Record<string, string> = {
   'debit_card':     'tarjeta_debito',
 };
 
-serve(async () => {
+serve(async (req) => {
+  // FIX-CORS-MP-SYNC — responder preflight antes de correr cualquier lógica
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: CORS_HEADERS });
+  }
+
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   const { data: integraciones, error: errInt } = await supabase
@@ -24,7 +35,7 @@ serve(async () => {
   if (errInt || !integraciones?.length) {
     console.log('[mp-sync] Sin integraciones MP activas');
     return new Response(JSON.stringify({ ok: true, synced: 0 }), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }, // FIX-CORS-MP-SYNC
     });
   }
 
@@ -111,6 +122,6 @@ serve(async () => {
 
   console.log(`[mp-sync] Completado. Insertados: ${totalInsertados}`);
   return new Response(JSON.stringify({ ok: true, synced: totalInsertados }), {
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' }, // FIX-CORS-MP-SYNC
   });
 });

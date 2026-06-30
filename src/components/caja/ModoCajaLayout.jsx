@@ -39,6 +39,8 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
   const [ofertasCarrito, setOfertasCarrito] = useState({});
   const [descuentosManuales, setDescuentosManuales] = useState({});
   const [medioPagoSeleccionado, setMedioPagoSeleccionado] = useState('Efectivo');
+  // RESPONSIVE-MOBILE
+  const [tabMobile, setTabMobile] = useState('productos'); // 'productos' | 'carrito'
 
   // Cargar logo y nombre empresa
   useEffect(() => {
@@ -246,27 +248,70 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
         </div>
       </div>
 
-      {/* ── Body: POS expandido ─────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-hidden flex min-h-0">
-        <PanelProductos onAgregarAlCarrito={handleAgregarAlCarrito} />
-        <PanelCarrito
-          carrito={carrito}
-          onModificarCarrito={setCarrito}
-          ofertasCarrito={ofertasCarrito}
-          descuentosManuales={descuentosManuales}
-          onDescuentoManualChange={(productoId, pct) =>
-            setDescuentosManuales(prev => ({ ...prev, [productoId]: pct }))
-          }
-          medioPago={medioPagoSeleccionado}
-          onMedioPagoChange={setMedioPagoSeleccionado}
-          onVentaExitosa={(payload) => {
-            setVentaExitosa({ ...payload, ofertasCarrito: { ...ofertasCarrito } });
-            setOfertasCarrito({});
-            setDescuentosManuales({});
-            setMedioPagoSeleccionado('Efectivo');
-          }}
-        />
+      {/* RESPONSIVE-MOBILE — tab bar Productos/Carrito */}
+      <div className="flex md:hidden border-b border-kx-border">
+        <button onClick={() => setTabMobile('productos')}
+          className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors ${
+            tabMobile === 'productos'
+              ? 'border-[rgb(var(--kx-violet))] text-kx-text'
+              : 'border-transparent text-kx-text-2'}`}>
+          Productos
+        </button>
+        <button onClick={() => setTabMobile('carrito')}
+          className={`flex-1 py-3 text-sm font-medium border-b-2 transition-colors relative ${
+            tabMobile === 'carrito'
+              ? 'border-[rgb(var(--kx-violet))] text-kx-text'
+              : 'border-transparent text-kx-text-2'}`}>
+          Carrito
+          {carrito.length > 0 && (
+            <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs rounded-full bg-[rgb(var(--kx-violet))] text-white">
+              {carrito.reduce((sum, i) => sum + i.cantidad, 0)}
+            </span>
+          )}
+        </button>
       </div>
+
+      {/* ── Body: POS expandido ─────────────────────────────────────────────── */}
+      {/* RESPONSIVE-MOBILE — flex-col en mobile, flex-row en desktop (idéntico al actual ≥md) */}
+      <div className="flex-1 overflow-hidden flex flex-col md:flex-row min-h-0">
+        {/* RESPONSIVE-MOBILE */}
+        <div className={`${tabMobile === 'productos' ? 'flex' : 'hidden'} md:flex flex-1 min-w-0 overflow-hidden`}>
+          <PanelProductos onAgregarAlCarrito={handleAgregarAlCarrito} />
+        </div>
+        {/* RESPONSIVE-MOBILE */}
+        <div className={`${tabMobile === 'carrito' ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-[360px] lg:w-[420px] flex-shrink-0`}>
+          <PanelCarrito
+            carrito={carrito}
+            onModificarCarrito={setCarrito}
+            ofertasCarrito={ofertasCarrito}
+            descuentosManuales={descuentosManuales}
+            onDescuentoManualChange={(productoId, pct) =>
+              setDescuentosManuales(prev => ({ ...prev, [productoId]: pct }))
+            }
+            medioPago={medioPagoSeleccionado}
+            onMedioPagoChange={setMedioPagoSeleccionado}
+            onVentaExitosa={(payload) => {
+              setVentaExitosa({ ...payload, ofertasCarrito: { ...ofertasCarrito } });
+              setOfertasCarrito({});
+              setDescuentosManuales({});
+              setMedioPagoSeleccionado('Efectivo');
+            }}
+          />
+        </div>
+      </div>
+
+      {/* RESPONSIVE-MOBILE — CTA flotante para saltar al carrito */}
+      {tabMobile === 'productos' && carrito.length > 0 && (
+        <button onClick={() => setTabMobile('carrito')}
+          className="md:hidden fixed bottom-4 left-4 right-4 z-20 bg-[rgb(var(--kx-violet))] text-white rounded-lg py-3 px-4 flex items-center justify-between shadow-lg">
+          <span className="font-medium">
+            Ver carrito ({carrito.reduce((sum, i) => sum + i.cantidad, 0)})
+          </span>
+          <span className="font-bold">
+            ${carrito.reduce((sum, i) => sum + i.precio_venta * i.cantidad, 0).toLocaleString('es-AR')}
+          </span>
+        </button>
+      )}
 
       {/* ── Modal Abrir / Cerrar Caja ───────────────────────────────────────── */}
       <Dialog open={showCaja} onOpenChange={setShowCaja}>

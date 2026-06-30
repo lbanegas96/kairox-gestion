@@ -193,7 +193,7 @@ function DashboardSection({ onNavigate }) {
       <ChecklistOnboarding onNavigate={onNavigate} />
 
       {/* ── Hero row — 3 cards ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-[1.4fr_1fr_1fr] gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
+      <div className="grid grid-cols-1 sm:grid-cols-[1.4fr_1fr_1fr] gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
         {/* Ventas del mes */}
         <div className="bg-kx-surface p-5 min-h-[140px] flex flex-col border-t-2 border-t-kx-violet hover:bg-kx-surface-2 transition-colors duration-200">
           <div className="text-[11.5px] text-kx-text-2 mb-2.5 flex items-center gap-1.5">
