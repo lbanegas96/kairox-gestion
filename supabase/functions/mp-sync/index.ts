@@ -18,6 +18,18 @@ const SUBTIPO_MAP: Record<string, string> = {
   'debit_card':     'tarjeta_debito',
 };
 
+const METHOD_LABEL: Record<string, string> = {
+  'account_money': 'Billetera MercadoPago',
+  'cvu':           'Transferencia CVU',
+  'credit_card':   'Tarjeta de crédito',
+  'debit_card':    'Tarjeta de débito',
+  'visa':          'Visa',
+  'master':        'Mastercard',
+  'amex':          'American Express',
+  'naranja':       'Naranja',
+  'cabal':         'Cabal',
+};
+
 serve(async (req) => {
   // FIX-CORS-MP-SYNC — responder preflight antes de correr cualquier lógica
   if (req.method === 'OPTIONS') {
@@ -84,9 +96,10 @@ serve(async (req) => {
         if (existente) continue;
 
         const subtipo    = SUBTIPO_MAP[pago.payment_type_id] ?? null;
+        const metodoLabel = METHOD_LABEL[pago.payment_method_id] ?? pago.payment_method_id;
         const descripcion = [
           `MP #${paymentId}`,
-          pago.payment_method_id,
+          metodoLabel,
           pago.payer?.email ?? pago.payer?.identification?.number ?? 'Pagador desconocido',
         ].filter(Boolean).join(' — ');
 
