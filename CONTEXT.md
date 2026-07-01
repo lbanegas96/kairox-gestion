@@ -1,5 +1,60 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-01 (sesión 42 Luciano — cierre de Frente 3/4: 2 pendientes resueltos sin necesitar decisión de Luciano)
+**Última actualización:** 2026-07-01 (sesión 43 Luciano — auditoría de integración Mercado Pago + fix RLS admin-only en integraciones_bancarias)
+
+## Sesión 43 — Luciano (2026-07-01) — "Vamos por MP" — auditoría de integración + hallazgo de seguridad
+
+Pedido: avanzar con Mercado Pago. Antes de tocar nada, audité el estado real del código de
+integración (3 edge functions + modal de configuración) para saber qué falta de verdad.
+
+### Estado del código de integración MP — YA ESTÁ COMPLETO
+- `mp-webhook` (v6, ACTIVE) — recibe notificaciones de pago, valida firma HMAC-SHA256 opcional,
+  consulta el pago real a la API de MP (nunca confía en el payload del evento), dedupe por
+  `descripcion`, inserta en `movimientos_bancarios` vía RPC `insertar_movimiento_bancario_externo`.
+- `mp-sync` (v4, ACTIVE) — sincronización batch/polling de respaldo (botón "Actualizar" en la UI),
+  con CORS habilitado para invocarse desde el browser.
+- `mp-verify-token` (v1, ACTIVE) — valida el Access Token contra `/users/me` de MP antes de guardarlo.
+- `ConfigMercadoPagoModal.jsx` — pasos guiados, URL del webhook autogenerada con `empresa_id`,
+  verificación de token, selección de cuenta bancaria destino, webhook secret opcional. Nunca
+  precarga el token real (`setAccessToken('')` al abrir, `type="password"`).
+
+Las 3 funciones están deployadas y activas — no había nada roto ni pendiente de deploy.
+
+### 🔴 Hallazgo de seguridad — `integraciones_bancarias` sin gate de admin (migration 124, aplicada ✅)
+Esta tabla guarda `access_token`/`refresh_token` de Mercado Pago y Ualá — credenciales de cobro
+reales. Tenía una única política RLS `FOR ALL` que solo exigía `empresa_id = get_my_empresa_id()`,
+**sin chequeo de rol**. Es decir, cualquier usuario autenticado de la empresa (cajero, vendedor,
+no solo admin) podía, vía la REST API de Supabase directamente (sin pasar por la UI), leer esos
+tokens en texto plano o modificar `cuenta_bancaria_id`/`access_token` — redirigiendo a dónde se
+acreditan los cobros. La UI ya gatea `ConfiguracionSection` a admin-only en el render (línea 1227),
+pero eso es solo cosmético del lado del cliente — nunca hay que confiar en el cliente.
+
+Mismo criterio ya aplicado por Luciano en migration 119 a `configuracion` ("la escritura de
+configuración debe ser SOLO admin"), que a esta tabla se le había pasado por alto — y es más
+sensible que `configuracion` porque contiene secretos de pago, no solo parámetros.
+
+**Fix:** dropeada la policy `integraciones_bancarias_all`, recreadas 4 políticas separadas
+(`SELECT`/`INSERT`/`UPDATE`/`DELETE`) todas con `empresa_id = get_my_empresa_id() AND is_admin()`.
+Las edge functions (`mp-webhook`, `mp-sync`) usan `SUPABASE_SERVICE_ROLE_KEY` (bypassa RLS), no
+se ven afectadas.
+
+**Verificado con `BEGIN...ROLLBACK`** simulando sesión autenticada real (perfil `staff` vs `admin`
+de la misma empresa, con una fila de prueba insertada dentro de la misma transacción): `staff` no
+ve la fila (`count=0`) y su intento de `INSERT` es rechazado (`42501 new row violates row-level
+security policy`); `admin` sí la ve (`count=1`).
+
+### Fix menor relacionado — fuga de token en el SELECT de Ualá
+`ConfiguracionSection.jsx` ya excluía `access_token` explícitamente en el SELECT de la integración
+MP (`// SECURITY-SENSITIVE-DATA`, columnas explícitas), pero el de Ualá usaba `select('*')` —
+mandaba `access_token`/`refresh_token` en la respuesta JSON al frontend (visible en Network tab)
+aunque la UI nunca lo mostrara. Alineado al mismo patrón de columnas explícitas.
+
+### Lo que sigue sin poder hacerse sin Luciano
+Todo lo demás del frente MP requiere su cuenta real: crear la app en developers.mercadopago.com,
+obtener el Access Token de producción, pegarlo en el modal (ya construido y verificado), y cargar
+la URL del webhook (ya autogenerada por el modal) en el panel de MP → Webhooks. Nada de esto se
+puede automatizar sin acceso a su cuenta.
+
+Build de producción verificado limpio (3173 módulos, sin errores) tras ambos cambios.
 
 ## Sesión 42 — Luciano (2026-07-01) — Investigación de pendientes "de decisión" — 2 cerrados sin tocar código
 

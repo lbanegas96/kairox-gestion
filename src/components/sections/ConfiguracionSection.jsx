@@ -540,7 +540,7 @@ const ConfiguracionSection = ({ initialTab }) => {
     if (!user?.empresa_id) return;
     supabase
       .from('integraciones_bancarias')
-      .select('*')
+      .select('id, empresa_id, proveedor, cuenta_bancaria_id, activo, ultimo_sync, config') // SECURITY-SENSITIVE-DATA
       .eq('empresa_id', user.empresa_id)
       .eq('proveedor', 'uala')
       .maybeSingle()
