@@ -40,7 +40,7 @@ VITE_SUPABASE_ANON_KEY=<pedirla al owner>
 ```bash
 npm run dev
 ```
-La app corre en `http://localhost:5173`. Se conecta a la misma base de datos de producción (Supabase compartido).
+La app corre en `http://localhost:3000`. Se conecta a la misma base de datos de producción (Supabase compartido).
 
 ---
 

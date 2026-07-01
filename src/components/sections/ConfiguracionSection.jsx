@@ -1220,6 +1220,17 @@ const ConfiguracionSection = ({ initialTab }) => {
   // ─────────────────────────────────────────────────────────────────────────
   // Render
   // ─────────────────────────────────────────────────────────────────────────
+  // La escritura en `configuracion` es solo-admin a nivel RLS (migration 119).
+  // Gateamos la sección completa para que un staff no llegue a un formulario
+  // que después le va a rechazar el guardado.
+  if (user?.role !== 'admin') {
+    return (
+      <div className="p-8 text-center text-kx-text-2">
+        No tenés permisos para acceder a Configuración.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}

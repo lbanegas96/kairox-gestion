@@ -1,7 +1,7 @@
 # KAIROX Gestión — Hoja de Ruta de Pruebas para Colaborador
 
 **Propósito:** Validar el sistema con casos de uso reales, detectar fallas y documentarlas para corrección.  
-**Entorno:** `http://localhost:3001` (dev) — Supabase proyecto `wuznppxeonmhfcvnqfbf`  
+**Entorno:** `http://localhost:3000` (dev) — Supabase proyecto `wuznppxeonmhfcvnqfbf`  
 **Credenciales de prueba:** usar cuenta propia registrada en el sistema.
 
 ---

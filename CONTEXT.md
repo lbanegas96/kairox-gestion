@@ -1,5 +1,69 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-30 (sesión 36 Luciano — auditoría general + fixes de seguridad críticos)
+**Última actualización:** 2026-06-30 (sesión 37 Luciano — gate admin Config + limpieza de residuos + afip_tickets confirmado OK)
+
+## Sesión 37 — Luciano (2026-06-30) — Cierre de cabo suelto + residuos + afip_tickets
+
+### Cabo suelto cerrado
+- `ConfiguracionSection.jsx`: agregado guard `if (user?.role !== 'admin') return <mensaje...>` antes del
+  render principal (mismo patrón que `OfertasSection`/`UsuariosSection`). Consistente con migration 119
+  (escritura de `configuracion` es admin-only a nivel RLS desde la sesión anterior) — ahora un staff
+  ni siquiera ve el formulario que le rechazaría el guardado.
+
+### ⚠️ Corrección importante sobre "Leaked Password Protection"
+Encontrado en `PLAN_SEMANA.md` (no lo sabía al reportar en la sesión anterior): **no es un simple
+toggle**. Luciano ya lo intentó activar — Supabase pide **plan Pro** para esta función (el proyecto
+`NALUX` está en plan **Gratis**). Queda como decisión de negocio (¿vale la pena el upgrade?), no como
+tarea técnica pendiente. Riesgo aceptado documentado: sin esto, no hay una capa extra contra
+contraseñas reusadas/filtradas, pero no es explotable directamente.
+
+### Limpieza de documentación (root)
+- **Eliminados** (obsoletos, contenido superado por `CONTEXT.md` o por trabajo ya completado):
+  `DIAGNOSIS.md` (describía una arquitectura `tenant_id` abandonada, contradice el modelo actual
+  `empresa_id` — activamente confuso si se lee ahora), `STATUS_REPORT.md` (snapshot feb-2026 superado),
+  `AUDITORIA.md` (snapshot jun-03 superado), `SUPABASE_ANALISIS.md` (análisis del bug de recursión RLS
+  ya resuelto, superado por `SUPABASE_SETUP.md`), `PLAN_AUDITORIA_2.md` (plan cuyos ítems están
+  duplicados/subsumidos en la sección 8 de `PLAN_SEMANA.md`, que se mantiene por tener ítems reales aún
+  abiertos).
+- **Mantenidos:** `PLAN_SEMANA.md` (tiene pendientes reales no confirmados como resueltos: guards de
+  tenant en RPCs de cheques/retenciones/asientos contables, precisión de cálculos financieros — fuera del
+  alcance de esta auditoría), `COLABORADOR.md` y `CAEA_IMPLEMENTACION.md` (docs vigentes de features
+  reales), `SUPABASE_SETUP.md` (guía de disaster-recovery aún válida), `TESTING_ROADMAP.md` (checklist QA
+  reusable).
+- **Fix menor:** puerto de dev incorrecto en `COLABORADOR.md` (5173→3000) y `TESTING_ROADMAP.md`
+  (3001→3000) — el real es 3000 (`package.json`).
+
+### Corrección sobre `mp-verify-token`
+Reportado antes como posible edge function muerta — **falso**: `ConfigMercadoPagoModal.jsx` la invoca
+2 veces (verificación de token MP). No se toca.
+
+### `arca-diag` — confirmado residuo, requiere borrado manual
+No tiene código local (solo remoto en Supabase), cero referencias en el frontend. No existe tool de
+MCP para borrar edge functions — **queda pendiente borrarla a mano desde el Dashboard de Supabase**.
+
+### npm audit
+`npm audit fix` (sin `--force`, solo cambios sin breaking changes): **26 → 6 vulnerabilidades**. Build
+verificado post-fix (exit 0). Las 6 restantes (`vite`, `esbuild`, `jspdf`, `jspdf-autotable`, `dompurify`,
+`xlsx`) requieren bump mayor (`vite` 4→8 es un salto grande) o no tienen fix (`xlsx` — sin fix disponible
+en absoluto). **No aplicado `--force`** — requiere decisión explícita, no es seguro a ciegas.
+
+### Auditoría de `console.log`/`console.error` — limpia
+Grep dirigido a variables sensibles (password, token, secret, cvv, cbu, tarjeta, api_key, jwt,
+credential) en `src/` y `supabase/functions/`: **0 coincidencias**. También se verificó que no se
+loguea la respuesta completa de MercadoPago (`pago`/`payment`/`response`) en `mp-sync`/`mp-webhook`.
+Sin acción necesaria.
+
+### `afip_tickets` — confirmado correcto, no es una falla
+Guarda `token`/`sign` (Ticket de Acceso WSAA de AFIP, credencial de sesión ~12h). El advisor
+`rls_enabled_no_policy` (nivel INFO, el más bajo) lo marcaba, pero es **diseño deliberado y ya
+documentado desde migration 099 (sesión 63)**: RLS habilitado sin políticas = deny-all para
+anon/authenticated, solo `service_role` accede (bypassa RLS). Confirmado en código: `_shared/wsaa.ts`
+usa el cliente `admin` (service_role), nunca un cliente scoped a usuario. **No requiere ningún cambio.**
+
+### Pendiente real para próximas sesiones
+- Borrar `arca-diag` manualmente del Dashboard de Supabase
+- Decisión de negocio: upgrade a plan Pro de Supabase para leaked password protection
+- `npm audit fix --force` — evaluar caso por caso (especialmente reemplazar `xlsx`, que no tiene fix)
+- Ítems de `PLAN_SEMANA.md` sección 8 (guards de RPCs no-stock, precisión financiera) — no auditados aún
 
 ## Sesión 36 — Luciano (2026-06-30) — Auditoría general del sistema + hardening
 
