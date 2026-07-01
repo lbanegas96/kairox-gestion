@@ -1,5 +1,47 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-01 (sesión 43 Luciano — auditoría de integración Mercado Pago + fix RLS admin-only en integraciones_bancarias)
+**Última actualización:** 2026-07-01 (sesión 43 Luciano — pruebas reales de MP revelan bug: todos los movimientos se registraban como ingreso)
+
+## Sesión 43 (cont.) — Bug real detectado en pruebas de Luciano: egresos MP registrados como ingreso
+
+Luciano probó la integración con transferencias reales (recibir y "Enviar dinero" desde la
+billetera MP conectada). Todos los movimientos aparecían en Bancos con badge "ingreso" y el saldo
+sumaba en vez de restar los egresos — confirmado con 2 pruebas suyas ($100 y $50 egresos reales).
+
+### Causa raíz
+`mp-webhook` y `mp-sync` mandaban `p_tipo: 'ingreso'` **hardcodeado** al RPC
+`insertar_movimiento_bancario_externo`, sin mirar la dirección real del dinero. El mecanismo de
+saldo (`saldos_bancarios()`) ya estaba bien diseñado — `CASE WHEN tipo='ingreso' THEN monto ELSE
+-monto END` — y el constraint de `movimientos_bancarios.tipo` ya permitía `'egreso'`; el bug era
+puramente que el código nunca lo escribía.
+
+Confirmado contra la documentación oficial de MP (`collector_id` = quién recibe el pago, `payer.id`
+= quién lo envía, `operation_type` puede ser `money_transfer` para transferencias entre cuentas, no
+solo `regular_payment`) — el `payment_type_id` (`account_money`) es el mismo para un cobro QR
+recibido y para un envío de dinero saliente, así que no alcanza para distinguir dirección.
+
+### Fix — comparar collector_id contra el user_id de la cuenta conectada
+1. `mp-verify-token` ahora devuelve también `mp_user_id` (el `id` de `/users/me`).
+2. `ConfigMercadoPagoModal.jsx` guarda `mp_user_id` dentro de `config` (jsonb) al verificar/guardar
+   el Access Token — se preserva si el usuario edita sin re-tipear el token.
+3. `mp-webhook` y `mp-sync`: `tipo = collector_id === mp_user_id ? 'ingreso' : 'egreso'`. Si la
+   integración todavía no tiene `mp_user_id` guardado (no re-verificada desde este fix), cae a
+   `'ingreso'` como antes (comportamiento previo, no rompe nada) y loguea un warning.
+4. Deployadas las 3 edge functions (`mp-webhook` v7, `mp-verify-token` v2, `mp-sync` v5).
+
+### Backfill de los 2 movimientos de HOY
+Los 2 movimientos que Luciano verificó personalmente como egresos ($100 `MP #166744418080`, $50
+`MP #165906039203`) se corrigieron a `tipo='egreso'` directamente por ID — son los únicos que él
+confirmó explícitamente como suyos y como egresos; los movimientos de MP de días anteriores no se
+tocaron (no hay certeza de cuáles, si alguno, también estén mal — pendiente de que Luciano
+confirme o de auditarlos contra la API real caso por caso).
+
+### Pendiente para que el fix quede completo
+La integración de Nadia/Luciano ya existía ANTES de este fix, así que su `config.mp_user_id`
+todavía está vacío — hasta que alguien reabra el modal de Mercado Pago y guarde de nuevo (con el
+mismo Access Token, no hace falta uno nuevo), el webhook seguirá asumiendo `'ingreso'` para todo.
+Avisar a Luciano de este paso.
+
+## Sesión 43 — Luciano (2026-07-01) — "Vamos por MP" — auditoría de integración + hallazgo de seguridad
 
 ## Sesión 43 — Luciano (2026-07-01) — "Vamos por MP" — auditoría de integración + hallazgo de seguridad
 

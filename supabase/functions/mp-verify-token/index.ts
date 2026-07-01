@@ -30,7 +30,7 @@ serve(async (req) => {
     if (mpRes.ok) {
       const data = await mpRes.json();
       return new Response(
-        JSON.stringify({ valid: true, nickname: data.nickname ?? null, email: data.email ?? null }),
+        JSON.stringify({ valid: true, mp_user_id: data.id ?? null, nickname: data.nickname ?? null, email: data.email ?? null }),
         { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
       );
     } else {

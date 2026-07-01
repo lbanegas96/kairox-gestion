@@ -40,7 +40,7 @@ serve(async (req) => {
 
   const { data: integraciones, error: errInt } = await supabase
     .from('integraciones_bancarias')
-    .select('empresa_id, access_token, cuenta_bancaria_id, ultimo_sync')
+    .select('empresa_id, access_token, cuenta_bancaria_id, ultimo_sync, config')
     .eq('proveedor', 'mercadopago')
     .eq('activo', true);
 
@@ -82,6 +82,8 @@ serve(async (req) => {
         continue;
       }
 
+      const mpUserId = integ.config?.mp_user_id;
+
       for (const pago of results) {
         const paymentId = String(pago.id);
 
@@ -94,6 +96,13 @@ serve(async (req) => {
           .maybeSingle();
 
         if (existente) continue;
+
+        // Dirección real del dinero: collector_id = quién recibe. Si no coincide
+        // con la cuenta conectada, es un egreso (ej. "Enviar dinero" saliente).
+        let tipoMovimiento = 'ingreso';
+        if (mpUserId != null) {
+          tipoMovimiento = String(pago.collector_id) === String(mpUserId) ? 'ingreso' : 'egreso';
+        }
 
         const subtipo    = SUBTIPO_MAP[pago.payment_type_id] ?? null;
         const metodoLabel = METHOD_LABEL[pago.payment_method_id] ?? pago.payment_method_id;
@@ -109,7 +118,7 @@ serve(async (req) => {
           p_fecha:              pago.date_approved ?? pago.date_created,
           p_descripcion:        descripcion,
           p_monto:              pago.transaction_amount,
-          p_tipo:               'ingreso',
+          p_tipo:               tipoMovimiento,
           p_origen:             'mercadopago',
           p_subtipo:            subtipo,
         });
@@ -118,7 +127,7 @@ serve(async (req) => {
           console.error('[mp-sync] Error RPC pago:', paymentId, errRPC);
         } else {
           totalInsertados++;
-          console.log('[mp-sync] ✓ Insertado:', paymentId, 'subtipo:', subtipo, 'empresa:', integ.empresa_id);
+          console.log('[mp-sync] ✓ Insertado:', paymentId, 'tipo:', tipoMovimiento, 'subtipo:', subtipo, 'empresa:', integ.empresa_id);
         }
       }
 

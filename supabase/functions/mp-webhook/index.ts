@@ -85,6 +85,18 @@ serve(async (req) => {
       return new Response('OK', { status: 200 });
     }
 
+    // ── Determinar dirección real del dinero ─────────────────────────────────
+    // collector_id = quién RECIBE el pago. Si coincide con la cuenta conectada,
+    // es un ingreso; si la cuenta conectada es la que paga (payer.id), es un egreso
+    // (ej. "Enviar dinero" desde la propia billetera MP, operation_type=money_transfer).
+    const mpUserId = integracion.config?.mp_user_id;
+    let tipoMovimiento = 'ingreso';
+    if (mpUserId != null) {
+      tipoMovimiento = String(pago.collector_id) === String(mpUserId) ? 'ingreso' : 'egreso';
+    } else {
+      console.warn('[mp-webhook] Integración sin mp_user_id guardado — asumiendo ingreso. Re-verificar el Access Token en Configuración para habilitar detección de egresos.');
+    }
+
     // ── Deduplicación: MP puede reenviar el mismo evento más de una vez ──────
     const descripcionPrefix = `MP #${paymentId}`;
     const { data: existente } = await supabase
@@ -120,7 +132,7 @@ serve(async (req) => {
         p_fecha:              pago.date_approved ?? pago.date_created,
         p_descripcion:        descripcion,
         p_monto:              pago.transaction_amount,
-        p_tipo:               'ingreso',
+        p_tipo:               tipoMovimiento,
         p_origen:             'mercadopago',
         p_subtipo:            subtipo,
       }
@@ -141,7 +153,7 @@ serve(async (req) => {
       console.warn('[mp-webhook] No se pudo actualizar ultimo_sync:', syncError.message);
     }
 
-    console.log('[mp-webhook] ✓ Pago registrado:', paymentId, '— subtipo:', subtipo, '— movimiento id:', resultado?.id);
+    console.log('[mp-webhook] ✓ Pago registrado:', paymentId, '— tipo:', tipoMovimiento, '— subtipo:', subtipo, '— movimiento id:', resultado?.id);
     return new Response(
       JSON.stringify({ ok: true, id: resultado?.id }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }

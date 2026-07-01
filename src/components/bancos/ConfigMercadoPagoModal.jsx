@@ -29,6 +29,7 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
   const [verificando,      setVerificando]      = useState(false);
   const [guardando,        setGuardando]        = useState(false);
   const [tokenValido,      setTokenValido]      = useState(null); // null | true | false
+  const [mpUserId,         setMpUserId]         = useState(null); // id numérico de la cuenta MP (para distinguir ingreso/egreso)
 
   const supabaseUrl  = import.meta.env.VITE_SUPABASE_URL;
   const webhookUrl   = `${supabaseUrl}/functions/v1/mp-webhook?empresa_id=${user?.empresa_id}`;
@@ -38,6 +39,7 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
     setAccessToken(''); // SECURITY-SENSITIVE-DATA — nunca precargar el token real
     setCuentaBancariaId(integracion?.cuenta_bancaria_id ?? '');
     setWebhookSecret(integracion?.config?.webhook_secret ?? '');
+    setMpUserId(integracion?.config?.mp_user_id ?? null);
     setTokenValido(null);
 
     supabase
@@ -62,6 +64,7 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
       });
       if (!error && data?.valid) {
         setTokenValido(true);
+        setMpUserId(data.mp_user_id ?? null);
         toast({
           title: `✓ Token válido — ${data.nickname ?? data.email ?? 'cuenta verificada'}`,
           className: 'bg-green-600 text-white border-green-700',
@@ -95,6 +98,7 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
     setGuardando(true);
     try {
       // SECURITY-SENSITIVE-DATA — solo verificar/enviar token si el usuario escribió uno nuevo
+      let mpUserIdFinal = mpUserId;
       if (accessToken) {
         if (tokenValido !== true) {
           const { data: vData, error: vError } = await supabase.functions.invoke('mp-verify-token', {
@@ -104,15 +108,19 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
             toast({ title: 'Access Token inválido o expirado', description: vData?.error, variant: 'destructive' });
             return;
           }
+          mpUserIdFinal = vData.mp_user_id ?? null;
         }
       }
+
+      const config = { ...(webhookSecret ? { webhook_secret: webhookSecret } : {}) };
+      if (mpUserIdFinal != null) config.mp_user_id = mpUserIdFinal;
 
       const upsertPayload = {
         empresa_id:         user.empresa_id,
         proveedor:          'mercadopago',
         cuenta_bancaria_id: cuentaBancariaId,
         activo:             true,
-        config:             webhookSecret ? { webhook_secret: webhookSecret } : {},
+        config,
       };
       if (accessToken) upsertPayload.access_token = accessToken; // SECURITY-SENSITIVE-DATA
 
@@ -190,7 +198,7 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
               <div className="relative flex-1">
                 <Input
                   value={accessToken}
-                  onChange={e => { setAccessToken(e.target.value); setTokenValido(null); }}
+                  onChange={e => { setAccessToken(e.target.value); setTokenValido(null); setMpUserId(null); }}
                   placeholder={integracion ? '••••••••••••••••' : 'APP_USR-...'} // SECURITY-SENSITIVE-DATA
                   className="kairox-input font-mono text-xs pr-9"
                   type="password"
