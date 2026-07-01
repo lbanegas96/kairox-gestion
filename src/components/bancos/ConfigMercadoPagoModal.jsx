@@ -273,7 +273,7 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button
             onClick={handleGuardar}
-            disabled={guardando || !accessToken || !cuentaBancariaId}
+            disabled={guardando || !cuentaBancariaId || (!accessToken && !integracion)}
             className="bg-[#009EE3] hover:bg-[#0082c1] text-white"
           >
             {guardando

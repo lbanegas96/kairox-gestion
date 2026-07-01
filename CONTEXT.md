@@ -1,5 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-01 (sesión 43 Luciano — pruebas reales de MP revelan bug: todos los movimientos se registraban como ingreso)
+**Última actualización:** 2026-07-01 (sesión 43 Luciano — fix botón Guardar de ConfigMercadoPagoModal exigía re-pegar el Access Token siempre)
+
+## Sesión 43 (cont. 2) — Bug de UX: el modal de MP exigía re-pegar el token para guardar CUALQUIER cambio
+
+Luciano reportó "es la tercera vez que pongo el Access Token, ¿qué pasa que me lo voltea?" —
+después de guardar la config, cada vez que reabría el modal para cualquier otra cosa, tenía que
+volver a pegar el token completo o no podía guardar.
+
+### Causa
+El botón "Guardar configuración" tenía `disabled={guardando || !accessToken || !cuentaBancariaId}`
+— exigía `accessToken` no vacío **siempre**, sin importar si ya existía una integración guardada.
+El campo Access Token nunca se precarga con el valor real (por seguridad — línea
+`setAccessToken('')` al abrir el modal, con placeholder de puntos como única pista de que ya hay
+uno guardado), así que el campo se ve vacío al abrir el modal aunque el token siga guardado en la
+base. La lógica interna de `handleGuardar()` ya contemplaba correctamente "sin token nuevo, no
+tocar el existente" — pero el botón nunca dejaba llegar ahí.
+
+### Fix
+`disabled={guardando || !cuentaBancariaId || (!accessToken && !integracion)}` — solo exige
+Access Token cuando es una integración nueva (`!integracion`). Con una integración existente, se
+puede guardar sin re-pegar el token (para cambiar solo cuenta destino o webhook secret).
+
+**Importante para Luciano:** este fix es para el futuro — de ahora en más no va a hacer falta
+re-pegar el token para guardar otros cambios. Pero la vez que falta (pegar el token una última vez
+para que se guarde el `mp_user_id` del hallazgo anterior) todavía hace falta, porque ese dato solo
+se captura cuando efectivamente se verifica un token contra la API de MP.
+
+## Sesión 43 — Luciano (2026-07-01) — "Vamos por MP" — auditoría de integración + hallazgo de seguridad
 
 ## Sesión 43 (cont.) — Bug real detectado en pruebas de Luciano: egresos MP registrados como ingreso
 
