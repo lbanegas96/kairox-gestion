@@ -311,7 +311,8 @@ function ClientesSection() {
       {/* Table */}
       <Card className="dark:bg-kx-bg dark:border-kx-border shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <Table>
+          {/* RESPONSIVE-TABLE */}
+          <Table className="whitespace-nowrap">
             <TableHeader className="bg-kx-surface-2 dark:bg-slate-900/60">
               <TableRow className="dark:border-kx-border">
                 <TableHead className="dark:text-kx-text-2 pl-6">Nombre</TableHead>

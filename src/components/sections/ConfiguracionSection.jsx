@@ -4,7 +4,7 @@ import {
   AlertCircle, AlertTriangle, TrendingUp, CheckCircle2, CheckCircle, FileText, Check, Download,
   Users, Puzzle, Bell, Package2, Info, Mail, MapPin, Hash,
   CreditCard, Warehouse, BarChart3, Cpu, Copy, Pencil,
-  Plus, Shield, RefreshCw,
+  Plus, Shield, RefreshCw, Eye, EyeOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -181,6 +181,7 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [integracionUala, setIntegracionUala] = useState(null);
   const [showConfigUala,  setShowConfigUala]  = useState(false);
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const [showWebhookUrl, setShowWebhookUrl] = useState(false); // SECURITY-WEBHOOK-URL
 
   // ── Puente Caja ↔ Bancos ──────────────────────────────────────────────────
   const METODOS_BANCARIOS = ['Transferencia', 'Tarjeta'];
@@ -517,7 +518,7 @@ const ConfiguracionSection = ({ initialTab }) => {
     if (!user?.empresa_id) return;
     supabase
       .from('integraciones_bancarias')
-      .select('*')
+      .select('id, empresa_id, proveedor, cuenta_bancaria_id, activo, ultimo_sync, config') // SECURITY-SENSITIVE-DATA
       .eq('empresa_id', user.empresa_id)
       .eq('proveedor', 'mercadopago')
       .maybeSingle()
@@ -528,7 +529,7 @@ const ConfiguracionSection = ({ initialTab }) => {
     if (!user?.empresa_id) return;
     supabase
       .from('integraciones_bancarias')
-      .select('*')
+      .select('id, empresa_id, proveedor, cuenta_bancaria_id, activo, ultimo_sync, config') // SECURITY-SENSITIVE-DATA
       .eq('empresa_id', user.empresa_id)
       .eq('proveedor', 'mercadopago')
       .maybeSingle()
@@ -2220,10 +2221,22 @@ const ConfiguracionSection = ({ initialTab }) => {
               {integracionMP?.activo && (
                 <div className="p-3 bg-kx-surface-2 rounded-lg border border-kx-border space-y-1.5">
                   <p className="text-xs font-medium text-kx-text-2">URL del Webhook (configurar en MP Developers)</p>
+                  {/* SECURITY-WEBHOOK-URL */}
                   <div className="flex items-center gap-2">
                     <code className="text-[10px] text-kx-text flex-1 break-all leading-relaxed">
-                      {`${supabaseUrl}/functions/v1/mp-webhook?empresa_id=${user?.empresa_id}`}
+                      {showWebhookUrl
+                        ? `${supabaseUrl}/functions/v1/mp-webhook?empresa_id=${user?.empresa_id}`
+                        : '••••••••••••••••••••••••••'}
                     </code>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0 shrink-0"
+                      onClick={() => setShowWebhookUrl(v => !v)}
+                      title={showWebhookUrl ? 'Ocultar URL' : 'Mostrar URL'}
+                    >
+                      {showWebhookUrl ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </Button>
                     <Button
                       size="sm"
                       variant="ghost"

@@ -500,7 +500,7 @@ function CajaSection() {
 
   const formatAmount = (amount, type) => {
     const num = Number(amount);
-    const formatted = num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const formatted = num.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); // FIX-FORMATO-ARS
     if (type === 'egreso') return `-$${formatted}`;
     return `$${formatted}`;
   };
@@ -855,15 +855,15 @@ function CajaSection() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="kairox-bg-card border kairox-border p-5 rounded-xl dark:bg-kx-bg dark:border-kx-border">
                  <div className="text-sm text-slate-500 dark:text-kx-text-2 mb-1">Ingresos</div>
-                 <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">${summaryData.ingresosPeriodo.toFixed(2)}</div>
+                 <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">${Number(summaryData.ingresosPeriodo).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>{/* FIX-FORMATO-ARS */}
               </div>
               <div className="kairox-bg-card border kairox-border p-5 rounded-xl dark:bg-kx-bg dark:border-kx-border">
                  <div className="text-sm text-slate-500 dark:text-kx-text-2 mb-1">Egresos</div>
-                 <div className="text-2xl font-bold text-red-600 dark:text-red-400">${summaryData.egresosPeriodo.toFixed(2)}</div>
+                 <div className="text-2xl font-bold text-red-600 dark:text-red-400">${Number(summaryData.egresosPeriodo).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>{/* FIX-FORMATO-ARS */}
               </div>
               <div className="kairox-bg-card border kairox-border p-5 rounded-xl dark:bg-kx-bg dark:border-kx-border">
                  <div className="text-sm text-slate-500 dark:text-kx-text-2 mb-1">Balance</div>
-                 <div className={`text-2xl font-bold ${summaryData.balancePeriodo >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>${summaryData.balancePeriodo.toFixed(2)}</div>
+                 <div className={`text-2xl font-bold ${summaryData.balancePeriodo >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>${Number(summaryData.balancePeriodo).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>{/* FIX-FORMATO-ARS */}
               </div>
             </div>
 

@@ -312,7 +312,8 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
       {/* TABLE */}
       <div className="kairox-bg-card border kairox-border rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
+          {/* RESPONSIVE-TABLE */}
+          <table className="w-full text-sm text-left whitespace-nowrap">
             <thead className="bg-kx-surface-2 dark:bg-slate-900/50 border-b kairox-border text-xs uppercase font-semibold text-slate-500">
               <tr>
                 <th className="p-4 w-32">Nro Venta</th>

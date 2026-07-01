@@ -35,7 +35,7 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
 
   useEffect(() => {
     if (!open || !user?.empresa_id) return;
-    setAccessToken(integracion?.access_token ?? '');
+    setAccessToken(''); // SECURITY-SENSITIVE-DATA — nunca precargar el token real
     setCuentaBancariaId(integracion?.cuenta_bancaria_id ?? '');
     setWebhookSecret(integracion?.config?.webhook_secret ?? '');
     setTokenValido(null);
@@ -79,40 +79,46 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
   };
 
   const handleGuardar = async () => {
-    if (!accessToken || !cuentaBancariaId) {
-      toast({ title: 'Completá los campos obligatorios', variant: 'destructive' });
+    // SECURITY-SENSITIVE-DATA — token obligatorio solo en nueva integración
+    if (!accessToken && !integracion) {
+      toast({ title: 'Completá el Access Token', variant: 'destructive' });
       return;
     }
-    if (!accessToken.startsWith('APP_USR-')) {
+    if (!cuentaBancariaId) {
+      toast({ title: 'Seleccioná una cuenta bancaria destino', variant: 'destructive' });
+      return;
+    }
+    if (accessToken && !accessToken.startsWith('APP_USR-')) {
       toast({ title: 'Token inválido', description: 'El Access Token debe empezar con APP_USR-', variant: 'destructive' });
       return;
     }
     setGuardando(true);
     try {
-      // Verificar contra MP si no fue verificado en esta sesión
-      if (tokenValido !== true) {
-        const { data: vData, error: vError } = await supabase.functions.invoke('mp-verify-token', {
-          body: { access_token: accessToken },
-        });
-        if (vError || !vData?.valid) {
-          toast({ title: 'Access Token inválido o expirado', description: vData?.error, variant: 'destructive' });
-          return;
+      // SECURITY-SENSITIVE-DATA — solo verificar/enviar token si el usuario escribió uno nuevo
+      if (accessToken) {
+        if (tokenValido !== true) {
+          const { data: vData, error: vError } = await supabase.functions.invoke('mp-verify-token', {
+            body: { access_token: accessToken },
+          });
+          if (vError || !vData?.valid) {
+            toast({ title: 'Access Token inválido o expirado', description: vData?.error, variant: 'destructive' });
+            return;
+          }
         }
       }
 
+      const upsertPayload = {
+        empresa_id:         user.empresa_id,
+        proveedor:          'mercadopago',
+        cuenta_bancaria_id: cuentaBancariaId,
+        activo:             true,
+        config:             webhookSecret ? { webhook_secret: webhookSecret } : {},
+      };
+      if (accessToken) upsertPayload.access_token = accessToken; // SECURITY-SENSITIVE-DATA
+
       const { error } = await supabase
         .from('integraciones_bancarias')
-        .upsert(
-          {
-            empresa_id:         user.empresa_id,
-            proveedor:          'mercadopago',
-            access_token:       accessToken,
-            cuenta_bancaria_id: cuentaBancariaId,
-            activo:             true,
-            config:             webhookSecret ? { webhook_secret: webhookSecret } : {},
-          },
-          { onConflict: 'empresa_id,proveedor' }
-        );
+        .upsert(upsertPayload, { onConflict: 'empresa_id,proveedor' });
 
       if (error) throw error;
 
@@ -185,7 +191,7 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
                 <Input
                   value={accessToken}
                   onChange={e => { setAccessToken(e.target.value); setTokenValido(null); }}
-                  placeholder="APP_USR-..."
+                  placeholder={integracion ? '••••••••••••••••' : 'APP_USR-...'} // SECURITY-SENSITIVE-DATA
                   className="kairox-input font-mono text-xs pr-9"
                   type="password"
                 />

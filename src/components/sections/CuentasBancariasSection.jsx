@@ -2,7 +2,8 @@ import React, { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Landmark, Plus, Upload, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle,
-  RefreshCw, FileText, ChevronRight, X, Building2, Wallet, CheckCircle2, Link2, Unlink2, Zap
+  RefreshCw, FileText, ChevronRight, X, Building2, Wallet, CheckCircle2, Link2, Unlink2, Zap,
+  Eye, EyeOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -548,6 +549,7 @@ function CuentasBancariasSection() {
   const [movModal, setMovModal] = useState({ open: false, cuentaId: '' });
   const [csvModal, setCsvModal] = useState(false);
   const [syncing, setSyncing] = useState(false); // FIX-MP-SYNC
+  const [showCbu, setShowCbu] = useState({}); // SECURITY-SENSITIVE-DATA
 
   const movFilters = useMemo(() => ({
     cuentaId: filterCuentaId !== 'todas' ? filterCuentaId : undefined,
@@ -721,8 +723,20 @@ function CuentasBancariasSection() {
                     <p className={`text-2xl font-bold font-mono ${(saldos.get(c.id) ?? 0) >= 0 ? 'text-kx-text dark:text-kx-text' : 'text-red-500'}`}>
                       {formatMoney(saldos.get(c.id) ?? 0)}
                     </p>
+                    {/* SECURITY-SENSITIVE-DATA */}
                     {c.cbu_alias && (
-                      <p className="text-xs text-kx-text-3 font-mono truncate">{c.cbu_alias}</p>
+                      <div className="flex items-center gap-1">
+                        <p className="text-xs text-kx-text-3 font-mono truncate">
+                          {showCbu[c.id] ? c.cbu_alias : '•••• •••• •••• ••••'}
+                        </p>
+                        <button
+                          onClick={() => setShowCbu(prev => ({ ...prev, [c.id]: !prev[c.id] }))}
+                          className="text-kx-text-3 hover:text-kx-text shrink-0"
+                          title={showCbu[c.id] ? 'Ocultar CBU' : 'Mostrar CBU'}
+                        >
+                          {showCbu[c.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                        </button>
+                      </div>
                     )}
                     {c.plan_cuentas ? (
                       <div className="flex items-center gap-1.5">

@@ -147,6 +147,7 @@ export function useConfirmarVenta() {
         p_pagos:            pagosPayload,
         p_es_cc:            isCC,
         p_caja_sesion_id:   currentSession?.id ?? null,
+        p_pedido_id:        null, // FIX-CREAR-VENTA-V3
       });
 
       if (rpcError) throw rpcError;

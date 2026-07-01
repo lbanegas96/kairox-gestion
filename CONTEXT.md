@@ -1,5 +1,37 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-30 (sesión 38 Luciano — auditoría de guards de tenant en RPCs no-stock: 1 fuga real encontrada y corregida)
+**Última actualización:** 2026-07-01 (sesión 39 Nadia — seguridad + formato ARS + responsive)
+
+## Sesión 39 — Nadia (2026-07-01) — Seguridad + formato ARS + responsive
+
+### Migrations aplicadas
+- **121** — agrega 'caja' a movimientos_bancarios_origen_check
+
+### Archivos modificados
+- CajaSection.jsx — formato números es-AR (FIX-FORMATO-ARS)
+- ConfiguracionSection.jsx — select MP sin access_token + URL webhook oculta Eye/EyeOff (SECURITY-WEBHOOK-URL)
+- ConfigMercadoPagoModal.jsx — token no viaja al frontend, placeholder dinámico, upsert condicional (SECURITY-SENSITIVE-DATA)
+- CuentasBancariasSection.jsx — CBU oculto con toggle Eye/EyeOff (SECURITY-SENSITIVE-DATA)
+- useConfirmarVenta.js — p_pedido_id null (FIX-CREAR-VENTA-V3)
+- HistorialVentas.jsx — whitespace-nowrap (RESPONSIVE-TABLE)
+- ClientesSection.jsx — whitespace-nowrap (RESPONSIVE-TABLE)
+
+### Validado en browser
+- Montos en Caja muestran $1.000,00 (antes $1,000.00)
+- Token MP no aparece en DevTools Network
+- CBU oculto por defecto, ojito lo revela
+- URL webhook oculta en Configuración
+- Ventas con Transferencia impactan automáticamente en Bancos
+- Tablas Historial y Clientes con scroll horizontal en mobile
+
+### Bug reportado para Luciano
+- Puente Caja→Bancos funciona para ventas (ingresos) pero NO para egresos manuales con Transferencia — el INSERT directo a movimientos_caja no tiene RPC ni trigger que cree el movimiento bancario correspondiente. Requiere fix en backend.
+
+### Pendiente
+- Webhook MP: Luciano registra URL en panel MP Developers
+- Retiros MP: Released Money report API
+- AFIP producción: cert real + PdV real (trámite Luciano)
+- Fidelización por puntos (Fase 2)
+- Billing MercadoPago Suscripciones
 
 ## Sesión 38 — Luciano (2026-06-30) — Guards de tenant en RPCs restantes (frente pendiente de PLAN_SEMANA.md §8)
 
