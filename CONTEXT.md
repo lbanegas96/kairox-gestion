@@ -1,5 +1,43 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-01 (sesión 39 Nadia — seguridad + formato ARS + responsive)
+**Última actualización:** 2026-07-01 (sesión 40 Luciano — fix bug reportado por Nadia: puente Caja→Bancos generalizado a trigger)
+
+## Sesión 40 — Luciano (2026-07-01) — Puente Caja→Bancos: de código embebido a trigger genérico
+
+### Bug reportado por Nadia (sesión 39) — RESUELTO
+El puente Caja→Bancos (migration 112) solo estaba embebido a mano dentro de `crear_venta`.
+Egresos/ingresos manuales cargados directo en Caja (`CajaSection.jsx`) — y los otros 6 call
+sites que insertan en `movimientos_caja` (`NuevaFacturaModal`, `CompraRapidaSection`,
+`NuevaFacturaProveedorModal`, `ClientDetailModal`, `NuevaNCProveedorModal`,
+`CuentaCorrienteSection`) — nunca disparaban el espejo a Bancos.
+
+### Migration 122 (aplicada ✅)
+- Nuevo trigger `trg_movimientos_caja_puente_bancos` (`AFTER INSERT ON movimientos_caja`) que
+  cubre TODOS los call sites de una sola vez, presentes y futuros, sin tocar el frontend.
+- `crear_venta` v5: se sacó el bloque explícito de `movimientos_bancarios` (migration 112) para
+  no duplicar — ahora el trigger dispara solo con el INSERT a `movimientos_caja` que crear_venta
+  ya hacía.
+
+### Verificado con `BEGIN...ROLLBACK` (simulando sesión autenticada real vía `SET LOCAL request.jwt.claims`)
+- ✅ Egreso manual por Transferencia (mapeada) → crea movimiento bancario `tipo='egreso'` — el bug de Nadia, confirmado resuelto.
+- ✅ Ingreso manual por Efectivo → NO crea movimiento bancario (excluido correctamente).
+- ✅ `crear_venta` con Transferencia → crea **exactamente 1** movimiento bancario, no 2 (sin duplicación tras sacar el bloque embebido).
+
+### Nota técnica — cómo testear crear_venta con contexto de usuario real
+`get_my_empresa_id()`/`get_my_role()` dependen de `auth.uid()`, que lee
+`current_setting('request.jwt.claims', true)::jsonb ->> 'sub'`. Para probar RPCs con guard de
+tenant vía `execute_sql` (que corre sin JWT, como `postgres`), hace falta:
+```sql
+BEGIN;
+SET LOCAL request.jwt.claims = '{"sub": "<uuid-de-un-profile-real>", "role": "authenticated"}';
+SET LOCAL ROLE authenticated;
+-- ... llamar la RPC ...
+ROLLBACK;
+```
+Sin esto, cualquier RPC con guard de tenant rechaza la llamada (`get_my_empresa_id()` = NULL).
+
+### Sin impacto en frontend
+No se tocó ningún componente — el fix es 100% backend (trigger + recreate de crear_venta con
+la misma firma). No hace falta rebuild/redeploy de Vercel para este cambio puntual.
 
 ## Sesión 39 — Nadia (2026-07-01) — Seguridad + formato ARS + responsive
 
