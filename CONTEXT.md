@@ -36,9 +36,10 @@ contraseñas reusadas/filtradas, pero no es explotable directamente.
 Reportado antes como posible edge function muerta — **falso**: `ConfigMercadoPagoModal.jsx` la invoca
 2 veces (verificación de token MP). No se toca.
 
-### `arca-diag` — confirmado residuo, requiere borrado manual
-No tiene código local (solo remoto en Supabase), cero referencias en el frontend. No existe tool de
-MCP para borrar edge functions — **queda pendiente borrarla a mano desde el Dashboard de Supabase**.
+### `arca-diag` — ✅ eliminada
+Confirmado residuo (sin código local, cero referencias en frontend). Borrada a mano por Luciano desde
+el Dashboard de Supabase (sin tool de MCP para esto). Verificado con `list_edge_functions`: ya no
+aparece en la lista.
 
 ### npm audit
 `npm audit fix` (sin `--force`, solo cambios sin breaking changes): **26 → 6 vulnerabilidades**. Build
@@ -60,7 +61,6 @@ anon/authenticated, solo `service_role` accede (bypassa RLS). Confirmado en cód
 usa el cliente `admin` (service_role), nunca un cliente scoped a usuario. **No requiere ningún cambio.**
 
 ### Pendiente real para próximas sesiones
-- Borrar `arca-diag` manualmente del Dashboard de Supabase
 - Decisión de negocio: upgrade a plan Pro de Supabase para leaked password protection
 - `npm audit fix --force` — evaluar caso por caso (especialmente reemplazar `xlsx`, que no tiene fix)
 - Ítems de `PLAN_SEMANA.md` sección 8 (guards de RPCs no-stock, precisión financiera) — no auditados aún
