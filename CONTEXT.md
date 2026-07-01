@@ -36,10 +36,39 @@ cambios — el frontend no requiere ningún ajuste.
   (candidato a código muerto — fuera de alcance de esta auditoría de seguridad).
 
 ### Pendiente real para próximas sesiones
-- Precisión de cálculos financieros (redondeo IVA, moneda paralela) — `PLAN_SEMANA.md` §8, aún sin auditar
-- Patrones de manejo de errores silenciosos fuera de `stock_actual` — sin auditar
-- Decisión de negocio: upgrade a plan Pro de Supabase para leaked password protection
-- `npm audit fix --force` — evaluar caso por caso (`vite` 4→8, `jspdf`, y especialmente `xlsx` sin fix)
+
+**Objetivo de Luciano:** cerrar la "parte central" (core transaccional/fiscal/seguridad) para
+pasar a ajustes de diseño. Plan de acción ordenado por prioridad:
+
+**Frente 1 — Bloqueante de negocio real (requiere acción externa de Luciano primero)**
+- AFIP a producción: conseguir cert real (no homologación) + PdV real de AFIP →
+  una vez que Luciano tenga esos 2 insumos, la sesión siguiente solo necesita cargarlos
+  y setear `AFIP_ENVIRONMENT=production` (trabajo técnico corto, ya está todo el circuito
+  WSAA→WSFE probado en homologación desde sesión 64)
+- Confirmar valor actual de `AFIP_ENVIRONMENT` en Dashboard → Edge Functions → Secrets
+  (pendiente desde sesión 30, nunca verificado)
+
+**Frente 2 — Auditoría técnica acotada (100% ejecutable sola, sin depender de Luciano)**
+- Precisión de cálculos financieros: redondeo de IVA discriminado, consistencia entre
+  `ROUND()` de SQL vs `Math.round` de JS, moneda paralela (`monto_paralelo`/`tc_paralelo`)
+- Patrones de manejo de errores silenciosos fuera de `stock_actual` (grep de
+  `console.error`/`console.warn` dentro de `catch` que deberían propagar el error)
+
+**Frente 3 — Decisiones rápidas de Luciano (5 minutos cada una, no bloquean nada más)**
+- ¿Plan Pro de Supabase? (leaked password protection)
+- ¿Qué hacer con `xlsx` sin fix de seguridad? (tolerar / migrar a `exceljs`)
+- ¿Aplicar `npm audit fix --force`? (bump mayor de `vite` 4→8 y `jspdf` — requiere testing manual post-upgrade)
+- Registrar la URL de webhook MP en el panel de MercadoPago Developers (2 minutos, la URL ya está en Configuración → Integraciones)
+
+**Frente 4 — Bugs menores con decisión de negocio pendiente**
+- Dropdown "Nota de Débito" en devolución a proveedor sigue mandando `nota_credito` al backend
+- "Convertir Ticket → Factura" desde el historial — no implementado, ¿un ticket no-fiscal puede pasar a fiscal después?
+
+**Roadmap — explícitamente pospuesto, no es parte del "core"**
+- Programa de fidelización por puntos
+- Multi-sucursal
+- Retiros/egresos de MP (Released Money API)
+- 78 índices "sin uso" — monitorear con tráfico real antes de decidir, no tocar todavía
 
 ## Sesión 37 — Luciano (2026-06-30) — Cierre de cabo suelto + residuos + afip_tickets
 
