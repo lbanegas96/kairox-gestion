@@ -1,5 +1,45 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-06-30 (sesión 37 Luciano — gate admin Config + limpieza de residuos + afip_tickets confirmado OK)
+**Última actualización:** 2026-06-30 (sesión 38 Luciano — auditoría de guards de tenant en RPCs no-stock: 1 fuga real encontrada y corregida)
+
+## Sesión 38 — Luciano (2026-06-30) — Guards de tenant en RPCs restantes (frente pendiente de PLAN_SEMANA.md §8)
+
+### Metodología
+Listadas las 27 funciones `SECURITY DEFINER` del schema público (excluyendo triggers). Las de
+venta/compra/stock ya estaban auditadas (sesiones 36-46). De las 13 restantes con `p_empresa_id`
+como parámetro, se leyó el body completo de cada una buscando el guard
+`p_empresa_id = get_my_empresa_id()` antes de cualquier lectura/escritura.
+
+### 🔴 Hallazgo real — `calcular_ofertas_carrito` sin ningún guard (migration 120, aplicada ✅)
+Cero validación de tenant. Cualquier usuario autenticado podía pasar el `empresa_id` de otra
+empresa y la función devolvía sus ofertas activas (nombre, tipo/valor de descuento, medio de
+pago, vigencia) — fuga de información comercial cross-tenant. **Verificado antes y después**:
+la misma llamada que en sesión 35 devolvía el descuento real del Termo Stanley, ahora lanza
+`No autorizado: empresa_id no coincide con el usuario autenticado`. Firma de la función sin
+cambios — el frontend no requiere ningún ajuste.
+
+### Casos revisados y descartados (guard correcto o no aplica, sin cambios)
+- `crear_nota_debito`, `usar_caea_en_venta`, `reencolar_caes_pendientes`,
+  `insertar_movimiento_bancario_externo` (2 overloads), `fecha_en_periodo_cerrado`,
+  `seed_plan_cuentas`, `siguiente_numero_documento`: guard correcto tal cual está.
+- **`seed_maestros_default` / `seed_series_numeracion`**: el guard tiene una excepción
+  cuando `profile.empresa_id` del caller es `NULL` — **verificado que es intencional y
+  necesario**: se disparan desde `trg_empresa_seed_maestros`/`trg_empresa_seed_series_numeracion`
+  (`AFTER INSERT ON empresas`), que corren **dentro** de `create_tenant`, en el instante en que
+  el perfil del usuario todavía no tiene `empresa_id` asignado (el INSERT a `profiles` es el
+  paso siguiente). Sacar la excepción rompería el alta de **toda empresa nueva**. Riesgo residual
+  mínimo: solo permite insertar filas default no sensibles (`Unidad`, `Contado`, etc.) con
+  `ON CONFLICT DO NOTHING`, nunca pisa datos reales. **No se toca.**
+- `check_rate_limit` / `record_attempt`: no manejan datos de tenant expuestos (rate limiting
+  por `identifier`, no filtran por empresa en la lectura). Sin impacto explotable.
+- `create_tenant`: auto-scoped a `auth.uid()`, no puede targetear otra empresa por diseño.
+- `siguiente_numero_documento`: guard correcto, pero confirmado sin callers en el frontend
+  (candidato a código muerto — fuera de alcance de esta auditoría de seguridad).
+
+### Pendiente real para próximas sesiones
+- Precisión de cálculos financieros (redondeo IVA, moneda paralela) — `PLAN_SEMANA.md` §8, aún sin auditar
+- Patrones de manejo de errores silenciosos fuera de `stock_actual` — sin auditar
+- Decisión de negocio: upgrade a plan Pro de Supabase para leaked password protection
+- `npm audit fix --force` — evaluar caso por caso (`vite` 4→8, `jspdf`, y especialmente `xlsx` sin fix)
 
 ## Sesión 37 — Luciano (2026-06-30) — Cierre de cabo suelto + residuos + afip_tickets
 
