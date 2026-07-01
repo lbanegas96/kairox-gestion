@@ -176,11 +176,20 @@ A pedido explícito: revisión de arriba a abajo de TODO lo que NO se auditó en
 
 **Migration 072.** La única policy SELECT de `profiles` era `id = auth.uid()` — no existía ninguna policy que permitiera ver perfiles de OTROS usuarios de la misma empresa. Confirmado con `BEGIN...ROLLBACK`: un admin que consulta `profiles WHERE empresa_id = su_empresa` recibía **solo su propia fila**, nunca la de sus compañeros — `UsuariosSection.jsx` (gestión de usuarios, pantalla solo para admins) depende de esto y hoy muestra la lista de usuarios vacía/incompleta en producción. Es el caso inverso al 8.1: no es una fuga, es una restricción excesiva que rompe funcionalidad real. Agregada policy `profiles_admin_select` (`is_admin() AND empresa_id = get_my_empresa_id()`), mismo patrón que `profiles_admin_update/insert/delete`. Grep confirmó que ningún otro componente del sistema necesita ver perfiles de otros usuarios — no se amplió más allá de lo necesario. Verificado: admin ahora ve 2 filas (la propia + la del colega), un `staff` sigue viendo solo 1.
 
-### Pendiente en esta auditoría
+### Pendiente en esta auditoría — TODO CERRADO (sesiones 38 y 41, ver CONTEXT.md)
 
-- Guards de tenant en RPCs `SECURITY DEFINER` no relacionadas a `stock_actual` (las de venta/compra ya se auditaron en sesión 36-46 — falta el resto: notas de crédito/débito, cheques, retenciones, conciliación bancaria, plan de cuentas/asientos).
-- Precisión de cálculos financieros (redondeo de IVA, totales, tipo de cambio paralelo).
-- Patrones de manejo de errores fuera de `stock_actual` (¿hay más `console.error`/`console.warn` silenciosos como los ya encontrados en `CompraRapidaSection.jsx`?).
+- ~~Guards de tenant en RPCs `SECURITY DEFINER` no relacionadas a `stock_actual`~~ — ✅ sesión 38.
+  Auditadas las 27 funciones `SECURITY DEFINER` del schema. Hallazgo real: `calcular_ofertas_carrito`
+  sin ningún guard (corregido, migration 120). Confirmado que cheques/retenciones/asientos
+  contables NO tienen RPCs propias — operan por RLS directo, ya cubierto en el barrido de
+  sesión 52 de arriba (8.0). Notas de crédito/débito: guard correcto, sin cambios.
+- ~~Precisión de cálculos financieros~~ — ✅ sesión 41. Hallazgo real: `subtotal = precio*cantidad`
+  en JS no siempre da 2 decimales limpios (ruido IEEE754, ej. `45.45*3 = 136.35000000000002`,
+  confirmado en ~30% de combinaciones comunes). Corregido con `ROUND(...,2)` defensivo dentro de
+  `crear_venta` (migration 123) — protege a todos los callers sin tocar el frontend.
+- ~~Patrones de manejo de errores fuera de `stock_actual`~~ — ✅ sesión 41. Auditadas ~25 escrituras
+  críticas: el 100% muestra toast al usuario cuando falla. Sin hallazgos esta vez (a diferencia
+  de sesiones 33 y 49, que sí encontraron catches silenciosos reales).
 - Edge functions: ya auditadas `invite-user`, `create-user`, `delete-user`, `generar-csr`, `emitir-cae`, `mp-webhook` (sesión 47-48) — falta nada nuevo salvo que se agregue una.
 
 Cualquier duda sobre el por qué de una decisión técnica (por qué `ajuste` es absoluto y no delta, por qué `increment_stock` decide el tipo de movimiento por signo y no por nombre de función, etc.) está razonada en detalle en `CONTEXT.md` — está ordenado por sesión, de más reciente a más vieja.

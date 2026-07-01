@@ -1,5 +1,53 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-01 (sesión 41 Luciano — Frente 2 completo: auditoría de errores silenciosos (limpia) + fix real de redondeo financiero)
+**Última actualización:** 2026-07-01 (sesión 42 Luciano — cierre de Frente 3/4: 2 pendientes resueltos sin necesitar decisión de Luciano)
+
+## Sesión 42 — Luciano (2026-07-01) — Investigación de pendientes "de decisión" — 2 cerrados sin tocar código
+
+Pedido: atacar todo lo posible sin tocar los bloqueantes de AFIP. Investigué los ítems de
+Frente 3/4 uno por uno — 2 resultaron tener respuesta técnica clara, sin necesitar que
+Luciano decida nada.
+
+### ✅ "Bug" de dropdown Nota de Débito — YA NO EXISTE (nota vieja, stale)
+Reviso `NuevaDevolucionProveedorModal.jsx` completo: el radio group de "Compensación" tiene
+3 opciones — `nota_credito` ("Nota de Crédito del proveedor"), `reemplazo`, `pendiente` — las
+3 correctamente etiquetadas y correctamente enviadas al backend. **No hay ninguna opción de
+"Nota de Débito" en este modal.** Además, contablemente es lo correcto: una devolución a
+proveedor se compensa con una NC que emite el proveedor (reduce lo que le debés), no con una
+ND. La nota en sesiones viejas quedó obsoleta — se ve que se corrigió en algún momento entre
+medio sin quedar documentado. Sin acción — cerrado.
+
+### ✅ `xlsx` sin fix de seguridad — investigado, riesgo real es CERO
+Los CVE de `xlsx` (prototype pollution, ReDoS) se disparan al **parsear** un archivo `.xlsx`
+malicioso (`XLSX.read`). Grep confirma: en todo el código solo hay 1 archivo que usa `xlsx`
+(`src/lib/excelUtils.js`), y **solo llama `XLSX.writeFile`/`utils.aoa_to_sheet`** — nunca
+`XLSX.read`. Es decir, se usa exclusivamente para *exportar* datos propios de KAIROX (productos,
+ventas, compras, clientes, movimientos) a un archivo descargable — nunca para parsear un archivo
+subido por un usuario. Confirmé además que `CSVImportModal.jsx` (la única función de "importar"
+del sistema) no usa `xlsx` en absoluto. **Conclusión: no hay ninguna ruta de ataque real en este
+código — no hace falta migrar a otra librería.** No era una decisión de negocio, era una pregunta
+técnica con respuesta clara.
+
+### 🟡 `npm audit fix --force` — investigado más a fondo, sigue sin aplicar
+Las 6 vulnerabilidades restantes (`vite`, `esbuild`, `jspdf`, `jspdf-autotable`, `dompurify`,
+`xlsx`) **todas** requieren bump de versión mayor (`isSemVerMajor: true`) — no hay ninguna
+"ganancia gratis" oculta. En particular `jspdf` (crítico) tocaría la generación de PDFs de
+facturas/tickets (funcionalidad real, en uso constante) y `vite` 4→8 tocaría el tooling de
+build completo — ambos requieren testing manual antes de aplicar, no algo para hacer a ciegas
+sin que Luciano lo sepa. `xlsx` ya se resolvió arriba (sin fix disponible, pero sin riesgo real).
+Sigue pendiente de decisión explícita, sin cambios.
+
+### `PLAN_SEMANA.md` §8 — CERRADO
+Los 3 ítems de auditoría técnica pendientes desde sesión 52 (guards de tenant no-stock,
+precisión financiera, errores silenciosos) quedaron los 3 resueltos entre sesiones 38 y 41.
+Marcado en el archivo.
+
+### Pendiente real — ya no queda nada puramente técnico sin decisión/acción de Luciano
+- **AFIP a producción** — bloqueante, necesita cert real + PdV real (Luciano)
+- **Webhook MP** — 2 minutos en el panel de MercadoPago (Luciano, no lo puedo hacer yo)
+- **Plan Pro de Supabase** — decisión de costo (Luciano)
+- **`npm audit fix --force`** — requiere testing manual antes de aplicar (jspdf toca PDFs de facturas)
+- **Ticket→Factura** — decisión de negocio/fiscal, no la voy a inventar sola
+- Roadmap (fidelización, multi-sucursal, retiros MP, billing suscripciones) — pospuesto, fuera del "core"
 
 ## Sesión 41 — Luciano (2026-07-01) — Frente 2: errores silenciosos + precisión financiera
 
