@@ -1,5 +1,46 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-01 (sesión 40 Luciano — fix bug reportado por Nadia: puente Caja→Bancos generalizado a trigger)
+**Última actualización:** 2026-07-01 (sesión 41 Luciano — Frente 2 completo: auditoría de errores silenciosos (limpia) + fix real de redondeo financiero)
+
+## Sesión 41 — Luciano (2026-07-01) — Frente 2: errores silenciosos + precisión financiera
+
+### Auditoría de errores silenciosos — LIMPIA, sin hallazgos
+Revisadas ~25 escrituras críticas (ventas, facturas, NC/ND cliente y proveedor, devoluciones,
+compras, productos, usuarios, permisos, apertura/cierre de caja, movimientos manuales): **el
+100% muestra toast al usuario cuando falla**. El patrón "solo console.warn, sin toast" está
+reservado exclusivamente a efectos secundarios ya documentados como no-críticos (asiento
+contable automático, cola de CAE AFIP) — nunca a la operación principal. A diferencia de las
+2 veces anteriores que este tipo de auditoría encontró bugs reales (sesiones 33 y 49), esta
+vez no hay nada para corregir.
+
+### 🟡 Hallazgo real — redondeo de punto flotante en subtotales (migration 123, aplicada ✅)
+El frontend calcula `subtotal = precio_unitario * cantidad` en JS. Por aritmética IEEE754 esto
+NO siempre da 2 decimales limpios — ej. `45.45 * 3 = 136.35000000000002` (confirmado con
+node: ~30% de combinaciones precio/cantidad comunes lo disparan). Ese valor viajaba como texto
+en el JSON hasta `crear_venta`, y Postgres lo persistía EXACTO (NUMERIC es precisión arbitraria)
+— sin fix, `comprobante_items.subtotal` y `comprobantes.total` quedaban con ruido de punto
+flotante permanente en la base. Invisible en pantalla (`toLocaleString` redondea para mostrar),
+pero real en el dato crudo — un export a CSV o un `WHERE subtotal = X` lo expondría.
+
+**Fix:** `crear_venta` v6 — `ROUND(..., 2)` en cada punto donde se extrae un monto del JSON
+(`subtotal`, `precio_unitario`, `precio_original`, `descuento_monto`, `p_total`, `monto` de
+pagos) antes de usarlo o guardarlo. Aplicado en el RPC, no en cada archivo del frontend, para
+proteger todos los callers actuales y futuros de una sola vez — mismo criterio que el trigger
+genérico de migration 122.
+
+**Verificado con el valor ruidoso real** (`45.45 * 3 = 136.35000000000002`) vía `BEGIN...ROLLBACK`
+simulando sesión autenticada: `comprobantes.total`, `neto_gravado`, `iva_discriminado`,
+`comprobante_items.subtotal` y `precio_unitario` — todos limpios (136.35 / 112.69 / 23.66 / 136.35
+/ 45.45). Re-verificado que el puente Caja→Bancos (migration 122) sigue funcionando igual tras
+la reescritura completa de la función (exactamente 1 movimiento bancario, sin duplicar).
+
+**No tocado (deliberado):** el redondeo del lado del frontend (`useConfirmarVenta.js`,
+`NuevaVentaModal.jsx`) — el fix del RPC ya garantiza que el dato ALMACENADO sea limpio
+independientemente del ruido que llegue por la red; tocar múltiples archivos de frontend para
+un problema ya cerrado en el punto de persistencia es scope creep innecesario.
+
+### Frente 2 — CERRADO
+Con esto se completa el Frente 2 del plan de acción de la sesión 37 (auditoría técnica acotada,
+100% ejecutable sin depender de Luciano).
 
 ## Sesión 40 — Luciano (2026-07-01) — Puente Caja→Bancos: de código embebido a trigger genérico
 
