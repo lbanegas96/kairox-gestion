@@ -1,12 +1,11 @@
 /**
  * Cliente Supabase secundario para la integración Ualá.
  *
- * Apunta al proyecto cgzaiijspgafruytozzk (Kairox-Gestión),
- * separado del cliente principal de la app (wuznppxeonmhfcvnqfbf).
+ * Apunta al proyecto Supabase de Ualá (project ID en VITE_UALA_SUPABASE_URL).
  *
  * Requiere en .env.local:
- *   VITE_UALA_SUPABASE_URL=https://cgzaiijspgafruytozzk.supabase.co
- *   VITE_UALA_SUPABASE_ANON_KEY=<anon key del proyecto cgzaiijspgafruytozzk>
+ *   VITE_UALA_SUPABASE_URL=https://your-project.supabase.co
+ *   VITE_UALA_SUPABASE_ANON_KEY=your-anon-key
  */
 import { createClient } from '@supabase/supabase-js';
 

@@ -513,11 +513,12 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           afipConfig.condicion_iva,
           selectedClient?.condicion_iva ?? 'CF'
         );
-        supabase.from('comprobantes').update({
+        const { error: afipQueueErr } = await supabase.from('comprobantes').update({
           tipo_comprobante_afip: tipoComp,
           punto_venta_id: afipConfig.punto_venta.id,
           cae_estado: 'pendiente',
-        }).eq('id', comprobante.id).catch(e => console.warn('[AFIP queue]', e.message));
+        }).eq('id', comprobante.id);
+        if (afipQueueErr) console.warn('[AFIP queue]', afipQueueErr.message);
       }
 
       toast({ title: "¡Venta Exitosa!", description: `Comprobante ${saleNumber} generado.` });

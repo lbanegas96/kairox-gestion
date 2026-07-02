@@ -1,5 +1,29 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-01 (sesión 43 Luciano — Determinación de Cuentas de Mayor estilo SAP + motor de asientos de Bancos)
+**Última actualización:** 2026-07-02 (sesión 40 Nadia — Plan de pruebas COMPLETADO ✅)
+
+## Sesión 40 — Ejecución PLAN_PRUEBAS_NADIA.md — COMPLETADO ✅ (2026-07-02)
+
+Plan de 7 bloques ejecutado en su totalidad. Resultados:
+
+- **Bloque 1** (MP ingreso): ✅ movimiento verde ingreso, monto positivo, origen Mercado Pago
+- **Bloque 2** (MP egreso): ✅ movimiento rojo egreso, monto negativo — fix collector_id validado
+- **Bloque 3** (Config MP sin re-pegar token): ✅ guarda sin exigir token, integración sigue funcionando
+- **Bloque 4** (UI tabla movimientos — origen/ID/ejecutor): ✅ chips con color, ID copiable, ejecutor correcto
+- **Bloque 5** (Determinación de Cuentas): ✅
+  - Pestaña visible con ícono balanza
+  - Regla creada (Cualquier origen + Solo Ingreso → 4.3 Otros Ingresos)
+  - Movimiento manual $500 contabilizado → asiento AS-000123 generado
+  - Asiento cuadra: DEBE 1.1.1 Caja y Bancos $500 / HABER 4.3 Otros Ingresos $500
+- **Bloque 6** (Contabilizar/Revertir): ✅
+  - Reversión → asiento AS-000123 queda estado "anulado" en el libro
+  - Movimiento queda disponible para recontabilizar
+- **Bloque 7** (Seguridad admin-only): ✅
+  - Usuario staff.test@kairox.test creado (role=staff, empresa Nalux, permisos bancos+dashboard+configuracion)
+  - Configuración → "No tenés permisos" — gate por rol funciona
+  - Bancos → Staff no ve botón Contabilizar
+  - Defensa en profundidad confirmada: gate UI + guard RPC (migration 127)
+
+**Nota:** usuario staff.test@kairox.test es solo para pruebas. Luciano puede eliminarlo cuando quiera.
 
 ## Sesión 43 (cont. 5) — Determinación de Cuentas de Mayor (estilo SAP EBS/OBYC) + contabilización de Bancos
 

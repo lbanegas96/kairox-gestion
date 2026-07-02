@@ -491,7 +491,7 @@ function ImportCSVModal({ open, onClose, cuentas, empresaId }) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Importar extracto bancario (CSV)</DialogTitle>
           <DialogDescription>Subí el archivo CSV de tu banco y mapeá las columnas.</DialogDescription>
