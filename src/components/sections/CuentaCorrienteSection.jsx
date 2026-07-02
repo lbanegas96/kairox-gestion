@@ -265,37 +265,25 @@ function CuentaCorrienteSection() {
       : null;
 
     try {
-      // 1. Movimiento en Cuenta Corriente (HABER reduce la deuda)
-      const { error: movError } = await supabase.from('cuenta_corriente_movimientos').insert([{
-        user_id: user.id,
-        empresa_id: user.empresa_id,
-        cliente_id: selectedClient.id,
-        tipo: 'HABER',
-        monto: amount,
-        descripcion: paymentData.nota ? `Pago: ${paymentData.nota}` : 'Pago de deuda',
-        fecha: date,
-        ...(pagoParalelo !== null ? { monto_paralelo: pagoParalelo, tc_paralelo: tcParalelo.tcHoy } : {}),
-      }]);
+      // Cobro ATÓMICO: cuenta corriente (HABER) + caja (ingreso) en un solo RPC (migration 130).
+      // Antes eran 2 inserts sueltos: si el 2º fallaba, la deuda del cliente bajaba SIN registrar
+      // la plata en caja, y un reintento reducía la deuda dos veces. Ahora es todo o nada.
+      const { error: cobroError } = await supabase.rpc('registrar_cobro_cliente', {
+        p_empresa_id:     user.empresa_id,
+        p_user_id:        user.id,
+        p_cliente_id:     selectedClient.id,
+        p_cliente_nombre: selectedClient.nombre,
+        p_monto:          amount,
+        p_metodo:         paymentData.metodo,
+        p_fecha:          date,
+        p_descripcion:    paymentData.nota ? `Pago: ${paymentData.nota}` : 'Pago de deuda',
+        p_caja_sesion_id: currentSession?.id ?? null,
+        p_monto_paralelo: pagoParalelo,
+        p_tc_paralelo:    pagoParalelo !== null ? tcParalelo.tcHoy : null,
+      });
 
-      if (movError) throw movError;
+      if (cobroError) throw cobroError;
 
-      // 2. Movimiento en Caja
-      const { error: cashError } = await supabase.from('movimientos_caja').insert([{
-        user_id: user.id,
-        empresa_id: user.empresa_id,
-        caja_sesion_id: currentSession?.id,
-        fecha: date,
-        tipo: 'ingreso',
-        categoria: 'Cobro Cliente',
-        concepto: `Cobro a ${selectedClient.nombre} - ${paymentData.metodo}`,
-        monto: amount,
-        metodo_pago: paymentData.metodo,
-        is_automatic: true,
-        ...(pagoParalelo !== null ? { monto_paralelo: pagoParalelo, tc_paralelo: tcParalelo.tcHoy } : {}),
-      }]);
-
-      if (cashError) throw cashError;
-      
       toast({
         title: "Pago Registrado",
         description: `Se registró el cobro de $${amount.toLocaleString('es-AR')}.`,

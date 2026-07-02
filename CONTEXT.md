@@ -1,6 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-07-02 (sesión 44 Luciano — auditoría del motor contable: 2 hallazgos cerrados)
 
+## Sesión 44 (cont.) — Auditoría por áreas (plan vivo) — CxC Clientes
+
+Se creó `PLAN_AUDITORIA.md` (documento vivo: metodología de 6 dimensiones, 12 áreas ✅, cola de 15
+pendientes por riesgo, log de hallazgos). Se arrancó por la cola: **#1 Cuenta Corriente Clientes**.
+
+### 🔴 Hallazgo A — Cobro de CxC no atómico (FIX migration 130)
+`CuentaCorrienteSection` registraba el cobro con 2 inserts sueltos (cuenta_corriente_movimientos HABER
++ movimientos_caja ingreso), cada uno su propia transacción. El 1º commitea (y el trigger baja
+`clientes.saldo_actual`) antes del 2º; si el 2º falla, la deuda queda reducida sin registrar la plata,
+y un reintento la reduce dos veces. **Fix:** RPC atómico `registrar_cobro_cliente` (guard tenant +
+validación cliente/monto + redondeo) que hace ambos inserts en una transacción; frontend refactorizado
+para llamarlo. El trigger puente Caja→Bancos (mig.122) sigue disparando dentro del RPC. Verificado con
+ROLLBACK: cobro $50k baja saldo 195k→145k con CC+caja creados; guards (cliente ajeno, monto≤0,
+cross-tenant) bloquean sin dejar filas.
+
+### 🟡 Hallazgo B — El cobro no genera asiento (gap sistémico, NO fixeado)
+Mismo patrón que Caja/Bancos: los sub-libros mueven, pero el cobro no asienta Debe Caja/Haber Deudores.
+El mayor diverge. Es el gap sistémico de contabilización de sub-libros — se cierra extendiendo la
+Determinación de Cuentas a Caja/CC, con decisión del contador. Documentado en PLAN_AUDITORIA.md.
+
+### ✅ Verificado OK en CxC
+Trigger `fn_update_cliente_saldo`: signos correctos (DEBE +, HABER −) y reversa en DELETE/UPDATE. RLS
+`cta_cte_empresa` aísla por tenant. Audit trigger presente.
+
+**Próxima área en la cola:** #2 Cuenta Corriente Proveedores (verificar si repite el patrón no-atómico).
+
 ## Sesión 44 — Luciano (2026-07-02) — Auditoría acotada del código de contabilización (recién shippeado)
 
 Tras cerrar y probar MP/Bancos/Contabilización, se auditó el código nuevo que toca dinero

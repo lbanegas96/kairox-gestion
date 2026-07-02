@@ -3,7 +3,7 @@
 por partes, dejando registrado qué se auditó, qué está en curso y qué falta — para que no se
 escape nada.
 
-**Última actualización:** 2026-07-02 (sesión 44)
+**Última actualización:** 2026-07-02 (sesión 44 — CxC Clientes auditada)
 **Leyenda de estado:** ✅ auditado · 🔄 en curso · ⬜ pendiente · ⏸️ bloqueado
 
 ---
@@ -45,16 +45,17 @@ hallazgo → fix con migración + verificación → documentar acá y en CONTEXT
 | **Numeración / Series** | C | `obtener_proximo_numero` atómico; test 4 casos | S30 |
 | **Errores silenciosos (barrido)** | E | ~25 escrituras críticas — 100% con toast; limpio | S41 |
 | **Config admin-only** | T | `configuracion`, `integraciones_bancarias`, `determinacion_cuentas_mayor` escritura solo admin | S~,S43 |
+| **Cuenta Corriente Clientes (CxC)** | T·D·C·F·A | Cobro atómico RPC `registrar_cobro_cliente` (mig.130); trigger de saldo con signos OK; RLS tenant OK. **Pendiente: no genera asiento (Hallazgo B, gap sistémico)** | S44 |
 
 ### 🔄 En curso
-_(ninguna ahora — próxima a arrancar según la cola de abajo)_
+_(ninguna ahora — próxima: #1 de la cola = Cuenta Corriente Proveedores)_
 
 ### ⬜ Pendientes — cola priorizada por riesgo (dinero y seguridad primero)
 
 | # | Área | Módulo / Tablas | Dimensiones foco | Por qué importa |
 |---|------|-----------------|-------------------|-----------------|
-| 1 | **Cuenta Corriente Clientes (CxC)** | CuentaCorrienteSection · `cuenta_corriente_movimientos` | T·D·C·F | Cobros / Open Item — dinero; ¿el saldo por comprobante cuadra? ¿genera asiento? |
-| 2 | **Cuenta Corriente Proveedores (CxP)** | `cuenta_corriente_proveedores` | T·D·C·F | Pagos a proveedores — dinero |
+| ~~1~~ | ~~Cuenta Corriente Clientes (CxC)~~ | — | — | ✅ AUDITADA S44 (ver tabla de arriba). Queda Hallazgo B (asiento) en gap sistémico |
+| 2 | **Cuenta Corriente Proveedores (CxP)** ← próxima | `cuenta_corriente_proveedores` | T·D·C·F | Pagos a proveedores — dinero. **Verificar si repite el patrón no-atómico de CxC** (probable) |
 | 3 | **Caja / POS** | CajaSection · `caja_sesiones`, `movimientos_caja`, `cajas` | T·D·C·A | Apertura/cierre/arqueo; diferencias; ¿quién cierra? |
 | 4 | **Cheques** | ChequesSection · `cheques`, `cheques_historial` | T·D·A | Instrumentos de pago; estados (cartera/depositado/rechazado); ¿lifecycle correcto? |
 | 5 | **Usuarios / Permisos granulares** | UsuariosSection · `profiles.permissions` (jsonb) | **T (crítico)** | ¿Los permisos se validan SOLO en la UI o también server-side (RLS/RPC)? Si es solo UI = vuln |
@@ -80,12 +81,21 @@ _(ninguna ahora — próxima a arrancar según la cola de abajo)_
 
 | Fecha | Área | Severidad | Hallazgo | Fix |
 |-------|------|-----------|----------|-----|
+| 2026-07-02 | CxC Clientes | 🔴 | Cobro no atómico (2 inserts sueltos): si el 2º falla, deuda baja sin registrar plata; reintento la baja 2 veces | RPC atómico `registrar_cobro_cliente` (mig.130) + frontend |
+| 2026-07-02 | CxC / sub-libros | 🟡 | El cobro no genera asiento contable (mayor diverge del sub-libro) | **Gap sistémico** — ver nota abajo, requiere contador |
 | 2026-07-02 | Bancos/Contab. | 🔴 | Borrar movimiento contabilizado → asiento huérfano | Trigger BEFORE DELETE (mig.128) + UI |
 | 2026-07-02 | Bancos/Contab. | 🟡 | `contabilizar` sin FOR UPDATE → posible doble asiento | FOR UPDATE (mig.129) |
 | 2026-07-01 | MP | 🔴 | Egresos MP registrados como ingreso | collector_id vs mp_user_id |
 | 2026-07-01 | Integraciones | 🔴 | `integraciones_bancarias` sin gate admin (tokens legibles por cualquier user) | RLS admin-only (mig.124) |
 
 ---
+
+## 🟡 Gap sistémico abierto — Contabilización de sub-libros
+Los sub-libros (Caja, Bancos, Cuenta Corriente) mueven dinero pero **solo Ventas y Compras generan
+asiento automático** (asientosAutoService). Cobros, pagos, movimientos de caja/bancos NO asientan →
+el mayor contable puede divergir de los sub-libros. Ya se empezó a cerrar con la **Determinación de
+Cuentas + contabilización de Bancos** (S43). Falta extenderlo a Caja y CC (cobros/pagos). **Requiere
+decisión del contador** (qué cuentas imputar) — no se inventa. Aplica a: CxC (Hallazgo B), CxP, Caja.
 
 ## Cómo retomar (para cualquier sesión futura)
 1. Abrir este archivo → mirar la **cola priorizada**.
