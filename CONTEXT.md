@@ -26,6 +26,14 @@ re-pegar el token para guardar otros cambios. Pero la vez que falta (pegar el to
 para que se guarde el `mp_user_id` del hallazgo anterior) todavía hace falta, porque ese dato solo
 se captura cuando efectivamente se verifica un token contra la API de MP.
 
+**Cierre:** el guardado real fallaba en varios intentos porque el navegador tenía cacheado el
+bundle JS de ANTES del fix — `git log`/deploy del lado del servidor estaban bien (verificado
+descargando y grepeando el bundle real servido en `kairox-gestion-chi.vercel.app`, que sí tenía
+el código nuevo), pero "cerrar sesión y volver a entrar" no fuerza una recarga de assets estáticos
+en una SPA. Con un hard refresh (Ctrl+Shift+R) el guardado funcionó y `config.mp_user_id` quedó
+persistido (`202242348`). Pendiente: que Luciano confirme con una prueba real de egreso que la
+clasificación automática ya funciona de punta a punta.
+
 ## Sesión 43 — Luciano (2026-07-01) — "Vamos por MP" — auditoría de integración + hallazgo de seguridad
 
 ## Sesión 43 (cont.) — Bug real detectado en pruebas de Luciano: egresos MP registrados como ingreso
