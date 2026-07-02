@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Landmark, Plus, Upload, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle,
   RefreshCw, FileText, ChevronRight, X, Building2, Wallet, CheckCircle2, Link2, Unlink2, Zap,
-  Eye, EyeOff
+  Eye, EyeOff, Copy, User, Bot, Check
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,73 @@ const BANCOS_COMUNES = ['Ualá', 'Mercado Pago', 'Banco Galicia', 'Banco Santand
 
 function formatMoney(n) {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 }).format(n ?? 0);
+}
+
+// ─── Metadata de origen (marca + color por integración) ────────────────────
+// Cada origen se muestra con su color de marca para reconocimiento inmediato,
+// siguiendo la práctica fintech de identificar visualmente el canal del movimiento.
+const ORIGEN_META = {
+  mercadopago: { label: 'Mercado Pago', dot: '#009EE3', cls: 'text-[#0082c1] dark:text-[#4db8e8] border-[#009EE3]/30 bg-[#009EE3]/10' },
+  uala:        { label: 'Ualá',         dot: '#7C3AED', cls: 'text-violet-600 dark:text-violet-400 border-violet-400/30 bg-violet-500/10' },
+  manual:      { label: 'Manual',       dot: '#64748b', cls: 'text-slate-600 dark:text-slate-300 border-slate-400/30 bg-slate-500/10' },
+  csv:         { label: 'Importado',    dot: '#d97706', cls: 'text-amber-600 dark:text-amber-400 border-amber-400/30 bg-amber-500/10' },
+  email:       { label: 'Email',        dot: '#0ea5e9', dot2: true, cls: 'text-sky-600 dark:text-sky-400 border-sky-400/30 bg-sky-500/10' },
+  webhook:     { label: 'Webhook',      dot: '#10b981', cls: 'text-emerald-600 dark:text-emerald-400 border-emerald-400/30 bg-emerald-500/10' },
+};
+
+function origenMeta(origen) {
+  return ORIGEN_META[origen] ?? { label: origen || '—', dot: '#94a3b8', cls: 'text-kx-text-3 border-kx-border bg-kx-surface-2' };
+}
+
+// Extrae la referencia externa (ej. "MP #166756842896") de la descripción del
+// movimiento. Si no hay referencia externa, cae al id interno corto del movimiento
+// para que TODO movimiento tenga una referencia trazable/copiable.
+function parseReferencia(m) {
+  const mp = /^MP #(\d+)/.exec(m.descripcion || '');
+  if (mp) return { chip: `MP #${mp[1]}`, value: mp[1], externa: true };
+  return { chip: `#${(m.id || '').slice(0, 8)}`, value: m.id, externa: false };
+}
+
+// Quita el prefijo "MP #id — " de la descripción para no repetir el id (ya va en su
+// propio chip). Deja la parte legible: método + pagador.
+function limpiarDescripcion(desc) {
+  return (desc || '').replace(/^MP #\d+\s*[—-]\s*/, '').trim();
+}
+
+// Etiqueta de quién ejecutó el movimiento. Manual/CSV: nombre del usuario (snapshot).
+// Integraciones (sin created_by): se deriva del origen.
+function ejecutorDe(m) {
+  if (m.created_by_nombre) return { nombre: m.created_by_nombre, sistema: false };
+  if (m.origen === 'mercadopago') return { nombre: 'Integración Mercado Pago', sistema: true };
+  if (m.origen === 'uala')        return { nombre: 'Integración Ualá', sistema: true };
+  if (m.origen === 'csv')         return { nombre: 'Importación CSV', sistema: true };
+  if (m.origen === 'email' || m.origen === 'webhook') return { nombre: 'Sistema', sistema: true };
+  return { nombre: '—', sistema: true };
+}
+
+// Chip de referencia con copiar-al-portapapeles (fintech: la referencia/ID es clave
+// para trazabilidad y resolución de disputas).
+function RefChip({ mov }) {
+  const [copied, setCopied] = useState(false);
+  const ref = parseReferencia(mov);
+  const copy = (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(ref.value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1400);
+  };
+  return (
+    <button
+      onClick={copy}
+      title={`Copiar ${ref.externa ? 'ID de pago' : 'ID interno'}: ${ref.value}`}
+      className="group inline-flex items-center gap-1 font-mono text-[11px] text-kx-text-3 hover:text-kx-text transition-colors"
+    >
+      <span className="tabular-nums">{ref.chip}</span>
+      {copied
+        ? <Check className="w-3 h-3 text-emerald-500" />
+        : <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
+    </button>
+  );
 }
 
 // ─── Modal Nueva/Editar Cuenta ─────────────────────────────────────────────
@@ -189,6 +256,8 @@ function MovimientoModal({ open, onClose, cuentas, empresaId, defaultCuentaId })
     }
   }, [open, defaultCuentaId, cuentas]);
 
+  const nombreUsuario = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.email || null;
+
   const mutation = useMutation({
     mutationFn: (data) => movimientosService.create({
       empresa_id: empresaId,
@@ -198,6 +267,8 @@ function MovimientoModal({ open, onClose, cuentas, empresaId, defaultCuentaId })
       monto: parseNumberLocale(data.monto),
       tipo: data.tipo,
       origen: 'manual',
+      created_by: user?.id ?? null,             // audit trail — quién registró
+      created_by_nombre: nombreUsuario,         // snapshot inmutable del nombre
     }),
     onSuccess: () => {
       // Invalidar usando solo el prefijo para que matchee con cualquier queryKey
@@ -309,6 +380,8 @@ function parseCSV(text) {
 function ImportCSVModal({ open, onClose, cuentas, empresaId }) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const nombreUsuario = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.email || null;
   const fileRef = useRef();
   const [step, setStep] = useState(1); // 1=config, 2=preview
   const [cuentaId, setCuentaId] = useState('');
@@ -394,9 +467,9 @@ function ImportCSVModal({ open, onClose, cuentas, empresaId }) {
           fecha = `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}T12:00:00`;
         }
       }
-      return { empresa_id: empresaId, cuenta_bancaria_id: cuentaId, fecha, descripcion: di >= 0 ? row[di] : '', monto, tipo, origen: 'csv' };
+      return { empresa_id: empresaId, cuenta_bancaria_id: cuentaId, fecha, descripcion: di >= 0 ? row[di] : '', monto, tipo, origen: 'csv', created_by: user?.id ?? null, created_by_nombre: nombreUsuario };
     }).filter(r => !isNaN(r.monto) && r.monto > 0);
-  }, [parsed, mapping, tipoOverride, empresaId, cuentaId]);
+  }, [parsed, mapping, tipoOverride, empresaId, cuentaId, user?.id, nombreUsuario]);
 
   const handleImport = async () => {
     if (!allRows.length) return;
@@ -827,7 +900,7 @@ function CuentasBancariasSection() {
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Fecha</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Cuenta</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Descripción</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Detalle · Referencia · Registrado por</th>
                       <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Tipo</th>
                       <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Monto</th>
                       <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Origen</th>
@@ -835,18 +908,36 @@ function CuentasBancariasSection() {
                     </tr>
                   </thead>
                   <tbody className="divide-y dark:divide-slate-800">
-                    {movimientosTabla.map(m => (
+                    {movimientosTabla.map(m => {
+                      const o = origenMeta(m.origen);
+                      const ej = ejecutorDe(m);
+                      const desc = limpiarDescripcion(m.descripcion);
+                      return (
                       <tr key={m.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/40 transition-colors">
-                        <td className="px-4 py-3 font-mono text-xs text-slate-500 whitespace-nowrap">
+                        <td className="px-4 py-3 font-mono text-xs text-slate-500 whitespace-nowrap align-top">
                           {formatDateAR(m.fecha)}
                         </td>
-                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                        <td className="px-4 py-3 text-slate-700 dark:text-slate-300 whitespace-nowrap align-top">
                           {m.cuentas_bancarias?.nombre ?? '—'}
                         </td>
-                        <td className="px-4 py-3 text-kx-text-2 dark:text-kx-text-2 max-w-xs truncate">
-                          {m.descripcion || <span className="italic text-kx-text-3">—</span>}
+                        {/* Detalle + Referencia (ID copiable) + Ejecutor — jerarquía fintech:
+                            descripción arriba, metadatos "silenciosos" debajo */}
+                        <td className="px-4 py-3 align-top max-w-sm">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-kx-text dark:text-kx-text truncate">
+                              {desc || <span className="italic text-kx-text-3">Sin descripción</span>}
+                            </span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <RefChip mov={m} />
+                              <span className="text-kx-text-3 text-[11px]">·</span>
+                              <span className="inline-flex items-center gap-1 text-[11px] text-kx-text-3" title={`Registrado por ${ej.nombre}`}>
+                                {ej.sistema ? <Bot className="w-3 h-3 shrink-0" /> : <User className="w-3 h-3 shrink-0" />}
+                                <span className="truncate max-w-[150px]">{ej.nombre}</span>
+                              </span>
+                            </div>
+                          </div>
                         </td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="px-4 py-3 text-center align-top">
                           {m.tipo === 'ingreso' ? (
                             <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 gap-1">
                               <ArrowUpCircle className="w-3 h-3" /> ingreso
@@ -857,13 +948,16 @@ function CuentasBancariasSection() {
                             </Badge>
                           )}
                         </td>
-                        <td className={`px-4 py-3 text-right font-mono font-semibold ${m.tipo === 'ingreso' ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                        <td className={`px-4 py-3 text-right font-mono font-semibold align-top ${m.tipo === 'ingreso' ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
                           {m.tipo === 'egreso' ? '-' : ''}{formatMoney(m.monto)}
                         </td>
-                        <td className="px-4 py-3 text-center">
-                          <Badge variant="outline" className="text-xs capitalize">{m.origen}</Badge>
+                        <td className="px-4 py-3 text-center align-top">
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-medium whitespace-nowrap ${o.cls}`}>
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: o.dot }} />
+                            {o.label}
+                          </span>
                         </td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="px-4 py-3 text-center align-top">
                           <Button
                             size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600"
                             onClick={() => deleteMov.mutate(m.id)}
@@ -872,7 +966,8 @@ function CuentasBancariasSection() {
                           </Button>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

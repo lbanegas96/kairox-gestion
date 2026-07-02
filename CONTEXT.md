@@ -1,5 +1,52 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-01 (sesión 43 Luciano — fix botón Guardar de ConfigMercadoPagoModal exigía re-pegar el Access Token siempre)
+**Última actualización:** 2026-07-01 (sesión 43 Luciano — UI tabla Bancos: ID/referencia + ejecutor + origen con marca; revisión contable MP)
+
+## Sesión 43 (cont. 4) — UI tabla de Movimientos de Bancos + revisión contable de MP
+
+Egresos MP validados en producción (badges rojo/verde correctos). Luciano pidió: (1) mejorar
+cómo se ve el **origen** de cada movimiento, (2) mostrar el **ID** de las transferencias MP y de
+todos los movimientos, (3) más info sobre **quién ejecutó** el movimiento, y (4) revisar el
+**impacto contable** de la integración. Pidió respaldarme en el contador (skill auditor-contable),
+el diseñador (skill web-designer) y research de mercado.
+
+### 🧾 Revisión contable (skill auditor-contable) — GAP identificado, NO implementado (necesita decisión)
+Los movimientos de MP/Ualá/CSV/manuales **NO generan asiento contable**:
+- `insertar_movimiento_bancario_externo` solo hace INSERT en `movimientos_bancarios`, no toca `asientos`.
+- No hay trigger sobre `movimientos_bancarios`. La columna `asiento_id` existe pero queda siempre NULL.
+- Las **ventas** (`crear_venta`) SÍ generan asiento vía asientosAutoService.
+
+**Diagnóstico (RT FACPCE / IAS 7):** Bancos funciona como "bank feed"/conciliación, no como fuente
+de asientos. Esto **evita correctamente la doble contabilización** de ventas ya cobradas por MP,
+PERO deja fuera de la contabilidad los movimientos que NO corresponden a una venta registrada
+(transferencias sueltas, comisiones MP, retiros) → el saldo de Bancos puede divergir del mayor.
+**Arquitectura correcta:** conciliar el movimiento contra un documento KAIROX; si matchea, sin
+asiento; si es evento económico real sin doc origen, se contabiliza. **Requiere decisión de
+Luciano + contador** (a qué cuenta imputar un ingreso MP no vinculado a venta, y las comisiones MP)
+— por eso NO se implementó, solo se dejó planteado. Prioridad 🟡 importante, no urgente.
+
+### 🎨 Mejoras de UI (skill web-designer + research de mercado) — IMPLEMENTADAS
+Research (Wise, fintech UX 2025-26): por fila mostrar monto prominente + referencia/ID trazable +
+método/contraparte + ejecutor/estado en jerarquía "silenciosa" debajo. Aplicado en
+`CuentasBancariasSection.jsx`, tabla de Movimientos:
+- **Origen con marca:** badge con dot de color por integración (MP celeste #009EE3, Ualá violeta,
+  Manual slate, Importado ámbar, etc.) en vez del badge gris plano.
+- **Referencia/ID copiable:** chip monoespaciado `MP #<paymentId>` (parseado de la descripción)
+  con botón copiar. Para movimientos sin ID externo, cae al id interno corto (`#a1b2c3d4`) — TODO
+  movimiento tiene referencia copiable.
+- **Ejecutor (quién registró):** manual/CSV muestran el nombre del usuario (ícono User);
+  integraciones muestran "Integración Mercado Pago"/"Ualá"/"Sistema" (ícono Bot).
+- **Descripción limpia:** se quita el prefijo `MP #id —` (redundante con el chip), queda método + pagador.
+
+### 🗄️ Migration 125 — trazabilidad created_by (respalda al contador y a la UI)
+El auditor marca como red flag las tablas de movimientos sin `created_by`. Se agregaron a
+`movimientos_bancarios`:
+- `created_by uuid` — auth uid del que registró (NULL en integraciones service_role).
+- `created_by_nombre text` — snapshot inmutable del nombre (audit trail; se guarda denormalizado a
+  propósito porque `profiles` tiene RLS admin-only para SELECT y un cajero no podría resolver el
+  JOIN). Poblado en el alta manual (MovimientoModal) y en el import CSV (ImportCSVModal).
+
+### Pendiente derivado
+- **Contabilización de movimientos bancarios** (asientos): decisión de negocio/fiscal de Luciano + contador.
 
 ## Sesión 43 (cont. 2) — Bug de UX: el modal de MP exigía re-pegar el token para guardar CUALQUIER cambio
 
