@@ -142,6 +142,24 @@ export const movimientosService = {
     if (count === 0) throw new Error('No se encontró el movimiento o no tenés permiso para eliminarlo.');
   },
 
+  // Contabiliza un movimiento bancario suelto: genera el asiento resolviendo la
+  // contrapartida vía la tabla de determinación (RPC SECURITY DEFINER, admin-only).
+  async contabilizar(movimientoId: string): Promise<{ asiento_id: string; numero: string }> {
+    const { data, error } = await supabase.rpc('contabilizar_movimiento_bancario', {
+      p_movimiento_id: movimientoId,
+    });
+    if (error) throw new Error(error.message);
+    return data as { asiento_id: string; numero: string };
+  },
+
+  // Revierte la contabilización: anula el asiento y libera el movimiento.
+  async revertirContabilizacion(movimientoId: string): Promise<void> {
+    const { error } = await supabase.rpc('revertir_contabilizacion_movimiento', {
+      p_movimiento_id: movimientoId,
+    });
+    if (error) throw new Error(error.message);
+  },
+
   // Saldo agregado por cuenta calculado en SQL (RPC saldos_bancarios).
   // Reemplaza al patrón de traer todos los movimientos y sumar en el cliente.
   async getSaldos(): Promise<Map<string, number>> {

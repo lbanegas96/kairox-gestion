@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Landmark, Plus, Upload, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle,
   RefreshCw, FileText, ChevronRight, X, Building2, Wallet, CheckCircle2, Link2, Unlink2, Zap,
-  Eye, EyeOff, Copy, User, Bot, Check
+  Eye, EyeOff, Copy, User, Bot, Check, Scale
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -658,6 +658,8 @@ function CuentasBancariasSection() {
     [saldos]
   );
 
+  const isAdmin = user?.role === 'admin';
+
   const deleteMov = useMutation({
     mutationFn: (id) => movimientosService.delete(id, empresaId),
     onSuccess: () => {
@@ -666,6 +668,25 @@ function CuentasBancariasSection() {
       toast({ title: 'Movimiento eliminado', className: 'bg-green-600 text-white' });
     },
     onError: (e) => toast({ title: 'Error al eliminar', description: e.message, variant: 'destructive' }),
+  });
+
+  // Contabilización de un movimiento suelto (genera asiento vía determinación de cuentas)
+  const contabilizarMut = useMutation({
+    mutationFn: (id) => movimientosService.contabilizar(id),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ['movimientos_bancarios', empresaId] });
+      toast({ title: `✓ Contabilizado — asiento ${res?.numero ?? ''}`, className: 'bg-green-600 text-white' });
+    },
+    onError: (e) => toast({ title: 'No se pudo contabilizar', description: e.message, variant: 'destructive' }),
+  });
+
+  const revertirMut = useMutation({
+    mutationFn: (id) => movimientosService.revertirContabilizacion(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['movimientos_bancarios', empresaId] });
+      toast({ title: 'Contabilización revertida' });
+    },
+    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
   const deactivateCuenta = useMutation({
@@ -957,13 +978,40 @@ function CuentasBancariasSection() {
                             {o.label}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-center align-top">
-                          <Button
-                            size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600"
-                            onClick={() => deleteMov.mutate(m.id)}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                        <td className="px-4 py-3 align-top">
+                          <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                            {m.asiento_id ? (
+                              isAdmin ? (
+                                <button
+                                  onClick={() => revertirMut.mutate(m.id)}
+                                  title="Contabilizado — click para revertir el asiento"
+                                  className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+                                >
+                                  <Check className="w-3.5 h-3.5" /> Contabilizado
+                                </button>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
+                                  <Check className="w-3.5 h-3.5" /> Contabilizado
+                                </span>
+                              )
+                            ) : isAdmin ? (
+                              <Button
+                                size="sm" variant="ghost"
+                                className="h-7 px-2 text-[11px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-700"
+                                onClick={() => contabilizarMut.mutate(m.id)}
+                                disabled={contabilizarMut.isPending}
+                                title="Generar el asiento contable de este movimiento"
+                              >
+                                <Scale className="w-3.5 h-3.5 mr-1" /> Contabilizar
+                              </Button>
+                            ) : null}
+                            <Button
+                              size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600"
+                              onClick={() => deleteMov.mutate(m.id)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                       );

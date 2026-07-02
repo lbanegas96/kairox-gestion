@@ -1,5 +1,50 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-01 (sesión 43 Luciano — UI tabla Bancos: ID/referencia + ejecutor + origen con marca; revisión contable MP)
+**Última actualización:** 2026-07-01 (sesión 43 Luciano — Determinación de Cuentas de Mayor estilo SAP + motor de asientos de Bancos)
+
+## Sesión 43 (cont. 5) — Determinación de Cuentas de Mayor (estilo SAP EBS/OBYC) + contabilización de Bancos
+
+Cierra el gap contable de la sesión anterior (movimientos de Bancos que no impactaban el mayor).
+Planificado con la skill sap-reference (modelo EBS posting rules + OBYC), implementado y probado.
+
+### Modelo (SAP Electronic Bank Statement / OBYC)
+La cuenta del banco es fija (sale de `cuentas_bancarias.plan_cuenta_id`); lo que se **determina** es la
+CONTRAPARTIDA, según una clave compuesta resuelta por especificidad:
+`(cuenta_bancaria_id?, origen, tipo, subtipo?) → cuenta_contable_id`. '*' = comodín.
+
+### Base de datos
+- **Migration 126** — tabla maestra `determinacion_cuentas_mayor` (empresa, origen, tipo, subtipo,
+  cuenta_bancaria_id opcional, cuenta_contable_id, prioridad, activo). RLS admin-only para escritura
+  (patrón migration 119), SELECT para la empresa. CHECK constraints en tipo/origen.
+- **Migration 127** — RPCs SECURITY DEFINER:
+  - `contabilizar_movimiento_bancario(id)`: genera el asiento (cabecera `asientos_contables` +
+    2 líneas `asientos_items`), resolviendo la contrapartida por determinación. ingreso → DEBE banco
+    / HABER contra; egreso → DEBE contra / HABER banco. Guards: admin, tenant, no-recontabilizar
+    (asiento_id ya seteado), período cerrado, banco con cuenta contable vinculada, regla existente.
+    Setea `movimientos_bancarios.asiento_id`. Numeración vía `next_numero_asiento` (AS-000123).
+  - `revertir_contabilizacion_movimiento(id)`: anula el asiento (estado='anulado', NO se borra —
+    queda en el libro) y libera el movimiento (asiento_id=NULL) para recontabilizar.
+- **Verificado con BEGIN...ROLLBACK** simulando admin real: ingreso $150 → DEBE 1.1.1 Caja y Bancos /
+  HABER 4.3 Otros Ingresos (cuadra 150=150, estado confirmado); egreso $100 → DEBE 2.1.1 / HABER 1.1.1;
+  reversa deja el asiento 'anulado' y el mov recontabilizable; doble-contab y cross-tenant/no-admin
+  bloqueados. **Nada se persistió** (rollback).
+
+### Frontend
+- `services/determinacionCuentasService.ts` — CRUD de reglas.
+- `services/cuentasBancariasService.ts` — `movimientosService.contabilizar()` / `.revertirContabilizacion()`.
+- `components/configuracion/DeterminacionCuentasTab.jsx` — nueva solapa (Configuración → "Determinación
+  de Cuentas", ícono Scale, entre Finanzas y Facturación): tabla editable de reglas + modal alta/edición +
+  aviso de cuentas bancarias sin cuenta contable vinculada.
+- `CuentasBancariasSection.jsx` — en la tabla de Movimientos, acción **"Contabilizar"** (admin) por
+  movimiento no contabilizado; los ya contabilizados muestran **"✓ Contabilizado"** (click = revertir, admin).
+
+### Regla contable clave (evita doble conteo)
+Es una acción MANUAL: el usuario contabiliza solo los movimientos SUELTOS (transferencias sin venta,
+comisiones, retiros). Los que corresponden a una venta ya tienen su asiento vía `crear_venta` — NO se
+tocan. La automatización (contabilizar al conciliar) queda como F3 futura.
+
+### Pendiente de decisión de Luciano + contador (para USAR la feature)
+Cargar las reglas en la nueva solapa: a qué cuenta imputar ingresos MP sueltos, comisiones MP, etc., y
+crear/elegir una cuenta "a clasificar" como regla comodín de red de seguridad. La maquinaria ya está lista.
 
 ## Sesión 43 (cont. 4) — UI tabla de Movimientos de Bancos + revisión contable de MP
 

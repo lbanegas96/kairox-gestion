@@ -4,8 +4,9 @@ import {
   AlertCircle, AlertTriangle, TrendingUp, CheckCircle2, CheckCircle, FileText, Check, Download,
   Users, Puzzle, Bell, Package2, Info, Mail, MapPin, Hash,
   CreditCard, Warehouse, BarChart3, Cpu, Copy, Pencil,
-  Plus, Shield, RefreshCw, Eye, EyeOff,
+  Plus, Shield, RefreshCw, Eye, EyeOff, Scale,
 } from 'lucide-react';
+import DeterminacionCuentasTab from '@/components/configuracion/DeterminacionCuentasTab';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,6 +49,7 @@ const TIPO_DOCUMENTO_LABEL = {
 const TABS = [
   { id: 'empresa',        label: 'Empresa',       Icon: Building    },
   { id: 'finanzas',       label: 'Finanzas',       Icon: TrendingUp  },
+  { id: 'contabilidad',   label: 'Determinación de Cuentas', Icon: Scale },
   { id: 'facturacion',    label: 'Facturación',    Icon: FileText    },
   { id: 'inventario',     label: 'Inventario',     Icon: Package2    },
   { id: 'integraciones',  label: 'Integraciones',  Icon: Puzzle      },
@@ -1538,6 +1540,13 @@ const ConfiguracionSection = ({ initialTab }) => {
               )}
             </div>
           </div>
+        </TabsContent>
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            TAB — DETERMINACIÓN DE CUENTAS DE MAYOR (estilo SAP EBS / OBYC)
+        ═══════════════════════════════════════════════════════════════════ */}
+        <TabsContent value="contabilidad">
+          <DeterminacionCuentasTab empresaId={user?.empresa_id} />
         </TabsContent>
 
         {/* ═══════════════════════════════════════════════════════════════════
