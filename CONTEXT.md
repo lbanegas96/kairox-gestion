@@ -46,6 +46,17 @@ tocan. La automatización (contabilizar al conciliar) queda como F3 futura.
 Cargar las reglas en la nueva solapa: a qué cuenta imputar ingresos MP sueltos, comisiones MP, etc., y
 crear/elegir una cuenta "a clasificar" como regla comodín de red de seguridad. La maquinaria ya está lista.
 
+**Decisión de Luciano (2026-07-02):** para las pruebas se usan **cuentas didácticas** (las de ejemplo del
+plan de cuentas). Cuando un comercio real use el sistema, cada uno cargará sus propias cuentas con su
+contador. No se define un mapeo contable "oficial" a nivel producto — es configurable por empresa (que es
+justamente el punto del módulo de Determinación).
+
+### Plan de pruebas para Nadia
+Creado `PLAN_PRUEBAS_NADIA.md` (raíz del repo) — checklist de 7 bloques cubriendo TODO lo de la sesión:
+MP ingreso/egreso, guardar config MP sin re-pegar token, UI de la tabla (origen/ID/ejecutor), movimiento
+manual + CSV con trazabilidad, Determinación de Cuentas, Contabilizar/Revertir con verificación del asiento,
+y checks de seguridad admin-only. Para correr mañana 2026-07-02.
+
 ## Sesión 43 (cont. 4) — UI tabla de Movimientos de Bancos + revisión contable de MP
 
 Egresos MP validados en producción (badges rojo/verde correctos). Luciano pidió: (1) mejorar
