@@ -1006,8 +1006,11 @@ function CuentasBancariasSection() {
                               </Button>
                             ) : null}
                             <Button
-                              size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600"
+                              size="sm" variant="ghost"
+                              className="h-7 w-7 p-0 text-red-400 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed"
                               onClick={() => deleteMov.mutate(m.id)}
+                              disabled={!!m.asiento_id}
+                              title={m.asiento_id ? 'No se puede eliminar un movimiento contabilizado — revertí la contabilización primero' : 'Eliminar movimiento'}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>

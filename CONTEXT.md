@@ -1,5 +1,33 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-02 (sesión 40 Nadia — Plan de pruebas COMPLETADO ✅)
+**Última actualización:** 2026-07-02 (sesión 44 Luciano — auditoría del motor contable: 2 hallazgos cerrados)
+
+## Sesión 44 — Luciano (2026-07-02) — Auditoría acotada del código de contabilización (recién shippeado)
+
+Tras cerrar y probar MP/Bancos/Contabilización, se auditó el código nuevo que toca dinero
+(migraciones 124–129). Nadia había probado los caminos felices; esta pasada buscó bordes.
+
+### 🔴 Hallazgo 1 — Borrar un movimiento contabilizado dejaba asiento huérfano (FIX migration 128)
+`movimientos_bancarios.delete` era un DELETE plano sin chequeo. `asientos_contables.origen_id` NO
+tiene FK a movimientos y la tabla no tenía triggers → borrar un movimiento ya contabilizado dejaba
+su asiento HUÉRFANO en el mayor (confirmado y sumando, sin documento origen) → mayor descuadrado.
+Alcanzable por un solo usuario en flujo normal (contabilizar → borrar). Había 0 movimientos
+contabilizados en prod, sin daño.
+**Fix:** trigger BEFORE DELETE `trg_fn_bloquear_delete_mov_contabilizado` que bloquea el borrado si
+`asiento_id IS NOT NULL` (criterio SAP: un documento contabilizado se revierte, no se borra). Defensa
+en profundidad: el botón de borrar en la UI queda deshabilitado con tooltip cuando está contabilizado.
+Verificado con BEGIN...ROLLBACK: contabilizado NO se borra (excepción clara), no-contabilizado sí.
+
+### 🟡 Hallazgo 2 — contabilizar sin lock de fila (FIX migration 129)
+`contabilizar_movimiento_bancario` leía el movimiento sin `FOR UPDATE`. Dos admins contabilizando el
+mismo movimiento en simultáneo podían crear 2 asientos (uno huérfano). Muy improbable en PyME (1-2
+usuarios) pero es el patrón correcto — mismo criterio que las RPCs de stock.
+**Fix:** `SELECT ... FOR UPDATE` al leer el movimiento. Re-verificado con ROLLBACK: sigue cuadrando.
+
+### ✅ Verificado OK (sin cambios)
+- Fix de Nadia (commit e2df270): el `.catch()` sobre query Supabase en NuevaVentaModal → cambiado a
+  `await` + destructurar `{ error }`. Correcto (los query builders son thenables, no promesas reales).
+- FK `movimientos_bancarios.asiento_id → asientos_contables` existe (integridad de esa dirección OK).
+- Reglas de determinación referencian plan_cuentas con FK (borrar cuenta usada queda bloqueado).
 
 ## Sesión 40 — Ejecución PLAN_PRUEBAS_NADIA.md — COMPLETADO ✅ (2026-07-02)
 
