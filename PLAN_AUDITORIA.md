@@ -3,7 +3,7 @@
 por partes, dejando registrado qué se auditó, qué está en curso y qué falta — para que no se
 escape nada.
 
-**Última actualización:** 2026-07-02 (sesión 44 — CxC y CxP auditadas)
+**Última actualización:** 2026-07-02 (sesión 44 — CxC, CxP y Caja/POS auditadas)
 **Leyenda de estado:** ✅ auditado · 🔄 en curso · ⬜ pendiente · ⏸️ bloqueado
 
 ---
@@ -47,9 +47,10 @@ hallazgo → fix con migración + verificación → documentar acá y en CONTEXT
 | **Config admin-only** | T | `configuracion`, `integraciones_bancarias`, `determinacion_cuentas_mayor` escritura solo admin | S~,S43 |
 | **Cuenta Corriente Clientes (CxC)** | T·D·C·F·A | Cobro atómico RPC `registrar_cobro_cliente` (mig.130); trigger de saldo con signos OK; RLS tenant OK. **Pendiente: no genera asiento (gap sistémico)** | S44 |
 | **Cuenta Corriente Proveedores (CxP)** | T·D·C·F | Pago atómico RPC `registrar_pago_proveedor` (mig.131): ahora SÍ descuenta de Caja/Bancos (antes no); + selector de método en UI; RLS tenant OK. **Pendiente: no genera asiento (gap sistémico)** | S44 |
+| **Caja / POS** | T·D·C·A | **SÓLIDO.** Índice único `uq_caja_sesion_abierta` garantiza 1 sesión abierta/caja (concurrencia OK); arqueo correcto (solo Efectivo afecta el cajón); RLS tenant OK; open/close atómicos. Solo se limpió dead code `insertMovimiento` (bug latente user_id). Sin 🔴 | S44 |
 
 ### 🔄 En curso
-_(ninguna ahora — próxima: #3 de la cola = Caja / POS)_
+_(ninguna ahora — próxima: #4 de la cola = Cheques)_
 
 ### ⬜ Pendientes — cola priorizada por riesgo (dinero y seguridad primero)
 
@@ -57,8 +58,8 @@ _(ninguna ahora — próxima: #3 de la cola = Caja / POS)_
 |---|------|-----------------|-------------------|-----------------|
 | ~~1~~ | ~~Cuenta Corriente Clientes (CxC)~~ | — | — | ✅ AUDITADA S44 (ver tabla de arriba). Queda Hallazgo B (asiento) en gap sistémico |
 | ~~2~~ | ~~Cuenta Corriente Proveedores (CxP)~~ | — | — | ✅ AUDITADA S44. Hallazgo 🔴: el pago no descontaba de Caja/Bancos → RPC atómico (mig.131). Queda asiento (gap sistémico) |
-| 3 | **Caja / POS** ← próxima | CajaSection · `caja_sesiones`, `movimientos_caja`, `cajas` | T·D·C·A | Apertura/cierre/arqueo; diferencias; ¿quién cierra? |
-| 4 | **Cheques** | ChequesSection · `cheques`, `cheques_historial` | T·D·A | Instrumentos de pago; estados (cartera/depositado/rechazado); ¿lifecycle correcto? |
+| ~~3~~ | ~~Caja / POS~~ | — | — | ✅ AUDITADA S44. Sólido (índice único de sesión, arqueo correcto). Solo limpieza de dead code |
+| 4 | **Cheques** ← próxima | ChequesSection · `cheques`, `cheques_historial` | T·D·A | Instrumentos de pago; estados (cartera/depositado/rechazado); ¿lifecycle correcto? |
 | 5 | **Usuarios / Permisos granulares** | UsuariosSection · `profiles.permissions` (jsonb) | **T (crítico)** | ¿Los permisos se validan SOLO en la UI o también server-side (RLS/RPC)? Si es solo UI = vuln |
 | 6 | **Notas de Débito** | `notas_debito` · `crear_nota_debito` | T·D·F | Impacto en CC; ¿genera asiento? signo correcto |
 | 7 | **Impuestos / IVA / Retenciones** | `alicuotas_impuestos`, `retenciones` | F·D | Cálculo fiscal; alícuotas parametrizables (no hardcode) |
@@ -82,6 +83,7 @@ _(ninguna ahora — próxima: #3 de la cola = Caja / POS)_
 
 | Fecha | Área | Severidad | Hallazgo | Fix |
 |-------|------|-----------|----------|-----|
+| 2026-07-02 | Caja/POS | 🟢 | `cajaService.insertMovimiento` dead code con bug latente (user_id=empresaId) | Eliminado |
 | 2026-07-02 | CxP Proveedores | 🔴 | Pagar a un proveedor NO descontaba de Caja/Bancos (tesorería inflada); ni capturaba método | RPC atómico `registrar_pago_proveedor` (mig.131) + selector de método |
 | 2026-07-02 | CxC Clientes | 🔴 | Cobro no atómico (2 inserts sueltos): si el 2º falla, deuda baja sin registrar plata; reintento la baja 2 veces | RPC atómico `registrar_cobro_cliente` (mig.130) + frontend |
 | 2026-07-02 | CxC / sub-libros | 🟡 | El cobro no genera asiento contable (mayor diverge del sub-libro) | **Gap sistémico** — ver nota abajo, requiere contador |

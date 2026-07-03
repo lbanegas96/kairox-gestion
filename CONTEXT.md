@@ -1,6 +1,21 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-07-02 (sesión 44 Luciano — auditoría del motor contable: 2 hallazgos cerrados)
 
+## Sesión 44 (cont. 3) — Auditoría área #3: Caja / POS — SÓLIDA ✅
+
+Auditada CajaSection + CajaContext + cajaService + CajaCierre. A diferencia de CxC/CxP, está bien:
+- **Concurrencia OK:** existe índice único parcial `uq_caja_sesion_abierta (caja_id) WHERE estado='abierta'`
+  → la base garantiza una sola sesión abierta por caja (el check client-side de openSession es solo UX).
+  0 cajas con sesiones duplicadas en prod.
+- **Arqueo correcto:** `CajaCierre` calcula `esperado = inicial + ingresosEfectivo − egresosEfectivo`,
+  filtrando bien por Efectivo (transferencias/tarjetas NO cuentan en el cajón físico). Contablemente correcto.
+- RLS tenant-aislada en caja_sesiones/movimientos_caja/cajas; openSession (INSERT) y closeSession (UPDATE)
+  son atómicos de por sí.
+- **Único hallazgo 🟢:** `cajaService.insertMovimiento` era dead code (nunca se llamaba) con bug latente
+  (`user_id: empresaId`). Eliminado.
+
+Próxima área: #4 Cheques.
+
 ## Sesión 44 (cont. 2) — Auditoría área #2: Cuenta Corriente Proveedores (CxP)
 
 ### 🔴 Hallazgo — Pagar a un proveedor no descontaba de Caja/Bancos (FIX migration 131)

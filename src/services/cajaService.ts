@@ -69,18 +69,9 @@ export const cajaService = {
     return { ingresos, egresos, balance: ingresos - egresos, byCategoria };
   },
 
-  async insertMovimiento(
-    empresaId: string,
-    payload: Partial<MovimientoCaja>
-  ): Promise<MovimientoCaja> {
-    const { data, error } = await supabase
-      .from('movimientos_caja')
-      .insert([{ ...payload, user_id: empresaId }])
-      .select()
-      .single();
-    if (error) throw new Error(error.message);
-    return data as MovimientoCaja;
-  },
+  // NOTA (auditoría S44): se eliminó `insertMovimiento` — era dead code (nunca se llamaba)
+  // y tenía un bug latente (seteaba user_id = empresaId). Los movimientos de caja se crean
+  // vía crear_venta / registrar_cobro_cliente / registrar_pago_proveedor / inserts directos.
 
   async deleteMovimiento(id: string, empresaId: string): Promise<void> {
     const { error } = await supabase
