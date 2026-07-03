@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { formatDateAR } from '@/lib/dateUtils';
 import {
   Search, Package, Users, ShoppingCart, Receipt,
@@ -9,19 +10,19 @@ import {
 } from 'lucide-react';
 
 const SECCIONES = [
-  { id: 'dashboard',       label: 'Dashboard',         icon: LayoutDashboard, keywords: ['inicio', 'home'] },
-  { id: 'pos',             label: 'Punto de Venta',     icon: ShoppingCart,    keywords: ['pos', 'caja', 'cobrar', 'vender', 'venta nueva'] },
-  { id: 'ventas',          label: 'Ventas (Historial)', icon: Receipt,         keywords: ['factura', 'historial', 'comprobante'] },
-  { id: 'productos',       label: 'Inventario',         icon: Package,         keywords: ['stock', 'producto', 'almacen'] },
-  { id: 'compras',         label: 'Compras',            icon: ShoppingCart,    keywords: ['proveedor', 'comprar'] },
-  { id: 'caja',            label: 'Caja',               icon: DollarSign,      keywords: ['efectivo', 'dinero', 'sesion'] },
-  { id: 'clientes',        label: 'Clientes',           icon: Users,           keywords: ['cliente', 'contacto'] },
-  { id: 'cotizaciones',    label: 'Cotizaciones',       icon: FileText,        keywords: ['presupuesto', 'cotizar'] },
-  { id: 'ordenes_compra',  label: 'Órdenes de Compra',  icon: ShoppingCart,    keywords: ['oc', 'orden', 'pedido'] },
-  { id: 'cuentacorriente', label: 'Cuenta Corriente',   icon: TrendingUp,      keywords: ['deuda', 'credito', 'saldo'] },
-  { id: 'plan_cuentas',    label: 'Contabilidad',       icon: BookOpen,        keywords: ['contabilidad', 'cuentas', 'asiento', 'balance', 'diario'] },
-  { id: 'reportes',        label: 'Reportes',           icon: FileText,        keywords: ['reporte', 'informe', 'pdf'] },
-  { id: 'configuracion',   label: 'Configuración',      icon: Settings,        keywords: ['config', 'empresa', 'logo'] },
+  { id: 'dashboard',       label: 'Dashboard',         icon: LayoutDashboard, keywords: ['inicio', 'home'],                                   permission: 'dashboard' },
+  { id: 'pos',             label: 'Punto de Venta',     icon: ShoppingCart,    keywords: ['pos', 'caja', 'cobrar', 'vender', 'venta nueva'],   permission: 'ventas' },
+  { id: 'ventas',          label: 'Ventas (Historial)', icon: Receipt,         keywords: ['factura', 'historial', 'comprobante'],              permission: 'ventas' },
+  { id: 'productos',       label: 'Inventario',         icon: Package,         keywords: ['stock', 'producto', 'almacen'],                     permission: 'productos' },
+  { id: 'compras',         label: 'Compras',            icon: ShoppingCart,    keywords: ['proveedor', 'comprar'],                             permission: 'compras' },
+  { id: 'caja',            label: 'Caja',               icon: DollarSign,      keywords: ['efectivo', 'dinero', 'sesion'],                     permission: 'caja' },
+  { id: 'clientes',        label: 'Clientes',           icon: Users,           keywords: ['cliente', 'contacto'],                              permission: 'clientes' },
+  { id: 'cotizaciones',    label: 'Cotizaciones',       icon: FileText,        keywords: ['presupuesto', 'cotizar'],                           permission: 'ventas' },
+  { id: 'ordenes_compra',  label: 'Órdenes de Compra',  icon: ShoppingCart,    keywords: ['oc', 'orden', 'pedido'],                            permission: 'compras' },
+  { id: 'cuentacorriente', label: 'Cuenta Corriente',   icon: TrendingUp,      keywords: ['deuda', 'credito', 'saldo'],                        permission: 'cuentacorriente' },
+  { id: 'plan_cuentas',    label: 'Contabilidad',       icon: BookOpen,        keywords: ['contabilidad', 'cuentas', 'asiento', 'balance', 'diario'], permission: 'configuracion' },
+  { id: 'reportes',        label: 'Reportes',           icon: FileText,        keywords: ['reporte', 'informe', 'pdf'],                        permission: 'reportes' },
+  { id: 'configuracion',   label: 'Configuración',      icon: Settings,        keywords: ['config', 'empresa', 'logo'],                        permission: 'configuracion' },
 ];
 
 function useDebounce(value, delay) {
@@ -35,6 +36,8 @@ function useDebounce(value, delay) {
 
 export function CommandPalette({ open, onClose, onNavigate }) {
   const { user } = useAuth();
+  const { hasPermission } = useUserPermissions();
+  const seccionesAccesibles = SECCIONES.filter(s => hasPermission(s.permission));
   const [query, setQuery] = useState('');
   const [results, setResults] = useState({ secciones: [], productos: [], clientes: [], ventas: [], cotizaciones: [], bancos: [] });
   const [loading, setLoading] = useState(false);
@@ -52,7 +55,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
 
   useEffect(() => {
     if (!debouncedQuery.trim() || !user?.empresa_id) {
-      setResults({ secciones: SECCIONES.slice(0, 5), productos: [], clientes: [], ventas: [], cotizaciones: [], bancos: [] });
+      setResults({ secciones: seccionesAccesibles.slice(0, 5), productos: [], clientes: [], ventas: [], cotizaciones: [], bancos: [] });
       return;
     }
     buscar(debouncedQuery.trim());
@@ -62,7 +65,7 @@ export function CommandPalette({ open, onClose, onNavigate }) {
     setLoading(true);
     const qLower = q.toLowerCase();
 
-    const seccionesMatch = SECCIONES.filter(s =>
+    const seccionesMatch = seccionesAccesibles.filter(s =>
       s.label.toLowerCase().includes(qLower) ||
       s.keywords.some(k => k.includes(qLower))
     );

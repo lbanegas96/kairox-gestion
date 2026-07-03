@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { getNowAR, getTodayAR } from '@/lib/dateUtils';
 
 // Notificaciones tienen que sentirse "vivas" — refrescamos cada 30s
@@ -21,6 +22,7 @@ const REFETCH_OPTS = {
  */
 export function useNotifications() {
   const { user } = useAuth();
+  const { hasPermission } = useUserPermissions();
   const empresaId = user?.empresa_id;
 
   // ── Stock mínimo global (config de empresa) ────────────────────────────────
@@ -97,7 +99,7 @@ export function useNotifications() {
       if (error) return [];
       return data ?? [];
     },
-    enabled: !!empresaId,
+    enabled: !!empresaId && hasPermission('compras'),
     ...REFETCH_OPTS,
   });
 
@@ -136,7 +138,7 @@ export function useNotifications() {
       if (error) return [];
       return data ?? [];
     },
-    enabled: !!empresaId,
+    enabled: !!empresaId && hasPermission('cheques'),
     ...REFETCH_OPTS,
   });
 
@@ -155,7 +157,7 @@ export function useNotifications() {
       if (error) return 0;
       return (data ?? []).reduce((s, r) => s + Number(r.monto), 0);
     },
-    enabled: !!empresaId,
+    enabled: !!empresaId && hasPermission('configuracion'),
     ...REFETCH_OPTS,
   });
 
