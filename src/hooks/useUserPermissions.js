@@ -32,6 +32,8 @@ export const useUserPermissions = () => {
       'caja',
       'clientes',
       'cuentacorriente',
+      'bancos',
+      'cheques',
       'reportes',
       'usuarios',
       'configuracion'

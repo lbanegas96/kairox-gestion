@@ -3,7 +3,7 @@
 por partes, dejando registrado qué se auditó, qué está en curso y qué falta — para que no se
 escape nada.
 
-**Última actualización:** 2026-07-02 (sesión 44 — CxC, CxP y Caja/POS auditadas)
+**Última actualización:** 2026-07-02 (sesión 44 — CxC, CxP, Caja/POS, Cheques y Usuarios/Permisos auditadas)
 **Leyenda de estado:** ✅ auditado · 🔄 en curso · ⬜ pendiente · ⏸️ bloqueado
 
 ---
@@ -48,9 +48,11 @@ hallazgo → fix con migración + verificación → documentar acá y en CONTEXT
 | **Cuenta Corriente Clientes (CxC)** | T·D·C·F·A | Cobro atómico RPC `registrar_cobro_cliente` (mig.130); trigger de saldo con signos OK; RLS tenant OK. **Pendiente: no genera asiento (gap sistémico)** | S44 |
 | **Cuenta Corriente Proveedores (CxP)** | T·D·C·F | Pago atómico RPC `registrar_pago_proveedor` (mig.131): ahora SÍ descuenta de Caja/Bancos (antes no); + selector de método en UI; RLS tenant OK. **Pendiente: no genera asiento (gap sistémico)** | S44 |
 | **Caja / POS** | T·D·C·A | **SÓLIDO.** Índice único `uq_caja_sesion_abierta` garantiza 1 sesión abierta/caja (concurrencia OK); arqueo correcto (solo Efectivo afecta el cajón); RLS tenant OK; open/close atómicos. Solo se limpió dead code `insertMovimiento` (bug latente user_id). Sin 🔴 | S44 |
+| **Cheques** | T·D·A | **Tracker aislado, sin 🔴.** RLS `get_my_empresa_id()` OK; `cheques_historial` + `user_id` en cada transición. El módulo NO mueve dinero (sin triggers/RPCs/asientos) → no puede corromper saldos. 🟢 menor: historial es 2ª llamada frontend (no atómica). **Pendiente: gap sistémico** — cobrar/depositar un cheque no genera movimiento en Bancos; falta cuenta "Valores en Cartera"; "Cheque" no mapeado en `metodo_pago_cuenta_bancaria`; rechazo no restaura deuda. Requiere contador | S44 |
+| **Usuarios / Permisos granulares** | **T (crítico)** | 🟠 **CONFIRMADO Y CORREGIDO.** Probado con BEGIN...ROLLBACK: staff con `permissions.compras=false` pudo INSERTAR en `proveedores` vía API directa — los permisos eran solo UI (`useUserPermissions` ocultaba menús, RLS no los consultaba). Aislamiento multi-tenant y no-escalación a admin (`profiles_self_update` exige `role=get_my_role()`) estaban intactos. **Fix (mig.132):** función `has_module_permission(modulo)` + policies SELECT(tenant)/CUD(tenant+permiso) en 28 tablas (compras, clientes, ventas parcial, caja, productos, bancos-NUEVO, cheques-NUEVO, plan de cuentas/asientos/IVA bajo 'configuracion'). Se agregaron 2 permisos nuevos al modelo (`bancos`, `cheques`) que no tenían key propia. Todo el motor de dinero (crear_venta, cobros, pagos, stock) es SECURITY DEFINER y sigue funcionando sin cambios. Validado con 4 casos reales (bloqueo sin permiso / permiso concede / admin siempre pasa). **Pendiente Fase 2** (documentado, no crítico): pedidos, entregas, comprobantes, recepciones, CC proveedores aún sin gate de escritura directa | S44 |
 
 ### 🔄 En curso
-_(ninguna ahora — próxima: #4 de la cola = Cheques)_
+_(ninguna ahora — próxima: #6 de la cola = Notas de Débito)_
 
 ### ⬜ Pendientes — cola priorizada por riesgo (dinero y seguridad primero)
 
@@ -59,9 +61,9 @@ _(ninguna ahora — próxima: #4 de la cola = Cheques)_
 | ~~1~~ | ~~Cuenta Corriente Clientes (CxC)~~ | — | — | ✅ AUDITADA S44 (ver tabla de arriba). Queda Hallazgo B (asiento) en gap sistémico |
 | ~~2~~ | ~~Cuenta Corriente Proveedores (CxP)~~ | — | — | ✅ AUDITADA S44. Hallazgo 🔴: el pago no descontaba de Caja/Bancos → RPC atómico (mig.131). Queda asiento (gap sistémico) |
 | ~~3~~ | ~~Caja / POS~~ | — | — | ✅ AUDITADA S44. Sólido (índice único de sesión, arqueo correcto). Solo limpieza de dead code |
-| 4 | **Cheques** ← próxima | ChequesSection · `cheques`, `cheques_historial` | T·D·A | Instrumentos de pago; estados (cartera/depositado/rechazado); ¿lifecycle correcto? |
-| 5 | **Usuarios / Permisos granulares** | UsuariosSection · `profiles.permissions` (jsonb) | **T (crítico)** | ¿Los permisos se validan SOLO en la UI o también server-side (RLS/RPC)? Si es solo UI = vuln |
-| 6 | **Notas de Débito** | `notas_debito` · `crear_nota_debito` | T·D·F | Impacto en CC; ¿genera asiento? signo correcto |
+| ~~4~~ | ~~Cheques~~ | — | — | ✅ AUDITADA S44. Tracker aislado, sin 🔴. Gap sistémico (valores en cartera) al log |
+| ~~5~~ | ~~Usuarios / Permisos granulares~~ | — | — | ✅ AUDITADA Y CORREGIDA S44. 🟠 confirmado (permisos solo-UI) + fix RLS (mig.132) en 28 tablas + 2 permisos nuevos |
+| 6 | **Notas de Débito** ← próxima | `notas_debito` · `crear_nota_debito` | T·D·F | Impacto en CC; ¿genera asiento? signo correcto |
 | 7 | **Impuestos / IVA / Retenciones** | `alicuotas_impuestos`, `retenciones` | F·D | Cálculo fiscal; alícuotas parametrizables (no hardcode) |
 | 8 | **Multi-moneda / Tipos de cambio** | `tipos_cambio` · moneda paralela | F·D | Valuación; TC guardado por transacción; conversión correcta |
 | 9 | **Períodos contables / Cierre** | `periodos_contables` · `fecha_en_periodo_cerrado` | D·T | ¿El cierre se respeta en TODOS los puntos de asiento? |
@@ -83,6 +85,9 @@ _(ninguna ahora — próxima: #4 de la cola = Cheques)_
 
 | Fecha | Área | Severidad | Hallazgo | Fix |
 |-------|------|-----------|----------|-----|
+| 2026-07-02 | Usuarios/Permisos | 🟠 | Permisos granulares por módulo eran solo-UI; staff sin permiso `compras` insertó en `proveedores` vía API (probado con ROLLBACK) | RLS real: `has_module_permission()` + policies SELECT/CUD en 28 tablas (mig.132); permisos nuevos `bancos`/`cheques` |
+| 2026-07-02 | Cheques | 🟡 | Registro de cheques desacoplado del motor de dinero: cobrar/depositar no impacta Bancos; falta cuenta "Valores en Cartera"; "Cheque" sin mapear en `metodo_pago_cuenta_bancaria`; rechazo no restaura deuda | **Gap sistémico** — requiere contador (misma familia sub-libros) |
+| 2026-07-02 | Cheques | 🟢 | `cheques_historial` se inserta en 2ª llamada frontend (no atómica con el update de estado) | Nota — no 🔴, audit-trail; se puede mover a trigger a futuro |
 | 2026-07-02 | Caja/POS | 🟢 | `cajaService.insertMovimiento` dead code con bug latente (user_id=empresaId) | Eliminado |
 | 2026-07-02 | CxP Proveedores | 🔴 | Pagar a un proveedor NO descontaba de Caja/Bancos (tesorería inflada); ni capturaba método | RPC atómico `registrar_pago_proveedor` (mig.131) + selector de método |
 | 2026-07-02 | CxC Clientes | 🔴 | Cobro no atómico (2 inserts sueltos): si el 2º falla, deuda baja sin registrar plata; reintento la baja 2 veces | RPC atómico `registrar_cobro_cliente` (mig.130) + frontend |
@@ -100,6 +105,12 @@ asiento automático** (asientosAutoService). Cobros, pagos, movimientos de caja/
 el mayor contable puede divergir de los sub-libros. Ya se empezó a cerrar con la **Determinación de
 Cuentas + contabilización de Bancos** (S43). Falta extenderlo a Caja y CC (cobros/pagos). **Requiere
 decisión del contador** (qué cuentas imputar) — no se inventa. Aplica a: CxC (Hallazgo B), CxP, Caja.
+
+**Cheques (S44):** caso especial del mismo gap. El registro de cheques es un tracker aislado — no
+mueve dinero. Para integrarlo bien hace falta la cuenta **"Cheques en Cartera / Valores a Depositar"**
+(activo) y decidir el flujo: al recibir un cheque de tercero → Debe "Cheques en Cartera" / Haber CxC;
+al depositarlo y acreditarse → Debe Bancos / Haber "Cheques en Cartera"; si se rechaza → restaurar CxC.
+Hoy nada de esto ocurre automáticamente. Decisión del contador.
 
 ## Cómo retomar (para cualquier sesión futura)
 1. Abrir este archivo → mirar la **cola priorizada**.

@@ -21,9 +21,11 @@ export default function StaffPermissionsModal({ isOpen, onClose, userData, onSav
     { id: 'caja',             label: 'Caja',                   desc: 'Apertura y cierre de caja, movimientos' },
     { id: 'clientes',         label: 'Clientes',               desc: 'Gestión de base de datos de clientes' },
     { id: 'cuentacorriente',  label: 'Cuenta Corriente',       desc: 'Gestionar deudas y saldos de clientes' },
+    { id: 'bancos',           label: 'Bancos',                 desc: 'Cuentas bancarias, movimientos y conciliación' },
+    { id: 'cheques',          label: 'Cheques',                desc: 'Cartera de cheques propios y de terceros' },
     { id: 'reportes',         label: 'Reportes',               desc: 'Acceso a reportes detallados' },
     { id: 'usuarios',         label: 'Usuarios',               desc: 'Ver lista de usuarios (solo lectura)' },
-    { id: 'configuracion',    label: 'Configuración',          desc: 'Ajustes del sistema' }
+    { id: 'configuracion',    label: 'Configuración',          desc: 'Ajustes del sistema, plan de cuentas e impuestos' }
   ];
 
   // ── Presets ───────────────────────────────────────────────────────────────
