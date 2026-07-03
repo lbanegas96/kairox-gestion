@@ -18,6 +18,18 @@ import { useToast } from '@/components/ui/use-toast';
 
 const PAGE_SIZE = 100;
 
+// Usa iva_discriminado real (calculado por crear_venta según la alícuota de cada
+// ítem — 21/10.5/0/exento). Fallback a estimación /1.21 solo para comprobantes
+// viejos sin el campo poblado (previo a migration 033).
+function ivaDeComprobante(c) {
+  if (c.iva_discriminado != null) return Number(c.iva_discriminado);
+  return Number(c.total) - Number(c.total) / 1.21;
+}
+function netoDeComprobante(c) {
+  if (c.neto_gravado != null) return Number(c.neto_gravado);
+  return Number(c.total) / 1.21;
+}
+
 function ReporteLibroIVA({ onBack }) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -45,7 +57,7 @@ function ReporteLibroIVA({ onBack }) {
           cliente_nombre, cliente_id,
           tipo_comprobante_afip, cae, cae_estado, cae_vencimiento,
           total, moneda, tipo_cambio_tasa,
-          estado_pago, forma_pago
+          estado_pago, forma_pago, iva_discriminado, neto_gravado
         `)
         .eq('empresa_id', user.empresa_id)
         .in('cae_estado', ['emitido', 'pendiente', 'error'])
@@ -68,8 +80,8 @@ function ReporteLibroIVA({ onBack }) {
   const kpis = useMemo(() => {
     const emitidos  = comprobantes.filter(c => c.cae_estado === 'emitido');
     const pendientes = comprobantes.filter(c => c.cae_estado === 'pendiente' || c.cae_estado === 'error');
-    const totalNeto   = emitidos.reduce((sum, c) => sum + Number(c.total) / 1.21, 0);
-    const totalIVA    = emitidos.reduce((sum, c) => sum + (Number(c.total) - Number(c.total) / 1.21), 0);
+    const totalNeto   = emitidos.reduce((sum, c) => sum + netoDeComprobante(c), 0);
+    const totalIVA    = emitidos.reduce((sum, c) => sum + ivaDeComprobante(c), 0);
     const totalBruto  = emitidos.reduce((sum, c) => sum + Number(c.total), 0);
     return { emitidos: emitidos.length, pendientes: pendientes.length, totalNeto, totalIVA, totalBruto };
   }, [comprobantes]);
@@ -87,8 +99,8 @@ function ReporteLibroIVA({ onBack }) {
 
   const exportarCSV = () => {
     const rows = comprobantesFiltrados.map(c => {
-      const neto = (Number(c.total) / 1.21).toFixed(2);
-      const iva  = (Number(c.total) - Number(c.total) / 1.21).toFixed(2);
+      const neto = netoDeComprobante(c).toFixed(2);
+      const iva  = ivaDeComprobante(c).toFixed(2);
       return [
         c.numero_afip ?? c.numero_venta,
         c.tipo_comprobante_afip ?? '',
@@ -298,8 +310,8 @@ function ReporteLibroIVA({ onBack }) {
                   </tr>
                 ) : (
                   paginatedData.map(c => {
-                    const neto = Number(c.total) / 1.21;
-                    const iva  = Number(c.total) - neto;
+                    const neto = netoDeComprobante(c);
+                    const iva  = ivaDeComprobante(c);
                     const todayDate = getTodayAR();
                     const caeVencido = c.cae_vencimiento && c.cae_vencimiento.slice(0, 10) < todayDate;
                     return (
