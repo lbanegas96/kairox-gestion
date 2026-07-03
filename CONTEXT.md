@@ -1,6 +1,18 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-07-02 (sesión 44 Luciano — auditoría del motor contable: 2 hallazgos cerrados)
 
+## Sesión 44 (cont. 2) — Auditoría área #2: Cuenta Corriente Proveedores (CxP)
+
+### 🔴 Hallazgo — Pagar a un proveedor no descontaba de Caja/Bancos (FIX migration 131)
+`registrarPago` (proveedoresService) SOLO insertaba en `cuenta_corriente_proveedores` (tipo='pago',
+baja la deuda). Nunca registraba la salida de plata → Caja/Bancos sobrevaluada. Peor que CxC: no es
+ventana de falla, pasa en TODOS los pagos. Y el modal ni capturaba el método. **Fix (decisión de
+Luciano: simétrico al cobro):** RPC atómico `registrar_pago_proveedor` (CxP 'pago' + movimientos_caja
+'egreso' en una transacción; el trigger puente Caja→Bancos enruta los métodos no-efectivo a Bancos).
+UI: selector de método (Efectivo→Caja, Transferencia/Tarjeta→Bancos). Verificado con ROLLBACK: pago
+Transferencia $30k crea CxP pago + caja egreso + banco egreso (puente), atómico; guards OK.
+**Pendiente (gap sistémico):** no genera asiento contable.
+
 ## Sesión 44 (cont.) — Auditoría por áreas (plan vivo) — CxC Clientes
 
 Se creó `PLAN_AUDITORIA.md` (documento vivo: metodología de 6 dimensiones, 12 áreas ✅, cola de 15

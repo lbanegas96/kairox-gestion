@@ -122,16 +122,28 @@ export async function getCuentaCorriente(proveedorId: string, empresaId: string)
   return data as MovimientoCCP[];
 }
 
-export async function registrarPago(empresaId: string, proveedorId: string, monto: number, descripcion: string, userId: string) {
-  const { error } = await supabase.from('cuenta_corriente_proveedores').insert([{
-    empresa_id: empresaId,
-    proveedor_id: proveedorId,
-    tipo: 'pago',
-    monto,
-    descripcion,
-    user_id: userId,
-    fecha: getNowAR().toISOString(),
-  }]);
+export async function registrarPago(
+  empresaId: string,
+  proveedorId: string,
+  proveedorNombre: string,
+  monto: number,
+  metodo: string,
+  descripcion: string,
+  userId: string,
+  cajaSesionId: string | null = null,
+) {
+  // Pago ATÓMICO: cuenta corriente proveedor ('pago') + caja (egreso) en un solo RPC (migration 131).
+  // Antes solo reducía la deuda sin registrar la salida de plata de Caja/Bancos → tesorería inflada.
+  const { error } = await supabase.rpc('registrar_pago_proveedor', {
+    p_empresa_id:       empresaId,
+    p_user_id:          userId,
+    p_proveedor_id:     proveedorId,
+    p_proveedor_nombre: proveedorNombre,
+    p_monto:            monto,
+    p_metodo:           metodo,
+    p_descripcion:      descripcion,
+    p_caja_sesion_id:   cajaSesionId,
+  });
   if (error) throw new Error(error.message);
 }
 

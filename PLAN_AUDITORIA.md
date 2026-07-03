@@ -3,7 +3,7 @@
 por partes, dejando registrado qué se auditó, qué está en curso y qué falta — para que no se
 escape nada.
 
-**Última actualización:** 2026-07-02 (sesión 44 — CxC Clientes auditada)
+**Última actualización:** 2026-07-02 (sesión 44 — CxC y CxP auditadas)
 **Leyenda de estado:** ✅ auditado · 🔄 en curso · ⬜ pendiente · ⏸️ bloqueado
 
 ---
@@ -45,18 +45,19 @@ hallazgo → fix con migración + verificación → documentar acá y en CONTEXT
 | **Numeración / Series** | C | `obtener_proximo_numero` atómico; test 4 casos | S30 |
 | **Errores silenciosos (barrido)** | E | ~25 escrituras críticas — 100% con toast; limpio | S41 |
 | **Config admin-only** | T | `configuracion`, `integraciones_bancarias`, `determinacion_cuentas_mayor` escritura solo admin | S~,S43 |
-| **Cuenta Corriente Clientes (CxC)** | T·D·C·F·A | Cobro atómico RPC `registrar_cobro_cliente` (mig.130); trigger de saldo con signos OK; RLS tenant OK. **Pendiente: no genera asiento (Hallazgo B, gap sistémico)** | S44 |
+| **Cuenta Corriente Clientes (CxC)** | T·D·C·F·A | Cobro atómico RPC `registrar_cobro_cliente` (mig.130); trigger de saldo con signos OK; RLS tenant OK. **Pendiente: no genera asiento (gap sistémico)** | S44 |
+| **Cuenta Corriente Proveedores (CxP)** | T·D·C·F | Pago atómico RPC `registrar_pago_proveedor` (mig.131): ahora SÍ descuenta de Caja/Bancos (antes no); + selector de método en UI; RLS tenant OK. **Pendiente: no genera asiento (gap sistémico)** | S44 |
 
 ### 🔄 En curso
-_(ninguna ahora — próxima: #1 de la cola = Cuenta Corriente Proveedores)_
+_(ninguna ahora — próxima: #3 de la cola = Caja / POS)_
 
 ### ⬜ Pendientes — cola priorizada por riesgo (dinero y seguridad primero)
 
 | # | Área | Módulo / Tablas | Dimensiones foco | Por qué importa |
 |---|------|-----------------|-------------------|-----------------|
 | ~~1~~ | ~~Cuenta Corriente Clientes (CxC)~~ | — | — | ✅ AUDITADA S44 (ver tabla de arriba). Queda Hallazgo B (asiento) en gap sistémico |
-| 2 | **Cuenta Corriente Proveedores (CxP)** ← próxima | `cuenta_corriente_proveedores` | T·D·C·F | Pagos a proveedores — dinero. **Verificar si repite el patrón no-atómico de CxC** (probable) |
-| 3 | **Caja / POS** | CajaSection · `caja_sesiones`, `movimientos_caja`, `cajas` | T·D·C·A | Apertura/cierre/arqueo; diferencias; ¿quién cierra? |
+| ~~2~~ | ~~Cuenta Corriente Proveedores (CxP)~~ | — | — | ✅ AUDITADA S44. Hallazgo 🔴: el pago no descontaba de Caja/Bancos → RPC atómico (mig.131). Queda asiento (gap sistémico) |
+| 3 | **Caja / POS** ← próxima | CajaSection · `caja_sesiones`, `movimientos_caja`, `cajas` | T·D·C·A | Apertura/cierre/arqueo; diferencias; ¿quién cierra? |
 | 4 | **Cheques** | ChequesSection · `cheques`, `cheques_historial` | T·D·A | Instrumentos de pago; estados (cartera/depositado/rechazado); ¿lifecycle correcto? |
 | 5 | **Usuarios / Permisos granulares** | UsuariosSection · `profiles.permissions` (jsonb) | **T (crítico)** | ¿Los permisos se validan SOLO en la UI o también server-side (RLS/RPC)? Si es solo UI = vuln |
 | 6 | **Notas de Débito** | `notas_debito` · `crear_nota_debito` | T·D·F | Impacto en CC; ¿genera asiento? signo correcto |
@@ -81,6 +82,7 @@ _(ninguna ahora — próxima: #1 de la cola = Cuenta Corriente Proveedores)_
 
 | Fecha | Área | Severidad | Hallazgo | Fix |
 |-------|------|-----------|----------|-----|
+| 2026-07-02 | CxP Proveedores | 🔴 | Pagar a un proveedor NO descontaba de Caja/Bancos (tesorería inflada); ni capturaba método | RPC atómico `registrar_pago_proveedor` (mig.131) + selector de método |
 | 2026-07-02 | CxC Clientes | 🔴 | Cobro no atómico (2 inserts sueltos): si el 2º falla, deuda baja sin registrar plata; reintento la baja 2 veces | RPC atómico `registrar_cobro_cliente` (mig.130) + frontend |
 | 2026-07-02 | CxC / sub-libros | 🟡 | El cobro no genera asiento contable (mayor diverge del sub-libro) | **Gap sistémico** — ver nota abajo, requiere contador |
 | 2026-07-02 | Bancos/Contab. | 🔴 | Borrar movimiento contabilizado → asiento huérfano | Trigger BEFORE DELETE (mig.128) + UI |

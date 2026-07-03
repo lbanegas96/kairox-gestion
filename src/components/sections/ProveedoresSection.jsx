@@ -49,7 +49,7 @@ function ProveedoresSection() {
   const [form, setForm]             = useState({ ...EMPTY_FORM });
   const [detalleId, setDetalleId]   = useState(null);
   const [pagoOpen, setPagoOpen]     = useState(false);
-  const [pagoForm, setPagoForm]     = useState({ monto: '', descripcion: '' });
+  const [pagoForm, setPagoForm]     = useState({ monto: '', descripcion: '', metodo: 'Efectivo' });
 
   const activoFilter = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
 
@@ -117,14 +117,14 @@ function ProveedoresSection() {
   });
 
   const pagoMutation = useMutation({
-    mutationFn: ({ monto, descripcion }) =>
-      proveedoresService.registrarPago(empresaId, detalleId, monto, descripcion, user.id),
+    mutationFn: ({ monto, descripcion, metodo }) =>
+      proveedoresService.registrarPago(empresaId, detalleId, detalle?.nombre, monto, metodo, descripcion, user.id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: PROV_KEYS.cuentaCorriente(detalleId) });
       invalidate();
       toast({ title: 'Pago registrado ✓', className: 'bg-green-600 text-white' });
       setPagoOpen(false);
-      setPagoForm({ monto: '', descripcion: '' });
+      setPagoForm({ monto: '', descripcion: '', metodo: 'Efectivo' });
     },
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
@@ -151,7 +151,7 @@ function ProveedoresSection() {
     e.preventDefault();
     const monto = parseNumberLocale(pagoForm.monto);
     if (!monto || monto <= 0) return toast({ title: 'Ingresá un monto válido', variant: 'destructive' });
-    pagoMutation.mutate({ monto, descripcion: pagoForm.descripcion || `Pago a ${detalle?.nombre}` });
+    pagoMutation.mutate({ monto, descripcion: pagoForm.descripcion || `Pago a ${detalle?.nombre}`, metodo: pagoForm.metodo });
   };
 
   const proveedores = listData?.data ?? [];
@@ -535,10 +535,24 @@ function ProveedoresSection() {
                 placeholder="0,00" className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
             </div>
             <div className="space-y-1">
+              <Label className="dark:text-kx-text">Método de pago *</Label>
+              <select
+                value={pagoForm.metodo}
+                onChange={e => setPagoForm(p => ({ ...p, metodo: e.target.value }))}
+                className="w-full h-10 rounded-md border border-kx-border bg-kx-surface px-3 text-sm text-kx-text dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+              >
+                <option value="Efectivo">Efectivo (Caja)</option>
+                <option value="Transferencia">Transferencia (Bancos)</option>
+                <option value="Tarjeta de débito">Tarjeta de débito (Bancos)</option>
+                <option value="Tarjeta de crédito">Tarjeta de crédito (Bancos)</option>
+              </select>
+              <p className="text-[11px] text-kx-text-3">Efectivo descuenta de la Caja; los demás, de la cuenta bancaria mapeada.</p>
+            </div>
+            <div className="space-y-1">
               <Label className="dark:text-kx-text">Descripción</Label>
               <Input value={pagoForm.descripcion}
                 onChange={e => setPagoForm(p => ({ ...p, descripcion: e.target.value }))}
-                placeholder="Transferencia, cheque, efectivo..." className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+                placeholder="Nota opcional del pago..." className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setPagoOpen(false)} className="dark:border-kx-border dark:text-slate-300">Cancelar</Button>
