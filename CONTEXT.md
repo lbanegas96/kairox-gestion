@@ -1,5 +1,51 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-02 (sesión 44 Luciano — auditoría del motor contable: 2 hallazgos cerrados)
+**Última actualización:** 2026-07-03 (sesión 45 Nadia — pruebas Bloques 2-5, bug crítico CC Proveedor fixeado)
+
+## Sesión 45 — Nadia (2026-07-03) — Pruebas Bloques 2-5 + fix CC Proveedor + RPCs cross-módulo
+
+### Commits de esta sesión
+- `5094837` — fix: RPCs cross-módulo para dropdowns (mig.135) — cierra roturas de mig.134
+- `428d3a3` — fix: Factura CC Proveedor no generaba deuda — tipo 'HABER' rechazado por CHECK
+
+### Migration 135 — RPCs cross-módulo para dropdowns
+Mig.134 gateó SELECT por `has_module_permission` en 17 tablas, rompiendo dropdowns en módulos que
+legítimamente necesitan listar proveedores/cuentas contables. Fix: 2 RPCs SECURITY DEFINER con guard
+tenant estricto y campos mínimos (no exponen datos sensibles):
+- `listar_proveedores_min()` → id, nombre (usado por ProductosSection, ChequesSection)
+- `listar_plan_cuentas_min()` → id, codigo, nombre, tipo, permite_movimientos, activa (CuentasBancariasSection)
+
+### 🔴 Bug crítico — Factura CC Proveedor no generaba deuda (FIX)
+`NuevaFacturaProveedorModal.jsx` insertaba `tipo: 'HABER'` en `cuenta_corriente_proveedores`, pero la
+tabla tiene CHECK constraint que solo acepta: `compra`, `pago`, `nota_credito`, `nota_debito`, `ajuste`.
+El insert fallaba silenciosamente (sin captura de error). La factura se registraba pero la deuda nunca
+se creaba → CC Proveedor descuadrada.
+**Fix:** `tipo: 'HABER'` → `tipo: 'compra'` + `if (ccErr) throw ccErr`.
+Fix preventivo en `NuevaNCProveedorModal.jsx`: tipo ya era correcto (`nota_credito`), se agregó captura de error.
+
+### Ejecución PLAN_PRUEBAS Bloques 2-5
+
+| Bloque | Prueba | Resultado |
+|--------|--------|-----------|
+| **2** | Registrar cheque recibido | ✅ PASS |
+| **2** | Cambio de estado tracker (cartera→depositado→cobrado) | ✅ PASS |
+| **2** | Historial en BD (3 registros con fecha/hora) | ✅ PASS (falta botón UI detalle) |
+| **3** | Factura CC Proveedor → genera deuda | 🔴 BUG → FIXEADO |
+| **3** | Pago a proveedor reduce deuda | ✅ PASS |
+| **4** | Libro IVA Ventas — alícuotas reales + tfoot TOTALES | ✅ PASS |
+| **5.1** | Venta normal (efectivo, caja abierta) | ✅ PASS |
+| **5.2** | Venta CC + cobro parcial CxC | ✅ PASS |
+| **5.3** | Pago a proveedor desde CC | ✅ PASS |
+| **5.4** | Apertura/cierre de caja | ✅ PASS |
+| **5.5** | Movimientos bancarios (sección Bancos) | ✅ PASS |
+
+### Mejoras UX pendientes (no bloqueantes)
+- Cheques: falta botón de detalle/historial en la UI (datos existen en BD)
+- Degradación cross-módulo staff: dashboardService KPIs=0, useNotifications vacío, CommandPalette
+  no encuentra ítems gateados, TabIVA/TabRetenciones dropdowns proveedores (admin-only, bajo riesgo)
+
+### Pendiente externo
+- AFIP producción: cert real + PdV real (trámite externo de Luciano)
+- Gap sistémico: sub-ledgers (Caja, CC) no generan asientos contables (requiere decisión de contador)
 
 ## Sesión 44 (cont. 3) — Auditoría área #3: Caja / POS — SÓLIDA ✅
 
