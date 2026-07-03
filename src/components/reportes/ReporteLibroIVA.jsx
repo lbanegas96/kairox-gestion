@@ -165,7 +165,7 @@ function ReporteLibroIVA({ onBack }) {
             Libro IVA Ventas
           </h2>
           <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-0.5">
-            Comprobantes con CAE por período · cálculo simplificado 21% IVA
+            Comprobantes con CAE por período · IVA discriminado por alícuota real de cada ítem
           </p>
         </div>
       </div>
@@ -231,8 +231,8 @@ function ReporteLibroIVA({ onBack }) {
         <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-400">
           <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
           <span>
-            <strong>Cálculo simplificado — 21% IVA.</strong> Verificar con contador.
-            En una fase futura se calculará por ítem con alícuota real (10.5%, 0%, exentos).
+            IVA calculado por la <strong>alícuota real de cada ítem</strong> (21%, 10.5%, 0%, exentos).
+            Comprobantes previos a la mig.033 usan estimación /1.21 como fallback.
           </span>
         </div>
       )}
@@ -369,10 +369,10 @@ function ReporteLibroIVA({ onBack }) {
                       {fmtARS(comprobantesFiltrados.reduce((s, c) => s + Number(c.total), 0))}
                     </td>
                     <td className="p-4 text-right font-black text-blue-600 dark:text-blue-400 font-mono">
-                      {fmtARS(comprobantesFiltrados.reduce((s, c) => s + Number(c.total) / 1.21, 0))}
+                      {fmtARS(comprobantesFiltrados.reduce((s, c) => s + netoDeComprobante(c), 0))}
                     </td>
                     <td className="p-4 text-right font-black text-violet-600 dark:text-violet-400 font-mono">
-                      {fmtARS(comprobantesFiltrados.reduce((s, c) => s + (Number(c.total) - Number(c.total) / 1.21), 0))}
+                      {fmtARS(comprobantesFiltrados.reduce((s, c) => s + ivaDeComprobante(c), 0))}
                     </td>
                     <td colSpan={3} />
                   </tr>
