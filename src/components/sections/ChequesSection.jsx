@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   FileCheck, Plus, Loader2, AlertTriangle, Clock,
-  CheckCircle2, RefreshCw, ArrowRightLeft,
+  CheckCircle2, RefreshCw, ArrowRightLeft, Eye,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -110,6 +110,10 @@ export default function ChequesSection() {
   const [chequeACambiar, setChequeACambiar]       = useState(null);
   const [estadoNuevo, setEstadoNuevo]             = useState('');
   const [obsEstado, setObsEstado]                 = useState('');
+  const [showDetalle, setShowDetalle]             = useState(false);
+  const [chequeDetalle, setChequeDetalle]         = useState(null);
+  const [historial, setHistorial]                 = useState([]);
+  const [loadingHistorial, setLoadingHistorial]   = useState(false);
 
   // Forms
   const [terceroForm, setTerceroForm]   = useState(emptyTerceroForm());
@@ -140,6 +144,26 @@ export default function ChequesSection() {
       toast({ title: 'Error al cargar cheques', description: e.message, variant: 'destructive' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const abrirDetalle = async (cheque) => {
+    setChequeDetalle(cheque);
+    setShowDetalle(true);
+    setLoadingHistorial(true);
+    try {
+      const { data, error } = await supabase
+        .from('cheques_historial')
+        .select('estado_anterior, estado_nuevo, observacion, fecha')
+        .eq('cheque_id', cheque.id)
+        .order('fecha', { ascending: true });
+      if (error) throw error;
+      setHistorial(data ?? []);
+    } catch (e) {
+      toast({ title: 'Error al cargar historial', description: e.message, variant: 'destructive' });
+      setHistorial([]);
+    } finally {
+      setLoadingHistorial(false);
     }
   };
 
@@ -354,14 +378,23 @@ export default function ChequesSection() {
     const opciones = cheque.tipo === 'tercero'
       ? TRANSICIONES_TERCERO[cheque.estado]
       : TRANSICIONES_PROPIO[cheque.estado];
-    if (!opciones?.length) return null;
     return (
-      <button
-        onClick={() => abrirCambioEstado(cheque)}
-        className="px-2 py-1 text-xs rounded text-[#00D4FF] hover:text-white hover:bg-[#00D4FF]/10 border border-[#00D4FF]/30 transition-colors flex items-center gap-1 mx-auto"
-      >
-        <ArrowRightLeft size={11} /> Mover
-      </button>
+      <div className="flex items-center justify-center gap-1">
+        <button
+          onClick={() => abrirDetalle(cheque)}
+          className="px-2 py-1 text-xs rounded text-kx-text-3 hover:text-white hover:bg-kx-surface-2 border border-kx-border transition-colors flex items-center gap-1"
+        >
+          <Eye size={11} /> Ver
+        </button>
+        {opciones?.length > 0 && (
+          <button
+            onClick={() => abrirCambioEstado(cheque)}
+            className="px-2 py-1 text-xs rounded text-[#00D4FF] hover:text-white hover:bg-[#00D4FF]/10 border border-[#00D4FF]/30 transition-colors flex items-center gap-1"
+          >
+            <ArrowRightLeft size={11} /> Mover
+          </button>
+        )}
+      </div>
     );
   };
 
@@ -773,6 +806,94 @@ export default function ChequesSection() {
               className="bg-blue-600 hover:bg-blue-700 text-white">
               {savingPropio ? <Loader2 size={14} className="animate-spin mr-2" /> : <CheckCircle2 size={14} className="mr-2" />}
               Registrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Modal: Detalle + Historial ── */}
+      <Dialog open={showDetalle} onOpenChange={v => { if (!v) { setShowDetalle(false); setChequeDetalle(null); setHistorial([]); } }}>
+        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileCheck size={16} className="text-emerald-400" /> Detalle del cheque
+            </DialogTitle>
+            {chequeDetalle && (
+              <DialogDescription>
+                Cheque {chequeDetalle.numero} · {fmt(chequeDetalle.monto)}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          {chequeDetalle && (
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="text-kx-text-3 text-xs">Tipo</span>
+                  <p className="text-kx-text">{chequeDetalle.tipo === 'tercero' ? 'De tercero' : 'Propio'}</p>
+                </div>
+                <div>
+                  <span className="text-kx-text-3 text-xs">Banco</span>
+                  <p className="text-kx-text">{chequeDetalle.banco}</p>
+                </div>
+                <div>
+                  <span className="text-kx-text-3 text-xs">{chequeDetalle.tipo === 'tercero' ? 'Recibido de' : 'Entregado a'}</span>
+                  <p className="text-kx-text">{chequeDetalle.clientes?.nombre ?? chequeDetalle.proveedores?.nombre ?? '—'}</p>
+                </div>
+                <div>
+                  <span className="text-kx-text-3 text-xs">Vencimiento</span>
+                  <p className="text-kx-text">{fmtDate(chequeDetalle.fecha_vencimiento)}</p>
+                </div>
+                <div>
+                  <span className="text-kx-text-3 text-xs">Estado actual</span>
+                  <p className="mt-0.5">{renderBadge(chequeDetalle.estado)}</p>
+                </div>
+                <div>
+                  <span className="text-kx-text-3 text-xs">Monto</span>
+                  <p className="text-kx-text font-mono font-medium">{fmt(chequeDetalle.monto)}</p>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-xs font-medium text-kx-text-3 mb-2 uppercase tracking-wider">Historial de estados</h4>
+                {loadingHistorial ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 size={16} className="animate-spin text-kx-text-3" />
+                  </div>
+                ) : historial.length === 0 ? (
+                  <p className="text-xs text-kx-text-3 py-2">Sin registros de historial</p>
+                ) : (
+                  <div className="space-y-0 relative">
+                    <div className="absolute left-[7px] top-2 bottom-2 w-px bg-kx-border" />
+                    {historial.map((h, i) => (
+                      <div key={i} className="flex items-start gap-3 py-1.5 relative">
+                        <div className={`w-[15px] h-[15px] rounded-full border-2 flex-shrink-0 z-10 ${
+                          i === historial.length - 1
+                            ? 'bg-emerald-500 border-emerald-400'
+                            : 'bg-slate-700 border-slate-500'
+                        }`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {h.estado_anterior
+                              ? <>{renderBadge(h.estado_anterior)} <span className="text-kx-text-3 text-xs">&rarr;</span> {renderBadge(h.estado_nuevo)}</>
+                              : renderBadge(h.estado_nuevo)
+                            }
+                          </div>
+                          <p className="text-[10px] text-kx-text-3 mt-0.5">
+                            {new Date(h.fecha).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            {h.observacion && <span className="ml-2 text-kx-text-2">&mdash; {h.observacion}</span>}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setShowDetalle(false); setChequeDetalle(null); setHistorial([]); }}
+              className="text-kx-text-3">
+              Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>
