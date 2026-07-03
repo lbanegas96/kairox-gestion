@@ -4446,6 +4446,42 @@ Movimientos visibles en KAIROX Bancos con badge "Mercadopago" ✅. Cuenta "Merca
 
 ---
 
+### Sesión 2026-07-02 — Auditoría integral continuada (sesión 44 cont.): Cheques, Permisos, ND, IVA
+
+**Commits:** `396d3a3` · `ca9df75` · `9b16cc3` · `499ad28`
+
+Continuación del plan de auditoría (`PLAN_AUDITORIA.md`) recorriendo la cola de áreas priorizadas por riesgo. Metodología: leer definición fresca del código/RPC → probar con `BEGIN...ROLLBACK` simulando usuario autenticado real → registrar hallazgo → fix con migración → re-verificar → documentar.
+
+**Área #3 Caja/POS — ✅ sólida, sin 🔴**
+Índice único `uq_caja_sesion_abierta` garantiza una sola sesión abierta por caja (concurrencia OK); arqueo correcto (solo Efectivo afecta el cajón físico); RLS tenant OK. Único cambio: se eliminó `cajaService.insertMovimiento`, código muerto con un bug latente (`user_id: empresaId`).
+
+**Área #4 Cheques — ✅ tracker aislado, sin 🔴**
+`ChequesSection` + tablas `cheques`/`cheques_historial` no tienen triggers ni RPCs — es un registro de instrumentos desacoplado del motor de dinero. RLS y trazabilidad (`cheques_historial` + `user_id`) OK. **Gap sistémico documentado** (no corregido, requiere contador): cobrar/depositar un cheque no genera movimiento en Bancos; falta la cuenta "Valores en Cartera"; "Cheque" no está mapeado en `metodo_pago_cuenta_bancaria`; un rechazo no restaura automáticamente la deuda del cliente.
+
+**Área #5 Usuarios/Permisos granulares — 🟠 CRÍTICO confirmado y corregido**
+Probado con ROLLBACK: un staff con `permissions.compras=false` pudo **insertar un proveedor vía API directa** — los permisos granulares (`profiles.permissions` jsonb) solo ocultaban menús en el frontend (`useUserPermissions`), la RLS jamás los consultaba. El aislamiento multi-tenant y la no-escalación a admin (`profiles_self_update` exige `role = get_my_role()`) sí estaban intactos.
+- **Migration 132**: función `has_module_permission(modulo)` + policies SELECT(tenant-only)/CUD(tenant+permiso) reescritas en **28 tablas** (compras, clientes, ventas parcial, caja, productos, bancos, cheques, contabilidad avanzada bajo 'configuracion').
+- Se agregaron **2 permisos nuevos** al modelo (`bancos`, `cheques`) que no tenían key propia — actualizado en `StaffPermissionsModal.jsx` y `useUserPermissions.js`.
+- El motor de dinero (`crear_venta`, `registrar_cobro_cliente`, `registrar_pago_proveedor`, `decrement_stock`, etc.) es `SECURITY DEFINER` y sigue funcionando sin cambios — el fix solo afecta escrituras directas desde el frontend.
+- Validado con 4 casos reales: bloqueo sin permiso / permiso concede acceso / admin siempre pasa.
+- **Pendiente Fase 2** (documentado, no crítico): `pedidos`, `entregas`, `comprobantes`, `recepciones`, `cuenta_corriente_proveedores` aún sin este gate de escritura directa.
+
+**Área #6 Notas de Débito — 🔴 confirmado y corregido**
+`crear_nota_debito` solo generaba el movimiento de Cuenta Corriente atómicamente para `tipo='emitida'` (cliente). Para `tipo='recibida'` (el proveedor nos cobra un adicional), `NuevaNDProveedorModal.jsx` hacía un **INSERT suelto posterior** en `cuenta_corriente_proveedores` — la misma clase de bug ya vista en CxC/CxP: si el 2º insert fallaba, la ND quedaba registrada pero la deuda al proveedor nunca subía.
+- **Migration 133**: el RPC ahora inserta el movimiento en la misma transacción para ambos tipos.
+- Frontend simplificado (eliminado el insert redundante).
+- Validado: ND de $500 → saldo del proveedor sube exactamente $500, atómicamente.
+
+**Área #7 Impuestos/IVA/Retenciones — 🟡 confirmado y corregido**
+Las alícuotas de IVA están bien diseñadas (configurables por producto: 21/10.5/0/exento/no_gravado en `TabIVA.jsx`); `crear_venta` calcula `iva_discriminado`/`neto_gravado` reales por ítem desde migration 033. El `?? 21` hardcodeado en varios modales es solo un default de UX para productos sin alícuota asignada, no un bug.
+- **Hallazgo real**: `ReporteLibroIVA.jsx` (Libro IVA Ventas, insumo para la DDJJ) ignoraba esas columnas ya correctas y recalculaba `total − total/1.21` asumiendo 21% fijo para TODO comprobante → IVA mal calculado en ventas con productos a tasa reducida o exenta. Su hermano `ReporteLibroIVACompras.jsx` ya usaba el patrón correcto (columnas reales + fallback documentado).
+- **Fix**: `ReporteLibroIVA.jsx` ahora usa `iva_discriminado`/`neto_gravado` reales, con el mismo fallback solo para comprobantes viejos sin el campo poblado.
+- Retenciones/Alícuotas: módulo de registro manual (retenciones sufridas/practicadas), sin impacto en CxC/CxP. 🟢 menor: `generarNumeroCertificado` usa un `count()` no atómico (posible colisión bajo concurrencia, bajo riesgo).
+
+**Estado de la cola** (`PLAN_AUDITORIA.md`): 7 de 15 áreas auditadas. Próxima: **#8 Multi-moneda/Tipos de cambio**.
+
+---
+
 ## 3 grandes proyectos al final
 
 | # | Proyecto | Por qué al final |
