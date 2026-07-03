@@ -148,7 +148,8 @@ export default function ChequesSection() {
     fetchCheques();
     Promise.all([
       supabase.from('clientes').select('id, nombre').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre'),
-      supabase.from('proveedores').select('id, nombre').eq('empresa_id', user.empresa_id).order('nombre'),
+      // SECURITY-RLS-CROSS: RPC scoped id+nombre — Cheques no requiere permiso 'compras' (mig.135)
+      supabase.rpc('listar_proveedores_min'),
       supabase.from('cuentas_bancarias').select('id, nombre, banco').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre'),
     ]).then(([{ data: cli }, { data: prov }, { data: ctas }]) => {
       setClientes(cli ?? []);

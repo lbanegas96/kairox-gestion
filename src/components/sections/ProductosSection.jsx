@@ -335,10 +335,8 @@ const ProductosSection = () => {
   const fetchProviders = async () => {
     if (!user?.empresa_id) return;
     try {
-      const { data } = await supabase.from('proveedores')
-        .select('*')
-        .eq('empresa_id', user.empresa_id)
-        .order('nombre');
+      // SECURITY-RLS-CROSS: RPC scoped id+nombre — Inventario no requiere permiso 'compras' (mig.135)
+      const { data } = await supabase.rpc('listar_proveedores_min');
       setProviders(data || []);
     } catch (error) {
       console.error("Error fetching providers:", error);

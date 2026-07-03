@@ -121,13 +121,11 @@ function CuentaModal({ open, onClose, cuenta, empresaId }) {
       plan_cuenta_id: cuenta?.plan_cuenta_id ?? '',
     });
     // Cargar cuentas contables de tipo activo para el selector
-    supabase
-      .from('plan_cuentas')
-      .select('id, codigo, nombre, tipo')
-      .eq('empresa_id', empresaId)
-      .in('tipo', ['activo', 'patrimonioNeto'])
-      .order('codigo')
-      .then(({ data }) => setCuentasContables(data ?? []));
+    // SECURITY-RLS-CROSS: RPC scoped id+codigo+nombre+tipo — Bancos no requiere permiso 'configuracion' (mig.135)
+    supabase.rpc('listar_plan_cuentas_min')
+      .then(({ data }) => setCuentasContables(
+        (data ?? []).filter(pc => ['activo', 'patrimonioNeto'].includes(pc.tipo))
+      ));
   }, [open, cuenta, empresaId]);
 
   const mutation = useMutation({
