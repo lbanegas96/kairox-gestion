@@ -209,19 +209,20 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
         if (itemsErr) throw itemsErr;
       }
 
-      // 3. CC Proveedor → HABER (aumenta deuda con proveedor)
+      // 3. CC Proveedor → cargo (aumenta deuda con proveedor)
       if (isCC && proveedorId) {
-        await supabase.from('cuenta_corriente_proveedores').insert([{
+        const { error: ccErr } = await supabase.from('cuenta_corriente_proveedores').insert([{
           empresa_id:      user.empresa_id,
           user_id:         user.id,
           proveedor_id:    proveedorId,
-          tipo:            'HABER',
+          tipo:            'compra',
           monto:           total,
           descripcion:     `Factura ${numeroFactura || 'S/N'} — ${provNombre}`,
           referencia_id:   compra.id,
           referencia_tipo: 'factura_compra',
           fecha:           now,
         }]);
+        if (ccErr) throw ccErr;
       }
 
       // 4. Efectivo + caja abierta → movimientos_caja (egreso)

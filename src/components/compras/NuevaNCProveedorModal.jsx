@@ -103,7 +103,7 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, onSucc
       const descripcion = `NC recibida — ${motivoFinal}${compraOrigen?.numero_factura ? ` (Fac. ${compraOrigen.numero_factura})` : ''}`;
 
       // 1. INSERT cuenta_corriente_proveedores — NC reduce lo que les debemos
-      await supabase.from('cuenta_corriente_proveedores').insert([{
+      const { error: ccErr } = await supabase.from('cuenta_corriente_proveedores').insert([{
         empresa_id:      user.empresa_id,
         user_id:         user.id,
         proveedor_id:    proveedorId,
@@ -114,6 +114,7 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, onSucc
         referencia_tipo: 'nc_proveedor',
         fecha:           now,
       }]);
+      if (ccErr) throw ccErr;
 
       // 2. Reembolso en efectivo — el proveedor nos devuelve plata (ingreso de caja)
       if (reembolsoEfectivo && isSessionOpen && currentSession?.id) {
