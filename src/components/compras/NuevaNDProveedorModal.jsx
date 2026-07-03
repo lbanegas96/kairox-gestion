@@ -10,11 +10,12 @@ import { Loader2, FilePlus } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
-import { getTodayAR, getNowAR } from '@/lib/dateUtils';
+import { getTodayAR } from '@/lib/dateUtils';
 import ProveedorSelector from '@/components/shared/ProveedorSelector';
 
 // ND de proveedor: el proveedor nos cobra más (flete, diferencia de precio, etc.)
-// Usa la RPC crear_nota_debito con tipo='recibida' + INSERT manual en CC proveedores (HABER).
+// Usa la RPC crear_nota_debito con tipo='recibida' — el movimiento en CC proveedores
+// se genera atómicamente dentro del RPC (migration 133).
 
 function parseMontoAR(str) {
   if (!str) return 0;
@@ -77,8 +78,7 @@ function NuevaNDProveedorModal({ open, onOpenChange, compraOrigen = null, onSucc
 
     setSaving(true);
     try {
-      // 1. Crear notas_debito via RPC (tipo='recibida' — el proveedor nos cobra más)
-      //    El RPC NO inserta CC para tipo='recibida', lo hacemos manualmente.
+      // Crear notas_debito + movimiento en CC proveedores atómicamente (migration 133)
       const { data, error } = await supabase.rpc('crear_nota_debito', {
         p_empresa_id:     user.empresa_id,
         p_user_id:        user.id,
@@ -90,21 +90,7 @@ function NuevaNDProveedorModal({ open, onOpenChange, compraOrigen = null, onSucc
       });
       if (error) throw error;
 
-      const now = getNowAR().toISOString();
       const numeroNd = data?.numero_nd || 'ND';
-
-      // 2. INSERT cuenta_corriente_proveedores — ND aumenta lo que les debemos
-      await supabase.from('cuenta_corriente_proveedores').insert([{
-        empresa_id:      user.empresa_id,
-        user_id:         user.id,
-        proveedor_id:    proveedorId,
-        tipo:            'nota_debito',
-        monto,
-        descripcion:     `ND ${numeroNd} recibida — ${concepto.trim()}`,
-        referencia_id:   data?.nota_debito_id || null,
-        referencia_tipo: 'nd_proveedor',
-        fecha:           now,
-      }]);
 
       toast({ title: `Nota de Débito ${numeroNd} registrada — el proveedor cobra $${monto.toLocaleString('es-AR', { minimumFractionDigits: 2 })} adicionales` });
       onSuccess?.(data);
