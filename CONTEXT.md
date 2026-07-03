@@ -1,5 +1,31 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-03 (sesión 45 Nadia — pruebas Bloques 2-5, bug crítico CC Proveedor fixeado)
+**Última actualización:** 2026-07-03 (sesión 45 cont. — historial cheques UI + degradación cross-módulo staff cerrada)
+
+## Sesión 45 (cont.) — UX historial cheques + degradación cross-módulo staff
+
+### Commits
+- `25c97e8` — feat: modal detalle + historial de cheques con timeline visual
+- `2dc8741` — fix: filtrar CommandPalette y notificaciones por permisos de staff
+
+### Modal detalle/historial de cheques
+Cierra el pendiente de UX del Bloque 2 de pruebas. Cada fila de cheques ahora tiene botón **"Ver"**
+que abre modal con: datos del cheque (tipo, banco, persona, vencimiento, estado, monto) + timeline
+visual del historial de estados con fecha/hora y observaciones. Los datos ya existían en
+`cheques_historial` pero no había forma de verlos desde el frontend.
+
+### Degradación cross-módulo staff — CERRADA
+Análisis completo de los 4 puntos pendientes:
+
+| Componente | Problema | Solución |
+|---|---|---|
+| **CommandPalette** | Staff veía secciones sin permiso en búsqueda | Agregado `permission` a cada sección + filtro con `hasPermission()` |
+| **useNotifications** | Queries a tablas gateadas (`ordenes_compra`, `cheques`, `retenciones`) fallaban silenciosamente | `enabled` condicionado a `hasPermission('compras'\|'cheques'\|'configuracion')` |
+| **Dashboard KPIs** | `ordenes_compra` devuelve 0 para staff sin `compras` | Sin cambios — comportamiento correcto (no debería ver OC) |
+| **TabIVA/TabRetenciones** | Admin-only | Sin cambios — bajo riesgo |
+
+### Estado actual — pendientes solo externos
+- AFIP producción: cert real + PdV real (trámite externo de Luciano)
+- Gap sistémico: sub-ledgers (Caja, CC) no generan asientos contables (requiere decisión de contador)
 
 ## Sesión 45 — Nadia (2026-07-03) — Pruebas Bloques 2-5 + fix CC Proveedor + RPCs cross-módulo
 
