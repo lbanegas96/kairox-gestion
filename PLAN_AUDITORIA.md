@@ -231,6 +231,35 @@ Los 4 hallazgos de bajo riesgo que quedaron documentados sin corregir a lo largo
 
 Build verificado, advisors sin hallazgos nuevos.
 
+## ✅ Fase 3 — Áreas fuera de la cola original (2026-07-04)
+
+Después de cerrar las 15 áreas de la cola priorizada (dinero/seguridad primero), se hizo un
+barrido de lo que quedó afuera: módulos/tablas que existen en el código pero nunca entraron
+en la auditoría porque no eran de los de mayor riesgo obvio. Se encontraron y corrigieron
+**3 hallazgos 🔴**, todos el mismo patrón recurrente de esta auditoría (policy `FOR ALL` con
+solo `empresa_id`, sin gate de admin ni de permiso de módulo — algunas tablas quedaron afuera
+del barrido de mig.132/134/146 por descuido, no por diseño):
+
+| Tabla | Hallazgo probado con ROLLBACK | Fix |
+|-------|-------------------------------|-----|
+| `condiciones_pago`, `unidades_medida` | Staff sin permiso insertó una condición de pago falsa (360 días, 99% dto) y borró las 11 unidades de medida reales de su empresa | mig.149 — SELECT tenant-only, CUD con `has_module_permission('configuracion')` |
+| `puntos_venta` | Staff no-admin ejecutó `UPDATE ... SET ultimo_numero_b = X` sin error — riesgo fiscal real (numeración AFIP duplicada) | mig.150 — CUD exige `is_admin()` (mismo nivel que `periodos_contables`) |
+| `tipos_comprobante_afip`, `caea_comprobantes`, `caea_registros`, `facturas_pendientes_arca` | Mismo patrón débil en 4 tablas del módulo AFIP/ARCA; 3 sin call-site de escritura real en frontend (solo Edge Functions `service_role`), 1 sí (`facturas_pendientes_arca`, botón "Reintentar CAE" en Historial de Ventas) | mig.151 — las 3 primeras a `is_admin()` (defensa en profundidad); `facturas_pendientes_arca` a `has_module_permission('ventas')` (mismo permiso que ya gatea esa pantalla) |
+
+Áreas revisadas en esta ronda **sin hallazgo** (ya estaban bien protegidas):
+`determinacion_cuentas_mayor` (mig.126, admin-only desde el origen), `metodo_pago_cuenta_bancaria`
+(ya cubierta por mig.132 con `has_module_permission('bancos')`), `listas_precio`/`lista_precio_items`
+(ya cubiertas por mig.132 con `has_module_permission('clientes')`), `rate_limit_attempts`
+(deny-all a nivel RLS, acceso solo vía función `SECURITY DEFINER` — diseño correcto). Las tablas
+`ventas_backup`/`detalle_ventas_backup` ya habían sido eliminadas (mig.068).
+
+Build verificado, advisors sin regresiones nuevas para ninguna de las 7 tablas tocadas.
+
+**Pendiente para una futura ronda** (menor prioridad, no se llegó a auditar en esta sesión):
+`condiciones_pago`/`unidades_medida` fueron la única área de "maestros de Configuración"
+revisada a fondo — si aparece tiempo, vale repasar el resto de tablas de `ConfiguracionSection`
+con el mismo criterio (¿tiene RLS?, ¿el gate coincide con el nivel real de riesgo?).
+
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma
    metodología de 6 dimensiones.

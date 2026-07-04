@@ -1,5 +1,53 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-04 (sesión 46 cont. 11 — limpieza de los 4 hallazgos 🟢 menores restantes)
+**Última actualización:** 2026-07-04 (sesión 46 cont. 12 — Fase 3: áreas fuera de la cola original, 3 hallazgos 🔴 nuevos)
+
+## Sesión 46 (cont. 12) — Fase 3: auditoría de áreas fuera de la cola original
+
+El usuario pidió seguir auditando lo que no había entrado en la cola priorizada de 15 áreas
+("las áreas que no fueron auditadas"). Se mapeó el código (componentes/tablas) contra la lista
+ya auditada y aparecieron ~10 candidatos; se priorizaron por riesgo dinero/fiscal. Se encontraron
+y corrigieron **3 hallazgos 🔴**, todos la misma familia de bug de esta auditoría: policy RLS
+`FOR ALL` con solo `empresa_id`, sin gate de admin ni de permiso de módulo — tablas que quedaron
+afuera del barrido de mig.132/134/146 por descuido.
+
+1. **`condiciones_pago` / `unidades_medida` (mig.149).** Probado con ROLLBACK: un staff sin
+   ningún permiso especial insertó una condición de pago falsa ("360 días, 99% descuento") y
+   borró las 11 unidades de medida reales de su empresa, ambas vía API directa. Fix: SELECT
+   tenant-only, CUD con `has_module_permission('configuracion')` — mismo permiso que ya protege
+   `plan_cuentas`/`listas_precio`/IVA. Validado: staff bloqueado (0 filas), admin sigue operando.
+
+2. **`puntos_venta` (mig.150).** Esta tabla guarda `ultimo_numero_a/b/c`, el contador que usa el
+   flujo AFIP/ARCA para numerar comprobantes con CAE. Probado con ROLLBACK: un staff no-admin
+   ejecutó `UPDATE puntos_venta SET ultimo_numero_b = 999` sin ningún error (0 filas con el fix
+   puesto, 1 fila antes) — resetear ese contador manualmente puede hacer que el sistema reintente
+   numeración ya usada ante AFIP, un problema fiscal real. Se la trató al mismo nivel que
+   `periodos_contables`/`determinacion_cuentas_mayor`: CUD exige `is_admin()`, no solo un permiso
+   de módulo. Confirmado antes de aplicar que `ConfiguracionSection` (único lugar del frontend que
+   escribe acá) ya es 100% admin-only en la UI, y que el único otro escritor (`arca-worker`, Edge
+   Function) usa `service_role` y bypasea RLS igual — el fix no rompe nada.
+
+3. **Tablas del módulo AFIP/ARCA (mig.151): `tipos_comprobante_afip`, `caea_comprobantes`,
+   `caea_registros`, `facturas_pendientes_arca`.** Mismo patrón débil. Se confirmó por grep que
+   `tipos_comprobante_afip` solo se escribe desde `ConfiguracionSection.jsx` (admin-only) y que
+   `caea_comprobantes`/`caea_registros` no tienen ningún call-site de escritura en el frontend
+   (solo los Edge Functions `solicitar-caea`/`informar-caea`/`verificar-caea-vigente`, con
+   `service_role`) — a las 3 se les puso `is_admin()` por defensa en profundidad, sin romper nada.
+   `facturas_pendientes_arca` sí se escribe desde pantallas de venta normales (botón "Reintentar
+   CAE" en `HistorialVentas.jsx`/`SaleDetailModal.jsx`, gateadas por el permiso `ventas`) — se le
+   puso `has_module_permission('ventas')` en vez de admin-only, para no romper esa función.
+   Se confirmó también que `fn_queue_factura_arca` (el trigger que llena esta tabla automáticamente
+   al fallar una emisión) es `SECURITY DEFINER`, así que sigue funcionando igual.
+   Validado con datos sintéticos dentro de transacciones ROLLBACK (el módulo AFIP aún no tiene
+   datos reales en producción — pendiente del certificado de Luciano): staff sin permiso bloqueado
+   en las 4 tablas, staff/admin con el permiso correcto sigue operando.
+
+**Sin hallazgo en esta ronda** (ya estaban bien protegidas): `determinacion_cuentas_mayor`
+(admin-only desde el origen, mig.126), `metodo_pago_cuenta_bancaria` y `listas_precio`/
+`lista_precio_items` (ya cubiertas por mig.132), `rate_limit_attempts` (deny-all a nivel RLS,
+acceso solo vía función `SECURITY DEFINER` — diseño correcto). Las tablas `ventas_backup`/
+`detalle_ventas_backup` ya habían sido eliminadas (mig.068).
+
+Build verificado, advisors sin regresiones nuevas para ninguna de las 7 tablas tocadas.
 
 ## Sesión 46 (cont. 11) — Limpieza de hallazgos 🟢 menores
 
