@@ -173,6 +173,28 @@ cuentas correctas y asientos balanceados.
 se contabilizan — requeriría una cuenta "Documentos a Pagar" que todavía no existe en el plan de
 cuentas; se agrega si el contador lo pide.
 
+## ✅ Fase 2 técnica de permisos granulares — CERRADA (2026-07-04)
+
+Extendido `has_module_permission()` (mig.132) a las 5 tablas que quedaban con gate solo de tenant:
+`pedidos`/`pedido_items` (módulo `ventas`), `entregas`/`entrega_items` (módulo `ventas`),
+`comprobantes`/`comprobante_items` (módulo `ventas`), `recepciones`/`recepcion_items` (módulo
+`compras`), `cuenta_corriente_proveedores` (módulo `compras`) — mismo mapeo de módulo que ya usaban
+`cotizaciones`/`ofertas` y `ordenes_compra`/`proveedores` respectivamente, así que ningún staff pierde
+acceso que ya tenía (mig.146). `comprobantes` y `cuenta_corriente_proveedores` ya tenían policies
+separadas sin DELETE (mig.141/142) — se les agregó el gate de permiso a INSERT/UPDATE sin reintroducir
+DELETE. SELECT se mantiene tenant-only en las 5 (sin gate de permiso) para no repetir la rotura de
+dropdowns cross-módulo que causó mig.134→mig.135.
+
+Validado con BEGIN...ROLLBACK: staff con permiso `ventas` inserta pedido (OK); staff sin permiso
+`compras` bloqueado en `cuenta_corriente_proveedores` (RLS deniega el INSERT); la RPC
+`registrar_pago_proveedor` (SECURITY DEFINER) sigue funcionando igual para ese mismo staff, sin
+cambios — bypasea RLS por table ownership, como todo el motor de dinero del sistema.
+
+Con esto se cierran los 3 pendientes documentados al terminar la Fase 1: el gap sistémico de
+contabilización y esta Fase 2 técnica. No queda ningún ítem abierto en este plan salvo lo que
+explícitamente requiere al contador (validar el esquema de cuentas propuesto) o al usuario (decidir
+si se agrega la cuenta de Documentos a Pagar para cheques propios).
+
 ## ✅ Cierre de la Fase 1 — las 15 áreas de la cola original auditadas (2026-07-04)
 
 Las 15 áreas de la cola priorizada quedaron auditadas, con hallazgo y fix documentado donde

@@ -1,5 +1,31 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-04 (sesión 46 cont. 9 — Cierre del gap sistémico: asiento automático en Cobro/Pago/Cheques)
+**Última actualización:** 2026-07-04 (sesión 46 cont. 10 — Fase 2 de permisos granulares — CIERRE TOTAL de los 3 pendientes de la auditoría)
+
+## Sesión 46 (cont. 10) — Fase 2 técnica de permisos granulares (mig.146)
+
+Último pendiente documentado al cerrar la Fase 1. Extendido `has_module_permission()` (mig.132) a
+`pedidos`/`pedido_items`, `entregas`/`entrega_items`, `comprobantes`/`comprobante_items` (módulo
+`ventas`, mismo que ya usaban cotizaciones/ofertas) y `recepciones`/`recepcion_items`,
+`cuenta_corriente_proveedores` (módulo `compras`, mismo que ordenes_compra/proveedores) — al reusar
+los mismos módulos ya existentes, ningún staff pierde acceso que ya tenía (no hace falta tocar
+permisos de usuarios existentes). `comprobantes`/`cuenta_corriente_proveedores` ya tenían policies
+sin DELETE (mig.141/142) — se agregó el gate de permiso a INSERT/UPDATE sin reintroducir DELETE.
+SELECT se dejó tenant-only en las 5 tablas (sin gate) para no repetir la rotura de dropdowns
+cross-módulo que pasó con mig.134 (arreglada en mig.135).
+
+Validado con BEGIN...ROLLBACK: staff con permiso `ventas` inserta pedido (OK); staff sin permiso
+`compras` bloqueado insertando en `cuenta_corriente_proveedores`; `registrar_pago_proveedor` (RPC
+SECURITY DEFINER) sigue funcionando igual para ese mismo staff sin permiso — bypasea RLS por table
+ownership, sin cambios de comportamiento en el motor de dinero.
+
+**Con esto se cierran los 3 pendientes documentados al terminar la Fase 1 de la auditoría** (asiento
+automático Cobro/Pago/Cheques + esta Fase 2). Solo queda pendiente lo que requiere al contador
+(validar el esquema de cuentas propuesto) o al usuario (decidir si se agrega la cuenta "Documentos a
+Pagar" para cheques propios).
+
+Solo cambios de DB — sin impacto en frontend, no requiere rebuild.
+
+## Sesión 46 (cont. 9) — Cierre del gap sistémico: asiento automático en Cobro/Pago/Cheques
 
 ## Sesión 46 (cont. 9) — Cierre del gap sistémico de contabilización
 
