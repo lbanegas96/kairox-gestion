@@ -227,7 +227,7 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
 
       // 4. Efectivo + caja abierta → movimientos_caja (egreso)
       if (formaPago === 'Efectivo' && isSessionOpen && currentSession?.id) {
-        await supabase.from('movimientos_caja').insert([{
+        const { error: cajaErr } = await supabase.from('movimientos_caja').insert([{
           empresa_id:     user.empresa_id,
           user_id:        user.id,
           caja_sesion_id: currentSession.id,
@@ -243,6 +243,7 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
             tc_paralelo:    tcParalelo.tcHoy,
           } : {}),
         }]);
+        if (cajaErr) throw cajaErr;
       }
 
       toast({ title: `Factura de proveedor registrada${numeroFactura ? ` — ${numeroFactura}` : ''}` });

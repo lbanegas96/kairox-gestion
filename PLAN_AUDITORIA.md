@@ -3,7 +3,7 @@
 por partes, dejando registrado qué se auditó, qué está en curso y qué falta — para que no se
 escape nada.
 
-**Última actualización:** 2026-07-02 (sesión 44 — CxC, CxP, Caja/POS, Cheques, Usuarios/Permisos, Notas de Débito e Impuestos/IVA auditadas)
+**Última actualización:** 2026-07-03 (sesión 46 — Multi-moneda/Tipos de cambio auditada; área #8)
 **Leyenda de estado:** ✅ auditado · 🔄 en curso · ⬜ pendiente · ⏸️ bloqueado
 
 ---
@@ -55,8 +55,10 @@ hallazgo → fix con migración + verificación → documentar acá y en CONTEXT
 
 | **Impuestos / IVA / Retenciones** | F·D | 🟡 **CONFIRMADO Y CORREGIDO.** Alícuotas de IVA son configurables por producto (21/10.5/0/exento/no_gravado en `TabIVA.jsx`) y `crear_venta` calcula `iva_discriminado`/`neto_gravado` reales por ítem desde mig.033 — el `?? 21` en los modales es solo un default de UX, no un hardcode que ignore config. Pero **`ReporteLibroIVA.jsx`** (Libro IVA Ventas, insumo para la DDJJ) ignoraba esas columnas y recalculaba `total − total/1.21` asumiendo 21% para TODO comprobante → IVA mal en ventas con productos a tasa reducida/exenta. `ReporteLibroIVACompras.jsx` (hermano) ya lo hacía bien. **Fix:** usar `iva_discriminado`/`neto_gravado` reales con fallback documentado solo para comprobantes viejos. Retenciones/Alícuotas: módulo de registro manual, sin impacto en CxC/CxP; 🟢 menor: numeración de certificado por `count()` no atómico (bajo riesgo) | S44 |
 
+| **Multi-moneda / Tipos de cambio** | F·D | 🟡 **CONFIRMADO Y CORREGIDO.** `monto_paralelo`/`tc_paralelo` se persisten atómicamente vía RPC en `crear_venta` (todas sus versiones) y en `registrar_cobro_cliente` (mig.130, con `ROUND(...,2)` server-side) — no hay riesgo de desync ahí. `useTCParalelo.calcParalelo` ya redondea a 2 decimales en JS antes de persistir (columnas `numeric(14,4)` desde mig.076, cierra el hallazgo teórico de esa migración). Pero se encontró el mismo patrón de "escritura de plata sin verificar error" ya visto en CxC/CxP/ND: **`NuevaFacturaProveedorModal.jsx`** y **`CompraRapidaSection.jsx`** insertaban el egreso en `movimientos_caja` (compra pagada en Efectivo) sin capturar/propagar el error — si el insert fallaba, la compra quedaba "pagada" pero Caja nunca reflejaba el egreso (tesorería inflada), mismo síntoma que el bug de CxP cerrado en mig.131 pero en el camino de compra directa/rápida. **Fix:** agregado `if (cajaErr) throw cajaErr` en ambos, igual patrón que ya usaba `CajaSection.jsx`. 🟢 menor (no fixeado): `tipoCambioService.js` calcula "hoy" con `Date` local del browser en vez de `getTodayAR()` — inconsistencia latente de baja probabilidad si el reloj/zona horaria del cliente difiere de Argentina. 🟢 menor (no fixeado, requiere confirmación del usuario para borrar): `tipoCambioService.ts` (getTasaVigente/getHistorial/upsertTasa/deleteTasa) es código muerto — cero imports reales, todo el código vivo usa `tipoCambioService.js` | S46 |
+
 ### 🔄 En curso
-_(ninguna ahora — próxima: #8 de la cola = Multi-moneda / Tipos de cambio)_
+_(ninguna ahora — próxima: #9 de la cola = Períodos contables / Cierre)_
 
 ### ⬜ Pendientes — cola priorizada por riesgo (dinero y seguridad primero)
 
@@ -69,8 +71,8 @@ _(ninguna ahora — próxima: #8 de la cola = Multi-moneda / Tipos de cambio)_
 | ~~5~~ | ~~Usuarios / Permisos granulares~~ | — | — | ✅ AUDITADA Y CORREGIDA S44. 🟠 confirmado (permisos solo-UI) + fix RLS (mig.132) en 28 tablas + 2 permisos nuevos |
 | ~~6~~ | ~~Notas de Débito~~ | — | — | ✅ AUDITADA Y CORREGIDA S44. 🔴 ND recibida no atómica → fix RPC (mig.133) |
 | ~~7~~ | ~~Impuestos / IVA / Retenciones~~ | — | — | ✅ AUDITADA Y CORREGIDA S44. 🟡 Libro IVA asumía 21% fijo → usa iva_discriminado real |
-| 8 | **Multi-moneda / Tipos de cambio** ← próxima | `tipos_cambio` · moneda paralela | F·D | Valuación; TC guardado por transacción; conversión correcta |
-| 9 | **Períodos contables / Cierre** | `periodos_contables` · `fecha_en_periodo_cerrado` | D·T | ¿El cierre se respeta en TODOS los puntos de asiento? |
+| ~~8~~ | ~~Multi-moneda / Tipos de cambio~~ | — | — | ✅ AUDITADA Y CORREGIDA S46. 🟡 egreso de Caja en compra-Efectivo sin verificar error (mismo patrón CxP) → fix en 2 archivos |
+| 9 | **Períodos contables / Cierre** ← próxima | `periodos_contables` · `fecha_en_periodo_cerrado` | D·T | ¿El cierre se respeta en TODOS los puntos de asiento? |
 | 10 | **Conciliación bancaria** | conciliacionService · `extractos_bancarios`, `extracto_lineas` | T·D | Lógica de auto-match; ¿puede conciliar cross-tenant? montos |
 | 11 | **Ofertas / Descuentos** | OfertasSection · `ofertas` · `calcular_ofertas_carrito` | T·F | Cálculo de descuentos; guard tenant (ya se agregó, falta correctness) |
 | 12 | **Cotizaciones / Pedidos** | Cotizaciones/Pedidos · `cotizaciones`, `pedidos` | T·D | Document flow; contadores por línea; sin doble stock |
@@ -89,6 +91,7 @@ _(ninguna ahora — próxima: #8 de la cola = Multi-moneda / Tipos de cambio)_
 
 | Fecha | Área | Severidad | Hallazgo | Fix |
 |-------|------|-----------|----------|-----|
+| 2026-07-03 | Multi-moneda | 🟡 | `NuevaFacturaProveedorModal.jsx` y `CompraRapidaSection.jsx`: egreso de `movimientos_caja` en compra pagada en Efectivo se insertaba sin capturar el error — si fallaba, la compra quedaba "pagada" sin reflejo en Caja (mismo patrón que el bug de CxP cerrado en mig.131) | Agregado `if (cajaErr) throw cajaErr` en ambos archivos, igual patrón que `CajaSection.jsx` |
 | 2026-07-02 | Impuestos/IVA | 🟡 | `ReporteLibroIVA.jsx` (Libro IVA Ventas, insumo DDJJ) asumía 21% fijo para todo comprobante en vez de usar `iva_discriminado`/`neto_gravado` reales ya calculados por `crear_venta` | Usa columnas reales con fallback solo para comprobantes viejos (igual patrón que ya tenía el Libro IVA Compras) |
 | 2026-07-02 | Notas de Débito | 🔴 | ND recibida (proveedor) no atómica: RPC + insert suelto en CC proveedores; si el 2º fallaba, la deuda no subía | Movido dentro del RPC en una sola transacción (mig.133) |
 | 2026-07-02 | Usuarios/Permisos | 🟠 | Permisos granulares por módulo eran solo-UI; staff sin permiso `compras` insertó en `proveedores` vía API (probado con ROLLBACK) | RLS real: `has_module_permission()` + policies SELECT/CUD en 28 tablas (mig.132); permisos nuevos `bancos`/`cheques` |

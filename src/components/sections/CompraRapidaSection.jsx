@@ -397,7 +397,7 @@ function ComprasSection() {
       // Caja
       const providerName = proveedores.find(p => p.id === purchaseForm.proveedor_id)?.nombre || 'Proveedor';
       if (status === 'pagada') {
-        await supabase.from('movimientos_caja').insert([{
+        const { error: cajaErr } = await supabase.from('movimientos_caja').insert([{
           user_id: user.id,
           empresa_id: user.empresa_id,
           caja_sesion_id: currentSession?.id,
@@ -409,6 +409,7 @@ function ComprasSection() {
           metodo_pago: purchaseForm.forma_pago,
           is_automatic: true
         }]);
+        if (cajaErr) throw cajaErr;
       }
 
       // Asiento contable automático (no bloquea el flujo de compras)

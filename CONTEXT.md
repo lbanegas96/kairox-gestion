@@ -1,5 +1,35 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-03 (sesión 45 cont. — historial cheques UI + degradación cross-módulo staff cerrada)
+**Última actualización:** 2026-07-03 (sesión 46 — Auditoría área #8: Multi-moneda / Tipos de cambio)
+
+## Sesión 46 — Auditoría área #8: Multi-moneda / Tipos de cambio
+
+Se retomó la cola de `PLAN_AUDITORIA.md` tras revisar y deployar el trabajo de Nadia (sesión 45:
+fix CC Proveedor `tipo='HABER'` rechazado por CHECK, RPCs cross-módulo mig.135, modal historial de
+cheques, filtro de permisos en CommandPalette/notificaciones).
+
+### Multi-moneda — auditado, 🟡 encontrado y corregido
+`monto_paralelo`/`tc_paralelo` se persisten atómicamente vía RPC en `crear_venta` (todas sus
+versiones) y en `registrar_cobro_cliente` (mig.130, con `ROUND(...,2)` server-side) — sin riesgo de
+desync. `useTCParalelo.calcParalelo` ya redondea a 2 decimales en JS antes de persistir (columnas
+`numeric(14,4)` desde mig.076).
+
+Se encontró el mismo patrón de "escritura de plata sin verificar error" ya cerrado en CxC/CxP/ND:
+**`NuevaFacturaProveedorModal.jsx`** y **`CompraRapidaSection.jsx`** insertaban el egreso en
+`movimientos_caja` (compra pagada en Efectivo) sin capturar/propagar el error — si el insert
+fallaba, la compra quedaba "pagada" pero Caja nunca reflejaba el egreso (tesorería inflada), mismo
+síntoma que el bug de CxP cerrado en mig.131 pero en el camino de compra directa/rápida (no pasaba
+por `registrar_pago_proveedor`). **Fix:** agregado `if (cajaErr) throw cajaErr` en ambos, igual
+patrón que ya usaba `CajaSection.jsx`.
+
+Hallazgos menores documentados, sin fix (bajo riesgo):
+- `tipoCambioService.js` calcula "hoy" con `Date` local del browser en vez de `getTodayAR()` —
+  inconsistencia latente si el reloj/zona horaria del cliente difiere de Argentina.
+- `tipoCambioService.ts` (con `getTasaVigente`/`getHistorial`/`upsertTasa`/`deleteTasa`) es código
+  muerto — cero imports reales, todo el código vivo usa `tipoCambioService.js`. No se borró:
+  requiere confirmación explícita del usuario antes de eliminar un archivo fuente pre-existente.
+
+Build verificado, deploy a producción hecho. Estado de la cola: 8 de 15 áreas auditadas. Próxima:
+#9 Períodos contables / Cierre.
 
 ## Sesión 45 (cont.) — UX historial cheques + degradación cross-módulo staff
 
