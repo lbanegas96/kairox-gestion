@@ -49,8 +49,8 @@ export function parsearCSV(texto: string): { fecha: string; descripcion: string;
       // formato: fecha, descripcion, debito, credito
       fecha = normalizarFecha(cols[0]);
       descripcion = cols[1];
-      const debito  = parseFloat(cols[2].replace(/[^0-9.,\-]/g, '').replace(',', '.')) || 0;
-      const credito = parseFloat(cols[3].replace(/[^0-9.,\-]/g, '').replace(',', '.')) || 0;
+      const debito  = parseMontoCSV(cols[2]);
+      const credito = parseMontoCSV(cols[3]);
       if (credito > 0) { monto = credito; tipo = 'ingreso'; }
       else if (debito > 0) { monto = debito; tipo = 'egreso'; }
       else continue;
@@ -58,7 +58,7 @@ export function parsearCSV(texto: string): { fecha: string; descripcion: string;
       // formato: fecha, descripcion, monto (negativo = débito)
       fecha = normalizarFecha(cols[0]);
       descripcion = cols[1];
-      const raw = parseFloat(cols[2].replace(/[^0-9.,\-]/g, '').replace(',', '.')) || 0;
+      const raw = parseMontoCSV(cols[2]);
       monto = Math.abs(raw);
       tipo  = raw >= 0 ? 'ingreso' : 'egreso';
     } else continue;
@@ -67,6 +67,17 @@ export function parsearCSV(texto: string): { fecha: string; descripcion: string;
     resultados.push({ fecha, descripcion, monto, tipo });
   }
   return resultados;
+}
+
+// Soporta formato AR ("1.234,56" — punto de miles, coma decimal) y US/plano
+// ("1234.56"). Sin esto, parseFloat corta en el primer punto y "1.234,56"
+// se leía como 1.234 en vez de 1234.56 (error de 3 órdenes de magnitud).
+function parseMontoCSV(raw: string): number {
+  let limpio = raw.replace(/[^0-9.,\-]/g, '');
+  if (limpio.includes(',')) {
+    limpio = limpio.replace(/\./g, '').replace(',', '.');
+  }
+  return parseFloat(limpio) || 0;
 }
 
 function normalizarFecha(raw: string): string {

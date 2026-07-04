@@ -1,5 +1,34 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-03 (sesión 46 cont. — Auditoría área #9: Períodos contables / Cierre)
+**Última actualización:** 2026-07-03 (sesión 46 cont. 2 — Auditoría área #10: Conciliación bancaria)
+
+## Sesión 46 (cont. 2) — Auditoría área #10: Conciliación bancaria
+
+### 🔴 Crítico — match cross-tenant sin guard (FIX)
+`matchManual()`/`autoMatch()` en `conciliacionService.ts` hacen `UPDATE extracto_lineas SET
+movimiento_id=X` sin verificar que X pertenezca a la MISMA empresa que la línea — solo hay FK
+(garantiza que el movimiento exista, no que sea del mismo tenant). Probado con BEGIN...ROLLBACK: un
+admin de Empresa A matcheó su línea con un `movimiento_bancario` de Empresa B, y el trigger
+`fn_sync_conciliado` (SECURITY DEFINER, correcto para su propósito original) propagó
+`conciliado=true` CROSS-TENANT al movimiento de B, corrompiendo su estado de conciliación.
+**Fix (mig.137):** trigger `fn_guard_match_tenant` (BEFORE UPDATE OF movimiento_id) que valida
+`empresa_id` coincidente antes de permitir el match; `EXECUTE` revocado de anon/authenticated (mismo
+endurecimiento que el resto de funciones trigger, mig.063). Validado: cross-tenant bloqueado (0 filas
+o excepción), match legítimo dentro del mismo tenant sigue funcionando.
+
+### 🟡 Parser de CSV no soportaba formato numérico argentino (FIX)
+`parsearCSV()` (importación de extractos bancarios) usaba `parseFloat(monto.replace(',', '.'))` —
+con el formato AR real de un banco ("1.234,56": punto de miles, coma decimal), esto producía
+`parseFloat("1.234.56")` = **1.234**, un error de 3 órdenes de magnitud sobre el monto real
+(1234.56). **Fix:** helper `parseMontoCSV()` que remueve los puntos de miles antes de reemplazar la
+coma por punto decimal, solo cuando hay coma presente (mantiene compatibilidad con CSVs en formato
+US/plano sin separador de miles).
+
+Hallazgos menores documentados, sin fix (bajo riesgo): `autoMatch` no tiene lock a nivel DB entre
+ejecuciones concurrentes (acción manual/ocasional de admin, no de alta frecuencia); el split de CSV
+por coma no soporta campos con comas dentro de comillas (no confirmado en uso real).
+
+Build verificado, advisors sin hallazgos nuevos (salvo el propio trigger nuevo, resuelto con REVOKE
+EXECUTE). Estado de la cola: 10 de 15 áreas auditadas. Próxima: #11 Ofertas / Descuentos.
 
 ## Sesión 46 (cont.) — Auditoría área #9: Períodos contables / Cierre
 
