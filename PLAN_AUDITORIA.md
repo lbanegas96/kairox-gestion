@@ -278,6 +278,43 @@ tabla-por-tabla (¿tiene RLS?, ¿el gate coincide con el nivel real de riesgo?) 
 revisó exhaustivamente cada tabla restante del schema (ej. `afip_tickets` ya es deny-all
 intencional, confirmado en sesiones previas).
 
+## ✅ Barrido sistemático completo — TODAS las tablas de `public` (mig.153, 2026-07-04)
+
+A pedido explícito del usuario ("quiero dejar absolutamente todo auditado, no pasemos a otro
+tema"), se abandonó el enfoque de ir tabla-por-tabla adivinando y se hizo un query directo a
+`pg_policies` cruzando TODAS las tablas de `public` contra el patrón de gate esperado. Aparecieron
+**6 tablas más** con el mismo patrón débil (`FOR ALL`/CUD sin `has_module_permission` ni
+`is_admin`), confirmadas con `BEGIN...ROLLBACK` contra datos reales antes del fix: un staff sin
+ningún permiso especial pudo `UPDATE` sobre `cajas`, `categorias`, `cuenta_corriente_movimientos`
+(monto → $999.999), `notas_debito` (monto → $999.999), y `DELETE` sobre `devoluciones` y
+`movimientos_inventario` (el libro de auditoría de stock).
+
+| Tabla | Módulo asignado | Motivo |
+|-------|------------------|--------|
+| `cajas` | `caja` | Igual que `caja_sesiones`/`movimientos_caja` (mig.132). Sin call-site de escritura en frontend (solo trigger de alta de empresa, SECURITY DEFINER) — gate puramente defensivo |
+| `categorias` | `productos` | Igual que la tabla `productos`; escrita desde `ProductosSection.jsx` |
+| `comprobante_pagos` | `ventas` | CERO call-sites de escritura detectados (tabla sin uso real) — gateada por defensa en profundidad |
+| `movimientos_inventario` | `productos` | Es un libro de auditoría de stock — se le sacó la policy de DELETE (mismo principio "se anula, no se borra" de mig.141/142) |
+| `devoluciones` / `devolucion_items` | `ventas` OR `compras` | Uso dual confirmado (`tipo='cliente'` es ventas, `tipo='proveedor'` es compras, ver `crear_devolucion`). Se sacó DELETE (sin call-site legítimo) |
+| `cuenta_corriente_movimientos` (CxC clientes) | `ventas` | Quedó afuera de mig.146 por descuido — su hermana `cuenta_corriente_proveedores` ya tenía `compras` desde esa migración |
+| `notas_debito` | `ventas` OR `compras` | Mismo uso dual que devoluciones (`tipo='emitida'`/`'recibida'`). DELETE ya estaba ausente desde mig.142 |
+
+Validado con `BEGIN...ROLLBACK`: las 8 combinaciones bloqueadas para staff sin el permiso
+correspondiente (incluyendo un caso donde se puso `permissions.ventas=false` y
+`permissions.compras=false` explícitamente dentro de la transacción para forzar el caso negativo,
+ya que los 2 únicos staff no-admin reales de la base tienen `ventas=true`); admin siempre pasa.
+Confirmado que todas las RPCs SECURITY DEFINER involucradas (`crear_venta`, `crear_devolucion`,
+`crear_nota_debito`, `registrar_cobro_cliente`, `decrement_stock`/`increment_stock`) siguen
+funcionando sin cambios — bypasean RLS por table ownership, igual que el resto del motor de dinero.
+
+Build verificado, advisors sin regresiones nuevas para ninguna de las 8 tablas tocadas.
+
+**Con esto, el barrido de `pg_policies` sobre TODAS las tablas de `public` no muestra ningún otro
+patrón "`FOR ALL`/CUD sin `is_admin`/`has_module_permission`" pendiente** — quedan únicamente
+tablas ya confirmadas sólidas (deny-all intencional como `afip_tickets`/`rate_limit_attempts`, o
+ya gateadas correctamente desde mig.132/134/146). No queda ninguna tabla de negocio con esta clase
+de hallazgo sin cerrar.
+
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma
    metodología de 6 dimensiones.

@@ -1,5 +1,49 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-04 (sesión 46 cont. 13 — Fase 3 cont.: `empresas` y `series_numeracion` sin gate de admin)
+**Última actualización:** 2026-07-04 (sesión 46 cont. 14 — barrido sistemático COMPLETO de `pg_policies`, 6 tablas más cerradas)
+
+## Sesión 46 (cont. 14) — Barrido sistemático completo de todas las tablas de `public`
+
+El usuario pidió dejar de ir "tabla por tabla adivinando" y auditar TODO de una — pidió un plan de
+ejecución y no pasar a otro tema hasta terminar. Se abandonó el enfoque manual y se hizo un query
+directo a `pg_policies` cruzando las ~65 tablas de `public` contra el patrón de gate esperado
+(`is_admin`/`has_module_permission` vs. solo `empresa_id`). Aparecieron 6 tablas más con el mismo
+patrón débil, confirmadas con `BEGIN...ROLLBACK` contra datos reales antes del fix (mig.153):
+un staff sin ningún permiso especial pudo `UPDATE` sobre `cajas`, `categorias`,
+`cuenta_corriente_movimientos` (monto → $999.999 en un movimiento real), `notas_debito` (ídem), y
+`DELETE` sobre `devoluciones` y `movimientos_inventario` (el libro de auditoría de stock).
+
+Módulo asignado por tabla (mismo criterio del resto de la auditoría — mirror de la tabla hermana
+o del dominio real de uso, confirmado por grep de call-sites antes de decidir):
+- `cajas` → módulo `caja` (como `caja_sesiones`/`movimientos_caja`); sin call-site de escritura en
+  frontend (solo el trigger de alta de empresa, `SECURITY DEFINER`) — gate puramente defensivo.
+- `categorias` → módulo `productos` (como la tabla `productos`; escrita desde `ProductosSection.jsx`).
+- `comprobante_pagos` → módulo `ventas`; CERO call-sites de escritura detectados en todo el
+  frontend/RPCs — tabla sin uso real, gateada por defensa en profundidad.
+- `movimientos_inventario` → módulo `productos`; es un libro de auditoría de stock — se le sacó la
+  policy de DELETE (mismo principio "se anula, no se borra" de mig.141/142).
+- `devoluciones`/`devolucion_items` → `ventas` OR `compras` (uso dual confirmado: `tipo='cliente'`
+  es ventas, `tipo='proveedor'` es compras, ver `crear_devolucion`). Se sacó DELETE también (sin
+  call-site legítimo).
+- `cuenta_corriente_movimientos` (CxC clientes) → `ventas`; quedó afuera de mig.146 por descuido —
+  su hermana `cuenta_corriente_proveedores` ya tenía `compras` desde esa migración.
+- `notas_debito` → `ventas` OR `compras` (mismo uso dual, `tipo='emitida'`/`'recibida'`). DELETE ya
+  estaba ausente desde mig.142.
+
+Validado con `BEGIN...ROLLBACK`: las 8 combinaciones bloqueadas para staff sin el permiso
+correspondiente. Para `cuenta_corriente_movimientos`/`notas_debito`, como los 2 únicos staff
+no-admin reales de la base ya tienen `ventas=true`, se forzó el caso negativo seteando
+`permissions.ventas=false` y `permissions.compras=false` explícitamente dentro de la misma
+transacción de prueba (revertido con ROLLBACK) — confirmado el bloqueo real. Admin siempre pasa.
+Confirmado que todas las RPCs `SECURITY DEFINER` involucradas (`crear_venta`, `crear_devolucion`,
+`crear_nota_debito`, `registrar_cobro_cliente`, `decrement_stock`/`increment_stock`) siguen
+funcionando sin cambios.
+
+Se verificó también `movimientos_uala` (quedaba en el plan como "a confirmar, no se espera
+hallazgo"): su policy de INSERT está explícitamente restringida al rol `service_role` (no
+`authenticated`), sin policies de UPDATE/DELETE — sólido, sin acción.
+
+**Con este barrido, el query a `pg_policies` sobre TODAS las tablas de `public` no muestra ningún
+otro patrón "`FOR ALL`/CUD sin gate" pendiente.** Build verificado, advisors sin regresiones.
 
 ## Sesión 46 (cont. 13) — Fase 3 cont.: `empresas` (raíz del tenant) y `series_numeracion`
 
