@@ -1,5 +1,42 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-04 (sesión 46 cont. 8 — Auditoría área #15: Audit log — CIERRE DE LA FASE 1: 15/15 áreas auditadas)
+**Última actualización:** 2026-07-04 (sesión 46 cont. 9 — Cierre del gap sistémico: asiento automático en Cobro/Pago/Cheques)
+
+## Sesión 46 (cont. 9) — Cierre del gap sistémico de contabilización
+
+Con la Fase 1 completa (15/15 áreas), el usuario pidió avanzar con los 2 pendientes documentados que
+requerían decisión de negocio. Ante la pregunta de cómo proceder, eligió que Claude proponga el
+esquema de cuentas directamente (con la advertencia explícita de que el contador debe validarlo
+después) en vez de esperar o solo hacer la Fase 2 técnica.
+
+### Cobro CxC y Pago CxP ahora generan asiento (mig.144)
+Reutiliza los mismos códigos de cuenta que `asientosAutoService` ya usaba para Ventas/Compras
+(`1.1.1 Caja y Bancos`, `1.1.2 Cuentas a Cobrar`, `2.1.1 Cuentas a Pagar`) y el mismo patrón "no
+bloqueante": si falta la cuenta en el plan o el período está cerrado, el cobro/pago se completa igual
+(la plata se mueve), simplemente no se genera asiento — igual que el resto del sistema. Embebido
+dentro de `registrar_cobro_cliente`/`registrar_pago_proveedor` (misma transacción atómica, no una
+llamada aparte). Validado con BEGIN...ROLLBACK: cobro de $1000 → asiento DEBE 1.1.1/HABER 1.1.2
+balanceado; pago de $700 → asiento DEBE 2.1.1/HABER 1.1.1 balanceado.
+
+### Cheques de terceros ahora generan asiento (mig.145)
+La cuenta `1.1.6 Cheques de Terceros en Cartera` ya estaba seedeada en el plan de cuentas de cada
+empresa desde antes, pero ningún código la usaba — se implementó vía 2 triggers en `cheques`
+(`AFTER INSERT`, `AFTER UPDATE OF estado`), no bloqueantes:
+- Recibido (`en_cartera`): DEBE 1.1.6 / HABER 1.1.2 (si tiene cliente) o 4.3 Otros Ingresos.
+- Cobrado: DEBE 1.1.1 Caja y Bancos / HABER 1.1.6.
+- Rechazado: reversa simétrica al recibido (restaura la deuda del cliente).
+Cheques *propios* (entregados a proveedores) quedan fuera de alcance — requerirían una cuenta
+"Documentos a Pagar" que no existe todavía; se agrega si el contador la pide.
+Validado con BEGIN...ROLLBACK: cheque recibido+cobrado y cheque recibido+rechazado, ambos con
+asientos balanceados y las cuentas correctas (confirmado con join a `plan_cuentas` mostrando código
+y nombre de cada cuenta, no solo el total).
+
+⚠️ **Advertencia explícita, repetida en `PLAN_AUDITORIA.md`:** este esquema de cuentas lo definió
+Claude, no el contador. Antes de confiar en Balance General/Estado de Resultados que dependan de
+estos asientos nuevos, Nadia/Luciano deberían hacerlo revisar.
+
+Solo cambios de DB (RPCs + triggers) — no hizo falta tocar frontend ni rebuildear/deployar.
+
+## Sesión 46 (cont. 8) — Auditoría área #15: Audit log — CIERRE DE LA FASE 1: 15/15 áreas auditadas
 
 ## Sesión 46 (cont. 8) — Auditoría área #15: Audit log — cobertura (última del plan)
 

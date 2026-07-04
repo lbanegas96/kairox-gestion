@@ -141,18 +141,37 @@ _(ninguna — **las 15 áreas de la cola original están auditadas**. Ver "Gap s
 
 ---
 
-## 🟡 Gap sistémico abierto — Contabilización de sub-libros
-Los sub-libros (Caja, Bancos, Cuenta Corriente) mueven dinero pero **solo Ventas y Compras generan
-asiento automático** (asientosAutoService). Cobros, pagos, movimientos de caja/bancos NO asientan →
-el mayor contable puede divergir de los sub-libros. Ya se empezó a cerrar con la **Determinación de
-Cuentas + contabilización de Bancos** (S43). Falta extenderlo a Caja y CC (cobros/pagos). **Requiere
-decisión del contador** (qué cuentas imputar) — no se inventa. Aplica a: CxC (Hallazgo B), CxP, Caja.
+## ✅ Gap sistémico — Contabilización de sub-libros (CERRADO 2026-07-04, esquema propuesto por Claude)
 
-**Cheques (S44):** caso especial del mismo gap. El registro de cheques es un tracker aislado — no
-mueve dinero. Para integrarlo bien hace falta la cuenta **"Cheques en Cartera / Valores a Depositar"**
-(activo) y decidir el flujo: al recibir un cheque de tercero → Debe "Cheques en Cartera" / Haber CxC;
-al depositarlo y acreditarse → Debe Bancos / Haber "Cheques en Cartera"; si se rechaza → restaurar CxC.
-Hoy nada de esto ocurre automáticamente. Decisión del contador.
+Los sub-libros (Caja, Bancos, Cuenta Corriente) mueven dinero pero antes **solo Ventas y Compras
+generaban asiento automático** (asientosAutoService). Cobros, pagos y cheques no asentaban → el mayor
+contable podía divergir de los sub-libros. Se empezó a cerrar con la **Determinación de Cuentas +
+contabilización de Bancos** (S43); ahora se cierra Caja/CC (cobros/pagos) y Cheques de terceros.
+
+⚠️ **El esquema de cuentas fue definido por Claude (no por el contador)** — reutiliza los mismos
+códigos de cuenta que ya usaba `asientosAutoService` para Ventas/Compras, con el mismo patrón "no
+bloqueante" (si falta la cuenta o el período está cerrado, la operación de plata se completa igual,
+sin asiento). **Debe ser validado por el contador de Nadia/Luciano antes de confiar en los reportes
+contables que dependan de esto** (Balance General, Estado de Resultados).
+
+**Cobro a cliente (mig.144):** DEBE `1.1.1 Caja y Bancos` / HABER `1.1.2 Cuentas a Cobrar`.
+**Pago a proveedor (mig.144):** DEBE `2.1.1 Cuentas a Pagar` / HABER `1.1.1 Caja y Bancos`.
+Ambos embebidos dentro de `registrar_cobro_cliente`/`registrar_pago_proveedor` (misma transacción
+atómica). Validado con BEGIN...ROLLBACK: cobro de $1000 y pago de $700 generan asientos balanceados
+con las cuentas correctas.
+
+**Cheques de terceros (mig.145):** la cuenta `1.1.6 Cheques de Terceros en Cartera` ya estaba
+seedeada en el plan de cuentas pero sin uso — ahora:
+- Recibido (INSERT, estado `en_cartera`): DEBE `1.1.6` / HABER `1.1.2 Cuentas a Cobrar` (si tiene
+  cliente) o `4.3 Otros Ingresos` (si no).
+- Cobrado (transición a `cobrado`): DEBE `1.1.1 Caja y Bancos` / HABER `1.1.6`.
+- Rechazado (transición a `rechazado`): reversa simétrica al recibido — restaura la deuda del cliente.
+Validado con BEGIN...ROLLBACK: cheque recibido + cobrado y cheque recibido + rechazado, ambos con las
+cuentas correctas y asientos balanceados.
+
+**Fuera de alcance, documentado para el contador:** cheques *propios* (entregados a proveedores) no
+se contabilizan — requeriría una cuenta "Documentos a Pagar" que todavía no existe en el plan de
+cuentas; se agrega si el contador lo pide.
 
 ## ✅ Cierre de la Fase 1 — las 15 áreas de la cola original auditadas (2026-07-04)
 
