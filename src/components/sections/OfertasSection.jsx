@@ -589,7 +589,10 @@ function OfertasSection() {
                 placeholder="Ej: Tecnología, Ferretería"
                 className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
               />
-              <p className="text-xs text-kx-text-3">Debe coincidir exactamente con la categoría del producto</p>
+              <p className="text-xs text-kx-text-3">
+                Debe coincidir exactamente con la categoría del producto.
+                {form.producto_id && ' Si ya elegiste un producto específico arriba, este campo se ignora.'}
+              </p>
             </div>
 
             {/* Medio de pago */}

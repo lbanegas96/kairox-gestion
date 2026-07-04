@@ -1,5 +1,26 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-03 (sesión 46 cont. 2 — Auditoría área #10: Conciliación bancaria)
+**Última actualización:** 2026-07-03 (sesión 46 cont. 3 — Auditoría área #11: Ofertas / Descuentos)
+
+## Sesión 46 (cont. 3) — Auditoría área #11: Ofertas / Descuentos
+
+### 🟡 producto_id + categoria_nombre evaluados con OR (FIX)
+`calcular_ofertas_carrito` (RPC) tenía guard de tenant correcto y la tabla `ofertas` ya tiene
+`chk_porcentaje_maximo` (evita >100% de descuento) y el tipo `monto_fijo` usa `LEAST(valor,precio)`
+como guard adicional contra precio negativo — todo eso ya estaba bien. Pero el WHERE de scope era
+`producto_id IS NULL OR producto_id = X OR categoria coincide`. La UI de `OfertasSection.jsx` permite
+completar Producto específico Y Categoría al mismo tiempo sin restricción — si un admin configura
+una oferta para UN producto puntual y también completa la categoría (por costumbre o error), la
+oferta terminaba aplicándose a CUALQUIER producto de esa categoría. Probado con BEGIN...ROLLBACK:
+oferta "solo Producto A" + categoría "Bebidas" descontó 50% en un Producto B no relacionado, misma
+categoría. **Fix (mig.138):** `producto_id`, cuando está seteado, es excluyente (más específico
+gana) — `categoria_nombre` solo se evalúa si la oferta NO tiene `producto_id`. Validado: producto
+ajeno ya no toma el descuento; producto correcto y oferta "solo categoría" siguen funcionando.
+Agregado un hint en la UI aclarando la precedencia cuando ambos campos están completos.
+
+Confirmado que `acumulable` NO es vestigial: controla si un descuento manual del POS se puede sumar
+sobre la oferta automática — nunca fue pensado para stackear 2 ofertas automáticas entre sí.
+
+Build verificado. Estado de la cola: 11 de 15 áreas auditadas. Próxima: #12 Cotizaciones / Pedidos.
 
 ## Sesión 46 (cont. 2) — Auditoría área #10: Conciliación bancaria
 
