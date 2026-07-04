@@ -502,7 +502,13 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           descripcion: `Venta #${saleNumber}`,
           esCredito:   isCC,
         }
-      ).catch(e => console.warn('[Contabilidad] Asiento venta (no crítico):', e.message));
+      ).catch(e => {
+        if (e.message?.startsWith('Período cerrado:')) {
+          toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
+        } else {
+          console.warn('[Contabilidad] Asiento venta (no crítico):', e.message);
+        }
+      });
 
       // ── Encolar CAE vía trigger (SAP async posting — no bloquea la venta) ──────
       // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca, que inserta

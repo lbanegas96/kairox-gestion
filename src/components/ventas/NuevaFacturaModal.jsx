@@ -282,7 +282,13 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
         fecha:       getTodayAR(),
         descripcion: `Factura ${numero}`,
         esCredito:   isCC,
-      }).catch(e => console.warn('[Contabilidad Factura]', e.message));
+      }).catch(e => {
+        if (e.message?.startsWith('Período cerrado:')) {
+          toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
+        } else {
+          console.warn('[Contabilidad Factura]', e.message);
+        }
+      });
 
       toast({ title: `Factura ${numero} creada correctamente` });
       onSuccess?.({ id: comp.id, numero_venta: numero, total });

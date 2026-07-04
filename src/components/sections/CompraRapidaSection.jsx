@@ -423,7 +423,13 @@ function ComprasSection() {
           descripcion: `Compra a ${providerName} - Fac. ${purchaseForm.numero_factura || 'S/N'}`,
           esCredito: purchaseForm.forma_pago === 'Cuenta Corriente',
         }
-      ).catch(e => console.warn('[Contabilidad] Asiento compra (no crítico):', e.message));
+      ).catch(e => {
+        if (e.message?.startsWith('Período cerrado:')) {
+          toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
+        } else {
+          console.warn('[Contabilidad] Asiento compra (no crítico):', e.message);
+        }
+      });
 
       toast({
         title: "¡Compra registrada correctamente! Stock actualizado.",

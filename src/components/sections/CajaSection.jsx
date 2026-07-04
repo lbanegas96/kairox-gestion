@@ -373,7 +373,8 @@ function CajaSection() {
 
       // Asiento contable automático — fire & forget (no bloquea el movimiento)
       // Mismo patrón que crearAsientoVenta en NuevaVentaModal. Si el plan de
-      // cuentas no está seedeado o el período está cerrado, sale silenciosamente.
+      // cuentas no está seedeado sale silenciosamente; si el período está
+      // cerrado, avisa por toast (no bloquea, pero ya no es un warn mudo).
       asientosAutoService.crearAsientoMovimientoCaja(
         user.empresa_id,
         user.id,
@@ -385,7 +386,13 @@ function CajaSection() {
           fecha:        formData.fecha,
           descripcion:  `${formData.tipo === 'egreso' ? 'Egreso' : 'Ingreso'} de caja — ${formData.concepto}`,
         }
-      ).catch(e => console.warn('[Contabilidad] Asiento mov. caja (no crítico):', e.message));
+      ).catch(e => {
+        if (e.message?.startsWith('Período cerrado:')) {
+          toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
+        } else {
+          console.warn('[Contabilidad] Asiento mov. caja (no crítico):', e.message);
+        }
+      });
 
       toast({
         title: "Movimiento registrado", 

@@ -1,5 +1,34 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-03 (sesión 46 — Auditoría área #8: Multi-moneda / Tipos de cambio)
+**Última actualización:** 2026-07-03 (sesión 46 cont. — Auditoría área #9: Períodos contables / Cierre)
+
+## Sesión 46 (cont.) — Auditoría área #9: Períodos contables / Cierre
+
+### 🔴 Crítico — cerrar/reabrir período era solo-UI (FIX)
+`PlanCuentasSection.jsx` gatea los botones Crear/Cerrar/Reabrir período con `isAdmin`, pero la
+policy RLS de `periodos_contables` (mig.027) solo verificaba `empresa_id`, no rol — mismo patrón
+que el hallazgo de Usuarios/Permisos (mig.132) de sesión 44. Probado con BEGIN...ROLLBACK: un staff
+no-admin INSERTÓ un período nuevo y CERRÓ 2 períodos reales existentes vía API directa.
+**Fix (mig.136):** INSERT/UPDATE en `periodos_contables` ahora exigen `is_admin()` además de
+`empresa_id` (mismo patrón que `configuracion`/`integraciones_bancarias`). SELECT se mantiene
+tenant-only — el staff puede seguir viendo el estado de los períodos, solo no modificarlos.
+Validado: staff bloqueado (0 filas afectadas), admin de la misma empresa sigue operando normal.
+
+### 🟡 Aviso silencioso cuando el asiento no se genera por período cerrado (FIX)
+`asientosAutoService.crearAsientoVenta/crearAsientoCompra/crearAsientoMovimientoCaja` ya consultaban
+`fecha_en_periodo_cerrado` antes de generar el asiento — correcto. Pero el diseño es "no bloqueante":
+si el período está cerrado, la venta/compra/movimiento operacional se registra igual, y el error de
+que el asiento no se generó solo iba a `console.warn` (invisible para el usuario). Se decidió
+mantener el no-bloqueante (es el comportamiento documentado/intencional en el propio código), pero
+cerrar el hueco de "error silencioso": los 5 call-sites (`NuevaVentaModal.jsx`, `NuevaFacturaModal.jsx`,
+`useConfirmarVenta.js`, `CompraRapidaSection.jsx`, `CajaSection.jsx`) ahora muestran un toast
+destructivo "Asiento contable no generado" cuando la causa es período cerrado, dejando el
+`console.warn` solo para causas realmente no-críticas (empresa sin plan de cuentas seedeado).
+
+CxC/CxP/Notas de Débito siguen sin generar asiento automático (gap sistémico ya documentado) —
+el guard de período cerrado no aplica ahí todavía.
+
+Build verificado, advisors sin hallazgos nuevos. Estado de la cola: 9 de 15 áreas auditadas.
+Próxima: #10 Conciliación bancaria.
 
 ## Sesión 46 — Auditoría área #8: Multi-moneda / Tipos de cambio
 
