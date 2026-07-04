@@ -9,7 +9,6 @@ import { Loader2, Plus, Trash2, FileMinus, Info } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
-import { getNowAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import ClienteSelector from '@/components/shared/ClienteSelector';
 
@@ -131,16 +130,6 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
     items.reduce((s, i) => s + calcNeto(i) * Number(i.alicuota_iva) / 100, 0), [items]);
   const total = subtotalNeto + totalIva;
 
-  // ── Número correlativo NC ───────────────────────────────────────────────────
-  const generateNCNumber = async () => {
-    const { data, error } = await supabase.rpc('obtener_proximo_numero', {
-      p_empresa_id: user.empresa_id,
-      p_tipo_documento: 'nota_credito',
-    });
-    if (error) throw error;
-    return data;
-  };
-
   // ── Confirmar ───────────────────────────────────────────────────────────────
   const handleConfirmar = async () => {
     const motivo = motivoNC === 'Otro' ? motivoCustom.trim() : motivoNC;
@@ -160,70 +149,36 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
 
     setLoading(true);
     try {
-      const numero = await generateNCNumber();
-      const now    = getNowAR().toISOString();
-
-      // 1. INSERT comprobante nota_credito
-      const { data: comp, error: compErr } = await supabase.from('comprobantes').insert([{
-        empresa_id:            user.empresa_id,
-        tenant_id:             user.empresa_id,
-        numero_venta:          numero,
-        fecha:                 now,
-        cliente_id:            clienteId || null,
-        cliente_nombre:        comprobanteOrigen?.cliente_nombre ?? 'Consumidor Final',
-        total,
-        neto_gravado:          subtotalNeto,
-        iva_discriminado:      totalIva,
-        forma_pago:            'Nota de Crédito',
-        estado_pago:           'pagada',
-        moneda:                'ARS',
-        tipo_cambio_tasa:      1,
-        tipo:                  'nota_credito',
-        comprobante_origen_id: comprobanteOrigen?.id || null,
-        motivo_nc:             motivo,
-      }]).select('id').single();
-      if (compErr) throw compErr;
-
-      // 2. INSERT comprobante_items — columnas en ESPAÑOL: producto_id, cantidad
-      const { error: itemsErr } = await supabase.from('comprobante_items').insert(
-        itemsValidos.map(i => ({
-          comprobante_id:  comp.id,
-          empresa_id:      user.empresa_id,
+      // comprobante + comprobante_items + movimiento HABER en CC, todo atómico
+      // en la RPC (evita el patrón "escrituras sueltas" — mig.140).
+      const { data, error } = await supabase.rpc('crear_nota_credito', {
+        p_empresa_id:            user.empresa_id,
+        p_user_id:               user.id,
+        p_cliente_id:            clienteId || null,
+        p_cliente_nombre:        comprobanteOrigen?.cliente_nombre ?? 'Consumidor Final',
+        p_motivo_nc:             motivo,
+        p_items:                 itemsValidos.map(i => ({
           producto_id:     i.producto_id || null,
           cantidad:        Number(i.cantidad),
           precio_unitario: parseNumberLocale(i.precio_unit) || 0,
-          subtotal:        calcNeto(i),
-          alicuota_iva:    String(i.alicuota_iva),
-        }))
-      );
-      if (itemsErr) throw itemsErr;
+          alicuota_iva:    Number(i.alicuota_iva),
+        })),
+        p_comprobante_origen_id: comprobanteOrigen?.id || null,
+      });
+      if (error) throw error;
 
-      // 3. HABER en CC — reduce deuda del cliente
-      if (clienteId) {
-        await supabase.from('cuenta_corriente_movimientos').insert([{
-          empresa_id:     user.empresa_id,
-          user_id:        user.id,
-          cliente_id:     clienteId,
-          comprobante_id: comp.id,
-          tipo:           'HABER',
-          monto:          total,
-          descripcion:    `NC ${numero} — ${motivo}`,
-          fecha:          now,
-        }]);
-      }
-
-      // 4. AFIP — encolar NC en facturas_pendientes_arca vía trigger (SAP async posting).
+      // AFIP — encolar NC en facturas_pendientes_arca vía trigger (SAP async posting).
       // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca.
       if (afipConfig?.usa_factura_electronica && afipConfig?.punto_venta) {
         supabase.from('comprobantes').update({
           tipo_comprobante_afip: comprobanteOrigen?.tipo_comprobante_afip ?? 'B',
           punto_venta_id:        afipConfig.punto_venta.id,
           cae_estado:            'pendiente',
-        }).eq('id', comp.id).catch(e => console.warn('[AFIP queue NC]', e.message));
+        }).eq('id', data.comprobante_id).catch(e => console.warn('[AFIP queue NC]', e.message));
       }
 
-      toast({ title: `Nota de Crédito ${numero} creada` });
-      onSuccess?.({ id: comp.id, numero_venta: numero, total });
+      toast({ title: `Nota de Crédito ${data.numero_venta} creada` });
+      onSuccess?.({ id: data.comprobante_id, numero_venta: data.numero_venta, total: data.total });
       onOpenChange(false);
     } catch (err) {
       console.error('[NuevaNC]', err);

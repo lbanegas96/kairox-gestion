@@ -1,5 +1,41 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-03 (sesión 46 cont. 4 — Auditoría área #12: Cotizaciones / Pedidos)
+**Última actualización:** 2026-07-03 (sesión 46 cont. 5 — Auditoría área #13: Comprobantes — lifecycle)
+
+## Sesión 46 (cont. 5) — Auditoría área #13: Comprobantes — lifecycle
+
+### 🔴 CRÍTICO — cualquier staff podía borrar una factura ya emitida (FIX)
+La policy RLS de `comprobantes` (`comprobantes_all`) era `FOR ALL` con solo `empresa_id =
+get_my_empresa_id()` — sin distinguir DELETE de SELECT/INSERT/UPDATE. Probado con
+BEGIN...ROLLBACK: un staff no-admin borró una factura de $50.000 con un `DELETE` directo vía API,
+sin pasar por ninguna pantalla del sistema (confirmado por grep: 0 call-sites de `.delete()` sobre
+`comprobantes` en todo el frontend — nadie lo usa, nadie lo necesita). Viola el principio contable
+básico "los documentos se anulan con una Nota de Crédito, nunca se borran" (ya aplicado para
+`asientos_contables` y para movimientos bancarios contabilizados, mig.128).
+**Fix (mig.141):** policy dividida en `comprobantes_select`/`comprobantes_insert`/`comprobantes_update`
+(mismo alcance de tenant que antes) — sin policy de DELETE, que queda denegado por RLS default para
+cualquier rol no-superuser. Validado: DELETE bloqueado (0 filas), SELECT/UPDATE normales intactos
+(probado marcando `cae_estado`).
+
+### 🔴 NC con escrituras sueltas sin capturar error (FIX)
+Mismo patrón de bug ya visto y cerrado 3 veces esta auditoría (CxC mig.130, CxP mig.131, ND
+mig.133): `NuevaNCModal.jsx` hacía 3 escrituras SUELTAS — INSERT `comprobantes`, INSERT
+`comprobante_items`, INSERT `cuenta_corriente_movimientos` (HABER) — y la 3ra ni siquiera capturaba
+el error. Si fallaba, la Nota de Crédito quedaba creada pero la deuda del cliente nunca bajaba.
+**Fix:** nueva RPC atómica `crear_nota_credito` (mig.140), mismo patrón que `crear_nota_debito`: la
+función calcula los totales (neto/IVA por ítem), inserta comprobante + items + movimiento HABER en
+una sola transacción, con guard de tenant y validación de `cliente_id`/`comprobante_origen_id`
+pertenecientes a la empresa. Frontend simplificado a una sola llamada `supabase.rpc(...)`. Validado
+con NC de $500 + 21% IVA: total ($605) y movimiento CC exactos en una sola transacción.
+
+El lifecycle real de "anulación" en KAIROX es: **Copiar a NC** (ajuste financiero puro, no toca
+stock, explícito en la UI: "Si además necesitás devolver mercadería, usá el módulo Devoluciones") y
+**Devolver mercadería** (`crear_devolucion`, ya auditado con guard de negativo + lock). No existe un
+botón "anular factura" — correcto, evita el anti-pattern de borrar/editar un documento fiscal ya
+emitido.
+
+Build verificado, advisors revisados (el lint de `crear_nota_credito` ejecutable por `authenticated`
+es el mismo patrón aceptado que ya tiene `crear_nota_debito` — intencional, es como el frontend la
+llama). Estado de la cola: 13 de 15 áreas auditadas. Próxima: #14 Reportes / Dashboard.
 
 ## Sesión 46 (cont. 4) — Auditoría área #12: Cotizaciones / Pedidos
 
