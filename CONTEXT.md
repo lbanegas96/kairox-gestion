@@ -1,5 +1,34 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-04 (sesión 46 cont. 7 — Auditoría área #14: Reportes / Dashboard)
+**Última actualización:** 2026-07-04 (sesión 46 cont. 8 — Auditoría área #15: Audit log — CIERRE DE LA FASE 1: 15/15 áreas auditadas)
+
+## Sesión 46 (cont. 8) — Auditoría área #15: Audit log — cobertura (última del plan)
+
+### 🟡 4 tablas críticas sin trigger de auditoría (FIX)
+14 tablas ya tenían `trg_audit_*` (función genérica `fn_audit_trigger()`): clientes, comprobantes,
+compras, cotizaciones, cuenta_corriente_movimientos/proveedores, movimientos_caja, ordenes_compra,
+pedidos, productos, profiles, tipos_cambio, caja_sesiones, configuracion. Probado con
+BEGIN...ROLLBACK: cerrar un período contable (`periodos_contables` — justo la tabla cuyo RLS de
+escritura se corrigió en mig.136 por ser explotable por cualquier staff) no dejaba **ningún rastro**
+en `audit_log`. Mismo vacío en `notas_debito` (documento de deuda), `movimientos_bancarios` y
+`asientos_contables` (el libro mayor mismo). **Fix (mig.143):** se agregó el mismo trigger genérico
+(ya probado en 14 tablas, cero riesgo) a estas 4. Validado: cerrar un período ahora genera 2
+registros (INSERT+UPDATE) en `audit_log`, la operación normal sigue funcionando igual.
+
+## 🎉 Cierre de la Fase 1 del plan de auditoría — 15/15 áreas
+
+Con esta área se completó la cola priorizada de `PLAN_AUDITORIA.md` iniciada en sesión 44. Resumen
+de hallazgos por severidad a lo largo de las 15 áreas: **8 🔴 críticos** corregidos (CxP sin
+descuento de Caja, ND recibida no atómica, permisos granulares solo-UI, cerrar período solo-UI,
+match cross-tenant en conciliación, DELETE sin restricción en comprobantes, DELETE sin restricción
+en CxC/CxP/ND), **6 🟡** corregidos, **1 🟠** corregido, y 2 áreas confirmadas sólidas sin hallazgos
+(Caja/POS, Reportes/Dashboard). Quedan documentados (no son bugs, son decisiones de negocio):
+1. Gap sistémico de sub-libros (Caja/CxC/CxP) sin asiento automático — requiere al contador.
+2. Cheques → cuenta "Valores en Cartera" — requiere al contador.
+3. Fase 2 técnica de bajo riesgo: extender `has_module_permission()` a pedidos/entregas/comprobantes/
+   recepciones/CC proveedores (hoy solo tenant-gated, no permission-gated, para escritura directa).
+
+Build verificado en cada paso con cambios de frontend; los cambios puramente de DB (RLS/triggers) se
+validaron con BEGIN...ROLLBACK antes y después de cada fix, sin necesidad de rebuild.
 
 ## Sesión 46 (cont. 7) — Auditoría área #14: Reportes / Dashboard
 

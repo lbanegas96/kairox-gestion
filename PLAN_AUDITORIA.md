@@ -3,7 +3,7 @@
 por partes, dejando registrado qué se auditó, qué está en curso y qué falta — para que no se
 escape nada.
 
-**Última actualización:** 2026-07-04 (sesión 46 cont. 7 — Reportes/Dashboard auditada; área #14)
+**Última actualización:** 2026-07-04 (sesión 46 cont. 8 — Audit log auditada; área #15 — PLAN COMPLETO: 15/15 áreas auditadas)
 **Leyenda de estado:** ✅ auditado · 🔄 en curso · ⬜ pendiente · ⏸️ bloqueado
 
 ---
@@ -57,6 +57,8 @@ hallazgo → fix con migración + verificación → documentar acá y en CONTEXT
 
 | **Comprobantes — lifecycle** | **T (crítico)·D·A** | 🔴 **CONFIRMADO Y CORREGIDO.** La policy RLS de `comprobantes` (`comprobantes_all`) era `FOR ALL` con solo `empresa_id = get_my_empresa_id()` — sin distinguir DELETE del resto. Probado con BEGIN...ROLLBACK: un staff no-admin borró una factura de $50.000 con un DELETE directo vía API, sin pasar por ninguna pantalla (0 call-sites de `.delete()` sobre `comprobantes` en todo el frontend — nadie lo usa, nadie lo necesita). Viola el principio contable básico "los documentos se anulan con una Nota de Crédito, nunca se borran" (ya aplicado para `asientos_contables` y movimientos bancarios contabilizados). **Fix (mig.141):** policy dividida en SELECT/INSERT/UPDATE, sin policy de DELETE — queda denegado por RLS default. Validado: DELETE bloqueado (0 filas), SELECT/UPDATE normales intactos. Lifecycle real de "anulación": Copiar a NC (`NuevaNCModal.jsx`) reduce la deuda del cliente sin tocar stock (por diseño, explícito en la UI); "Devolver mercadería" (`crear_devolucion`, ya auditado) es el camino correcto cuando SÍ hay que revertir stock. 🔴 Además, mismo patrón de escrituras sueltas ya visto 3 veces esta auditoría (CxC/CxP/ND): `NuevaNCModal.jsx` hacía 3 inserts sueltos (comprobante, comprobante_items, CC HABER) y el 3ro ni siquiera capturaba el error — si fallaba, la NC quedaba creada pero la deuda del cliente nunca bajaba. **Fix:** nueva RPC atómica `crear_nota_credito` (mig.140, mismo patrón que `crear_nota_debito` mig.133); frontend simplificado a una sola llamada. Validado con NC de $500+IVA: total y movimiento CC exactos en una sola transacción | S46 |
 
+| **Audit log — cobertura** | A | 🟡 **CONFIRMADO Y CORREGIDO.** 14 tablas ya tenían `trg_audit_*` (función genérica `fn_audit_trigger()`, reusa `to_jsonb` old/new): clientes, comprobantes, compras, cotizaciones, cuenta_corriente_movimientos/proveedores, movimientos_caja, ordenes_compra, pedidos, productos, profiles, tipos_cambio, caja_sesiones, configuracion. Probado con BEGIN...ROLLBACK: cerrar un período contable (`periodos_contables`, justo la tabla cuyo RLS de escritura se arregló en mig.136 por ser explotable por cualquier staff) no dejaba **ningún rastro** en `audit_log` — mismo vacío en `notas_debito` (documento de deuda), `movimientos_bancarios` y `asientos_contables` (el libro mayor mismo). **Fix (mig.143):** se agregó el mismo trigger genérico (ya probado en 14 tablas) a estas 4. Validado: cerrar un período ahora genera 2 registros (INSERT+UPDATE) en `audit_log`, la operación normal sigue funcionando igual | S46 |
+
 | **Reportes / Dashboard** | T | ✅ **SÓLIDO, sin hallazgos.** `dashboardService.ts` y los reportes (`ReporteLibroIVA`, `ReporteLibroIVACompras`, `ReporteParidad`) hacen SELECT plano con `.eq('empresa_id', empresaId)` — ninguno usa RPC/SECURITY DEFINER que pudiera bypasear RLS. Confirmado el caso límite con BEGIN...ROLLBACK: un staff de Empresa A que consulta explícitamente `WHERE empresa_id = <Empresa B>` en `comprobantes`, `movimientos_caja` y `clientes` obtiene 0 filas — la RLS bloquea independientemente de lo que el cliente pida, no solo por el filtro de la query. Sin cambios necesarios | S46 |
 
 | **Comprobantes-lifecycle (extensión)** | **T (crítico)** | 🔴 El mismo patrón de la fuga de DELETE (policy `FOR ALL`, sin gate de permiso) se encontró también en `cuenta_corriente_movimientos` (CxC), `cuenta_corriente_proveedores` (CxP) y `notas_debito`. Probado: un staff sin ningún permiso especial borró un movimiento de CxC de $10.000, uno de CxP de $10.000 y una ND de $5.000, cada uno con una sola llamada DELETE. **Fix (mig.142):** mismo patrón que mig.141 — SELECT/INSERT/UPDATE separados, sin policy de DELETE en las 3 tablas. Validado: DELETE bloqueado en las 3, UPDATE normal intacto | S46 |
@@ -72,9 +74,9 @@ hallazgo → fix con migración + verificación → documentar acá y en CONTEXT
 | **Multi-moneda / Tipos de cambio** | F·D | 🟡 **CONFIRMADO Y CORREGIDO.** `monto_paralelo`/`tc_paralelo` se persisten atómicamente vía RPC en `crear_venta` (todas sus versiones) y en `registrar_cobro_cliente` (mig.130, con `ROUND(...,2)` server-side) — no hay riesgo de desync ahí. `useTCParalelo.calcParalelo` ya redondea a 2 decimales en JS antes de persistir (columnas `numeric(14,4)` desde mig.076, cierra el hallazgo teórico de esa migración). Pero se encontró el mismo patrón de "escritura de plata sin verificar error" ya visto en CxC/CxP/ND: **`NuevaFacturaProveedorModal.jsx`** y **`CompraRapidaSection.jsx`** insertaban el egreso en `movimientos_caja` (compra pagada en Efectivo) sin capturar/propagar el error — si el insert fallaba, la compra quedaba "pagada" pero Caja nunca reflejaba el egreso (tesorería inflada), mismo síntoma que el bug de CxP cerrado en mig.131 pero en el camino de compra directa/rápida. **Fix:** agregado `if (cajaErr) throw cajaErr` en ambos, igual patrón que ya usaba `CajaSection.jsx`. 🟢 menor (no fixeado): `tipoCambioService.js` calcula "hoy" con `Date` local del browser en vez de `getTodayAR()` — inconsistencia latente de baja probabilidad si el reloj/zona horaria del cliente difiere de Argentina. 🟢 menor (no fixeado, requiere confirmación del usuario para borrar): `tipoCambioService.ts` (getTasaVigente/getHistorial/upsertTasa/deleteTasa) es código muerto — cero imports reales, todo el código vivo usa `tipoCambioService.js` | S46 |
 
 ### 🔄 En curso
-_(ninguna ahora — próxima: #15 de la cola = Audit log — cobertura)_
+_(ninguna — **las 15 áreas de la cola original están auditadas**. Ver "Gap sistémico" y "Fase 2" abajo para los pendientes de decisión de negocio que quedan documentados, no son bugs)_
 
-### ⬜ Pendientes — cola priorizada por riesgo (dinero y seguridad primero)
+### ⬜ Pendientes — cola priorizada por riesgo (dinero y seguridad primero) — TODAS CERRADAS
 
 | # | Área | Módulo / Tablas | Dimensiones foco | Por qué importa |
 |---|------|-----------------|-------------------|-----------------|
@@ -92,7 +94,7 @@ _(ninguna ahora — próxima: #15 de la cola = Audit log — cobertura)_
 | ~~12~~ | ~~Cotizaciones / Pedidos~~ | — | — | ✅ AUDITADA Y CORREGIDA S46. 🟡 `crear_entrega` permitía sobre-entrega (más de lo pedido) → guard mig.139 + test pgTAP ampliado; 2 errores silenciosos corregidos en PedidosSection |
 | ~~13~~ | ~~Comprobantes — lifecycle~~ | — | — | ✅ AUDITADA Y CORREGIDA S46. 🔴 CRÍTICO: cualquier staff podía BORRAR una factura ya emitida vía API (policy FOR ALL) → fix mig.141 (sin policy de DELETE); 🔴 NC con escrituras sueltas sin capturar error → RPC atómica crear_nota_credito (mig.140); 🔴 mismo DELETE sin restricción en CxC/CxP/ND → fix mig.142 |
 | ~~14~~ | ~~Reportes / Dashboard~~ | — | — | ✅ AUDITADA S46. Sólido — RLS bloquea cross-tenant incluso con query adversaria explícita. Sin hallazgos |
-| 15 | **Audit log — cobertura** ← próxima | `audit_log` | A | ¿Se puebla consistentemente en las operaciones sensibles? |
+| ~~15~~ | ~~Audit log — cobertura~~ | — | — | ✅ AUDITADA Y CORREGIDA S46. 🟡 4 tablas críticas (periodos_contables, notas_debito, movimientos_bancarios, asientos_contables) sin trigger de auditoría → agregado mig.143 |
 | 10 | **Conciliación bancaria** | conciliacionService · `extractos_bancarios`, `extracto_lineas` | T·D | Lógica de auto-match; ¿puede conciliar cross-tenant? montos |
 | 11 | **Ofertas / Descuentos** | OfertasSection · `ofertas` · `calcular_ofertas_carrito` | T·F | Cálculo de descuentos; guard tenant (ya se agregó, falta correctness) |
 | 12 | **Cotizaciones / Pedidos** | Cotizaciones/Pedidos · `cotizaciones`, `pedidos` | T·D | Document flow; contadores por línea; sin doble stock |
@@ -111,6 +113,7 @@ _(ninguna ahora — próxima: #15 de la cola = Audit log — cobertura)_
 
 | Fecha | Área | Severidad | Hallazgo | Fix |
 |-------|------|-----------|----------|-----|
+| 2026-07-04 | Audit log | 🟡 | 4 tablas críticas (`periodos_contables`, `notas_debito`, `movimientos_bancarios`, `asientos_contables`) sin trigger de auditoría — cerrar un período no dejaba ningún rastro | Agregado `trg_audit_*` (función genérica existente) a las 4 (mig.143) |
 | 2026-07-04 | Comprobantes | 🔴 | Mismo patrón de DELETE sin restricción en `cuenta_corriente_movimientos`, `cuenta_corriente_proveedores` y `notas_debito` — staff sin permiso borró movimientos reales de CxC/CxP/ND | Policies divididas SELECT/INSERT/UPDATE, sin DELETE, en las 3 tablas (mig.142) |
 | 2026-07-03 | Comprobantes | 🔴 | Policy RLS de `comprobantes` era FOR ALL sin distinguir DELETE — cualquier staff pudo borrar una factura de $50.000 vía API directa, sin ningún call-site legítimo en el frontend | Policy dividida SELECT/INSERT/UPDATE, sin policy de DELETE (mig.141) |
 | 2026-07-03 | Comprobantes | 🔴 | `NuevaNCModal.jsx`: 3 escrituras sueltas (comprobante, items, CC HABER), la 3ra sin capturar error — si fallaba, la NC se creaba pero la deuda del cliente no bajaba | RPC atómica `crear_nota_credito` (mig.140), mismo patrón que crear_nota_debito |
@@ -151,9 +154,25 @@ mueve dinero. Para integrarlo bien hace falta la cuenta **"Cheques en Cartera / 
 al depositarlo y acreditarse → Debe Bancos / Haber "Cheques en Cartera"; si se rechaza → restaurar CxC.
 Hoy nada de esto ocurre automáticamente. Decisión del contador.
 
+## ✅ Cierre de la Fase 1 — las 15 áreas de la cola original auditadas (2026-07-04)
+
+Las 15 áreas de la cola priorizada quedaron auditadas, con hallazgo y fix documentado donde
+correspondía. Resumen de severidad: 8 🔴 críticos corregidos, 6 🟡 corregidos, 1 🟠 corregido, y 2
+áreas sólidas sin hallazgos (Caja/POS, Reportes/Dashboard). Los dos temas que **no** se cerraron son,
+a propósito, decisiones de negocio que requieren al contador (no bugs de código):
+
+1. **Gap sistémico de sub-libros sin asiento** (Caja/CxC/CxP no generan asiento automático — ver
+   sección de arriba).
+2. **Cheques → cuenta "Valores en Cartera"** (ver sección de arriba).
+
+Y una Fase 2 técnica de bajo riesgo, documentada pero no crítica: extender
+`has_module_permission()` a `pedidos`, `entregas`, `comprobantes`, `recepciones`, `cuenta_corriente_proveedores`
+para escritura directa (hoy solo gateadas por tenant, no por permiso de módulo).
+
 ## Cómo retomar (para cualquier sesión futura)
-1. Abrir este archivo → mirar la **cola priorizada**.
-2. Tomar el ítem #1 pendiente (o el que Luciano indique), marcarlo 🔄 "en curso".
-3. Auditarlo contra sus dimensiones foco con la técnica base (ROLLBACK).
-4. Registrar hallazgos en el **log**, aplicar fixes, mover el área a ✅.
-5. Actualizar CONTEXT.md y commitear.
+1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma
+   metodología de 6 dimensiones.
+2. Para los 2 pendientes de decisión de negocio: agendar con el contador, no adivinar el fix.
+3. Para la Fase 2 técnica: mismo patrón que mig.132 (has_module_permission + policies SELECT/CUD).
+4. Auditar contra las dimensiones foco con la técnica base (BEGIN...ROLLBACK).
+5. Registrar hallazgos en el **log**, aplicar fixes, documentar en CONTEXT.md y commitear.
