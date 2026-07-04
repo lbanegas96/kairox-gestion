@@ -1,5 +1,67 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-04 (sesión 46 cont. 14 — barrido sistemático COMPLETO de `pg_policies`, 6 tablas más cerradas)
+**Última actualización:** 2026-07-04 (sesión 46 cont. 15 — Fase 4: permiso de módulo faltante en 16 RPCs "motor de dinero")
+
+## Sesión 46 (cont. 15) — Fase 4: permiso de módulo en RPCs punto de entrada (mig.154, mig.155)
+
+Arreglando `insertar_movimiento_bancario_externo` (mig.154) — probado con ROLLBACK que un staff
+con `permissions.bancos=false` la llamó directamente vía RPC e insertó un movimiento bancario falso
+de $999.999 sin ningún error — apareció una categoría de hallazgo mucho más grande: **todo el
+motor de dinero del sistema** (`crear_venta`, `crear_devolucion`, `crear_entrega`,
+`crear_recepcion`, `registrar_cobro_cliente`, `registrar_pago_proveedor`,
+`decrement_stock`/`increment_stock`, `ajustar_stock_manual`, `crear_nota_credito`,
+`crear_nota_debito`, etc.) valida tenant pero **nunca** valida `has_module_permission()`. Al ser
+`SECURITY DEFINER` con `EXECUTE` otorgado a `authenticated`, cualquier empleado podía llamarlas
+directo desde la consola del navegador (`supabase.rpc(...)`), sin pasar por ninguna pantalla, y
+saltarse por completo el sistema de permisos granulares de las mig.132/134/146/153.
+
+Antes de tocar código se hizo un mapeo con `pg_proc` (funciones `SECURITY DEFINER` otorgadas a
+`authenticated`, cruzadas contra si el cuerpo contiene `has_module_permission`) + grep de todos los
+`.rpc(...)` en `src/` para saber, de cada una, cuál es su único call-site real en el frontend. Esto
+separó dos categorías:
+- **Puntos de entrada** — llamadas solo desde una pantalla, nunca desde otra RPC → seguro gatearlas
+  con el permiso de esa pantalla.
+- **Piezas internas** (`obtener_proximo_numero`, `fecha_en_periodo_cerrado`) — llamadas por RPCs de
+  MÚLTIPLES módulos distintos (ventas, compras, bancos, cheques) → NO se tocan, porque gatearlas
+  rompería flujos cruzados (ej. un vendedor sin permiso `productos` fallaría al vender si
+  `crear_venta` llamara internamente algo gateado a `productos`).
+
+Se confirmó con una query cruzando `pg_get_functiondef` de TODAS las funciones `SECURITY DEFINER`
+contra los nombres de las 21 candidatas, que ninguna de las 16 finalmente tocadas es invocada por
+otra función `SECURITY DEFINER` — son 100% puntos de entrada directos, sin riesgo de romper una
+llamada cruzada entre módulos.
+
+**mig.155** agregó el gate a 16 RPCs (módulo según su único call-site real confirmado por grep):
+- `ventas`: `crear_venta`, `crear_entrega`, `crear_nota_credito`, `registrar_cobro_cliente`,
+  `reencolar_caes_pendientes` (botón "Reintentar CAE" en `Header.jsx`), `usar_caea_en_venta` y
+  `siguiente_numero_documento` (sin call-site real hoy — gateadas por defensa en profundidad).
+- `compras`: `crear_recepcion`, `crear_recepcion_implicita`, `registrar_pago_proveedor`,
+  `aplicar_compra_producto`, `decrement_stock`/`increment_stock` (único call-site real:
+  `CompraRapidaSection.jsx`, no confundir con `ajustar_stock_manual` que es la herramienta de
+  ajuste manual de `ProductosSection.jsx`).
+- `productos`: `ajustar_stock_manual`.
+- `ventas` OR `compras` (dual): `crear_devolucion`, `crear_nota_debito` (mismo uso dual ya visto en
+  la tabla `devoluciones`/`notas_debito`, mig.153).
+
+Ya estaban bien y no se tocaron: `contabilizar_movimiento_bancario` y
+`revertir_contabilizacion_movimiento` ya exigían `is_admin()` desde su creación original.
+
+Validación antes de aplicar en producción (siguiendo la metodología de toda la sesión, reforzada
+esta vez porque el clasificador de auto-mode bloqueó el primer intento de aplicar sin validar
+primero — correctamente, dado el tamaño del cambio):
+1. `crear_venta` probado end-to-end dentro de una transacción `BEGIN...ROLLBACK`: staff sin permiso
+   `ventas` bloqueado; staff con el permiso completa una venta real completa (comprobante + entrega
+   + movimiento de caja + descuento de stock, todo en cascada) sin ningún error.
+2. `ajustar_stock_manual` probado (representando el patrón sin `p_empresa_id` explícito, que usa
+   `get_my_empresa_id()` internamente).
+3. Tras aplicar la migración real, un test comprehensivo con las 9 funciones restantes
+   (`registrar_cobro_cliente`, `registrar_pago_proveedor`, `decrement_stock`, `increment_stock`,
+   `aplicar_compra_producto`, `crear_devolucion`, `crear_nota_debito`) confirmó: bloqueadas sin el
+   permiso correspondiente, funcionando normal con él.
+
+Build verificado, advisors sin regresiones nuevas — el único hallazgo que aparece para estas 16
+funciones es el lint informativo preexistente "callable by authenticated as SECURITY DEFINER",
+idéntico al de todas las RPCs de dinero desde el inicio de la auditoría (es el diseño esperado: son
+la API pública de la app).
 
 ## Sesión 46 (cont. 14) — Barrido sistemático completo de todas las tablas de `public`
 

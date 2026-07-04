@@ -315,6 +315,50 @@ tablas ya confirmadas sólidas (deny-all intencional como `afip_tickets`/`rate_l
 ya gateadas correctamente desde mig.132/134/146). No queda ninguna tabla de negocio con esta clase
 de hallazgo sin cerrar.
 
+## ✅ Fase 4 — Permiso de módulo faltante en RPCs "punto de entrada" (mig.154, mig.155)
+
+Al arreglar `insertar_movimiento_bancario_externo` (mig.154 — bancos) se descubrió una categoría
+de hallazgo más grande: **todo el motor de dinero del sistema** (`crear_venta`, `crear_devolucion`,
+`crear_entrega`, `crear_recepcion`, `registrar_cobro_cliente`, `registrar_pago_proveedor`,
+`decrement_stock`/`increment_stock`, `ajustar_stock_manual`, `crear_nota_credito`,
+`crear_nota_debito`, etc.) valida que `empresa_id` coincida con el tenant del caller, pero
+**ninguna valida `has_module_permission()`** — al ser `SECURITY DEFINER` y estar otorgadas a
+`authenticated`, cualquier empleado (sin importar sus permisos asignados) podía llamarlas
+directamente vía `supabase.rpc(...)`, sin pasar por ninguna pantalla, y bypasear por completo el
+sistema de permisos granulares construido en las mig.132/134/146/153.
+
+**Metodología:** antes de tocar nada se hizo un mapeo con `pg_proc` + grep de call-sites reales en
+`src/` para separar RPCs "punto de entrada" (llamadas solo desde una pantalla — seguro gatearlas
+con el permiso de esa pantalla) de RPCs "pieza interna" (`obtener_proximo_numero`,
+`fecha_en_periodo_cerrado` — llamadas por RPCs de distintos módulos, NO se tocan porque gatearlas
+rompería flujos cruzados: un vendedor sin permiso `productos` fallaría al vender si `crear_venta`
+llamara internamente algo gateado a `productos`). Se confirmó con una query a `pg_proc` que ninguna
+de las 16 funciones tocadas es llamada por otra `SECURITY DEFINER` — son 100% puntos de entrada.
+
+**mig.155** agregó el gate correspondiente a 16 RPCs:
+- `ventas`: `crear_venta`, `crear_entrega`, `crear_nota_credito`, `registrar_cobro_cliente`,
+  `reencolar_caes_pendientes`, `usar_caea_en_venta`*, `siguiente_numero_documento`*
+- `compras`: `crear_recepcion`, `crear_recepcion_implicita`, `registrar_pago_proveedor`,
+  `aplicar_compra_producto`, `decrement_stock`, `increment_stock`
+- `productos`: `ajustar_stock_manual`
+- `ventas` OR `compras` (dual): `crear_devolucion`, `crear_nota_debito`
+- (* sin call-site real en el frontend hoy — gateadas por defensa en profundidad)
+
+Ya estaban bien (no se tocaron): `contabilizar_movimiento_bancario` y
+`revertir_contabilizacion_movimiento` ya exigían `is_admin()` desde su creación.
+
+Antes de aplicar en producción se validó cada patrón con `BEGIN...ROLLBACK`: `crear_venta` probado
+end-to-end (creó comprobante + entrega + movimiento de caja + descontó stock correctamente con el
+permiso; bloqueado sin él), `ajustar_stock_manual` (patrón sin `p_empresa_id` explícito), y las 9
+funciones restantes en un solo test comprehensivo — las 16 quedaron confirmadas: bloqueadas sin el
+permiso, funcionando normal con el permiso correcto. Build verificado, advisors sin regresiones
+(el único hallazgo que aparece es el lint informativo preexistente "callable by authenticated",
+igual al de todas las RPCs de dinero desde el inicio de esta auditoría — es el diseño esperado).
+
+**mig.154** cerró el hallazgo original: `insertar_movimiento_bancario_externo` (ambas sobrecargas)
+ahora exige `has_module_permission('bancos')` para el camino no-`service_role`, preservando la
+excepción para los webhooks de MercadoPago.
+
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma
    metodología de 6 dimensiones.
