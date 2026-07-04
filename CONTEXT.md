@@ -1,5 +1,27 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-03 (sesión 46 cont. 5 — Auditoría área #13: Comprobantes — lifecycle)
+**Última actualización:** 2026-07-04 (sesión 46 cont. 6 — extensión área #13: DELETE sin restricción en 3 tablas de libro contable)
+
+## Sesión 46 (cont. 6) — Extensión área #13: DELETE sin restricción en tablas de libro contable
+
+Al revisar el patrón de la policy `FOR ALL` de `comprobantes` (mig.141), se detectó el mismo patrón
+en otras 3 tablas de libro contable: `cuenta_corriente_movimientos` (CxC), `cuenta_corriente_proveedores`
+(CxP) y `notas_debito` — todas con policy `FOR ALL` solo por `empresa_id`, sin gate de permiso y sin
+distinguir DELETE. Probado con BEGIN...ROLLBACK: un staff sin ningún permiso especial borró un
+movimiento de CxC de $10.000, uno de CxP de $10.000 y una ND de $5.000, cada uno con una sola llamada
+DELETE — 0 call-sites de `.delete()` sobre estas 3 tablas en todo el frontend, confirmando que la
+capacidad no tiene ningún uso legítimo. **Fix (mig.142):** mismo patrón que mig.141 — policies
+divididas en SELECT/INSERT/UPDATE, sin policy de DELETE en las 3 tablas. Validado: DELETE bloqueado
+en las 3 (0 filas), UPDATE normal intacto (probado actualizando un concepto de ND).
+
+También se backfillearon a `supabase/migrations/` los archivos de las migraciones 136-140 y 142 de
+esta sesión, que se habían aplicado en vivo vía MCP pero no se habían guardado como archivo versionado
+en el repo (desvío del proceso habitual — corregido).
+
+Nota: `movimientos_caja`, `movimientos_bancarios` y `asientos_contables` también tienen policies
+`FOR ALL`, pero ya están gateadas por `has_module_permission()` (mig.132) — no cualquier staff, solo
+quien tenga el permiso del módulo. Menor severidad, no se tocaron en esta pasada (podría ser un
+hallazgo futuro si se decide que ni siquiera con permiso de módulo se debería poder borrar un
+movimiento ya registrado).
 
 ## Sesión 46 (cont. 5) — Auditoría área #13: Comprobantes — lifecycle
 
