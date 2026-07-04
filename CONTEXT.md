@@ -1,5 +1,35 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-04 (sesión 46 cont. 12 — Fase 3: áreas fuera de la cola original, 3 hallazgos 🔴 nuevos)
+**Última actualización:** 2026-07-04 (sesión 46 cont. 13 — Fase 3 cont.: `empresas` y `series_numeracion` sin gate de admin)
+
+## Sesión 46 (cont. 13) — Fase 3 cont.: `empresas` (raíz del tenant) y `series_numeracion`
+
+Siguiendo el mismo criterio ("repasar `ConfiguracionSection` tabla por tabla"), aparecieron 2
+hallazgos 🔴 más — probados con `BEGIN...ROLLBACK` contra datos reales, sin tocar producción:
+
+1. **`empresas`.** La policy `empresas_update` (mig.006/016) solo exigía
+   `id = get_my_empresa_id()`, sin gate de admin. Probado: un staff no-admin ejecutó
+   `UPDATE empresas SET nombre=..., cuit=..., afip_cuit=..., usa_factura_electronica=false`
+   sobre la empresa real, sin ningún error. Es la tabla raíz del tenant — identidad legal/fiscal
+   completa (CUIT, razón social) y el interruptor de facturación electrónica. Antes de aplicar
+   el fix se confirmó por grep que el único escritor no-`ConfiguracionSection` es
+   `OnboardingWizard.jsx`, y que el creador del tenant siempre queda con `role='admin'`
+   (mig.006/`create_tenant()`) — el onboarding lo completa esa misma persona antes de invitar
+   staff, así que exigir `is_admin()` en `empresas_update` (mig.152) no rompe el alta de empresas
+   nuevas. Validado: staff bloqueado (0 filas), admin sigue editando (1 fila).
+
+2. **`series_numeracion`.** Mismo patrón débil (`FOR ALL`, solo `empresa_id`). Probado: un staff
+   alteró `proximo_numero` de una serie real sin ningún error — riesgo de saltar o reutilizar
+   numeración de comprobantes. Confirmado que el único call-site de escritura en el frontend es
+   `ConfiguracionSection.jsx` (ya admin-only en la UI) y que `obtener_proximo_numero()` (la que
+   usa el flujo normal de venta) es `SECURITY DEFINER` — sigue funcionando sin cambios. Fix
+   (mig.152): CUD exige `is_admin()`, SELECT sigue tenant-only.
+
+Se revisó también un advisor preexistente sobre `seed_series_numeracion` (invocable directo por
+`authenticated`) — no es una regresión de esta sesión: ya fue evaluado y mitigado en mig.057
+(sesión 32) con un guard de tenant + `ON CONFLICT DO NOTHING` como mitigación aceptada
+explícitamente en su momento (riesgo residual bajo, documentado). No se tocó de nuevo.
+
+Build verificado, advisors sin regresiones para `empresas`/`series_numeracion`.
 
 ## Sesión 46 (cont. 12) — Fase 3: auditoría de áreas fuera de la cola original
 

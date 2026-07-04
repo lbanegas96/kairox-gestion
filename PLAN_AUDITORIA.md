@@ -255,10 +255,28 @@ del barrido de mig.132/134/146 por descuido, no por diseño):
 
 Build verificado, advisors sin regresiones nuevas para ninguna de las 7 tablas tocadas.
 
+**Continuación misma sesión — 2 hallazgos 🔴 más (mig.152):** siguiendo el mismo criterio de
+"repasar `ConfiguracionSection` tabla por tabla", aparecieron 2 más, ambos con datos reales
+(probados y revertidos con ROLLBACK, sin tocar producción):
+
+| Tabla | Hallazgo | Fix |
+|-------|----------|-----|
+| `empresas` | La policy `empresas_update` (mig.006/016) no exigía admin — un staff no-admin modificó `nombre`, `cuit`, `afip_cuit` y `usa_factura_electronica` de la empresa real sin ningún error. Es la tabla raíz del tenant: identidad legal/fiscal completa | `empresas_update` ahora exige `is_admin()`. Confirmado que el único escritor no-admin (`OnboardingWizard.jsx`) siempre corre con el creador del tenant, que mig.006 fuerza a `role='admin'` — no rompe el alta de empresas nuevas |
+| `series_numeracion` | Mismo patrón débil (`FOR ALL`, solo `empresa_id`) — un staff alteró `proximo_numero` de una serie real sin error | CUD ahora exige `is_admin()`; `obtener_proximo_numero()` (usada por el flujo normal de venta) es `SECURITY DEFINER`, sigue funcionando igual |
+
+Se revisó también el advisor preexistente sobre `seed_series_numeracion` (callable directo por
+`authenticated`) — no es una regresión de esta ronda: ya fue evaluado y mitigado en mig.057
+(sesión 32), con guard de tenant + `ON CONFLICT DO NOTHING` como mitigación aceptada explícitamente
+(riesgo residual documentado y considerado bajo). No requiere acción nueva.
+
+Build verificado de nuevo, advisors sin regresiones para `empresas`/`series_numeracion`.
+
 **Pendiente para una futura ronda** (menor prioridad, no se llegó a auditar en esta sesión):
-`condiciones_pago`/`unidades_medida` fueron la única área de "maestros de Configuración"
-revisada a fondo — si aparece tiempo, vale repasar el resto de tablas de `ConfiguracionSection`
-con el mismo criterio (¿tiene RLS?, ¿el gate coincide con el nivel real de riesgo?).
+repasar el resto de tablas que cuelgan de `ConfiguracionSection` con el mismo criterio
+tabla-por-tabla (¿tiene RLS?, ¿el gate coincide con el nivel real de riesgo?) — quedan
+`cuentas_bancarias`/`integraciones_bancarias` ya confirmadas sólidas en esta ronda, pero no se
+revisó exhaustivamente cada tabla restante del schema (ej. `afip_tickets` ya es deny-all
+intencional, confirmado en sesiones previas).
 
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma
