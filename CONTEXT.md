@@ -1,5 +1,17 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-04 (sesión 46 cont. 6 — extensión área #13: DELETE sin restricción en 3 tablas de libro contable)
+**Última actualización:** 2026-07-04 (sesión 46 cont. 7 — Auditoría área #14: Reportes / Dashboard)
+
+## Sesión 46 (cont. 7) — Auditoría área #14: Reportes / Dashboard
+
+Área sólida, sin hallazgos. `dashboardService.ts` y los 3 reportes (`ReporteLibroIVA.jsx`,
+`ReporteLibroIVACompras.jsx`, `ReporteParidad.jsx`) hacen SELECT plano con `.eq('empresa_id',
+empresaId)` sobre tablas con RLS habilitado — ninguno usa RPC/SECURITY DEFINER que pudiera
+bypasear la RLS. Se confirmó el caso límite con BEGIN...ROLLBACK: un staff de Empresa A que
+consulta explícitamente `WHERE empresa_id = <Empresa B>` en `comprobantes`, `movimientos_caja` y
+`clientes` obtiene 0 filas en los tres — la RLS bloquea el acceso cross-tenant independientemente
+de lo que pida el cliente, no solo por el filtro de la query del frontend. Sin cambios necesarios.
+
+Estado de la cola: 14 de 15 áreas auditadas. Próxima y última: #15 Audit log — cobertura.
 
 ## Sesión 46 (cont. 6) — Extensión área #13: DELETE sin restricción en tablas de libro contable
 
