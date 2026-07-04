@@ -305,10 +305,14 @@ function PedidosSection({ onNavigate } = {}) {
 
   const handleSaleSuccessForPedido = async () => {
     if (!pedidoToFacturar) return;
-    await supabase.from('pedidos')
+    const { error } = await supabase.from('pedidos')
       .update({ estado: 'facturado', updated_at: getNowAR().toISOString() })
       .eq('id', pedidoToFacturar.id);
-    toast({ title: `Pedido ${pedidoToFacturar.numero} marcado como Facturado` });
+    if (error) {
+      toast({ title: 'La venta se registró, pero no se pudo marcar el pedido como Facturado', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: `Pedido ${pedidoToFacturar.numero} marcado como Facturado` });
+    }
     setPedidoToFacturar(null);
     setIsFacturarOpen(false);
     fetchAll();
@@ -328,10 +332,14 @@ function PedidosSection({ onNavigate } = {}) {
 
   const handleCancelar = async () => {
     if (!cancelTarget) return;
-    await supabase.from('pedidos')
+    const { error } = await supabase.from('pedidos')
       .update({ estado: 'cancelado', updated_at: getNowAR().toISOString() })
       .eq('id', cancelTarget.id);
-    toast({ title: `Pedido ${cancelTarget.numero} cancelado` });
+    if (error) {
+      toast({ title: 'Error al cancelar el pedido', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: `Pedido ${cancelTarget.numero} cancelado` });
+    }
     setCancelTarget(null);
     fetchAll();
   };

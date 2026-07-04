@@ -1,5 +1,38 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-03 (sesión 46 cont. 3 — Auditoría área #11: Ofertas / Descuentos)
+**Última actualización:** 2026-07-03 (sesión 46 cont. 4 — Auditoría área #12: Cotizaciones / Pedidos)
+
+## Sesión 46 (cont. 4) — Auditoría área #12: Cotizaciones / Pedidos
+
+Cotizaciones y Pedidos no mueven stock ni dinero directamente — solo `crear_entrega` lo hace. El
+hallazgo real de esta área terminó siendo ahí.
+
+### 🟡 crear_entrega permitía sobre-entrega (FIX)
+`crear_entrega` validaba stock disponible (con `FOR UPDATE`, correcto) pero NUNCA que la entrega
+respetara `pedido_items.cantidad` (lo pedido). Probado con BEGIN...ROLLBACK: se generaron 2 entregas
+de 5 unidades sobre un `pedido_item` de `cantidad=5`, dejando `cantidad_entregada=10` — el doble de
+lo pedido, sin ningún error. Rompe el invariante de Document Flow (`cantidad_entregada <=
+cantidad_pedida`) del que dependen Pedidos → Entregas → Facturación (regla 3 de sap-reference).
+**Fix (mig.139):** dentro de `crear_entrega`, cuando el ítem trae `pedido_item_id`, se hace
+`SELECT ... FOR UPDATE` sobre `pedido_items` y se bloquea con `RAISE EXCEPTION` si
+`cantidad_entregada + cantidad_a_entregar > cantidad_pedida`. Validado: entregas parciales exactas
+(3+2=5) siguen funcionando; el intento de entregar de más se bloquea con mensaje claro. Test pgTAP
+`supabase/tests/crear_entrega.test.sql` ampliado de 5 a 7 aserciones (Caso 5a/5b), corrido de verdad
+contra el proyecto remoto dentro de BEGIN...ROLLBACK — pasó completo.
+
+### 🟢 Errores silenciosos menores en PedidosSection.jsx (FIX)
+`handleSaleSuccessForPedido` (marca pedido como "facturado" tras generar la venta) y `handleCancelar`
+hacían `await supabase.from('pedidos').update(...)` sin capturar el error — si el UPDATE fallaba, el
+pedido quedaba en un estado desactualizado sin que nadie se enterara. Agregado `if (error)` + toast
+destructivo en ambos, mismo patrón que el resto de la auditoría.
+
+### 🟢 Menor, no fixeado
+`cotizacionesService.create` y `PedidosSection.handleSave` insertan el header y los ítems en 2
+llamadas separadas (no atómico) — a diferencia de los bugs de CxC/CxP/ND, acá no hay plata real
+movida (sin stock, sin caja): el peor caso es un registro "cabeza sin ítems" huérfano. Severidad baja,
+documentado sin fix.
+
+Build verificado, deploy a producción hecho. Estado de la cola: 12 de 15 áreas auditadas. Próxima:
+#13 Comprobantes — lifecycle (anulación de facturas, notas de crédito, reversión de asiento/stock).
 
 ## Sesión 46 (cont. 3) — Auditoría área #11: Ofertas / Descuentos
 

@@ -13,7 +13,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(5);
+SELECT plan(7);
 
 -- ───────────────────────────────────────────────────────────────────────────
 -- Fixtures: Tenant P (casos 1, 2, 4) + Tenant Q (caso 3, guard de tenant).
@@ -42,7 +42,11 @@ INSERT INTO public.pedidos (id, empresa_id, user_id, numero, cliente_id) VALUES
 
 INSERT INTO public.productos (id, empresa_id, nombre, stock_actual) VALUES
   ('00000000-feeb-0000-0000-0000000000a1', '00000000-feeb-0000-0000-000000000001', '__PGTAP_TEST__ Prod P1 (entrega normal, stock 10)', 10),
-  ('00000000-feeb-0000-0000-0000000000a2', '00000000-feeb-0000-0000-000000000001', '__PGTAP_TEST__ Prod P2 (stock insuficiente, stock 2)', 2);
+  ('00000000-feeb-0000-0000-0000000000a2', '00000000-feeb-0000-0000-000000000001', '__PGTAP_TEST__ Prod P2 (stock insuficiente, stock 2)', 2),
+  ('00000000-feeb-0000-0000-0000000000a3', '00000000-feeb-0000-0000-000000000001', '__PGTAP_TEST__ Prod P3 (guard sobre-entrega, stock 100)', 100);
+
+INSERT INTO public.pedido_items (id, pedido_id, empresa_id, producto_id, descripcion, cantidad, precio_unitario, subtotal, cantidad_entregada) VALUES
+  ('00000000-feeb-0000-0000-0000000000e1', '00000000-feeb-0000-0000-0000000000d1', '00000000-feeb-0000-0000-000000000001', '00000000-feeb-0000-0000-0000000000a3', 'TEST item P3', 2, 100, 200, 0);
 
 SELECT set_config('request.jwt.claims', '{"sub":"00000000-feeb-0000-0000-00000000000f","role":"authenticated"}', true);
 
@@ -112,6 +116,32 @@ SELECT is(
    WHERE producto_id = '00000000-feeb-0000-0000-0000000000a1' AND tipo = 'salida' AND cantidad = 3),
   1,
   'Caso 4: crear_entrega genera exactamente 1 movimiento de inventario tipo salida cantidad 3'
+);
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- Caso 5: guard de sobre-entrega. pedido_item de P3 tiene cantidad=2. Entregar
+-- 2 (completo) debe funcionar; entregar 1 más después debe bloquear.
+-- ───────────────────────────────────────────────────────────────────────────
+
+SELECT lives_ok(
+  $$ SELECT public.crear_entrega(
+       '00000000-feeb-0000-0000-000000000001'::uuid,
+       '00000000-feeb-0000-0000-00000000000f'::uuid,
+       '00000000-feeb-0000-0000-0000000000d1'::uuid,
+       '[{"producto_id":"00000000-feeb-0000-0000-0000000000a3","cantidad":2,"pedido_item_id":"00000000-feeb-0000-0000-0000000000e1"}]'::jsonb
+     ) $$,
+  'Caso 5a: entrega completa (2 de 2 pedidos) funciona'
+);
+
+SELECT throws_like(
+  $$ SELECT public.crear_entrega(
+       '00000000-feeb-0000-0000-000000000001'::uuid,
+       '00000000-feeb-0000-0000-00000000000f'::uuid,
+       '00000000-feeb-0000-0000-0000000000d1'::uuid,
+       '[{"producto_id":"00000000-feeb-0000-0000-0000000000a3","cantidad":1,"pedido_item_id":"00000000-feeb-0000-0000-0000000000e1"}]'::jsonb
+     ) $$,
+  'Sobre-entrega%',
+  'Caso 5b: crear_entrega bloquea sobre-entrega cuando ya se entregó todo lo pedido'
 );
 
 SELECT * FROM finish();
