@@ -1,5 +1,37 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-04 (sesión 46 cont. 10 — Fase 2 de permisos granulares — CIERRE TOTAL de los 3 pendientes de la auditoría)
+**Última actualización:** 2026-07-04 (sesión 46 cont. 11 — limpieza de los 4 hallazgos 🟢 menores restantes)
+
+## Sesión 46 (cont. 11) — Limpieza de hallazgos 🟢 menores
+
+Con la Fase 1 + gap contable + Fase 2 cerrados, no quedaba nada en la cola de auditoría. A pedido del
+usuario ("qué nos queda? algo que auditar, crear o modificar?"), se limpiaron los 4 hallazgos de bajo
+riesgo que habían quedado documentados sin corregir:
+
+1. **`tipoCambioService.ts` borrado** — código muerto confirmado (cero imports reales), ya
+   autorizado explícitamente por el usuario esta vez.
+2. **`tipoCambioService.js`** — `getTodayTC`/`upsertTC` usaban `new Date().toLocaleDateString()`
+   (zona horaria del browser) en vez de `getTodayAR()`. Corregido para usar la misma utilidad AR
+   que el resto del sistema.
+3. **`cheques_historial` atómico (mig.147)** — 3 RPCs nuevas (`crear_cheque_tercero`,
+   `crear_cheque_propio`, `cambiar_estado_cheque`) reemplazan el patrón "insert cheque + 2da llamada
+   historial" de `ChequesSection.jsx`. Cada RPC replica el gate `has_module_permission('cheques')`
+   que ya exige la RLS (necesario porque las RPCs SECURITY DEFINER bypasean RLS por table
+   ownership — si no se replica el check, se pierde la protección de mig.132). Validado con
+   BEGIN...ROLLBACK: staff sin permiso bloqueado; admin crea cheque con su historial inicial en la
+   misma transacción, cambia de estado y el 2do registro de historial también queda atómico.
+4. **Numeración de Retenciones atómica (mig.148)** — `registrar_retencion_practicada` usa
+   `pg_advisory_xact_lock` (empresa+año) para serializar el cálculo del número de certificado +
+   insert, reemplazando el `count()` sin lock del frontend. Formato "RET-{año}-####" reinicia por
+   año, por eso no se usó el mecanismo de `series_numeracion` (documentos continuos) — un advisory
+   lock es proporcional al volumen esperado de este módulo (registro manual). Validado: 2 llamadas
+   consecutivas devuelven números correlativos correctos.
+
+Build verificado, advisors sin hallazgos nuevos. **No queda nada pendiente** en `PLAN_AUDITORIA.md`
+salvo lo que depende de terceros: pruebas de Nadia, validación del contador sobre el esquema de
+asientos, certificado real de AFIP (Luciano), y la decisión (si se toma) de agregar la cuenta
+"Documentos a Pagar" para cheques propios.
+
+## Sesión 46 (cont. 10) — Fase 2 de permisos granulares — CIERRE TOTAL de los 3 pendientes de la auditoría
 
 ## Sesión 46 (cont. 10) — Fase 2 técnica de permisos granulares (mig.146)
 

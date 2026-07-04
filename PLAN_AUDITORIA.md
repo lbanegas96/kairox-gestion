@@ -210,6 +210,27 @@ Y una Fase 2 técnica de bajo riesgo, documentada pero no crítica: extender
 `has_module_permission()` a `pedidos`, `entregas`, `comprobantes`, `recepciones`, `cuenta_corriente_proveedores`
 para escritura directa (hoy solo gateadas por tenant, no por permiso de módulo).
 
+## ✅ Limpieza de hallazgos 🟢 menores — CERRADA (2026-07-04)
+
+Los 4 hallazgos de bajo riesgo que quedaron documentados sin corregir a lo largo de la Fase 1:
+
+1. **`tipoCambioService.ts`** (código muerto, cero imports reales) — **borrado**.
+2. **`tipoCambioService.js`** usaba `Date` local del browser en vez de zona horaria Argentina —
+   ahora usa `getTodayAR()` (mismo patrón que el resto del sistema).
+3. **`cheques_historial`** se insertaba en una 2da llamada separada del frontend, no atómica con el
+   cheque — ahora 3 RPCs (`crear_cheque_tercero`, `crear_cheque_propio`, `cambiar_estado_cheque`,
+   mig.147) hacen cheque + historial en una sola transacción. Replican el gate
+   `has_module_permission('cheques')` para no perder la protección de mig.132 (las RPCs SECURITY
+   DEFINER bypasean RLS por table ownership). Validado con BEGIN...ROLLBACK: staff sin permiso
+   bloqueado, admin crea cheque + historial atómico, cambia estado + 2do historial atómico.
+4. **Numeración de certificado de Retención** (`generarNumeroCertificado`) usaba `count()` en el
+   cliente sin lock — ahora `registrar_retencion_practicada` (mig.148) usa un advisory lock
+   transaccional (empresa+año) para serializar cálculo + insert. No se usó `series_numeracion`
+   porque el formato "RET-{año}-####" reinicia por año, distinto al resto de documentos (continuos).
+   Validado: 2 llamadas consecutivas devuelven números correlativos correctos.
+
+Build verificado, advisors sin hallazgos nuevos.
+
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma
    metodología de 6 dimensiones.

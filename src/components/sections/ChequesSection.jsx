@@ -224,16 +224,6 @@ export default function ChequesSection() {
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
-  const registrarHistorial = (chequeId, estadoAnterior, estadoNv, observacion) =>
-    supabase.from('cheques_historial').insert([{
-      cheque_id:       chequeId,
-      empresa_id:      user.empresa_id,
-      user_id:         user.id,
-      estado_anterior: estadoAnterior,
-      estado_nuevo:    estadoNv,
-      observacion:     observacion || null,
-    }]);
-
   const handleGuardarTercero = async () => {
     if (!terceroForm.numero || !terceroForm.banco || !terceroForm.monto || !terceroForm.fecha_vencimiento) {
       toast({ title: 'Completá número, banco, monto y fecha de vencimiento', variant: 'destructive' }); return;
@@ -244,22 +234,20 @@ export default function ChequesSection() {
     }
     setSavingT(true);
     try {
-      const { data, error } = await supabase.from('cheques').insert([{
-        empresa_id:        user.empresa_id,
-        user_id:           user.id,
-        tipo:              'tercero',
-        numero:            terceroForm.numero,
-        banco:             terceroForm.banco,
-        monto,
-        fecha_emision:     terceroForm.fecha_emision,
-        fecha_vencimiento: terceroForm.fecha_vencimiento,
-        cliente_id:        terceroForm.cliente_id || null,
-        comprobante_id:    terceroForm.comprobante_id || null,
-        observaciones:     terceroForm.observaciones || null,
-        estado:            'en_cartera',
-      }]).select().single();
+      // Cheque + historial inicial en una sola transacción (RPC atómica).
+      const { error } = await supabase.rpc('crear_cheque_tercero', {
+        p_empresa_id:        user.empresa_id,
+        p_user_id:           user.id,
+        p_numero:            terceroForm.numero,
+        p_banco:             terceroForm.banco,
+        p_monto:             monto,
+        p_fecha_emision:     terceroForm.fecha_emision,
+        p_fecha_vencimiento: terceroForm.fecha_vencimiento,
+        p_cliente_id:        terceroForm.cliente_id || null,
+        p_comprobante_id:    terceroForm.comprobante_id || null,
+        p_observaciones:     terceroForm.observaciones || null,
+      });
       if (error) throw error;
-      await registrarHistorial(data.id, null, 'en_cartera', 'Registro inicial');
       toast({ title: 'Cheque registrado en cartera', className: 'bg-green-900 border-green-700 text-white' });
       setShowNuevoTercero(false);
       setTerceroForm(emptyTerceroForm());
@@ -281,23 +269,21 @@ export default function ChequesSection() {
     }
     setSavingP(true);
     try {
-      const { data, error } = await supabase.from('cheques').insert([{
-        empresa_id:         user.empresa_id,
-        user_id:            user.id,
-        tipo:               'propio',
-        numero:             propioForm.numero,
-        banco:              propioForm.banco,
-        cuenta_bancaria_id: propioForm.cuenta_bancaria_id || null,
-        monto,
-        fecha_emision:      propioForm.fecha_emision,
-        fecha_vencimiento:  propioForm.fecha_vencimiento,
-        proveedor_id:       propioForm.proveedor_id || null,
-        compra_id:          propioForm.compra_id || null,
-        observaciones:      propioForm.observaciones || null,
-        estado:             'pendiente',
-      }]).select().single();
+      // Cheque + historial inicial en una sola transacción (RPC atómica).
+      const { error } = await supabase.rpc('crear_cheque_propio', {
+        p_empresa_id:         user.empresa_id,
+        p_user_id:            user.id,
+        p_numero:             propioForm.numero,
+        p_banco:              propioForm.banco,
+        p_monto:              monto,
+        p_fecha_emision:      propioForm.fecha_emision,
+        p_fecha_vencimiento:  propioForm.fecha_vencimiento,
+        p_cuenta_bancaria_id: propioForm.cuenta_bancaria_id || null,
+        p_proveedor_id:       propioForm.proveedor_id || null,
+        p_compra_id:          propioForm.compra_id || null,
+        p_observaciones:      propioForm.observaciones || null,
+      });
       if (error) throw error;
-      await registrarHistorial(data.id, null, 'pendiente', 'Registro inicial');
       toast({ title: 'Cheque propio registrado', className: 'bg-green-900 border-green-700 text-white' });
       setShowNuevoPropio(false);
       setPropioForm(emptyPropioForm());
@@ -313,13 +299,14 @@ export default function ChequesSection() {
     if (!chequeACambiar || !estadoNuevo) return;
     setSavingE(true);
     try {
-      const { error } = await supabase
-        .from('cheques')
-        .update({ estado: estadoNuevo, updated_at: new Date().toISOString() })
-        .eq('id', chequeACambiar.id)
-        .eq('empresa_id', user.empresa_id);
+      // Cambio de estado + historial en una sola transacción (RPC atómica).
+      const { error } = await supabase.rpc('cambiar_estado_cheque', {
+        p_cheque_id:    chequeACambiar.id,
+        p_user_id:      user.id,
+        p_estado_nuevo: estadoNuevo,
+        p_observacion:  obsEstado || null,
+      });
       if (error) throw error;
-      await registrarHistorial(chequeACambiar.id, chequeACambiar.estado, estadoNuevo, obsEstado);
       toast({
         title: `Estado → ${ESTADO_LABELS[estadoNuevo]}`,
         className: 'bg-green-900 border-green-700 text-white',

@@ -393,17 +393,6 @@ function SubTabPracticadas() {
     return data?.alicuota ?? null;
   };
 
-  const generarNumeroCertificado = async () => {
-    const anio = new Date().getFullYear();
-    const { count } = await supabase
-      .from('retenciones')
-      .select('id', { count: 'exact', head: true })
-      .eq('empresa_id', user.empresa_id)
-      .eq('tipo', 'practicada')
-      .gte('fecha', `${anio}-01-01`);
-    return `RET-${anio}-${String((count ?? 0) + 1).padStart(4, '0')}`;
-  };
-
   const abrirNueva = () => { setForm({ ...emptyForm, fecha: getTodayAR() }); setModalOpen(true); };
 
   // Recalcular monto al cambiar base o alícuota.
@@ -434,26 +423,25 @@ function SubTabPracticadas() {
     }
     setSaving(true);
     const prov = proveedores.find(p => p.id === form.proveedor_id);
-    const numeroCert = await generarNumeroCertificado();
-    const payload = {
-      empresa_id: user.empresa_id,
-      user_id: user.id,
-      tipo: 'practicada',
-      impuesto: form.impuesto,
-      jurisdiccion: form.jurisdiccion.trim() || 'Córdoba',
-      monto: montoNum,
-      alicuota_aplicada: form.alicuota_aplicada ? parseNumberLocale(form.alicuota_aplicada) : null,
-      fecha: form.fecha,
-      contraparte_nombre: prov?.razon_social || prov?.nombre || 'Proveedor',
-      contraparte_cuit: prov?.cuit ?? null,
-      compra_id: form.compra_id || null,
-      numero_certificado: numeroCert,
-      observaciones: form.monto_base ? `Base: ${fmtARS(parseNumberLocale(form.monto_base))}` : null,
-    };
-    const { error } = await supabase.from('retenciones').insert(payload);
+    // Número de certificado + insert en una sola transacción (RPC atómica) —
+    // evita que 2 retenciones registradas casi al mismo tiempo reciban el
+    // mismo número (antes: count() en el cliente, sin lock).
+    const { data, error } = await supabase.rpc('registrar_retencion_practicada', {
+      p_empresa_id: user.empresa_id,
+      p_user_id: user.id,
+      p_impuesto: form.impuesto,
+      p_jurisdiccion: form.jurisdiccion.trim() || 'Córdoba',
+      p_monto: montoNum,
+      p_alicuota_aplicada: form.alicuota_aplicada ? parseNumberLocale(form.alicuota_aplicada) : null,
+      p_fecha: form.fecha,
+      p_contraparte_nombre: prov?.razon_social || prov?.nombre || 'Proveedor',
+      p_contraparte_cuit: prov?.cuit ?? null,
+      p_compra_id: form.compra_id || null,
+      p_observaciones: form.monto_base ? `Base: ${fmtARS(parseNumberLocale(form.monto_base))}` : null,
+    });
     setSaving(false);
     if (error) { toast({ title: 'Error', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'Retención registrada', description: `Certificado ${numeroCert} generado.` });
+    toast({ title: 'Retención registrada', description: `Certificado ${data.numero_certificado} generado.` });
     setModalOpen(false);
     fetchPracticadas();
   };
