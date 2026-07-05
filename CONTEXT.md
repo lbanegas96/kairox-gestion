@@ -70,10 +70,28 @@ archivo — al reescribir el parent slim hubo que Read-antes-de-Write.
 Smoke test autenticado completo: los 7 tabs renderizan con datos reales + modal Nueva Cuenta abre
 (valida import default cross-file) + sin errores de consola.
 
-**Próximo archivo gigante de Fase C:** `CuentasBancariasSection.jsx` (1288), luego
-`CompraRapidaSection.jsx` (1214), y el resto >650 líneas. Antes de extraer, revisar si es
-monolítico (como ConfiguracionSection → prop-threading) o ya tiene componentes separados (como
-PlanCuentasSection → split mecánico). Mismo smoke test con las credenciales de test.
+### Fase C — CuentasBancariasSection.jsx (1288 → 472 líneas, ✅ CERRADO, commit `ebfd13a`)
+Híbrido: los 3 modales (`CuentaModal`, `MovimientoModal`, `ImportCSVModal`), `ConciliacionTab` y los
+helpers puros ya eran piezas separadas → split mecánico a `src/components/cuentas-bancarias/`
+(`shared.jsx` con `formatMoney`/`ORIGEN_META`/`origenMeta`/`parseReferencia`/`limpiarDescripcion`/
+`ejecutorDe`/`RefChip`/`parseCSV`/`BANCOS_COMUNES`). El padre conserva el componente principal con
+los tabs cuentas/movimientos inline (dependen de su estado). Gotcha nuevo: el padre vive en
+`sections/` pero el generador puso imports `./shared` relativos → apuntaban a `sections/`; corregido a
+rutas `@/components/cuentas-bancarias/...`. Verificación: prop-check 0 faltantes, lint 0 errores,
+build OK, smoke test de los 3 tabs + CuentaModal.
+
+### Verificación anti-regresión (respuesta a "¿dejamos bugs?")
+Se creó un chequeo estático `scratchpad/check_props.js` que compara props desestructurados en cada
+hijo vs props efectivamente pasados por el padre. **Resultado: 0 props faltantes** en los 14 tabs de
+Configuracion+PlanCuentas + los 4 componentes de bancos. Combinado con lint `no-undef` limpio, esto
+cierra el hueco de "prop undefined silencioso" (lint no lo ve, pero el par lint-limpio + prop-check
+lo garantiza). Lo único no detectable estáticamente: prop pasado con el valor equivocado (mitigado
+por nombres idénticos en la extracción + smoke tests).
+
+**Próximo archivo gigante de Fase C:** `CompraRapidaSection.jsx` (1214), y el resto >650 líneas.
+Antes de extraer, revisar si es monolítico (prop-threading, como ConfiguracionSection) o ya tiene
+componentes separados (split mecánico scripteado, como PlanCuentas/CuentasBancarias). Mismo smoke
+test + prop-check con las credenciales de test.
 
 **Detalle de UI del preview para smoke test:** el login del preview requiere `form.requestSubmit()`
 (el click del botón no propaga el submit en el iframe); los tabs de Radix requieren click CDP real
