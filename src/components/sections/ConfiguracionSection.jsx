@@ -31,6 +31,7 @@ import { formatCuit } from '@/lib/cuitUtils';
 import TabEmpresa from '@/components/configuracion/TabEmpresa';
 import TabFinanzas from '@/components/configuracion/TabFinanzas';
 import TabInventario from '@/components/configuracion/TabInventario';
+import TabIntegraciones from '@/components/configuracion/TabIntegraciones';
 
 const TAB_IDS = ['empresa', 'finanzas', 'facturacion', 'inventario', 'integraciones', 'alertas', 'usuarios', 'sistema'];
 
@@ -1817,175 +1818,21 @@ const ConfiguracionSection = ({ initialTab }) => {
             TAB 5 — INTEGRACIONES
         ═══════════════════════════════════════════════════════════════════ */}
         <TabsContent value="integraciones">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-
-            {/* ── Mercado Pago — card rica con estado real ── */}
-            <div className="kairox-bg-card border kairox-border p-5 rounded-xl shadow-sm flex flex-col gap-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#009EE3] flex items-center justify-center text-white font-bold text-sm shrink-0">
-                    MP
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-kx-text text-sm">Mercado Pago</h4>
-                    {integracionMP?.activo ? (
-                      <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 mt-1">
-                        ✓ Conectado
-                      </span>
-                    ) : (
-                      <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border bg-kx-surface-2 text-kx-text-3 border-kx-border mt-1">
-                        Sin configurar
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <Button size="sm" variant="outline" className="text-xs h-8 shrink-0" onClick={() => setShowConfigMP(true)}>
-                  {integracionMP ? 'Editar' : 'Conectar'}
-                </Button>
-              </div>
-
-              <p className="text-xs text-kx-text-2 leading-relaxed">
-                Sincronización automática de cobros via QR, link de pago y tarjeta. Los pagos aprobados se registran en Bancos sin intervención manual.
-              </p>
-
-              {integracionMP?.ultimo_sync && (
-                <p className="text-xs text-kx-text-3">
-                  Último sync: {formatDateAR(integracionMP.ultimo_sync)}
-                </p>
-              )}
-
-              {integracionMP?.activo && (
-                <div className="p-3 bg-kx-surface-2 rounded-lg border border-kx-border space-y-1.5">
-                  <p className="text-xs font-medium text-kx-text-2">URL del Webhook (configurar en MP Developers)</p>
-                  {/* SECURITY-WEBHOOK-URL */}
-                  <div className="flex items-center gap-2">
-                    <code className="text-[10px] text-kx-text flex-1 break-all leading-relaxed">
-                      {showWebhookUrl
-                        ? `${supabaseUrl}/functions/v1/mp-webhook?empresa_id=${user?.empresa_id}`
-                        : '••••••••••••••••••••••••••'}
-                    </code>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 w-7 p-0 shrink-0"
-                      onClick={() => setShowWebhookUrl(v => !v)}
-                      title={showWebhookUrl ? 'Ocultar URL' : 'Mostrar URL'}
-                    >
-                      {showWebhookUrl ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-7 w-7 p-0 shrink-0"
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          `${supabaseUrl}/functions/v1/mp-webhook?empresa_id=${user?.empresa_id}`
-                        );
-                        toast({ title: '✓ URL copiada al portapapeles' });
-                      }}
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ── Ualá (conciliación) — card rica con estado real ── */}
-            <div className="kairox-bg-card border kairox-border p-5 rounded-xl shadow-sm flex flex-col gap-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-violet-500 flex items-center justify-center text-white text-base shrink-0">
-                    💳
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-kx-text text-sm">Ualá (conciliación)</h4>
-                    {integracionUala?.activo ? (
-                      <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 mt-1">
-                        ✓ Conectado
-                      </span>
-                    ) : (
-                      <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border bg-kx-surface-2 text-kx-text-3 border-kx-border mt-1">
-                        Sin configurar
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <Button size="sm" variant="outline" className="text-xs h-8 shrink-0" onClick={() => setShowConfigUala(true)}>
-                  {integracionUala ? 'Editar' : 'Conectar'}
-                </Button>
-              </div>
-
-              <p className="text-xs text-kx-text-2 leading-relaxed">
-                Las transferencias de Ualá sincronizadas desde Gmail por el Apps Script se registran automáticamente en Bancos (no en Caja) una vez que elegís a qué cuenta bancaria corresponden.
-              </p>
-            </div>
-
-            <IntegracionCard
-              nombre="Ualá QR"
-              descripcion="Pagos con QR Ualá desde la pantalla de caja. Cobros instantáneos sin hardware adicional."
-              estado="proximamente"
-              logo="📱"
-            />
-            <IntegracionCard
-              nombre="AFIP / ARCA"
-              descripcion="Facturación electrónica con CAE automático. Configurado en la pestaña Facturación."
-              estado={afipConfig.usa_factura_electronica ? 'activo' : 'inactivo'}
-              logo="🏛️"
-              onConfigure={() => setActiveTab('facturacion')}
-            />
-            <IntegracionCard
-              nombre="WhatsApp Business"
-              descripcion="Envío de presupuestos y facturas por WhatsApp directamente desde KAIROX."
-              estado="proximamente"
-              logo="💬"
-            />
-            <IntegracionCard
-              nombre="Google Sheets"
-              descripcion="Exportación periódica de reportes a Google Sheets para análisis externos."
-              estado="proximamente"
-              logo="📊"
-            />
-          </div>
-
-          {/* ── Puente Caja ↔ Bancos ── */}
-          <div className="mt-6 kairox-bg-card border kairox-border rounded-xl shadow-sm p-5">
-            <h4 className="font-semibold text-kx-text text-sm mb-1 flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-kx-accent" />
-              Puente Caja → Bancos
-            </h4>
-            <p className="text-xs text-kx-text-2 mb-4 leading-relaxed">
-              Cuando se confirma una venta con estos métodos de pago, se crea automáticamente un movimiento
-              en la cuenta bancaria seleccionada. Efectivo y Cuenta Corriente nunca se acreditan en Bancos.
-            </p>
-            <div className="space-y-3">
-              {METODOS_BANCARIOS.map(metodo => (
-                <div key={metodo} className="flex items-center gap-3">
-                  <span className="w-32 text-sm font-medium text-kx-text shrink-0">{metodo}</span>
-                  <Select
-                    value={mapeosCuentas[metodo] ?? '__none__'}
-                    onValueChange={v => setMapeosCuentas(prev => ({ ...prev, [metodo]: v === '__none__' ? '' : v }))}
-                  >
-                    <SelectTrigger className="flex-1 h-9 text-sm kairox-input">
-                      <SelectValue placeholder="— Sin acreditación bancaria —" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">— Sin acreditación bancaria —</SelectItem>
-                      {cuentasBancariasLista.map(cb => (
-                        <SelectItem key={cb.id} value={cb.id}>{cb.nombre} ({cb.banco})</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 flex justify-end">
-              <Button size="sm" onClick={handleSaveMapeos} disabled={savingMapeos} className="gap-2">
-                {savingMapeos ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                Guardar mapeo
-              </Button>
-            </div>
-          </div>
+          <TabIntegraciones
+            integracionMP={integracionMP}
+            integracionUala={integracionUala}
+            afipConfig={afipConfig}
+            showWebhookUrl={showWebhookUrl}
+            setShowWebhookUrl={setShowWebhookUrl}
+            mapeosCuentas={mapeosCuentas}
+            setMapeosCuentas={setMapeosCuentas}
+            savingMapeos={savingMapeos}
+            cuentasBancariasLista={cuentasBancariasLista}
+            onConfigMP={() => setShowConfigMP(true)}
+            onConfigUala={() => setShowConfigUala(true)}
+            onGoFacturacion={() => setActiveTab('facturacion')}
+            onSaveMapeos={handleSaveMapeos}
+          />
         </TabsContent>
 
         {/* ═══════════════════════════════════════════════════════════════════
