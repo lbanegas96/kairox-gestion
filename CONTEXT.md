@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-05 (sesión 47 — Auditoría de código Fases A/B + Fase C en curso: 6/7 tabs de ConfiguracionSection extraídos)
+**Última actualización:** 2026-07-05 (sesión 47 — Auditoría de código Fases A/B ✅ + Fase C: ConfiguracionSection 100% modularizado, 7/7 tabs)
 
 ## Sesión 47 — Auditoría de código (PLAN_AUDITORIA_CODIGO.md): Fases A, B y C en curso
 
@@ -22,29 +22,36 @@
 - De paso: eliminado import muerto de `UsuariosSection` en Dashboard (el case 'usuarios' ya
   renderiza `ConfiguracionSection initialTab="usuarios"`).
 
-### Fase C — Archivos gigantes: ConfiguracionSection.jsx (2937 → 2291 líneas, EN CURSO)
+### Fase C — Archivos gigantes: ConfiguracionSection.jsx (2937 → 1705 líneas, ✅ CERRADO)
 Metodología por tab: extraer a `src/components/configuracion/` como componente presentacional puro
 (estado/handlers por props, lógica de negocio queda en el padre) → **lint (`no-undef`) → build →
 smoke test autenticado** (login con `nalux2430@gmail.com`, empresa de test "Nalux"; render vs línea
 de base + interacción real) → commit + push individual.
 
-**6 de 7 tabs propios extraídos** (los otros 2, Determinación de Cuentas y Usuarios, ya eran
-componentes externos):
+**7 de 7 tabs propios extraídos a `src/components/configuracion/`** (los otros 2, Determinación de
+Cuentas y Usuarios, ya eran componentes externos):
 - `TabSistema` (commit `217687b`) · `TabAlertas` (`289803c`) · `TabEmpresa` (`cb566af`, +
   `formatCuit` a `src/lib/cuitUtils.js`) · `TabFinanzas` (`729cc60`) · `TabInventario` (`edef935`) ·
-  `TabIntegraciones` (`7d1acfd`).
+  `TabIntegraciones` (`7d1acfd`) · `TabFacturacion` (`166f67f`).
 
 **Hallazgo del propio proceso:** al extraer TabSistema olvidé el `import` en el padre. esbuild NO lo
 detecta (asume global) → build pasaba pero React crasheaba en runtime ("Element type is invalid",
 white-screen). Lo detectó el smoke test. Lección: **el orden correcto es lint → build → smoke test**;
 el `no-undef` de Fase A habría atrapado esto. De ahí en más se corre lint antes de cada smoke test.
 
-**PENDIENTE — tab Facturación (AFIP/Vault):** único tab propio sin extraer. Es el más grande (~480
-líneas) y crítico del sistema (config AFIP, certificado en Vault, series de numeración, cola de CAEs
-pendientes). Arrastra 2 modales que siguen en el padre (certificado ARCA + punto de venta AFIP) que
-habría que decidir si mover con él. Se pausó deliberadamente para tratarlo en sesión fresca dedicada.
-Al retomar: mismo patrón, con smoke test extra-cuidadoso (probar cert ARCA, alta de punto de venta,
-edición de series) porque toca facturación electrónica real.
+**TabFacturacion (`166f67f`) — el más grande (~480 líneas) y crítico:** toggle AFIP, credenciales/
+certificado ARCA en Vault, puntos de venta, tipos de comprobante, facturas con error de CAE, series
+de numeración y pie de documento. Presentacional: todo el estado, los handlers de negocio y los 3
+modales (cert ARCA, punto de venta, detalle de error) quedan en el padre; `previewProximoNumero` y
+`TIPO_DOCUMENTO_LABEL` (puros) se movieron al hijo. Smoke test extra-cuidadoso OK: render completo +
+modal cert ARCA/Vault abre + modal Nuevo PdV abre + pie editable + sin errores de consola. En el
+mismo commit se limpió el dead code que las 6 extracciones previas dejaron en el padre (19 iconos +
+`Badge` + `IntegracionCard` + `formatDateAR`/`getTodayAR` + const `supabaseUrl`): lint del archivo
+93 → 8 warnings, 0 errores.
+
+**Próximo archivo gigante de Fase C:** `PlanCuentasSection.jsx` (1843 líneas), luego
+`CuentasBancariasSection.jsx` (1288), `CompraRapidaSection.jsx` (1214), y el resto >650 líneas.
+Mismo patrón + smoke test con las credenciales de test.
 
 **Detalle de UI del preview para smoke test:** el login del preview requiere `form.requestSubmit()`
 (el click del botón no propaga el submit en el iframe); los tabs de Radix requieren click CDP real
