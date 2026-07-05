@@ -1,5 +1,59 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-04 (sesión 46 cont. 16 — Auditoría de seguridad CERRADA · Plan de auditoría de código creado)
+**Última actualización:** 2026-07-05 (sesión 47 — Auditoría de código Fases A/B + Fase C en curso: 6/7 tabs de ConfiguracionSection extraídos)
+
+## Sesión 47 — Auditoría de código (PLAN_AUDITORIA_CODIGO.md): Fases A, B y C en curso
+
+### Fase A — Higiene de herramientas ✅ (commit `e45152f`)
+- `eslint.config.mjs` endurecido: `no-unused-vars` y `react/prop-types` reactivados como `warn`,
+  `react/jsx-uses-vars` reactivado (necesario para que el uso en JSX cuente), `import/no-unresolved`
+  desactivado (falso positivo — el alias `@/` lo resuelve Vite en build, no eslint-plugin-import).
+- Estado del lint: **0 errores, ~1380 warnings** cosméticos (1094 prop-types, 236 unused-vars,
+  50 exhaustive-deps) — todos `warn`, no bloquean build.
+- **Bug real corregido:** `OfertasSection.jsx` tenía 6 hooks (`useQuery`×2, `useMutation`×4)
+  declarados DESPUÉS de un early return de chequeo de rol admin → violación de rules-of-hooks,
+  crash potencial. Movido el early return después de todos los hooks.
+- Prettier: se decidió NO agregarlo (reformateo masivo del historial sin beneficio funcional).
+
+### Fase B — Bundle / code-splitting ✅ (commit `7fad0c2`)
+- `Dashboard.jsx`: 16 secciones convertidas a `React.lazy()` + `<Suspense>` (DashboardSection queda
+  eager: es la vista de aterrizaje al login). `react-pdf` ya estaba code-split por diseño.
+- Resultado: bundle principal `index.js` **2428 KB → 1082 KB** (gzip 650 → 320 KB, **−55%**). Cada
+  sección es ahora un chunk bajo demanda.
+- De paso: eliminado import muerto de `UsuariosSection` en Dashboard (el case 'usuarios' ya
+  renderiza `ConfiguracionSection initialTab="usuarios"`).
+
+### Fase C — Archivos gigantes: ConfiguracionSection.jsx (2937 → 2291 líneas, EN CURSO)
+Metodología por tab: extraer a `src/components/configuracion/` como componente presentacional puro
+(estado/handlers por props, lógica de negocio queda en el padre) → **lint (`no-undef`) → build →
+smoke test autenticado** (login con `nalux2430@gmail.com`, empresa de test "Nalux"; render vs línea
+de base + interacción real) → commit + push individual.
+
+**6 de 7 tabs propios extraídos** (los otros 2, Determinación de Cuentas y Usuarios, ya eran
+componentes externos):
+- `TabSistema` (commit `217687b`) · `TabAlertas` (`289803c`) · `TabEmpresa` (`cb566af`, +
+  `formatCuit` a `src/lib/cuitUtils.js`) · `TabFinanzas` (`729cc60`) · `TabInventario` (`edef935`) ·
+  `TabIntegraciones` (`7d1acfd`).
+
+**Hallazgo del propio proceso:** al extraer TabSistema olvidé el `import` en el padre. esbuild NO lo
+detecta (asume global) → build pasaba pero React crasheaba en runtime ("Element type is invalid",
+white-screen). Lo detectó el smoke test. Lección: **el orden correcto es lint → build → smoke test**;
+el `no-undef` de Fase A habría atrapado esto. De ahí en más se corre lint antes de cada smoke test.
+
+**PENDIENTE — tab Facturación (AFIP/Vault):** único tab propio sin extraer. Es el más grande (~480
+líneas) y crítico del sistema (config AFIP, certificado en Vault, series de numeración, cola de CAEs
+pendientes). Arrastra 2 modales que siguen en el padre (certificado ARCA + punto de venta AFIP) que
+habría que decidir si mover con él. Se pausó deliberadamente para tratarlo en sesión fresca dedicada.
+Al retomar: mismo patrón, con smoke test extra-cuidadoso (probar cert ARCA, alta de punto de venta,
+edición de series) porque toca facturación electrónica real.
+
+**Detalle de UI del preview para smoke test:** el login del preview requiere `form.requestSubmit()`
+(el click del botón no propaga el submit en el iframe); los tabs de Radix requieren click CDP real
+(`preview_click`), no `.click()` por eval; el buffer de console del preview NO se limpia entre reloads
+(errores viejos con `?t=<timestamp>` persisten — validar por evidencia funcional, no por el buffer).
+
+### Fases D/E/F del plan — no iniciadas.
+
+---
 
 ## Sesión 46 (cont. 16) — Cierre de auditoría de seguridad + Plan auditoría de código
 
