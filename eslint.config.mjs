@@ -26,18 +26,22 @@ export default [
 			...reactHooks.configs.recommended.rules,
 			...importPlugin.flatConfigs.recommended.rules,
 
-			// Non-critical rules - disabled since code works fine without them
-			'react/prop-types': 'off',
+			// Rules turned off — safe with React 17+ new JSX transform
 			'react/no-unescaped-entities': 'off',
-			'react/display-name': 'off', // Non-critical, component works without displayName
-			'react/jsx-uses-react': 'off', // Not needed in React 17+, non-critical
-			'react/react-in-jsx-scope': 'off', // Not needed in React 17+, non-critical
-			'react/jsx-uses-vars': 'off', // Non-critical, code works fine
-			'react/jsx-no-comment-textnodes': 'off', // Non-critical, comments could be visible if put inside the JSX, most cases are just rendering text like '///'
+			'react/display-name': 'off',
+			'react/jsx-uses-react': 'off',
+			'react/react-in-jsx-scope': 'off',
+			'react/jsx-no-comment-textnodes': 'off',
+			'import/no-named-as-default': 'off',
+			'import/no-named-as-default-member': 'off',
+			// Vite handles alias resolution (@/) at build time — eslint-plugin-import
+			// doesn't understand the Vite config, so this rule produces false positives
+			'import/no-unresolved': 'off',
 
-			'no-unused-vars': 'off', // Non-critical, code works fine with unused vars
-			'import/no-named-as-default': 'off', // Can cause runtime import errors, usually fine to leave as is
-			'import/no-named-as-default-member': 'off', // Can cause runtime import errors
+			// Reactivated as warn — auditing phase (upgrade to error once count is zero)
+			'react/prop-types': 'warn',
+			'react/jsx-uses-vars': 'warn', // required so JSX usage counts as "used" for no-unused-vars
+			'no-unused-vars': ['warn', { varsIgnorePattern: '^_', argsIgnorePattern: '^_' }],
 
 			// Critical rules that prevent runtime errors
 			'no-undef': 'error', // Undefined variables cause runtime errors

@@ -90,14 +90,6 @@ function OfertasSection() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [prodSearch, setProdSearch] = useState('');
 
-  if (user?.role !== 'admin') {
-    return (
-      <div className="p-8 text-center text-kx-text-2">
-        No tenés permisos para gestionar ofertas.
-      </div>
-    );
-  }
-
   const { data: ofertas = [], isLoading } = useQuery({
     queryKey: OFERTAS_KEY(empresaId),
     queryFn: async () => {
@@ -257,6 +249,14 @@ function OfertasSection() {
         p.categorias?.nombre?.toLowerCase().includes(prodSearch.toLowerCase())
       )
     : productos;
+
+  if (user?.role !== 'admin') {
+    return (
+      <div className="p-8 text-center text-kx-text-2">
+        No tenés permisos para gestionar ofertas.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
