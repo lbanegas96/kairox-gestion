@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-05 (sesión 47 — Auditoría de código Fases A/B ✅ + Fase C: ConfiguracionSection 100% modularizado, 7/7 tabs)
+**Última actualización:** 2026-07-05 (sesión 47 — Auditoría de código Fases A/B ✅ + Fase C: ConfiguracionSection Y PlanCuentasSection modularizados)
 
 ## Sesión 47 — Auditoría de código (PLAN_AUDITORIA_CODIGO.md): Fases A, B y C en curso
 
@@ -49,9 +49,31 @@ mismo commit se limpió el dead code que las 6 extracciones previas dejaron en e
 `Badge` + `IntegracionCard` + `formatDateAR`/`getTodayAR` + const `supabaseUrl`): lint del archivo
 93 → 8 warnings, 0 errores.
 
-**Próximo archivo gigante de Fase C:** `PlanCuentasSection.jsx` (1843 líneas), luego
-`CuentasBancariasSection.jsx` (1288), `CompraRapidaSection.jsx` (1214), y el resto >650 líneas.
-Mismo patrón + smoke test con las credenciales de test.
+### Fase C — PlanCuentasSection.jsx (1843 → 135 líneas, ✅ CERRADO, commit `07ba3dd`)
+Caso distinto y mucho más favorable que ConfiguracionSection: los 7 tabs YA eran componentes
+función independientes dentro del mismo archivo (no había estado interwoven). Extracción **mecánica**
+a `src/components/plan-cuentas/`: `TabPlanCuentas`, `TabAsientos`, `TabBalance`,
+`TabEstadoResultados`, `TabBalanceGeneral`, `TabLibroMayor`, `TabPeriodos` + 2 modales
+(`ModalNuevaCuenta`, `ModalNuevoAsiento`) + `shared.jsx` (constantes `TIPO_COLOR`/`TIPO_LABEL`/
+`ESTADO_COLOR`, `fmt`, `CuentaNode`, `matchesSearch`, `csvDownload`). El padre queda solo con el
+shell de `<Tabs>`.
+
+Se hizo con un **split físico scripteado** (node en scratchpad copiando rangos de línea exactos +
+generando imports por archivo) para evitar transcripción manual de 1700 líneas. Gotchas encontrados
+y resueltos: (1) el script se auto-importaba (self-import) → excluir el propio nombre; (2) doble
+`fmt` por slices solapados; (3) **los modales son `export default` pero el generador los importaba
+como named `{ }`** → rollup "not exported" (lint no lo detecta, sólo build). Lección: para módulos
+generados, correr **lint Y build** — el build atrapa desajustes default/named que el lint no ve.
+Además: el `git checkout` para restaurar el original hizo que el harness perdiera el track del
+archivo — al reescribir el parent slim hubo que Read-antes-de-Write.
+
+Smoke test autenticado completo: los 7 tabs renderizan con datos reales + modal Nueva Cuenta abre
+(valida import default cross-file) + sin errores de consola.
+
+**Próximo archivo gigante de Fase C:** `CuentasBancariasSection.jsx` (1288), luego
+`CompraRapidaSection.jsx` (1214), y el resto >650 líneas. Antes de extraer, revisar si es
+monolítico (como ConfiguracionSection → prop-threading) o ya tiene componentes separados (como
+PlanCuentasSection → split mecánico). Mismo smoke test con las credenciales de test.
 
 **Detalle de UI del preview para smoke test:** el login del preview requiere `form.requestSubmit()`
 (el click del botón no propaga el submit en el iframe); los tabs de Radix requieren click CDP real
