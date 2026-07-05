@@ -1,27 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { Loader2 } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { AuroraBackground } from '@/components/ui/AuroraBackground';
+// DashboardSection queda con import estático: es la vista de aterrizaje al
+// hacer login, lazy-cargarla agregaría un flash de spinner en el camino más
+// común. Las demás 16 secciones se cargan bajo demanda (code-splitting).
 import DashboardSection from '@/components/sections/DashboardSection';
-import ProductosSection from '@/components/sections/ProductosSection';
-import VentasSection from '@/components/sections/VentasSection';
-import ComprasSection from '@/components/sections/ComprasSection';
-import CajaSection from '@/components/sections/CajaSection';
-import ClientesSection from '@/components/sections/ClientesSection';
-import CuentaCorrienteSection from '@/components/sections/CuentaCorrienteSection';
-import ReportesSection from '@/components/sections/ReportesSection';
-import UsuariosSection from '@/components/sections/UsuariosSection';
-import ConfiguracionSection from '@/components/sections/ConfiguracionSection';
-import ListasPrecioSection from '@/components/sections/ListasPrecioSection';
-import OfertasSection from '@/components/sections/OfertasSection';
-import PlanCuentasSection from '@/components/sections/PlanCuentasSection';
-import CuentasBancariasSection from '@/components/sections/CuentasBancariasSection';
-import ChequesSection from '@/components/sections/ChequesSection';
-import ImpuestosSection from '@/components/ImpuestosSection';
-import ProveedoresSection from '@/components/sections/ProveedoresSection';
+const ProductosSection = lazy(() => import('@/components/sections/ProductosSection'));
+const VentasSection = lazy(() => import('@/components/sections/VentasSection'));
+const ComprasSection = lazy(() => import('@/components/sections/ComprasSection'));
+const CajaSection = lazy(() => import('@/components/sections/CajaSection'));
+const ClientesSection = lazy(() => import('@/components/sections/ClientesSection'));
+const CuentaCorrienteSection = lazy(() => import('@/components/sections/CuentaCorrienteSection'));
+const ReportesSection = lazy(() => import('@/components/sections/ReportesSection'));
+const ConfiguracionSection = lazy(() => import('@/components/sections/ConfiguracionSection'));
+const ListasPrecioSection = lazy(() => import('@/components/sections/ListasPrecioSection'));
+const OfertasSection = lazy(() => import('@/components/sections/OfertasSection'));
+const PlanCuentasSection = lazy(() => import('@/components/sections/PlanCuentasSection'));
+const CuentasBancariasSection = lazy(() => import('@/components/sections/CuentasBancariasSection'));
+const ChequesSection = lazy(() => import('@/components/sections/ChequesSection'));
+const ImpuestosSection = lazy(() => import('@/components/ImpuestosSection'));
+const ProveedoresSection = lazy(() => import('@/components/sections/ProveedoresSection'));
 import { CommandPalette, useCommandPalette } from '@/components/CommandPalette';
 import { supabase } from '@/lib/customSupabaseClient';
 import { OnboardingWizard } from '@/components/OnboardingWizard';
+
+const SectionFallback = () => (
+  <div className="flex items-center justify-center py-24">
+    <Loader2 className="w-8 h-8 text-kx-blue animate-spin" />
+  </div>
+);
 
 function Dashboard({ user, onLogout, onEnterPOS }) {
   const [activeSection, setActiveSection]     = useState('dashboard');
@@ -105,7 +114,9 @@ function Dashboard({ user, onLogout, onEnterPOS }) {
 
           <main className="flex-1 overflow-y-auto p-6">
             <div key={activeSection} className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-              {renderSection()}
+              <Suspense fallback={<SectionFallback />}>
+                {renderSection()}
+              </Suspense>
             </div>
           </main>
         </div>
