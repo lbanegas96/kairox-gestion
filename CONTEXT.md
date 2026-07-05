@@ -1,5 +1,38 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-04 (sesión 46 cont. 15 — Fase 4: permiso de módulo faltante en 16 RPCs "motor de dinero")
+**Última actualización:** 2026-07-04 (sesión 46 cont. 16 — Auditoría de seguridad CERRADA · Plan de auditoría de código creado)
+
+## Sesión 46 (cont. 16) — Cierre de auditoría de seguridad + Plan auditoría de código
+
+### Estado de auditorías
+
+**Auditoría de seguridad/permisos/RLS: ✅ CERRADA** (ver `PLAN_AUDITORIA.md`)
+Todas las migraciones mig.001–mig.155 aplicadas en producción. Resumen de lo auditado y cerrado:
+- RLS en todas las tablas de `public` verificada con query a `pg_policies` — cero tablas sin gate.
+- 16 RPCs "motor de dinero" (`SECURITY DEFINER`, grant a `authenticated`) gateadas con
+  `has_module_permission()` en mig.154 y mig.155.
+- Auditado: ventas, compras, caja, bancos, cheques, productos, configuracion, plan de cuentas,
+  AFIP/ARCA, series de numeración, empresas, condiciones de pago, unidades de medida, puntos de
+  venta, movimientos de inventario, devoluciones, notas de débito, cuenta corriente de clientes,
+  comprobante_pagos, cajas, categorias.
+- Metodología: explotación real con `BEGIN...ROLLBACK` antes de cada fix + validación post-fix.
+
+**Auditoría de código (estilo/performance/mantenibilidad): 📋 PLANIFICADA, no ejecutada**
+Plan completo en `PLAN_AUDITORIA_CODIGO.md` (creado esta sesión). 6 fases:
+- Fase A: Higiene de herramientas (ESLint endurecer, Prettier, bundle analysis)
+- Fase B: Bundle/performance de carga (react-pdf lazy, code-splitting por sección)
+- Fase C: Archivos gigantes (ConfiguracionSection 2937 líneas → otros 3 >1200 líneas → 11 >650)
+- Fase D: Consistencia de patrones de datos (18 useEffect vs 12 useQuery mezclados)
+- Fase E: Duplicación de modales ventas↔compras (5 pares candidatos a unificar)
+- Fase F: Limpieza menor (reportes/ vs reports/, no-unused-vars post-lint)
+Metodología: smoke test antes+después de cada cambio; errores detectados leyendo el código también
+se corrigen en el momento, no se documentan para después.
+
+### Próximo paso
+Arrancar Fase A del plan de auditoría de código. Confirmar con el usuario el orden de fases antes
+de ejecutar (se puede reordenar según prioridad percibida — ej. si el dolor es carga lenta, ir
+directo a Fase B).
+
+---
 
 ## Sesión 46 (cont. 15) — Fase 4: permiso de módulo en RPCs punto de entrada (mig.154, mig.155)
 
