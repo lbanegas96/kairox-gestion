@@ -1,7 +1,25 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-06 (sesión 49 Luciano — fix del bug crítico de facturación de pedidos que dejó Nadia en sesión 48)
+**Última actualización:** 2026-07-06 (sesión 49 Luciano — fix facturación de pedidos + parser CSV + Fase C OrdenesCompraSection)
 
-## Sesión 49 — Luciano — Fix bug crítico de facturación de pedidos (Bloque 5 de Nadia)
+## Sesión 49 — Luciano — Plan del día: bugs de Nadia + continuación auditoría de código
+
+Resumen de la sesión (orden ejecutado):
+1. ✅ Fix crítico facturación de pedidos (Bloque 5 de Nadia) — ver detalle abajo.
+2. ✅ Fix parser CSV de conciliación bancaria (Bloque 3 de Nadia) — ver detalle abajo.
+3. ✅ Fase C auditoría: `OrdenesCompraSection.jsx` modularizado (850 → 347 líneas), 9/15 archivos
+   gigantes cerrados. Extraído a `src/components/ordenes-compra/`: `shared.jsx`, `TablaOrdenesCompra`,
+   `FormNuevaOC`, `ModalDetalleOC`, `ModalRegistrarFactura`. Sin cambios de comportamiento — build
+   de producción y lint (0 errores) verificados; no se pudo abrir la sección en el navegador real
+   por falta de credenciales de login en este entorno.
+
+**Pendiente para la próxima sesión (no abordado hoy, decisión del usuario):**
+- Cheques pre-mig.145 que descuadran cuenta 1.1.6 (necesita asiento de apertura — decisión de
+  negocio con el contador, ver Bloque 7 más abajo).
+- Bloques 1, 2, 8 de `PLAN_PRUEBAS_NADIA_2026-07-04.md` sin ejecutar.
+- Fase C: quedan `CuentaCorrienteSection`, `OfertasSection`, `NuevaVentaModal`, `CotizacionesSection`,
+  `ReportesSection`, `DashboardSection`. Fases D/E/F sin empezar.
+
+### Fix crítico — Facturación de pedidos (Bloque 5 de Nadia)
 
 ### ✅ RESUELTO — Sobre-facturación de pedidos + doble descuento de stock
 
