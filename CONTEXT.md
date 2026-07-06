@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-05 (sesión 47 — Auditoría de código Fases A/B ✅ + Fase C: ConfiguracionSection, PlanCuentasSection, CuentasBancariasSection y CompraRapidaSection modularizados)
+**Última actualización:** 2026-07-06 (sesión 47 — Auditoría de código Fases A/B ✅ + Fase C: ConfiguracionSection, PlanCuentasSection, CuentasBancariasSection, CompraRapidaSection y ChequesSection modularizados)
 
 ## Sesión 47 — Auditoría de código (PLAN_AUDITORIA_CODIGO.md): Fases A, B y C en curso
 
@@ -110,11 +110,32 @@ autenticado con datos reales de Nalux — carrito calcula bien ($10.000,00 con 1
 removido de nuevo), Historial con 13 compras reales + filtros, `ModalEditarCompra` abre con ítem
 real y total correcto. Cero errores de consola.
 
-**Próximo archivo gigante de Fase C:** el resto de archivos >650 líneas (`ChequesSection`,
-`CajaSection`, `PedidosSection`, `ProductosSection`, `OrdenesCompraSection`,
-`CuentaCorrienteSection`, `OfertasSection`, `NuevaVentaModal`, `CotizacionesSection`,
-`ReportesSection`, `DashboardSection`). Antes de extraer, revisar si es monolítico (prop-threading)
-o ya tiene componentes separados (split mecánico scripteado). Mismo smoke test + prop-check.
+### Fase C — ChequesSection.jsx (953 → 425 líneas, ✅ CERRADO, commit `a244142`)
+Caso híbrido: los 4 modales, las 2 tablas de tabs y los helpers puros ya eran bloques
+autocontenidos dentro del mismo archivo → extraídos a `src/components/cheques/`:
+`ModalNuevoChequeTercero`, `ModalNuevoChequePropio`, `ModalDetalleCheque`, `ModalCambioEstado`,
+`TabCarteraTerceros`, `TabChequesPropios`, y `shared.jsx` (constantes `BANCOS_AR`/
+`TRANSICIONES_*`/`ESTADO_*`, helpers `fmt`/`fmtDate`/`addDays`/`emptyTerceroForm`/
+`emptyPropioForm`, y 3 componentes puros `EstadoBadge`/`FechaVto`/`AccionesCheque`
+reutilizados tanto por las tablas como por los modales).
+
+**Bug propio detectado por lint (no por smoke test):** al remover los render-helpers del padre
+quedó `ESTADO_LABELS` sin importar — se usa en el toast de cambio de estado, no en el JSX
+extraído. `no-undef` lo atrapó antes del build. Refuerza la lección de sesiones anteriores:
+correr lint inmediatamente después de cada extracción, no esperar al smoke test.
+
+Verificación: prop-check 0 faltantes (4+4+8+9+5+10 props en los 6 componentes), lint 0
+errores, build OK, smoke test autenticado con datos reales de Nalux — KPIs correctos,
+Cartera de Terceros (7 cheques) y Cheques Propios (1 cheque) renderizan, `ModalDetalleCheque`
+muestra el historial de 3 transiciones de un cheque real, `ModalCambioEstado` abre con las
+transiciones válidas según estado, `ModalNuevoChequePropio` abre completo. Cero errores de
+consola.
+
+**Próximo archivo gigante de Fase C:** el resto de archivos >650 líneas (`CajaSection`,
+`PedidosSection`, `ProductosSection`, `OrdenesCompraSection`, `CuentaCorrienteSection`,
+`OfertasSection`, `NuevaVentaModal`, `CotizacionesSection`, `ReportesSection`,
+`DashboardSection`). Antes de extraer, revisar si es monolítico (prop-threading) o ya tiene
+componentes separados (split mecánico scripteado). Mismo smoke test + prop-check.
 
 **Detalle de UI del preview para smoke test:** el login del preview requiere `form.requestSubmit()`
 (el click del botón no propaga el submit en el iframe); los tabs de Radix requieren click CDP real
