@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-06 (sesión 47 — Auditoría de código Fases A/B ✅ + Fase C: ConfiguracionSection, PlanCuentasSection, CuentasBancariasSection, CompraRapidaSection y ChequesSection modularizados)
+**Última actualización:** 2026-07-06 (sesión 47 — Auditoría de código Fases A/B ✅ + Fase C: ConfiguracionSection, PlanCuentasSection, CuentasBancariasSection, CompraRapidaSection, ChequesSection y CajaSection modularizados)
 
 ## Sesión 47 — Auditoría de código (PLAN_AUDITORIA_CODIGO.md): Fases A, B y C en curso
 
@@ -131,11 +131,31 @@ muestra el historial de 3 transiciones de un cheque real, `ModalCambioEstado` ab
 transiciones válidas según estado, `ModalNuevoChequePropio` abre completo. Cero errores de
 consola.
 
-**Próximo archivo gigante de Fase C:** el resto de archivos >650 líneas (`CajaSection`,
-`PedidosSection`, `ProductosSection`, `OrdenesCompraSection`, `CuentaCorrienteSection`,
-`OfertasSection`, `NuevaVentaModal`, `CotizacionesSection`, `ReportesSection`,
-`DashboardSection`). Antes de extraer, revisar si es monolítico (prop-threading) o ya tiene
-componentes separados (split mecánico scripteado). Mismo smoke test + prop-check.
+### Fase C — CajaSection.jsx (951 → 564 líneas, ✅ CERRADO, commit `8f8c6d9`)
+Caso monolítico como CompraRapidaSection: header de sesión + 3 tabs (Movimientos, Nuevo
+Movimiento, Reporte Histórico) vivían inline en el mismo `return`. Extraídos a
+`src/components/caja/`: `EstadoCajaHeader` (card de sesión + indicadores de turno),
+`TabMovimientos`, `TabNuevoMovimiento`, `TabResumenHistorico`, `ModalAbrirCaja`, y
+`shared.jsx` (categorías de ingreso/egreso, `formatAmount`, `getPeriodLabel`). El padre
+conserva todo el estado/handlers (carga de movimientos, resumen financiero, apertura/cierre
+de sesión vía `CajaContext`, asiento contable automático).
+
+Prop-check: 5/6 componentes 0 faltantes; el 6to (`TabMovimientos`) dio un falso positivo
+porque el script matcheó la firma de `SortIcon` (sub-componente definido antes en el mismo
+archivo) en vez de la de `TabMovimientos` — verificado a mano que las 8 props reales se
+pasan bien. Limitación conocida del script: solo lee la primera firma de función que
+encuentra en el archivo.
+
+Verificación: lint 0 errores, build OK, smoke test autenticado con datos reales de Nalux —
+tab Movimientos con historial real, Nuevo Movimiento con categorías ligadas al tipo (venta
+automática deshabilitada), Reporte Histórico con KPIs y detalle, `ModalAbrirCaja` abre
+completo. Cero errores de consola.
+
+**Próximo archivo gigante de Fase C:** el resto de archivos >650 líneas (`PedidosSection`,
+`ProductosSection`, `OrdenesCompraSection`, `CuentaCorrienteSection`, `OfertasSection`,
+`NuevaVentaModal`, `CotizacionesSection`, `ReportesSection`, `DashboardSection`). Antes de
+extraer, revisar si es monolítico (prop-threading) o ya tiene componentes separados (split
+mecánico scripteado). Mismo smoke test + prop-check.
 
 **Detalle de UI del preview para smoke test:** el login del preview requiere `form.requestSubmit()`
 (el click del botón no propaga el submit en el iframe); los tabs de Radix requieren click CDP real
