@@ -121,20 +121,25 @@ Oferta "Test Batidora solo producto" (20%, producto=Batidora Eléctrica + Catego
 - Vender Mouse plano (misma cat. Tecnología, NO es el producto elegido) → SIN descuento ✓
 El fix funciona: producto específico + categoría aplica SOLO al producto, no a toda la categoría.
 
-### Bloque 3 — Conciliación bancaria / parser CSV — 🔴 hallazgo (análisis de código, prueba en curso)
-El fix `parseMontoCSV` en `conciliacionService.ts:75` maneja bien "1.234,56" EN AISLAMIENTO
-(quita puntos de miles, coma→punto). PERO `parsearCSV` (línea 40) hace `split(',')` ingenuo:
-un monto argentino con coma decimal ("18.500,75") parte las columnas ANTES de llegar al fix →
-el monto se importa mal. Además: montos enteros con punto de miles sin coma ("1.234.567") →
-`parseFloat` corta en el primer punto → 1.234. Y el OTRO importador (`ImportCSVModal.jsx:62/86`,
-pestaña Movimientos) NO recibió el fix — sigue con `.replace(',', '.')` simple que rompe
-"1.234,56"→"1.234.56"→parseFloat→1.234. Generados 2 CSV de prueba en scratchpad
-(`extracto_formato_US.csv` y `extracto_formato_AR.csv`) para confirmar empíricamente. Prueba
-quedó a mitad al cerrar esta entrada. **A resolver con Luciano** (parser CSV robusto que respete
-comillas o separe por `;`, y unificar ambos importadores).
+### ✅ RESUELTO en sesión 49 — Bloque 3 — Conciliación bancaria / parser CSV
+El fix `parseMontoCSV` en `conciliacionService.ts:75` manejaba bien "1.234,56" EN AISLAMIENTO
+(quita puntos de miles, coma→punto). PERO `parsearCSV` (línea 40) hacía `split(',')` ingenuo:
+un monto argentino con coma decimal ("18.500,75") partía las columnas ANTES de llegar al fix →
+el monto se importaba mal. Además: montos enteros con punto de miles sin coma ("1.234.567") →
+`parseFloat` cortaba en el primer punto → 1.234. Y el OTRO importador (`ImportCSVModal.jsx:62/86`,
+pestaña Movimientos) NO tenía el fix — seguía con `.replace(',', '.')` simple que rompe
+"1.234,56"→"1.234.56"→parseFloat→1.234.
+
+**Fix:** centralizado en `src/lib/csvUtils.js` — `parseCSVText` (split con auto-detección de
+delimitador `;` vs `,` y respeto de campos entre comillas) + `parseMontoCSV` (tolera AR y
+US/plano, incluyendo miles sin decimales tipo "1.234.567", y resuelve la ambigüedad de un solo
+punto: 3 dígitos detrás → separador de miles, 1-2 dígitos → decimal US). Los 3 puntos que
+duplicaban esta lógica (`conciliacionService.ts`, `cuentas-bancarias/shared.jsx`,
+`ImportCSVModal.jsx`) ahora usan las mismas funciones. Validado con test de Node (12 casos:
+montos AR/US/miles/negativos + CSV delimitado por `,` y por `;` con comilla decimal) y build de
+producción (3223 módulos, sin errores).
 
 ### Pendiente de esta sesión
-- Bloque 3 (Conciliación): terminar prueba empírica de importación US/AR + resolver parser CSV.
 - Bloques 1, 2, 8 del PLAN_PRUEBAS_NADIA_2026-07-04 sin ejecutar todavía.
 
 ## Sesión 47 — Auditoría de código (PLAN_AUDITORIA_CODIGO.md): Fases A, B y C en curso
