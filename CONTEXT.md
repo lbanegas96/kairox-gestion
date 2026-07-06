@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-06 (sesión 47 — Auditoría de código Fases A/B ✅ + Fase C: ConfiguracionSection, PlanCuentasSection, CuentasBancariasSection, CompraRapidaSection, ChequesSection, CajaSection y PedidosSection modularizados)
+**Última actualización:** 2026-07-06 (sesión 47 — Auditoría de código Fases A/B ✅ + Fase C: ConfiguracionSection, PlanCuentasSection, CuentasBancariasSection, CompraRapidaSection, ChequesSection, CajaSection, PedidosSection y ProductosSection modularizados)
 
 ## Sesión 47 — Auditoría de código (PLAN_AUDITORIA_CODIGO.md): Fases A, B y C en curso
 
@@ -165,11 +165,28 @@ autenticado con datos reales de Nalux — tabla con 14+ pedidos y KPIs correctos
 `ModalDetallePedido` muestra el `DocumentFlow` pedido→entrega con progreso parcial 2/5,
 `ModalPedidoForm` abre completo con clientes/productos reales. Cero errores de consola.
 
-**Próximo archivo gigante de Fase C:** el resto de archivos >650 líneas (`ProductosSection`,
-`OrdenesCompraSection`, `CuentaCorrienteSection`, `OfertasSection`, `NuevaVentaModal`,
-`CotizacionesSection`, `ReportesSection`, `DashboardSection`). Antes de extraer, revisar si
-es monolítico (prop-threading) o ya tiene componentes separados (split mecánico scripteado).
-Mismo smoke test + prop-check.
+### Fase C — ProductosSection.jsx (904 → 487 líneas, ✅ CERRADO, commit `cc1b50b`)
+`ProductForm` ya era un componente top-level standalone (definido fuera del padre a propósito,
+para no romper la identidad de los portales de Radix Select/Dialog en cada render) → se movió
+tal cual a su propio archivo. Extraídos además a `src/components/productos/`: `TablaInventario`
+(tabla + acciones editar/ajustar stock/desactivar/reactivar), `TabHistorialMovimientos` (filtro
+por producto + tabla), y `ModalMovimiento` (ajuste manual de stock vía
+`productosService.adjustStock`). El padre conserva todo el estado/handlers (fetch, alta/edición
+de producto, ajuste de stock, activar/desactivar, import CSV).
+
+Verificación: prop-check 0 faltantes (11+4+7 props en los 3 componentes nuevos; `ProductForm`
+verificado a mano en sus 2 call-sites — alta y edición — con las 7-8 props cada una, ya que el
+script solo matchea el primer call-site). Lint 0 errores, build OK, smoke test autenticado con
+datos reales de Nalux — `TablaInventario` con 11 productos y bajo-stock resaltado,
+`TabHistorialMovimientos` con movimientos reales, `ModalMovimiento` con el producto
+seleccionado, `ProductForm` (alta) con proveedores/unidades reales y el default de unidad
+"UN — Unidad" autoseleccionado. Cero errores de consola.
+
+**Próximo archivo gigante de Fase C:** el resto de archivos >650 líneas (`OrdenesCompraSection`,
+`CuentaCorrienteSection`, `OfertasSection`, `NuevaVentaModal`, `CotizacionesSection`,
+`ReportesSection`, `DashboardSection`). Antes de extraer, revisar si es monolítico
+(prop-threading) o ya tiene componentes separados (split mecánico scripteado). Mismo smoke
+test + prop-check.
 
 **Detalle de UI del preview para smoke test:** el login del preview requiere `form.requestSubmit()`
 (el click del botón no propaga el submit en el iframe); los tabs de Radix requieren click CDP real
