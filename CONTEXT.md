@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-06 (sesión 47 — Auditoría de código Fases A/B ✅ + Fase C: ConfiguracionSection, PlanCuentasSection, CuentasBancariasSection, CompraRapidaSection, ChequesSection y CajaSection modularizados)
+**Última actualización:** 2026-07-06 (sesión 47 — Auditoría de código Fases A/B ✅ + Fase C: ConfiguracionSection, PlanCuentasSection, CuentasBancariasSection, CompraRapidaSection, ChequesSection, CajaSection y PedidosSection modularizados)
 
 ## Sesión 47 — Auditoría de código (PLAN_AUDITORIA_CODIGO.md): Fases A, B y C en curso
 
@@ -151,11 +151,25 @@ tab Movimientos con historial real, Nuevo Movimiento con categorías ligadas al 
 automática deshabilitada), Reporte Histórico con KPIs y detalle, `ModalAbrirCaja` abre
 completo. Cero errores de consola.
 
-**Próximo archivo gigante de Fase C:** el resto de archivos >650 líneas (`PedidosSection`,
-`ProductosSection`, `OrdenesCompraSection`, `CuentaCorrienteSection`, `OfertasSection`,
-`NuevaVentaModal`, `CotizacionesSection`, `ReportesSection`, `DashboardSection`). Antes de
-extraer, revisar si es monolítico (prop-threading) o ya tiene componentes separados (split
-mecánico scripteado). Mismo smoke test + prop-check.
+### Fase C — PedidosSection.jsx (920 → 457 líneas, ✅ CERRADO, commit `b00c25c`)
+Caso monolítico: tabla + 2 modales grandes (Nuevo/Editar, Detalle) vivían inline. Extraídos
+a `src/components/pedidos/`: `TablaPedidos` (listado con acciones por fila — editar, generar
+entrega, avanzar/facturar, cancelar), `ModalPedidoForm` (alta/edición de ítems), `ModalDetallePedido`
+(estado, progreso de entrega, `DocumentFlow`, tabla de ítems, botones de workflow), y
+`shared.jsx` (`ESTADOS` del workflow, `getEstado`, `EstadoBadge`, `ProgressoBadge`). El padre
+conserva el header/KPIs/filtros (pequeños, ligados a `searchTerm`/`filterEstado`) y todo el
+estado/handlers (fetch, guardar, avanzar estado, facturar, generar entrega, cancelar).
+
+Verificación: prop-check 0 faltantes (10+13+10 props), lint 0 errores, build OK, smoke test
+autenticado con datos reales de Nalux — tabla con 14+ pedidos y KPIs correctos,
+`ModalDetallePedido` muestra el `DocumentFlow` pedido→entrega con progreso parcial 2/5,
+`ModalPedidoForm` abre completo con clientes/productos reales. Cero errores de consola.
+
+**Próximo archivo gigante de Fase C:** el resto de archivos >650 líneas (`ProductosSection`,
+`OrdenesCompraSection`, `CuentaCorrienteSection`, `OfertasSection`, `NuevaVentaModal`,
+`CotizacionesSection`, `ReportesSection`, `DashboardSection`). Antes de extraer, revisar si
+es monolítico (prop-threading) o ya tiene componentes separados (split mecánico scripteado).
+Mismo smoke test + prop-check.
 
 **Detalle de UI del preview para smoke test:** el login del preview requiere `form.requestSubmit()`
 (el click del botón no propaga el submit en el iframe); los tabs de Radix requieren click CDP real
