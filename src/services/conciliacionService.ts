@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/customSupabaseClient';
+import { parseCSVText, parseMontoCSV } from '@/lib/csvUtils';
 
 export const CONC_KEYS = {
   extractos:  (cuentaId: string) => ['extractos', cuentaId] as const,
@@ -32,12 +33,14 @@ export interface ExtractoLinea {
 
 // ─── Parsear CSV de extracto bancario ─────────────────────────────────────────
 // Formato esperado: fecha,descripcion,debito,credito  (o monto con signo)
+// Delimitador auto-detectado (';' o ',') y campos entre comillas respetados
+// — ver src/lib/csvUtils.js. Antes hacía split(',') ingenuo, que rompía
+// montos AR con coma decimal en archivos delimitados por coma.
 export function parsearCSV(texto: string): { fecha: string; descripcion: string; monto: number; tipo: 'ingreso' | 'egreso' }[] {
-  const lineas = texto.trim().split('\n').filter(l => l.trim());
+  const { rows } = parseCSVText(texto);
   const resultados = [];
 
-  for (let i = 1; i < lineas.length; i++) {      // saltar header
-    const cols = lineas[i].split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+  for (const cols of rows) {
     if (cols.length < 2) continue;
 
     let fecha = '';
@@ -67,17 +70,6 @@ export function parsearCSV(texto: string): { fecha: string; descripcion: string;
     resultados.push({ fecha, descripcion, monto, tipo });
   }
   return resultados;
-}
-
-// Soporta formato AR ("1.234,56" — punto de miles, coma decimal) y US/plano
-// ("1234.56"). Sin esto, parseFloat corta en el primer punto y "1.234,56"
-// se leía como 1.234 en vez de 1234.56 (error de 3 órdenes de magnitud).
-function parseMontoCSV(raw: string): number {
-  let limpio = raw.replace(/[^0-9.,\-]/g, '');
-  if (limpio.includes(',')) {
-    limpio = limpio.replace(/\./g, '').replace(',', '.');
-  }
-  return parseFloat(limpio) || 0;
 }
 
 function normalizarFecha(raw: string): string {

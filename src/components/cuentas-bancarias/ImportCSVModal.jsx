@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { formatMoney, parseCSV } from './shared';
+import { parseMontoCSV } from '@/lib/csvUtils';
 
 function ImportCSVModal({ open, onClose, cuentas, empresaId }) {
   const qc = useQueryClient();
@@ -59,7 +60,7 @@ function ImportCSVModal({ open, onClose, cuentas, empresaId }) {
     const di = parsed.headers.indexOf(mapping.descripcion);
     const mi = parsed.headers.indexOf(mapping.monto);
     return parsed.rows.slice(0, 10).map(row => {
-      const rawMonto = parseFloat((row[mi] || '0').replace(/[^0-9.,-]/g, '').replace(',', '.'));
+      const rawMonto = parseMontoCSV(row[mi] || '0');
       const monto = Math.abs(rawMonto);
       let tipo;
       if (tipoOverride !== 'auto') {
@@ -83,7 +84,7 @@ function ImportCSVModal({ open, onClose, cuentas, empresaId }) {
     const di = parsed.headers.indexOf(mapping.descripcion);
     const mi = parsed.headers.indexOf(mapping.monto);
     return parsed.rows.map(row => {
-      const rawMonto = parseFloat((row[mi] || '0').replace(/[^0-9.,-]/g, '').replace(',', '.'));
+      const rawMonto = parseMontoCSV(row[mi] || '0');
       const monto = Math.abs(rawMonto);
       let tipo;
       if (tipoOverride !== 'auto') {

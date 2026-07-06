@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Copy, Check } from 'lucide-react';
+import { parseCSVText } from '@/lib/csvUtils';
 
 export const BANCOS_COMUNES = ['Ualá', 'Mercado Pago', 'Banco Galicia', 'Banco Santander', 'BBVA', 'HSBC', 'Banco Nación', 'Banco Provincia', 'Brubank', 'Naranja X', 'Otro'];
 
@@ -63,12 +64,5 @@ export function RefChip({ mov }) {
 }
 
 export function parseCSV(text) {
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length < 2) return { headers: [], rows: [] };
-  const delim = lines[0].includes(';') ? ';' : ',';
-  const headers = lines[0].split(delim).map(h => h.replace(/"/g, '').trim());
-  const rows = lines.slice(1).map(l =>
-    l.split(delim).map(c => c.replace(/"/g, '').trim())
-  ).filter(r => r.some(c => c));
-  return { headers, rows };
+  return parseCSVText(text);
 }
