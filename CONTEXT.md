@@ -1,9 +1,53 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-06 (sesión 48 Nadia — ejecución PLAN_PRUEBAS 2026-07-04: Bloque 6 OK + 2 bugs encontrados/fixeados, Bloque 5 → 🔴 bug grave de facturación de pedidos)
+**Última actualización:** 2026-07-06 (sesión 49 Luciano — fix del bug crítico de facturación de pedidos que dejó Nadia en sesión 48)
+
+## Sesión 49 — Luciano — Fix bug crítico de facturación de pedidos (Bloque 5 de Nadia)
+
+### ✅ RESUELTO — Sobre-facturación de pedidos + doble descuento de stock
+
+Fix de raíz en `crear_venta` (migration `156_crear_venta_fix_facturacion_pedido.sql`), aplicado
+directo a producción (Supabase branching no disponible en el plan actual — no se pudo probar en
+entorno aislado, se validó con un smoke test SQL real dentro de `BEGIN...ROLLBACK`, ver abajo).
+
+**Los 3 defectos que reportó Nadia, resueltos:**
+1. **Doble descuento de stock:** ahora, si el pedido ya tiene una Entrega manual `entregado`,
+   `crear_venta` NO vuelve a descontar `stock_actual` ni inserta `movimientos_inventario` — el
+   stock ya se movió en `crear_entrega` (Regla 8 SAP-reference: el stock se mueve una sola vez).
+2. **Sobre-facturación:** tope por ítem contra `pedido_items.cantidad_entregada - cantidad_facturada`
+   (si hubo entrega previa) o `cantidad - cantidad_facturada` (si se factura directo, sin entrega
+   previa — comportamiento histórico preservado, la factura implica la entrega en ese caso).
+   Supera el tope → `RAISE EXCEPTION`, la venta completa se aborta (todo o nada).
+3. **`pedidos.comprobante_id` sin vincular:** la columna existía en el schema pero nunca se
+   escribía. Ahora `crear_venta` la setea al comprobante recién creado cuando `p_pedido_id` no es
+   null.
+
+**Nota de alcance:** se asume que un pedido se factura en una sola operación (columna singular,
+estado 'facturado' saca el botón de la UI) — no se modela facturación parcial de un mismo pedido
+en múltiples comprobantes.
+
+**Autocorrección durante el despliegue:** al aplicar la migration por `execute_sql` (retipeando el
+contenido para la tool), se introdujo un typo — `comprobante_items.descuento_monto` quedó grabando
+`v_descuento_manual_pct` en vez de `v_descuento_monto_item`. Detectado inmediatamente vía
+`pg_get_functiondef` antes de que se usara en producción, corregido con una segunda migration
+(`crear_venta_fix_typo_descuento_monto`) en el mismo turno. Lección: verificar siempre con
+`pg_get_functiondef` después de un `apply_migration` que retipea SQL largo.
+
+**Validación (smoke test SQL, tenant sintético `00000000-aaaa-...`, dentro de `BEGIN...ROLLBACK`,
+sin dejar ningún dato persistido):**
+- Pedido 10un → Entrega 10un (stock 100→90) → facturar 15 → bloqueado ✓
+- Facturar exactamente 10 (lo entregado) → stock se queda en 90 (no baja a 80) ✓, `comprobante_id`
+  vinculado ✓, solo 1 movimiento de stock de salida (el de la entrega, ninguno nuevo) ✓
+- Reintentar facturar el mismo pedido ya facturado → bloqueado (tope en 0) ✓
+- Pedido sin entrega previa, facturar directo → stock se mueve ahora (comportamiento histórico
+  preservado) ✓, se crea entrega implícita ✓, sobre-facturación contra lo pedido también bloqueada ✓
+
+**No se pudo probar en Supabase branch aislado** (branching requiere plan Pro, no disponible)
+— aplicado directo a producción con confirmación explícita del usuario, y validado con el smoke
+test de arriba antes de dar por cerrado.
 
 ## Sesión 48 — Nadia — Ejecución PLAN_PRUEBAS_NADIA_2026-07-04 (Bloques 5 y 6)
 
-### 🔴 Bug CRÍTICO (para Luciano) — Facturar un pedido permite sobre-facturar y duplica descuento de stock
+### ✅ RESUELTO en sesión 49 (ver arriba) — Facturar un pedido permite sobre-facturar y duplica descuento de stock
 
 **Cómo se reprodujo (Bloque 5):**
 1. Pedido `PED-20260706-001` (Jhon V.): 1 ítem Batidora Eléctrica × **5**, confirmado.
