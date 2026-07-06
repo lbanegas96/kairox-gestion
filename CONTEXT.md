@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-05 (sesión 47 — Auditoría de código Fases A/B ✅ + Fase C: ConfiguracionSection Y PlanCuentasSection modularizados)
+**Última actualización:** 2026-07-05 (sesión 47 — Auditoría de código Fases A/B ✅ + Fase C: ConfiguracionSection, PlanCuentasSection, CuentasBancariasSection y CompraRapidaSection modularizados)
 
 ## Sesión 47 — Auditoría de código (PLAN_AUDITORIA_CODIGO.md): Fases A, B y C en curso
 
@@ -88,10 +88,33 @@ cierra el hueco de "prop undefined silencioso" (lint no lo ve, pero el par lint-
 lo garantiza). Lo único no detectable estáticamente: prop pasado con el valor equivocado (mitigado
 por nombres idénticos en la extracción + smoke tests).
 
-**Próximo archivo gigante de Fase C:** `CompraRapidaSection.jsx` (1214), y el resto >650 líneas.
-Antes de extraer, revisar si es monolítico (prop-threading, como ConfiguracionSection) o ya tiene
-componentes separados (split mecánico scripteado, como PlanCuentas/CuentasBancarias). Mismo smoke
-test + prop-check con las credenciales de test.
+### Fase C — CompraRapidaSection.jsx (1214 → 818 líneas, ✅ CERRADO, commit `5c9e52c`)
+Caso monolítico como ConfiguracionSection (no scripted split): los 2 tabs ("Nueva Compra"/
+"Historial") y el modal de edición vivían como JSX inline en el mismo `return`, no como funciones
+top-level separadas — estado y handlers fuertemente interrelacionados entre alta y edición de
+compras (carrito, moneda paralela, diff de stock al editar). Extracción manual a
+`src/components/compras/`: `TabNuevaCompra` (form + carrito + búsqueda de productos), `TabHistorialCompras`
+(filtros + tabla + paginación) y `ModalEditarCompra` (edición de ítems con ajuste de stock). El padre
+retiene TODO el estado/handlers y pasa props con nombres idénticos.
+
+**Bug propio detectado por el propio proceso:** al transcribir a mano la celda de subtotal del
+carrito quedó una expresión rota, `(parseNumberLocale => parseNumberLocale)(item.costo_unitario)`
+en vez de `parseNumberLocale(item.costo_unitario)` — típico error de transcripción manual (vs. el
+split scripteado de PlanCuentas/CuentasBancarias, que no tiene este riesgo porque copia rangos de
+línea exactos). Lo agarró el lint (`no-unused-vars` sobre el import no usado), **antes** de llegar
+al build o al smoke test — reforzando por qué el orden lint → build → smoke test importa incluso en
+extracciones "simples".
+
+Verificación: prop-check 0 faltantes (29+18+18 props), lint 0 errores, build OK, smoke test
+autenticado con datos reales de Nalux — carrito calcula bien ($10.000,00 con 1 ítem agregado y
+removido de nuevo), Historial con 13 compras reales + filtros, `ModalEditarCompra` abre con ítem
+real y total correcto. Cero errores de consola.
+
+**Próximo archivo gigante de Fase C:** el resto de archivos >650 líneas (`ChequesSection`,
+`CajaSection`, `PedidosSection`, `ProductosSection`, `OrdenesCompraSection`,
+`CuentaCorrienteSection`, `OfertasSection`, `NuevaVentaModal`, `CotizacionesSection`,
+`ReportesSection`, `DashboardSection`). Antes de extraer, revisar si es monolítico (prop-threading)
+o ya tiene componentes separados (split mecánico scripteado). Mismo smoke test + prop-check.
 
 **Detalle de UI del preview para smoke test:** el login del preview requiere `form.requestSubmit()`
 (el click del botón no propaga el submit en el iframe); los tabs de Radix requieren click CDP real
