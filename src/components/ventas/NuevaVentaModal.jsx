@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ShoppingCart, Search, Trash2, X, Check, Loader2, Package, ChevronDown, AlertTriangle, Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { ShoppingCart } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -11,15 +8,15 @@ import { useCaja } from '@/contexts/CajaContext';
 import { getNowAR, getTodayAR } from '@/lib/dateUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
 import ComprobantePrintModal from './ComprobantePrintModal';
-import { MonedaSelector } from '@/components/ui/MonedaSelector';
 import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
-import { formatCurrency } from '@/lib/currencyUtils';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { useMultipago } from '@/hooks/useMultipago';
 import { useCreditoCliente } from '@/hooks/useCreditoCliente';
 import { listaPreciosService } from '@/services/listaPreciosService';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAfipConfig } from '@/hooks/useAfipConfig';
+import PanelCarrito from '@/components/ventas/nueva-venta/PanelCarrito';
+import PanelPago from '@/components/ventas/nueva-venta/PanelPago';
 
 const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = null, onConvertSuccess, pedido = null }) => {
   const { user } = useAuth();
@@ -560,198 +557,27 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           </DialogHeader>
 
           <div className="flex-1 overflow-hidden flex flex-col md:flex-row min-h-0">
-            <div className="flex-1 flex flex-col min-h-0 border-r border-slate-200 dark:border-slate-800">
-              <div ref={searchWrapperRef} className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 relative">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <Input ref={searchInputRef} placeholder="Buscar producto o elegí de la lista..." value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setShowProductDropdown(true); }} onFocus={() => setShowProductDropdown(true)} className="pl-10 h-12 text-lg kairox-input pr-10 dark:bg-slate-900 dark:border-slate-700 dark:text-white" autoComplete="off" />
-                  <div className={`absolute top-full left-0 w-full z-50 bg-white dark:bg-slate-950 border kairox-border shadow-xl rounded-md mt-1 overflow-hidden max-h-80 overflow-y-auto ${showProductDropdown ? '' : 'hidden'}`}>
-                    {filteredProducts.length === 0 && (
-                      <div className="px-3 py-4 text-sm text-slate-400 text-center">
-                        {productSearch.trim() ? 'No se encontraron productos' : 'Cargando productos...'}
-                      </div>
-                    )}
-                    {filteredProducts.map(p => (
-                      <div key={p.id} className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 grid grid-cols-12 gap-2 items-center cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20" onClick={() => handleAddToCart(p)}>
-                        <div className="col-span-3 text-xs text-slate-500 font-mono truncate">{p.codigo_sku}</div>
-                        <div className="col-span-5 font-medium truncate text-sm text-slate-800 dark:text-slate-200">{p.nombre}</div>
-                        <div className="col-span-2 text-right text-xs font-bold dark:text-slate-300">{p.stock_actual}</div>
-                        <div className="col-span-2 text-right font-bold text-emerald-600 dark:text-emerald-400 text-sm">${p.precio_venta}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4 dark:bg-slate-950 min-h-[200px]">
-                {cart.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400"><Package className="h-16 w-16 mb-4 opacity-20" /><p>El carrito está vacío</p></div>
-                ) : (
-                  <table className="w-full text-sm">
-                    <thead><tr className="text-slate-500 dark:text-slate-400 border-b dark:border-slate-800"><th className="text-left pb-2">Producto</th><th className="text-center pb-2 w-20">Cant.</th><th className="text-right pb-2">Subtotal</th><th className="w-8"></th></tr></thead>
-                    <tbody className="dark:text-slate-200">
-                      {cart.map(item => (
-                        <tr key={item.id} className="group hover:bg-slate-50 dark:hover:bg-slate-900/20">
-                          <td className="py-3 pl-2">
-                            <div className="font-medium">{item.nombre}</div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs text-slate-400">${item.precio_venta}</span>
-                              {item._precioLista && (
-                                <span className="text-[9px] font-bold bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 px-1 py-0.5 rounded">LISTA</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 text-center"><Input type="number" value={item.cantidad} onChange={(e) => updateQuantity(item.id, e.target.value)} className="h-8 w-16 text-center mx-auto dark:bg-slate-800 dark:border-slate-700" /></td>
-                          <td className="py-3 text-right font-bold">${(item.precio_venta * item.cantidad).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                          <td className="py-3 text-right pr-2"><Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => removeFromCart(item.id)}><Trash2 className="h-4 w-4" /></Button></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
+            <PanelCarrito
+              searchInputRef={searchInputRef} searchWrapperRef={searchWrapperRef}
+              productSearch={productSearch} setProductSearch={setProductSearch}
+              showProductDropdown={showProductDropdown} setShowProductDropdown={setShowProductDropdown}
+              filteredProducts={filteredProducts} handleAddToCart={handleAddToCart}
+              cart={cart} updateQuantity={updateQuantity} removeFromCart={removeFromCart}
+            />
 
-            <div className="w-full md:w-96 bg-slate-50 dark:bg-slate-900/30 p-6 flex flex-col gap-6 overflow-y-auto border-l border-slate-200 dark:border-slate-800">
-               <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border kairox-border">
-                  <div className="flex justify-between items-center text-xl font-bold pt-2 dark:text-white"><span>Total</span><span className="text-blue-600 dark:text-[#00D4FF]">{formatCurrency(totalEnMonedaSeleccionada(), moneda)}</span></div>
-                  {moneda !== 'ARS' && tipoCambioTasa > 0 && (
-                    <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 text-right">
-                      Equivale a {formatCurrency(calculateTotal(), 'ARS')} (TC ${Number(tipoCambioTasa).toLocaleString('es-AR')})
-                    </div>
-                  )}
-                  <div className="mt-3">
-                    <MonedaSelector
-                      moneda={moneda}
-                      tasa={tipoCambioTasa}
-                      onMonedaChange={v => { setMoneda(v); if (v === 'ARS') setTipoCambioTasa(1); }}
-                      onTasaChange={setTipoCambioTasa}
-                      onTCMissingChange={setTcMissing}
-                    />
-                  </div>
-                  {/* Banner de paridad: visible cuando la empresa usa moneda paralela y la operación es en ARS */}
-                  {tcParalelo.enabled && moneda === 'ARS' && !tcParalelo.loading && (
-                    <div className="mt-2">
-                      {tcParalelo.tcMissing ? (
-                        <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2 border border-amber-200 dark:border-amber-800">
-                          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                          <span>Sin TC de paridad {tcParalelo.monedaParalela} del día</span>
-                          <Button type="button" size="sm" variant="outline"
-                            className="ml-auto h-6 text-xs px-2 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"
-                            onClick={() => setShowParaleloTCModal(true)}>
-                            Cargar TC
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg px-3 py-2 border border-emerald-200 dark:border-emerald-800">
-                          <Check className="h-3.5 w-3.5 flex-shrink-0" />
-                          Paridad {tcParalelo.monedaParalela}: 1 {tcParalelo.monedaParalela} = ${Number(tcParalelo.tcHoy || 0).toLocaleString('es-AR')} ARS
-                        </div>
-                      )}
-                    </div>
-                  )}
-               </div>
-               <div className="space-y-3 dark:text-white">
-                 <div className="flex items-center justify-between">
-                   <Label>Método de Pago</Label>
-                   {isMultiPago && (
-                     <span className="text-xs text-slate-400 dark:text-slate-500">Seleccioná varios métodos</span>
-                   )}
-                 </div>
-                 <div className="grid grid-cols-2 gap-2">
-                   {['Efectivo', 'Transferencia', 'Tarjeta', 'Cuenta Corriente'].map(method => (
-                     <div key={method}
-                       className={`cursor-pointer border rounded-lg p-3 text-center text-sm transition-colors select-none ${
-                         selectedMethods.has(method)
-                           ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200'
-                           : 'hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800 dark:text-slate-300'
-                       }`}
-                       onClick={() => toggleMethod(method)}
-                     >
-                       <div className="flex items-center justify-center gap-1">
-                         {selectedMethods.has(method) && <Check className="h-3.5 w-3.5 shrink-0" />}
-                         <span>{method}</span>
-                       </div>
-                       {/* Amount input for multi-pago (not CC) */}
-                       {isMultiPago && selectedMethods.has(method) && method !== 'Cuenta Corriente' && (
-                         <div className="mt-2" onClick={e => e.stopPropagation()}>
-                           <input
-                             type="text"
-                             inputMode="decimal"
-                             placeholder="$0,00"
-                             value={methodAmounts[method] || ''}
-                             onChange={e => setMethodAmounts(prev => ({ ...prev, [method]: e.target.value }))}
-                             className="w-full h-7 text-center text-xs rounded border border-blue-300 dark:border-blue-700 dark:bg-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 px-1"
-                           />
-                         </div>
-                       )}
-                     </div>
-                   ))}
-                 </div>
-                 {/* Restante indicator */}
-                 {isMultiPago && (
-                   <div className={`text-sm font-semibold text-center py-2 px-3 rounded-lg ${
-                     Math.abs(restante) < 0.01
-                       ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                       : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400'
-                   }`}>
-                     {Math.abs(restante) < 0.01
-                       ? '✓ Pago completo'
-                       : `Restante a asignar: $${restante.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                   </div>
-                 )}
-               </div>
-               <div className="space-y-2 dark:text-white">
-                 <Label>Cliente</Label>
-                 {listaNombre && (
-                   <div className="text-xs text-violet-600 dark:text-violet-400 flex items-center gap-1 mb-1">
-                     <span className="inline-block w-2 h-2 rounded-full bg-violet-500"></span>
-                     Lista activa: <strong>{listaNombre}</strong>
-                   </div>
-                 )}
-                 <select
-                   className="w-full h-10 rounded-md border bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white px-3 text-sm focus:border-blue-500 dark:focus:border-[#00D4FF]"
-                   value={selectedClient?.id || ''}
-                   onChange={e => handleSelectClient(clients.find(c => c.id === e.target.value) || null)}
-                 >
-                   <option value="">Consumidor Final</option>
-                   {clients.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                 </select>
-                 {/* Condiciones de pago + límite CC */}
-                 {isCC && selectedClient && (selectedClient.condiciones_pago || selectedClient.limite_credito > 0) && (
-                   <div className="text-xs rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-2 space-y-0.5">
-                     {selectedClient.condiciones_pago && (
-                       <p className="text-blue-700 dark:text-blue-300">📋 {selectedClient.condiciones_pago}</p>
-                     )}
-                     {selectedClient.limite_credito > 0 && (
-                       <p className="text-blue-600 dark:text-blue-400">
-                         Límite: ${Number(selectedClient.limite_credito).toLocaleString('es-AR')}
-                         {' · '}Saldo: ${Number(selectedClient.saldo_actual || 0).toLocaleString('es-AR')}
-                       </p>
-                     )}
-                   </div>
-                 )}
-               </div>
-               <div className="mt-auto">
-                 <Button
-                   className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 text-white dark:bg-green-700 dark:hover:bg-green-600 disabled:opacity-50"
-                   disabled={
-                     loading ||
-                     cart.length === 0 ||
-                     (moneda !== 'ARS' && tcMissing) ||
-                     (tcParalelo.enabled && moneda === 'ARS' && tcParalelo.tcMissing)
-                   }
-                   onClick={handleConfirmSale}
-                 >
-                   {loading ? <Loader2 className="animate-spin mr-2" /> : <Check className="mr-2" />}
-                   Confirmar Venta
-                 </Button>
-                 {(moneda !== 'ARS' && tcMissing) || (tcParalelo.enabled && moneda === 'ARS' && tcParalelo.tcMissing) ? (
-                   <p className="text-xs text-center text-amber-600 dark:text-amber-400 mt-1.5">
-                     ⚠ Cargá el TC del día para habilitar la venta
-                   </p>
-                 ) : null}
-               </div>
-            </div>
+            <PanelPago
+              totalEnMonedaSeleccionada={totalEnMonedaSeleccionada} moneda={moneda} tipoCambioTasa={tipoCambioTasa}
+              calculateTotal={calculateTotal}
+              setMoneda={setMoneda} setTipoCambioTasa={setTipoCambioTasa} setTcMissing={setTcMissing}
+              tcParalelo={tcParalelo} setShowParaleloTCModal={setShowParaleloTCModal}
+              selectedMethods={selectedMethods} toggleMethod={toggleMethod} isMultiPago={isMultiPago}
+              methodAmounts={methodAmounts} setMethodAmounts={setMethodAmounts} restante={restante}
+              listaNombre={listaNombre}
+              selectedClient={selectedClient} clients={clients} handleSelectClient={handleSelectClient}
+              isCC={isCC}
+              loading={loading} cart={cart} tcMissing={tcMissing}
+              handleConfirmSale={handleConfirmSale}
+            />
           </div>
         </DialogContent>
       </Dialog>
