@@ -1,19 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import {
-  Plus, Search, Eye, Trash2, Check, X, Loader2, Package,
-  ClipboardList, ChevronRight, ArrowRight, Banknote, AlertTriangle,
-  Calendar, User, FileText, Edit3, Truck, Receipt,
-} from 'lucide-react';
+import { Plus, Search, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogDescription, DialogFooter
-} from '@/components/ui/dialog';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
@@ -21,46 +9,13 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { getNowAR, formatDateAR } from '@/lib/dateUtils';
-import { parseNumberLocale } from '@/lib/currencyUtils';
+import { getNowAR } from '@/lib/dateUtils';
 import GenerarEntregaModal from '@/components/ventas/GenerarEntregaModal';
 import NuevaVentaModal from '@/components/ventas/NuevaVentaModal';
-import DocumentFlow from '@/components/shared/DocumentFlow';
-
-// ── Estados del workflow ───────────────────────────────────────────────────────
-const ESTADOS = [
-  { id: 'borrador',        label: 'Borrador',        color: 'bg-slate-100 text-kx-text-2 dark:bg-kx-surface-2 dark:text-slate-300',           next: 'confirmado'       },
-  { id: 'confirmado',      label: 'Confirmado',      color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',            next: 'en_preparacion'   },
-  { id: 'en_preparacion',  label: 'En Preparación',  color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',        next: 'facturado'        },
-  { id: 'facturado',       label: 'Facturado',       color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',        next: null               },
-  { id: 'cancelado',       label: 'Cancelado',       color: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',               next: null               },
-];
-
-const getEstado = (id) => ESTADOS.find(e => e.id === id) || ESTADOS[0];
-
-function EstadoBadge({ estado }) {
-  const e = getEstado(estado);
-  return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${e.color}`}>{e.label}</span>;
-}
-
-function ProgressoBadge({ items = [] }) {
-  if (!items.length) return null;
-  const totalPedido    = items.reduce((s, i) => s + Number(i.cantidad || 0), 0);
-  const totalEntregado = items.reduce((s, i) => s + Number(i.cantidad_entregada || 0), 0);
-  if (totalEntregado <= 0) return null;
-  if (totalEntregado >= totalPedido) {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
-        <Check className="h-3 w-3" /> Entregado
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-      {totalEntregado}/{totalPedido} ents.
-    </span>
-  );
-}
+import { ESTADOS, getEstado } from '@/components/pedidos/shared';
+import TablaPedidos from '@/components/pedidos/TablaPedidos';
+import ModalPedidoForm from '@/components/pedidos/ModalPedidoForm';
+import ModalDetallePedido from '@/components/pedidos/ModalDetallePedido';
 
 // ── Componente principal ───────────────────────────────────────────────────────
 function PedidosSection({ onNavigate } = {}) {
@@ -422,463 +377,45 @@ function PedidosSection({ onNavigate } = {}) {
       </div>
 
       {/* Tabla */}
-      <Card className="dark:bg-kx-bg dark:border-kx-border overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-kx-surface-2 dark:bg-slate-900/60 border-b border-kx-border dark:border-kx-border">
-              <tr>
-                <th className="text-left p-4 font-semibold text-kx-text-2 dark:text-kx-text-2">Número</th>
-                <th className="text-left p-4 font-semibold text-kx-text-2 dark:text-kx-text-2">Cliente</th>
-                <th className="text-left p-4 font-semibold text-kx-text-2 dark:text-kx-text-2">Fecha</th>
-                <th className="text-left p-4 font-semibold text-kx-text-2 dark:text-kx-text-2">Entrega</th>
-                <th className="text-right p-4 font-semibold text-kx-text-2 dark:text-kx-text-2">Total</th>
-                <th className="text-center p-4 font-semibold text-kx-text-2 dark:text-kx-text-2">Progreso</th>
-                <th className="text-center p-4 font-semibold text-kx-text-2 dark:text-kx-text-2">Estado</th>
-                <th className="text-center p-4 font-semibold text-kx-text-2 dark:text-kx-text-2">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {loading ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <tr key={i}>
-                    {Array.from({ length: 8 }).map((_, j) => (
-                      <td key={j} className="p-4">
-                        <div className="h-4 bg-slate-200 dark:bg-kx-surface-2 rounded animate-pulse w-20" />
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="p-12 text-center text-kx-text-3 dark:text-kx-text-3">
-                    <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                    <p className="font-medium">No hay pedidos{filterEstado !== 'Todos' ? ` en estado "${getEstado(filterEstado).label}"` : ''}</p>
-                    <Button variant="link" onClick={openNew} className="mt-2 text-blue-500">
-                      Crear el primer pedido
-                    </Button>
-                  </td>
-                </tr>
-              ) : (
-                filtered.map(pedido => {
-                  const e = getEstado(pedido.estado);
-                  const canEdit    = pedido.estado === 'borrador';
-                  const items      = pedido.pedido_items || [];
-                  const totalPed   = items.reduce((s, i) => s + Number(i.cantidad || 0), 0);
-                  const totalEnt   = items.reduce((s, i) => s + Number(i.cantidad_entregada || 0), 0);
-                  const hayPendiente = totalEnt < totalPed;
-                  const puedeEntrega = ['confirmado', 'en_preparacion'].includes(pedido.estado) && hayPendiente;
-                  const esParaFacturar = e.next === 'facturado';
-
-                  return (
-                    <tr key={pedido.id}
-                      className="hover:bg-kx-surface-2 dark:hover:bg-slate-900/40 transition-colors cursor-pointer"
-                      onClick={() => { setDetailPedido(pedido); setIsDetailOpen(true); }}
-                    >
-                      <td className="p-4 font-mono font-semibold text-blue-600 dark:text-blue-400">
-                        {pedido.numero}
-                      </td>
-                      <td className="p-4 dark:text-kx-text">
-                        <div className="flex items-center gap-1.5">
-                          <User className="h-3.5 w-3.5 text-kx-text-3 shrink-0" />
-                          {pedido.cliente_nombre}
-                        </div>
-                      </td>
-                      <td className="p-4 text-slate-500 dark:text-kx-text-2 text-xs">
-                        {formatDateAR(pedido.fecha)}
-                      </td>
-                      <td className="p-4 text-slate-500 dark:text-kx-text-2 text-xs">
-                        {pedido.fecha_entrega ? (
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3.5 w-3.5" />
-                            {formatDateAR(pedido.fecha_entrega)}
-                          </span>
-                        ) : '—'}
-                      </td>
-                      <td className="p-4 text-right font-mono font-bold dark:text-kx-text">
-                        ${Number(pedido.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="p-4 text-center">
-                        <ProgressoBadge items={items} />
-                      </td>
-                      <td className="p-4 text-center">
-                        <EstadoBadge estado={pedido.estado} />
-                      </td>
-                      <td className="p-4 text-center" onClick={ev => ev.stopPropagation()}>
-                        <div className="flex items-center justify-center gap-1">
-                          {canEdit && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-blue-600"
-                              onClick={() => openEdit(pedido)} title="Editar">
-                              <Edit3 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-
-                          {/* Generar Entrega */}
-                          {puedeEntrega && (
-                            <Button
-                              variant="ghost" size="icon"
-                              className="h-8 w-8 text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20"
-                              onClick={(ev) => handleAbrirGenerarEntrega(pedido, ev)}
-                              title="Generar Entrega"
-                            >
-                              <Truck className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-
-                          {/* Avanzar estado o Facturar */}
-                          {e.next && (
-                            esParaFacturar ? (
-                              <Button
-                                variant="ghost" size="icon"
-                                className="h-8 w-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
-                                onClick={() => handleFacturarPedido(pedido)}
-                                title="Facturar pedido"
-                              >
-                                <Receipt className="h-3.5 w-3.5" />
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="ghost" size="icon"
-                                className="h-8 w-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
-                                onClick={() => handleAvanzar(pedido)}
-                                title={`Avanzar → ${getEstado(e.next).label}`}
-                              >
-                                <ArrowRight className="h-3.5 w-3.5" />
-                              </Button>
-                            )
-                          )}
-
-                          {pedido.estado !== 'cancelado' && pedido.estado !== 'facturado' && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-                              onClick={() => setCancelTarget(pedido)} title="Cancelar">
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <TablaPedidos
+        filtered={filtered}
+        loading={loading}
+        filterEstado={filterEstado}
+        openNew={openNew}
+        openEdit={openEdit}
+        onVerDetalle={(pedido) => { setDetailPedido(pedido); setIsDetailOpen(true); }}
+        handleAbrirGenerarEntrega={handleAbrirGenerarEntrega}
+        handleFacturarPedido={handleFacturarPedido}
+        handleAvanzar={handleAvanzar}
+        setCancelTarget={setCancelTarget}
+      />
 
       {/* ── Modal Nuevo / Editar ──────────────────────────────────────────────── */}
-      <Dialog open={isModalOpen} onOpenChange={v => { if (!v) setIsModalOpen(false); }}>
-        <DialogContent className="max-w-3xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="dark:text-kx-text">
-              {editingPedido ? `Editar ${editingPedido.numero}` : 'Nuevo Pedido'}
-            </DialogTitle>
-            <DialogDescription className="dark:text-kx-text-2">
-              {editingPedido ? 'Modificá los ítems del pedido en borrador.' : 'Cargá los productos y datos del pedido.'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-5 py-2">
-            {/* Cliente + Entrega */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="dark:text-kx-text">Cliente</Label>
-                <select
-                  value={form.cliente_id}
-                  onChange={e => setForm(f => ({ ...f, cliente_id: e.target.value }))}
-                  className="w-full h-10 rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text px-3 text-sm"
-                >
-                  <option value="">Sin cliente</option>
-                  {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="dark:text-kx-text">Fecha de Entrega (opcional)</Label>
-                <Input
-                  type="date"
-                  value={form.fecha_entrega}
-                  onChange={e => setForm(f => ({ ...f, fecha_entrega: e.target.value }))}
-                  className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
-                />
-              </div>
-            </div>
-
-            {/* Items */}
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <Label className="dark:text-kx-text">Ítems del Pedido</Label>
-                <Button variant="outline" size="sm" onClick={addItem} className="h-8 dark:text-kx-text dark:border-kx-border">
-                  <Plus className="h-3.5 w-3.5 mr-1" /> Agregar ítem
-                </Button>
-              </div>
-              <div className="space-y-2">
-                <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 dark:text-kx-text-2 px-1">
-                  <span className="col-span-4">Producto / Descripción</span>
-                  <span className="col-span-3">Descripción libre</span>
-                  <span className="col-span-2 text-center">Cantidad</span>
-                  <span className="col-span-2 text-right">Precio Unit.</span>
-                  <span className="col-span-1"></span>
-                </div>
-                {form.items.map((item, i) => (
-                  <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                    <div className="col-span-4">
-                      <select
-                        value={item.producto_id}
-                        onChange={e => updateItem(i, 'producto_id', e.target.value)}
-                        className="w-full h-9 text-sm rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text px-2"
-                      >
-                        <option value="">— sin producto —</option>
-                        {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                      </select>
-                    </div>
-                    <div className="col-span-3">
-                      <Input
-                        placeholder="Descripción"
-                        value={item.descripcion}
-                        onChange={e => updateItem(i, 'descripcion', e.target.value)}
-                        className="h-9 text-sm dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <Input
-                        type="number" min="1" step="1"
-                        value={item.cantidad}
-                        onChange={e => updateItem(i, 'cantidad', e.target.value.replace(/[^\d]/g, ''))}
-                        className="h-9 text-sm text-center dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <Input
-                        type="text" inputMode="decimal" placeholder="0,00"
-                        value={item.precio_unitario}
-                        onChange={e => updateItem(i, 'precio_unitario', e.target.value)}
-                        className="h-9 text-sm text-right dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
-                      />
-                    </div>
-                    <div className="col-span-1 flex justify-center">
-                      {form.items.length > 1 && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500"
-                          onClick={() => removeItem(i)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex justify-end mt-3 text-sm font-bold text-slate-700 dark:text-kx-text">
-                Total: ${totalForm.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-              </div>
-            </div>
-
-            {/* Notas */}
-            <div className="space-y-1.5">
-              <Label className="dark:text-kx-text">Notas internas</Label>
-              <Textarea
-                placeholder="Instrucciones especiales, referencias, etc."
-                value={form.notas}
-                onChange={e => setForm(f => ({ ...f, notas: e.target.value }))}
-                className="resize-none h-20 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsModalOpen(false)} className="dark:text-kx-text dark:border-kx-border">
-              Cancelar
-            </Button>
-            <Button onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white">
-              {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
-              {editingPedido ? 'Guardar cambios' : 'Crear Pedido'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ModalPedidoForm
+        isModalOpen={isModalOpen} setIsModalOpen={setIsModalOpen}
+        editingPedido={editingPedido}
+        form={form} setForm={setForm}
+        clientes={clientes}
+        productos={productos}
+        addItem={addItem}
+        removeItem={removeItem}
+        updateItem={updateItem}
+        totalForm={totalForm}
+        handleSave={handleSave}
+        saving={saving}
+      />
 
       {/* ── Modal Detalle ──────────────────────────────────────────────────────── */}
-      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-lg dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
-          {detailPedido && (() => {
-            const e          = getEstado(detailPedido.estado);
-            const items      = detailPedido.pedido_items || [];
-            const totalPed   = items.reduce((s, i) => s + Number(i.cantidad || 0), 0);
-            const totalEnt   = items.reduce((s, i) => s + Number(i.cantidad_entregada || 0), 0);
-            const estaCompleto = totalPed > 0 && totalEnt >= totalPed;
-            const estaParcial  = totalEnt > 0 && totalEnt < totalPed;
-            const puedeEntrega = ['confirmado', 'en_preparacion'].includes(detailPedido.estado) && totalEnt < totalPed;
-
-            // Chips del Document Flow
-            const entregaConFactura = entregasDetalle.find(e => e.comprobante_id);
-            const flowChips = [
-              { tipo: 'pedido', id: detailPedido.id, numero: detailPedido.numero, active: true },
-              ...entregasDetalle.map(ent => ({
-                tipo: 'entrega',
-                id: ent.id,
-                numero: ent.numero_entrega,
-                active: false,
-              })),
-              ...(entregaConFactura ? [{
-                tipo: 'factura',
-                id: entregaConFactura.comprobante_id,
-                numero: entregaConFactura.comprobantes?.numero_venta,
-                active: false,
-              }] : []),
-            ];
-
-            return (
-              <>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 dark:text-kx-text">
-                    <FileText className="h-5 w-5 text-blue-500" />
-                    Pedido {detailPedido.numero}
-                  </DialogTitle>
-                  <DialogDescription className="dark:text-kx-text-2">
-                    Detalle completo del pedido
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-2">
-                  {/* Estado + Progreso */}
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-500">Estado</span>
-                    <div className="flex items-center gap-2">
-                      <EstadoBadge estado={detailPedido.estado} />
-                    </div>
-                  </div>
-
-                  {/* Badge de progreso de entrega (verbose) */}
-                  {totalPed > 0 && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-slate-500">Entrega</span>
-                      {estaCompleto ? (
-                        <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-semibold">
-                          <Check className="h-3 w-3" /> Completo ({totalEnt}/{totalPed} u.)
-                        </span>
-                      ) : estaParcial ? (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-semibold">
-                          Parcial {totalEnt}/{totalPed} u.
-                        </span>
-                      ) : (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 dark:bg-kx-surface-2 dark:text-kx-text-2">
-                          Sin entregar
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-500">Cliente</span>
-                    <span className="font-medium dark:text-kx-text">{detailPedido.cliente_nombre}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-500">Fecha</span>
-                    <span className="text-sm dark:text-slate-300">{formatDateAR(detailPedido.fecha)}</span>
-                  </div>
-                  {detailPedido.fecha_entrega && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-slate-500">Fecha entrega</span>
-                      <span className="text-sm dark:text-slate-300">{formatDateAR(detailPedido.fecha_entrega)}</span>
-                    </div>
-                  )}
-                  {detailPedido.notas && (
-                    <div className="bg-kx-surface-2 dark:bg-kx-surface rounded-lg p-3 text-sm text-kx-text-2 dark:text-kx-text-2">
-                      {detailPedido.notas}
-                    </div>
-                  )}
-
-                  {/* Document Flow chain */}
-                  <div className="space-y-1.5 pt-1">
-                    <p className="text-[10px] font-semibold text-kx-text-3 dark:text-kx-text-3 uppercase tracking-wider">
-                      Flujo del documento
-                    </p>
-                    {loadingEntregas ? (
-                      <div className="h-5 bg-slate-100 dark:bg-kx-surface-2 rounded-full animate-pulse w-40" />
-                    ) : (
-                      <DocumentFlow chips={flowChips} onNavigate={(tipo, id) => {
-                        if (tipo === 'pedido') return; // ya estamos acá
-                        setDetailPedido(null);
-                        onNavigate?.(tipo, id);
-                      }} />
-                    )}
-                  </div>
-
-                  {/* Items */}
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-kx-border dark:border-kx-border">
-                        <th className="text-left pb-2 text-slate-500">Descripción</th>
-                        <th className="text-center pb-2 text-slate-500 w-14">Pedido</th>
-                        <th className="text-center pb-2 text-slate-500 w-14">Entregado</th>
-                        <th className="text-right pb-2 text-slate-500">Subtotal</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map(it => {
-                        const ent = Number(it.cantidad_entregada || 0);
-                        const ped = Number(it.cantidad || 0);
-                        const precio = Number(it.precio_unitario || 0);
-                        const subEntregado = ent * precio;
-                        const completo = ent >= ped && ped > 0;
-                        return (
-                          <tr key={it.id} className="border-b border-slate-100 dark:border-slate-800/50">
-                            <td className="py-2 dark:text-kx-text">{it.descripcion}</td>
-                            <td className="py-2 text-center text-slate-500">{ped}</td>
-                            <td className={`py-2 text-center font-medium ${completo ? 'text-green-600 dark:text-green-400' : ent > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-kx-text-3'}`}>
-                              {ent}
-                            </td>
-                            <td className="py-2 text-right font-mono dark:text-kx-text">
-                              ${subEntregado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  <div className="text-right font-bold text-lg dark:text-kx-text">
-                    Total entregado: ${items.reduce((s, it) => s + (Number(it.cantidad_entregada || 0) * Number(it.precio_unitario || 0)), 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                    <div className="text-xs font-normal text-kx-text-3">
-                      Total pedido: ${Number(detailPedido.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                    </div>
-                  </div>
-
-                  {/* Workflow buttons */}
-                  <div className="flex flex-col gap-2">
-                    {/* Generar Entrega */}
-                    {puedeEntrega && (
-                      <Button
-                        variant="outline"
-                        className="w-full border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300"
-                        onClick={() => handleAbrirGenerarEntrega(detailPedido)}
-                      >
-                        <Truck className="h-4 w-4 mr-2" />
-                        Generar Entrega
-                      </Button>
-                    )}
-
-                    {/* Avanzar / Facturar */}
-                    {e.next && (
-                      e.next === 'facturado' ? (
-                        <Button
-                          className="w-full bg-green-600 hover:bg-green-700 text-white"
-                          onClick={() => handleFacturarPedido(detailPedido)}
-                        >
-                          <Receipt className="h-4 w-4 mr-2" />
-                          Facturar Pedido
-                        </Button>
-                      ) : (
-                        <Button
-                          className="w-full bg-green-600 hover:bg-green-700 text-white"
-                          onClick={() => { handleAvanzar(detailPedido); setIsDetailOpen(false); }}
-                        >
-                          <ArrowRight className="h-4 w-4 mr-2" />
-                          Avanzar a {getEstado(e.next).label}
-                        </Button>
-                      )
-                    )}
-                  </div>
-                </div>
-              </>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
+      <ModalDetallePedido
+        isDetailOpen={isDetailOpen} setIsDetailOpen={setIsDetailOpen}
+        detailPedido={detailPedido} setDetailPedido={setDetailPedido}
+        entregasDetalle={entregasDetalle}
+        loadingEntregas={loadingEntregas}
+        onNavigate={onNavigate}
+        handleAbrirGenerarEntrega={handleAbrirGenerarEntrega}
+        handleFacturarPedido={handleFacturarPedido}
+        handleAvanzar={handleAvanzar}
+      />
 
       {/* ── Confirm cancelar ─────────────────────────────────────────────────── */}
       <AlertDialog open={!!cancelTarget} onOpenChange={v => !v && setCancelTarget(null)}>
