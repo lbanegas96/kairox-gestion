@@ -1,222 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { 
-  Package, Search, Filter, Plus, Edit, Tag, Archive, AlertCircle, 
-  DollarSign, MoreVertical, Truck, Loader2, Power, PowerOff, Trash2, 
-  History, ArrowRightLeft, Download, Upload, ArrowUpCircle, ArrowDownCircle, 
-  AlertTriangle, Save
-} from 'lucide-react';
+import { Plus, Power, PowerOff, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
-import { 
-  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, 
-  DialogTrigger, DialogFooter 
-} from "@/components/ui/dialog";
-import { 
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, 
-  DropdownMenuSeparator 
-} from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
-} from "@/components/ui/select";
 import { supabase } from '@/lib/customSupabaseClient';
 import { productosService } from '@/services/productosService';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { getNowAR, formatDateTimeAR } from '@/lib/dateUtils';
+import { getNowAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
-import { Textarea } from '@/components/ui/textarea';
 import CSVImportModal from '@/components/ui/CSVImportModal';
-
-// Defined outside ProductosSection to keep a stable component identity across renders.
-// If defined inside, React creates a new function reference every render, causing
-// Radix UI portal (Select, Dialog) DOM nodes to unmount/remount and throw removeChild errors.
-const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categories, isSubmitting, unidadesMedida = [] }) => {
-  // En alta (no edit), si todavía no se eligió unidad y ya cargó el maestro, default a "Unidad".
-  useEffect(() => {
-    if (!isEdit && !data.unidad_medida_id && unidadesMedida.length > 0) {
-      const def = unidadesMedida.find(u => u.descripcion === 'Unidad') || unidadesMedida[0];
-      if (def) setData(prev => ({ ...prev, unidad_medida_id: def.id, unidad_medida: def.descripcion }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEdit, unidadesMedida]);
-
-  return (
-  <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-    <div className="space-y-2">
-      <Label htmlFor="nombre">Nombre del Producto *</Label>
-      <Input
-        id="nombre"
-        value={data.nombre}
-        onChange={e => setData({...data, nombre: e.target.value})}
-        required
-        className="bg-kx-surface dark:bg-kx-bg"
-      />
-    </div>
-    <div className="space-y-2">
-      <Label htmlFor="sku">Código SKU *</Label>
-      <Input
-        id="sku"
-        value={data.codigo_sku}
-        onChange={e => setData({...data, codigo_sku: e.target.value})}
-        required
-        className="bg-kx-surface dark:bg-kx-bg font-mono"
-      />
-    </div>
-
-    {/* SCANNER — código de barras leído por scanner USB/Bluetooth en el POS */}
-    <div className="space-y-2">
-      <Label htmlFor="codigo_barras">Código de barras (EAN/UPC)</Label>
-      <Input
-        id="codigo_barras"
-        value={data.codigo_barras || ''}
-        onChange={e => setData({...data, codigo_barras: e.target.value})}
-        placeholder="Ej: 7790895000443"
-        className="bg-kx-surface dark:bg-kx-bg font-mono"
-      />
-    </div>
-
-    <div className="space-y-2">
-      <Label htmlFor="categoria">Categoría</Label>
-      <div className="relative">
-        <Input
-          id="categoria"
-          value={data.categoria_nombre}
-          onChange={e => setData({...data, categoria_nombre: e.target.value})}
-          list="categories-list"
-          placeholder="Escribe o selecciona..."
-          className="bg-kx-surface dark:bg-kx-bg"
-        />
-        <datalist id="categories-list">
-          {categories.map(c => <option key={c.id} value={c.nombre} />)}
-        </datalist>
-      </div>
-    </div>
-
-    <div className="space-y-2">
-      <Label htmlFor="proveedor">Proveedor</Label>
-      <Select
-        value={data.proveedor_id || "none"}
-        onValueChange={(val) => setData({...data, proveedor_id: val === "none" ? null : val})}
-      >
-        <SelectTrigger id="proveedor" className="bg-kx-surface dark:bg-kx-bg">
-          <SelectValue placeholder="Seleccionar proveedor" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="none">Sin proveedor</SelectItem>
-          {providers.map(p => (
-            <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-
-    <div className="space-y-2">
-      <Label htmlFor="costo">Costo Compra ($)</Label>
-      <Input
-        id="costo"
-        type="text"
-        inputMode="decimal"
-        placeholder="0,00"
-        value={data.costo_compra}
-        onChange={e => setData({...data, costo_compra: e.target.value})}
-        className="bg-kx-surface dark:bg-kx-bg"
-      />
-    </div>
-
-    <div className="space-y-2">
-      <Label htmlFor="precio">Precio Venta ($) *</Label>
-      <Input
-        id="precio"
-        type="text"
-        inputMode="decimal"
-        placeholder="0,00"
-        value={data.precio_venta}
-        onChange={e => setData({...data, precio_venta: e.target.value})}
-        required
-        className="bg-kx-surface dark:bg-kx-bg"
-      />
-    </div>
-
-    <div className="space-y-2">
-      <Label htmlFor="stock">Stock Actual</Label>
-      <Input
-        id="stock"
-        type="number"
-        min="0"
-        step="1"
-        value={data.stock_actual}
-        onChange={e => setData({...data, stock_actual: e.target.value.replace(/[^\d]/g, '')})}
-        className="bg-kx-surface dark:bg-kx-bg"
-      />
-    </div>
-
-    <div className="space-y-2">
-      <Label htmlFor="min_stock">Stock Mínimo</Label>
-      <Input
-        id="min_stock"
-        type="number"
-        min="0"
-        step="1"
-        value={data.stock_minimo}
-        onChange={e => setData({...data, stock_minimo: e.target.value.replace(/[^\d]/g, '')})}
-        className="bg-kx-surface dark:bg-kx-bg"
-      />
-    </div>
-
-    <div className="space-y-2">
-      <Label htmlFor="unidad">Unidad de Medida</Label>
-      <select
-        id="unidad"
-        value={data.unidad_medida_id || ''}
-        onChange={e => {
-          const id = e.target.value;
-          const um = unidadesMedida.find(u => u.id === id);
-          setData({
-            ...data,
-            unidad_medida_id: id || null,
-            unidad_medida: um?.descripcion ?? data.unidad_medida,
-          });
-        }}
-        className="w-full h-10 px-3 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-bg dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-      >
-        <option value="">— Elegí —</option>
-        {unidadesMedida.map(u => (
-          <option key={u.id} value={u.id}>{u.codigo} — {u.descripcion}</option>
-        ))}
-      </select>
-      {!data.unidad_medida_id && data.unidad_medida && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">
-          Valor actual: "{data.unidad_medida}" — no coincide con el maestro, seleccioná una unidad.
-        </p>
-      )}
-    </div>
-
-    <div className="col-span-1 md:col-span-2 space-y-2">
-      <Label htmlFor="desc">Descripción</Label>
-      <Textarea
-        id="desc"
-        value={data.descripcion}
-        onChange={e => setData({...data, descripcion: e.target.value})}
-        className="bg-kx-surface dark:bg-kx-bg resize-none h-20"
-      />
-    </div>
-
-    <div className="col-span-1 md:col-span-2 pt-4 flex justify-end gap-2">
-      <Button
-        type="submit"
-        disabled={isSubmitting}
-        className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white"
-      >
-        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        {isEdit ? 'Guardar Cambios' : 'Crear Producto'}
-      </Button>
-    </div>
-  </form>
-  );
-};
+import ProductForm from '@/components/productos/ProductForm';
+import TablaInventario from '@/components/productos/TablaInventario';
+import TabHistorialMovimientos from '@/components/productos/TabHistorialMovimientos';
+import ModalMovimiento from '@/components/productos/ModalMovimiento';
 
 const ProductosSection = () => {
   const { user } = useAuth();
@@ -644,252 +442,37 @@ const ProductosSection = () => {
           </TabsList>
 
           <TabsContent value="inventory" className="space-y-4">
-             {showInactivos && (
-               <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">
-                 <PowerOff className="h-4 w-4 shrink-0" />
-                 Mostrando productos <strong>inactivos</strong>. Usá el botón "Activos" para volver a la vista normal.
-               </div>
-             )}
-             {/* Search Bar */}
-             <div className="relative">
-               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-kx-text-3" />
-               <Input
-                 placeholder="Buscar por nombre o SKU..."
-                 value={searchQuery}
-                 onChange={(e) => setSearchQuery(e.target.value)}
-                 className="pl-10 bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border"
-               />
-             </div>
-
-             <div className="rounded-lg border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface overflow-hidden shadow-sm">
-               <div className="overflow-x-auto">
-                 <table className="w-full text-sm text-left">
-                   <thead className="bg-kx-surface-2 dark:bg-slate-800/50 border-b border-kx-border dark:border-kx-border text-slate-500 dark:text-kx-text-2 font-medium">
-                     <tr>
-                       <th className="p-4">Producto</th>
-                       <th className="p-4 text-center">Categoría</th>
-                       <th className="p-4 text-right">Stock</th>
-                       <th className="p-4 text-right">Costo</th>
-                       <th className="p-4 text-right">Precio</th>
-                       <th className="p-4 text-right">Acciones</th>
-                     </tr>
-                   </thead>
-                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {loading ? (
-                        <tr><td colSpan="6" className="p-8 text-center text-slate-500">Cargando inventario...</td></tr>
-                      ) : filteredProducts.length === 0 ? (
-                        <tr><td colSpan="6" className="p-8 text-center text-slate-500">No se encontraron productos.</td></tr>
-                      ) : (
-                        filteredProducts.map(p => {
-                           const isLowStock = p.stock_actual <= p.stock_minimo;
-                           return (
-                             <tr key={p.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/30 transition-colors">
-                                <td className="p-4">
-                                  <div className="font-medium text-slate-900 dark:text-kx-text">{p.nombre}</div>
-                                  <div className="text-xs text-slate-500 font-mono">{p.codigo_sku}</div>
-                                </td>
-                                <td className="p-4 text-center">
-                                  {p.categories?.nombre ? (
-                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                                      {p.categories.nombre}
-                                    </span>
-                                  ) : (
-                                    <span className="text-kx-text-3">-</span>
-                                  )}
-                                </td>
-                                <td className="p-4 text-right">
-                                  <div className={`font-mono font-bold ${isLowStock ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>
-                                    {p.stock_actual}
-                                  </div>
-                                  {isLowStock && <div className="text-[10px] text-red-500 flex items-center justify-end gap-1"><AlertTriangle className="h-3 w-3" /> Bajo stock</div>}
-                                </td>
-                                <td className="p-4 text-right text-slate-500">
-                                  ${p.costo_compra?.toLocaleString('es-AR')}
-                                </td>
-                                <td className="p-4 text-right font-medium text-slate-900 dark:text-kx-text">
-                                  ${p.precio_venta?.toLocaleString('es-AR')}
-                                </td>
-                                <td className="p-4 text-right">
-                                  <div className="flex items-center justify-end gap-2">
-                                    {!showInactivos && (
-                                      <>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-8 w-8 p-0 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                                          onClick={() => {
-                                            setEditProduct({
-                                              ...p,
-                                              categoria_nombre: p.categories?.nombre || '',
-                                              proveedor_id: p.proveedor_id || 'none'
-                                            });
-                                            setIsEditProductOpen(true);
-                                          }}
-                                          title="Editar"
-                                        >
-                                          <Edit className="h-4 w-4"/>
-                                        </Button>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-8 w-8 p-0 text-slate-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-                                          onClick={() => { setSelectedProductForMov(p); setIsMovimientoOpen(true); }}
-                                          title="Ajustar Stock"
-                                        >
-                                          <ArrowRightLeft className="h-4 w-4"/>
-                                        </Button>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-8 w-8 p-0 text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                                          onClick={() => handleDisableProduct(p)}
-                                          title="Desactivar producto"
-                                        >
-                                          <PowerOff className="h-4 w-4"/>
-                                        </Button>
-                                      </>
-                                    )}
-                                    {showInactivos && (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-8 w-8 p-0 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
-                                        onClick={() => handleReactivateProduct(p)}
-                                        title="Reactivar producto"
-                                      >
-                                        <Power className="h-4 w-4"/>
-                                      </Button>
-                                    )}
-                                  </div>
-                                </td>
-                             </tr>
-                           );
-                        })
-                      )}
-                   </tbody>
-                 </table>
-               </div>
-             </div>
+             <TablaInventario
+               showInactivos={showInactivos}
+               searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+               loading={loading}
+               filteredProducts={filteredProducts}
+               setEditProduct={setEditProduct}
+               setIsEditProductOpen={setIsEditProductOpen}
+               setSelectedProductForMov={setSelectedProductForMov}
+               setIsMovimientoOpen={setIsMovimientoOpen}
+               handleDisableProduct={handleDisableProduct}
+               handleReactivateProduct={handleReactivateProduct}
+             />
           </TabsContent>
 
           <TabsContent value="history" className="space-y-4">
-             {/* History Filters */}
-             <div className="flex gap-4 mb-4">
-               <Select 
-                 value={historyFilters.productId} 
-                 onValueChange={(val) => setHistoryFilters({...historyFilters, productId: val})}
-               >
-                 <SelectTrigger className="w-[250px] bg-kx-surface dark:bg-kx-surface">
-                   <SelectValue placeholder="Filtrar por producto" />
-                 </SelectTrigger>
-                 <SelectContent>
-                   <SelectItem value="all">Todos los productos</SelectItem>
-                   {products.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}
-                 </SelectContent>
-               </Select>
-             </div>
-
-             <div className="rounded-lg border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface overflow-hidden shadow-sm">
-               <div className="overflow-x-auto">
-               <table className="w-full text-sm text-left">
-                 <thead className="bg-kx-surface-2 dark:bg-slate-800/50 border-b border-kx-border dark:border-kx-border text-slate-500 dark:text-kx-text-2 font-medium">
-                   <tr>
-                     <th className="p-4 whitespace-nowrap">Fecha</th>
-                     <th className="p-4 whitespace-nowrap">Producto</th>
-                     <th className="p-4 whitespace-nowrap">Tipo</th>
-                     <th className="p-4 whitespace-nowrap">Motivo</th>
-                     <th className="p-4 text-right whitespace-nowrap">Cantidad</th>
-                   </tr>
-                 </thead>
-                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {movements.map(m => (
-                       <tr key={m.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/30">
-                          <td className="p-4 text-slate-500">{formatDateTimeAR(m.fecha)}</td>
-                          <td className="p-4 font-medium">{m.productos?.nombre}</td>
-                          <td className="p-4">
-                             <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase
-                               ${m.tipo === 'entrada' ? 'bg-emerald-100 text-emerald-700' : 
-                                 m.tipo === 'salida' ? 'bg-red-100 text-red-700' : 
-                                 'bg-blue-100 text-blue-700'}`
-                             }>
-                               {m.tipo}
-                             </span>
-                          </td>
-                          <td className="p-4 text-slate-500 truncate max-w-[200px]">{m.motivo || '-'}</td>
-                          <td className={`p-4 text-right font-mono font-bold ${m.tipo === 'salida' ? 'text-red-600' : 'text-emerald-600'}`}>
-                             {m.tipo === 'salida' ? '-' : '+'}{m.cantidad}
-                          </td>
-                       </tr>
-                    ))}
-                    {movements.length === 0 && (
-                      <tr><td colSpan="5" className="p-8 text-center text-slate-500">No hay movimientos registrados.</td></tr>
-                    )}
-                 </tbody>
-               </table>
-               </div>
-             </div>
+             <TabHistorialMovimientos
+               historyFilters={historyFilters} setHistoryFilters={setHistoryFilters}
+               products={products}
+               movements={movements}
+             />
           </TabsContent>
        </Tabs>
-       
+
        {/* Movement Dialog */}
-       <Dialog open={isMovimientoOpen} onOpenChange={setIsMovimientoOpen}>
-         <DialogContent className="sm:max-w-[425px] bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border">
-            <DialogHeader>
-              <DialogTitle>Registrar Movimiento</DialogTitle>
-              <DialogDescription>Ajuste de stock para: <strong>{selectedProductForMov?.nombre}</strong></DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmitMovimiento} className="space-y-4 py-2">
-               <div className="space-y-2">
-                 <Label>Tipo de Movimiento</Label>
-                 <Select 
-                   value={movimientoForm.tipo} 
-                   onValueChange={val=>setMovimientoForm({...movimientoForm, tipo:val})}
-                 >
-                   <SelectTrigger className="bg-kx-surface dark:bg-kx-bg">
-                     <SelectValue />
-                   </SelectTrigger>
-                   <SelectContent>
-                     <SelectItem value="entrada">Entrada (Compra/Devolución)</SelectItem>
-                     <SelectItem value="salida">Salida (Venta/Pérdida)</SelectItem>
-                     <SelectItem value="ajuste">Ajuste (Inventario Físico)</SelectItem>
-                   </SelectContent>
-                 </Select>
-               </div>
-               
-               <div className="space-y-2">
-                 <Label>Cantidad</Label>
-                 <Input
-                   type="number"
-                   min="1"
-                   step="1"
-                   value={movimientoForm.cantidad}
-                   onChange={e=>setMovimientoForm({...movimientoForm, cantidad:e.target.value.replace(/[^\d]/g, '')})}
-                   placeholder="0"
-                   required
-                   className="bg-kx-surface dark:bg-kx-bg font-mono text-lg"
-                 />
-               </div>
-
-               <div className="space-y-2">
-                 <Label>Motivo / Observación</Label>
-                 <Input 
-                   value={movimientoForm.motivo} 
-                   onChange={e=>setMovimientoForm({...movimientoForm, motivo:e.target.value})} 
-                   placeholder="Ej: Compra mensual, Rotura, etc."
-                   className="bg-kx-surface dark:bg-kx-bg"
-                 />
-               </div>
-
-               <DialogFooter>
-                 <Button type="button" variant="outline" onClick={() => setIsMovimientoOpen(false)}>Cancelar</Button>
-                 <Button type="submit" disabled={isSubmitting}>
-                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                   Confirmar
-                 </Button>
-               </DialogFooter>
-            </form>
-         </DialogContent>
-       </Dialog>
+       <ModalMovimiento
+         isMovimientoOpen={isMovimientoOpen} setIsMovimientoOpen={setIsMovimientoOpen}
+         selectedProductForMov={selectedProductForMov}
+         movimientoForm={movimientoForm} setMovimientoForm={setMovimientoForm}
+         handleSubmitMovimiento={handleSubmitMovimiento}
+         isSubmitting={isSubmitting}
+       />
 
        {/* CSV Import Modal */}
        <CSVImportModal
