@@ -170,11 +170,12 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
       // AFIP — encolar NC en facturas_pendientes_arca vía trigger (SAP async posting).
       // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca.
       if (afipConfig?.usa_factura_electronica && afipConfig?.punto_venta) {
-        supabase.from('comprobantes').update({
+        const { error: afipQueueErr } = await supabase.from('comprobantes').update({
           tipo_comprobante_afip: comprobanteOrigen?.tipo_comprobante_afip ?? 'B',
           punto_venta_id:        afipConfig.punto_venta.id,
           cae_estado:            'pendiente',
-        }).eq('id', data.comprobante_id).catch(e => console.warn('[AFIP queue NC]', e.message));
+        }).eq('id', data.comprobante_id);
+        if (afipQueueErr) console.warn('[AFIP queue NC]', afipQueueErr.message);
       }
 
       toast({ title: `Nota de Crédito ${data.numero_venta} creada` });

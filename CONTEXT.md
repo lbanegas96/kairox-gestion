@@ -1,5 +1,97 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-06 (sesión 47 — Auditoría de código Fases A/B ✅ + Fase C: ConfiguracionSection, PlanCuentasSection, CuentasBancariasSection, CompraRapidaSection, ChequesSection, CajaSection, PedidosSection y ProductosSection modularizados)
+**Última actualización:** 2026-07-06 (sesión 48 Nadia — ejecución PLAN_PRUEBAS 2026-07-04: Bloque 6 OK + 2 bugs encontrados/fixeados, Bloque 5 → 🔴 bug grave de facturación de pedidos)
+
+## Sesión 48 — Nadia — Ejecución PLAN_PRUEBAS_NADIA_2026-07-04 (Bloques 5 y 6)
+
+### 🔴 Bug CRÍTICO (para Luciano) — Facturar un pedido permite sobre-facturar y duplica descuento de stock
+
+**Cómo se reprodujo (Bloque 5):**
+1. Pedido `PED-20260706-001` (Jhon V.): 1 ítem Batidora Eléctrica × **5**, confirmado.
+2. Entrega `ENT-2026-0067`: 5 unidades → descuenta stock -5 (correcto), pedido "Entregado (5/5)".
+3. Acción **"Facturar"** del pedido → abre un modal de "Nueva Venta" **desconectado del pedido**:
+   permite EDITAR la cantidad. Se cambió a **6** y facturó sin validar contra lo entregado.
+
+**Dos defectos de fondo:**
+1. **Sobre-facturación:** el modal de facturación de un pedido/entrega no valida la cantidad
+   contra `cantidad_entregada`. Facturó 6 sobre una entrega de 5. `pedidos.comprobante_id`
+   quedó `NULL` (la factura no queda vinculada al pedido — flujo desconectado).
+2. **Doble descuento de stock:** la Entrega ya descuenta stock (-5). Al Facturar, la venta
+   genera OTRO `movimientos_inventario` de salida (-6). Total -11 por un pedido de 5.
+   Stock Batidora 50 → 39. Riesgo real: cobrar de más + descontar stock que no salió.
+
+**Impacto de datos (corregido a mano por SQL en esta sesión, empresa Nalux):**
+- Comprobante `20260706-003`: total 120k→100k, neto 99173.55→82644.63, iva 20826.45→17355.37,
+  item cantidad 6→5, subtotal 120k→100k.
+- `movimientos_caja` ingreso 120k→100k. Cliente pagó Efectivo, caja sobre-registrada corregida.
+- Stock Batidora: reversado a 45 (movimiento de ajuste +5 que anula el de la venta; queda solo
+  la entrega -5). Verificado: suma movimientos = -5, stock_actual = 45, consistente.
+
+**Pendiente de fix real (Luciano):** el flujo "Facturar pedido" debe (a) NO permitir cantidad
+> entregada, (b) NO generar movimiento de stock nuevo (ya lo hizo la entrega), (c) vincular
+`pedidos.comprobante_id`. Es su dominio (document flow / backend). No se parcheó código, solo
+se corrigió la data de prueba.
+
+### 🔴 Bug (fixeado) — `.catch()` sobre query Supabase en NuevaNCModal + NuevaFacturaModal
+
+Mismo patrón que el fix de sesión 45 en `NuevaVentaModal`: los query builders de Supabase son
+thenables, no Promises — no tienen `.catch()`. Al crear una NC saltaba
+`supabase.from(...).update(...).eq(...).catch is not a function` **después** de crear la NC
+(en el UPDATE de encolado AFIP), mostrando "Error al crear NC" engañoso → el usuario reintenta
+y crea NCs duplicadas (pasó: NC-001/002/003, se limpiaron 001 y 002 por SQL).
+**Fix:** `await` + destructurar `{ error }` en `NuevaNCModal.jsx:177` y (preventivo, mismo patrón)
+`NuevaFacturaModal.jsx:275`. Grep de `.eq(...).catch(` en src → 0 ocurrencias restantes.
+
+### Bloque 6 — Comprobantes / Notas de Crédito ✅
+Flujo Historial → "Copiar a NC" → `crear_nota_credito_atomica` (mig.140) OK. La NC reduce la
+deuda del cliente en Cta Corriente correctamente. (Las NCs no generan asiento contable — fuera
+de scope de mig.144/145, que cubren cobros/pagos/cheques, no NC de ventas.)
+
+### Bloque 7 — Asientos contables automáticos (cobros/pagos/cheques) — lógica ✅, pero 🔴 descuadre por datos de migración
+
+**Los asientos automáticos funcionan perfecto en su lógica.** Verificados uno por uno (SQL):
+- Cobro cliente (AS-000131): Debe 1.1.1 Caja y Bancos / Haber 1.1.2 Cuentas a Cobrar ✓
+- Pago proveedor (AS-000132, origen `pago_proveedor`): Debe 2.1.1 Cuentas a Pagar / Haber 1.1.1 Caja ✓
+- Cheque tercero recibido (AS-000133): Debe 1.1.6 Cheques en Cartera / Haber 1.1.2 Cuentas a Cobrar ✓
+- Cheque tercero cobrado (AS-000134): Debe 1.1.1 Caja / Haber 1.1.6 Cheques en Cartera ✓
+- Cheque tercero rechazado (AS-000135): Debe 1.1.2 Cuentas a Cobrar / Haber 1.1.6 Cheques en Cartera ✓
+- "Depositado" NO genera asiento (correcto — sigue siendo activo, solo cambia de sub-estado).
+- El asiento de venta usa formato simplificado (Debe Caja / Haber Ventas SIN discriminar IVA) —
+  decisión de diseño de Luciano, no se toca.
+
+🔴 **Hallazgo (para Luciano) — cheques pre-mig.145 descuadran la cuenta 1.1.6:**
+Los cheques de tercero que ya existían ANTES de mig.145 (feature de asientos automáticos de cheques)
+NO tienen asiento de apertura/recepción. Al cobrarlos o rechazarlos AHORA, el sistema genera solo
+el asiento de salida (Haber 1.1.6) sin el Debe previo de recepción → la cuenta **"1.1.6 Cheques de
+Terceros en Cartera" quedó en saldo −$195.000** (un activo no puede tener saldo Haber). Además, el
+asiento de rechazo del cheque 00001234 sumó $150.000 a "1.1.2 Cuentas a Cobrar" en el mayor, pero
+el saldo del cliente en su sub-libro NO cambió (Nadia Tecera sigue −$10.000) → **mayor y sub-libro
+de clientes divergen**. Es un problema de **migración de datos**, no del código nuevo: el feature
+necesita un **asiento de apertura de saldos iniciales** (Debe 1.1.6 por el total de cheques en
+cartera al activar el feature, contra cuenta de apertura/patrimonio) — decisión de Luciano + contador.
+NO se parcheó (data de prueba en Nalux, sin daño real). Cheques viejos aún "en cartera"/"depositado"
+que repetirán el problema al cobrarse: 00005678 (Carlos Perez, $80k, depositado).
+
+### Bloque 4 — Ofertas (fix scope producto vs categoría, mig.138) ✅
+Oferta "Test Batidora solo producto" (20%, producto=Batidora Eléctrica + Categoría=Tecnología).
+- Vender Batidora → aplica 20% ($20k→$16k) ✓
+- Vender Mouse plano (misma cat. Tecnología, NO es el producto elegido) → SIN descuento ✓
+El fix funciona: producto específico + categoría aplica SOLO al producto, no a toda la categoría.
+
+### Bloque 3 — Conciliación bancaria / parser CSV — 🔴 hallazgo (análisis de código, prueba en curso)
+El fix `parseMontoCSV` en `conciliacionService.ts:75` maneja bien "1.234,56" EN AISLAMIENTO
+(quita puntos de miles, coma→punto). PERO `parsearCSV` (línea 40) hace `split(',')` ingenuo:
+un monto argentino con coma decimal ("18.500,75") parte las columnas ANTES de llegar al fix →
+el monto se importa mal. Además: montos enteros con punto de miles sin coma ("1.234.567") →
+`parseFloat` corta en el primer punto → 1.234. Y el OTRO importador (`ImportCSVModal.jsx:62/86`,
+pestaña Movimientos) NO recibió el fix — sigue con `.replace(',', '.')` simple que rompe
+"1.234,56"→"1.234.56"→parseFloat→1.234. Generados 2 CSV de prueba en scratchpad
+(`extracto_formato_US.csv` y `extracto_formato_AR.csv`) para confirmar empíricamente. Prueba
+quedó a mitad al cerrar esta entrada. **A resolver con Luciano** (parser CSV robusto que respete
+comillas o separe por `;`, y unificar ambos importadores).
+
+### Pendiente de esta sesión
+- Bloque 3 (Conciliación): terminar prueba empírica de importación US/AR + resolver parser CSV.
+- Bloques 1, 2, 8 del PLAN_PRUEBAS_NADIA_2026-07-04 sin ejecutar todavía.
 
 ## Sesión 47 — Auditoría de código (PLAN_AUDITORIA_CODIGO.md): Fases A, B y C en curso
 

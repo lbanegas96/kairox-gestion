@@ -268,11 +268,12 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
       const afipActivo = afipConfig?.usa_factura_electronica && afipConfig?.punto_venta;
       if (afipActivo && tipoDoc !== 'Ticket') {
         const tipoAfip = tipoDoc.replace('Factura ', '');
-        supabase.from('comprobantes').update({
+        const { error: afipQueueErr } = await supabase.from('comprobantes').update({
           tipo_comprobante_afip: tipoAfip,
           punto_venta_id:        afipConfig.punto_venta.id,
           cae_estado:            'pendiente',
-        }).eq('id', comp.id).catch(e => console.warn('[AFIP queue]', e.message));
+        }).eq('id', comp.id);
+        if (afipQueueErr) console.warn('[AFIP queue]', afipQueueErr.message);
       }
 
       // 6. Asiento contable (fire & forget)
