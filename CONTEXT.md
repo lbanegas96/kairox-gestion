@@ -188,6 +188,40 @@ seleccionado, `ProductForm` (alta) con proveedores/unidades reales y el default 
 (prop-threading) o ya tiene componentes separados (split mecánico scripteado). Mismo smoke
 test + prop-check.
 
+### 🔖 Corte de sesión 47 (2026-07-06) — continuar mañana
+
+**Dónde retomar:** Fase C, siguiente archivo a modularizar es **`OrdenesCompraSection.jsx`
+(850 líneas)**. Repetir el mismo método de las 8 secciones ya cerradas: leer el archivo
+completo primero para clasificar si es monolítico (prop-threading manual, como
+CompraRapida/Caja/Pedidos) o ya tiene componentes separados (split mecánico scripteado, como
+PlanCuentas/CuentasBancarias) → extraer → **lint → build → `check_props.js` → smoke test
+autenticado (empresa "Nalux")** → commit + push + actualizar este CONTEXT.md. Después de
+`OrdenesCompraSection` siguen, en orden de tamaño: `CuentaCorrienteSection`, `OfertasSection`,
+`NuevaVentaModal`, `CotizacionesSection`, `ReportesSection`, `DashboardSection` — y recién ahí
+Fase C queda cerrada y arrancan las Fases D (consistencia de data-fetching), E (deduplicar
+modales ventas↔compras) y F (limpieza menor) de `PLAN_AUDITORIA_CODIGO.md`.
+
+**Estado del repo al cortar:** `master` limpio, sin otras branches, sincronizado con
+`origin/master` (último commit `9591bb1`). Deploy a Vercel disparado manualmente al cierre de
+esta sesión (ver nota de auto-deploy roto más abajo en `[Vercel deploy]`). Nada bloqueado,
+nada a medio terminar — cada sección modularizada quedó cerrada con su smoke test antes de
+pasar a la siguiente.
+
+**Para delegar a Nadia (si toca antes de la próxima sesión):**
+- No hay nada urgente ni bloqueante pendiente de esta auditoría — es trabajo de fondo
+  (mejora de mantenibilidad, no afecta funcionalidad visible para el usuario final).
+- Si Nadia necesita tocar cualquiera de las 8 secciones ya modularizadas
+  (`ConfiguracionSection`, `PlanCuentasSection`, `CuentasBancariasSection`,
+  `CompraRapidaSection`, `ChequesSection`, `CajaSection`, `PedidosSection`,
+  `ProductosSection`), la lógica de negocio sigue en el archivo padre bajo
+  `src/components/sections/` — los archivos nuevos en `src/components/<nombre>/` son
+  presentacionales (reciben todo por props, mismos nombres que las variables del padre).
+  No debería sorprenderla nada raro en un diff.
+- Si el deploy de Vercel no refleja cambios después de un push (bug conocido, ver memoria
+  `project_vercel_deploy.md`), correr `npx vercel deploy --prod --yes` a mano.
+- El checklist de seguridad de `CLAUDE.md` (RLS, secretos, MercadoPago backend-only) sigue
+  vigente para cualquier código nuevo que toque estas mismas áreas.
+
 **Detalle de UI del preview para smoke test:** el login del preview requiere `form.requestSubmit()`
 (el click del botón no propaga el submit en el iframe); los tabs de Radix requieren click CDP real
 (`preview_click`), no `.click()` por eval; el buffer de console del preview NO se limpia entre reloads
