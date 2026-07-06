@@ -1,23 +1,39 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-06 (sesión 49 Luciano — fix facturación de pedidos + parser CSV + Fase C OrdenesCompraSection)
+**Última actualización:** 2026-07-06 (sesión 49 Luciano — fix facturación de pedidos + parser CSV + Fase C completa salvo NuevaVentaModal)
 
 ## Sesión 49 — Luciano — Plan del día: bugs de Nadia + continuación auditoría de código
 
-Resumen de la sesión (orden ejecutado):
+Resumen de la sesión (orden ejecutado; la segunda mitad se hizo con Luciano ausente, a pedido
+explícito de él — "continuá con lo que puedas hasta que regrese" — priorizando trabajo mecánico
+y reversible, sin tocar producción/DB ni nada que requiriera su decisión):
+
 1. ✅ Fix crítico facturación de pedidos (Bloque 5 de Nadia) — ver detalle abajo.
 2. ✅ Fix parser CSV de conciliación bancaria (Bloque 3 de Nadia) — ver detalle abajo.
-3. ✅ Fase C auditoría: `OrdenesCompraSection.jsx` modularizado (850 → 347 líneas), 9/15 archivos
-   gigantes cerrados. Extraído a `src/components/ordenes-compra/`: `shared.jsx`, `TablaOrdenesCompra`,
-   `FormNuevaOC`, `ModalDetalleOC`, `ModalRegistrarFactura`. Sin cambios de comportamiento — build
-   de producción y lint (0 errores) verificados; no se pudo abrir la sección en el navegador real
-   por falta de credenciales de login en este entorno.
+3. ✅ Fase C auditoría — modularizados en esta sesión (todos con build de producción + lint
+   0 errores verificados, sin cambios de comportamiento):
+   - `OrdenesCompraSection.jsx` 850 → 347 líneas (`src/components/ordenes-compra/`)
+   - `CuentaCorrienteSection.jsx` 778 → 383 líneas (`src/components/cuenta-corriente/`)
+   - `OfertasSection.jsx` 770 → 257 líneas (`src/components/ofertas/`)
+   - `CotizacionesSection.jsx` 673 → 301 líneas (`src/components/cotizaciones/`)
+   - `ReportesSection.jsx` 671 → 262 líneas (`src/components/reportes/` — reportDefinitions/
+     GridReportes/ModalReporte)
+   - `DashboardSection.jsx` 666 → 167 líneas (`src/components/dashboard/`)
+   - **14/15 archivos gigantes de la lista original ya cerrados.** Solo queda `NuevaVentaModal.jsx`
+     (769 líneas) — **dejado a propósito sin tocar**: es el componente que dispara `crear_venta`,
+     la misma RPC que se corrigió hoy para el bug de facturación de pedidos (punto 1). Modularizarlo
+     en la misma sesión, sin poder probarlo en navegador real (sin credenciales de login en este
+     entorno), es un riesgo innecesario de reintroducir una regresión justo en el flujo más
+     delicado del día. Queda como el próximo candidato, pero mejor con Luciano presente para probar
+     el flujo real (Nueva Venta, Convertir Cotización, Facturar Pedido) después del cambio.
+   - Ningún archivo pudo verse en el navegador real (falta de credenciales de login en este
+     entorno) — la verificación disponible fue build de producción + lint por archivo.
 
 **Pendiente para la próxima sesión (no abordado hoy, decisión del usuario):**
 - Cheques pre-mig.145 que descuadran cuenta 1.1.6 (necesita asiento de apertura — decisión de
   negocio con el contador, ver Bloque 7 más abajo).
 - Bloques 1, 2, 8 de `PLAN_PRUEBAS_NADIA_2026-07-04.md` sin ejecutar.
-- Fase C: quedan `CuentaCorrienteSection`, `OfertasSection`, `NuevaVentaModal`, `CotizacionesSection`,
-  `ReportesSection`, `DashboardSection`. Fases D/E/F sin empezar.
+- Fase C: falta solo `NuevaVentaModal.jsx` (ver nota arriba — probar a mano después de modularizar).
+- Fases D (data-fetching), E (dedup modales ventas↔compras) y F (limpieza menor) sin empezar.
 
 ### Fix crítico — Facturación de pedidos (Bloque 5 de Nadia)
 
