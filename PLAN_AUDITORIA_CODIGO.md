@@ -119,12 +119,39 @@ No se extrajeron hooks custom por dominio (`useProductos`, `useClientes`) en est
 un segundo consumidor real de esas queries hoy que justifique la abstracción (evitar
 sobre-ingeniería sin necesidad concreta, ver principio de la skill de simplicidad).
 
-### Fase E — Duplicación de modales ventas↔compras
-Para cada par identificado, evaluar si conviene una única implementación parametrizada
-(`tipo: 'cliente' | 'proveedor'`) o si las diferencias de negocio justifican mantenerlos separados
-— **esto requiere criterio, no solo métrica de líneas duplicadas**, dado que ventas y compras tienen
-reglas de negocio distintas (ej. IVA, alícuotas, forma de pago) que podrían no valer la pena
-unificar si la lógica diverge mucho.
+### Fase E — Duplicación de modales ventas↔compras — ✅ EJECUTADA (2026-07-07, sesión 51)
+
+Se evaluaron los 5 pares candidatos con criterio de negocio (no solo métrica de líneas):
+
+**Unificados (3 pares → 3 componentes en `shared/`):**
+- `GenerarEntregaModal` + `GenerarRecepcionModal` → [`shared/GenerarMovimientoModal.jsx`](src/components/shared/GenerarMovimientoModal.jsx)
+  (`tipo: 'entrega'|'recepcion'`). Sin divergencia de negocio real — eran casi el mismo código.
+  Ahora siempre fetch-ea fresco por id (antes `GenerarEntregaModal` confiaba en `pedido_items` ya
+  cargados por el padre, que podían quedar desactualizados con entregas parciales concurrentes).
+  Probado en vivo: entrega real generada (PED-20260626-001 → ENT-2026-0078) y fetch/cálculo de
+  recepción verificado.
+- `NuevaNotaDebitoModal` + `NuevaNDProveedorModal` → [`shared/NuevaNotaDebitoModal.jsx`](src/components/shared/NuevaNotaDebitoModal.jsx)
+  (`tipo: 'cliente'|'proveedor'`). Ambos eran wrappers delgados sobre la misma RPC `crear_nota_debito`,
+  sin AFIP ni asientos de por medio. Probado en vivo: ND-2026-0004 (proveedor, origen bloqueado desde
+  Factura de Compra) y ND-2026-0005 (cliente, standalone) registradas con éxito real en Nalux.
+- `NuevaDevolucionModal` + `NuevaDevolucionProveedorModal` → [`shared/NuevaDevolucionModal.jsx`](src/components/shared/NuevaDevolucionModal.jsx)
+  (`tipo: 'cliente'|'proveedor'`). Ambos comparten la RPC `crear_devolucion`; el lado proveedor
+  soporta 2 fuentes de origen (Factura de Compra u OC directamente) vía un campo `origen.fuente`.
+  Probado en vivo: DEV-2026-0012 (cliente, con comprobante, generó NC automática) y DEV-2026-0013
+  (proveedor, fuente compra, generó NC automática) registradas con éxito real.
+
+**NO unificados (2 pares) — divergencia de negocio real, no vale la pena forzar:**
+- `NuevaFacturaModal` ↔ `NuevaFacturaProveedorModal`: ventas tiene integración AFIP/ARCA (cola de
+  CAE), asiento contable automático y cálculo de `fecha_vencimiento`; compras tiene moneda paralela
+  (TC) y número de factura manual del proveedor. Mezclar ambas lógicas en un solo componente
+  aumentaría el riesgo de regresión en flujos críticos (facturación electrónica, contabilidad) sin
+  ahorro real de mantenimiento.
+- `NuevaNCModal` ↔ `NuevaNCProveedorModal`: mismo motivo — la NC de ventas también encola en AFIP.
+
+**Resultado:** 4 archivos de modal eliminados, 3 componentes compartidos nuevos en `src/components/shared/`,
+8 call sites actualizados (`PedidosSection`, `OrdenesCompraSection`, `FacturasCompraSection`,
+`DevolucionesSection`, `HistorialVentas`). Build limpio, 0 errores de lint (solo warnings preexistentes),
+todos los flujos probados con datos reales en el tenant Nalux.
 
 ### Fase F — Limpieza menor
 - Resolver la duplicación `components/reportes/` vs `components/reports/` (decidir cuál queda,

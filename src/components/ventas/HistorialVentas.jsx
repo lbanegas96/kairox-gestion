@@ -13,9 +13,9 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import SaleDetailModal from './SaleDetailModal';
-import NuevaDevolucionModal from './NuevaDevolucionModal';
+import NuevaDevolucionModal from '@/components/shared/NuevaDevolucionModal';
 import NuevaNCModal from './NuevaNCModal';
-import NuevaNotaDebitoModal from './NuevaNotaDebitoModal';
+import NuevaNotaDebitoModal from '@/components/shared/NuevaNotaDebitoModal';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import { formatDateAR, formatTimeAR } from '@/lib/dateUtils';
@@ -493,8 +493,8 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                                   e.preventDefault();
                                   setTimeout(() => {
                                     setNdOrigen({
-                                      clienteId:     sale.cliente_id,
-                                      comprobanteId: sale.id,
+                                      entidadId: sale.cliente_id,
+                                      docId:     sale.id,
                                     });
                                     setIsNdOpen(true);
                                   }, 0);
@@ -509,10 +509,10 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                                   e.preventDefault();
                                   setTimeout(() => {
                                     setDevolucionComp({
-                                      id:             sale.id,
-                                      numero_venta:   sale.numero_venta,
-                                      cliente_id:     sale.cliente_id,
-                                      cliente_nombre: sale.cliente_nombre,
+                                      id:            sale.id,
+                                      numero:        sale.numero_venta,
+                                      entidadId:     sale.cliente_id,
+                                      entidadNombre: sale.cliente_nombre,
                                     });
                                     setIsDevolucionOpen(true);
                                   }, 0);
@@ -586,10 +586,11 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
       )}
 
       <NuevaDevolucionModal
+        tipo="cliente"
         isOpen={isDevolucionOpen}
         onClose={() => { setIsDevolucionOpen(false); setDevolucionComp(null); }}
         onSuccess={() => fetchData()}
-        comprobante={devolucionComp}
+        origen={devolucionComp}
       />
 
       <NuevaNCModal
@@ -600,11 +601,11 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
       />
 
       <NuevaNotaDebitoModal
-        isOpen={isNdOpen}
-        onClose={() => { setIsNdOpen(false); setNdOrigen(null); }}
+        tipo="cliente"
+        open={isNdOpen}
+        onOpenChange={v => { setIsNdOpen(v); if (!v) setNdOrigen(null); }}
+        origen={ndOrigen}
         onSuccess={() => fetchData()}
-        defaultClienteId={ndOrigen?.clienteId ?? null}
-        defaultComprobanteId={ndOrigen?.comprobanteId ?? null}
       />
 
       <MapaRelaciones

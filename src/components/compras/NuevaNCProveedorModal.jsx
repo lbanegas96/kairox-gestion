@@ -14,7 +14,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { getNowAR } from '@/lib/dateUtils';
 import ProveedorSelector from '@/components/shared/ProveedorSelector';
 
-// Nota: NuevaDevolucionProveedorModal cubre el caso de devolución física con stock.
+// Nota: shared/NuevaDevolucionModal (tipo="proveedor") cubre el caso de devolución física con stock.
 // Este modal es para NC financiera (el proveedor nos acredita sin devolución de mercadería).
 
 const MOTIVOS_NC = [

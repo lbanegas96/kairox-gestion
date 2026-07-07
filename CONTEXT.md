@@ -1,5 +1,29 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-07 (sesión 51 Luciano — Fase D del PLAN_AUDITORIA_CODIGO.md cerrada: consistencia de patrones de fetching)
+**Última actualización:** 2026-07-07 (sesión 51 Luciano — Fase E del PLAN_AUDITORIA_CODIGO.md cerrada: dedup modales ventas↔compras)
+
+## ✅ Fase E del PLAN_AUDITORIA_CODIGO.md — Duplicación de modales ventas↔compras (2026-07-07, sesión 51)
+
+Se evaluaron los 5 pares de modales candidatos identificados en la auditoría (ver detalle completo
+en `PLAN_AUDITORIA_CODIGO.md`), con criterio de negocio y no solo métrica de líneas duplicadas:
+
+**Unificados (3 pares):**
+- `GenerarEntregaModal` + `GenerarRecepcionModal` → `shared/GenerarMovimientoModal.jsx` (`tipo: 'entrega'|'recepcion'`).
+- `NuevaNotaDebitoModal` + `NuevaNDProveedorModal` → `shared/NuevaNotaDebitoModal.jsx` (`tipo: 'cliente'|'proveedor'`).
+- `NuevaDevolucionModal` + `NuevaDevolucionProveedorModal` → `shared/NuevaDevolucionModal.jsx` (`tipo: 'cliente'|'proveedor'`, con `origen.fuente: 'compra'|'oc'` en el lado proveedor).
+
+**NO unificados (2 pares, divergencia de negocio real):**
+- `NuevaFacturaModal` ↔ `NuevaFacturaProveedorModal` (AFIP/asientos en ventas vs. moneda paralela en compras).
+- `NuevaNCModal` ↔ `NuevaNCProveedorModal` (mismo motivo — AFIP en el lado ventas).
+
+**Verificación real en Nalux (todo con datos reales, no solo build/lint):**
+- Entrega generada: PED-20260626-001 → ENT-2026-0078 (stock y estado actualizados).
+- ND-2026-0004 (proveedor, origen bloqueado) y ND-2026-0005 (cliente, standalone) registradas.
+- DEV-2026-0012 (cliente, con comprobante → generó NC-20260707-003) y DEV-2026-0013 (proveedor,
+  fuente compra → generó NC-20260707-004) registradas.
+
+4 archivos de modal eliminados, 3 componentes nuevos en `src/components/shared/`, 8 call sites
+actualizados. Build limpio, 0 errores de lint. Quedan pendientes de Fase F: dedup `components/reportes/`
+vs `components/reports/` y barrido de `no-unused-vars`.
 
 ## ✅ Fase D del PLAN_AUDITORIA_CODIGO.md — Consistencia de patrones de datos (2026-07-07, sesión 51)
 

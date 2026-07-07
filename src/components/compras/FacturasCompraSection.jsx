@@ -15,9 +15,9 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { formatDateAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
-import NuevaDevolucionProveedorModal from './NuevaDevolucionProveedorModal';
+import NuevaDevolucionModal from '@/components/shared/NuevaDevolucionModal';
 import NuevaNCProveedorModal from './NuevaNCProveedorModal';
-import NuevaNDProveedorModal from './NuevaNDProveedorModal';
+import NuevaNotaDebitoModal from '@/components/shared/NuevaNotaDebitoModal';
 import NuevaFacturaProveedorModal from './NuevaFacturaProveedorModal';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 
@@ -112,22 +112,23 @@ function FacturasCompraSection() {
 
   const abrirNd = (compra) => {
     setNdOrigen({
-      id:              compra.id,
-      numero_factura:  compra.numero_factura,
-      proveedor_id:    compra.proveedor_id,
-      proveedor_nombre: compra.proveedores?.nombre,
-      proveedores:     compra.proveedores,
-      total:           compra.total,
+      entidadId:     compra.proveedor_id,
+      entidadNombre: compra.proveedores?.nombre,
+      docId:         compra.id,
+      docNumero:     compra.numero_factura,
+      docTotal:      compra.total,
+      lockEntidad:   true,
     });
     setIsNdOpen(true);
   };
 
   const abrirDevolucion = (compra) => {
     setDevolverCompra({
-      id:              compra.id,
-      numero_factura:  compra.numero_factura,
-      proveedor_id:    compra.proveedor_id,
-      proveedor_nombre: compra.proveedores?.nombre,
+      fuente:        'compra',
+      id:            compra.id,
+      numero:        compra.numero_factura,
+      entidadId:     compra.proveedor_id,
+      entidadNombre: compra.proveedores?.nombre,
     });
   };
 
@@ -356,11 +357,12 @@ function FacturasCompraSection() {
         onSuccess={() => { setShowNuevaFactura(false); fetchCompras(); }}
       />
 
-      <NuevaDevolucionProveedorModal
+      <NuevaDevolucionModal
+        tipo="proveedor"
         isOpen={!!devolverCompra}
         onClose={() => setDevolverCompra(null)}
         onSuccess={() => fetchCompras()}
-        compra={devolverCompra}
+        origen={devolverCompra}
       />
 
       <NuevaNCProveedorModal
@@ -370,10 +372,11 @@ function FacturasCompraSection() {
         onSuccess={() => { setIsNcOpen(false); setNcOrigen(null); fetchCompras(); }}
       />
 
-      <NuevaNDProveedorModal
+      <NuevaNotaDebitoModal
+        tipo="proveedor"
         open={isNdOpen}
         onOpenChange={setIsNdOpen}
-        compraOrigen={ndOrigen}
+        origen={ndOrigen}
         onSuccess={() => { setIsNdOpen(false); setNdOrigen(null); fetchCompras(); }}
       />
 

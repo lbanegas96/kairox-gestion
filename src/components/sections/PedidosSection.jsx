@@ -10,7 +10,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { getNowAR } from '@/lib/dateUtils';
-import GenerarEntregaModal from '@/components/ventas/GenerarEntregaModal';
+import GenerarMovimientoModal from '@/components/shared/GenerarMovimientoModal';
 import NuevaVentaModal from '@/components/ventas/NuevaVentaModal';
 import { ESTADOS, getEstado } from '@/components/pedidos/shared';
 import TablaPedidos from '@/components/pedidos/TablaPedidos';
@@ -41,8 +41,7 @@ function PedidosSection({ onNavigate } = {}) {
   const [cancelTarget, setCancelTarget] = useState(null);
 
   // Generar Entrega
-  const [isGenerarEntregaOpen, setIsGenerarEntregaOpen] = useState(false);
-  const [pedidoParaEntrega, setPedidoParaEntrega] = useState(null);
+  const [entregaPedidoId, setEntregaPedidoId] = useState(null);
 
   // Facturar desde pedido
   const [isFacturarOpen, setIsFacturarOpen] = useState(false);
@@ -276,8 +275,7 @@ function PedidosSection({ onNavigate } = {}) {
   // ── Generar Entrega ─────────────────────────────────────────────────────────
   const handleAbrirGenerarEntrega = (pedido, ev) => {
     ev?.stopPropagation();
-    setPedidoParaEntrega(pedido);
-    setIsGenerarEntregaOpen(true);
+    setEntregaPedidoId(pedido.id);
   };
 
   const handleEntregaSuccess = (numeroEntrega) => {
@@ -436,10 +434,10 @@ function PedidosSection({ onNavigate } = {}) {
       </AlertDialog>
 
       {/* ── Generar Entrega Modal ────────────────────────────────────────────── */}
-      <GenerarEntregaModal
-        pedido={pedidoParaEntrega}
-        isOpen={isGenerarEntregaOpen}
-        onClose={() => { setIsGenerarEntregaOpen(false); setPedidoParaEntrega(null); }}
+      <GenerarMovimientoModal
+        tipo="entrega"
+        sourceId={entregaPedidoId}
+        onClose={() => setEntregaPedidoId(null)}
         onSuccess={handleEntregaSuccess}
       />
 

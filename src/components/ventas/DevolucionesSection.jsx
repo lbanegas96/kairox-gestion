@@ -9,8 +9,8 @@ import {
   Check, RefreshCw, Package,
 } from 'lucide-react';
 import { formatDateAR } from '@/lib/dateUtils';
-import NuevaDevolucionModal from './NuevaDevolucionModal';
-import NuevaNotaDebitoModal from './NuevaNotaDebitoModal';
+import NuevaDevolucionModal from '@/components/shared/NuevaDevolucionModal';
+import NuevaNotaDebitoModal from '@/components/shared/NuevaNotaDebitoModal';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -211,6 +211,7 @@ function DevolucionesTab({ onNavigate }) {
       )}
 
       <NuevaDevolucionModal
+        tipo="cliente"
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={() => setRefreshKey(k => k + 1)}
@@ -318,8 +319,9 @@ function NotasDebitoTab() {
       )}
 
       <NuevaNotaDebitoModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        tipo="cliente"
+        open={isModalOpen}
+        onOpenChange={setIsModalOpen}
         onSuccess={() => setRefreshKey(k => k + 1)}
       />
     </>

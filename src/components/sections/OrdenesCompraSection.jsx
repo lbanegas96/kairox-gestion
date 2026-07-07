@@ -7,8 +7,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { ordenesCompraService, OC_KEYS } from '@/services/ordenesCompraService';
 import { supabase } from '@/lib/customSupabaseClient';
-import GenerarRecepcionModal from '@/components/compras/GenerarRecepcionModal';
-import NuevaDevolucionProveedorModal from '@/components/compras/NuevaDevolucionProveedorModal';
+import GenerarMovimientoModal from '@/components/shared/GenerarMovimientoModal';
+import NuevaDevolucionModal from '@/components/shared/NuevaDevolucionModal';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { ESTADOS, EMPTY_ITEM } from '@/components/ordenes-compra/shared';
 import TablaOrdenesCompra from '@/components/ordenes-compra/TablaOrdenesCompra';
@@ -321,8 +321,9 @@ function OrdenesCompraSection() {
       />
 
       {/* ── MODAL: Generar Recepción (nuevo flujo via crear_recepcion RPC) ── */}
-      <GenerarRecepcionModal
-        ocId={genRecepId}
+      <GenerarMovimientoModal
+        tipo="recepcion"
+        sourceId={genRecepId}
         onClose={() => setGenRecepId(null)}
         onSuccess={() => {
           setGenRecepId(null);
@@ -331,10 +332,17 @@ function OrdenesCompraSection() {
       />
 
       {/* ── MODAL: Devolución al Proveedor desde OC ── */}
-      <NuevaDevolucionProveedorModal
+      <NuevaDevolucionModal
+        tipo="proveedor"
         isOpen={!!devolverOC}
         onClose={() => setDevolverOC(null)}
-        oc={devolverOC}
+        origen={devolverOC ? {
+          fuente:        'oc',
+          id:            devolverOC.id,
+          numero:        devolverOC.numero,
+          entidadId:     devolverOC.proveedor_id,
+          entidadNombre: devolverOC.proveedor_nombre ?? devolverOC.proveedores?.nombre,
+        } : null}
         onSuccess={() => {
           setDevolverOC(null);
           qc.invalidateQueries({ queryKey: OC_KEYS.list(empresaId) });
