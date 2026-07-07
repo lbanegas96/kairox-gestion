@@ -1,5 +1,42 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-06 (sesión 49 Luciano — fix facturación de pedidos + parser CSV + Fase C 15/15 archivos)
+**Última actualización:** 2026-07-06 (sesión 49 Luciano — fix facturación de pedidos + parser CSV + Fase C 15/15 + smoke test real confirmado + 2do bug encontrado y resuelto)
+
+## ✅ Smoke test real del fix de facturación de pedidos — CONFIRMADO
+
+Luciano compartió sus credenciales reales (`nalux2430@gmail.com`, empresa Nalux) para probar en
+el navegador de verdad. Se ejecutó el flujo completo Pedido → Entrega → Facturar Pedido igual
+que el bug original de Nadia (Bloque 5):
+
+1. Creado pedido `PED-20260706-002` (Carlos Perez, Mouse plano ×5, $25.000) — datos de prueba.
+2. Generada Entrega `ENT-2026-0069` (5/5 u.) — stock Mouse plano 5→0.
+3. Avanzado a "En Preparación" → botón "Facturar Pedido" → abrió `NuevaVentaModal` (ya refactorizado
+   hoy) precargado con cliente y carrito correctos.
+4. Confirmada la venta (Efectivo) → comprobante `20260706-005` generado, ticket impreso OK.
+
+**Verificado en DB tras la venta:** `pedidos.comprobante_id` vinculado ✓, `cantidad_facturada` (5) =
+`cantidad_entregada` (5) ✓, `stock_actual` de Mouse plano se mantuvo en 0 (NO bajó a -5) ✓, el
+último `movimientos_inventario` de ese producto sigue siendo el de la Entrega — **cero movimiento
+nuevo por la venta** ✓. El fix de `crear_venta` (migration 156) funciona correctamente en la app
+real, no solo en el smoke test SQL de antes.
+
+### 🐛 Segundo bug encontrado (y resuelto) durante la prueba — no relacionado con el fix de hoy
+El primer intento de confirmar la venta no hacía nada (sin error visible, sin llamada a `crear_venta`
+en el network). Causa: `NuevaVentaModal.jsx` tiene un loop de "pre-validación de stock (UX)" que
+compara `stock_actual` del depósito contra la cantidad del carrito para **todos** los ítems, sin
+distinguir si vienen de un pedido ya entregado. Como la Entrega ya había dejado el stock en 0 (el
+producto se entregó por completo), este chequeo bloqueaba **silenciosamente** (con un toast que no
+llegué a ver en el snapshot) la facturación de un pedido legítimamente entregado — un bug de
+usabilidad real que afectaría a cualquier "Facturar Pedido" cuando el stock general del depósito
+está bajo. **Fix:** se agregó `pedidoYaEntregado` (mismo criterio que usa `crear_venta` — existe una
+entrega manual/entregado para el pedido) y se salta el loop de pre-validación cuando es `true`,
+ya que el servidor no va a volver a mover ese stock. Commiteado y re-probado — funcionó.
+
+### Datos de prueba que quedaron en Nalux (a decidir con Luciano si se limpian o se dejan)
+- Pedido `PED-20260706-002` (Carlos Perez, $25.000, estado `facturado`)
+- Entrega `ENT-2026-0069` (Mouse plano, 5 u.)
+- Comprobante/Venta `20260706-005` ($25.000, Efectivo, Carlos Perez)
+- `movimientos_caja`: ingreso $25.000 Efectivo (mismo número de venta)
+- Stock de "Mouse plano" quedó en 0 (bajó de 5 por la entrega; era su stock real antes de la prueba)
 
 ## Sesión 49 — Luciano — Plan del día: bugs de Nadia + continuación auditoría de código
 
@@ -16,25 +53,22 @@ decisión):
    - `CuentaCorrienteSection.jsx` 778 → 383 líneas (`src/components/cuenta-corriente/`)
    - `OfertasSection.jsx` 770 → 257 líneas (`src/components/ofertas/`)
    - `NuevaVentaModal.jsx` 769 → 595 líneas (`src/components/ventas/nueva-venta/` — PanelCarrito/
-     PanelPago). **Deliberadamente solo se movió JSX de presentación** — hooks/handlers
-     (`calculateTotal`, `handleConfirmSale`, etc.) quedaron intactos en el archivo principal, dado
-     que este componente dispara `crear_venta`, la misma RPC corregida hoy para el bug de
-     facturación de pedidos (punto 1). **Pendiente: smoke test manual real** (Nueva Venta,
-     Convertir Cotización, Facturar Pedido) — no se pudo probar en navegador por falta de
-     credenciales de login en este entorno; Luciano ofreció sus credenciales reales para la
-     próxima sesión (ver "Pendiente" abajo).
+     PanelPago). Deliberadamente solo se movió JSX de presentación — hooks/handlers
+     (`calculateTotal`, `handleConfirmSale`, etc.) quedaron intactos en el archivo principal.
+     **✅ Validado con smoke test manual real en Nalux** (ver sección arriba) — funciona
+     correctamente, incluido el flujo Facturar Pedido del fix de hoy.
    - `CotizacionesSection.jsx` 673 → 301 líneas (`src/components/cotizaciones/`)
    - `ReportesSection.jsx` 671 → 262 líneas (`src/components/reportes/` — reportDefinitions/
      GridReportes/ModalReporte)
-   - `DashboardSection.jsx` 666 → 167 líneas (`src/components/dashboard/`)
-   - Ningún archivo pudo verse en el navegador real (falta de credenciales de login en este
-     entorno) — la verificación disponible fue build de producción + lint por archivo.
+   - `DashboardSection.jsx` 666 → 167 líneas (`src/components/dashboard/`) — **✅ validado
+     visualmente** (dashboard de Nalux cargó bien en el smoke test).
+   - Los otros 4 archivos (OrdenesCompra/CuentaCorriente/Ofertas/Cotizaciones/Reportes) no se
+     abrieron en el navegador real todavía — verificación disponible fue build + lint por archivo.
 
 **Pendiente para la próxima sesión:**
-- **Smoke test manual de `NuevaVentaModal.jsx` con credenciales reales de Luciano** (ofrecidas,
-  pendientes de compartir): abrir Nueva Venta, agregar producto, confirmar venta con cada método
-  de pago; Convertir Cotización; Facturar Pedido (el flujo del fix de hoy) — confirmar que el
-  split de UI no rompió nada y que el fix de `crear_venta` funciona en la app real, no solo en SQL.
+- **Decidir con Luciano** si se limpian o se dejan los datos de prueba en Nalux (ver lista arriba).
+- Abrir en el navegador real los 4 archivos de Fase C que solo tienen build+lint verificado
+  (OrdenesCompraSection, CuentaCorrienteSection, OfertasSection, CotizacionesSection, ReportesSection).
 - Cheques pre-mig.145 que descuadran cuenta 1.1.6 (necesita asiento de apertura — decisión de
   negocio con el contador, ver Bloque 7 más abajo).
 - Bloques 1, 2, 8 de `PLAN_PRUEBAS_NADIA_2026-07-04.md` sin ejecutar.
