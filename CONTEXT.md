@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-06 (sesión 49 Luciano — fix facturación de pedidos + parser CSV + Fase C 15/15 + smoke test real confirmado + 2do bug encontrado y resuelto + verificación visual completa de Fase C)
+**Última actualización:** 2026-07-06/07 (sesión 49 Luciano — fix facturación de pedidos + parser CSV + Fase C 15/15 + smoke test real confirmado + 2do bug encontrado y resuelto + verificación visual completa de Fase C + asiento de apertura cheques pre-mig.145)
 
 ## ✅ Smoke test real del fix de facturación de pedidos — CONFIRMADO
 
@@ -81,8 +81,7 @@ decisión):
      abrieron en el navegador real todavía — verificación disponible fue build + lint por archivo.
 
 **Pendiente para la próxima sesión:**
-- Cheques pre-mig.145 que descuadran cuenta 1.1.6 (necesita asiento de apertura — decisión de
-  negocio con el contador, ver Bloque 7 más abajo).
+- ~~Cheques pre-mig.145 que descuadran cuenta 1.1.6~~ ✅ resuelto (ver Bloque 7 más abajo).
 - Bloques 1, 2, 8 de `PLAN_PRUEBAS_NADIA_2026-07-04.md` sin ejecutar.
 - Fases D (data-fetching), E (dedup modales ventas↔compras) y F (limpieza menor) del
   `PLAN_AUDITORIA_CODIGO.md` sin empezar — Fase C queda 100% cerrada y validada (ver arriba).
@@ -188,7 +187,40 @@ de scope de mig.144/145, que cubren cobros/pagos/cheques, no NC de ventas.)
 - El asiento de venta usa formato simplificado (Debe Caja / Haber Ventas SIN discriminar IVA) —
   decisión de diseño de Luciano, no se toca.
 
-🔴 **Hallazgo (para Luciano) — cheques pre-mig.145 descuadran la cuenta 1.1.6:**
+### ✅ RESUELTO (2026-07-06/07) — Asiento de apertura cheques pre-mig.145 (migration 157)
+
+Actuando como contador (a pedido explícito de Luciano — "actua como mi contador, asigna la cuenta
+correspondiente a cheques"), se investigó cheque por cheque cuáles quedaron con efecto residual
+real en "1.1.6 Cheques de Terceros en Cartera" (saldo antes: **−$150.000**):
+- **00001234** ($150.000, rechazado 2026-07-06): su asiento de rechazo (AS-000135, ya con mig.145
+  activa) generó Debe 1.1.2 / Haber 1.1.6, pero el Debe 1.1.6 de recepción nunca existió → dejó
+  1.1.6 en saldo Haber (inválido para un activo).
+- **00005678** ($80.000, "depositado", sin resolver): sigue siendo un activo real hoy, nunca tuvo
+  su asiento de recepción.
+- Los otros cheques pre-mig.145 (00001, 000002, 00003, 00004, 00005432) completaron todo su ciclo
+  de vida (alta y baja) ANTES de que el trigger existiera — su efecto neto en 1.1.6 ya es cero,
+  no requieren ajuste.
+
+**Decisión contable:** esto no es un hecho económico del ejercicio — es la corrección de un gap de
+implementación de sistema, con julio todavía **abierto** (`periodos_contables.estado = 'abierto'`).
+Se registró contra **"3.2 Resultados Acumulados"** (patrimonio) y NO contra 1.1.2/4.3 (usar esas
+cuentas otra vez habría duplicado la reducción de deuda de clientes ya registrada por otra vía en
+`cuenta_corriente_movimientos`, que no tiene relación 1 a 1 verificable con estos cheques puntuales
+— se revisaron los movimientos de Nadia Tecera y Carlos Perez y no hay match exacto de monto/fecha).
+
+**Asiento aplicado** (`AS-000138`, migration `157_asiento_apertura_cheques_pre_mig145.sql`):
+Debe 1.1.6 $150.000 (cheque 00001234) + Debe 1.1.6 $80.000 (cheque 00005678) = Debe $230.000 /
+Haber 3.2 Resultados Acumulados $230.000. **Verificado:** 1.1.6 pasó de −$150.000 a **+$80.000**
+(exactamente el valor del único cheque que sigue genuinamente en cartera hoy) ✓.
+
+Nota: el Balance General consolidado de Nalux sigue sin cerrar matemáticamente por motivos NO
+relacionados a este ajuste (la base de test tiene otras inconsistencias históricas — confirmado
+que el asiento nuevo en sí está balanceado 230.000=230.000). Luciano ya indicó que no vale la pena
+perseguir esos descuadres de fondo en esta base de test.
+
+---
+
+_Hallazgo original (2026-07-06), ya resuelto arriba:_
 Los cheques de tercero que ya existían ANTES de mig.145 (feature de asientos automáticos de cheques)
 NO tienen asiento de apertura/recepción. Al cobrarlos o rechazarlos AHORA, el sistema genera solo
 el asiento de salida (Haber 1.1.6) sin el Debe previo de recepción → la cuenta **"1.1.6 Cheques de
