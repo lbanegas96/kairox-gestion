@@ -54,6 +54,25 @@ código de la app (los mismos botones funcionan bien con clicks reales de usuari
 
 **Con esto, el `PLAN_PRUEBAS_NADIA_2026-07-04.md` queda 100% ejecutado (bloques 1 a 8).**
 
+### 🔖 Cierre de sesión 49 (2026-07-07)
+
+Sesión cerrada. Resumen de lo entregado hoy:
+1. Fix crítico sobre-facturación/doble descuento de stock en pedidos (migration 156).
+2. Fix parser CSV de conciliación bancaria (montos formato AR).
+3. Fase C de auditoría de código: **100% cerrada** (15/15 archivos gigantes modularizados,
+   todos con build+lint, los 7 más sensibles con verificación visual/funcional real en Nalux).
+4. Segundo bug encontrado y resuelto en `NuevaVentaModal.jsx` (pre-validación de stock bloqueaba
+   facturar pedidos ya entregados).
+5. Asiento de apertura para cheques de terceros pre-mig.145 (migration 157) — cuenta 1.1.6 corregida.
+6. `PLAN_PRUEBAS_NADIA_2026-07-04.md`: **100% ejecutado** (8/8 bloques, en real sobre Nalux).
+7. Se generó `PLAN_PRUEBAS_NADIA_2026-07-07.md` con lo nuevo de hoy para que Nadia lo confirme.
+
+**Pendiente para la próxima sesión:**
+- Fases D (data-fetching), E (dedup modales ventas↔compras) y F (limpieza menor) del
+  `PLAN_AUDITORIA_CODIGO.md` — sin empezar, sin bugs conocidos detrás.
+- Datos de prueba en Nalux de hoy (pedido/entrega/venta de la sesión 49 + las ventas/cobros/pagos
+  de la prueba de bloques 1/2/8) — Luciano ya indicó que no hace falta limpiarlos.
+
 ## ✅ Smoke test real del fix de facturación de pedidos — CONFIRMADO
 
 Luciano compartió sus credenciales reales (`nalux2430@gmail.com`, empresa Nalux) para probar en
