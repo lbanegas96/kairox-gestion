@@ -35,6 +35,12 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   const [tcMissing, setTcMissing] = useState(false);
   const [showParaleloTCModal, setShowParaleloTCModal] = useState(false);
   const [showProductDropdown, setShowProductDropdown] = useState(false);
+  // Si el pedido que se está facturando ya tuvo una Entrega manual confirmada,
+  // el stock de esos ítems ya se movió ahí (ver crear_venta, migration 156) —
+  // la pre-validación de stock de más abajo no debe correr para ese caso, o
+  // bloquearía facturar un pedido legítimamente entregado si el stock general
+  // del depósito bajó por otras ventas después de la entrega.
+  const [pedidoYaEntregado, setPedidoYaEntregado] = useState(false);
 
   // ── Moneda Paralela ─────────────────────────────────────────────────────────
   const tcParalelo = useTCParalelo();
@@ -118,6 +124,19 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
 
       // Pre-llenar carrito desde pedido
       if (pedido?.pedido_items?.length > 0) {
+        // ¿Ya hubo una Entrega manual confirmada para este pedido? Mismo criterio
+        // que usa crear_venta (migration 156) para decidir si mueve stock o no.
+        const { data: entregaPrevia } = await supabase
+          .from('entregas')
+          .select('id')
+          .eq('empresa_id', user.empresa_id)
+          .eq('pedido_id', pedido.id)
+          .eq('origen', 'manual')
+          .eq('estado', 'entregado')
+          .limit(1)
+          .maybeSingle();
+        setPedidoYaEntregado(!!entregaPrevia);
+
         const productoIds = pedido.pedido_items.map(i => i.producto_id).filter(Boolean);
         const { data: prods } = productoIds.length > 0
           ? await supabase.from('productos').select('*').eq('empresa_id', user.empresa_id).in('id', productoIds)
@@ -196,6 +215,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     setLoading(false);
     setPrecioMap({});
     setListaNombre('');
+    setPedidoYaEntregado(false);
   };
 
   // Cuando cambia el cliente, cargar su lista de precios
@@ -411,12 +431,18 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
       }
     }
 
-    // Pre-validación de stock (UX): verifica antes de iniciar la transacción
-    for (const item of cart) {
-      const { data: freshProduct } = await supabase.from('productos').select('stock_actual').eq('id', item.id).single();
-      if (!freshProduct || freshProduct.stock_actual < item.cantidad) {
-        toast({ title: "Stock Insuficiente", description: `El producto ${item.nombre} cambió su stock.`, variant: "destructive" });
-        return;
+    // Pre-validación de stock (UX): verifica antes de iniciar la transacción.
+    // Se salta cuando el pedido ya tuvo una Entrega — ahí el stock de estos
+    // ítems ya se movió (y crear_venta no lo vuelve a mover), así que comparar
+    // contra el stock_actual general del depósito no tiene sentido y podría
+    // bloquear una facturación legítima si el stock bajó por otras ventas.
+    if (!pedidoYaEntregado) {
+      for (const item of cart) {
+        const { data: freshProduct } = await supabase.from('productos').select('stock_actual').eq('id', item.id).single();
+        if (!freshProduct || freshProduct.stock_actual < item.cantidad) {
+          toast({ title: "Stock Insuficiente", description: `El producto ${item.nombre} cambió su stock.`, variant: "destructive" });
+          return;
+        }
       }
     }
 
