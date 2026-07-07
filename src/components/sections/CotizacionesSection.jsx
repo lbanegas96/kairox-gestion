@@ -38,10 +38,7 @@ function CotizacionesSection({ onNavigateToSale } = {}) {
   const [prodSearch, setProdSearch] = useState({});
   const [prodResults, setProdResults] = useState({});
   const [prodOpen, setProdOpen] = useState({});  // qué fila tiene el dropdown abierto
-  const [allProducts, setAllProducts] = useState([]);
 
-  // Clientes para autocompletar
-  const [allClientes, setAllClientes] = useState([]);
   const [showClienteDropdown, setShowClienteDropdown] = useState(false);
   const clienteWrapperRef = useRef(null);
 
@@ -57,16 +54,26 @@ function CotizacionesSection({ onNavigateToSale } = {}) {
 
   const empresaId = user?.empresa_id;
 
-  // Cargar productos y clientes al montar (después de tener empresaId)
-  useEffect(() => {
-    if (!empresaId) return;
-    (async () => {
-      const { data: prods } = await supabase.from('productos').select('id, nombre, precio_venta, unidad_medida').eq('empresa_id', empresaId).eq('activo', true).order('nombre').limit(200);
-      setAllProducts(prods ?? []);
-      const { data: clis } = await supabase.from('clientes').select('id, nombre').eq('empresa_id', empresaId).order('nombre').limit(500);
-      setAllClientes(clis ?? []);
-    })();
-  }, [empresaId]);
+  // Productos y clientes para autocompletar
+  const { data: allProducts = [] } = useQuery({
+    queryKey: ['cotizaciones_productos_autocomplete', empresaId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('productos').select('id, nombre, precio_venta, unidad_medida').eq('empresa_id', empresaId).eq('activo', true).order('nombre').limit(200);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!empresaId,
+  });
+
+  const { data: allClientes = [] } = useQuery({
+    queryKey: ['cotizaciones_clientes_autocomplete', empresaId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('clientes').select('id, nombre').eq('empresa_id', empresaId).order('nombre').limit(500);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!empresaId,
+  });
 
   // Cerrar dropdowns al hacer click afuera
   useEffect(() => {

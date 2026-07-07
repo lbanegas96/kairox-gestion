@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Power, PowerOff, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -20,47 +20,106 @@ const ProductosSection = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const empresaId = user?.empresa_id;
   // Helper: invalidar cache de notificaciones cuando cambia stock
   const invalidateNotifs = () => qc.invalidateQueries({ queryKey: ['notif'] });
 
   const [activeTab, setActiveTab] = useState('inventory');
-  const [loading, setLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false); 
-  
-  // Data
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [providers, setProviders] = useState([]);
-  const [movements, setMovements] = useState([]);
-  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [showInactivos, setShowInactivos] = useState(false);
   const [historyFilters, setHistoryFilters] = useState({ productId: 'all', dateFrom: '', dateTo: '' });
-  
+
   // Modal States
   const [isNewProductOpen, setIsNewProductOpen] = useState(false);
   const [isEditProductOpen, setIsEditProductOpen] = useState(false);
   const [isMovimientoOpen, setIsMovimientoOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
-  
+
   // Selection State
   const [selectedProductForMov, setSelectedProductForMov] = useState(null);
 
   const { data: unidadesMedida = [] } = useQuery({
-    queryKey: ['unidades_medida', user?.empresa_id],
+    queryKey: ['unidades_medida', empresaId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('unidades_medida')
         .select('*')
-        .eq('empresa_id', user.empresa_id)
+        .eq('empresa_id', empresaId)
         .eq('activo', true)
         .order('codigo');
       if (error) throw error;
       return data ?? [];
     },
-    enabled: !!user?.empresa_id,
+    enabled: !!empresaId,
   });
+
+  // --- Data Fetching (useQuery) ---
+
+  const { data: products = [], isLoading: loading } = useQuery({
+    queryKey: ['inventario_productos', empresaId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('productos')
+        .select(`*, categories:categorias(id, nombre), providers:proveedores(nombre)`)
+        .eq('empresa_id', empresaId)
+        .order('nombre');
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!empresaId,
+  });
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ['inventario_categorias', empresaId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('categorias')
+        .select('*')
+        .eq('empresa_id', empresaId)
+        .order('nombre');
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!empresaId,
+  });
+
+  const { data: providers = [] } = useQuery({
+    queryKey: ['inventario_proveedores', empresaId],
+    queryFn: async () => {
+      // SECURITY-RLS-CROSS: RPC scoped id+nombre — Inventario no requiere permiso 'compras' (mig.135)
+      const { data, error } = await supabase.rpc('listar_proveedores_min');
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!empresaId,
+  });
+
+  const { data: movements = [] } = useQuery({
+    queryKey: ['inventario_movimientos', empresaId, historyFilters],
+    queryFn: async () => {
+      let query = supabase.from('movimientos_inventario')
+        .select(`*, productos (nombre, codigo_sku)`)
+        .eq('empresa_id', empresaId)
+        .order('fecha', { ascending: false });
+
+      if (historyFilters.productId !== 'all') query = query.eq('producto_id', historyFilters.productId);
+      if (historyFilters.dateFrom) query = query.gte('fecha', historyFilters.dateFrom);
+      if (historyFilters.dateTo) query = query.lte('fecha', `${historyFilters.dateTo}T23:59:59`);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!empresaId && activeTab === 'history',
+  });
+
+  const invalidateProductos = () => qc.invalidateQueries({ queryKey: ['inventario_productos', empresaId] });
+  const invalidateTodo = () => {
+    invalidateProductos();
+    qc.invalidateQueries({ queryKey: ['inventario_categorias', empresaId] });
+    qc.invalidateQueries({ queryKey: ['inventario_proveedores', empresaId] });
+  };
 
   // Forms
   const initialProductState = {
@@ -73,93 +132,6 @@ const ProductosSection = () => {
   const [editProduct, setEditProduct] = useState({ ...initialProductState, id: '' });
   const initialMovimientoState = { tipo: 'entrada', cantidad: '', motivo: '' };
   const [movimientoForm, setMovimientoForm] = useState(initialMovimientoState);
-
-  // --- Effects ---
-
-  useEffect(() => {
-    if (user && user.empresa_id) {
-      fetchInitialData();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (activeTab === 'history' && user?.empresa_id) {
-      fetchMovements();
-    }
-  }, [activeTab, historyFilters]);
-
-  // --- Data Fetching ---
-
-  const fetchInitialData = async () => {
-    try {
-      setLoading(true);
-      await Promise.all([fetchProducts(), fetchCategories(), fetchProviders()]);
-    } catch (error) {
-      console.error("Error loading data:", error);
-      toast({ title: "Error de carga", description: "No se pudieron cargar los datos.", variant: "destructive" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchProducts = async () => {
-    if (!user?.empresa_id) return;
-    try {
-      const { data, error } = await supabase.from('productos')
-        .select(`*, categories:categorias(id, nombre), providers:proveedores(nombre)`)
-        .eq('empresa_id', user.empresa_id)
-        .order('nombre');
-      
-      if (error) throw error;
-      setProducts(data || []);
-    } catch (error) {
-      console.error("Error fetching products:", error);
-    }
-  };
-
-  const fetchCategories = async () => {
-    if (!user?.empresa_id) return;
-    try {
-      const { data } = await supabase.from('categorias')
-        .select('*')
-        .eq('empresa_id', user.empresa_id)
-        .order('nombre');
-      setCategories(data || []);
-    } catch (error) {
-      console.error("Error fetching categories:", error);
-    }
-  };
-
-  const fetchProviders = async () => {
-    if (!user?.empresa_id) return;
-    try {
-      // SECURITY-RLS-CROSS: RPC scoped id+nombre — Inventario no requiere permiso 'compras' (mig.135)
-      const { data } = await supabase.rpc('listar_proveedores_min');
-      setProviders(data || []);
-    } catch (error) {
-      console.error("Error fetching providers:", error);
-    }
-  };
-
-  const fetchMovements = async () => {
-    if (!user?.empresa_id) return;
-    try {
-      let query = supabase.from('movimientos_inventario')
-        .select(`*, productos (nombre, codigo_sku)`)
-        .eq('empresa_id', user.empresa_id)
-        .order('fecha', { ascending: false });
-      
-      if (historyFilters.productId !== 'all') query = query.eq('producto_id', historyFilters.productId);
-      if (historyFilters.dateFrom) query = query.gte('fecha', historyFilters.dateFrom);
-      if (historyFilters.dateTo) query = query.lte('fecha', `${historyFilters.dateTo}T23:59:59`);
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      setMovements(data || []);
-    } catch (error) {
-      console.error("Error fetching movements:", error);
-    }
-  };
 
   // --- Helpers ---
 
@@ -184,7 +156,7 @@ const ProductosSection = () => {
       .single();
     
     if (error) throw error;
-    setCategories(prev => [...prev, data]);
+    qc.setQueryData(['inventario_categorias', user.empresa_id], (prev = []) => [...prev, data]);
     return data.id;
   };
 
@@ -229,7 +201,7 @@ const ProductosSection = () => {
       toast({ title: "Producto creado", description: "El producto se ha añadido al inventario." });
       setIsNewProductOpen(false);
       setNewProduct(initialProductState);
-      await fetchProducts();
+      invalidateProductos();
       invalidateNotifs();
     } catch (error) {
       console.error("Create product error:", error);
@@ -274,7 +246,7 @@ const ProductosSection = () => {
 
       toast({ title: "Producto actualizado", description: "Los cambios se han guardado correctamente." });
       setIsEditProductOpen(false);
-      await fetchProducts();
+      invalidateProductos();
       invalidateNotifs();
     } catch (error) {
       console.error("Update product error:", error);
@@ -305,8 +277,8 @@ const ProductosSection = () => {
        toast({ title: "Movimiento registrado", description: "Stock actualizado correctamente." });
        setIsMovimientoOpen(false);
        setMovimientoForm(initialMovimientoState);
-       await fetchProducts();
-      invalidateNotifs();
+       invalidateProductos();
+       invalidateNotifs();
     } catch (error) {
        console.error("Movimiento error:", error);
 
@@ -333,7 +305,7 @@ const ProductosSection = () => {
         .eq('empresa_id', user.empresa_id);
       if (error) throw error;
       toast({ title: "Producto desactivado", description: `"${product.nombre}" fue desactivado. Puede reactivarlo desde la vista de inactivos.` });
-      await fetchProducts();
+      invalidateProductos();
       invalidateNotifs();
     } catch (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -349,7 +321,7 @@ const ProductosSection = () => {
         .eq('empresa_id', user.empresa_id);
       if (error) throw error;
       toast({ title: "Producto reactivado", description: `"${product.nombre}" vuelve a estar disponible en el inventario.` });
-      await fetchProducts();
+      invalidateProductos();
       invalidateNotifs();
     } catch (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -479,7 +451,7 @@ const ProductosSection = () => {
          open={isImportOpen}
          onOpenChange={setIsImportOpen}
          tipo="productos"
-         onSuccess={() => Promise.all([fetchProducts(), fetchCategories(), fetchProviders()])}
+         onSuccess={invalidateTodo}
        />
     </div>
   );

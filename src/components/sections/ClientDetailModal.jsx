@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter 
 } from '@/components/ui/dialog';
@@ -8,7 +9,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { User, Loader2, TrendingUp, TrendingDown, DollarSign, Calendar, Clock, Banknote, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
-import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
@@ -24,38 +24,22 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
   const qc = useQueryClient();
   const tcParalelo = useTCParalelo();
   
-  const [loading, setLoading] = useState(false);
-  
-  // Data State
-  const [localClientData, setLocalClientData] = useState(clientData);
-  const [movements, setMovements] = useState([]);
-  
   // Payment Form State
   const [paymentAmount, setPaymentAmount] = useState('');
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
 
-  useEffect(() => {
-    if (open && clientId) {
-      // If we have passed clientData, use it initially, but refresh to be safe
-      if (clientData) setLocalClientData(clientData);
-      fetchDetails();
-    } else {
-      setMovements([]);
-      setPaymentAmount('');
-    }
-  }, [open, clientId, clientData]);
+  const detailsQueryKey = ['client_detail', clientId];
 
-  const fetchDetails = async () => {
-    setLoading(true);
-    try {
+  const { data: details, isLoading: loading, error: detailsError } = useQuery({
+    queryKey: detailsQueryKey,
+    queryFn: async () => {
       // 1. Refresh Client Data (Current Balance)
       const { data: cData, error: cError } = await supabase
         .from('clientes')
         .select('*')
         .eq('id', clientId)
         .single();
-      
-      if (!cError && cData) setLocalClientData(cData);
+      if (cError) throw cError;
 
       // 2. Fetch Movements History
       // We want to show sales, payments, adjustments.
@@ -82,18 +66,32 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
         comprobantesMap = Object.fromEntries((comps || []).map(c => [c.id, c]));
       }
 
-      setMovements((movs || []).map(m => ({
-        ...m,
-        _comprobante: m.comprobante_id ? comprobantesMap[m.comprobante_id] : null,
-      })));
+      return {
+        cliente: cData,
+        movements: (movs || []).map(m => ({
+          ...m,
+          _comprobante: m.comprobante_id ? comprobantesMap[m.comprobante_id] : null,
+        })),
+      };
+    },
+    enabled: open && !!clientId,
+  });
 
-    } catch (error) {
-      console.error("Error loading details:", error);
+  useEffect(() => {
+    if (detailsError) {
+      console.error("Error loading details:", detailsError);
       toast({ title: "Error", description: "No se pudieron cargar los detalles.", variant: "destructive" });
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [detailsError]);
+
+  // Limpiar el form de pago al cerrar el modal (no es fetch, efecto de UI legítimo)
+  useEffect(() => {
+    if (!open) setPaymentAmount('');
+  }, [open]);
+
+  // Mientras la query resuelve, mostramos el clientData pasado por prop (misma UX que antes)
+  const localClientData = details?.cliente ?? clientData;
+  const movements = details?.movements ?? [];
 
   const handleRegisterPayment = async () => {
     if (!isSessionOpen) {
@@ -152,7 +150,7 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
       setPaymentAmount('');
 
       // Refresh Data
-      await fetchDetails();
+      qc.invalidateQueries({ queryKey: detailsQueryKey });
       if (onUpdate) onUpdate(); // Notify parent to refresh list
       qc.invalidateQueries({ queryKey: ['notif'] }); // deuda_vencida depende de estos movimientos
 

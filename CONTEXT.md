@@ -1,5 +1,38 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-07 (sesión 50 Nadia — ejecución completa del PLAN_PRUEBAS_NADIA_2026-07-07.md, 5/5 bloques PASS)
+**Última actualización:** 2026-07-07 (sesión 51 Luciano — Fase D del PLAN_AUDITORIA_CODIGO.md cerrada: consistencia de patrones de fetching)
+
+## ✅ Fase D del PLAN_AUDITORIA_CODIGO.md — Consistencia de patrones de datos (2026-07-07, sesión 51)
+
+Retomado tras revisar lo que hizo Nadia (sesión 50 — `PLAN_PRUEBAS_NADIA_2026-07-07.md` 5/5 bloques
+PASS, incluida su aprobación del tratamiento contable del asiento de apertura de cheques contra
+Resultados Acumulados). Se avanzó con la Fase D de la auditoría de código (ver `PLAN_AUDITORIA_CODIGO.md`
+para el detalle completo de la decisión y el alcance).
+
+**Estándar decidido:** `useQuery` para todo fetch de Supabase; `useEffect` solo para efectos
+imperativos no-fetch (listeners, timers, reset de UI al cerrar un modal).
+
+**Re-verificación en frío:** de los 5 archivos originalmente flageados, 2 ya habían quedado limpios
+como efecto colateral de la Fase C (`CuentasBancariasSection.jsx`, `PlanCuentasSection.jsx` — sin
+acción). Los 3 restantes se migraron con smoke test manual real (antes/después) en Nalux:
+
+- **`ProductosSection.jsx`** — `fetchInitialData`/`fetchMovements` → `useQuery` (`inventario_productos`,
+  `inventario_categorias`, `inventario_proveedores`, `inventario_movimientos`). Probado: lista de
+  inventario, historial con filtros, y un movimiento de stock real (Jamón Cocido +10, 5845→5855)
+  con refresco automático sin reload manual ✓.
+- **`CotizacionesSection.jsx`** — el `useEffect` de carga de productos/clientes para autocompletar
+  → 2 `useQuery` nuevos. El otro `useEffect` (listener de click-outside) quedó intacto — es el uso
+  correcto de `useEffect`. Probado: autocompletado de cliente y producto con datos reales ✓.
+- **`ClientDetailModal.jsx`** — `fetchDetails` (cliente + movimientos + comprobantes vinculados) →
+  1 `useQuery` keyed por `clientId` con `enabled: open && !!clientId`. El refresco tras un cobro
+  pasó de `await fetchDetails()` a `queryClient.invalidateQueries`. Probado con un cobro real
+  (Jhon V., $5.000): saldo y historial se actualizaron solos, sin reload ✓.
+
+Ningún hallazgo nuevo de bug — los 3 archivos funcionan igual que antes, solo con mejor patrón de
+datos (cache, invalidación declarativa, sin condiciones de carrera de fetch manual).
+
+**Pendiente para la próxima sesión:** Fases E (deduplicar modales ventas↔compras) y F (limpieza
+menor: carpeta `reportes`/`reports` duplicada + barrido de `no-unused-vars`) del
+`PLAN_AUDITORIA_CODIGO.md`.
 
 ## ✅ PLAN_PRUEBAS_NADIA_2026-07-07.md — 5/5 bloques ejecutados por Nadia (sesión 50, 2026-07-07)
 

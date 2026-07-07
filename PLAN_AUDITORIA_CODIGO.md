@@ -86,13 +86,38 @@ extraer lógica de negocio a hooks custom donde tenga sentido. **No tocar la ló
 sin un smoke test manual de esa pantalla.**
 
 ### Fase D — Consistencia de patrones de datos
-1. Decidir el estándar: ¿todo migra a TanStack Query, o se documenta cuándo `useEffect` es
-   aceptable (ej. suscripciones a realtime de Supabase)?
-2. Para los 5 archivos con mezcla confirmada (`ProductosSection`, `CuentasBancariasSection`,
-   `CotizacionesSection`, `ClientDetailModal`, `PlanCuentasSection`), migrar el fetch manual a
-   `useQuery` uno por uno.
-3. Evaluar extraer hooks custom por dominio (`useProductos`, `useClientes`, etc.) para no repetir la
-   misma query en cada componente que necesite esos datos.
+
+**Estado (2026-07-07):** ✅ EJECUTADA.
+
+**Estándar decidido:** `useQuery` (TanStack Query) para todo fetch de datos desde Supabase (listas,
+detalle, cualquier GET). `useEffect` queda reservado exclusivamente para efectos imperativos que
+no son fetch — listeners de DOM (click-outside), suscripciones a Supabase Realtime, timers, foco
+de inputs. Motivo: el proyecto ya usa `useQuery` en 12+ archivos con un patrón consistente
+(`queryKey` + `enabled` + invalidación vía `queryClient`), da cache/refetch/loading-state gratis, y
+evita el bug clásico de fetch manual (condición de carrera si el componente se desmonta antes de
+que resuelva la promesa, olvido de invalidar tras una mutación, etc.).
+
+**Re-verificación en frío del hallazgo original (research de sesión previa a Fase C):** de los 5
+archivos originalmente flageados con mezcla `useEffect`/`useQuery`, 2 ya habían quedado limpios
+como efecto colateral de la modularización de Fase C:
+- `CuentasBancariasSection.jsx` — ya 100% `useQuery`, sin `useEffect`. Sin acción.
+- `PlanCuentasSection.jsx` — ya 100% `useQuery`, sin `useEffect` (el fetch de períodos vive en
+  `TabPeriodos.jsx`, un sub-componente aparte, con su propio `useEffect` legítimo — no es el mismo
+  archivo que se auditó originalmente). Sin acción.
+
+Los 3 restantes sí tenían mezcla real y se migraron:
+- **`ProductosSection.jsx`** — `fetchInitialData` (productos+categorías+proveedores) y
+  `fetchMovements` (historial con filtros) migrados a `useQuery`.
+- **`CotizacionesSection.jsx`** — el `useEffect` que cargaba productos/clientes para autocompletar
+  migrado a `useQuery`. El otro `useEffect` (listener de click-outside para cerrar dropdowns) se
+  dejó intacto — no es fetch, es el uso correcto de `useEffect`.
+- **`ClientDetailModal.jsx`** — `fetchDetails` (cliente + movimientos + comprobantes vinculados)
+  migrado a `useQuery` keyed por `clientId`, con `enabled: open && !!clientId`; el refresco tras
+  registrar un cobro pasó de llamar `fetchDetails()` a mano a `queryClient.invalidateQueries`.
+
+No se extrajeron hooks custom por dominio (`useProductos`, `useClientes`) en esta pasada — no hay
+un segundo consumidor real de esas queries hoy que justifique la abstracción (evitar
+sobre-ingeniería sin necesidad concreta, ver principio de la skill de simplicidad).
 
 ### Fase E — Duplicación de modales ventas↔compras
 Para cada par identificado, evaluar si conviene una única implementación parametrizada
