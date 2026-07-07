@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-06 (sesión 49 Luciano — fix facturación de pedidos + parser CSV + Fase C 15/15 + smoke test real confirmado + 2do bug encontrado y resuelto)
+**Última actualización:** 2026-07-06 (sesión 49 Luciano — fix facturación de pedidos + parser CSV + Fase C 15/15 + smoke test real confirmado + 2do bug encontrado y resuelto + verificación visual completa de Fase C)
 
 ## ✅ Smoke test real del fix de facturación de pedidos — CONFIRMADO
 
@@ -31,12 +31,27 @@ está bajo. **Fix:** se agregó `pedidoYaEntregado` (mismo criterio que usa `cre
 entrega manual/entregado para el pedido) y se salta el loop de pre-validación cuando es `true`,
 ya que el servidor no va a volver a mover ese stock. Commiteado y re-probado — funcionó.
 
-### Datos de prueba que quedaron en Nalux (a decidir con Luciano si se limpian o se dejan)
+### Datos de prueba que quedaron en Nalux — Luciano decidió DEJARLOS ("no molestan, esta base está sucia")
 - Pedido `PED-20260706-002` (Carlos Perez, $25.000, estado `facturado`)
 - Entrega `ENT-2026-0069` (Mouse plano, 5 u.)
 - Comprobante/Venta `20260706-005` ($25.000, Efectivo, Carlos Perez)
 - `movimientos_caja`: ingreso $25.000 Efectivo (mismo número de venta)
 - Stock de "Mouse plano" quedó en 0 (bajó de 5 por la entrega; era su stock real antes de la prueba)
+- **Decisión (2026-07-06):** no se limpian. Nalux ya es una base de pruebas sucia, no producción real
+  con datos críticos — no vale la pena el esfuerzo de reversión.
+
+### ✅ Verificación visual completa de Fase C (2026-07-06) — 5/5 archivos restantes confirmados en navegador
+Con las credenciales reales de Nalux ya logueadas, se navegó cada sección modularizada que solo
+tenía build+lint verificado. Todas renderizan y funcionan correctamente, sin regresiones visuales:
+- `OfertasSection` — grid de ofertas activas OK.
+- `CotizacionesSection` — tabla + tabs (Cotizaciones/Pedidos/Entregas/Facturas/Devoluciones) OK.
+- `CuentaCorrienteSection` — KPIs + tabla de clientes con deuda OK.
+- `OrdenesCompraSection` — KPIs por estado + tabla de OCs OK.
+- `ReportesSection` — grid de reportes + `ModalReporte` abierto y generado (Reporte de Ventas,
+  incluye la venta de prueba `20260706-005`) OK.
+
+**Fase C queda 100% cerrada y validada** (15/15 archivos, todos con build+lint, y los 7 más
+sensibles —incluido `NuevaVentaModal`— además con verificación visual/funcional real en Nalux).
 
 ## Sesión 49 — Luciano — Plan del día: bugs de Nadia + continuación auditoría de código
 
@@ -66,14 +81,11 @@ decisión):
      abrieron en el navegador real todavía — verificación disponible fue build + lint por archivo.
 
 **Pendiente para la próxima sesión:**
-- **Decidir con Luciano** si se limpian o se dejan los datos de prueba en Nalux (ver lista arriba).
-- Abrir en el navegador real los 4 archivos de Fase C que solo tienen build+lint verificado
-  (OrdenesCompraSection, CuentaCorrienteSection, OfertasSection, CotizacionesSection, ReportesSection).
 - Cheques pre-mig.145 que descuadran cuenta 1.1.6 (necesita asiento de apertura — decisión de
   negocio con el contador, ver Bloque 7 más abajo).
 - Bloques 1, 2, 8 de `PLAN_PRUEBAS_NADIA_2026-07-04.md` sin ejecutar.
-- Fases D (data-fetching), E (dedup modales ventas↔compras) y F (limpieza menor) sin empezar —
-  Fase C queda 100% cerrada.
+- Fases D (data-fetching), E (dedup modales ventas↔compras) y F (limpieza menor) del
+  `PLAN_AUDITORIA_CODIGO.md` sin empezar — Fase C queda 100% cerrada y validada (ver arriba).
 
 ### Fix crítico — Facturación de pedidos (Bloque 5 de Nadia)
 
