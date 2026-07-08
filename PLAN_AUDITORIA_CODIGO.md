@@ -59,7 +59,7 @@ propios). Todo lo demás que sea claramente un bug, se corrige.
 
 ## Fases propuestas (orden por impacto/riesgo, no por facilidad)
 
-### Fase A — Higiene de herramientas (bajo riesgo, alto apalancamiento)
+### Fase A — Higiene de herramientas (bajo riesgo, alto apalancamiento) — ✅ EJECUTADA (commit `e45152f`)
 Se hace primero porque destapa automáticamente muchos hallazgos de las fases siguientes.
 1. Endurecer `eslint.config.mjs` gradualmente: reactivar `no-unused-vars` y `react/prop-types`
    primero como `warn` (no `error`) para no bloquear el build, correr una vez y ver el volumen real
@@ -69,7 +69,7 @@ Se hace primero porque destapa automáticamente muchos hallazgos de las fases si
 3. Medir bundle real: correr `npx vite build` con `--mode analyze` o `rollup-plugin-visualizer` para
    confirmar qué módulos inflan `index-*.js` antes de decidir cómo cortarlo.
 
-### Fase B — Bundle / performance de carga (impacto directo en UX del POS)
+### Fase B — Bundle / performance de carga (impacto directo en UX del POS) — ✅ EJECUTADA (commit `7fad0c2`)
 1. Dynamic `import()` de `react-pdf` (solo se usa para generar PDF de facturas/tickets) — no debería
    estar en el bundle principal.
 2. Code-splitting por sección usando `React.lazy()` en el router de `Dashboard.jsx` — cada sección
@@ -77,7 +77,7 @@ Se hace primero porque destapa automáticamente muchos hallazgos de las fases si
 3. Revisar si `html2canvas` (201 KB) y `purify.es` (22 KB) están también en el camino crítico o son
    parte de la misma cadena de generación de PDF (probablemente sí — mismo fix que #1 los arrastra).
 
-### Fase C — Archivos gigantes (mantenibilidad, uno por uno, empezando por el peor)
+### Fase C — Archivos gigantes (mantenibilidad, uno por uno, empezando por el peor) — ✅ EJECUTADA (15/15 archivos, ver CONTEXT.md)
 Orden sugerido por tamaño: `ConfiguracionSection.jsx` (2937) → `PlanCuentasSection.jsx` (1843) →
 `CuentasBancariasSection.jsx` (1288) → `CompraRapidaSection.jsx` (1214) → el resto (>650 líneas).
 Para cada uno: separar en sub-componentes por tab/sección visual (muchos de estos archivos ya son
