@@ -99,6 +99,7 @@ export interface CaeRequest {
   impNeto: number;
   impIVA: number;
   ivaId: number | null; // 5=21%, 4=10.5%, 3=0%; null = Factura C (sin discriminar IVA)
+  condicionIVAReceptorId: number; // obligatorio desde RG 5616 (1=RI, 4=Exento, 5=CF, 6=Monotributo, 7=No Categorizado)
 }
 
 export interface CaeResponse {
@@ -351,6 +352,7 @@ export async function feCAESolicitar(
     `<ar:ImpTrib>0.00</ar:ImpTrib>` +
     `<ar:MonId>PES</ar:MonId>` +
     `<ar:MonCotiz>1</ar:MonCotiz>` +
+    `<ar:CondicionIVAReceptorId>${req.condicionIVAReceptorId}</ar:CondicionIVAReceptorId>` +
     ivaNode +
     `</ar:FECAEDetRequest></ar:FeDetReq>` +
     `</ar:FeCAEReq></ar:FECAESolicitar>`;

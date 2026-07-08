@@ -138,13 +138,15 @@ Deno.serve(async (req) => {
         .eq('empresa_id', comp.empresa_id);
 
       let cliDocumento: string | null = null;
+      let cliCondicionIva: string | null = null;
       if (comp.cliente_id) {
         const { data: cli } = await adminClient
           .from('clientes')
-          .select('documento')
+          .select('documento, condicion_iva')
           .eq('id', comp.cliente_id)
           .single();
         cliDocumento = cli?.documento ?? null;
+        cliCondicionIva = cli?.condicion_iva ?? null;
       }
 
       const { tipo: docTipo, nro: docNro } = docTipoAfip(cliDocumento);
@@ -188,6 +190,7 @@ Deno.serve(async (req) => {
         issueDate:       new Date(comp.fecha).toISOString().slice(0, 10).replace(/-/g, ''),
         customerDocType: docTipo,
         customerDocNro:  docNro,
+        customerCondicionIva: cliCondicionIva,
         items:           wsfeItems,
         neto, iva, total: totalNum,
       });

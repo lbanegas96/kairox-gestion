@@ -42,6 +42,24 @@ export function docTipoAfip(documento: string | null): { tipo: number; nro: stri
   return { tipo: 99, nro: '0' };                      // 99 = Consumidor Final
 }
 
+/**
+ * Mapea la condición IVA del receptor (KAIROX: RI/Monotributo/Exento/CF/No Categorizado)
+ * al `CondicionIVAReceptorId` de AFIP — obligatorio desde RG 5616 (error 10246 si falta).
+ * Sin este campo, ARCA rechaza el comprobante completo (visto en producción: 20 facturas
+ * atascadas en `error_datos` hasta que se agregó este campo).
+ */
+export function condicionIvaReceptorId(condicionIva: string | null, docTipo: number): number {
+  if (docTipo === 99) return 5; // Consumidor Final (sin documento) — siempre CF para AFIP
+  switch (condicionIva) {
+    case 'RI': return 1;              // Responsable Inscripto
+    case 'Exento': return 4;          // Sujeto Exento
+    case 'Monotributo': return 6;     // Responsable Monotributo
+    case 'No Categorizado': return 7; // Sujeto No Categorizado
+    case 'CF': return 5;              // Consumidor Final
+    default: return 5;                // fallback seguro: Consumidor Final
+  }
+}
+
 export interface ArcaEmitParams {
   empresaId: string;
   cuit: string;
@@ -53,6 +71,7 @@ export interface ArcaEmitParams {
   issueDate: string;       // YYYYMMDD
   customerDocType: number;
   customerDocNro: string;
+  customerCondicionIva: string | null;
   items: Array<{ description: string; quantity: number; unitPrice: number; ivaAliquot: number }>;
   neto: number;
   iva: number;
@@ -126,6 +145,7 @@ export async function callArcaEmit(
     impNeto,
     impIVA,
     ivaId,
+    condicionIVAReceptorId: condicionIvaReceptorId(params.customerCondicionIva, params.customerDocType),
   });
 
   return {

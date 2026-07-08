@@ -56,6 +56,11 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
   const [productosCache, setProductosCache] = useState([]);
   const [searchFocusId, setSearchFocusId] = useState(null);
   const [afipConfig, setAfipConfig]       = useState(null);
+  // Patrón SAP "Relevante para impuestos": por defecto todo documento SÍ es
+  // relevante. Tildar acá excluye este comprobante de la emisión de CAE aunque
+  // AFIP esté activo — para ajustes internos, pruebas o correcciones manuales
+  // que nunca deben presentarse ante ARCA.
+  const [noRelevanteFiscal, setNoRelevanteFiscal] = useState(false);
 
   // ── Carga de datos al abrir ─────────────────────────────────────────────────
   useEffect(() => {
@@ -108,6 +113,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
       setItems([newItem()]);
       setSearchFocusId(null);
       setAfipConfig(null);
+      setNoRelevanteFiscal(false);
     }
   }, [open]);
 
@@ -214,6 +220,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
         tipo:                  'venta',
         tipo_comprobante_afip: tipoAfipInsert,
         fecha_vencimiento:     fechaVencimiento,
+        relevante_fiscal:      !noRelevanteFiscal,
       }]).select('id').single();
       if (compErr) throw compErr;
 
@@ -264,9 +271,11 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
       // 5. AFIP — encolar en facturas_pendientes_arca vía trigger (SAP async posting).
       // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca, que inserta
       // en la cola. El arca-worker (cron */5 * * * *) es la única fuente de verdad
-      // para llamar a ARCA — nunca desde el frontend.
+      // para llamar a ARCA — nunca desde el frontend. Si el documento se marcó
+      // "no relevante", ni siquiera se intenta (el trigger igual lo bloquearía,
+      // pero evitamos el UPDATE innecesario).
       const afipActivo = afipConfig?.usa_factura_electronica && afipConfig?.punto_venta;
-      if (afipActivo && tipoDoc !== 'Ticket') {
+      if (afipActivo && tipoDoc !== 'Ticket' && !noRelevanteFiscal) {
         const tipoAfip = tipoDoc.replace('Factura ', '');
         const { error: afipQueueErr } = await supabase.from('comprobantes').update({
           tipo_comprobante_afip: tipoAfip,
@@ -361,6 +370,23 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
               />
             </div>
           </div>
+
+          {/* Relevancia fiscal (patrón SAP) — solo tiene sentido si AFIP está activo */}
+          {afipConfig?.usa_factura_electronica && tipoDoc !== 'Ticket' && (
+            <label className="flex items-start gap-2 p-3 rounded-lg bg-kx-surface-2 border border-kx-border text-xs text-kx-text-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={noRelevanteFiscal}
+                onChange={e => setNoRelevanteFiscal(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <strong className="text-kx-text">No relevante para AFIP</strong> — documento interno,
+                ajuste o corrección manual. Tildado, este comprobante <strong>nunca</strong> se encola
+                para emitir CAE ante ARCA, aunque la facturación electrónica esté activa.
+              </span>
+            </label>
+          )}
 
           {/* Sección 2: Tabla de ítems */}
           <div>

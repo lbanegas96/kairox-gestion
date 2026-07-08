@@ -1,5 +1,46 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-08 (sesión 53 Nadia — ejecución PLAN_PRUEBAS_NADIA_2026-07-08 + 3 bugs de UI encontrados y corregidos)
+**Última actualización:** 2026-07-08 (sesión 54 Luciano — bug real AFIP RG 5616 + relevante_fiscal (patrón SAP))
+
+## 🔴 Bug real AFIP: `CondicionIVAReceptorId` faltante (RG 5616) — fix escrito, deploy pendiente + feature `relevante_fiscal` (sesión 54, 2026-07-08)
+
+Durante la continuación de la auditoría contable (Frente 1, área FACTURACION) apareció un bug **en
+producción real**: 19 comprobantes de Nalux (ventas + NC, 2026-07-03 a 2026-07-08) quedaron en
+`facturas_pendientes_arca.estado='error_datos'` porque WSFE rechaza el comprobante con
+`[10246] Campo Condicion Frente al IVA del receptor es obligatorio conforme a lo reglamentado por la
+Resolucion General Nro 5616` — el campo `CondicionIVAReceptorId` (obligatorio desde 2022) nunca se
+mandaba en el request de `FECAESolicitar`.
+
+**Fix de código (escrito, verificado por grep, NO deployado a la Edge Function todavía):**
+- `supabase/functions/_shared/wsfe.ts`: agregado `condicionIVAReceptorId` a `CaeRequest` + al XML.
+- `supabase/functions/_shared/afip.ts`: nueva función `condicionIvaReceptorId(condicionIva, docTipo)`
+  mapea `condicion_iva` del cliente (RI/Monotributo/Exento/CF/No Categorizado) → código AFIP
+  (1/6/4/5/7); `docTipo===99` (sin documento) → siempre 5 (Consumidor Final).
+- `supabase/functions/arca-worker/index.ts`: ahora lee `condicion_iva` del cliente y lo pasa a
+  `callArcaEmit`.
+- **Deploy bloqueado por auto-mode classifier** (acción de producción no autorizada explícitamente en
+  el momento) — pendiente de autorización de Luciano antes del próximo deploy de `arca-worker`.
+
+**Feature nueva `comprobantes.relevante_fiscal`** (patrón SAP "Relevante para impuestos", propuesta de
+Luciano, ver `sap-reference` skill) — migration 167, **deployada**:
+- Columna `relevante_fiscal BOOLEAN DEFAULT true`. `false` = documento interno/ajuste que NUNCA se
+  encola para CAE, sin importar si AFIP está activo.
+- `fn_queue_factura_arca` (trigger): guard `IF NEW.relevante_fiscal = false THEN RETURN NEW`, cubre
+  cualquier camino que ponga `cae_estado` en `pendiente`/`error` (creación, reintento por fila, etc.).
+- `reencolar_caes_pendientes` (RPC del botón "Reintentar CAE"): excluye `relevante_fiscal=false` como
+  defensa en profundidad adicional al trigger.
+- **Backfill inmediato:** las 19 facturas con error 10246 → `relevante_fiscal=false`,
+  `cae_estado='no_aplica'` (mismo estado usado para CAEA — "no necesita CAE individual"); sus filas en
+  `facturas_pendientes_arca` → `estado='error_definitivo'` (fuera del filtro del worker). Esto frena
+  el ruido de reintentos (botón manual o reintento por fila) mientras el fix de código no esté
+  deployado. **Verificado con SQL real:** 19/19 marcadas, cola activa (`pendiente`/`reintentando`) en 0.
+- ⚠️ **Pendiente de reversión tras el deploy del fix:** estas 19 facturas SON fiscalmente válidas y
+  DEBEN emitir CAE real — no es una decisión de "documento interno" permanente, es un freno temporal.
+  Revertir con `UPDATE comprobantes SET relevante_fiscal=true, cae_estado='error' WHERE relevante_fiscal=false AND ...` + `reencolar_caes_pendientes` una vez deployado `arca-worker`.
+- **UI:** `NuevaFacturaModal.jsx` — checkbox "No relevante para AFIP" (solo visible si AFIP activo y
+  tipo de documento ≠ Ticket), default sin tildar (todo documento nace relevante). Pendiente extender a
+  `NuevaVentaModal.jsx`/`NuevaNCModal.jsx` si se necesita en esos flujos.
+
+---
 
 ## ✅ PLAN_PRUEBAS_NADIA_2026-07-08.md ejecutado + 3 bugs de frontend corregidos (sesión 53, 2026-07-08)
 
