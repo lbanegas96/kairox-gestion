@@ -1,5 +1,70 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-07 (sesión 52 Luciano — backlog de performance RLS resuelto: 245→0 multiple_permissive_policies)
+**Última actualización:** 2026-07-08 (sesión 52 cont. Luciano — cheques propios contabilizados + 2 fixes de mercado en cheques de terceros, migration 166)
+
+## ✅ Cheques propios → contabilización + correcciones de mercado en cheques de terceros (2026-07-08, migration 166)
+
+Cierre del último pendiente de negocio documentado en `PLAN_AUDITORIA.md`: los cheques propios
+(entregados a proveedores) no generaban asiento contable. Se decidió avanzar sin esperar a un
+contador matriculado — usando la skill interna `auditor-contable` (10 áreas, RT FACPCE/IFRS) como
+validación de estructura, más research de mercado argentino (Tango, Colppy, e-cheq/COELSA) para
+entender qué le falta al módulo de cheques respecto a lo que un ERP argentino típico ofrece.
+
+**Cuentas nuevas** (backfill a las 2 empresas existentes + agregado al seed para empresas nuevas):
+- `2.1.6 Documentos a Pagar` (pasivo) — cuenta puente para cheques propios en tránsito.
+- `1.1.7 Deudores por Cheques Rechazados` (activo) — antes los rechazados volvían directo a Cuentas
+  a Cobrar/Otros Ingresos, mezclando cobranza sana con cobranza dudosa. Es la práctica estándar que
+  usan Tango y Colppy.
+
+**Cheque propio — trigger nuevo `fn_asiento_cheque_propio`:**
+- Entregado (`pendiente→entregado`, requiere `proveedor_id`): DEBE `2.1.1 Cuentas a Pagar` / HABER
+  `2.1.6 Documentos a Pagar`.
+- Cobrado/debitado (`entregado→cobrado`): DEBE `2.1.6` / HABER `1.1.1 Caja y Bancos`.
+- Rechazado desde `entregado` (rebotó): reversa — DEBE `2.1.6` / HABER `2.1.1` (la deuda con el
+  proveedor vuelve a estar viva).
+- Rechazado desde `pendiente` (anulado antes de entregar): sin asiento — nunca hubo evento económico.
+
+**Cheque de tercero — 2 correcciones sobre `fn_asiento_cheque_tercero` (mig.145):**
+1. **Bug real, no solo gap:** antes, un cheque de tercero endosado a un proveedor y luego marcado
+   "cobrado" generaba `DEBE Caja y Bancos` como si hubiese entrado efectivo real, cuando en realidad
+   se había cancelado una deuda con ese proveedor. Fix: el asiento se dispara en el momento del
+   **endoso** (`DEBE 2.1.1 Cuentas a Pagar del proveedor / HABER 1.1.6`), y la transición posterior a
+   "cobrado" pasa a ser no-op si el cheque ya está endosado.
+2. **Rechazado:** ahora va a `1.1.7` en vez de revertir directo a `1.1.2`/`4.3`. Si el rechazo ocurre
+   después de un endoso, reinstala la deuda del proveedor (`HABER 2.1.1`) en vez de la del cliente.
+
+**Columna nueva:** `cheques.es_electronico` (boolean, default false) — solo flag informativo, sin
+integración con COELSA. Se agregó porque el e-cheq es hoy mayoritario en Argentina (BCRA empujó la
+digitalización desde 2020) y el módulo no distinguía papel de electrónico en ningún campo.
+
+**Fuera de alcance a propósito** (documentado, no urgente): `descontado` (adelanto bancario de un
+cheque de tercero) sigue sin asiento propio, su costo financiero no está modelado; múltiples
+"carteras" de cheques por cuenta de tesorería (Tango lo tiene) tampoco — sobre-ingeniería para el
+tamaño de PyME que ataca KAIROX hoy.
+
+**Validación:** se armó un test tipo pgTAP (`supabase/tests/cheques_contabilizacion_166.test.sql`,
+10 casos) y se corrió primero con `BEGIN...ROLLBACK` contra un tenant sintético — los 10 casos dieron
+el resultado esperado (incluida una vuelta atrás: la primera corrida marcó 1 "fallo" que resultó ser
+un error de la propia assertion del test — comparaba el saldo acumulado de la cuenta del tenant en
+vez de aislar el efecto de ese cheque puntual por `origen_id`; reverificado en un tenant 100%
+aislado, los 3 asientos del caso dieron exactamente lo esperado). De paso se encontró y corrigió un
+problema real de Postgres: `CREATE OR REPLACE FUNCTION` no reemplaza una función si se le agregan
+parámetros nuevos — crea una sobrecarga ambigua junto a la vieja. Hubo que agregar `DROP FUNCTION`
+explícito de las 3 firmas anteriores (`crear_cheque_tercero`, `crear_cheque_propio`,
+`cambiar_estado_cheque`) antes de recrearlas.
+
+**Aplicado a producción** (branching de Supabase no disponible — plan gratuito, requiere Pro — se
+validó con `BEGIN...ROLLBACK` en su lugar, mismo estándar que los tests pgTAP existentes). Confirmado
+en la base real: las 2 empresas existentes ya tienen las cuentas `2.1.6`/`1.1.7`. No hizo falta
+ningún ajuste de apertura — el único cheque propio existente en Nalux ya estaba "cobrado" (ciclo
+completo, sin residuo), y ningún cheque de tercero está hoy en estado "endosado".
+
+**Pendiente — test end-to-end no cerrado:** se intentó registrar un cheque propio de prueba real
+($1, proveedor Alibaba) desde la UI para confirmar el flujo completo con datos reales, pero el botón
+"Registrar" del modal no disparaba el submit en el navegador automatizado (se probó clic directo,
+eventos de puntero, Enter con foco — sin éxito, sin error visible tampoco). En vez de forzarlo
+insertando el registro directo por SQL (que el propio sistema bloqueó como escritura de datos falsos
+en producción sin autorización puntual), se dejó pendiente para que Nadia lo haga manualmente — ver
+`PLAN_PRUEBAS_NADIA_2026-07-08.md`.
 
 ## ✅ Backlog de performance de Supabase — RLS multiple_permissive_policies + FKs sin índice (2026-07-07, sesión 52)
 

@@ -169,9 +169,21 @@ seedeada en el plan de cuentas pero sin uso — ahora:
 Validado con BEGIN...ROLLBACK: cheque recibido + cobrado y cheque recibido + rechazado, ambos con las
 cuentas correctas y asientos balanceados.
 
-**Fuera de alcance, documentado para el contador:** cheques *propios* (entregados a proveedores) no
-se contabilizan — requeriría una cuenta "Documentos a Pagar" que todavía no existe en el plan de
-cuentas; se agrega si el contador lo pide.
+**✅ RESUELTO (2026-07-08, sesión 52, migration 166):** cheques *propios* (entregados a proveedores)
+ahora sí se contabilizan. Se agregó la cuenta `2.1.6 Documentos a Pagar` (pasivo) y un trigger nuevo
+(`fn_asiento_cheque_propio`): Entregado → DEBE `2.1.1 Cuentas a Pagar` / HABER `2.1.6`; Cobrado →
+DEBE `2.1.6` / HABER `1.1.1 Caja y Bancos`; Rechazado desde 'entregado' → reversa (la deuda con el
+proveedor vuelve a estar viva); rechazado desde 'pendiente' (nunca entregado) → sin asiento. De paso
+se corrigieron 2 hallazgos de mercado en cheques de terceros: (1) bug real — un cheque endosado a un
+proveedor y luego marcado "cobrado" generaba antes un DEBE Caja y Bancos como si hubiese entrado
+efectivo real; ahora el asiento se dispara en el momento del endoso, contra `2.1.1` del proveedor; (2)
+los cheques rechazados ahora van a una cuenta dedicada `1.1.7 Deudores por Cheques Rechazados` en vez
+de revertir directo a Cuentas a Cobrar (práctica de mercado — Tango, Colppy — para separar cobranza
+sana de cobranza dudosa). También se agregó un flag `es_electronico` (sin integración COELSA) porque
+el e-cheq es hoy mayoritario en Argentina. Validado con pgTAP-equivalente (`BEGIN...ROLLBACK`, tenant
+aislado, 10 casos) antes de aplicar a producción — ver `PLAN_PRUEBAS_NADIA_2026-07-08.md` para la
+verificación manual pendiente (no se pudo cerrar un test end-to-end desde el botón de la UI por un
+problema del navegador automatizado, no del código — se le pide a Nadia que lo haga).
 
 ## ✅ Fase 2 técnica de permisos granulares — CERRADA (2026-07-04)
 

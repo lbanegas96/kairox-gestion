@@ -69,7 +69,13 @@ Configuración de Supabase Auth (Dashboard → Authentication → Policies), no 
 
 **Migration 065.** Al revisar el `TO` de la policy `"service role puede insertar"` se confirmó que, a pesar del nombre, **NO** estaba scoped a `service_role` — estaba en `PUBLIC`. Y la tabla además tenía `GRANT INSERT` a nivel tabla para `anon` **y** `authenticated`. Resultado real (no hipotético): **cualquiera, incluso sin login, podía insertar filas arbitrarias en `movimientos_uala`** (tabla de conciliación bancaria con Ualá). Confirmado por grep que el frontend (`MovimientosUala.jsx`) solo hace `SELECT`, nunca `INSERT` — el único INSERT legítimo es el del job de sincronización (`service_role`). Se revocó `INSERT` de tabla para `anon`/`authenticated` y se recreó la policy explícitamente `TO service_role`. Verificado con `pg_policy` que `roles = {service_role}` después del fix.
 
-### 1.2 — 🔒 BLOQUEADO por plan de Supabase (no es un pendiente de configuración)
+### 1.2 — 🔒 BLOQUEADO por plan de Supabase — decisión: queda PENDIENTE a propósito (2026-07-07)
+
+Luciano decidió dejarlo para más adelante: será una de las últimas cosas a resolver antes de
+lanzarse al mercado (junto con el upgrade de plan de Supabase que requiere). No es una tarea para
+esta semana.
+
+### 1.2 (detalle original)
 
 Luciano encontró el toggle correcto: Authentication → Iniciar sesión / Proveedores → Email → **"Prevent use of leaked passwords"** (NO está en "Políticas" ni en "Contraseñas", esas son otras cosas — RLS y WebAuthn respectivamente). Lo activó, pero al guardar Supabase tira un cartel pidiendo upgradear: **esta función requiere plan Pro o superior**, y el proyecto (`NALUX`) está en plan **Gratis**. No se puede activar sin pagar el plan Pro de Supabase.
 
