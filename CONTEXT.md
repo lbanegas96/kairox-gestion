@@ -1,7 +1,7 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-08 (sesión 54 Luciano — bug real AFIP RG 5616 + relevante_fiscal (patrón SAP))
+**Última actualización:** 2026-07-08 (sesión 54 Luciano — bug real AFIP RG 5616 deployado + 16/19 facturas recuperadas + feature relevante_fiscal (patrón SAP))
 
-## 🔴 Bug real AFIP: `CondicionIVAReceptorId` faltante (RG 5616) — fix escrito, deploy pendiente + feature `relevante_fiscal` (sesión 54, 2026-07-08)
+## 🔴 Bug real AFIP: `CondicionIVAReceptorId` faltante (RG 5616) — DEPLOYADO + 16/19 facturas recuperadas + feature `relevante_fiscal` (sesión 54, 2026-07-08)
 
 Durante la continuación de la auditoría contable (Frente 1, área FACTURACION) apareció un bug **en
 producción real**: 19 comprobantes de Nalux (ventas + NC, 2026-07-03 a 2026-07-08) quedaron en
@@ -10,15 +10,33 @@ producción real**: 19 comprobantes de Nalux (ventas + NC, 2026-07-03 a 2026-07-
 Resolucion General Nro 5616` — el campo `CondicionIVAReceptorId` (obligatorio desde 2022) nunca se
 mandaba en el request de `FECAESolicitar`.
 
-**Fix de código (escrito, verificado por grep, NO deployado a la Edge Function todavía):**
+**Fix de código — escrito y DEPLOYADO a producción (autorizado explícitamente por Luciano):**
 - `supabase/functions/_shared/wsfe.ts`: agregado `condicionIVAReceptorId` a `CaeRequest` + al XML.
 - `supabase/functions/_shared/afip.ts`: nueva función `condicionIvaReceptorId(condicionIva, docTipo)`
   mapea `condicion_iva` del cliente (RI/Monotributo/Exento/CF/No Categorizado) → código AFIP
   (1/6/4/5/7); `docTipo===99` (sin documento) → siempre 5 (Consumidor Final).
 - `supabase/functions/arca-worker/index.ts`: ahora lee `condicion_iva` del cliente y lo pasa a
   `callArcaEmit`.
-- **Deploy bloqueado por auto-mode classifier** (acción de producción no autorizada explícitamente en
-  el momento) — pendiente de autorización de Luciano antes del próximo deploy de `arca-worker`.
+- Deployado vía `deploy_edge_function` (versión 4, ACTIVE). Toda factura **nueva** desde este momento
+  emite CAE correctamente.
+
+**Resultado de reencolar las 19 facturas frenadas (autorizado explícitamente por Luciano):**
+- **16/19 recuperaron su CAE real** (verificado con números AFIP reales, ej. `0001-00000014` a
+  `0001-00000017` para Factura C, `0001-00000001`/`0001-00000002` para NC-B).
+- **3 quedaron sin resolver**: `20260706-002`, `20260706-005`, `NC-20260706-003` — rechazadas con
+  `[10016] El numero o fecha del comprobante no se corresponde con el proximo a autorizar` en DOS
+  intentos distintos, incluso para la NC-B que no tenía ningún otro comprobante del mismo tipo en el
+  mismo lote (descarta una condición de carrera simple contra sí misma). Causa más probable: reintentos
+  consecutivos muy seguidos contra el mismo PdV+tipo pueden pegarle a una réplica de AFIP con lag
+  (`FECompUltimoAutorizado` no siempre refleja instantáneamente un `FECAESolicitar` recién autorizado).
+  **No se siguió reintentando** para no seguir generando rechazos reales contra AFIP sin entender la
+  causa — queda pendiente: esperar más tiempo entre intentos (ideal: no antes de mañana) y reintentar
+  UNA vez más, o usar el botón "Reintentar CAE" desde la UI cuando Luciano lo decida.
+- **Hallazgo lateral (no corregido, documentado):** `arca-worker/index.ts` procesa la cola sin
+  `ORDER BY fecha` — en un reencolado masivo esto puede asignar números AFIP fuera de orden
+  cronológico respecto a la fecha original de venta (ya pasó: `20260707-008` con fecha posterior a
+  `20260707-007` recibió el número AFIP más bajo). Sin impacto en operación normal (1 factura a la
+  vez), sí importa si se vuelve a reencolar un lote grande.
 
 **Feature nueva `comprobantes.relevante_fiscal`** (patrón SAP "Relevante para impuestos", propuesta de
 Luciano, ver `sap-reference` skill) — migration 167, **deployada**:
@@ -33,9 +51,9 @@ Luciano, ver `sap-reference` skill) — migration 167, **deployada**:
   `facturas_pendientes_arca` → `estado='error_definitivo'` (fuera del filtro del worker). Esto frena
   el ruido de reintentos (botón manual o reintento por fila) mientras el fix de código no esté
   deployado. **Verificado con SQL real:** 19/19 marcadas, cola activa (`pendiente`/`reintentando`) en 0.
-- ⚠️ **Pendiente de reversión tras el deploy del fix:** estas 19 facturas SON fiscalmente válidas y
-  DEBEN emitir CAE real — no es una decisión de "documento interno" permanente, es un freno temporal.
-  Revertir con `UPDATE comprobantes SET relevante_fiscal=true, cae_estado='error' WHERE relevante_fiscal=false AND ...` + `reencolar_caes_pendientes` una vez deployado `arca-worker`.
+- ✅ **Reversión ya aplicada** (mismo día, tras el deploy): las 19 se volvieron a marcar
+  `relevante_fiscal=true` y se reencolaron. 16 ya tienen CAE real; 3 siguen en `cae_estado='error'`
+  (ver arriba, error 10016 — no relacionado a este feature).
 - **UI:** `NuevaFacturaModal.jsx` — checkbox "No relevante para AFIP" (solo visible si AFIP activo y
   tipo de documento ≠ Ticket), default sin tildar (todo documento nace relevante). Pendiente extender a
   `NuevaVentaModal.jsx`/`NuevaNCModal.jsx` si se necesita en esos flujos.
