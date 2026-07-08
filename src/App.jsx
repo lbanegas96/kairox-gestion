@@ -1,18 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import AuthPage from '@/components/AuthPage';
 import Dashboard from '@/components/Dashboard';
 import ResetPasswordPage from '@/components/ResetPasswordPage';
 import ModoCajaLayout from '@/components/caja/ModoCajaLayout';
-import { Toaster } from '@/components/ui/toaster';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { useTheme } from '@/contexts/ThemeContext';
 import { CajaProvider } from '@/contexts/CajaContext';
 
 function App() {
   const { user, loading, signOut, needsPasswordReset, setNeedsPasswordReset } = useAuth();
-  const { theme } = useTheme();
   const [longLoad, setLongLoad] = useState(false);
   const [showPOS, setShowPOS] = useState(false);
   const { toast } = useToast();

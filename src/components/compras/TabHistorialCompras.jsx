@@ -1,4 +1,3 @@
-import React from 'react';
 import { Filter, X, Check, AlertTriangle, Eye, Edit, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

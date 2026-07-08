@@ -1,8 +1,7 @@
-import React from 'react';
 import {
   Menu, Bell, CheckCircle, Moon, Sun, Search, Settings,
   Package, CreditCard, ShoppingBag, AlertCircle, Wallet,
-  FileText, ShoppingCart, Plus,
+  FileText, Plus,
 } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useQueryClient } from '@tanstack/react-query';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Plus, Search, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -278,7 +278,7 @@ function PedidosSection({ onNavigate } = {}) {
     setEntregaPedidoId(pedido.id);
   };
 
-  const handleEntregaSuccess = (numeroEntrega) => {
+  const handleEntregaSuccess = () => {
     fetchAll();
     setEntregasRefreshKey(k => k + 1); // refresca el DocumentFlow del modal de detalle
   };

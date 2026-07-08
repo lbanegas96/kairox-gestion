@@ -1,7 +1,6 @@
-import React from 'react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import ReportHeader from '@/components/reports/ReportHeader';
-import ReportTable from '@/components/reports/ReportTable';
+import ReportHeader from '@/components/reportes/ReportHeader';
+import ReportTable from '@/components/reportes/ReportTable';
 import { getTableConfig } from './reportDefinitions';
 
 function ModalReporte({

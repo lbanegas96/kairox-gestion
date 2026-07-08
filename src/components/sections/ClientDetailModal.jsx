@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter 
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { User, Loader2, TrendingUp, TrendingDown, DollarSign, Calendar, Clock, Banknote, AlertCircle, CheckCircle } from 'lucide-react';
+import { User, Loader2, DollarSign, Clock, Banknote, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -15,7 +15,6 @@ import { useCaja } from '@/contexts/CajaContext';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { getNowAR, getTodayAR, formatDateAR, formatTimeAR } from '@/lib/dateUtils';
-import EstadoBadge from '@/components/ui/EstadoBadge';
 
 const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate }) => {
   const { user } = useAuth();

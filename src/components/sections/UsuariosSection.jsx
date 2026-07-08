@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { UserPlus, Trash2, Shield, Mail, Edit, Loader2, Search, RefreshCw, AlertCircle, CheckCircle2, XCircle, Clock, Send } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Trash2, Shield, Mail, Edit, Loader2, Search, RefreshCw, Clock, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import StaffPermissionsModal from '@/components/sections/StaffPermissionsModal';
-import { validateEmail, validatePassword, checkEmailExists } from '@/lib/validationUtils';
+import { validateEmail, checkEmailExists } from '@/lib/validationUtils';
 
 function UsuariosSection() {
   const { user } = useAuth();

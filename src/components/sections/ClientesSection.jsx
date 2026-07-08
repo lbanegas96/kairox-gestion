@@ -1,17 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Search, Plus, Edit, Eye, Upload, X, AlertTriangle, Shield, CreditCard,
+  Search, Plus, Edit, Eye, Upload, AlertTriangle, Shield, CreditCard,
   Phone, Mail, MapPin, Hash, DollarSign, Clock, Tag
 } from 'lucide-react';
 import { listaPreciosService } from '@/services/listaPreciosService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from '@/components/ui/use-toast';
@@ -155,7 +154,7 @@ function ClientesSection() {
   // OJO: NO usar como <ClientForm /> (eso lo trata como componente y React lo
   // remonta en cada render del padre, perdiendo focus de los inputs en cada
   // tecla). Llamar siempre como función: {renderClientForm({ isEdit: false })}
-  const renderClientForm = ({ onSubmit, isEdit }) => (
+  const renderClientForm = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
       {/* Nombre */}
       <div className="space-y-1.5 md:col-span-2">

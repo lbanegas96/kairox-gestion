@@ -1,4 +1,3 @@
-import React from 'react';
 import { ClipboardList, User, Calendar, Edit3, Truck, ArrowRight, Receipt, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';

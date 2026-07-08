@@ -1,4 +1,3 @@
-import React from 'react';
 import { Search, Trash2, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

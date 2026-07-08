@@ -1,4 +1,3 @@
-import React from 'react';
 import { TrendingUp, TrendingDown, Scale, Clock, Lock, Unlock, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';

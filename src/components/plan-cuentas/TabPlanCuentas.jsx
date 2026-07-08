@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { BookOpen, Plus, Search, RefreshCw } from 'lucide-react';
 import { planCuentasService } from '@/services/planCuentasService';
 import { useToast } from '@/components/ui/use-toast';

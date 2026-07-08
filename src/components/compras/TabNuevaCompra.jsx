@@ -1,4 +1,3 @@
-import React from 'react';
 import { Calendar, ShoppingBag, PackageOpen, Search, X, Trash2, AlertTriangle, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

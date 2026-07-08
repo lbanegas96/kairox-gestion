@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { Eye, Filter, AlertCircle, X, Check, ChevronLeft, ChevronRight, Clock, AlertTriangle, Undo2, MoreHorizontal, FileText, Network, Copy, RefreshCw } from 'lucide-react';

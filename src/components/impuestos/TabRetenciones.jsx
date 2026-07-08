@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Plus, Trash2, Download, RefreshCw, FileDown, Calendar, AlertCircle
 } from 'lucide-react';

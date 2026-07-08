@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { asientosService, PLAN_CUENTAS_KEYS } from '@/services/planCuentasService';
-import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +10,6 @@ import { TIPO_COLOR, TIPO_LABEL, fmt } from './shared';
 function TabBalance({ empresaId }) {
   const [fechaDesde, setDesde] = useState('');
   const [fechaHasta, setHasta] = useState('');
-  const { toast } = useToast();
 
   const { data: rows = [], isLoading, refetch } = useQuery({
     queryKey: PLAN_CUENTAS_KEYS.balance(empresaId, fechaDesde, fechaHasta),

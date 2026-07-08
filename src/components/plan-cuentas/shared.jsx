@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ChevronRight, ChevronDown, Pencil } from 'lucide-react';
 
 export const TIPO_COLOR = {

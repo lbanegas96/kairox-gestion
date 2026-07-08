@@ -1,4 +1,3 @@
-import React from 'react';
 import { Check, Loader2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';

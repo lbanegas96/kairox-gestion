@@ -1,4 +1,3 @@
-import React from 'react';
 import { Tag, ToggleLeft, ToggleRight, Plus, Edit, Trash2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';

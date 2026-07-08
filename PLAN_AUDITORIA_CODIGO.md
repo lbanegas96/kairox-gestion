@@ -153,11 +153,34 @@ Se evaluaron los 5 pares candidatos con criterio de negocio (no solo métrica de
 `DevolucionesSection`, `HistorialVentas`). Build limpio, 0 errores de lint (solo warnings preexistentes),
 todos los flujos probados con datos reales en el tenant Nalux.
 
-### Fase F — Limpieza menor
-- Resolver la duplicación `components/reportes/` vs `components/reports/` (decidir cuál queda,
-  mover el contenido, actualizar imports).
-- Barrido de `no-unused-vars` una vez activado el lint (Fase A) — probablemente destape imports
-  muertos, variables sin usar, código comentado viejo.
+### Fase F — Limpieza menor — ✅ EJECUTADA (2026-07-07, sesión 51)
+
+- **Duplicación `components/reportes/` vs `components/reports/` resuelta:** `reports/` solo tenía
+  2 componentes genéricos (`ReportHeader.jsx`, `ReportTable.jsx`) consumidos únicamente por
+  `reportes/ModalReporte.jsx` — no era duplicación real, solo inconsistencia de naming (inglés vs
+  español). Se movieron ambos archivos a `reportes/` (carpeta española, consistente con el resto del
+  proyecto), se actualizó el único import, y se eliminó la carpeta `reports/` vacía.
+- **Barrido de `no-unused-vars` completo:** de 220 warnings a 3 (2186 warnings totales restantes son
+  casi todos `react/prop-types`, fuera de alcance de esta fase — ver Fase A).
+  - 155 imports de `React` sin uso eliminados (proyecto usa el JSX runtime automático de
+    `@vitejs/plugin-react`, no necesita `import React from 'react'` salvo donde se usa `React.algo`
+    explícitamente).
+  - 63 imports/variables/parámetros sin uso adicionales limpiados (íconos de lucide-react sin usar,
+    componentes de `ui/` sin usar, destructuring de hooks con campos no leídos, parámetros de
+    función no usados).
+  - 3 casos **dejados intencionalmente sin tocar** por ser posibles gaps de producto (no leftovers
+    de refactor) — requieren decisión de negocio, no limpieza mecánica:
+    - `TabPlanCuentas.jsx`: `handleToggleActiva` está completamente implementado pero no conectado a
+      ningún botón — activar/desactivar una cuenta contable podría ser una función real faltando su
+      UI, no código muerto.
+    - `DataTable.jsx`: `pageSize` es un prop público documentado en el JSDoc del componente
+      compartido — quitarlo cambiaría el contrato de la API aunque el body no lo lea hoy.
+    - `ComprobantePrintModal.jsx`: `pagoLabel` calcula correctamente el desglose de pagos múltiples,
+      pero el template impreso usa `comprobante.forma_pago` directo (línea 231) — el comprobante
+      impreso no muestra el desglose cuando hay más de un método de pago. Posible bug real, no dead
+      code.
+  - Verificado en vivo en Nalux tras el barrido completo: Dashboard, Clientes, Caja, Usuarios,
+    Cuentas Bancarias (incl. tab Conciliación) — sin errores de consola, sin regresiones visuales.
 
 ---
 

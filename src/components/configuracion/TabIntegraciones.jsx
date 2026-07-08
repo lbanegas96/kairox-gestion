@@ -1,4 +1,3 @@
-import React from 'react';
 import { EyeOff, Eye, Copy, CreditCard, Loader2, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';

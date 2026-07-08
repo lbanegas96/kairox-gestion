@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   Building, Mail, MapPin, Hash, Upload, Loader2, Trash2, AlertCircle,
   Image as ImageIcon, Save,

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Warehouse, Loader2, CheckCircle2, Save, Package2, BarChart3, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';

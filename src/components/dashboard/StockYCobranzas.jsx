@@ -1,4 +1,3 @@
-import React from 'react';
 import { Package, ArrowUpRight, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import { Skeleton } from './shared';
 

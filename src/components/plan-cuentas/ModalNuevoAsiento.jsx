@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Plus, Check, X, AlertTriangle, FileText, Loader2, CheckCircle2 } from 'lucide-react';
 import { asientosService } from '@/services/planCuentasService';
 import { parseNumberLocale } from '@/lib/currencyUtils';

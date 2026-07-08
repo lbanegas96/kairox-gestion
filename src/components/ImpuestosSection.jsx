@@ -1,4 +1,3 @@
-import React from 'react';
 import { Receipt } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import TabIVA from '@/components/impuestos/TabIVA';

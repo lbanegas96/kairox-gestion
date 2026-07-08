@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -117,7 +117,7 @@ export default function StaffPermissionsModal({ isOpen, onClose, userData, onSav
   const isAdmin = userData.role === 'admin';
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !loading && onClose()}>
+    <Dialog open={isOpen} onOpenChange={() => !loading && onClose()}>
       <DialogContent className="max-w-md bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">

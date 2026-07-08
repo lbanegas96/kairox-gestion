@@ -1,4 +1,3 @@
-import React from 'react';
 import { Bell, Loader2, Save } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';

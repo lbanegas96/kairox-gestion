@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Landmark, Plus, Upload, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle, RefreshCw, FileText, ChevronRight, Building2, Wallet, Eye, EyeOff, User, Bot, Check, Scale } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/SupabaseAuthContext';

@@ -1,4 +1,3 @@
-import React from 'react';
 import { BarChart3, ShoppingCart, Users, CreditCard, Banknote, Smartphone } from 'lucide-react';
 import { formatDateAR } from '@/lib/dateUtils';
 import { formatCurrency } from '@/lib/currencyUtils';

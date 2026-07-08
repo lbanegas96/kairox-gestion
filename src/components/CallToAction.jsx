@@ -1,4 +1,3 @@
-import React from 'react';
 const CallToAction = () => {
   return (
     <h1 className='text-xl font-bold text-white leading-8 w-full animate-in fade-in duration-500'>

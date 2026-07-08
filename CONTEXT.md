@@ -1,5 +1,30 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-07 (sesión 51 Luciano — Fase E del PLAN_AUDITORIA_CODIGO.md cerrada: dedup modales ventas↔compras)
+**Última actualización:** 2026-07-07 (sesión 51 Luciano — PLAN_AUDITORIA_CODIGO.md 100% ejecutado: Fases A-F cerradas)
+
+## ✅ Fase F del PLAN_AUDITORIA_CODIGO.md — Limpieza menor (2026-07-07, sesión 51)
+
+Última fase del plan de auditoría de código, ejecutada de forma autónoma (sin decisiones de negocio
+pendientes) mientras Luciano estaba afuera:
+
+- **`components/reportes/` vs `components/reports/`:** no era duplicación real — `reports/` solo
+  tenía 2 componentes genéricos (`ReportHeader.jsx`, `ReportTable.jsx`) usados únicamente por
+  `reportes/ModalReporte.jsx`. Se movieron a `reportes/` (consistente con el naming en español del
+  resto del proyecto) y se borró la carpeta vieja.
+- **Barrido `no-unused-vars`:** de 220 warnings a 3. La mayoría (155) eran `import React` sin usar
+  (el proyecto usa el JSX runtime automático de Vite, no lo necesita salvo uso explícito de
+  `React.algo`). El resto (63) eran íconos/componentes de UI importados y nunca usados, campos de
+  hooks destructurados sin leer, y parámetros de función sin usar.
+- **3 casos dejados sin tocar a propósito** (posibles gaps de producto, no leftovers — ver detalle en
+  `PLAN_AUDITORIA_CODIGO.md`): `TabPlanCuentas.jsx` tiene una función completa de activar/desactivar
+  cuenta contable sin botón que la dispare; `DataTable.jsx` tiene un prop público `pageSize`
+  documentado que el body no usa (API contract, no dead code); `ComprobantePrintModal.jsx` calcula
+  correctamente el desglose de pagos múltiples pero el template impreso muestra `forma_pago` directo
+  en su lugar — el comprobante impreso no reflejaría el desglose cuando hay más de un método de pago.
+- Verificado en vivo en Nalux tras el barrido: Dashboard, Clientes, Caja, Usuarios, Cuentas
+  Bancarias (incl. Conciliación) — sin errores de consola, sin regresiones. Build limpio, commit,
+  push y deploy a producción.
+
+**El `PLAN_AUDITORIA_CODIGO.md` queda 100% ejecutado (Fases A a F).**
 
 ## ✅ Fase E del PLAN_AUDITORIA_CODIGO.md — Duplicación de modales ventas↔compras (2026-07-07, sesión 51)
 

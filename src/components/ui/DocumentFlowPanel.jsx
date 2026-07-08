@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FileText, ShoppingCart, ClipboardList, PackageCheck, MinusCircle, CreditCard, ArrowRight, Loader2, GitBranch, RotateCcw } from 'lucide-react';
+import { ShoppingCart, ClipboardList, PackageCheck, MinusCircle, CreditCard, ArrowRight, Loader2, GitBranch, RotateCcw } from 'lucide-react';
 import { documentFlowService } from '@/services/documentFlowService';
 import { formatDateAR } from '@/lib/dateUtils';
 

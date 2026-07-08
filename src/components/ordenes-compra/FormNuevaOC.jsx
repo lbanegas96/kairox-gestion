@@ -1,4 +1,3 @@
-import React from 'react';
 import { Plus, ShoppingBag, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +10,7 @@ import { FORMAS_PAGO, EMPTY_ITEM } from './shared';
 function FormNuevaOC({
   form, setForm,
   items, setItems,
-  provSearch, provResults, selectedProv,
+  provSearch, provResults,
   searchProveedor, selectProveedor,
   prodResults, searchProducto, selectProducto,
   updateItem,

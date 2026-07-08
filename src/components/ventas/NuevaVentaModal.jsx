@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { ShoppingCart } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
@@ -13,7 +13,6 @@ import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { useMultipago } from '@/hooks/useMultipago';
 import { useCreditoCliente } from '@/hooks/useCreditoCliente';
 import { listaPreciosService } from '@/services/listaPreciosService';
-import { useQueryClient } from '@tanstack/react-query';
 import { useAfipConfig } from '@/hooks/useAfipConfig';
 import PanelCarrito from '@/components/ventas/nueva-venta/PanelCarrito';
 import PanelPago from '@/components/ventas/nueva-venta/PanelPago';
@@ -22,7 +21,6 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   const { user } = useAuth();
   const { currentSession, isSessionOpen } = useCaja();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   const [products, setProducts] = useState([]);
   const [clients, setClients] = useState([]);

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React from 'react';
 import { Upload, CheckCircle2, Link2, Unlink2, Zap } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
@@ -25,7 +25,7 @@ function ConciliacionTab({ cuentas, empresaId, userId }) {
     enabled: !!cuentaId,
   });
 
-  const { data: lineas = [], refetch: refetchLineas } = useQuery({
+  const { data: lineas = [] } = useQuery({
     queryKey: CONC_KEYS.lineas(extractoId),
     queryFn: () => conciliacionService.getLineas(extractoId, empresaId),
     enabled: !!extractoId,

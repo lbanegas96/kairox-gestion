@@ -1,4 +1,3 @@
-import React from 'react';
 import { Info, CheckCircle2, Package2 } from 'lucide-react';
 
 /**

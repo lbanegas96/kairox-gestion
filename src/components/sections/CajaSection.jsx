@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Filter, Plus, Wallet } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from '@/components/ui/use-toast';
@@ -29,7 +29,7 @@ import ModalAbrirCaja from '@/components/caja/ModalAbrirCaja';
 
 function CajaSection() {
   const { user } = useAuth();
-  const { currentSession, isSessionOpen, loading: sessionLoading, openSession, refreshSession } = useCaja();
+  const { currentSession, isSessionOpen, loading: sessionLoading, openSession } = useCaja();
   const { toast } = useToast();
   const tcParalelo = useTCParalelo();
   
@@ -37,7 +37,7 @@ function CajaSection() {
   const [activeTab, setActiveTab] = useState("movimientos");
   const [loading, setLoading] = useState(false);
   const [movimientos, setMovimientos] = useState([]);
-  const [userProfile, setUserProfile] = useState(null);
+  const [_userProfile, setUserProfile] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
 
   // Modal States

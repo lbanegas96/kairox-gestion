@@ -1,4 +1,3 @@
-import React from 'react';
 import { TrendingUp, TrendingDown, ArrowUpRight, Receipt } from 'lucide-react';
 import { fmt, fmtK, Skeleton } from './shared';
 

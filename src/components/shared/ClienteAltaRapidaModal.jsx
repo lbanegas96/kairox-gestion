@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { UserPlus, Loader2, Check } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,

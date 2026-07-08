@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Plus, ChevronRight, FileText, Loader2, CheckCircle2, Ban, Eye, ChevronLeft } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { asientosService, PLAN_CUENTAS_KEYS } from '@/services/planCuentasService';
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ESTADO_COLOR, fmt } from './shared';
 import ModalNuevoAsiento from './ModalNuevoAsiento';
 
-function TabAsientos({ empresaId, userId, cuentasFlat, onRefresh }) {
+function TabAsientos({ empresaId, userId, cuentasFlat }) {
   const [page, setPage]             = useState(1);
   const [filtroEstado, setFiltro]   = useState('');
   const [showModal, setShowModal]   = useState(false);

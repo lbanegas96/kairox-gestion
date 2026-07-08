@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Search, RefreshCw, TrendingUp, TrendingDown, Scale, BookOpen, ArrowRight
 } from 'lucide-react';

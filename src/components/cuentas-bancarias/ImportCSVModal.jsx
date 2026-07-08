@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Upload, RefreshCw } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -18,7 +18,7 @@ function ImportCSVModal({ open, onClose, cuentas, empresaId }) {
   const { user } = useAuth();
   const nombreUsuario = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.email || null;
   const fileRef = useRef();
-  const [step, setStep] = useState(1); // 1=config, 2=preview
+  const [_step, setStep] = useState(1); // 1=config, 2=preview
   const [cuentaId, setCuentaId] = useState('');
   const [parsed, setParsed] = useState(null); // { headers, rows }
   const [mapping, setMapping] = useState({ fecha: '', descripcion: '', monto: '', tipo: 'auto' });

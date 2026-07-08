@@ -1,4 +1,3 @@
-import React from 'react';
 import { TrendingUp, TrendingDown, Archive, Percent, CheckCircle2 } from 'lucide-react';
 import { fmt, Skeleton } from './shared';
 

@@ -1,4 +1,3 @@
-import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -41,7 +40,7 @@ function DashboardSection({ onNavigate }) {
     refetchInterval:      1000 * 30,
   };
 
-  const { data: kpis, isLoading: kpisLoading, error: kpisError, refetch: refetchKpis } = useQuery({
+  const { data: kpis, isLoading: kpisLoading, error: kpisError } = useQuery({
     queryKey: DASHBOARD_KEYS.kpis(empresaId),
     queryFn:  () => dashboardService.getKPIs(empresaId),
     ...dashboardOpts,

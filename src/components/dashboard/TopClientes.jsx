@@ -1,4 +1,3 @@
-import React from 'react';
 import { Users, ArrowUpRight } from 'lucide-react';
 import { Skeleton } from './shared';
 

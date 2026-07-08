@@ -1,4 +1,3 @@
-import React from 'react';
 import { ShoppingCart, ClipboardList, ShoppingBag, Wallet, UserPlus, FileText } from 'lucide-react';
 import { QuickActionButton } from './shared';
 

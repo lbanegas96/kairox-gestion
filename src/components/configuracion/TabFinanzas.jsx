@@ -1,4 +1,3 @@
-import React from 'react';
 import { TrendingUp, Loader2, CheckCircle2, Save, CreditCard, Pencil } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';

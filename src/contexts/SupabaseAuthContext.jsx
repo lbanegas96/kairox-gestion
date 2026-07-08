@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
-import { logger, safeErrorMessage } from '@/lib/securityUtils';
+import { logger } from '@/lib/securityUtils';
 import { useInactivityTimeout } from '@/hooks/useInactivityTimeout';
 
 const AuthContext = createContext(undefined);

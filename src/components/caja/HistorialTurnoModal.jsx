@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
@@ -6,7 +6,7 @@ import { Loader2, History, TrendingUp, ShoppingBag, CreditCard } from 'lucide-re
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
-import { formatDateAR, formatTimeAR } from '@/lib/dateUtils';
+import { formatTimeAR } from '@/lib/dateUtils';
 
 const fmt = (n) =>
   Number(n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

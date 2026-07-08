@@ -1,4 +1,3 @@
-import React from 'react';
 import { FileSpreadsheet, ArrowLeftRight, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { REPORTS } from './reportDefinitions';

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Search, Filter, Eye, Banknote, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

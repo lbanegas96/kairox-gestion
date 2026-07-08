@@ -1,4 +1,3 @@
-import React from 'react';
 import { Search, Eye, Trash2, CheckCircle, XCircle, Send, ShoppingCart, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

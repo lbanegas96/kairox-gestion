@@ -1,4 +1,3 @@
-import React from 'react';
 import { Search, Bot, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

@@ -1,7 +1,6 @@
 import { Buffer } from 'buffer';
 if (typeof globalThis.Buffer === 'undefined') globalThis.Buffer = Buffer;
 
-import React from 'react';
 import ReactDOM from 'react-dom/client';
 
 // ─── Suprimir console.* en producción para evitar fuga de datos ──────────────

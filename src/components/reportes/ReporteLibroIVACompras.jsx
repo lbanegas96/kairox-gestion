@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   BookOpen, Calendar, Download, RefreshCw, ArrowLeft, AlertCircle
 } from 'lucide-react';

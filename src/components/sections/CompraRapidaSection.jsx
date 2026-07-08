@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { AlertTriangle, ShoppingBag, Calendar } from 'lucide-react';
 import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 import { Button } from '@/components/ui/button';

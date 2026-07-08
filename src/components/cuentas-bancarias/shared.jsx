@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Copy, Check } from 'lucide-react';
+import { useState } from 'react';
+import { Copy, Check } from 'lucide-react';
 import { parseCSVText } from '@/lib/csvUtils';
 
 export const BANCOS_COMUNES = ['Ualá', 'Mercado Pago', 'Banco Galicia', 'Banco Santander', 'BBVA', 'HSBC', 'Banco Nación', 'Banco Provincia', 'Brubank', 'Naranja X', 'Otro'];

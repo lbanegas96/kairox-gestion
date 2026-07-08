@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 import { Building2, User, UserCircle, ArrowRight, Loader2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -32,7 +32,7 @@ function OnboardingPage() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.rpc('create_tenant', {
+      const { error } = await supabase.rpc('create_tenant', {
         p_nombre_empresa: formData.nombre_empresa.trim(),
         p_first_name: formData.first_name.trim(),
         p_last_name: formData.last_name.trim(),
