@@ -390,8 +390,28 @@ function ComprasSection() {
         );
       }
 
-      // Caja
       const providerName = proveedores.find(p => p.id === purchaseForm.proveedor_id)?.nombre || 'Proveedor';
+
+      // Cuenta Corriente → cargo en el sub-libro del proveedor (aumenta su deuda).
+      // Sin esto la compra a crédito quedaba registrada y con asiento contable, pero
+      // la deuda NO aparecía en Proveedores → Cuenta Corriente (mismo patrón que
+      // NuevaFacturaProveedorModal).
+      if (purchaseForm.forma_pago === 'Cuenta Corriente') {
+        const { error: ccErr } = await supabase.from('cuenta_corriente_proveedores').insert([{
+          empresa_id:      user.empresa_id,
+          user_id:         user.id,
+          proveedor_id:    purchaseForm.proveedor_id,
+          tipo:            'compra',
+          monto:           totalCompra,
+          descripcion:     `Compra ${purchaseForm.numero_factura || 'S/N'} — ${providerName}`,
+          referencia_id:   newPurchase.id,
+          referencia_tipo: 'compra_rapida',
+          fecha:           getDateFromInputAR(purchaseForm.fecha),
+        }]);
+        if (ccErr) throw ccErr;
+      }
+
+      // Caja
       if (status === 'pagada') {
         const { error: cajaErr } = await supabase.from('movimientos_caja').insert([{
           user_id: user.id,

@@ -11,10 +11,13 @@ function ModalCambioEstado({
   chequeACambiar,
   estadoNuevo, setEstadoNuevo,
   obsEstado, setObsEstado,
+  proveedores = [],
+  proveedorEndosoId, setProveedorEndosoId,
   savingEstado,
   transicionesDisponibles,
   onConfirmar,
 }) {
+  const requiereProveedor = estadoNuevo === 'endosado';
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-sm">
@@ -46,6 +49,21 @@ function ModalCambioEstado({
               </SelectContent>
             </Select>
           </div>
+          {requiereProveedor && (
+            <div>
+              <Label className="text-kx-text-3 text-xs">Endosar a proveedor *</Label>
+              <Select value={proveedorEndosoId} onValueChange={setProveedorEndosoId}>
+                <SelectTrigger className="mt-1 bg-slate-800 border-slate-700">
+                  <SelectValue placeholder="Elegí un proveedor" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  {proveedores.map(p => (
+                    <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div>
             <Label className="text-kx-text-3 text-xs">Observación (opcional)</Label>
             <Input value={obsEstado}
@@ -60,7 +78,7 @@ function ModalCambioEstado({
             className="text-kx-text-3">
             Cancelar
           </Button>
-          <Button onClick={onConfirmar} disabled={savingEstado || !estadoNuevo}
+          <Button onClick={onConfirmar} disabled={savingEstado || !estadoNuevo || (requiereProveedor && !proveedorEndosoId)}
             className="bg-[#00D4FF] text-black hover:bg-[#00bfe8]">
             {savingEstado
               ? <Loader2 size={14} className="animate-spin mr-2" />

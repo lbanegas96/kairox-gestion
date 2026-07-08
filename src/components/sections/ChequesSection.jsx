@@ -36,6 +36,7 @@ export default function ChequesSection() {
   const [chequeACambiar, setChequeACambiar]       = useState(null);
   const [estadoNuevo, setEstadoNuevo]             = useState('');
   const [obsEstado, setObsEstado]                 = useState('');
+  const [proveedorEndosoId, setProveedorEndosoId] = useState('');
   const [showDetalle, setShowDetalle]             = useState(false);
   const [chequeDetalle, setChequeDetalle]         = useState(null);
   const [historial, setHistorial]                 = useState([]);
@@ -223,6 +224,13 @@ export default function ChequesSection() {
 
   const handleCambiarEstado = async () => {
     if (!chequeACambiar || !estadoNuevo) return;
+    // El endoso requiere elegir a qué proveedor se le entrega el cheque —
+    // sin esto el trigger fn_asiento_cheque_tercero (mig.166) no genera el
+    // asiento (no-op silencioso si proveedor_id sigue null).
+    if (estadoNuevo === 'endosado' && !proveedorEndosoId) {
+      toast({ title: 'Elegí un proveedor para el endoso', variant: 'destructive' });
+      return;
+    }
     setSavingE(true);
     try {
       // Cambio de estado + historial en una sola transacción (RPC atómica).
@@ -231,6 +239,7 @@ export default function ChequesSection() {
         p_user_id:      user.id,
         p_estado_nuevo: estadoNuevo,
         p_observacion:  obsEstado || null,
+        p_proveedor_endoso_id: estadoNuevo === 'endosado' ? proveedorEndosoId : null,
       });
       if (error) throw error;
       toast({
@@ -241,6 +250,7 @@ export default function ChequesSection() {
       setChequeACambiar(null);
       setEstadoNuevo('');
       setObsEstado('');
+      setProveedorEndosoId('');
       fetchCheques();
     } catch (e) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
@@ -257,6 +267,7 @@ export default function ChequesSection() {
     setChequeACambiar(cheque);
     setEstadoNuevo(opciones[0]);
     setObsEstado('');
+    setProveedorEndosoId('');
     setShowCambioEstado(true);
   };
 
@@ -411,11 +422,13 @@ export default function ChequesSection() {
         onOpenChange={v => {
           if (savingEstado) return;
           setShowCambioEstado(v);
-          if (!v) { setChequeACambiar(null); setEstadoNuevo(''); setObsEstado(''); }
+          if (!v) { setChequeACambiar(null); setEstadoNuevo(''); setObsEstado(''); setProveedorEndosoId(''); }
         }}
         chequeACambiar={chequeACambiar}
         estadoNuevo={estadoNuevo} setEstadoNuevo={setEstadoNuevo}
         obsEstado={obsEstado} setObsEstado={setObsEstado}
+        proveedores={proveedores}
+        proveedorEndosoId={proveedorEndosoId} setProveedorEndosoId={setProveedorEndosoId}
         savingEstado={savingEstado}
         transicionesDisponibles={transicionesDisponibles}
         onConfirmar={handleCambiarEstado}

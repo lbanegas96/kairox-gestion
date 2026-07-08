@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useCaja } from '@/contexts/CajaContext';
 import { proveedoresService, PROV_KEYS } from '@/services/proveedoresService';
 import { formatDateAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
@@ -38,6 +39,7 @@ function ProveedoresSection() {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { currentSession } = useCaja();
   const empresaId = user?.empresa_id;
   const isAdmin = user?.role === 'admin';
 
@@ -118,7 +120,7 @@ function ProveedoresSection() {
 
   const pagoMutation = useMutation({
     mutationFn: ({ monto, descripcion, metodo }) =>
-      proveedoresService.registrarPago(empresaId, detalleId, detalle?.nombre, monto, metodo, descripcion, user.id),
+      proveedoresService.registrarPago(empresaId, detalleId, detalle?.nombre, monto, metodo, descripcion, user.id, currentSession?.id ?? null),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: PROV_KEYS.cuentaCorriente(detalleId) });
       invalidate();

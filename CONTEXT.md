@@ -1,5 +1,72 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-08 (sesión 52 cont. Luciano — cheques propios contabilizados + 2 fixes de mercado en cheques de terceros, migration 166)
+**Última actualización:** 2026-07-08 (sesión 53 Nadia — ejecución PLAN_PRUEBAS_NADIA_2026-07-08 + 3 bugs de UI encontrados y corregidos)
+
+## ✅ PLAN_PRUEBAS_NADIA_2026-07-08.md ejecutado + 3 bugs de frontend corregidos (sesión 53, 2026-07-08)
+
+Nadia ejecutó el plan de pruebas de cheques que dejó Luciano (migration 166). Los 4 bloques se
+probaron en real sobre Nalux. **El backend de la migration 166 estaba 100% correcto, pero faltaba
+conectar el frontend en 2 lugares — más un 3er bug independiente que apareció durante la regresión.**
+Los 3 se corrigieron y verificaron en vivo.
+
+### Bloque 1 — Cheque propio (pendiente→entregado→cobrado) ✅
+- El botón "Registrar" que a Luciano no le respondía era solo su navegador automatizado — funciona
+  bien (Nadia registró el cheque propio 99001/Alibaba $1.000 sin problema).
+- Entregado → AS-000150 (DEBE 2.1.1 Cuentas a Pagar / HABER 2.1.6 Documentos a Pagar).
+- Cobrado → AS-000151 (DEBE 2.1.6 / HABER 1.1.1 Caja y Bancos). Cuenta 2.1.6 queda en $0 al cerrar
+  el ciclo. Todo exacto.
+
+### Bloque 2 — Cheque de tercero endosado a proveedor 🔴 BUG DE FRONTEND → CORREGIDO
+- **Bug:** al mover un cheque a "Endosado", la UI no pedía elegir proveedor y no generaba asiento —
+  el cheque quedaba `estado='endosado'` con `proveedor_id=null` (no-op silencioso del trigger).
+- **Causa:** la migration 166 agregó el parámetro `p_proveedor_endoso_id` al RPC
+  `cambiar_estado_cheque`, pero el frontend nunca se actualizó. `ChequesSection.handleCambiarEstado`
+  llamaba al RPC sin ese parámetro y `ModalCambioEstado` no tenía campo para elegirlo.
+- **Fix:** `ModalCambioEstado.jsx` ahora muestra un `<Select>` "Endosar a proveedor *" solo cuando
+  `estadoNuevo === 'endosado'`, con el botón Confirmar bloqueado hasta elegir uno.
+  `ChequesSection.jsx` agrega state `proveedorEndosoId`, valida que esté seteado antes de endosar, y
+  pasa `p_proveedor_endoso_id` al RPC. Se pasa `proveedores` (ya cargado en el state) al modal.
+- **Verificado:** cheque 88005 endosado a Amazon → AS-000162 (DEBE 2.1.1 / HABER 1.1.6, $2.000). El
+  paso posterior a "Cobrado" NO generó asiento duplicado (correcto — ya se resolvió en el endoso).
+
+### Bloque 3 — Cheque de tercero rechazado ✅
+- Cheque 33003/Niño rechazado → AS-000154 (DEBE 1.1.7 Deudores por Cheques Rechazados / HABER 1.1.6).
+  Ya no revierte contra Cuentas a Cobrar. Correcto.
+
+### Bloque 4 — Regresión general ✅ + 2do bug encontrado
+- Venta Efectivo (20260708-001) y Venta CC (20260708-002, Katy) OK.
+- Cheque normal (recibido→depositado→cobrado, sin endoso): sigue generando los mismos 2 asientos
+  (recibido + cobrado). OK.
+- Cobro de CC de cliente (Katy $6.320) OK.
+- **Pago a proveedor 🔴 BUG DE FRONTEND → CORREGIDO:** el pago a proveedor en efectivo insertaba el
+  `movimientos_caja` con `caja_sesion_id=null`, así que no se contaba en "Egresos del turno" ni en el
+  arqueo de cierre (posible diferencia de caja real). **Causa:** `ProveedoresSection.jsx` no importaba
+  `useCaja()` y llamaba `registrarPago` sin `cajaSesionId` (siempre `null`) — asimétrico con
+  `CuentaCorrienteSection.jsx` (cobro a cliente) que sí pasaba `currentSession?.id`. **Fix:** importar
+  `useCaja`, tomar `currentSession` y pasarlo. **Verificado:** pago de $500 a Amazon → "Egresos del
+  turno" pasó de $0 a $500, y el arqueo de cierre lo incluyó (cuadró en $0 con saldo esperado $205.856).
+- Ciclo abrir/cerrar caja completo probado (cerró cuadrando, reabierta con saldo $205.856).
+- Dashboard sin nada raro.
+
+### 3er bug (independiente, encontrado durante la regresión) 🔴 → CORREGIDO
+- **Compra Rápida con forma de pago "Cuenta Corriente"** registraba la compra y generaba el asiento
+  contable (`esCredito:true`), pero **nunca insertaba el movimiento en `cuenta_corriente_proveedores`**
+  → la deuda no aparecía en Proveedores → Cuenta Corriente. Solo "Facturas de Compra"
+  (`NuevaFacturaProveedorModal`) lo hacía bien.
+- **Fix:** `CompraRapidaSection.handleRegisterPurchase` ahora inserta el cargo `tipo:'compra'` en
+  `cuenta_corriente_proveedores` cuando `forma_pago === 'Cuenta Corriente'` (mismo patrón que
+  NuevaFacturaProveedorModal, con `referencia_tipo:'compra_rapida'`).
+- **Verificado:** compra CC de $10.000 a Burbujitas → saldo deuda del proveedor pasó a $10.000 en su
+  Cuenta Corriente.
+
+**Archivos tocados (todo frontend, sin migración nueva):**
+`src/components/cheques/ModalCambioEstado.jsx`, `src/components/sections/ChequesSection.jsx`,
+`src/components/sections/ProveedoresSection.jsx`, `src/components/sections/CompraRapidaSection.jsx`.
+Lint OK (solo warnings preexistentes de prop-types), 0 errores.
+
+**Con esto el PLAN_PRUEBAS_NADIA_2026-07-08.md queda 100% ejecutado (4/4 bloques) y los 3 bugs que
+aparecieron quedaron corregidos y verificados en vivo.**
+
+---
 
 ## ✅ Cheques propios → contabilización + correcciones de mercado en cheques de terceros (2026-07-08, migration 166)
 
