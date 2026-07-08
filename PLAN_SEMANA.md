@@ -106,7 +106,31 @@ El commit de Nadia le agregó 2 callers reales en `CompraRapidaSection.jsx` (edi
 - ✅ **RESUELTO (sesión 50, migration 067):** 5 policies RLS que re-evaluaban `auth.uid()`/`auth.role()` por fila (4 en `profiles`, 1 en `movimientos_uala`) — reescritas con `(select auth.uid())`/`(select auth.role())`, misma lógica exacta, verificado con `BEGIN...ROLLBACK` (un usuario sigue viendo solo su propio profile) y con `get_advisors` (el lint `auth_rls_initplan` bajó de 5 a 0).
 - ✅ **RESUELTO (sesión 50, migration 067):** 2 índices duplicados — `idx_prov_empresa` (duplicaba `idx_proveedores_empresa`) y `idx_tc_empresa_moneda_fecha` (duplicaba `idx_tipos_cambio_empresa_fecha`), ambos dropeados. Confirmado con `get_advisors` (lint `duplicate_index` bajó de 2 a 0).
 - ✅ **RESUELTO (sesión 50, migration 068):** `ventas_backup` / `detalle_ventas_backup` — confirmado por contenido (Luciano revisó las filas): eran restos del esquema viejo `ventas`/`detalle_ventas` previo a la migración a `comprobantes`, de los primeros días del sistema (fechas 02-03/06), ya reemplazados por 8 comprobantes reales de la misma empresa en ese mismo rango. Sin ninguna FK de otra tabla apuntando a estas 2 (confirmado por `pg_constraint` antes de borrar). `DROP TABLE` de ambas — el contenido completo (14 filas en total) queda embebido en el comentario de rollback de la migration, 100% recuperable desde el historial de git si algún día hiciera falta.
-- **90 warnings de "multiple permissive policies"** y **75 FKs sin índice** y **44 índices sin uso**: backlog real, pero no es bloqueante para "sistema funcional esta semana" — anotarlo para una sesión de performance dedicada más adelante, no la prioricen ahora salvo que algo concreto esté lento.
+- ✅ **RESUELTO (sesión 52, migrations 158-165):** el backlog había crecido a 245 warnings de
+  "multiple permissive policies" (47 tablas con un par `_cud`/`_admin_write` (`FOR ALL`) +
+  `_select` redundante, más 3 pares en `profiles`) y 2 FKs sin índice en
+  `determinacion_cuentas_mayor`. Fix aplicado:
+  - Las 46 tablas con patrón `_cud`/`_admin_write` (`FOR ALL`) + `_select`: se dividió la policy
+    `FOR ALL` en `INSERT`/`UPDATE`/`DELETE` separadas (misma condición exacta, sin ningún cambio de
+    autorización), dejando la `_select` dedicada como única policy que aplica a lecturas. Aplicado
+    con un `DO $$ ... $$` que lee la condición real desde `pg_policies` (sin transcripción manual)
+    y la reescribe, en 6 lotes de ~8 tablas con `SET lock_timeout = '3s'` cada uno — la primera
+    prueba en una sola transacción grande chocó con un deadlock real contra tráfico en producción
+    (confirmado con `preview_network`: los mismos requests fallidos en consola eran logs cacheados
+    de ese intento, no un problema persistente), así que se re-hizo en lotes chicos y sin bloquear a
+    nadie.
+  - `profiles`: los 3 pares (`admin_select`+`select`, `admin_insert`+`insert`,
+    `admin_update`+`self_update`) se fusionaron en una única policy por acción con `OR` (admin ve
+    todos en su empresa, o el propio usuario ve/edita su fila — el `self_update` sigue bloqueando
+    que un usuario se auto-escale el rol).
+  - 2 índices de cobertura agregados para las FKs de `determinacion_cuentas_mayor`.
+  - Verificado con `get_advisors`: `multiple_permissive_policies` 245→0, `unindexed_foreign_keys`
+    2→0. Verificado en vivo en Nalux (Dashboard, Clientes, Configuración→Usuarios como admin) sin
+    errores de RLS ni regresiones.
+  - **44 índices sin uso** (ahora 91 tras crecer el schema) se dejan sin tocar a propósito — son
+    índices de cobertura de FK que el advisor marca "unused" solo porque el volumen de datos actual
+    es chico y Postgres todavía prefiere seq scan; dropearlos ahora perjudicaría performance futura
+    cuando el volumen de datos crezca. Backlog conocido, no bloqueante.
 
 ---
 

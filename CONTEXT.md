@@ -1,5 +1,45 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-07 (sesión 51 Luciano — PLAN_AUDITORIA_CODIGO.md 100% ejecutado: Fases A-F cerradas)
+**Última actualización:** 2026-07-07 (sesión 52 Luciano — backlog de performance RLS resuelto: 245→0 multiple_permissive_policies)
+
+## ✅ Backlog de performance de Supabase — RLS multiple_permissive_policies + FKs sin índice (2026-07-07, sesión 52)
+
+Con `PLAN_AUDITORIA_CODIGO.md` (Fases A-F) y la seguridad (`PLAN_AUDITORIA.md`) ya cerrados, se
+retomó el único frente real que quedaba documentado como backlog no bloqueante en `PLAN_SEMANA.md`
+sección 3: 245 warnings de `multiple_permissive_policies` (había crecido desde los 90 documentados
+en sesión 50, por tablas nuevas de AFIP/series/unidades/condiciones agregadas después) y 2
+`unindexed_foreign_keys` en `determinacion_cuentas_mayor`.
+
+**Causa:** 46 tablas tenían el patrón `<tabla>_cud` (o `_admin_write`) como policy `FOR ALL` +
+una policy `_select` separada — Postgres evalúa ambas para cualquier `SELECT`, ya que "ALL" incluye
+"SELECT". Además `profiles` tenía 3 pares de policies duplicadas por diseño (admin ve todo vs. el
+usuario ve/edita su propia fila).
+
+**Fix (migrations 158-165):**
+- 46 tablas: se dividió la policy `FOR ALL` en `INSERT`/`UPDATE`/`DELETE` separadas con la
+  **misma condición exacta** (leída dinámicamente desde `pg_policies`, no transcripta a mano, para
+  evitar errores), dejando `_select` como única policy que aplica a lecturas. Sin cambio de
+  autorización en ningún caso — verificado comparando `qual`/`with_check` antes y después.
+- `profiles`: los 3 pares se fusionaron en una policy por acción con `OR` (mismo resultado que la
+  suma de las 2 policies anteriores, una sola evaluación en vez de dos). `self_update` sigue
+  bloqueando que un usuario cambie su propio rol.
+- 2 índices agregados para las FKs de `determinacion_cuentas_mayor`.
+
+**Incidente durante la aplicación:** el primer intento (una sola transacción con las 46 tablas)
+chocó con un deadlock real (`40P01`) contra tráfico en producción — Postgres lo detectó y abortó la
+transacción automáticamente, sin dejar nada a medio aplicar. Se confirmó con el usuario cómo seguir
+(por lotes chicos, ahora) y se re-aplicó en 6 lotes de ~8 tablas con `SET lock_timeout = '3s'` cada
+uno — todos los lotes entraron sin bloquear a nadie.
+
+**Verificación:** `get_advisors` performance: `multiple_permissive_policies` 245→0,
+`unindexed_foreign_keys` 2→0. Probado en vivo en Nalux (sesión de Nadia, admin): Dashboard,
+Clientes, Configuración→Usuarios — sin errores de RLS, sin regresiones. Los 91 `unused_index`
+restantes se dejan sin tocar a propósito (índices de cobertura de FK legítimos que el advisor marca
+"unused" solo por bajo volumen de datos actual, no por ser redundantes).
+
+**Resultado:** con esto se cierran, además de `PLAN_AUDITORIA_CODIGO.md`, los 3 backlogs de
+performance identificados en `PLAN_SEMANA.md` sección 3. Solo queda pendiente 1.2 (Leaked Password
+Protection, bloqueado por plan de Supabase — decisión de negocio) y los 2 items fuera de alcance de
+pgTAP (emitir-cae, Caja) documentados en sección 4.
 
 ## ✅ Fase F del PLAN_AUDITORIA_CODIGO.md — Limpieza menor (2026-07-07, sesión 51)
 
