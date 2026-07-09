@@ -48,6 +48,9 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
   const [items, setItems]             = useState([newItem()]);
   const [loading, setLoading]         = useState(false);
   const [afipConfig, setAfipConfig]   = useState(null);
+  // Relevancia fiscal (patrón SAP, mismo que NuevaFacturaModal.jsx) — tildado,
+  // esta NC nunca se encola para CAE aunque AFIP esté activo.
+  const [noRelevanteFiscal, setNoRelevanteFiscal] = useState(false);
 
   const origenLocked = !!comprobanteOrigen;
 
@@ -103,6 +106,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
       setMotivoCustom('');
       setItems([newItem()]);
       setAfipConfig(null);
+      setNoRelevanteFiscal(false);
     }
   }, [open]);
 
@@ -167,9 +171,18 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
       });
       if (error) throw error;
 
+      // Relevancia fiscal (patrón SAP) — crear_nota_credito no acepta este campo
+      // como parámetro (default relevante_fiscal=true en la tabla), se corrige acá
+      // con un UPDATE de seguimiento antes de decidir si se encola para AFIP.
+      if (noRelevanteFiscal) {
+        const { error: relevanteErr } = await supabase.from('comprobantes')
+          .update({ relevante_fiscal: false }).eq('id', data.comprobante_id);
+        if (relevanteErr) console.warn('[relevante_fiscal NC]', relevanteErr.message);
+      }
+
       // AFIP — encolar NC en facturas_pendientes_arca vía trigger (SAP async posting).
       // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca.
-      if (afipConfig?.usa_factura_electronica && afipConfig?.punto_venta) {
+      if (afipConfig?.usa_factura_electronica && afipConfig?.punto_venta && !noRelevanteFiscal) {
         const { error: afipQueueErr } = await supabase.from('comprobantes').update({
           tipo_comprobante_afip: comprobanteOrigen?.tipo_comprobante_afip ?? 'B',
           punto_venta_id:        afipConfig.punto_venta.id,
@@ -215,6 +228,23 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
               Si además necesitás devolver mercadería al stock, usá el módulo Devoluciones.
             </span>
           </div>
+
+          {/* Relevancia fiscal (patrón SAP) — solo tiene sentido si AFIP está activo */}
+          {afipConfig?.usa_factura_electronica && (
+            <label className="flex items-start gap-2 p-3 rounded-lg bg-kx-surface-2 border border-kx-border text-xs text-kx-text-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={noRelevanteFiscal}
+                onChange={e => setNoRelevanteFiscal(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                <strong className="text-kx-text">No relevante para AFIP</strong> — ajuste interno o
+                corrección manual. Tildado, esta NC <strong>nunca</strong> se encola para emitir CAE
+                ante ARCA, aunque la facturación electrónica esté activa.
+              </span>
+            </label>
+          )}
 
           {/* Cliente + Motivo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

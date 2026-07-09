@@ -45,6 +45,10 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   const [centrosCosto, setCentrosCosto] = useState([]);
   const [centroCostoId, setCentroCostoId] = useState('');
 
+  // Relevancia fiscal (patrón SAP, mismo que NuevaFacturaModal.jsx) — tildado,
+  // esta venta nunca se encola para CAE aunque AFIP esté activo.
+  const [noRelevanteFiscal, setNoRelevanteFiscal] = useState(false);
+
   // ── Moneda Paralela ─────────────────────────────────────────────────────────
   const tcParalelo = useTCParalelo();
 
@@ -232,6 +236,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     setListaNombre('');
     setPedidoYaEntregado(false);
     setCentroCostoId('');
+    setNoRelevanteFiscal(false);
   };
 
   // Cuando cambia el cliente, cargar su lista de precios
@@ -554,11 +559,22 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         }
       });
 
+      // Relevancia fiscal (patrón SAP, mismo que NuevaFacturaModal.jsx) — crear_venta
+      // no acepta este campo como parámetro (default relevante_fiscal=true en la
+      // tabla), así que se corrige con un UPDATE de seguimiento antes de decidir si
+      // se encola para AFIP. fn_queue_factura_arca también lo guarda como defensa
+      // en profundidad, pero evitamos el UPDATE de cae_estado innecesario acá.
+      if (noRelevanteFiscal && comprobante?.id) {
+        const { error: relevanteErr } = await supabase.from('comprobantes')
+          .update({ relevante_fiscal: false }).eq('id', comprobante.id);
+        if (relevanteErr) console.warn('[relevante_fiscal]', relevanteErr.message);
+      }
+
       // ── Encolar CAE vía trigger (SAP async posting — no bloquea la venta) ──────
       // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca, que inserta
       // en facturas_pendientes_arca. El arca-worker (cron */5 * * * *) es la única
       // fuente de verdad para llamar a ARCA — nunca desde el frontend.
-      if (afipActivo && comprobante?.id) {
+      if (afipActivo && comprobante?.id && !noRelevanteFiscal) {
         const tipoComp = determinarTipoComprobante(
           afipConfig.condicion_iva,
           selectedClient?.condicion_iva ?? 'CF'
@@ -625,6 +641,8 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
               loading={loading} cart={cart} tcMissing={tcMissing}
               handleConfirmSale={handleConfirmSale}
               centrosCosto={centrosCosto} centroCostoId={centroCostoId} setCentroCostoId={setCentroCostoId}
+              afipActivo={afipActivo}
+              noRelevanteFiscal={noRelevanteFiscal} setNoRelevanteFiscal={setNoRelevanteFiscal}
             />
           </div>
         </DialogContent>

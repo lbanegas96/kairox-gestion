@@ -1,4 +1,23 @@
 # KAIROX Gestión — Contexto de Sesión
+**Última actualización:** 2026-07-09 (sesión 56 Nadia — checkbox "No relevante para AFIP" en NuevaVentaModal y NuevaNCModal)
+
+## ✅ Checkbox "No relevante para AFIP" en NuevaVentaModal + NuevaNCModal (sesión 56)
+
+Nadia revisó los pendientes del CONTEXT.md. Los ítems #1–#3 y #5 ya estaban implementados por Luciano en commits anteriores (verificado por grep en el código fuente). Solo faltaba el ítem #4: el checkbox "No relevante para AFIP" que existía en `NuevaFacturaModal.jsx` pero **no** en `NuevaVentaModal.jsx` (flujo POS/pedidos) ni en `NuevaNCModal.jsx`.
+
+**Implementación:**
+- `NuevaVentaModal.jsx`: estado `noRelevanteFiscal`, reset en `resetForm()`, UPDATE `relevante_fiscal=false` en `comprobantes` post-RPC si está tildado, guard `!noRelevanteFiscal` en el encolado AFIP. Props `afipActivo/noRelevanteFiscal/setNoRelevanteFiscal` pasadas a `PanelPago`.
+- `PanelPago.jsx` (`nueva-venta/`): recibe los 3 props nuevos, renderiza el checkbox dentro de un `label` estilizado solo cuando `afipActivo === true` (mismo patrón visual que el resto de la UI).
+- `NuevaNCModal.jsx`: mismo patrón — estado, reset en `useEffect`, UPDATE post-RPC, guard en encolado AFIP. Checkbox mostrado solo cuando `afipConfig?.usa_factura_electronica`.
+
+**Semántica:** `relevante_fiscal=false` marca el comprobante como "nunca encolar para CAE ante ARCA". La columna tiene `DEFAULT true` en DB. El RPC `crear_venta` no acepta ese parámetro, por lo que se corrige con un UPDATE de seguimiento. El trigger `fn_queue_factura_arca` también verifica `relevante_fiscal` como defensa en profundidad.
+
+`npx vite build` exit 0.
+
+**Pendiente (no bloqueante):**
+- Task #6 (opcional, baja severidad): trigger BEFORE INSERT/UPDATE que valide `centro_costo_id.empresa_id = comprobante.empresa_id` en comprobantes/compras/asientos_contables — previene cross-tenant `centro_costo_id` vía API directa. Para Luciano.
+- Jurisdicción IIBB de Nalux: quedó `Córdoba` (dato de test de Luciano). Corregir desde Impuestos → IIBB.
+
 **Última actualización:** 2026-07-09 (sesión 55 Luciano — CIERRE del plan de 4 frentes contables + toggle "Impuestos Avanzados" por empresa, migrations 170-173)
 
 ## ✅ Toggle "Impuestos Avanzados" por empresa (migration 173, sesión 55)

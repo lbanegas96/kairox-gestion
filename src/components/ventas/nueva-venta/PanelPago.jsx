@@ -15,6 +15,7 @@ function PanelPago({
   loading, cart, tcMissing,
   handleConfirmSale,
   centrosCosto = [], centroCostoId, setCentroCostoId,
+  afipActivo = false, noRelevanteFiscal, setNoRelevanteFiscal,
 }) {
   return (
     <div className="w-full md:w-96 bg-slate-50 dark:bg-slate-900/30 p-6 flex flex-col gap-6 overflow-y-auto border-l border-slate-200 dark:border-slate-800">
@@ -149,6 +150,21 @@ function PanelPago({
             {centrosCosto.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
         </div>
+      )}
+      {afipActivo && (
+        <label className="flex items-start gap-2 p-3 rounded-lg bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={noRelevanteFiscal}
+            onChange={e => setNoRelevanteFiscal(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            <strong className="text-slate-900 dark:text-white">No relevante para AFIP</strong> — venta
+            interna, ajuste o corrección manual. Tildado, este comprobante <strong>nunca</strong> se
+            encola para emitir CAE ante ARCA, aunque la facturación electrónica esté activa.
+          </span>
+        </label>
       )}
       <div className="mt-auto">
         <Button
