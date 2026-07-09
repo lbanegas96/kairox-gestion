@@ -181,10 +181,28 @@ La matemática de FX ya se auditó a fondo como parte del área #1 (vive en las 
   caso tomaría la tasa del día siguiente en vez de la de hoy. Mismo tipo de hallazgo ya documentado
   para `tipoCambioService.js` (ya corregido en el frontend); acá queda igual de bajo riesgo.
 
+**4. Centro de Costo — ✅ AUDITADA Y CORREGIDA.**
+- Ya se había encontrado y corregido 1 regresión (`crear_venta` sin `has_module_permission`,
+  ver arriba). Barrido del resto de la superficie (`compras`, `asientos_contables`,
+  `centros_costo`, `TabEstadoResultados.jsx`):
+- **T: 🔴 CONFIRMADO Y CORREGIDO.** `centros_costo` (tabla nueva de mig.168) se creó **después**
+  del barrido sistemático de mig.149/153 que gateó todas las tablas maestras de
+  `ConfiguracionSection` con `has_module_permission('configuracion')` — quedó con el mismo patrón
+  débil de origen (`FOR ALL`, solo `empresa_id`, sin permiso de módulo). Probado con
+  `BEGIN...ROLLBACK`: staff sin permiso `configuracion` insertó un centro de costo falso vía API
+  directa. **Fix (mig.177):** mismo patrón exacto que mig.149 — SELECT tenant-only, INSERT/UPDATE/
+  DELETE exigen `has_module_permission('configuracion')`. Validado: staff sin permiso bloqueado.
+- `compras`/`asientos_contables`: la escritura de `centro_costo_id` va directo al INSERT (no vía
+  RPC) — ya protegidas por sus policies existentes (`has_module_permission('compras')` /
+  `('configuracion')` respectivamente, confirmadas intactas). Sin hallazgo.
+- `TabEstadoResultados.jsx`: filtro de solo lectura sobre `asientos_contables`, cubierto por su
+  policy SELECT tenant-only existente. Sin hallazgo.
+
 ## Registro de hallazgos (log corrido)
 
 | Fecha | Área | Severidad | Hallazgo | Fix |
 |-------|------|-----------|----------|-----|
+| 2026-07-09 | Centro de Costo | 🔴 | `centros_costo` con policy `FOR ALL` débil (solo `empresa_id`, sin permiso de módulo) — se creó después del barrido sistemático que protegió el resto de tablas maestras de Configuración | Mismo patrón que mig.149: SELECT tenant-only, CUD exige `has_module_permission('configuracion')` (mig.177) |
 | 2026-07-09 | Multimoneda | 🟢 | `registrar_pago_proveedor` usa `now()::date` (fecha del servidor UTC) para `get_tasa_cambio` en vez de la fecha Argentina del pago — ventana angosta (pagos después de 21:00 ART con tasa de "mañana" ya cargada) | No fixeado — documentado, mismo criterio que hallazgos 🟢 previos de esta auditoría |
 | 2026-07-09 | IIBB | 🔴 | `generar_liquidacion_iibb` sin guard contra 2 liquidaciones para el mismo período (o solapado) — doble confirmación duplicaría el IIBB contabilizado | `EXISTS` contra períodos solapados antes de generar (mig.176) |
 | 2026-07-09 | IIBB | 🟡 | Base imponible ignoraba las Notas de Crédito del período (solo sumaba `tipo='venta'`), sobrestimando el impuesto | Base neteada: ventas − NC del mismo período (mig.176) |
