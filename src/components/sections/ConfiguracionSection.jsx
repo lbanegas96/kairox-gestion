@@ -78,6 +78,11 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [loadingTC, setLoadingTC] = useState(false);
   const [savingTC, setSavingTC] = useState(false);
 
+  // ── Tab 2: Finanzas — Toggle Impuestos Avanzados (IIBB / Retenciones) ──────
+  const [impuestosAvanzados, setImpuestosAvanzados] = useState(false);
+  const [loadingImpuestosAv, setLoadingImpuestosAv] = useState(false);
+  const [savingImpuestosAv, setSavingImpuestosAv] = useState(false);
+
   // ── Tab 4: Inventario — Método de Valoración de Stock ────────────────────
   const [valoracionStock, setValoracionStock] = useState('ultimo_costo');
   const [loadingValoracion, setLoadingValoracion] = useState(false);
@@ -421,6 +426,26 @@ const ConfiguracionSection = ({ initialTab }) => {
       }
     };
     loadTC();
+  }, [user?.empresa_id]);
+
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    const loadImpuestosAv = async () => {
+      setLoadingImpuestosAv(true);
+      try {
+        const { data } = await supabase
+          .from('empresas')
+          .select('usa_impuestos_avanzados')
+          .eq('id', user.empresa_id)
+          .single();
+        if (data) setImpuestosAvanzados(data.usa_impuestos_avanzados ?? false);
+      } catch (e) {
+        console.error('[Impuestos Avanzados] Error al cargar config:', e);
+      } finally {
+        setLoadingImpuestosAv(false);
+      }
+    };
+    loadImpuestosAv();
   }, [user?.empresa_id]);
 
   useEffect(() => {
@@ -785,6 +810,32 @@ const ConfiguracionSection = ({ initialTab }) => {
       toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
     } finally {
       setSavingTC(false);
+    }
+  };
+
+  const handleSaveImpuestosAv = async (nuevoValor) => {
+    if (!user?.empresa_id) return;
+    setSavingImpuestosAv(true);
+    // Optimista — el Switch ya refleja el nuevo valor
+    setImpuestosAvanzados(nuevoValor);
+    try {
+      const { error } = await supabase
+        .from('empresas')
+        .update({ usa_impuestos_avanzados: nuevoValor })
+        .eq('id', user.empresa_id);
+      if (error) throw error;
+      toast({
+        title: nuevoValor ? 'Impuestos avanzados activados' : 'Impuestos avanzados desactivados',
+        description: nuevoValor
+          ? 'IIBB, Retenciones/Percepciones y Alícuotas ya están disponibles en el módulo Impuestos.'
+          : 'Se ocultaron IIBB, Retenciones/Percepciones y Alícuotas. IVA sigue disponible.',
+        className: 'bg-green-600 text-white border-green-700',
+      });
+    } catch (e) {
+      setImpuestosAvanzados(!nuevoValor); // revertir si falla
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingImpuestosAv(false);
     }
   };
 
@@ -1348,6 +1399,10 @@ const ConfiguracionSection = ({ initialTab }) => {
             onNuevoCentroCosto={openNuevoCentroCosto}
             onEditarCentroCosto={openEditarCentroCosto}
             onToggleCentroCosto={toggleActivoCentroCosto}
+            impuestosAvanzados={impuestosAvanzados}
+            loadingImpuestosAv={loadingImpuestosAv}
+            savingImpuestosAv={savingImpuestosAv}
+            onToggleImpuestosAv={handleSaveImpuestosAv}
           />
         </TabsContent>
 

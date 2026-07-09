@@ -1,5 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-09 (sesión 55 Luciano — CIERRE del plan de 4 frentes contables: Fase 3 Multimoneda/diferencia de cambio + Fase 4 IIBB auto-liquidación, migrations 170-172)
+**Última actualización:** 2026-07-09 (sesión 55 Luciano — CIERRE del plan de 4 frentes contables + toggle "Impuestos Avanzados" por empresa, migrations 170-173)
+
+## ✅ Toggle "Impuestos Avanzados" por empresa (migration 173, sesión 55)
+
+Pedido de Luciano tras cerrar IIBB: que IIBB / Retenciones-Percepciones / Convenio
+Multilateral sean **activables por empresa** desde Configuración (opt-in) — si el
+cliente no los usa, que no se activen; si los activa, que aparezcan sus solapas y
+acciones. IVA queda SIEMPRE disponible, no depende del flag.
+
+- **Patrón reusado:** idéntico a `empresas.usa_tc_paralelo` (toggle de moneda paralela).
+  No existía nada equivalente para impuestos — la sección Impuestos siempre estuvo
+  visible, solo gateada por el permiso de usuario `configuracion`. Ahora hay un flag
+  a nivel empresa.
+- **migration 173:** `empresas.usa_impuestos_avanzados BOOLEAN DEFAULT false`. Empresas
+  NUEVAS arrancan OFF (opt-in). Backfill de las EXISTENTES a `true` para no hacerles
+  desaparecer solapas de golpe (aditivo, sin regresión — Nalux conserva lo que tenía).
+- **UI:** card "Impuestos Avanzados" en Configuración → Finanzas (`TabFinanzas.jsx`),
+  con Switch. `ImpuestosSection.jsx` lee el flag y **oculta condicionalmente** las
+  solapas IIBB / Retenciones / Alícuotas cuando está OFF (IVA siempre visible). Al
+  apagar no se pueden ejecutar sus acciones (las solapas no existen para el usuario).
+- **Verificado en vivo contra Nalux:** ON→OFF→ON persistieron en DB por la vía normal
+  de la app (RLS como admin); con OFF, Impuestos mostró solo IVA; con ON, reaparecieron
+  las 4 solapas. Nota operativa: durante el testeo el flag de Nalux quedó momentáneamente
+  en OFF y se restauró a ON con el toggle de la UI (el intento de restaurarlo por SQL
+  directo fue bloqueado correctamente por el clasificador — es dato de producción).
+- `npx vite build` exit 0.
+
+
 
 ## ✅ Plan de 4 frentes contables — Fase 4 (ÚLTIMA): IIBB auto-liquidación (migration 172, sesión 55)
 

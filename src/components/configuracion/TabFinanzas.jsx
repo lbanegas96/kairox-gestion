@@ -1,4 +1,4 @@
-import { TrendingUp, Loader2, CheckCircle2, Save, CreditCard, Pencil, Building2 } from 'lucide-react';
+import { TrendingUp, Loader2, CheckCircle2, Save, CreditCard, Pencil, Building2, Receipt } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
@@ -17,8 +17,47 @@ const TabFinanzas = ({
   onNuevaCondicion, onEditarCondicion, onToggleCondicion,
   centrosCosto, loadingCentrosCosto,
   onNuevoCentroCosto, onEditarCentroCosto, onToggleCentroCosto,
+  impuestosAvanzados, loadingImpuestosAv, savingImpuestosAv, onToggleImpuestosAv,
 }) => (
   <div className="space-y-6 max-w-2xl">
+    {/* Impuestos Avanzados (IIBB / Retenciones / Convenio) */}
+    <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+      <div className="flex items-start gap-3 mb-4">
+        <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg mt-0.5">
+          <Receipt className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+        </div>
+        <div>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-kx-text">Impuestos Avanzados</h3>
+          <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-0.5">
+            Activá esto solo si la empresa liquida <strong>IIBB (Ingresos Brutos)</strong>, aplica
+            <strong> Retenciones/Percepciones</strong> o trabaja bajo <strong>Convenio Multilateral</strong>.
+            El módulo de <strong>IVA</strong> está siempre disponible, no depende de este interruptor.
+          </p>
+        </div>
+      </div>
+
+      {loadingImpuestosAv ? (
+        <div className="flex items-center gap-2 text-kx-text-3 py-4">
+          <Loader2 className="h-4 w-4 animate-spin" /> Cargando configuración...
+        </div>
+      ) : (
+        <div className="flex items-center justify-between p-4 bg-kx-surface-2 dark:bg-slate-900/50 rounded-lg border kairox-border">
+          <div>
+            <Label className="text-kx-text dark:text-kx-text font-medium">Activar impuestos avanzados</Label>
+            <p className="text-xs text-slate-500 dark:text-kx-text-2 mt-0.5">
+              {impuestosAvanzados
+                ? 'Las solapas IIBB, Retenciones/Percepciones y Alícuotas están visibles en Impuestos.'
+                : 'Ocultas. El módulo Impuestos solo muestra IVA.'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {savingImpuestosAv && <Loader2 className="h-4 w-4 animate-spin text-kx-text-3" />}
+            <Switch checked={impuestosAvanzados} disabled={savingImpuestosAv} onCheckedChange={onToggleImpuestosAv} />
+          </div>
+        </div>
+      )}
+    </div>
+
     {/* Moneda Paralela */}
     <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
       <div className="flex items-start gap-3 mb-4">
