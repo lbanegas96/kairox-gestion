@@ -38,11 +38,18 @@ Deno.serve(async (req) => {
   const environment: 'production' | 'sandbox' = isProduction ? 'production' : 'sandbox';
 
   // ── 1. Leer cola pendiente ─────────────────────────────────────────────────
+  // Ordenada por la fecha real del comprobante (no por created_at de la cola):
+  // AFIP exige números correlativos por PdV+tipo, así que un lote debe siempre
+  // autorizarse en el mismo orden cronológico en que se vendió. Sin este orden,
+  // un reencolado masivo puede procesar un comprobante más nuevo antes que uno
+  // más viejo del mismo tipo y dejarlo con [10016] "no corresponde al próximo
+  // a autorizar" (visto en producción al reencolar 19 facturas, sesión 54).
   const { data: pendientes, error: fetchErr } = await adminClient
     .from('facturas_pendientes_arca')
-    .select('*')
+    .select('*, comprobantes(fecha)')
     .in('estado', ['pendiente', 'reintentando'])
     .lte('proximo_intento', new Date().toISOString())
+    .order('fecha', { foreignTable: 'comprobantes', ascending: true, nullsFirst: false })
     .limit(BATCH_SIZE);
 
   if (fetchErr) {
