@@ -3,6 +3,7 @@ import { AlertTriangle, DollarSign, ArrowDownCircle, ArrowUpCircle, Users, Clock
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
@@ -266,6 +267,23 @@ function CuentaCorrienteSection() {
     setImputaciones(nuevo);
   };
 
+  // Migration 181: regenera el asiento de un cobro que quedó sin generarlo (período
+  // cerrado en su momento, cuenta faltante, o una colisión de numeración concurrente
+  // ya corregida) — usa la diferencia de cambio ya calculada al momento del cobro,
+  // no la recalcula con la cotización de hoy.
+  const handleRegenerarAsientoCxc = async (movimientoId) => {
+    const { error } = await supabase.rpc('regenerar_asiento_cxc', {
+      p_movimiento_id: movimientoId,
+      p_user_id: user.id,
+    });
+    if (error) {
+      toast({ title: 'No se pudo regenerar el asiento', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Asiento regenerado', className: 'bg-emerald-600 text-white border-none' });
+    qc.invalidateQueries();
+  };
+
   const handleRegisterPayment = async () => {
     // Solo Efectivo requiere caja abierta — Transferencia/Tarjeta/Cheque no
     if (paymentData.metodo === 'Efectivo' && !isSessionOpen) {
@@ -341,11 +359,19 @@ function CuentaCorrienteSection() {
       // no bloqueante (mismo patrón que asientosAutoService): si falla por período
       // cerrado o cuenta faltante, el cobro igual se registra. Antes esto era
       // invisible — data.asiento_generado nunca se leía en el frontend.
+      // Migration 181: una vez corregido el motivo (cuenta creada / período reabierto),
+      // "Regenerar" llama a regenerar_asiento_cxc — no recalcula la diferencia de
+      // cambio, usa la que ya quedó guardada en el cobro al momento original.
       if (cobroData?.asiento_generado === false) {
         toast({
           title: "Cobro registrado sin asiento contable",
           description: "El cobro se guardó correctamente, pero no se generó el asiento (período cerrado o cuenta contable faltante). Revisar Plan de Cuentas.",
           variant: "destructive",
+          action: (
+            <ToastAction altText="Regenerar asiento" onClick={() => handleRegenerarAsientoCxc(cobroData.cc_id)}>
+              Regenerar
+            </ToastAction>
+          ),
         });
       }
 

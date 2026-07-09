@@ -6323,6 +6323,31 @@ producción.
 Sigue el plan con el ítem #3 (CxC/CxP: regenerar asiento manual) y #4 (Cheques → Bancos, pendiente
 de decisión de alcance del usuario).
 
+**Ítem #3 — CxC/CxP: causa raíz real encontrada (migration 181).** Investigando el alcance de
+"asiento no generado" se confirmó en Nalux que 25/28 cobros y 2/6 pagos reales no tienen asiento.
+La mayoría son anteriores a que la función generara asientos (2026-07-06), pero **5 cobros reales
+posteriores a esa fecha tampoco lo tienen**. Causa raíz real: `next_numero_asiento()` leía
+`MAX(numero)+1` sin lock, y `asientos_contables` tiene `UNIQUE(empresa_id, numero)` — dos asientos
+concurrentes (ej. venta + cobro al mismo tiempo) podían calcular el mismo número; el 2º choca
+contra el índice único, y ese error quedaba atrapado en silencio por el `EXCEPTION WHEN OTHERS` de
+`registrar_cobro_cliente`/`registrar_pago_proveedor`. **Fix:** `pg_advisory_xact_lock` por empresa
+en `next_numero_asiento` (serializa cualquier concurrencia real). Además se agregó "Regenerar
+asiento" manual: se persiste `dif_cambio_total` (antes se perdía si fallaba) y `asiento_id` (NULL
+sin asiento) en la fila del cobro/pago; nuevas RPCs `regenerar_asiento_cxc`/`regenerar_asiento_cxp`
+(bloqueadas si ya hay asiento o el período sigue cerrado) recrean el asiento con la diferencia de
+cambio ya calculada en su momento — no la recalculan con la cotización de hoy. Botón "Regenerar"
+(`ToastAction`) en el toast de fallo de `CuentaCorrienteSection.jsx`/`ProveedoresSection.jsx`.
+Validado con `BEGIN...ROLLBACK` contra un cobro real de Nalux: asiento creado balanceado
+(debe=haber=$87.120), segundo intento de regenerar correctamente rechazado, cero duplicados.
+
+Pendiente de decisión de negocio, no técnica: el histórico de ~27 cobros/pagos de antes del
+2026-07-06 no tiene "Regenerar" expuesto en ninguna lista todavía — las RPCs ya lo soportan, falta
+agregar el botón a `ClientDetailModal.jsx`/detalle de proveedor si se quiere sanear el histórico
+completo. No se hizo hoy por alcance.
+
+Build de producción sin errores. Verificado en preview (Nalux/Nadia) que Cuenta Corriente sigue
+cargando y operando con datos reales sin errores de consola nuevos tras el cambio.
+
 ## 3 grandes proyectos al final
 
 | # | Proyecto | Por qué al final |

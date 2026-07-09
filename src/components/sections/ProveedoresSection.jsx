@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { proveedoresService, PROV_KEYS } from '@/services/proveedoresService';
@@ -134,6 +135,22 @@ function ProveedoresSection() {
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
+  // Migration 181: regenera el asiento de un pago que quedó sin generarlo (período
+  // cerrado en su momento, cuenta faltante, o una colisión de numeración concurrente
+  // ya corregida) — usa la diferencia de cambio ya calculada al momento del pago.
+  const handleRegenerarAsientoCxp = async (movimientoId) => {
+    const { error } = await supabase.rpc('regenerar_asiento_cxp', {
+      p_movimiento_id: movimientoId,
+      p_user_id: user.id,
+    });
+    if (error) {
+      toast({ title: 'No se pudo regenerar el asiento', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Asiento regenerado', className: 'bg-emerald-600 text-white border-none' });
+    invalidate();
+  };
+
   const pagoMutation = useMutation({
     mutationFn: ({ monto, descripcion, metodo, imputaciones: imp }) =>
       proveedoresService.registrarPago(empresaId, detalleId, detalle?.nombre, monto, metodo, descripcion, user.id, currentSession?.id ?? null, imp),
@@ -148,6 +165,11 @@ function ProveedoresSection() {
           title: 'Pago registrado sin asiento contable',
           description: 'El pago se guardó correctamente, pero no se generó el asiento (período cerrado o cuenta contable faltante). Revisar Plan de Cuentas.',
           variant: 'destructive',
+          action: (
+            <ToastAction altText="Regenerar asiento" onClick={() => handleRegenerarAsientoCxp(data.ccp_id)}>
+              Regenerar
+            </ToastAction>
+          ),
         });
       }
       setPagoOpen(false);

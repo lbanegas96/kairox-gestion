@@ -214,9 +214,42 @@ La matemática de FX ya se auditó a fondo como parte del área #1 (vive en las 
   con el mensaje esperado.
 
 Con esto se cierran las 5 áreas priorizadas de la Fase 5 (superficie nueva post mig.155:
-Centro de Costo, CxC/CxP imputación, Multimoneda, IIBB, toggle Impuestos Avanzados). Pendiente
-sin cerrar (bajo, no crítico): el bug de "Reintentar CAE" silencioso en `HistorialVentas.jsx`
-(ya derivado a una sesión aparte, no bloqueante).
+Centro de Costo, CxC/CxP imputación, Multimoneda, IIBB, toggle Impuestos Avanzados).
+
+## ✅ Cierre de pendientes de la Fase 5 — sesión 2026-07-09 (cont.)
+
+**1. Bug "Reintentar CAE" — CERRADO (mig.180).** Ver detalle en CONTEXT.md. Causa raíz: UPDATE
+por `comprobante_id` (sin chequear `error`) chocaba contra `uq_fpa_comprobante_activo` cuando
+había >1 fila histórica para el mismo comprobante — mismo defecto encontrado también en
+`reencolar_caes_pendientes`. Fix: nueva RPC `reintentar_cae_comprobante` + corrección del mismo
+patrón en `reencolar_caes_pendientes`, ambas apuntando siempre a la fila más reciente por `id`.
+
+**2. CxC/CxP sin asiento — causa raíz real encontrada y cerrada (mig.181).** Investigando el
+alcance de "`asiento_generado=false`" se confirmó en producción (Nalux) que 25/28 cobros y 2/6
+pagos reales no tienen asiento — la gran mayoría anteriores a que la función generara asientos
+(2026-07-06), pero **5 cobros reales posteriores a esa fecha tampoco lo tienen**, sin imputación
+de por medio. Causa raíz: `next_numero_asiento()` leía `MAX(numero)+1` **sin lock**, y
+`asientos_contables` tiene `UNIQUE(empresa_id, numero)` real — dos asientos concurrentes para la
+misma empresa (ej. una venta y un cobro simultáneos) podían calcular el mismo número; el segundo
+en commitear choca contra el índice único, y en `registrar_cobro_cliente`/`registrar_pago_proveedor`
+ese error queda atrapado por el `EXCEPTION WHEN OTHERS` y se pierde en silencio (mismo patrón de
+"asiento no bloqueante" ya documentado, pero esta vez el fallo era evitable). **Fix:**
+`pg_advisory_xact_lock` por empresa en `next_numero_asiento` serializa la concurrencia real.
+Además, se agregó la capacidad de **regenerar manualmente** el asiento de un cobro/pago viejo que
+quedó sin él: se persiste `dif_cambio_total` (antes se perdía si el asiento fallaba) y `asiento_id`
+(NULL mientras no haya asiento) en la fila del cobro/pago; nuevas RPCs `regenerar_asiento_cxc`/
+`regenerar_asiento_cxp` (bloqueadas si ya existe asiento o si el período sigue cerrado) crean el
+asiento usando la diferencia de cambio ya calculada en el momento original, sin recalcularla con
+la cotización de hoy (patrón SAP: documento y asiento como objetos separados). Botón "Regenerar"
+en el toast de `CuentaCorrienteSection.jsx`/`ProveedoresSection.jsx`. Validado con
+`BEGIN...ROLLBACK` contra un cobro real: asiento creado balanceado, segundo intento correctamente
+rechazado ("ya tiene un asiento"), cero filas duplicadas.
+
+**Pendiente de decisión de negocio (no técnica):** los ~27 cobros/pagos históricos de antes del
+2026-07-06 no tienen "Regenerar" expuesto en ninguna lista todavía (solo aparece en el toast al
+momento del cobro/pago) — si se quiere sanear el histórico completo, falta agregar el botón a la
+vista de movimientos de `ClientDetailModal.jsx`/detalle de proveedor. No se hizo en esta sesión
+por alcance (afecta un archivo no tocado hoy); las RPCs ya soportan ese caso de uso.
 
 ## Registro de hallazgos (log corrido)
 
