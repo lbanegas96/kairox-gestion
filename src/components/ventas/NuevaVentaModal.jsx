@@ -496,6 +496,9 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         p_es_cc:            isCC,
         p_caja_sesion_id:   currentSession?.id ?? null,
         p_pedido_id:        pedido?.id ?? null,
+        // Valor nominal fijo en moneda extranjera (Fase 3 Multimoneda — diferencia
+        // de cambio realizada). Null si la venta es en ARS.
+        p_monto_moneda_original: moneda !== 'ARS' ? totalEnMonedaSeleccionada() : null,
       });
 
       if (rpcError) throw rpcError;

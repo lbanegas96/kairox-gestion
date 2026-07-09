@@ -9,6 +9,7 @@ import { useCaja } from '@/contexts/CajaContext';
 import { getNowAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
+import { tipoCambioService } from '@/services/tipoCambioService';
 import ClientDetailModal from './ClientDetailModal';
 import TablaClientes from '@/components/cuenta-corriente/TablaClientes';
 import TabAntiguedad from '@/components/cuenta-corriente/TabAntiguedad';
@@ -49,6 +50,11 @@ function CuentaCorrienteSection() {
   // (reduce el saldo corrido, sin marcar ninguna factura puntual como paga).
   const [facturasAbiertas, setFacturasAbiertas] = useState([]);
   const [imputaciones, setImputaciones] = useState({}); // { comprobante_id: "monto string" }
+  // Imputación en moneda extranjera (Fase 3 Multimoneda — diferencia de cambio):
+  // solo aplica a facturas con moneda != 'ARS'. Separado de `imputaciones` (ARS)
+  // porque el RPC necesita saber cuántas unidades de moneda extranjera se están
+  // cancelando para calcular la diferencia de cambio realizada al TC de hoy.
+  const [imputacionesFX, setImputacionesFX] = useState({}); // { comprobante_id: "monto FX string" }
 
   // Aging Report
   const [activeTab, setActiveTab] = useState('clientes');
@@ -203,6 +209,7 @@ function CuentaCorrienteSection() {
     setSelectedClient(client);
     setPaymentData({ monto: '', metodo: 'Efectivo', nota: '' });
     setImputaciones({});
+    setImputacionesFX({});
     setFacturasAbiertas([]);
     setIsPaymentDialogOpen(true);
     fetchFacturasAbiertas(client.id);
@@ -211,7 +218,7 @@ function CuentaCorrienteSection() {
   const fetchFacturasAbiertas = async (clienteId) => {
     const { data, error } = await supabase
       .from('facturas_saldo_pendiente')
-      .select('comprobante_id, numero_venta, fecha, saldo_pendiente')
+      .select('comprobante_id, numero_venta, fecha, saldo_pendiente, moneda, tipo_cambio_tasa')
       .eq('cliente_id', clienteId)
       .gt('saldo_pendiente', 0)
       .order('fecha', { ascending: true });
@@ -219,16 +226,36 @@ function CuentaCorrienteSection() {
       console.error('[facturas_saldo_pendiente]', error.message);
       return;
     }
-    setFacturasAbiertas(data || []);
+    let facturas = data || [];
+
+    // Para facturas en moneda extranjera, traer el TC de hoy (una consulta por
+    // moneda distinta) para mostrar el equivalente ARS y validar el clearing.
+    const monedasExtranjeras = [...new Set(facturas.filter(f => f.moneda && f.moneda !== 'ARS').map(f => f.moneda))];
+    if (monedasExtranjeras.length > 0) {
+      const tasas = {};
+      await Promise.all(monedasExtranjeras.map(async (m) => {
+        try {
+          tasas[m] = await tipoCambioService.getToday(user.empresa_id, m);
+        } catch {
+          tasas[m] = null;
+        }
+      }));
+      facturas = facturas.map(f => (f.moneda && f.moneda !== 'ARS') ? { ...f, tc_hoy: tasas[f.moneda] } : f);
+    }
+
+    setFacturasAbiertas(facturas);
   };
 
   // Reparte `monto` entre las facturas abiertas más viejas primero (FIFO),
   // hasta agotar el monto o las facturas. El usuario puede editar el
-  // resultado a mano después.
+  // resultado a mano después. Solo aplica a facturas en ARS — las facturas en
+  // moneda extranjera se imputan a mano con el input dedicado (necesitan el
+  // monto en esa moneda, no en pesos).
   const autoDistribuirFIFO = (monto) => {
     let restante = monto;
     const nuevo = {};
     for (const f of facturasAbiertas) {
+      if (f.moneda && f.moneda !== 'ARS') continue;
       if (restante <= 0) break;
       const aplicar = Math.min(restante, f.saldo_pendiente);
       if (aplicar > 0) {
@@ -270,9 +297,18 @@ function CuentaCorrienteSection() {
     // si el usuario cargó algún monto — si no, se manda null y el cobro se
     // comporta exactamente igual que antes (reduce el saldo corrido, sin
     // marcar ninguna factura puntual como cancelada).
-    const imputacionesArray = Object.entries(imputaciones)
-      .map(([comprobante_id, montoStr]) => ({ comprobante_id, monto: parseNumberLocale(montoStr) }))
-      .filter(i => i.monto > 0);
+    // Facturas en moneda extranjera (Fase 3 Multimoneda) usan monto_moneda_extranjera
+    // en vez de monto ARS — el RPC calcula la diferencia de cambio realizada.
+    const imputacionesArray = facturasAbiertas
+      .map(f => {
+        if (f.moneda && f.moneda !== 'ARS') {
+          const fx = parseNumberLocale(imputacionesFX[f.comprobante_id] || '');
+          return fx > 0 ? { comprobante_id: f.comprobante_id, monto_moneda_extranjera: fx } : null;
+        }
+        const monto = parseNumberLocale(imputaciones[f.comprobante_id] || '');
+        return monto > 0 ? { comprobante_id: f.comprobante_id, monto } : null;
+      })
+      .filter(Boolean);
 
     try {
       // Cobro ATÓMICO: cuenta corriente (HABER) + caja (ingreso) en un solo RPC (migration 130).
@@ -425,6 +461,7 @@ function CuentaCorrienteSection() {
         handleRegisterPayment={handleRegisterPayment}
         facturasAbiertas={facturasAbiertas}
         imputaciones={imputaciones} setImputaciones={setImputaciones}
+        imputacionesFX={imputacionesFX} setImputacionesFX={setImputacionesFX}
         autoDistribuirFIFO={autoDistribuirFIFO}
       />
     </div>

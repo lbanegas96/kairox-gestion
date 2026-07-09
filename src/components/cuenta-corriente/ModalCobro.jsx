@@ -14,10 +14,21 @@ function ModalCobro({
   handleRegisterPayment,
   facturasAbiertas = [],
   imputaciones = {}, setImputaciones,
+  imputacionesFX = {}, setImputacionesFX,
   autoDistribuirFIFO,
 }) {
   const montoCobro = parseNumberLocale(paymentData.monto) || 0;
-  const totalImputado = Object.values(imputaciones).reduce((s, v) => s + (parseNumberLocale(v) || 0), 0);
+  // El total imputado en pesos: filas ARS suman el monto tal cual; filas en
+  // moneda extranjera se valorizan al TC de hoy (lo que realmente sale de la
+  // caja), igual que hace el RPC para el guard "no supera el monto del cobro".
+  const totalImputado = facturasAbiertas.reduce((s, f) => {
+    if (f.moneda && f.moneda !== 'ARS') {
+      const fx = parseNumberLocale(imputacionesFX[f.comprobante_id] || '') || 0;
+      const tc = f.tc_hoy || f.tipo_cambio_tasa || 0;
+      return s + fx * tc;
+    }
+    return s + (parseNumberLocale(imputaciones[f.comprobante_id] || '') || 0);
+  }, 0);
   return (
     <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
       <DialogContent className="sm:max-w-[425px] bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border">
@@ -107,22 +118,49 @@ function ModalCobro({
                 Si imputás, esas facturas puntuales quedan marcadas como cobradas.
               </p>
               <div className="border border-kx-border rounded-lg divide-y divide-kx-border max-h-48 overflow-y-auto">
-                {facturasAbiertas.map(f => (
-                  <div key={f.comprobante_id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                    <div className="min-w-0">
-                      <div className="font-medium text-kx-text truncate">{f.numero_venta}</div>
-                      <div className="text-xs text-kx-text-3">
-                        Pendiente: ${Number(f.saldo_pendiente).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                {facturasAbiertas.map(f => {
+                  const esFX = !!(f.moneda && f.moneda !== 'ARS');
+                  const fxValue = parseNumberLocale(imputacionesFX[f.comprobante_id] || '') || 0;
+                  const tcHoy = f.tc_hoy || f.tipo_cambio_tasa || 0;
+                  return (
+                    <div key={f.comprobante_id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                      <div className="min-w-0">
+                        <div className="font-medium text-kx-text truncate">{f.numero_venta}</div>
+                        <div className="text-xs text-kx-text-3">
+                          Pendiente: ${Number(f.saldo_pendiente).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                          {esFX && <span className="ml-1">({f.moneda})</span>}
+                        </div>
+                        {esFX && !f.tc_hoy && (
+                          <div className="text-[11px] text-amber-600 dark:text-amber-400">
+                            Sin TC de hoy para {f.moneda} — se usará el TC de la factura
+                          </div>
+                        )}
                       </div>
+                      {esFX ? (
+                        <div className="text-right shrink-0">
+                          <Input
+                            type="text" inputMode="decimal" placeholder={`0,00 ${f.moneda}`}
+                            value={imputacionesFX[f.comprobante_id] ?? ''}
+                            onChange={(e) => setImputacionesFX(prev => ({ ...prev, [f.comprobante_id]: e.target.value }))}
+                            className="w-28 h-8 text-right text-xs"
+                          />
+                          {fxValue > 0 && tcHoy > 0 && (
+                            <div className="text-[11px] text-kx-text-3 mt-0.5">
+                              ≈ ${(fxValue * tcHoy).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <Input
+                          type="text" inputMode="decimal" placeholder="0,00"
+                          value={imputaciones[f.comprobante_id] ?? ''}
+                          onChange={(e) => setImputaciones(prev => ({ ...prev, [f.comprobante_id]: e.target.value }))}
+                          className="w-28 h-8 text-right text-xs shrink-0"
+                        />
+                      )}
                     </div>
-                    <Input
-                      type="text" inputMode="decimal" placeholder="0,00"
-                      value={imputaciones[f.comprobante_id] ?? ''}
-                      onChange={(e) => setImputaciones(prev => ({ ...prev, [f.comprobante_id]: e.target.value }))}
-                      className="w-28 h-8 text-right text-xs shrink-0"
-                    />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <div className={`text-xs text-right ${totalImputado > montoCobro ? 'text-red-500 font-semibold' : 'text-kx-text-3'}`}>
                 Imputado: ${totalImputado.toLocaleString('es-AR', { minimumFractionDigits: 2 })} / ${montoCobro.toLocaleString('es-AR', { minimumFractionDigits: 2 })}

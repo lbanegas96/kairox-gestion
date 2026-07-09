@@ -327,6 +327,11 @@ function ComprasSection() {
           estado_pago: status,
           moneda,
           tipo_cambio_tasa: tipoCambioTasa,
+          // Valor nominal fijo en moneda extranjera (Fase 3 Multimoneda —
+          // diferencia de cambio realizada). Null si la compra es en ARS.
+          monto_moneda_original: moneda !== 'ARS' && tipoCambioTasa > 0
+            ? totalCompra / tipoCambioTasa
+            : null,
           ...(montoParaleloValue !== null ? {
             monto_paralelo: montoParaleloValue,
             tc_paralelo: tcParaleloValue,
