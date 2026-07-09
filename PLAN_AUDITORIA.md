@@ -109,10 +109,40 @@ _(ninguna — **las 15 áreas de la cola original están auditadas**. Ver "Gap s
 
 ---
 
+## ✅ Fase 5 — Auditoría de la superficie nueva (Centro de Costo, CxC/CxP imputación, Multimoneda, IIBB) — EN CURSO (2026-07-09)
+
+Entre el cierre de la Fase 1-4 (2026-07-04/07) y hoy se agregaron 8 migraciones (168-175) con
+lógica financiera real (Open Item clearing, diferencia de cambio, IIBB) que nunca pasaron por
+esta metodología. Se retoma la auditoría por esa superficie, priorizada dinero/seguridad primero.
+
+**1. CxC/CxP — Imputación por factura (Open Item clearing, `registrar_cobro_cliente` /
+`registrar_pago_proveedor`) — ✅ AUDITADA Y CORREGIDA.**
+- **T:** ambas exigen `get_my_empresa_id()` + `has_module_permission('ventas'|'compras')` — intacto.
+- **C:** `FOR UPDATE` sobre la factura/compra target de cada imputación serializa correctamente 2
+  imputaciones concurrentes sobre el mismo comprobante (la 2ª espera el commit de la 1ª y relee
+  `v_ya_imputado` actualizado) — sin condición de carrera.
+- **F:** matemática de diferencia de cambio simétrica y con signo correcto: en cobro, TC actual >
+  TC origen es GANANCIA (cobrás más ARS-equivalente de lo que cancela la deuda); en pago, es
+  PÉRDIDA (pagás más). Verificado que `total_debe`/`total_haber` del asiento siempre igualan la
+  suma real de sus líneas en ambas ramas (ganancia/pérdida).
+- **E: 🟡 CONFIRMADO Y CORREGIDO.** Ambas RPC generan el asiento de forma no bloqueante (mismo
+  patrón que `asientosAutoService`) y devuelven `asiento_generado: false` si falla (período
+  cerrado o cuenta faltante) — pero **ningún frontend leía ese campo**: `CuentaCorrienteSection.jsx`
+  y `proveedoresService.registrarPago` descartaban `data` y solo miraban `error`. A diferencia del
+  fix de períodos contables (mig.136, sesión 46) que sí cubrió Ventas/Compras/Caja vía
+  `asientosAutoService`, este camino (CxC/CxP con asiento embebido en la propia RPC) nunca se
+  conectó a ningún aviso — el cobro/pago se registraba bien pero el usuario no se enteraba si el
+  libro mayor había quedado desincronizado. **Fix:** `registrarPago()` ahora devuelve `data`;
+  `CuentaCorrienteSection.jsx` y `ProveedoresSection.jsx` muestran un toast destructivo cuando
+  `asiento_generado === false`.
+- Sin otros hallazgos — atomicidad, guard de sobre-imputación (`v_monto_imp > v_saldo_pendiente`,
+  `v_suma_imputada > v_monto`) y aislamiento tenant correctos en ambas.
+
 ## Registro de hallazgos (log corrido)
 
 | Fecha | Área | Severidad | Hallazgo | Fix |
 |-------|------|-----------|----------|-----|
+| 2026-07-09 | CxC/CxP imputación | 🟡 | `registrar_cobro_cliente`/`registrar_pago_proveedor` devuelven `asiento_generado: false` cuando el asiento no se genera (período cerrado/cuenta faltante), pero ningún frontend leía ese campo — el cobro/pago se registraba sin avisar que el libro mayor no reflejó el movimiento | `registrarPago()` devuelve `data`; toast destructivo en `CuentaCorrienteSection.jsx` y `ProveedoresSection.jsx` cuando `asiento_generado === false` |
 | 2026-07-09 | Permisos granulares (regresión) | 🔴 | `crear_venta` perdió el gate `has_module_permission('ventas')` que la mig.155 le había agregado — alguna migración posterior que la recreó (170 monto_moneda_original o 174 centro_costo_id) partió de una copia vieja del body (pre-155) en vez de la definición vigente. De las 16 RPCs gateadas por mig.155, era la ÚNICA que lo había perdido (confirmado con query a `pg_proc` sobre las 16 + barrido extendido a IIBB/cheques/retenciones — sin otras regresiones). Probado con BEGIN...ROLLBACK: staff con `ventas=false` forzado en la misma transacción → `crear_venta` lanzó `No autorizado: sin permiso de módulo ventas` como se esperaba | Gate restaurado (mig.175), mismo patrón textual que las otras 15 funciones. **Lección de proceso:** toda migración que haga `DROP+CREATE` sobre una función ya gateada debe partir de `pg_get_functiondef` de la definición VIGENTE en producción, no de una versión archivada en `supabase/migrations/`, para no perder fixes de seguridad aplicados después de esa versión |
 | 2026-07-04 | Audit log | 🟡 | 4 tablas críticas (`periodos_contables`, `notas_debito`, `movimientos_bancarios`, `asientos_contables`) sin trigger de auditoría — cerrar un período no dejaba ningún rastro | Agregado `trg_audit_*` (función genérica existente) a las 4 (mig.143) |
 | 2026-07-04 | Comprobantes | 🔴 | Mismo patrón de DELETE sin restricción en `cuenta_corriente_movimientos`, `cuenta_corriente_proveedores` y `notas_debito` — staff sin permiso borró movimientos reales de CxC/CxP/ND | Policies divididas SELECT/INSERT/UPDATE, sin DELETE, en las 3 tablas (mig.142) |

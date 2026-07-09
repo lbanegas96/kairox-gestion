@@ -137,10 +137,19 @@ function ProveedoresSection() {
   const pagoMutation = useMutation({
     mutationFn: ({ monto, descripcion, metodo, imputaciones: imp }) =>
       proveedoresService.registrarPago(empresaId, detalleId, detalle?.nombre, monto, metodo, descripcion, user.id, currentSession?.id ?? null, imp),
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: PROV_KEYS.cuentaCorriente(detalleId) });
       invalidate();
       toast({ title: 'Pago registrado ✓', className: 'bg-green-600 text-white' });
+      // El RPC genera el asiento en la misma transacción, no bloqueante: si falla
+      // (período cerrado o cuenta faltante), el pago igual se registra sin avisar.
+      if (data?.asiento_generado === false) {
+        toast({
+          title: 'Pago registrado sin asiento contable',
+          description: 'El pago se guardó correctamente, pero no se generó el asiento (período cerrado o cuenta contable faltante). Revisar Plan de Cuentas.',
+          variant: 'destructive',
+        });
+      }
       setPagoOpen(false);
       setPagoForm({ monto: '', descripcion: '', metodo: 'Efectivo' });
       setImputaciones({});

@@ -141,7 +141,7 @@ export async function registrarPago(
 ) {
   // Pago ATÓMICO: cuenta corriente proveedor ('pago') + caja (egreso) en un solo RPC (migration 131).
   // Antes solo reducía la deuda sin registrar la salida de plata de Caja/Bancos → tesorería inflada.
-  const { error } = await supabase.rpc('registrar_pago_proveedor', {
+  const { data, error } = await supabase.rpc('registrar_pago_proveedor', {
     p_empresa_id:       empresaId,
     p_user_id:          userId,
     p_proveedor_id:     proveedorId,
@@ -153,6 +153,7 @@ export async function registrarPago(
     p_imputaciones:     imputaciones,
   });
   if (error) throw new Error(error.message);
+  return data as { ok: boolean; ccp_id: string; caja_id: string; asiento_generado: boolean; diferencia_cambio: number };
 }
 
 export async function getSaldoProveedor(proveedorId: string, empresaId: string): Promise<number> {

@@ -314,7 +314,7 @@ function CuentaCorrienteSection() {
       // Cobro ATÓMICO: cuenta corriente (HABER) + caja (ingreso) en un solo RPC (migration 130).
       // Antes eran 2 inserts sueltos: si el 2º fallaba, la deuda del cliente bajaba SIN registrar
       // la plata en caja, y un reintento reducía la deuda dos veces. Ahora es todo o nada.
-      const { error: cobroError } = await supabase.rpc('registrar_cobro_cliente', {
+      const { data: cobroData, error: cobroError } = await supabase.rpc('registrar_cobro_cliente', {
         p_empresa_id:     user.empresa_id,
         p_user_id:        user.id,
         p_cliente_id:     selectedClient.id,
@@ -336,6 +336,18 @@ function CuentaCorrienteSection() {
         description: `Se registró el cobro de $${amount.toLocaleString('es-AR')}.`,
         className: "bg-emerald-600 text-white border-none"
       });
+
+      // El RPC genera el asiento contable en la misma transacción, pero de forma
+      // no bloqueante (mismo patrón que asientosAutoService): si falla por período
+      // cerrado o cuenta faltante, el cobro igual se registra. Antes esto era
+      // invisible — data.asiento_generado nunca se leía en el frontend.
+      if (cobroData?.asiento_generado === false) {
+        toast({
+          title: "Cobro registrado sin asiento contable",
+          description: "El cobro se guardó correctamente, pero no se generó el asiento (período cerrado o cuenta contable faltante). Revisar Plan de Cuentas.",
+          variant: "destructive",
+        });
+      }
 
       setIsPaymentDialogOpen(false);
       fetchData(); // Refresh list
