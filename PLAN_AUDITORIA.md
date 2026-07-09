@@ -165,10 +165,27 @@ esta metodología. Se retoma la auditoría por esa superficie, priorizada dinero
 - Sin otros hallazgos — coeficientes de Convenio Multilateral validados (deben sumar 100), alícuota
   faltante bloquea la liquidación con mensaje claro, redondeo a 2 decimales correcto.
 
+**3. Multimoneda / diferencia de cambio (cálculo) — ✅ AUDITADA, sin hallazgos nuevos.**
+La matemática de FX ya se auditó a fondo como parte del área #1 (vive en las mismas RPCs
+`registrar_cobro_cliente`/`registrar_pago_proveedor`). Revisado además:
+- `get_tasa_cambio()`: tenant-check correcto (`get_my_empresa_id()` OR `service_role`), busca la
+  tasa vigente más reciente `<= fecha` con fallback a `NULL` si no hay ninguna (los callers ya usan
+  `COALESCE(..., tc_origen)` — sin riesgo de división por cero ni de romper el flujo).
+- `crear_venta` persiste `monto_moneda_original` con `ROUND(...,2)` server-side; el cálculo
+  client-side (`totalARS / tipoCambioTasa` en `NuevaVentaModal.jsx`) es correcto.
+- 🟢 **menor, no fixeado (documentado):** `registrar_pago_proveedor` llama
+  `get_tasa_cambio(..., now()::date)` — usa la fecha del **servidor** (UTC) en vez de la fecha
+  Argentina pasada por el frontend (a diferencia de `registrar_cobro_cliente`, que sí recibe
+  `p_fecha` del caller). Ventana de exposición angosta: solo afecta un pago hecho después de las
+  21:00 ART (ya "mañana" en UTC) Y si la tasa de "mañana" ya estaba cargada por adelantado — en ese
+  caso tomaría la tasa del día siguiente en vez de la de hoy. Mismo tipo de hallazgo ya documentado
+  para `tipoCambioService.js` (ya corregido en el frontend); acá queda igual de bajo riesgo.
+
 ## Registro de hallazgos (log corrido)
 
 | Fecha | Área | Severidad | Hallazgo | Fix |
 |-------|------|-----------|----------|-----|
+| 2026-07-09 | Multimoneda | 🟢 | `registrar_pago_proveedor` usa `now()::date` (fecha del servidor UTC) para `get_tasa_cambio` en vez de la fecha Argentina del pago — ventana angosta (pagos después de 21:00 ART con tasa de "mañana" ya cargada) | No fixeado — documentado, mismo criterio que hallazgos 🟢 previos de esta auditoría |
 | 2026-07-09 | IIBB | 🔴 | `generar_liquidacion_iibb` sin guard contra 2 liquidaciones para el mismo período (o solapado) — doble confirmación duplicaría el IIBB contabilizado | `EXISTS` contra períodos solapados antes de generar (mig.176) |
 | 2026-07-09 | IIBB | 🟡 | Base imponible ignoraba las Notas de Crédito del período (solo sumaba `tipo='venta'`), sobrestimando el impuesto | Base neteada: ventas − NC del mismo período (mig.176) |
 | 2026-07-09 | IIBB | 🟡 | `TabIIBB.jsx` mostraba "Se generó el asiento contable" sin chequear `asiento_generado` — mensaje de éxito falso si el asiento no se generó | Toast condicional según el campo real de la respuesta |
