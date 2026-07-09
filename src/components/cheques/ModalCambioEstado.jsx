@@ -13,11 +13,17 @@ function ModalCambioEstado({
   obsEstado, setObsEstado,
   proveedores = [],
   proveedorEndosoId, setProveedorEndosoId,
+  cuentasBancarias = [],
+  cuentaBancariaCobroId, setCuentaBancariaCobroId,
   savingEstado,
   transicionesDisponibles,
   onConfirmar,
 }) {
   const requiereProveedor = estadoNuevo === 'endosado';
+  // Cheque de tercero cobrado: hay que elegir a qué cuenta se depositó para que
+  // aparezca en Bancos/conciliación (mig.182) — los propios ya tienen su cuenta
+  // bancaria asignada desde que se crearon.
+  const requiereCuentaBancaria = estadoNuevo === 'cobrado' && chequeACambiar?.tipo === 'tercero';
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-sm">
@@ -64,6 +70,21 @@ function ModalCambioEstado({
               </Select>
             </div>
           )}
+          {requiereCuentaBancaria && (
+            <div>
+              <Label className="text-kx-text-3 text-xs">¿A qué cuenta se depositó? *</Label>
+              <Select value={cuentaBancariaCobroId} onValueChange={setCuentaBancariaCobroId}>
+                <SelectTrigger className="mt-1 bg-slate-800 border-slate-700">
+                  <SelectValue placeholder="Elegí una cuenta bancaria" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  {cuentasBancarias.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.nombre} ({c.banco})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div>
             <Label className="text-kx-text-3 text-xs">Observación (opcional)</Label>
             <Input value={obsEstado}
@@ -78,7 +99,7 @@ function ModalCambioEstado({
             className="text-kx-text-3">
             Cancelar
           </Button>
-          <Button onClick={onConfirmar} disabled={savingEstado || !estadoNuevo || (requiereProveedor && !proveedorEndosoId)}
+          <Button onClick={onConfirmar} disabled={savingEstado || !estadoNuevo || (requiereProveedor && !proveedorEndosoId) || (requiereCuentaBancaria && !cuentaBancariaCobroId)}
             className="bg-[#00D4FF] text-black hover:bg-[#00bfe8]">
             {savingEstado
               ? <Loader2 size={14} className="animate-spin mr-2" />

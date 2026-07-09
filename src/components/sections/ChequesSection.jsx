@@ -37,6 +37,7 @@ export default function ChequesSection() {
   const [estadoNuevo, setEstadoNuevo]             = useState('');
   const [obsEstado, setObsEstado]                 = useState('');
   const [proveedorEndosoId, setProveedorEndosoId] = useState('');
+  const [cuentaBancariaCobroId, setCuentaBancariaCobroId] = useState('');
   const [showDetalle, setShowDetalle]             = useState(false);
   const [chequeDetalle, setChequeDetalle]         = useState(null);
   const [historial, setHistorial]                 = useState([]);
@@ -231,6 +232,12 @@ export default function ChequesSection() {
       toast({ title: 'Elegí un proveedor para el endoso', variant: 'destructive' });
       return;
     }
+    // Cheque de tercero cobrado: necesitamos saber a qué cuenta se depositó para
+    // que el movimiento aparezca en Bancos/conciliación (mig.182).
+    if (estadoNuevo === 'cobrado' && chequeACambiar.tipo === 'tercero' && !cuentaBancariaCobroId) {
+      toast({ title: 'Elegí a qué cuenta bancaria se depositó', variant: 'destructive' });
+      return;
+    }
     setSavingE(true);
     try {
       // Cambio de estado + historial en una sola transacción (RPC atómica).
@@ -240,6 +247,7 @@ export default function ChequesSection() {
         p_estado_nuevo: estadoNuevo,
         p_observacion:  obsEstado || null,
         p_proveedor_endoso_id: estadoNuevo === 'endosado' ? proveedorEndosoId : null,
+        p_cuenta_bancaria_id: (estadoNuevo === 'cobrado' && chequeACambiar.tipo === 'tercero') ? cuentaBancariaCobroId : null,
       });
       if (error) throw error;
       toast({
@@ -251,6 +259,7 @@ export default function ChequesSection() {
       setEstadoNuevo('');
       setObsEstado('');
       setProveedorEndosoId('');
+      setCuentaBancariaCobroId('');
       fetchCheques();
     } catch (e) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
@@ -268,6 +277,7 @@ export default function ChequesSection() {
     setEstadoNuevo(opciones[0]);
     setObsEstado('');
     setProveedorEndosoId('');
+    setCuentaBancariaCobroId('');
     setShowCambioEstado(true);
   };
 
@@ -422,13 +432,15 @@ export default function ChequesSection() {
         onOpenChange={v => {
           if (savingEstado) return;
           setShowCambioEstado(v);
-          if (!v) { setChequeACambiar(null); setEstadoNuevo(''); setObsEstado(''); setProveedorEndosoId(''); }
+          if (!v) { setChequeACambiar(null); setEstadoNuevo(''); setObsEstado(''); setProveedorEndosoId(''); setCuentaBancariaCobroId(''); }
         }}
         chequeACambiar={chequeACambiar}
         estadoNuevo={estadoNuevo} setEstadoNuevo={setEstadoNuevo}
         obsEstado={obsEstado} setObsEstado={setObsEstado}
         proveedores={proveedores}
         proveedorEndosoId={proveedorEndosoId} setProveedorEndosoId={setProveedorEndosoId}
+        cuentasBancarias={cuentasBancarias}
+        cuentaBancariaCobroId={cuentaBancariaCobroId} setCuentaBancariaCobroId={setCuentaBancariaCobroId}
         savingEstado={savingEstado}
         transicionesDisponibles={transicionesDisponibles}
         onConfirmar={handleCambiarEstado}

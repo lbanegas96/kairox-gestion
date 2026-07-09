@@ -6348,6 +6348,35 @@ completo. No se hizo hoy por alcance.
 Build de producción sin errores. Verificado en preview (Nalux/Nadia) que Cuenta Corriente sigue
 cargando y operando con datos reales sin errores de consola nuevos tras el cambio.
 
+**Ítem #4 — Cheques: circuito completo A+B+C (migration 182).** El usuario eligió el alcance
+completo tras encontrar, en el diseño, que el gap era más profundo de lo previsto: Cheques ya
+generaba asientos de Mayor desde hace unas sesiones (mig.145/166), pero nunca tocaba
+`cuenta_corriente_movimientos`/`cuenta_corriente_proveedores` — un cliente podía pagar con cheque y
+seguir figurando con la factura completa impaga en Cuenta Corriente. Se implementó:
+- **(A)** `crear_cheque_tercero` cancela la factura puntual del cliente (HABER + imputación si
+  viene con `comprobante_id`, misma validación de sobre-imputación que `registrar_cobro_cliente`).
+  Simétrico para propios: `entregado` cancela la compra puntual del proveedor.
+- **(B)** Rechazo reabre la deuda (fila DEBE/nota_debito de reversión, queda en el historial para
+  siempre) y borra el vínculo de imputación puntual — se descubrió en el camino que
+  `cuenta_corriente_imputaciones`/`_proveedores_imputaciones` tienen un CHECK `monto > 0` que
+  bloquea el patrón "fila negativa de reversión" usado en la sesión anterior para CxC/CxP — acá se
+  usó DELETE del vínculo en su lugar (el movimiento financiero en sí nunca se borra).
+- **(C)** Cobrar/depositar genera el movimiento en `movimientos_bancarios` (se agregó
+  `origen='cheque'` al CHECK existente), linkeado al mismo `asiento_id` que ya crea el trigger de
+  GL — vive en los triggers `fn_asiento_cheque_tercero`/`fn_asiento_cheque_propio` (tienen
+  `v_asiento_id` en scope), no en las RPCs. Se agregó un selector de cuenta bancaria en
+  `ModalCambioEstado.jsx`, solo visible al cobrar un cheque de tercero (los propios ya la tienen
+  desde su creación).
+
+Validado con `BEGIN...ROLLBACK` contra datos reales de Nalux (cliente Tuku + factura real,
+proveedor Alibaba + compra real, cuenta BBVA real): 6 casos, todos correctos — cobro+rechazo con
+imputación (neto 0), pago propio+rechazo con imputación (neto 0), cobro de tercero con depósito en
+Bancos, pago propio debitado por el banco en Bancos. Build sin errores, verificado en preview
+(pantalla de Cheques con datos reales, sin regresiones).
+
+Fuera de alcance (documentado): 'endosado' no cancela la compra puntual del proveedor endosado (la
+UI no captura qué compra se paga en ese momento) — 'descontado' sigue sin modelo contable propio.
+
 ## 3 grandes proyectos al final
 
 | # | Proyecto | Por qué al final |

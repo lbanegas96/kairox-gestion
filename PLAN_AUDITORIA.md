@@ -550,6 +550,49 @@ porque `crear_venta`/`crear_nota_credito` no aceptan ese parámetro.
 
 Sin hallazgos críticos ni importantes. Feature correcta y segura tal como está.
 
+## ✅ Cheques — circuito completo A+B+C (mig.182, 2026-07-09) — CERRADO
+
+A pedido explícito del usuario ("las 3 cosas"), se cerró el gap sistémico de Cheques documentado
+desde la Fase 1 original (S44: "gap sistémico — cobrar/depositar un cheque no genera movimiento en
+Bancos... rechazo no restaura deuda"). Investigando el alcance real se encontró que Cheques ya
+generaba asientos de Mayor (mig.145/166, sesiones previas) para recibido/endosado/cobrado/rechazado
+con la cuenta puente 1.1.6 "Cheques de Terceros en Cartera" — pero nunca tocaba
+`cuenta_corriente_movimientos`/`cuenta_corriente_proveedores` (la subcuenta por cliente/proveedor
+que usan las pantallas de Cuenta Corriente) ni `movimientos_bancarios` — un cliente podía pagar con
+cheque y seguir figurando con la factura completa impaga en Cuenta Corriente, aunque el Mayor
+estuviera bien.
+
+**(A) Recibir un cheque de un cliente** (`crear_cheque_tercero`) ahora inserta una fila HABER en
+`cuenta_corriente_movimientos` (cancela el saldo del cliente) y, si viene con `comprobante_id`,
+una fila en `cuenta_corriente_imputaciones` (cancela la factura puntual, con la misma validación
+de sobre-imputación que `registrar_cobro_cliente`). Simétrico para cheques propios: `entregado`
+(`cambiar_estado_cheque`) inserta 'pago' en `cuenta_corriente_proveedores` + imputación contra
+`compra_id` si vino con una.
+
+**(B) Rechazo** reabre la deuda: fila DEBE (tercero) / 'nota_debito' (propio) de reversión, que
+queda en el historial para siempre. La imputación puntual se **borra** (no se puede insertar una
+fila negativa — `cuenta_corriente_imputaciones`/`_proveedores_imputaciones` exigen `monto > 0` vía
+CHECK constraint, confirmado en vivo) — se borra solo el vínculo "a qué factura se aplicó", nunca
+el movimiento financiero en sí.
+
+**(C) Cobrar/depositar** genera el movimiento en `movimientos_bancarios` (antes esa tabla no
+tenía siquiera `origen='cheque'` como valor permitido — se extendió el CHECK), linkeado al MISMO
+`asiento_id` que ya crea el trigger de GL para no duplicar el asiento — por eso esta parte vive en
+los triggers `fn_asiento_cheque_tercero`/`fn_asiento_cheque_propio` (tienen `v_asiento_id` en scope
+en el momento exacto), mientras que A/B viven en las RPCs. Cheques de tercero no traían
+`cuenta_bancaria_id` (solo los propios, desde su creación) — se agregó un selector en
+`ModalCambioEstado.jsx` que solo aparece al mover un cheque de tercero a 'cobrado'.
+
+**Fuera de alcance** (documentado, no pedido): 'endosado' no cancela la compra puntual del
+proveedor endosado (la UI no captura qué compra se paga en el momento del endoso) — 'descontado'
+tampoco tiene modelo contable propio (no lo tenía antes tampoco).
+
+Validado con `BEGIN...ROLLBACK` contra datos reales de Nalux (cliente Tuku + factura real, proveedor
+Alibaba + compra real, cuenta bancaria BBVA real): 6 casos — cobro con imputación y su rechazo
+(neto 0, imputación borrada), pago propio con imputación y su rechazo (neto 0), cobro de tercero con
+depósito en Bancos (ingreso, mismo asiento), pago propio cobrado por el banco (egreso, mismo
+asiento) — los 6 pasaron. Build de producción sin errores, verificado en preview sin regresiones.
+
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma
    metodología de 6 dimensiones.
