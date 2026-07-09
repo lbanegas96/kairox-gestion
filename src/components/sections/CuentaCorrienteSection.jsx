@@ -44,6 +44,11 @@ function CuentaCorrienteSection() {
     nota: ''
   });
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  // Imputación por factura (Open Item clearing, migration 169) — opcional.
+  // Si el usuario no imputa nada, el cobro se comporta igual que siempre
+  // (reduce el saldo corrido, sin marcar ninguna factura puntual como paga).
+  const [facturasAbiertas, setFacturasAbiertas] = useState([]);
+  const [imputaciones, setImputaciones] = useState({}); // { comprobante_id: "monto string" }
 
   // Aging Report
   const [activeTab, setActiveTab] = useState('clientes');
@@ -65,15 +70,15 @@ function CuentaCorrienteSection() {
   const fetchAgingData = async () => {
     setAgingLoading(true);
     try {
-      // Open Item Management: cada comprobante pendiente es un ítem abierto con su propia fecha.
-      // Esto evita que deudas viejas ya pagadas afecten la banda de antigüedad actual.
+      // Open Item Management real (migration 169): saldo_pendiente = total -
+      // suma de imputaciones. Antes esto miraba solo el flag estado_pago='pendiente'
+      // y mostraba el total COMPLETO de la factura aunque ya se hubiese cobrado
+      // parcialmente — hallazgo de la auditoría contable, corregido acá.
       const { data: comprobantes, error } = await supabase
-        .from('comprobantes')
-        .select('id, numero_venta, fecha, total, cliente_id, cliente_nombre')
+        .from('facturas_saldo_pendiente')
+        .select('comprobante_id, numero_venta, fecha, saldo_pendiente, cliente_id, cliente_nombre')
         .eq('empresa_id', user.empresa_id)
-        .eq('estado_pago', 'pendiente')
-        .eq('tipo', 'venta')
-        .not('cliente_id', 'is', null)
+        .gt('saldo_pendiente', 0)
         .order('fecha', { ascending: true });
 
       if (error) throw error;
@@ -88,10 +93,10 @@ function CuentaCorrienteSection() {
         else if (dias <= 90) { banda = '61–90 días'; color = 'orange'; }
         else                 { banda = '+90 días';   color = 'red'; }
         return {
-          comprobante_id: comp.id,
+          comprobante_id: comp.comprobante_id,
           numero_venta:   comp.numero_venta,
           fecha:          comp.fecha,
-          total:          Number(comp.total),
+          total:          Number(comp.saldo_pendiente),
           cliente_id:     comp.cliente_id,
           cliente_nombre: comp.cliente_nombre,
           dias,
@@ -197,7 +202,41 @@ function CuentaCorrienteSection() {
     e?.stopPropagation();
     setSelectedClient(client);
     setPaymentData({ monto: '', metodo: 'Efectivo', nota: '' });
+    setImputaciones({});
+    setFacturasAbiertas([]);
     setIsPaymentDialogOpen(true);
+    fetchFacturasAbiertas(client.id);
+  };
+
+  const fetchFacturasAbiertas = async (clienteId) => {
+    const { data, error } = await supabase
+      .from('facturas_saldo_pendiente')
+      .select('comprobante_id, numero_venta, fecha, saldo_pendiente')
+      .eq('cliente_id', clienteId)
+      .gt('saldo_pendiente', 0)
+      .order('fecha', { ascending: true });
+    if (error) {
+      console.error('[facturas_saldo_pendiente]', error.message);
+      return;
+    }
+    setFacturasAbiertas(data || []);
+  };
+
+  // Reparte `monto` entre las facturas abiertas más viejas primero (FIFO),
+  // hasta agotar el monto o las facturas. El usuario puede editar el
+  // resultado a mano después.
+  const autoDistribuirFIFO = (monto) => {
+    let restante = monto;
+    const nuevo = {};
+    for (const f of facturasAbiertas) {
+      if (restante <= 0) break;
+      const aplicar = Math.min(restante, f.saldo_pendiente);
+      if (aplicar > 0) {
+        nuevo[f.comprobante_id] = String(aplicar);
+        restante -= aplicar;
+      }
+    }
+    setImputaciones(nuevo);
   };
 
   const handleRegisterPayment = async () => {
@@ -227,6 +266,14 @@ function CuentaCorrienteSection() {
       ? tcParalelo.calcParalelo(amount, 'ARS', 1)
       : null;
 
+    // Imputación por factura (opcional, migration 169): solo se arma el array
+    // si el usuario cargó algún monto — si no, se manda null y el cobro se
+    // comporta exactamente igual que antes (reduce el saldo corrido, sin
+    // marcar ninguna factura puntual como cancelada).
+    const imputacionesArray = Object.entries(imputaciones)
+      .map(([comprobante_id, montoStr]) => ({ comprobante_id, monto: parseNumberLocale(montoStr) }))
+      .filter(i => i.monto > 0);
+
     try {
       // Cobro ATÓMICO: cuenta corriente (HABER) + caja (ingreso) en un solo RPC (migration 130).
       // Antes eran 2 inserts sueltos: si el 2º fallaba, la deuda del cliente bajaba SIN registrar
@@ -243,6 +290,7 @@ function CuentaCorrienteSection() {
         p_caja_sesion_id: currentSession?.id ?? null,
         p_monto_paralelo: pagoParalelo,
         p_tc_paralelo:    pagoParalelo !== null ? tcParalelo.tcHoy : null,
+        p_imputaciones:   imputacionesArray.length > 0 ? imputacionesArray : null,
       });
 
       if (cobroError) throw cobroError;
@@ -375,6 +423,9 @@ function CuentaCorrienteSection() {
         tcParalelo={tcParalelo}
         isProcessingPayment={isProcessingPayment}
         handleRegisterPayment={handleRegisterPayment}
+        facturasAbiertas={facturasAbiertas}
+        imputaciones={imputaciones} setImputaciones={setImputaciones}
+        autoDistribuirFIFO={autoDistribuirFIFO}
       />
     </div>
   );

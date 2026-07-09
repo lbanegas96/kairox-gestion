@@ -12,7 +12,12 @@ function ModalCobro({
   tcParalelo,
   isProcessingPayment,
   handleRegisterPayment,
+  facturasAbiertas = [],
+  imputaciones = {}, setImputaciones,
+  autoDistribuirFIFO,
 }) {
+  const montoCobro = parseNumberLocale(paymentData.monto) || 0;
+  const totalImputado = Object.values(imputaciones).reduce((s, v) => s + (parseNumberLocale(v) || 0), 0);
   return (
     <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
       <DialogContent className="sm:max-w-[425px] bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border">
@@ -86,13 +91,51 @@ function ModalCobro({
               placeholder="Ej: Pago parcial factura #123"
             />
           </div>
+
+          {facturasAbiertas.length > 0 && (
+            <div className="grid gap-2 border-t border-kx-border pt-3">
+              <div className="flex items-center justify-between">
+                <Label>Imputar a factura(s) (opcional)</Label>
+                {montoCobro > 0 && (
+                  <Button type="button" size="sm" variant="outline" onClick={() => autoDistribuirFIFO(montoCobro)}>
+                    Auto (más vieja primero)
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-kx-text-3">
+                Si no imputás nada, el cobro solo baja el saldo total del cliente (como siempre).
+                Si imputás, esas facturas puntuales quedan marcadas como cobradas.
+              </p>
+              <div className="border border-kx-border rounded-lg divide-y divide-kx-border max-h-48 overflow-y-auto">
+                {facturasAbiertas.map(f => (
+                  <div key={f.comprobante_id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                    <div className="min-w-0">
+                      <div className="font-medium text-kx-text truncate">{f.numero_venta}</div>
+                      <div className="text-xs text-kx-text-3">
+                        Pendiente: ${Number(f.saldo_pendiente).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                    <Input
+                      type="text" inputMode="decimal" placeholder="0,00"
+                      value={imputaciones[f.comprobante_id] ?? ''}
+                      onChange={(e) => setImputaciones(prev => ({ ...prev, [f.comprobante_id]: e.target.value }))}
+                      className="w-28 h-8 text-right text-xs shrink-0"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className={`text-xs text-right ${totalImputado > montoCobro ? 'text-red-500 font-semibold' : 'text-kx-text-3'}`}>
+                Imputado: ${totalImputado.toLocaleString('es-AR', { minimumFractionDigits: 2 })} / ${montoCobro.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+              </div>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setIsPaymentDialogOpen(false)} disabled={isProcessingPayment}>Cancelar</Button>
           <Button
             onClick={handleRegisterPayment}
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
-            disabled={isProcessingPayment || !paymentData.monto || !(parseNumberLocale(paymentData.monto) > 0)}
+            disabled={isProcessingPayment || !paymentData.monto || !(parseNumberLocale(paymentData.monto) > 0) || totalImputado > montoCobro}
           >
             {isProcessingPayment ? "Procesando..." : "Confirmar Cobro"}
           </Button>

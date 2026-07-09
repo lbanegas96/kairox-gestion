@@ -1,5 +1,45 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-08 (sesión 54 Luciano — plan de 4 frentes contables (Fase 1 Centros de Costo cerrada) + bug real AFIP RG 5616 deployado + 16/19 facturas recuperadas + feature relevante_fiscal (patrón SAP))
+**Última actualización:** 2026-07-08 (sesión 54 Luciano — plan de 4 frentes contables: Fase 1 Centros de Costo + Fase 4 CxC/CxP imputación por factura reordenada y cerrada + bug real AFIP RG 5616 deployado + 16/19 facturas recuperadas + feature relevante_fiscal (patrón SAP))
+
+## ✅ Plan de 4 frentes contables — CxC/CxP: imputación por factura (migration 169, sesión 54)
+
+Reordenado desde "Fase 4" (era la última, mayor prioridad) a segunda, porque resultó ser
+**prerrequisito real de Multimoneda/diferencia de cambio** — investigado vía skill `sap-reference`:
+SAP calcula la diferencia de cambio realizada específicamente en el momento del "clearing" (cuando
+un pago se aparea contra la factura puntual que cancela); sin Open Item Management no hay forma de
+saber contra qué TC de origen comparar. Confirmado con Luciano antes de programar.
+
+**Hallazgo de auditoría confirmado con código:** `registrar_cobro_cliente`/`registrar_pago_proveedor`
+solo reducían el saldo corrido del cliente/proveedor — nunca supieron a qué factura/compra puntual
+correspondía un cobro/pago. Contradice lo que `sap-reference` (Regla 5) da por implementado.
+
+**Fix (migration 169):**
+- Tablas nuevas `cuenta_corriente_imputaciones` (clientes) y `cuenta_corriente_proveedores_imputaciones`
+  (proveedores) — permiten repartir un cobro/pago entre varias facturas y cobrar una factura en
+  varias cuotas. RLS solo-lectura; la escritura es exclusiva de los RPCs `SECURITY DEFINER`.
+- `registrar_cobro_cliente`/`registrar_pago_proveedor`: nuevo parámetro opcional `p_imputaciones`
+  (jsonb, default NULL). **100% backward-compatible** — sin ese parámetro, el cobro/pago se comporta
+  exactamente igual que antes de esta migration. Con guard `FOR UPDATE` + validación de que el monto
+  imputado no supere el saldo pendiente de la factura ni el monto total del cobro.
+- ⚠️ **Lección aplicada de migration 166**: `CREATE OR REPLACE FUNCTION` no reemplaza una función si
+  se le agrega un parámetro nuevo — crea una sobrecarga ambigua. Se agregó `DROP FUNCTION` explícito
+  de las firmas anteriores antes de recrear ambos RPCs.
+- Vistas `facturas_saldo_pendiente` / `compras_saldo_pendiente` — saldo real (total - imputado) por
+  comprobante/compra, para UI y reportes.
+- **Test pgTAP** (`cxc_imputacion_factura.test.sql`, 8 casos) corrido de verdad, **8/8 verde**:
+  imputación total, imputación parcial dividida, guard de sobre-imputación, guard de suma > monto
+  del cobro, regresión (cobro sin imputar sigue igual que antes).
+- **UI (solo clientes por ahora):** `ModalCobro.jsx`/`CuentaCorrienteSection.jsx` — al cobrar, lista
+  las facturas abiertas del cliente con su saldo pendiente, botón "Auto (más vieja primero)" para
+  FIFO, inputs editables por factura. Si no se imputa nada, funciona exactamente igual que siempre.
+- **Bug de UX real corregido de paso:** `TabAntiguedad` (reporte de antigüedad de saldos) miraba
+  solo `comprobantes.estado_pago='pendiente'` y mostraba el **total completo** de la factura aunque
+  ya se hubiese cobrado parcialmente — coincide exactamente con el hallazgo de la auditoría. Ahora
+  usa `facturas_saldo_pendiente` (saldo real).
+- **Pendiente (no bloqueante):** UI simétrica de imputación en el flujo de pago a proveedores
+  (`ProveedoresSection`/pago) — el RPC ya soporta `p_imputaciones`, falta solo la pantalla.
+
+---
 
 ## ✅ Plan de 4 frentes contables — Fase 1: Centros de Costo (migration 168, sesión 54)
 
