@@ -127,6 +127,7 @@ export const asientosService = {
       descripcion?: string;
       origen?: string;
       origen_id?: string;
+      centro_costo_id?: string | null;
     },
     items: Omit<AsientoItem, 'id' | 'asiento_id' | 'empresa_id' | 'created_at'>[]
   ): Promise<AsientoContable> {
@@ -297,6 +298,7 @@ export const asientosAutoService = {
       fecha: string;       // YYYY-MM-DD
       descripcion: string;
       esCredito?: boolean;
+      centroCostoId?: string | null;
     }
   ): Promise<void> {
     // Non-critical period check — RPC errors never block the sale
@@ -324,7 +326,10 @@ export const asientosAutoService = {
 
     const asiento = await asientosService.createAsiento(
       empresaId, userId,
-      { fecha: params.fecha, descripcion: params.descripcion, origen: 'venta', origen_id: params.ventaId },
+      {
+        fecha: params.fecha, descripcion: params.descripcion, origen: 'venta', origen_id: params.ventaId,
+        centro_costo_id: params.centroCostoId ?? null,
+      },
       [
         { cuenta_id: cuentaCobro,  debe: params.total, haber: 0,            descripcion: 'Cobro por venta' },
         { cuenta_id: cuentaVentas, debe: 0,            haber: params.total, descripcion: 'Ingreso por venta' },
@@ -347,6 +352,7 @@ export const asientosAutoService = {
       fecha: string;       // YYYY-MM-DD
       descripcion: string;
       esCredito?: boolean;
+      centroCostoId?: string | null;
     }
   ): Promise<void> {
     // Non-critical period check — RPC errors never block the purchase
@@ -374,7 +380,10 @@ export const asientosAutoService = {
 
     const asiento = await asientosService.createAsiento(
       empresaId, userId,
-      { fecha: params.fecha, descripcion: params.descripcion, origen: 'compra', origen_id: params.compraId },
+      {
+        fecha: params.fecha, descripcion: params.descripcion, origen: 'compra', origen_id: params.compraId,
+        centro_costo_id: params.centroCostoId ?? null,
+      },
       [
         { cuenta_id: cuentaInventario, debe: params.total, haber: 0,            descripcion: 'Compra de mercadería' },
         { cuenta_id: cuentaPago,       debe: 0,            haber: params.total, descripcion: 'Pago por compra' },

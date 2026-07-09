@@ -61,6 +61,10 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
   // AFIP esté activo — para ajustes internos, pruebas o correcciones manuales
   // que nunca deben presentarse ante ARCA.
   const [noRelevanteFiscal, setNoRelevanteFiscal] = useState(false);
+  // Centro de costo (Fase 1 del plan de 4 frentes contables) — opcional, para
+  // reportar por sucursal/línea de negocio. null = sin asignar, igual que hoy.
+  const [centrosCosto, setCentrosCosto]   = useState([]);
+  const [centroCostoId, setCentroCostoId] = useState('');
 
   // ── Carga de datos al abrir ─────────────────────────────────────────────────
   useEffect(() => {
@@ -69,6 +73,10 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
     supabase.from('clientes').select('id, nombre, dias_credito')
       .eq('empresa_id', user.empresa_id).neq('activo', false).order('nombre')
       .then(({ data }) => setClientes(data || []));
+
+    supabase.from('centros_costo').select('id, nombre')
+      .eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre')
+      .then(({ data }) => setCentrosCosto(data || []));
 
     supabase.from('empresas')
       .select('usa_factura_electronica, condicion_iva, afip_cuit')
@@ -114,6 +122,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
       setSearchFocusId(null);
       setAfipConfig(null);
       setNoRelevanteFiscal(false);
+      setCentroCostoId('');
     }
   }, [open]);
 
@@ -221,6 +230,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
         tipo_comprobante_afip: tipoAfipInsert,
         fecha_vencimiento:     fechaVencimiento,
         relevante_fiscal:      !noRelevanteFiscal,
+        centro_costo_id:       centroCostoId || null,
       }]).select('id').single();
       if (compErr) throw compErr;
 
@@ -292,6 +302,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
         fecha:       getTodayAR(),
         descripcion: `Factura ${numero}`,
         esCredito:   isCC,
+        centroCostoId: centroCostoId || null,
       }).catch(e => {
         if (e.message?.startsWith('Período cerrado:')) {
           toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
@@ -369,6 +380,19 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
                 className="h-10 bg-kx-surface border-kx-border text-kx-text"
               />
             </div>
+            {centrosCosto.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-kx-text-2">Centro de costo (opcional)</Label>
+                <select
+                  value={centroCostoId}
+                  onChange={e => setCentroCostoId(e.target.value)}
+                  className="w-full h-10 rounded-md border border-kx-border bg-kx-surface px-3 text-sm text-kx-text focus:outline-none focus:ring-1 focus:ring-[rgb(var(--kx-violet))]"
+                >
+                  <option value="">Sin asignar</option>
+                  {centrosCosto.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Relevancia fiscal (patrón SAP) — solo tiene sentido si AFIP está activo */}

@@ -102,6 +102,14 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [condicionForm, setCondicionForm] = useState({ nombre: '', dias_credito: '', descuento_pct: '' });
   const [savingCondicion, setSavingCondicion] = useState(false);
 
+  // ── Tab 2: Centros de Costo (Fase 1 del plan de 4 frentes contables) ────
+  const [centrosCosto, setCentrosCosto] = useState([]);
+  const [loadingCentrosCosto, setLoadingCentrosCosto] = useState(true);
+  const [showCentroCostoModal, setShowCentroCostoModal] = useState(false);
+  const [editingCentroCosto, setEditingCentroCosto] = useState(null);
+  const [centroCostoForm, setCentroCostoForm] = useState({ nombre: '' });
+  const [savingCentroCosto, setSavingCentroCosto] = useState(false);
+
   // ── Tab 3: Facturación ────────────────────────────────────────────────────
   const [afipConfig, setAfipConfig] = useState({
     usa_factura_electronica: false,
@@ -611,6 +619,26 @@ const ConfiguracionSection = ({ initialTab }) => {
   };
 
   useEffect(() => { fetchCondicionesPago(); }, [user?.empresa_id]);
+
+  const fetchCentrosCosto = async () => {
+    if (!user?.empresa_id) return;
+    setLoadingCentrosCosto(true);
+    try {
+      const { data, error } = await supabase
+        .from('centros_costo')
+        .select('*')
+        .eq('empresa_id', user.empresa_id)
+        .order('nombre');
+      if (error) throw error;
+      setCentrosCosto(data ?? []);
+    } catch (e) {
+      console.error('[Centros de Costo] Error al cargar:', e);
+    } finally {
+      setLoadingCentrosCosto(false);
+    }
+  };
+
+  useEffect(() => { fetchCentrosCosto(); }, [user?.empresa_id]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Tab 1 handlers
@@ -1193,6 +1221,54 @@ const ConfiguracionSection = ({ initialTab }) => {
     }
   };
 
+  // ── Handlers Centros de Costo ────────────────────────────────────────────
+  const openNuevoCentroCosto = () => {
+    setEditingCentroCosto(null);
+    setCentroCostoForm({ nombre: '' });
+    setShowCentroCostoModal(true);
+  };
+
+  const openEditarCentroCosto = (c) => {
+    setEditingCentroCosto(c);
+    setCentroCostoForm({ nombre: c.nombre });
+    setShowCentroCostoModal(true);
+  };
+
+  const toggleActivoCentroCosto = async (id, activo) => {
+    const { error } = await supabase.from('centros_costo').update({ activo }).eq('id', id);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
+    }
+    fetchCentrosCosto();
+  };
+
+  const handleGuardarCentroCosto = async () => {
+    if (!centroCostoForm.nombre.trim()) {
+      toast({ title: 'El nombre es obligatorio', variant: 'destructive' });
+      return;
+    }
+    setSavingCentroCosto(true);
+    try {
+      const payload = { nombre: centroCostoForm.nombre.trim() };
+      if (editingCentroCosto) {
+        const { error } = await supabase.from('centros_costo').update(payload).eq('id', editingCentroCosto.id);
+        if (error) throw error;
+        toast({ title: 'Centro de costo actualizado' });
+      } else {
+        const { error } = await supabase.from('centros_costo').insert({ ...payload, empresa_id: user.empresa_id });
+        if (error) throw error;
+        toast({ title: 'Centro de costo creado' });
+      }
+      setShowCentroCostoModal(false);
+      fetchCentrosCosto();
+    } catch (e) {
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingCentroCosto(false);
+    }
+  };
+
   // ─────────────────────────────────────────────────────────────────────────
   // Render
   // ─────────────────────────────────────────────────────────────────────────
@@ -1267,6 +1343,11 @@ const ConfiguracionSection = ({ initialTab }) => {
             onNuevaCondicion={openNuevaCondicion}
             onEditarCondicion={openEditarCondicion}
             onToggleCondicion={toggleActivoCondicion}
+            centrosCosto={centrosCosto}
+            loadingCentrosCosto={loadingCentrosCosto}
+            onNuevoCentroCosto={openNuevoCentroCosto}
+            onEditarCentroCosto={openEditarCentroCosto}
+            onToggleCentroCosto={toggleActivoCentroCosto}
           />
         </TabsContent>
 
@@ -1575,6 +1656,35 @@ const ConfiguracionSection = ({ initialTab }) => {
             <Button variant="outline" onClick={() => setShowCondicionModal(false)}>Cancelar</Button>
             <Button onClick={handleGuardarCondicion} disabled={savingCondicion}>
               {savingCondicion ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Guardando...</> : 'Guardar'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          MODAL — Nuevo/Editar Centro de Costo (fuera del sistema de tabs)
+      ═══════════════════════════════════════════════════════════════════ */}
+      <Dialog open={showCentroCostoModal} onOpenChange={setShowCentroCostoModal}>
+        <DialogContent className="sm:max-w-[420px] bg-kx-surface border-kx-border">
+          <DialogHeader>
+            <DialogTitle className="text-kx-text">{editingCentroCosto ? 'Editar' : 'Nuevo'} Centro de Costo</DialogTitle>
+            <DialogDescription>Dimensión opcional para reportar por sucursal o línea de negocio.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-kx-text">Nombre *</Label>
+              <Input
+                value={centroCostoForm.nombre}
+                onChange={e => setCentroCostoForm(f => ({ ...f, nombre: e.target.value }))}
+                placeholder="Ej: Sucursal Centro"
+                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-2 border-t border-kx-border">
+            <Button variant="outline" onClick={() => setShowCentroCostoModal(false)}>Cancelar</Button>
+            <Button onClick={handleGuardarCentroCosto} disabled={savingCentroCosto}>
+              {savingCentroCosto ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Guardando...</> : 'Guardar'}
             </Button>
           </div>
         </DialogContent>

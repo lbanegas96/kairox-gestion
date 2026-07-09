@@ -1,4 +1,4 @@
-import { TrendingUp, Loader2, CheckCircle2, Save, CreditCard, Pencil } from 'lucide-react';
+import { TrendingUp, Loader2, CheckCircle2, Save, CreditCard, Pencil, Building2 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,8 @@ const TabFinanzas = ({
   tcConfig, setTcConfig, loadingTC, savingTC, onSaveTC,
   condicionesPago, loadingCondiciones,
   onNuevaCondicion, onEditarCondicion, onToggleCondicion,
+  centrosCosto, loadingCentrosCosto,
+  onNuevoCentroCosto, onEditarCentroCosto, onToggleCentroCosto,
 }) => (
   <div className="space-y-6 max-w-2xl">
     {/* Moneda Paralela */}
@@ -119,6 +121,46 @@ const TabFinanzas = ({
               <div className="flex items-center gap-2">
                 <Switch checked={c.activo} onCheckedChange={(v) => onToggleCondicion(c.id, v)} />
                 <Button size="sm" variant="ghost" onClick={() => onEditarCondicion(c)}>
+                  <Pencil className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+
+    {/* Centros de Costo */}
+    <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Building2 className="w-5 h-5 text-kx-text-3" />
+          <h3 className="font-semibold text-kx-text">Centros de Costo</h3>
+        </div>
+        <Button size="sm" onClick={onNuevoCentroCosto}>+ Nuevo</Button>
+      </div>
+      <p className="text-sm text-kx-text-2 mb-4">
+        Dimensión opcional para reportar por sucursal o línea de negocio. Si no se asigna ninguno,
+        el sistema sigue funcionando exactamente igual que hoy.
+      </p>
+
+      {loadingCentrosCosto ? (
+        <div className="flex items-center gap-2 text-kx-text-3 py-4">
+          <Loader2 className="h-4 w-4 animate-spin" /> Cargando...
+        </div>
+      ) : centrosCosto.length === 0 ? (
+        <p className="text-sm text-kx-text-3 py-4 text-center">No hay centros de costo cargados.</p>
+      ) : (
+        <div className="border border-kx-border rounded-xl overflow-hidden">
+          {centrosCosto.map(c => (
+            <div key={c.id} className="flex items-center justify-between px-4 py-2.5 border-b border-kx-border last:border-0">
+              <div className={`flex items-center gap-2 ${!c.activo ? 'opacity-40' : ''}`}>
+                <span className="text-sm font-medium text-kx-text">{c.nombre}</span>
+                {!c.activo && <Badge variant="outline" className="text-xs text-slate-400">Inactivo</Badge>}
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={c.activo} onCheckedChange={(v) => onToggleCentroCosto(c.id, v)} />
+                <Button size="sm" variant="ghost" onClick={() => onEditarCentroCosto(c)}>
                   <Pencil className="w-3.5 h-3.5" />
                 </Button>
               </div>

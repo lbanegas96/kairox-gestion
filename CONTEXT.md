@@ -1,5 +1,45 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-08 (sesión 54 Luciano — bug real AFIP RG 5616 deployado + 16/19 facturas recuperadas + feature relevante_fiscal (patrón SAP))
+**Última actualización:** 2026-07-08 (sesión 54 Luciano — plan de 4 frentes contables (Fase 1 Centros de Costo cerrada) + bug real AFIP RG 5616 deployado + 16/19 facturas recuperadas + feature relevante_fiscal (patrón SAP))
+
+## ✅ Plan de 4 frentes contables — Fase 1: Centros de Costo (migration 168, sesión 54)
+
+Cierre de la auditoría contable del Frente 1: se definió un plan de 4 áreas (Centros de Costo →
+Multimoneda/diferencia de cambio → IIBB auto-liquidación → CxC/CxP imputación por factura),
+ordenadas de menor a mayor prioridad/complejidad a pedido de Luciano. Fase 1 completa hoy:
+
+- **Migration 168**: tabla `centros_costo` (maestro simple, mismo patrón que `unidades_medida`) +
+  columna `centro_costo_id` (nullable, FK `ON DELETE SET NULL`) en `comprobantes`, `compras` y
+  `asientos_contables`. 100% aditivo — nada existente cambia de comportamiento si no se usa.
+- **UI**: nueva sección "Centros de Costo" en `ConfiguracionSection` → tab Finanzas (`TabFinanzas.jsx`),
+  mismo patrón CRUD que Condiciones de Pago. Selector opcional en `NuevaFacturaModal.jsx` (solo
+  aparece si hay al menos un centro de costo activo cargado) — se guarda en el comprobante y se
+  propaga al asiento automático (`asientosAutoService.crearAsientoVenta`/`crearAsientoCompra`,
+  parámetro nuevo `centroCostoId`).
+- **Test pgTAP** (`supabase/tests/centros_costo.test.sql`, 6 casos) — corrido de verdad vía
+  `execute_sql` dentro de `BEGIN...ROLLBACK`, **6/6 verde**. Hallazgo del propio proceso de testeo:
+  el aislamiento RLS solo se puede probar forzando `SET LOCAL ROLE authenticated` (la conexión de
+  la tool corre como superuser/BYPASSRLS por defecto) — documentado en el test para futuras pruebas
+  de RLS puro sobre tablas nuevas.
+- 🟢 **Hallazgo menor documentado, no corregido:** las FK de Postgres no respetan RLS al validar la
+  referencia (limitación conocida de Postgres, no un bug de esta migration) — un `centro_costo_id`
+  de otro tenant técnicamente podría forzarse vía API directa (nunca pasa por la UI normal). Impacto
+  bajo: solo expondría el `nombre` del centro de costo ajeno, nunca datos financieros. Si se quiere
+  cerrar del todo, hace falta un trigger `BEFORE INSERT/UPDATE` que valide
+  `centro_costo_id.empresa_id = comprobante.empresa_id` — no implementado, queda para un hardening
+  futuro si se decide que vale la pena.
+- **Pendiente extender** (no bloqueante): selector de centro de costo en `NuevaVentaModal.jsx` (POS)
+  y `CompraRapidaSection.jsx`/`NuevaFacturaProveedorModal.jsx` (compras) — solo se conectó en
+  `NuevaFacturaModal.jsx` para esta fase inicial. Reporte "Estado de Resultados por centro de costo"
+  también queda pendiente (la columna ya existe, falta el filtro en el reporte).
+
+**Próximas fases del plan** (decisiones ya tomadas por Luciano):
+- **Fase 2 — Diferencia de cambio:** contra "TC del día" (TC de origen del comprobante vs. TC del
+  momento del cobro/pago), no contra el último cierre de período.
+- **Fase 3 — IIBB:** soportar **ambas** modalidades (jurisdicción única y Convenio Multilateral) —
+  el Convenio Multilateral requiere coeficientes de distribución por jurisdicción, sube bastante la
+  complejidad de esta fase respecto a lo estimado originalmente.
+- **Fase 4 — CxC/CxP imputación por factura:** la de mayor prioridad e impacto, dejada última a
+  propósito (toca el flujo de cobros/pagos ya en uso diario por Nalux).
 
 ## 🔴 Bug real AFIP: `CondicionIVAReceptorId` faltante (RG 5616) — DEPLOYADO + 16/19 facturas recuperadas + feature `relevante_fiscal` (sesión 54, 2026-07-08)
 
