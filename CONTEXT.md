@@ -32,11 +32,11 @@ mandaba en el request de `FECAESolicitar`.
   **No se siguió reintentando** para no seguir generando rechazos reales contra AFIP sin entender la
   causa — queda pendiente: esperar más tiempo entre intentos (ideal: no antes de mañana) y reintentar
   UNA vez más, o usar el botón "Reintentar CAE" desde la UI cuando Luciano lo decida.
-- **Hallazgo lateral (no corregido, documentado):** `arca-worker/index.ts` procesa la cola sin
-  `ORDER BY fecha` — en un reencolado masivo esto puede asignar números AFIP fuera de orden
-  cronológico respecto a la fecha original de venta (ya pasó: `20260707-008` con fecha posterior a
-  `20260707-007` recibió el número AFIP más bajo). Sin impacto en operación normal (1 factura a la
-  vez), sí importa si se vuelve a reencolar un lote grande.
+- **Hallazgo lateral — CORREGIDO Y DEPLOYADO (mismo día):** `arca-worker/index.ts` procesaba la cola
+  sin `ORDER BY fecha` — en un reencolado masivo esto podía asignar números AFIP fuera de orden
+  cronológico respecto a la fecha original de venta (pasó: `20260707-008` con fecha posterior a
+  `20260707-007` recibió el número AFIP más bajo). Fix: `.order('fecha', { foreignTable: 'comprobantes', ascending: true, nullsFirst: false })`
+  sobre la lectura de `facturas_pendientes_arca` (join embebido a `comprobantes`). Deployado versión 5.
 
 **Feature nueva `comprobantes.relevante_fiscal`** (patrón SAP "Relevante para impuestos", propuesta de
 Luciano, ver `sap-reference` skill) — migration 167, **deployada**:
