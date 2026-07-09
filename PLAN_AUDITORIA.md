@@ -198,10 +198,31 @@ La matemática de FX ya se auditó a fondo como parte del área #1 (vive en las 
 - `TabEstadoResultados.jsx`: filtro de solo lectura sobre `asientos_contables`, cubierto por su
   policy SELECT tenant-only existente. Sin hallazgo.
 
+**5. Toggle "Impuestos Avanzados" — ✅ AUDITADA Y CORREGIDA.**
+- El write de `empresas.usa_impuestos_avanzados` ya estaba protegido — va por la misma policy
+  `empresas_update` (mig.152, exige `is_admin()`), sin hallazgo ahí.
+- **E/D: 🟡 CONFIRMADO Y CORREGIDO.** El diseño original elegido por el usuario fue "Ocultar del
+  menú + no ejecutar acciones", pero solo se implementó la primera mitad (`ImpuestosSection.jsx`
+  oculta las tabs si el toggle está OFF) — ninguna de las 3 RPCs de impuestos avanzados
+  (`generar_liquidacion_iibb`, `confirmar_liquidacion_iibb`, `registrar_retencion_practicada`)
+  chequeaba el toggle: un admin (o cualquiera con permiso `configuracion`) podía seguir generando
+  liquidaciones IIBB o registrando retenciones por API directa con el toggle en OFF. Riesgo real
+  bajo (requiere permiso admin/configuración, es la propia empresa auto-restringiéndose), pero
+  completa el diseño elegido. **Fix (mig.178):** las 3 RPCs ahora exigen
+  `empresas.usa_impuestos_avanzados = true`, mismo mensaje de error apuntando a dónde activarlo.
+  Validado con `BEGIN...ROLLBACK`: toggle forzado a `false` → `generar_liquidacion_iibb` bloqueada
+  con el mensaje esperado.
+
+Con esto se cierran las 5 áreas priorizadas de la Fase 5 (superficie nueva post mig.155:
+Centro de Costo, CxC/CxP imputación, Multimoneda, IIBB, toggle Impuestos Avanzados). Pendiente
+sin cerrar (bajo, no crítico): el bug de "Reintentar CAE" silencioso en `HistorialVentas.jsx`
+(ya derivado a una sesión aparte, no bloqueante).
+
 ## Registro de hallazgos (log corrido)
 
 | Fecha | Área | Severidad | Hallazgo | Fix |
 |-------|------|-----------|----------|-----|
+| 2026-07-09 | Impuestos Avanzados | 🟡 | El toggle solo ocultaba las tabs en el frontend — el diseño elegido ("no ejecutar acciones") nunca se implementó a nivel RPC en `generar_liquidacion_iibb`/`confirmar_liquidacion_iibb`/`registrar_retencion_practicada` | Las 3 RPCs ahora exigen `usa_impuestos_avanzados=true` (mig.178) |
 | 2026-07-09 | Centro de Costo | 🔴 | `centros_costo` con policy `FOR ALL` débil (solo `empresa_id`, sin permiso de módulo) — se creó después del barrido sistemático que protegió el resto de tablas maestras de Configuración | Mismo patrón que mig.149: SELECT tenant-only, CUD exige `has_module_permission('configuracion')` (mig.177) |
 | 2026-07-09 | Multimoneda | 🟢 | `registrar_pago_proveedor` usa `now()::date` (fecha del servidor UTC) para `get_tasa_cambio` en vez de la fecha Argentina del pago — ventana angosta (pagos después de 21:00 ART con tasa de "mañana" ya cargada) | No fixeado — documentado, mismo criterio que hallazgos 🟢 previos de esta auditoría |
 | 2026-07-09 | IIBB | 🔴 | `generar_liquidacion_iibb` sin guard contra 2 liquidaciones para el mismo período (o solapado) — doble confirmación duplicaría el IIBB contabilizado | `EXISTS` contra períodos solapados antes de generar (mig.176) |
