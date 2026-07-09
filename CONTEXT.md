@@ -6284,6 +6284,45 @@ Build de producción sin errores. Validado con `BEGIN...ROLLBACK` que `crear_ven
 
 ---
 
+### Sesión 2026-07-09 (cont.) — Plan de cierre de gaps: auditoría de la feature de Nadia + fix real de "Reintentar CAE"
+
+Se retomó la sesión trayendo un commit nuevo de Nadia (`3d781de`, checkbox "No relevante para
+AFIP" en POS/NC) con `git pull`. A pedido del usuario se armó un plan priorizado para atacar los
+gaps pendientes, empezando por lo que no requería su decisión.
+
+**1. Auditoría (6 dimensiones) del checkbox de Nadia — sin hallazgos críticos.** Documentado en
+`PLAN_AUDITORIA.md` § Fase 6. Confirmado en producción que hay defensa en profundidad real
+(`fn_queue_factura_arca` y `reencolar_caes_pendientes` chequean `relevante_fiscal=false`, y
+`cae_estado` nunca avanza de `'no_aplica'` si `noRelevanteFiscal=true`) — un solo hallazgo 🟢
+menor documentado (mismo patrón de `console.warn` ya presente en el propio archivo, no es
+regresión).
+
+**2. Fix real del bug "Reintentar CAE" (migration 180).** Se confirmó en producción que el defecto
+de raíz no era solo del botón de `HistorialVentas.jsx`/`SaleDetailModal.jsx` (UPDATE por
+`comprobante_id` que puede chocar contra `uq_fpa_comprobante_activo` si hay >1 fila histórica) —
+la función batch `reencolar_caes_pendientes` (mig.087/151) comparte exactamente el mismo defecto:
+su UPDATE interno filtra `estado IN (...,'error_definitivo')`, así que si existieran 2 filas
+`error_definitivo` para el mismo comprobante, el UPDATE movería a ambas a `'pendiente'` en el
+mismo statement y violaría el índice único igual. **Fix:** nueva RPC
+`reintentar_cae_comprobante(p_comprobante_id)` (gatea tenant + `has_module_permission('ventas')`)
+que siempre apunta a la fila más reciente por `id` (nunca un blanket update por `comprobante_id`);
+mismo patrón aplicado dentro del loop de `reencolar_caes_pendientes`. Validado con
+`BEGIN...ROLLBACK` simulando el escenario real (2 filas `error_definitivo` para un comprobante
+real) — resultado: exactamente 1 fila pasa a `pendiente`, la histórica queda intacta, sin
+violación de índice. `HistorialVentas.jsx` y `SaleDetailModal.jsx` migrados de los 2 `.update()`
+directos (que nunca chequeaban `error`, por eso el toast de éxito era falso) a
+`supabase.rpc('reintentar_cae_comprobante', ...)` con chequeo de `error` real.
+`ConfiguracionSection.handleReintentarFactura` no tenía este defecto (ya apunta a una fila
+específica por su propio `id`) — no requirió cambios.
+
+Build de producción sin errores. Verificado en preview (usuario real de Nalux) que la pantalla de
+Historial de Ventas carga sin errores de consola con las 14 facturas reales en estado `error` — no
+se ejecutó el botón en sí para no disparar un reintento real de CAE contra ARCA con datos de
+producción.
+
+Sigue el plan con el ítem #3 (CxC/CxP: regenerar asiento manual) y #4 (Cheques → Bancos, pendiente
+de decisión de alcance del usuario).
+
 ## 3 grandes proyectos al final
 
 | # | Proyecto | Por qué al final |

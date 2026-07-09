@@ -134,27 +134,19 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
   };
 
   // Reintento de CAE por comprobante (estados 'error' / 'error_definitivo').
-  // NO emite desde el frontend: re-encola en facturas_pendientes_arca y deja que
-  // el arca-worker (única fuente de verdad) lo procese. Mismo patrón que
-  // ConfiguracionSection.handleReintentarFactura, pero a partir del comprobante.
-  // ORDEN CRÍTICO: primero la fila de cola, después el comprobante — así, cuando el
-  // UPDATE del comprobante dispara fn_queue_factura_arca, la fila ya está 'pendiente'
-  // (dentro del índice único parcial) y el INSERT del trigger hace ON CONFLICT DO
-  // NOTHING en vez de crear una fila duplicada.
+  // NO emite desde el frontend: llama a reintentar_cae_comprobante (mig.180), que
+  // reencola SIEMPRE la fila más reciente de facturas_pendientes_arca para este
+  // comprobante (por id, nunca un blanket update por comprobante_id) — evita el
+  // choque contra uq_fpa_comprobante_activo cuando hay filas históricas
+  // 'error_definitivo' de reintentos anteriores. El arca-worker (única fuente de
+  // verdad) procesa la cola después.
   const handleReintentarCae = async (sale) => {
     setReintentandoCaeId(sale.id);
     try {
-      await supabase.from('facturas_pendientes_arca').update({
-        estado:          'pendiente',
-        intentos:        0,
-        proximo_intento: new Date().toISOString(),
-        error_mensaje:   null,
-      }).eq('comprobante_id', sale.id);
-
-      await supabase.from('comprobantes').update({
-        cae_estado: 'pendiente',
-        error_afip: null,
-      }).eq('id', sale.id);
+      const { error } = await supabase.rpc('reintentar_cae_comprobante', {
+        p_comprobante_id: sale.id,
+      });
+      if (error) throw error;
 
       toast({ title: 'CAE reencolado', description: 'El worker reintentará la emisión en los próximos minutos.' });
       fetchData();

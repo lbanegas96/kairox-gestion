@@ -488,6 +488,35 @@ igual al de todas las RPCs de dinero desde el inicio de esta auditoría — es e
 ahora exige `has_module_permission('bancos')` para el camino no-`service_role`, preservando la
 excepción para los webhooks de MercadoPago.
 
+## ✅ Fase 6 — Checkbox "No relevante para AFIP" en POS/NC (commit 3d781de, Nadia) — AUDITADA (2026-07-09)
+
+Nadia extendió el patrón ya existente en `NuevaFacturaModal.jsx` (checkbox que fija
+`relevante_fiscal=false` para excluir un comprobante de CAE) a `NuevaVentaModal.jsx`/`PanelPago.jsx`
+(POS) y `NuevaNCModal.jsx`. A diferencia del original (que setea `relevante_fiscal` en el mismo
+INSERT vía `crear_venta`), estos 2 flujos lo hacen con un `UPDATE` de seguimiento después de la RPC,
+porque `crear_venta`/`crear_nota_credito` no aceptan ese parámetro.
+
+- **T:** sin cambios de gate — el `UPDATE` cae bajo `comprobantes_update` (`empresa_id = tenant AND
+  has_module_permission('ventas')`), confirmado en producción. Sin hallazgo.
+- **C (orden/carrera):** confirmado en producción que `trg_queue_factura_arca` dispara SOLO en
+  `AFTER UPDATE OF cae_estado` (no en INSERT) y que `comprobantes.cae_estado` default es
+  `'no_aplica'` — con `noRelevanteFiscal=true` el código nunca llega a actualizar `cae_estado`, así
+  que el trigger jamás se dispara para ese comprobante. Sin condición de carrera.
+- **F/E — defensa en profundidad confirmada:** tanto `fn_queue_factura_arca` como
+  `reencolar_caes_pendientes` (ambas leídas frescas de producción) chequean explícitamente
+  `relevante_fiscal = false → no encolar` — aunque el `UPDATE` de seguimiento fallara en el
+  frontend, ningún proceso (ni el trigger ni el reencolado masivo) podría emitir CAE para ese
+  comprobante, porque además `cae_estado` nunca se movió de `'no_aplica'`.
+- 🟢 **Hallazgo menor, no fixeado (documentado, mismo criterio de tolerancia que otros 🟢 de esta
+  auditoría):** si el `UPDATE` de seguimiento a `relevante_fiscal` falla (red, etc.), el error solo
+  va a `console.warn` — el comprobante queda con `relevante_fiscal=true` en la base aunque el
+  usuario haya tildado "no relevante" (inconsistencia de dato para reportes, sin impacto funcional
+  real por la defensa en profundidad de arriba). Mismo patrón ya presente en el propio archivo para
+  el `UPDATE` de encolado AFIP (`console.warn('[AFIP queue]', ...)`) — consistente con el código
+  existente, no es una regresión introducida.
+
+Sin hallazgos críticos ni importantes. Feature correcta y segura tal como está.
+
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma
    metodología de 6 dimensiones.

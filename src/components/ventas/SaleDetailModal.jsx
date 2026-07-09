@@ -104,18 +104,16 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
     }
   };
 
+  // Ver HistorialVentas.jsx: llama a reintentar_cae_comprobante (mig.180), que
+  // reencola la fila más reciente por id (nunca un blanket update por
+  // comprobante_id) para no chocar contra uq_fpa_comprobante_activo.
   const handleReintentarCae = async () => {
     setReintentandoCae(true);
     try {
-      await supabase.from('facturas_pendientes_arca').update({
-        estado: 'pendiente', intentos: 0,
-        proximo_intento: new Date().toISOString(),
-        error_mensaje: null,
-      }).eq('comprobante_id', sale.id);
-
-      await supabase.from('comprobantes').update({
-        cae_estado: 'pendiente', error_afip: null,
-      }).eq('id', sale.id);
+      const { error } = await supabase.rpc('reintentar_cae_comprobante', {
+        p_comprobante_id: sale.id,
+      });
+      if (error) throw error;
 
       toast({ title: 'CAE reencolado', description: 'El worker reintentará la emisión en los próximos minutos.' });
       fetchSaleDetails();
