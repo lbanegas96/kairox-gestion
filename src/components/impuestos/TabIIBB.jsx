@@ -206,7 +206,7 @@ function TabIIBB() {
 
   const confirmarLiquidacion = async (id) => {
     setConfirmando(true);
-    const { error } = await supabase.rpc('confirmar_liquidacion_iibb', {
+    const { data, error } = await supabase.rpc('confirmar_liquidacion_iibb', {
       p_empresa_id: user.empresa_id,
       p_user_id: user.id,
       p_liquidacion_id: id,
@@ -216,7 +216,15 @@ function TabIIBB() {
       toast({ title: 'No se pudo confirmar', description: error.message, variant: 'destructive' });
       return;
     }
-    toast({ title: 'Liquidación confirmada', description: 'Se generó el asiento contable.' });
+    if (data?.asiento_generado === false) {
+      toast({
+        title: 'Liquidación confirmada sin asiento contable',
+        description: 'Se guardó la confirmación, pero no se generó el asiento (período cerrado o cuenta contable faltante). Revisar Plan de Cuentas.',
+        variant: 'destructive',
+      });
+    } else {
+      toast({ title: 'Liquidación confirmada', description: 'Se generó el asiento contable.' });
+    }
     setLiquidacionActual(null);
     fetchHistorial();
   };

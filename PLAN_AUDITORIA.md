@@ -138,10 +138,40 @@ esta metodología. Se retoma la auditoría por esa superficie, priorizada dinero
 - Sin otros hallazgos — atomicidad, guard de sobre-imputación (`v_monto_imp > v_saldo_pendiente`,
   `v_suma_imputada > v_monto`) y aislamiento tenant correctos en ambas.
 
+**2. IIBB auto-liquidación (`generar_liquidacion_iibb` / `confirmar_liquidacion_iibb`) —
+✅ AUDITADA Y CORREGIDA.**
+- **T:** ambas exigen `get_my_empresa_id()` + `has_module_permission('configuracion')` — correcto,
+  mismo módulo que gatea la pantalla Impuestos.
+- **C:** `confirmar_liquidacion_iibb` usa `FOR UPDATE` sobre la fila de liquidación + chequea
+  `estado != 'confirmada'` — evita doble confirmación concurrente. Pero **`generar_liquidacion_iibb`
+  no tenía NINGÚN guard contra 2 liquidaciones para el mismo período (o solapado)** — un doble clic
+  o reintento podía crear 2 filas `'borrador'`, y si ambas se confirmaban, el IIBB devengado quedaba
+  contabilizado 2 veces en Plan de Cuentas. 🔴 **Fix (mig.176):** `EXISTS` contra `iibb_liquidaciones`
+  antes de generar, bloqueando cualquier período que se solape con uno ya existente (borrador o
+  confirmada). Validado con `BEGIN...ROLLBACK`: período parcialmente solapado (15→20 dentro de
+  01→31 ya existente) correctamente rechazado.
+- **F: 🟡 CONFIRMADO Y CORREGIDO.** La base imponible sumaba `neto_gravado` de TODAS las ventas del
+  período (`tipo='venta'`) pero **ignoraba las Notas de Crédito emitidas en ese mismo período** —
+  sobrestimando la base (y el impuesto) cada vez que hubo una NC. Confirmado que las NC se guardan
+  con montos positivos (mismo signo que las ventas), por lo que el filtro `tipo='venta'` las excluía
+  por completo en vez de netearlas. **Fix (mig.176):** la base ahora resta el `neto_gravado` de las
+  NC del mismo período (criterio real de Ingresos Brutos — la NC reduce la base en el período en que
+  se emite, no retroactivamente en el período de la venta original).
+- **E: 🟡 CONFIRMADO Y CORREGIDO.** `confirmar_liquidacion_iibb` devuelve `asiento_generado: false`
+  si el asiento no se generó (mismo patrón no-bloqueante que CxC/CxP), pero `TabIIBB.jsx` mostraba
+  el toast **"Se generó el asiento contable" incondicionalmente**, sin leer ese campo — un mensaje
+  de éxito falso. **Fix:** toast condicional según `data.asiento_generado`, mismo patrón que el
+  hallazgo #1 de esta fase.
+- Sin otros hallazgos — coeficientes de Convenio Multilateral validados (deben sumar 100), alícuota
+  faltante bloquea la liquidación con mensaje claro, redondeo a 2 decimales correcto.
+
 ## Registro de hallazgos (log corrido)
 
 | Fecha | Área | Severidad | Hallazgo | Fix |
 |-------|------|-----------|----------|-----|
+| 2026-07-09 | IIBB | 🔴 | `generar_liquidacion_iibb` sin guard contra 2 liquidaciones para el mismo período (o solapado) — doble confirmación duplicaría el IIBB contabilizado | `EXISTS` contra períodos solapados antes de generar (mig.176) |
+| 2026-07-09 | IIBB | 🟡 | Base imponible ignoraba las Notas de Crédito del período (solo sumaba `tipo='venta'`), sobrestimando el impuesto | Base neteada: ventas − NC del mismo período (mig.176) |
+| 2026-07-09 | IIBB | 🟡 | `TabIIBB.jsx` mostraba "Se generó el asiento contable" sin chequear `asiento_generado` — mensaje de éxito falso si el asiento no se generó | Toast condicional según el campo real de la respuesta |
 | 2026-07-09 | CxC/CxP imputación | 🟡 | `registrar_cobro_cliente`/`registrar_pago_proveedor` devuelven `asiento_generado: false` cuando el asiento no se genera (período cerrado/cuenta faltante), pero ningún frontend leía ese campo — el cobro/pago se registraba sin avisar que el libro mayor no reflejó el movimiento | `registrarPago()` devuelve `data`; toast destructivo en `CuentaCorrienteSection.jsx` y `ProveedoresSection.jsx` cuando `asiento_generado === false` |
 | 2026-07-09 | Permisos granulares (regresión) | 🔴 | `crear_venta` perdió el gate `has_module_permission('ventas')` que la mig.155 le había agregado — alguna migración posterior que la recreó (170 monto_moneda_original o 174 centro_costo_id) partió de una copia vieja del body (pre-155) en vez de la definición vigente. De las 16 RPCs gateadas por mig.155, era la ÚNICA que lo había perdido (confirmado con query a `pg_proc` sobre las 16 + barrido extendido a IIBB/cheques/retenciones — sin otras regresiones). Probado con BEGIN...ROLLBACK: staff con `ventas=false` forzado en la misma transacción → `crear_venta` lanzó `No autorizado: sin permiso de módulo ventas` como se esperaba | Gate restaurado (mig.175), mismo patrón textual que las otras 15 funciones. **Lección de proceso:** toda migración que haga `DROP+CREATE` sobre una función ya gateada debe partir de `pg_get_functiondef` de la definición VIGENTE en producción, no de una versión archivada en `supabase/migrations/`, para no perder fixes de seguridad aplicados después de esa versión |
 | 2026-07-04 | Audit log | 🟡 | 4 tablas críticas (`periodos_contables`, `notas_debito`, `movimientos_bancarios`, `asientos_contables`) sin trigger de auditoría — cerrar un período no dejaba ningún rastro | Agregado `trg_audit_*` (función genérica existente) a las 4 (mig.143) |
