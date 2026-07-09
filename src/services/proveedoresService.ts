@@ -122,6 +122,12 @@ export async function getCuentaCorriente(proveedorId: string, empresaId: string)
   return data as MovimientoCCP[];
 }
 
+export interface ImputacionPago {
+  compra_id: string;
+  monto?: number;
+  monto_moneda_extranjera?: number;
+}
+
 export async function registrarPago(
   empresaId: string,
   proveedorId: string,
@@ -131,6 +137,7 @@ export async function registrarPago(
   descripcion: string,
   userId: string,
   cajaSesionId: string | null = null,
+  imputaciones: ImputacionPago[] | null = null,
 ) {
   // Pago ATÓMICO: cuenta corriente proveedor ('pago') + caja (egreso) en un solo RPC (migration 131).
   // Antes solo reducía la deuda sin registrar la salida de plata de Caja/Bancos → tesorería inflada.
@@ -143,6 +150,7 @@ export async function registrarPago(
     p_metodo:           metodo,
     p_descripcion:      descripcion,
     p_caja_sesion_id:   cajaSesionId,
+    p_imputaciones:     imputaciones,
   });
   if (error) throw new Error(error.message);
 }

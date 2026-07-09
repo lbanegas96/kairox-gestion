@@ -14,6 +14,7 @@ function PanelPago({
   isCC,
   loading, cart, tcMissing,
   handleConfirmSale,
+  centrosCosto = [], centroCostoId, setCentroCostoId,
 }) {
   return (
     <div className="w-full md:w-96 bg-slate-50 dark:bg-slate-900/30 p-6 flex flex-col gap-6 overflow-y-auto border-l border-slate-200 dark:border-slate-800">
@@ -136,6 +137,19 @@ function PanelPago({
           </div>
         )}
       </div>
+      {centrosCosto.length > 0 && (
+        <div className="space-y-2 dark:text-white">
+          <Label>Centro de costo (opcional)</Label>
+          <select
+            className="w-full h-10 rounded-md border bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white px-3 text-sm focus:border-blue-500 dark:focus:border-[#00D4FF]"
+            value={centroCostoId}
+            onChange={e => setCentroCostoId(e.target.value)}
+          >
+            <option value="">Sin asignar</option>
+            {centrosCosto.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+        </div>
+      )}
       <div className="mt-auto">
         <Button
           className="w-full h-12 text-lg font-bold bg-green-600 hover:bg-green-700 text-white dark:bg-green-700 dark:hover:bg-green-600 disabled:opacity-50"

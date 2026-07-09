@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { proveedoresService, PROV_KEYS } from '@/services/proveedoresService';
+import { supabase } from '@/lib/customSupabaseClient';
 import { formatDateAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 
@@ -52,6 +53,12 @@ function ProveedoresSection() {
   const [detalleId, setDetalleId]   = useState(null);
   const [pagoOpen, setPagoOpen]     = useState(false);
   const [pagoForm, setPagoForm]     = useState({ monto: '', descripcion: '', metodo: 'Efectivo' });
+  // Imputación por factura (Open Item clearing, migration 169/170) — opcional.
+  // Si no se imputa nada, el pago se comporta igual que siempre (reduce el
+  // saldo corrido, sin marcar ninguna compra puntual como cancelada).
+  const [facturasAbiertas, setFacturasAbiertas] = useState([]);
+  const [imputaciones, setImputaciones] = useState({}); // { compra_id: "monto string" }
+  const [imputacionesFX, setImputacionesFX] = useState({}); // { compra_id: "monto FX string" } — compras en moneda extranjera
 
   const activoFilter = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
 
@@ -86,6 +93,15 @@ function ProveedoresSection() {
     enabled: !!detalleId,
   });
 
+  const montoPago = parseNumberLocale(pagoForm.monto) || 0;
+  const totalImputadoPago = facturasAbiertas.reduce((s, f) => {
+    if (f.moneda && f.moneda !== 'ARS') {
+      const fx = parseNumberLocale(imputacionesFX[f.compra_id] || '') || 0;
+      return s + fx * (f.tipo_cambio_tasa || 0);
+    }
+    return s + (parseNumberLocale(imputaciones[f.compra_id] || '') || 0);
+  }, 0);
+
   const saldo = (cuentaCorriente).reduce((acc, m) => {
     if (m.tipo === 'compra' || m.tipo === 'nota_debito')  return acc + Number(m.monto);
     if (m.tipo === 'pago'   || m.tipo === 'nota_credito') return acc - Number(m.monto);
@@ -119,14 +135,16 @@ function ProveedoresSection() {
   });
 
   const pagoMutation = useMutation({
-    mutationFn: ({ monto, descripcion, metodo }) =>
-      proveedoresService.registrarPago(empresaId, detalleId, detalle?.nombre, monto, metodo, descripcion, user.id, currentSession?.id ?? null),
+    mutationFn: ({ monto, descripcion, metodo, imputaciones: imp }) =>
+      proveedoresService.registrarPago(empresaId, detalleId, detalle?.nombre, monto, metodo, descripcion, user.id, currentSession?.id ?? null, imp),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: PROV_KEYS.cuentaCorriente(detalleId) });
       invalidate();
       toast({ title: 'Pago registrado ✓', className: 'bg-green-600 text-white' });
       setPagoOpen(false);
       setPagoForm({ monto: '', descripcion: '', metodo: 'Efectivo' });
+      setImputaciones({});
+      setImputacionesFX({});
     },
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
@@ -149,11 +167,81 @@ function ProveedoresSection() {
     saveMutation.mutate({ ...form, plazo_pago_dias: Number(form.plazo_pago_dias) || 0 });
   };
 
+  const fetchFacturasAbiertas = async (proveedorId) => {
+    const { data, error } = await supabase
+      .from('compras_saldo_pendiente')
+      .select('compra_id, total, saldo_pendiente, moneda, tipo_cambio_tasa')
+      .eq('proveedor_id', proveedorId)
+      .gt('saldo_pendiente', 0)
+      .order('compra_id');
+    if (error) {
+      console.error('[compras_saldo_pendiente]', error.message);
+      return;
+    }
+    // Traer el número de factura por separado (la vista no lo incluye).
+    const ids = (data || []).map(f => f.compra_id);
+    let numerosPorId = {};
+    if (ids.length > 0) {
+      const { data: compras } = await supabase.from('compras').select('id, numero_factura, fecha').in('id', ids);
+      numerosPorId = Object.fromEntries((compras || []).map(c => [c.id, c]));
+    }
+    setFacturasAbiertas((data || []).map(f => ({
+      ...f,
+      numero_factura: numerosPorId[f.compra_id]?.numero_factura || 'S/N',
+      fecha: numerosPorId[f.compra_id]?.fecha,
+    })));
+  };
+
+  const openPagoDialog = () => {
+    setPagoForm({ monto: '', descripcion: '', metodo: 'Efectivo' });
+    setImputaciones({});
+    setImputacionesFX({});
+    setFacturasAbiertas([]);
+    setPagoOpen(true);
+    if (detalleId) fetchFacturasAbiertas(detalleId);
+  };
+
+  // Reparte `monto` entre las compras abiertas más viejas primero (FIFO). Solo
+  // aplica a compras en ARS — las de moneda extranjera se imputan a mano.
+  const autoDistribuirFIFO = (monto) => {
+    let restante = monto;
+    const nuevo = {};
+    for (const f of facturasAbiertas) {
+      if (f.moneda && f.moneda !== 'ARS') continue;
+      if (restante <= 0) break;
+      const aplicar = Math.min(restante, f.saldo_pendiente);
+      if (aplicar > 0) {
+        nuevo[f.compra_id] = String(aplicar);
+        restante -= aplicar;
+      }
+    }
+    setImputaciones(nuevo);
+  };
+
   const handlePago = (e) => {
     e.preventDefault();
     const monto = parseNumberLocale(pagoForm.monto);
     if (!monto || monto <= 0) return toast({ title: 'Ingresá un monto válido', variant: 'destructive' });
-    pagoMutation.mutate({ monto, descripcion: pagoForm.descripcion || `Pago a ${detalle?.nombre}`, metodo: pagoForm.metodo });
+
+    // Imputación por compra (opcional): facturas en moneda extranjera usan
+    // monto_moneda_extranjera — el RPC calcula la diferencia de cambio realizada.
+    const imputacionesArray = facturasAbiertas
+      .map(f => {
+        if (f.moneda && f.moneda !== 'ARS') {
+          const fx = parseNumberLocale(imputacionesFX[f.compra_id] || '');
+          return fx > 0 ? { compra_id: f.compra_id, monto_moneda_extranjera: fx } : null;
+        }
+        const m = parseNumberLocale(imputaciones[f.compra_id] || '');
+        return m > 0 ? { compra_id: f.compra_id, monto: m } : null;
+      })
+      .filter(Boolean);
+
+    pagoMutation.mutate({
+      monto,
+      descripcion: pagoForm.descripcion || `Pago a ${detalle?.nombre}`,
+      metodo: pagoForm.metodo,
+      imputaciones: imputacionesArray.length > 0 ? imputacionesArray : null,
+    });
   };
 
   const proveedores = listData?.data ?? [];
@@ -408,7 +496,7 @@ function ProveedoresSection() {
                   </p>
                   <p className="text-xs text-kx-text-3 mt-0.5">{saldo > 0 ? 'Deuda pendiente' : saldo < 0 ? 'Saldo a favor' : 'Sin deuda'}</p>
                 </div>
-                <Button onClick={() => setPagoOpen(true)} className="bg-green-600 hover:bg-green-700 text-white gap-2">
+                <Button onClick={openPagoDialog} className="bg-green-600 hover:bg-green-700 text-white gap-2">
                   <Banknote className="w-4 h-4" /> Registrar Pago
                 </Button>
               </div>
@@ -556,9 +644,60 @@ function ProveedoresSection() {
                 onChange={e => setPagoForm(p => ({ ...p, descripcion: e.target.value }))}
                 placeholder="Nota opcional del pago..." className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
             </div>
+
+            {facturasAbiertas.length > 0 && (
+                <div className="grid gap-2 border-t border-kx-border pt-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="dark:text-kx-text">Imputar a factura(s) (opcional)</Label>
+                    {montoPago > 0 && (
+                      <Button type="button" size="sm" variant="outline" onClick={() => autoDistribuirFIFO(montoPago)}>
+                        Auto (más vieja primero)
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-kx-text-3">
+                    Si no imputás nada, el pago solo baja el saldo total del proveedor (como siempre).
+                  </p>
+                  <div className="border border-kx-border rounded-lg divide-y divide-kx-border max-h-48 overflow-y-auto">
+                    {facturasAbiertas.map(f => {
+                      const esFX = !!(f.moneda && f.moneda !== 'ARS');
+                      return (
+                        <div key={f.compra_id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
+                          <div className="min-w-0">
+                            <div className="font-medium text-kx-text truncate">{f.numero_factura}</div>
+                            <div className="text-xs text-kx-text-3">
+                              Pendiente: ${Number(f.saldo_pendiente).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                              {esFX && <span className="ml-1">({f.moneda})</span>}
+                            </div>
+                          </div>
+                          {esFX ? (
+                            <Input
+                              type="text" inputMode="decimal" placeholder={`0,00 ${f.moneda}`}
+                              value={imputacionesFX[f.compra_id] ?? ''}
+                              onChange={(e) => setImputacionesFX(prev => ({ ...prev, [f.compra_id]: e.target.value }))}
+                              className="w-28 h-8 text-right text-xs shrink-0"
+                            />
+                          ) : (
+                            <Input
+                              type="text" inputMode="decimal" placeholder="0,00"
+                              value={imputaciones[f.compra_id] ?? ''}
+                              onChange={(e) => setImputaciones(prev => ({ ...prev, [f.compra_id]: e.target.value }))}
+                              className="w-28 h-8 text-right text-xs shrink-0"
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className={`text-xs text-right ${totalImputadoPago > montoPago ? 'text-red-500 font-semibold' : 'text-kx-text-3'}`}>
+                    Imputado: ${totalImputadoPago.toLocaleString('es-AR', { minimumFractionDigits: 2 })} / ${montoPago.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+            )}
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setPagoOpen(false)} className="dark:border-kx-border dark:text-slate-300">Cancelar</Button>
-              <Button type="submit" disabled={pagoMutation.isPending} className="bg-green-600 hover:bg-green-700 text-white">
+              <Button type="submit" disabled={pagoMutation.isPending || totalImputadoPago > montoPago} className="bg-green-600 hover:bg-green-700 text-white">
                 {pagoMutation.isPending ? 'Guardando...' : 'Confirmar Pago'}
               </Button>
             </DialogFooter>

@@ -8,6 +8,7 @@ import { parseNumberLocale } from '@/lib/currencyUtils';
 function TabNuevaCompra({
   purchaseForm, setPurchaseForm,
   proveedores,
+  centrosCosto = [],
   moneda, setMoneda,
   tipoCambioTasa, setTipoCambioTasa,
   tcMissing, setTcMissing,
@@ -39,6 +40,9 @@ function TabNuevaCompra({
           <div className="space-y-2"><Label className="dark:text-kx-text">N° Factura / Referencia</Label><Input value={purchaseForm.numero_factura} onChange={e => setPurchaseForm({...purchaseForm, numero_factura: e.target.value})} placeholder="Ej: F-001-2304" className="kairox-input dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"/></div>
           <div className="space-y-2"><Label className="dark:text-kx-text">Fecha de Compra</Label><div className="relative"><Calendar className="absolute left-3 top-2.5 h-4 w-4 text-slate-500"/><Input type="date" value={purchaseForm.fecha} onChange={e => setPurchaseForm({...purchaseForm, fecha: e.target.value})} className="pl-9 kairox-input dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"/></div></div>
           <div className="space-y-2"><Label className="dark:text-kx-text">Forma de Pago</Label><select className="w-full h-10 rounded-md bg-kx-surface dark:bg-kx-surface border border-slate-300 dark:border-kx-border text-slate-900 dark:text-kx-text px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={purchaseForm.forma_pago} onChange={e => setPurchaseForm({...purchaseForm, forma_pago: e.target.value})}><option value="Efectivo">Efectivo</option><option value="Transferencia">Transferencia</option><option value="Tarjeta">Tarjeta</option><option value="Cuenta Corriente">Cuenta Corriente</option></select></div>
+          {centrosCosto.length > 0 && (
+            <div className="space-y-2"><Label className="dark:text-kx-text">Centro de costo (opcional)</Label><select className="w-full h-10 rounded-md bg-kx-surface dark:bg-kx-surface border border-slate-300 dark:border-kx-border text-slate-900 dark:text-kx-text px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={purchaseForm.centro_costo_id || ''} onChange={e => setPurchaseForm({...purchaseForm, centro_costo_id: e.target.value})}><option value="">Sin asignar</option>{centrosCosto.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></div>
+          )}
           <div className="col-span-1 md:col-span-2">
             <MonedaSelector
               moneda={moneda}

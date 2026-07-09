@@ -182,16 +182,17 @@ export const asientosService = {
   },
 
   /** Balance de comprobación: suma debe/haber por cuenta */
-  async getBalanceComprobacion(empresaId: string, fechaDesde?: string, fechaHasta?: string) {
+  async getBalanceComprobacion(empresaId: string, fechaDesde?: string, fechaHasta?: string, centroCostoId?: string) {
     let q = supabase
       .from('asientos_items')
-      .select('cuenta_id, debe, haber, plan_cuentas(codigo, nombre, tipo), asientos_contables!inner(estado, fecha, empresa_id)')
+      .select('cuenta_id, debe, haber, plan_cuentas(codigo, nombre, tipo), asientos_contables!inner(estado, fecha, empresa_id, centro_costo_id)')
       .eq('empresa_id', empresaId)
       .eq('asientos_contables.estado', 'confirmado')
       .eq('asientos_contables.empresa_id', empresaId);
 
     if (fechaDesde) q = q.gte('asientos_contables.fecha', fechaDesde);
     if (fechaHasta) q = q.lte('asientos_contables.fecha', fechaHasta);
+    if (centroCostoId) q = q.eq('asientos_contables.centro_costo_id', centroCostoId);
 
     const { data, error } = await q;
     if (error) throw new Error(error.message);
@@ -263,8 +264,8 @@ export const PLAN_CUENTAS_KEYS = {
     ['balance_comprobacion', empresaId, desde, hasta] as const,
   libroMayor: (empresaId: string, cuentaId: string, desde?: string, hasta?: string) =>
     ['libro_mayor', empresaId, cuentaId, desde, hasta] as const,
-  estadoResultados: (empresaId: string, desde?: string, hasta?: string) =>
-    ['estado_resultados', empresaId, desde, hasta] as const,
+  estadoResultados: (empresaId: string, desde?: string, hasta?: string, centroCostoId?: string) =>
+    ['estado_resultados', empresaId, desde, hasta, centroCostoId] as const,
   balanceGeneral: (empresaId: string, fechaCorte?: string) =>
     ['balance_general', empresaId, fechaCorte] as const,
 };

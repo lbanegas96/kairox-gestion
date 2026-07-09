@@ -34,8 +34,11 @@ function ComprasSection() {
     proveedor_id: '',
     numero_factura: '',
     fecha: getTodayAR(),
-    forma_pago: 'Efectivo'
+    forma_pago: 'Efectivo',
+    centro_costo_id: ''
   });
+  // Centro de costo (Fase 1 del plan de 4 frentes contables) — opcional.
+  const [centrosCosto, setCentrosCosto] = useState([]);
   const [products, setProducts] = useState([]); // All available products for search
   const [productSearch, setProductSearch] = useState('');
   const [showAutocomplete, setShowAutocomplete] = useState(false);
@@ -80,6 +83,7 @@ function ComprasSection() {
       loadProveedores();
       loadProducts();
       loadCompras();
+      loadCentrosCosto();
     }
   }, [user]);
 
@@ -91,6 +95,16 @@ function ComprasSection() {
       .select('id, nombre')
       .order('nombre');
     if (data) setProveedores(data);
+  };
+
+  const loadCentrosCosto = async () => {
+    const { data } = await supabase
+      .from('centros_costo')
+      .select('id, nombre')
+      .eq('empresa_id', user.empresa_id)
+      .eq('activo', true)
+      .order('nombre');
+    if (data) setCentrosCosto(data);
   };
 
   const loadProducts = async () => {
@@ -269,7 +283,8 @@ function ComprasSection() {
       proveedor_id: '',
       numero_factura: '',
       fecha: getTodayAR(),
-      forma_pago: 'Efectivo'
+      forma_pago: 'Efectivo',
+      centro_costo_id: ''
     });
     setProductSearch('');
     setMoneda('ARS');
@@ -325,6 +340,7 @@ function ComprasSection() {
           total: totalCompra,
           forma_pago: purchaseForm.forma_pago,
           estado_pago: status,
+          centro_costo_id: purchaseForm.centro_costo_id || null,
           moneda,
           tipo_cambio_tasa: tipoCambioTasa,
           // Valor nominal fijo en moneda extranjera (Fase 3 Multimoneda —
@@ -443,6 +459,7 @@ function ComprasSection() {
           fecha: purchaseForm.fecha || getTodayAR(),
           descripcion: `Compra a ${providerName} - Fac. ${purchaseForm.numero_factura || 'S/N'}`,
           esCredito: purchaseForm.forma_pago === 'Cuenta Corriente',
+          centroCostoId: purchaseForm.centro_costo_id || null,
         }
       ).catch(e => {
         if (e.message?.startsWith('Período cerrado:')) {
@@ -461,7 +478,8 @@ function ComprasSection() {
         proveedor_id: '',
         numero_factura: '',
         fecha: getTodayAR(),
-        forma_pago: 'Efectivo'
+        forma_pago: 'Efectivo',
+        centro_costo_id: ''
       });
       setCart([]);
       setMoneda('ARS');
@@ -750,6 +768,7 @@ function ComprasSection() {
           <TabNuevaCompra
             purchaseForm={purchaseForm} setPurchaseForm={setPurchaseForm}
             proveedores={proveedores}
+            centrosCosto={centrosCosto}
             moneda={moneda} setMoneda={setMoneda}
             tipoCambioTasa={tipoCambioTasa} setTipoCambioTasa={setTipoCambioTasa}
             tcMissing={tcMissing} setTcMissing={setTcMissing}

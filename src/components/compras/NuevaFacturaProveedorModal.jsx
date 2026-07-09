@@ -55,6 +55,9 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
   const [loading, setLoading]             = useState(false);
   const tcParalelo                        = useTCParalelo();
   const [showParaleloTCModal, setShowParaleloTCModal] = useState(false);
+  // Centro de costo (Fase 1 del plan de 4 frentes contables) — opcional.
+  const [centrosCosto, setCentrosCosto]   = useState([]);
+  const [centroCostoId, setCentroCostoId] = useState('');
 
   // ── Carga al abrir ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -63,6 +66,10 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
     supabase.from('proveedores').select('id, nombre')
       .eq('empresa_id', user.empresa_id).neq('activo', false).order('nombre')
       .then(({ data }) => setProveedores(data || []));
+
+    supabase.from('centros_costo').select('id, nombre')
+      .eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre')
+      .then(({ data }) => setCentrosCosto(data || []));
 
     if (compraOrigen?.id) {
       setProveedorId(compraOrigen.proveedor_id || '');
@@ -94,6 +101,7 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
       setFormaPago('CC Proveedor');
       setItems([newItem()]);
       setSearchFocusId(null);
+      setCentroCostoId('');
     }
   }, [open]);
 
@@ -184,6 +192,7 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
         iva_discriminado: totalIva,
         moneda:           'ARS',
         tipo_cambio_tasa: 1,
+        centro_costo_id:  centroCostoId || null,
         observaciones:    serviciosDesc || null,
         ...(montoParaleloValue !== null ? {
           monto_paralelo: montoParaleloValue,
@@ -312,6 +321,19 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
                 className="h-10 bg-kx-surface border-kx-border text-kx-text"
               />
             </div>
+            {centrosCosto.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-kx-text-2">Centro de costo (opcional)</Label>
+                <select
+                  value={centroCostoId}
+                  onChange={e => setCentroCostoId(e.target.value)}
+                  className="w-full h-10 rounded-md border border-kx-border bg-kx-surface px-3 text-sm text-kx-text focus:outline-none focus:ring-1 focus:ring-[rgb(var(--kx-violet))]"
+                >
+                  <option value="">Sin asignar</option>
+                  {centrosCosto.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Tabla de ítems */}

@@ -6186,6 +6186,30 @@ Las alícuotas de IVA están bien diseñadas (configurables por producto: 21/10.
 
 ---
 
+### Sesión 2026-07-09 — Cierre de 5 puntos pendientes (post Fase 4 IIBB / toggle Impuestos Avanzados)
+
+**Migration:** `174_crear_venta_centro_costo.sql` (aplicada a producción)
+
+Cierre del punchlist de 5 items detectados tras cerrar la Fase 4 (IIBB) y el toggle "Impuestos Avanzados", antes de retomar las auditorías generales.
+
+**1. UI de imputación por factura en pago a proveedores** — completado.
+`ProveedoresSection.jsx` ganó el mismo patrón ya usado en `CuentaCorrienteSection.jsx`/`ModalCobro.jsx` para cobros: al abrir "Registrar Pago" se cargan las facturas abiertas del proveedor (`compras_saldo_pendiente`), con inputs por factura (ARS o `monto_moneda_extranjera` si la factura es en moneda extranjera), botón "Auto (más vieja primero)" para FIFO, y guard de envío si lo imputado supera el monto del pago. `proveedoresService.registrarPago()` ahora acepta un parámetro opcional `imputaciones` y lo reenvía como `p_imputaciones` — el RPC `registrar_pago_proveedor` ya lo soportaba desde las migrations 169/170, solo faltaba la capa de servicio/UI. Verificado en preview con un proveedor real (Shein) con facturas ARS + USD abiertas: el modal renderiza ambas filas y calcula el total imputado sin errores.
+
+**2. Centro de Costo en el POS (`NuevaVentaModal.jsx`)** — gap real detectado y corregido.
+El selector de Centro de Costo se había agregado al frontend en una sesión anterior, pero `crear_venta` nunca ganó el parámetro `p_centro_costo_id` — hubiera fallado en cuanto un usuario intentara vender con un centro de costo asignado. **Migration 174**: `DROP FUNCTION` de la firma vieja (19 parámetros) + recreación con `p_centro_costo_id uuid DEFAULT NULL` agregado al `INSERT INTO comprobantes`. Confirmado con `pg_get_function_identity_arguments` que el parámetro quedó registrado en producción.
+
+**3. Centro de Costo en compras** — ya estaba completo (verificado, no requirió cambios): `CompraRapidaSection.jsx`/`TabNuevaCompra.jsx` y `NuevaFacturaProveedorModal.jsx` ya pasan `centro_costo_id` directo al INSERT de `compras` (no vía RPC), y `asientosAutoService.crearAsientoCompra` ya acepta `centroCostoId`.
+
+**4. Filtro por Centro de Costo en Estado de Resultados** — ya estaba completo (verificado).
+
+**5. Reintentar CAE de 3 facturas AFIP estancadas** (`20260706-002`, `20260706-005`, `NC-20260706-003`, error 10016) — resuelto, con un hallazgo de bug en el camino.
+El botón "Reintentar CAE" de `HistorialVentas.jsx` falla en silencio cuando un comprobante tiene **más de una fila** en `facturas_pendientes_arca` (una vieja `error_definitivo` + una más nueva de un reencolado masivo anterior): el `UPDATE .eq('comprobante_id', sale.id)` intenta poner ambas filas en `estado='pendiente'` a la vez, choca contra el índice único parcial `uq_fpa_comprobante_activo`, y como `supabase-js` no lanza excepción en un `.update()` sin chequear `error`, el código sigue de largo y el toast dice "CAE reencolado" aunque la cola nunca se movió. Las 3 facturas afectadas tenían exactamente ese patrón (2 filas cada una). Fix aplicado con `execute_sql` dirigido a la fila específica más reciente de cada una (`estado='pendiente'`, `intentos=0`, `proximo_intento=now()`) + `comprobantes.cae_estado='pendiente'` — sin tocar la fila vieja (se preserva el historial). El fix de `CondicionIVAReceptorId` (RG 5616, error 10246) que una de ellas tenía pendiente ya está desplegado en `arca-worker` (confirmado leyendo el código vivo de la función). El `arca-worker` (cron cada 5 min) las procesará solo; su propio guard de `getLastVoucherNumber` evita re-emisión duplicada si AFIP ya avanzó la numeración (protege contra el escenario del error 10016).
+**Deuda técnica NO corregida** (fuera de alcance de este cierre, requiere decisión de producto): el botón de reintento debería, o (a) targetear la fila específica en vez de un blanket update por `comprobante_id`, o (b) chequear el `error` devuelto por el `.update()` y no mostrar "éxito" en falso. Ambos archivos (`HistorialVentas.jsx` y su hermano `SaleDetailModal.jsx`) comparten el mismo patrón.
+
+Build de producción sin errores (`npx vite build`). Verificación en preview con usuario real de Nalux (Nadia).
+
+---
+
 ## 3 grandes proyectos al final
 
 | # | Proyecto | Por qué al final |

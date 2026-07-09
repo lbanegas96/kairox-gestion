@@ -40,6 +40,11 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   // del depósito bajó por otras ventas después de la entrega.
   const [pedidoYaEntregado, setPedidoYaEntregado] = useState(false);
 
+  // Centro de costo (Fase 1 del plan de 4 frentes contables) — opcional, para
+  // reportar por sucursal/línea de negocio. Mismo patrón que NuevaFacturaModal.jsx.
+  const [centrosCosto, setCentrosCosto] = useState([]);
+  const [centroCostoId, setCentroCostoId] = useState('');
+
   // ── Moneda Paralela ─────────────────────────────────────────────────────────
   const tcParalelo = useTCParalelo();
 
@@ -64,6 +69,12 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
       const { data: clis } = await supabase
         .from('clientes').select('*').eq('empresa_id', user.empresa_id).eq('activo', true);
       setClients(clis || []);
+
+      const { data: centros } = await supabase
+        .from('centros_costo').select('id, nombre')
+        .eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre');
+      setCentrosCosto(centros || []);
+
       resetForm();
 
       // Pre-llenar carrito desde cotización: cargar solo los productos necesarios
@@ -214,6 +225,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     setPrecioMap({});
     setListaNombre('');
     setPedidoYaEntregado(false);
+    setCentroCostoId('');
   };
 
   // Cuando cambia el cliente, cargar su lista de precios
@@ -499,6 +511,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         // Valor nominal fijo en moneda extranjera (Fase 3 Multimoneda — diferencia
         // de cambio realizada). Null si la venta es en ARS.
         p_monto_moneda_original: moneda !== 'ARS' ? totalEnMonedaSeleccionada() : null,
+        p_centro_costo_id:  centroCostoId || null,
       });
 
       if (rpcError) throw rpcError;
@@ -525,6 +538,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           fecha:       getTodayAR(),
           descripcion: `Venta #${saleNumber}`,
           esCredito:   isCC,
+          centroCostoId: centroCostoId || null,
         }
       ).catch(e => {
         if (e.message?.startsWith('Período cerrado:')) {
@@ -604,6 +618,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
               isCC={isCC}
               loading={loading} cart={cart} tcMissing={tcMissing}
               handleConfirmSale={handleConfirmSale}
+              centrosCosto={centrosCosto} centroCostoId={centroCostoId} setCentroCostoId={setCentroCostoId}
             />
           </div>
         </DialogContent>

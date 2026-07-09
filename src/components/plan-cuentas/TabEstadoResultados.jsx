@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Loader2, RefreshCw, TrendingUp, TrendingDown, Download } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { asientosService, PLAN_CUENTAS_KEYS } from '@/services/planCuentasService';
+import { supabase } from '@/lib/customSupabaseClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,10 +11,20 @@ import { fmt, csvDownload } from './shared';
 function TabEstadoResultados({ empresaId }) {
   const [fechaDesde, setDesde] = useState('');
   const [fechaHasta, setHasta] = useState('');
+  // Centro de costo (Fase 1 del plan de 4 frentes contables) — opcional.
+  const [centrosCosto, setCentrosCosto] = useState([]);
+  const [centroCostoId, setCentroCostoId] = useState('');
+
+  useEffect(() => {
+    if (!empresaId) return;
+    supabase.from('centros_costo').select('id, nombre')
+      .eq('empresa_id', empresaId).eq('activo', true).order('nombre')
+      .then(({ data }) => setCentrosCosto(data || []));
+  }, [empresaId]);
 
   const { data: rows = [], isLoading, refetch } = useQuery({
-    queryKey: PLAN_CUENTAS_KEYS.estadoResultados(empresaId, fechaDesde, fechaHasta),
-    queryFn: () => asientosService.getBalanceComprobacion(empresaId, fechaDesde || undefined, fechaHasta || undefined),
+    queryKey: PLAN_CUENTAS_KEYS.estadoResultados(empresaId, fechaDesde, fechaHasta, centroCostoId),
+    queryFn: () => asientosService.getBalanceComprobacion(empresaId, fechaDesde || undefined, fechaHasta || undefined, centroCostoId || undefined),
     enabled: !!empresaId,
   });
 
@@ -64,6 +75,19 @@ function TabEstadoResultados({ empresaId }) {
           <Input type="date" value={fechaHasta} onChange={(e) => setHasta(e.target.value)}
             className="bg-slate-800 border-slate-700 h-9 text-sm w-36" />
         </div>
+        {centrosCosto.length > 0 && (
+          <div className="flex items-center gap-2">
+            <Label className="text-kx-text-3 text-xs whitespace-nowrap">Centro de costo</Label>
+            <select
+              value={centroCostoId}
+              onChange={(e) => setCentroCostoId(e.target.value)}
+              className="h-9 rounded-md bg-slate-800 border border-slate-700 text-sm text-slate-200 px-2"
+            >
+              <option value="">Todos</option>
+              {centrosCosto.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+            </select>
+          </div>
+        )}
         <Button onClick={() => refetch()} size="sm" variant="outline"
           className="border-slate-700 text-slate-300 hover:bg-slate-800">
           <RefreshCw size={14} className="mr-1" /> Actualizar
