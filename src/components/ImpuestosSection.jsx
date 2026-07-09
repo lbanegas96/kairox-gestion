@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import TabIVA from '@/components/impuestos/TabIVA';
 import TabAlicuotas from '@/components/impuestos/TabAlicuotas';
 import TabRetenciones from '@/components/impuestos/TabRetenciones';
+import TabIIBB from '@/components/impuestos/TabIIBB';
 
 function ImpuestosSection({ onNavigate }) {
   return (
@@ -20,11 +21,15 @@ function ImpuestosSection({ onNavigate }) {
       <Tabs defaultValue="iva" className="w-full">
         <TabsList>
           <TabsTrigger value="iva">IVA</TabsTrigger>
+          <TabsTrigger value="iibb">IIBB</TabsTrigger>
           <TabsTrigger value="retenciones">Retenciones y Percepciones</TabsTrigger>
           <TabsTrigger value="alicuotas">Alícuotas</TabsTrigger>
         </TabsList>
         <TabsContent value="iva" className="mt-4">
           <TabIVA onNavigate={onNavigate} />
+        </TabsContent>
+        <TabsContent value="iibb" className="mt-4">
+          <TabIIBB />
         </TabsContent>
         <TabsContent value="retenciones" className="mt-4">
           <TabRetenciones />

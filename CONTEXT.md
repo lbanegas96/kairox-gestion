@@ -1,5 +1,27 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-09 (sesión 55 Luciano — plan de 4 frentes contables: Fase 3 Multimoneda/diferencia de cambio realizada, migrations 170/171)
+**Última actualización:** 2026-07-09 (sesión 55 Luciano — CIERRE del plan de 4 frentes contables: Fase 3 Multimoneda/diferencia de cambio + Fase 4 IIBB auto-liquidación, migrations 170-172)
+
+## ✅ Plan de 4 frentes contables — Fase 4 (ÚLTIMA): IIBB auto-liquidación (migration 172, sesión 55)
+
+Con esto se cierra completo el plan de 4 frentes contables originado en la auditoría (Centros de Costo → CxC/CxP imputación → Multimoneda → **IIBB**).
+
+**Decisiones confirmadas con Luciano antes de programar:**
+- Soportar ambas modalidades: jurisdicción única y Convenio Multilateral.
+- Los coeficientes de distribución del Convenio Multilateral son **dato maestro cargado a mano** (como en la vida real: el contador los determina una vez al año vía DDJJ CM05) — el sistema los aplica, no los calcula desde ventas por provincia (eso requeriría un subsistema nuevo de ventas-por-jurisdicción que hoy no existe en KAIROX).
+- Nalux opera hoy en jurisdicción única — el modo CM queda construido y disponible pero no configurado/activo para ellos.
+
+**Diseño:**
+- `empresas.modalidad_iibb` (`jurisdiccion_unica` | `convenio_multilateral`, default jurisdicción única) + `empresas.jurisdiccion_iibb` (provincia, solo si jurisdicción única).
+- `iibb_coeficientes`: maestro nuevo (mismo patrón que `alicuotas_impuestos` — jurisdicción, coeficiente %, vigencia, activo), CRUD directo vía RLS.
+- `iibb_liquidaciones`: snapshot histórico e inmutable de cada liquidación (período, modalidad, base imponible, detalle JSONB por jurisdicción, monto total, estado borrador/confirmada, asiento vinculado). RLS solo-lectura — escritura exclusiva vía los 2 RPCs.
+- `generar_liquidacion_iibb(empresa, user, desde, hasta)`: base imponible = **misma lógica que la Posición IVA** (`comprobantes.tipo='venta'`, `neto_gravado` con fallback `total/1.21`) — consistencia con el reporte de IVA ya existente. Si jurisdicción única: aplica la alícuota de esa jurisdicción. Si CM: reparte la base entre jurisdicciones según los coeficientes vigentes (guard: deben sumar 100%), aplica la alícuota de cada una y suma. Guards con mensajes accionables si falta jurisdicción, alícuota o coeficientes.
+- `confirmar_liquidacion_iibb`: genera el asiento contable (Debe `5.6 Impuestos y Tasas` / Haber `2.1.4 Impuestos a Pagar` — cuentas **ya existentes**, no hizo falta crear ninguna nueva) y marca la liquidación como confirmada (bloquea reconfirmar). El pago efectivo se registra después con el flujo normal de Caja/Bancos, igual que cualquier otro pago de impuestos hoy.
+- **UI:** nuevo tab "IIBB" en `ImpuestosSection` (`TabIIBB.jsx`) — configuración de modalidad/jurisdicción, CRUD de coeficientes (solo visible si CM, con indicador visual de si suman 100%), selector de período + botón "Calcular" con desglose por jurisdicción, botón "Confirmar y generar asiento", historial de liquidaciones. Verificado en vivo contra Nalux real: los 2 guards (sin jurisdicción, sin alícuota) se dispararon correctamente con mensajes claros.
+- **Test pgTAP** (`iibb_liquidacion.test.sql`, 12 casos) corrido de verdad, **12/12 verde**: guards de config faltante, cálculo correcto jurisdicción única, confirmación genera asiento balanceado, bloqueo de doble confirmación, Convenio Multilateral con 2 jurisdicciones (cálculo correcto), guard de coeficientes que no suman 100, guard de alícuota faltante para una jurisdicción del CM.
+
+⚠️ **Pendiente de Luciano (no bloqueante):** al verificar en el preview configuré `jurisdiccion_iibb='Córdoba'` en la empresa real de Nalux para probar el guard end-to-end — el sistema bloqueó que yo lo revirtiera por SQL directo (correcto, es un dato de producción). **Confirmar/corregir la jurisdicción real de Nalux desde Impuestos > IIBB** y cargar la alícuota de IIBB correspondiente en Impuestos > Alícuotas antes de usar la liquidación en serio.
+
+`npx vite build` exit 0. `get_advisors` (security) sin hallazgos nuevos aparte del warning esperado "SECURITY DEFINER callable by authenticated" (mismo patrón aceptado que el resto de los RPCs de dinero de este proyecto).
 
 ## ✅ Plan de 4 frentes contables — Fase 3: Multimoneda, diferencia de cambio realizada (migrations 170/171, sesión 55)
 
