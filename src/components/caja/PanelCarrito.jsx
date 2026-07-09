@@ -112,6 +112,8 @@ function PanelCarrito({
   const [clientes, setClientes]     = useState([]);
   const [clienteId, setClienteId]   = useState('');
   const [selectedClient, setSelectedClient] = useState(null);
+  const [centrosCosto, setCentrosCosto]     = useState([]);
+  const [centroCostoId, setCentroCostoId]   = useState('');
   const { confirmar, loading }      = useConfirmarVenta();
 
   useEffect(() => {
@@ -123,6 +125,19 @@ function PanelCarrito({
       .neq('activo', false)
       .order('nombre')
       .then(({ data }) => setClientes(data || []));
+  }, [user?.empresa_id]);
+
+  // Centro de Costo (opcional, toggle empresas.usa_centros_costo) — igual patrón
+  // que NuevaVentaModal.jsx: solo se muestra el selector si la empresa lo activó.
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    supabase.from('empresas').select('usa_centros_costo').eq('id', user.empresa_id).single()
+      .then(({ data: emp }) => {
+        if (!emp?.usa_centros_costo) { setCentrosCosto([]); return; }
+        supabase.from('centros_costo').select('id, nombre')
+          .eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre')
+          .then(({ data }) => setCentrosCosto(data || []));
+      });
   }, [user?.empresa_id]);
 
   // OFERTAS — total con descuentos aplicados
@@ -168,12 +183,14 @@ function PanelCarrito({
     const result = await confirmar({
       cart: carrito, selectedClient, pagos,
       ofertasCarrito, descuentosManuales,
+      centroCostoId: centroCostoId || null,
     });
     if (result) {
       const itemsSnapshot = carrito;
       onModificarCarrito([]);
       setSelectedClient(null);
       setClienteId('');
+      setCentroCostoId('');
       onMedioPagoChange?.('Efectivo');
       onVentaExitosa?.({ comprobante: result, items: itemsSnapshot });
     }
@@ -202,6 +219,16 @@ function PanelCarrito({
           <p className="text-xs text-kx-amber mt-1 flex items-center gap-1">
             <AlertTriangle className="w-3 h-3" /> CC requiere cliente seleccionado
           </p>
+        )}
+        {centrosCosto.length > 0 && (
+          <select
+            value={centroCostoId}
+            onChange={(e) => setCentroCostoId(e.target.value)}
+            className="w-full mt-2 h-9 rounded-lg border border-kx-border bg-kx-surface-2 text-sm text-kx-text px-2"
+          >
+            <option value="">Centro de costo: sin asignar</option>
+            {centrosCosto.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
         )}
       </div>
 

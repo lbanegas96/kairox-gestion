@@ -98,6 +98,9 @@ function ComprasSection() {
   };
 
   const loadCentrosCosto = async () => {
+    const { data: emp } = await supabase
+      .from('empresas').select('usa_centros_costo').eq('id', user.empresa_id).single();
+    if (!emp?.usa_centros_costo) { setCentrosCosto([]); return; }
     const { data } = await supabase
       .from('centros_costo')
       .select('id, nombre')

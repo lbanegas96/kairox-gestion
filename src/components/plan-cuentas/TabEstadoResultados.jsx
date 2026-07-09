@@ -17,9 +17,13 @@ function TabEstadoResultados({ empresaId }) {
 
   useEffect(() => {
     if (!empresaId) return;
-    supabase.from('centros_costo').select('id, nombre')
-      .eq('empresa_id', empresaId).eq('activo', true).order('nombre')
-      .then(({ data }) => setCentrosCosto(data || []));
+    supabase.from('empresas').select('usa_centros_costo').eq('id', empresaId).single()
+      .then(({ data: emp }) => {
+        if (!emp?.usa_centros_costo) { setCentrosCosto([]); return; }
+        supabase.from('centros_costo').select('id, nombre')
+          .eq('empresa_id', empresaId).eq('activo', true).order('nombre')
+          .then(({ data }) => setCentrosCosto(data || []));
+      });
   }, [empresaId]);
 
   const { data: rows = [], isLoading, refetch } = useQuery({

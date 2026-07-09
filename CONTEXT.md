@@ -6224,6 +6224,47 @@ Al arrancar la ronda de auditorías (`PLAN_AUDITORIA.md`), antes de definir qué
 
 ---
 
+### Sesión 2026-07-09 (cont.) — Toggle "Centros de Costo" por empresa (mismo patrón que Impuestos Avanzados)
+
+**Migration:** `179_toggle_centros_costo.sql` (aplicada a producción)
+
+A pedido explícito del usuario, se replicó el patrón de `usa_impuestos_avanzados` (mig.173) para
+Centro de Costo: `empresas.usa_centros_costo` (default `false`, backfill solo para empresas que ya
+tuvieran algún `centros_costo` cargado — la tabla estaba vacía en las 3 empresas reales, así que el
+backfill no activó a nadie automáticamente). Toggle en `ConfiguracionSection.jsx` → `TabFinanzas.jsx`,
+junto a la card de Centros de Costo (que ahora solo se muestra con el toggle ON, igual que IIBB/
+Retenciones se ocultan en `ImpuestosSection.jsx`).
+
+**Enforcement a nivel RPC (mismo criterio que mig.178 para Impuestos Avanzados):** `crear_venta` es
+el único punto de escritura de `centro_costo_id` que pasa por una RPC (compras/comprobantes lo
+insertan directo a la tabla, ya protegidos por RLS) — ahora rechaza la venta si le llega un
+`p_centro_costo_id` con el toggle en OFF.
+
+**Hallazgo real encontrado al verificar en preview:** el selector de Centro de Costo de la Fase 1
+original (tareas #188-190) solo se había conectado a `NuevaVentaModal.jsx`/`PanelPago.jsx` — pero
+el POS real que usan los cajeros todos los días (Modo Caja → `PanelCarrito.jsx` → hook
+`useConfirmarVenta.js`) **nunca tuvo el selector ni pasaba `centro_costo_id` a `crear_venta`**. La
+"Fase 1" quedó incompleta en su momento porque agregó el selector a un componente secundario, no al
+flujo principal. Se completó ahora: `useConfirmarVenta.confirmar()` acepta `centroCostoId` y lo
+reenvía a `crear_venta` y a `asientosAutoService.crearAsientoVenta`; `PanelCarrito.jsx` agrega el
+fetch (gateado por `usa_centros_costo`, igual patrón que los otros 5 puntos) + el `<select>`.
+
+Los otros 5 fetch de `centros_costo` en el frontend (`NuevaVentaModal.jsx`, `NuevaFacturaModal.jsx`,
+`CompraRapidaSection.jsx`, `NuevaFacturaProveedorModal.jsx`, `TabEstadoResultados.jsx`) se ajustaron
+para chequear `empresas.usa_centros_costo` antes de traer la lista — si está OFF, `centrosCosto`
+queda vacío y el `{centrosCosto.length > 0 && (...)}` que ya existía en cada uno oculta el selector
+sin tocar esa condición.
+
+Verificado en vivo end-to-end en Nalux (Nadia): activé el toggle, creé el centro "Sucursal Centro"
+desde Configuración, confirmé que aparece en el carrito real del Modo Caja (Punto de Venta) con la
+opción correcta. Se dejó activo a pedido del usuario — Nalux queda con el toggle ON y ese centro de
+costo real cargado.
+
+Build de producción sin errores. Validado con `BEGIN...ROLLBACK` que `crear_venta` rechaza
+`p_centro_costo_id` cuando el toggle está en `false`.
+
+---
+
 ## 3 grandes proyectos al final
 
 | # | Proyecto | Por qué al final |

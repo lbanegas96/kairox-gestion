@@ -40,7 +40,7 @@ export function useConfirmarVenta() {
 
   // pagos: Array<{ metodo: string, monto: number }>
   // selectedClient: null | { id, nombre, condicion_iva? }  ← condicion_iva define A/B/C
-  const confirmar = useCallback(async ({ cart, selectedClient, pagos, ofertasCarrito = {}, descuentosManuales = {} }) => {
+  const confirmar = useCallback(async ({ cart, selectedClient, pagos, ofertasCarrito = {}, descuentosManuales = {}, centroCostoId = null }) => {
     if (!cart?.length) {
       toast({ title: 'Carrito vacío', variant: 'destructive' });
       return null;
@@ -148,6 +148,7 @@ export function useConfirmarVenta() {
         p_es_cc:            isCC,
         p_caja_sesion_id:   currentSession?.id ?? null,
         p_pedido_id:        null, // FIX-CREAR-VENTA-V3
+        p_centro_costo_id:  centroCostoId || null,
       });
 
       if (rpcError) throw rpcError;
@@ -169,6 +170,7 @@ export function useConfirmarVenta() {
         fecha:       getTodayAR(),
         descripcion: `Venta #${saleNumber}`,
         esCredito:   isCC,
+        centroCostoId: centroCostoId || null,
       }).catch(e => {
         if (e.message?.startsWith('Período cerrado:')) {
           toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });

@@ -67,9 +67,13 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
       .eq('empresa_id', user.empresa_id).neq('activo', false).order('nombre')
       .then(({ data }) => setProveedores(data || []));
 
-    supabase.from('centros_costo').select('id, nombre')
-      .eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre')
-      .then(({ data }) => setCentrosCosto(data || []));
+    supabase.from('empresas').select('usa_centros_costo').eq('id', user.empresa_id).single()
+      .then(({ data: emp }) => {
+        if (!emp?.usa_centros_costo) { setCentrosCosto([]); return; }
+        supabase.from('centros_costo').select('id, nombre')
+          .eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre')
+          .then(({ data }) => setCentrosCosto(data || []));
+      });
 
     if (compraOrigen?.id) {
       setProveedorId(compraOrigen.proveedor_id || '');

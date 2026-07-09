@@ -70,10 +70,16 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         .from('clientes').select('*').eq('empresa_id', user.empresa_id).eq('activo', true);
       setClients(clis || []);
 
-      const { data: centros } = await supabase
-        .from('centros_costo').select('id, nombre')
-        .eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre');
-      setCentrosCosto(centros || []);
+      const { data: empresaCC } = await supabase
+        .from('empresas').select('usa_centros_costo').eq('id', user.empresa_id).single();
+      if (empresaCC?.usa_centros_costo) {
+        const { data: centros } = await supabase
+          .from('centros_costo').select('id, nombre')
+          .eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre');
+        setCentrosCosto(centros || []);
+      } else {
+        setCentrosCosto([]);
+      }
 
       resetForm();
 

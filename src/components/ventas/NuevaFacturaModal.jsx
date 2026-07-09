@@ -74,14 +74,17 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
       .eq('empresa_id', user.empresa_id).neq('activo', false).order('nombre')
       .then(({ data }) => setClientes(data || []));
 
-    supabase.from('centros_costo').select('id, nombre')
-      .eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre')
-      .then(({ data }) => setCentrosCosto(data || []));
-
     supabase.from('empresas')
-      .select('usa_factura_electronica, condicion_iva, afip_cuit')
+      .select('usa_factura_electronica, condicion_iva, afip_cuit, usa_centros_costo')
       .eq('id', user.empresa_id).single()
       .then(({ data: emp }) => {
+        if (emp?.usa_centros_costo) {
+          supabase.from('centros_costo').select('id, nombre')
+            .eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre')
+            .then(({ data }) => setCentrosCosto(data || []));
+        } else {
+          setCentrosCosto([]);
+        }
         if (!emp?.usa_factura_electronica) return;
         supabase.from('puntos_venta').select('id, numero')
           .eq('empresa_id', user.empresa_id).eq('activo', true).limit(1).maybeSingle()

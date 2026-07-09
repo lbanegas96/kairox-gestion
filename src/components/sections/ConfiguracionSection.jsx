@@ -82,6 +82,9 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [impuestosAvanzados, setImpuestosAvanzados] = useState(false);
   const [loadingImpuestosAv, setLoadingImpuestosAv] = useState(false);
   const [savingImpuestosAv, setSavingImpuestosAv] = useState(false);
+  const [usaCentrosCosto, setUsaCentrosCosto] = useState(false);
+  const [loadingUsaCentrosCosto, setLoadingUsaCentrosCosto] = useState(false);
+  const [savingUsaCentrosCosto, setSavingUsaCentrosCosto] = useState(false);
 
   // ── Tab 4: Inventario — Método de Valoración de Stock ────────────────────
   const [valoracionStock, setValoracionStock] = useState('ultimo_costo');
@@ -446,6 +449,26 @@ const ConfiguracionSection = ({ initialTab }) => {
       }
     };
     loadImpuestosAv();
+  }, [user?.empresa_id]);
+
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    const loadUsaCentrosCosto = async () => {
+      setLoadingUsaCentrosCosto(true);
+      try {
+        const { data } = await supabase
+          .from('empresas')
+          .select('usa_centros_costo')
+          .eq('id', user.empresa_id)
+          .single();
+        if (data) setUsaCentrosCosto(data.usa_centros_costo ?? false);
+      } catch (e) {
+        console.error('[Centros de Costo] Error al cargar config:', e);
+      } finally {
+        setLoadingUsaCentrosCosto(false);
+      }
+    };
+    loadUsaCentrosCosto();
   }, [user?.empresa_id]);
 
   useEffect(() => {
@@ -836,6 +859,31 @@ const ConfiguracionSection = ({ initialTab }) => {
       toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
     } finally {
       setSavingImpuestosAv(false);
+    }
+  };
+
+  const handleSaveUsaCentrosCosto = async (nuevoValor) => {
+    if (!user?.empresa_id) return;
+    setSavingUsaCentrosCosto(true);
+    setUsaCentrosCosto(nuevoValor);
+    try {
+      const { error } = await supabase
+        .from('empresas')
+        .update({ usa_centros_costo: nuevoValor })
+        .eq('id', user.empresa_id);
+      if (error) throw error;
+      toast({
+        title: nuevoValor ? 'Centros de costo activados' : 'Centros de costo desactivados',
+        description: nuevoValor
+          ? 'Los selectores de centro de costo ya están disponibles en Ventas, Compras y Estado de Resultados.'
+          : 'Se ocultaron los selectores de centro de costo en todo el sistema.',
+        className: 'bg-green-600 text-white border-green-700',
+      });
+    } catch (e) {
+      setUsaCentrosCosto(!nuevoValor);
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingUsaCentrosCosto(false);
     }
   };
 
@@ -1403,6 +1451,10 @@ const ConfiguracionSection = ({ initialTab }) => {
             loadingImpuestosAv={loadingImpuestosAv}
             savingImpuestosAv={savingImpuestosAv}
             onToggleImpuestosAv={handleSaveImpuestosAv}
+            usaCentrosCosto={usaCentrosCosto}
+            loadingUsaCentrosCosto={loadingUsaCentrosCosto}
+            savingUsaCentrosCosto={savingUsaCentrosCosto}
+            onToggleUsaCentrosCosto={handleSaveUsaCentrosCosto}
           />
         </TabsContent>
 
