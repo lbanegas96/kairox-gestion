@@ -6210,6 +6210,20 @@ Build de producción sin errores (`npx vite build`). Verificación en preview co
 
 ---
 
+### Sesión 2026-07-09 (cont.) — Retomando auditorías: regresión crítica encontrada en `crear_venta`
+
+**Migration:** `175_fix_regresion_permiso_crear_venta.sql` (aplicada a producción, con autorización explícita)
+
+Al arrancar la ronda de auditorías (`PLAN_AUDITORIA.md`), antes de definir qué auditar se hizo una verificación rápida de que el cierre de mig.174 no hubiera introducido una regresión — y apareció una real: **`crear_venta` había perdido el gate `has_module_permission('ventas')`** que la mig.155 le agregó (parte del barrido de "permiso de módulo en RPCs punto de entrada"). Alguna migración posterior que recreó la función con `DROP+CREATE` (170 para `monto_moneda_original`, o la propia 174 de esta sesión para `centro_costo_id`) partió de una copia del body **anterior** a la mig.155 en vez de leer la definición vigente en producción — el chequeo se perdió en silencio, sin que ningún build ni test lo detectara (no hay tests pgTAP que verifiquen la presencia del gate, solo el comportamiento de negocio).
+
+**Impacto:** cualquier empleado autenticado sin permiso `ventas` podía llamar `crear_venta` directo por API, saltándose el sistema de permisos granulares — la misma clase de vulnerabilidad que la mig.155 había cerrado.
+
+**Verificación sistemática:** se corrió la misma query de auditoría contra las 16 RPCs gateadas por mig.155 + IIBB/cheques/retenciones — `crear_venta` era la única con el gate perdido. Fix (mig.175): mismo patrón textual exacto que las otras 15 funciones. Validado con `BEGIN...ROLLBACK` contra un staff real: forzando `permissions.ventas=false` dentro de la misma transacción, `crear_venta` lanzó `No autorizado: sin permiso de módulo ventas` — confirmado en vivo, sin tocar datos reales.
+
+**Lección de proceso para toda futura migración que haga `DROP+CREATE` de una función ya auditada:** partir siempre de `pg_get_functiondef` de la definición VIGENTE en producción (vía `execute_sql`), nunca de una copia archivada en `supabase/migrations/` — de lo contrario se puede revertir en silencio un fix de seguridad aplicado después de esa versión archivada. Documentado también en `PLAN_AUDITORIA.md`.
+
+---
+
 ## 3 grandes proyectos al final
 
 | # | Proyecto | Por qué al final |
