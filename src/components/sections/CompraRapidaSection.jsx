@@ -111,9 +111,12 @@ function ComprasSection() {
   };
 
   const loadProducts = async () => {
+    // unidad_compra/factor_conversion_compra: factor de conversión de unidad de compra
+    // (roadmap SAP) — permite cargar la compra en Cajas/Docenas/etc. y convertir a la
+    // unidad de stock automáticamente. null/factor 1 = sin cambio de comportamiento.
     const { data } = await supabase
       .from('productos')
-      .select('id, nombre, codigo_sku, costo_compra, stock_actual, unidad_medida')
+      .select('id, nombre, codigo_sku, costo_compra, stock_actual, unidad_medida, unidad_compra_id, factor_conversion_compra, unidad_compra:unidades_medida!unidad_compra_id(codigo, descripcion)')
       .eq('empresa_id', user.empresa_id)
       .eq('activo', true)
       .order('nombre');
@@ -226,17 +229,21 @@ function ComprasSection() {
   );
 
   const addToCart = (product) => {
-    const newItem = { 
-      ...product, 
+    const newItem = {
+      ...product,
       cartItemId: crypto.randomUUID(),
-      cantidad: 1, 
-      costo_unitario: product.costo_compra || 0 
+      cantidad: 1,
+      costo_unitario: product.costo_compra || 0,
+      // Campos temporales del conversor de unidad de compra (Caja/Docena/etc.) —
+      // solo se usan para calcular cantidad/costo_unitario, no se envían al backend.
+      packQty: '',
+      packCosto: '',
     };
-    
+
     setCart([...cart, newItem]);
     setProductSearch('');
     setShowAutocomplete(false);
-    
+
     setTimeout(() => {
       searchInputRef.current?.focus();
     }, 10);
@@ -254,13 +261,32 @@ function ComprasSection() {
   const updateCartItem = (cartItemId, field, value) => {
     setCart(cart.map(item => {
       if (item.cartItemId === cartItemId) {
-        if (field === 'costo_unitario') {
-          return { ...item, costo_unitario: value };
+        if (field === 'costo_unitario' || field === 'packQty' || field === 'packCosto') {
+          return { ...item, [field]: value };
         }
         const val = parseFloat(value);
         return { ...item, [field]: isNaN(val) ? '' : val };
       }
       return item;
+    }));
+  };
+
+  // Convierte "3 Cajas a $1200 c/u" -> cantidad=36 (unidad de stock), costo_unitario=$100
+  // (por unidad de stock), usando el factor de conversión configurado en el producto.
+  // Solo pre-carga los campos cantidad/costo_unitario que ya existían — no cambia nada
+  // del flujo de envío (aplicar_compra_producto sigue recibiendo unidad de stock, como siempre).
+  const applyPackConversion = (cartItemId) => {
+    setCart(cart.map(item => {
+      if (item.cartItemId !== cartItemId) return item;
+      const factor = Number(item.factor_conversion_compra) || 1;
+      const packQty = parseNumberLocale(item.packQty);
+      const packCosto = parseNumberLocale(item.packCosto);
+      if (!packQty || packQty <= 0) return item;
+      return {
+        ...item,
+        cantidad: packQty * factor,
+        costo_unitario: packCosto > 0 ? packCosto / factor : item.costo_unitario,
+      };
     }));
   };
 
@@ -788,6 +814,7 @@ function ComprasSection() {
             getShortUnit={getShortUnit}
             addToCart={addToCart}
             updateCartItem={updateCartItem}
+            applyPackConversion={applyPackConversion}
             removeFromCart={removeFromCart}
             isSubmitting={isSubmitting}
             setShowClearConfirm={setShowClearConfirm}

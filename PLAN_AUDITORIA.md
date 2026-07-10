@@ -674,6 +674,42 @@ Aplicado a producción y verificado en preview: el Dashboard real de Nalux muest
 (coincide exacto), ambas RPCs responden 200 en Network. `dashboardService.ts` y
 `CommandPalette.jsx` actualizados para usar las RPCs en vez de la tabla directa.
 
+## ✅ Roadmap SAP — Factor de conversión de unidad de compra (mig.186, 2026-07-09)
+
+Primer ítem del roadmap SAP (sap-reference: "unidad de medida de compra vs. inventario, con factor
+de conversión") con evidencia real de necesidad: Nalux ya tenía cargadas en el maestro de unidades
+(mig.043) "Caja", "Docena", "Paquete" — sin ningún factor que las conectara al stock, no servían
+para nada funcional. Se descartaron los otros 3 ítems del roadmap (FIFO, almacenes múltiples,
+series por sucursal) por ser cambios mucho más invasivos sin evidencia de necesidad real hoy.
+
+**Alcance (confirmado con el usuario):** solo unidad de compra opcional + factor de conversión.
+La venta sigue siendo en la unidad base — no se agregó una 3ª "unidad de venta" separada.
+
+**Alcance real vs. lo propuesto inicialmente:** al investigar se confirmó que
+`NuevaFacturaProveedorModal.jsx` ("Factura de Proveedor") es puramente financiero — el propio
+banner de la UI dice "no modifica el inventario, usá OC → Recepción" — no llama a
+`aplicar_compra_producto` ni mueve stock. La conversión de unidades solo tiene sentido donde el
+stock realmente se mueve: **Compra Rápida** (implementado) y, como paso natural siguiente,
+**OC → Recepción** (`fn_oc_update_stock`, mismo esquema reutilizable, no implementado en esta
+pasada — el usuario aprobó el alcance mencionando "compra/OC" pero se acotó a Compra Rápida por
+tiempo; queda documentado como próximo paso, no como bug).
+
+**Implementación:**
+- `productos.unidad_compra_id` (FK a `unidades_medida`, nullable) + `factor_conversion_compra`
+  (numeric, default 1, `CHECK > 0`) — mig.186, aditiva pura.
+- `ProductForm.jsx`: selector "Unidad de Compra (opcional)" + input "Factor de conversión"
+  (solo visible si se eligió una unidad de compra).
+- `CompraRapidaSection.jsx`/`TabNuevaCompra.jsx`: cada línea del carrito, si el producto tiene
+  unidad de compra configurada, muestra un mini-conversor "o en Caja (x12): [cant] × [$/u] [↧]"
+  que precarga `cantidad`/`costo_unitario` (los mismos campos de siempre, en unidad de stock) —
+  cero cambios en `aplicar_compra_producto` ni en el submit; el conversor es solo una calculadora
+  que llena los campos existentes.
+
+Validado en preview con datos reales de Nalux: producto "Batidora Eléctrica" configurado con
+Unidad de Compra = Caja, factor = 12 → cargar "2 Cajas × $600" convirtió correctamente a
+Cantidad=24, Costo Unit.=$50, Subtotal=$1.200,00 (matemática exacta). No se registró la compra
+real (se descartó el formulario) para no crear un movimiento de stock/plata sin pedido explícito.
+
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma
    metodología de 6 dimensiones.

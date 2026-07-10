@@ -170,6 +170,43 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
       )}
     </div>
 
+    {/* Factor de conversión de unidad de compra (roadmap SAP) — opcional. Si no se
+        configura, la compra sigue siendo en la misma unidad que el stock, sin cambios. */}
+    <div className="space-y-2">
+      <Label htmlFor="unidad_compra">Unidad de Compra (opcional)</Label>
+      <select
+        id="unidad_compra"
+        value={data.unidad_compra_id || ''}
+        onChange={e => setData({ ...data, unidad_compra_id: e.target.value || null })}
+        className="w-full h-10 px-3 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-bg dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="">Igual que la unidad de stock</option>
+        {unidadesMedida.map(u => (
+          <option key={u.id} value={u.id}>{u.codigo} — {u.descripcion}</option>
+        ))}
+      </select>
+      <p className="text-xs text-kx-text-3">
+        Elegí esto si comprás en una unidad distinta a la que manejás en stock (ej: comprás por Caja, stockeás por Unidad).
+      </p>
+    </div>
+    {data.unidad_compra_id && (
+      <div className="space-y-2">
+        <Label htmlFor="factor_conversion">Factor de conversión</Label>
+        <Input
+          id="factor_conversion"
+          type="text"
+          inputMode="decimal"
+          placeholder="12"
+          value={data.factor_conversion_compra}
+          onChange={e => setData({ ...data, factor_conversion_compra: e.target.value })}
+          className="bg-kx-surface dark:bg-kx-bg"
+        />
+        <p className="text-xs text-kx-text-3">
+          1 unidad de compra = cuántas unidades de stock. Ej: 1 Caja = 12 Unidades → poné 12.
+        </p>
+      </div>
+    )}
+
     <div className="col-span-1 md:col-span-2 space-y-2">
       <Label htmlFor="desc">Descripción</Label>
       <Textarea

@@ -125,7 +125,10 @@ const ProductosSection = () => {
   const initialProductState = {
     nombre: '', codigo_sku: '', codigo_barras: '', categoria_nombre: '', proveedor_id: '',
     unidad_medida: 'Unidad', unidad_medida_id: '', costo_compra: '', precio_venta: '',
-    stock_actual: '', stock_minimo: 5, descripcion: ''
+    stock_actual: '', stock_minimo: 5, descripcion: '',
+    // Factor de conversión de unidad de compra (roadmap SAP) — opcional, default sin cambio
+    // de comportamiento: unidad_compra_id vacío = se compra en la misma unidad del stock.
+    unidad_compra_id: '', factor_conversion_compra: '1',
   };
 
   const [newProduct, setNewProduct] = useState(initialProductState);
@@ -190,6 +193,8 @@ const ProductosSection = () => {
         proveedor_id: newProduct.proveedor_id || null,
         unidad_medida: newProduct.unidad_medida,
         unidad_medida_id: newProduct.unidad_medida_id || null,
+        unidad_compra_id: newProduct.unidad_compra_id || null,
+        factor_conversion_compra: parseNumberLocale(newProduct.factor_conversion_compra) || 1,
         descripcion: newProduct.descripcion,
         activo: true,
         fecha_creacion: getNowAR().toISOString()
@@ -230,6 +235,8 @@ const ProductosSection = () => {
         proveedor_id: editProduct.proveedor_id || null,
         unidad_medida: editProduct.unidad_medida,
         unidad_medida_id: editProduct.unidad_medida_id || null,
+        unidad_compra_id: editProduct.unidad_compra_id || null,
+        factor_conversion_compra: parseNumberLocale(editProduct.factor_conversion_compra) || 1,
         costo_compra: parseNumberLocale(editProduct.costo_compra) || 0,
         precio_venta: parseNumberLocale(editProduct.precio_venta) || 0,
         stock_actual: parseInt(editProduct.stock_actual) || 0,

@@ -1,5 +1,31 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-09 (sesión 57 — cierre de dropdowns cross-módulo pendientes desde mig.134/135)
+**Última actualización:** 2026-07-09 (sesión 57 — roadmap SAP: factor de conversión unidad de compra)
+
+## ✅ Roadmap SAP: factor de conversión de unidad de compra (migration 186, sesión 57)
+
+Primer ítem del roadmap SAP con evidencia real: Nalux ya tenía "Caja"/"Docena"/"Paquete" cargadas
+en `unidades_medida` (mig.043) sin ningún factor que las conectara al stock — no servían para nada.
+Se descartaron FIFO/almacenes múltiples/series por sucursal por ser cambios mucho más grandes sin
+evidencia de necesidad real hoy.
+
+**Alcance confirmado con el usuario:** unidad de compra opcional + factor por producto. La venta
+sigue en la unidad base, sin 3ª unidad de venta separada.
+
+**Hallazgo que acotó el alcance real:** `NuevaFacturaProveedorModal.jsx` es puramente financiero
+(no llama `aplicar_compra_producto`, la propia UI dice "no modifica el inventario") — la conversión
+solo aplica donde el stock se mueve de verdad: Compra Rápida (implementado) y, como paso natural
+siguiente, OC → Recepción (mismo esquema reutilizable, no implementado en esta pasada — se acotó
+por tiempo, documentado como próximo paso, no como bug pendiente).
+
+**Implementación:** `productos.unidad_compra_id`/`factor_conversion_compra` (mig.186, aditivo);
+`ProductForm.jsx` con los 2 campos nuevos (factor solo visible si hay unidad de compra elegida);
+`CompraRapidaSection.jsx`/`TabNuevaCompra.jsx` con un mini-conversor por línea del carrito
+("o en Caja (x12): cant × $/u ↧") que precarga los mismos campos `cantidad`/`costo_unitario` de
+siempre — sin tocar `aplicar_compra_producto` ni el submit.
+
+Validado en preview con datos reales: "Batidora Eléctrica" (Alibaba) configurada con Unidad de
+Compra=Caja, factor=12 → "2 Cajas × $600" convirtió a Cantidad=24/Costo=$50/Subtotal=$1.200,00
+exacto. No se registró la compra real (se descartó el formulario tras validar la conversión).
 
 ## ✅ Dropdowns cross-módulo — cierre definitivo (migration 185, sesión 57)
 
