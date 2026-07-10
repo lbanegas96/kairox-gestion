@@ -1,4 +1,30 @@
 # KAIROX Gestión — Contexto de Sesión
+**Última actualización:** 2026-07-10 (sesión 58 Nadia — hardening: trigger tenant en centro_costo_id, migration 187)
+
+## ✅ Hardening: trigger de validación tenant en `centro_costo_id` (migration 187, sesión 58)
+
+Cierre del Task #6 pendiente desde sesión 56 (baja severidad, defensa en profundidad). `centro_costo_id`
+(mig.168) es una FK simple a `centros_costo(id)` sin validar que el centro de costo pertenezca a la
+misma empresa que el `comprobante`/`compra`/`asiento_contable`. RLS ya protege las consultas normales
+de la UI (siempre filtra por `empresa_id = get_my_empresa_id()`), pero un INSERT/UPDATE directo vía
+API con un `centro_costo_id` válido de OTRA empresa (dentro de RLS propia) no tenía nada que lo impidiera.
+
+**Fix:** trigger `BEFORE INSERT OR UPDATE OF centro_costo_id` en `comprobantes`/`compras`/
+`asientos_contables` que valida `centros_costo.empresa_id = NEW.empresa_id` cuando `centro_costo_id`
+no es NULL. Mismo espíritu que el trigger `fn_queue_factura_arca` (defensa en profundidad, RLS es la
+primera capa).
+
+**Hallazgo del propio `get_advisors` tras aplicar:** la función de trigger, al ser `SECURITY DEFINER`
+sin `REVOKE` explícito, quedaba invocable directo como RPC público vía `/rest/v1/rpc/fn_validar_tenant_centro_costo`
+por `anon`/`authenticated` — no tenía sentido exponerla, es de uso interno del trigger. Corregido con
+`REVOKE EXECUTE ... FROM PUBLIC, anon, authenticated` (los triggers disparan igual, corren con el
+privilegio del dueño de la función).
+
+Validado con `BEGIN...ROLLBACK` contra datos reales (Nalux + 2 empresas más en la DB): UPDATE cross-tenant
+(centro de costo de otra empresa en un comprobante de Nalux) bloqueado con el mensaje esperado; UPDATE
+same-tenant y `SET NULL` permitidos sin error; repetido después del REVOKE para confirmar que el trigger
+sigue funcionando igual.
+
 **Última actualización:** 2026-07-09 (sesión 57 — roadmap SAP: factor de conversión unidad de compra)
 
 ## ✅ Roadmap SAP: factor de conversión de unidad de compra (migration 186, sesión 57)
@@ -123,7 +149,7 @@ Nadia revisó los pendientes del CONTEXT.md. Los ítems #1–#3 y #5 ya estaban 
 `npx vite build` exit 0.
 
 **Pendiente (no bloqueante):**
-- Task #6 (opcional, baja severidad): trigger BEFORE INSERT/UPDATE que valide `centro_costo_id.empresa_id = comprobante.empresa_id` en comprobantes/compras/asientos_contables — previene cross-tenant `centro_costo_id` vía API directa. Para Luciano.
+- ~~Task #6: trigger de validación tenant en `centro_costo_id`~~ → cerrado en sesión 58 (migration 187).
 - Jurisdicción IIBB de Nalux: quedó `Córdoba` (dato de test de Luciano). Corregir desde Impuestos → IIBB.
 
 **Última actualización:** 2026-07-09 (sesión 55 Luciano — CIERRE del plan de 4 frentes contables + toggle "Impuestos Avanzados" por empresa, migrations 170-173)
