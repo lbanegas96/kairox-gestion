@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { User, Loader2, DollarSign, Clock, Banknote, AlertCircle } from 'lucide-react';
+import { User, Loader2, DollarSign, Clock, Banknote, AlertCircle, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -161,6 +161,28 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
     }
   };
 
+  // Migration 181/183: cobros históricos que quedaron sin asiento (período cerrado o
+  // cuenta faltante al momento del cobro) pueden regenerarse acá. El RPC ya rechaza
+  // (con guard propio) filas que en realidad son cheques o Notas de Crédito, así que
+  // el filtro de abajo es solo para no mostrar el botón donde el RPC lo va a rechazar.
+  const puedeRegenerarAsiento = (mov) =>
+    mov.tipo === 'HABER' && !mov.asiento_id && !mov.cheque_id &&
+    !(mov.comprobante_id && !mov.metodo_cobro);
+
+  const handleRegenerarAsiento = async (movimientoId) => {
+    const { error } = await supabase.rpc('regenerar_asiento_cxc', {
+      p_movimiento_id: movimientoId,
+      p_user_id: user.id,
+    });
+    if (error) {
+      toast({ title: 'No se pudo regenerar el asiento', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Asiento regenerado', className: 'bg-emerald-600 text-white border-none' });
+    qc.invalidateQueries({ queryKey: detailsQueryKey });
+    if (onUpdate) onUpdate();
+  };
+
   const hasDebt = (localClientData?.saldo_actual || 0) > 0;
   const saldo = localClientData?.saldo_actual || 0;
   const limite = localClientData?.limite_credito || 0;
@@ -289,6 +311,15 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
                                    </td>
                                    <td className="px-4 py-3 text-slate-700 dark:text-slate-300 font-medium">
                                       {mov.descripcion}
+                                      {puedeRegenerarAsiento(mov) && (
+                                         <div className="mt-1">
+                                            <Button size="sm" variant="outline"
+                                               onClick={() => handleRegenerarAsiento(mov.id)}
+                                               className="h-6 px-2 gap-1 text-[11px] text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-900/50 dark:hover:bg-amber-900/20">
+                                               <RefreshCw className="h-3 w-3" /> Sin asiento — Regenerar
+                                            </Button>
+                                         </div>
+                                      )}
                                    </td>
                                    <td className="px-4 py-3 text-xs">
                                       {mov._comprobante?.fecha_vencimiento ? (

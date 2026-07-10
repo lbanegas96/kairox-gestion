@@ -1,5 +1,37 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-09 (sesión 56 Nadia — checkbox "No relevante para AFIP" en NuevaVentaModal y NuevaNCModal)
+**Última actualización:** 2026-07-09 (sesión 57 — botón "Regenerar" en histórico CxC/CxP + guard cheques/NC + saneamiento real)
+
+## ✅ Botón "Regenerar asiento" en el histórico + guard crítico cheques/NC + saneamiento real (migration 183, sesión 57)
+
+Cierre del pendiente documentado al final de la sesión anterior: exponer "Regenerar" (RPCs
+`regenerar_asiento_cxc`/`cxp`, mig.181) en el histórico de movimientos, no solo en el toast del
+momento del cobro/pago.
+
+**Hallazgo antes de tocar el frontend:** ambas RPCs no validaban que la fila fuera un cobro/pago
+real — solo `tipo='HABER'`/`'pago'`. Con datos reales de Nalux se confirmó que también habrían
+"regenerado" un asiento de cobro en efectivo fabricado para:
+- **Cheques** (`crear_cheque_tercero`, mig.182): HABER con `cheque_id` — su asiento real ya existe
+  vía el trigger de cheques (DEBE 1.1.6 / HABER 1.1.2). Simulado dentro de un `BEGIN...ROLLBACK`
+  (no hay cheques de tercero con cliente real en Nalux todavía) — rechazado correctamente.
+- **Notas de Crédito/devoluciones**: HABER con `comprobante_id` (apunta a la NC, nunca a la factura
+  original) y `metodo_cobro` NULL — 8 filas reales, todas "NC ...". Sin plata real de por medio.
+- Se descartó "excluir por `comprobante_id`" a secas: existe 1 fila real vieja-estilo
+  ("Cobro Efectivo - Fact. 20260602-004") que SÍ es plata real, liga `comprobante_id` a la factura
+  que cancela, pero además tiene `metodo_cobro` seteado — la regla final combina ambas señales.
+
+**Regla:** `CxC regenerable := cheque_id IS NULL AND NOT (comprobante_id IS NOT NULL AND metodo_cobro IS NULL)`;
+`CxP regenerable := cheque_id IS NULL`. Validada con 6 casos reales/simulados vía `BEGIN...ROLLBACK`
+antes de aplicar mig.183 a producción.
+
+**Frontend:** `ClientDetailModal.jsx` (historial de cliente) y la tab Cuenta Corriente de
+`ProveedoresSection.jsx` (detalle de proveedor) muestran un badge ámbar "Sin asiento — Regenerar"
+bajo la descripción de cada fila elegible — mismo criterio que el guard del RPC. Verificado en
+preview: aparece en los "Pago de deuda" de Katy, no en sus NC.
+
+**Saneamiento real (a pedido explícito del usuario, "hacelo vos"):** se regeneraron los 26 asientos
+históricos reales de Nalux (20 CxC + 6 CxP) que quedaron sin asiento desde antes de esta sesión —
+26/26 exitosos, todos balanceados, 0 rechazos. El backlog de "cobros/pagos sin asiento" documentado
+en sesiones previas queda en 0.
 
 ## ✅ Checkbox "No relevante para AFIP" en NuevaVentaModal + NuevaNCModal (sesión 56)
 

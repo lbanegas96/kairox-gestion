@@ -251,6 +251,45 @@ momento del cobro/pago) — si se quiere sanear el histórico completo, falta ag
 vista de movimientos de `ClientDetailModal.jsx`/detalle de proveedor. No se hizo en esta sesión
 por alcance (afecta un archivo no tocado hoy); las RPCs ya soportan ese caso de uso.
 
+## ✅ "Regenerar" expuesto en el histórico + guard crítico + saneamiento real (mig.183, 2026-07-09)
+
+Antes de exponer el botón en `ClientDetailModal.jsx`/`ProveedoresSection.jsx` se encontró, con
+datos reales de producción, que `regenerar_asiento_cxc`/`regenerar_asiento_cxp` **no validaban que
+la fila fuera un cobro/pago real** — solo filtraban por `tipo='HABER'`/`'pago'`. Eso significa que
+también habrían "regenerado" un asiento de "cobro en efectivo" para filas que NO son plata real:
+
+- **Cheques (mig.182):** `crear_cheque_tercero` inserta HABER con `cheque_id` — su asiento real ya
+  existe (DEBE 1.1.6 Cheques en Cartera / HABER 1.1.2) vía el trigger de cheques. "Regenerar"
+  habría fabricado un segundo asiento con DEBE Caja, como si hubiese entrado efectivo real.
+- **Notas de Crédito / devoluciones:** `crear_nota_credito`/`crear_devolucion` insertan HABER con
+  `comprobante_id` apuntando a la NC (nunca a la factura original) y NUNCA setean `metodo_cobro` —
+  confirmado con 8 filas reales en producción (todas "NC ..."). Es una reducción de deuda sin plata
+  real; "Regenerar" también habría fabricado un DEBE Caja falso.
+- Se descartó "excluir por `comprobante_id`" como regla simple porque existe un estilo VIEJO de
+  cobro (pre-mig.130, sin tabla de imputación) que SÍ es plata real y liga `comprobante_id` a la
+  factura que cancela — pero además siempre seteó `metodo_cobro` (ej. "Cobro Efectivo - Fact. ...").
+  1 fila real así en producción.
+
+**Regla validada** contra los 20 candidatos CxC + 6 CxP reales de Nalux (0 falsos positivos):
+`CxC regenerable := cheque_id IS NULL AND NOT (comprobante_id IS NOT NULL AND metodo_cobro IS NULL)`;
+`CxP regenerable := cheque_id IS NULL` (ND recibida ya usa `tipo='nota_debito'`, distinto de `'pago'`).
+
+**Fix (mig.183):** ambas RPCs ahora rechazan explícitamente cheques y NC/devolución con un mensaje
+claro. Validado con `BEGIN...ROLLBACK` (6 casos: cobro genuino simple, NC real, cobro viejo-estilo
+con factura linkeada, cheque de tercero simulado, pago genuino, cheque propio simulado — los 6
+correctos). Aplicado a producción.
+
+**Frontend:** `ClientDetailModal.jsx` y la tab Cuenta Corriente de `ProveedoresSection.jsx` ahora
+muestran un badge "Sin asiento — Regenerar" bajo la descripción de cada fila elegible (mismo
+criterio que el guard del RPC, para no mostrar un botón que el RPC va a rechazar). Verificado en
+preview contra datos reales: aparece en los 3 "Pago de deuda" de Katy, NO aparece en sus 2 filas de
+NC.
+
+**Saneamiento real ejecutado (a pedido explícito del usuario):** se regeneraron los 26 asientos
+históricos reales de Nalux (20 CxC + 6 CxP) que quedaron sin asiento desde antes de esta sesión —
+todos exitosos, todos balanceados (`total_debe = total_haber`), 0 rechazos. El backlog documentado
+en la sección anterior queda en **0 pendientes**.
+
 ## Registro de hallazgos (log corrido)
 
 | Fecha | Área | Severidad | Hallazgo | Fix |

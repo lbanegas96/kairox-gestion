@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Truck, Plus, Search, Edit, Eye, UserX, UserCheck,
-  DollarSign, FileText, ShoppingBag, Banknote
+  DollarSign, FileText, ShoppingBag, Banknote, RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -135,9 +135,12 @@ function ProveedoresSection() {
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
-  // Migration 181: regenera el asiento de un pago que quedó sin generarlo (período
+  // Migration 181/183: regenera el asiento de un pago que quedó sin generarlo (período
   // cerrado en su momento, cuenta faltante, o una colisión de numeración concurrente
-  // ya corregida) — usa la diferencia de cambio ya calculada al momento del pago.
+  // ya corregida) — usa la diferencia de cambio ya calculada al momento del pago. El RPC
+  // rechaza (con guard propio) filas que en realidad son cheques propios entregados.
+  const puedeRegenerarAsientoCxp = (mov) => mov.tipo === 'pago' && !mov.asiento_id && !mov.cheque_id;
+
   const handleRegenerarAsientoCxp = async (movimientoId) => {
     const { error } = await supabase.rpc('regenerar_asiento_cxp', {
       p_movimiento_id: movimientoId,
@@ -149,6 +152,7 @@ function ProveedoresSection() {
     }
     toast({ title: 'Asiento regenerado', className: 'bg-emerald-600 text-white border-none' });
     invalidate();
+    qc.invalidateQueries({ queryKey: PROV_KEYS.cuentaCorriente(detalleId) });
   };
 
   const pagoMutation = useMutation({
@@ -554,7 +558,18 @@ function ProveedoresSection() {
                           <td className="p-3">
                             <span className={`px-2 py-0.5 rounded text-xs font-medium ${cfg.color}`}>{cfg.label}</span>
                           </td>
-                          <td className="p-3 text-kx-text-2 dark:text-slate-300">{m.descripcion || '—'}</td>
+                          <td className="p-3 text-kx-text-2 dark:text-slate-300">
+                            {m.descripcion || '—'}
+                            {puedeRegenerarAsientoCxp(m) && (
+                              <div className="mt-1">
+                                <Button size="sm" variant="outline"
+                                  onClick={() => handleRegenerarAsientoCxp(m.id)}
+                                  className="h-6 px-2 gap-1 text-[11px] text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-900/50 dark:hover:bg-amber-900/20">
+                                  <RefreshCw className="h-3 w-3" /> Sin asiento — Regenerar
+                                </Button>
+                              </div>
+                            )}
+                          </td>
                           <td className={`p-3 text-right font-mono font-bold ${esDebito ? 'text-red-500' : 'text-green-500'}`}>
                             {esDebito ? '+' : '-'}${Number(m.monto).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                           </td>
