@@ -70,20 +70,28 @@ export function CommandPalette({ open, onClose, onNavigate }) {
       s.keywords.some(k => k.includes(qLower))
     );
 
-    const [{ data: prods }, { data: clientes }, { data: ventas }, { data: cotizaciones }, { data: bancos }] = await Promise.all([
+    const [{ data: prods }, { data: clientes }, { data: ventas }, { data: cotizacionesAll }, { data: bancos }] = await Promise.all([
       supabase.from('productos').select('id, nombre, stock_actual, codigo_sku').eq('empresa_id', user.empresa_id).eq('activo', true).ilike('nombre', `%${q}%`).limit(5),
       supabase.from('clientes').select('id, nombre, documento, saldo_actual').eq('empresa_id', user.empresa_id).neq('activo', false).ilike('nombre', `%${q}%`).limit(5),
       supabase.from('comprobantes').select('id, numero_venta, total, fecha').eq('empresa_id', user.empresa_id).ilike('numero_venta', `%${q}%`).limit(3),
-      supabase.from('cotizaciones').select('id, numero, cliente_nombre, total, estado').eq('empresa_id', user.empresa_id).or(`numero.ilike.%${q}%,cliente_nombre.ilike.%${q}%`).limit(4),
+      // `cotizaciones` está gateada a has_module_permission('ventas') (mig.134), pero el
+      // buscador ⌘K es global (visible a cualquier rol) — RPC SECURITY DEFINER (mig.185)
+      // para que un staff sin permiso 'ventas' también encuentre resultados de cotizaciones.
+      supabase.rpc('listar_cotizaciones_min'),
       supabase.from('cuentas_bancarias').select('id, nombre, banco').eq('empresa_id', user.empresa_id).eq('activo', true).ilike('nombre', `%${q}%`).limit(3),
     ]);
+
+    const qLowerCot = q.toLowerCase();
+    const cotizaciones = (cotizacionesAll ?? [])
+      .filter(c => c.numero?.toLowerCase().includes(qLowerCot) || c.cliente_nombre?.toLowerCase().includes(qLowerCot))
+      .slice(0, 4);
 
     setResults({
       secciones: seccionesMatch.slice(0, 4),
       productos: prods ?? [],
       clientes: clientes ?? [],
       ventas: ventas ?? [],
-      cotizaciones: cotizaciones ?? [],
+      cotizaciones,
       bancos: bancos ?? [],
     });
     setLoading(false);

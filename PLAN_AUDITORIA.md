@@ -319,7 +319,7 @@ en la sección anterior queda en **0 pendientes**.
 | 2026-07-02 | Impuestos/IVA | 🟡 | `ReporteLibroIVA.jsx` (Libro IVA Ventas, insumo DDJJ) asumía 21% fijo para todo comprobante en vez de usar `iva_discriminado`/`neto_gravado` reales ya calculados por `crear_venta` | Usa columnas reales con fallback solo para comprobantes viejos (igual patrón que ya tenía el Libro IVA Compras) |
 | 2026-07-02 | Notas de Débito | 🔴 | ND recibida (proveedor) no atómica: RPC + insert suelto en CC proveedores; si el 2º fallaba, la deuda no subía | Movido dentro del RPC en una sola transacción (mig.133) |
 | 2026-07-02 | Usuarios/Permisos | 🟠 | Permisos granulares por módulo eran solo-UI; staff sin permiso `compras` insertó en `proveedores` vía API (probado con ROLLBACK) | RLS real: `has_module_permission()` + policies SELECT/CUD en 28 tablas (mig.132); permisos nuevos `bancos`/`cheques` |
-| 2026-07-03 | Usuarios/Permisos (fase 2 SELECT) | 🟠 | Mig.132 dejó SELECT tenant-only; Staff con {dashboard,ventas} pudo LEER Historial de Compras completo ($8.372.098 en 12 compras) desde Compra Rápida/Proveedores | Mig.134 gatea SELECT con `has_module_permission` en 17 tablas exclusivas: 5 compras + 3 ventas + 3 bancos + 2 cheques + 4 configuracion. Excluidas intencionalmente: `facturas_proveedor` y `asientos_contables` (insumo de reportes cross-módulo). Verificado con ROLLBACK: staff bloqueado ve 0 filas; staff con permiso ve todo; admin siempre ve todo. **Pendiente aparte:** UI degradada en 15+ componentes cross-módulo (dropdowns vacíos) — resolver con RPCs SECURITY DEFINER scoped id+nombre |
+| 2026-07-03 | Usuarios/Permisos (fase 2 SELECT) | 🟠 | Mig.132 dejó SELECT tenant-only; Staff con {dashboard,ventas} pudo LEER Historial de Compras completo ($8.372.098 en 12 compras) desde Compra Rápida/Proveedores | Mig.134 gatea SELECT con `has_module_permission` en 17 tablas exclusivas: 5 compras + 3 ventas + 3 bancos + 2 cheques + 4 configuracion. Excluidas intencionalmente: `facturas_proveedor` y `asientos_contables` (insumo de reportes cross-módulo). Verificado con ROLLBACK: staff bloqueado ve 0 filas; staff con permiso ve todo; admin siempre ve todo. **Pendiente aparte (✅ CERRADO — ver mig.135 y mig.185 más abajo):** UI degradada en componentes cross-módulo (dropdowns vacíos) — resuelto con RPCs SECURITY DEFINER scoped id+nombre |
 | 2026-07-02 | Cheques | 🟡 | Registro de cheques desacoplado del motor de dinero: cobrar/depositar no impacta Bancos; falta cuenta "Valores en Cartera"; "Cheque" sin mapear en `metodo_pago_cuenta_bancaria`; rechazo no restaura deuda | **Gap sistémico** — requiere contador (misma familia sub-libros) |
 | 2026-07-02 | Cheques | 🟢 | `cheques_historial` se inserta en 2ª llamada frontend (no atómica con el update de estado) | Nota — no 🔴, audit-trail; se puede mover a trigger a futuro |
 | 2026-07-02 | Caja/POS | 🟢 | `cajaService.insertMovimiento` dead code con bug latente (user_id=empresaId) | Eliminado |
@@ -634,6 +634,45 @@ Alibaba + compra real, cuenta bancaria BBVA real): 6 casos — cobro con imputac
 (neto 0, imputación borrada), pago propio con imputación y su rechazo (neto 0), cobro de tercero con
 depósito en Bancos (ingreso, mismo asiento), pago propio cobrado por el banco (egreso, mismo
 asiento) — los 6 pasaron. Build de producción sin errores, verificado en preview sin regresiones.
+
+## ✅ Dropdowns cross-módulo — cierre definitivo (mig.185, 2026-07-09)
+
+Pendiente documentado desde la Fase 2 SELECT (mig.134, sesión 46): gatear el SELECT de 17 tablas
+exclusivas con `has_module_permission` podía romper dropdowns/paneles en pantallas de OTRO módulo
+que legítimamente necesitan leer esos datos. Mig.135 (misma sesión 46) ya había cerrado 2 casos
+(`proveedores`, `plan_cuentas`) con RPCs `listar_*_min`. Quedaba sin auditar el resto.
+
+Se revisaron las 15 tablas restantes con `grep` de cada `.from('<tabla>')` en todo `src/` +
+verificación manual de qué permiso gatea la pantalla que hace cada llamada. Resultado: **solo 2
+lectores cross-módulo reales**, el resto (`compras`/`detalle_compras`/`ordenes_compra_items`,
+`cotizacion_items`, `ofertas`, `extractos_bancarios`/`extracto_lineas`,
+`metodo_pago_cuenta_bancaria`, `cheques`/`cheques_historial`, `asientos_items`,
+`alicuotas_impuestos`, `retenciones`) se leen solo desde pantallas de su propio módulo, o ya estaban
+correctamente gateadas client-side con `hasPermission()` antes de la query (`useNotifications.js`).
+
+Los 2 reales, ambos en features **globales** (visibles a cualquier rol, sin pantalla "dueña" que
+ya exija el permiso):
+- **`CommandPalette.jsx`** (⌘K) — buscaba directo en `cotizaciones` (gateada a `has_module_permission('ventas')`,
+  mig.134); un staff sin ese permiso no veía resultados de cotizaciones en la búsqueda global.
+- **`dashboardService.ts`** (Dashboard, visible a todos) — `getKPIs()` contaba `ordenes_compra`
+  activas para el KPI "OC Pendientes" (gateada a `compras`); `getCotizacionesStats()` leía
+  `cotizaciones` completas para el widget del mes. Ambos quedaban en 0/vacío silenciosamente para
+  un staff sin el permiso correspondiente — un número de negocio incorrecto, no solo un dropdown
+  vacío.
+
+**Fix (mig.185):** 2 RPCs `SECURITY DEFINER` nuevas, mismo criterio que mig.135 (tenant-scoped, sin
+gate de módulo):
+- `contar_ordenes_compra_activas()` — devuelve solo un conteo, cero superficie expuesta.
+- `listar_cotizaciones_min()` — expone id/numero/cliente/total/estado; mismo nivel de sensibilidad
+  que `comprobantes` (facturas de venta), que YA es de lectura tenant-only sin gate de módulo por
+  diseño explícito del propio mig.134 ("insumo de reportes cross-módulo") — no se introduce
+  superficie nueva.
+
+Validado con `BEGIN...ROLLBACK`: conteos reales de Nalux coinciden con el query directo sin RLS (3
+OC activas, 18 cotizaciones); un admin de otra empresa ve solo lo suyo (aislamiento tenant intacto).
+Aplicado a producción y verificado en preview: el Dashboard real de Nalux muestra "OC Pendientes: 3"
+(coincide exacto), ambas RPCs responden 200 en Network. `dashboardService.ts` y
+`CommandPalette.jsx` actualizados para usar las RPCs en vez de la tabla directa.
 
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma

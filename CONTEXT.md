@@ -1,5 +1,33 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-09 (sesión 57 — `registrar_pago_proveedor` usa fecha Argentina, no la del servidor)
+**Última actualización:** 2026-07-09 (sesión 57 — cierre de dropdowns cross-módulo pendientes desde mig.134/135)
+
+## ✅ Dropdowns cross-módulo — cierre definitivo (migration 185, sesión 57)
+
+Pendiente documentado desde sesión 46 (mig.134 gateó SELECT por permiso de módulo en 17 tablas;
+mig.135 cerró 2 casos con RPCs `listar_proveedores_min`/`listar_plan_cuentas_min`, quedaban 15
+tablas sin auditar). Grep sistemático de `.from('<tabla>')` en todo `src/` para las 15 restantes +
+verificación manual de qué permiso gatea cada pantalla que hace la llamada.
+
+**Resultado: solo 2 lectores cross-módulo reales** (el resto ya estaba bien — o vive dentro de su
+propio módulo, o `useNotifications.js` ya usaba `hasPermission()` antes de cada query gateada):
+- `CommandPalette.jsx` (⌘K, buscador global) leía `cotizaciones` directo — un staff sin permiso
+  'ventas' no veía resultados de cotizaciones en la búsqueda.
+- `dashboardService.ts` (Dashboard, visible a cualquier rol) — `getKPIs()` contaba `ordenes_compra`
+  para el KPI "OC Pendientes"; `getCotizacionesStats()` leía `cotizaciones` para el widget del mes.
+  Ambos quedaban en 0/vacío silenciosamente para un staff sin 'compras'/'ventas' — un número de
+  negocio incorrecto en el Dashboard de todos, no solo un dropdown vacío en un formulario.
+
+**Fix:** 2 RPCs `SECURITY DEFINER` (mismo criterio que mig.135, tenant-scoped, sin gate de módulo):
+`contar_ordenes_compra_activas()` (solo un conteo) y `listar_cotizaciones_min()` (mismo nivel de
+sensibilidad que `comprobantes`, ya tenant-only sin gate por diseño explícito de mig.134).
+`dashboardService.ts` y `CommandPalette.jsx` actualizados para usarlas.
+
+Validado con `BEGIN...ROLLBACK`: conteos reales de Nalux (3 OC activas, 18 cotizaciones) coinciden
+con el query directo sin RLS; un admin de otra empresa ve solo lo suyo. Aplicado a producción y
+verificado en preview real: el Dashboard de Nalux muestra "OC Pendientes: 3" (exacto), ambas RPCs
+responden 200 en Network. No se pudo verificar la UI del buscador ⌘K en el entorno automatizado
+(el trigger no respondió a la simulación de teclado/click), pero corre sobre la misma RPC ya
+probada end-to-end desde el Dashboard — cambio de bajo riesgo (swap de fuente de datos + filtro JS).
 
 ## ✅ `registrar_pago_proveedor` usa la fecha Argentina del pago, no la del servidor (migration 184, sesión 57)
 

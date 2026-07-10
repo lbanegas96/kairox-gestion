@@ -22,8 +22,11 @@ export const dashboardService = {
       supabase.from('productos').select('id, nombre, stock_actual, stock_minimo, unidad_medida').eq('empresa_id', empresaId).eq('activo', true),
       // Comprobantes del mes (accrual basis para DSO y ticket promedio)
       supabase.from('comprobantes').select('id, total').eq('empresa_id', empresaId).gte('fecha', mesStart).lte('fecha', todayEnd),
-      // Órdenes de compra activas (pendientes de recibir)
-      supabase.from('ordenes_compra').select('id').eq('empresa_id', empresaId).not('estado', 'in', '("recibida","cancelada")'),
+      // Órdenes de compra activas (pendientes de recibir). El Dashboard es visible a
+      // cualquier rol, pero `ordenes_compra` está gateada a has_module_permission('compras')
+      // (mig.134) — un staff sin ese permiso vería este KPI en 0 silenciosamente. RPC
+      // SECURITY DEFINER scoped a un conteo (mig.185), sin exponer datos de la OC.
+      supabase.rpc('contar_ordenes_compra_activas'),
     ]);
 
     const sum = (rows: { data: { monto: number }[] | null }) =>
@@ -53,7 +56,7 @@ export const dashboardService = {
     const facturasMesTotal = (comprobantesRes.data ?? []).reduce(
       (s: number, c: { total: number }) => s + Number(c.total), 0
     );
-    const ocPendientes = ocRes.data?.length ?? 0;
+    const ocPendientes = ocRes.data ?? 0; // scalar (RPC devuelve un conteo, no filas)
     const ticketPromedio = facturasMesCount > 0 ? facturasMesTotal / facturasMesCount : 0;
 
     // DSO = (deuda cobrar / facturación del mes) × 30  — base accrual
@@ -237,16 +240,17 @@ export const dashboardService = {
     const now = getNowAR();
     const mesStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
 
-    const { data, error } = await supabase
-      .from('cotizaciones')
-      .select('id, estado, total, numero, cliente_nombre, created_at')
-      .eq('empresa_id', empresaId)
-      .gte('created_at', mesStart);
+    // El Dashboard es visible a cualquier rol, pero `cotizaciones` está gateada a
+    // has_module_permission('ventas') (mig.134) — un staff sin ese permiso vería este widget
+    // vacío silenciosamente. RPC SECURITY DEFINER (mig.185, mismo nivel de sensibilidad que
+    // `comprobantes`, ya de lectura tenant-only sin gate); el filtro por mes se hace acá porque
+    // la RPC no soporta encadenar .gte() como una tabla real.
+    const { data, error } = await supabase.rpc('listar_cotizaciones_min');
 
     if (error) throw new Error(error.message);
 
     type CotRow = { id: string; estado: string; total: number; numero: string; cliente_nombre: string | null; created_at: string };
-    const todas = (data ?? []) as CotRow[];
+    const todas = ((data ?? []) as CotRow[]).filter(c => c.created_at >= mesStart);
     const convertidas = todas.filter((c: CotRow) => c.estado === 'convertida');
     const aprobadas   = todas.filter((c: CotRow) => c.estado === 'aprobada');
     const montoTotal  = todas.reduce((s: number, c: CotRow) => s + Number(c.total), 0);
