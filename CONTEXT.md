@@ -1,5 +1,49 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-10 (sesión 58 Nadia — hardening tenant centro_costo_id + conversor unidad de compra en OC → Recepción + corrección jurisdicción IIBB Nalux)
+**Última actualización:** 2026-07-10 (sesión 59 — conversión general de unidades de medida: magnitud + factor a unidad base, migration 188)
+
+## ✅ Conversión general entre unidades de medida (magnitud + factor base, migration 188, sesión 59)
+
+Cierre de una confusión real que planteó el usuario: `unidades_medida` era una lista plana de
+etiquetas (UN/KG/GR/LT...) sin ninguna relación entre filas — no existía "1 TN = 1000 KG" en ningún
+lado. Distinto del factor de mig.186 (`productos.factor_conversion_compra`), que es un factor de
+**empaque por producto** ("1 Caja de ESTE producto = 12 unidades", arbitrario por producto). Ahora
+existen ambos conceptos, complementarios y sin pisarse:
+
+| Concepto | Ejemplo | Dónde vive |
+|---|---|---|
+| Conversión física fija por magnitud | 1 TN = 1.000 KG, 1 LT = 1.000 ML | `unidades_medida.magnitud/factor_base` (mig.188) |
+| Factor de empaque por producto | 1 Caja de *este* producto = 12 u | `productos.factor_conversion_compra` (mig.186) |
+
+**Modelo (SAP "grupo de unidades de medida" / dimensión ISO S/4HANA):** cada unidad tiene `magnitud`
+(masa/volumen/longitud/cantidad, o NULL para empaques sueltos como Caja/Paquete) y `factor_base` =
+cuántas unidades BASE de esa magnitud representa (la base lleva 1). Conversión A→B misma magnitud:
+`qty_B = qty_A * factor_base(A) / factor_base(B)`. Bases: GR (masa), ML (volumen), CM (longitud),
+UN (cantidad).
+
+**mig.188 (aditiva, validada en dry-run BEGIN...ROLLBACK antes de aplicar):** agrega las 2 columnas
+(nullable, con CHECK de coherencia: van juntas o ambas NULL), actualiza `seed_maestros_default`
+conservando el guard de tenant de mig.057, agrega TN/MG/MM/KM al estándar precargado (Nalux pasó de
+11 a 15 unidades), y backfillea magnitud/factor de las 11 unidades preexistentes por código. Caja
+(CJ) y Paquete (PQ) quedan sin magnitud a propósito.
+
+**Frontend:**
+- `unidadesMedida.js`: helpers `MAGNITUDES`, `sonConvertibles`, `factorEntreUnidades`, `convertirCantidad`.
+- Configuración → Inventario (`TabInventario.jsx`): cada unidad muestra su magnitud + "1 TN =
+  1.000.000 GR"; el modal de alta/edición (`ConfiguracionSection.jsx`) tiene selector de magnitud +
+  input de factor con preview en vivo ("1 QT = 100.000 GR").
+- Ficha de producto (`ProductForm.jsx`): al elegir unidad de compra, si comparte magnitud con la de
+  stock, el `factor_conversion_compra` (el de mig.186) se **autocompleta** desde el maestro — es lo
+  que conecta los dos conceptos. Si son de distinta magnitud (o la de compra es un empaque suelto),
+  el factor queda manual como antes.
+
+**Validado en preview con datos reales de Nalux** (login nalux2430): Configuración → Inventario lista
+las 15 unidades con conversiones correctas (TN=1.000.000 GR, KG=1.000 GR, MG=0,001 GR, MM=0,1 CM,
+Caja/Paquete sueltas); modal con preview en vivo OK; autocompletado en la Batidora Eléctrica: elegir
+DOC → factor salta a 12 con hint "1 DOC = 12 UN (misma magnitud: Cantidad)"; elegir KG (distinta
+magnitud) → NO autocompleta (correcto). Sin errores de consola. `npx vite build` exit 0. La config
+real de la Batidora (CJ/12) quedó intacta (no se guardó el toqueteo de prueba).
+
+## ✅ Jurisdicción IIBB de Nalux corregida a Buenos Aires (sesión 58)
 
 ## ✅ Jurisdicción IIBB de Nalux corregida a Buenos Aires (sesión 58)
 

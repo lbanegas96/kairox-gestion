@@ -674,6 +674,24 @@ Aplicado a producción y verificado en preview: el Dashboard real de Nalux muest
 (coincide exacto), ambas RPCs responden 200 en Network. `dashboardService.ts` y
 `CommandPalette.jsx` actualizados para usar las RPCs en vez de la tabla directa.
 
+## ✅ Roadmap SAP — Conversión general entre unidades de medida (mig.188, 2026-07-10, sesión 59)
+
+Segundo ítem del roadmap SAP ("grupo de unidades de medida" / dimensión ISO), a pedido del usuario
+que detectó — con razón — que `unidades_medida` era una lista plana sin relación entre filas y que
+el factor de mig.186 era otra cosa (empaque por producto, no conversión física fija). Ahora conviven
+los 2 conceptos sin pisarse (detalle completo en CONTEXT.md, sesión 59):
+
+- **mig.188 (aditiva):** `unidades_medida.magnitud` (masa/volumen/longitud/cantidad, o NULL) +
+  `factor_base` (cuántas unidades base representa; base lleva 1). CHECK de coherencia (van juntas o
+  ambas NULL). `seed_maestros_default` actualizado (conserva guard mig.057) + TN/MG/MM/KM al estándar
+  + backfill por código de las 11 unidades preexistentes. Validada en dry-run BEGIN...ROLLBACK contra
+  datos reales antes de aplicar; aplicada a prod con confirmación explícita del usuario.
+- **Frontend:** helpers en `unidadesMedida.js`; Configuración → Inventario muestra magnitud +
+  conversión por unidad, modal con preview en vivo; `ProductForm.jsx` autocompleta
+  `factor_conversion_compra` (mig.186) cuando stock y compra comparten magnitud.
+- **Verificado en preview real (Nalux):** 15 unidades con conversiones correctas; autocompletado
+  Batidora DOC→12 (mismo magnitud) y KG→sin autocompletar (distinta magnitud). Sin errores. Build OK.
+
 ## ✅ Roadmap SAP — Factor de conversión de unidad de compra (mig.186, 2026-07-09)
 
 Primer ítem del roadmap SAP (sap-reference: "unidad de medida de compra vs. inventario, con factor

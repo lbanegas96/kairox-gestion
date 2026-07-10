@@ -2,6 +2,9 @@ import { Warehouse, Loader2, CheckCircle2, Save, Package2, BarChart3, Pencil } f
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { MAGNITUDES, getMagnitudLabel } from '@/lib/unidadesMedida';
+
+const fmtFactor = (n) => Number(n).toLocaleString('es-AR', { maximumFractionDigits: 6 });
 
 /**
  * Tab "Inventario" de ConfiguracionSection — método de valoración de stock +
@@ -104,7 +107,11 @@ const TabInventario = ({
         </div>
         <Button size="sm" onClick={onNuevaUM}>+ Nueva</Button>
       </div>
-      <p className="text-sm text-kx-text-2 mb-4">Unidades disponibles para productos, compras, OC y cotizaciones.</p>
+      <p className="text-sm text-kx-text-2 mb-4">
+        Unidades disponibles para productos, compras, OC y cotizaciones. Agrupá cada unidad por su
+        <span className="font-medium"> magnitud</span> (masa, volumen, longitud, cantidad) y definí su
+        factor para poder convertir entre unidades de la misma magnitud — ej: 1 TN = 1.000 KG.
+      </p>
 
       {loadingUM ? (
         <div className="flex items-center gap-2 text-kx-text-3 py-4">
@@ -114,24 +121,42 @@ const TabInventario = ({
         <p className="text-sm text-kx-text-3 py-4 text-center">No hay unidades de medida cargadas.</p>
       ) : (
         <div className="border border-kx-border rounded-xl overflow-hidden">
-          {unidadesMedida.map(u => (
-            <div key={u.id} className="flex items-center justify-between px-4 py-2.5 border-b border-kx-border last:border-0">
-              <div className={`flex items-center gap-3 ${!u.activo ? 'opacity-40' : ''}`}>
-                <span className="text-xs font-mono bg-kx-surface-2 px-2 py-0.5 rounded">{u.codigo}</span>
-                <span className="text-sm text-kx-text">{u.descripcion}</span>
-                {!u.activo && <Badge variant="outline" className="text-xs text-slate-400">Inactiva</Badge>}
+          {unidadesMedida.map(u => {
+            const baseCode = MAGNITUDES.find(m => m.value === u.magnitud)?.base;
+            const esBase = u.magnitud && Number(u.factor_base) === 1;
+            return (
+              <div key={u.id} className="flex items-center justify-between px-4 py-2.5 border-b border-kx-border last:border-0">
+                <div className={`min-w-0 ${!u.activo ? 'opacity-40' : ''}`}>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-mono bg-kx-surface-2 px-2 py-0.5 rounded shrink-0">{u.codigo}</span>
+                    <span className="text-sm text-kx-text truncate">{u.descripcion}</span>
+                    {!u.activo && <Badge variant="outline" className="text-xs text-slate-400 shrink-0">Inactiva</Badge>}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 pl-0.5 text-[11px] text-kx-text-3">
+                    {u.magnitud ? (
+                      <>
+                        <span className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
+                          {getMagnitudLabel(u.magnitud)}
+                        </span>
+                        <span>{esBase ? 'unidad base' : `1 ${u.codigo} = ${fmtFactor(u.factor_base)} ${baseCode}`}</span>
+                      </>
+                    ) : (
+                      <span className="italic">Sin magnitud (empaque suelto)</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Switch
+                    checked={u.activo}
+                    onCheckedChange={(v) => onToggleUM(u.id, v)}
+                  />
+                  <Button size="sm" variant="ghost" onClick={() => onEditarUM(u)}>
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={u.activo}
-                  onCheckedChange={(v) => onToggleUM(u.id, v)}
-                />
-                <Button size="sm" variant="ghost" onClick={() => onEditarUM(u)}>
-                  <Pencil className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

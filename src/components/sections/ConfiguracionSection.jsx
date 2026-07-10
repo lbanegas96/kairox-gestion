@@ -27,6 +27,7 @@ import TabFinanzas from '@/components/configuracion/TabFinanzas';
 import TabInventario from '@/components/configuracion/TabInventario';
 import TabIntegraciones from '@/components/configuracion/TabIntegraciones';
 import TabFacturacion from '@/components/configuracion/TabFacturacion';
+import { MAGNITUDES } from '@/lib/unidadesMedida';
 
 const TAB_IDS = ['empresa', 'finanzas', 'facturacion', 'inventario', 'integraciones', 'alertas', 'usuarios', 'sistema'];
 
@@ -174,7 +175,7 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [loadingUM, setLoadingUM] = useState(true);
   const [showUMModal, setShowUMModal] = useState(false);
   const [editingUM, setEditingUM] = useState(null);
-  const [umForm, setUmForm] = useState({ codigo: '', descripcion: '' });
+  const [umForm, setUmForm] = useState({ codigo: '', descripcion: '', magnitud: '', factor_base: '' });
   const [savingUM, setSavingUM] = useState(false);
 
   // ── Tab 5: Integraciones — Mercado Pago ──────────────────────────────────
@@ -1214,13 +1215,18 @@ const ConfiguracionSection = ({ initialTab }) => {
   // ─────────────────────────────────────────────────────────────────────────
   const openNuevaUM = () => {
     setEditingUM(null);
-    setUmForm({ codigo: '', descripcion: '' });
+    setUmForm({ codigo: '', descripcion: '', magnitud: '', factor_base: '' });
     setShowUMModal(true);
   };
 
   const openEditarUM = (u) => {
     setEditingUM(u);
-    setUmForm({ codigo: u.codigo, descripcion: u.descripcion });
+    setUmForm({
+      codigo: u.codigo,
+      descripcion: u.descripcion,
+      magnitud: u.magnitud ?? '',
+      factor_base: u.factor_base != null ? String(u.factor_base) : '',
+    });
     setShowUMModal(true);
   };
 
@@ -1238,11 +1244,23 @@ const ConfiguracionSection = ({ initialTab }) => {
       toast({ title: 'Completá código y descripción', variant: 'destructive' });
       return;
     }
+    // Magnitud + factor de conversión (migration 188): van juntos o ambos vacíos.
+    const magnitud = umForm.magnitud || null;
+    let factorBase = null;
+    if (magnitud) {
+      factorBase = parseFloat(String(umForm.factor_base).replace(',', '.'));
+      if (!Number.isFinite(factorBase) || factorBase <= 0) {
+        toast({ title: 'Factor inválido', description: 'Si elegís una magnitud, el factor debe ser un número mayor a 0.', variant: 'destructive' });
+        return;
+      }
+    }
     setSavingUM(true);
     try {
       const payload = {
         codigo: umForm.codigo.trim().toUpperCase(),
         descripcion: umForm.descripcion.trim(),
+        magnitud,
+        factor_base: factorBase,
       };
       if (editingUM) {
         const { error } = await supabase.from('unidades_medida').update(payload).eq('id', editingUM.id);
@@ -1826,6 +1844,55 @@ const ConfiguracionSection = ({ initialTab }) => {
                 className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
               />
             </div>
+
+            {/* Magnitud + factor de conversión general (migration 188) */}
+            <div className="space-y-1.5">
+              <Label className="text-kx-text">Magnitud</Label>
+              <select
+                value={umForm.magnitud}
+                onChange={e => setUmForm(f => ({ ...f, magnitud: e.target.value }))}
+                className="w-full h-10 px-3 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Sin magnitud (unidad suelta, ej: Caja)</option>
+                {MAGNITUDES.map(m => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+              <p className="text-xs text-kx-text-3">
+                Agrupá la unidad por lo que mide para poder convertir entre unidades de la misma
+                magnitud (ej: Masa → KG, GR, TN se convierten entre sí). Dejala vacía para empaques
+                sin conversión física fija (Caja, Paquete).
+              </p>
+            </div>
+
+            {umForm.magnitud && (() => {
+              const baseCode = MAGNITUDES.find(m => m.value === umForm.magnitud)?.base ?? '';
+              const factorNum = parseFloat(String(umForm.factor_base).replace(',', '.'));
+              const validFactor = Number.isFinite(factorNum) && factorNum > 0;
+              const codeLabel = umForm.codigo.trim().toUpperCase() || 'esta unidad';
+              return (
+                <div className="space-y-1.5">
+                  <Label className="text-kx-text">Equivale a (en {baseCode}) *</Label>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={umForm.factor_base}
+                    onChange={e => setUmForm(f => ({ ...f, factor_base: e.target.value }))}
+                    placeholder={`Ej: 1000`}
+                    className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                  />
+                  <p className="text-xs text-kx-text-3">
+                    Cuántos <span className="font-mono">{baseCode}</span> equivale 1 de esta unidad.
+                    La unidad base ({baseCode}) lleva 1.
+                  </p>
+                  {validFactor && (
+                    <p className="text-xs text-blue-600 dark:text-blue-400">
+                      1 {codeLabel} = {factorNum.toLocaleString('es-AR', { maximumFractionDigits: 6 })} {baseCode}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
           <div className="flex gap-2 justify-end pt-2 border-t border-kx-border">
             <Button variant="outline" onClick={() => setShowUMModal(false)}>Cancelar</Button>

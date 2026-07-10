@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { factorEntreUnidades, sonConvertibles, getMagnitudLabel } from '@/lib/unidadesMedida';
 
 // Defined outside ProductosSection to keep a stable component identity across renders.
 // If defined inside, React creates a new function reference every render, causing
@@ -18,6 +19,25 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEdit, unidadesMedida]);
+
+  // Conversión general (migration 188): si la unidad de stock y la de compra son de
+  // la misma magnitud, el factor de conversión se autocalcula desde el maestro.
+  const stockUnit = unidadesMedida.find(u => u.id === data.unidad_medida_id) || null;
+  const compraUnit = unidadesMedida.find(u => u.id === data.unidad_compra_id) || null;
+  const autoFactor = factorEntreUnidades(compraUnit, stockUnit); // 1 compra = autoFactor stock
+  const mismaMagnitud = sonConvertibles(compraUnit, stockUnit);
+
+  // Al elegir unidad de compra, si comparte magnitud con la de stock, precargar el factor.
+  const handleUnidadCompraChange = (val) => {
+    const newId = val || null;
+    const nextCompra = unidadesMedida.find(u => u.id === newId) || null;
+    const factor = factorEntreUnidades(nextCompra, stockUnit);
+    setData({
+      ...data,
+      unidad_compra_id: newId,
+      ...(factor != null ? { factor_conversion_compra: String(factor) } : {}),
+    });
+  };
 
   return (
   <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
@@ -177,7 +197,7 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
       <select
         id="unidad_compra"
         value={data.unidad_compra_id || ''}
-        onChange={e => setData({ ...data, unidad_compra_id: e.target.value || null })}
+        onChange={e => handleUnidadCompraChange(e.target.value)}
         className="w-full h-10 px-3 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-bg dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
         <option value="">Igual que la unidad de stock</option>
@@ -201,9 +221,16 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
           onChange={e => setData({ ...data, factor_conversion_compra: e.target.value })}
           className="bg-kx-surface dark:bg-kx-bg"
         />
-        <p className="text-xs text-kx-text-3">
-          1 unidad de compra = cuántas unidades de stock. Ej: 1 Caja = 12 Unidades → poné 12.
-        </p>
+        {mismaMagnitud && autoFactor != null ? (
+          <p className="text-xs text-blue-600 dark:text-blue-400">
+            Autocompletado desde el maestro: 1 {compraUnit?.codigo} = {Number(autoFactor).toLocaleString('es-AR', { maximumFractionDigits: 6 })} {stockUnit?.codigo}
+            {' '}(misma magnitud: {getMagnitudLabel(compraUnit?.magnitud)}). Ajustá solo si tu empaque difiere.
+          </p>
+        ) : (
+          <p className="text-xs text-kx-text-3">
+            1 unidad de compra = cuántas unidades de stock. Ej: 1 Caja = 12 Unidades → poné 12.
+          </p>
+        )}
       </div>
     )}
 
