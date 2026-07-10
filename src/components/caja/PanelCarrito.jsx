@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { ShoppingCart, Trash2, Plus, Minus, CheckCircle, Loader2, AlertTriangle, Tag } from 'lucide-react';
+import { ShoppingCart, Trash2, Plus, Minus, CheckCircle, Loader2, AlertTriangle, Tag, Boxes } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import ClienteSelector from '@/components/shared/ClienteSelector';
@@ -26,10 +26,11 @@ function getPrecioConDescuento(item, oferta, descuentoManualPct) {
   return Math.round(precio * 100) / 100;
 }
 
-function CarritoItem({ item, onModificar, onEliminar, oferta, descuentoManual, onDescuentoManualChange }) {
+function CarritoItem({ item, onModificar, onEliminar, oferta, descuentoManual, onDescuentoManualChange, onTogglePack, onUpdatePacks }) {
   const precioFinal = getPrecioConDescuento(item, oferta, descuentoManual);
   const tieneDescuento = oferta || descuentoManual > 0;
   const subtotal = precioFinal * item.cantidad;
+  const packMode = !!item._packMode;
 
   return (
     <div className="bg-kx-surface-2 rounded-xl px-3 py-2 space-y-1">
@@ -44,6 +45,9 @@ function CarritoItem({ item, onModificar, onEliminar, oferta, descuentoManual, o
           ) : (
             <p className="text-xs text-kx-text-3 tabular-nums">${fmt(item.precio_venta)} c/u</p>
           )}
+          {packMode && (
+            <p className="text-[10px] text-amber-500 tabular-nums">${fmt(item._precioUnidadVenta)} / {item.unidad_venta?.codigo || 'pack'}</p>
+          )}
           {/* OFERTAS — badge con nombre de la oferta */}
           {oferta && (
             <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-500 mt-0.5">
@@ -52,24 +56,38 @@ function CarritoItem({ item, onModificar, onEliminar, oferta, descuentoManual, o
           )}
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          <button
-            onClick={() => onModificar(item.id, item.cantidad - 1)}
-            className="w-6 h-6 rounded-full bg-kx-border flex items-center justify-center hover:bg-kx-text-3/20 transition-colors"
-          >
-            <Minus className="w-3 h-3 text-kx-text" />
-          </button>
-          <Input
-            type="number"
-            value={item.cantidad}
-            onChange={e => onModificar(item.id, parseInt(e.target.value) || 1)}
-            className="w-12 h-7 text-center text-sm bg-kx-surface border-kx-border text-kx-text p-0"
-          />
-          <button
-            onClick={() => onModificar(item.id, item.cantidad + 1)}
-            className="w-6 h-6 rounded-full bg-kx-border flex items-center justify-center hover:bg-kx-text-3/20 transition-colors"
-          >
-            <Plus className="w-3 h-3 text-kx-text" />
-          </button>
+          {packMode ? (
+            <div className="flex flex-col items-center">
+              <Input
+                type="number" min="1"
+                value={item._packs}
+                onChange={e => onUpdatePacks?.(item.id, e.target.value)}
+                className="w-14 h-7 text-center text-sm bg-kx-surface border-kx-border text-kx-text p-0"
+              />
+              <span className="text-[9px] text-kx-text-3">= {item.cantidad} u</span>
+            </div>
+          ) : (
+            <>
+              <button
+                onClick={() => onModificar(item.id, item.cantidad - 1)}
+                className="w-6 h-6 rounded-full bg-kx-border flex items-center justify-center hover:bg-kx-text-3/20 transition-colors"
+              >
+                <Minus className="w-3 h-3 text-kx-text" />
+              </button>
+              <Input
+                type="number"
+                value={item.cantidad}
+                onChange={e => onModificar(item.id, parseInt(e.target.value) || 1)}
+                className="w-12 h-7 text-center text-sm bg-kx-surface border-kx-border text-kx-text p-0"
+              />
+              <button
+                onClick={() => onModificar(item.id, item.cantidad + 1)}
+                className="w-6 h-6 rounded-full bg-kx-border flex items-center justify-center hover:bg-kx-text-3/20 transition-colors"
+              >
+                <Plus className="w-3 h-3 text-kx-text" />
+              </button>
+            </>
+          )}
           <button
             onClick={() => onEliminar(item.id)}
             className="w-6 h-6 rounded-full flex items-center justify-center hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors ml-1"
@@ -83,6 +101,19 @@ function CarritoItem({ item, onModificar, onEliminar, oferta, descuentoManual, o
           </span>
         </div>
       </div>
+      {/* Toggle venta por pack — solo si el producto tiene unidad de venta configurada */}
+      {item.unidad_venta_id && onTogglePack && (
+        <button
+          type="button"
+          onClick={() => onTogglePack(item.id)}
+          className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border transition-colors ${packMode ? 'border-amber-400 text-amber-500 bg-amber-500/10' : 'border-kx-border text-kx-text-3 hover:bg-kx-border/40'}`}
+        >
+          <Boxes className="w-3 h-3" />
+          {packMode
+            ? `Vendiendo por ${item.unidad_venta?.descripcion || 'pack'} (x${item.factor_conversion_venta}) — volver a unidad`
+            : `Vender por ${item.unidad_venta?.descripcion || 'pack'} (x${item.factor_conversion_venta})`}
+        </button>
+      )}
       {/* OFERTAS — input de descuento manual (visible si no hay oferta, o si la oferta es acumulable) */}
       {(!oferta || oferta.acumulable) && (
         <div className="flex items-center gap-1.5 pl-0.5">
@@ -105,6 +136,7 @@ function CarritoItem({ item, onModificar, onEliminar, oferta, descuentoManual, o
 
 function PanelCarrito({
   carrito, onModificarCarrito, onVentaExitosa,
+  onTogglePack, onUpdatePacks,
   ofertasCarrito = {}, descuentosManuales = {},
   onDescuentoManualChange, medioPago = 'Efectivo', onMedioPagoChange,
 }) {
@@ -249,6 +281,8 @@ function PanelCarrito({
               oferta={ofertasCarrito[item.id]}
               descuentoManual={descuentosManuales[item.id] || 0}
               onDescuentoManualChange={onDescuentoManualChange}
+              onTogglePack={onTogglePack}
+              onUpdatePacks={onUpdatePacks}
             />
           ))
         )}

@@ -129,6 +129,9 @@ const ProductosSection = () => {
     // Factor de conversión de unidad de compra (roadmap SAP) — opcional, default sin cambio
     // de comportamiento: unidad_compra_id vacío = se compra en la misma unidad del stock.
     unidad_compra_id: '', factor_conversion_compra: '1',
+    // Unidad de venta / pack (roadmap SAP, mig.189/190) — opcional. Vacío = se vende en
+    // la unidad de stock. precio_venta_pack vacío = proporcional; descuento_pack_pct = auto.
+    unidad_venta_id: '', factor_conversion_venta: '1', precio_venta_pack: '', descuento_pack_pct: '',
   };
 
   const [newProduct, setNewProduct] = useState(initialProductState);
@@ -195,6 +198,10 @@ const ProductosSection = () => {
         unidad_medida_id: newProduct.unidad_medida_id || null,
         unidad_compra_id: newProduct.unidad_compra_id || null,
         factor_conversion_compra: parseNumberLocale(newProduct.factor_conversion_compra) || 1,
+        unidad_venta_id: newProduct.unidad_venta_id || null,
+        factor_conversion_venta: parseNumberLocale(newProduct.factor_conversion_venta) || 1,
+        precio_venta_pack: (newProduct.precio_venta_pack ?? '') !== '' ? parseNumberLocale(newProduct.precio_venta_pack) : null,
+        descuento_pack_pct: parseNumberLocale(newProduct.descuento_pack_pct) || 0,
         descripcion: newProduct.descripcion,
         activo: true,
         fecha_creacion: getNowAR().toISOString()
@@ -237,6 +244,10 @@ const ProductosSection = () => {
         unidad_medida_id: editProduct.unidad_medida_id || null,
         unidad_compra_id: editProduct.unidad_compra_id || null,
         factor_conversion_compra: parseNumberLocale(editProduct.factor_conversion_compra) || 1,
+        unidad_venta_id: editProduct.unidad_venta_id || null,
+        factor_conversion_venta: parseNumberLocale(editProduct.factor_conversion_venta) || 1,
+        precio_venta_pack: (editProduct.precio_venta_pack ?? '') !== '' ? parseNumberLocale(editProduct.precio_venta_pack) : null,
+        descuento_pack_pct: parseNumberLocale(editProduct.descuento_pack_pct) || 0,
         costo_compra: parseNumberLocale(editProduct.costo_compra) || 0,
         precio_venta: parseNumberLocale(editProduct.precio_venta) || 0,
         stock_actual: parseInt(editProduct.stock_actual) || 0,

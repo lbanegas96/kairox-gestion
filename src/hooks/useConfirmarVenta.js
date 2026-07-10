@@ -119,6 +119,10 @@ export function useConfirmarVenta() {
           descuento_monto:      Math.round(descuentoMonto * 100) / 100,
           oferta_id:            ofertaId,
           descuento_manual_pct: descManualPct,
+          // Venta por pack (mig.190) — solo si la línea está en modo pack.
+          unidad_venta_id:      item._packMode ? item.unidad_venta_id : '',
+          cantidad_venta:       item._packMode ? item._packs : '',
+          precio_unidad_venta:  item._packMode ? item._precioUnidadVenta : '',
         };
       });
 

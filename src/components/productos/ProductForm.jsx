@@ -39,6 +39,30 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
     });
   };
 
+  // Unidad de VENTA por pack (migration 189/190) — mismo patrón que compra.
+  const ventaUnit = unidadesMedida.find(u => u.id === data.unidad_venta_id) || null;
+  const autoFactorVenta = factorEntreUnidades(ventaUnit, stockUnit); // 1 venta = autoFactorVenta stock
+  const mismaMagnitudVenta = sonConvertibles(ventaUnit, stockUnit);
+  const handleUnidadVentaChange = (val) => {
+    const newId = val || null;
+    const nextVenta = unidadesMedida.find(u => u.id === newId) || null;
+    const factor = factorEntreUnidades(nextVenta, stockUnit);
+    setData({
+      ...data,
+      unidad_venta_id: newId,
+      ...(factor != null ? { factor_conversion_venta: String(factor) } : {}),
+    });
+  };
+  // Preview del precio del pack: fijo si está cargado, si no proporcional (factor × precio unit).
+  const factorVentaNum = parseFloat(String(data.factor_conversion_venta ?? '').replace(',', '.'));
+  const precioUnitNum = parseFloat(String(data.precio_venta ?? '').replace(',', '.'));
+  const precioPackFijo = parseFloat(String(data.precio_venta_pack ?? '').replace(',', '.'));
+  const descPackNum = parseFloat(String(data.descuento_pack_pct ?? '').replace(',', '.')) || 0;
+  const precioPackBase = Number.isFinite(precioPackFijo) && precioPackFijo > 0
+    ? precioPackFijo
+    : (Number.isFinite(precioUnitNum) && Number.isFinite(factorVentaNum) ? precioUnitNum * factorVentaNum : NaN);
+  const precioPackFinal = Number.isFinite(precioPackBase) ? precioPackBase * (1 - descPackNum / 100) : NaN;
+
   return (
   <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
     <div className="space-y-2">
@@ -232,6 +256,90 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
           </p>
         )}
       </div>
+    )}
+
+    {/* Unidad de VENTA por pack (roadmap SAP, mig.189/190) — opcional. Si no se
+        configura, la venta sigue en la unidad de stock, sin cambios. */}
+    <div className="space-y-2">
+      <Label htmlFor="unidad_venta">Unidad de Venta / Pack (opcional)</Label>
+      <select
+        id="unidad_venta"
+        value={data.unidad_venta_id || ''}
+        onChange={e => handleUnidadVentaChange(e.target.value)}
+        className="w-full h-10 px-3 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-bg dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="">Igual que la unidad de stock</option>
+        {unidadesMedida.map(u => (
+          <option key={u.id} value={u.id}>{u.codigo} — {u.descripcion}</option>
+        ))}
+      </select>
+      <p className="text-xs text-kx-text-3">
+        Elegí esto si vendés en una unidad/pack distinta a la de stock (ej: stockeás por Unidad, vendés por Six-pack).
+      </p>
+    </div>
+    {data.unidad_venta_id && (
+      <div className="space-y-2">
+        <Label htmlFor="factor_conversion_venta">Factor de conversión</Label>
+        <Input
+          id="factor_conversion_venta"
+          type="text"
+          inputMode="decimal"
+          placeholder="6"
+          value={data.factor_conversion_venta ?? ''}
+          onChange={e => setData({ ...data, factor_conversion_venta: e.target.value })}
+          className="bg-kx-surface dark:bg-kx-bg"
+        />
+        {mismaMagnitudVenta && autoFactorVenta != null ? (
+          <p className="text-xs text-blue-600 dark:text-blue-400">
+            Autocompletado: 1 {ventaUnit?.codigo} = {Number(autoFactorVenta).toLocaleString('es-AR', { maximumFractionDigits: 6 })} {stockUnit?.codigo}
+            {' '}(misma magnitud: {getMagnitudLabel(ventaUnit?.magnitud)}). Ajustá si tu pack difiere.
+          </p>
+        ) : (
+          <p className="text-xs text-kx-text-3">
+            1 pack = cuántas unidades de stock. Ej: 1 Six-pack = 6 Unidades → poné 6.
+          </p>
+        )}
+      </div>
+    )}
+    {data.unidad_venta_id && (
+      <>
+        <div className="space-y-2">
+          <Label htmlFor="precio_venta_pack">Precio del pack ($) — opcional</Label>
+          <Input
+            id="precio_venta_pack"
+            type="text"
+            inputMode="decimal"
+            placeholder="dejalo vacío = proporcional"
+            value={data.precio_venta_pack ?? ''}
+            onChange={e => setData({ ...data, precio_venta_pack: e.target.value })}
+            className="bg-kx-surface dark:bg-kx-bg"
+          />
+          <p className="text-xs text-kx-text-3">
+            Precio fijo del pack. Si lo dejás vacío, se calcula proporcional (factor × precio unitario).
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="descuento_pack_pct">Descuento fijo del pack (%) — opcional</Label>
+          <Input
+            id="descuento_pack_pct"
+            type="text"
+            inputMode="decimal"
+            placeholder="0"
+            value={data.descuento_pack_pct ?? ''}
+            onChange={e => setData({ ...data, descuento_pack_pct: e.target.value })}
+            className="bg-kx-surface dark:bg-kx-bg"
+          />
+          <p className="text-xs text-kx-text-3">
+            Se aplica automático al vender por pack (encima del precio). El vendedor puede sumar un descuento manual en el momento.
+          </p>
+          {Number.isFinite(precioPackFinal) && (
+            <p className="text-xs text-blue-600 dark:text-blue-400">
+              Precio final del pack: ${precioPackFinal.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {descPackNum > 0 && Number.isFinite(precioPackBase) ? ` (${descPackNum}% off de $${precioPackBase.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})` : ''}
+            </p>
+          )}
+        </div>
+      </>
     )}
 
     <div className="col-span-1 md:col-span-2 space-y-2">

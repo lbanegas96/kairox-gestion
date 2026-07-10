@@ -254,18 +254,23 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((item, i) => (
+                    {items.map((item, i) => {
+                      const isPack = !!item._packMode;
+                      const displayCant = isPack ? `${item._packs} ${item.unidad_venta?.codigo || 'pack'}` : item.cantidad;
+                      const displayPunit = isPack && item._packs ? item.subtotal / item._packs : item.precio_unitario;
+                      return (
                       <tr key={i}>
                         <td className="py-1 truncate max-w-[120px]">{item.producto_nombre}</td>
-                        <td className="text-center py-1">{item.cantidad}</td>
+                        <td className="text-center py-1">{displayCant}</td>
                         <td className="text-right py-1 price-col">
-                          {simbolo}{fmt(conv(item.precio_unitario))}
+                          {simbolo}{fmt(conv(displayPunit))}
                         </td>
                         <td className="text-right py-1 font-bold price-col">
                           {simbolo}{fmt(conv(item.subtotal))}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
 

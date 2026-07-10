@@ -75,7 +75,7 @@ function PanelProductos({ onAgregarAlCarrito }) {
     try {
       let query = supabase
         .from('productos')
-        .select('id, nombre, codigo_sku, precio_venta, stock_actual, stock_minimo, alicuota_iva')
+        .select('id, nombre, codigo_sku, precio_venta, stock_actual, stock_minimo, alicuota_iva, unidad_venta_id, factor_conversion_venta, precio_venta_pack, descuento_pack_pct, unidad_venta:unidades_medida!unidad_venta_id(codigo, descripcion)')
         .eq('empresa_id', user.empresa_id)
         .eq('activo', true)
         .order('nombre')
@@ -138,7 +138,7 @@ function PanelProductos({ onAgregarAlCarrito }) {
 
     const { data: producto } = await supabase
       .from('productos')
-      .select('*')
+      .select('*, unidad_venta:unidades_medida!unidad_venta_id(codigo, descripcion)')
       .eq('empresa_id', user.empresa_id)
       .eq('codigo_barras', code)
       .eq('activo', true)

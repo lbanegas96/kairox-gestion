@@ -93,12 +93,15 @@ function TicketPrint({ venta, items = [], empresa = {}, formato = '80mm', oferta
               const punit = getPunit(it);
               const sub = cant * punit;
               const oferta = ofertasCarrito[it.id];
+              const isPack = !!it._packMode;
+              const displayCant = isPack ? `${it._packs} ${it.unidad_venta?.codigo || 'pack'}` : cant;
+              const displayPunit = isPack && it._packs ? sub / it._packs : punit;
               return (
                 <React.Fragment key={idx}>
-                  <div className="grid grid-cols-[3ch_1fr_9ch_9ch] gap-1">
-                    <span>{cant}</span>
+                  <div className="grid grid-cols-[5ch_1fr_9ch_9ch] gap-1">
+                    <span>{displayCant}</span>
                     <span className="break-words">{it.nombre || it.descripcion}</span>
-                    <span className="text-right">${formatARS(punit)}</span>
+                    <span className="text-right">${formatARS(displayPunit)}</span>
                     <span className="text-right">${formatARS(sub)}</span>
                   </div>
                   {oferta && (
@@ -126,12 +129,15 @@ function TicketPrint({ venta, items = [], empresa = {}, formato = '80mm', oferta
                 const punit = getPunit(it);
                 const sub = cant * punit;
                 const oferta = ofertasCarrito[it.id];
+                const isPack = !!it._packMode;
+                const displayCant = isPack ? `${it._packs} ${it.unidad_venta?.codigo || 'pack'}` : cant;
+                const displayPunit = isPack && it._packs ? sub / it._packs : punit;
                 return (
                   <React.Fragment key={idx}>
                     <tr className="border-b border-gray-300">
-                      <td className="py-1">{cant}</td>
+                      <td className="py-1">{displayCant}</td>
                       <td className="py-1">{it.nombre || it.descripcion}</td>
-                      <td className="py-1 text-right">${formatARS(punit)}</td>
+                      <td className="py-1 text-right">${formatARS(displayPunit)}</td>
                       <td className="py-1 text-right">${formatARS(sub)}</td>
                     </tr>
                     {oferta && (

@@ -1,5 +1,76 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-10 (sesión 59 — conversión general de unidades de medida: magnitud + factor a unidad base, migration 188)
+**Última actualización:** 2026-07-10 (sesión 59 — venta por pack / unidad de venta (3er eslabón SAP) + alícuota IIBB de prueba + conversión general de unidades)
+
+## ✅ Venta por pack / unidad de venta separada (3er eslabón SAP, migrations 189/190, sesión 59)
+
+Cierre del ítem que quedó en el roadmap desde mig.186: el modelo de unidades de SAP tiene 3 eslabones
+(inventario / compra / VENTA). Ya estaban inventario (`unidad_medida_id`) y compra (mig.186); faltaba
+**vender en una unidad/pack distinta a la de stock** (ej: stockeás por Unidad, vendés por Six-pack/Docena).
+
+**Modelo de precio (confirmado con el usuario, estilo SAP):**
+- `productos.unidad_venta_id` + `factor_conversion_venta` (autocompletado por magnitud, como compra).
+- `precio_venta_pack` (nullable): precio FIJO del pack; si es NULL → proporcional (factor × precio unit).
+- `descuento_pack_pct`: descuento fijo que se aplica AUTOMÁTICO al vender por pack, encima del precio.
+- El descuento manual del vendedor (ya existente, `descuento_manual_pct`) se aplica APARTE, en el momento.
+
+**mig.189** (aditiva): las 4 columnas en `productos` + 3 en `comprobante_items` (`unidad_venta_id`,
+`cantidad_venta`, `precio_unidad_venta`) que guardan CÓMO mostrar el pack. **mig.190**: `crear_venta`
+(copia fiel de la función viva + los 3 campos) guarda la representación del pack — la plata, el stock,
+el IVA, las entregas, la caja y la CC NO cambian de fórmula: el frontend sigue mandando `cantidad` en
+unidad BASE (= cantidad_venta × factor), `subtotal` y `precio_unitario` por unidad base igual que hoy.
+
+**IMPACTO AFIP (verificado en `_shared/wsfe.ts`):** el payload de FECAESolicitar manda SOLO totales
+(ImpTotal/ImpNeto/ImpIVA/nro), NO líneas — mostrar el pack en el comprobante impreso NO cambia lo que
+se envía a AFIP ni afecta el CAE. Las columnas nuevas de `comprobante_items` son solo display.
+
+**Frontend — TODAS las pantallas de venta:**
+- `ProductForm.jsx` / `ProductosSection.jsx`: config de venta por pack en la ficha (con preview del
+  precio final del pack en vivo).
+- **POS Modo Caja** (`caja/ModoCajaLayout` + `PanelCarrito` + `PanelProductos` + `useConfirmarVenta`):
+  toggle "Vender por Docena (x12)" por línea + input de packs (muestra "= N u") + badge.
+- **POS NuevaVentaModal** (`ventas/NuevaVentaModal` + `nueva-venta/PanelCarrito`): mismo toggle/UI.
+- Impresos: `caja/TicketPrint` (80mm + A4) y `ventas/ComprobantePrintModal` muestran "N Docena × $pack".
+- Helper compartido `precioPackFinal()` en `unidadesMedida.js` (usado por ambos POS, sin duplicar).
+
+**EXCLUIDO (con criterio, mismo que compra en mig.186):** `NuevaFacturaModal.jsx` es factura
+FINANCIERA — la propia UI dice "no afecta el inventario" —, no mueve stock ni es un POS de venta por
+pack. La conversión solo aplica donde se mueve stock (los 2 POS).
+
+**Validado:** `crear_venta` con venta por pack en `BEGIN...ROLLBACK` (3 Docenas → 36 de stock, plata
+exacta, pack guardado). Config de producto probada en UI real (Jamón, guardó + verificado en DB).
+POS Modo Caja probado en vivo: 1 Docena → 12 u, precio $75/u, pack $900 (=$1000 −10%), subtotal/total
+$900 exactos — sin confirmar la venta (sin mover stock real). Jamón revertido: 0 productos con pack en
+prod (feature 100% gateada por `unidad_venta_id`). `npx vite build` exit 0.
+
+**Pendiente menor (documentado, no bloqueante):** los listados HISTÓRICOS de ítems (ClientDetailModal,
+reimpresión desde historial) leen `comprobante_items` y muestran la cantidad en unidad BASE (correcto,
+es el stock real) — no la representación de pack. El impreso del momento de la venta sí la muestra.
+
+## ✅ Alícuota IIBB de prueba cargada para validar el cálculo (sesión 59, 2026-07-10)
+
+## ✅ Alícuota IIBB de prueba cargada para validar el cálculo (sesión 59, 2026-07-10)
+
+Aclaración del usuario: la jurisdicción "Buenos Aires" de Nalux (corregida en sesión 58 pensando que
+era la real) **no es fiscal real** — Nalux no tiene confirmado tributar ahí. Todo el campo viene
+siendo dato de prueba desde sesión 55 (arrancó en "Córdoba", dato de test de Luciano para validar el
+guard de la liquidación). Por eso NO se cargó una alícuota real buscada en AGIP/ARBA — sería fabricar
+un número fiscal para una empresa que quizás no tributa en esa jurisdicción, con riesgo real si algún
+día se usa para liquidar de verdad.
+
+**Se cargó una fila de prueba** en `alicuotas_impuestos` (IIBB, Buenos Aires, 3,00%) con
+`concepto = 'TEST — NO es la alícuota real de Nalux'` y `observaciones` explicando el motivo —
+solo para poder ejercer `generar_liquidacion_iibb`/`confirmar_liquidacion_iibb` end-to-end.
+
+**Validado con `BEGIN...ROLLBACK`** (impersonando admin real de Nalux): período julio 2026 →
+base imponible $504.691,15 (ventas reales del período), alícuota 3%, monto IIBB $15.140,73. El guard
+de mig.176 (antes bloqueaba con "Falta la alícuota") ya no bloquea; la matemática cierra. No se
+confirmó ninguna liquidación real — todo quedó en rollback, sin persistir.
+
+**Antes de usar la liquidación de IIBB en producción real:** hay que (a) confirmar la jurisdicción
+real de Nalux (o si no tributa IIBB, dejar el módulo sin usar) y (b) reemplazar/desactivar esta fila
+de prueba por la alícuota real de esa jurisdicción + actividad. Ya existía además otra fila de prueba
+vieja ("Córdoba", IIBB 3%, sesión 55) — ambas quedan marcadas como TEST, ninguna es apta para
+liquidar de verdad.
 
 ## ✅ Conversión general entre unidades de medida (magnitud + factor base, migration 188, sesión 59)
 

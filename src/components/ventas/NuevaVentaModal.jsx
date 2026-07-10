@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { getNowAR, getTodayAR } from '@/lib/dateUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
+import { precioPackFinal } from '@/lib/unidadesMedida';
 import ComprobantePrintModal from './ComprobantePrintModal';
 import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
@@ -199,7 +200,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     searchDebounceRef.current = setTimeout(async () => {
       let query = supabase
         .from('productos')
-        .select('id, nombre, codigo_sku, precio_venta, stock_actual, activo, unidad_medida, alicuota_iva')
+        .select('id, nombre, codigo_sku, precio_venta, stock_actual, activo, unidad_medida, alicuota_iva, unidad_venta_id, factor_conversion_venta, precio_venta_pack, descuento_pack_pct, unidad_venta:unidades_medida!unidad_venta_id(codigo, descripcion)')
         .eq('empresa_id', user.empresa_id)
         .eq('activo', true)
         .order('nombre')
@@ -330,7 +331,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         }
         return prev.map(item => item.id === product.id ? { ...item, cantidad: item.cantidad + qty } : item);
       }
-      return [...prev, { ...product, precio_venta: precioFinal, _precioLista: esPrecioLista, cantidad: qty }];
+      return [...prev, { ...product, precio_venta: precioFinal, _precioUnitOriginal: precioFinal, _precioLista: esPrecioLista, cantidad: qty }];
     });
     setProductSearch('');
     setShowProductDropdown(false);
@@ -340,6 +341,47 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   };
 
   const removeFromCart = (productId) => setCart(prev => prev.filter(item => item.id !== productId));
+
+  // ── Venta por pack (mig.189/190) ────────────────────────────────────────────
+  // Precio final del pack: fijo (precio_venta_pack) o proporcional (unit × factor),
+  // con el descuento fijo del pack aplicado. El vendedor puede sumar descuento manual aparte.
+  const packPrecioFinal = (item) => precioPackFinal(item, item._precioUnitOriginal ?? item.precio_venta);
+
+  const togglePackMode = (productId) => {
+    setCart(prev => prev.map(item => {
+      if (item.id !== productId) return item;
+      if (item._packMode) {
+        return { ...item, _packMode: false, cantidad: 1, precio_venta: item._precioUnitOriginal ?? item.precio_venta };
+      }
+      const factor = Number(item.factor_conversion_venta) || 1;
+      const packFinal = packPrecioFinal(item);
+      const product = products.find(p => p.id === productId);
+      if (product && product.stock_actual < factor) {
+        toast({ title: 'Stock insuficiente', description: `No alcanza para 1 ${item.unidad_venta?.descripcion || 'pack'} (= ${factor} ${item.unidad_medida || 'u'}).`, variant: 'destructive' });
+        return item;
+      }
+      return {
+        ...item, _packMode: true, _packs: 1, _precioUnidadVenta: packFinal,
+        cantidad: factor, precio_venta: packFinal / factor,
+      };
+    }));
+  };
+
+  const updatePacks = (productId, nPacks) => {
+    const packs = parseInt(nPacks);
+    if (isNaN(packs) || packs < 1) return;
+    setCart(prev => prev.map(item => {
+      if (item.id !== productId || !item._packMode) return item;
+      const factor = Number(item.factor_conversion_venta) || 1;
+      const baseQty = packs * factor;
+      const product = products.find(p => p.id === productId);
+      if (product && product.stock_actual < baseQty) {
+        toast({ title: 'Stock insuficiente', description: `Solo hay ${product.stock_actual} ${item.unidad_medida || 'u'} (≈ ${Math.floor(product.stock_actual / factor)} ${item.unidad_venta?.codigo || 'packs'}).`, variant: 'destructive' });
+        return item;
+      }
+      return { ...item, _packs: packs, cantidad: baseQty };
+    }));
+  };
 
   const updateQuantity = (productId, newQty) => {
     const qty = parseInt(newQty);
@@ -483,6 +525,10 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         precio_unitario: item.precio_venta,
         subtotal:        item.precio_venta * item.cantidad,
         alicuota_iva:    item.alicuota_iva ?? '21',  // snapshot de la alícuota del producto
+        // Venta por pack (mig.190) — solo se manda si la línea está en modo pack.
+        unidad_venta_id:     item._packMode ? item.unidad_venta_id : '',
+        cantidad_venta:      item._packMode ? item._packs : '',
+        precio_unidad_venta: item._packMode ? item._precioUnidadVenta : '',
       }));
 
       // Pagos para la RPC (monto_paralelo calculado por pago).
@@ -589,7 +635,10 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
 
       toast({ title: "¡Venta Exitosa!", description: `Comprobante ${saleNumber} generado.` });
       setLastComprobante(comprobante);
-      setLastItems(cart.map(i => ({ producto_nombre: i.nombre, cantidad: i.cantidad, precio_unitario: i.precio_venta, subtotal: i.precio_venta * i.cantidad })));
+      setLastItems(cart.map(i => ({
+        producto_nombre: i.nombre, cantidad: i.cantidad, precio_unitario: i.precio_venta, subtotal: i.precio_venta * i.cantidad,
+        _packMode: i._packMode, _packs: i._packs, _precioUnidadVenta: i._precioUnidadVenta, unidad_venta: i.unidad_venta,
+      })));
       setLastPagos(pagosFinales);
       setShowPrintModal(true);
       if (onSaleSuccess) onSaleSuccess();
@@ -626,6 +675,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
               showProductDropdown={showProductDropdown} setShowProductDropdown={setShowProductDropdown}
               filteredProducts={filteredProducts} handleAddToCart={handleAddToCart}
               cart={cart} updateQuantity={updateQuantity} removeFromCart={removeFromCart}
+              togglePackMode={togglePackMode} updatePacks={updatePacks}
             />
 
             <PanelPago

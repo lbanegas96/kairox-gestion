@@ -9,6 +9,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { parseNumberLocale } from '@/lib/currencyUtils';
+import { precioPackFinal } from '@/lib/unidadesMedida';
 import PanelProductos from './PanelProductos';
 import PanelCarrito from './PanelCarrito';
 import HistorialTurnoModal from './HistorialTurnoModal';
@@ -153,8 +154,40 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
         }
         return prev.map(i => i.id === producto.id ? { ...i, cantidad: i.cantidad + 1 } : i);
       }
-      return [...prev, { ...producto, cantidad: 1 }];
+      return [...prev, { ...producto, cantidad: 1, _precioUnitOriginal: producto.precio_venta }];
     });
+  };
+
+  // ── Venta por pack (mig.189/190) ────────────────────────────────────────────
+  const togglePackMode = (id) => {
+    setCarrito(prev => prev.map(item => {
+      if (item.id !== id) return item;
+      if (item._packMode) {
+        return { ...item, _packMode: false, cantidad: 1, precio_venta: item._precioUnitOriginal ?? item.precio_venta };
+      }
+      const factor = Number(item.factor_conversion_venta) || 1;
+      if (item.stock_actual < factor) {
+        toast({ title: 'Stock insuficiente', description: `No alcanza para 1 ${item.unidad_venta?.descripcion || 'pack'} (= ${factor} u).`, variant: 'destructive' });
+        return item;
+      }
+      const packFinal = precioPackFinal(item, item._precioUnitOriginal ?? item.precio_venta);
+      return { ...item, _packMode: true, _packs: 1, _precioUnidadVenta: packFinal, cantidad: factor, precio_venta: packFinal / factor };
+    }));
+  };
+
+  const updatePacks = (id, nPacks) => {
+    const packs = parseInt(nPacks);
+    if (isNaN(packs) || packs < 1) return;
+    setCarrito(prev => prev.map(item => {
+      if (item.id !== id || !item._packMode) return item;
+      const factor = Number(item.factor_conversion_venta) || 1;
+      const baseQty = packs * factor;
+      if (item.stock_actual < baseQty) {
+        toast({ title: 'Stock insuficiente', description: `Solo hay ${item.stock_actual} u (≈ ${Math.floor(item.stock_actual / factor)} ${item.unidad_venta?.codigo || 'packs'}).`, variant: 'destructive' });
+        return item;
+      }
+      return { ...item, _packs: packs, cantidad: baseQty };
+    }));
   };
 
   const handleAbrirCaja = async () => {
@@ -283,6 +316,8 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
           <PanelCarrito
             carrito={carrito}
             onModificarCarrito={setCarrito}
+            onTogglePack={togglePackMode}
+            onUpdatePacks={updatePacks}
             ofertasCarrito={ofertasCarrito}
             descuentosManuales={descuentosManuales}
             onDescuentoManualChange={(productoId, pct) =>

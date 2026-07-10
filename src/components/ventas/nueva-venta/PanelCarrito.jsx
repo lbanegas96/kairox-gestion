@@ -1,4 +1,4 @@
-import { Search, Trash2, Package } from 'lucide-react';
+import { Search, Trash2, Package, Boxes } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -8,6 +8,7 @@ function PanelCarrito({
   showProductDropdown, setShowProductDropdown,
   filteredProducts, handleAddToCart,
   cart, updateQuantity, removeFromCart,
+  togglePackMode, updatePacks,
 }) {
   return (
     <div className="flex-1 flex flex-col min-h-0 border-r border-slate-200 dark:border-slate-800">
@@ -44,13 +45,43 @@ function PanelCarrito({
                   <td className="py-3 pl-2">
                     <div className="font-medium">{item.nombre}</div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-slate-400">${item.precio_venta}</span>
+                      <span className="text-xs text-slate-400">
+                        ${Number(item.precio_venta).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {item._packMode && item.unidad_venta && (
+                          <span className="text-slate-400"> /u · ${Number(item._precioUnidadVenta).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/{item.unidad_venta.codigo}</span>
+                        )}
+                      </span>
                       {item._precioLista && (
                         <span className="text-[9px] font-bold bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 px-1 py-0.5 rounded">LISTA</span>
                       )}
+                      {item._packMode && (
+                        <span className="text-[9px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 px-1 py-0.5 rounded">PACK</span>
+                      )}
                     </div>
+                    {/* Toggle venta por pack — solo si el producto tiene unidad de venta configurada */}
+                    {item.unidad_venta_id && togglePackMode && (
+                      <button
+                        type="button"
+                        onClick={() => togglePackMode(item.id)}
+                        className={`mt-1 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded border transition-colors ${item._packMode ? 'border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20' : 'border-slate-300 dark:border-slate-600 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                      >
+                        <Boxes className="h-3 w-3" />
+                        {item._packMode
+                          ? `Vendiendo por ${item.unidad_venta?.descripcion || 'pack'} (x${item.factor_conversion_venta}) — volver a unidad`
+                          : `Vender por ${item.unidad_venta?.descripcion || 'pack'} (x${item.factor_conversion_venta})`}
+                      </button>
+                    )}
                   </td>
-                  <td className="py-3 text-center"><Input type="number" value={item.cantidad} onChange={(e) => updateQuantity(item.id, e.target.value)} className="h-8 w-16 text-center mx-auto dark:bg-slate-800 dark:border-slate-700" /></td>
+                  <td className="py-3 text-center">
+                    {item._packMode ? (
+                      <div className="flex flex-col items-center gap-0.5">
+                        <Input type="number" min="1" value={item._packs} onChange={(e) => updatePacks(item.id, e.target.value)} className="h-8 w-16 text-center mx-auto dark:bg-slate-800 dark:border-slate-700" />
+                        <span className="text-[10px] text-slate-400">= {item.cantidad} {item.unidad_medida || 'u'}</span>
+                      </div>
+                    ) : (
+                      <Input type="number" value={item.cantidad} onChange={(e) => updateQuantity(item.id, e.target.value)} className="h-8 w-16 text-center mx-auto dark:bg-slate-800 dark:border-slate-700" />
+                    )}
+                  </td>
                   <td className="py-3 text-right font-bold">${(item.precio_venta * item.cantidad).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="py-3 text-right pr-2"><Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => removeFromCart(item.id)}><Trash2 className="h-4 w-4" /></Button></td>
                 </tr>

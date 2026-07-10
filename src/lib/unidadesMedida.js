@@ -77,3 +77,17 @@ export const convertirCantidad = (cantidad, desde, hacia) => {
   if (factor == null) return null;
   return Number(cantidad) * factor;
 };
+
+// ─── Venta por pack (migration 189/190) ─────────────────────────────────────
+// Precio final de 1 pack a partir de la config del producto + el precio unitario base:
+//   - precio_venta_pack fijo (si > 0) → precio independiente del pack
+//   - si no → proporcional: precioUnitBase × factor
+//   - descuento_pack_pct (%) se aplica automático encima de cualquiera de los dos.
+// El descuento manual del vendedor se aplica APARTE, en el flujo de venta.
+export const precioPackFinal = (prod, precioUnitBase) => {
+  const factor = Number(prod?.factor_conversion_venta) || 1;
+  const fijo = Number(prod?.precio_venta_pack);
+  const base = (Number.isFinite(fijo) && fijo > 0) ? fijo : (Number(precioUnitBase) * factor);
+  const desc = Number(prod?.descuento_pack_pct) || 0;
+  return base * (1 - desc / 100);
+};
