@@ -1,5 +1,17 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-10 (sesión 58 Nadia — hardening tenant centro_costo_id + conversor de unidad de compra en OC → Recepción)
+**Última actualización:** 2026-07-10 (sesión 58 Nadia — hardening tenant centro_costo_id + conversor unidad de compra en OC → Recepción + corrección jurisdicción IIBB Nalux)
+
+## ✅ Jurisdicción IIBB de Nalux corregida a Buenos Aires (sesión 58)
+
+Pendiente arrastrado desde la sesión 55 (había quedado en "Córdoba", dato de prueba de Luciano para
+validar el guard end-to-end de la liquidación IIBB). Nadia confirmó que la jurisdicción real de Nalux
+es **Buenos Aires** — corregido desde la UI real (Impuestos → IIBB → Configuración de IIBB → Guardar),
+no por SQL directo. Verificado en la DB: `empresas.jurisdiccion_iibb = 'Buenos Aires'`.
+
+**Pendiente real para Luciano (bloqueante para liquidar IIBB en serio):** no hay ninguna alícuota
+cargada para "Buenos Aires" en Impuestos → Alícuotas — sin eso, `generar_liquidacion_iibb` va a
+rechazar con el guard de "falta alícuota". Cargar el % de IIBB real de Nalux para Buenos Aires antes
+de usar la liquidación.
 
 ## ✅ Roadmap SAP: factor de conversión de unidad de compra, ahora también en OC → Recepción (sesión 58)
 
@@ -179,7 +191,8 @@ Nadia revisó los pendientes del CONTEXT.md. Los ítems #1–#3 y #5 ya estaban 
 
 **Pendiente (no bloqueante):**
 - ~~Task #6: trigger de validación tenant en `centro_costo_id`~~ → cerrado en sesión 58 (migration 187).
-- Jurisdicción IIBB de Nalux: quedó `Córdoba` (dato de test de Luciano). Corregir desde Impuestos → IIBB.
+- ~~Jurisdicción IIBB de Nalux~~ → corregida a Buenos Aires en sesión 58 (ver arriba). Falta cargar la
+  alícuota de Buenos Aires en Impuestos → Alícuotas (para Luciano).
 
 **Última actualización:** 2026-07-09 (sesión 55 Luciano — CIERRE del plan de 4 frentes contables + toggle "Impuestos Avanzados" por empresa, migrations 170-173)
 
