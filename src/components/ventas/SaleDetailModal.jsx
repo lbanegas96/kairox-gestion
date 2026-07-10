@@ -55,7 +55,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
       // Fetch Items
       const { data: itemsData, error: itemsError } = await supabase
         .from('comprobante_items')
-        .select('*, productos(nombre)')
+        .select('*, productos(nombre), unidad_venta:unidades_medida!unidad_venta_id(codigo, descripcion)')
         .eq('comprobante_id', saleId);
       
       if (itemsError) throw itemsError;
@@ -300,14 +300,21 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {items.map((item, i) => (
+                    {items.map((item, i) => {
+                      // Venta por pack (mig.189/190): si el ítem se vendió por pack, mostrar
+                      // la cantidad/precio en la unidad de venta en vez de la unidad base.
+                      const isPack = !!item.unidad_venta_id;
+                      const displayCant = isPack ? `${item.cantidad_venta} ${item.unidad_venta?.codigo || 'pack'}` : item.cantidad;
+                      const displayPunit = isPack ? item.precio_unidad_venta : item.precio_unitario;
+                      return (
                       <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/20">
                         <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">{item.producto_nombre}</td>
-                        <td className="px-4 py-3 text-center text-kx-text-2 dark:text-kx-text-2">{item.cantidad}</td>
-                        <td className="px-4 py-3 text-right text-kx-text-2 dark:text-kx-text-2">${Number(item.precio_unitario).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="px-4 py-3 text-center text-kx-text-2 dark:text-kx-text-2">{displayCant}</td>
+                        <td className="px-4 py-3 text-right text-kx-text-2 dark:text-kx-text-2">${Number(displayPunit).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         <td className="px-4 py-3 text-right font-bold text-kx-text dark:text-kx-text">${Number(item.subtotal).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                   <tfoot className="bg-kx-surface-2 dark:bg-slate-900/50 border-t kairox-border font-bold">
                     <tr>

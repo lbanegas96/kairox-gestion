@@ -255,9 +255,16 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
                   </thead>
                   <tbody>
                     {items.map((item, i) => {
-                      const isPack = !!item._packMode;
-                      const displayCant = isPack ? `${item._packs} ${item.unidad_venta?.codigo || 'pack'}` : item.cantidad;
-                      const displayPunit = isPack && item._packs ? item.subtotal / item._packs : item.precio_unitario;
+                      // Venta por pack (mig.189/190): item._packMode viene del carrito en vivo
+                      // (venta recién confirmada); item.unidad_venta_id viene de comprobante_items
+                      // persistido (reimpresión desde el historial vía SaleDetailModal).
+                      const isPack = !!item._packMode || !!item.unidad_venta_id;
+                      const packs = item._packs ?? item.cantidad_venta;
+                      const packUnitCodigo = item.unidad_venta?.codigo || 'pack';
+                      const displayCant = isPack ? `${packs} ${packUnitCodigo}` : item.cantidad;
+                      const displayPunit = isPack
+                        ? (item._precioUnidadVenta ?? item.precio_unidad_venta ?? (packs ? item.subtotal / packs : item.precio_unitario))
+                        : item.precio_unitario;
                       return (
                       <tr key={i}>
                         <td className="py-1 truncate max-w-[120px]">{item.producto_nombre}</td>

@@ -42,9 +42,15 @@ POS Modo Caja probado en vivo: 1 Docena → 12 u, precio $75/u, pack $900 (=$100
 $900 exactos — sin confirmar la venta (sin mover stock real). Jamón revertido: 0 productos con pack en
 prod (feature 100% gateada por `unidad_venta_id`). `npx vite build` exit 0.
 
-**Pendiente menor (documentado, no bloqueante):** los listados HISTÓRICOS de ítems (ClientDetailModal,
-reimpresión desde historial) leen `comprobante_items` y muestran la cantidad en unidad BASE (correcto,
-es el stock real) — no la representación de pack. El impreso del momento de la venta sí la muestra.
+**Cierre del pendiente histórico (mismo día):** `SaleDetailModal.jsx` (detalle de venta desde el
+Historial) ahora hace el join `unidades_medida!unidad_venta_id(codigo, descripcion)` al leer
+`comprobante_items`, y tanto su tabla de ítems como la reimpresión (`ComprobantePrintModal`) muestran
+"N Docena × $pack" cuando el ítem se vendió por pack (detectado por `unidad_venta_id IS NOT NULL`
+persistido en DB, no solo por el `_packMode` de la venta en vivo). `ClientDetailModal` no necesitó
+cambios — solo lista comprobantes a nivel cabecera, sin ítems. Verificado en preview contra una venta
+real sin pack (regresión: sigue mostrando "1 × $8.000" igual que antes, en el detalle y en la
+reimpresión). No se pudo probar el caso CON pack en producción porque ningún producto de Nalux tiene
+`unidad_venta_id` configurado todavía (0 ventas históricas reales con pack existen aún).
 
 ## ✅ Alícuota IIBB de prueba cargada para validar el cálculo (sesión 59, 2026-07-10)
 
