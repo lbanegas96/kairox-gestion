@@ -694,6 +694,10 @@ stock realmente se mueve: **Compra Rápida** (implementado) y, como paso natural
 pasada — el usuario aprobó el alcance mencionando "compra/OC" pero se acotó a Compra Rápida por
 tiempo; queda documentado como próximo paso, no como bug).
 
+**Cierre (sesión 58, 2026-07-10):** conversor extendido a `GenerarMovimientoModal.jsx` (rama
+`recepcion`), validado en preview con una OC de prueba temporal (creada y borrada en la misma
+sesión) — ver detalle en CONTEXT.md.
+
 **Implementación:**
 - `productos.unidad_compra_id` (FK a `unidades_medida`, nullable) + `factor_conversion_compra`
   (numeric, default 1, `CHECK > 0`) — mig.186, aditiva pura.

@@ -1,5 +1,34 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-10 (sesión 58 Nadia — hardening: trigger tenant en centro_costo_id, migration 187)
+**Última actualización:** 2026-07-10 (sesión 58 Nadia — hardening tenant centro_costo_id + conversor de unidad de compra en OC → Recepción)
+
+## ✅ Roadmap SAP: factor de conversión de unidad de compra, ahora también en OC → Recepción (sesión 58)
+
+Cierre del "próximo paso" que Luciano dejó documentado en la sesión 57 (mig.186): el mini-conversor de
+unidad de compra (Caja/Docena/etc. → unidad de stock) solo estaba en Compra Rápida. `OC → Recepción`
+mueve stock con el mismo mecanismo (`fn_oc_update_stock`, vía RPC `crear_recepcion`) pero no tenía el
+conversor.
+
+**Implementación:** el formulario de Recepción es el modal compartido `GenerarMovimientoModal.jsx`
+(usado también por "Entrega" de Pedidos vía un `CONFIG` por `tipo`). Se extendió solo la rama
+`recepcion`:
+- `fetchEntidad` ahora trae `unidad_compra_id`, `factor_conversion_compra` y la descripción de la
+  unidad de compra (`unidades_medida!unidad_compra_id`) por producto.
+- Estado `packQtys` (uno por ítem) + `applyPackConversion(item)`: mismo cálculo que
+  `CompraRapidaSection.jsx` (`packQty × factor → cantidad`), reutilizando el `setCantidad` existente
+  (que ya clampea contra `pendiente`) — no se tocó `crear_recepcion` ni el submit.
+- El mini-conversor solo se renderiza si `it.unidad_compra_id` existe; en la rama `entrega` (Pedidos)
+  ese campo nunca se selecciona, así que el conversor no puede aparecer ahí — sin necesidad de un
+  chequeo explícito de `tipo`.
+
+**Validado en preview con datos reales de Nalux:** se creó una OC de prueba temporal
+(`OC-TEST-CONVERSOR`, proveedor Alibaba, "Batidora Eléctrica" x24 pendientes — mismo producto
+configurado en la sesión 57 con Unidad de Compra=Caja, factor=12) para poder ejercer el flujo real
+de Recepción (no había ninguna OC real con este producto aún pendiente). Casos probados: "2 Cajas" →
+convierte a 24 (exacto); cambiar "A recibir" a 5 y volver a convertir restaura 24; "3 Cajas" (36
+unidades, excede el pendiente de 24) clampea correctamente a 24. Se canceló el modal sin confirmar
+(sin generar movimiento de stock real) y se borró la OC de prueba de la DB al terminar. Regresión: OCs
+reales sin pendientes (`OC-00012`, `OC-00010`) siguen mostrando "Todos los ítems ya fueron recibidos"
+igual que antes. Sin errores de consola. `npx vite build` exit 0.
 
 ## ✅ Hardening: trigger de validación tenant en `centro_costo_id` (migration 187, sesión 58)
 

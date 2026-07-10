@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 
 // Config por tipo — única fuente de las diferencias de negocio entre
 // "Entrega" (ventas, sobre un Pedido) y "Recepción" (compras, sobre una OC).
@@ -62,7 +63,8 @@ const CONFIG = {
         .from('ordenes_compra')
         .select(`
           id, numero,
-          ordenes_compra_items(id, producto_id, descripcion, cantidad_pedida, cantidad_recibida, productos(nombre))
+          ordenes_compra_items(id, producto_id, descripcion, cantidad_pedida, cantidad_recibida,
+            productos(nombre, unidad_compra_id, factor_conversion_compra, unidad_compra:unidades_medida!unidad_compra_id(descripcion)))
         `)
         .eq('id', id)
         .eq('empresa_id', empresaId)
@@ -76,6 +78,9 @@ const CONFIG = {
           nombre: it.productos?.nombre || it.descripcion,
           pedida: Number(it.cantidad_pedida) || 0,
           hecha: Number(it.cantidad_recibida) || 0,
+          unidad_compra_id: it.productos?.unidad_compra_id || null,
+          factor_conversion_compra: Number(it.productos?.factor_conversion_compra) || 1,
+          unidad_compra_descripcion: it.productos?.unidad_compra?.descripcion || null,
         })),
       };
     },
@@ -99,6 +104,10 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
   const [loadingEntidad, setLoadingEntidad] = useState(false);
   const [entidad, setEntidad] = useState(null);
   const [cantidades, setCantidades] = useState({});
+  // Campo temporal del conversor de unidad de compra (Caja/Docena/etc., mismo
+  // patrón que CompraRapidaSection/TabNuevaCompra) — solo pre-carga `cantidades`,
+  // no se envía al backend.
+  const [packQtys, setPackQtys] = useState({});
 
   const isOpen = !!sourceId;
 
@@ -111,6 +120,7 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
         const init = {};
         data.items.forEach(it => { init[it.id] = Math.max(0, it.pedida - it.hecha); });
         setCantidades(init);
+        setPackQtys({});
       })
       .finally(() => setLoadingEntidad(false));
   }, [sourceId, user?.empresa_id, tipo]);
@@ -128,6 +138,19 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
   const setCantidad = (itemId, val, pendiente) => {
     const num = Math.max(0, Math.min(pendiente, Number(val) || 0));
     setCantidades(prev => ({ ...prev, [itemId]: num }));
+  };
+
+  const setPackQty = (itemId, val) => {
+    setPackQtys(prev => ({ ...prev, [itemId]: val }));
+  };
+
+  // Convierte "3 Cajas" -> cantidad=36 (unidad de stock) usando el factor de
+  // conversión configurado en el producto (mismo cálculo que Compra Rápida).
+  const applyPackConversion = (item) => {
+    const factor = Number(item.factor_conversion_compra) || 1;
+    const packQty = parseNumberLocale(packQtys[item.id]);
+    if (!packQty || packQty <= 0) return;
+    setCantidad(item.id, packQty * factor, item.pendiente);
   };
 
   const handleConfirm = async () => {
@@ -204,9 +227,34 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
 
             {itemsConPendiente.map(it => (
               <div key={it.id} className="grid grid-cols-12 gap-2 items-center py-2 border-b border-kx-border last:border-0">
-                <div className="col-span-5 flex items-center gap-2 text-sm text-kx-text">
-                  <Package className="h-3.5 w-3.5 text-kx-text-3 shrink-0" />
-                  <span className="truncate">{it.nombre}</span>
+                <div className="col-span-5 flex flex-col gap-1 text-sm text-kx-text">
+                  <div className="flex items-center gap-2">
+                    <Package className="h-3.5 w-3.5 text-kx-text-3 shrink-0" />
+                    <span className="truncate">{it.nombre}</span>
+                  </div>
+                  {it.unidad_compra_id && (
+                    <div className="flex items-center gap-1 text-[11px] text-kx-text-3 pl-5">
+                      <span>o en {it.unidad_compra_descripcion || 'unidad de compra'} (x{it.factor_conversion_compra}):</span>
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="cant."
+                        value={packQtys[it.id] ?? ''}
+                        onChange={e => setPackQty(it.id, e.target.value)}
+                        className="w-14 h-6 text-[11px] px-1.5 dark:bg-kx-surface-2 dark:border-kx-border dark:text-kx-text"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => applyPackConversion(it)}
+                        className="h-6 px-1.5 text-[11px]"
+                        title="Convertir a unidad de stock"
+                      >
+                        ↧
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 <div className="col-span-2 text-center text-sm text-kx-text-2">{it.pedida}</div>
                 <div className="col-span-2 text-center text-sm text-kx-text-2">{it.hecha}</div>
