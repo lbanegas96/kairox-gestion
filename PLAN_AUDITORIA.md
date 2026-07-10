@@ -173,13 +173,16 @@ La matemática de FX ya se auditó a fondo como parte del área #1 (vive en las 
   `COALESCE(..., tc_origen)` — sin riesgo de división por cero ni de romper el flujo).
 - `crear_venta` persiste `monto_moneda_original` con `ROUND(...,2)` server-side; el cálculo
   client-side (`totalARS / tipoCambioTasa` en `NuevaVentaModal.jsx`) es correcto.
-- 🟢 **menor, no fixeado (documentado):** `registrar_pago_proveedor` llama
-  `get_tasa_cambio(..., now()::date)` — usa la fecha del **servidor** (UTC) en vez de la fecha
-  Argentina pasada por el frontend (a diferencia de `registrar_cobro_cliente`, que sí recibe
-  `p_fecha` del caller). Ventana de exposición angosta: solo afecta un pago hecho después de las
-  21:00 ART (ya "mañana" en UTC) Y si la tasa de "mañana" ya estaba cargada por adelantado — en ese
-  caso tomaría la tasa del día siguiente en vez de la de hoy. Mismo tipo de hallazgo ya documentado
-  para `tipoCambioService.js` (ya corregido en el frontend); acá queda igual de bajo riesgo.
+- ✅ **Corregido (mig.184, 2026-07-09):** `registrar_pago_proveedor` llamaba
+  `get_tasa_cambio(..., now()::date)` y usaba `now()`/`now()::date` para su propia fecha de
+  movimiento — la fecha del **servidor** (UTC), no la Argentina que sí recibía su hermana
+  `registrar_cobro_cliente` (`p_fecha`). Fix: se agregó `p_fecha` (nullable, fallback a `now()`
+  para no romper callers viejos) y se usa consistentemente en `cuenta_corriente_proveedores.fecha`,
+  `movimientos_caja.fecha`, `asientos_contables.fecha`, el chequeo de período cerrado y la búsqueda
+  de tipo de cambio — mismo patrón que `registrar_cobro_cliente`. `proveedoresService.registrarPago`
+  ahora pasa `getNowAR().toISOString()`. Validado con `BEGIN...ROLLBACK` contra la función real de
+  producción: una fecha de "23:30 ART" se propaga correctamente a las 3 tablas sin desviarse al día
+  siguiente.
 
 **4. Centro de Costo — ✅ AUDITADA Y CORREGIDA.**
 - Ya se había encontrado y corregido 1 regresión (`crear_venta` sin `has_module_permission`,

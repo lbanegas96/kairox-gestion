@@ -141,6 +141,9 @@ export async function registrarPago(
 ) {
   // Pago ATÓMICO: cuenta corriente proveedor ('pago') + caja (egreso) en un solo RPC (migration 131).
   // Antes solo reducía la deuda sin registrar la salida de plata de Caja/Bancos → tesorería inflada.
+  // p_fecha (migration 184): fecha Argentina real del pago, no la del servidor (UTC) — mismo
+  // patrón que registrar_cobro_cliente, evita tomar la tasa de cambio del día siguiente en pagos
+  // hechos después de las 21:00 ART.
   const { data, error } = await supabase.rpc('registrar_pago_proveedor', {
     p_empresa_id:       empresaId,
     p_user_id:          userId,
@@ -151,6 +154,7 @@ export async function registrarPago(
     p_descripcion:      descripcion,
     p_caja_sesion_id:   cajaSesionId,
     p_imputaciones:     imputaciones,
+    p_fecha:            getNowAR().toISOString(),
   });
   if (error) throw new Error(error.message);
   return data as { ok: boolean; ccp_id: string; caja_id: string; asiento_generado: boolean; diferencia_cambio: number };

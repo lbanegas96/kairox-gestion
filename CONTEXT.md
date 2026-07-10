@@ -1,5 +1,27 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-09 (sesión 57 — botón "Regenerar" en histórico CxC/CxP + guard cheques/NC + saneamiento real)
+**Última actualización:** 2026-07-09 (sesión 57 — `registrar_pago_proveedor` usa fecha Argentina, no la del servidor)
+
+## ✅ `registrar_pago_proveedor` usa la fecha Argentina del pago, no la del servidor (migration 184, sesión 57)
+
+Cierre del hallazgo 🟢 documentado en la Fase 3 Multimoneda: `registrar_pago_proveedor` usaba
+`now()`/`now()::date` (fecha del **servidor**, UTC) para su propia fecha de movimiento, el chequeo
+de período cerrado y la búsqueda de tipo de cambio — a diferencia de su hermana
+`registrar_cobro_cliente`, que ya recibía `p_fecha` del caller. Ventana de exposición real: un pago
+hecho después de las 21:00 ART (ya "mañana" en UTC) con la tasa de "mañana" ya cargada por
+adelantado tomaba esa tasa en vez de la de hoy.
+
+**Fix:** se agregó `p_fecha` (nullable, con fallback a `now()` para no romper si algún caller viejo
+no lo manda) y se usa consistentemente en las 4 columnas/chequeos que antes tenían `now()` suelto:
+`cuenta_corriente_proveedores.fecha`, `movimientos_caja.fecha`, `asientos_contables.fecha`, y
+`get_tasa_cambio(...)`. `proveedoresService.registrarPago` ahora pasa `getNowAR().toISOString()`
+(mismo patrón que `CuentaCorrienteSection.jsx` ya usaba para `registrar_cobro_cliente`).
+
+Validado con `BEGIN...ROLLBACK` contra la función real ya aplicada en producción: se simuló un pago
+a las 23:30 ART del 1/7 (`'2026-07-01T23:30:00.000Z'` — el formato que produce `getNowAR()`,
+que resta 3h al epoch real y lo serializa como si fuera UTC) y se confirmó que las 3 tablas
+(`cuenta_corriente_proveedores`, `movimientos_caja`, `asientos_contables`) quedaron con fecha
+`2026-07-01`, no `2026-07-02` como habría dado `now()::date` del lado del servidor. El caso sin
+`p_fecha` (fallback) también se probó — sigue funcionando igual que antes.
 
 ## ✅ Botón "Regenerar asiento" en el histórico + guard crítico cheques/NC + saneamiento real (migration 183, sesión 57)
 
