@@ -1039,13 +1039,45 @@ había datos históricos ya corrompidos por el bug (facturas con saldo imputado 
 `comprobantes` y cero en `compras`. No hizo falta backfill; el fix es puramente hacia adelante.
 Archivo: `supabase/migrations/196_sync_estado_pago_en_imputaciones.sql`.
 
-**Nota relacionada, NO investigada a fondo (fuera de alcance de esta sesión):** `crear_nota_credito`
-acepta `comprobante_origen_id` mostrando que una NC referencia una factura concreta, pero no queda
-claro si además inserta una imputación contra esa factura en `cuenta_corriente_imputaciones` (lo cual
-reduciría su saldo Open Item) o si solo mueve el saldo general del cliente vía
-`cuenta_corriente_movimientos`. Si NO imputa contra la factura de origen, el saldo "por factura" y el
-saldo "del cliente" podrían divergir tras una NC. Vale investigarlo en una futura sesión, sin asumir
-que es un bug — puede ser el diseño correcto si la NC no está pensada para saldar una factura puntual.
+### ✅ CONFIRMADO Y RESUELTO: crear_nota_credito no imputaba contra la factura de origen
+La nota quedó resuelta esta misma sesión: se investigó y **sí era un bug real**, confirmado con datos
+de producción (no solo teórico). `crear_nota_credito` inserta un HABER en
+`cuenta_corriente_movimientos` (reduce el saldo agregado del cliente) pero nunca insertaba en
+`cuenta_corriente_imputaciones` contra `comprobante_origen_id`. Confirmado con varias facturas reales
+con NC en contra: todas mostraban `saldo_pendiente = total original`, como si la NC nunca hubiera
+pasado. Caso más grave: una factura a cuenta corriente (`estado_pago='pendiente'`) con una NC **mayor
+que la factura** ya emitida en su contra — el sistema seguía pidiendo cobrar el total completo a un
+cliente que en realidad no debía nada (montos exactos omitidos de este doc por ser un repo público).
+
+**Fix (mig.197, aplicada a producción con confirmación explícita):** si la NC tiene
+`comprobante_origen_id` y `cliente_id`, se imputa contra esa factura, topado al saldo pendiente real
+(`LEAST(total_nc, GREATEST(saldo_pendiente, 0))` — nunca más de lo que la factura debe, nunca
+negativo). Si la NC excede el saldo, el excedente no se imputa a esa factura puntual (ya está
+reflejado en el saldo agregado vía el HABER existente). Se reutiliza el mismo movimiento HABER de la
+NC como `cobro_movimiento_id`. `estado_pago` se sincroniza con el mismo patrón de mig.196. Validado
+con `BEGIN...ROLLBACK`: NC menor al saldo → imputa el monto exacto, factura 'parcial'; NC MAYOR al
+saldo (el caso real) → imputa exactamente el saldo pendiente (topado), factura 'pagada', sin violar
+el CHECK `monto > 0`; NC sin `comprobante_origen_id` → no rompe nada.
+
+**Backfill de las facturas reales ya afectadas:** ejecutado con confirmación explícita.
+- **5 facturas** corregidas: se insertó la imputación retroactiva (usando el HABER que la NC ya había
+  generado, sin crear movimientos nuevos) y se recalculó `estado_pago`. La factura del caso más grave
+  pasó de `'pendiente'` (falso) a **`'pagada'`** (correcto) — el caso real que motivó todo el hallazgo.
+  Dos quedaron en `'parcial'` (NC menor al total, saldo real pendiente) y dos en `'pagada'`.
+- **3 facturas NO tocadas**: ventas sin `cliente_id` (walk-in/Consumidor Final) — correctamente
+  excluidas, no existe tracking de Open Item sin cliente.
+- **2 facturas NO tocadas — hallazgo nuevo, sin resolver a propósito**: 2 NC antiguas (numeración
+  `NC-2026-000X`, de mediados de junio) tienen `cliente_id` seteado pero **nunca generaron NINGÚN
+  movimiento en `cuenta_corriente_movimientos`** — ni siquiera el HABER agregado, no solo la
+  imputación puntual. Su numeración no coincide con el patrón de series diarias que usa el resto de
+  las NC recientes, y el saldo del cliente en cuestión ya es negativo (Nalux le debe a él) — fuerte
+  indicio de que son datos de prueba de sesiones de desarrollo anteriores (posiblemente ligadas al
+  trabajo de `crear_devolucion` de la sesión 39), no transacciones reales de un cliente actual
+  pendientes de corregir. **Deliberadamente no se tocaron**: no hay certeza de que sea data real vs.
+  artefactos de test, y corregir el ledger de un cliente nombrado sin esa certeza es más riesgoso que
+  dejarlo. Si se confirma que es data de prueba, se puede limpiar directamente (DELETE); si es real,
+  aplicaría el mismo backfill. Pendiente de tu criterio — detalle completo (IDs, montos, nombre del
+  cliente) solo en el historial de conversación, no en este documento versionado públicamente.
 
 ### Ventas/POS — revisión rápida de la venta por pack (código nuevo de hoy)
 Reviso `precioPackFinal`/`packPrecioFinal`/`updatePacks` (NuevaVentaModal + unidadesMedida.js) por ser
@@ -1056,6 +1088,11 @@ del formulario no valide el rango (mejora cosmética menor, no funcional, no se 
 
 ### 📋 Resumen para retomar (orden de prioridad sugerido)
 1. ✅ **mig.196 aplicada** (sync estado_pago al imputar cobro/pago) — cerrado, ver arriba.
+1b. ✅ **mig.197 aplicada** (crear_nota_credito imputa contra la factura de origen) + backfill de 5
+   facturas reales — cerrado, ver arriba.
+1c. 🟡 **Pendiente de tu criterio**: 2 NC viejas (`NC-2026-0001`, `NC-2026-0006`) sin ningún
+   movimiento de ledger — probable data de test de sesiones anteriores, deliberadamente sin tocar.
+   Confirmar si es test data (limpiar) o real (backfill).
 2. ✅ **Historial de git**: decisión tomada (2026-07-11) — se deja como está. Son totales agregados
    mensuales, no datos personales ni secretos; reescribir el historial (force-push) es más riesgoso
    que el beneficio.
