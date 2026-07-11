@@ -52,9 +52,12 @@ real sin pack (regresión: sigue mostrando "1 × $8.000" igual que antes, en el 
 reimpresión). No se pudo probar el caso CON pack en producción porque ningún producto de Nalux tiene
 `unidad_venta_id` configurado todavía (0 ventas históricas reales con pack existen aún).
 
-## ✅ Alícuota IIBB de prueba cargada para validar el cálculo (sesión 59, 2026-07-10)
+## ✅ Alícuota IIBB de prueba cargada para validar el cálculo — CERRADO, no es pendiente real (sesión 59, 2026-07-10)
 
-## ✅ Alícuota IIBB de prueba cargada para validar el cálculo (sesión 59, 2026-07-10)
+**Desestimado del roadmap/pendientes (confirmado por el usuario, mismo día):** Nalux no tributa IIBB
+en ninguna jurisdicción confirmada hoy — no es un gap a resolver, es simplemente "no aplica todavía".
+Sacado de la lista de pendientes críticos. Si en algún momento Nalux empieza a operar en una
+jurisdicción real, ahí sí habrá que cargar la alícuota real y reemplazar la fila de TEST.
 
 Aclaración del usuario: la jurisdicción "Buenos Aires" de Nalux (corregida en sesión 58 pensando que
 era la real) **no es fiscal real** — Nalux no tiene confirmado tributar ahí. Todo el campo viene
