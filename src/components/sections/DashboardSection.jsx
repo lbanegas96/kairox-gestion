@@ -82,6 +82,8 @@ function DashboardSection({ onNavigate }) {
 
   const variacion      = kpis?.variacionVentas ?? 0;
   const variacionLabel = `${variacion >= 0 ? '+' : ''}${variacion.toFixed(1)}% vs ayer`;
+  const variacionMes      = kpis?.variacionMes ?? 0;
+  const variacionMesLabel = `${variacionMes >= 0 ? '+' : ''}${variacionMes.toFixed(1)}% vs mes anterior`;
   const balanceNeto    = (kpis?.ventasMes ?? 0) - (kpis?.gastosMes ?? 0);
   const dsoHealth      = getDSOHealth(kpis?.dso ?? null);
 
@@ -132,7 +134,7 @@ function DashboardSection({ onNavigate }) {
       <ChecklistOnboarding onNavigate={onNavigate} />
 
       <HeroRow
-        loading={loading} kpis={kpis} variacion={variacion} variacionLabel={variacionLabel}
+        loading={loading} kpis={kpis} variacion={variacionMes} variacionLabel={variacionMesLabel}
         cajaLoading={cajaLoading} isSessionOpen={isSessionOpen} currentSession={currentSession}
       />
 

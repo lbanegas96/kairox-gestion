@@ -9,9 +9,13 @@ export const dashboardService = {
     const todayEnd = getEndOfDayAR(now);
     const ayer = new Date(now.getTime() - 86400000);
     const mesStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+    // Mismo período del mes anterior (día 1 → mismo día del mes), para comparar
+    // month-to-date contra month-to-date en la variación de "Ventas del mes".
+    const mesAntStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString();
+    const mesAntFin   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, now.getUTCDate() + 1)).toISOString();
 
     const [
-      ventasHoy, ventasAyer, ventasMes, gastosMes,
+      ventasHoy, ventasAyer, ventasMes, ventasMesAnterior, gastosMes,
       deudaTotal, stockRaw, comprobantesRes, ocRes,
     ] = await Promise.all([
       supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'ingreso').eq('categoria', 'Venta').gte('fecha', todayStart).lte('fecha', todayEnd),
@@ -21,11 +25,17 @@ export const dashboardService = {
       // ventas — inconsistente con ventasHoy/ventasAyer arriba, que sí lo filtran
       // (hallazgo auditoría sesión 59).
       supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'ingreso').eq('categoria', 'Venta').gte('fecha', mesStart).lte('fecha', todayEnd),
+      // Mismo período del mes anterior (para la variación mes-contra-mes del card).
+      supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'ingreso').eq('categoria', 'Venta').gte('fecha', mesAntStart).lt('fecha', mesAntFin),
       supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'egreso').neq('categoria', 'Apertura').gte('fecha', mesStart).lte('fecha', todayEnd),
       supabase.from('clientes').select('saldo_actual').eq('empresa_id', empresaId).gt('saldo_actual', 0),
       supabase.from('productos').select('id, nombre, stock_actual, stock_minimo, unidad_medida').eq('empresa_id', empresaId).eq('activo', true),
-      // Comprobantes del mes (accrual basis para DSO y ticket promedio)
-      supabase.from('comprobantes').select('id, total').eq('empresa_id', empresaId).gte('fecha', mesStart).lte('fecha', todayEnd),
+      // Comprobantes del mes (accrual basis para DSO y ticket promedio). tipo='venta'
+      // explícito: `comprobantes` también guarda Notas de Crédito (tipo='nota_credito')
+      // — sin este filtro las NC se contaban como si sumaran a lo facturado, inflando
+      // "Facturas del mes" y el ticket promedio y desinflando el DSO (hallazgo sesión 60,
+      // mismo bug que ya se corrigió en los reportes). NC no es una factura de venta.
+      supabase.from('comprobantes').select('id, total').eq('empresa_id', empresaId).eq('tipo', 'venta').gte('fecha', mesStart).lte('fecha', todayEnd),
       // Órdenes de compra activas (pendientes de recibir). El Dashboard es visible a
       // cualquier rol, pero `ordenes_compra` está gateada a has_module_permission('compras')
       // (mig.134) — un staff sin ese permiso vería este KPI en 0 silenciosamente. RPC
@@ -39,6 +49,7 @@ export const dashboardService = {
     const ventasHoyTotal   = sum(ventasHoy);
     const ventasAyerTotal  = sum(ventasAyer);
     const ventasMesTotal   = sum(ventasMes);
+    const ventasMesAntTotal = sum(ventasMesAnterior);
     const gastosMesTotal   = sum(gastosMes);
     const deudaClientesTotal = (deudaTotal.data ?? []).reduce(
       (s: number, c: { saldo_actual: number }) => s + Number(c.saldo_actual), 0
@@ -51,6 +62,14 @@ export const dashboardService = {
       ventasAyerTotal > 0
         ? ((ventasHoyTotal - ventasAyerTotal) / ventasAyerTotal) * 100
         : ventasHoyTotal > 0 ? 100 : 0;
+
+    // Variación del mes en curso vs el mismo período del mes anterior (month-to-date).
+    // Va en el card "Ventas del mes" — antes ese card mostraba variacionVentas (diaria,
+    // "vs ayer"), un mismatch: un total mensual comparado contra ayer (hallazgo sesión 60).
+    const variacionMes =
+      ventasMesAntTotal > 0
+        ? ((ventasMesTotal - ventasMesAntTotal) / ventasMesAntTotal) * 100
+        : ventasMesTotal > 0 ? 100 : 0;
 
     const margenBruto =
       ventasMesTotal > 0 ? ((ventasMesTotal - gastosMesTotal) / ventasMesTotal) * 100 : 0;
@@ -72,6 +91,7 @@ export const dashboardService = {
       ventasHoy: ventasHoyTotal,
       ventasAyer: ventasAyerTotal,
       variacionVentas,
+      variacionMes,
       ventasMes: ventasMesTotal,
       gastosMes: gastosMesTotal,
       margenBruto,

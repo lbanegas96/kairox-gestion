@@ -957,6 +957,24 @@ Estado final:
 3. ✅ **`afip_tickets` RLS sin policy → NO era bug (deny-all intencional, mig.099) + endurecido
    (mig.195).** El advisor INFO era false-positive respecto de la intención documentada.
 
+## 🔍 Revisión punto por punto pre-lanzamiento (sesión 60)
+Recorrido módulo por módulo en el navegador (Nalux real) para pulir antes de lanzar.
+
+### Dashboard — hallazgos y fixes
+1. ✅ **Bug: "Facturas del mes" / ticket promedio / DSO contaban Notas de Crédito.** La query de
+   `comprobantes` en `getKPIs` no filtraba `tipo='venta'` (mismo bug que ya se había corregido en los
+   reportes, pero se había pasado por alto acá). Con datos reales de Nalux: mostraba 27 comprobantes
+   / $807k, cuando las ventas reales del mes son 22 / $709.070,80 (5 NC de $98k se contaban como
+   facturado). Fix: `.eq('tipo','venta')`. Verificado en vivo: 27→22, $807k→$709k, ticket $30k→$32k,
+   DSO 13→15 días. La NC no es una factura de venta.
+2. ✅ **Bug de etiqueta: "Ventas del mes" mostraba variación diaria ("vs ayer").** El card de total
+   mensual usaba `variacionVentas` (hoy vs ayer) — un mes comparado contra ayer no cierra. Fix: nueva
+   `variacionMes` (month-to-date vs mismo período del mes anterior), label "vs mes anterior". El card
+   "Ventas del día" mantiene la variación diaria (correcta). Verificado en vivo.
+3. 🟢 **Aclaración (no bug): "Ventas del mes" $663k (base caja/cobrado) vs "Facturas del mes" $709k
+   (facturado/devengado).** Tras el fix #1 la brecha bajó a ~$46k = ventas a CC del mes aún no
+   cobradas. Es la diferencia legítima caja-vs-devengado, no un error.
+
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma
    metodología de 6 dimensiones.

@@ -358,6 +358,7 @@ export interface DashboardKPIs {
   ventasHoy: number;
   ventasAyer: number;
   variacionVentas: number;
+  variacionMes: number;
   ventasMes: number;
   gastosMes: number;
   margenBruto: number;
