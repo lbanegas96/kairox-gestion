@@ -169,8 +169,15 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
         step="1"
         value={data.stock_actual}
         onChange={e => setData({...data, stock_actual: e.target.value.replace(/[^\d]/g, '')})}
-        className="bg-kx-surface dark:bg-kx-bg"
+        disabled={isEdit}
+        className="bg-kx-surface dark:bg-kx-bg disabled:opacity-60"
       />
+      {isEdit && (
+        <p className="text-xs text-kx-text-3">
+          El stock se ajusta desde "Ajustar Stock" en la tabla de inventario, no desde acá — así queda
+          registrado en el historial de movimientos.
+        </p>
+      )}
     </div>
 
     <div className="space-y-2">

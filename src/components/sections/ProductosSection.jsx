@@ -250,7 +250,11 @@ const ProductosSection = () => {
         descuento_pack_pct: parseNumberLocale(editProduct.descuento_pack_pct) || 0,
         costo_compra: parseNumberLocale(editProduct.costo_compra) || 0,
         precio_venta: parseNumberLocale(editProduct.precio_venta) || 0,
-        stock_actual: parseInt(editProduct.stock_actual) || 0,
+        // stock_actual NO se toca acá — se ajusta solo vía "Ajustar Stock"
+        // (productosService.adjustStock → ajustar_stock_manual), que tiene lock +
+        // guard de negativo + trazabilidad en movimientos_inventario. Escribirlo
+        // directo acá permitía revertir en silencio ventas/compras concurrentes al
+        // guardar el form con el valor stale que tenía al abrirlo.
         stock_minimo: parseInt(editProduct.stock_minimo) || 0,
         descripcion: editProduct.descripcion
       };

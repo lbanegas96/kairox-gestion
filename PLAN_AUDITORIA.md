@@ -1144,6 +1144,25 @@ conversación.
 **Backfill del caso real confirmado:** se sumó al stock la cantidad faltante de ese producto
 (`ultimo_costo` ya estaba correcto, no requirió tocar el costo).
 
+### ✅ CONFIRMADO Y CORREGIDO: editar un producto revertía el stock en silencio
+(hallazgo revisión punto por punto de **Inventario**, sesión 60 cont. 2, 2026-07-11)
+
+`ProductosSection.jsx` (`handleUpdateProduct`) incluía `stock_actual` en el UPDATE directo a
+`productos` al guardar "Editar Producto" — bypaseando por completo `ajustar_stock_manual` (el RPC
+diseñado a propósito con `FOR UPDATE` + guard de negativo + registro en `movimientos_inventario`,
+sesiones 30-ish). Riesgo real: si el formulario de edición queda abierto mientras una venta/compra
+mueve el stock, al guardar se pisa ese cambio con el valor stale que tenía el form al abrirse — un
+"restock fantasma" silencioso, sin ningún rastro en el historial de movimientos. Sin trigger de DB
+que lo evite (solo hay auditoría genérica en `productos`, no un guard). No confirmado con un caso
+real en producción (bug de concurrencia, no financiero histórico) — corregido preventivamente.
+
+**Fix:** el campo "Stock Actual" queda deshabilitado en modo edición (con nota explicando que se usa
+"Ajustar Stock"), y `stock_actual` se sacó del payload de `handleUpdateProduct`. Sigue editable solo
+al crear el producto (alta inicial, sin historial previo que proteger). 🟢 nota menor no accionada:
+`productosService.ts` tiene `create`/`update`/`softDelete`/`getLowStock`/`getAll`/`getById` sin
+ningún caller real (ProductosSection usa `supabase.from('productos')` directo) — código muerto, mismo
+patrón ya visto en `comprasService.ts`/`tipoCambioService.ts`.
+
 ### 📋 Resumen para retomar (orden de prioridad sugerido)
 1. ✅ **mig.196 aplicada** (sync estado_pago al imputar cobro/pago) — cerrado, ver arriba.
 1b. ✅ **mig.197 aplicada** (crear_nota_credito imputa contra la factura de origen) + backfill de 5
