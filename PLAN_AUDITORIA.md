@@ -1184,9 +1184,10 @@ Cierre del recorrido punto por punto (sesión 60 cont. 2, 2026-07-11):
   con el naming correcto (`afip_cert_{empresa_id}`), sin regresión del bug de sesión 44.
 
 Con esto se completa el recorrido punto por punto de **Compras, Inventario, Bancos/Caja, Cuenta
-Corriente, Impuestos y Configuración** (sesión 60 cont. 2). Quedan pendientes de una sesión futura:
-Ventas/POS completo con navegador (bloqueado por el tool de screenshot) y la auditoría visual con
-capturas reales.
+Corriente, Impuestos, Configuración y Ventas/POS** (sesión 60 cont. 2 — Ventas/POS verificado
+funcionalmente más abajo, sin necesidad de capturas). Queda pendiente de una sesión futura solo la
+auditoría **visual** (spacing, colores, layout) con capturas reales, cuando el tool de screenshot se
+resuelva — eso sí requiere imagen, no alcanza con verificación funcional.
 
 ### 📋 Resumen para retomar (orden de prioridad sugerido)
 1. ✅ **mig.196 aplicada** (sync estado_pago al imputar cobro/pago) — cerrado, ver arriba.
