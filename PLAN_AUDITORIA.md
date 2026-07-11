@@ -1203,9 +1203,22 @@ capturas reales.
    Supabase (decisión del usuario 2026-07-11: posponer por ahora).
 4. ✅ **Recorrido punto por punto completo**: Compras (mig.199 + fix stock Nueva Factura Proveedor),
    Inventario (fix editar producto), Bancos/Caja, Cuenta Corriente, Impuestos, Configuración — todos
-   revisados, ver detalle arriba. Falta solo Ventas/POS completo con navegador (ver ítem 5).
-5. 🟢 Ventas/POS completo con navegador (bloqueado por el tool de screenshot) + repetir la auditoría
-   visual con capturas reales — pendiente para cuando el tool de browser deje de colgarse.
+   revisados, ver detalle arriba.
+5. ✅ **Diagnóstico del tool de screenshot** (2026-07-11): NO es un problema de la app. Aislado
+   probando cada capacidad del navegador por separado — `screenshot`/`zoom` (captura de píxeles)
+   cuelgan siempre a los 30s; `key`, click por `ref` de elemento, `get_page_text`, `read_page`,
+   `navigate` funcionan todos instantáneo y devuelven contenido real y correcto. El renderer está
+   sano y la app es 100% interactiva — el problema es específico del mecanismo de captura de imagen
+   de la herramienta (a nivel de protocolo de DevTools), no de KAIROX. Mitigación: verificación
+   funcional vía `read_page`/`get_page_text`/click-por-ref en vez de capturas visuales.
+6. ✅ **Recorrido funcional de Ventas/POS** (sin capturas, con la técnica de arriba): navegación al
+   Modo Caja real, agregar producto al carrito (cálculo cantidad×precio correcto), aplicar descuento %
+   (matemática correcta, "Ahorro" bien calculado), y confirmé el guard de negocio "CC requiere cliente
+   seleccionado" — se activa con "Sin cliente" + Cuenta Corriente (botón Confirmar Venta deshabilitado,
+   click no hace nada) y se desactiva al elegir un cliente real. De paso, confirmé en vivo que el fix
+   de stock de la sesión (Máquina de afeitar 9→14) ya está reflejado en el panel de productos del POS.
+   No se completó ninguna venta real (para no dejar un comprobante de prueba en los datos de Nalux,
+   ya que `comprobantes` no permite DELETE por diseño) — el carrito se limpió al finalizar.
 
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma
