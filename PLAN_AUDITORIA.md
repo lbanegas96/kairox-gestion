@@ -920,8 +920,19 @@ Estado final:
 1. ✅ **mig.191 aplicada** a prod (`{success:true}`). Verificado post-apply: ambos guards
    (`reintentar_cae_comprobante`, `reencolar_caes_pendientes`) ahora usan `IS DISTINCT FROM
    get_my_empresa_id`, ya no queda ningún `<> get_my_empresa_id`.
-2. ✅ **mig.192 aplicada** a prod (`{success:true}`). Verificado: 0 grants a `anon` en las 12 RPCs
-   revocadas; `email_exists_in_system` conserva su grant a anon (signup pre-login intacto).
+2. ⚠️→✅ **mig.192 aplicada pero INEFECTIVA; corregida por mig.194.** La 192 revocó `FROM anon`,
+   pero el acceso de anon a 7 de esas RPCs venía de `PUBLIC=EXECUTE` (heredado), no de un grant
+   directo a anon. Revocar `FROM anon` fue un no-op. La verificación inicial (`grantee='anon'` en
+   `routine_privileges` → vacío) dio un **falso verde** porque el grant real está bajo
+   `grantee='PUBLIC'`. Detectado con el advisor `anon_security_definer_function_executable` (seguía
+   listando 7 funciones) + `has_function_privilege('anon', oid, 'EXECUTE')=true` post-192.
+   **mig.194 aplicada** (`{success:true}`): `REVOKE EXECUTE ... FROM PUBLIC` en las 7
+   (crear_venta, cambiar_estado_cheque, regenerar_asiento_cxc/cxp, registrar_pago_proveedor,
+   reintentar_cae_comprobante, has_module_permission). Verificado con `has_function_privilege`:
+   las 7 quedaron `anon=false / authenticated=true`; `email_exists_in_system` sigue `anon=true`
+   (signup pre-login intacto). NOTA: no hubo exploit activo — los guards internos de las 7 ya
+   bloqueaban a anon a nivel lógico (mig.191 + `IS DISTINCT FROM`/`IS NULL`); esto es defensa en
+   profundidad hecha bien.
 3. ✅ **mig.193 aplicada** a prod (`{success:true}`). `search_path` agregado a las 2 funciones.
 4. ✅ **Frontend commiteado + pusheado + deployado**: los 2 reportes (`.eq('tipo','venta')`),
    `dashboardService.ts` (ventasMes/getTopClientes/getAlertasCC) y `HeroRow.jsx` (relabel margen).
