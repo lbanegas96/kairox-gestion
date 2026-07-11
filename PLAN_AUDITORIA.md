@@ -1045,6 +1045,30 @@ reduciría su saldo Open Item) o si solo mueve el saldo general del cliente vía
 saldo "del cliente" podrían divergir tras una NC. Vale investigarlo en una futura sesión, sin asumir
 que es un bug — puede ser el diseño correcto si la NC no está pensada para saldar una factura puntual.
 
+### Ventas/POS — revisión rápida de la venta por pack (código nuevo de hoy)
+Reviso `precioPackFinal`/`packPrecioFinal`/`updatePacks` (NuevaVentaModal + unidadesMedida.js) por ser
+código recién escrito. Sin bugs: el CHECK constraint `productos_descuento_pack_pct_check` (0-100) y
+`productos_precio_venta_pack_check` (>=0) ya protegen contra precio de pack negativo aunque el input
+del formulario no valide el rango (mejora cosmética menor, no funcional, no se tocó). La matemática de
+"N packs = N × precio del pack" en `updatePacks` es consistente (no duplica el descuento automático).
+
+### 📋 Resumen para retomar (orden de prioridad sugerido)
+1. 🔴 **Revisar y aplicar mig.196** (sync estado_pago al imputar cobro/pago) — el hallazgo más
+   importante de esta sesión. Ya validado con BEGIN/ROLLBACK, solo falta el OK para aplicar + luego
+   verificar en vivo que `ClientDetailModal` ya no muestre "Vencido" en una factura recién cobrada.
+2. 🟡 Revisar el diff de `HeroRow.jsx`/`dashboardService.ts` (card "Contado (mes)") y el fix del
+   Libro IVA — ya deployados, pero vale una mirada.
+3. 🟡 Activar "Leaked Password Protection" en Supabase Auth (1 clic, dashboard).
+4. 🟢 Investigar si `crear_nota_credito` debería imputar contra `comprobante_origen_id` en
+   `cuenta_corriente_imputaciones` (nota sin resolver, no confirmado como bug).
+5. 🟢 Seguir el recorrido punto por punto: Ventas/POS completo (con navegador, cuando la herramienta
+   de browser deje de colgarse), Compras, Inventario, Bancos/Caja, CC, Impuestos, Configuración.
+6. 🟢 Repetir la auditoría visual con capturas reales (bloqueada por el tool de screenshot toda la
+   sesión — algo a investigar aparte, posiblemente no relacionado con la app).
+7. 🟢 Decidir si limpiar el historial de git de los 2 commits con cifras reales de Nalux
+   (`daf626a`, `ca1b7d2`) — quedaron pusheados al repo público antes de que el clasificador de
+   seguridad lo bloqueara en un commit posterior.
+
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma
    metodología de 6 dimensiones.
