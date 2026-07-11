@@ -971,9 +971,26 @@ Recorrido módulo por módulo en el navegador (Nalux real) para pulir antes de l
    mensual usaba `variacionVentas` (hoy vs ayer) — un mes comparado contra ayer no cierra. Fix: nueva
    `variacionMes` (month-to-date vs mismo período del mes anterior), label "vs mes anterior". El card
    "Ventas del día" mantiene la variación diaria (correcta). Verificado en vivo.
-3. 🟢 **Aclaración (no bug): "Ventas del mes" $663k (base caja/cobrado) vs "Facturas del mes" $709k
-   (facturado/devengado).** Tras el fix #1 la brecha bajó a ~$46k = ventas a CC del mes aún no
+3. 🟢 **Aclaración (no bug): "Ventas del mes" (base caja/cobrado) vs "Facturas del mes"
+   (facturado/devengado).** Tras el fix #1 la brecha bajó a las ventas a CC del mes aún no
    cobradas. Es la diferencia legítima caja-vs-devengado, no un error.
+4. ✅ **Card "Margen de caja" reemplazado por "Contado (mes)"** = ventas al contado / total facturado
+   del mes. El viejo "margen bruto" era engañoso sin COGS. El nuevo mide cuánto se cobra en el acto
+   vs cuánto queda en CC. Verificado en vivo.
+
+### Reportes — hallazgos y fixes
+1. ✅ **Bug fiscal (AFIP): el Libro IVA Ventas SUMABA las Notas de Crédito en vez de restarlas.**
+   `ivaDeComprobante`/`netoDeComprobante` no aplicaban signo según `tipo`, y la query ni traía la
+   columna `tipo` (solo `tipo_comprobante_afip`, la letra A/B/C). Como las NC se guardan con montos
+   positivos, el IVA débito y el neto gravado quedaban sobreestimados (por 2× el IVA de cada NC).
+   Confirmado con datos reales de Nalux (NC emitidas en el mes). Fix: helper `signoComprobante`
+   (NC = −1), aplicado a IVA/neto/bruto en totales, filas y CSV; se trae `tipo` en el SELECT; las NC
+   se muestran en negativo y con badge rojo "NC-x" en vez de "F-x". Baseline SQL del mes: IVA débito
+   neteado correcto vs el viejo (diferencia = 2× IVA de las NC). Build exit 0. Verificación en vivo
+   del render limitada por la flakeidad del browser de la sesión (nav/captura), pero lógica + build +
+   baseline SQL confirman el neteo.
+2. ✅ **ReporteParidad y Reporte de Ventas**: ya tenían el `.eq('tipo','venta')` de la sesión 59.
+3. ✅ **ReporteLibroIVACompras**: usa tabla `compras` (separada), sin NC de venta — sin cambios.
 
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma

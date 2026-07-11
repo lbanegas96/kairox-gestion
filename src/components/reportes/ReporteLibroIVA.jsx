@@ -21,13 +21,27 @@ const PAGE_SIZE = 100;
 // Usa iva_discriminado real (calculado por crear_venta según la alícuota de cada
 // ítem — 21/10.5/0/exento). Fallback a estimación /1.21 solo para comprobantes
 // viejos sin el campo poblado (previo a migration 033).
+// Las Notas de Crédito emitidas se guardan con montos POSITIVOS en `comprobantes`,
+// pero en el Libro IVA Ventas RESTAN del IVA débito / neto / bruto (revierten una
+// venta). Sin este signo, los totales sumaban las NC y sobreestimaban el IVA débito
+// (hallazgo auditoría sesión 60). Se aplica a IVA, neto y bruto por igual.
+function signoComprobante(c) {
+  return c.tipo === 'nota_credito' ? -1 : 1;
+}
 function ivaDeComprobante(c) {
-  if (c.iva_discriminado != null) return Number(c.iva_discriminado);
-  return Number(c.total) - Number(c.total) / 1.21;
+  const base = c.iva_discriminado != null
+    ? Number(c.iva_discriminado)
+    : Number(c.total) - Number(c.total) / 1.21;
+  return signoComprobante(c) * base;
 }
 function netoDeComprobante(c) {
-  if (c.neto_gravado != null) return Number(c.neto_gravado);
-  return Number(c.total) / 1.21;
+  const base = c.neto_gravado != null
+    ? Number(c.neto_gravado)
+    : Number(c.total) / 1.21;
+  return signoComprobante(c) * base;
+}
+function brutoDeComprobante(c) {
+  return signoComprobante(c) * Number(c.total);
 }
 
 function ReporteLibroIVA({ onBack }) {
@@ -53,7 +67,7 @@ function ReporteLibroIVA({ onBack }) {
       const { data, error } = await supabase
         .from('comprobantes')
         .select(`
-          id, numero_venta, numero_afip, fecha,
+          id, tipo, numero_venta, numero_afip, fecha,
           cliente_nombre, cliente_id,
           tipo_comprobante_afip, cae, cae_estado, cae_vencimiento,
           total, moneda, tipo_cambio_tasa,
@@ -82,7 +96,7 @@ function ReporteLibroIVA({ onBack }) {
     const pendientes = comprobantes.filter(c => c.cae_estado === 'pendiente' || c.cae_estado === 'error');
     const totalNeto   = emitidos.reduce((sum, c) => sum + netoDeComprobante(c), 0);
     const totalIVA    = emitidos.reduce((sum, c) => sum + ivaDeComprobante(c), 0);
-    const totalBruto  = emitidos.reduce((sum, c) => sum + Number(c.total), 0);
+    const totalBruto  = emitidos.reduce((sum, c) => sum + brutoDeComprobante(c), 0);
     return { emitidos: emitidos.length, pendientes: pendientes.length, totalNeto, totalIVA, totalBruto };
   }, [comprobantes]);
 
@@ -103,10 +117,10 @@ function ReporteLibroIVA({ onBack }) {
       const iva  = ivaDeComprobante(c).toFixed(2);
       return [
         c.numero_afip ?? c.numero_venta,
-        c.tipo_comprobante_afip ?? '',
+        (c.tipo === 'nota_credito' ? 'NC-' : '') + (c.tipo_comprobante_afip ?? ''),
         c.fecha?.slice(0, 10) ?? '',
         `"${(c.cliente_nombre ?? 'Consumidor Final').replace(/"/g, '""')}"`,
-        Number(c.total).toFixed(2),
+        brutoDeComprobante(c).toFixed(2),
         neto,
         iva,
         c.cae ?? '',
@@ -142,14 +156,16 @@ function ReporteLibroIVA({ onBack }) {
     return <span className="text-xs text-kx-text-3">{estado}</span>;
   };
 
-  const tipoBadge = (tipo) => {
-    if (!tipo) return <span className="text-xs text-kx-text-3">—</span>;
+  const tipoBadge = (letra, tipoDoc) => {
+    if (!letra) return <span className="text-xs text-kx-text-3">—</span>;
+    const esNC = tipoDoc === 'nota_credito';
     const colors = {
       A: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
       B: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
       C: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',
     };
-    return <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${colors[tipo] ?? ''}`}>F-{tipo}</span>;
+    const ncColor = 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400';
+    return <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${esNC ? ncColor : (colors[letra] ?? '')}`}>{esNC ? 'NC' : 'F'}-{letra}</span>;
   };
 
   return (
@@ -319,7 +335,7 @@ function ReporteLibroIVA({ onBack }) {
                         <td className="p-4 font-mono text-xs font-semibold text-blue-600 dark:text-blue-400">
                           {c.numero_afip ?? c.numero_venta}
                         </td>
-                        <td className="p-4 text-center">{tipoBadge(c.tipo_comprobante_afip)}</td>
+                        <td className="p-4 text-center">{tipoBadge(c.tipo_comprobante_afip, c.tipo)}</td>
                         <td className="p-4 text-xs text-slate-500 dark:text-kx-text-2">
                           {formatDateAR(c.fecha)}
                         </td>
@@ -327,7 +343,7 @@ function ReporteLibroIVA({ onBack }) {
                           {c.cliente_nombre || <span className="text-kx-text-3 italic">Consumidor Final</span>}
                         </td>
                         <td className="p-4 text-right font-bold font-mono text-slate-700 dark:text-kx-text">
-                          {fmtARS(c.total)}
+                          {fmtARS(brutoDeComprobante(c))}
                         </td>
                         <td className="p-4 text-right font-mono text-kx-text-2 dark:text-slate-300">
                           {fmtARS(neto)}
