@@ -1119,6 +1119,31 @@ porque la mayoría de compras reales se pagan fuera de CC al momento de la compr
 huérfanos ya existentes se dejan como están (decisión del usuario) — no tienen impacto fiscal y
 borrarlos es más riesgoso que el beneficio de "limpiarlos".
 
+### 🔴 CONFIRMADO Y CORREGIDO: "Nueva Factura de Proveedor" no actualizaba stock ni costo
+(hallazgo revisión punto por punto de **Compras**, sesión 60 cont. 2, 2026-07-11)
+
+`NuevaFacturaProveedorModal.jsx` (botón "Nueva Factura de Proveedor" en Facturas de Proveedores) es
+la ÚNICA vía en todo el frontend para crear una `compra` con ítems reales que **nunca** llamaba a
+`aplicar_compra_producto` — a diferencia de `CompraRapidaSection.jsx`, que sí lo hace. Registraba la
+deuda (CxP), el comprobante y el asiento correctamente, pero `productos.stock_actual` y
+`productos.costo_compra` quedaban intactos. Confirmado que no hay ningún trigger de DB que lo
+compense (`trg_audit_compras`/`trg_validar_tenant_centro_costo` son los únicos triggers en `compras`,
+ninguno toca stock). El parámetro `compraOrigen` del modal (pensado quizás para "generar factura
+desde recepción") nunca se usa en la práctica — el único call-site (`FacturasCompraSection.jsx`) lo
+abre siempre standalone.
+
+Confirmado con datos reales de Nalux: 1 factura identificable con certeza (forma_pago='CC Proveedor',
+marca exclusiva de este modal) nunca sumó el stock de un producto real. No es posible distinguir con
+certeza compras vía Efectivo/Transferencia hechas por este modal vs. por Compra Rápida (comparten las
+mismas etiquetas), así que podría haber más casos no identificables sin revisión manual. Montos y
+cantidades exactos omitidos de este doc por ser un repo público — quedan en el historial de la
+conversación.
+
+**Fix:** se agregó el mismo loop de `aplicar_compra_producto` por ítem (mismo patrón que
+`CompraRapidaSection`, con acumulación de errores y bloqueo del toast de éxito si alguno falla).
+**Backfill del caso real confirmado:** se sumó al stock la cantidad faltante de ese producto
+(`ultimo_costo` ya estaba correcto, no requirió tocar el costo).
+
 ### 📋 Resumen para retomar (orden de prioridad sugerido)
 1. ✅ **mig.196 aplicada** (sync estado_pago al imputar cobro/pago) — cerrado, ver arriba.
 1b. ✅ **mig.197 aplicada** (crear_nota_credito imputa contra la factura de origen) + backfill de 5

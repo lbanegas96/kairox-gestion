@@ -682,7 +682,8 @@ function ComprasSection() {
         if (stockError) throw stockError;
 
         // Delete record
-        await supabase.from('detalle_compras').delete().eq('id', item.id);
+        const { error: delError } = await supabase.from('detalle_compras').delete().eq('id', item.id);
+        if (delError) throw delError;
       }
 
       // B. New & Modified Items
@@ -738,17 +739,19 @@ function ComprasSection() {
             }
 
             // Always update record in case cost changed
-            await supabase.from('detalle_compras').update({
+            const { error: detError } = await supabase.from('detalle_compras').update({
               cantidad: Number(item.cantidad),
               costo_unitario: parseNumberLocale(item.costo_unitario),
               subtotal: Number(item.cantidad) * parseNumberLocale(item.costo_unitario)
             }).eq('id', item.id);
+            if (detError) throw detError;
 
             // Costo "último costo" — seguro también bajo PPP, porque la validación de
             // arriba ya garantiza que cantidad/costo no cambiaron para este ítem en ese modo.
-            await supabase.from('productos')
+            const { error: costoError } = await supabase.from('productos')
               .update({ costo_compra: parseNumberLocale(item.costo_unitario) })
               .eq('id', item.producto_id);
+            if (costoError) throw costoError;
           }
         }
       }

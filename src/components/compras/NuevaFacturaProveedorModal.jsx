@@ -222,6 +222,29 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
         if (itemsErr) throw itemsErr;
       }
 
+      // 2b. Stock + costo — aplicar_compra_producto centraliza el cálculo del
+      // nuevo costo según empresas.metodo_valoracion_stock (mismo patrón que
+      // CompraRapidaSection). Sin esto, la factura quedaba registrada (deuda +
+      // documento) pero el stock nunca subía.
+      const stockErrors = [];
+      for (const item of itemsConProducto) {
+        const { error: aplicarError } = await supabase.rpc('aplicar_compra_producto', {
+          p_producto_id: item.producto_id,
+          p_cantidad: Number(item.cantidad),
+          p_costo_nuevo: parseNumberLocale(item.precio_unit) || 0,
+        });
+        if (aplicarError) {
+          console.error('Error al aplicar factura al producto:', aplicarError);
+          stockErrors.push(item.descripcion || item.producto_id);
+        }
+      }
+      if (stockErrors.length > 0) {
+        throw new Error(
+          `La factura quedó registrada pero NO se pudo actualizar el stock de: ${stockErrors.join(', ')}. ` +
+          `Revisá el stock de esos productos manualmente antes de seguir operando.`
+        );
+      }
+
       // 3. CC Proveedor → cargo (aumenta deuda con proveedor)
       if (isCC && proveedorId) {
         const { error: ccErr } = await supabase.from('cuenta_corriente_proveedores').insert([{
