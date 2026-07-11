@@ -992,6 +992,59 @@ Recorrido módulo por módulo en el navegador (Nalux real) para pulir antes de l
 2. ✅ **ReporteParidad y Reporte de Ventas**: ya tenían el `.eq('tipo','venta')` de la sesión 59.
 3. ✅ **ReporteLibroIVACompras**: usa tabla `compras` (separada), sin NC de venta — sin cambios.
 
+### Cheques → Bancos: gap YA RESUELTO (no era pendiente real)
+El circuito completo (cobrar/depositar cheque → movimiento en Bancos, con el mismo asiento; rechazo
+de cheque de tercero → reabre la deuda del cliente; rechazo de cheque propio → reabre la deuda al
+proveedor; endoso; cuentas puente 1.1.6/1.1.7/2.1.6) **ya está implementado** vía triggers
+`fn_asiento_cheque_tercero` / `fn_asiento_cheque_propio` + la RPC `cambiar_estado_cheque`. Confirmado
+leyendo las definiciones vivas. No es un pendiente de sesiones anteriores — ya se resolvió en algún
+punto no capturado en el resumen previo. 🟢 Nota menor no bloqueante: los triggers atrapan todo error
+interno (`EXCEPTION WHEN OTHERS THEN NULL`) sin dejar ninguna señal visible al usuario si, por ejemplo,
+faltara una cuenta del plan (ej. `1.1.6`) — mismo patrón "asiento no bloqueante" ya documentado en
+otras partes del sistema. Bajo riesgo (solo se manifiesta con un plan de cuentas incompleto).
+
+### 🔴 CRÍTICO — hallazgo real y CONFIRMADO (validado, NO aplicado): estado_pago nunca se sincroniza
+al cobrar/pagar una factura a cuenta corriente
+**El bug:** `registrar_cobro_cliente` y `registrar_pago_proveedor` insertan en
+`cuenta_corriente_imputaciones` / `cuenta_corriente_proveedores_imputaciones` (el registro real de
+qué se pagó) pero **nunca** actualizan `comprobantes.estado_pago` / `compras.estado_pago`. Confirmado
+por inspección: ninguna de las 2 funciones menciona `estado_pago`; solo `crear_venta`,
+`crear_nota_credito`, `crear_devolucion` la tocan (al crear el documento, nunca al cobrarlo/pagarlo).
+Ningún trigger en `cuenta_corriente_imputaciones` la sincroniza tampoco.
+
+**Impacto real:** una factura de venta a cuenta corriente (`estado_pago='pendiente'`) que se cobra
+100% vía Open Item clearing se queda con `estado_pago='pendiente'` **para siempre**, aunque el saldo
+real (por imputaciones) sea $0. `ClientDetailModal.jsx` usa exactamente ese campo para el badge
+"Vencido" (`estado_pago==='pendiente' AND fecha_vencimiento < hoy`) — una factura ya cobrada por
+completo seguiría mostrando "Vencido" indefinidamente. Hay 21 archivos del frontend que leen
+`estado_pago` (SaleDetailModal, HistorialVentas, CuentaCorrienteSection, reportes, etc.) con el mismo
+riesgo. Bug simétrico confirmado también en `compras.estado_pago` / `registrar_pago_proveedor`.
+
+**Fix (mig.196, escrita y VALIDADA, no aplicada):** dentro del loop de imputaciones de cada función,
+justo después del INSERT de la imputación (mismo `FOR UPDATE` ya tomado, sin queries extra), un
+`UPDATE` que recalcula `estado_pago` = `'pagada'` si `v_ya_imputado + v_monto_imp >= total`,
+`'parcial'` si cubre algo, `'pendiente'` si nada. Los 3 valores están permitidos por los CHECK
+constraints existentes en ambas tablas (confirmado). Copia fiel del resto de cada función.
+
+**Validado con `BEGIN...ROLLBACK`** (impersonando a Nadia vía `request.jwt.claim.sub`, con datos de
+prueba `TEST QA mig196` creados y revertidos dentro de la misma transacción — nada quedó persistido):
+- Cobro total sobre factura CC → `estado_pago` pasó a `'pagada'` ✓
+- Cobro parcial sobre otra factura CC → `estado_pago` pasó a `'parcial'` ✓
+- Pago total sobre una compra CC (lado proveedor) → `estado_pago` pasó a `'pagada'` ✓
+
+**NO aplicada a producción** — es una escritura a una función financiera crítica (afecta `crear_venta`
+y `crear_devolucion` indirectamente por compartir tabla) y el usuario no estaba presente para
+confirmar (regla del proyecto: toda escritura a prod requiere confirmación explícita por migración).
+Archivo: `supabase/migrations/196_sync_estado_pago_en_imputaciones.sql`, lista para aplicar con el OK.
+
+**Nota relacionada, NO investigada a fondo (fuera de alcance de esta sesión):** `crear_nota_credito`
+acepta `comprobante_origen_id` mostrando que una NC referencia una factura concreta, pero no queda
+claro si además inserta una imputación contra esa factura en `cuenta_corriente_imputaciones` (lo cual
+reduciría su saldo Open Item) o si solo mueve el saldo general del cliente vía
+`cuenta_corriente_movimientos`. Si NO imputa contra la factura de origen, el saldo "por factura" y el
+saldo "del cliente" podrían divergir tras una NC. Vale investigarlo en una futura sesión, sin asumir
+que es un bug — puede ser el diseño correcto si la NC no está pensada para saldar una factura puntual.
+
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma
    metodología de 6 dimensiones.
