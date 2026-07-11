@@ -1091,22 +1091,50 @@ código recién escrito. Sin bugs: el CHECK constraint `productos_descuento_pack
 del formulario no valide el rango (mejora cosmética menor, no funcional, no se tocó). La matemática de
 "N packs = N × precio del pack" en `updatePacks` es consistente (no duplica el descuento automático).
 
+### 🔴 CONFIRMADO Y CORREGIDO: devolución a proveedor con NC nunca acreditaba su cuenta corriente
+(hallazgo revisión punto por punto de **Compras**, sesión 60 cont. 2, 2026-07-11)
+
+`crear_devolucion`, dentro de `p_compensacion = 'nota_credito'`, ejecutaba SIEMPRE la rama pensada
+para clientes sin importar `p_tipo`: creaba un comprobante tipo='nota_credito' en la tabla de VENTAS
+(cliente_id NULL → 'Consumidor Final', consumiendo la numeración de NC de ventas reales) y, si no
+era reembolso en efectivo, insertaba el HABER en `cuenta_corriente_movimientos` (ledger de
+**clientes**) con cliente_id NULL. Nunca tocaba `cuenta_corriente_proveedores` — la deuda real al
+proveedor jamás bajaba, pese a que la UI le dice al usuario "La ND ajustará el saldo de Cuenta
+Corriente del proveedor (recomendado)".
+
+Confirmado con datos reales de Nalux: **5 devoluciones a proveedor con NC**, las 5 generaron el
+comprobante-NC huérfano (sin impacto AFIP/Libro IVA — las 5 tienen `cae_estado='no_aplica'`,
+confirmado). De esas 5, las **3 con reembolso en efectivo=false** (el camino recomendado) nunca
+acreditaron `cuenta_corriente_proveedores` — 2 proveedores tenían un saldo a pagar sobreestimado en
+$160.068 combinados.
+
+**Fix (mig.199, aplicada a producción con confirmación explícita):** la rama de creación de
+comprobante/CC-cliente queda gateada a `p_tipo='cliente'` (sin cambios ahí, ya corregido en mig.198).
+Para proveedor, se acredita `cuenta_corriente_proveedores` directo (mismo patrón ya usado y validado
+en `NuevaNCProveedorModal.jsx` — sin comprobante de venta, sin imputación contra una compra puntual,
+porque la mayoría de compras reales se pagan fuera de CC al momento de la compra). Validado con
+`BEGIN...ROLLBACK` (5 casos: proveedor+NC+CC, proveedor+NC+efectivo, cliente+NC+CC de regresión — los
+5 se comportan como se espera). **Backfill aplicado**: se acreditó retroactivamente a
+`cuenta_corriente_proveedores` el monto de las 3 devoluciones reales afectadas. Los 5 comprobantes-NC
+huérfanos ya existentes se dejan como están (decisión del usuario) — no tienen impacto fiscal y
+borrarlos es más riesgoso que el beneficio de "limpiarlos".
+
 ### 📋 Resumen para retomar (orden de prioridad sugerido)
 1. ✅ **mig.196 aplicada** (sync estado_pago al imputar cobro/pago) — cerrado, ver arriba.
 1b. ✅ **mig.197 aplicada** (crear_nota_credito imputa contra la factura de origen) + backfill de 5
    facturas reales — cerrado, ver arriba.
 1c. ✅ **mig.198 aplicada** (mismo fix en la copia inline de crear_devolucion) — cerrado, sin backfill
    necesario. Las 2 NC que parecían huérfanas se confirmaron como reembolsos en efectivo legítimos.
+1d. ✅ **mig.199 aplicada** (devolución a proveedor con NC acredita cuenta_corriente_proveedores en
+   vez de crear un comprobante de venta fantasma) + backfill de 3 casos reales — cerrado, ver arriba.
 2. ✅ **Historial de git**: decisión tomada (2026-07-11) — se deja como está. Son totales agregados
    mensuales, no datos personales ni secretos; reescribir el historial (force-push) es más riesgoso
    que el beneficio.
-3. 🟡 Activar "Leaked Password Protection" en Supabase Auth (1 clic, dashboard) — sigue pendiente,
-   Claude no puede hacerlo.
-4. 🟢 Investigar si `crear_nota_credito` debería imputar contra `comprobante_origen_id` en
-   `cuenta_corriente_imputaciones` (nota sin resolver, no confirmado como bug).
-5. 🟢 Seguir el recorrido punto por punto: Ventas/POS completo (con navegador, cuando la herramienta
-   de browser deje de colgarse), Compras, Inventario, Bancos/Caja, CC, Impuestos, Configuración.
-6. 🟢 Repetir la auditoría visual con capturas reales (bloqueada por el tool de screenshot toda la
+3. 🟡 Activar "Leaked Password Protection" en Supabase Auth — sigue pendiente. Requiere plan pago de
+   Supabase (decisión del usuario 2026-07-11: posponer por ahora).
+4. 🔄 Seguir el recorrido punto por punto: Compras (en curso — ver hallazgo mig.199 arriba), Ventas/POS
+   completo, Inventario, Bancos/Caja, CC, Impuestos, Configuración.
+5. 🟢 Repetir la auditoría visual con capturas reales (bloqueada por el tool de screenshot toda la
    sesión — algo a investigar aparte, posiblemente no relacionado con la app).
 
 ## Cómo retomar (para cualquier sesión futura)

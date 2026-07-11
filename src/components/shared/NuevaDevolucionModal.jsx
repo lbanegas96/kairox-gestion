@@ -236,7 +236,9 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
       }
 
       const msg = compensacion === 'nota_credito'
-        ? `Devolución ${data.numero_devolucion} registrada — Nota de Crédito ${data.numero_nc || ''} generada`
+        ? (data.numero_nc
+            ? `Devolución ${data.numero_devolucion} registrada — Nota de Crédito ${data.numero_nc} generada`
+            : `Devolución ${data.numero_devolucion} registrada — cuenta corriente del proveedor acreditada`)
         : `Devolución ${data.numero_devolucion} registrada`;
       toast({ title: msg });
       onSuccess?.(data);
