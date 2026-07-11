@@ -1163,6 +1163,31 @@ al crear el producto (alta inicial, sin historial previo que proteger). 🟢 not
 ningún caller real (ProductosSection usa `supabase.from('productos')` directo) — código muerto, mismo
 patrón ya visto en `comprasService.ts`/`tipoCambioService.ts`.
 
+### Bancos/Caja, Cuenta Corriente, Impuestos, Configuración — recorridos, sin hallazgos nuevos
+Cierre del recorrido punto por punto (sesión 60 cont. 2, 2026-07-11):
+- **Bancos/Caja**: RLS de `cuentas_bancarias`/`movimientos_bancarios` exige `has_module_permission('bancos')`
+  además de `empresa_id` (no solo gateado en la UI); el trigger `trg_bloquear_delete_mov_contabilizado`
+  impide borrar un movimiento ya contabilizado incluso vía API directa. Caja/POS y Cheques→Bancos ya
+  estaban confirmados sólidos de sesiones previas.
+- **Cuenta Corriente**: la vista `facturas_saldo_pendiente` (fuente de verdad de "saldo por factura")
+  filtra `tipo='venta'` y `cliente_id IS NOT NULL` correctamente; el badge "Vencido" ya usa el
+  `estado_pago` sincronizado por los fixes de hoy; el lado proveedor (`registrarPago`) usa los signos
+  correctos. 🟢 nota menor: `proveedoresService.getHistorialCompras` referencia columnas que no
+  existen en `compras` — confirmado sin ningún caller real, no se tocó.
+- **Impuestos**: la numeración de certificados de Retenciones ya está atomizada vía RPC con lock
+  (la nota "🟢 menor: count() no atómico" de una sesión anterior ya había quedado resuelta); IIBB ya
+  tiene tests pgTAP.
+- **Configuración**: revisé específicamente el manejo de credenciales (la parte de mayor riesgo según
+  la política de seguridad del proyecto) — el token de Mercado Pago nunca se precarga en el form, viaja
+  enmascarado (`type=password`), se verifica vía Edge Function antes de guardar, y la tabla
+  `integraciones_bancarias` sigue siendo admin-only (mig.124). El certificado AFIP sigue usando Vault
+  con el naming correcto (`afip_cert_{empresa_id}`), sin regresión del bug de sesión 44.
+
+Con esto se completa el recorrido punto por punto de **Compras, Inventario, Bancos/Caja, Cuenta
+Corriente, Impuestos y Configuración** (sesión 60 cont. 2). Quedan pendientes de una sesión futura:
+Ventas/POS completo con navegador (bloqueado por el tool de screenshot) y la auditoría visual con
+capturas reales.
+
 ### 📋 Resumen para retomar (orden de prioridad sugerido)
 1. ✅ **mig.196 aplicada** (sync estado_pago al imputar cobro/pago) — cerrado, ver arriba.
 1b. ✅ **mig.197 aplicada** (crear_nota_credito imputa contra la factura de origen) + backfill de 5
@@ -1176,10 +1201,11 @@ patrón ya visto en `comprasService.ts`/`tipoCambioService.ts`.
    que el beneficio.
 3. 🟡 Activar "Leaked Password Protection" en Supabase Auth — sigue pendiente. Requiere plan pago de
    Supabase (decisión del usuario 2026-07-11: posponer por ahora).
-4. 🔄 Seguir el recorrido punto por punto: Compras (en curso — ver hallazgo mig.199 arriba), Ventas/POS
-   completo, Inventario, Bancos/Caja, CC, Impuestos, Configuración.
-5. 🟢 Repetir la auditoría visual con capturas reales (bloqueada por el tool de screenshot toda la
-   sesión — algo a investigar aparte, posiblemente no relacionado con la app).
+4. ✅ **Recorrido punto por punto completo**: Compras (mig.199 + fix stock Nueva Factura Proveedor),
+   Inventario (fix editar producto), Bancos/Caja, Cuenta Corriente, Impuestos, Configuración — todos
+   revisados, ver detalle arriba. Falta solo Ventas/POS completo con navegador (ver ítem 5).
+5. 🟢 Ventas/POS completo con navegador (bloqueado por el tool de screenshot) + repetir la auditoría
+   visual con capturas reales — pendiente para cuando el tool de browser deje de colgarse.
 
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma
