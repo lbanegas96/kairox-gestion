@@ -1163,6 +1163,32 @@ al crear el producto (alta inicial, sin historial previo que proteger). 🟢 not
 ningún caller real (ProductosSection usa `supabase.from('productos')` directo) — código muerto, mismo
 patrón ya visto en `comprasService.ts`/`tipoCambioService.ts`.
 
+### ✅ CONFIRMADO Y CORREGIDO: rechazar un cheque no resincronizaba estado_pago
+(hallazgo sesión 60 cont. 3, a pedido del usuario sobre el estado de Cheques, 2026-07-11)
+
+Releyendo `cambiar_estado_cheque` (la RPC detrás de cambiar el estado de un cheque) para responder
+"¿los cheques quedaron bien?": el circuito de asientos contables (triggers `fn_asiento_cheque_tercero`/
+`fn_asiento_cheque_propio`) sigue sólido y confirmado con datos reales (15 cheques, 14 asientos
+generados). Pero la propia RPC — que correctamente reabre la deuda en la cuenta corriente y borra la
+imputación puntual contra la factura/compra de origen al rechazar un cheque — nunca recalculaba
+`comprobantes.estado_pago` / `compras.estado_pago` después de borrar esa imputación. Mismo patrón
+exacto de gap que mig.196-199, en una función que no pasó por ese fix porque vive aparte
+(`cambiar_estado_cheque`, no `registrar_cobro_cliente`/`registrar_pago_proveedor`). De paso apareció un
+tercer gap simétrico al escribir el fix: el cheque propio "entregado" (pago a proveedor) tampoco
+sincronizaba `compras.estado_pago` al crear la imputación — nunca lo había hecho, ni al pagar ni al
+rechazar.
+
+Verificado con datos reales de Nalux: **cero casos ya corrompidos** — de los 3 cheques de tercero
+rechazados existentes, ninguno tenía en realidad una imputación puntual contra una factura (cobros sin
+imputar). El fix es puramente preventivo/hacia adelante.
+
+**Fix (mig.200, aplicada a producción con confirmación explícita):** antes de borrar cada imputación,
+se recorre cada factura/compra afectada y se recalcula `estado_pago` con el mismo patrón de
+mig.196-199. Se agrega también la sincronización en el alta del pago con cheque propio. Validado con
+`BEGIN...ROLLBACK` (3 casos: rechazo de cheque de tercero reabre la factura, cheque propio entregado
+marca la compra pagada, rechazo de ese cheque propio la reabre — los 3 se comportan como se espera). Sin
+backfill necesario.
+
 ### Bancos/Caja, Cuenta Corriente, Impuestos, Configuración — recorridos, sin hallazgos nuevos
 Cierre del recorrido punto por punto (sesión 60 cont. 2, 2026-07-11):
 - **Bancos/Caja**: RLS de `cuentas_bancarias`/`movimientos_bancarios` exige `has_module_permission('bancos')`
@@ -1197,6 +1223,8 @@ resuelva — eso sí requiere imagen, no alcanza con verificación funcional.
    necesario. Las 2 NC que parecían huérfanas se confirmaron como reembolsos en efectivo legítimos.
 1d. ✅ **mig.199 aplicada** (devolución a proveedor con NC acredita cuenta_corriente_proveedores en
    vez de crear un comprobante de venta fantasma) + backfill de 3 casos reales — cerrado, ver arriba.
+1e. ✅ **mig.200 aplicada** (cambiar_estado_cheque resincroniza estado_pago al rechazar un cheque de
+   tercero/propio, y al entregar un cheque propio) — cerrado, sin backfill necesario, ver arriba.
 2. ✅ **Historial de git**: decisión tomada (2026-07-11) — se deja como está. Son totales agregados
    mensuales, no datos personales ni secretos; reescribir el historial (force-push) es más riesgoso
    que el beneficio.
