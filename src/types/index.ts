@@ -361,7 +361,7 @@ export interface DashboardKPIs {
   variacionMes: number;
   ventasMes: number;
   gastosMes: number;
-  margenBruto: number;
+  tasaContado: number;
   deudaClientes: number;
   productosStockBajo: Pick<Producto, 'id' | 'nombre' | 'stock_actual' | 'stock_minimo' | 'unidad_medida'>[];
   // Salud financiera

@@ -71,14 +71,21 @@ export const dashboardService = {
         ? ((ventasMesTotal - ventasMesAntTotal) / ventasMesAntTotal) * 100
         : ventasMesTotal > 0 ? 100 : 0;
 
-    const margenBruto =
-      ventasMesTotal > 0 ? ((ventasMesTotal - gastosMesTotal) / ventasMesTotal) * 100 : 0;
-
     // Salud financiera
     const facturasMesCount = comprobantesRes.data?.length ?? 0;
     const facturasMesTotal = (comprobantesRes.data ?? []).reduce(
       (s: number, c: { total: number }) => s + Number(c.total), 0
     );
+
+    // % Contado: qué parte de lo facturado del mes se cobró en el acto (ventas al
+    // contado, categoria='Venta' en caja) vs lo que quedó en cuenta corriente.
+    // Numerador = ventasMesTotal (contado); denominador = facturasMesTotal (todo lo
+    // facturado, tipo='venta'). NO es una "tasa de cobranza" clásica: los cobros de
+    // CC de meses anteriores (categoria='Cobro Cliente') no van en el numerador, así
+    // que no puede dar >100% por cobrar deuda vieja. Reemplaza al viejo "margen bruto",
+    // que era engañoso sin COGS (hallazgo auditoría sesión 59, decisión sesión 60).
+    const tasaContado =
+      facturasMesTotal > 0 ? Math.min(100, (ventasMesTotal / facturasMesTotal) * 100) : 0;
     const ocPendientes = ocRes.data ?? 0; // scalar (RPC devuelve un conteo, no filas)
     const ticketPromedio = facturasMesCount > 0 ? facturasMesTotal / facturasMesCount : 0;
 
@@ -94,7 +101,7 @@ export const dashboardService = {
       variacionMes,
       ventasMes: ventasMesTotal,
       gastosMes: gastosMesTotal,
-      margenBruto,
+      tasaContado,
       deudaClientes: deudaClientesTotal,
       productosStockBajo,
       dso,

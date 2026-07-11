@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, Archive, Percent, CheckCircle2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Archive, Wallet, Banknote } from 'lucide-react';
 import { fmt, Skeleton } from './shared';
 
 function HeroRow({ loading, kpis, variacion, variacionLabel, cajaLoading, isSessionOpen, currentSession }) {
@@ -45,27 +45,25 @@ function HeroRow({ loading, kpis, variacion, variacionLabel, cajaLoading, isSess
         )}
       </div>
 
-      {/* Margen de caja del mes. NO es margen bruto contable (Ventas - COGS) / Ventas:
-          el sistema todavía no postea costo de mercadería vendida a ningún asiento
-          (gap documentado, pendiente de decisión con el contador). Hoy es
-          (ingresos de caja del mes - egresos de caja del mes) / ingresos, así que
-          se relabelea para no mostrar un "margen bruto" falso (llegaba a mostrar
-          92%+ con datos reales — hallazgo auditoría sesión 59). Sin badge de
-          "Saludable": el umbral de 30% aplicaba a margen bruto real, no a esto. */}
+      {/* Contado del mes: qué % de lo facturado en el mes se cobró en el acto
+          (ventas al contado / total facturado). Reemplaza al viejo "margen bruto",
+          que era engañoso sin COGS (llegaba a 92%+ y sonaba a rentabilidad — hallazgo
+          auditoría sesión 59, decisión sesión 60). Este sí es un número real y
+          accionable: cuánto vendés al contado vs cuánto queda en cuenta corriente. */}
       <div className="bg-kx-surface p-5 min-h-[140px] flex flex-col border-t-2 border-t-kx-blue hover:bg-kx-surface-2 transition-colors duration-200">
         <div className="text-[11.5px] text-kx-text-2 mb-2.5 flex items-center gap-1.5">
-          <Percent className="w-3.5 h-3.5" /> Margen de caja (mes)
+          <Wallet className="w-3.5 h-3.5" /> Contado (mes)
         </div>
         {loading ? (
           <><Skeleton className="h-7 w-20 mb-2" /><Skeleton className="h-4 w-24" /></>
         ) : (
           <>
             <div className="text-[26px] font-semibold text-kx-text tracking-tight leading-none mb-2 tabular-nums">
-              {(kpis?.margenBruto ?? 0).toFixed(1)}%
+              {(kpis?.tasaContado ?? 0).toFixed(1)}%
             </div>
             <div className="text-xs flex items-center gap-1.5 text-kx-text-2">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Ingresos vs. egresos de caja del mes
+              <Banknote className="w-3.5 h-3.5" />
+              De lo facturado, cobrado en el acto
             </div>
           </>
         )}
