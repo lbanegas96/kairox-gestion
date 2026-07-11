@@ -1066,18 +1066,23 @@ el CHECK `monto > 0`; NC sin `comprobante_origen_id` → no rompe nada.
   Dos quedaron en `'parcial'` (NC menor al total, saldo real pendiente) y dos en `'pagada'`.
 - **3 facturas NO tocadas**: ventas sin `cliente_id` (walk-in/Consumidor Final) — correctamente
   excluidas, no existe tracking de Open Item sin cliente.
-- **2 facturas NO tocadas — hallazgo nuevo, sin resolver a propósito**: 2 NC antiguas (numeración
-  `NC-2026-000X`, de mediados de junio) tienen `cliente_id` seteado pero **nunca generaron NINGÚN
-  movimiento en `cuenta_corriente_movimientos`** — ni siquiera el HABER agregado, no solo la
-  imputación puntual. Su numeración no coincide con el patrón de series diarias que usa el resto de
-  las NC recientes, y el saldo del cliente en cuestión ya es negativo (Nalux le debe a él) — fuerte
-  indicio de que son datos de prueba de sesiones de desarrollo anteriores (posiblemente ligadas al
-  trabajo de `crear_devolucion` de la sesión 39), no transacciones reales de un cliente actual
-  pendientes de corregir. **Deliberadamente no se tocaron**: no hay certeza de que sea data real vs.
-  artefactos de test, y corregir el ledger de un cliente nombrado sin esa certeza es más riesgoso que
-  dejarlo. Si se confirma que es data de prueba, se puede limpiar directamente (DELETE); si es real,
-  aplicaría el mismo backfill. Pendiente de tu criterio — detalle completo (IDs, montos, nombre del
-  cliente) solo en el historial de conversación, no en este documento versionado públicamente.
+- **2 facturas NO tocadas — hallazgo inicial CORREGIDO tras investigar más**: 2 NC antiguas (numeración
+  `NC-2026-000X`) tienen `cliente_id` seteado pero no tenían ningún movimiento en
+  `cuenta_corriente_movimientos`. Se sospechó inicialmente que eran datos de prueba de sesiones
+  anteriores. **Investigado y descartado**: ambas vinieron de `crear_devolucion` con
+  `reembolso_efectivo=true` — cuando el reembolso es en efectivo, la función correctamente NO toca el
+  ledger de cuenta corriente del cliente (el dinero ya volvió por caja, no por crédito a cuenta). No
+  es un bug ni datos de prueba — es el comportamiento correcto. No requieren ninguna corrección.
+
+### ✅ Mismo hallazgo, gap simétrico en crear_devolucion (mig.198)
+`crear_devolucion` tiene su **propia copia inline** de la lógica de creación de NC (no llama a
+`crear_nota_credito`) para el caso `p_compensacion='nota_credito'` — así que el fix de mig.197 no la
+cubría. Mismo gap exacto: cuando el reembolso NO es en efectivo, inserta el HABER pero nunca imputaba
+contra `p_comprobante_id`. **Fix (mig.198, aplicada a producción):** mismo patrón — imputación topada
+al saldo pendiente + sincronización de `estado_pago`. Validado con `BEGIN...ROLLBACK`. Impacto real:
+de 5 devoluciones históricas con NC, 4 son reembolso en efectivo (correctamente sin tocar) y la única
+con reembolso NO efectivo ya había quedado cubierta por el backfill de mig.197 — **no hizo falta
+backfill adicional**, el fix es puramente hacia adelante para futuras devoluciones.
 
 ### Ventas/POS — revisión rápida de la venta por pack (código nuevo de hoy)
 Reviso `precioPackFinal`/`packPrecioFinal`/`updatePacks` (NuevaVentaModal + unidadesMedida.js) por ser
@@ -1090,9 +1095,8 @@ del formulario no valide el rango (mejora cosmética menor, no funcional, no se 
 1. ✅ **mig.196 aplicada** (sync estado_pago al imputar cobro/pago) — cerrado, ver arriba.
 1b. ✅ **mig.197 aplicada** (crear_nota_credito imputa contra la factura de origen) + backfill de 5
    facturas reales — cerrado, ver arriba.
-1c. 🟡 **Pendiente de tu criterio**: 2 NC viejas (`NC-2026-0001`, `NC-2026-0006`) sin ningún
-   movimiento de ledger — probable data de test de sesiones anteriores, deliberadamente sin tocar.
-   Confirmar si es test data (limpiar) o real (backfill).
+1c. ✅ **mig.198 aplicada** (mismo fix en la copia inline de crear_devolucion) — cerrado, sin backfill
+   necesario. Las 2 NC que parecían huérfanas se confirmaron como reembolsos en efectivo legítimos.
 2. ✅ **Historial de git**: decisión tomada (2026-07-11) — se deja como está. Son totales agregados
    mensuales, no datos personales ni secretos; reescribir el historial (force-push) es más riesgoso
    que el beneficio.
