@@ -937,9 +937,25 @@ Estado final:
 4. ✅ **Frontend commiteado + pusheado + deployado**: los 2 reportes (`.eq('tipo','venta')`),
    `dashboardService.ts` (ventasMes/getTopClientes/getAlertasCC) y `HeroRow.jsx` (relabel margen).
    `npx vite build` exit 0.
-5. 🟢 **Pendiente sin tocar** (requiere decisión/cuidado, NO bloqueante para lanzar): mover `pg_net`
-   a su propio schema (crons dependientes), activar "Leaked Password Protection" en el dashboard de
-   Supabase Auth, repetir la auditoría visual con capturas reales cuando el tool de captura ande.
+5. ✅ **mig.195 aplicada** a prod (`{success:true}`): `REVOKE ALL ON afip_tickets FROM anon,
+   authenticated` (defensa en profundidad sobre la caché de tokens WSAA de AFIP). Verificado con
+   `has_table_privilege`: anon/authenticated → `false`; service_role/postgres → `true` (edge
+   functions intactas). El RLS deny-all de mig.099 sigue activo — esto es la 2da barrera.
+
+### ✅ Los 3 pendientes de advisor — resueltos/decididos (sesión 60)
+1. 🟢 **`pg_net` en schema public → NO se mueve (riesgo aceptado, decisión del usuario).** Las
+   funciones (`http_post`, etc.) YA están en el schema `net`, no en `public` — verificado con
+   `pg_proc`/`pg_namespace`. Lo único en `public` es el marcador de registro de la extensión, sin
+   impacto en `search_path` ni exposición de funciones. Mover con `ALTER EXTENSION pg_net SET SCHEMA`
+   es riesgoso (pg_net hardcodea el schema `net`) y hay 2 crons críticos que llaman `net.http_post`:
+   jobid 1 `arca-worker` (*/5min, emisión CAE) y jobid 3 `mp-sync` (*/2min, MercadoPago). Beneficio
+   de seguridad real = nulo; riesgo = alto. El advisor `extension_in_public` queda como
+   false-positive justificado.
+2. 🟡 **"Leaked Password Protection" → acción del usuario (dashboard, no código).** Toggle en
+   Supabase → Authentication → activar "Leaked password protection" (chequeo HaveIBeenPwned) + subir
+   "Minimum password length" a 8+. No lo puede hacer Claude (setting de seguridad de cuenta).
+3. ✅ **`afip_tickets` RLS sin policy → NO era bug (deny-all intencional, mig.099) + endurecido
+   (mig.195).** El advisor INFO era false-positive respecto de la intención documentada.
 
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma
