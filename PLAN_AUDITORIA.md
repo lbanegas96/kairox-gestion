@@ -1032,10 +1032,12 @@ prueba `TEST QA mig196` creados y revertidos dentro de la misma transacción —
 - Cobro parcial sobre otra factura CC → `estado_pago` pasó a `'parcial'` ✓
 - Pago total sobre una compra CC (lado proveedor) → `estado_pago` pasó a `'pagada'` ✓
 
-**NO aplicada a producción** — es una escritura a una función financiera crítica (afecta `crear_venta`
-y `crear_devolucion` indirectamente por compartir tabla) y el usuario no estaba presente para
-confirmar (regla del proyecto: toda escritura a prod requiere confirmación explícita por migración).
-Archivo: `supabase/migrations/196_sync_estado_pago_en_imputaciones.sql`, lista para aplicar con el OK.
+**✅ APLICADA a producción** (sesión 60 cont., con confirmación explícita del usuario). Verificado
+post-apply: ambas funciones vivas contienen el `UPDATE ... estado_pago` nuevo. Se revisó además si
+había datos históricos ya corrompidos por el bug (facturas con saldo imputado ≥ total pero
+`estado_pago` todavía `pendiente`/`parcial`) en **todos los tenants**, no solo Nalux — cero casos en
+`comprobantes` y cero en `compras`. No hizo falta backfill; el fix es puramente hacia adelante.
+Archivo: `supabase/migrations/196_sync_estado_pago_en_imputaciones.sql`.
 
 **Nota relacionada, NO investigada a fondo (fuera de alcance de esta sesión):** `crear_nota_credito`
 acepta `comprobante_origen_id` mostrando que una NC referencia una factura concreta, pero no queda
@@ -1053,21 +1055,18 @@ del formulario no valide el rango (mejora cosmética menor, no funcional, no se 
 "N packs = N × precio del pack" en `updatePacks` es consistente (no duplica el descuento automático).
 
 ### 📋 Resumen para retomar (orden de prioridad sugerido)
-1. 🔴 **Revisar y aplicar mig.196** (sync estado_pago al imputar cobro/pago) — el hallazgo más
-   importante de esta sesión. Ya validado con BEGIN/ROLLBACK, solo falta el OK para aplicar + luego
-   verificar en vivo que `ClientDetailModal` ya no muestre "Vencido" en una factura recién cobrada.
-2. 🟡 Revisar el diff de `HeroRow.jsx`/`dashboardService.ts` (card "Contado (mes)") y el fix del
-   Libro IVA — ya deployados, pero vale una mirada.
-3. 🟡 Activar "Leaked Password Protection" en Supabase Auth (1 clic, dashboard).
+1. ✅ **mig.196 aplicada** (sync estado_pago al imputar cobro/pago) — cerrado, ver arriba.
+2. ✅ **Historial de git**: decisión tomada (2026-07-11) — se deja como está. Son totales agregados
+   mensuales, no datos personales ni secretos; reescribir el historial (force-push) es más riesgoso
+   que el beneficio.
+3. 🟡 Activar "Leaked Password Protection" en Supabase Auth (1 clic, dashboard) — sigue pendiente,
+   Claude no puede hacerlo.
 4. 🟢 Investigar si `crear_nota_credito` debería imputar contra `comprobante_origen_id` en
    `cuenta_corriente_imputaciones` (nota sin resolver, no confirmado como bug).
 5. 🟢 Seguir el recorrido punto por punto: Ventas/POS completo (con navegador, cuando la herramienta
    de browser deje de colgarse), Compras, Inventario, Bancos/Caja, CC, Impuestos, Configuración.
 6. 🟢 Repetir la auditoría visual con capturas reales (bloqueada por el tool de screenshot toda la
    sesión — algo a investigar aparte, posiblemente no relacionado con la app).
-7. 🟢 Decidir si limpiar el historial de git de los 2 commits con cifras reales de Nalux
-   (`daf626a`, `ca1b7d2`) — quedaron pusheados al repo público antes de que el clasificador de
-   seguridad lo bloqueara en un commit posterior.
 
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma
