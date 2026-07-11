@@ -54,11 +54,14 @@ function ReporteParidad({ onBack }) {
       const startISO = `${dateFrom}T00:00:00.000Z`;
       const endISO   = `${dateTo}T23:59:59.999Z`;
 
-      // 1. Traer comprobantes del período
+      // 1. Traer comprobantes del período. tipo='venta' explícito: sin este
+      // filtro se sumaban las Notas de Crédito (tipo='nota_credito') como si
+      // fueran ventas (hallazgo auditoría sesión 59).
       const { data: comps, error: compError } = await supabase
         .from('comprobantes')
         .select('id, numero_venta, fecha, cliente_nombre, forma_pago, estado_pago, total, moneda, tipo_cambio_tasa, monto_paralelo, tc_paralelo')
         .eq('empresa_id', user.empresa_id)
+        .eq('tipo', 'venta')
         .gte('fecha', startISO)
         .lte('fecha', endISO)
         .order('fecha', { ascending: false });

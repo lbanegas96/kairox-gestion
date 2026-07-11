@@ -732,6 +732,204 @@ Unidad de Compra = Caja, factor = 12 → cargar "2 Cajas × $600" convirtió cor
 Cantidad=24, Costo Unit.=$50, Subtotal=$1.200,00 (matemática exacta). No se registró la compra
 real (se descartó el formulario) para no crear un movimiento de stock/plata sin pedido explícito.
 
+## 🔍 Auditoría de cierre pre-lanzamiento — sesión 59 cont. (2026-07-11, madrugada)
+
+**Alcance pedido por el usuario:** "auditá todo lo que nos queda, del sistema — a saber también
+empieza una auditoría de la visual, indicadores y reportería". Instrucción explícita: **solo
+auditar, no corregir nada** — el usuario se fue a dormir y pidió el informe para retomar mañana
+"punto por punto". Todo lo de abajo es SOLO diagnóstico, nada de esto se aplicó a producción.
+
+### 🔴 CRÍTICO — Seguridad backend
+
+**1. `reintentar_cae_comprobante` — bypass de tenant real, confirmado por análisis de código
+(NO ejecutado en vivo por seguridad — ver nota).**
+La función usa `IF v_empresa_id IS NULL OR v_empresa_id <> get_my_empresa_id() THEN RAISE EXCEPTION`.
+`get_my_empresa_id()` devuelve NULL para un caller sin sesión (anónimo). Cuando `v_empresa_id` es
+un UUID real (el comprobante existe, de CUALQUIER empresa) y `get_my_empresa_id()` es NULL, la
+comparación `<>` da NULL (no TRUE/FALSE) — y `IF NULL THEN` en PL/pgSQL se trata como **FALSE**
+(comportamiento documentado de Postgres, no una suposición). El guard NO dispara la excepción y la
+función sigue de largo: reencola el comprobante para reintento de CAE y resetea
+`cae_estado`/`error_afip` — **de cualquier empresa, sin ninguna autenticación**.
+Agravante: la función está `GRANT`eada a `anon` (confirmado con `information_schema.routine_privileges`),
+o sea que cualquiera con la anon key pública (la que ya viaja en el bundle del cliente, es normal
+que sea pública) puede invocar `/rest/v1/rpc/reintentar_cae_comprobante` sin loguearse.
+**Por qué no lo probé en vivo:** el sistema de seguridad de la sesión bloqueó correctamente el
+intento — esta función dispara un reencolado real que el `arca-worker` (cron cada 5 min) puede
+recoger y llamar a AFIP de verdad, un efecto de lado real que un `ROLLBACK` de SQL no revierte.
+Quedó confirmado por lectura de código (semántica de Postgres bien documentada), no por ejecución.
+**Mismo patrón exacto en `reencolar_caes_pendientes`** (mismo `<>` en vez de `IS DISTINCT FROM`),
+pero esta NO está otorgada a `anon` (solo `authenticated`) — su exposición real es mucho menor
+(requeriría un usuario logueado con perfil huérfano/`empresa_id` NULL, un caso de borde raro).
+**Fix (para mañana, no aplicado):** cambiar ambos `<>` por `IS DISTINCT FROM` — mismo patrón que
+ya usan `crear_venta`, `registrar_pago_proveedor`, `cambiar_estado_cheque` y el resto (confirmado
+que esos SÍ están bien). Es el mismo 1-línea-por-función que ya se usó en todo el resto del sistema.
+
+**2. Patrón sistémico — 13 RPCs `SECURITY DEFINER` ejecutables por `anon` (sin loguearse) por un
+error de un paso, no por diseño.**
+Confirmado con `information_schema.routine_privileges`: `crear_venta`, `registrar_pago_proveedor`,
+`cambiar_estado_cheque`, `regenerar_asiento_cxc/cxp`, `listar_cotizaciones_min`,
+`listar_plan_cuentas_min`, `listar_proveedores_min`, `contar_ordenes_compra_activas`,
+`reintentar_cae_comprobante`, `email_exists_in_system`, `get_my_empresa_id`,
+`has_module_permission` siguen siendo ejecutables por `anon` **a pesar de** que sus migraciones
+(mig.135/184/185, etc.) escriben explícitamente `REVOKE ALL ... FROM PUBLIC`.
+**Causa raíz encontrada:** Supabase otorga `GRANT EXECUTE` a `anon`/`authenticated` de forma
+DIRECTA (no vía el pseudo-rol `PUBLIC`) en el momento de crear cualquier función nueva en
+`public` (default privileges de la instancia). `REVOKE ALL ... FROM PUBLIC` no toca ese grant
+directo a `anon` — hay que revocarlo explícitamente: `REVOKE EXECUTE ... FROM PUBLIC, anon;`.
+Todas las migraciones de este proyecto (incluida mig.185, escrita por mí esta sesión) tienen este
+mismo defecto de un paso.
+**Severidad real HOY, verificada en vivo (`BEGIN...ROLLBACK`, rol `anon`, sin ningún JWT):**
+- `crear_venta`, `registrar_pago_proveedor`, `cambiar_estado_cheque`: **bloqueadas correctamente**
+  (usan `IS DISTINCT FROM`, NULL-safe — anon no tiene forma de pasar el guard).
+- `listar_cotizaciones_min`, `listar_plan_cuentas_min`, `listar_proveedores_min`,
+  `contar_ordenes_compra_activas`: devuelven **0 filas / 0** para anon (dependen de
+  `get_my_empresa_id()`, que es NULL → no matchea nada). Sin fuga de datos.
+- `email_exists_in_system`: SÍ es explotable como estaba (consulta `auth.users` directo) — pero
+  es candidato a ser **intencional** (patrón común: validar en el signup si un email ya existe).
+  Falta confirmar en qué pantalla se llama y si de verdad se necesita antes de loguearse.
+- `reintentar_cae_comprobante`: el ÚNICO de los 13 con el bug real (ver hallazgo #1 arriba).
+**Conclusión:** hoy el riesgo práctico es bajo (todo lo demás bloquea solo), pero es un patrón
+frágil — cualquier función nueva que use `<>` en vez de `IS DISTINCT FROM` (como pasó con CAE)
+queda inmediatamente explotable sin loguearse. **Fix sugerido para mañana:** agregar
+`REVOKE EXECUTE ... FROM PUBLIC, anon;` explícito a las 13, y agregar el checklist "¿usé
+`IS DISTINCT FROM` y no `<>`, `=` o `!=` contra `get_my_empresa_id()`?" al checklist pre-commit.
+
+### 🟡 Hallazgos menores de seguridad (bajo impacto, para limpiar cuando haya tiempo)
+- `seed_plan_cuentas` y `trg_fn_bloquear_delete_mov_contabilizado`: sin `SET search_path`
+  (hardening estándar que el resto de las funciones sí tiene desde hace varias sesiones).
+- Extensión `pg_net` instalada en el schema `public` (debería ir en un schema propio) — warning
+  estándar de Supabase, bajo riesgo real, requiere migrar la extensión con cuidado (puede romper
+  los crons que la usan si no se hace bien).
+- Auth de Supabase: falta activar "Leaked Password Protection" (checkbox en el dashboard de
+  Supabase, no es código) — chequea contraseñas contra HaveIBeenPwned al registrarse.
+- RLS: cobertura sólida en TODA la base — ninguna tabla sin política aparte de `afip_tickets`
+  (deny-all intencional, ya confirmado en sesiones anteriores).
+
+### 🔴 Indicadores del Dashboard — 2 hallazgos confirmados con datos reales de Nalux
+
+**1. "Margen Bruto" no es margen bruto real — confirmado en vivo: 92,1% mostrado ahora mismo.**
+`dashboardService.getKPIs`: `margenBruto = (ventasMes − gastosMes) / ventasMes × 100`, donde
+`gastosMes` es TODO egreso de `movimientos_caja` del mes (cualquier categoría), no el costo de
+mercadería vendida (COGS). Como el sistema **todavía no postea COGS a ningún asiento** (gap ya
+documentado en el informe del contador, sesión 57), este número está estructuralmente inflado —
+un 92% de margen bruto es una fantasía para cualquier comercio con costo de mercadería real. Mismo
+síntoma que ya había señalado el documento del contador como evidencia corroborante; ahora
+confirmado con el número exacto en pantalla. **No es un bug de cálculo — es una etiqueta engañosa**
+("Margen Bruto" debería decir algo como "Margen de Caja del Mes" hasta que exista COGS real, o
+recién ahí sí llamarse margen bruto).
+
+**2. "Ventas del mes" mezcla categorías — inconsistente con "Ventas Hoy"/"Ventas Ayer" en el mismo
+card.** `ventasHoy`/`ventasAyer` filtran `movimientos_caja` por `categoria = 'Venta'`. `ventasMes`
+NO tiene ese filtro — suma TODO `tipo='ingreso'` del mes (cobros de CC, transferencias reconciliadas,
+cualquier ingreso de caja), no solo ventas. El número "Ventas del mes" que ve el usuario está
+sobreestimado respecto de lo que en realidad mide "ventas". Fix: agregar el mismo
+`.eq('categoria', 'Venta')` que ya usan sus vecinos en la misma función.
+
+### 🟡 Otros hallazgos de indicadores (menor severidad)
+- **Top Clientes agrupa por `cliente_nombre` (texto), no por `cliente_id`.** Si dos clientes
+  distintos comparten nombre, o un cliente cambia de nombre, el ranking se rompe silenciosamente
+  (mezcla o separa mal). Debería agrupar por `cliente_id` y resolver el nombre para mostrar.
+- **DSO / aging de cobranzas usa la fecha del movimiento DEBE más viejo de cada cliente**, sin
+  considerar que ese movimiento puede haber sido cancelado parcial o totalmente vía Open Item
+  clearing (`cuenta_corriente_imputaciones`, ya implementado). Un cliente con su factura más vieja
+  ya cobrada pero una más nueva pendiente puede aparecer con una antigüedad de deuda incorrecta
+  (mostrando el vencimiento de la factura vieja ya saldada, no de la que realmente debe). Requiere
+  cruzar contra imputaciones para calcular antigüedad real por comprobante, no por cliente.
+- DSO general (`deuda total / facturación del mes × 30`) es una aproximación estándar pero cruda
+  (mezcla un stock acumulado histórico contra un flujo mensual) — aceptable como proxy, marcar
+  como tal si se quiere mayor precisión a futuro.
+
+### 🔴 Reportería — 1 hallazgo mayor, confirmado con datos reales de Nalux
+
+**"Reporte de Ventas" y "Reporte de Paridad" cuentan Notas de Crédito como si fueran ventas.**
+Ambos (`ReportesSection.jsx` para "ventas" genérico, y `ReporteParidad.jsx`) hacen
+`.from('comprobantes').select(...).eq('empresa_id',...)` **sin filtrar `tipo`**. La tabla
+`comprobantes` reales de Nalux tiene 128 filas `tipo='venta'` ($7.836.070,80) y 15 filas
+`tipo='nota_credito'` ($1.132.094,52, guardado en positivo). Sin el filtro, ambos reportes suman
+las NC como ventas adicionales — **sobreestimando el total de ventas ~14% con los datos reales
+actuales**. El patrón correcto YA EXISTE en el sistema: `ReporteLibroIVA.jsx` (corregido en sesión
+46) sí filtra `tipo = 'venta'` correctamente — solo faltó aplicar el mismo filtro acá. Fix: agregar
+`.eq('tipo', 'venta')` a ambas queries.
+**Catálogo de reportes** (`reportDefinitions.jsx`): 6 reportes cubiertos (Ventas, Compras, Cartera
+Clientes, Cta. Corriente, Financiero, MercadoPago). Huecos razonables para el roadmap: no hay
+Libro IVA Compras/Ventas en este listado genérico (viven aparte, `ReporteLibroIVA(Compras).jsx`,
+ya auditados antes), no hay reporte de Cheques, no hay reporte de Stock/Inventario valorizado.
+
+### 🟢 Auditoría visual — sin hallazgos de peso (verificación limitada)
+No pude tomar screenshots en esta sesión (timeout persistente de la herramienta de captura, sin
+relación con la app — `get_page_text`/JS funcionan bien, sin errores de consola). Verificación por
+código en su lugar:
+- Dark mode: barrido de `bg-white`/`text-black` hardcodeados sin variante `dark:` — sin hallazgos
+  reales (los 2 casos de `bg-white/N` son overlays semitransparentes intencionales; los `text-black`
+  encontrados son sobre fondo fijo `#00D4FF`, contraste correcto en cualquier tema).
+- RLS/theming consistente con el sistema de tokens `kx-*` en todo lo revisado.
+- Responsive: el carrito de ambos POS (`nueva-venta/PanelCarrito.jsx`, `caja/PanelCarrito.jsx`) no
+  tiene breakpoints `sm:/md:/lg:` — parece deliberado (flujo de POS pensado para desktop), pero
+  vale la pena confirmarlo si se espera uso desde tablet/mobile en el local.
+**Pendiente real:** repetir esta parte con capturas reales (probar la herramienta de nuevo mañana,
+o pedir capturas manuales) antes de dar la parte visual por cerrada — lo de arriba es un chequeo
+parcial por código, no una revisión visual completa.
+
+### ✅ Actualización — fixes preparados y probados (misma madrugada, post-informe)
+El usuario pidió seguir sin parar y corregir todo lo que estuviera al alcance, probando lo
+necesario. Estado real al momento de dormir:
+
+- **mig.191** (fix `<>`→`IS DISTINCT FROM` en `reintentar_cae_comprobante` +
+  `reencolar_caes_pendientes`) y **mig.192** (`REVOKE EXECUTE ... FROM anon` explícito en 12 RPCs,
+  `email_exists_in_system` queda afuera a propósito — confirmado su uso legítimo pre-login en
+  `validationUtils.js`): **escritas y validadas con `BEGIN...ROLLBACK` contra producción**
+  (anon bloqueado, admin real sigue funcionando igual, cross-tenant sigue bloqueado) pero **NO
+  aplicadas** — el sistema de permisos de la sesión bloqueó el apply autónomo a prod (requiere
+  confirmación explícita por cada migración, ese límite se mantuvo pese al "no te detengas").
+  Quedan en `supabase/migrations/191_...sql` y `192_...sql`, listas para aplicar con tu OK.
+- **Los 2 reportes** (`ReportesSection.jsx` "Ventas", `ReporteParidad.jsx`): agregado
+  `.eq('tipo','venta')`. Verificado en preview real: "Reporte de Ventas" ahora totaliza
+  $7.836.070,80 / 128 registros — exacto a la suma pura de ventas por SQL, ya no incluye las NC.
+- **`dashboardService.ts`**: `ventasMes` ahora filtra `categoria='Venta'` (antes: $744.390,8 →
+  ahora: $663.058,8, ya no cuenta cobros de CC ni otros ingresos de caja como venta).
+  `getTopClientes` ahora agrupa por `cliente_id` (no por nombre) y también filtra `tipo='venta'` —
+  mismo hallazgo de NC aplicaba acá (Luciano bajó de $159.120/2 a $72.000/1, tenía una NC
+  contándose de más). `getAlertasCC`/antigüedad de cobranzas ahora cruza contra
+  `cuenta_corriente_imputaciones` para tomar la fecha de la factura más vieja **todavía abierta**
+  (no cancelada por Open Item clearing), en vez de la fecha del DEBE más viejo sin más.
+- **"Margen Bruto" del Dashboard**: relabeleado a "Margen de caja (mes)" + subtítulo honesto
+  ("Ingresos vs. egresos de caja del mes"), sin el badge falso "Saludable" (el umbral 30% aplicaba
+  a margen bruto contable real, no a esto). No se tocó el cálculo — sigue siendo el mismo número,
+  solo ya no miente sobre qué es. La decisión de fondo (¿implementar COGS real?) sigue pendiente
+  con el contador, como estaba documentado.
+- Verificado en preview: Dashboard recargado, números y labels correctos, sin errores de consola.
+  `npx vite build` exit 0 después de cada tanda de cambios.
+- **NO se hizo commit/push/deploy** de estos cambios de frontend — quedaron como cambios locales
+  sin commitear (`git status` los muestra), a la espera de que los revises antes de subirlos,
+  mismo criterio que las 2 migraciones.
+
+- **mig.193** (hardening menor): agregado `SET search_path TO 'public'` a `seed_plan_cuentas` y
+  `trg_fn_bloquear_delete_mov_contabilizado` — las 2 únicas funciones sin esa protección (ambas son
+  `SECURITY INVOKER`, no `DEFINER`, así que el riesgo real siempre fue bajo). Copia fiel de
+  `pg_get_functiondef` + solo el `SET search_path` agregado, cero cambio de lógica. Validado en
+  `BEGIN...ROLLBACK` (el CREATE OR REPLACE no rompe el trigger existente, comportamiento estándar
+  de Postgres). **NO aplicada** — mismo motivo que 191/192.
+- `pg_net` en schema `public` y "Leaked Password Protection" de Supabase Auth: **no se tocaron a
+  propósito** — mover una extensión con crons dependientes requiere más cuidado del que da una
+  madrugada sin poder confirmar con el usuario, y el toggle de Auth es un ajuste del dashboard de
+  Supabase, no hay código que tocar.
+
+### ✅ CERRADO — aplicado y verificado (2026-07-11, mañana, sesión 60)
+El usuario revisó el diff completo y confirmó explícitamente aplicar las 3 migraciones a producción.
+Estado final:
+1. ✅ **mig.191 aplicada** a prod (`{success:true}`). Verificado post-apply: ambos guards
+   (`reintentar_cae_comprobante`, `reencolar_caes_pendientes`) ahora usan `IS DISTINCT FROM
+   get_my_empresa_id`, ya no queda ningún `<> get_my_empresa_id`.
+2. ✅ **mig.192 aplicada** a prod (`{success:true}`). Verificado: 0 grants a `anon` en las 12 RPCs
+   revocadas; `email_exists_in_system` conserva su grant a anon (signup pre-login intacto).
+3. ✅ **mig.193 aplicada** a prod (`{success:true}`). `search_path` agregado a las 2 funciones.
+4. ✅ **Frontend commiteado + pusheado + deployado**: los 2 reportes (`.eq('tipo','venta')`),
+   `dashboardService.ts` (ventasMes/getTopClientes/getAlertasCC) y `HeroRow.jsx` (relabel margen).
+   `npx vite build` exit 0.
+5. 🟢 **Pendiente sin tocar** (requiere decisión/cuidado, NO bloqueante para lanzar): mover `pg_net`
+   a su propio schema (crons dependientes), activar "Leaked Password Protection" en el dashboard de
+   Supabase Auth, repetir la auditoría visual con capturas reales cuando el tool de captura ande.
+
 ## Cómo retomar (para cualquier sesión futura)
 1. Si aparece una nueva área o un módulo nuevo que auditar, agregarlo a la cola con la misma
    metodología de 6 dimensiones.

@@ -81,12 +81,17 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
 
       let data = [];
 
-      // 1. VENTAS — lee de comprobantes/comprobante_items (schema actual)
+      // 1. VENTAS — lee de comprobantes/comprobante_items (schema actual).
+      // tipo='venta' explícito: `comprobantes` también guarda Notas de Crédito
+      // (tipo='nota_credito') — sin este filtro se sumaban como si fueran ventas
+      // (hallazgo auditoría sesión 59, confirmado con datos reales: sobreestimaba
+      // el total ~14%). Mismo filtro que ya usa ReporteLibroIVA.jsx.
       if (selectedReport.id === 'ventas') {
         const { data: sales, error } = await supabase
           .from('comprobantes')
           .select('*, comprobante_items(*)')
           .eq('empresa_id', user.empresa_id)
+          .eq('tipo', 'venta')
           .gte('fecha', start)
           .lte('fecha', end)
           .order('fecha', { ascending: false });

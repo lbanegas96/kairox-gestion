@@ -16,7 +16,11 @@ export const dashboardService = {
     ] = await Promise.all([
       supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'ingreso').eq('categoria', 'Venta').gte('fecha', todayStart).lte('fecha', todayEnd),
       supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'ingreso').eq('categoria', 'Venta').gte('fecha', getStartOfDayAR(ayer)).lte('fecha', getEndOfDayAR(ayer)),
-      supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'ingreso').gte('fecha', mesStart).lte('fecha', todayEnd),
+      // categoria='Venta' explícito: sin este filtro sumaba CUALQUIER ingreso de
+      // caja del mes (cobros de CC, transferencias reconciliadas, etc.), no solo
+      // ventas — inconsistente con ventasHoy/ventasAyer arriba, que sí lo filtran
+      // (hallazgo auditoría sesión 59).
+      supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'ingreso').eq('categoria', 'Venta').gte('fecha', mesStart).lte('fecha', todayEnd),
       supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'egreso').neq('categoria', 'Apertura').gte('fecha', mesStart).lte('fecha', todayEnd),
       supabase.from('clientes').select('saldo_actual').eq('empresa_id', empresaId).gt('saldo_actual', 0),
       supabase.from('productos').select('id, nombre, stock_actual, stock_minimo, unidad_medida').eq('empresa_id', empresaId).eq('activo', true),
@@ -146,24 +150,32 @@ export const dashboardService = {
     const mesStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
     const mesEnd   = getEndOfDayAR(now);
 
+    // tipo='venta': mismo hallazgo que el resto de los reportes — sin este filtro
+    // las Notas de Crédito se sumaban como ventas del cliente (auditoría sesión 59).
     const { data } = await supabase
       .from('comprobantes')
-      .select('cliente_nombre, total')
+      .select('cliente_id, cliente_nombre, total')
       .eq('empresa_id', empresaId)
+      .eq('tipo', 'venta')
       .not('cliente_nombre', 'is', null)
       .gte('fecha', mesStart)
       .lte('fecha', mesEnd);
 
-    const byCliente: Record<string, { total: number; count: number }> = {};
+    // Agrupar por cliente_id (no por nombre): dos clientes con el mismo nombre no
+    // deben mezclarse, y un cliente que cambió de nombre no debe separarse en dos
+    // filas (hallazgo auditoría sesión 59). "Consumidor Final" (cliente_id NULL)
+    // sigue agrupando por nombre, que es lo correcto para ventas sin cliente.
+    const byCliente: Record<string, { nombre: string; total: number; count: number }> = {};
     for (const c of data ?? []) {
       if (!c.cliente_nombre) continue;
-      if (!byCliente[c.cliente_nombre]) byCliente[c.cliente_nombre] = { total: 0, count: 0 };
-      byCliente[c.cliente_nombre].total += Number(c.total);
-      byCliente[c.cliente_nombre].count += 1;
+      const key = c.cliente_id ?? `nombre:${c.cliente_nombre}`;
+      if (!byCliente[key]) byCliente[key] = { nombre: c.cliente_nombre, total: 0, count: 0 };
+      byCliente[key].total += Number(c.total);
+      byCliente[key].count += 1;
     }
 
-    return Object.entries(byCliente)
-      .map(([nombre, { total, count }]) => ({ nombre, total, count }))
+    return Object.values(byCliente)
+      .map(({ nombre, total, count }) => ({ nombre, total, count }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 5);
   },
@@ -188,16 +200,42 @@ export const dashboardService = {
 
     const clienteIds = conDeuda.map((c: { id: string }) => c.id);
 
+    // Antigüedad de deuda por comprobante abierto, no por "DEBE más viejo del cliente".
+    // Sin esto, una factura vieja ya cancelada vía Open Item clearing
+    // (cuenta_corriente_imputaciones) seguía marcando al cliente como "vencido
+    // hace mucho" aunque la deuda real fuera de una factura más reciente
+    // (hallazgo auditoría sesión 59).
     const { data: movs } = await supabase
       .from('cuenta_corriente_movimientos')
-      .select('cliente_id, fecha')
+      .select('cliente_id, fecha, monto, comprobante_id')
       .eq('empresa_id', empresaId)
       .eq('tipo', 'DEBE')
       .in('cliente_id', clienteIds)
       .order('fecha', { ascending: true });
 
+    type DebeRow = { cliente_id: string; fecha: string; monto: number; comprobante_id: string | null };
+    const debeRows = (movs ?? []) as DebeRow[];
+
+    // Imputado por comprobante (solo para los que tienen comprobante_id — los que
+    // no lo tienen, ej. reversión de cheque rechazado, se consideran siempre abiertos).
+    const comprobanteIds = [...new Set(debeRows.map((m) => m.comprobante_id).filter((id): id is string => !!id))];
+    const imputadoPorComprobante: Record<string, number> = {};
+    if (comprobanteIds.length) {
+      const { data: imputaciones } = await supabase
+        .from('cuenta_corriente_imputaciones')
+        .select('factura_comprobante_id, monto')
+        .eq('empresa_id', empresaId)
+        .in('factura_comprobante_id', comprobanteIds);
+      for (const i of (imputaciones ?? []) as { factura_comprobante_id: string; monto: number }[]) {
+        imputadoPorComprobante[i.factura_comprobante_id] = (imputadoPorComprobante[i.factura_comprobante_id] ?? 0) + Number(i.monto);
+      }
+    }
+
     const oldestByClient: Record<string, string> = {};
-    for (const m of (movs ?? []) as { cliente_id: string; fecha: string }[]) {
+    for (const m of debeRows) {
+      const imputado = m.comprobante_id ? (imputadoPorComprobante[m.comprobante_id] ?? 0) : 0;
+      const abierto = !m.comprobante_id || imputado < Number(m.monto);
+      if (!abierto) continue; // ya cancelado vía Open Item clearing — no cuenta para antigüedad
       if (!oldestByClient[m.cliente_id]) oldestByClient[m.cliente_id] = m.fecha;
     }
 
