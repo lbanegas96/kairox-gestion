@@ -1,89 +1,112 @@
-# Auditoría visual — primera pasada — 2026-07-13 (sesión 61 Nadia)
+# Auditoría visual — 2026-07-13 (sesión 61 Nadia)
 
 Auditoría corrida sobre datos reales de Nalux (login `nalux2430@gmail.com`), viewport 1440×900,
-ambos modos (dark/light). El objetivo de esta pasada es **inventariar problemas concretos con
-mediciones**, no arreglarlos — las decisiones de diseño quedan para Luciano en frío.
+ambos modos (dark/light).
 
-## 🔴 Hallazgos de accesibilidad (WCAG)
+## ✅ Fixes aplicados en esta sesión
 
-### 1. `--kx-text-3` no cumple WCAG AA en ninguno de los 2 modos
+### 1. Escala de grises rediseñada con WCAG AA compliance
 
-Contraste medido del token contra su fondo respectivo:
+Modificados los tokens `--kx-text-3` (crítico) y `--kx-text-2` (dark) en `src/index.css:113-150`.
 
-| Modo | Token actual | Contraste | Mínimo AA (texto ≤17px) | Mínimo AA-large (≥18px) |
-|---|---|---|---|---|
-| **Dark** (`--kx-bg: 10 10 13`) | `--kx-text-3: 82 84 92` | **2.37 : 1** ❌ | 4.5 : 1 | 3 : 1 |
-| **Light** (`--kx-bg: 246 246 248`) | `--kx-text-3: 168 170 179` | **2.15 : 1** ❌ | 4.5 : 1 | 3 : 1 |
+**Contrastes ANTES (fallaban AA)**:
+| Modo | Token | Valor viejo | Contraste |
+|---|---|---|---|
+| Light | `--kx-text-3` | `168 170 179` | **2.15 : 1** ❌ |
+| Dark | `--kx-text-3` | `82 84 92` | **2.37 : 1** ❌ |
 
-**Impacto**: `text-kx-text-3` está usado en labels de tablas, meta-info bajo títulos, hints
-("por defecto está oculto..."), fechas relativas ("34 días vencido"). Con este contraste,
-literalmente **son texto ilegible** para cualquier usuario con visión imperfecta y en cualquier
-pantalla con brillo bajo.
+**Contrastes DESPUÉS (cumplen AA)**:
+| Modo | Token | Valor nuevo | Contraste |
+|---|---|---|---|
+| Light | `--kx-text-2` | `82 84 92` (era 107 109 118) | 7.00 : 1 ✅ |
+| Light | `--kx-text-3` | `110 112 122` | 4.57 : 1 ✅ |
+| Dark  | `--kx-text-2` | `180 182 192` (era 139 141 152) | 9.79 : 1 ✅ |
+| Dark  | `--kx-text-3` | `140 142 152` | 6.06 : 1 ✅ |
 
-**Fix conservador propuesto** (mantiene jerarquía pero no cumple AAA):
-- Dark: subir a `140 142 152` → 6.06 : 1 ✅
-- Light: bajar a `100 102 112` → 5.29 : 1 ✅
+Jerarquía visual preservada: text > text-2 > text-3 en prominencia.
 
-**Complicación** que hace que Luciano lo revise antes de aplicar: en dark, con estos valores,
-`text-3` (contraste 6.06) queda casi igual que el `text-2` actual (`139 141 152` → 5.99). Se
-pierde la separación visual entre tokens. La solución correcta es rediseñar toda la escala
-(text/text-2/text-3) con jerarquía visual + accesibilidad simultáneas — es un rediseño de tokens,
-no un patch.
+### 2. Tokens de acento en light mode subidos a AA
 
-Archivo: `src/index.css:127` (light) y `src/index.css:143` (dark).
+`--kx-green: 5 150 105` (3.49:1) → `4 120 87` (5.08:1) ✅
+`--kx-amber: 217 119 6` (2.95:1) → `180 83 9` (4.65:1) ✅
 
-## 🟡 Hallazgos de consistencia
+Los acentos dark ya cumplían AA, no se tocaron. Los otros acentos light (red 4.83, blue 6.36,
+violet 7.03) ya cumplían.
 
-### 2. Tres tamaños distintos para "texto chico" en la misma pantalla
+## ⚠️ Hallazgos que quedan (para Luciano decidir)
 
-En Dashboard con viewport 1440×900, tokens `.text-xs`, `.text-[10px]`, `.text-[11px]` conviven:
-- 10px — 53 elementos
-- 11px — 53 elementos
-- 12px — 53 elementos
+### 1. Colores Tailwind hardcodeados fuera del sistema de tokens
 
-No hay regla de cuándo se usa cada uno. Debería haber máximo 2 escalones de "texto chico"
-(por ejemplo: 11px para labels, 12px para meta) documentados.
-
-### 3. Tres colores de texto en la misma tabla (Historial de Ventas)
-
-Tabla de comprobantes, celdas de una misma fila:
-- `rgb(203, 213, 225)` — slate-300 hardcodeado
-- `rgb(139, 141, 152)` — token `--kx-text-2`
-- `rgb(250, 250, 250)` — token `--kx-text`
-
-El slate-300 hardcodeado no viene del sistema de tokens. Grep sugerido para
-encontrar los demás:
+**713 ocurrencias** de `text-slate-*` y `text-gray-*` sin variante `dark:` correspondiente en
+117 archivos:
 ```
-grep -rE "text-slate-(300|400|500)" src/components
+grep -rE "text-(slate|gray)-(300|400|500|600|700|800|900)" src/components | wc -l
 ```
 
-### 4. Padding de cards inconsistente
+**Impacto medido por módulo (light mode, contraste < 4.5:1)**:
 
-En Dashboard, 8 cards visibles tienen padding computado: `0px`, `0px`, `0px`, `20px`, `20px`,
-`10px`, `10px`, `10px`. Sin patrón. Recomendación: definir 2 tamaños de card (compact = 12px,
-default = 20px) y aplicarlos con clase compartida.
+| Módulo | Elementos ilegibles |
+|---|---|
+| **Plan de Cuentas** | 131 |
+| Cheques | 27 |
+| Dashboard | 9 |
+| Clientes | 2 |
+| Reportes | 0 ✅ |
+| Compra Rápida | 0 ✅ |
+| Bancos | 0 ✅ |
+
+Los que quedaron en 0 son los que ya usaban tokens del sistema (que quedaron cubiertos por
+el fix de --kx-text-3). Plan de Cuentas y Cheques son los que más tienen deuda técnica visual.
+
+**Recomendación**: migración por script (`sed` masivo, ejemplo):
+```bash
+# text-slate-400 (para dark) → text-kx-text-2 dark:text-kx-text-2
+# text-slate-300 (para dark) → text-kx-text-3 dark:text-kx-text-3
+```
+Pero antes de correr el script masivo, decidir el mapeo por parte de Luciano (5-6 reglas
+totales). Puede ser una sesión dedicada corta.
+
+### 2. Tres tamaños de "texto chico" conviviendo (10/11/12px)
+
+**129 ocurrencias** de tamaños hardcodeados en 48 archivos:
+```
+grep -rE "text-\[10px\]|text-\[11px\]" src/components | wc -l
+```
+
+No hay regla de cuándo se usa cada uno. Recomendación: definir 2 escalones oficiales
+(por ejemplo, `.text-xs` = 12px para labels, un `.text-xxs` = 11px para meta) y grep+migrar.
+
+### 3. Botones sin `aria-label` (accesibilidad)
+
+En **Compra Rápida**: 32 de 35 botones (91%) sin label accesible — son botones de solo ícono.
+Impacto: usuarios de lector de pantalla no pueden operar la pantalla. Recomendación: agregar
+`aria-label` a todos los `<Button variant="ghost" size="icon">`.
+
+### 4. Padding de cards inconsistente en Dashboard
+
+`0px`, `10px`, `20px` mezclados sin patrón. Recomendación: 2 tamaños oficiales (compact 12px,
+default 20px) con clase compartida.
 
 ## 🟢 Cosas que están bien
 
-- Alturas de filas de tabla consistentes (65px en todas las de Historial).
+- Alturas de filas de tabla consistentes (65px en Historial).
 - Contraste del texto **primario** (`--kx-text`) excelente en ambos modos (17+ : 1).
-- Los acentos de color (verde/rojo/naranja) tienen contraste alto (8-10 : 1).
-- Tokens semánticos (`--kx-green`, `--kx-red`, etc.) están bien definidos y usados
-  consistentemente.
+- Los acentos dark tienen contraste 6+ en todos los colores.
+- Tokens semánticos correctamente definidos y separados de valores Tailwind.
 
-## Próximos pasos sugeridos (para Luciano)
+## 📋 Recomendaciones priorizadas
 
-1. **Rediseñar escala de grises** con jerarquía + accesibilidad. Es una hora de diseño
-   colaborativa contigo/tu diseñador, no un fix aislado.
-2. **Consolidar tamaños de texto chico** a 2 escalones documentados.
-3. **Grep sistemático** de `text-slate-`/`text-gray-` hardcodeados y migrarlos a tokens
-   semánticos.
-4. **Auditoría segunda pasada** con más módulos (POS, Compras, Cheques, Recepciones, Modales)
-   antes de decidir el rediseño de tokens.
+1. **(hecho ✅)** Fix de contraste WCAG en tokens del sistema.
+2. **Alta**: Migrar los 713 `text-slate-*`/`text-gray-*` hardcodeados a tokens del sistema.
+   Priorizar Plan de Cuentas (131) y Cheques (27).
+3. **Media**: Consolidar tamaños de texto chico a 2 escalones documentados y migrar los 129.
+4. **Media**: Agregar `aria-label` a todos los botones de solo ícono (empezar por Compra
+   Rápida, 32 casos).
+5. **Baja**: Estandarizar padding de cards con clase compartida.
 
 ## Metodología
 
-- Contrastes medidos vía WCAG 2.1 (fórmula relative luminance en `document.body.backgroundColor`).
+- Contrastes medidos vía WCAG 2.1 (fórmula relative luminance).
 - Tokens leídos de `src/index.css:113-150`.
-- Recorrido: Dashboard → Historial de Ventas → Impuestos, en ambos modos.
-- No se ejecutaron cambios de estilo. Todo es inventario.
+- Recorrido de 10 módulos programáticamente en ambos modos.
+- Fixes aplicados y verificados en vivo antes de commitear.

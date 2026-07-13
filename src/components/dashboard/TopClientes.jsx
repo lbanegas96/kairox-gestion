@@ -27,7 +27,14 @@ function TopClientes({ topLoading, topClientes, maxTopTotal, onNavigate }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
           {topClientes.map((c, i) => {
             const pct = (c.total / maxTopTotal) * 100;
-            const rankColors = ['text-yellow-500','text-slate-400','text-amber-600','text-kx-text-3','text-kx-text-3'];
+            // Oro/plata/bronce: tono oscuro en light (AA) + tono claro original en dark.
+            const rankColors = [
+              'text-yellow-700 dark:text-yellow-500',
+              'text-slate-600 dark:text-slate-400',
+              'text-amber-700 dark:text-amber-600',
+              'text-kx-text-3',
+              'text-kx-text-3',
+            ];
             return (
               <div key={c.nombre} className="bg-kx-surface-2 rounded-xl p-3 border border-kx-border">
                 <div className="flex items-center gap-2 mb-2">

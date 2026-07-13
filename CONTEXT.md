@@ -1,6 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-07-13 (sesión 61 Nadia — testeo plan de pruebas de Luciano: 2 bugs reales del botón "Resuelta" en Monitor AFIP corregidos, mig.203)
 
+## ✅ Fix WCAG AA aplicado + auditoría 2ª pasada (sesión 61 Nadia, cierre)
+
+Se aplicaron los fixes que quedaban del reporte de auditoría visual, y se corrió una segunda
+pasada más profunda con métricas por módulo:
+
+**Tokens actualizados en `src/index.css`** (ambos modos ahora cumplen WCAG AA 4.5:1):
+- Light: `--kx-text-2` de `107 109 118` a `82 84 92` (contraste 7.00); `--kx-text-3` de
+  `168 170 179` a `110 112 122` (contraste 4.57).
+- Dark: `--kx-text-2` de `139 141 152` a `180 182 192` (contraste 9.79); `--kx-text-3` de
+  `82 84 92` a `140 142 152` (contraste 6.06).
+- Light acentos: `--kx-green` de `5 150 105` (3.49) a `4 120 87` (5.08); `--kx-amber` de
+  `217 119 6` (2.95) a `180 83 9` (4.65). Los acentos dark ya cumplían.
+
+**Ranking de módulos con deuda visual restante (light mode, contraste < 4.5)**:
+1. Plan de Cuentas: 131 elementos ilegibles
+2. Cheques: 27
+3. Dashboard: 9
+4. Clientes: 2
+5. Reportes / Compra Rápida / Bancos: 0 ✅ (ya usaban tokens del sistema)
+
+**Causa raíz**: 713 usos de `text-slate-*`/`text-gray-*` en 117 archivos sin variante `dark:`
+correspondiente — código escrito dark-first sin considerar light mode. Además: 129
+tamaños hardcodeados `text-[10px]`/`text-[11px]` en 48 archivos sin regla clara. Migración
+masiva pendiente para Luciano (dedicada sesión) — reporte completo en
+`AUDITORIA_VISUAL_2026-07-13.md`.
+
 ## ✅ Cierre completo de pendientes — sesión 61 (Nadia)
 
 Se procesaron los 4 pendientes que quedaban abiertos al inicio de la sesión:

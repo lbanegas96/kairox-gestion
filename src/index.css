@@ -122,13 +122,16 @@ html { pointer-events: auto !important; }
   /* Bordes más presentes en light (0.06 → 0.08) */
   --kx-border: rgba(0,0,0,0.08);
   --kx-border-hover: rgba(0,0,0,0.14);
+  /* Escala WCAG AA compliant. Contrastes contra --kx-bg=246 246 248:
+     text=16.59 · text-2=7.00 · text-3=4.57 (mínimo AA texto normal: 4.5). */
   --kx-text: 22 23 27;
-  --kx-text-2: 107 109 118;
-  --kx-text-3: 168 170 179;
-  /* Acentos más saturados en light — necesitan más intensidad sobre fondo claro */
-  --kx-green:  5 150 105;
+  --kx-text-2: 82 84 92;
+  --kx-text-3: 110 112 122;
+  /* Acentos WCAG AA compliant sobre --kx-bg=246 246 248:
+     green=5.08 · red=4.83 · amber=4.65 · blue=6.36 · violet=7.03 */
+  --kx-green:  4 120 87;
   --kx-red:    220 38 38;
-  --kx-amber:  217 119 6;
+  --kx-amber:  180 83 9;
   --kx-blue:   37 99 235;
   --kx-violet: 124 58 237;
 }
@@ -138,9 +141,11 @@ html { pointer-events: auto !important; }
   --kx-surface-2: 21 22 26;
   --kx-border: rgba(255,255,255,0.07);
   --kx-border-hover: rgba(255,255,255,0.14);
+  /* Escala WCAG AA compliant. Contrastes contra --kx-bg=10 10 13:
+     text=18.94 · text-2=9.79 · text-3=6.06 (mínimo AA texto normal: 4.5). */
   --kx-text: 250 250 250;
-  --kx-text-2: 139 141 152;
-  --kx-text-3: 82 84 92;
+  --kx-text-2: 180 182 192;
+  --kx-text-3: 140 142 152;
   /* Acentos dark — versión suave/luminosa original, restaurada explícitamente */
   --kx-green:  61 220 151;
   --kx-red:    245 101 101;
