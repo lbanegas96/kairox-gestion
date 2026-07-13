@@ -3,7 +3,7 @@
 por partes, dejando registrado qué se auditó, qué está en curso y qué falta — para que no se
 escape nada.
 
-**Última actualización:** 2026-07-04 (sesión 46 cont. 8 — Audit log auditada; área #15 — PLAN COMPLETO: 15/15 áreas auditadas)
+**Última actualización:** 2026-07-12 (sesión 60 cont. 5 — Monitor de Facturación AFIP construido, mig.202; arca-worker v7 con lock de concurrencia)
 **Leyenda de estado:** ✅ auditado · 🔄 en curso · ⬜ pendiente · ⏸️ bloqueado
 
 ---
@@ -1215,6 +1215,122 @@ funcionalmente más abajo, sin necesidad de capturas). Queda pendiente de una se
 auditoría **visual** (spacing, colores, layout) con capturas reales, cuando el tool de screenshot se
 resuelva — eso sí requiere imagen, no alcanza con verificación funcional.
 
+### ✅ CONFIRMADO Y CORREGIDO: numeración AFIP con hueco (18 facturas en error permanente) + reseteo accidental de 2 ya emitidas
+(hallazgo sesión 60 cont. 4, a pedido del usuario sobre facturas sin CAE en error permanente, 2026-07-11/12)
+
+Diagnóstico de por qué había ~18 comprobantes con `cae_estado='error'`/`'no_aplica'` sin CAE. Dos grupos
+que resultaron solaparse (18 comprobantes únicos, no 30 como se estimó al sumarlos ingenuamente):
+17 parqueados el 2026-07-08 por un workaround temporal de RG 5616 (`CondicionIVAReceptorId`) que se
+dejó "no relevante" con una nota explícita para revertir tras deployar el fix real — nunca se revirtió
+— y 13 con error AFIP `[10016] El numero o fecha del comprobante no se corresponde con el proximo a
+autorizar`. Verificado que el fix de RG 5616 SÍ está deployado en producción (`get_edge_function`,
+versión 5, coincide con el repo).
+
+**Reencolado inicial (30→18) y hallazgo de un efecto secundario propio:** al resetear en bloque via
+`DISTINCT ON (comprobante_id) ORDER BY created_at DESC`, dos comprobantes que YA tenían CAE real y
+válido (`20260707-007`→CAE `...768265`/N°15, `20260707-008`→CAE `...768223`/N°14, ambos emitidos el
+2026-07-08 por fuera del flujo normal) quedaron barridos por el reseteo y uno de ellos fue reintentado
+por el worker sin necesidad (resultado: `error_datos` con 10016, pero sin duplicar el CAE real gracias
+al chequeo `getLastVoucherNumber` del worker). **Corregido de inmediato** restaurando `cae_estado`
+'emitido' + `facturas_pendientes_arca.estado` 'emitida' con el CAE que ya tenían — sin volver a llamar a
+AFIP.
+
+**Causa raíz real de los 13 con [10016] (root cause, confirmado con datos reales del punto de venta):**
+la secuencia AFIP de Factura C en este punto de venta es ...13 (2/jul) → **hueco** → 14-15
+(20260707-008/007, retries manuales tardíos el 8/jul) → 16,18 (ventas normales del 8/jul en adelante).
+Las 13 facturas viejas (3-7/jul) quedaron paradas en el workaround mientras el negocio siguió facturando
+con normalidad y consumió los números 14-18 — AFIP nunca va a aceptarlas con un número anterior a 19,
+van a fallar con el mismo error para siempre. El contador local (`puntos_venta.ultimo_numero_c`) está
+correcto y sincronizado con AFIP; el problema es solo de estas 13 facturas "huérfanas" de su lugar
+cronológico.
+
+**Segundo problema encontrado al analizar el fix:** el worker (`arca-worker/index.ts`) siempre envía la
+fecha real de la venta como `CbteFch` ante AFIP. Para Concepto=1 (productos), AFIP exige que esa fecha
+esté dentro de los 5 días del día de proceso — las facturas más viejas atascadas tienen 9 días de
+antigüedad, así que aunque se arreglara solo la numeración, iban a fallar igual por fecha vencida.
+
+**Fix aplicado (edge function `arca-worker`, versión 6, deploy confirmado explícitamente por el
+usuario):** se agregó el cálculo de `fechaEmisionAfip` — si la venta tiene más de 5 días, se usa hoy
+como fecha de emisión ante AFIP en vez de la fecha real (que queda intacta en `comprobantes.fecha` para
+uso interno/contable). No hizo falta ninguna migración de renumeración: `callArcaEmit` ya calcula el
+próximo número dinámicamente contra AFIP en cada intento (`feCompUltimoAutorizado() + 1`), así que basta
+con resetear la cola a `pendiente` — el propio worker asigna 19, 20, 21... en orden al procesar en
+`fecha ASC`.
+
+Reencoladas las 9 facturas (de las 13+1NC) que ya habían quedado en `error_datos`/`error` tras el primer
+intento fallido, más las 5 que seguían en `pendiente` sin tocar — 14 en total en cola con el fix ya
+desplegado, a la espera del próximo ciclo del cron (cada 5 min). Sin backfill de datos: el fix es hacia
+adelante, el cron procesa la cola automáticamente.
+
+**Verificación (mismo día, más tarde) y segundo hallazgo — condición de carrera entre corridas del
+worker:** de las 14, 5 obtuvieron CAE real limpio (Factura C N°19-22 + NC N°7, secuencia correcta, sin
+huecos). Las 9 restantes fallaron de nuevo con [10016] — pero 4 de ellas con el código YA corregido
+(v6). Mirando los timestamps: esas 9 se procesaron en una ventana de ~3 segundos, en un orden que NO
+respeta `fecha ASC` (el propio orden que pide el worker) — huella clara de que **dos invocaciones del
+worker corrieron en paralelo** y ambas pidieron "el próximo número" a AFIP casi simultáneamente; una
+ganó, la otra quedó rechazada con el mismo error aunque el número en sí no tenía ningún problema. El
+cron dispara cada 5 min sin esperar a que la corrida anterior termine — con varias facturas por lote,
+cada una con 2 llamadas SOAP reales a AFIP, es plausible cruzar ese umbral.
+
+**Fix (mig.201 + arca-worker v7, deploy confirmado explícitamente por el usuario):** tabla
+`arca_worker_run` de una sola fila como lock de ejecución única — el worker reclama el lock al empezar
+(`UPDATE ... WHERE running=false OR started_at < now()-10min`, este último para no quedar en deadlock
+si una corrida previa crasheó sin liberar) y lo libera en un `finally`, éxito o error. Si ya hay una
+corrida en curso, la invocación nueva sale de inmediato sin tocar la cola. Reencoladas las 9 facturas
+restantes con el guard ya activo — pendiente de verificar en la próxima sesión que las 9 terminen de
+salir sin volver a chocar entre sí.
+
+### ✅ Monitor de Facturación AFIP (mig.202, sesión 60 cont. 5, 2026-07-12)
+Reemplazo de la vieja sección "Facturas con Error CAE" (que solo mostraba lo roto) por un Monitor
+completo, inspirado en el "Manage Electronic Documents" / eDocument Cockpit de SAP S/4HANA (decisión de
+diseño cerrada con el usuario: se queda en Configuración → Facturación, alcance completo v1, y se corrige
+de paso el patrón de `.update()` suelto).
+
+**Backend (mig.202, validada con BEGIN...ROLLBACK, aplicada):**
+- Vista `v_facturas_arca_monitor` (`security_invoker=on` → RLS del que consulta, sin fuga cross-tenant):
+  toma `comprobantes` como canónico (cae_estado = estado fiscal legal) + LEFT JOIN LATERAL a la última
+  fila de la cola para intentos/error. Expone los 5 estados: no_aplica/pendiente/error/error_definitivo/
+  emitido.
+- RPC `reintentar_caes_lote(uuid[])` — acción masiva atómica, guard de empresa + permiso 'ventas', y
+  **guard clave: nunca re-encola un 'emitido' ni 'no_aplica'** (no re-emitir un CAE válido → no duplicar
+  en AFIP). Devuelve la cantidad realmente reencolada. Probado: 1 error + 1 emitido → reencola solo el
+  error (return 1), el emitido queda intacto.
+- RPC `marcar_cae_resuelto_manual(uuid)` — override "Resuelta" atómico, mismos guards.
+- Ambas RPCs con `REVOKE EXECUTE ... FROM anon` (convención del proyecto, cierra el advisor
+  security_definer_rpc_anon).
+
+**Frontend:**
+- Nuevo componente autocontenido `MonitorFacturacionAFIP.jsx` (fetching vía useQuery — estándar de
+  PLAN_AUDITORIA_CODIGO.md): KPIs (total/emitidas/en cola/con error), filtros (rango de fechas server-side,
+  estado multi-select vía chips, tipo A/B/C, búsqueda por nº/cliente/nº AFIP), columna Nº AFIP, selección
+  múltiple con "Reintentar seleccionadas", y drill-down con el detalle completo (CAE, venc, estado cola,
+  error completo). Por defecto oculta 'no relevante'.
+- **Fix del patrón "escritura suelta"**: las acciones Reintentar/Resuelta ahora van por RPC atómica —
+  antes hacían `.update()` directo a `facturas_pendientes_arca` + `comprobantes` desde el front (mismo
+  patrón corregido en CxC/CxP/ND/Cheques esta auditoría). Se removió el state/handlers/modal muertos del
+  padre `ConfiguracionSection.jsx`.
+
+**Verificado en el navegador (dev server, sesión Nalux):** build limpio; el Monitor renderiza con 32
+filas fiscales por defecto (oculta los 111 no_aplica), togglear "No relevante" sube a 108 (ventana 30
+días); una fila 'emitido' ofrece solo "Detalle", una fila 'error' ofrece Reintentar+Detalle+Resuelta; sin
+errores de consola.
+
+**Corrección de ubicación (misma sesión, a pedido del usuario):** el usuario planteó la pregunta correcta
+— ¿por qué un monitor operativo de Ventas vive detrás del permiso `configuracion`, que es todo-o-nada y
+también desbloquea Integraciones (token Mercado Pago), Usuarios, Sistema y datos fiscales de la Empresa?
+Confirmado en `useUserPermissions.js`: los permisos de staff son binarios por módulo, sin sub-permisos —
+darle "configuracion" a un staff solo para ver el Monitor sería un sobre-permiso real. Aplicando la regla
+SAP de Configuración vs Operación: la parametrización de AFIP (credenciales, PdV, tipos, series, pie de
+documento) es customizing real y se queda en Configuración → Facturación; el Monitor es una función
+operativa de Ventas y se movió a una 6ª pestaña "Facturación AFIP" dentro de `VentasSection.jsx`, gateada
+por el permiso `ventas` que ya existe (mismo patrón que Cotizaciones/Pedidos/Entregas/Facturas/
+Devoluciones). Se usa el hook ya existente `useAfipConfig` (`afipActivo`) para ocultar la pestaña si la
+empresa no tiene AFIP habilitado — sin necesidad de crear ningún permiso nuevo. Componente movido de
+`src/components/configuracion/` a `src/components/ventas/` para reflejar su ubicación real. Verificado en
+una pestaña de navegador completamente limpia (sin contaminación de HMR de la sesión de edición): ambas
+rutas (Configuración → Facturación sin el Monitor; Ventas → Facturación AFIP con el Monitor, 32 filas)
+funcionan sin ningún error de consola.
+
 ### 📋 Resumen para retomar (orden de prioridad sugerido)
 1. ✅ **mig.196 aplicada** (sync estado_pago al imputar cobro/pago) — cerrado, ver arriba.
 1b. ✅ **mig.197 aplicada** (crear_nota_credito imputa contra la factura de origen) + backfill de 5
@@ -1225,6 +1341,11 @@ resuelva — eso sí requiere imagen, no alcanza con verificación funcional.
    vez de crear un comprobante de venta fantasma) + backfill de 3 casos reales — cerrado, ver arriba.
 1e. ✅ **mig.200 aplicada** (cambiar_estado_cheque resincroniza estado_pago al rechazar un cheque de
    tercero/propio, y al entregar un cheque propio) — cerrado, sin backfill necesario, ver arriba.
+1f. ✅ **arca-worker v6→v7 desplegado** (fecha de emisión AFIP clampeada a 5 días + lock de ejecución
+   única mig.201 para la condición de carrera entre corridas del cron) — ver arriba. 5 de 14 facturas ya
+   salieron limpias (Factura C N°19-22 + NC N°7). **Pendiente de verificar en la próxima sesión:**
+   confirmar que las 9 restantes (20260703-002, 20260706-001/005, 20260707-001/002/003/004/005/006)
+   terminaron de salir con CAE real tras el guard de concurrencia.
 2. ✅ **Historial de git**: decisión tomada (2026-07-11) — se deja como está. Son totales agregados
    mensuales, no datos personales ni secretos; reescribir el historial (force-push) es más riesgoso
    que el beneficio.

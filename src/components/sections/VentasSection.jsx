@@ -8,8 +8,11 @@ import PedidosSection from '@/components/sections/PedidosSection';
 import EntregasSection from '@/components/ventas/EntregasSection';
 import HistorialVentas from '@/components/ventas/HistorialVentas';
 import DevolucionesSection from '@/components/ventas/DevolucionesSection';
+import MonitorFacturacionAFIP from '@/components/ventas/MonitorFacturacionAFIP';
+import { useAfipConfig } from '@/hooks/useAfipConfig';
 
 function VentasSection({ initialTab = 'historial' }) {
+  const { afipActivo } = useAfipConfig();
   const [activeTab, setActiveTab]           = useState(initialTab);
   const [showNuevaFactura, setShowNuevaFactura] = useState(false);
   const [refreshKey, setRefreshKey]         = useState(0);
@@ -48,6 +51,7 @@ function VentasSection({ initialTab = 'historial' }) {
             { value: 'entregas',     label: 'Entregas'     },
             { value: 'historial',    label: 'Facturas'     },
             { value: 'devoluciones', label: 'Devoluciones' },
+            ...(afipActivo ? [{ value: 'afip', label: 'Facturación AFIP' }] : []),
           ].map(tab => (
             <TabsTrigger
               key={tab.value}
@@ -101,6 +105,12 @@ function VentasSection({ initialTab = 'historial' }) {
         <TabsContent value="devoluciones" className="mt-4">
           <DevolucionesSection onNavigate={handleChildNavigate} />
         </TabsContent>
+
+        {afipActivo && (
+          <TabsContent value="afip" className="mt-4">
+            <MonitorFacturacionAFIP />
+          </TabsContent>
+        )}
       </Tabs>
 
       <NuevaFacturaModal

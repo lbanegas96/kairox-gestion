@@ -1,6 +1,5 @@
 import {
-  FileText, Loader2, Check, AlertCircle, Shield, RefreshCw, Plus, Pencil,
-  AlertTriangle, CheckCircle, Save,
+  FileText, Loader2, Check, AlertCircle, Shield, RefreshCw, Plus, Pencil, Save,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -54,9 +53,6 @@ const TabFacturacion = ({
   // Tipos de comprobante
   selectedPvId, setSelectedPvId, loadingTipos, tiposComprobante, savingTipoId,
   updateTipoLocal, handleSaveTipoProximoNumero,
-  // Facturas con error CAE
-  loadingFacturasError, facturasError, reloadFacturasError,
-  reintentandoId, handleReintentarFactura, setErrorDetailModal, resolviendoId, handleMarcarResuelta,
   // Series de numeración
   loadingSeries, seriesNumeracion, savingSerieId, updateSerieLocal, handleSaveSerie,
   // Pie de documento
@@ -320,112 +316,6 @@ const TabFacturacion = ({
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    )}
-
-    {/* ── Sección 4: Facturas con Error CAE ─────────────────────────── */}
-    {afipConfig.usa_factura_electronica && (
-      <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div className="flex items-start gap-3">
-            <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg mt-0.5">
-              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-kx-text">Facturas con Error CAE</h3>
-              <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-0.5">
-                Comprobantes que fallaron en la emisión electrónica. El worker las reintenta automáticamente cada 5 minutos.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={reloadFacturasError}
-            className="p-2 rounded-lg border kairox-border hover:bg-slate-100 dark:hover:bg-kx-surface-2 transition-colors"
-            title="Recargar"
-          >
-            <RefreshCw className={`w-4 h-4 text-kx-text-2 ${loadingFacturasError ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-
-        {loadingFacturasError ? (
-          <div className="flex items-center gap-2 text-kx-text-3 py-4"><Loader2 className="w-4 h-4 animate-spin" /> Cargando...</div>
-        ) : facturasError.length === 0 ? (
-          <div className="flex items-center gap-2 text-green-600 dark:text-green-400 py-3 text-sm">
-            <CheckCircle className="w-4 h-4" />
-            <span>Sin facturas con error. Todos los CAE fueron emitidos correctamente.</span>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-kx-text-3 uppercase tracking-wide">
-                  <th className="px-3 py-2">Comprobante</th>
-                  <th className="px-3 py-2">Fecha</th>
-                  <th className="px-3 py-2">Cliente</th>
-                  <th className="px-3 py-2 text-right">Total</th>
-                  <th className="px-3 py-2">Estado</th>
-                  <th className="px-3 py-2">Intentos</th>
-                  <th className="px-3 py-2">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {facturasError.map((fpa) => {
-                  const comp = fpa.comprobantes;
-                  const puedeReintentar = !['error_datos'].includes(fpa.estado);
-                  const estadoBadge = {
-                    pendiente:       'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-                    reintentando:    'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-                    procesando:      'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-                    error_datos:     'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-                    error_definitivo:'bg-red-200 text-red-800 dark:bg-red-900/50 dark:text-red-300',
-                  }[fpa.estado] ?? 'bg-slate-100 text-slate-600';
-                  return (
-                    <tr key={fpa.id} className="border-t border-kx-border">
-                      <td className="px-3 py-2 font-mono text-xs text-kx-text font-medium">{comp?.numero_venta ?? '—'}</td>
-                      <td className="px-3 py-2 text-kx-text-2 whitespace-nowrap">{comp?.fecha ? new Date(comp.fecha).toLocaleDateString('es-AR') : '—'}</td>
-                      <td className="px-3 py-2 text-kx-text-2 max-w-[140px] truncate">{comp?.cliente_nombre ?? 'Consumidor Final'}</td>
-                      <td className="px-3 py-2 text-kx-text text-right font-medium">
-                        {comp?.total != null ? new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(comp.total) : '—'}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${estadoBadge}`}>
-                          {fpa.estado.replace('_', ' ')}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-center text-kx-text-2 text-xs">{fpa.intentos}/{fpa.max_intentos}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-1">
-                          {puedeReintentar && (
-                            <button
-                              onClick={() => handleReintentarFactura(fpa)}
-                              disabled={reintentandoId === fpa.id}
-                              className="text-xs px-2 py-1 rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
-                            >
-                              {reintentandoId === fpa.id ? <Loader2 className="w-3 h-3 animate-spin inline" /> : 'Reintentar'}
-                            </button>
-                          )}
-                          <button
-                            onClick={() => setErrorDetailModal({ mensaje: fpa.error_mensaje ?? 'Sin detalle de error.' })}
-                            className="text-xs px-2 py-1 rounded border border-kx-border text-kx-text-2 hover:bg-slate-100 dark:hover:bg-kx-surface-2 transition-colors"
-                          >
-                            Ver error
-                          </button>
-                          <button
-                            onClick={() => handleMarcarResuelta(fpa)}
-                            disabled={resolviendoId === fpa.id}
-                            className="text-xs px-2 py-1 rounded border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 transition-colors"
-                          >
-                            {resolviendoId === fpa.id ? <Loader2 className="w-3 h-3 animate-spin inline" /> : 'Resuelta'}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
               </tbody>
             </table>
           </div>

@@ -37,6 +37,35 @@ Deno.serve(async (req) => {
   const isProduction = Deno.env.get('AFIP_ENVIRONMENT') === 'production';
   const environment: 'production' | 'sandbox' = isProduction ? 'production' : 'sandbox';
 
+  // ── 0. Lock de ejecución única ────────────────────────────────────────────
+  // El cron dispara cada 5 min sin esperar a que la corrida anterior termine.
+  // Sin este lock, dos invocaciones concurrentes piden `feCompUltimoAutorizado()`
+  // por su cuenta y pueden pedir el mismo número a la vez → AFIP acepta una y
+  // rechaza la otra con [10016] aunque el número no tuviera ningún problema real
+  // (visto en producción al reencolar 9 facturas: se procesaron en ~3s en un
+  // orden que no respetaba fecha ASC, señal de 2 corridas en paralelo).
+  // Se fuerza el reclamo si el lock anterior quedó tomado hace más de 10 min
+  // (una corrida normal no debería tardar tanto) para no quedar en deadlock si
+  // una invocación previa crasheó sin liberar.
+  const { data: locked } = await adminClient
+    .from('arca_worker_run')
+    .update({ running: true, started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', true)
+    .or(`running.eq.false,started_at.lt.${new Date(Date.now() - 10 * 60 * 1000).toISOString()}`)
+    .select();
+
+  if (!locked?.length) {
+    return new Response(JSON.stringify({ procesados: 0, mensaje: 'Ya hay una corrida en curso' }), { status: 200 });
+  }
+
+  try {
+    return await procesarCola(environment);
+  } finally {
+    await adminClient.from('arca_worker_run').update({ running: false }).eq('id', true);
+  }
+});
+
+async function procesarCola(environment: 'production' | 'sandbox'): Promise<Response> {
   // ── 1. Leer cola pendiente ─────────────────────────────────────────────────
   // Ordenada por la fecha real del comprobante (no por created_at de la cola):
   // AFIP exige números correlativos por PdV+tipo, así que un lote debe siempre
@@ -189,12 +218,21 @@ Deno.serve(async (req) => {
       }
 
       // ── 6. Emitir contra ARCA ────────────────────────────────────────────────
+      // AFIP exige, para Concepto=1 (productos), que CbteFch esté dentro de los 5
+      // días del día de proceso. Si la emisión real se demoró más que eso (cola
+      // atascada, reintento manual tardío), se usa hoy como fecha de emisión ante
+      // AFIP — la fecha real de la venta queda intacta en comprobantes.fecha
+      // (visto en producción: 13 facturas del 3-7/jul reencoladas el 12/jul).
+      const fechaVenta = new Date(comp.fecha);
+      const diffDiasVenta = Math.floor((Date.now() - fechaVenta.getTime()) / 86400000);
+      const fechaEmisionAfip = diffDiasVenta > 5 ? new Date() : fechaVenta;
+
       const arcaResult = await callArcaEmit(adminClient, {
         empresaId: comp.empresa_id,
         cuit: empresa.afip_cuit, certPem, keyPem, environment,
         pvNumero:        pv.numero,
         voucherType,
-        issueDate:       new Date(comp.fecha).toISOString().slice(0, 10).replace(/-/g, ''),
+        issueDate:       fechaEmisionAfip.toISOString().slice(0, 10).replace(/-/g, ''),
         customerDocType: docTipo,
         customerDocNro:  docNro,
         customerCondicionIva: cliCondicionIva,
@@ -264,7 +302,7 @@ Deno.serve(async (req) => {
 
   console.log('[arca-worker]', JSON.stringify(resultados));
   return new Response(JSON.stringify({ procesados: pendientes.length, resultados }), { status: 200 });
-});
+}
 
 async function marcarErrorDatos(fpaId: string, comprobanteId: string, msg: string, intentos: number) {
   await Promise.all([

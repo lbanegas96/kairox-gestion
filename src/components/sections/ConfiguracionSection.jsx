@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Settings, Building, Loader2, AlertTriangle, TrendingUp, FileText, Check, Download,
+  Settings, Building, Loader2, TrendingUp, FileText, Check, Download,
   Users, Puzzle, Bell, Package2, Info, Cpu, Shield, Scale,
 } from 'lucide-react';
 import DeterminacionCuentasTab from '@/components/configuracion/DeterminacionCuentasTab';
@@ -162,12 +162,9 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [loadingTipos, setLoadingTipos] = useState(false);
   const [savingTipoId, setSavingTipoId] = useState(null);
 
-  // ── Tab 3b: Facturas con Error CAE ────────────────────────────────────────
-  const [facturasError, setFacturasError] = useState([]);
-  const [loadingFacturasError, setLoadingFacturasError] = useState(false);
-  const [errorDetailModal, setErrorDetailModal] = useState(null); // { mensaje }
-  const [reintentandoId, setReintentandoId] = useState(null);
-  const [resolviendoId, setResolviendoId] = useState(null);
+  // ── Tab 3b: prueba de conexión AFIP ───────────────────────────────────────
+  // (La lista de facturas + su estado electrónico ahora vive en
+  //  MonitorFacturacionAFIP, autocontenido con su propio fetching vía useQuery.)
   const [probandoConexion, setProbandoConexion] = useState(false);
 
   // ── Tab 4: Unidades de Medida ─────────────────────────────────────────────
@@ -295,72 +292,6 @@ const ConfiguracionSection = ({ initialTab }) => {
   useEffect(() => {
     if (activeTab === 'facturacion' && selectedPvId) reloadTipos(selectedPvId);
   }, [selectedPvId, activeTab]);
-
-  const reloadFacturasError = async () => {
-    if (!user?.empresa_id) return;
-    setLoadingFacturasError(true);
-    try {
-      const { data } = await supabase
-        .from('facturas_pendientes_arca')
-        .select('id, estado, intentos, max_intentos, proximo_intento, error_mensaje, created_at, comprobante_id, comprobantes(numero_venta, fecha, total, cliente_nombre)')
-        .eq('empresa_id', user.empresa_id)
-        .in('estado', ['pendiente', 'reintentando', 'error_datos', 'error_definitivo', 'procesando'])
-        .order('created_at', { ascending: false })
-        .limit(50);
-      setFacturasError(data ?? []);
-    } catch (e) {
-      console.error('[FacturasError ARCA] Error al cargar:', e);
-    } finally {
-      setLoadingFacturasError(false);
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'facturacion' && afipConfig?.usa_factura_electronica) {
-      reloadFacturasError();
-    }
-  }, [user?.empresa_id, afipConfig?.usa_factura_electronica, activeTab]);
-
-  const handleReintentarFactura = async (fpa) => {
-    setReintentandoId(fpa.id);
-    try {
-      await supabase.from('facturas_pendientes_arca').update({
-        estado: 'pendiente',
-        intentos: 0,
-        proximo_intento: new Date().toISOString(),
-        error_mensaje: null,
-      }).eq('id', fpa.id);
-      await supabase.from('comprobantes').update({
-        cae_estado: 'pendiente',
-        error_afip: null,
-      }).eq('id', fpa.comprobante_id);
-      toast({ title: 'Factura encolada', description: 'El worker la procesará en los próximos minutos.', className: 'bg-green-600 text-white border-green-500' });
-      reloadFacturasError();
-    } catch (e) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    } finally {
-      setReintentandoId(null);
-    }
-  };
-
-  const handleMarcarResuelta = async (fpa) => {
-    setResolviendoId(fpa.id);
-    try {
-      await supabase.from('facturas_pendientes_arca').update({
-        estado: 'emitida',
-      }).eq('id', fpa.id);
-      await supabase.from('comprobantes').update({
-        cae_estado: 'emitido',
-        error_afip: null,
-      }).eq('id', fpa.comprobante_id);
-      toast({ title: 'Marcada como resuelta', description: 'La factura fue marcada como emitida externamente.', className: 'bg-green-600 text-white border-green-500' });
-      reloadFacturasError();
-    } catch (e) {
-      toast({ title: 'Error', description: e.message, variant: 'destructive' });
-    } finally {
-      setResolviendoId(null);
-    }
-  };
 
   const handleProbarConexion = async () => {
     setProbandoConexion(true);
@@ -1508,14 +1439,6 @@ const ConfiguracionSection = ({ initialTab }) => {
             savingTipoId={savingTipoId}
             updateTipoLocal={updateTipoLocal}
             handleSaveTipoProximoNumero={handleSaveTipoProximoNumero}
-            loadingFacturasError={loadingFacturasError}
-            facturasError={facturasError}
-            reloadFacturasError={reloadFacturasError}
-            reintentandoId={reintentandoId}
-            handleReintentarFactura={handleReintentarFactura}
-            setErrorDetailModal={setErrorDetailModal}
-            resolviendoId={resolviendoId}
-            handleMarcarResuelta={handleMarcarResuelta}
             loadingSeries={loadingSeries}
             seriesNumeracion={seriesNumeracion}
             savingSerieId={savingSerieId}
@@ -2078,25 +2001,6 @@ const ConfiguracionSection = ({ initialTab }) => {
         onSuccess={reloadIntegracionUala}
       />
 
-      {/* ── Modal detalle error ARCA ───────────────────────────────────────── */}
-      <Dialog open={!!errorDetailModal} onOpenChange={(o) => !o && setErrorDetailModal(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
-              <AlertTriangle className="w-5 h-5" />
-              Detalle del error ARCA
-            </DialogTitle>
-            <DialogDescription>
-              Mensaje de error devuelto por el servicio WSFE de AFIP/ARCA.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="mt-3 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-            <pre className="text-sm text-red-800 dark:text-red-300 whitespace-pre-wrap break-words font-mono">
-              {errorDetailModal?.mensaje ?? ''}
-            </pre>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

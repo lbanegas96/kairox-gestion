@@ -1,5 +1,94 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-10 (sesión 59 — venta por pack / unidad de venta (3er eslabón SAP) + alícuota IIBB de prueba + conversión general de unidades)
+**Última actualización:** 2026-07-12 (sesión 60 — cheques resincronizan estado_pago, numeración AFIP con hueco diagnosticada y corregida, Monitor de Facturación AFIP nuevo y reubicado a Ventas)
+
+## ✅ Cheques: rechazar/entregar resincroniza estado_pago (mig.200, sesión 60)
+
+Al preguntar "¿los cheques quedaron bien?", releyendo `cambiar_estado_cheque` apareció el mismo patrón de
+gap que mig.196-199 (esta auditoría): la función reabre correctamente la deuda en cuenta corriente y
+borra la imputación puntual al rechazar un cheque, pero nunca recalculaba `comprobantes.estado_pago` /
+`compras.estado_pago` después — la factura/compra quedaba "pagada" para siempre aunque la deuda real ya
+se había reabierto. De paso apareció un tercer gap: el cheque propio "entregado" (pago a proveedor) nunca
+sincronizaba `compras.estado_pago`, ni al pagar ni al rechazar.
+
+**Fix:** antes de borrar cada imputación, se recorre cada factura/compra afectada y se recalcula
+`estado_pago` (mismo patrón mig.196-199), y se agrega la sincronización en el alta del pago con cheque
+propio. Validado con `BEGIN...ROLLBACK` (3 casos: rechazo de tercero reabre la factura, cheque propio
+entregado marca la compra pagada, rechazo de ese cheque la reabre). Cero casos reales ya corrompidos
+(verificado con datos de Nalux) — el fix es puramente preventivo.
+
+## ✅ Numeración AFIP con hueco: 18 facturas en error permanente diagnosticadas y corregidas (sesión 60)
+
+El usuario preguntó por qué tenía facturas en cola sin CAE y en error permanente. Diagnóstico en dos
+capas:
+
+**Capa 1 — 17 facturas parqueadas por el workaround de RG 5616** (`CondicionIVAReceptorId`) desde el
+2026-07-08, marcadas "no relevante" con una nota para revertir tras deployar el fix real — nunca se
+revirtió. Confirmado que el fix SÍ está deployado en producción (`get_edge_function`, v5 = repo local).
+
+**Capa 2 — causa raíz real de los errores `[10016]` persistentes:** la secuencia AFIP de Factura C en el
+punto de venta tiene un HUECO real: ...13 (2/jul) → hueco → 14-15 (dos facturas del 7/jul, emitidas fuera
+de orden por retry manual el 8/jul) → 16,18 (ventas normales del 8/jul en adelante). 13 facturas viejas
+(3-7/jul) quedaron paradas en el workaround mientras el negocio siguió facturando con normalidad —
+AFIP nunca las va a aceptar con un número anterior a 19. El contador local está correcto y sincronizado;
+solo esas 13 (+1 NC) están "huérfanas" de su lugar cronológico.
+
+**Segundo hallazgo al reencolar:** el worker (`arca-worker`) siempre enviaba la fecha REAL de la venta
+como fecha del comprobante ante AFIP. Para Concepto=1 (productos), AFIP exige que esa fecha esté dentro
+de los 5 días del día de proceso — las facturas más viejas (9 días) iban a fallar igual aunque se
+arreglara la numeración.
+
+**Fix desplegado (arca-worker v6):** si la venta tiene más de 5 días, se usa hoy como fecha de emisión
+ante AFIP (la fecha real de la venta queda intacta en `comprobantes.fecha` para uso interno). No hizo
+falta ninguna migración de renumeración: `callArcaEmit` ya calcula el próximo número dinámicamente
+(`feCompUltimoAutorizado() + 1`) en cada intento — basta con resetear la cola y dejar que el worker
+procese en `fecha ASC`.
+
+**Tercer hallazgo — condición de carrera entre corridas del worker:** al reencolar, 9 facturas se
+procesaron en ~3 segundos en un orden que no respetaba `fecha ASC` — huella de que dos invocaciones del
+cron corrieron en paralelo y ambas pidieron "el próximo número" a AFIP casi simultáneamente (una ganó, la
+otra quedó rechazada con el mismo error aunque el número no tuviera ningún problema real). **Fix
+(mig.201, arca-worker v7):** tabla `arca_worker_run` de una sola fila como lock de ejecución única — el
+worker reclama el lock al empezar y lo libera en un `finally`; si ya hay una corrida en curso, la
+invocación nueva sale sin tocar la cola. Con este guard, las 18 facturas terminaron de salir con CAE real
+(Factura C hasta N°28 + NC hasta N°7), sin más choques.
+
+**Nota operativa importante durante el proceso:** al reencolar en bloque con `DISTINCT ON (comprobante_id)
+ORDER BY created_at DESC`, 2 facturas que YA tenían CAE real (emitidas por fuera del flujo normal el
+8/jul) quedaron barridas por el reset — corregido de inmediato restaurando su estado con el CAE que ya
+tenían (sin volver a emitir). Ninguna quedó duplicada en AFIP gracias al chequeo `getLastVoucherNumber`
+que ya trae el worker.
+
+## ✅ Monitor de Facturación AFIP — nuevo, y reubicado de Configuración a Ventas (mig.202, sesión 60)
+
+A pedido del usuario ("quiero el equivalente al Document Monitor de SAP"), se reemplazó la vieja lista
+"Facturas con Error CAE" (que solo mostraba lo roto) por un Monitor completo — inspirado en el "Manage
+Electronic Documents" de SAP S/4HANA: TODOS los comprobantes con TODOS sus estados fiscales
+(no_aplica/pendiente/error/error_definitivo/emitido), con filtros de fecha/estado/tipo/búsqueda,
+selección múltiple con reintento en lote, y drill-down con el detalle completo.
+
+**Backend (mig.202):** vista `v_facturas_arca_monitor` (`security_invoker=on`, respeta RLS por
+`empresa_id`); RPC `reintentar_caes_lote(uuid[])` con guard clave — nunca re-encola un comprobante ya
+`emitido` ni `no_aplica` (evita re-emitir un CAE válido y duplicarlo en AFIP), probado con ROLLBACK: 1
+error + 1 emitido → reencola solo el error; RPC `marcar_cae_resuelto_manual`. Ambas con `anon` revocado
+(convención del proyecto). De paso se corrigió el patrón de "escritura suelta" que tenían las acciones
+viejas — `Reintentar`/`Resuelta` hacían `.update()` directo desde el frontend en vez de pasar por una RPC
+(mismo bug corregido en CxC/CxP/ND/Cheques esta auditoría).
+
+**Decisión de ubicación (a pedido del usuario, muy buena pregunta):** ¿un staff de ventas sin permiso de
+`configuracion` iba a poder ver el estado de sus propias facturas? Confirmado en `useUserPermissions.js`:
+los permisos son binarios por módulo — darle "configuracion" a un staff solo para esto le desbloquearía
+también Integraciones (token MP), Usuarios, Sistema y datos fiscales de la Empresa. Aplicando la regla
+SAP de Configuración vs Operación: la parametrización de AFIP (credenciales, PdV, tipos, series, pie de
+documento) se queda en Configuración → Facturación; el Monitor se movió a una 6ª pestaña "Facturación
+AFIP" dentro de `VentasSection.jsx`, gateada por el permiso `ventas` ya existente (mismo patrón que
+Cotizaciones/Pedidos/Entregas/Facturas/Devoluciones) — sin crear ningún permiso nuevo. Se reutiliza el
+hook `useAfipConfig` (`afipActivo`) para ocultar la pestaña si la empresa no tiene AFIP habilitado.
+Componente movido de `components/configuracion/` a `components/ventas/`.
+
+Verificado en una pestaña de navegador completamente limpia (build `npx vite build` limpio, sin errores
+de consola): Configuración → Facturación sin el Monitor; Ventas → Facturación AFIP con el Monitor, 32
+filas fiscales (oculta las 111 "no relevante" por defecto, togglear el chip sube a 108); fila 'emitido'
+solo ofrece "Detalle", fila 'error' ofrece Reintentar+Detalle+Resuelta.
 
 ## ✅ Venta por pack / unidad de venta separada (3er eslabón SAP, migrations 189/190, sesión 59)
 
