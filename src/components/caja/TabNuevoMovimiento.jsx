@@ -35,7 +35,7 @@ function TabNuevoMovimiento({
             <div className="space-y-2">
               <Label className={currentThemeColor}>Monto ($)</Label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-2.5 h-5 w-5 text-slate-500"/>
+                <DollarSign className="absolute left-3 top-2.5 h-5 w-5 text-kx-text-2"/>
                 <Input type="text" inputMode="decimal" name="monto" value={formData.monto} onChange={handleInputChange} className={`pl-10 h-12 text-xl font-mono font-bold kairox-input dark:bg-kx-surface dark:border-kx-border dark:text-kx-text ${currentBorderColor}`} placeholder="0,00" required/>
               </div>
             </div>

@@ -43,7 +43,7 @@ function TabMovimientos({
         <div className="space-y-2">
           <Label className="dark:text-kx-text">Buscar Concepto</Label>
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500"/>
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-kx-text-2"/>
             <Input placeholder="Buscar..." value={filters.search} onChange={e => setFilters({...filters, search: e.target.value})} className="pl-9 kairox-input dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"/>
           </div>
         </div>
@@ -72,9 +72,9 @@ function TabMovimientos({
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               {loading ? (
-                <tr><td colSpan={tcParalelo.enabled ? 8 : 7} className="p-8 text-center text-slate-500">Cargando movimientos...</td></tr>
+                <tr><td colSpan={tcParalelo.enabled ? 8 : 7} className="p-8 text-center text-kx-text-2">Cargando movimientos...</td></tr>
               ) : sortedMovimientos.length === 0 ? (
-                <tr><td colSpan={tcParalelo.enabled ? 8 : 7} className="p-8 text-center text-slate-500">No se encontraron movimientos</td></tr>
+                <tr><td colSpan={tcParalelo.enabled ? 8 : 7} className="p-8 text-center text-kx-text-2">No se encontraron movimientos</td></tr>
               ) : (
                 sortedMovimientos.map((m) => (
                   <tr key={m.id} className="kairox-table-row group h-[60px] hover:bg-kx-surface-2 dark:hover:bg-slate-800/50">

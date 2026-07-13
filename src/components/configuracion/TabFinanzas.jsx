@@ -156,7 +156,7 @@ const TabFinanzas = ({
                 <span className="text-xs text-kx-text-2">
                   {c.dias_credito} días{c.descuento_pct > 0 ? ` · ${c.descuento_pct}% desc.` : ''}
                 </span>
-                {!c.activo && <Badge variant="outline" className="text-xs text-slate-400">Inactiva</Badge>}
+                {!c.activo && <Badge variant="outline" className="text-xs text-kx-text-2">Inactiva</Badge>}
               </div>
               <div className="flex items-center gap-2">
                 <Switch checked={c.activo} onCheckedChange={(v) => onToggleCondicion(c.id, v)} />
@@ -223,7 +223,7 @@ const TabFinanzas = ({
                 <div key={c.id} className="flex items-center justify-between px-4 py-2.5 border-b border-kx-border last:border-0">
                   <div className={`flex items-center gap-2 ${!c.activo ? 'opacity-40' : ''}`}>
                     <span className="text-sm font-medium text-kx-text">{c.nombre}</span>
-                    {!c.activo && <Badge variant="outline" className="text-xs text-slate-400">Inactivo</Badge>}
+                    {!c.activo && <Badge variant="outline" className="text-xs text-kx-text-2">Inactivo</Badge>}
                   </div>
                   <div className="flex items-center gap-2">
                     <Switch checked={c.activo} onCheckedChange={(v) => onToggleCentroCosto(c.id, v)} />

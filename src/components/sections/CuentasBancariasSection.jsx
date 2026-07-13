@@ -332,13 +332,13 @@ function CuentasBancariasSection() {
                 <table className="w-full text-sm">
                   <thead className="border-b dark:border-kx-border bg-slate-50/70 dark:bg-slate-800/50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Fecha</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Cuenta</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Detalle · Referencia · Registrado por</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Tipo</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Monto</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Origen</th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase"></th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-kx-text-2 uppercase">Fecha</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-kx-text-2 uppercase">Cuenta</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-kx-text-2 uppercase">Detalle · Referencia · Registrado por</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-kx-text-2 uppercase">Tipo</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-kx-text-2 uppercase">Monto</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-kx-text-2 uppercase">Origen</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-kx-text-2 uppercase"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y dark:divide-slate-800">
@@ -348,7 +348,7 @@ function CuentasBancariasSection() {
                       const desc = limpiarDescripcion(m.descripcion);
                       return (
                       <tr key={m.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/40 transition-colors">
-                        <td className="px-4 py-3 font-mono text-xs text-slate-500 whitespace-nowrap align-top">
+                        <td className="px-4 py-3 font-mono text-xs text-kx-text-2 whitespace-nowrap align-top">
                           {formatDateAR(m.fecha)}
                         </td>
                         <td className="px-4 py-3 text-slate-700 dark:text-slate-300 whitespace-nowrap align-top">

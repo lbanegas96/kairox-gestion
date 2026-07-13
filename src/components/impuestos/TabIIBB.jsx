@@ -326,11 +326,11 @@ function TabIIBB() {
                     <span className="text-xs text-kx-text-2">
                       {formatDateAR(c.vigencia_desde)}{c.vigencia_hasta ? ` → ${formatDateAR(c.vigencia_hasta)}` : ''}
                     </span>
-                    {!c.activo && <Badge variant="outline" className="text-xs text-slate-400">Inactivo</Badge>}
+                    {!c.activo && <Badge variant="outline" className="text-xs text-kx-text-2">Inactivo</Badge>}
                   </div>
                   <div className="flex items-center gap-1">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => abrirEditarCoef(c)}>
-                      <Pencil className="h-4 w-4 text-slate-500" />
+                      <Pencil className="h-4 w-4 text-kx-text-2" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toggleActivoCoef(c)} title={c.activo ? 'Desactivar' : 'Activar'}>
                       <Power className={`h-4 w-4 ${c.activo ? 'text-red-500' : 'text-green-500'}`} />
@@ -355,11 +355,11 @@ function TabIIBB() {
           </div>
           <div className="flex items-end gap-2">
             <div className="space-y-1">
-              <Label className="text-xs text-slate-500">Desde</Label>
+              <Label className="text-xs text-kx-text-2">Desde</Label>
               <Input type="date" value={periodoDesde} onChange={e => setPeriodoDesde(e.target.value)} className="h-9 w-36" />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-slate-500">Hasta</Label>
+              <Label className="text-xs text-kx-text-2">Hasta</Label>
               <Input type="date" value={periodoHasta} onChange={e => setPeriodoHasta(e.target.value)} className="h-9 w-36" />
             </div>
             <Button onClick={generarLiquidacion} disabled={generando} className="h-9 bg-blue-600 hover:bg-blue-700 text-white">

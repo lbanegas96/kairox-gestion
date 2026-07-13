@@ -236,7 +236,7 @@ function TabAlicuotas() {
                     <td className="p-4">
                       <div className="flex items-center justify-end gap-1">
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => abrirEditar(a)}>
-                          <Pencil className="h-4 w-4 text-slate-500" />
+                          <Pencil className="h-4 w-4 text-kx-text-2" />
                         </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toggleActivo(a)} title={a.activo ? 'Desactivar' : 'Activar'}>
                           <Power className={`h-4 w-4 ${a.activo ? 'text-red-500' : 'text-green-500'}`} />

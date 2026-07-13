@@ -101,7 +101,7 @@ function TablaPedidos({
                     <td className="p-4 text-center" onClick={ev => ev.stopPropagation()}>
                       <div className="flex items-center justify-center gap-1">
                         {canEdit && (
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-blue-600"
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-kx-text-2 hover:text-blue-600"
                             onClick={() => openEdit(pedido)} title="Editar">
                             <Edit3 className="h-3.5 w-3.5" />
                           </Button>

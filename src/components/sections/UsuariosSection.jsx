@@ -363,7 +363,7 @@ function UsuariosSection() {
                        ))
                     ) : filteredUsers.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={7} className="h-32 text-center text-slate-500">
+                            <TableCell colSpan={7} className="h-32 text-center text-kx-text-2">
                                 {searchTerm ? 'No se encontraron resultados.' : 'No hay usuarios registrados.'}
                             </TableCell>
                         </TableRow>
@@ -382,7 +382,7 @@ function UsuariosSection() {
                                             <span>{u.first_name} {u.last_name}</span>
                                         </div>
                                     </TableCell>
-                                    <TableCell className="text-slate-500">{u.email}</TableCell>
+                                    <TableCell className="text-kx-text-2">{u.email}</TableCell>
                                     <TableCell>
                                         <Badge variant="outline" className={`uppercase text-[10px] font-bold ${
                                             u.role === 'admin' 
@@ -433,7 +433,7 @@ function UsuariosSection() {
                                     <TableCell className="text-xs text-kx-text-3">
                                         {u.last_login_at
                                           ? new Date(u.last_login_at).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' })
-                                          : <span className="italic text-slate-500">Nunca</span>
+                                          : <span className="italic text-kx-text-2">Nunca</span>
                                         }
                                     </TableCell>
                                     <TableCell className="text-right">
@@ -444,7 +444,7 @@ function UsuariosSection() {
                                                 onClick={() => openPermissionsModal(u)}
                                                 title="Gestionar Permisos"
                                             >
-                                                <Edit className="h-4 w-4 text-slate-500 hover:text-blue-600" />
+                                                <Edit className="h-4 w-4 text-kx-text-2 hover:text-blue-600" />
                                             </Button>
                                             {u.id !== user.id && (
                                                 <Button

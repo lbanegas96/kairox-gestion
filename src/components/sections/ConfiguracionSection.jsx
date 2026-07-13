@@ -1896,7 +1896,7 @@ const ConfiguracionSection = ({ initialTab }) => {
                     <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs flex items-center justify-center font-medium">1</span>
                     <span className="text-sm font-medium text-slate-700 dark:text-kx-text">Generá tu archivo para ARCA</span>
                   </div>
-                  <p className="text-xs text-slate-500 pl-8">KAIROX crea automáticamente las claves criptográficas. Solo descargás el archivo y lo subís en ARCA.</p>
+                  <p className="text-xs text-kx-text-2 pl-8">KAIROX crea automáticamente las claves criptográficas. Solo descargás el archivo y lo subís en ARCA.</p>
                   <Button onClick={handleGenerarCSR} disabled={generandoCsr} className="ml-8" variant="outline">
                     {generandoCsr ? <><Loader2 className="animate-spin w-4 h-4 mr-2" /> Generando...</> : '⚙ Generar archivo para ARCA'}
                   </Button>
@@ -1917,7 +1917,7 @@ const ConfiguracionSection = ({ initialTab }) => {
                   <span className="w-6 h-6 rounded-full bg-slate-100 dark:bg-kx-surface-2 text-kx-text-2 dark:text-slate-300 text-xs flex items-center justify-center font-medium">2</span>
                   <span className="text-sm font-medium text-slate-700 dark:text-kx-text">Subí el archivo en ARCA</span>
                 </div>
-                <ol className="text-xs text-slate-500 pl-8 space-y-1 list-decimal list-inside">
+                <ol className="text-xs text-kx-text-2 pl-8 space-y-1 list-decimal list-inside">
                   <li>Entrá a <a href="https://www.afip.gob.ar" target="_blank" rel="noreferrer" className="text-blue-500 underline">afip.gob.ar</a> con tu CUIT y clave fiscal</li>
                   <li>Ir a <strong>Administración de Certificados Digitales</strong></li>
                   <li>Subí el archivo .csr que descargaste</li>

@@ -1,5 +1,35 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-14 (Luciano — Monitor AFIP verificado en 0 errores; Plan de Cuentas + Cheques migrados por completo a tokens del sistema)
+**Última actualización:** 2026-07-14 (Luciano — resto de la migración de tokens visuales cerrado: 9 módulos más migrados)
+
+## ✅ Migración de tokens visuales — resto de módulos cerrado (Luciano, 2026-07-14, sesión 63)
+
+Continuación directa del punto anterior. Migrados los ~146 líneas estimadas en `sections`, `reportes`,
+`caja`, `ventas`, `ordenes-compra`, `configuracion`, `pedidos`, `impuestos`, `cotizaciones` — el alcance
+completo que había quedado documentado como pendiente.
+
+**Metodología distinta a la de Plan de Cuentas/Cheques**: acá NO se aplicó sed masivo por archivo. La
+mayoría de las líneas con `bg-slate-800/900` o `border-slate-700/800/900` en estos módulos YA tenían su
+variante `dark:` correcta (ej. `bg-slate-100 dark:bg-kx-surface`) — es decir, ya funcionaban bien en
+ambos temas con el patrón viejo, solo no estaban en el sistema de tokens puro. Migrarlas no era necesario
+para la corrección visual, así que se dejaron como están. Solo se tocaron las líneas **genuinamente
+rotas**: clases sin ningún `dark:` que quedaban fijas en un tono (típicamente `text-slate-400/500`
+en labels, iconos y placeholders de "sin datos"). Verificado línea por línea con grep antes de cada
+edit para no romper pares `dark:` ya correctos.
+
+**Resultado**: 29 archivos, 75 líneas migradas, 0 quedaron sin resolver en los 9 módulos. Excepción
+documentada: `caja/TicketPrint.jsx` (ticket térmico impreso, siempre blanco/negro por diseño — no es
+parte de la UI temática de la app, correctamente fuera de alcance).
+
+**Nuevo hallazgo — alcance adicional no estimado originalmente**: al barrer todo `src/components` con el
+mismo criterio, aparecen más archivos con el mismo patrón fuera de los 9 módulos ya cerrados: `compras/`,
+`cuenta-corriente/`, `cuentas-bancarias/`, `productos/`, `shared/`, `ui/` (componentes usados en muchas
+pantallas). No estaban en el conteo original de Nadia. Pendiente evaluar y migrar en una próxima sesión.
+Las pantallas de auth (`AuthPage`, `OnboardingPage`, `PasswordRecoveryModal`, `ResetPasswordPage`) usan
+0 variantes `dark:` — parecen ser de un solo tema por diseño (pre-login, sin toggle de tema visible) y
+se dejaron sin tocar hasta confirmar con el usuario.
+
+Build limpio verificado tras el batch completo. Pendiente: verificación visual en navegador real (misma
+limitación que la sesión anterior — no puedo iniciar sesión).
 
 ## ✅ Migración completa de Plan de Cuentas + Cheques a tokens del sistema (Luciano, 2026-07-14)
 

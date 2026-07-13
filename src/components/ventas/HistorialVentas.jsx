@@ -334,9 +334,9 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                 ))
               ) : filteredSales.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="p-12 text-center text-slate-500 bg-slate-50/50 dark:bg-slate-900/20">
+                  <td colSpan="8" className="p-12 text-center text-kx-text-2 bg-slate-50/50 dark:bg-slate-900/20">
                     <div className="flex flex-col items-center gap-2">
-                       <AlertCircle className="h-10 w-10 text-slate-300" />
+                       <AlertCircle className="h-10 w-10 text-kx-text-3" />
                        <p className="font-medium">
                          {comprobantes.length === 0 ? "Sin ventas registradas aún" : "No hay ventas que coincidan con los filtros"}
                        </p>

@@ -44,7 +44,7 @@ export default function PlanCuentasSection() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-kx-text flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg">
               <BookOpen size={18} className="text-white" />
             </div>
@@ -60,7 +60,7 @@ export default function PlanCuentasSection() {
         </div>
       ) : (
         <Tabs defaultValue="cuentas" className="space-y-4">
-          <TabsList className="bg-slate-800 border border-slate-700 p-1">
+          <TabsList className="bg-kx-surface-2 border border-kx-border p-1">
             <TabsTrigger value="cuentas"
               className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-kx-text-3 gap-2">
               <ListOrdered size={14} /> Plan de Cuentas

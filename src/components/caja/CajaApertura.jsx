@@ -50,7 +50,7 @@ const CajaApertura = () => {
               <div className="space-y-2">
                 <Label htmlFor="monto" className="text-base font-medium">Monto Inicial ($)</Label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">$</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kx-text-2 font-bold">$</span>
                   <Input
                     id="monto"
                     type="text"

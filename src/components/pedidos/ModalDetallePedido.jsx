@@ -57,7 +57,7 @@ function ModalDetallePedido({
               </DialogHeader>
               <div className="space-y-4 py-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-slate-500">Estado</span>
+                  <span className="text-sm text-kx-text-2">Estado</span>
                   <div className="flex items-center gap-2">
                     <EstadoBadge estado={detailPedido.estado} />
                   </div>
@@ -65,7 +65,7 @@ function ModalDetallePedido({
 
                 {totalPed > 0 && (
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-500">Entrega</span>
+                    <span className="text-sm text-kx-text-2">Entrega</span>
                     {estaCompleto ? (
                       <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-semibold">
                         <Check className="h-3 w-3" /> Completo ({totalEnt}/{totalPed} u.)
@@ -83,16 +83,16 @@ function ModalDetallePedido({
                 )}
 
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-slate-500">Cliente</span>
+                  <span className="text-sm text-kx-text-2">Cliente</span>
                   <span className="font-medium dark:text-kx-text">{detailPedido.cliente_nombre}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-slate-500">Fecha</span>
+                  <span className="text-sm text-kx-text-2">Fecha</span>
                   <span className="text-sm dark:text-slate-300">{formatDateAR(detailPedido.fecha)}</span>
                 </div>
                 {detailPedido.fecha_entrega && (
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-slate-500">Fecha entrega</span>
+                    <span className="text-sm text-kx-text-2">Fecha entrega</span>
                     <span className="text-sm dark:text-slate-300">{formatDateAR(detailPedido.fecha_entrega)}</span>
                   </div>
                 )}
@@ -120,10 +120,10 @@ function ModalDetallePedido({
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-kx-border dark:border-kx-border">
-                      <th className="text-left pb-2 text-slate-500">Descripción</th>
-                      <th className="text-center pb-2 text-slate-500 w-14">Pedido</th>
-                      <th className="text-center pb-2 text-slate-500 w-14">Entregado</th>
-                      <th className="text-right pb-2 text-slate-500">Subtotal</th>
+                      <th className="text-left pb-2 text-kx-text-2">Descripción</th>
+                      <th className="text-center pb-2 text-kx-text-2 w-14">Pedido</th>
+                      <th className="text-center pb-2 text-kx-text-2 w-14">Entregado</th>
+                      <th className="text-right pb-2 text-kx-text-2">Subtotal</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -136,7 +136,7 @@ function ModalDetallePedido({
                       return (
                         <tr key={it.id} className="border-b border-slate-100 dark:border-slate-800/50">
                           <td className="py-2 dark:text-kx-text">{it.descripcion}</td>
-                          <td className="py-2 text-center text-slate-500">{ped}</td>
+                          <td className="py-2 text-center text-kx-text-2">{ped}</td>
                           <td className={`py-2 text-center font-medium ${completo ? 'text-green-600 dark:text-green-400' : ent > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-kx-text-3'}`}>
                             {ent}
                           </td>

@@ -265,9 +265,9 @@ function DeterminacionCuentasTab({ empresaId }) {
             <table className="w-full text-sm">
               <thead className="bg-slate-50/70 dark:bg-slate-800/50 border-b kairox-border">
                 <tr>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase">Cuándo (origen · tipo · subtipo · cuenta)</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase">Imputa a</th>
-                  <th className="px-4 py-2.5 text-center text-xs font-semibold text-slate-500 uppercase">Prioridad</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-kx-text-2 uppercase">Cuándo (origen · tipo · subtipo · cuenta)</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-semibold text-kx-text-2 uppercase">Imputa a</th>
+                  <th className="px-4 py-2.5 text-center text-xs font-semibold text-kx-text-2 uppercase">Prioridad</th>
                   <th className="px-4 py-2.5"></th>
                 </tr>
               </thead>

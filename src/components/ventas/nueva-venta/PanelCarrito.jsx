@@ -14,17 +14,17 @@ function PanelCarrito({
     <div className="flex-1 flex flex-col min-h-0 border-r border-slate-200 dark:border-slate-800">
       <div ref={searchWrapperRef} className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 relative">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-kx-text-2" />
           <Input ref={searchInputRef} placeholder="Buscar producto o elegí de la lista..." value={productSearch} onChange={(e) => { setProductSearch(e.target.value); setShowProductDropdown(true); }} onFocus={() => setShowProductDropdown(true)} className="pl-10 h-12 text-lg kairox-input pr-10 dark:bg-slate-900 dark:border-slate-700 dark:text-white" autoComplete="off" />
           <div className={`absolute top-full left-0 w-full z-50 bg-white dark:bg-slate-950 border kairox-border shadow-xl rounded-md mt-1 overflow-hidden max-h-80 overflow-y-auto ${showProductDropdown ? '' : 'hidden'}`}>
             {filteredProducts.length === 0 && (
-              <div className="px-3 py-4 text-sm text-slate-400 text-center">
+              <div className="px-3 py-4 text-sm text-kx-text-2 text-center">
                 {productSearch.trim() ? 'No se encontraron productos' : 'Cargando productos...'}
               </div>
             )}
             {filteredProducts.map(p => (
               <div key={p.id} className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 grid grid-cols-12 gap-2 items-center cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20" onClick={() => handleAddToCart(p)}>
-                <div className="col-span-3 text-xs text-slate-500 font-mono truncate">{p.codigo_sku}</div>
+                <div className="col-span-3 text-xs text-kx-text-2 font-mono truncate">{p.codigo_sku}</div>
                 <div className="col-span-5 font-medium truncate text-sm text-slate-800 dark:text-slate-200">{p.nombre}</div>
                 <div className="col-span-2 text-right text-xs font-bold dark:text-slate-300">{p.stock_actual}</div>
                 <div className="col-span-2 text-right font-bold text-emerald-600 dark:text-emerald-400 text-sm">${p.precio_venta}</div>
@@ -35,7 +35,7 @@ function PanelCarrito({
       </div>
       <div className="flex-1 overflow-y-auto p-4 dark:bg-slate-950 min-h-[200px]">
         {cart.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-slate-400"><Package className="h-16 w-16 mb-4 opacity-20" /><p>El carrito está vacío</p></div>
+          <div className="h-full flex flex-col items-center justify-center text-kx-text-2"><Package className="h-16 w-16 mb-4 opacity-20" /><p>El carrito está vacío</p></div>
         ) : (
           <table className="w-full text-sm">
             <thead><tr className="text-slate-500 dark:text-slate-400 border-b dark:border-slate-800"><th className="text-left pb-2">Producto</th><th className="text-center pb-2 w-20">Cant.</th><th className="text-right pb-2">Subtotal</th><th className="w-8"></th></tr></thead>
@@ -45,10 +45,10 @@ function PanelCarrito({
                   <td className="py-3 pl-2">
                     <div className="font-medium">{item.nombre}</div>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-kx-text-2">
                         ${Number(item.precio_venta).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         {item._packMode && item.unidad_venta && (
-                          <span className="text-slate-400"> /u · ${Number(item._precioUnidadVenta).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/{item.unidad_venta.codigo}</span>
+                          <span className="text-kx-text-2"> /u · ${Number(item._precioUnidadVenta).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/{item.unidad_venta.codigo}</span>
                         )}
                       </span>
                       {item._precioLista && (
@@ -63,7 +63,7 @@ function PanelCarrito({
                       <button
                         type="button"
                         onClick={() => togglePackMode(item.id)}
-                        className={`mt-1 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded border transition-colors ${item._packMode ? 'border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20' : 'border-slate-300 dark:border-slate-600 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                        className={`mt-1 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded border transition-colors ${item._packMode ? 'border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20' : 'border-slate-300 dark:border-slate-600 text-kx-text-2 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
                       >
                         <Boxes className="h-3 w-3" />
                         {item._packMode
@@ -76,7 +76,7 @@ function PanelCarrito({
                     {item._packMode ? (
                       <div className="flex flex-col items-center gap-0.5">
                         <Input type="number" min="1" value={item._packs} onChange={(e) => updatePacks(item.id, e.target.value)} className="h-8 w-16 text-center mx-auto dark:bg-slate-800 dark:border-slate-700" />
-                        <span className="text-[10px] text-slate-400">= {item.cantidad} {item.unidad_medida || 'u'}</span>
+                        <span className="text-[10px] text-kx-text-2">= {item.cantidad} {item.unidad_medida || 'u'}</span>
                       </div>
                     ) : (
                       <Input type="number" value={item.cantidad} onChange={(e) => updateQuantity(item.id, e.target.value)} className="h-8 w-16 text-center mx-auto dark:bg-slate-800 dark:border-slate-700" />

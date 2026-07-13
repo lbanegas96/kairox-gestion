@@ -37,11 +37,11 @@ const ReportHeader = ({
       
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end bg-slate-50 dark:bg-slate-950/50 p-3 rounded-md border border-slate-100 dark:border-slate-800">
         <div className="space-y-1">
-          <Label className="text-xs font-semibold text-slate-500 uppercase">Desde</Label>
+          <Label className="text-xs font-semibold text-kx-text-2 uppercase">Desde</Label>
           <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-white dark:bg-slate-900" />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs font-semibold text-slate-500 uppercase">Hasta</Label>
+          <Label className="text-xs font-semibold text-kx-text-2 uppercase">Hasta</Label>
           <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-white dark:bg-slate-900" />
         </div>
         <div className="flex gap-2 sm:col-span-2 md:col-span-2">
@@ -50,7 +50,7 @@ const ReportHeader = ({
              Generar Reporte
            </Button>
            <Button onClick={onClear} variant="outline" title="Limpiar Filtros" className="px-3">
-             <FilterX className="h-4 w-4 text-slate-500" />
+             <FilterX className="h-4 w-4 text-kx-text-2" />
            </Button>
         </div>
       </div>

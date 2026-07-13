@@ -115,7 +115,7 @@ function TablaOrdenesCompra({
       {listData && listData.pages > 1 && (
         <div className="flex items-center justify-center gap-2">
           <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Anterior</Button>
-          <span className="text-sm text-slate-500">{page} / {listData.pages}</span>
+          <span className="text-sm text-kx-text-2">{page} / {listData.pages}</span>
           <Button variant="outline" size="sm" disabled={page >= listData.pages} onClick={() => setPage(p => p + 1)}>Siguiente</Button>
         </div>
       )}

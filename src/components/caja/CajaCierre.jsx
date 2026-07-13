@@ -147,7 +147,7 @@ const CajaCierre = ({ onCancel }) => {
            {/* Resumen Calculado */}
            <div className="bg-kx-surface-2 dark:bg-kx-surface rounded-lg p-4 space-y-3 border border-kx-border dark:border-kx-border">
               <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Saldo Inicial</span>
+                <span className="text-kx-text-2">Saldo Inicial</span>
                 <span className="font-mono font-medium">${totals.inicial.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
@@ -176,7 +176,7 @@ const CajaCierre = ({ onCancel }) => {
               <div className="space-y-2">
                 <Label htmlFor="saldoReal" className="text-base">Saldo Real (Efectivo)</Label>
                 <div className="relative">
-                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">$</span>
+                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kx-text-2 font-bold">$</span>
                    <Input
                       id="saldoReal"
                       type="text"

@@ -140,11 +140,11 @@ function SubTabSufridas() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex items-end gap-2">
           <div className="space-y-1">
-            <Label className="text-xs text-slate-500">Desde</Label>
+            <Label className="text-xs text-kx-text-2">Desde</Label>
             <Input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} className="h-9 w-36" />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs text-slate-500">Hasta</Label>
+            <Label className="text-xs text-kx-text-2">Hasta</Label>
             <Input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} className="h-9 w-36" />
           </div>
         </div>

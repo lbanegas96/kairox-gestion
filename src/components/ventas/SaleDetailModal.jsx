@@ -331,7 +331,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
               </div>
             </div>
           ) : (
-            <div className="p-8 text-center text-slate-500">No se encontraron datos.</div>
+            <div className="p-8 text-center text-kx-text-2">No se encontraron datos.</div>
           )}
 
           <DialogFooter className="border-t border-slate-100 dark:border-kx-border pt-4 flex gap-2 justify-end">

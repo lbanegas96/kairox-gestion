@@ -149,7 +149,7 @@ function FormNuevaOC({
 
           <div className="flex justify-end pt-4 border-t border-kx-border dark:border-kx-border">
             <div className="text-right">
-              <span className="text-sm text-slate-500 mr-4">Total pedido:</span>
+              <span className="text-sm text-kx-text-2 mr-4">Total pedido:</span>
               <span className="text-2xl font-bold font-mono text-slate-900 dark:text-kx-text">
                 {formatCurrency(total, form.moneda)}
               </span>

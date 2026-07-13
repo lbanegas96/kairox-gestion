@@ -153,7 +153,7 @@ const TabEmpresa = ({
           ) : (
             <div className="h-32 w-full bg-slate-100 dark:bg-kx-surface-2 rounded-lg flex flex-col items-center justify-center border-2 border-dashed border-slate-300 dark:border-kx-border">
               <ImageIcon className="h-10 w-10 text-kx-text-3 mb-2" />
-              <span className="text-xs text-slate-500">Sin logo configurado</span>
+              <span className="text-xs text-kx-text-2">Sin logo configurado</span>
             </div>
           )}
           <div className="w-full">
@@ -161,16 +161,16 @@ const TabEmpresa = ({
               {formData.nombre_empresa || 'Nombre de Empresa'}
             </h4>
             {(formData.localidad || formData.provincia) && (
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-kx-text-2 mt-1">
                 {[formData.localidad, formData.provincia].filter(Boolean).join(', ')}
               </p>
             )}
-            {formData.email_empresa && <p className="text-xs text-slate-400 mt-0.5">{formData.email_empresa}</p>}
-            <p className="text-xs text-slate-500 mt-2">Así se verá en la pantalla de inicio</p>
+            {formData.email_empresa && <p className="text-xs text-kx-text-2 mt-0.5">{formData.email_empresa}</p>}
+            <p className="text-xs text-kx-text-2 mt-2">Así se verá en la pantalla de inicio</p>
           </div>
         </div>
       </div>
-      <p className="text-sm text-slate-500 max-w-xs">Los cambios se aplicarán inmediatamente para todos los usuarios.</p>
+      <p className="text-sm text-kx-text-2 max-w-xs">Los cambios se aplicarán inmediatamente para todos los usuarios.</p>
     </div>
   </div>
 );

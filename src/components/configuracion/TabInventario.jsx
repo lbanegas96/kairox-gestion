@@ -130,7 +130,7 @@ const TabInventario = ({
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-mono bg-kx-surface-2 px-2 py-0.5 rounded shrink-0">{u.codigo}</span>
                     <span className="text-sm text-kx-text truncate">{u.descripcion}</span>
-                    {!u.activo && <Badge variant="outline" className="text-xs text-slate-400 shrink-0">Inactiva</Badge>}
+                    {!u.activo && <Badge variant="outline" className="text-xs text-kx-text-2 shrink-0">Inactiva</Badge>}
                   </div>
                   <div className="flex items-center gap-2 mt-1 pl-0.5 text-[11px] text-kx-text-3">
                     {u.magnitud ? (
