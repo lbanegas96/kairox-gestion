@@ -88,14 +88,14 @@ export function AccionesCheque({ cheque, onVerDetalle, onCambiarEstado }) {
     <div className="flex items-center justify-center gap-1">
       <button
         onClick={() => onVerDetalle(cheque)}
-        className="px-2 py-1 text-xs rounded text-kx-text-3 hover:text-white hover:bg-kx-surface-2 border border-kx-border transition-colors flex items-center gap-1"
+        className="px-2 py-1 text-xs rounded text-kx-text-3 hover:text-kx-text hover:bg-kx-surface-2 border border-kx-border transition-colors flex items-center gap-1"
       >
         <Eye size={11} /> Ver
       </button>
       {opciones?.length > 0 && (
         <button
           onClick={() => onCambiarEstado(cheque)}
-          className="px-2 py-1 text-xs rounded text-[#00D4FF] hover:text-white hover:bg-[#00D4FF]/10 border border-[#00D4FF]/30 transition-colors flex items-center gap-1"
+          className="px-2 py-1 text-xs rounded text-[#00D4FF] hover:text-kx-text hover:bg-[#00D4FF]/10 border border-[#00D4FF]/30 transition-colors flex items-center gap-1"
         >
           <ArrowRightLeft size={11} /> Mover
         </button>
@@ -113,7 +113,7 @@ export function FechaVto({ fecha, estado }) {
   const proximo  = activo && !vencido && fecha <= in7d;
   return (
     <span className={`flex items-center gap-1 font-mono text-xs whitespace-nowrap
-      ${vencido ? 'text-red-400' : proximo ? 'text-amber-400' : 'text-slate-300'}`}>
+      ${vencido ? 'text-red-400' : proximo ? 'text-amber-400' : 'text-kx-text-3'}`}>
       {(vencido || proximo) && <Clock size={11} className="flex-shrink-0" />}
       {fmtDate(fecha)}
       {vencido && <span className="text-[10px] font-medium">(vencido)</span>}

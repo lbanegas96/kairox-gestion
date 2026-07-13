@@ -143,9 +143,9 @@ function TabPeriodos({ empresaId, userId, userRole }) {
         )}
       </div>
 
-      <div className="rounded-xl border border-slate-700 overflow-hidden">
+      <div className="rounded-xl border border-kx-border overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-800">
+          <thead className="bg-kx-surface-2">
             <tr>
               <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Nombre</th>
               <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Inicio</th>
@@ -157,20 +157,20 @@ function TabPeriodos({ empresaId, userId, userRole }) {
           </thead>
           <tbody>
             {loadingPeriodos && (
-              <tr><td colSpan={isAdmin ? 6 : 5} className="text-center py-12 text-slate-500">
+              <tr><td colSpan={isAdmin ? 6 : 5} className="text-center py-12 text-kx-text-2">
                 <Loader2 size={20} className="animate-spin mx-auto" />
               </td></tr>
             )}
             {!loadingPeriodos && periodos.length === 0 && (
-              <tr><td colSpan={isAdmin ? 6 : 5} className="text-center py-12 text-slate-500">
+              <tr><td colSpan={isAdmin ? 6 : 5} className="text-center py-12 text-kx-text-2">
                 No hay períodos contables creados
               </td></tr>
             )}
             {periodos.map(p => (
-              <tr key={p.id} className="border-t border-slate-800 hover:bg-slate-800/30 transition-colors">
-                <td className="px-4 py-3 text-white font-medium">{p.nombre}</td>
-                <td className="px-4 py-3 font-mono text-xs text-slate-300">{fmtFecha(p.fecha_inicio)}</td>
-                <td className="px-4 py-3 font-mono text-xs text-slate-300">{fmtFecha(p.fecha_cierre)}</td>
+              <tr key={p.id} className="border-t border-kx-border hover:bg-kx-surface-2/30 transition-colors">
+                <td className="px-4 py-3 text-kx-text font-medium">{p.nombre}</td>
+                <td className="px-4 py-3 font-mono text-xs text-kx-text-3">{fmtFecha(p.fecha_inicio)}</td>
+                <td className="px-4 py-3 font-mono text-xs text-kx-text-3">{fmtFecha(p.fecha_cierre)}</td>
                 <td className="px-4 py-3 text-center">
                   <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium
                     ${p.estado === 'cerrado'
@@ -211,7 +211,7 @@ function TabPeriodos({ empresaId, userId, userRole }) {
 
       {/* Modal: Nuevo período */}
       <Dialog open={showNuevoModal} onOpenChange={setShowNuevoModal}>
-        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-md">
+        <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plus size={16} className="text-[#00D4FF]" /> Nuevo Período Contable
@@ -224,20 +224,20 @@ function TabPeriodos({ empresaId, userId, userRole }) {
               <Input value={nuevoForm.nombre}
                 onChange={e => setNuevoForm(f => ({ ...f, nombre: e.target.value }))}
                 placeholder="Ej: Ejercicio 2025 — Enero"
-                className="mt-1 bg-slate-800 border-slate-700" />
+                className="mt-1 bg-kx-surface-2 border-kx-border" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-kx-text-3 text-xs">Fecha inicio *</Label>
                 <Input type="date" value={nuevoForm.fecha_inicio}
                   onChange={e => setNuevoForm(f => ({ ...f, fecha_inicio: e.target.value }))}
-                  className="mt-1 bg-slate-800 border-slate-700" />
+                  className="mt-1 bg-kx-surface-2 border-kx-border" />
               </div>
               <div>
                 <Label className="text-kx-text-3 text-xs">Fecha cierre *</Label>
                 <Input type="date" value={nuevoForm.fecha_cierre}
                   onChange={e => setNuevoForm(f => ({ ...f, fecha_cierre: e.target.value }))}
-                  className="mt-1 bg-slate-800 border-slate-700" />
+                  className="mt-1 bg-kx-surface-2 border-kx-border" />
               </div>
             </div>
             <div>
@@ -245,7 +245,7 @@ function TabPeriodos({ empresaId, userId, userRole }) {
               <Input value={nuevoForm.observaciones}
                 onChange={e => setNuevoForm(f => ({ ...f, observaciones: e.target.value }))}
                 placeholder="Opcional"
-                className="mt-1 bg-slate-800 border-slate-700" />
+                className="mt-1 bg-kx-surface-2 border-kx-border" />
             </div>
           </div>
           <DialogFooter className="gap-2">
@@ -262,7 +262,7 @@ function TabPeriodos({ empresaId, userId, userRole }) {
         open={showCierreConfirm}
         onOpenChange={v => { if (!procesandoCierre) { setShowCierre(v); if (!v) setPeriodoACerrar(null); } }}
       >
-        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-md">
+        <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-400">
               <AlertTriangle size={18} /> Cerrar período contable
@@ -279,7 +279,7 @@ function TabPeriodos({ empresaId, userId, userRole }) {
               </div>
               <p className="text-sm text-kx-text-3">
                 No se podrán crear nuevos asientos en ese rango de fechas. Los asientos existentes{' '}
-                <span className="text-white font-medium">no se modifican ni eliminan</span>.
+                <span className="text-kx-text font-medium">no se modifican ni eliminan</span>.
               </p>
             </div>
           )}
@@ -305,7 +305,7 @@ function TabPeriodos({ empresaId, userId, userRole }) {
         open={showReabrirConfirm}
         onOpenChange={v => { if (!procesandoCierre) { setShowReabrir(v); if (!v) setPeriodoAReabrir(null); } }}
       >
-        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-md">
+        <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-400">
               <Unlock size={18} /> Reabrir período contable
@@ -321,8 +321,8 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                 </p>
               </div>
               <p className="text-sm text-kx-text-3">
-                Los asientos existentes <span className="text-white font-medium">no se modifican</span>.
-                Se limpia la fecha de cierre real y vuelve a estado <span className="text-white font-medium">abierto</span>.
+                Los asientos existentes <span className="text-kx-text font-medium">no se modifican</span>.
+                Se limpia la fecha de cierre real y vuelve a estado <span className="text-kx-text font-medium">abierto</span>.
               </p>
             </div>
           )}

@@ -16,7 +16,7 @@ function ModalNuevoChequeTercero({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-lg">
+      <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Plus size={16} className="text-emerald-400" /> Registrar cheque recibido
@@ -29,14 +29,14 @@ function ModalNuevoChequeTercero({
               <Label className="text-kx-text-3 text-xs">Número *</Label>
               <Input value={terceroForm.numero}
                 onChange={e => setTerceroForm(f => ({ ...f, numero: e.target.value }))}
-                placeholder="00001234" className="mt-1 bg-slate-800 border-slate-700" />
+                placeholder="00001234" className="mt-1 bg-kx-surface-2 border-kx-border" />
             </div>
             <div>
               <Label className="text-kx-text-3 text-xs">Banco emisor *</Label>
               <Input value={terceroForm.banco}
                 onChange={e => setTerceroForm(f => ({ ...f, banco: e.target.value }))}
                 list="bancos-tercero" placeholder="Banco Galicia"
-                className="mt-1 bg-slate-800 border-slate-700" />
+                className="mt-1 bg-kx-surface-2 border-kx-border" />
               <datalist id="bancos-tercero">
                 {BANCOS_AR.map(b => <option key={b} value={b} />)}
               </datalist>
@@ -48,20 +48,20 @@ function ModalNuevoChequeTercero({
               <Input value={terceroForm.monto}
                 onChange={e => setTerceroForm(f => ({ ...f, monto: e.target.value }))}
                 placeholder="0,00" inputMode="decimal"
-                className="mt-1 bg-slate-800 border-slate-700" />
+                className="mt-1 bg-kx-surface-2 border-kx-border" />
             </div>
             <div>
               <Label className="text-kx-text-3 text-xs">Fecha vencimiento *</Label>
               <Input type="date" value={terceroForm.fecha_vencimiento}
                 onChange={e => setTerceroForm(f => ({ ...f, fecha_vencimiento: e.target.value }))}
-                className="mt-1 bg-slate-800 border-slate-700" />
+                className="mt-1 bg-kx-surface-2 border-kx-border" />
             </div>
           </div>
           <div>
             <Label className="text-kx-text-3 text-xs">Fecha emisión</Label>
             <Input type="date" value={terceroForm.fecha_emision}
               onChange={e => setTerceroForm(f => ({ ...f, fecha_emision: e.target.value }))}
-              className="mt-1 bg-slate-800 border-slate-700" />
+              className="mt-1 bg-kx-surface-2 border-kx-border" />
           </div>
           <div>
             <Label className="text-kx-text-3 text-xs">Cliente (opcional)</Label>
@@ -69,10 +69,10 @@ function ModalNuevoChequeTercero({
               value={terceroForm.cliente_id || '__none__'}
               onValueChange={v => setTerceroForm(f => ({ ...f, cliente_id: v === '__none__' ? '' : v, comprobante_id: '' }))}
             >
-              <SelectTrigger className="mt-1 bg-slate-800 border-slate-700">
+              <SelectTrigger className="mt-1 bg-kx-surface-2 border-kx-border">
                 <SelectValue placeholder="Sin cliente" />
               </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-700 max-h-56">
+              <SelectContent className="bg-kx-surface-2 border-kx-border max-h-56">
                 <SelectItem value="__none__">Sin cliente</SelectItem>
                 {clientes.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
               </SelectContent>
@@ -85,10 +85,10 @@ function ModalNuevoChequeTercero({
                 value={terceroForm.comprobante_id || '__none__'}
                 onValueChange={v => setTerceroForm(f => ({ ...f, comprobante_id: v === '__none__' ? '' : v }))}
               >
-                <SelectTrigger className="mt-1 bg-slate-800 border-slate-700">
+                <SelectTrigger className="mt-1 bg-kx-surface-2 border-kx-border">
                   <SelectValue placeholder="Sin comprobante" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700 max-h-56">
+                <SelectContent className="bg-kx-surface-2 border-kx-border max-h-56">
                   <SelectItem value="__none__">Sin comprobante</SelectItem>
                   {comprobantesCliente.map(comp => (
                     <SelectItem key={comp.id} value={comp.id}>
@@ -103,7 +103,7 @@ function ModalNuevoChequeTercero({
             <Label className="text-kx-text-3 text-xs">Observaciones</Label>
             <Input value={terceroForm.observaciones}
               onChange={e => setTerceroForm(f => ({ ...f, observaciones: e.target.value }))}
-              placeholder="Opcional" className="mt-1 bg-slate-800 border-slate-700" />
+              placeholder="Opcional" className="mt-1 bg-kx-surface-2 border-kx-border" />
           </div>
         </div>
         <DialogFooter className="gap-2">

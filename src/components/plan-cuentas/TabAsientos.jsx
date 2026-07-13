@@ -49,10 +49,10 @@ function TabAsientos({ empresaId, userId, cuentasFlat }) {
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <Select value={filtroEstado} onValueChange={(v) => { setFiltro(v === 'todos' ? '' : v); setPage(1); }}>
-          <SelectTrigger className="w-40 bg-slate-800 border-slate-700 h-9 text-sm">
+          <SelectTrigger className="w-40 bg-kx-surface-2 border-kx-border h-9 text-sm">
             <SelectValue placeholder="Todos" />
           </SelectTrigger>
-          <SelectContent className="bg-slate-800 border-slate-700">
+          <SelectContent className="bg-kx-surface-2 border-kx-border">
             <SelectItem value="todos">Todos</SelectItem>
             <SelectItem value="borrador">Borrador</SelectItem>
             <SelectItem value="confirmado">Confirmados</SelectItem>
@@ -68,9 +68,9 @@ function TabAsientos({ empresaId, userId, cuentasFlat }) {
         </Button>
       </div>
 
-      <div className="rounded-xl border border-slate-700 overflow-hidden">
+      <div className="rounded-xl border border-kx-border overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-800">
+          <thead className="bg-kx-surface-2">
             <tr>
               <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Nº</th>
               <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Fecha</th>
@@ -83,22 +83,22 @@ function TabAsientos({ empresaId, userId, cuentasFlat }) {
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={7} className="text-center py-12 text-slate-500">
+              <tr><td colSpan={7} className="text-center py-12 text-kx-text-2">
                 <Loader2 size={20} className="animate-spin mx-auto" />
               </td></tr>
             )}
             {!isLoading && data?.data?.length === 0 && (
-              <tr><td colSpan={7} className="text-center py-12 text-slate-500">
+              <tr><td colSpan={7} className="text-center py-12 text-kx-text-2">
                 No hay asientos
               </td></tr>
             )}
             {data?.data?.map((a) => (
-              <tr key={a.id} className="border-t border-slate-800 hover:bg-slate-800/30 transition-colors">
+              <tr key={a.id} className="border-t border-kx-border hover:bg-kx-surface-2/30 transition-colors">
                 <td className="px-4 py-3 font-mono text-xs text-[#00D4FF]">{a.numero}</td>
-                <td className="px-4 py-3 text-slate-300">{new Date(a.fecha + 'T12:00:00').toLocaleDateString('es-AR')}</td>
-                <td className="px-4 py-3 text-slate-300 max-w-xs truncate">{a.descripcion || '—'}</td>
-                <td className="px-4 py-3 text-right font-mono text-slate-300">{fmt(a.total_debe)}</td>
-                <td className="px-4 py-3 text-right font-mono text-slate-300">{fmt(a.total_haber)}</td>
+                <td className="px-4 py-3 text-kx-text-3">{new Date(a.fecha + 'T12:00:00').toLocaleDateString('es-AR')}</td>
+                <td className="px-4 py-3 text-kx-text-3 max-w-xs truncate">{a.descripcion || '—'}</td>
+                <td className="px-4 py-3 text-right font-mono text-kx-text-3">{fmt(a.total_debe)}</td>
+                <td className="px-4 py-3 text-right font-mono text-kx-text-3">{fmt(a.total_haber)}</td>
                 <td className="px-4 py-3 text-center">
                   <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${ESTADO_COLOR[a.estado]}`}>
                     {a.estado}
@@ -107,7 +107,7 @@ function TabAsientos({ empresaId, userId, cuentasFlat }) {
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-center gap-1">
                     <button onClick={() => setDetalle(a)}
-                      className="p-1.5 rounded text-kx-text-3 hover:text-white hover:bg-slate-700 transition-colors" title="Ver detalle">
+                      className="p-1.5 rounded text-kx-text-3 hover:text-kx-text hover:bg-kx-surface-2 transition-colors" title="Ver detalle">
                       <Eye size={14} />
                     </button>
                     {a.estado === 'borrador' && (
@@ -148,7 +148,7 @@ function TabAsientos({ empresaId, userId, cuentasFlat }) {
 
       {/* Modal detalle asiento */}
       <Dialog open={!!detalle} onOpenChange={() => setDetalle(null)}>
-        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-lg">
+        <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText size={16} className="text-[#00D4FF]" />
@@ -162,13 +162,13 @@ function TabAsientos({ empresaId, userId, cuentasFlat }) {
           {detalle && (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-2 text-sm">
-                <div><span className="text-slate-500">Fecha:</span> <span className="text-white">{new Date(detalle.fecha + 'T12:00:00').toLocaleDateString('es-AR')}</span></div>
-                <div><span className="text-slate-500">Origen:</span> <span className="text-white">{detalle.origen || 'manual'}</span></div>
-                {detalle.descripcion && <div className="col-span-2"><span className="text-slate-500">Descripción:</span> <span className="text-white">{detalle.descripcion}</span></div>}
+                <div><span className="text-kx-text-2">Fecha:</span> <span className="text-kx-text">{new Date(detalle.fecha + 'T12:00:00').toLocaleDateString('es-AR')}</span></div>
+                <div><span className="text-kx-text-2">Origen:</span> <span className="text-kx-text">{detalle.origen || 'manual'}</span></div>
+                {detalle.descripcion && <div className="col-span-2"><span className="text-kx-text-2">Descripción:</span> <span className="text-kx-text">{detalle.descripcion}</span></div>}
               </div>
-              <div className="rounded-lg border border-slate-700 overflow-hidden">
+              <div className="rounded-lg border border-kx-border overflow-hidden">
                 <table className="w-full text-xs">
-                  <thead className="bg-slate-800">
+                  <thead className="bg-kx-surface-2">
                     <tr>
                       <th className="px-3 py-2 text-left text-kx-text-3">Cuenta</th>
                       <th className="px-3 py-2 text-right text-kx-text-3">Debe</th>
@@ -177,22 +177,22 @@ function TabAsientos({ empresaId, userId, cuentasFlat }) {
                   </thead>
                   <tbody>
                     {detalle.asientos_items?.map((item) => (
-                      <tr key={item.id} className="border-t border-slate-800">
-                        <td className="px-3 py-1.5 text-slate-300">
+                      <tr key={item.id} className="border-t border-kx-border">
+                        <td className="px-3 py-1.5 text-kx-text-3">
                           <span className="font-mono text-[#00D4FF] mr-2">{item.plan_cuentas?.codigo}</span>
                           {item.plan_cuentas?.nombre}
-                          {item.descripcion && <span className="text-slate-500 ml-2">({item.descripcion})</span>}
+                          {item.descripcion && <span className="text-kx-text-2 ml-2">({item.descripcion})</span>}
                         </td>
-                        <td className="px-3 py-1.5 text-right font-mono text-slate-300">{item.debe > 0 ? fmt(item.debe) : '—'}</td>
-                        <td className="px-3 py-1.5 text-right font-mono text-slate-300">{item.haber > 0 ? fmt(item.haber) : '—'}</td>
+                        <td className="px-3 py-1.5 text-right font-mono text-kx-text-3">{item.debe > 0 ? fmt(item.debe) : '—'}</td>
+                        <td className="px-3 py-1.5 text-right font-mono text-kx-text-3">{item.haber > 0 ? fmt(item.haber) : '—'}</td>
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="bg-slate-800/50">
+                  <tfoot className="bg-kx-surface-2/50">
                     <tr>
                       <td className="px-3 py-2 text-kx-text-3 font-medium">Total</td>
-                      <td className="px-3 py-2 text-right font-mono font-bold text-white">{fmt(detalle.total_debe)}</td>
-                      <td className="px-3 py-2 text-right font-mono font-bold text-white">{fmt(detalle.total_haber)}</td>
+                      <td className="px-3 py-2 text-right font-mono font-bold text-kx-text">{fmt(detalle.total_debe)}</td>
+                      <td className="px-3 py-2 text-right font-mono font-bold text-kx-text">{fmt(detalle.total_haber)}</td>
                     </tr>
                   </tfoot>
                 </table>

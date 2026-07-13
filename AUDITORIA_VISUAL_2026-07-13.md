@@ -33,7 +33,36 @@ Jerarquía visual preservada: text > text-2 > text-3 en prominencia.
 Los acentos dark ya cumplían AA, no se tocaron. Los otros acentos light (red 4.83, blue 6.36,
 violet 7.03) ya cumplían.
 
-## ⚠️ Hallazgos que quedan (para Luciano decidir)
+## ✅ Plan de Cuentas + Cheques migrados por completo (Luciano, 2026-07-13/14)
+
+Migración completa de ambos módulos (los 2 con más deuda del ranking de abajo). Hallazgo adicional al
+hacerlo: el conteo original de "elementos ilegibles" media solo `text-*` — pero la causa real en estos
+2 módulos era más profunda: **diálogos, tablas y selects enteros con fondo/borde oscuro fijo**
+(`bg-slate-800/900`, `border-slate-700/800/900`, `text-white`), no solo texto. Confirmado con el usuario
+que NO era intencional (no es una "terminal financiera" a propósito) — debía respetar el tema como el
+resto de la app.
+
+**Mapeo aplicado** (15 archivos, Plan de Cuentas + Cheques):
+- `bg-slate-900` → `bg-kx-surface` (fondo de diálogos)
+- `bg-slate-800` → `bg-kx-surface-2` (inputs/selects/headers de tabla/hover de filas)
+- `border-slate-700/800/900` → `border-kx-border`
+- `text-slate-300` → `text-kx-text-3`, `text-slate-500` → `text-kx-text-2` (texto secundario/terciario)
+- `text-white` → `text-kx-text` **excepto** en toasts/botones con fondo de acento explícito
+  (`bg-green-900`, `bg-amber-600`, `bg-emerald-600`, `bg-blue-600`) — esos quedan igual, es
+  intencional y correcto en ambos temas.
+
+Verificado: 0 colores hardcodeados restantes en ambos módulos (antes: ~195 líneas). Build limpio.
+**Pendiente para Nadia**: verificar visualmente en su propio navegador (no pude verificar en el
+preview automatizado por sesión separada) — revisar Plan de Cuentas (los 7 tabs) y Cheques en modo
+claro y oscuro.
+
+**Alcance real mucho mayor de lo estimado**: al revisar el resto del código con un chequeo más preciso
+(descartando pares que ya funcionan con `dark:` hardcodeado o con un token kx- del lado oscuro), quedan
+**~146 líneas rotas de verdad en ~49 archivos más** repartidos en `sections` (17), `reportes` (7),
+`caja` (7), `ventas` (6), `ordenes-compra` (5), `configuracion` (5), `pedidos`/`impuestos`/
+`cotizaciones` (4 c/u), y varias carpetas chicas — sin contar posibles casos `bg-`/`border-` como los
+que aparecieron en Plan de Cuentas (no medidos todavía en el resto). Decisión pendiente: continuar
+módulo por módulo con el mismo criterio, o cerrar acá por ahora.
 
 ### 1. Colores Tailwind hardcodeados fuera del sistema de tokens
 

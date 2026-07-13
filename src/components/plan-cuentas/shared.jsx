@@ -36,7 +36,7 @@ export function CuentaNode({ cuenta, depth = 0, onEdit, search }) {
     <div>
       <div
         className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors cursor-pointer group
-          ${depth === 0 ? 'bg-slate-800/60 mb-1' : 'hover:bg-slate-800/40'}
+          ${depth === 0 ? 'bg-kx-surface-2/60 mb-1' : 'hover:bg-kx-surface-2/40'}
           ${highlight ? 'ring-1 ring-[#00D4FF]/30' : ''}
         `}
         style={{ paddingLeft: `${12 + depth * 20}px` }}
@@ -48,11 +48,11 @@ export function CuentaNode({ cuenta, depth = 0, onEdit, search }) {
           <span className="w-3.5 flex-shrink-0" />
         )}
 
-        <span className={`text-xs font-mono w-16 flex-shrink-0 ${depth === 0 ? 'text-slate-300' : 'text-slate-500'}`}>
+        <span className={`text-xs font-mono w-16 flex-shrink-0 ${depth === 0 ? 'text-kx-text-3' : 'text-kx-text-2'}`}>
           {cuenta.codigo}
         </span>
 
-        <span className={`flex-1 text-sm ${depth === 0 ? 'font-semibold text-white' : 'text-slate-300'} ${!cuenta.activa ? 'line-through opacity-50' : ''}`}>
+        <span className={`flex-1 text-sm ${depth === 0 ? 'font-semibold text-kx-text' : 'text-kx-text-3'} ${!cuenta.activa ? 'line-through opacity-50' : ''}`}>
           {cuenta.nombre}
         </span>
 
@@ -71,7 +71,7 @@ export function CuentaNode({ cuenta, depth = 0, onEdit, search }) {
         {cuenta.permite_movimientos && (
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(cuenta); }}
-            className="opacity-0 group-hover:opacity-100 p-1 rounded text-kx-text-3 hover:text-white transition-all"
+            className="opacity-0 group-hover:opacity-100 p-1 rounded text-kx-text-3 hover:text-kx-text transition-all"
           >
             <Pencil size={12} />
           </button>

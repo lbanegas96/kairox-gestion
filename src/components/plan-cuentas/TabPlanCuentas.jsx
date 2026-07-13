@@ -39,7 +39,7 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
       <div className="flex flex-col items-center justify-center py-20 gap-4">
         <BookOpen size={48} className="text-kx-text-2" />
         <p className="text-kx-text-3 text-lg font-medium">Plan de cuentas vacío</p>
-        <p className="text-slate-500 text-sm">Podés inicializarlo con las cuentas estándar para PyMEs argentinas</p>
+        <p className="text-kx-text-2 text-sm">Podés inicializarlo con las cuentas estándar para PyMEs argentinas</p>
         <Button onClick={handleSeedCuentas} className="bg-[#00D4FF] text-black hover:bg-[#00bfe8] mt-2">
           <RefreshCw size={16} className="mr-2" /> Inicializar Plan Estándar
         </Button>
@@ -51,9 +51,9 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-xs">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-kx-text-2" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 bg-slate-800 border-slate-700 h-9 text-sm" placeholder="Buscar cuenta..." />
+            className="pl-9 bg-kx-surface-2 border-kx-border h-9 text-sm" placeholder="Buscar cuenta..." />
         </div>
         <Button onClick={() => setShowModal(true)} size="sm"
           className="bg-[#00D4FF] text-black hover:bg-[#00bfe8]">
@@ -61,7 +61,7 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
         </Button>
       </div>
 
-      <div className="rounded-xl border border-slate-700 bg-slate-900/50 overflow-hidden">
+      <div className="rounded-xl border border-kx-border bg-kx-surface/50 overflow-hidden">
         <div className="p-3 space-y-1">
           {tree.map((raiz) => (
             <CuentaNode key={raiz.id} cuenta={raiz} depth={0}
@@ -82,7 +82,7 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
 
       {/* Modal editar cuenta */}
       <Dialog open={!!editCuenta} onOpenChange={() => setEditCuenta(null)}>
-        <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-sm">
+        <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-sm">
           <DialogHeader>
             <DialogTitle>Editar Cuenta</DialogTitle>
             <DialogDescription>Modificá el nombre y estado de la cuenta contable.</DialogDescription>
@@ -93,13 +93,13 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
                 <Label className="text-kx-text-3 text-xs">Nombre</Label>
                 <Input value={editCuenta.nombre}
                   onChange={(e) => setEditCuenta({ ...editCuenta, nombre: e.target.value })}
-                  className="bg-slate-800 border-slate-700" />
+                  className="bg-kx-surface-2 border-kx-border" />
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={editCuenta.activa}
                   onChange={(e) => setEditCuenta({ ...editCuenta, activa: e.target.checked })}
                   className="w-4 h-4 rounded" />
-                <span className="text-sm text-slate-300">Cuenta activa</span>
+                <span className="text-sm text-kx-text-3">Cuenta activa</span>
               </label>
             </div>
           )}

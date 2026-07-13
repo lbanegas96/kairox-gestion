@@ -54,7 +54,7 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-2xl">
+      <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             <FileText size={18} className="text-[#00D4FF]" /> Nuevo Asiento Contable
@@ -68,19 +68,19 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
               <Label className="text-kx-text-3 text-xs">Fecha *</Label>
               <Input type="date" value={form.fecha}
                 onChange={(e) => setForm({ ...form, fecha: e.target.value })}
-                className="bg-slate-800 border-slate-700" />
+                className="bg-kx-surface-2 border-kx-border" />
             </div>
             <div className="space-y-1">
               <Label className="text-kx-text-3 text-xs">Descripción</Label>
               <Input value={form.descripcion}
                 onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
-                className="bg-slate-800 border-slate-700" placeholder="Concepto del asiento" />
+                className="bg-kx-surface-2 border-kx-border" placeholder="Concepto del asiento" />
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-700 overflow-hidden">
+          <div className="rounded-lg border border-kx-border overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-slate-800">
+              <thead className="bg-kx-surface-2">
                 <tr>
                   <th className="px-3 py-2 text-left text-kx-text-3 font-medium">Cuenta</th>
                   <th className="px-3 py-2 text-left text-kx-text-3 font-medium">Detalle</th>
@@ -91,12 +91,12 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
               </thead>
               <tbody>
                 {lineas.map((l, i) => (
-                  <tr key={i} className="border-t border-slate-800">
+                  <tr key={i} className="border-t border-kx-border">
                     <td className="px-2 py-1.5">
                       <select
                         value={l.cuenta_id}
                         onChange={(e) => updateLinea(i, 'cuenta_id', e.target.value)}
-                        className="w-full bg-slate-800 border border-slate-700 rounded text-white text-xs px-2 py-1.5 focus:outline-none focus:border-[#00D4FF]"
+                        className="w-full bg-kx-surface-2 border border-kx-border rounded text-kx-text text-xs px-2 py-1.5 focus:outline-none focus:border-[#00D4FF]"
                       >
                         <option value="">— Seleccionar —</option>
                         {movibles.map((c) => (
@@ -107,22 +107,22 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
                     <td className="px-2 py-1.5">
                       <Input value={l.descripcion}
                         onChange={(e) => updateLinea(i, 'descripcion', e.target.value)}
-                        className="bg-slate-800 border-slate-700 h-8 text-xs" placeholder="Detalle" />
+                        className="bg-kx-surface-2 border-kx-border h-8 text-xs" placeholder="Detalle" />
                     </td>
                     <td className="px-2 py-1.5">
                       <Input type="text" inputMode="decimal" value={l.debe}
                         onChange={(e) => updateLinea(i, 'debe', e.target.value)}
-                        className="bg-slate-800 border-slate-700 h-8 text-xs text-right" placeholder="0,00" />
+                        className="bg-kx-surface-2 border-kx-border h-8 text-xs text-right" placeholder="0,00" />
                     </td>
                     <td className="px-2 py-1.5">
                       <Input type="text" inputMode="decimal" value={l.haber}
                         onChange={(e) => updateLinea(i, 'haber', e.target.value)}
-                        className="bg-slate-800 border-slate-700 h-8 text-xs text-right" placeholder="0,00" />
+                        className="bg-kx-surface-2 border-kx-border h-8 text-xs text-right" placeholder="0,00" />
                     </td>
                     <td className="px-1">
                       {lineas.length > 2 && (
                         <button onClick={() => setLineas((p) => p.filter((_, j) => j !== i))}
-                          className="text-slate-500 hover:text-red-400 p-1">
+                          className="text-kx-text-2 hover:text-red-400 p-1">
                           <X size={12} />
                         </button>
                       )}
@@ -130,7 +130,7 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="bg-slate-800/50">
+              <tfoot className="bg-kx-surface-2/50">
                 <tr>
                   <td colSpan={2} className="px-3 py-2">
                     <button onClick={() => setLineas((p) => [...p, emptyLinea()])}
@@ -138,10 +138,10 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
                       <Plus size={12} /> Agregar línea
                     </button>
                   </td>
-                  <td className={`px-3 py-2 text-right text-xs font-mono font-bold ${cuadrado ? 'text-green-400' : 'text-white'}`}>
+                  <td className={`px-3 py-2 text-right text-xs font-mono font-bold ${cuadrado ? 'text-green-400' : 'text-kx-text'}`}>
                     {fmt(totalDebe)}
                   </td>
-                  <td className={`px-3 py-2 text-right text-xs font-mono font-bold ${cuadrado ? 'text-green-400' : 'text-white'}`}>
+                  <td className={`px-3 py-2 text-right text-xs font-mono font-bold ${cuadrado ? 'text-green-400' : 'text-kx-text'}`}>
                     {fmt(totalHaber)}
                   </td>
                   <td />

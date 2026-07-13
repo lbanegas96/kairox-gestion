@@ -17,7 +17,7 @@ function ModalNuevoChequePropio({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-lg">
+      <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Plus size={16} className="text-blue-400" /> Registrar cheque propio emitido
@@ -30,14 +30,14 @@ function ModalNuevoChequePropio({
               <Label className="text-kx-text-3 text-xs">Número *</Label>
               <Input value={propioForm.numero}
                 onChange={e => setPropioForm(f => ({ ...f, numero: e.target.value }))}
-                placeholder="00001234" className="mt-1 bg-slate-800 border-slate-700" />
+                placeholder="00001234" className="mt-1 bg-kx-surface-2 border-kx-border" />
             </div>
             <div>
               <Label className="text-kx-text-3 text-xs">Banco *</Label>
               <Input value={propioForm.banco}
                 onChange={e => setPropioForm(f => ({ ...f, banco: e.target.value }))}
                 list="bancos-propio" placeholder="Banco Nación"
-                className="mt-1 bg-slate-800 border-slate-700" />
+                className="mt-1 bg-kx-surface-2 border-kx-border" />
               <datalist id="bancos-propio">
                 {BANCOS_AR.map(b => <option key={b} value={b} />)}
               </datalist>
@@ -49,10 +49,10 @@ function ModalNuevoChequePropio({
               value={propioForm.cuenta_bancaria_id || '__none__'}
               onValueChange={v => setPropioForm(f => ({ ...f, cuenta_bancaria_id: v === '__none__' ? '' : v }))}
             >
-              <SelectTrigger className="mt-1 bg-slate-800 border-slate-700">
+              <SelectTrigger className="mt-1 bg-kx-surface-2 border-kx-border">
                 <SelectValue placeholder="Sin cuenta asociada" />
               </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-700 max-h-56">
+              <SelectContent className="bg-kx-surface-2 border-kx-border max-h-56">
                 <SelectItem value="__none__">Sin cuenta asociada</SelectItem>
                 {cuentasBancarias.map(cb => (
                   <SelectItem key={cb.id} value={cb.id}>{cb.nombre} — {cb.banco}</SelectItem>
@@ -66,20 +66,20 @@ function ModalNuevoChequePropio({
               <Input value={propioForm.monto}
                 onChange={e => setPropioForm(f => ({ ...f, monto: e.target.value }))}
                 placeholder="0,00" inputMode="decimal"
-                className="mt-1 bg-slate-800 border-slate-700" />
+                className="mt-1 bg-kx-surface-2 border-kx-border" />
             </div>
             <div>
               <Label className="text-kx-text-3 text-xs">Fecha vencimiento *</Label>
               <Input type="date" value={propioForm.fecha_vencimiento}
                 onChange={e => setPropioForm(f => ({ ...f, fecha_vencimiento: e.target.value }))}
-                className="mt-1 bg-slate-800 border-slate-700" />
+                className="mt-1 bg-kx-surface-2 border-kx-border" />
             </div>
           </div>
           <div>
             <Label className="text-kx-text-3 text-xs">Fecha emisión</Label>
             <Input type="date" value={propioForm.fecha_emision}
               onChange={e => setPropioForm(f => ({ ...f, fecha_emision: e.target.value }))}
-              className="mt-1 bg-slate-800 border-slate-700" />
+              className="mt-1 bg-kx-surface-2 border-kx-border" />
           </div>
           <div>
             <Label className="text-kx-text-3 text-xs">Proveedor (opcional)</Label>
@@ -87,10 +87,10 @@ function ModalNuevoChequePropio({
               value={propioForm.proveedor_id || '__none__'}
               onValueChange={v => setPropioForm(f => ({ ...f, proveedor_id: v === '__none__' ? '' : v, compra_id: '' }))}
             >
-              <SelectTrigger className="mt-1 bg-slate-800 border-slate-700">
+              <SelectTrigger className="mt-1 bg-kx-surface-2 border-kx-border">
                 <SelectValue placeholder="Sin proveedor" />
               </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-700 max-h-56">
+              <SelectContent className="bg-kx-surface-2 border-kx-border max-h-56">
                 <SelectItem value="__none__">Sin proveedor</SelectItem>
                 {proveedores.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>)}
               </SelectContent>
@@ -103,10 +103,10 @@ function ModalNuevoChequePropio({
                 value={propioForm.compra_id || '__none__'}
                 onValueChange={v => setPropioForm(f => ({ ...f, compra_id: v === '__none__' ? '' : v }))}
               >
-                <SelectTrigger className="mt-1 bg-slate-800 border-slate-700">
+                <SelectTrigger className="mt-1 bg-kx-surface-2 border-kx-border">
                   <SelectValue placeholder="Sin compra" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700 max-h-56">
+                <SelectContent className="bg-kx-surface-2 border-kx-border max-h-56">
                   <SelectItem value="__none__">Sin compra</SelectItem>
                   {comprasProveedor.map(comp => (
                     <SelectItem key={comp.id} value={comp.id}>
@@ -121,7 +121,7 @@ function ModalNuevoChequePropio({
             <Label className="text-kx-text-3 text-xs">Observaciones</Label>
             <Input value={propioForm.observaciones}
               onChange={e => setPropioForm(f => ({ ...f, observaciones: e.target.value }))}
-              placeholder="Opcional" className="mt-1 bg-slate-800 border-slate-700" />
+              placeholder="Opcional" className="mt-1 bg-kx-surface-2 border-kx-border" />
           </div>
         </div>
         <DialogFooter className="gap-2">

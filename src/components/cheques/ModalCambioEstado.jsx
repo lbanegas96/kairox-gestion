@@ -26,7 +26,7 @@ function ModalCambioEstado({
   const requiereCuentaBancaria = estadoNuevo === 'cobrado' && chequeACambiar?.tipo === 'tercero';
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-sm">
+      <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ArrowRightLeft size={16} className="text-[#00D4FF]" /> Cambiar estado
@@ -45,10 +45,10 @@ function ModalCambioEstado({
           <div>
             <Label className="text-kx-text-3 text-xs">Nuevo estado *</Label>
             <Select value={estadoNuevo} onValueChange={setEstadoNuevo}>
-              <SelectTrigger className="mt-1 bg-slate-800 border-slate-700">
+              <SelectTrigger className="mt-1 bg-kx-surface-2 border-kx-border">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-700">
+              <SelectContent className="bg-kx-surface-2 border-kx-border">
                 {transicionesDisponibles.map(e => (
                   <SelectItem key={e} value={e}>{ESTADO_LABELS[e]}</SelectItem>
                 ))}
@@ -59,10 +59,10 @@ function ModalCambioEstado({
             <div>
               <Label className="text-kx-text-3 text-xs">Endosar a proveedor *</Label>
               <Select value={proveedorEndosoId} onValueChange={setProveedorEndosoId}>
-                <SelectTrigger className="mt-1 bg-slate-800 border-slate-700">
+                <SelectTrigger className="mt-1 bg-kx-surface-2 border-kx-border">
                   <SelectValue placeholder="Elegí un proveedor" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
+                <SelectContent className="bg-kx-surface-2 border-kx-border">
                   {proveedores.map(p => (
                     <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
                   ))}
@@ -74,10 +74,10 @@ function ModalCambioEstado({
             <div>
               <Label className="text-kx-text-3 text-xs">¿A qué cuenta se depositó? *</Label>
               <Select value={cuentaBancariaCobroId} onValueChange={setCuentaBancariaCobroId}>
-                <SelectTrigger className="mt-1 bg-slate-800 border-slate-700">
+                <SelectTrigger className="mt-1 bg-kx-surface-2 border-kx-border">
                   <SelectValue placeholder="Elegí una cuenta bancaria" />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
+                <SelectContent className="bg-kx-surface-2 border-kx-border">
                   {cuentasBancarias.map(c => (
                     <SelectItem key={c.id} value={c.id}>{c.nombre} ({c.banco})</SelectItem>
                   ))}
@@ -90,7 +90,7 @@ function ModalCambioEstado({
             <Input value={obsEstado}
               onChange={e => setObsEstado(e.target.value)}
               placeholder="Ej: Depositado en Bco. Nación"
-              className="mt-1 bg-slate-800 border-slate-700" />
+              className="mt-1 bg-kx-surface-2 border-kx-border" />
           </div>
         </div>
         <DialogFooter className="gap-2">

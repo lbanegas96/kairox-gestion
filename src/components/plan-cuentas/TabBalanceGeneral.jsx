@@ -76,15 +76,15 @@ function TabBalanceGeneral({ empresaId }) {
         <div className="flex items-center gap-2">
           <Label className="text-kx-text-3 text-xs whitespace-nowrap">Fecha de corte</Label>
           <Input type="date" value={fechaCorte} onChange={(e) => setFechaCorte(e.target.value)}
-            className="bg-slate-800 border-slate-700 h-9 text-sm w-36" />
+            className="bg-kx-surface-2 border-kx-border h-9 text-sm w-36" />
         </div>
         <Button onClick={() => refetch()} size="sm" variant="outline"
-          className="border-slate-700 text-slate-300 hover:bg-slate-800">
+          className="border-kx-border text-kx-text-3 hover:bg-kx-surface-2">
           <RefreshCw size={14} className="mr-1" /> Actualizar
         </Button>
         {!sinDatos && (
           <Button onClick={handleExportCSV} size="sm" variant="outline"
-            className="border-slate-700 text-slate-300 hover:bg-slate-800">
+            className="border-kx-border text-kx-text-3 hover:bg-kx-surface-2">
             <Download size={14} className="mr-1" /> Exportar CSV
           </Button>
         )}
@@ -107,7 +107,7 @@ function TabBalanceGeneral({ empresaId }) {
       )}
 
       {sinDatos && (
-        <div className="text-center py-20 text-slate-500">
+        <div className="text-center py-20 text-kx-text-2">
           <Scale size={36} className="mx-auto mb-3 opacity-30" />
           <p className="font-medium">No hay movimientos hasta la fecha seleccionada</p>
           <p className="text-xs mt-1 text-kx-text-2">Solo se consideran asientos confirmados</p>
@@ -117,24 +117,24 @@ function TabBalanceGeneral({ empresaId }) {
       {!isLoading && rows.length > 0 && (
         <div className="grid md:grid-cols-2 gap-4">
           {/* Activo */}
-          <div className="rounded-xl border border-slate-700 overflow-hidden self-start">
-            <div className="bg-blue-500/10 px-4 py-2 border-b border-slate-700">
+          <div className="rounded-xl border border-kx-border overflow-hidden self-start">
+            <div className="bg-blue-500/10 px-4 py-2 border-b border-kx-border">
               <span className="text-sm font-semibold text-blue-400">Activo</span>
             </div>
             <table className="w-full text-sm">
               <tbody>
                 {calc.activos.length === 0 && (
-                  <tr><td className="px-4 py-4 text-center text-slate-500 text-xs">Sin cuentas de activo con movimientos</td></tr>
+                  <tr><td className="px-4 py-4 text-center text-kx-text-2 text-xs">Sin cuentas de activo con movimientos</td></tr>
                 )}
                 {calc.activos.map((r) => (
-                  <tr key={r.cuenta_id} className="border-t border-slate-800 hover:bg-slate-800/30">
+                  <tr key={r.cuenta_id} className="border-t border-kx-border hover:bg-kx-surface-2/30">
                     <td className="px-4 py-2.5 font-mono text-xs text-[#00D4FF] w-20">{r.codigo}</td>
-                    <td className="px-4 py-2.5 text-slate-300">{r.nombre}</td>
-                    <td className="px-4 py-2.5 text-right font-mono text-slate-300 w-36">{fmt(r.monto)}</td>
+                    <td className="px-4 py-2.5 text-kx-text-3">{r.nombre}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-kx-text-3 w-36">{fmt(r.monto)}</td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="bg-slate-800/50">
+              <tfoot className="bg-kx-surface-2/50">
                 <tr>
                   <td colSpan={2} className="px-4 py-2.5 text-kx-text-3 font-semibold">Total Activo</td>
                   <td className="px-4 py-2.5 text-right font-mono font-bold text-blue-400">{fmt(calc.totalActivo)}</td>
@@ -145,24 +145,24 @@ function TabBalanceGeneral({ empresaId }) {
 
           {/* Pasivo + Patrimonio */}
           <div className="space-y-4">
-            <div className="rounded-xl border border-slate-700 overflow-hidden">
-              <div className="bg-red-500/10 px-4 py-2 border-b border-slate-700">
+            <div className="rounded-xl border border-kx-border overflow-hidden">
+              <div className="bg-red-500/10 px-4 py-2 border-b border-kx-border">
                 <span className="text-sm font-semibold text-red-400">Pasivo</span>
               </div>
               <table className="w-full text-sm">
                 <tbody>
                   {calc.pasivos.length === 0 && (
-                    <tr><td className="px-4 py-4 text-center text-slate-500 text-xs">Sin cuentas de pasivo con movimientos</td></tr>
+                    <tr><td className="px-4 py-4 text-center text-kx-text-2 text-xs">Sin cuentas de pasivo con movimientos</td></tr>
                   )}
                   {calc.pasivos.map((r) => (
-                    <tr key={r.cuenta_id} className="border-t border-slate-800 hover:bg-slate-800/30">
+                    <tr key={r.cuenta_id} className="border-t border-kx-border hover:bg-kx-surface-2/30">
                       <td className="px-4 py-2.5 font-mono text-xs text-[#00D4FF] w-20">{r.codigo}</td>
-                      <td className="px-4 py-2.5 text-slate-300">{r.nombre}</td>
-                      <td className="px-4 py-2.5 text-right font-mono text-slate-300 w-36">{fmt(r.monto)}</td>
+                      <td className="px-4 py-2.5 text-kx-text-3">{r.nombre}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-kx-text-3 w-36">{fmt(r.monto)}</td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-slate-800/50">
+                <tfoot className="bg-kx-surface-2/50">
                   <tr>
                     <td colSpan={2} className="px-4 py-2.5 text-kx-text-3 font-semibold">Total Pasivo</td>
                     <td className="px-4 py-2.5 text-right font-mono font-bold text-red-400">{fmt(calc.totalPasivo)}</td>
@@ -171,22 +171,22 @@ function TabBalanceGeneral({ empresaId }) {
               </table>
             </div>
 
-            <div className="rounded-xl border border-slate-700 overflow-hidden">
-              <div className="bg-purple-500/10 px-4 py-2 border-b border-slate-700">
+            <div className="rounded-xl border border-kx-border overflow-hidden">
+              <div className="bg-purple-500/10 px-4 py-2 border-b border-kx-border">
                 <span className="text-sm font-semibold text-purple-400">Patrimonio Neto</span>
               </div>
               <table className="w-full text-sm">
                 <tbody>
                   {calc.patrimonios.map((r) => (
-                    <tr key={r.cuenta_id} className="border-t border-slate-800 hover:bg-slate-800/30">
+                    <tr key={r.cuenta_id} className="border-t border-kx-border hover:bg-kx-surface-2/30">
                       <td className="px-4 py-2.5 font-mono text-xs text-[#00D4FF] w-20">{r.codigo}</td>
-                      <td className="px-4 py-2.5 text-slate-300">{r.nombre}</td>
-                      <td className="px-4 py-2.5 text-right font-mono text-slate-300 w-36">{fmt(r.monto)}</td>
+                      <td className="px-4 py-2.5 text-kx-text-3">{r.nombre}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-kx-text-3 w-36">{fmt(r.monto)}</td>
                     </tr>
                   ))}
-                  <tr className="border-t border-slate-800 hover:bg-slate-800/30">
+                  <tr className="border-t border-kx-border hover:bg-kx-surface-2/30">
                     <td className="px-4 py-2.5 font-mono text-xs text-[#00D4FF] w-20">3.3</td>
-                    <td className="px-4 py-2.5 text-slate-300 italic">
+                    <td className="px-4 py-2.5 text-kx-text-3 italic">
                       Resultado del Ejercicio
                       <span className="ml-2 text-[10px] text-kx-text-3 not-italic">(calculado del P&amp;L)</span>
                     </td>
@@ -195,7 +195,7 @@ function TabBalanceGeneral({ empresaId }) {
                     </td>
                   </tr>
                 </tbody>
-                <tfoot className="bg-slate-800/50">
+                <tfoot className="bg-kx-surface-2/50">
                   <tr>
                     <td colSpan={2} className="px-4 py-2.5 text-kx-text-3 font-semibold">Total Patrimonio</td>
                     <td className="px-4 py-2.5 text-right font-mono font-bold text-purple-400">{fmt(calc.totalPatrimonio)}</td>
@@ -206,7 +206,7 @@ function TabBalanceGeneral({ empresaId }) {
 
             <div className={`rounded-xl border p-3 flex items-center justify-between
               ${calc.cierra ? 'border-green-500/30 bg-green-500/10' : 'border-red-500/30 bg-red-500/10'}`}>
-              <span className="text-sm font-semibold text-white">Pasivo + Patrimonio</span>
+              <span className="text-sm font-semibold text-kx-text">Pasivo + Patrimonio</span>
               <span className={`font-mono font-bold ${calc.cierra ? 'text-green-400' : 'text-red-400'}`}>
                 {fmt(calc.totalPasivo + calc.totalPatrimonio)}
               </span>

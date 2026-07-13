@@ -1,5 +1,37 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-13 (sesión 61 Nadia — testeo plan de pruebas de Luciano: 2 bugs reales del botón "Resuelta" en Monitor AFIP corregidos, mig.203)
+**Última actualización:** 2026-07-14 (Luciano — Monitor AFIP verificado en 0 errores; Plan de Cuentas + Cheques migrados por completo a tokens del sistema)
+
+## ✅ Migración completa de Plan de Cuentas + Cheques a tokens del sistema (Luciano, 2026-07-14)
+
+Retomando la deuda visual que dejó documentada Nadia (`AUDITORIA_VISUAL_2026-07-13.md`): migrados los
+2 módulos con más deuda (Plan de Cuentas 131 + Cheques 27 "elementos ilegibles" del ranking original).
+
+**Hallazgo al hacerlo**: el problema real era más profundo que solo texto — diálogos, tablas y selects
+enteros con fondo/borde oscuro fijo (`bg-slate-800/900`, `border-slate-700/800/900`, `text-white`), sin
+ninguna consideración de modo claro. Confirmado con el usuario que NO era intencional (no es un look
+"terminal financiera" a propósito) — debía respetar el tema como el resto de la app.
+
+**Mapeo aplicado** (15 archivos): `bg-slate-900`→`bg-kx-surface`, `bg-slate-800`→`bg-kx-surface-2`,
+`border-slate-700/800/900`→`border-kx-border`, `text-slate-300`→`text-kx-text-3`,
+`text-slate-500`→`text-kx-text-2`, `text-white`→`text-kx-text` **excepto** en toasts/botones con fondo
+de acento explícito (verde/ámbar/esmeralda/azul), que quedan igual a propósito. 0 colores hardcodeados
+restantes en ambos módulos (antes ~195 líneas). Build limpio, verificado por lectura de diff línea por
+línea (no se pudo verificar visualmente en el preview automatizado — sesión de navegador separada del
+usuario).
+
+**Alcance real mucho mayor al estimado**: el resto del código tiene ~146 líneas rotas de verdad en ~49
+archivos más (`sections` 17, `reportes` 7, `caja` 7, `ventas` 6, `ordenes-compra` 5, `configuracion` 5,
+y varias carpetas chicas) — sin contar posibles casos `bg-`/`border-` no medidos todavía fuera de estos
+2 módulos. Detalle completo en `AUDITORIA_VISUAL_2026-07-13.md`. Decisión pendiente del usuario: seguir
+módulo por módulo o cerrar acá por ahora.
+
+## ✅ Facturas AFIP: saga de numeración con hueco 100% cerrada (verificado, sesión 62)
+
+Confirmado con datos reales: **0 facturas en error, 0 pendientes** en todo el sistema (32 emitidas + 111
+no relevantes). El rango 3-8/jul quedó con 20 emitidas / 0 en error, números AFIP secuenciales 8 a 32
+sin huecos. Las últimas 7 que Nadia había dejado como pendiente operativo (mig.203, sesión 61) ya se
+resolvieron solas (probablemente vía el Monitor). Producción re-deployada en Vercel para confirmar que
+refleja el estado combinado de ambas sesiones (la propia + la de Nadia).
 
 > 👋 **Luciano, leé esto primero:** Nadia terminó tu plan de pruebas completo (los 4 bloques,
 > todos ✅) y de paso arregló 3 bugs que aparecieron en el camino (ver abajo). También hizo la

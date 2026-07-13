@@ -45,7 +45,7 @@ function ModalNuevaCuenta({ open, onClose, cuentasFlat, empresaId, onSuccess }) 
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-md">
+      <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-md">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             <Plus size={18} className="text-[#00D4FF]" /> Nueva Cuenta
@@ -58,15 +58,15 @@ function ModalNuevaCuenta({ open, onClose, cuentasFlat, empresaId, onSuccess }) 
             <div className="space-y-1">
               <Label className="text-kx-text-3 text-xs">Código *</Label>
               <Input value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })}
-                className="bg-slate-800 border-slate-700" placeholder="ej: 1.1.6" />
+                className="bg-kx-surface-2 border-kx-border" placeholder="ej: 1.1.6" />
             </div>
             <div className="space-y-1">
               <Label className="text-kx-text-3 text-xs">Tipo *</Label>
               <Select value={padre ? padre.tipo : form.tipo} onValueChange={(v) => setForm({ ...form, tipo: v })} disabled={!!padre}>
-                <SelectTrigger className="bg-slate-800 border-slate-700">
+                <SelectTrigger className="bg-kx-surface-2 border-kx-border">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
+                <SelectContent className="bg-kx-surface-2 border-kx-border">
                   {Object.entries(TIPO_LABEL).map(([k, v]) => (
                     <SelectItem key={k} value={k}>{v}</SelectItem>
                   ))}
@@ -78,7 +78,7 @@ function ModalNuevaCuenta({ open, onClose, cuentasFlat, empresaId, onSuccess }) 
           <div className="space-y-1">
             <Label className="text-kx-text-3 text-xs">Nombre *</Label>
             <Input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-              className="bg-slate-800 border-slate-700" placeholder="Nombre de la cuenta" />
+              className="bg-kx-surface-2 border-kx-border" placeholder="Nombre de la cuenta" />
           </div>
 
           <div className="space-y-1">
@@ -89,7 +89,7 @@ function ModalNuevaCuenta({ open, onClose, cuentasFlat, empresaId, onSuccess }) 
               value={form.cuenta_padre_id || '__none__'}
               onValueChange={(v) => setForm({ ...form, cuenta_padre_id: v === '__none__' ? null : v })}
             >
-              <SelectTrigger className="bg-slate-800 border-slate-700">
+              <SelectTrigger className="bg-kx-surface-2 border-kx-border">
                 <SelectValue placeholder="Sin padre (cuenta raíz)" />
               </SelectTrigger>
               {/* position="popper" → se ancla al trigger en vez de tratar de alinear el item
@@ -98,7 +98,7 @@ function ModalNuevaCuenta({ open, onClose, cuentasFlat, empresaId, onSuccess }) 
               <SelectContent
                 position="popper"
                 sideOffset={4}
-                className="bg-slate-800 border-slate-700 max-h-[400px] overflow-y-auto w-[var(--radix-select-trigger-width)]"
+                className="bg-kx-surface-2 border-kx-border max-h-[400px] overflow-y-auto w-[var(--radix-select-trigger-width)]"
               >
                 <SelectItem value="__none__">Sin padre (raíz)</SelectItem>
                 {cuentasFlat.filter((c) => !c.permite_movimientos || c.nivel < 3).map((c) => (
@@ -115,7 +115,7 @@ function ModalNuevaCuenta({ open, onClose, cuentasFlat, empresaId, onSuccess }) 
               <input type="checkbox" checked={form.permite_movimientos}
                 onChange={(e) => setForm({ ...form, permite_movimientos: e.target.checked })}
                 className="w-4 h-4 rounded" />
-              <span className="text-sm text-slate-300">Permite movimientos</span>
+              <span className="text-sm text-kx-text-3">Permite movimientos</span>
             </label>
           </div>
         </div>

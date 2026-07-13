@@ -11,7 +11,7 @@ function ModalDetalleCheque({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-md">
+      <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileCheck size={16} className="text-emerald-400" /> Detalle del cheque
@@ -67,7 +67,7 @@ function ModalDetalleCheque({
                       <div className={`w-[15px] h-[15px] rounded-full border-2 flex-shrink-0 z-10 ${
                         i === historial.length - 1
                           ? 'bg-emerald-500 border-emerald-400'
-                          : 'bg-slate-700 border-slate-500'
+                          : 'bg-kx-text-3 border-kx-text-3'
                       }`} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">

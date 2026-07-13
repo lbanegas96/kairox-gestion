@@ -26,22 +26,22 @@ function TabBalance({ empresaId }) {
         <div className="flex items-center gap-2">
           <Label className="text-kx-text-3 text-xs whitespace-nowrap">Desde</Label>
           <Input type="date" value={fechaDesde} onChange={(e) => setDesde(e.target.value)}
-            className="bg-slate-800 border-slate-700 h-9 text-sm w-36" />
+            className="bg-kx-surface-2 border-kx-border h-9 text-sm w-36" />
         </div>
         <div className="flex items-center gap-2">
           <Label className="text-kx-text-3 text-xs whitespace-nowrap">Hasta</Label>
           <Input type="date" value={fechaHasta} onChange={(e) => setHasta(e.target.value)}
-            className="bg-slate-800 border-slate-700 h-9 text-sm w-36" />
+            className="bg-kx-surface-2 border-kx-border h-9 text-sm w-36" />
         </div>
         <Button onClick={() => refetch()} size="sm" variant="outline"
-          className="border-slate-700 text-slate-300 hover:bg-slate-800">
+          className="border-kx-border text-kx-text-3 hover:bg-kx-surface-2">
           <RefreshCw size={14} className="mr-1" /> Actualizar
         </Button>
       </div>
 
-      <div className="rounded-xl border border-slate-700 overflow-hidden">
+      <div className="rounded-xl border border-kx-border overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-slate-800">
+          <thead className="bg-kx-surface-2">
             <tr>
               <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Código</th>
               <th className="px-4 py-3 text-left text-kx-text-3 font-medium">Cuenta</th>
@@ -53,28 +53,28 @@ function TabBalance({ empresaId }) {
           </thead>
           <tbody>
             {isLoading && (
-              <tr><td colSpan={6} className="text-center py-12 text-slate-500">
+              <tr><td colSpan={6} className="text-center py-12 text-kx-text-2">
                 <Loader2 size={20} className="animate-spin mx-auto" />
               </td></tr>
             )}
             {!isLoading && rows.length === 0 && (
-              <tr><td colSpan={6} className="text-center py-12 text-slate-500">
+              <tr><td colSpan={6} className="text-center py-12 text-kx-text-2">
                 No hay movimientos confirmados
               </td></tr>
             )}
             {rows.map((r) => {
               const saldo = r.total_debe - r.total_haber;
               return (
-                <tr key={r.cuenta_id} className="border-t border-slate-800 hover:bg-slate-800/30">
+                <tr key={r.cuenta_id} className="border-t border-kx-border hover:bg-kx-surface-2/30">
                   <td className="px-4 py-2.5 font-mono text-xs text-[#00D4FF]">{r.codigo}</td>
-                  <td className="px-4 py-2.5 text-slate-300">{r.nombre}</td>
+                  <td className="px-4 py-2.5 text-kx-text-3">{r.nombre}</td>
                   <td className="px-4 py-2.5 text-center">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${TIPO_COLOR[r.tipo]}`}>
                       {TIPO_LABEL[r.tipo]}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-right font-mono text-slate-300">{fmt(r.total_debe)}</td>
-                  <td className="px-4 py-2.5 text-right font-mono text-slate-300">{fmt(r.total_haber)}</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-kx-text-3">{fmt(r.total_debe)}</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-kx-text-3">{fmt(r.total_haber)}</td>
                   <td className={`px-4 py-2.5 text-right font-mono font-bold ${saldo >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {fmt(Math.abs(saldo))} {saldo < 0 ? '(H)' : '(D)'}
                   </td>
@@ -83,13 +83,13 @@ function TabBalance({ empresaId }) {
             })}
           </tbody>
           {rows.length > 0 && (
-            <tfoot className="bg-slate-800">
+            <tfoot className="bg-kx-surface-2">
               <tr>
                 <td colSpan={3} className="px-4 py-3 text-kx-text-3 font-semibold">TOTALES</td>
-                <td className={`px-4 py-3 text-right font-mono font-bold ${Math.abs(totalDebe - totalHaber) < 0.01 ? 'text-green-400' : 'text-white'}`}>
+                <td className={`px-4 py-3 text-right font-mono font-bold ${Math.abs(totalDebe - totalHaber) < 0.01 ? 'text-green-400' : 'text-kx-text'}`}>
                   {fmt(totalDebe)}
                 </td>
-                <td className={`px-4 py-3 text-right font-mono font-bold ${Math.abs(totalDebe - totalHaber) < 0.01 ? 'text-green-400' : 'text-white'}`}>
+                <td className={`px-4 py-3 text-right font-mono font-bold ${Math.abs(totalDebe - totalHaber) < 0.01 ? 'text-green-400' : 'text-kx-text'}`}>
                   {fmt(totalHaber)}
                 </td>
                 <td className={`px-4 py-3 text-right text-xs font-medium ${Math.abs(totalDebe - totalHaber) < 0.01 ? 'text-green-400' : 'text-yellow-400'}`}>
