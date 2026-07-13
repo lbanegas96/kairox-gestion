@@ -1,5 +1,28 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-14 (Luciano — resto de la migración de tokens visuales cerrado: 9 módulos más migrados)
+**Última actualización:** 2026-07-14 (Luciano — migración de tokens visuales 100% cerrada: compras, cuenta-corriente, cuentas-bancarias, productos, shared, ui + 2 bugs estructurales de tema encontrados y corregidos)
+
+## ✅ Migración de tokens visuales — alcance adicional cerrado + 2 bugs estructurales (Luciano, 2026-07-14, sesión 63 cont.)
+
+Continuación del punto anterior. Migrados los 6 módulos que habían aparecido como alcance no estimado
+(`compras`, `cuenta-corriente`, `cuentas-bancarias`, `productos`, `shared`, `ui`) — 15 archivos, mismo
+criterio: solo líneas sin `dark:` genuinamente rotas.
+
+**2 hallazgos estructurales más profundos que un simple swap de clase, corregidos en el mismo commit**:
+
+1. **`src/components/ui/EstadoBadge.jsx`** (usado en Ventas/Compras — estado pagado/pendiente/cancelado/
+   parcial de facturas): tenía un `style={{...}}` inline con colores hex fijos que sobreescribía las
+   clases Tailwind en TODOS los estados conocidos — nunca respetaba el tema oscuro. Se eliminó el inline
+   style y se agregaron variantes `dark:` reales por estado (verde/amarillo/rojo/naranja), y el estado
+   "desconocido" pasó a usar tokens kx- en vez de `bg-slate-100 text-slate-800` fijo.
+
+2. **`src/components/ui/dropdown-menu.jsx`** (primitivo base, 3 usos): el menú entero (`DropdownMenuContent`,
+   `SubContent`, `Item`, `CheckboxItem`, `RadioItem`, `Separator`) tenía `bg-white text-slate-950` /
+   `focus:bg-slate-100` sin NINGUNA variante `dark:` — quedaba blanco fijo en cualquier tema. Migrado a
+   tokens kx- (`bg-kx-surface`, `text-kx-text`, `focus:bg-kx-surface-2`, `border-kx-border`).
+
+Build limpio. Con esto se cierra completamente el alcance de migración de tokens visuales iniciado en
+`AUDITORIA_VISUAL_2026-07-13.md` (Plan de Cuentas/Cheques + los 9 módulos + estos 6 + los 2 bugs
+estructurales). Pendiente: verificación visual en navegador real (misma limitación — no puedo loguearme).
 
 ## ✅ Migración de tokens visuales — resto de módulos cerrado (Luciano, 2026-07-14, sesión 63)
 

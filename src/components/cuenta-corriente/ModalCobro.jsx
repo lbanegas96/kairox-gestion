@@ -43,7 +43,7 @@ function ModalCobro({
 
         <div className="p-4 bg-kx-surface-2 dark:bg-slate-800/50 rounded-lg border border-slate-100 dark:border-kx-border mb-2">
           <div className="flex justify-between items-center text-sm mb-1">
-            <span className="text-slate-500">Deuda Actual:</span>
+            <span className="text-kx-text-2">Deuda Actual:</span>
             <span className="font-bold text-red-600">${selectedClient?.saldo_actual?.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
           </div>
           {tcParalelo.enabled && tcParalelo.tcHoy && Number(selectedClient?.saldo_actual) > 0 && (

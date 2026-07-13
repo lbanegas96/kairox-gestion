@@ -38,7 +38,7 @@ function TabHistorialMovimientos({
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
              {movements.map(m => (
                 <tr key={m.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/30">
-                   <td className="p-4 text-slate-500">{formatDateTimeAR(m.fecha)}</td>
+                   <td className="p-4 text-kx-text-2">{formatDateTimeAR(m.fecha)}</td>
                    <td className="p-4 font-medium">{m.productos?.nombre}</td>
                    <td className="p-4">
                       <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase
@@ -49,14 +49,14 @@ function TabHistorialMovimientos({
                         {m.tipo}
                       </span>
                    </td>
-                   <td className="p-4 text-slate-500 truncate max-w-[200px]">{m.motivo || '-'}</td>
+                   <td className="p-4 text-kx-text-2 truncate max-w-[200px]">{m.motivo || '-'}</td>
                    <td className={`p-4 text-right font-mono font-bold ${m.tipo === 'salida' ? 'text-red-600' : 'text-emerald-600'}`}>
                       {m.tipo === 'salida' ? '-' : '+'}{m.cantidad}
                    </td>
                 </tr>
              ))}
              {movements.length === 0 && (
-               <tr><td colSpan="5" className="p-8 text-center text-slate-500">No hay movimientos registrados.</td></tr>
+               <tr><td colSpan="5" className="p-8 text-center text-kx-text-2">No hay movimientos registrados.</td></tr>
              )}
           </tbody>
         </table>

@@ -151,7 +151,7 @@ function TabHistorialCompras({
                 <tr>
                   <td colSpan={tcParalelo.enabled ? 8 : 7} className="p-12 text-center text-slate-500 bg-slate-50/50 dark:bg-slate-900/20 dark:text-kx-text-2">
                     <div className="flex flex-col items-center gap-2">
-                       <AlertTriangle className="h-10 w-10 text-slate-300" />
+                       <AlertTriangle className="h-10 w-10 text-kx-text-3" />
                        <p className="font-medium">
                          {compras.length === 0 ? "Sin compras registradas aún" : "No hay compras que coincidan con los filtros"}
                        </p>

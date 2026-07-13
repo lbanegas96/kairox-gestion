@@ -192,7 +192,7 @@ function ImportCSVModal({ open, onClose, cuentas, empresaId }) {
               {/* Preview */}
               {preview.length > 0 && (
                 <div>
-                  <p className="text-xs text-slate-500 mb-1">Vista previa — primeras {preview.length} filas ({allRows.length} total a importar)</p>
+                  <p className="text-xs text-kx-text-2 mb-1">Vista previa — primeras {preview.length} filas ({allRows.length} total a importar)</p>
                   <div className="border rounded-lg overflow-hidden text-xs">
                     <table className="w-full">
                       <thead className="bg-kx-surface-2 dark:bg-kx-surface-2">

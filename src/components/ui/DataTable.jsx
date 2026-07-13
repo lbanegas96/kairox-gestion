@@ -100,7 +100,7 @@ export function DataTable({
 
   const SortIcon = ({ col }) => {
     if (!col.sortable) return null;
-    if (sortKey !== col.key) return <ArrowUpDown className="w-3.5 h-3.5 ml-1 text-slate-400" />;
+    if (sortKey !== col.key) return <ArrowUpDown className="w-3.5 h-3.5 ml-1 text-kx-text-2" />;
     return sortDir === 'asc'
       ? <ArrowUp className="w-3.5 h-3.5 ml-1 text-blue-500" />
       : <ArrowDown className="w-3.5 h-3.5 ml-1 text-blue-500" />;
@@ -113,7 +113,7 @@ export function DataTable({
         <div className="flex flex-wrap items-center gap-2">
           {searchable && (
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-kx-text-2" />
               <Input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
@@ -157,7 +157,7 @@ export function DataTable({
               {loading ? (
                 <tr>
                   <td colSpan={columns.length} className="px-4 py-12 text-center">
-                    <div className="flex flex-col items-center gap-3 text-slate-400">
+                    <div className="flex flex-col items-center gap-3 text-kx-text-2">
                       <Loader2 className="w-6 h-6 animate-spin" />
                       <span className="text-sm">Cargando...</span>
                     </div>
@@ -165,7 +165,7 @@ export function DataTable({
                 </tr>
               ) : sorted.length === 0 ? (
                 <tr>
-                  <td colSpan={columns.length} className="px-4 py-12 text-center text-slate-400 text-sm">
+                  <td colSpan={columns.length} className="px-4 py-12 text-center text-kx-text-2 text-sm">
                     {search ? `Sin resultados para "${search}"` : emptyMessage}
                   </td>
                 </tr>
@@ -220,7 +220,7 @@ export function DataTable({
 
       {/* Contador sin paginación server-side */}
       {!isServerPaged && sorted.length > 0 && (
-        <p className="text-xs text-slate-400 text-right">
+        <p className="text-xs text-kx-text-2 text-right">
           {search && sorted.length !== data.length
             ? `${sorted.length} de ${data.length} registros`
             : `${sorted.length} registros`}

@@ -101,7 +101,7 @@ function ConciliacionTab({ cuentas, empresaId, userId }) {
       {/* Controls */}
       <div className="flex flex-wrap gap-3 items-end">
         <div className="space-y-1">
-          <Label className="text-xs text-slate-500">Cuenta bancaria</Label>
+          <Label className="text-xs text-kx-text-2">Cuenta bancaria</Label>
           <select value={cuentaId} onChange={e => { setCuentaId(e.target.value); setExtractoId(null); }}
             className="h-9 rounded-md border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface px-3 text-sm">
             {cuentas.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
@@ -109,7 +109,7 @@ function ConciliacionTab({ cuentas, empresaId, userId }) {
         </div>
         {extractos.length > 0 && (
           <div className="space-y-1">
-            <Label className="text-xs text-slate-500">Extracto importado</Label>
+            <Label className="text-xs text-kx-text-2">Extracto importado</Label>
             <select value={extractoId ?? ''} onChange={e => setExtractoId(e.target.value || null)}
               className="h-9 rounded-md border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface px-3 text-sm">
               <option value="">Seleccionar...</option>
@@ -150,7 +150,7 @@ function ConciliacionTab({ cuentas, empresaId, userId }) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Izquierda: líneas del extracto */}
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-slate-500 uppercase">Extracto bancario</p>
+            <p className="text-xs font-semibold text-kx-text-2 uppercase">Extracto bancario</p>
             <div className="rounded-xl border border-kx-border dark:border-kx-border overflow-hidden max-h-[500px] overflow-y-auto">
               {lineas.length === 0 ? (
                 <div className="p-8 text-center text-kx-text-3">Sin líneas</div>
@@ -192,7 +192,7 @@ function ConciliacionTab({ cuentas, empresaId, userId }) {
 
           {/* Derecha: movimientos registrados */}
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-slate-500 uppercase">
+            <p className="text-xs font-semibold text-kx-text-2 uppercase">
               {lineaActiva ? `Seleccioná un movimiento para conciliar (${lineaActiva.tipo} ${formatMoney(lineaActiva.monto)})` : 'Movimientos sin conciliar'}
             </p>
             <div className="rounded-xl border border-kx-border dark:border-kx-border overflow-hidden max-h-[500px] overflow-y-auto">

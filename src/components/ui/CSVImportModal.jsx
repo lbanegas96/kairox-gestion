@@ -252,10 +252,10 @@ export default function CSVImportModal({ open, onOpenChange, tipo, onSuccess }) 
         <div className="flex items-center gap-1 text-xs mb-4">
           {['Archivo', 'Mapear', 'Preview', 'Resultado'].map((s, i) => (
             <React.Fragment key={s}>
-              <span className={`px-2 py-0.5 rounded-full font-medium ${step === i + 1 ? 'bg-blue-600 text-white' : step > i + 1 ? 'bg-green-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
+              <span className={`px-2 py-0.5 rounded-full font-medium ${step === i + 1 ? 'bg-blue-600 text-white' : step > i + 1 ? 'bg-green-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-kx-text-2'}`}>
                 {s}
               </span>
-              {i < 3 && <ChevronRight className="h-3 w-3 text-slate-400" />}
+              {i < 3 && <ChevronRight className="h-3 w-3 text-kx-text-2" />}
             </React.Fragment>
           ))}
         </div>
@@ -269,7 +269,7 @@ export default function CSVImportModal({ open, onOpenChange, tipo, onSuccess }) 
             >
               <FileText className="h-12 w-12 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
               <p className="font-medium text-slate-600 dark:text-slate-300">Clic para seleccionar archivo CSV</p>
-              <p className="text-sm text-slate-400 mt-1">Máx. 5000 filas · UTF-8 · separado por comas</p>
+              <p className="text-sm text-kx-text-2 mt-1">Máx. 5000 filas · UTF-8 · separado por comas</p>
               <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleFile} />
             </div>
             <Button variant="outline" size="sm" onClick={downloadSample} className="w-full dark:text-slate-300 dark:border-slate-700">
@@ -342,7 +342,7 @@ export default function CSVImportModal({ open, onOpenChange, tipo, onSuccess }) 
                 })}
               </tbody>
             </table>
-            <p className="text-xs text-slate-400 mt-2 text-right">
+            <p className="text-xs text-kx-text-2 mt-2 text-right">
               {csvRows.length > 5 && `y ${csvRows.length - 5} filas más...`} Total: {csvRows.length} registros
             </p>
           </div>
@@ -358,9 +358,9 @@ export default function CSVImportModal({ open, onOpenChange, tipo, onSuccess }) 
                 <div className="text-sm text-green-600 dark:text-green-500">importados correctamente</div>
               </div>
               <div className={`p-4 rounded-xl border text-center ${importResult.errores > 0 ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800'}`}>
-                <AlertTriangle className={`h-8 w-8 mx-auto mb-1 ${importResult.errores > 0 ? 'text-red-500' : 'text-slate-300'}`} />
-                <div className={`text-2xl font-bold ${importResult.errores > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-400'}`}>{importResult.errores}</div>
-                <div className={`text-sm ${importResult.errores > 0 ? 'text-red-500' : 'text-slate-400'}`}>con errores</div>
+                <AlertTriangle className={`h-8 w-8 mx-auto mb-1 ${importResult.errores > 0 ? 'text-red-500' : 'text-kx-text-3'}`} />
+                <div className={`text-2xl font-bold ${importResult.errores > 0 ? 'text-red-600 dark:text-red-400' : 'text-kx-text-2'}`}>{importResult.errores}</div>
+                <div className={`text-sm ${importResult.errores > 0 ? 'text-red-500' : 'text-kx-text-2'}`}>con errores</div>
               </div>
             </div>
             {importResult.errorList.length > 0 && (

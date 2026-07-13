@@ -145,8 +145,8 @@ export function MonedaSelector({
               </Label>
               {tcLoading ? (
                 <div className="h-9 flex items-center gap-2 px-3 border rounded-md border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
-                  <span className="text-xs text-slate-400">Consultando TC…</span>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-kx-text-2" />
+                  <span className="text-xs text-kx-text-2">Consultando TC…</span>
                 </div>
               ) : (
                 <Input

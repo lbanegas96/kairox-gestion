@@ -112,9 +112,9 @@ function TablaClientes({
                 ))
               ) : filteredClients.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-40 text-center text-slate-500 bg-slate-50/30 dark:bg-slate-900/10">
+                  <TableCell colSpan={4} className="h-40 text-center text-kx-text-2 bg-slate-50/30 dark:bg-slate-900/10">
                     <div className="flex flex-col items-center gap-2">
-                      <Filter className="h-10 w-10 text-slate-300" />
+                      <Filter className="h-10 w-10 text-kx-text-3" />
                       <p className="font-medium">
                         {clients.length === 0 ? "Sin clientes registrados aún" : "No hay clientes que coincidan con los filtros"}
                       </p>
@@ -140,7 +140,7 @@ function TablaClientes({
                     >
                       <TableCell className="pl-6 font-medium text-kx-text dark:text-kx-text">
                         {client.nombre}
-                        {client.telefono && <div className="text-xs text-kx-text-3 font-normal mt-0.5 flex items-center gap-1"><span className="text-slate-300">|</span> {client.telefono}</div>}
+                        {client.telefono && <div className="text-xs text-kx-text-3 font-normal mt-0.5 flex items-center gap-1"><span className="text-kx-text-3">|</span> {client.telefono}</div>}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className={`font-mono font-bold text-lg ${hasDebt ? 'text-red-600 dark:text-red-400' : (client.saldo_actual || 0) < 0 ? 'text-blue-600 dark:text-blue-400' : 'text-kx-text-2 dark:text-kx-text-2'}`}>

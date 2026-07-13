@@ -31,12 +31,12 @@ function DocNode({ node, isActual = false, onNavigate }) {
         <span className={`text-[10px] font-semibold uppercase tracking-wide ${cfg.color}`}>{cfg.label}</span>
       </div>
       <span className="text-xs font-bold text-slate-700 dark:text-white truncate">{node.numero}</span>
-      <span className="text-[10px] text-slate-400">{formatDateAR(node.fecha)}</span>
+      <span className="text-[10px] text-kx-text-2">{formatDateAR(node.fecha)}</span>
       <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
         ${Number(node.monto).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
       </span>
       {node.estado && (
-        <span className="text-[9px] text-slate-400 uppercase">{node.estado.replace('_', ' ')}</span>
+        <span className="text-[9px] text-kx-text-2 uppercase">{node.estado.replace('_', ' ')}</span>
       )}
     </button>
   );
@@ -69,7 +69,7 @@ export function DocumentFlowPanel({ comprobanteId, onNavigate }) {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 py-3 text-slate-400 text-xs">
+      <div className="flex items-center gap-2 py-3 text-kx-text-2 text-xs">
         <Loader2 className="w-3.5 h-3.5 animate-spin" />
         Cargando flujo...
       </div>
@@ -82,7 +82,7 @@ export function DocumentFlowPanel({ comprobanteId, onNavigate }) {
 
   if (!hasFlow && flow) {
     return (
-      <div className="text-xs text-slate-400 py-2 flex items-center gap-1.5">
+      <div className="text-xs text-kx-text-2 py-2 flex items-center gap-1.5">
         <GitBranch className="w-3.5 h-3.5" />
         Sin documentos relacionados
       </div>

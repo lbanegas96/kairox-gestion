@@ -83,7 +83,7 @@ function ModalEditarCompra({
                 {showEditAutocomplete && editSearch && (
                   <div className="absolute top-full left-0 w-full kairox-bg-card border kairox-border rounded-md mt-1 shadow-xl max-h-60 overflow-y-auto dark:bg-kx-bg dark:border-kx-border">
                     {filteredEditProducts.length === 0 ? (
-                      <div className="p-3 text-slate-500 text-sm text-center">No se encontraron productos</div>
+                      <div className="p-3 text-kx-text-2 text-sm text-center">No se encontraron productos</div>
                     ) : (
                       filteredEditProducts.map(p => (
                         <div

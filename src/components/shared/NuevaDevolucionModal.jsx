@@ -331,8 +331,8 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
                         return (
                           <tr key={item.id} className="dark:bg-slate-950/50">
                             <td className="px-3 py-2 font-medium dark:text-kx-text">{item.nombre || '—'}</td>
-                            <td className="px-3 py-2 text-center text-slate-500">{item.hecha}</td>
-                            <td className="px-3 py-2 text-center text-slate-500">{item.cantidad_devuelta || 0}</td>
+                            <td className="px-3 py-2 text-center text-kx-text-2">{item.hecha}</td>
+                            <td className="px-3 py-2 text-center text-kx-text-2">{item.cantidad_devuelta || 0}</td>
                             <td className="px-3 py-2 text-center">
                               <input
                                 type="number" min="0" max={maxDev} step="1"

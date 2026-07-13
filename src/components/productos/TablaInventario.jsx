@@ -47,9 +47,9 @@ function TablaInventario({
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                {loading ? (
-                 <tr><td colSpan="6" className="p-8 text-center text-slate-500">Cargando inventario...</td></tr>
+                 <tr><td colSpan="6" className="p-8 text-center text-kx-text-2">Cargando inventario...</td></tr>
                ) : filteredProducts.length === 0 ? (
-                 <tr><td colSpan="6" className="p-8 text-center text-slate-500">No se encontraron productos.</td></tr>
+                 <tr><td colSpan="6" className="p-8 text-center text-kx-text-2">No se encontraron productos.</td></tr>
                ) : (
                  filteredProducts.map(p => {
                     const isLowStock = p.stock_actual <= p.stock_minimo;
@@ -57,7 +57,7 @@ function TablaInventario({
                       <tr key={p.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/30 transition-colors">
                          <td className="p-4">
                            <div className="font-medium text-slate-900 dark:text-kx-text">{p.nombre}</div>
-                           <div className="text-xs text-slate-500 font-mono">{p.codigo_sku}</div>
+                           <div className="text-xs text-kx-text-2 font-mono">{p.codigo_sku}</div>
                          </td>
                          <td className="p-4 text-center">
                            {p.categories?.nombre ? (
@@ -74,7 +74,7 @@ function TablaInventario({
                            </div>
                            {isLowStock && <div className="text-[10px] text-red-500 flex items-center justify-end gap-1"><AlertTriangle className="h-3 w-3" /> Bajo stock</div>}
                          </td>
-                         <td className="p-4 text-right text-slate-500">
+                         <td className="p-4 text-right text-kx-text-2">
                            ${p.costo_compra?.toLocaleString('es-AR')}
                          </td>
                          <td className="p-4 text-right font-medium text-slate-900 dark:text-kx-text">
