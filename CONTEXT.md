@@ -1,6 +1,14 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-07-13 (sesión 61 Nadia — testeo plan de pruebas de Luciano: 2 bugs reales del botón "Resuelta" en Monitor AFIP corregidos, mig.203)
 
+> 👋 **Luciano, leé esto primero:** Nadia terminó tu plan de pruebas completo (los 4 bloques,
+> todos ✅) y de paso arregló 3 bugs que aparecieron en el camino (ver abajo). También hizo la
+> **auditoría visual** que dejaste pendiente — encontró un hallazgo real de accesibilidad
+> (contraste WCAG AA fallando en toda la escala de grises) y ya lo corrigió. Quedan 4 ítems de
+> deuda visual documentados en `AUDITORIA_VISUAL_2026-07-13.md` para que decidas prioridad
+> (el más grande: ~713 usos de colores Tailwind hardcodeados fuera del sistema de tokens,
+> concentrados en Plan de Cuentas y Cheques). Todo pusheado a `master`, 6 commits nuevos.
+
 ## ✅ Fix WCAG AA aplicado + auditoría 2ª pasada (sesión 61 Nadia, cierre)
 
 Se aplicaron los fixes que quedaban del reporte de auditoría visual, y se corrió una segunda
