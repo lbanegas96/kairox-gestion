@@ -1,6 +1,37 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-07-13 (sesión 61 Nadia — testeo plan de pruebas de Luciano: 2 bugs reales del botón "Resuelta" en Monitor AFIP corregidos, mig.203)
 
+## ✅ Plan de pruebas de Luciano — sesión 61 (Nadia), resultado por bloque
+
+**Bloque 1 — Cheques resincronizan estado_pago:** ✅ PASÓ. Probado end-to-end contra
+Nalux con cheques de prueba (TESTCHQ-001 tercero + TESTPROPIO-001 propio, ambos creados
+y borrados en la misma sesión). Cobrar factura pendiente de Niño con cheque de tercero
+la pasó a "pagada"; rechazarlo la volvió a "pendiente". Entregar cheque propio a Amazon
+pasó la compra a "pagada"; rechazarlo la volvió a "pendiente". Bug menor cosmético
+(no bloqueante): al elegir compra en el modal de cheque propio emitido, el label del
+combo muestra "Invalid Date" — para Luciano.
+
+**Bloque 2 — Facturas AFIP atascadas 3-8/jul:** ⚠️ parcialmente OK. De las 22
+comprobantes del rango, 7 estaban todavía en error [10016] "número o fecha no
+corresponde al próximo a autorizar" (mismo hueco de numeración que Luciano diagnosticó).
+Al presionar "Reintentar" en 20260707-001, arca-worker v7 la aceptó (Nº AFIP
+`0001-00000026`, CAE `86280555136462`) — el fix funciona, solo faltaba el empujón.
+**Pendiente operativo (para Luciano o vos)**: reintentar las otras 6 desde el
+Monitor una por una (20260706-005, 20260707-002, 003, 004, 005, 006).
+
+**Bloque 3 — Monitor de Facturación AFIP:** ⚠️→✅ tras fix. Filtros por fecha,
+chips de estado (toggle multi-select), búsqueda por cliente/nº AFIP, detalle
+drill-down: todo funciona. Encontramos 2 bugs reales en el flujo "Resuelta" que
+corregimos en esta misma sesión (ver mig.203 más abajo).
+
+**Bloque 4 — Regresión general:** ✅ Dashboard con KPIs consistentes (verificado
+contra base: $709k facturado / 22 fact / 3 OC pendientes); Caja abierta $211.606
+correcto; Bancos con 3 cuentas y saldo total $1.547.883; Reportes carga limpio;
+Libro IVA Ventas muestra 18 comprobantes con CAE, IVA discriminado, NC neteadas
+correctamente (fix de `15ca258`); POS Modo Caja abre sin errores con productos y
+stock reales. No se ejecutaron ventas/pagos operativos (evitar movimientos
+reales sin autorización explícita de Nadia).
+
 ## ✅ 2 bugs del botón "Resuelta" del Monitor AFIP corregidos (mig.203, sesión 61)
 
 Testeando el plan de pruebas que dejó Luciano (`PLAN_PRUEBAS_NADIA_2026-07-12.md`), aparecieron 2
