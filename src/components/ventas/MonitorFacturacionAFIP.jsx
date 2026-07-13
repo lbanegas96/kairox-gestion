@@ -14,6 +14,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { formatDateAR } from '@/lib/dateUtils';
 
 // ── Metadatos de cada estado fiscal (canónico = comprobantes.cae_estado) ──────
@@ -79,6 +83,7 @@ const MonitorFacturacionAFIP = () => {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [rowBusy, setRowBusy] = useState(null);
   const [detalle, setDetalle] = useState(null);
+  const [confirmResuelta, setConfirmResuelta] = useState(null);
 
   const queryKey = ['monitor_afip', empresaId, fechaDesde, fechaHasta];
   const { data: rows = [], isLoading, isFetching, refetch } = useQuery({
@@ -403,7 +408,7 @@ const MonitorFacturacionAFIP = () => {
                         </button>
                         {esError && (
                           <button
-                            onClick={() => marcarResuelta(row)}
+                            onClick={() => setConfirmResuelta(row)}
                             disabled={busy}
                             className="text-xs px-2 py-1 rounded border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 transition-colors"
                           >
@@ -456,6 +461,37 @@ const MonitorFacturacionAFIP = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Confirmación antes de marcar "Resuelta" — acción irreversible: el */}
+      {/* comprobante queda 'emitido' sin CAE/Nº AFIP; sólo tiene sentido si */}
+      {/* el usuario ya lo emitió por fuera (portal ARCA directo). */}
+      <AlertDialog open={!!confirmResuelta} onOpenChange={(o) => !o && setConfirmResuelta(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Marcar como resuelta {confirmResuelta?.numero_venta}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción marca el comprobante como <strong>Emitido</strong> ante AFIP <strong>sin CAE ni Nº AFIP</strong>. Sólo tiene sentido si ya emitiste este comprobante <strong>por fuera del sistema</strong> (por ejemplo, desde el portal AFIP/ARCA directo).
+              <br /><br />
+              Si en cambio querés reintentar la emisión automática, cancelá y usá "Reintentar".
+              <br /><br />
+              La acción es <strong>irreversible</strong> desde esta pantalla.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const row = confirmResuelta;
+                setConfirmResuelta(null);
+                if (row) marcarResuelta(row);
+              }}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              Sí, marcar como resuelta
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -1,5 +1,46 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-12 (sesión 60 — cheques resincronizan estado_pago, numeración AFIP con hueco diagnosticada y corregida, Monitor de Facturación AFIP nuevo y reubicado a Ventas)
+**Última actualización:** 2026-07-13 (sesión 61 Nadia — testeo plan de pruebas de Luciano: 2 bugs reales del botón "Resuelta" en Monitor AFIP corregidos, mig.203)
+
+## ✅ 2 bugs del botón "Resuelta" del Monitor AFIP corregidos (mig.203, sesión 61)
+
+Testeando el plan de pruebas que dejó Luciano (`PLAN_PRUEBAS_NADIA_2026-07-12.md`), aparecieron 2
+bugs reales en el flujo "Resuelta" del Monitor de Facturación AFIP (mig.202):
+
+1. **RPC `marcar_cae_resuelto_manual` sin filtro de fila reciente**: hacía
+   `UPDATE facturas_pendientes_arca SET estado='emitida' WHERE comprobante_id = p_comprobante_id`
+   sin filtrar por la fila más reciente. En los 7 comprobantes en error del rango 6-7/jul, cada
+   uno tenía 2 filas de historial en la cola — el UPDATE marcaba **ambas** filas como `emitida`,
+   incluyendo la vieja que contenía el contexto histórico del error de RG 5616 (con nota
+   `[KAIROX: marcado no-relevante temporalmente... revertir tras deployar]`). Se perdía la
+   trazabilidad. Fix: `AND id = (SELECT id FROM facturas_pendientes_arca WHERE comprobante_id=$1
+   ORDER BY created_at DESC LIMIT 1)`.
+
+2. **RPC sin guard de estado actual**: a diferencia de `reintentar_caes_lote` (mig.202) que
+   valida `estado IN ('error','error_definitivo','pendiente')`, el RPC hermano
+   `marcar_cae_resuelto_manual` no chequeaba nada — un click accidental sobre una fila `pendiente`
+   la forzaba a `emitido` sin CAE ni Nº AFIP. Fix: guard `IF v_estado_actual NOT IN
+   ('error','error_definitivo') THEN RAISE EXCEPTION`. Nota: `pendiente` queda excluido a
+   propósito, no es "resolver algo roto" sino "está en proceso normal".
+
+3. **UI sin confirmación**: `marcarResuelta()` disparaba directo sin diálogo. Se agregó
+   `AlertDialog` con explicación clara ("marca el comprobante como Emitido ante AFIP sin CAE ni
+   Nº AFIP", "sólo tiene sentido si ya emitiste por fuera", "es irreversible desde esta pantalla")
+   + botón alternativo sugerido ("cancelá y usá Reintentar").
+
+**Validado end-to-end con datos reales de Nalux**:
+- BEGIN/ROLLBACK con la nueva RPC contra `20260707-002` (2 filas históricas): fila vieja quedó
+  `error_definitivo` (preservada), sólo la última pasó a `emitida`. Antes las 2 se marcaban.
+- Guard: intentar marcar "resuelta" un comprobante ya `emitido` → bloqueado con mensaje claro.
+- En el preview real: click en "Resuelta" abre AlertDialog; "Cancelar" no toca nada; "Sí, marcar
+  como resuelta" ejecuta correctamente.
+
+**Hallazgo positivo del testeo (documentado para Luciano)**: el Bloque 2 del plan
+(facturas AFIP atascadas 3-8/jul) tenía 7 facturas todavía en error [10016] "número o fecha no
+corresponde al próximo a autorizar" — el hueco de numeración que Luciano diagnosticó. Al presionar
+"Reintentar" en una sola (20260707-001), el arca-worker v7 con el fix de fecha (>5 días → usar
+hoy) la aceptó exitosamente: obtuvo Nº AFIP `0001-00000026` + CAE real. **Las otras 6 muy
+probablemente se resuelvan igual con solo tocar "Reintentar" una vez cada una** — Luciano puede
+hacerlo en 30 segundos desde el Monitor.
 
 ## ✅ Cheques: rechazar/entregar resincroniza estado_pago (mig.200, sesión 60)
 
