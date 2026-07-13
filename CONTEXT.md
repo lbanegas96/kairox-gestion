@@ -1,6 +1,31 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-07-13 (sesión 61 Nadia — testeo plan de pruebas de Luciano: 2 bugs reales del botón "Resuelta" en Monitor AFIP corregidos, mig.203)
 
+## ✅ Cierre completo de pendientes — sesión 61 (Nadia)
+
+Se procesaron los 4 pendientes que quedaban abiertos al inicio de la sesión:
+
+1. **Bloque 2 AFIP — 6 facturas atascadas restantes**: reencoladas vía RPC
+   `reintentar_caes_lote` y procesadas por arca-worker v7. Todas obtuvieron CAE real
+   (Nº AFIP 27, 28, 29, 30, 31, 32). Total del rango 3-8/jul: **20 emitidas, 0 en error**.
+2. **Bug cosmético "Invalid Date" en modal de cheque propio**: `fmtDate` de
+   `cheques/shared.jsx` concatenaba `T12:00:00` asumiendo formato `YYYY-MM-DD`, pero
+   `compras.fecha` es `timestamptz` — el sufijo `+00` del ISO no es siempre parseable por
+   V8. Fix: extraer los primeros 10 chars antes de parsear. Cubre todos los formatos.
+3. **Auditoría visual — primera pasada**: hallazgo mayor de accesibilidad
+   documentado en `AUDITORIA_VISUAL_2026-07-13.md` — `--kx-text-3` tiene contraste
+   **2.15:1 en light** y **2.37:1 en dark**, muy por debajo del mínimo WCAG AA (4.5:1).
+   Es un hallazgo sistémico que requiere rediseñar la escala de grises con jerarquía +
+   accesibilidad simultáneas (no un patch aislado). Propuestas numéricas concretas
+   documentadas en el archivo. También: 3 tamaños distintos de "texto chico" conviviendo
+   (10/11/12px sin regla), padding de cards inconsistente en Dashboard, colores
+   hardcodeados fuera del sistema de tokens.
+4. **Leaked Password Protection**: explicado el trade-off — gratis en plan Pro de Supabase
+   (25 USD/mes), Nalux hoy en Free. Recomendación: NO upgradear el plan solo por esto
+   dado que los usuarios del sistema son pocos y conocidos (Nadia/Luciano/empleados
+   invitados). Política simple: contraseñas ≥12 chars. Cuando (a) sumen empleados con
+   auto-registro o (b) hagan la app pública, ahí sí activar.
+
 ## ✅ Plan de pruebas de Luciano — sesión 61 (Nadia), resultado por bloque
 
 **Bloque 1 — Cheques resincronizan estado_pago:** ✅ PASÓ. Probado end-to-end contra
