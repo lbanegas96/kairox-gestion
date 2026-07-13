@@ -45,8 +45,16 @@ export const ESTADO_COLOR = {
 export const fmt = (n) =>
   `$ ${Number(n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export const fmtDate = (d) =>
-  d ? new Date(d + 'T12:00:00').toLocaleDateString('es-AR') : '—';
+export const fmtDate = (d) => {
+  if (!d) return '—';
+  // Extrae solo la parte 'YYYY-MM-DD' — funciona igual con 'date' plano y con el
+  // timestamptz de Postgres ('2026-06-09T18:48:42+00'), cuyo offset '+00' es
+  // parcialmente rechazado por Date() según la versión de V8.
+  const s = typeof d === 'string' ? d.slice(0, 10) : '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return '—';
+  const parsed = new Date(s + 'T12:00:00');
+  return isNaN(parsed) ? '—' : parsed.toLocaleDateString('es-AR');
+};
 
 export const addDays = (dateStr, days) =>
   new Date(new Date(dateStr + 'T00:00:00Z').getTime() + days * 86400000)
