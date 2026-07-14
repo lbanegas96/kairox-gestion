@@ -1,4 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { verifyAdmin } from '../_shared/auth.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -11,6 +12,16 @@ serve(async (req) => {
   }
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405, headers: CORS_HEADERS });
+  }
+
+  // Solo admin puede usar esto — antes cualquier usuario autenticado (de cualquier tenant)
+  // podía usarlo como oráculo para validar un access_token de MP arbitrario.
+  const auth = await verifyAdmin(req);
+  if (!auth.ok) {
+    return new Response(JSON.stringify({ valid: false, error: auth.error }), {
+      status: 401,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    });
   }
 
   try {

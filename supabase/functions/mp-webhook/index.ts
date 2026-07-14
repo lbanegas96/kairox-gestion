@@ -52,16 +52,24 @@ serve(async (req) => {
       return new Response('Not Found', { status: 404 });
     }
 
-    // ── Validar firma HMAC-SHA256 (opcional, si el comercio configuró webhook_secret) ──
+    // ── Validar firma HMAC-SHA256 (obligatoria) ──
+    // Sin esto, cualquiera que conozca el empresa_id (visible en la URL del webhook) y un
+    // payment_id de MP cualquiera podría forzar la inserción de un movimiento bancario falso.
     const signature     = req.headers.get('x-signature');
     const requestId     = req.headers.get('x-request-id') ?? '';
     const webhookSecret = integracion.config?.webhook_secret;
-    if (webhookSecret && signature) {
-      const isValid = await validarFirmaMP(signature, paymentId, webhookSecret, requestId);
-      if (!isValid) {
-        console.error('[mp-webhook] Firma inválida para pago:', paymentId);
-        return new Response('Unauthorized', { status: 401 });
-      }
+    if (!webhookSecret) {
+      console.error('[mp-webhook] Integración sin webhook_secret configurado — rechazado por seguridad:', empresaId);
+      return new Response('Webhook secret not configured', { status: 401 });
+    }
+    if (!signature) {
+      console.error('[mp-webhook] Falta header x-signature:', paymentId);
+      return new Response('Unauthorized', { status: 401 });
+    }
+    const isValid = await validarFirmaMP(signature, paymentId, webhookSecret, requestId);
+    if (!isValid) {
+      console.error('[mp-webhook] Firma inválida para pago:', paymentId);
+      return new Response('Unauthorized', { status: 401 });
     }
 
     // ── Consultar detalles del pago a la API de MP ───────────────────────────

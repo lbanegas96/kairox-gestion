@@ -15,7 +15,8 @@ const STEPS = [
   'En "Credenciales de producción" → copiar el Access Token (APP_USR-...)',
   'En "Webhooks" → agregar la URL del webhook que aparece abajo',
   'Seleccionar evento: "Pagos" (payment)',
-  'Pegar el Access Token y el Webhook Secret (opcional) en este formulario y guardar',
+  'Copiar la "Clave secreta" que MP genera para ese webhook',
+  'Pegar el Access Token y el Webhook Secret en este formulario y guardar',
 ];
 
 function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) {
@@ -89,6 +90,11 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
     }
     if (!cuentaBancariaId) {
       toast({ title: 'Seleccioná una cuenta bancaria destino', variant: 'destructive' });
+      return;
+    }
+    // Obligatorio: sin este secret el webhook rechaza todas las notificaciones de MP (por seguridad)
+    if (!webhookSecret && !integracion?.config?.webhook_secret) {
+      toast({ title: 'Completá el Webhook Secret', description: 'Es obligatorio para validar que las notificaciones vienen realmente de Mercado Pago.', variant: 'destructive' });
       return;
     }
     if (accessToken && !accessToken.startsWith('APP_USR-')) {
@@ -253,18 +259,17 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
           <div className="space-y-2">
             <Label className="text-kx-text text-sm flex items-center gap-1.5">
               <Shield className="w-3.5 h-3.5 text-kx-text-3" />
-              Webhook Secret
-              <span className="text-xs font-normal text-kx-text-3">(opcional, recomendado)</span>
+              Webhook Secret <span className="text-kx-red">*</span>
             </Label>
             <Input
               value={webhookSecret}
               onChange={e => setWebhookSecret(e.target.value)}
-              placeholder="tu-clave-secreta-de-mp..."
+              placeholder={integracion?.config?.webhook_secret ? '••••••••••••••••' : 'tu-clave-secreta-de-mp...'}
               className="kairox-input font-mono text-xs"
               type="password"
             />
             <p className="text-xs text-kx-text-3">
-              Si configurás un secret en MP Developers → Webhooks, pegalo acá para validar la firma de cada notificación y evitar requests falsos.
+              Obligatorio: valida que cada notificación viene realmente de Mercado Pago. Sin esto, el webhook rechaza todos los pagos por seguridad.
             </p>
           </div>
         </div>
@@ -273,7 +278,7 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button
             onClick={handleGuardar}
-            disabled={guardando || !cuentaBancariaId || (!accessToken && !integracion)}
+            disabled={guardando || !cuentaBancariaId || (!accessToken && !integracion) || (!webhookSecret && !integracion?.config?.webhook_secret)}
             className="bg-[#009EE3] hover:bg-[#0082c1] text-white"
           >
             {guardando

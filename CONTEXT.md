@@ -1,5 +1,43 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-14 (Nadia — migración completa de los ~90 archivos restantes con colores de acento sin `dark:`; deuda visual del proyecto queda en 0)
+**Última actualización:** 2026-07-14 (Nadia — nueva pasada de seguridad sobre integración MercadoPago: 3 hallazgos reales cerrados)
+
+## ✅ Pasada de seguridad — integración MercadoPago (sesión 65 Nadia)
+
+Auditoría de seguridad enfocada en el módulo de mayor riesgo (maneja dinero real + un access token de
+terceros). RLS de las 68 tablas y advisors de Supabase revisados — sin hallazgos nuevos (ya cubierto en
+auditorías previas). El foco real estuvo en los 3 edge functions de MP:
+
+**🔴 Alto — `mp-webhook`: firma HMAC pasó de opcional a obligatoria.** La UI marcaba el Webhook Secret
+como "opcional, recomendado" — sin él, la validación de firma se saltaba por completo
+(`if (webhookSecret && signature)`). Como el `empresa_id` viaja como query param visible en la URL del
+webhook (no es secreto), cualquiera con un `payment_id` de MP cualquiera (no tiene que ser un pago real
+de la víctima) podía forzar un POST directo y lograr que KAIROX insertara un movimiento bancario falso
+en la contabilidad de esa empresa. Fix: `webhook_secret` ausente o firma inválida → 401 siempre (antes
+solo fallaba si el secret SÍ estaba configurado y la firma no coincidía). UI actualizada: campo marcado
+como obligatorio (`*`), validación en `handleGuardar` antes de guardar. Verificado con SQL antes de
+deployar: la única integración activa (Nalux) ya tenía `webhook_secret` configurado → el fix no rompe
+nada en producción.
+
+**🟡 Medio — `mp-sync`: cualquier usuario autenticado (de cualquier tenant) podía disparar el sync de
+TODAS las empresas.** Solo exigía `verify_jwt=true` (cualquier JWT válido), sin chequear `is_admin()` ni
+acotar a la empresa del caller — adentro recorría *todas* las integraciones activas con `service_role`.
+Fix: agregado `verifyAdmin(req)` (helper ya existente en `_shared/auth.ts`, mismo patrón que
+`invite-user`) + `.eq('empresa_id', auth.empresaId)` en la query, reemplazando el filtro por
+`body.empresa_id` (no confiable, viene del cliente) que de hecho la función ya ignoraba.
+
+**🟢 Bajo — `mp-verify-token`: oráculo de validación de tokens sin chequeo de rol.** Cualquier usuario
+logueado (no solo admin) podía validar un access_token de MP arbitrario y obtener nickname/email de esa
+cuenta. Fix: mismo `verifyAdmin(req)`.
+
+**Deploy:** los 3 edge functions restablecidos vía `deploy_edge_function` (MCP Supabase) —
+`mp-webhook` v8 (`verify_jwt=false`, intencional: MP no manda JWT), `mp-sync` v6, `mp-verify-token` v3
+(ambos `verify_jwt=true`, ahora + `is_admin()` interno). Build (`npx vite build`) exit 0.
+
+**No tocado / fuera de alcance:** el access token de MP en `integraciones_bancarias.access_token` sigue
+en texto plano en la tabla (RLS ya lo protege con `is_admin() AND empresa_id = propio`, y el frontend
+nunca lo selecciona de vuelta — confirmado en `ConfiguracionSection.jsx`). Encriptar el token en reposo
+sería un hardening adicional, no un hallazgo explotable hoy — queda como posible ítem futuro si se
+decide profundizar.
 
 ## ✅ Migración completa: colores de acento sin `dark:` en TODO el proyecto (sesión 64 Nadia)
 

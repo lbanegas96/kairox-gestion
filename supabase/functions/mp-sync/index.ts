@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { verifyAdmin } from '../_shared/auth.ts';
 
 const SUPABASE_URL      = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -36,13 +37,25 @@ serve(async (req) => {
     return new Response('ok', { headers: CORS_HEADERS });
   }
 
+  // Solo admin de la propia empresa puede disparar el sync — antes cualquier usuario
+  // autenticado de cualquier tenant podía forzar el sync (e inserción de movimientos) de TODAS
+  // las empresas, porque no había chequeo de rol ni de alcance por empresa_id.
+  const auth = await verifyAdmin(req);
+  if (!auth.ok) {
+    return new Response(JSON.stringify({ error: auth.error }), {
+      status: 401,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    });
+  }
+
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
   const { data: integraciones, error: errInt } = await supabase
     .from('integraciones_bancarias')
     .select('empresa_id, access_token, cuenta_bancaria_id, ultimo_sync, config')
     .eq('proveedor', 'mercadopago')
-    .eq('activo', true);
+    .eq('activo', true)
+    .eq('empresa_id', auth.empresaId);
 
   if (errInt || !integraciones?.length) {
     console.log('[mp-sync] Sin integraciones MP activas');
