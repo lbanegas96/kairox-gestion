@@ -1,5 +1,20 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-14 (Luciano — barrido final de cierre de sesión: recuperado trabajo huérfano de un worktree, cerrado gap de seguridad ACL en 2 RPCs, verificado circuito Cheques→Bancos y Monitor AFIP ya en producción)
+**Última actualización:** 2026-07-14 (Nadia — aplicada migration 204, único pendiente de sesión 63 de Luciano)
+
+## ✅ Migration 204 aplicada — REVOKE PUBLIC en RPCs de AFIP (sesión 64 Nadia)
+
+Único pendiente que había dejado Luciano al cierre de sesión 63: `204_revoke_public_execute_cae_rpcs.sql`
+estaba escrita pero no aplicada (requería confirmación explícita del usuario por ser cambio de
+permisos). Nadia confirmó y se aplicó a producción.
+
+Verificado antes de aplicar: `authenticated` tenía su propia fila de `EXECUTE` explícita en ambas
+funciones (`marcar_cae_resuelto_manual`, `reintentar_caes_lote`), así que revocar `PUBLIC` no iba a
+afectar el uso normal de la app. Verificado después: `information_schema.routine_privileges` ya no
+lista `PUBLIC` en ninguna de las dos; probado con `BEGIN...ROLLBACK` impersonando el admin real de
+Nalux — `reintentar_caes_lote` sigue funcionando sin error de permisos.
+
+Con esto queda cerrado el 100% del gap de ACL "revoke FROM anon es no-op" que el proyecto viene
+cerrando sistemáticamente desde mig.194.
 
 ## ✅ Barrido final de cierre — sesión 63 (Luciano, 2026-07-14)
 
