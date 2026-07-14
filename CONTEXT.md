@@ -1,11 +1,19 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-14 (Nadia — nueva pasada de seguridad sobre integración MercadoPago: 3 hallazgos reales cerrados)
+**Última actualización:** 2026-07-14 (Luciano — Access Token de MercadoPago cifrado en Vault, cierre del ítem de hardening dejado abierto por Nadia)
 
-> 📌 **Luciano, leé esto antes de seguir:** se corrigieron 3 hallazgos de seguridad en la integración
-> de Mercado Pago (validación insuficiente en `mp-webhook`, `mp-sync` y `mp-verify-token`). Ya está
-> corregido, deployado en Supabase y pusheado a `master` (commit `7bccea5`) — no requiere ninguna
-> acción tuya, solo que estés al tanto si tocás algo de la integración de MP. Detalle técnico
-> completo en el historial de commits, no reproducido acá por tratarse de un repo público.
+> 📌 **Luciano, leé esto antes de seguir:** se cerró el ítem de hardening que Nadia dejó marcado
+> como "no urgente" en sesión 65 (token de MP en texto plano). Ya está corregido, deployado en
+> Supabase y pusheado a `master` (commit `27bb3e1`) — no requiere ninguna acción tuya. Detalle
+> técnico completo en el historial de commits, no reproducido acá por tratarse de un repo público.
+
+## ✅ Cifrado del Access Token de MercadoPago (sesión 66 Luciano)
+
+Cierre del ítem de hardening que Nadia dejó documentado como "no urgente" en la sesión 65 (token
+de MP en texto plano en la tabla, protegido solo por RLS + rol admin). Se aplicó el mismo mecanismo
+de cifrado en reposo ya usado para el certificado AFIP. Migración de base aplicada en producción,
+edge functions de MP actualizadas y redeployadas, frontend actualizado. Verificado en producción
+antes y después del cambio. Build (`npx vite build`) exit 0. Detalle técnico completo en el commit
+`27bb3e1`, no reproducido acá por tratarse de un repo público.
 
 ## ✅ Pasada de seguridad — integración MercadoPago (sesión 65 Nadia)
 
