@@ -41,14 +41,24 @@ serve(async (req) => {
     // Obtener integración activa de la empresa
     const { data: integracion, error: errInt } = await supabase
       .from('integraciones_bancarias')
-      .select('access_token, cuenta_bancaria_id, config')
+      .select('cuenta_bancaria_id, config')
       .eq('empresa_id', empresaId)
       .eq('proveedor', 'mercadopago')
       .eq('activo', true)
       .single();
 
-    if (errInt || !integracion?.access_token) {
+    if (errInt || !integracion) {
       console.error('[mp-webhook] Integración MP no encontrada para empresa:', empresaId);
+      return new Response('Not Found', { status: 404 });
+    }
+
+    // El Access Token vive cifrado en Vault, no en la tabla — mismo mecanismo que
+    // el certificado AFIP (vault_secret_read, service_role-only).
+    const { data: accessToken, error: vaultErr } = await supabase.rpc('vault_secret_read', {
+      p_name: `mp_access_token_${empresaId}`,
+    });
+    if (vaultErr || !accessToken) {
+      console.error('[mp-webhook] Token no encontrado en Vault para empresa:', empresaId);
       return new Response('Not Found', { status: 404 });
     }
 
@@ -75,7 +85,7 @@ serve(async (req) => {
     // ── Consultar detalles del pago a la API de MP ───────────────────────────
     const mpResponse = await fetch(`${MP_API_BASE}/v1/payments/${paymentId}`, {
       headers: {
-        'Authorization': `Bearer ${integracion.access_token}`,
+        'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
     });

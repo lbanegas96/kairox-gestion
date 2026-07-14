@@ -103,38 +103,22 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
     }
     setGuardando(true);
     try {
-      // SECURITY-SENSITIVE-DATA — solo verificar/enviar token si el usuario escribió uno nuevo
-      let mpUserIdFinal = mpUserId;
-      if (accessToken) {
-        if (tokenValido !== true) {
-          const { data: vData, error: vError } = await supabase.functions.invoke('mp-verify-token', {
-            body: { access_token: accessToken },
-          });
-          if (vError || !vData?.valid) {
-            toast({ title: 'Access Token inválido o expirado', description: vData?.error, variant: 'destructive' });
-            return;
-          }
-          mpUserIdFinal = vData.mp_user_id ?? null;
-        }
+      // SECURITY-SENSITIVE-DATA — el Access Token nunca se escribe directo a la tabla desde
+      // acá. Se manda a mp-save-config, que lo verifica contra la API de MP y lo guarda
+      // cifrado en Supabase Vault (mismo mecanismo que el certificado AFIP) — la tabla
+      // integraciones_bancarias nunca tiene el token en texto plano.
+      const { data, error } = await supabase.functions.invoke('mp-save-config', {
+        body: {
+          access_token:       accessToken || undefined,
+          cuenta_bancaria_id: cuentaBancariaId,
+          webhook_secret:     webhookSecret || undefined,
+        },
+      });
+
+      if (error || data?.error) {
+        toast({ title: 'Error al guardar', description: data?.error ?? error?.message, variant: 'destructive' });
+        return;
       }
-
-      const config = { ...(webhookSecret ? { webhook_secret: webhookSecret } : {}) };
-      if (mpUserIdFinal != null) config.mp_user_id = mpUserIdFinal;
-
-      const upsertPayload = {
-        empresa_id:         user.empresa_id,
-        proveedor:          'mercadopago',
-        cuenta_bancaria_id: cuentaBancariaId,
-        activo:             true,
-        config,
-      };
-      if (accessToken) upsertPayload.access_token = accessToken; // SECURITY-SENSITIVE-DATA
-
-      const { error } = await supabase
-        .from('integraciones_bancarias')
-        .upsert(upsertPayload, { onConflict: 'empresa_id,proveedor' });
-
-      if (error) throw error;
 
       toast({ title: '✓ Mercado Pago conectado correctamente', className: 'bg-green-600 text-white border-green-700' });
       onSuccess?.();

@@ -52,7 +52,7 @@ serve(async (req) => {
 
   const { data: integraciones, error: errInt } = await supabase
     .from('integraciones_bancarias')
-    .select('empresa_id, access_token, cuenta_bancaria_id, ultimo_sync, config')
+    .select('empresa_id, cuenta_bancaria_id, ultimo_sync, config')
     .eq('proveedor', 'mercadopago')
     .eq('activo', true)
     .eq('empresa_id', auth.empresaId);
@@ -68,6 +68,16 @@ serve(async (req) => {
 
   for (const integ of integraciones) {
     try {
+      // El Access Token vive cifrado en Vault, no en la tabla — mismo mecanismo que
+      // el certificado AFIP (vault_secret_read, service_role-only).
+      const { data: accessToken, error: vaultErr } = await supabase.rpc('vault_secret_read', {
+        p_name: `mp_access_token_${integ.empresa_id}`,
+      });
+      if (vaultErr || !accessToken) {
+        console.error('[mp-sync] Token no encontrado en Vault para empresa:', integ.empresa_id);
+        continue;
+      }
+
       // Si no hay último sync, tomar últimas 72 horas
       const desde = integ.ultimo_sync
         ? new Date(integ.ultimo_sync).toISOString()
@@ -76,7 +86,7 @@ serve(async (req) => {
 
       const mpRes = await fetch(
         `${MP_API_BASE}/v1/payments/search?sort=date_created&criteria=asc&status=approved&begin_date=${desde}&end_date=${hasta}&limit=100`,
-        { headers: { Authorization: `Bearer ${integ.access_token}` } },
+        { headers: { Authorization: `Bearer ${accessToken}` } },
       );
 
       if (!mpRes.ok) {
