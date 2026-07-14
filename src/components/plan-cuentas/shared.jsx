@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { ChevronRight, ChevronDown, Pencil, Power } from 'lucide-react';
 
 export const TIPO_COLOR = {
-  activo:     'bg-blue-500/10 text-blue-400 border-blue-500/30',
-  pasivo:     'bg-red-500/10 text-red-400 border-red-500/30',
-  patrimonio: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
-  ingreso:    'bg-green-500/10 text-green-400 border-green-500/30',
-  egreso:     'bg-orange-500/10 text-orange-400 border-orange-500/30',
+  activo:     'bg-kx-blue/10 text-kx-blue border-kx-blue/30',
+  pasivo:     'bg-kx-red/10 text-kx-red border-kx-red/30',
+  patrimonio: 'bg-kx-violet/10 text-kx-violet border-kx-violet/30',
+  ingreso:    'bg-kx-green/10 text-kx-green border-kx-green/30',
+  egreso:     'bg-kx-amber/10 text-kx-amber border-kx-amber/30',
 };
 
 export const TIPO_LABEL = {
@@ -15,9 +15,9 @@ export const TIPO_LABEL = {
 };
 
 export const ESTADO_COLOR = {
-  borrador:   'bg-yellow-500/10 text-yellow-400 border-yellow-500/30',
-  confirmado: 'bg-green-500/10 text-green-400 border-green-500/30',
-  anulado:    'bg-red-500/10 text-red-400 border-red-500/30',
+  borrador:   'bg-kx-amber/10 text-kx-amber border-kx-amber/30',
+  confirmado: 'bg-kx-green/10 text-kx-green border-kx-green/30',
+  anulado:    'bg-kx-red/10 text-kx-red border-kx-red/30',
 };
 
 export const fmt = (n) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 }).format(n ?? 0);
@@ -63,7 +63,7 @@ export function CuentaNode({ cuenta, depth = 0, onEdit, onToggleActiva, search }
         )}
 
         {cuenta.permite_movimientos && cuenta.saldo_actual !== 0 && (
-          <span className={`text-xs font-mono ${cuenta.saldo_actual >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          <span className={`text-xs font-mono ${cuenta.saldo_actual >= 0 ? 'text-kx-green' : 'text-kx-red'}`}>
             {fmt(cuenta.saldo_actual)}
           </span>
         )}
@@ -72,7 +72,7 @@ export function CuentaNode({ cuenta, depth = 0, onEdit, onToggleActiva, search }
           <button
             onClick={(e) => { e.stopPropagation(); onToggleActiva(cuenta); }}
             title={cuenta.activa ? 'Desactivar cuenta' : 'Activar cuenta'}
-            className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-all ${cuenta.activa ? 'text-kx-text-3 hover:text-kx-text' : 'text-green-400 hover:text-green-300'}`}
+            className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-all ${cuenta.activa ? 'text-kx-text-3 hover:text-kx-text' : 'text-kx-green hover:opacity-80'}`}
           >
             <Power size={12} />
           </button>

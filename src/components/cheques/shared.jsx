@@ -31,15 +31,18 @@ export const ESTADO_LABELS = {
   rechazado:  'Rechazado',
 };
 
+// Tono -700 en light (AA, >=4.5:1) + tono -400 original en dark. 8 estados
+// distintos, más colores que los 5 tokens semánticos kx- del sistema, así que
+// se fija cada shade por color en vez de reusar kx-green/kx-red/etc.
 export const ESTADO_COLOR = {
-  pendiente:  'bg-yellow-500/10 text-yellow-400 border-yellow-500/30',
-  entregado:  'bg-blue-500/10 text-blue-400 border-blue-500/30',
-  en_cartera: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
-  depositado: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30',
-  endosado:   'bg-purple-500/10 text-purple-400 border-purple-500/30',
-  descontado: 'bg-orange-500/10 text-orange-400 border-orange-500/30',
-  cobrado:    'bg-green-500/10 text-green-400 border-green-500/30',
-  rechazado:  'bg-red-500/10 text-red-400 border-red-500/30',
+  pendiente:  'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30',
+  entregado:  'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30',
+  en_cartera: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/30',
+  depositado: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30',
+  endosado:   'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/30',
+  descontado: 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30',
+  cobrado:    'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30',
+  rechazado:  'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30',
 };
 
 export const fmt = (n) =>
@@ -113,7 +116,7 @@ export function FechaVto({ fecha, estado }) {
   const proximo  = activo && !vencido && fecha <= in7d;
   return (
     <span className={`flex items-center gap-1 font-mono text-xs whitespace-nowrap
-      ${vencido ? 'text-red-400' : proximo ? 'text-amber-400' : 'text-kx-text-3'}`}>
+      ${vencido ? 'text-kx-red' : proximo ? 'text-kx-amber' : 'text-kx-text-3'}`}>
       {(vencido || proximo) && <Clock size={11} className="flex-shrink-0" />}
       {fmtDate(fecha)}
       {vencido && <span className="text-[10px] font-medium">(vencido)</span>}

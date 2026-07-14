@@ -174,8 +174,8 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                 <td className="px-4 py-3 text-center">
                   <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium
                     ${p.estado === 'cerrado'
-                      ? 'bg-red-500/10 text-red-400 border-red-500/30'
-                      : 'bg-green-500/10 text-green-400 border-green-500/30'}`}>
+                      ? 'bg-kx-red/10 text-kx-red border-kx-red/30'
+                      : 'bg-kx-green/10 text-kx-green border-kx-green/30'}`}>
                     {p.estado}
                   </span>
                 </td>

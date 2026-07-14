@@ -106,7 +106,7 @@ function TabEstadoResultados({ empresaId }) {
 
       {isLoading && (
         <div className="flex items-center justify-center py-20">
-          <Loader2 size={24} className="animate-spin text-[#00D4FF]" />
+          <Loader2 size={24} className="animate-spin text-kx-blue" />
         </div>
       )}
 
@@ -122,8 +122,8 @@ function TabEstadoResultados({ empresaId }) {
         <>
           {/* Ingresos */}
           <div className="rounded-xl border border-kx-border overflow-hidden">
-            <div className="bg-green-500/10 px-4 py-2 border-b border-kx-border">
-              <span className="text-sm font-semibold text-green-400">Ingresos</span>
+            <div className="bg-kx-green/10 px-4 py-2 border-b border-kx-border">
+              <span className="text-sm font-semibold text-kx-green">Ingresos</span>
             </div>
             <table className="w-full text-sm">
               <tbody>
@@ -132,7 +132,7 @@ function TabEstadoResultados({ empresaId }) {
                 )}
                 {ingresos.map((r) => (
                   <tr key={r.cuenta_id} className="border-t border-kx-border hover:bg-kx-surface-2/30">
-                    <td className="px-4 py-2.5 font-mono text-xs text-[#00D4FF] w-20">{r.codigo}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-kx-blue w-20">{r.codigo}</td>
                     <td className="px-4 py-2.5 text-kx-text-3">{r.nombre}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-kx-text-3 w-40">{fmt(r.monto)}</td>
                   </tr>
@@ -141,7 +141,7 @@ function TabEstadoResultados({ empresaId }) {
               <tfoot className="bg-kx-surface-2/50">
                 <tr>
                   <td colSpan={2} className="px-4 py-2.5 text-kx-text-3 font-semibold">Total Ingresos</td>
-                  <td className="px-4 py-2.5 text-right font-mono font-bold text-green-400">{fmt(totalIngresos)}</td>
+                  <td className="px-4 py-2.5 text-right font-mono font-bold text-kx-green">{fmt(totalIngresos)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -149,8 +149,8 @@ function TabEstadoResultados({ empresaId }) {
 
           {/* Egresos */}
           <div className="rounded-xl border border-kx-border overflow-hidden">
-            <div className="bg-orange-500/10 px-4 py-2 border-b border-kx-border">
-              <span className="text-sm font-semibold text-orange-400">Egresos / Gastos</span>
+            <div className="bg-kx-amber/10 px-4 py-2 border-b border-kx-border">
+              <span className="text-sm font-semibold text-kx-amber">Egresos / Gastos</span>
             </div>
             <table className="w-full text-sm">
               <tbody>
@@ -159,7 +159,7 @@ function TabEstadoResultados({ empresaId }) {
                 )}
                 {egresos.map((r) => (
                   <tr key={r.cuenta_id} className="border-t border-kx-border hover:bg-kx-surface-2/30">
-                    <td className="px-4 py-2.5 font-mono text-xs text-[#00D4FF] w-20">{r.codigo}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-kx-blue w-20">{r.codigo}</td>
                     <td className="px-4 py-2.5 text-kx-text-3">{r.nombre}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-kx-text-3 w-40">{fmt(r.monto)}</td>
                   </tr>
@@ -168,7 +168,7 @@ function TabEstadoResultados({ empresaId }) {
               <tfoot className="bg-kx-surface-2/50">
                 <tr>
                   <td colSpan={2} className="px-4 py-2.5 text-kx-text-3 font-semibold">Total Egresos</td>
-                  <td className="px-4 py-2.5 text-right font-mono font-bold text-orange-400">{fmt(totalEgresos)}</td>
+                  <td className="px-4 py-2.5 text-right font-mono font-bold text-kx-amber">{fmt(totalEgresos)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -176,16 +176,16 @@ function TabEstadoResultados({ empresaId }) {
 
           {/* Resultado del período */}
           <div className={`rounded-xl border p-4 flex items-center justify-between
-            ${ganancia ? 'border-green-500/30 bg-green-500/10' : 'border-red-500/30 bg-red-500/10'}`}>
+            ${ganancia ? 'border-kx-green/30 bg-kx-green/10' : 'border-kx-red/30 bg-kx-red/10'}`}>
             <div className="flex items-center gap-2">
-              {ganancia ? <TrendingUp size={18} className="text-green-400" /> : <TrendingDown size={18} className="text-red-400" />}
+              {ganancia ? <TrendingUp size={18} className="text-kx-green" /> : <TrendingDown size={18} className="text-kx-red" />}
               <span className="font-semibold text-kx-text">Resultado del Período</span>
               <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium
-                ${ganancia ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30'}`}>
+                ${ganancia ? 'bg-kx-green/10 text-kx-green border-kx-green/30' : 'bg-kx-red/10 text-kx-red border-kx-red/30'}`}>
                 {ganancia ? 'Ganancia' : 'Pérdida'}
               </span>
             </div>
-            <span className={`text-xl font-mono font-bold ${ganancia ? 'text-green-400' : 'text-red-400'}`}>
+            <span className={`text-xl font-mono font-bold ${ganancia ? 'text-kx-green' : 'text-kx-red'}`}>
               {fmt(Math.abs(resultado))}
             </span>
           </div>

@@ -94,7 +94,7 @@ function TabAsientos({ empresaId, userId, cuentasFlat }) {
             )}
             {data?.data?.map((a) => (
               <tr key={a.id} className="border-t border-kx-border hover:bg-kx-surface-2/30 transition-colors">
-                <td className="px-4 py-3 font-mono text-xs text-[#00D4FF]">{a.numero}</td>
+                <td className="px-4 py-3 font-mono text-xs text-kx-blue">{a.numero}</td>
                 <td className="px-4 py-3 text-kx-text-3">{new Date(a.fecha + 'T12:00:00').toLocaleDateString('es-AR')}</td>
                 <td className="px-4 py-3 text-kx-text-3 max-w-xs truncate">{a.descripcion || '—'}</td>
                 <td className="px-4 py-3 text-right font-mono text-kx-text-3">{fmt(a.total_debe)}</td>
@@ -113,11 +113,11 @@ function TabAsientos({ empresaId, userId, cuentasFlat }) {
                     {a.estado === 'borrador' && (
                       <>
                         <button onClick={() => handleConfirmar(a.id)}
-                          className="p-1.5 rounded text-kx-text-3 hover:text-green-400 hover:bg-green-500/10 transition-colors" title="Confirmar">
+                          className="p-1.5 rounded text-kx-text-3 hover:text-kx-green hover:bg-kx-green/10 transition-colors" title="Confirmar">
                           <CheckCircle2 size={14} />
                         </button>
                         <button onClick={() => handleAnular(a.id)}
-                          className="p-1.5 rounded text-kx-text-3 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Anular">
+                          className="p-1.5 rounded text-kx-text-3 hover:text-kx-red hover:bg-kx-red/10 transition-colors" title="Anular">
                           <Ban size={14} />
                         </button>
                       </>
@@ -151,7 +151,7 @@ function TabAsientos({ empresaId, userId, cuentasFlat }) {
         <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileText size={16} className="text-[#00D4FF]" />
+              <FileText size={16} className="text-kx-blue" />
               Asiento {detalle?.numero}
               <span className={`ml-2 text-[10px] px-2 py-0.5 rounded-full border font-medium ${ESTADO_COLOR[detalle?.estado]}`}>
                 {detalle?.estado}
@@ -179,7 +179,7 @@ function TabAsientos({ empresaId, userId, cuentasFlat }) {
                     {detalle.asientos_items?.map((item) => (
                       <tr key={item.id} className="border-t border-kx-border">
                         <td className="px-3 py-1.5 text-kx-text-3">
-                          <span className="font-mono text-[#00D4FF] mr-2">{item.plan_cuentas?.codigo}</span>
+                          <span className="font-mono text-kx-blue mr-2">{item.plan_cuentas?.codigo}</span>
                           {item.plan_cuentas?.nombre}
                           {item.descripcion && <span className="text-kx-text-2 ml-2">({item.descripcion})</span>}
                         </td>

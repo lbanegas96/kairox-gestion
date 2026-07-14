@@ -36,7 +36,7 @@ function TabLibroMayor({ empresaId, cuentasFlat }) {
           <SelectContent className="bg-kx-surface-2 border-kx-border">
             {cuentasConMov.map(c => (
               <SelectItem key={c.id} value={c.id}>
-                <span className="font-mono text-[#00D4FF] mr-2 text-xs">{c.codigo}</span>
+                <span className="font-mono text-kx-blue mr-2 text-xs">{c.codigo}</span>
                 {c.nombre}
               </SelectItem>
             ))}
@@ -74,7 +74,7 @@ function TabLibroMayor({ empresaId, cuentasFlat }) {
           <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${TIPO_COLOR[cuentaSeleccionada.tipo]}`}>
             {TIPO_LABEL[cuentaSeleccionada.tipo]}
           </span>
-          <span className="font-mono text-[#00D4FF] text-sm">{cuentaSeleccionada.codigo}</span>
+          <span className="font-mono text-kx-blue text-sm">{cuentaSeleccionada.codigo}</span>
           <span className="font-semibold text-kx-text">{cuentaSeleccionada.nombre}</span>
           {rows.length > 0 && (
             <span className="ml-auto text-kx-text-3 text-xs">{rows.length} movimiento{rows.length !== 1 ? 's' : ''}</span>
@@ -112,7 +112,7 @@ function TabLibroMayor({ empresaId, cuentasFlat }) {
                   <td className="px-4 py-2.5 text-kx-text-3 whitespace-nowrap">
                     {new Date(row.asientos_contables.fecha + 'T12:00:00').toLocaleDateString('es-AR')}
                   </td>
-                  <td className="px-4 py-2.5 font-mono text-xs text-[#00D4FF]">
+                  <td className="px-4 py-2.5 font-mono text-xs text-kx-blue">
                     {row.asientos_contables.numero}
                   </td>
                   <td className="px-4 py-2.5 text-kx-text-3 max-w-xs truncate">
@@ -124,7 +124,7 @@ function TabLibroMayor({ empresaId, cuentasFlat }) {
                   <td className="px-4 py-2.5 text-right font-mono text-kx-text-3">
                     {Number(row.haber) > 0 ? fmt(row.haber) : '—'}
                   </td>
-                  <td className={`px-4 py-2.5 text-right font-mono font-bold ${row.saldo_acumulado >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>
+                  <td className={`px-4 py-2.5 text-right font-mono font-bold ${row.saldo_acumulado >= 0 ? 'text-kx-blue' : 'text-kx-amber'}`}>
                     {fmt(Math.abs(row.saldo_acumulado))}
                     <span className="text-[10px] ml-1">{row.saldo_acumulado >= 0 ? 'D' : 'H'}</span>
                   </td>
@@ -141,7 +141,7 @@ function TabLibroMayor({ empresaId, cuentasFlat }) {
                     <td colSpan={3} className="px-4 py-3 text-kx-text-3 font-semibold">SALDO FINAL</td>
                     <td className="px-4 py-3 text-right font-mono font-bold text-kx-text-3">{fmt(totalDebe)}</td>
                     <td className="px-4 py-3 text-right font-mono font-bold text-kx-text-3">{fmt(totalHaber)}</td>
-                    <td className={`px-4 py-3 text-right font-mono font-bold text-lg ${last.saldo_acumulado >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>
+                    <td className={`px-4 py-3 text-right font-mono font-bold text-lg ${last.saldo_acumulado >= 0 ? 'text-kx-blue' : 'text-kx-amber'}`}>
                       {fmt(Math.abs(last.saldo_acumulado))} {last.saldo_acumulado >= 0 ? '(D)' : '(H)'}
                     </td>
                   </tr>

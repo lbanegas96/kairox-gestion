@@ -66,7 +66,7 @@ function TabBalance({ empresaId }) {
               const saldo = r.total_debe - r.total_haber;
               return (
                 <tr key={r.cuenta_id} className="border-t border-kx-border hover:bg-kx-surface-2/30">
-                  <td className="px-4 py-2.5 font-mono text-xs text-[#00D4FF]">{r.codigo}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-kx-blue">{r.codigo}</td>
                   <td className="px-4 py-2.5 text-kx-text-3">{r.nombre}</td>
                   <td className="px-4 py-2.5 text-center">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${TIPO_COLOR[r.tipo]}`}>
@@ -75,7 +75,7 @@ function TabBalance({ empresaId }) {
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono text-kx-text-3">{fmt(r.total_debe)}</td>
                   <td className="px-4 py-2.5 text-right font-mono text-kx-text-3">{fmt(r.total_haber)}</td>
-                  <td className={`px-4 py-2.5 text-right font-mono font-bold ${saldo >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <td className={`px-4 py-2.5 text-right font-mono font-bold ${saldo >= 0 ? 'text-kx-green' : 'text-kx-red'}`}>
                     {fmt(Math.abs(saldo))} {saldo < 0 ? '(H)' : '(D)'}
                   </td>
                 </tr>
@@ -86,13 +86,13 @@ function TabBalance({ empresaId }) {
             <tfoot className="bg-kx-surface-2">
               <tr>
                 <td colSpan={3} className="px-4 py-3 text-kx-text-3 font-semibold">TOTALES</td>
-                <td className={`px-4 py-3 text-right font-mono font-bold ${Math.abs(totalDebe - totalHaber) < 0.01 ? 'text-green-400' : 'text-kx-text'}`}>
+                <td className={`px-4 py-3 text-right font-mono font-bold ${Math.abs(totalDebe - totalHaber) < 0.01 ? 'text-kx-green' : 'text-kx-text'}`}>
                   {fmt(totalDebe)}
                 </td>
-                <td className={`px-4 py-3 text-right font-mono font-bold ${Math.abs(totalDebe - totalHaber) < 0.01 ? 'text-green-400' : 'text-kx-text'}`}>
+                <td className={`px-4 py-3 text-right font-mono font-bold ${Math.abs(totalDebe - totalHaber) < 0.01 ? 'text-kx-green' : 'text-kx-text'}`}>
                   {fmt(totalHaber)}
                 </td>
-                <td className={`px-4 py-3 text-right text-xs font-medium ${Math.abs(totalDebe - totalHaber) < 0.01 ? 'text-green-400' : 'text-yellow-400'}`}>
+                <td className={`px-4 py-3 text-right text-xs font-medium ${Math.abs(totalDebe - totalHaber) < 0.01 ? 'text-kx-green' : 'text-kx-amber'}`}>
                   {Math.abs(totalDebe - totalHaber) < 0.01 ? '✓ Cuadra' : `Dif: ${fmt(Math.abs(totalDebe - totalHaber))}`}
                 </td>
               </tr>
