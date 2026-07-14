@@ -39,17 +39,15 @@ actualizado, commit + push a GitHub (`4f7c11e..47c98d4`), branch local `claude/a
 mergeada a master (no-op — ya no tenía commits propios, todo su contenido útil se había recuperado a
 mano en el punto 1 de arriba), deploy a producción en Vercel confirmado (READY).
 
-**Para retomar la próxima sesión — único pendiente real:**
-- **Migration `204_revoke_public_execute_cae_rpcs.sql`** está escrita en el repo pero **NO aplicada**
-  a la base de producción — quedó bloqueada por el sistema de seguridad porque es un cambio de
-  permisos de base de datos no pedido explícitamente. Revoca `EXECUTE ... FROM PUBLIC` en
-  `marcar_cae_resuelto_manual` y `reintentar_caes_lote` (mismo gap de ACL que la mig.194 ya había
-  cerrado para otras 7 funciones — ambas seguían siendo llamables por `anon` sin sesión, sin exploit
-  activo pero como defensa en profundidad). Para aplicarla: confirmar con el usuario y correr
-  `apply_migration` contra el proyecto `wuznppxeonmhfcvnqfbf`, o pedirle que la corra él desde el
-  dashboard de Supabase.
-- Todo lo demás (migración visual, Cheques→Bancos, Monitor AFIP, worktree huérfano) quedó 100% cerrado,
-  verificado y deployado — no hay nada más pendiente detectado en el barrido de esta sesión.
+**Migration `204_revoke_public_execute_cae_rpcs.sql` — APLICADA (2026-07-14, con confirmación explícita
+del usuario).** Revoca `EXECUTE ... FROM PUBLIC` en `marcar_cae_resuelto_manual` y `reintentar_caes_lote`
+(mismo gap de ACL que la mig.194 ya había cerrado para otras 7 funciones). Verificado con
+`information_schema.routine_privileges`: ambas funciones quedaron con `authenticated`/`postgres`/
+`service_role` únicamente, sin `PUBLIC` ni `anon`. Sin exploit activo previo (defensa en profundidad).
+
+Con esto no queda ningún pendiente detectado en el barrido de esta sesión — migración visual,
+Cheques→Bancos, Monitor AFIP, worktree huérfano y ahora el ACL de estas 2 RPCs, todo cerrado, verificado
+y deployado.
 
 
 ## ✅ Migración de tokens visuales — alcance adicional cerrado + 2 bugs estructurales (Luciano, 2026-07-14, sesión 63 cont.)
