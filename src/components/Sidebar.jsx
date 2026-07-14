@@ -149,7 +149,7 @@ function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen }) {
                   onClick={() => toggleGroup(group.label)}
                   className="w-full flex items-center justify-between px-3 pt-4 pb-1.5 group"
                 >
-                  <span className="text-[10px] font-semibold text-kx-text-3 uppercase tracking-wider select-none">
+                  <span className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider select-none">
                     {group.label}
                   </span>
                   {isCollapsed
@@ -193,7 +193,7 @@ function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen }) {
         {/* User footer */}
         <div className="p-3 border-t border-kx-border flex-shrink-0">
           <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-kx-surface-2 transition-colors">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-white text-[10px] font-semibold flex-shrink-0">
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-white text-2xs font-semibold flex-shrink-0">
               {initials}
             </div>
             <div className="min-w-0 flex-1">

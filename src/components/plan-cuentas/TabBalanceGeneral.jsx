@@ -93,7 +93,7 @@ function TabBalanceGeneral({ empresaId }) {
 
         {!sinDatos && (
           <span className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border font-medium
-            ${calc.cierra ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-red-500/10 text-red-400 border-red-500/30'}`}>
+            ${calc.cierra ? 'bg-kx-green/10 text-kx-green border-kx-green/30' : 'bg-kx-red/10 text-kx-red border-kx-red/30'}`}>
             {calc.cierra ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
             {calc.cierra ? 'Balanceado: Activo = Pasivo + Patrimonio' : `Descuadrado — diferencia: ${fmt(Math.abs(calc.diferencia))}`}
           </span>
@@ -102,7 +102,7 @@ function TabBalanceGeneral({ empresaId }) {
 
       {isLoading && (
         <div className="flex items-center justify-center py-20">
-          <Loader2 size={24} className="animate-spin text-[#00D4FF]" />
+          <Loader2 size={24} className="animate-spin text-kx-blue" />
         </div>
       )}
 
@@ -118,8 +118,8 @@ function TabBalanceGeneral({ empresaId }) {
         <div className="grid md:grid-cols-2 gap-4">
           {/* Activo */}
           <div className="rounded-xl border border-kx-border overflow-hidden self-start">
-            <div className="bg-blue-500/10 px-4 py-2 border-b border-kx-border">
-              <span className="text-sm font-semibold text-blue-400">Activo</span>
+            <div className="bg-kx-blue/10 px-4 py-2 border-b border-kx-border">
+              <span className="text-sm font-semibold text-kx-blue">Activo</span>
             </div>
             <table className="w-full text-sm">
               <tbody>
@@ -128,7 +128,7 @@ function TabBalanceGeneral({ empresaId }) {
                 )}
                 {calc.activos.map((r) => (
                   <tr key={r.cuenta_id} className="border-t border-kx-border hover:bg-kx-surface-2/30">
-                    <td className="px-4 py-2.5 font-mono text-xs text-[#00D4FF] w-20">{r.codigo}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-kx-blue w-20">{r.codigo}</td>
                     <td className="px-4 py-2.5 text-kx-text-3">{r.nombre}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-kx-text-3 w-36">{fmt(r.monto)}</td>
                   </tr>
@@ -137,7 +137,7 @@ function TabBalanceGeneral({ empresaId }) {
               <tfoot className="bg-kx-surface-2/50">
                 <tr>
                   <td colSpan={2} className="px-4 py-2.5 text-kx-text-3 font-semibold">Total Activo</td>
-                  <td className="px-4 py-2.5 text-right font-mono font-bold text-blue-400">{fmt(calc.totalActivo)}</td>
+                  <td className="px-4 py-2.5 text-right font-mono font-bold text-kx-blue">{fmt(calc.totalActivo)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -146,8 +146,8 @@ function TabBalanceGeneral({ empresaId }) {
           {/* Pasivo + Patrimonio */}
           <div className="space-y-4">
             <div className="rounded-xl border border-kx-border overflow-hidden">
-              <div className="bg-red-500/10 px-4 py-2 border-b border-kx-border">
-                <span className="text-sm font-semibold text-red-400">Pasivo</span>
+              <div className="bg-kx-red/10 px-4 py-2 border-b border-kx-border">
+                <span className="text-sm font-semibold text-kx-red">Pasivo</span>
               </div>
               <table className="w-full text-sm">
                 <tbody>
@@ -156,7 +156,7 @@ function TabBalanceGeneral({ empresaId }) {
                   )}
                   {calc.pasivos.map((r) => (
                     <tr key={r.cuenta_id} className="border-t border-kx-border hover:bg-kx-surface-2/30">
-                      <td className="px-4 py-2.5 font-mono text-xs text-[#00D4FF] w-20">{r.codigo}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-kx-blue w-20">{r.codigo}</td>
                       <td className="px-4 py-2.5 text-kx-text-3">{r.nombre}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-kx-text-3 w-36">{fmt(r.monto)}</td>
                     </tr>
@@ -165,32 +165,32 @@ function TabBalanceGeneral({ empresaId }) {
                 <tfoot className="bg-kx-surface-2/50">
                   <tr>
                     <td colSpan={2} className="px-4 py-2.5 text-kx-text-3 font-semibold">Total Pasivo</td>
-                    <td className="px-4 py-2.5 text-right font-mono font-bold text-red-400">{fmt(calc.totalPasivo)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-bold text-kx-red">{fmt(calc.totalPasivo)}</td>
                   </tr>
                 </tfoot>
               </table>
             </div>
 
             <div className="rounded-xl border border-kx-border overflow-hidden">
-              <div className="bg-purple-500/10 px-4 py-2 border-b border-kx-border">
-                <span className="text-sm font-semibold text-purple-400">Patrimonio Neto</span>
+              <div className="bg-kx-violet/10 px-4 py-2 border-b border-kx-border">
+                <span className="text-sm font-semibold text-kx-violet">Patrimonio Neto</span>
               </div>
               <table className="w-full text-sm">
                 <tbody>
                   {calc.patrimonios.map((r) => (
                     <tr key={r.cuenta_id} className="border-t border-kx-border hover:bg-kx-surface-2/30">
-                      <td className="px-4 py-2.5 font-mono text-xs text-[#00D4FF] w-20">{r.codigo}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-kx-blue w-20">{r.codigo}</td>
                       <td className="px-4 py-2.5 text-kx-text-3">{r.nombre}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-kx-text-3 w-36">{fmt(r.monto)}</td>
                     </tr>
                   ))}
                   <tr className="border-t border-kx-border hover:bg-kx-surface-2/30">
-                    <td className="px-4 py-2.5 font-mono text-xs text-[#00D4FF] w-20">3.3</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-kx-blue w-20">3.3</td>
                     <td className="px-4 py-2.5 text-kx-text-3 italic">
                       Resultado del Ejercicio
-                      <span className="ml-2 text-[10px] text-kx-text-3 not-italic">(calculado del P&amp;L)</span>
+                      <span className="ml-2 text-2xs text-kx-text-3 not-italic">(calculado del P&amp;L)</span>
                     </td>
-                    <td className={`px-4 py-2.5 text-right font-mono w-36 ${calc.resultadoEjercicio >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    <td className={`px-4 py-2.5 text-right font-mono w-36 ${calc.resultadoEjercicio >= 0 ? 'text-kx-green' : 'text-kx-red'}`}>
                       {fmt(calc.resultadoEjercicio)}
                     </td>
                   </tr>
@@ -198,16 +198,16 @@ function TabBalanceGeneral({ empresaId }) {
                 <tfoot className="bg-kx-surface-2/50">
                   <tr>
                     <td colSpan={2} className="px-4 py-2.5 text-kx-text-3 font-semibold">Total Patrimonio</td>
-                    <td className="px-4 py-2.5 text-right font-mono font-bold text-purple-400">{fmt(calc.totalPatrimonio)}</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-bold text-kx-violet">{fmt(calc.totalPatrimonio)}</td>
                   </tr>
                 </tfoot>
               </table>
             </div>
 
             <div className={`rounded-xl border p-3 flex items-center justify-between
-              ${calc.cierra ? 'border-green-500/30 bg-green-500/10' : 'border-red-500/30 bg-red-500/10'}`}>
+              ${calc.cierra ? 'border-kx-green/30 bg-kx-green/10' : 'border-kx-red/30 bg-kx-red/10'}`}>
               <span className="text-sm font-semibold text-kx-text">Pasivo + Patrimonio</span>
-              <span className={`font-mono font-bold ${calc.cierra ? 'text-green-400' : 'text-red-400'}`}>
+              <span className={`font-mono font-bold ${calc.cierra ? 'text-kx-green' : 'text-kx-red'}`}>
                 {fmt(calc.totalPasivo + calc.totalPatrimonio)}
               </span>
             </div>

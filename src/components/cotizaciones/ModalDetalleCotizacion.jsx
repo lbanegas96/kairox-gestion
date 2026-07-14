@@ -10,7 +10,7 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle }) {
       <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border">
         <DialogHeader>
           <DialogTitle className="dark:text-kx-text flex items-center gap-2">
-            <FileText className="w-5 h-5 text-blue-500" />
+            <FileText className="w-5 h-5 text-kx-blue" />
             Cotización {detalle?.numero}
           </DialogTitle>
           <DialogDescription className="dark:text-kx-text-2">Detalle y líneas de la cotización.</DialogDescription>

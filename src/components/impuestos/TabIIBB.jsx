@@ -333,7 +333,7 @@ function TabIIBB() {
                       <Pencil className="h-4 w-4 text-kx-text-2" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toggleActivoCoef(c)} title={c.activo ? 'Desactivar' : 'Activar'}>
-                      <Power className={`h-4 w-4 ${c.activo ? 'text-red-500' : 'text-green-500'}`} />
+                      <Power className={`h-4 w-4 ${c.activo ? 'text-kx-red' : 'text-kx-green'}`} />
                     </Button>
                   </div>
                 </div>

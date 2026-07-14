@@ -198,7 +198,7 @@ function OfertasSection() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
-            <Tag className="w-6 h-6 text-emerald-500" /> Ofertas y Descuentos
+            <Tag className="w-6 h-6 text-kx-green" /> Ofertas y Descuentos
           </h2>
           <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-1">
             Configurá descuentos automáticos por producto, categoría, medio de pago o día de la semana

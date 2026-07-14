@@ -40,7 +40,7 @@ const COMPENSACION_OPCIONES = (tipo) => ([
 const CONFIG = {
   cliente: {
     icon: Undo2,
-    iconClass: 'text-orange-500',
+    iconClass: 'text-kx-amber',
     confirmClass: 'bg-orange-500 hover:bg-orange-600 text-white',
     rpcTipo: 'cliente',
     rpcEntidadParam: 'p_cliente_id',
@@ -57,7 +57,7 @@ const CONFIG = {
   },
   proveedor: {
     icon: RotateCcw,
-    iconClass: 'text-orange-500',
+    iconClass: 'text-kx-amber',
     confirmClass: 'bg-orange-500 hover:bg-orange-600 text-white',
     rpcTipo: 'proveedor',
     rpcEntidadParam: 'p_proveedor_id',

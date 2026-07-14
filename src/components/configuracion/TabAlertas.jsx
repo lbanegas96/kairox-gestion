@@ -13,7 +13,7 @@ const TabAlertas = ({ alertas, setAlertas, loadingAlertas, savingAlertas, onSave
   <div className="space-y-4 max-w-2xl">
     <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
       <h3 className="text-lg font-bold text-kx-text mb-5 flex items-center gap-2">
-        <Bell className="w-5 h-5 text-amber-500" />
+        <Bell className="w-5 h-5 text-kx-amber" />
         Configuración de Alertas
       </h3>
 

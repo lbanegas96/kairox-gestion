@@ -156,7 +156,7 @@ function TabHistorialCompras({
                          {compras.length === 0 ? "Sin compras registradas aún" : "No hay compras que coincidan con los filtros"}
                        </p>
                        {activeFiltersCount > 0 && (
-                         <Button variant="link" onClick={clearFilters} className="text-blue-500 h-auto p-0">Limpiar filtros</Button>
+                         <Button variant="link" onClick={clearFilters} className="text-kx-blue h-auto p-0">Limpiar filtros</Button>
                        )}
                     </div>
                   </td>
@@ -200,10 +200,10 @@ function TabHistorialCompras({
                     )}
                     <td className="p-4 text-center">
                       <div className="flex justify-center gap-1">
-                         <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-kx-text-3 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full">
+                         <Button size="sm" variant="ghost" aria-label="Ver detalle de la compra" className="h-8 w-8 p-0 text-kx-text-3 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full">
                            <Eye className="h-4 w-4" />
                          </Button>
-                         <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-kx-text-3 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-full" onClick={(e) => handleEditClick(compra, e)}>
+                         <Button size="sm" variant="ghost" aria-label="Editar compra" className="h-8 w-8 p-0 text-kx-text-3 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-full" onClick={(e) => handleEditClick(compra, e)}>
                            <Edit className="h-4 w-4" />
                          </Button>
                       </div>
@@ -222,7 +222,7 @@ function TabHistorialCompras({
             Mostrando {(comprasPage - 1) * COMPRAS_PAGE_SIZE + 1}–{Math.min(comprasPage * COMPRAS_PAGE_SIZE, filteredCompras.length)} de {filteredCompras.length} compras
           </p>
           <div className="flex items-center gap-1">
-            <Button variant="outline" size="sm" onClick={() => setComprasPage(p => Math.max(1, p - 1))} disabled={comprasPage === 1} className="h-8 w-8 p-0">
+            <Button variant="outline" size="sm" onClick={() => setComprasPage(p => Math.max(1, p - 1))} disabled={comprasPage === 1} aria-label="Página anterior" className="h-8 w-8 p-0">
               <ChevronLeft className="h-4 w-4" />
             </Button>
             {Array.from({ length: comprasTotalPages }, (_, i) => i + 1)
@@ -232,7 +232,7 @@ function TabHistorialCompras({
                 item === '...' ? <span key={`e-${idx}`} className="px-2 text-kx-text-3">…</span> :
                 <Button key={item} variant={comprasPage === item ? "default" : "outline"} size="sm" onClick={() => setComprasPage(item)} className="h-8 w-8 p-0">{item}</Button>
               )}
-            <Button variant="outline" size="sm" onClick={() => setComprasPage(p => Math.min(comprasTotalPages, p + 1))} disabled={comprasPage === comprasTotalPages} className="h-8 w-8 p-0">
+            <Button variant="outline" size="sm" onClick={() => setComprasPage(p => Math.min(comprasTotalPages, p + 1))} disabled={comprasPage === comprasTotalPages} aria-label="Página siguiente" className="h-8 w-8 p-0">
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>

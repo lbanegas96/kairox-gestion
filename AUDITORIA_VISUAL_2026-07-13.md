@@ -95,26 +95,44 @@ el fix de --kx-text-3). Plan de Cuentas y Cheques son los que más tienen deuda 
 Pero antes de correr el script masivo, decidir el mapeo por parte de Luciano (5-6 reglas
 totales). Puede ser una sesión dedicada corta.
 
-### 2. Tres tamaños de "texto chico" conviviendo (10/11/12px)
+### 2. ✅ RESUELTO (sesión 64, 2026-07-14) — Tres tamaños de "texto chico" conviviendo (10/11/12px)
 
-**129 ocurrencias** de tamaños hardcodeados en 48 archivos:
-```
-grep -rE "text-\[10px\]|text-\[11px\]" src/components | wc -l
-```
+`text-xs` (12px) queda como escalón "labels". Se agregó `text-2xs` (11px) en `tailwind.config.js`
+como único escalón "meta" y se migraron los 132 usos de `text-[10px]`/`text-[11px]` (46 archivos) con
+un swap 1:1 (sin ambigüedad semántica, no necesitó revisión archivo por archivo como los colores).
+Excluidos a propósito: `caja/TicketPrint.jsx` y `ventas/ComprobantePrintModal.jsx` (impresión térmica,
+tamaño físico fijo). Verificado en vivo: 0 overflows en badges/pills de Cheques y Plan de Cuentas.
+Detalle en CONTEXT.md.
 
-No hay regla de cuándo se usa cada uno. Recomendación: definir 2 escalones oficiales
-(por ejemplo, `.text-xs` = 12px para labels, un `.text-xxs` = 11px para meta) y grep+migrar.
+### 3. ✅ RESUELTO (sesión 64, 2026-07-14) — Botones sin `aria-label` en Compra Rápida
 
-### 3. Botones sin `aria-label` (accesibilidad)
+El "32 de 35" original eran solo 2 formas de ícono (Eye/Edit) repetidas ~16 veces en la tabla
+paginada de Historial — 9 ubicaciones reales en el código (`TabNuevaCompra.jsx`,
+`TabHistorialCompras.jsx`, `ModalEditarCompra.jsx`, `CompraDetailModal.jsx`). Todas corregidas con
+`aria-label` descriptivo. Verificado en vivo: 32→0. Detalle en CONTEXT.md.
 
-En **Compra Rápida**: 32 de 35 botones (91%) sin label accesible — son botones de solo ícono.
-Impacto: usuarios de lector de pantalla no pueden operar la pantalla. Recomendación: agregar
-`aria-label` a todos los `<Button variant="ghost" size="icon">`.
+### 4. ✅ RESUELTO (sesión 64, 2026-07-14) — Padding de cards inconsistente en Dashboard
 
-### 4. Padding de cards inconsistente en Dashboard
+El "0px" era en realidad un falso positivo de medición (grids de KPI con truco `gap-px`, no cards).
+Sistema real: 3 niveles ya casi 100% consistentes (hero 20px / KPI secundario 16px / card 20px,
+jerarquía visual intencional). Único bug real: `TopClientes.jsx` usaba 12px para sus items de
+ranking en vez de los 10px que ya usaba `StockYCobranzas.jsx` en sus 3 patrones análogos —
+unificado. Detalle en CONTEXT.md.
 
-`0px`, `10px`, `20px` mezclados sin patrón. Recomendación: 2 tamaños oficiales (compact 12px,
-default 20px) con clase compartida.
+## ✅ ROADMAP COMPLETO — los 4 ítems de esta auditoría quedan cerrados (sesión 64, 2026-07-14)
+
+## ✅✅ CERRADO TAMBIÉN: los ~90 archivos restantes con colores sin `dark:` (sesión 64, 2026-07-14, cont.)
+
+Lo que en esta misma sesión se dejó documentado como "pendiente, no urgente" se migró completo en
+la continuación de la sesión: ~50 archivos reales (tras descartar falsos positivos), ampliando el
+patrón de colores buscados (+violet, teal, emerald, rose) al encontrar casos que el patrón
+original no capturaba. Incluyó corregir residuos encontrados en Plan de Cuentas y Cheques —
+módulos que se habían dado por 100% cerrados pero tenían líneas que el chequeo visual en vivo de
+esa sesión no vio (botones con ícono+texto que el script de auditoría salta, y elementos
+condicionales como `isAdmin` o estado de período). Detalle completo en CONTEXT.md.
+
+**Estado final: 0 archivos con el patrón roto en todo `src/components`**, excepto
+`ResetPasswordPage.jsx`/`AuthPage.jsx` (excluidos a propósito, tema fijo oscuro por diseño).
 
 ## 🟢 Cosas que están bien
 

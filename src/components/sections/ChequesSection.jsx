@@ -317,28 +317,28 @@ export default function ChequesSection() {
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
         <div className="bg-kx-surface p-4 border-t-2 border-t-kx-green hover:bg-kx-surface-2 transition-colors duration-200">
-          <p className="text-[11px] text-kx-text-2 uppercase font-medium tracking-wide mb-1">En Cartera</p>
+          <p className="text-2xs text-kx-text-2 uppercase font-medium tracking-wide mb-1">En Cartera</p>
           <p className="text-xl font-bold text-kx-text tabular-nums">{fmt(kpis.totalCartera)}</p>
           <p className="text-xs text-kx-green mt-1">
             {kpis.countCartera} cheque{kpis.countCartera !== 1 ? 's' : ''}
           </p>
         </div>
         <div className="bg-kx-surface p-4 border-t-2 border-t-kx-blue hover:bg-kx-surface-2 transition-colors duration-200">
-          <p className="text-[11px] text-kx-text-2 uppercase font-medium tracking-wide mb-1">Propios Pendientes</p>
+          <p className="text-2xs text-kx-text-2 uppercase font-medium tracking-wide mb-1">Propios Pendientes</p>
           <p className="text-xl font-bold text-kx-text tabular-nums">{fmt(kpis.totalPropios)}</p>
           <p className="text-xs text-kx-blue mt-1">
             {kpis.countPropios} cheque{kpis.countPropios !== 1 ? 's' : ''}
           </p>
         </div>
         <div className="bg-kx-surface p-4 border-t-2 border-t-kx-amber hover:bg-kx-surface-2 transition-colors duration-200">
-          <p className="text-[11px] text-kx-text-2 uppercase font-medium tracking-wide mb-1">Vencen Esta Semana</p>
+          <p className="text-2xs text-kx-text-2 uppercase font-medium tracking-wide mb-1">Vencen Esta Semana</p>
           <p className={`text-xl font-bold tabular-nums ${kpis.vencenPronto > 0 ? 'text-kx-amber' : 'text-kx-text'}`}>
             {kpis.vencenPronto}
           </p>
           <p className="text-xs text-kx-text-3 mt-1">próximos 7 días</p>
         </div>
         <div className="bg-kx-surface p-4 border-t-2 border-t-kx-red hover:bg-kx-surface-2 transition-colors duration-200">
-          <p className="text-[11px] text-kx-text-2 uppercase font-medium tracking-wide mb-1">Rechazados</p>
+          <p className="text-2xs text-kx-text-2 uppercase font-medium tracking-wide mb-1">Rechazados</p>
           <p className={`text-xl font-bold tabular-nums ${kpis.rechazados > 0 ? 'text-kx-red' : 'text-kx-text'}`}>
             {kpis.rechazados}
           </p>
@@ -358,7 +358,7 @@ export default function ChequesSection() {
               className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-kx-surface-2 text-kx-text-2 hover:bg-kx-surface-2 rounded-md px-4 py-2 gap-2">
               Cartera de Terceros
               {kpis.countCartera > 0 && (
-                <span className="ml-1 bg-kx-surface border border-kx-border text-kx-text text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                <span className="ml-1 bg-kx-surface border border-kx-border text-kx-text text-2xs px-1.5 py-0.5 rounded-full font-bold">
                   {kpis.countCartera}
                 </span>
               )}
@@ -367,7 +367,7 @@ export default function ChequesSection() {
               className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-kx-surface-2 text-kx-text-2 hover:bg-kx-surface-2 rounded-md px-4 py-2 gap-2">
               Cheques Propios
               {kpis.countPropios > 0 && (
-                <span className="ml-1 bg-kx-surface border border-kx-border text-kx-text text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                <span className="ml-1 bg-kx-surface border border-kx-border text-kx-text text-2xs px-1.5 py-0.5 rounded-full font-bold">
                   {kpis.countPropios}
                 </span>
               )}

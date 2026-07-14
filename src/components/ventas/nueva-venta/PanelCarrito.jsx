@@ -63,7 +63,7 @@ function PanelCarrito({
                       <button
                         type="button"
                         onClick={() => togglePackMode(item.id)}
-                        className={`mt-1 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded border transition-colors ${item._packMode ? 'border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20' : 'border-slate-300 dark:border-slate-600 text-kx-text-2 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                        className={`mt-1 inline-flex items-center gap-1 text-2xs px-1.5 py-0.5 rounded border transition-colors ${item._packMode ? 'border-amber-400 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20' : 'border-slate-300 dark:border-slate-600 text-kx-text-2 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
                       >
                         <Boxes className="h-3 w-3" />
                         {item._packMode
@@ -76,7 +76,7 @@ function PanelCarrito({
                     {item._packMode ? (
                       <div className="flex flex-col items-center gap-0.5">
                         <Input type="number" min="1" value={item._packs} onChange={(e) => updatePacks(item.id, e.target.value)} className="h-8 w-16 text-center mx-auto dark:bg-slate-800 dark:border-slate-700" />
-                        <span className="text-[10px] text-kx-text-2">= {item.cantidad} {item.unidad_medida || 'u'}</span>
+                        <span className="text-2xs text-kx-text-2">= {item.cantidad} {item.unidad_medida || 'u'}</span>
                       </div>
                     ) : (
                       <Input type="number" value={item.cantidad} onChange={(e) => updateQuantity(item.id, e.target.value)} className="h-8 w-16 text-center mx-auto dark:bg-slate-800 dark:border-slate-700" />

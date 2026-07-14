@@ -170,7 +170,7 @@ function SubTabSufridas() {
       </div>
 
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex items-start gap-2">
-        <AlertCircle className="h-4 w-4 mt-0.5 text-blue-500 flex-shrink-0" />
+        <AlertCircle className="h-4 w-4 mt-0.5 text-blue-600 dark:text-blue-500 flex-shrink-0" />
         <p className="text-xs text-blue-800 dark:text-blue-400">
           Registrá acá las retenciones que te practicaron tus clientes. Se acumulan como crédito fiscal
           para tu DDJJ mensual. Importación de archivos ARBA — próximamente.
@@ -214,7 +214,7 @@ function SubTabSufridas() {
                           <FileDown className="h-4 w-4 text-kx-text-3 rotate-180" />
                         </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => eliminar(r)}>
-                          <Trash2 className="h-4 w-4 text-red-400" />
+                          <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
                         </Button>
                       </div>
                     </td>
@@ -497,7 +497,7 @@ function SubTabPracticadas() {
         </Card>
         <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
           <div className="flex items-center gap-2 text-xs text-kx-text-3 uppercase tracking-wide">
-            <Calendar className="h-4 w-4 text-amber-500" /> Próximo vencimiento
+            <Calendar className="h-4 w-4 text-amber-600 dark:text-amber-400" /> Próximo vencimiento
           </div>
           <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">{formatDateAR(proximoVto)}</p>
           <p className="text-xs text-kx-text-3 mt-1">estimado (verificar calendario)</p>
@@ -540,7 +540,7 @@ function SubTabPracticadas() {
                           PDF
                         </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => eliminar(r)}>
-                          <Trash2 className="h-4 w-4 text-red-400" />
+                          <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
                         </Button>
                       </div>
                     </td>

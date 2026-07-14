@@ -68,7 +68,7 @@ export function TipoCambioModal({ open, onOpenChange, moneda, onConfirm }) {
       <DialogContent className="max-w-sm dark:bg-slate-950 dark:border-slate-800">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 dark:text-white">
-            <TrendingUp className="h-5 w-5 text-blue-500" />
+            <TrendingUp className="h-5 w-5 text-kx-blue" />
             Tipo de Cambio del Día
           </DialogTitle>
           <DialogDescription className="dark:text-slate-400">

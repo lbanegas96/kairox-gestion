@@ -175,7 +175,7 @@ function TabAlicuotas() {
       {sinDatos && (
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 flex items-center justify-between gap-4">
           <div className="flex items-start gap-2">
-            <Sparkles className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <Sparkles className="h-5 w-5 text-kx-amber flex-shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-medium text-amber-800 dark:text-amber-300">No tenés alícuotas cargadas</p>
               <p className="text-xs text-amber-700 dark:text-amber-400">Podés empezar con un set sugerido para Córdoba y editarlo después.</p>
@@ -239,7 +239,7 @@ function TabAlicuotas() {
                           <Pencil className="h-4 w-4 text-kx-text-2" />
                         </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toggleActivo(a)} title={a.activo ? 'Desactivar' : 'Activar'}>
-                          <Power className={`h-4 w-4 ${a.activo ? 'text-red-500' : 'text-green-500'}`} />
+                          <Power className={`h-4 w-4 ${a.activo ? 'text-kx-red' : 'text-kx-green'}`} />
                         </Button>
                       </div>
                     </td>

@@ -21,7 +21,7 @@ function ModalOfertaForm({
       <DialogContent className="max-w-lg dark:bg-kx-bg dark:border-kx-border max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="dark:text-kx-text flex items-center gap-2">
-            <Tag className="w-5 h-5 text-emerald-500" />
+            <Tag className="w-5 h-5 text-kx-green" />
             {editingOferta ? 'Editar oferta' : 'Nueva oferta'}
           </DialogTitle>
           <DialogDescription className="dark:text-kx-text-2">
@@ -121,7 +121,7 @@ function ModalOfertaForm({
                     {productos.find(p => p.id === form.producto_id)?.nombre ?? 'Producto seleccionado'}
                   </span>
                   <button onClick={() => setForm(f => ({ ...f, producto_id: null }))}
-                    className="text-emerald-500 hover:text-red-500">
+                    className="text-kx-green hover:text-kx-red">
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>

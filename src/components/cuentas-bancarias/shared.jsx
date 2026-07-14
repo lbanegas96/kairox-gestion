@@ -53,11 +53,11 @@ export function RefChip({ mov }) {
     <button
       onClick={copy}
       title={`Copiar ${ref.externa ? 'ID de pago' : 'ID interno'}: ${ref.value}`}
-      className="group inline-flex items-center gap-1 font-mono text-[11px] text-kx-text-3 hover:text-kx-text transition-colors"
+      className="group inline-flex items-center gap-1 font-mono text-2xs text-kx-text-3 hover:text-kx-text transition-colors"
     >
       <span className="tabular-nums">{ref.chip}</span>
       {copied
-        ? <Check className="w-3 h-3 text-emerald-500" />
+        ? <Check className="w-3 h-3 text-kx-green" />
         : <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
     </button>
   );

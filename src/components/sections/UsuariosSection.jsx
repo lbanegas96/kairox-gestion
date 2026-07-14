@@ -384,7 +384,7 @@ function UsuariosSection() {
                                     </TableCell>
                                     <TableCell className="text-kx-text-2">{u.email}</TableCell>
                                     <TableCell>
-                                        <Badge variant="outline" className={`uppercase text-[10px] font-bold ${
+                                        <Badge variant="outline" className={`uppercase text-2xs font-bold ${
                                             u.role === 'admin' 
                                             ? 'border-purple-200 text-purple-700 bg-purple-50 dark:border-purple-900 dark:text-purple-400 dark:bg-purple-900/20' 
                                             : 'border-kx-border text-kx-text-2 bg-kx-surface-2 dark:border-kx-border dark:text-kx-text-2 dark:bg-kx-surface-2'
@@ -484,7 +484,7 @@ function UsuariosSection() {
         <DialogContent className="max-w-2xl bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border flex flex-col max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
-              <Send className="h-5 w-5 text-blue-500" /> Invitar Usuario
+              <Send className="h-5 w-5 text-blue-600 dark:text-blue-500" /> Invitar Usuario
             </DialogTitle>
             <DialogDescription className="dark:text-kx-text-2">
               El usuario recibirá un email con un link para crear su propia contraseña y acceder al sistema.
@@ -509,7 +509,7 @@ function UsuariosSection() {
                         </div>
 
                         <div className="space-y-1">
-                            <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
+                            <Label htmlFor="email">Email <span className="text-red-600 dark:text-red-400">*</span></Label>
                             <Input id="email" name="email" type="email" value={formData.email} onChange={handleInputChange} placeholder="usuario@ejemplo.com" />
                         </div>
 

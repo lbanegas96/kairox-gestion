@@ -122,7 +122,7 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
                     <td className="px-1">
                       {lineas.length > 2 && (
                         <button onClick={() => setLineas((p) => p.filter((_, j) => j !== i))}
-                          className="text-kx-text-2 hover:text-red-400 p-1">
+                          className="text-kx-text-2 hover:text-kx-red p-1">
                           <X size={12} />
                         </button>
                       )}
@@ -138,10 +138,10 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
                       <Plus size={12} /> Agregar línea
                     </button>
                   </td>
-                  <td className={`px-3 py-2 text-right text-xs font-mono font-bold ${cuadrado ? 'text-green-400' : 'text-kx-text'}`}>
+                  <td className={`px-3 py-2 text-right text-xs font-mono font-bold ${cuadrado ? 'text-kx-green' : 'text-kx-text'}`}>
                     {fmt(totalDebe)}
                   </td>
-                  <td className={`px-3 py-2 text-right text-xs font-mono font-bold ${cuadrado ? 'text-green-400' : 'text-kx-text'}`}>
+                  <td className={`px-3 py-2 text-right text-xs font-mono font-bold ${cuadrado ? 'text-kx-green' : 'text-kx-text'}`}>
                     {fmt(totalHaber)}
                   </td>
                   <td />
@@ -151,12 +151,12 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
           </div>
 
           {!cuadrado && totalDebe > 0 && (
-            <div className="flex items-center gap-2 text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2 text-xs text-kx-amber bg-kx-amber/10 border border-kx-amber/30 rounded-lg px-3 py-2">
               <AlertTriangle size={14} /> El asiento no cuadra — diferencia: {fmt(Math.abs(totalDebe - totalHaber))}
             </div>
           )}
           {cuadrado && (
-            <div className="flex items-center gap-2 text-xs text-green-400 bg-green-400/10 border border-green-400/30 rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2 text-xs text-kx-green bg-kx-green/10 border border-kx-green/30 rounded-lg px-3 py-2">
               <CheckCircle2 size={14} /> El asiento cuadra correctamente
             </div>
           )}

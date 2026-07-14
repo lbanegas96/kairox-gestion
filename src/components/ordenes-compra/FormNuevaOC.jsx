@@ -139,7 +139,7 @@ function FormNuevaOC({
                   className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
               </div>
               <div className="col-span-1 flex justify-end">
-                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-kx-text-3 hover:text-red-500"
+                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-kx-text-3 hover:text-kx-red"
                   onClick={() => setItems(prev => prev.filter((_, i) => i !== idx))} disabled={items.length === 1}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </Button>

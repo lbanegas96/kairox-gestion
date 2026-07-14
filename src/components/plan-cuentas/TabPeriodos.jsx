@@ -172,10 +172,10 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                 <td className="px-4 py-3 font-mono text-xs text-kx-text-3">{fmtFecha(p.fecha_inicio)}</td>
                 <td className="px-4 py-3 font-mono text-xs text-kx-text-3">{fmtFecha(p.fecha_cierre)}</td>
                 <td className="px-4 py-3 text-center">
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium
+                  <span className={`text-2xs px-2 py-0.5 rounded-full border font-medium
                     ${p.estado === 'cerrado'
-                      ? 'bg-red-500/10 text-red-400 border-red-500/30'
-                      : 'bg-green-500/10 text-green-400 border-green-500/30'}`}>
+                      ? 'bg-kx-red/10 text-kx-red border-kx-red/30'
+                      : 'bg-kx-green/10 text-kx-green border-kx-green/30'}`}>
                     {p.estado}
                   </span>
                 </td>
@@ -189,14 +189,14 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                     {p.estado === 'abierto' ? (
                       <button
                         onClick={() => { setPeriodoACerrar(p); setShowCierre(true); }}
-                        className="flex items-center gap-1 mx-auto px-3 py-1.5 rounded text-xs text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 border border-amber-500/30 transition-colors"
+                        className="flex items-center gap-1 mx-auto px-3 py-1.5 rounded text-xs text-kx-amber hover:opacity-80 hover:bg-kx-amber/10 border border-kx-amber/30 transition-colors"
                       >
                         <Lock size={12} /> Cerrar
                       </button>
                     ) : (
                       <button
                         onClick={() => { setPeriodoAReabrir(p); setShowReabrir(true); }}
-                        className="flex items-center gap-1 mx-auto px-3 py-1.5 rounded text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 border border-emerald-500/30 transition-colors"
+                        className="flex items-center gap-1 mx-auto px-3 py-1.5 rounded text-xs text-kx-green hover:opacity-80 hover:bg-kx-green/10 border border-kx-green/30 transition-colors"
                       >
                         <Unlock size={12} /> Reabrir
                       </button>
@@ -264,16 +264,16 @@ function TabPeriodos({ empresaId, userId, userRole }) {
       >
         <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-amber-400">
+            <DialogTitle className="flex items-center gap-2 text-kx-amber">
               <AlertTriangle size={18} /> Cerrar período contable
             </DialogTitle>
             <DialogDescription>Esta acción no se puede deshacer fácilmente.</DialogDescription>
           </DialogHeader>
           {periodoACerrar && (
             <div className="space-y-3 py-2">
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
-                <p className="text-sm font-semibold text-amber-300 mb-1">{periodoACerrar.nombre}</p>
-                <p className="text-xs text-amber-400">
+              <div className="bg-kx-amber/10 border border-kx-amber/30 rounded-lg p-3">
+                <p className="text-sm font-semibold text-kx-amber mb-1">{periodoACerrar.nombre}</p>
+                <p className="text-xs text-kx-amber">
                   {fmtFecha(periodoACerrar.fecha_inicio)} — {fmtFecha(periodoACerrar.fecha_cierre)}
                 </p>
               </div>
@@ -307,16 +307,16 @@ function TabPeriodos({ empresaId, userId, userRole }) {
       >
         <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-emerald-400">
+            <DialogTitle className="flex items-center gap-2 text-kx-green">
               <Unlock size={18} /> Reabrir período contable
             </DialogTitle>
             <DialogDescription>Se podrán generar nuevos asientos en este rango de fechas.</DialogDescription>
           </DialogHeader>
           {periodoAReabrir && (
             <div className="space-y-3 py-2">
-              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
-                <p className="text-sm font-semibold text-emerald-300 mb-1">{periodoAReabrir.nombre}</p>
-                <p className="text-xs text-emerald-400">
+              <div className="bg-kx-green/10 border border-kx-green/30 rounded-lg p-3">
+                <p className="text-sm font-semibold text-kx-green mb-1">{periodoAReabrir.nombre}</p>
+                <p className="text-xs text-kx-green">
                   {fmtFecha(periodoAReabrir.fecha_inicio)} — {fmtFecha(periodoAReabrir.fecha_cierre)}
                 </p>
               </div>

@@ -226,7 +226,7 @@ function OrdenesCompraSection() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
-            <ShoppingBag className="w-6 h-6 text-indigo-500" /> Órdenes de Compra
+            <ShoppingBag className="w-6 h-6 text-indigo-600 dark:text-indigo-500" /> Órdenes de Compra
           </h2>
           <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-1">
             Gestioná pedidos a proveedores con seguimiento de recepción y actualización de stock automática

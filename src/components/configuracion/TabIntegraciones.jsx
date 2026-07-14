@@ -39,11 +39,11 @@ const TabIntegraciones = ({
               <div>
                 <h4 className="font-semibold text-kx-text text-sm">Mercado Pago</h4>
                 {integracionMP?.activo ? (
-                  <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 mt-1">
+                  <span className="inline-block text-2xs font-medium px-2 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 mt-1">
                     ✓ Conectado
                   </span>
                 ) : (
-                  <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border bg-kx-surface-2 text-kx-text-3 border-kx-border mt-1">
+                  <span className="inline-block text-2xs font-medium px-2 py-0.5 rounded-full border bg-kx-surface-2 text-kx-text-3 border-kx-border mt-1">
                     Sin configurar
                   </span>
                 )}
@@ -69,7 +69,7 @@ const TabIntegraciones = ({
               <p className="text-xs font-medium text-kx-text-2">URL del Webhook (configurar en MP Developers)</p>
               {/* SECURITY-WEBHOOK-URL */}
               <div className="flex items-center gap-2">
-                <code className="text-[10px] text-kx-text flex-1 break-all leading-relaxed">
+                <code className="text-2xs text-kx-text flex-1 break-all leading-relaxed">
                   {showWebhookUrl
                     ? `${supabaseUrl}/functions/v1/mp-webhook?empresa_id=${user?.empresa_id}`
                     : '••••••••••••••••••••••••••'}
@@ -111,11 +111,11 @@ const TabIntegraciones = ({
               <div>
                 <h4 className="font-semibold text-kx-text text-sm">Ualá (conciliación)</h4>
                 {integracionUala?.activo ? (
-                  <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 mt-1">
+                  <span className="inline-block text-2xs font-medium px-2 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 mt-1">
                     ✓ Conectado
                   </span>
                 ) : (
-                  <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border bg-kx-surface-2 text-kx-text-3 border-kx-border mt-1">
+                  <span className="inline-block text-2xs font-medium px-2 py-0.5 rounded-full border bg-kx-surface-2 text-kx-text-3 border-kx-border mt-1">
                     Sin configurar
                   </span>
                 )}

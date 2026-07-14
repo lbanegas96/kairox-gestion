@@ -19,7 +19,7 @@ function ModalNuevoChequeTercero({
       <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Plus size={16} className="text-emerald-400" /> Registrar cheque recibido
+            <Plus size={16} className="text-kx-green" /> Registrar cheque recibido
           </DialogTitle>
           <DialogDescription>Cheque de tercero recibido como medio de pago de un cliente.</DialogDescription>
         </DialogHeader>

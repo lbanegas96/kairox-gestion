@@ -292,7 +292,7 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                        {loading ? (
-                          <tr><td colSpan="5" className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-500"/></td></tr>
+                          <tr><td colSpan="5" className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-kx-blue"/></td></tr>
                        ) : movements.length === 0 ? (
                           <tr><td colSpan="5" className="p-8 text-center text-slate-500 italic flex flex-col items-center gap-2"><AlertCircle className="h-8 w-8 text-slate-200 dark:text-slate-700"/>Sin movimientos registrados</td></tr>
                        ) : (
@@ -302,10 +302,10 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
                                 <tr key={mov.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-900/30 transition-colors">
                                    <td className="px-4 py-3 text-kx-text-2 dark:text-kx-text-2 font-mono text-xs">
                                       {formatDateAR(mov.created_at || mov.fecha)}
-                                      <div className="text-[10px] text-kx-text-3">{formatTimeAR(mov.created_at || mov.fecha)}</div>
+                                      <div className="text-2xs text-kx-text-3">{formatTimeAR(mov.created_at || mov.fecha)}</div>
                                    </td>
                                    <td className="px-4 py-3 text-center">
-                                      <Badge variant={isDebe ? "outline" : "default"} className={`text-[10px] h-5 ${isDebe ? 'text-red-600 border-red-200 bg-red-50 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/50' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/30'}`}>
+                                      <Badge variant={isDebe ? "outline" : "default"} className={`text-2xs h-5 ${isDebe ? 'text-red-600 border-red-200 bg-red-50 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/50' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:hover:bg-emerald-900/30'}`}>
                                          {isDebe ? 'VENTA / CARGO' : 'PAGO / ABONO'}
                                       </Badge>
                                    </td>
@@ -315,7 +315,7 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
                                          <div className="mt-1">
                                             <Button size="sm" variant="outline"
                                                onClick={() => handleRegenerarAsiento(mov.id)}
-                                               className="h-6 px-2 gap-1 text-[11px] text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-900/50 dark:hover:bg-amber-900/20">
+                                               className="h-6 px-2 gap-1 text-2xs text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-900/50 dark:hover:bg-amber-900/20">
                                                <RefreshCw className="h-3 w-3" /> Sin asiento — Regenerar
                                             </Button>
                                          </div>
@@ -326,7 +326,7 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
                                          <div className="flex items-center gap-1.5">
                                             <span className="text-kx-text-2 dark:text-kx-text-2 font-mono">{formatDateAR(mov._comprobante.fecha_vencimiento)}</span>
                                             {mov._comprobante.estado_pago === 'pendiente' && mov._comprobante.fecha_vencimiento < getTodayAR() && (
-                                               <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-transparent text-[10px] h-5 dark:bg-red-900/30 dark:text-red-400">Vencido</Badge>
+                                               <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-transparent text-2xs h-5 dark:bg-red-900/30 dark:text-red-400">Vencido</Badge>
                                             )}
                                          </div>
                                       ) : (

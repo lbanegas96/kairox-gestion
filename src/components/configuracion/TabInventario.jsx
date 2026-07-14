@@ -49,7 +49,7 @@ const TabInventario = ({
           >
             <div className="flex items-center justify-between">
               <span className="font-semibold text-kx-text">Último Costo</span>
-              {valoracionStock === 'ultimo_costo' && <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />}
+              {valoracionStock === 'ultimo_costo' && <CheckCircle2 className="w-4 h-4 text-kx-blue shrink-0" />}
             </div>
             <p className="text-xs text-kx-text-2 mt-1">
               El costo de tus productos se actualiza con cada compra al precio más reciente. Simple y rápido.
@@ -67,7 +67,7 @@ const TabInventario = ({
           >
             <div className="flex items-center justify-between">
               <span className="font-semibold text-kx-text">Promedio Ponderado</span>
-              {valoracionStock === 'promedio_ponderado' && <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />}
+              {valoracionStock === 'promedio_ponderado' && <CheckCircle2 className="w-4 h-4 text-kx-blue shrink-0" />}
             </div>
             <p className="text-xs text-kx-text-2 mt-1">
               El costo se calcula como un promedio entre lo que tenías y lo que compraste. Más preciso si tus
@@ -79,7 +79,7 @@ const TabInventario = ({
             <div className="flex items-center justify-between">
               <span className="font-semibold text-kx-text flex items-center gap-2">
                 FIFO
-                <span className="text-[10px] bg-kx-surface-2 text-kx-text-3 px-2 py-0.5 rounded-full border border-kx-border">
+                <span className="text-2xs bg-kx-surface-2 text-kx-text-3 px-2 py-0.5 rounded-full border border-kx-border">
                   Próximamente
                 </span>
               </span>
@@ -132,7 +132,7 @@ const TabInventario = ({
                     <span className="text-sm text-kx-text truncate">{u.descripcion}</span>
                     {!u.activo && <Badge variant="outline" className="text-xs text-kx-text-2 shrink-0">Inactiva</Badge>}
                   </div>
-                  <div className="flex items-center gap-2 mt-1 pl-0.5 text-[11px] text-kx-text-3">
+                  <div className="flex items-center gap-2 mt-1 pl-0.5 text-2xs text-kx-text-3">
                     {u.magnitud ? (
                       <>
                         <span className="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">

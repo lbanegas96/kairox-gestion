@@ -75,7 +75,7 @@ function TablaOfertas({
                         <td className="p-4">
                           <div className="flex items-center gap-2">
                             <div className="w-7 h-7 rounded-md bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
-                              <Tag className="w-3.5 h-3.5 text-emerald-500" />
+                              <Tag className="w-3.5 h-3.5 text-kx-green" />
                             </div>
                             <div className="min-w-0">
                               <span className="font-semibold text-kx-text dark:text-kx-text block truncate">{oferta.nombre}</span>
@@ -154,18 +154,18 @@ function TablaOfertas({
                             title={oferta.activo ? 'Desactivar oferta' : 'Activar oferta'}
                           >
                             {oferta.activo
-                              ? <ToggleRight className="w-6 h-6 text-emerald-500" />
+                              ? <ToggleRight className="w-6 h-6 text-kx-green" />
                               : <ToggleLeft className="w-6 h-6 text-kx-text-3" />
                             }
                           </button>
                         </td>
                         <td className="p-4">
                           <div className="flex items-center justify-center gap-1">
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-blue-500"
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-blue"
                               onClick={() => openEditar(oferta)} title="Editar oferta">
                               <Edit className="w-3.5 h-3.5" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-red-500"
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-red"
                               onClick={() => setDeleteConfirm(oferta.id)} title="Eliminar oferta">
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>

@@ -110,7 +110,7 @@ function ReglaModal({ open, onClose, regla, empresaId, cuentasContables, cuentas
               <Label>Subtipo <span className="text-kx-text-3 font-normal">(opcional)</span></Label>
               <Input value={form.subtipo} onChange={e => setForm(p => ({ ...p, subtipo: e.target.value }))}
                 placeholder="ej. comision, transferencia, qr" />
-              <p className="text-[11px] text-kx-text-3 mt-1">Vacío = aplica a cualquier subtipo.</p>
+              <p className="text-2xs text-kx-text-3 mt-1">Vacío = aplica a cualquier subtipo.</p>
             </div>
             <div>
               <Label>Cuenta bancaria <span className="text-kx-text-3 font-normal">(opcional)</span></Label>
@@ -125,21 +125,21 @@ function ReglaModal({ open, onClose, regla, empresaId, cuentasContables, cuentas
           </div>
 
           <div>
-            <Label>Cuenta contable de contrapartida <span className="text-red-400">*</span></Label>
+            <Label>Cuenta contable de contrapartida <span className="text-kx-red">*</span></Label>
             <Select value={form.cuenta_contable_id} onValueChange={v => setForm(p => ({ ...p, cuenta_contable_id: v }))}>
               <SelectTrigger><SelectValue placeholder="Seleccionar cuenta del plan…" /></SelectTrigger>
               <SelectContent>
                 {cuentasContables.map(c => <SelectItem key={c.id} value={c.id}>{c.codigo} — {c.nombre}</SelectItem>)}
               </SelectContent>
             </Select>
-            <p className="text-[11px] text-kx-text-3 mt-1">El lado del banco lo pone la cuenta contable vinculada a la cuenta bancaria.</p>
+            <p className="text-2xs text-kx-text-3 mt-1">El lado del banco lo pone la cuenta contable vinculada a la cuenta bancaria.</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Prioridad</Label>
               <Input type="number" value={form.prioridad} onChange={e => setForm(p => ({ ...p, prioridad: e.target.value }))} />
-              <p className="text-[11px] text-kx-text-3 mt-1">Menor = se evalúa antes (ante empates).</p>
+              <p className="text-2xs text-kx-text-3 mt-1">Menor = se evalúa antes (ante empates).</p>
             </div>
             <div>
               <Label>Nota <span className="text-kx-text-3 font-normal">(opcional)</span></Label>
@@ -226,8 +226,8 @@ function DeterminacionCuentasTab({ empresaId }) {
           <Info className="w-4 h-4 shrink-0 mt-0.5 text-kx-blue" />
           <span>
             Reglá de resolución: se elige la regla <b>más específica</b> que matchee (cuenta bancaria &gt; subtipo &gt;
-            origen &gt; tipo). Creá una regla comodín (<Badge variant="outline" className="text-[10px]">Cualquier origen</Badge> +
-            <Badge variant="outline" className="text-[10px] ml-1">Ingreso y Egreso</Badge>) apuntando a una cuenta
+            origen &gt; tipo). Creá una regla comodín (<Badge variant="outline" className="text-2xs">Cualquier origen</Badge> +
+            <Badge variant="outline" className="text-2xs ml-1">Ingreso y Egreso</Badge>) apuntando a una cuenta
             <b> "a clasificar"</b> como red de seguridad.
           </span>
         </div>
@@ -276,12 +276,12 @@ function DeterminacionCuentasTab({ empresaId }) {
                   <tr key={r.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/40">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <Badge variant="outline" className="text-[11px]">{label(ORIGENES, r.origen)}</Badge>
-                        <Badge variant="outline" className="text-[11px]">{label(TIPOS, r.tipo)}</Badge>
-                        {r.subtipo && <Badge variant="outline" className="text-[11px]">{r.subtipo}</Badge>}
-                        {r.cuentas_bancarias?.nombre && <Badge variant="outline" className="text-[11px]">{r.cuentas_bancarias.nombre}</Badge>}
+                        <Badge variant="outline" className="text-2xs">{label(ORIGENES, r.origen)}</Badge>
+                        <Badge variant="outline" className="text-2xs">{label(TIPOS, r.tipo)}</Badge>
+                        {r.subtipo && <Badge variant="outline" className="text-2xs">{r.subtipo}</Badge>}
+                        {r.cuentas_bancarias?.nombre && <Badge variant="outline" className="text-2xs">{r.cuentas_bancarias.nombre}</Badge>}
                       </div>
-                      {r.descripcion && <p className="text-[11px] text-kx-text-3 mt-1">{r.descripcion}</p>}
+                      {r.descripcion && <p className="text-2xs text-kx-text-3 mt-1">{r.descripcion}</p>}
                     </td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center gap-1.5 font-mono text-xs text-kx-text">
@@ -294,7 +294,7 @@ function DeterminacionCuentasTab({ empresaId }) {
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setModal({ open: true, regla: r })}>
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => delMut.mutate(r.id)}>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-kx-red hover:opacity-80" onClick={() => delMut.mutate(r.id)}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </td>

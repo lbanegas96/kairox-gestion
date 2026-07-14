@@ -177,7 +177,7 @@ function ReporteLibroIVA({ onBack }) {
         </Button>
         <div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
-            <BookOpen className="h-6 w-6 text-blue-500" />
+            <BookOpen className="h-6 w-6 text-blue-600 dark:text-blue-500" />
             Libro IVA Ventas
           </h2>
           <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-0.5">
@@ -283,7 +283,7 @@ function ReporteLibroIVA({ onBack }) {
               {fmtARS(kpis.totalIVA)}
             </p>
             {kpis.pendientes > 0 && (
-              <p className="text-xs text-amber-500 mt-1">{kpis.pendientes} sin CAE aún</p>
+              <p className="text-xs text-kx-amber mt-1">{kpis.pendientes} sin CAE aún</p>
             )}
           </Card>
         </div>

@@ -376,7 +376,7 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
             <div className="border border-kx-border rounded-xl overflow-visible">
               <table className="w-full text-sm">
                 <thead className="bg-kx-surface-2 border-b border-kx-border">
-                  <tr className="text-[11px] text-kx-text-2 font-semibold uppercase tracking-wide">
+                  <tr className="text-2xs text-kx-text-2 font-semibold uppercase tracking-wide">
                     <th className="text-left px-3 py-2.5 w-[38%]">Descripción</th>
                     <th className="text-center px-3 py-2.5 w-16">Cant.</th>
                     <th className="text-right px-3 py-2.5 w-32">Costo Unit.</th>
@@ -467,7 +467,7 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
               </table>
             </div>
             {items.some(i => !i.producto_id && i.descripcion.trim()) && (
-              <p className="text-[10px] text-kx-text-3 mt-1.5">
+              <p className="text-2xs text-kx-text-3 mt-1.5">
                 Los ítems SERV no afectan inventario — su descripción se guarda en observaciones.
               </p>
             )}

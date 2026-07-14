@@ -20,7 +20,7 @@ function ModalNuevoChequePropio({
       <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Plus size={16} className="text-blue-400" /> Registrar cheque propio emitido
+            <Plus size={16} className="text-kx-blue" /> Registrar cheque propio emitido
           </DialogTitle>
           <DialogDescription>Cheque emitido por la empresa para pagar a un proveedor.</DialogDescription>
         </DialogHeader>

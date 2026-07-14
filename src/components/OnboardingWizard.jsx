@@ -208,7 +208,7 @@ export function OnboardingWizard({ open, onComplete }) {
 
             <div className="space-y-3">
               <div>
-                <Label>Nombre del negocio <span className="text-red-500">*</span></Label>
+                <Label>Nombre del negocio <span className="text-red-600 dark:text-red-400">*</span></Label>
                 <Input
                   value={empresaForm.nombre}
                   onChange={e => setEmpresaForm(f => ({ ...f, nombre: e.target.value }))}
@@ -219,7 +219,7 @@ export function OnboardingWizard({ open, onComplete }) {
               </div>
 
               <div>
-                <Label>Rubro <span className="text-red-500">*</span></Label>
+                <Label>Rubro <span className="text-red-600 dark:text-red-400">*</span></Label>
                 <Select
                   value={empresaForm.rubro}
                   onValueChange={v => setEmpresaForm(f => ({ ...f, rubro: v }))}
@@ -293,7 +293,7 @@ export function OnboardingWizard({ open, onComplete }) {
 
             <div className="space-y-3">
               <div>
-                <Label>Nombre del producto <span className="text-red-500">*</span></Label>
+                <Label>Nombre del producto <span className="text-red-600 dark:text-red-400">*</span></Label>
                 <Input
                   value={productoForm.nombre}
                   onChange={e => setProductoForm(f => ({ ...f, nombre: e.target.value }))}
@@ -305,7 +305,7 @@ export function OnboardingWizard({ open, onComplete }) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Precio de venta <span className="text-red-500">*</span></Label>
+                  <Label>Precio de venta <span className="text-red-600 dark:text-red-400">*</span></Label>
                   <Input
                     type="text"
                     inputMode="decimal"

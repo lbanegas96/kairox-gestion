@@ -1,5 +1,207 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-14 (Luciano — barrido final de cierre de sesión: recuperado trabajo huérfano de un worktree, cerrado gap de seguridad ACL en 2 RPCs, verificado circuito Cheques→Bancos y Monitor AFIP ya en producción)
+**Última actualización:** 2026-07-14 (Nadia — nueva pasada de seguridad sobre integración MercadoPago: 3 hallazgos reales cerrados)
+
+> 📌 **Luciano, leé esto antes de seguir:** se corrigieron 3 hallazgos de seguridad en la integración
+> de Mercado Pago (validación insuficiente en `mp-webhook`, `mp-sync` y `mp-verify-token`). Ya está
+> corregido, deployado en Supabase y pusheado a `master` (commit `7bccea5`) — no requiere ninguna
+> acción tuya, solo que estés al tanto si tocás algo de la integración de MP. Detalle técnico
+> completo en el historial de commits, no reproducido acá por tratarse de un repo público.
+
+## ✅ Pasada de seguridad — integración MercadoPago (sesión 65 Nadia)
+
+Auditoría de seguridad enfocada en el módulo de mayor riesgo (maneja dinero real + un access token de
+terceros). RLS de las 68 tablas y advisors de Supabase revisados — sin hallazgos nuevos (ya cubierto en
+auditorías previas). El foco real estuvo en los 3 edge functions de MP, con 3 hallazgos de validación
+insuficiente (uno alto, dos menores) ya corregidos y deployados. Detalle técnico completo en el commit
+`7bccea5` y en el historial local de la sesión.
+
+**Deploy:** los 3 edge functions restablecidos vía `deploy_edge_function` (MCP Supabase) —
+`mp-webhook` v8 (`verify_jwt=false`, intencional: MP no manda JWT), `mp-sync` v6, `mp-verify-token` v3
+(ambos `verify_jwt=true`, ahora + chequeo de rol admin interno). Build (`npx vite build`) exit 0.
+Verificado con SQL antes de deployar que la integración activa (Nalux) no se veía afectada.
+
+**No tocado / fuera de alcance:** el access token de MP en `integraciones_bancarias` sigue en texto
+plano en la tabla (protegido por RLS + rol admin, nunca expuesto al frontend). Encriptarlo en reposo
+sería un hardening adicional, no un hallazgo explotable hoy — queda como posible ítem futuro si se
+decide profundizar.
+
+## ✅ Migración completa: colores de acento sin `dark:` en TODO el proyecto (sesión 64 Nadia)
+
+Cierre del último pendiente documentado ("~90 archivos restantes fuera de los 6 módulos ya
+migrados"). Alcance real tras filtrar falsos positivos (líneas que ya tenían su `dark:` correcto):
+**~50 archivos, ~90 líneas** con colores `-400`/`-500` (ampliado más allá de los 9 colores
+originales — se sumaron `violet`, `teal`, `emerald`, `rose` al descubrir casos reales que el patrón
+angosto no capturaba, ej. `text-violet-500` en vez de `text-purple-500`).
+
+**Metodología:** por archivo, filtrar solo líneas SIN `dark:` en la misma línea (evita falsos
+positivos de pares ya correctos), leer contexto real, y aplicar:
+- Tokens `kx-green`/`kx-red`/`kx-blue`/`kx-violet`/`kx-amber` cuando el color es uno de los 5
+  semánticos ya validados para WCAG AA.
+- Patrón `text-{color}-600 dark:text-{color}-400/500` para colores sin token (indigo, teal) o
+  cuando el archivo ya tenía una convención local propia establecida (ej. `TabIVA.jsx` usa
+  `rose-600/rose-400` y `emerald-600/emerald-400` en líneas vecinas — se siguió esa convención en
+  vez de forzar `kx-*` para no crear 2 paletas distintas en el mismo archivo).
+- El patrón `"*"` de campo obligatorio (`<span className="text-red-500">*</span>`) apareció
+  repetido en varios formularios — se corrigió con `replace_all` por archivo una vez identificado.
+
+**Hallazgo durante el barrido final:** un chequeo exhaustivo de TODO `src/components` al terminar
+encontró 6 líneas residuales en `TabPeriodos.jsx` (Plan de Cuentas, supuestamente ya migrado en
+sesión anterior) y 1-2 en `ReporteLibroIVA(Compras).jsx`/`ModalNuevoChequeTercero.jsx`/
+`ModalDetalleCheque.jsx` (Cheques, también supuestamente cerrado). Causa: esos módulos se
+verificaron con el patrón angosto original (sin violet/teal/emerald) y con un script de auditoría
+en vivo que **salta elementos con hijos** (ej. `<button><Icon/>Texto</button>` no se mide si el
+texto no es un nodo de texto directo sin hermanos elemento) — combinado con botones que solo
+renderizan condicionalmente (`isAdmin`, período abierto/cerrado), el chequeo visual en vivo de la
+sesión anterior no los vio. Quedaron corregidos ahora junto con el resto.
+
+**Excluida a propósito:** `ResetPasswordPage.jsx` (y `AuthPage.jsx`) — fondo fijo `bg-[#0F172A]`
+siempre oscuro por diseño (pantalla pre-login), 0 usos de `dark:` en todo el archivo, cualquier
+color ahí es correcto sin necesitar variante clara.
+
+**Verificado:** grep final sobre TODO `src/components` → 0 líneas con el patrón roto (excepto la
+excepción documentada). `npx vite build` exit 0. Verificado en vivo (Plan de Cuentas → Períodos,
+Cheques → Registrar cheque recibido): colores computados correctos en ambos temas, contraste light
+5.02:1 en el botón "Cerrar período", sin regresión en dark (mismo tono original preservado vía
+`dark:`).
+
+**Con esto, la deuda visual documentada en `AUDITORIA_VISUAL_2026-07-13.md` queda en 0 en todo el
+proyecto** — no solo los 6 módulos ya cubiertos en sesiones anteriores.
+
+## ✅ Padding de cards en Dashboard — roadmap de auditoría visual 100% cerrado (sesión 64 Nadia)
+
+## ✅ Padding de cards en Dashboard — roadmap de auditoría visual 100% cerrado (sesión 64 Nadia)
+
+Item #4, el último de `AUDITORIA_VISUAL_2026-07-13.md` ("0px/10px/20px mezclados sin patrón, 8 cards").
+Al medir en vivo con el mismo método del audit original, la mayoría de esos "0px" resultaron ser un
+**falso positivo de medición**: eran los contenedores `grid` de KPIs con el truco `gap-px` (bordes
+entre celdas vía gap, no padding) — hay que medir las celdas internas, no el wrapper del grid.
+
+**Sistema real encontrado (3 niveles, ya casi 100% consistente):**
+1. **Hero** (`HeroRow.jsx`, 3 tiles): `p-5` (20px), `min-h-[140px]` — jerarquía visual intencional,
+   números más grandes (34px/26px). No es un bug, es la fila de métricas más importantes.
+2. **KPI secundario** (`KpiGrids.jsx` + `KpisCotizaciones.jsx`, 16 tiles en 3 grids): `p-4` (16px),
+   `min-h-[88px]` — 100% consistente entre sí, ya estaba bien.
+3. **Card contenedora** (`StockYCobranzas.jsx`, `TopClientes.jsx`, `Graficos.jsx`,
+   `AccionesRapidas.jsx`, 7 cards): `p-5` (20px) — 100% consistente.
+
+**Único bug real encontrado:** dentro del nivel "item anidado dentro de una card" (aging buckets de
+Cobranzas, alertas de stock, deudores, ranking de Top Clientes), `StockYCobranzas.jsx` usaba `p-2.5`
+(10px) consistentemente en sus 3 patrones, pero `TopClientes.jsx` usaba `p-3` (12px) para sus 5 items
+de ranking — único desajuste real de 2px. Unificado a `p-2.5` (10px) en `TopClientes.jsx`.
+
+Verificado en vivo: los 8 items anidados (3 aging + 5 ranking) miden 10px de padding parejo, 0
+overflows con texto real ("Consumidor Final"). `npx vite build` exit 0.
+
+**Con esto, los 4 ítems de `AUDITORIA_VISUAL_2026-07-13.md` quedan cerrados.** Lo único que sigue
+abierto del roadmap visual original es la migración de los ~90 archivos restantes con colores de
+acento sin `dark:` fuera de los 6 módulos ya migrados (documentado, pendiente de decisión del
+usuario — no urgente).
+
+## ✅ aria-label en botones de solo ícono — Compra Rápida (sesión 64 Nadia)
+
+Item #3 del roadmap de `AUDITORIA_VISUAL_2026-07-13.md` ("32 de 35 botones sin aria-label en Compra
+Rápida"). Al revisar el código fuente (`TabNuevaCompra.jsx`, `TabHistorialCompras.jsx`,
+`ModalEditarCompra.jsx`, `CompraDetailModal.jsx`) se encontraron solo **9 ubicaciones reales** en el
+código — el número "32" de la auditoría original contaba instancias repetidas en el DOM (2 botones
+—Eye "Ver"/Edit "Editar"— × ~16 filas de la tabla paginada de Historial), no 32 bugs distintos.
+Confirmado en vivo: el conteo real en la pantalla de Historial coincidía exacto con 32, y las 32
+correspondían a solo 2 formas de ícono únicas.
+
+**9 botones corregidos** con `aria-label` descriptivo (varios incluyen el nombre del producto/entidad
+real, no un texto genérico — ej. `` `Eliminar ${item.nombre} del carrito` ``):
+- `TabNuevaCompra.jsx`: eliminar producto del carrito, vaciar carrito.
+- `TabHistorialCompras.jsx`: ver detalle, editar compra, paginación (anterior/siguiente).
+- `ModalEditarCompra.jsx`: eliminar producto de la compra en edición.
+- `CompraDetailModal.jsx`: editar estado de pago, cancelar edición.
+
+**Hallazgo aparte, no tocado** (fuera de alcance de este fix): el botón "Ver" en
+`TabHistorialCompras.jsx` no tiene `onClick` propio — abre el detalle únicamente porque el click
+burbujea hasta el `onClick` de la fila (`<tr>`). Funciona hoy, pero es información redundante/frágil.
+No se tocó el comportamiento, solo se agregó el `aria-label`.
+
+**Validado en vivo:** conteo de "botones sin nombre accesible" en Historial de Compras bajó de 32 a 0.
+Probado agregar un producto real al carrito (Batidora Eléctrica) y confirmado que el `aria-label`
+incluye el nombre real (`"Eliminar Batidora Eléctrica del carrito"`), no un texto genérico —
+carrito vaciado sin registrar la compra. `npx vite build` exit 0.
+
+## ✅ Consolidación de tamaños de texto chico: text-2xs (11px) reemplaza text-[10px]/text-[11px] (sesión 64 Nadia)
+
+Item #2 del roadmap pendiente de `AUDITORIA_VISUAL_2026-07-13.md` ("3 tamaños de texto chico
+conviviendo sin regla — 10/11/12px"). `text-xs` (12px, ya el estándar dominante con 952 usos) queda
+como el escalón "label" sin tocar; se agregó un único escalón "meta" nuevo para reemplazar los dos
+tamaños arbitrarios que competían entre sí.
+
+**Implementación:** `tailwind.config.js` — `fontSize: { '2xs': ['11px', { lineHeight: '14px' }] }`.
+Migrados los 132 usos de `text-[10px]`/`text-[11px]` (69+63, en 46 archivos) a `text-2xs` con un
+`sed` mecánico 1:1 — sin ambigüedad semántica como la migración de colores (era un swap de tamaño,
+no de significado), así que no hizo falta revisión archivo por archivo como con los colores.
+
+**Excluidos a propósito** (mismo criterio que Luciano usó para `TicketPrint.jsx` en la migración de
+colores): `caja/TicketPrint.jsx` y `ventas/ComprobantePrintModal.jsx` — impresión térmica, necesitan
+tamaño físico fijo en mm/px reales, no un token de diseño de UI que pueda cambiar.
+
+**Validado en vivo:** `text-2xs` computa `font-size: 11px; line-height: 14px` en el DOM real (Cheques).
+Chequeo de overflow (badges/pills son el caso de riesgo por el 1px de más que 10px→11px podría causar)
+en Cheques (17 elementos `.text-2xs`) y Plan de Cuentas (39 elementos): **0 overflows** en ambos.
+`npx vite build` exit 0.
+
+**Nota operativa:** el `sed` tocando 46 archivos casi simultáneamente hizo que el HMR de Vite entrara
+en un loop de reconexión que dejó la SPA con la navegación del sidebar sin responder por un momento —
+se resolvió con un reload forzado (`navigate` con `force`), no era un bug del código, era el dev
+server. Documentado por si se repite en la próxima sesión con cambios masivos de archivos.
+
+## ⚠️ Regresión encontrada al verificar en el navegador la migración de tokens de Luciano (sesión 64 Nadia)
+
+Luciano documentó en su cierre de sesión 63 que no pudo verificar visualmente la migración de tokens
+("no puedo loguearme"). Nadia la verificó en el navegador real (login nalux2430) con un script de
+contraste WCAG que compone correctamente fondos translúcidos (`rgba(...)` sobre su backdrop real, no
+tratados como color final) — el grep de Luciano (`text-slate-*`/`text-gray-*`) no capturaba esta clase
+de bug porque busca solo grises neutros, no colores de acento.
+
+**Bug real encontrado**: colores de acento (`text-green-400`, `text-blue-400`, `#00D4FF`, etc.)
+diseñados para verse bien en fondo oscuro, usados **sin variante `dark:`** — ilegibles en modo claro
+(contraste medido 1.45–2.56:1, mínimo WCAG AA es 4.5:1). Afectaba masivamente **Plan de Cuentas**
+(hasta 50 elementos por pestaña, las 7 pestañas) y **Cheques** (13-15 elementos, ambas pestañas) —
+justo los 2 módulos que la auditoría original de sesión 61 había marcado como peor deuda visual, y que
+Luciano migró primero.
+
+**Corregido y verificado en vivo (ambos temas, 0 casos):**
+- Plan de Cuentas completo (`shared.jsx` + 6 tabs + `ModalNuevoAsiento.jsx`): `TIPO_COLOR`/`ESTADO_COLOR`
+  y saldos con color migrados a los tokens `kx-green`/`kx-red`/`kx-blue`/`kx-violet`/`kx-amber`.
+- Cheques completo (`shared.jsx` + `ModalNuevoChequePropio.jsx`): 8 estados del pipeline (más colores
+  que los 5 tokens `kx-` disponibles) migrados a patrón `text-{color}-700` en light +
+  `dark:text-{color}-400` original — mismo patrón que `TopClientes.jsx` (sesión 61).
+- Top 5 archivos de mayor impacto fuera de esos 2 módulos: `ProveedoresSection.jsx`,
+  `ReporteLibroIVA.jsx`, `HistorialVentas.jsx`, `CuentasBancariasSection.jsx` (`MonitorFacturacionAFIP.jsx`
+  resultó ya estar 100% limpio — todos sus colores ya tenían pares `dark:` válidos).
+
+**⚠️ Hallazgo de alcance mayor, sin resolver — para retomar:** el mismo patrón (color de acento sin
+`dark:`) aparece en **~90 archivos más** de toda la app (Configuración, Caja, Reportes, Historial de
+Compras, etc. — lista completa reproducible con
+`grep -rE "text-(blue|green|red|purple|orange|yellow|cyan|indigo)-(400|500)" src/components`).
+**Importante**: ese grep tiene ~50% de falsos positivos — muchos de esos hits ya tienen su
+`dark:text-*` correcto y no son bugs (confirmado revisando `ProveedoresSection.jsx` y
+`MonitorFacturacionAFIP.jsx` a mano). No hay forma segura de arreglarlo con `sed` masivo — cada
+archivo necesita revisión línea por línea como se hizo hoy. Decisión pendiente del usuario: sesión
+dedicada a barrer el resto, o dejarlo así (los 2 módulos de peor deuda ya están cerrados).
+
+`npx vite build` exit 0. Verificado con script de contraste WCAG en vivo (ambos temas) antes de cada
+commit — no solo lectura de diff.
+
+## ✅ Migration 204 aplicada — REVOKE PUBLIC en RPCs de AFIP (sesión 64 Nadia)
+
+Único pendiente que había dejado Luciano al cierre de sesión 63: `204_revoke_public_execute_cae_rpcs.sql`
+estaba escrita pero no aplicada (requería confirmación explícita del usuario por ser cambio de
+permisos). Nadia confirmó y se aplicó a producción.
+
+Verificado antes de aplicar: `authenticated` tenía su propia fila de `EXECUTE` explícita en ambas
+funciones (`marcar_cae_resuelto_manual`, `reintentar_caes_lote`), así que revocar `PUBLIC` no iba a
+afectar el uso normal de la app. Verificado después: `information_schema.routine_privileges` ya no
+lista `PUBLIC` en ninguna de las dos; probado con `BEGIN...ROLLBACK` impersonando el admin real de
+Nalux — `reintentar_caes_lote` sigue funcionando sin error de permisos.
+
+Con esto queda cerrado el 100% del gap de ACL "revoke FROM anon es no-op" que el proyecto viene
+cerrando sistemáticamente desde mig.194.
 
 ## ✅ Barrido final de cierre — sesión 63 (Luciano, 2026-07-14)
 

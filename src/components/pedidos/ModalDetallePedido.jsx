@@ -48,7 +48,7 @@ function ModalDetallePedido({
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2 dark:text-kx-text">
-                  <FileText className="h-5 w-5 text-blue-500" />
+                  <FileText className="h-5 w-5 text-kx-blue" />
                   Pedido {detailPedido.numero}
                 </DialogTitle>
                 <DialogDescription className="dark:text-kx-text-2">
@@ -103,7 +103,7 @@ function ModalDetallePedido({
                 )}
 
                 <div className="space-y-1.5 pt-1">
-                  <p className="text-[10px] font-semibold text-kx-text-3 dark:text-kx-text-3 uppercase tracking-wider">
+                  <p className="text-2xs font-semibold text-kx-text-3 dark:text-kx-text-3 uppercase tracking-wider">
                     Flujo del documento
                   </p>
                   {loadingEntregas ? (
