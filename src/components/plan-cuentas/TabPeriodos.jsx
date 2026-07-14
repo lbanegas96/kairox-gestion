@@ -172,7 +172,7 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                 <td className="px-4 py-3 font-mono text-xs text-kx-text-3">{fmtFecha(p.fecha_inicio)}</td>
                 <td className="px-4 py-3 font-mono text-xs text-kx-text-3">{fmtFecha(p.fecha_cierre)}</td>
                 <td className="px-4 py-3 text-center">
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium
+                  <span className={`text-2xs px-2 py-0.5 rounded-full border font-medium
                     ${p.estado === 'cerrado'
                       ? 'bg-kx-red/10 text-kx-red border-kx-red/30'
                       : 'bg-kx-green/10 text-kx-green border-kx-green/30'}`}>

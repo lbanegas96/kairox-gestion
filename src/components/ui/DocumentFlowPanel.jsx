@@ -28,11 +28,11 @@ function DocNode({ node, isActual = false, onNavigate }) {
     >
       <div className="flex items-center gap-1.5">
         <Icon className={`w-3.5 h-3.5 shrink-0 ${cfg.color}`} />
-        <span className={`text-[10px] font-semibold uppercase tracking-wide ${cfg.color}`}>{cfg.label}</span>
+        <span className={`text-2xs font-semibold uppercase tracking-wide ${cfg.color}`}>{cfg.label}</span>
       </div>
       <span className="text-xs font-bold text-slate-700 dark:text-white truncate">{node.numero}</span>
-      <span className="text-[10px] text-kx-text-2">{formatDateAR(node.fecha)}</span>
-      <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+      <span className="text-2xs text-kx-text-2">{formatDateAR(node.fecha)}</span>
+      <span className="text-2xs font-semibold text-slate-600 dark:text-slate-300">
         ${Number(node.monto).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
       </span>
       {node.estado && (

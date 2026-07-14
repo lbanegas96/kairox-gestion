@@ -69,7 +69,7 @@ function TabBalance({ empresaId }) {
                   <td className="px-4 py-2.5 font-mono text-xs text-kx-blue">{r.codigo}</td>
                   <td className="px-4 py-2.5 text-kx-text-3">{r.nombre}</td>
                   <td className="px-4 py-2.5 text-center">
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${TIPO_COLOR[r.tipo]}`}>
+                    <span className={`text-2xs px-2 py-0.5 rounded-full border font-medium ${TIPO_COLOR[r.tipo]}`}>
                       {TIPO_LABEL[r.tipo]}
                     </span>
                   </td>

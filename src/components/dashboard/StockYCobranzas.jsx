@@ -63,17 +63,17 @@ function StockYCobranzas({
         {/* Aging buckets */}
         <div className="grid grid-cols-3 gap-2 mb-4">
           <div className="text-center p-2.5 rounded-xl bg-kx-surface-2 border border-kx-border">
-            <div className="text-[10px] text-kx-text-3 mb-1">30-60 días</div>
+            <div className="text-2xs text-kx-text-3 mb-1">30-60 días</div>
             <div className={`text-xl font-bold tabular-nums ${aging30 > 0 ? 'text-kx-amber' : 'text-kx-text-3'}`}>{aging30}</div>
             <div className="text-[9.5px] text-kx-text-3">clientes</div>
           </div>
           <div className="text-center p-2.5 rounded-xl bg-kx-surface-2 border border-kx-border">
-            <div className="text-[10px] text-kx-text-3 mb-1">60-90 días</div>
+            <div className="text-2xs text-kx-text-3 mb-1">60-90 días</div>
             <div className={`text-xl font-bold tabular-nums ${aging60 > 0 ? 'text-orange-500 dark:text-orange-400' : 'text-kx-text-3'}`}>{aging60}</div>
             <div className="text-[9.5px] text-kx-text-3">clientes</div>
           </div>
           <div className="text-center p-2.5 rounded-xl bg-kx-surface-2 border border-kx-border">
-            <div className="text-[10px] text-kx-text-3 mb-1">+90 días</div>
+            <div className="text-2xs text-kx-text-3 mb-1">+90 días</div>
             <div className={`text-xl font-bold tabular-nums ${aging90 > 0 ? 'text-kx-red' : 'text-kx-text-3'}`}>{aging90}</div>
             <div className="text-[9.5px] text-kx-text-3">clientes</div>
           </div>
@@ -110,7 +110,7 @@ function StockYCobranzas({
         {/* Total vencido */}
         {(alertasCC?.montoTotal ?? 0) > 0 && (
           <div className="mt-3 pt-3 border-t border-kx-border flex items-center justify-between">
-            <span className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Total vencido</span>
+            <span className="text-2xs text-kx-text-2 uppercase tracking-wide font-medium">Total vencido</span>
             <span className="text-sm font-bold text-kx-red tabular-nums">
               ${(alertasCC.montoTotal).toLocaleString('es-AR', { minimumFractionDigits: 0 })}
             </span>

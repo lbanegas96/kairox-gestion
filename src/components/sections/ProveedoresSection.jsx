@@ -564,7 +564,7 @@ function ProveedoresSection() {
                               <div className="mt-1">
                                 <Button size="sm" variant="outline"
                                   onClick={() => handleRegenerarAsientoCxp(m.id)}
-                                  className="h-6 px-2 gap-1 text-[11px] text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-900/50 dark:hover:bg-amber-900/20">
+                                  className="h-6 px-2 gap-1 text-2xs text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-900/50 dark:hover:bg-amber-900/20">
                                   <RefreshCw className="h-3 w-3" /> Sin asiento — Regenerar
                                 </Button>
                               </div>
@@ -682,7 +682,7 @@ function ProveedoresSection() {
                 <option value="Tarjeta de débito">Tarjeta de débito (Bancos)</option>
                 <option value="Tarjeta de crédito">Tarjeta de crédito (Bancos)</option>
               </select>
-              <p className="text-[11px] text-kx-text-3">Efectivo descuenta de la Caja; los demás, de la cuenta bancaria mapeada.</p>
+              <p className="text-2xs text-kx-text-3">Efectivo descuenta de la Caja; los demás, de la cuenta bancaria mapeada.</p>
             </div>
             <div className="space-y-1">
               <Label className="dark:text-kx-text">Descripción</Label>

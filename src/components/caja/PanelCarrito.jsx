@@ -46,11 +46,11 @@ function CarritoItem({ item, onModificar, onEliminar, oferta, descuentoManual, o
             <p className="text-xs text-kx-text-3 tabular-nums">${fmt(item.precio_venta)} c/u</p>
           )}
           {packMode && (
-            <p className="text-[10px] text-amber-500 tabular-nums">${fmt(item._precioUnidadVenta)} / {item.unidad_venta?.codigo || 'pack'}</p>
+            <p className="text-2xs text-amber-500 tabular-nums">${fmt(item._precioUnidadVenta)} / {item.unidad_venta?.codigo || 'pack'}</p>
           )}
           {/* OFERTAS — badge con nombre de la oferta */}
           {oferta && (
-            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-500 mt-0.5">
+            <span className="inline-flex items-center gap-1 text-2xs font-medium text-emerald-500 mt-0.5">
               <Tag className="w-2.5 h-2.5" /> {oferta.oferta_nombre}
             </span>
           )}
@@ -106,7 +106,7 @@ function CarritoItem({ item, onModificar, onEliminar, oferta, descuentoManual, o
         <button
           type="button"
           onClick={() => onTogglePack(item.id)}
-          className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border transition-colors ${packMode ? 'border-amber-400 text-amber-500 bg-amber-500/10' : 'border-kx-border text-kx-text-3 hover:bg-kx-border/40'}`}
+          className={`inline-flex items-center gap-1 text-2xs px-1.5 py-0.5 rounded border transition-colors ${packMode ? 'border-amber-400 text-amber-500 bg-amber-500/10' : 'border-kx-border text-kx-text-3 hover:bg-kx-border/40'}`}
         >
           <Boxes className="w-3 h-3" />
           {packMode
@@ -117,7 +117,7 @@ function CarritoItem({ item, onModificar, onEliminar, oferta, descuentoManual, o
       {/* OFERTAS — input de descuento manual (visible si no hay oferta, o si la oferta es acumulable) */}
       {(!oferta || oferta.acumulable) && (
         <div className="flex items-center gap-1.5 pl-0.5">
-          <span className="text-[10px] text-kx-text-3">Dto:</span>
+          <span className="text-2xs text-kx-text-3">Dto:</span>
           <input
             type="number"
             min="0"
@@ -125,9 +125,9 @@ function CarritoItem({ item, onModificar, onEliminar, oferta, descuentoManual, o
             value={descuentoManual || ''}
             onChange={e => onDescuentoManualChange?.(item.id, parseFloat(e.target.value) || 0)}
             placeholder="0"
-            className="w-12 h-5 text-[10px] text-center rounded border border-kx-border bg-kx-surface text-kx-text px-1"
+            className="w-12 h-5 text-2xs text-center rounded border border-kx-border bg-kx-surface text-kx-text px-1"
           />
-          <span className="text-[10px] text-kx-text-3">%</span>
+          <span className="text-2xs text-kx-text-3">%</span>
         </div>
       )}
     </div>

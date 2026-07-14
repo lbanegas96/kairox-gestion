@@ -180,7 +180,7 @@ function TabEstadoResultados({ empresaId }) {
             <div className="flex items-center gap-2">
               {ganancia ? <TrendingUp size={18} className="text-kx-green" /> : <TrendingDown size={18} className="text-kx-red" />}
               <span className="font-semibold text-kx-text">Resultado del Período</span>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium
+              <span className={`text-2xs px-2 py-0.5 rounded-full border font-medium
                 ${ganancia ? 'bg-kx-green/10 text-kx-green border-kx-green/30' : 'bg-kx-red/10 text-kx-red border-kx-red/30'}`}>
                 {ganancia ? 'Ganancia' : 'Pérdida'}
               </span>

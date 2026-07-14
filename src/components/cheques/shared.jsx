@@ -77,7 +77,7 @@ export const emptyPropioForm = () => ({
 
 export function EstadoBadge({ estado }) {
   return (
-    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${ESTADO_COLOR[estado] ?? ''}`}>
+    <span className={`text-2xs px-2 py-0.5 rounded-full border font-medium ${ESTADO_COLOR[estado] ?? ''}`}>
       {ESTADO_LABELS[estado] ?? estado}
     </span>
   );
@@ -119,8 +119,8 @@ export function FechaVto({ fecha, estado }) {
       ${vencido ? 'text-kx-red' : proximo ? 'text-kx-amber' : 'text-kx-text-3'}`}>
       {(vencido || proximo) && <Clock size={11} className="flex-shrink-0" />}
       {fmtDate(fecha)}
-      {vencido && <span className="text-[10px] font-medium">(vencido)</span>}
-      {proximo && <span className="text-[10px] font-medium">(&lt;7d)</span>}
+      {vencido && <span className="text-2xs font-medium">(vencido)</span>}
+      {proximo && <span className="text-2xs font-medium">(&lt;7d)</span>}
     </span>
   );
 }

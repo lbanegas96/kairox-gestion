@@ -48,7 +48,7 @@ function ProductoCard({ producto, onAgregar }) {
         {producto.nombre}
       </p>
       {producto.codigo_sku && (
-        <p className="text-[10px] text-kx-text-3 font-mono">{producto.codigo_sku}</p>
+        <p className="text-2xs text-kx-text-3 font-mono">{producto.codigo_sku}</p>
       )}
       <p className="text-lg font-bold text-kx-text tabular-nums mt-auto">
         ${fmt(producto.precio_venta)}

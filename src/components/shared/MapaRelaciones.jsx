@@ -51,7 +51,7 @@ function NodoMapa({ nodo, activo = false, onClick }) {
           : 'cursor-default',
       ].join(' ')}
     >
-      <div className={`text-[10px] font-bold uppercase tracking-wider mb-1 flex items-center gap-1 ${
+      <div className={`text-2xs font-bold uppercase tracking-wider mb-1 flex items-center gap-1 ${
         activo ? 'text-[rgb(var(--kx-violet))]' : config.accent
       }`}>
         {config.label}
@@ -67,11 +67,11 @@ function NodoMapa({ nodo, activo = false, onClick }) {
       </div>
 
       {nodo.fecha && (
-        <div className="text-[10px] text-kx-text-2 mt-0.5">{formatDateAR(nodo.fecha)}</div>
+        <div className="text-2xs text-kx-text-2 mt-0.5">{formatDateAR(nodo.fecha)}</div>
       )}
 
       {(nodo.total != null || nodo.monto != null) && (
-        <div className="text-[11px] font-semibold text-kx-text mt-1 tabular-nums">
+        <div className="text-2xs font-semibold text-kx-text mt-1 tabular-nums">
           ${fmt(nodo.total ?? nodo.monto)}
         </div>
       )}
@@ -338,7 +338,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
             <Network className="w-5 h-5 text-kx-violet" />
             Mapa de Relaciones
             {isCompra && (
-              <span className="text-[10px] font-normal text-kx-text-3 bg-kx-surface-2 px-2 py-0.5 rounded-full">
+              <span className="text-2xs font-normal text-kx-text-3 bg-kx-surface-2 px-2 py-0.5 rounded-full">
                 Compras
               </span>
             )}
@@ -375,7 +375,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
           {!loading && mapa?.modo === 'venta' && !sinRelacionesVenta && (
             <div className="space-y-6">
               <div>
-                <p className="text-[10px] font-semibold text-kx-text-3 uppercase tracking-wider mb-3">
+                <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider mb-3">
                   Cadena de documentos
                 </p>
                 <div className="flex items-start gap-1 flex-wrap">
@@ -425,7 +425,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
 
               {tieneDerivadosVenta && (
                 <div className="pl-5 border-l-2 border-dashed border-kx-border ml-4 space-y-3">
-                  <p className="text-[10px] font-semibold text-kx-text-3 uppercase tracking-wider">
+                  <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider">
                     Documentos derivados
                   </p>
                   <div className="flex flex-wrap gap-3">
@@ -461,7 +461,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
 
               <div className="flex flex-wrap gap-3 pt-2 border-t border-kx-border">
                 {['venta', 'pedido', 'entrega', 'nota_credito', 'nota_debito', 'cobro_cc', 'devolucion'].map(tipo => (
-                  <div key={tipo} className="flex items-center gap-1.5 text-[10px] text-kx-text-3">
+                  <div key={tipo} className="flex items-center gap-1.5 text-2xs text-kx-text-3">
                     <div className={`w-2 h-2 rounded-full ${TIPO_CONFIG[tipo].accent.replace('text-', 'bg-')}`} />
                     {TIPO_CONFIG[tipo].label}
                   </div>
@@ -484,7 +484,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
           {!loading && mapa?.modo === 'compra' && !sinRelacionesCompra && (
             <div className="space-y-6">
               <div>
-                <p className="text-[10px] font-semibold text-kx-text-3 uppercase tracking-wider mb-3">
+                <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider mb-3">
                   Cadena de documentos
                 </p>
                 <div className="flex items-start gap-1 flex-wrap">
@@ -514,7 +514,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
 
               {tieneDerivadosCompra && (
                 <div className="pl-5 border-l-2 border-dashed border-kx-border ml-4 space-y-3">
-                  <p className="text-[10px] font-semibold text-kx-text-3 uppercase tracking-wider">
+                  <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider">
                     Documentos derivados
                   </p>
                   <div className="flex flex-wrap gap-3">
@@ -546,7 +546,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
 
               <div className="flex flex-wrap gap-3 pt-2 border-t border-kx-border">
                 {['factura_compra', 'recepcion', 'pago_proveedor', 'nc_proveedor', 'nd_proveedor', 'devolucion_prov'].map(tipo => (
-                  <div key={tipo} className="flex items-center gap-1.5 text-[10px] text-kx-text-3">
+                  <div key={tipo} className="flex items-center gap-1.5 text-2xs text-kx-text-3">
                     <div className={`w-2 h-2 rounded-full ${TIPO_CONFIG[tipo].accent.replace('text-', 'bg-')}`} />
                     {TIPO_CONFIG[tipo].label}
                   </div>

@@ -403,7 +403,7 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                     <td className="p-4 text-right font-bold text-slate-700 dark:text-kx-text group-hover:text-emerald-600 transition-colors">
                       ${Number(sale.total).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       {sale.moneda && sale.moneda !== 'ARS' && Number(sale.tipo_cambio_tasa) > 0 && (
-                        <div className="text-[10px] font-normal text-slate-500 dark:text-kx-text-2 mt-0.5">
+                        <div className="text-2xs font-normal text-slate-500 dark:text-kx-text-2 mt-0.5">
                           <span className="inline-block bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded font-bold mr-1">{sale.moneda}</span>
                           {sale.moneda} {(Number(sale.total) / Number(sale.tipo_cambio_tasa)).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · TC ${Number(sale.tipo_cambio_tasa).toLocaleString('es-AR')}
                         </div>

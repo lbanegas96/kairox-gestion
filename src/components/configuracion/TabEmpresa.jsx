@@ -88,7 +88,7 @@ const TabEmpresa = ({
             className="kairox-input"
           />
           {formData.afip_cuit && formData.afip_cuit.replace(/\D/g, '').length !== 11 && (
-            <p className="text-[11px] text-amber-600 dark:text-amber-400">El CUIT debe tener 11 dígitos.</p>
+            <p className="text-2xs text-amber-600 dark:text-amber-400">El CUIT debe tener 11 dígitos.</p>
           )}
         </div>
 
@@ -107,7 +107,7 @@ const TabEmpresa = ({
             <option value="Exento">Exento</option>
             <option value="CF">Consumidor Final</option>
           </select>
-          <p className="text-[11px] text-kx-text-3">Se usa en certificados de retención y facturas. Si activás AFIP, se usa el mismo dato.</p>
+          <p className="text-2xs text-kx-text-3">Se usa en certificados de retención y facturas. Si activás AFIP, se usa el mismo dato.</p>
         </div>
 
         {/* Logo */}

@@ -121,7 +121,7 @@ function ModalEditarCompra({
                     <tr key={item.internalId} className="hover:bg-kx-surface-2 dark:hover:bg-slate-900/50">
                       <td className="p-3 pl-4">
                         <div className="font-medium kairox-text-primary dark:text-kx-text">{item.nombre}</div>
-                        {item.is_new && <span className="text-[10px] bg-green-100 text-green-700 px-1 rounded border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">NUEVO</span>}
+                        {item.is_new && <span className="text-2xs bg-green-100 text-green-700 px-1 rounded border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">NUEVO</span>}
                       </td>
                       <td className="p-3 text-center">
                         <Input

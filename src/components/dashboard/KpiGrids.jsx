@@ -11,7 +11,7 @@ function KpiGrids({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
         {/* Ventas del día */}
         <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-violet hover:bg-kx-surface-2 transition-colors duration-200">
-          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Ventas del día</div>
+          <div className="text-2xs text-kx-text-2 uppercase tracking-wide font-medium">Ventas del día</div>
           <div>
             {loading ? <Skeleton className="h-6 w-28 mb-1" /> :
               <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">${fmt(kpis?.ventasHoy)}</div>}
@@ -24,7 +24,7 @@ function KpiGrids({
 
         {/* Gastos del mes */}
         <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-red hover:bg-kx-surface-2 transition-colors duration-200">
-          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Gastos del mes</div>
+          <div className="text-2xs text-kx-text-2 uppercase tracking-wide font-medium">Gastos del mes</div>
           <div>
             {loading ? <Skeleton className="h-6 w-28 mb-1" /> :
               <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">${fmt(kpis?.gastosMes)}</div>}
@@ -34,7 +34,7 @@ function KpiGrids({
 
         {/* Balance neto */}
         <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-green hover:bg-kx-surface-2 transition-colors duration-200">
-          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Balance neto</div>
+          <div className="text-2xs text-kx-text-2 uppercase tracking-wide font-medium">Balance neto</div>
           <div>
             {loading ? <Skeleton className="h-6 w-28 mb-1" /> :
               <div className={`text-xl font-semibold tracking-tight tabular-nums mb-1 ${balanceNeto >= 0 ? 'text-kx-green' : 'text-kx-red'}`}>
@@ -52,7 +52,7 @@ function KpiGrids({
           className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between cursor-pointer border-t-2 border-t-kx-amber hover:bg-kx-surface-2 transition-colors duration-200"
           onClick={() => onNavigate?.('cuentacorriente')}
         >
-          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Deuda clientes</div>
+          <div className="text-2xs text-kx-text-2 uppercase tracking-wide font-medium">Deuda clientes</div>
           <div>
             {loading ? <Skeleton className="h-6 w-28 mb-1" /> :
               <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">${fmt(kpis?.deudaClientes)}</div>}
@@ -68,7 +68,7 @@ function KpiGrids({
 
         {/* DSO — Días en cobrar */}
         <div className={`bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 ${dsoHealth.border} hover:bg-kx-surface-2 transition-colors duration-200`}>
-          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium flex items-center gap-1">
+          <div className="text-2xs text-kx-text-2 uppercase tracking-wide font-medium flex items-center gap-1">
             DSO
             <span className="text-[9px] normal-case font-normal text-kx-text-3">(días en cobrar)</span>
           </div>
@@ -86,7 +86,7 @@ function KpiGrids({
 
         {/* Facturas del mes */}
         <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-violet hover:bg-kx-surface-2 transition-colors duration-200">
-          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium flex items-center gap-1">
+          <div className="text-2xs text-kx-text-2 uppercase tracking-wide font-medium flex items-center gap-1">
             <Receipt className="w-3 h-3" /> Facturas del mes
           </div>
           <div>
@@ -100,7 +100,7 @@ function KpiGrids({
 
         {/* Ticket promedio */}
         <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-blue hover:bg-kx-surface-2 transition-colors duration-200">
-          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Ticket promedio</div>
+          <div className="text-2xs text-kx-text-2 uppercase tracking-wide font-medium">Ticket promedio</div>
           <div>
             {loading ? <Skeleton className="h-6 w-24 mb-1" /> :
               <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">
@@ -115,7 +115,7 @@ function KpiGrids({
           className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between cursor-pointer border-t-2 border-t-kx-amber hover:bg-kx-surface-2 transition-colors duration-200"
           onClick={() => onNavigate?.('ordenes_compra')}
         >
-          <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">OC pendientes</div>
+          <div className="text-2xs text-kx-text-2 uppercase tracking-wide font-medium">OC pendientes</div>
           <div>
             {loading ? <Skeleton className="h-6 w-10 mb-1" /> :
               <div className={`text-xl font-semibold tracking-tight tabular-nums mb-1 ${(kpis?.ocPendientes ?? 0) > 0 ? 'text-kx-amber' : 'text-kx-text'}`}>

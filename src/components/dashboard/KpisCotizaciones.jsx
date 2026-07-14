@@ -7,7 +7,7 @@ function KpisCotizaciones({ cotLoading, cotStats, onNavigate }) {
         className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between cursor-pointer border-t-2 border-t-kx-violet hover:bg-kx-surface-2 transition-colors duration-200"
         onClick={() => onNavigate?.('cotizaciones')}
       >
-        <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Cotizaciones / mes</div>
+        <div className="text-2xs text-kx-text-2 uppercase tracking-wide font-medium">Cotizaciones / mes</div>
         <div>
           {cotLoading ? <Skeleton className="h-6 w-12 mb-1" /> :
             <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">{cotStats?.totalMes ?? 0}</div>}
@@ -15,7 +15,7 @@ function KpisCotizaciones({ cotLoading, cotStats, onNavigate }) {
         </div>
       </div>
       <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-green hover:bg-kx-surface-2 transition-colors duration-200">
-        <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Tasa de conversión</div>
+        <div className="text-2xs text-kx-text-2 uppercase tracking-wide font-medium">Tasa de conversión</div>
         <div>
           {cotLoading ? <Skeleton className="h-6 w-16 mb-1" /> :
             <div className={`text-xl font-semibold tracking-tight tabular-nums mb-1 ${(cotStats?.tasaConversion ?? 0) >= 50 ? 'text-kx-green' : 'text-kx-amber'}`}>
@@ -28,7 +28,7 @@ function KpisCotizaciones({ cotLoading, cotStats, onNavigate }) {
         className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between cursor-pointer border-t-2 border-t-kx-violet hover:bg-kx-surface-2 transition-colors duration-200"
         onClick={() => onNavigate?.('cotizaciones')}
       >
-        <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Aprobadas pendientes</div>
+        <div className="text-2xs text-kx-text-2 uppercase tracking-wide font-medium">Aprobadas pendientes</div>
         <div>
           {cotLoading ? <Skeleton className="h-6 w-10 mb-1" /> :
             <div className={`text-xl font-semibold tracking-tight tabular-nums mb-1 ${(cotStats?.aprobadas ?? 0) > 0 ? 'text-kx-violet' : 'text-kx-text'}`}>
@@ -40,7 +40,7 @@ function KpisCotizaciones({ cotLoading, cotStats, onNavigate }) {
         </div>
       </div>
       <div className="bg-kx-surface p-4 min-h-[88px] flex flex-col justify-between border-t-2 border-t-kx-amber hover:bg-kx-surface-2 transition-colors duration-200">
-        <div className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Monto convertido</div>
+        <div className="text-2xs text-kx-text-2 uppercase tracking-wide font-medium">Monto convertido</div>
         <div>
           {cotLoading ? <Skeleton className="h-6 w-28 mb-1" /> :
             <div className="text-xl font-semibold text-kx-text tracking-tight tabular-nums mb-1">

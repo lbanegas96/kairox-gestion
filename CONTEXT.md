@@ -1,5 +1,31 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-14 (Nadia — verificación en navegador de la migración de tokens de Luciano: encontrada y corregida una regresión real de accesibilidad + hallazgo de alcance mayor pendiente)
+**Última actualización:** 2026-07-14 (Nadia — consolidados los 3 tamaños de texto chico a 2 oficiales, item #2 del roadmap de auditoría visual)
+
+## ✅ Consolidación de tamaños de texto chico: text-2xs (11px) reemplaza text-[10px]/text-[11px] (sesión 64 Nadia)
+
+Item #2 del roadmap pendiente de `AUDITORIA_VISUAL_2026-07-13.md` ("3 tamaños de texto chico
+conviviendo sin regla — 10/11/12px"). `text-xs` (12px, ya el estándar dominante con 952 usos) queda
+como el escalón "label" sin tocar; se agregó un único escalón "meta" nuevo para reemplazar los dos
+tamaños arbitrarios que competían entre sí.
+
+**Implementación:** `tailwind.config.js` — `fontSize: { '2xs': ['11px', { lineHeight: '14px' }] }`.
+Migrados los 132 usos de `text-[10px]`/`text-[11px]` (69+63, en 46 archivos) a `text-2xs` con un
+`sed` mecánico 1:1 — sin ambigüedad semántica como la migración de colores (era un swap de tamaño,
+no de significado), así que no hizo falta revisión archivo por archivo como con los colores.
+
+**Excluidos a propósito** (mismo criterio que Luciano usó para `TicketPrint.jsx` en la migración de
+colores): `caja/TicketPrint.jsx` y `ventas/ComprobantePrintModal.jsx` — impresión térmica, necesitan
+tamaño físico fijo en mm/px reales, no un token de diseño de UI que pueda cambiar.
+
+**Validado en vivo:** `text-2xs` computa `font-size: 11px; line-height: 14px` en el DOM real (Cheques).
+Chequeo de overflow (badges/pills son el caso de riesgo por el 1px de más que 10px→11px podría causar)
+en Cheques (17 elementos `.text-2xs`) y Plan de Cuentas (39 elementos): **0 overflows** en ambos.
+`npx vite build` exit 0.
+
+**Nota operativa:** el `sed` tocando 46 archivos casi simultáneamente hizo que el HMR de Vite entrara
+en un loop de reconexión que dejó la SPA con la navegación del sidebar sin responder por un momento —
+se resolvió con un reload forzado (`navigate` con `force`), no era un bug del código, era el dev
+server. Documentado por si se repite en la próxima sesión con cambios masivos de archivos.
 
 ## ⚠️ Regresión encontrada al verificar en el navegador la migración de tokens de Luciano (sesión 64 Nadia)
 

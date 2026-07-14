@@ -76,7 +76,7 @@ function EstadoCajaHeader({
               <TrendingUp className="h-5 w-5" />
             </div>
             <div>
-              <div className="text-[11px] text-kx-text-2 uppercase font-medium tracking-wide">Ingresos del turno</div>
+              <div className="text-2xs text-kx-text-2 uppercase font-medium tracking-wide">Ingresos del turno</div>
               <div className="text-2xl font-bold font-mono text-kx-green tabular-nums">
                 ${totals.ingresos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
               </div>
@@ -94,7 +94,7 @@ function EstadoCajaHeader({
               <TrendingDown className="h-5 w-5" />
             </div>
             <div>
-              <div className="text-[11px] text-kx-text-2 uppercase font-medium tracking-wide">Egresos del turno</div>
+              <div className="text-2xs text-kx-text-2 uppercase font-medium tracking-wide">Egresos del turno</div>
               <div className="text-2xl font-bold font-mono text-kx-red tabular-nums">
                 ${totals.egresos.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
               </div>
@@ -115,7 +115,7 @@ function EstadoCajaHeader({
                   <Scale className="h-5 w-5" />
                 </div>
                 <div>
-                  <div className="text-[11px] text-kx-text-2 uppercase font-medium tracking-wide">Saldo líquido de caja</div>
+                  <div className="text-2xs text-kx-text-2 uppercase font-medium tracking-wide">Saldo líquido de caja</div>
                   <div className={`text-2xl font-bold font-mono tabular-nums ${saldo >= 0 ? 'text-kx-blue' : 'text-kx-amber'}`}>
                     ${saldo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                   </div>

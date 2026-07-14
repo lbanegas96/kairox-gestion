@@ -16,6 +16,12 @@ module.exports = {
 			},
 		},
 		extend: {
+			fontSize: {
+				/* Único escalón "chico" oficial por debajo de text-xs (12px) —
+				   reemplaza los text-[10px]/text-[11px] arbitrarios que convivían
+				   sin regla. Usado en badges, hints y meta-texto. */
+				'2xs': ['11px', { lineHeight: '14px' }],
+			},
 			colors: {
 				/* shadcn/ui tokens */
 				border:     'hsl(var(--border))',

@@ -228,7 +228,7 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, onSucc
               onChange={e => setMontoRaw(e.target.value)}
               className="bg-kx-surface border-kx-border text-kx-text font-mono"
             />
-            <p className="text-[10px] text-kx-text-3">Punto = miles, coma = decimal (ej: 1.500,00)</p>
+            <p className="text-2xs text-kx-text-3">Punto = miles, coma = decimal (ej: 1.500,00)</p>
           </div>
 
           {/* Reembolso efectivo */}
@@ -243,7 +243,7 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, onSucc
               <Label htmlFor="reembolso-nc-prov" className="cursor-pointer font-medium text-sm text-kx-text">
                 Cobrar reembolso en efectivo ahora
               </Label>
-              <p className="text-[10px] text-kx-text-3 mt-0.5">
+              <p className="text-2xs text-kx-text-3 mt-0.5">
                 {reembolsoEfectivo
                   ? 'El proveedor nos devuelve el importe en efectivo. Requiere caja abierta.'
                   : 'El importe ajusta el saldo de Cuenta Corriente del proveedor (recomendado).'}

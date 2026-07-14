@@ -45,7 +45,7 @@ function TopClientes({ topLoading, topClientes, maxTopTotal, onNavigate }) {
                 <div className="h-1.5 bg-kx-border rounded-full overflow-hidden">
                   <div className="h-full bg-kx-violet rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
                 </div>
-                <div className="text-[10px] text-kx-text-3 mt-1">{c.count} comprobante{c.count !== 1 ? 's' : ''}</div>
+                <div className="text-2xs text-kx-text-3 mt-1">{c.count} comprobante{c.count !== 1 ? 's' : ''}</div>
               </div>
             );
           })}

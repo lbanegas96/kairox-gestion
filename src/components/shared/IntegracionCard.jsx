@@ -24,7 +24,7 @@ function IntegracionCard({ nombre, descripcion, estado = 'proximamente', logo, o
         <span className="text-2xl leading-none mt-0.5" role="img" aria-label={nombre}>{logo}</span>
         <div>
           <h4 className="font-semibold text-kx-text text-sm">{nombre}</h4>
-          <span className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full border mt-1 ${ESTADO_STYLES[estado] ?? ESTADO_STYLES.inactivo}`}>
+          <span className={`inline-block text-2xs font-medium px-2 py-0.5 rounded-full border mt-1 ${ESTADO_STYLES[estado] ?? ESTADO_STYLES.inactivo}`}>
             {ESTADO_LABELS[estado] ?? estado}
           </span>
         </div>

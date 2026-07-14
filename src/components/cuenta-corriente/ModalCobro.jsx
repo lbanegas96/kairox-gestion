@@ -131,7 +131,7 @@ function ModalCobro({
                           {esFX && <span className="ml-1">({f.moneda})</span>}
                         </div>
                         {esFX && !f.tc_hoy && (
-                          <div className="text-[11px] text-amber-600 dark:text-amber-400">
+                          <div className="text-2xs text-amber-600 dark:text-amber-400">
                             Sin TC de hoy para {f.moneda} — se usará el TC de la factura
                           </div>
                         )}
@@ -145,7 +145,7 @@ function ModalCobro({
                             className="w-28 h-8 text-right text-xs"
                           />
                           {fxValue > 0 && tcHoy > 0 && (
-                            <div className="text-[11px] text-kx-text-3 mt-0.5">
+                            <div className="text-2xs text-kx-text-3 mt-0.5">
                               ≈ ${(fxValue * tcHoy).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                             </div>
                           )}

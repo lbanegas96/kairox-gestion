@@ -188,7 +188,7 @@ function TabBalanceGeneral({ empresaId }) {
                     <td className="px-4 py-2.5 font-mono text-xs text-kx-blue w-20">3.3</td>
                     <td className="px-4 py-2.5 text-kx-text-3 italic">
                       Resultado del Ejercicio
-                      <span className="ml-2 text-[10px] text-kx-text-3 not-italic">(calculado del P&amp;L)</span>
+                      <span className="ml-2 text-2xs text-kx-text-3 not-italic">(calculado del P&amp;L)</span>
                     </td>
                     <td className={`px-4 py-2.5 text-right font-mono w-36 ${calc.resultadoEjercicio >= 0 ? 'text-kx-green' : 'text-kx-red'}`}>
                       {fmt(calc.resultadoEjercicio)}

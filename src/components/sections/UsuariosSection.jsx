@@ -384,7 +384,7 @@ function UsuariosSection() {
                                     </TableCell>
                                     <TableCell className="text-kx-text-2">{u.email}</TableCell>
                                     <TableCell>
-                                        <Badge variant="outline" className={`uppercase text-[10px] font-bold ${
+                                        <Badge variant="outline" className={`uppercase text-2xs font-bold ${
                                             u.role === 'admin' 
                                             ? 'border-purple-200 text-purple-700 bg-purple-50 dark:border-purple-900 dark:text-purple-400 dark:bg-purple-900/20' 
                                             : 'border-kx-border text-kx-text-2 bg-kx-surface-2 dark:border-kx-border dark:text-kx-text-2 dark:bg-kx-surface-2'

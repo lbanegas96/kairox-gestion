@@ -411,7 +411,7 @@ function CuentaCorrienteSection() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
         <div className="bg-kx-surface p-5 flex flex-col justify-between border-t-2 border-t-kx-amber hover:bg-kx-surface-2 transition-colors duration-200">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Total Deuda (Filtrada)</span>
+            <span className="text-2xs text-kx-text-2 uppercase tracking-wide font-medium">Total Deuda (Filtrada)</span>
             <DollarSign className="h-4 w-4 text-kx-amber" />
           </div>
           <div>
@@ -429,7 +429,7 @@ function CuentaCorrienteSection() {
 
         <div className="bg-kx-surface p-5 flex flex-col justify-between border-t-2 border-t-kx-red hover:bg-kx-surface-2 transition-colors duration-200">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Clientes con Deuda</span>
+            <span className="text-2xs text-kx-text-2 uppercase tracking-wide font-medium">Clientes con Deuda</span>
             <ArrowDownCircle className="h-4 w-4 text-kx-red" />
           </div>
           <div>
@@ -440,7 +440,7 @@ function CuentaCorrienteSection() {
 
         <div className="bg-kx-surface p-5 flex flex-col justify-between border-t-2 border-t-kx-green hover:bg-kx-surface-2 transition-colors duration-200">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] text-kx-text-2 uppercase tracking-wide font-medium">Clientes Al Día</span>
+            <span className="text-2xs text-kx-text-2 uppercase tracking-wide font-medium">Clientes Al Día</span>
             <ArrowUpCircle className="h-4 w-4 text-kx-green" />
           </div>
           <div>

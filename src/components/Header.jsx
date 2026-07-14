@@ -95,7 +95,7 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch, activ
         >
           <Search className="w-3.5 h-3.5 flex-shrink-0" />
           <span className="flex-1">Buscar...</span>
-          <kbd className="hidden lg:block text-[10px] border border-kx-border rounded px-1 bg-kx-surface-2">⌘K</kbd>
+          <kbd className="hidden lg:block text-2xs border border-kx-border rounded px-1 bg-kx-surface-2">⌘K</kbd>
         </button>
 
         {/* Theme toggle */}
@@ -128,7 +128,7 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch, activ
                 <Bell className="w-4 h-4" /> Notificaciones
               </h4>
               {notifications.hasNotifications && (
-                <span className="text-[10px] font-bold bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full">
+                <span className="text-2xs font-bold bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full">
                   {notifications.count} alertas
                 </span>
               )}
@@ -173,7 +173,7 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch, activ
                         <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${cfg.color}`} />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">{item.titulo}</p>
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">{item.detalle}</p>
+                          <p className="text-2xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">{item.detalle}</p>
                         </div>
                         {item.nivel === 'critico' && (
                           <span className="text-[9px] font-bold text-red-600 bg-red-100 dark:bg-red-500/20 px-1.5 py-0.5 rounded shrink-0">CRÍTICO</span>
@@ -188,7 +188,7 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch, activ
               )}
             </div>
             {notifications.hasNotifications && (
-              <div className="p-2 border-t border-kx-border grid grid-cols-3 gap-1 text-[10px] text-kx-text-3 rounded-b-xl">
+              <div className="p-2 border-t border-kx-border grid grid-cols-3 gap-1 text-2xs text-kx-text-3 rounded-b-xl">
                 <span className="text-center">📦 {notifications.stockBajo?.length ?? 0} stock</span>
                 <span className="text-center">💳 {notifications.deudaVencida?.length ?? 0} deudas</span>
                 <span className="text-center">🛒 {notifications.ocPendientes?.length ?? 0} OC</span>
@@ -216,7 +216,7 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch, activ
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="pl-1.5 pr-1 py-1 h-auto hover:bg-kx-surface-2 rounded-lg gap-2 transition-colors">
               <Avatar className="h-7 w-7 border border-kx-border">
-                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-violet-600 text-white font-semibold text-[10px]">
+                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-violet-600 text-white font-semibold text-2xs">
                   {initials}
                 </AvatarFallback>
               </Avatar>

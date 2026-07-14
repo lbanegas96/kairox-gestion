@@ -57,7 +57,7 @@ export function CuentaNode({ cuenta, depth = 0, onEdit, onToggleActiva, search }
         </span>
 
         {depth === 0 && (
-          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${TIPO_COLOR[cuenta.tipo]}`}>
+          <span className={`text-2xs px-2 py-0.5 rounded-full border font-medium ${TIPO_COLOR[cuenta.tipo]}`}>
             {TIPO_LABEL[cuenta.tipo]}
           </span>
         )}

@@ -233,7 +233,7 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
                     <span className="truncate">{it.nombre}</span>
                   </div>
                   {it.unidad_compra_id && (
-                    <div className="flex items-center gap-1 text-[11px] text-kx-text-3 pl-5">
+                    <div className="flex items-center gap-1 text-2xs text-kx-text-3 pl-5">
                       <span>o en {it.unidad_compra_descripcion || 'unidad de compra'} (x{it.factor_conversion_compra}):</span>
                       <Input
                         type="text"
@@ -241,14 +241,14 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
                         placeholder="cant."
                         value={packQtys[it.id] ?? ''}
                         onChange={e => setPackQty(it.id, e.target.value)}
-                        className="w-14 h-6 text-[11px] px-1.5 dark:bg-kx-surface-2 dark:border-kx-border dark:text-kx-text"
+                        className="w-14 h-6 text-2xs px-1.5 dark:bg-kx-surface-2 dark:border-kx-border dark:text-kx-text"
                       />
                       <Button
                         type="button"
                         size="sm"
                         variant="outline"
                         onClick={() => applyPackConversion(it)}
-                        className="h-6 px-1.5 text-[11px]"
+                        className="h-6 px-1.5 text-2xs"
                         title="Convertir a unidad de stock"
                       >
                         ↧

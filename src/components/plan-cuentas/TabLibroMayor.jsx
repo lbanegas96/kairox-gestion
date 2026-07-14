@@ -71,7 +71,7 @@ function TabLibroMayor({ empresaId, cuentasFlat }) {
       {/* Encabezado de cuenta seleccionada */}
       {cuentaId && cuentaSeleccionada && (
         <div className="flex items-center gap-3 p-3 rounded-lg bg-kx-surface-2/50 border border-kx-border">
-          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${TIPO_COLOR[cuentaSeleccionada.tipo]}`}>
+          <span className={`text-2xs px-2 py-0.5 rounded-full border font-medium ${TIPO_COLOR[cuentaSeleccionada.tipo]}`}>
             {TIPO_LABEL[cuentaSeleccionada.tipo]}
           </span>
           <span className="font-mono text-kx-blue text-sm">{cuentaSeleccionada.codigo}</span>
@@ -126,7 +126,7 @@ function TabLibroMayor({ empresaId, cuentasFlat }) {
                   </td>
                   <td className={`px-4 py-2.5 text-right font-mono font-bold ${row.saldo_acumulado >= 0 ? 'text-kx-blue' : 'text-kx-amber'}`}>
                     {fmt(Math.abs(row.saldo_acumulado))}
-                    <span className="text-[10px] ml-1">{row.saldo_acumulado >= 0 ? 'D' : 'H'}</span>
+                    <span className="text-2xs ml-1">{row.saldo_acumulado >= 0 ? 'D' : 'H'}</span>
                   </td>
                 </tr>
               ))}

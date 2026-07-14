@@ -100,7 +100,7 @@ function TabAsientos({ empresaId, userId, cuentasFlat }) {
                 <td className="px-4 py-3 text-right font-mono text-kx-text-3">{fmt(a.total_debe)}</td>
                 <td className="px-4 py-3 text-right font-mono text-kx-text-3">{fmt(a.total_haber)}</td>
                 <td className="px-4 py-3 text-center">
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium ${ESTADO_COLOR[a.estado]}`}>
+                  <span className={`text-2xs px-2 py-0.5 rounded-full border font-medium ${ESTADO_COLOR[a.estado]}`}>
                     {a.estado}
                   </span>
                 </td>
@@ -153,7 +153,7 @@ function TabAsientos({ empresaId, userId, cuentasFlat }) {
             <DialogTitle className="flex items-center gap-2">
               <FileText size={16} className="text-kx-blue" />
               Asiento {detalle?.numero}
-              <span className={`ml-2 text-[10px] px-2 py-0.5 rounded-full border font-medium ${ESTADO_COLOR[detalle?.estado]}`}>
+              <span className={`ml-2 text-2xs px-2 py-0.5 rounded-full border font-medium ${ESTADO_COLOR[detalle?.estado]}`}>
                 {detalle?.estado}
               </span>
             </DialogTitle>

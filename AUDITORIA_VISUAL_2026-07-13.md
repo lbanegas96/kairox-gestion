@@ -95,15 +95,14 @@ el fix de --kx-text-3). Plan de Cuentas y Cheques son los que más tienen deuda 
 Pero antes de correr el script masivo, decidir el mapeo por parte de Luciano (5-6 reglas
 totales). Puede ser una sesión dedicada corta.
 
-### 2. Tres tamaños de "texto chico" conviviendo (10/11/12px)
+### 2. ✅ RESUELTO (sesión 64, 2026-07-14) — Tres tamaños de "texto chico" conviviendo (10/11/12px)
 
-**129 ocurrencias** de tamaños hardcodeados en 48 archivos:
-```
-grep -rE "text-\[10px\]|text-\[11px\]" src/components | wc -l
-```
-
-No hay regla de cuándo se usa cada uno. Recomendación: definir 2 escalones oficiales
-(por ejemplo, `.text-xs` = 12px para labels, un `.text-xxs` = 11px para meta) y grep+migrar.
+`text-xs` (12px) queda como escalón "labels". Se agregó `text-2xs` (11px) en `tailwind.config.js`
+como único escalón "meta" y se migraron los 132 usos de `text-[10px]`/`text-[11px]` (46 archivos) con
+un swap 1:1 (sin ambigüedad semántica, no necesitó revisión archivo por archivo como los colores).
+Excluidos a propósito: `caja/TicketPrint.jsx` y `ventas/ComprobantePrintModal.jsx` (impresión térmica,
+tamaño físico fijo). Verificado en vivo: 0 overflows en badges/pills de Cheques y Plan de Cuentas.
+Detalle en CONTEXT.md.
 
 ### 3. Botones sin `aria-label` (accesibilidad)
 

@@ -18,7 +18,7 @@ function KpiCard({ icon: Icon, label, value, accent = 'text-kx-text' }) {
         <Icon className={`w-4 h-4 ${accent}`} />
       </div>
       <div>
-        <p className="text-[10px] text-kx-text-3 uppercase tracking-wide">{label}</p>
+        <p className="text-2xs text-kx-text-3 uppercase tracking-wide">{label}</p>
         <p className={`text-base font-bold tabular-nums ${accent}`}>{value}</p>
       </div>
     </div>

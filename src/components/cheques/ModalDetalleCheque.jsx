@@ -76,7 +76,7 @@ function ModalDetalleCheque({
                             : <EstadoBadge estado={h.estado_nuevo} />
                           }
                         </div>
-                        <p className="text-[10px] text-kx-text-3 mt-0.5">
+                        <p className="text-2xs text-kx-text-3 mt-0.5">
                           {new Date(h.fecha).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           {h.observacion && <span className="ml-2 text-kx-text-2">&mdash; {h.observacion}</span>}
                         </p>
