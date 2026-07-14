@@ -341,7 +341,7 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                          {comprobantes.length === 0 ? "Sin ventas registradas aún" : "No hay ventas que coincidan con los filtros"}
                        </p>
                        {activeFiltersCount > 0 && (
-                         <Button variant="link" onClick={clearFilters} className="text-blue-500 h-auto p-0">Limpiar todos los filtros</Button>
+                         <Button variant="link" onClick={clearFilters} className="text-kx-blue h-auto p-0">Limpiar todos los filtros</Button>
                        )}
                     </div>
                   </td>
@@ -509,7 +509,7 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                                     setIsDevolucionOpen(true);
                                   }, 0);
                                 }}
-                                className="gap-2 cursor-pointer text-orange-500 focus:text-orange-500"
+                                className="gap-2 cursor-pointer text-kx-amber focus:text-kx-amber"
                               >
                                 <Undo2 className="h-3.5 w-3.5" /> Devolver mercadería
                               </DropdownMenuItem>

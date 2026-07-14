@@ -141,7 +141,7 @@ function CuentasBancariasSection() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
-            <Landmark className="h-6 w-6 text-indigo-500" />
+            <Landmark className="h-6 w-6 text-indigo-600 dark:text-indigo-500" />
             Cuentas Bancarias
           </h1>
           <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-1">
@@ -227,7 +227,7 @@ function CuentasBancariasSection() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <p className={`text-2xl font-bold font-mono ${(saldos.get(c.id) ?? 0) >= 0 ? 'text-kx-text dark:text-kx-text' : 'text-red-500'}`}>
+                    <p className={`text-2xl font-bold font-mono ${(saldos.get(c.id) ?? 0) >= 0 ? 'text-kx-text dark:text-kx-text' : 'text-kx-red'}`}>
                       {formatMoney(saldos.get(c.id) ?? 0)}
                     </p>
                     {/* SECURITY-SENSITIVE-DATA */}
@@ -247,7 +247,7 @@ function CuentasBancariasSection() {
                     )}
                     {c.plan_cuentas ? (
                       <div className="flex items-center gap-1.5">
-                        <FileText className="w-3 h-3 text-indigo-400" />
+                        <FileText className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
                         <span className="text-xs text-indigo-600 dark:text-indigo-400">
                           {c.plan_cuentas.codigo} — {c.plan_cuentas.nombre}
                         </span>
@@ -266,7 +266,7 @@ function CuentasBancariasSection() {
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
                       <Button
-                        size="sm" variant="ghost" className="text-red-500 hover:text-red-600"
+                        size="sm" variant="ghost" className="text-kx-red hover:opacity-80"
                         onClick={() => deactivateCuenta.mutate(c.id)}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -420,7 +420,7 @@ function CuentasBancariasSection() {
                             ) : null}
                             <Button
                               size="sm" variant="ghost"
-                              className="h-7 w-7 p-0 text-red-400 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="h-7 w-7 p-0 text-kx-red hover:opacity-80 disabled:opacity-30 disabled:cursor-not-allowed"
                               onClick={() => deleteMov.mutate(m.id)}
                               disabled={!!m.asiento_id}
                               title={m.asiento_id ? 'No se puede eliminar un movimiento contabilizado — revertí la contabilización primero' : 'Eliminar movimiento'}

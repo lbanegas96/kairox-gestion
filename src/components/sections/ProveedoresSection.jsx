@@ -288,7 +288,7 @@ function ProveedoresSection() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
-            <Truck className="w-6 h-6 text-indigo-500" /> Proveedores
+            <Truck className="w-6 h-6 text-indigo-600 dark:text-indigo-500" /> Proveedores
           </h2>
           <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-1">Gestión de proveedores y cuenta corriente</p>
         </div>
@@ -300,9 +300,9 @@ function ProveedoresSection() {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: 'Total', value: stats?.total ?? 0, icon: Truck, color: 'text-indigo-500' },
-          { label: 'Activos', value: stats?.activos ?? 0, icon: UserCheck, color: 'text-green-500' },
-          { label: 'Deuda Total', value: `$${(stats?.deudaTotal ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-red-500' },
+          { label: 'Total', value: stats?.total ?? 0, icon: Truck, color: 'text-indigo-600 dark:text-indigo-500' },
+          { label: 'Activos', value: stats?.activos ?? 0, icon: UserCheck, color: 'text-kx-green' },
+          { label: 'Deuda Total', value: `$${(stats?.deudaTotal ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-kx-red' },
         ].map(({ label, value, icon: Icon, color }) => (
           <Card key={label} className="dark:bg-kx-bg dark:border-kx-border">
             <CardContent className="p-4 flex items-center gap-3">
@@ -378,17 +378,17 @@ function ProveedoresSection() {
                 </td>
                 <td className="p-4">
                   <div className="flex items-center justify-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-indigo-500"
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-indigo-600 dark:hover:text-indigo-500"
                       onClick={() => setDetalleId(prov.id)} title="Ver detalle">
                       <Eye className="w-3.5 h-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-blue-500"
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-blue"
                       onClick={() => openEditar(prov)} title="Editar">
                       <Edit className="w-3.5 h-3.5" />
                     </Button>
                     {isAdmin && (
                       <Button variant="ghost" size="icon"
-                        className={`h-7 w-7 ${prov.activo ? 'text-kx-text-3 hover:text-red-500' : 'text-kx-text-3 hover:text-green-500'}`}
+                        className={`h-7 w-7 ${prov.activo ? 'text-kx-text-3 hover:text-kx-red' : 'text-kx-text-3 hover:text-kx-green'}`}
                         onClick={() => toggleMutation.mutate({ id: prov.id, activo: !prov.activo })}
                         title={prov.activo ? 'Inactivar' : 'Reactivar'}>
                         {prov.activo ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
@@ -501,7 +501,7 @@ function ProveedoresSection() {
         <DialogContent className="max-w-3xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="dark:text-kx-text flex items-center gap-2">
-              <Truck className="w-5 h-5 text-indigo-500" /> {detalle?.nombre}
+              <Truck className="w-5 h-5 text-indigo-600 dark:text-indigo-500" /> {detalle?.nombre}
             </DialogTitle>
             <DialogDescription className="dark:text-kx-text-2">
               {detalle?.cuit ? `CUIT: ${detalle.cuit} · ` : ''}{detalle?.condicion_iva} · {detalle?.condicion_pago}
@@ -526,7 +526,7 @@ function ProveedoresSection() {
               <div className="flex items-center justify-between">
                 <div className="p-3 rounded-lg bg-kx-surface-2 dark:bg-kx-surface border border-kx-border dark:border-kx-border">
                   <p className="text-xs text-kx-text-3 uppercase">Saldo Deuda</p>
-                  <p className={`text-2xl font-bold font-mono ${saldo > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                  <p className={`text-2xl font-bold font-mono ${saldo > 0 ? 'text-kx-red' : 'text-kx-green'}`}>
                     ${saldo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                   </p>
                   <p className="text-xs text-kx-text-3 mt-0.5">{saldo > 0 ? 'Deuda pendiente' : saldo < 0 ? 'Saldo a favor' : 'Sin deuda'}</p>
@@ -570,7 +570,7 @@ function ProveedoresSection() {
                               </div>
                             )}
                           </td>
-                          <td className={`p-3 text-right font-mono font-bold ${esDebito ? 'text-red-500' : 'text-green-500'}`}>
+                          <td className={`p-3 text-right font-mono font-bold ${esDebito ? 'text-kx-red' : 'text-kx-green'}`}>
                             {esDebito ? '+' : '-'}${Number(m.monto).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                           </td>
                         </tr>
@@ -660,7 +660,7 @@ function ProveedoresSection() {
           <DialogHeader>
             <DialogTitle className="dark:text-kx-text">Registrar Pago</DialogTitle>
             <DialogDescription className="dark:text-kx-text-2">
-              Saldo actual: <span className="font-bold text-red-500">${saldo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+              Saldo actual: <span className="font-bold text-kx-red">${saldo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handlePago} className="space-y-4">
@@ -735,7 +735,7 @@ function ProveedoresSection() {
                       );
                     })}
                   </div>
-                  <div className={`text-xs text-right ${totalImputadoPago > montoPago ? 'text-red-500 font-semibold' : 'text-kx-text-3'}`}>
+                  <div className={`text-xs text-right ${totalImputadoPago > montoPago ? 'text-kx-red font-semibold' : 'text-kx-text-3'}`}>
                     Imputado: ${totalImputadoPago.toLocaleString('es-AR', { minimumFractionDigits: 2 })} / ${montoPago.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                   </div>
                 </div>

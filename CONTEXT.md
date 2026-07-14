@@ -1,5 +1,43 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-14 (Nadia — aplicada migration 204, único pendiente de sesión 63 de Luciano)
+**Última actualización:** 2026-07-14 (Nadia — verificación en navegador de la migración de tokens de Luciano: encontrada y corregida una regresión real de accesibilidad + hallazgo de alcance mayor pendiente)
+
+## ⚠️ Regresión encontrada al verificar en el navegador la migración de tokens de Luciano (sesión 64 Nadia)
+
+Luciano documentó en su cierre de sesión 63 que no pudo verificar visualmente la migración de tokens
+("no puedo loguearme"). Nadia la verificó en el navegador real (login nalux2430) con un script de
+contraste WCAG que compone correctamente fondos translúcidos (`rgba(...)` sobre su backdrop real, no
+tratados como color final) — el grep de Luciano (`text-slate-*`/`text-gray-*`) no capturaba esta clase
+de bug porque busca solo grises neutros, no colores de acento.
+
+**Bug real encontrado**: colores de acento (`text-green-400`, `text-blue-400`, `#00D4FF`, etc.)
+diseñados para verse bien en fondo oscuro, usados **sin variante `dark:`** — ilegibles en modo claro
+(contraste medido 1.45–2.56:1, mínimo WCAG AA es 4.5:1). Afectaba masivamente **Plan de Cuentas**
+(hasta 50 elementos por pestaña, las 7 pestañas) y **Cheques** (13-15 elementos, ambas pestañas) —
+justo los 2 módulos que la auditoría original de sesión 61 había marcado como peor deuda visual, y que
+Luciano migró primero.
+
+**Corregido y verificado en vivo (ambos temas, 0 casos):**
+- Plan de Cuentas completo (`shared.jsx` + 6 tabs + `ModalNuevoAsiento.jsx`): `TIPO_COLOR`/`ESTADO_COLOR`
+  y saldos con color migrados a los tokens `kx-green`/`kx-red`/`kx-blue`/`kx-violet`/`kx-amber`.
+- Cheques completo (`shared.jsx` + `ModalNuevoChequePropio.jsx`): 8 estados del pipeline (más colores
+  que los 5 tokens `kx-` disponibles) migrados a patrón `text-{color}-700` en light +
+  `dark:text-{color}-400` original — mismo patrón que `TopClientes.jsx` (sesión 61).
+- Top 5 archivos de mayor impacto fuera de esos 2 módulos: `ProveedoresSection.jsx`,
+  `ReporteLibroIVA.jsx`, `HistorialVentas.jsx`, `CuentasBancariasSection.jsx` (`MonitorFacturacionAFIP.jsx`
+  resultó ya estar 100% limpio — todos sus colores ya tenían pares `dark:` válidos).
+
+**⚠️ Hallazgo de alcance mayor, sin resolver — para retomar:** el mismo patrón (color de acento sin
+`dark:`) aparece en **~90 archivos más** de toda la app (Configuración, Caja, Reportes, Historial de
+Compras, etc. — lista completa reproducible con
+`grep -rE "text-(blue|green|red|purple|orange|yellow|cyan|indigo)-(400|500)" src/components`).
+**Importante**: ese grep tiene ~50% de falsos positivos — muchos de esos hits ya tienen su
+`dark:text-*` correcto y no son bugs (confirmado revisando `ProveedoresSection.jsx` y
+`MonitorFacturacionAFIP.jsx` a mano). No hay forma segura de arreglarlo con `sed` masivo — cada
+archivo necesita revisión línea por línea como se hizo hoy. Decisión pendiente del usuario: sesión
+dedicada a barrer el resto, o dejarlo así (los 2 módulos de peor deuda ya están cerrados).
+
+`npx vite build` exit 0. Verificado con script de contraste WCAG en vivo (ambos temas) antes de cada
+commit — no solo lectura de diff.
 
 ## ✅ Migration 204 aplicada — REVOKE PUBLIC en RPCs de AFIP (sesión 64 Nadia)
 
