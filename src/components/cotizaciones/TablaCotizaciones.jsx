@@ -71,7 +71,7 @@ function TablaCotizaciones({
                 </td>
                 <td className="p-4">
                   <div className="flex items-center justify-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-blue-500" onClick={() => setViewId(cot.id)} title="Ver detalle">
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-blue" onClick={() => setViewId(cot.id)} title="Ver detalle">
                       <Eye className="w-3.5 h-3.5" />
                     </Button>
                     {cot.estado === 'borrador' && (
@@ -84,7 +84,7 @@ function TablaCotizaciones({
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-green-600" onClick={() => estadoMutation.mutate({ id: cot.id, estado: 'aprobada' })} title="Aprobar">
                           <CheckCircle className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-red-500" onClick={() => estadoMutation.mutate({ id: cot.id, estado: 'rechazada' })} title="Rechazar">
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-red" onClick={() => estadoMutation.mutate({ id: cot.id, estado: 'rechazada' })} title="Rechazar">
                           <XCircle className="w-3.5 h-3.5" />
                         </Button>
                       </>
@@ -103,14 +103,14 @@ function TablaCotizaciones({
                       <button
                         type="button"
                         onClick={() => onNavigateToSale?.(cot.comprobante_id)}
-                        className="text-xs text-purple-500 hover:text-purple-400 font-medium flex items-center gap-1 hover:underline cursor-pointer"
+                        className="text-xs text-kx-violet hover:opacity-80 font-medium flex items-center gap-1 hover:underline cursor-pointer"
                         title="Ver venta generada"
                       >
                         <ExternalLink className="w-3 h-3" /> Venta
                       </button>
                     )}
                     {['borrador', 'rechazada'].includes(cot.estado) && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-red-500" onClick={() => deleteMutation.mutate(cot.id)} title="Eliminar">
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-red" onClick={() => deleteMutation.mutate(cot.id)} title="Eliminar">
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     )}

@@ -17,7 +17,7 @@ function ModalDetalleOC({
       <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border">
         <DialogHeader>
           <DialogTitle className="dark:text-kx-text flex items-center gap-2">
-            <ShoppingBag className="w-5 h-5 text-indigo-500" />
+            <ShoppingBag className="w-5 h-5 text-indigo-600 dark:text-indigo-500" />
             Orden de Compra {detalle?.numero}
           </DialogTitle>
         </DialogHeader>

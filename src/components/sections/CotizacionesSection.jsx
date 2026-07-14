@@ -242,7 +242,7 @@ function CotizacionesSection({ onNavigateToSale } = {}) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
-            <FileText className="w-6 h-6 text-blue-500" /> Cotizaciones
+            <FileText className="w-6 h-6 text-kx-blue" /> Cotizaciones
           </h2>
           <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-1">
             Genera presupuestos y convierte en ventas

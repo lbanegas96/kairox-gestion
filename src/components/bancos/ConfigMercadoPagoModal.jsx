@@ -192,7 +192,7 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
           {/* Access Token */}
           <div className="space-y-2">
             <Label className="text-kx-text text-sm">
-              Access Token de Producción <span className="text-red-400">*</span>
+              Access Token de Producción <span className="text-kx-red">*</span>
             </Label>
             <div className="flex gap-2">
               <div className="relative flex-1">
@@ -204,10 +204,10 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
                   type="password"
                 />
                 {tokenValido === true && (
-                  <CheckCircle2 className="absolute right-2.5 top-2.5 w-4 h-4 text-emerald-500" />
+                  <CheckCircle2 className="absolute right-2.5 top-2.5 w-4 h-4 text-kx-green" />
                 )}
                 {tokenValido === false && (
-                  <AlertCircle className="absolute right-2.5 top-2.5 w-4 h-4 text-red-400" />
+                  <AlertCircle className="absolute right-2.5 top-2.5 w-4 h-4 text-kx-red" />
                 )}
               </div>
               <Button
@@ -226,7 +226,7 @@ function ConfigMercadoPagoModal({ open, onOpenChange, integracion, onSuccess }) 
           {/* Cuenta bancaria destino */}
           <div className="space-y-2">
             <Label className="text-kx-text text-sm">
-              Cuenta bancaria destino <span className="text-red-400">*</span>
+              Cuenta bancaria destino <span className="text-kx-red">*</span>
             </Label>
             {cuentas.length === 0 ? (
               <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-700 dark:text-amber-400">

@@ -73,7 +73,7 @@ function MovimientosUala() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
-            <Wallet className="h-6 w-6 text-violet-500" />
+            <Wallet className="h-6 w-6 text-kx-violet" />
             Movimientos Ualá
           </h1>
           <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-1">

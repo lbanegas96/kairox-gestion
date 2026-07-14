@@ -484,7 +484,7 @@ function UsuariosSection() {
         <DialogContent className="max-w-2xl bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border flex flex-col max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
-              <Send className="h-5 w-5 text-blue-500" /> Invitar Usuario
+              <Send className="h-5 w-5 text-blue-600 dark:text-blue-500" /> Invitar Usuario
             </DialogTitle>
             <DialogDescription className="dark:text-kx-text-2">
               El usuario recibirá un email con un link para crear su propia contraseña y acceder al sistema.
@@ -509,7 +509,7 @@ function UsuariosSection() {
                         </div>
 
                         <div className="space-y-1">
-                            <Label htmlFor="email">Email <span className="text-red-500">*</span></Label>
+                            <Label htmlFor="email">Email <span className="text-red-600 dark:text-red-400">*</span></Label>
                             <Input id="email" name="email" type="email" value={formData.email} onChange={handleInputChange} placeholder="usuario@ejemplo.com" />
                         </div>
 

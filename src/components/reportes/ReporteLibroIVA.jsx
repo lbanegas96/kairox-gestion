@@ -283,7 +283,7 @@ function ReporteLibroIVA({ onBack }) {
               {fmtARS(kpis.totalIVA)}
             </p>
             {kpis.pendientes > 0 && (
-              <p className="text-xs text-amber-500 mt-1">{kpis.pendientes} sin CAE aún</p>
+              <p className="text-xs text-kx-amber mt-1">{kpis.pendientes} sin CAE aún</p>
             )}
           </Card>
         </div>

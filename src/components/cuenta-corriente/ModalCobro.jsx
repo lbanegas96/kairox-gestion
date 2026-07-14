@@ -162,7 +162,7 @@ function ModalCobro({
                   );
                 })}
               </div>
-              <div className={`text-xs text-right ${totalImputado > montoCobro ? 'text-red-500 font-semibold' : 'text-kx-text-3'}`}>
+              <div className={`text-xs text-right ${totalImputado > montoCobro ? 'text-kx-red font-semibold' : 'text-kx-text-3'}`}>
                 Imputado: ${totalImputado.toLocaleString('es-AR', { minimumFractionDigits: 2 })} / ${montoCobro.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
               </div>
             </div>

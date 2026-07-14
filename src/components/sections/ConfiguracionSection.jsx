@@ -1918,7 +1918,7 @@ const ConfiguracionSection = ({ initialTab }) => {
                   <span className="text-sm font-medium text-slate-700 dark:text-kx-text">Subí el archivo en ARCA</span>
                 </div>
                 <ol className="text-xs text-kx-text-2 pl-8 space-y-1 list-decimal list-inside">
-                  <li>Entrá a <a href="https://www.afip.gob.ar" target="_blank" rel="noreferrer" className="text-blue-500 underline">afip.gob.ar</a> con tu CUIT y clave fiscal</li>
+                  <li>Entrá a <a href="https://www.afip.gob.ar" target="_blank" rel="noreferrer" className="text-kx-blue underline">afip.gob.ar</a> con tu CUIT y clave fiscal</li>
                   <li>Ir a <strong>Administración de Certificados Digitales</strong></li>
                   <li>Subí el archivo .csr que descargaste</li>
                   <li>Descargá el certificado .crt que ARCA te entrega</li>

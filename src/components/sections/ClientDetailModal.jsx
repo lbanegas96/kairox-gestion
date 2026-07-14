@@ -292,7 +292,7 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                        {loading ? (
-                          <tr><td colSpan="5" className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-blue-500"/></td></tr>
+                          <tr><td colSpan="5" className="p-8 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-kx-blue"/></td></tr>
                        ) : movements.length === 0 ? (
                           <tr><td colSpan="5" className="p-8 text-center text-slate-500 italic flex flex-col items-center gap-2"><AlertCircle className="h-8 w-8 text-slate-200 dark:text-slate-700"/>Sin movimientos registrados</td></tr>
                        ) : (

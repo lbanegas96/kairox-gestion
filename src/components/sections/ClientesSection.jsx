@@ -209,7 +209,7 @@ function ClientesSection() {
           <Label className="dark:text-kx-text flex items-center gap-1"><CreditCard className="h-3.5 w-3.5" /> Condición de Pago</Label>
           <div className="w-full h-10 rounded-md border border-dashed border-kx-border px-3 flex items-center text-xs text-kx-text-3">
             Sin condiciones activas —
-            <a className="ml-1 text-violet-400 underline cursor-pointer">configurar en Finanzas</a>
+            <a className="ml-1 text-kx-violet underline cursor-pointer">configurar en Finanzas</a>
           </div>
         </div>
       ) : (
@@ -350,7 +350,7 @@ function ClientesSection() {
                     >
                       <TableCell className="pl-6 font-medium dark:text-kx-text">
                         {client.nombre}
-                        {excedido && <AlertTriangle className="inline h-3.5 w-3.5 ml-1 text-amber-500" title="Límite excedido" />}
+                        {excedido && <AlertTriangle className="inline h-3.5 w-3.5 ml-1 text-kx-amber" title="Límite excedido" />}
                       </TableCell>
                       <TableCell className="text-xs text-slate-500 dark:text-kx-text-2 font-mono">
                         {client.documento || '—'}

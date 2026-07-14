@@ -14,7 +14,7 @@ function ModalRegistrarFactura({
       <DialogContent className="max-w-md dark:bg-kx-bg dark:border-kx-border">
         <DialogHeader>
           <DialogTitle className="dark:text-kx-text flex items-center gap-2">
-            <Receipt className="w-5 h-5 text-indigo-500" />
+            <Receipt className="w-5 h-5 text-indigo-600 dark:text-indigo-500" />
             Registrar Factura — OC {detalle?.numero}
           </DialogTitle>
           <DialogDescription className="dark:text-kx-text-2">

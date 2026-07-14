@@ -128,14 +128,14 @@ const CajaCierre = ({ onCancel }) => {
   const isFaltante = diferencia < -0.01;
 
   if (loading) {
-    return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-blue-500"/></div>;
+    return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-500"/></div>;
   }
 
   return (
     <Card className="border-0 shadow-none">
       <CardHeader className="px-0 pt-0">
         <CardTitle className="flex items-center gap-2">
-           <Lock className="w-5 h-5 text-red-500" /> Arqueo y Cierre de Caja
+           <Lock className="w-5 h-5 text-red-600 dark:text-red-400" /> Arqueo y Cierre de Caja
         </CardTitle>
         <CardDescription>
            Verifica el efectivo físico y compáralo con el saldo esperado por el sistema.
@@ -155,8 +155,8 @@ const CajaCierre = ({ onCancel }) => {
                 <span className="font-mono font-medium text-emerald-600">+${totals.ingresosEfectivo.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-red-500 flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> Egresos Efectivo</span>
-                <span className="font-mono font-medium text-red-500">-${totals.egresosEfectivo.toFixed(2)}</span>
+                <span className="text-red-600 dark:text-red-400 flex items-center gap-1"><AlertTriangle className="w-3 h-3"/> Egresos Efectivo</span>
+                <span className="font-mono font-medium text-red-600 dark:text-red-400">-${totals.egresosEfectivo.toFixed(2)}</span>
               </div>
               <Separator className="bg-slate-300 dark:bg-slate-700"/>
               <div className="flex justify-between items-center pt-1">

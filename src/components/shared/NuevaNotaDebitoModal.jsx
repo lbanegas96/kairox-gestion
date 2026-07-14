@@ -24,7 +24,7 @@ function parseMontoAR(str) {
 const CONFIG = {
   cliente: {
     icon: FileWarning,
-    iconClass: 'text-amber-500',
+    iconClass: 'text-kx-amber',
     confirmClass: 'bg-amber-500 hover:bg-amber-600 text-white',
     entidadLabel: 'Cliente',
     entidadTabla: 'clientes',

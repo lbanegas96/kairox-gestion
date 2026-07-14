@@ -156,7 +156,7 @@ function TabHistorialCompras({
                          {compras.length === 0 ? "Sin compras registradas aún" : "No hay compras que coincidan con los filtros"}
                        </p>
                        {activeFiltersCount > 0 && (
-                         <Button variant="link" onClick={clearFilters} className="text-blue-500 h-auto p-0">Limpiar filtros</Button>
+                         <Button variant="link" onClick={clearFilters} className="text-kx-blue h-auto p-0">Limpiar filtros</Button>
                        )}
                     </div>
                   </td>

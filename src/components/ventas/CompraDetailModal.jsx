@@ -112,7 +112,7 @@ const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra }) => 
 
         {loading ? (
            <div className="flex-1 flex items-center justify-center p-12">
-             <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+             <Loader2 className="h-8 w-8 animate-spin text-kx-blue" />
            </div>
         ) : compra ? (
           <div className="flex-1 overflow-y-auto p-1">
@@ -135,7 +135,7 @@ const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra }) => 
                 <div className="flex justify-between items-start">
                    <div className="text-sm text-slate-500 flex items-center gap-2 dark:text-kx-text-2">Estado de Pago</div>
                    {!isEditing && (
-                      <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} aria-label="Editar estado de pago" className="h-6 w-6 p-0 text-kx-text-3 hover:text-blue-500">
+                      <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} aria-label="Editar estado de pago" className="h-6 w-6 p-0 text-kx-text-3 hover:text-kx-blue">
                         <Edit2 className="h-3 w-3" />
                       </Button>
                    )}

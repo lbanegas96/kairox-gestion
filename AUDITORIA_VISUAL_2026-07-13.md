@@ -121,10 +121,18 @@ unificado. Detalle en CONTEXT.md.
 
 ## ✅ ROADMAP COMPLETO — los 4 ítems de esta auditoría quedan cerrados (sesión 64, 2026-07-14)
 
-Pendiente real restante, fuera del alcance de esta auditoría puntual: migrar los ~90 archivos con
-colores de acento sin `dark:` fuera de los 6 módulos ya migrados (Plan de Cuentas, Cheques,
-Proveedores, Libro IVA, Historial de Ventas, Cuentas Bancarias). Documentado en CONTEXT.md con el
-comando de grep para reproducirlo — decisión pendiente del usuario, no urgente.
+## ✅✅ CERRADO TAMBIÉN: los ~90 archivos restantes con colores sin `dark:` (sesión 64, 2026-07-14, cont.)
+
+Lo que en esta misma sesión se dejó documentado como "pendiente, no urgente" se migró completo en
+la continuación de la sesión: ~50 archivos reales (tras descartar falsos positivos), ampliando el
+patrón de colores buscados (+violet, teal, emerald, rose) al encontrar casos que el patrón
+original no capturaba. Incluyó corregir residuos encontrados en Plan de Cuentas y Cheques —
+módulos que se habían dado por 100% cerrados pero tenían líneas que el chequeo visual en vivo de
+esa sesión no vio (botones con ícono+texto que el script de auditoría salta, y elementos
+condicionales como `isAdmin` o estado de período). Detalle completo en CONTEXT.md.
+
+**Estado final: 0 archivos con el patrón roto en todo `src/components`**, excepto
+`ResetPasswordPage.jsx`/`AuthPage.jsx` (excluidos a propósito, tema fijo oscuro por diseño).
 
 ## 🟢 Cosas que están bien
 

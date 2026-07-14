@@ -26,7 +26,7 @@ const TabSistema = ({ user }) => (
               small ? 'text-xs text-kx-text-3 break-all max-w-[260px] text-right' : 'text-sm text-kx-text',
             ].join(' ')}>
               {isStatus
-                ? <span className="text-emerald-500 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Conectada</span>
+                ? <span className="text-kx-green flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Conectada</span>
                 : value}
             </dd>
           </div>

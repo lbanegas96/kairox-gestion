@@ -14,7 +14,7 @@ function ModalDetalleCheque({
       <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileCheck size={16} className="text-emerald-400" /> Detalle del cheque
+            <FileCheck size={16} className="text-kx-green" /> Detalle del cheque
           </DialogTitle>
           {chequeDetalle && (
             <DialogDescription>

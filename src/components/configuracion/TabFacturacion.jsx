@@ -218,7 +218,7 @@ const TabFacturacion = ({
                         ) : '—'}
                       </td>
                       <td className="px-3 py-2 text-center">
-                        {pv.es_default && <Check className="w-4 h-4 text-emerald-500 mx-auto" />}
+                        {pv.es_default && <Check className="w-4 h-4 text-kx-green mx-auto" />}
                       </td>
                       <td className="px-3 py-2 text-center">
                         <span className={`inline-block w-2 h-2 rounded-full ${pv.activo ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`} />

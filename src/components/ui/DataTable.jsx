@@ -110,8 +110,8 @@ export function DataTable({
     if (!col.sortable) return null;
     if (sortKey !== col.key) return <ArrowUpDown className="w-3.5 h-3.5 ml-1 text-kx-text-2" />;
     return sortDir === 'asc'
-      ? <ArrowUp className="w-3.5 h-3.5 ml-1 text-blue-500" />
-      : <ArrowDown className="w-3.5 h-3.5 ml-1 text-blue-500" />;
+      ? <ArrowUp className="w-3.5 h-3.5 ml-1 text-kx-blue" />
+      : <ArrowDown className="w-3.5 h-3.5 ml-1 text-kx-blue" />;
   };
 
   return (

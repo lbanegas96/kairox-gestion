@@ -49,7 +49,7 @@ const TabInventario = ({
           >
             <div className="flex items-center justify-between">
               <span className="font-semibold text-kx-text">Último Costo</span>
-              {valoracionStock === 'ultimo_costo' && <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />}
+              {valoracionStock === 'ultimo_costo' && <CheckCircle2 className="w-4 h-4 text-kx-blue shrink-0" />}
             </div>
             <p className="text-xs text-kx-text-2 mt-1">
               El costo de tus productos se actualiza con cada compra al precio más reciente. Simple y rápido.
@@ -67,7 +67,7 @@ const TabInventario = ({
           >
             <div className="flex items-center justify-between">
               <span className="font-semibold text-kx-text">Promedio Ponderado</span>
-              {valoracionStock === 'promedio_ponderado' && <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />}
+              {valoracionStock === 'promedio_ponderado' && <CheckCircle2 className="w-4 h-4 text-kx-blue shrink-0" />}
             </div>
             <p className="text-xs text-kx-text-2 mt-1">
               El costo se calcula como un promedio entre lo que tenías y lo que compraste. Más preciso si tus

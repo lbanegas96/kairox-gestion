@@ -107,7 +107,7 @@ function ModalPedidoForm({
                   </div>
                   <div className="col-span-1 flex justify-center">
                     {form.items.length > 1 && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500"
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-kx-red"
                         onClick={() => removeItem(i)}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>

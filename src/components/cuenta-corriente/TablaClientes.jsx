@@ -119,7 +119,7 @@ function TablaClientes({
                         {clients.length === 0 ? "Sin clientes registrados aún" : "No hay clientes que coincidan con los filtros"}
                       </p>
                       {(searchTerm || statusFilter !== 'Todos') && (
-                        <Button variant="link" onClick={() => { setSearchTerm(''); setStatusFilter('Todos'); }} className="text-blue-500 h-auto p-0">
+                        <Button variant="link" onClick={() => { setSearchTerm(''); setStatusFilter('Todos'); }} className="text-kx-blue h-auto p-0">
                           Limpiar filtros
                         </Button>
                       )}

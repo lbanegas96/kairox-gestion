@@ -160,7 +160,7 @@ function ReporteParidad({ onBack }) {
         </Button>
         <div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
-            <TrendingUp className="h-6 w-6 text-blue-500" />
+            <TrendingUp className="h-6 w-6 text-kx-blue" />
             Reporte de Paridad ARS / {monedaParalela}
           </h2>
           <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-0.5">
@@ -226,8 +226,8 @@ function ReporteParidad({ onBack }) {
             </p>
             <p className="text-xs text-kx-text-3 mt-1">
               {rowsSinTC > 0
-                ? <span className="text-amber-500">{rowsSinTC} sin TC del día cargado</span>
-                : <span className="text-emerald-500">Todos con TC ✓</span>}
+                ? <span className="text-kx-amber">{rowsSinTC} sin TC del día cargado</span>
+                : <span className="text-kx-green">Todos con TC ✓</span>}
             </p>
           </Card>
         </div>

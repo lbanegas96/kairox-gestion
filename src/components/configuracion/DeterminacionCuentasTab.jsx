@@ -125,7 +125,7 @@ function ReglaModal({ open, onClose, regla, empresaId, cuentasContables, cuentas
           </div>
 
           <div>
-            <Label>Cuenta contable de contrapartida <span className="text-red-400">*</span></Label>
+            <Label>Cuenta contable de contrapartida <span className="text-kx-red">*</span></Label>
             <Select value={form.cuenta_contable_id} onValueChange={v => setForm(p => ({ ...p, cuenta_contable_id: v }))}>
               <SelectTrigger><SelectValue placeholder="Seleccionar cuenta del plan…" /></SelectTrigger>
               <SelectContent>
@@ -294,7 +294,7 @@ function DeterminacionCuentasTab({ empresaId }) {
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setModal({ open: true, regla: r })}>
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={() => delMut.mutate(r.id)}>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-kx-red hover:opacity-80" onClick={() => delMut.mutate(r.id)}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </td>

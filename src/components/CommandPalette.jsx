@@ -133,11 +133,11 @@ export function CommandPalette({ open, onClose, onNavigate }) {
 
   const getIcon = (item) => {
     if (item.type === 'seccion') { const Icon = item.icon; return <Icon className="w-4 h-4" />; }
-    if (item.type === 'producto')    return <Package className="w-4 h-4 text-blue-500" />;
-    if (item.type === 'cliente')     return <Users className="w-4 h-4 text-purple-500" />;
-    if (item.type === 'venta')       return <Receipt className="w-4 h-4 text-green-500" />;
-    if (item.type === 'cotizacion')  return <ClipboardList className="w-4 h-4 text-indigo-500" />;
-    if (item.type === 'banco')       return <Landmark className="w-4 h-4 text-teal-500" />;
+    if (item.type === 'producto')    return <Package className="w-4 h-4 text-kx-blue" />;
+    if (item.type === 'cliente')     return <Users className="w-4 h-4 text-kx-violet" />;
+    if (item.type === 'venta')       return <Receipt className="w-4 h-4 text-kx-green" />;
+    if (item.type === 'cotizacion')  return <ClipboardList className="w-4 h-4 text-indigo-600 dark:text-indigo-500" />;
+    if (item.type === 'banco')       return <Landmark className="w-4 h-4 text-teal-600 dark:text-teal-500" />;
     return null;
   };
 

@@ -48,7 +48,7 @@ function TablaPedidos({
                 <td colSpan={8} className="p-12 text-center text-kx-text-3 dark:text-kx-text-3">
                   <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-20" />
                   <p className="font-medium">No hay pedidos{filterEstado !== 'Todos' ? ` en estado "${getEstado(filterEstado).label}"` : ''}</p>
-                  <Button variant="link" onClick={openNew} className="mt-2 text-blue-500">
+                  <Button variant="link" onClick={openNew} className="mt-2 text-kx-blue">
                     Crear el primer pedido
                   </Button>
                 </td>

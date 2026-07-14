@@ -57,7 +57,7 @@ export function RefChip({ mov }) {
     >
       <span className="tabular-nums">{ref.chip}</span>
       {copied
-        ? <Check className="w-3 h-3 text-emerald-500" />
+        ? <Check className="w-3 h-3 text-kx-green" />
         : <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />}
     </button>
   );

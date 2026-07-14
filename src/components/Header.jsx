@@ -136,7 +136,7 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch, activ
             <div className="max-h-[360px] overflow-y-auto p-2 space-y-1">
               {!notifications.hasNotifications ? (
                 <div className="py-8 px-4 text-center flex flex-col items-center gap-2">
-                  <CheckCircle className="h-10 w-10 text-emerald-500/30" />
+                  <CheckCircle className="h-10 w-10 text-kx-green/30" />
                   <p className="text-sm font-medium text-kx-text-2">¡Todo al día!</p>
                   <p className="text-xs text-kx-text-3">Sin alertas pendientes</p>
                 </div>

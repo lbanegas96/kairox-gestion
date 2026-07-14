@@ -72,7 +72,7 @@ function TablaInventario({
                            <div className={`font-mono font-bold ${isLowStock ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>
                              {p.stock_actual}
                            </div>
-                           {isLowStock && <div className="text-2xs text-red-500 flex items-center justify-end gap-1"><AlertTriangle className="h-3 w-3" /> Bajo stock</div>}
+                           {isLowStock && <div className="text-2xs text-red-600 dark:text-red-400 flex items-center justify-end gap-1"><AlertTriangle className="h-3 w-3" /> Bajo stock</div>}
                          </td>
                          <td className="p-4 text-right text-kx-text-2">
                            ${p.costo_compra?.toLocaleString('es-AR')}

@@ -71,7 +71,7 @@ function TablaOrdenesCompra({
                   </td>
                   <td className="p-4">
                     <div className="flex items-center justify-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-indigo-500"
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-indigo-600 dark:hover:text-indigo-500"
                         onClick={() => setDetalleId(oc.id)} title="Ver detalle">
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
@@ -91,14 +91,14 @@ function TablaOrdenesCompra({
                       )}
 
                       {['borrador', 'enviada'].includes(oc.estado) && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-red-500"
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-red"
                           onClick={() => cancelarMutation.mutate(oc.id)} title="Cancelar OC">
                           <XCircle className="w-3.5 h-3.5" />
                         </Button>
                       )}
 
                       {['recibida', 'recibida_parcial'].includes(oc.estado) && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-orange-500"
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-amber"
                           onClick={() => setDevolverOC(oc)} title="Devolver al proveedor">
                           <RotateCcw className="w-3.5 h-3.5" />
                         </Button>

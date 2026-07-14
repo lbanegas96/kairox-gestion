@@ -135,7 +135,7 @@ function ConciliacionTab({ cuentas, empresaId, userId }) {
           {[
             { label: 'Total líneas', value: lineas.length, color: 'text-slate-700 dark:text-kx-text' },
             { label: 'Conciliadas', value: conciliadas.length, color: 'text-green-600' },
-            { label: 'Pendientes', value: pendientes.length, color: pendientes.length > 0 ? 'text-orange-500' : 'text-kx-text-3' },
+            { label: 'Pendientes', value: pendientes.length, color: pendientes.length > 0 ? 'text-kx-amber' : 'text-kx-text-3' },
           ].map(({ label, value, color }) => (
             <div key={label} className="p-3 rounded-lg bg-kx-surface-2 dark:bg-kx-surface border border-kx-border dark:border-kx-border text-center">
               <p className="text-xs text-kx-text-3 uppercase">{label}</p>
@@ -166,11 +166,11 @@ function ConciliacionTab({ cuentas, empresaId, userId }) {
                       <p className="text-sm truncate dark:text-kx-text">{l.descripcion}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className={`text-sm font-mono font-bold ${l.tipo === 'ingreso' ? 'text-green-600' : 'text-red-500'}`}>
+                      <span className={`text-sm font-mono font-bold ${l.tipo === 'ingreso' ? 'text-kx-green' : 'text-kx-red'}`}>
                         {l.tipo === 'ingreso' ? '+' : '-'}{formatMoney(l.monto)}
                       </span>
                       {l.conciliado
-                        ? <CheckCircle2 className="w-4 h-4 text-green-500" />
+                        ? <CheckCircle2 className="w-4 h-4 text-kx-green" />
                         : <button onClick={e => { e.stopPropagation(); setLineaActiva(lineaActiva?.id === l.id ? null : l); }}
                             className="w-4 h-4 rounded-full border-2 border-slate-300 hover:border-indigo-500" />
                       }
@@ -180,7 +180,7 @@ function ConciliacionTab({ cuentas, empresaId, userId }) {
                     <div className="flex items-center justify-between mt-1">
                       <span className="text-xs text-green-600 dark:text-green-400">Conciliada</span>
                       <button onClick={e => { e.stopPropagation(); handleDesMatch(l.id); }}
-                        className="text-xs text-kx-text-3 hover:text-red-500 flex items-center gap-1">
+                        className="text-xs text-kx-text-3 hover:text-kx-red flex items-center gap-1">
                         <Unlink2 className="w-3 h-3" /> Deshacer
                       </button>
                     </div>
@@ -213,10 +213,10 @@ function ConciliacionTab({ cuentas, empresaId, userId }) {
                         <p className="text-xs text-kx-text-3">{m.origen}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className={`text-sm font-mono font-bold ${m.tipo === 'ingreso' ? 'text-green-600' : 'text-red-500'}`}>
+                        <span className={`text-sm font-mono font-bold ${m.tipo === 'ingreso' ? 'text-kx-green' : 'text-kx-red'}`}>
                           {m.tipo === 'ingreso' ? '+' : '-'}{formatMoney(m.monto)}
                         </span>
-                        {lineaActiva && compatible && <Link2 className="w-4 h-4 text-indigo-500" />}
+                        {lineaActiva && compatible && <Link2 className="w-4 h-4 text-indigo-600 dark:text-indigo-500" />}
                       </div>
                     </div>
                   </div>

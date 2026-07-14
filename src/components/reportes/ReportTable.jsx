@@ -21,7 +21,7 @@ const ReportTable = ({ columns, data, loading, totals }) => {
   if (loading) {
     return (
       <div className="flex flex-col justify-center items-center h-64 border rounded-md bg-kx-surface-2 dark:bg-slate-800/50 animate-pulse dark:border-kx-border">
-        <Loader2 className="h-10 w-10 animate-spin text-blue-500 mb-3" />
+        <Loader2 className="h-10 w-10 animate-spin text-kx-blue mb-3" />
         <p className="text-slate-500 dark:text-kx-text-2 text-sm font-medium">Procesando datos del reporte...</p>
       </div>
     );

@@ -238,7 +238,7 @@ export default function CSVImportModal({ open, onOpenChange, tipo, onSuccess }) 
       <DialogContent className="max-w-2xl dark:bg-slate-950 dark:border-slate-800">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 dark:text-white">
-            <Upload className="h-5 w-5 text-blue-500" /> {cfg.title}
+            <Upload className="h-5 w-5 text-blue-600 dark:text-blue-500" /> {cfg.title}
           </DialogTitle>
           <DialogDescription className="dark:text-slate-400">
             {step === 1 && 'Subí un archivo CSV para importar en masa.'}
@@ -333,7 +333,7 @@ export default function CSVImportModal({ open, onOpenChange, tipo, onSuccess }) 
                       ))}
                       <td className="p-2">
                         {errs.length
-                          ? <span className="text-red-500 flex items-center gap-1"><AlertTriangle className="h-3 w-3" />{errs[0]}</span>
+                          ? <span className="text-red-600 dark:text-red-400 flex items-center gap-1"><AlertTriangle className="h-3 w-3" />{errs[0]}</span>
                           : <span className="text-green-600 flex items-center gap-1"><CheckCircle2 className="h-3 w-3" />OK</span>
                         }
                       </td>
@@ -358,9 +358,9 @@ export default function CSVImportModal({ open, onOpenChange, tipo, onSuccess }) 
                 <div className="text-sm text-green-600 dark:text-green-500">importados correctamente</div>
               </div>
               <div className={`p-4 rounded-xl border text-center ${importResult.errores > 0 ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800'}`}>
-                <AlertTriangle className={`h-8 w-8 mx-auto mb-1 ${importResult.errores > 0 ? 'text-red-500' : 'text-kx-text-3'}`} />
+                <AlertTriangle className={`h-8 w-8 mx-auto mb-1 ${importResult.errores > 0 ? 'text-red-600 dark:text-red-400' : 'text-kx-text-3'}`} />
                 <div className={`text-2xl font-bold ${importResult.errores > 0 ? 'text-red-600 dark:text-red-400' : 'text-kx-text-2'}`}>{importResult.errores}</div>
-                <div className={`text-sm ${importResult.errores > 0 ? 'text-red-500' : 'text-kx-text-2'}`}>con errores</div>
+                <div className={`text-sm ${importResult.errores > 0 ? 'text-red-600 dark:text-red-400' : 'text-kx-text-2'}`}>con errores</div>
               </div>
             </div>
             {importResult.errorList.length > 0 && (

@@ -1,5 +1,49 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-14 (Nadia — padding de Dashboard, item #4, ÚLTIMO pendiente del roadmap de auditoría visual — roadmap 100% cerrado)
+**Última actualización:** 2026-07-14 (Nadia — migración completa de los ~90 archivos restantes con colores de acento sin `dark:`; deuda visual del proyecto queda en 0)
+
+## ✅ Migración completa: colores de acento sin `dark:` en TODO el proyecto (sesión 64 Nadia)
+
+Cierre del último pendiente documentado ("~90 archivos restantes fuera de los 6 módulos ya
+migrados"). Alcance real tras filtrar falsos positivos (líneas que ya tenían su `dark:` correcto):
+**~50 archivos, ~90 líneas** con colores `-400`/`-500` (ampliado más allá de los 9 colores
+originales — se sumaron `violet`, `teal`, `emerald`, `rose` al descubrir casos reales que el patrón
+angosto no capturaba, ej. `text-violet-500` en vez de `text-purple-500`).
+
+**Metodología:** por archivo, filtrar solo líneas SIN `dark:` en la misma línea (evita falsos
+positivos de pares ya correctos), leer contexto real, y aplicar:
+- Tokens `kx-green`/`kx-red`/`kx-blue`/`kx-violet`/`kx-amber` cuando el color es uno de los 5
+  semánticos ya validados para WCAG AA.
+- Patrón `text-{color}-600 dark:text-{color}-400/500` para colores sin token (indigo, teal) o
+  cuando el archivo ya tenía una convención local propia establecida (ej. `TabIVA.jsx` usa
+  `rose-600/rose-400` y `emerald-600/emerald-400` en líneas vecinas — se siguió esa convención en
+  vez de forzar `kx-*` para no crear 2 paletas distintas en el mismo archivo).
+- El patrón `"*"` de campo obligatorio (`<span className="text-red-500">*</span>`) apareció
+  repetido en varios formularios — se corrigió con `replace_all` por archivo una vez identificado.
+
+**Hallazgo durante el barrido final:** un chequeo exhaustivo de TODO `src/components` al terminar
+encontró 6 líneas residuales en `TabPeriodos.jsx` (Plan de Cuentas, supuestamente ya migrado en
+sesión anterior) y 1-2 en `ReporteLibroIVA(Compras).jsx`/`ModalNuevoChequeTercero.jsx`/
+`ModalDetalleCheque.jsx` (Cheques, también supuestamente cerrado). Causa: esos módulos se
+verificaron con el patrón angosto original (sin violet/teal/emerald) y con un script de auditoría
+en vivo que **salta elementos con hijos** (ej. `<button><Icon/>Texto</button>` no se mide si el
+texto no es un nodo de texto directo sin hermanos elemento) — combinado con botones que solo
+renderizan condicionalmente (`isAdmin`, período abierto/cerrado), el chequeo visual en vivo de la
+sesión anterior no los vio. Quedaron corregidos ahora junto con el resto.
+
+**Excluida a propósito:** `ResetPasswordPage.jsx` (y `AuthPage.jsx`) — fondo fijo `bg-[#0F172A]`
+siempre oscuro por diseño (pantalla pre-login), 0 usos de `dark:` en todo el archivo, cualquier
+color ahí es correcto sin necesitar variante clara.
+
+**Verificado:** grep final sobre TODO `src/components` → 0 líneas con el patrón roto (excepto la
+excepción documentada). `npx vite build` exit 0. Verificado en vivo (Plan de Cuentas → Períodos,
+Cheques → Registrar cheque recibido): colores computados correctos en ambos temas, contraste light
+5.02:1 en el botón "Cerrar período", sin regresión en dark (mismo tono original preservado vía
+`dark:`).
+
+**Con esto, la deuda visual documentada en `AUDITORIA_VISUAL_2026-07-13.md` queda en 0 en todo el
+proyecto** — no solo los 6 módulos ya cubiertos en sesiones anteriores.
+
+## ✅ Padding de cards en Dashboard — roadmap de auditoría visual 100% cerrado (sesión 64 Nadia)
 
 ## ✅ Padding de cards en Dashboard — roadmap de auditoría visual 100% cerrado (sesión 64 Nadia)
 

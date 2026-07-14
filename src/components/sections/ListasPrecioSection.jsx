@@ -166,7 +166,7 @@ function ListasPrecioSection() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-kx-text flex items-center gap-2">
-            <Tag className="w-6 h-6 text-violet-500" /> Listas de Precios
+            <Tag className="w-6 h-6 text-kx-violet" /> Listas de Precios
           </h2>
           <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-1">
             Creá listas de precios por segmento (VIP, Mayorista, etc.) y asignálas a clientes
@@ -238,7 +238,7 @@ function ListasPrecioSection() {
                     <td className="p-4">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-md bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
-                          <Tag className="w-3.5 h-3.5 text-violet-500" />
+                          <Tag className="w-3.5 h-3.5 text-kx-violet" />
                         </div>
                         <span className="font-semibold text-kx-text dark:text-kx-text">{lista.nombre}</span>
                       </div>
@@ -258,22 +258,22 @@ function ListasPrecioSection() {
                         title={lista.activo ? 'Desactivar lista' : 'Activar lista'}
                       >
                         {lista.activo
-                          ? <ToggleRight className="w-6 h-6 text-emerald-500" />
+                          ? <ToggleRight className="w-6 h-6 text-kx-green" />
                           : <ToggleLeft className="w-6 h-6 text-kx-text-3" />
                         }
                       </button>
                     </td>
                     <td className="p-4">
                       <div className="flex items-center justify-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-violet-500"
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-violet"
                           onClick={() => openItems(lista)} title="Gestionar precios">
                           <DollarSign className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-blue-500"
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-blue"
                           onClick={() => openEditar(lista)} title="Editar lista">
                           <Edit className="w-3.5 h-3.5" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-red-500"
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-red"
                           onClick={() => deleteLista.mutate(lista.id)} title="Eliminar lista">
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
@@ -292,7 +292,7 @@ function ListasPrecioSection() {
         <DialogContent className="max-w-md dark:bg-kx-bg dark:border-kx-border">
           <DialogHeader>
             <DialogTitle className="dark:text-kx-text flex items-center gap-2">
-              <Tag className="w-5 h-5 text-violet-500" />
+              <Tag className="w-5 h-5 text-kx-violet" />
               {editingLista ? 'Editar lista' : 'Nueva lista de precios'}
             </DialogTitle>
             <DialogDescription className="dark:text-kx-text-2">
@@ -343,7 +343,7 @@ function ListasPrecioSection() {
         <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="dark:text-kx-text flex items-center gap-2">
-              <DollarSign className="w-5 h-5 text-violet-500" />
+              <DollarSign className="w-5 h-5 text-kx-violet" />
               Precios: {selectedLista?.nombre}
             </DialogTitle>
             <DialogDescription className="dark:text-kx-text-2">
@@ -400,7 +400,7 @@ function ListasPrecioSection() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-8 w-8 text-violet-500 hover:bg-violet-100 dark:hover:bg-violet-900/20"
+                      className="h-8 w-8 text-kx-violet hover:bg-violet-100 dark:hover:bg-violet-900/20"
                       onClick={() => handleSaveItemPrecio(prod.id)}
                       disabled={savingItem === prod.id || !precioEdicion[prod.id]}
                       title="Guardar precio"
@@ -414,7 +414,7 @@ function ListasPrecioSection() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="h-8 w-8 text-kx-text-3 hover:text-red-500"
+                        className="h-8 w-8 text-kx-text-3 hover:text-kx-red"
                         onClick={() => deleteItem.mutate(existingItem.id)}
                         title="Quitar precio especial"
                       >
