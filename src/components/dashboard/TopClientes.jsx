@@ -36,7 +36,7 @@ function TopClientes({ topLoading, topClientes, maxTopTotal, onNavigate }) {
               'text-kx-text-3',
             ];
             return (
-              <div key={c.nombre} className="bg-kx-surface-2 rounded-xl p-3 border border-kx-border">
+              <div key={c.nombre} className="bg-kx-surface-2 rounded-xl p-2.5 border border-kx-border">
                 <div className="flex items-center gap-2 mb-2">
                   <span className={`text-xs font-bold tabular-nums ${rankColors[i] ?? 'text-kx-text-3'}`}>#{i + 1}</span>
                   <span className="text-[12px] font-semibold text-kx-text truncate">{c.nombre}</span>

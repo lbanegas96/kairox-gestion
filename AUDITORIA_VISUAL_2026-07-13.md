@@ -111,10 +111,20 @@ paginada de Historial — 9 ubicaciones reales en el código (`TabNuevaCompra.js
 `TabHistorialCompras.jsx`, `ModalEditarCompra.jsx`, `CompraDetailModal.jsx`). Todas corregidas con
 `aria-label` descriptivo. Verificado en vivo: 32→0. Detalle en CONTEXT.md.
 
-### 4. Padding de cards inconsistente en Dashboard
+### 4. ✅ RESUELTO (sesión 64, 2026-07-14) — Padding de cards inconsistente en Dashboard
 
-`0px`, `10px`, `20px` mezclados sin patrón. Recomendación: 2 tamaños oficiales (compact 12px,
-default 20px) con clase compartida.
+El "0px" era en realidad un falso positivo de medición (grids de KPI con truco `gap-px`, no cards).
+Sistema real: 3 niveles ya casi 100% consistentes (hero 20px / KPI secundario 16px / card 20px,
+jerarquía visual intencional). Único bug real: `TopClientes.jsx` usaba 12px para sus items de
+ranking en vez de los 10px que ya usaba `StockYCobranzas.jsx` en sus 3 patrones análogos —
+unificado. Detalle en CONTEXT.md.
+
+## ✅ ROADMAP COMPLETO — los 4 ítems de esta auditoría quedan cerrados (sesión 64, 2026-07-14)
+
+Pendiente real restante, fuera del alcance de esta auditoría puntual: migrar los ~90 archivos con
+colores de acento sin `dark:` fuera de los 6 módulos ya migrados (Plan de Cuentas, Cheques,
+Proveedores, Libro IVA, Historial de Ventas, Cuentas Bancarias). Documentado en CONTEXT.md con el
+comando de grep para reproducirlo — decisión pendiente del usuario, no urgente.
 
 ## 🟢 Cosas que están bien
 

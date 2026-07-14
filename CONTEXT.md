@@ -1,5 +1,33 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-14 (Nadia — aria-label en botones de solo ícono de Compra Rápida, item #3 del roadmap de auditoría visual)
+**Última actualización:** 2026-07-14 (Nadia — padding de Dashboard, item #4, ÚLTIMO pendiente del roadmap de auditoría visual — roadmap 100% cerrado)
+
+## ✅ Padding de cards en Dashboard — roadmap de auditoría visual 100% cerrado (sesión 64 Nadia)
+
+Item #4, el último de `AUDITORIA_VISUAL_2026-07-13.md` ("0px/10px/20px mezclados sin patrón, 8 cards").
+Al medir en vivo con el mismo método del audit original, la mayoría de esos "0px" resultaron ser un
+**falso positivo de medición**: eran los contenedores `grid` de KPIs con el truco `gap-px` (bordes
+entre celdas vía gap, no padding) — hay que medir las celdas internas, no el wrapper del grid.
+
+**Sistema real encontrado (3 niveles, ya casi 100% consistente):**
+1. **Hero** (`HeroRow.jsx`, 3 tiles): `p-5` (20px), `min-h-[140px]` — jerarquía visual intencional,
+   números más grandes (34px/26px). No es un bug, es la fila de métricas más importantes.
+2. **KPI secundario** (`KpiGrids.jsx` + `KpisCotizaciones.jsx`, 16 tiles en 3 grids): `p-4` (16px),
+   `min-h-[88px]` — 100% consistente entre sí, ya estaba bien.
+3. **Card contenedora** (`StockYCobranzas.jsx`, `TopClientes.jsx`, `Graficos.jsx`,
+   `AccionesRapidas.jsx`, 7 cards): `p-5` (20px) — 100% consistente.
+
+**Único bug real encontrado:** dentro del nivel "item anidado dentro de una card" (aging buckets de
+Cobranzas, alertas de stock, deudores, ranking de Top Clientes), `StockYCobranzas.jsx` usaba `p-2.5`
+(10px) consistentemente en sus 3 patrones, pero `TopClientes.jsx` usaba `p-3` (12px) para sus 5 items
+de ranking — único desajuste real de 2px. Unificado a `p-2.5` (10px) en `TopClientes.jsx`.
+
+Verificado en vivo: los 8 items anidados (3 aging + 5 ranking) miden 10px de padding parejo, 0
+overflows con texto real ("Consumidor Final"). `npx vite build` exit 0.
+
+**Con esto, los 4 ítems de `AUDITORIA_VISUAL_2026-07-13.md` quedan cerrados.** Lo único que sigue
+abierto del roadmap visual original es la migración de los ~90 archivos restantes con colores de
+acento sin `dark:` fuera de los 6 módulos ya migrados (documentado, pendiente de decisión del
+usuario — no urgente).
 
 ## ✅ aria-label en botones de solo ícono — Compra Rápida (sesión 64 Nadia)
 
