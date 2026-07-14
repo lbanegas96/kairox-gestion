@@ -149,6 +149,7 @@ function ModalEditarCompra({
                         <Button
                           size="icon"
                           variant="ghost"
+                          aria-label={`Eliminar ${item.nombre} de la compra`}
                           className="h-7 w-7 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
                           onClick={() => removeEditItem(item.internalId)}
                         >

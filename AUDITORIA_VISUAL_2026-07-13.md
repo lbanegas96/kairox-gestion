@@ -104,11 +104,12 @@ Excluidos a propósito: `caja/TicketPrint.jsx` y `ventas/ComprobantePrintModal.j
 tamaño físico fijo). Verificado en vivo: 0 overflows en badges/pills de Cheques y Plan de Cuentas.
 Detalle en CONTEXT.md.
 
-### 3. Botones sin `aria-label` (accesibilidad)
+### 3. ✅ RESUELTO (sesión 64, 2026-07-14) — Botones sin `aria-label` en Compra Rápida
 
-En **Compra Rápida**: 32 de 35 botones (91%) sin label accesible — son botones de solo ícono.
-Impacto: usuarios de lector de pantalla no pueden operar la pantalla. Recomendación: agregar
-`aria-label` a todos los `<Button variant="ghost" size="icon">`.
+El "32 de 35" original eran solo 2 formas de ícono (Eye/Edit) repetidas ~16 veces en la tabla
+paginada de Historial — 9 ubicaciones reales en el código (`TabNuevaCompra.jsx`,
+`TabHistorialCompras.jsx`, `ModalEditarCompra.jsx`, `CompraDetailModal.jsx`). Todas corregidas con
+`aria-label` descriptivo. Verificado en vivo: 32→0. Detalle en CONTEXT.md.
 
 ### 4. Padding de cards inconsistente en Dashboard
 

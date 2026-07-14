@@ -1,5 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-14 (Nadia — consolidados los 3 tamaños de texto chico a 2 oficiales, item #2 del roadmap de auditoría visual)
+**Última actualización:** 2026-07-14 (Nadia — aria-label en botones de solo ícono de Compra Rápida, item #3 del roadmap de auditoría visual)
+
+## ✅ aria-label en botones de solo ícono — Compra Rápida (sesión 64 Nadia)
+
+Item #3 del roadmap de `AUDITORIA_VISUAL_2026-07-13.md` ("32 de 35 botones sin aria-label en Compra
+Rápida"). Al revisar el código fuente (`TabNuevaCompra.jsx`, `TabHistorialCompras.jsx`,
+`ModalEditarCompra.jsx`, `CompraDetailModal.jsx`) se encontraron solo **9 ubicaciones reales** en el
+código — el número "32" de la auditoría original contaba instancias repetidas en el DOM (2 botones
+—Eye "Ver"/Edit "Editar"— × ~16 filas de la tabla paginada de Historial), no 32 bugs distintos.
+Confirmado en vivo: el conteo real en la pantalla de Historial coincidía exacto con 32, y las 32
+correspondían a solo 2 formas de ícono únicas.
+
+**9 botones corregidos** con `aria-label` descriptivo (varios incluyen el nombre del producto/entidad
+real, no un texto genérico — ej. `` `Eliminar ${item.nombre} del carrito` ``):
+- `TabNuevaCompra.jsx`: eliminar producto del carrito, vaciar carrito.
+- `TabHistorialCompras.jsx`: ver detalle, editar compra, paginación (anterior/siguiente).
+- `ModalEditarCompra.jsx`: eliminar producto de la compra en edición.
+- `CompraDetailModal.jsx`: editar estado de pago, cancelar edición.
+
+**Hallazgo aparte, no tocado** (fuera de alcance de este fix): el botón "Ver" en
+`TabHistorialCompras.jsx` no tiene `onClick` propio — abre el detalle únicamente porque el click
+burbujea hasta el `onClick` de la fila (`<tr>`). Funciona hoy, pero es información redundante/frágil.
+No se tocó el comportamiento, solo se agregó el `aria-label`.
+
+**Validado en vivo:** conteo de "botones sin nombre accesible" en Historial de Compras bajó de 32 a 0.
+Probado agregar un producto real al carrito (Batidora Eléctrica) y confirmado que el `aria-label`
+incluye el nombre real (`"Eliminar Batidora Eléctrica del carrito"`), no un texto genérico —
+carrito vaciado sin registrar la compra. `npx vite build` exit 0.
 
 ## ✅ Consolidación de tamaños de texto chico: text-2xs (11px) reemplaza text-[10px]/text-[11px] (sesión 64 Nadia)
 
