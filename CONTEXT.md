@@ -1,5 +1,39 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-14 (Luciano — migración de tokens visuales 100% cerrada: compras, cuenta-corriente, cuentas-bancarias, productos, shared, ui + 2 bugs estructurales de tema encontrados y corregidos)
+**Última actualización:** 2026-07-14 (Luciano — barrido final de cierre de sesión: recuperado trabajo huérfano de un worktree, cerrado gap de seguridad ACL en 2 RPCs, verificado circuito Cheques→Bancos y Monitor AFIP ya en producción)
+
+## ✅ Barrido final de cierre — sesión 63 (Luciano, 2026-07-14)
+
+Antes de mergear/deployar, barrido completo del repo para confirmar que no quedaba nada suelto:
+
+**1. Worktree huérfano recuperado.** Había una branch/worktree (`claude/agitated-panini-a29997`,
+sesión de skill aislada anterior) con 4 archivos modificados sin commitear: toggle activar/desactivar
+cuenta en Plan de Cuentas (`TabPlanCuentas.jsx` + `plan-cuentas/shared.jsx`, ya tenía su handler
+`handleToggleActiva` en el árbol principal, solo faltaba cablear el botón), paginación client-side en
+`DataTable.jsx`, y una limpieza de variable muerta (`pagoLabel`) en `ComprobantePrintModal.jsx`. La
+branch estaba desactualizada respecto a master (creada antes de la migración de tokens de Plan de
+Cuentas y antes del feature de venta por pack en el ticket) — copiar los archivos a ciegas hubiera
+revertido ambas cosas. Se reconstruyó cada archivo a mano: se partió de la versión actual de master y
+se aplicó *solo* el cambio nuevo real de cada uno. Verificado con `git diff HEAD` que los 4 diffs
+finales son puramente aditivos. Build limpio. La branch remota quedó redundante pero no se borró
+(bloqueado por el sistema de seguridad — requiere confirmación explícita del usuario para borrar).
+
+**2. Gap de seguridad real encontrado vía advisors de Supabase**: `marcar_cae_resuelto_manual` (mig.203)
+y `reintentar_caes_lote` seguían siendo ejecutables por `anon` (usuario sin sesión) a través del RPC
+público — mismo bug exacto que ya se había corregido para 7 funciones en mig.194 (revocar `FROM anon`
+es un no-op cuando el grant real que deja pasar a anon es `PUBLIC=EXECUTE`; hay que revocar `FROM PUBLIC`).
+Confirmado con `information_schema.routine_privileges`: ambas tenían fila `PUBLIC` sin fila explícita
+para `anon`. Sin exploit activo (los guards internos ya bloquean con "No autorizado" porque anon no
+tiene `empresa_id`) pero es el mismo hallazgo de defensa en profundidad que el proyecto viene cerrando
+sistemáticamente. **Migración escrita** (`204_revoke_public_execute_cae_rpcs.sql`) pero **no aplicada**
+a producción — requiere confirmación explícita del usuario (cambio de permisos de base de datos).
+
+**3. Verificado (sin cambios necesarios)**: el circuito Cheques→Bancos y el Monitor de Facturación AFIP
+en Ventas ya estaban 100% implementados en producción desde sesiones anteriores — no había nada
+pendiente ahí, contrario a lo que sugería una nota vieja en `AUDITORIA_VISUAL_2026-07-13.md`.
+
+**4. Alícuota IIBB de Buenos Aires**: sacada del roadmap a pedido del usuario (no se va a cargar por
+ahora).
+
 
 ## ✅ Migración de tokens visuales — alcance adicional cerrado + 2 bugs estructurales (Luciano, 2026-07-14, sesión 63 cont.)
 
@@ -437,11 +471,6 @@ validar el guard end-to-end de la liquidación IIBB). Nadia confirmó que la jur
 es **Buenos Aires** — corregido desde la UI real (Impuestos → IIBB → Configuración de IIBB → Guardar),
 no por SQL directo. Verificado en la DB: `empresas.jurisdiccion_iibb = 'Buenos Aires'`.
 
-**Pendiente real para Luciano (bloqueante para liquidar IIBB en serio):** no hay ninguna alícuota
-cargada para "Buenos Aires" en Impuestos → Alícuotas — sin eso, `generar_liquidacion_iibb` va a
-rechazar con el guard de "falta alícuota". Cargar el % de IIBB real de Nalux para Buenos Aires antes
-de usar la liquidación.
-
 ## ✅ Roadmap SAP: factor de conversión de unidad de compra, ahora también en OC → Recepción (sesión 58)
 
 Cierre del "próximo paso" que Luciano dejó documentado en la sesión 57 (mig.186): el mini-conversor de
@@ -620,8 +649,7 @@ Nadia revisó los pendientes del CONTEXT.md. Los ítems #1–#3 y #5 ya estaban 
 
 **Pendiente (no bloqueante):**
 - ~~Task #6: trigger de validación tenant en `centro_costo_id`~~ → cerrado en sesión 58 (migration 187).
-- ~~Jurisdicción IIBB de Nalux~~ → corregida a Buenos Aires en sesión 58 (ver arriba). Falta cargar la
-  alícuota de Buenos Aires en Impuestos → Alícuotas (para Luciano).
+- ~~Jurisdicción IIBB de Nalux~~ → corregida a Buenos Aires en sesión 58 (ver arriba).
 
 **Última actualización:** 2026-07-09 (sesión 55 Luciano — CIERRE del plan de 4 frentes contables + toggle "Impuestos Avanzados" por empresa, migrations 170-173)
 

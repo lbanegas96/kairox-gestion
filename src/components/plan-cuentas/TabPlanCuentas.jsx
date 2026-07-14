@@ -65,7 +65,7 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
         <div className="p-3 space-y-1">
           {tree.map((raiz) => (
             <CuentaNode key={raiz.id} cuenta={raiz} depth={0}
-              onEdit={setEditCuenta} search={search} />
+              onEdit={setEditCuenta} onToggleActiva={handleToggleActiva} search={search} />
           ))}
         </div>
       </div>

@@ -55,6 +55,7 @@ export function DataTable({
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState(null);
   const [sortDir, setSortDir] = useState('asc');
+  const [localPage, setLocalPage] = useState(1);
 
   // ── Búsqueda client-side ───────────────────────────────────────────────────
   const keys = searchKeys ?? columns.map(c => c.key);
@@ -98,6 +99,13 @@ export function DataTable({
   // ── Paginación (cuando es server-side) ────────────────────────────────────
   const isServerPaged = typeof page === 'number' && typeof onPageChange === 'function';
 
+  // ── Paginación client-side (cuando no viene page/onPageChange desde afuera) ─
+  const localTotalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const localPageClamped = Math.min(localPage, localTotalPages);
+  const paginated = isServerPaged
+    ? sorted
+    : sorted.slice((localPageClamped - 1) * pageSize, localPageClamped * pageSize);
+
   const SortIcon = ({ col }) => {
     if (!col.sortable) return null;
     if (sortKey !== col.key) return <ArrowUpDown className="w-3.5 h-3.5 ml-1 text-kx-text-2" />;
@@ -116,7 +124,7 @@ export function DataTable({
               <Search className="absolute left-3 top-2.5 w-4 h-4 text-kx-text-2" />
               <Input
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={e => { setSearch(e.target.value); setLocalPage(1); }}
                 placeholder={searchPlaceholder}
                 className="pl-9 h-9 dark:bg-slate-900 dark:border-slate-700 dark:text-white text-sm"
               />
@@ -170,7 +178,7 @@ export function DataTable({
                   </td>
                 </tr>
               ) : (
-                sorted.map((row, idx) => (
+                paginated.map((row, idx) => (
                   <tr
                     key={row.id ?? idx}
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
@@ -218,13 +226,43 @@ export function DataTable({
         </div>
       )}
 
-      {/* Contador sin paginación server-side */}
-      {!isServerPaged && sorted.length > 0 && (
-        <p className="text-xs text-kx-text-2 text-right">
-          {search && sorted.length !== data.length
-            ? `${sorted.length} de ${data.length} registros`
-            : `${sorted.length} registros`}
-        </p>
+      {/* Paginación client-side (cuando no viene page/onPageChange desde afuera) */}
+      {!isServerPaged && localTotalPages > 1 ? (
+        <div className="flex items-center justify-between text-sm text-slate-500 dark:text-slate-400">
+          <span>
+            {search && sorted.length !== data.length
+              ? `${sorted.length} de ${data.length} registros`
+              : `${sorted.length} registros`}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="icon" className="h-8 w-8 dark:border-slate-700"
+              disabled={localPageClamped <= 1} onClick={() => setLocalPage(p => Math.max(1, p - 1))}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            {Array.from({ length: Math.min(localTotalPages, 5) }, (_, i) => {
+              const p = Math.max(1, Math.min(localPageClamped - 2, localTotalPages - 4)) + i;
+              return (
+                <Button key={p} variant={p === localPageClamped ? 'default' : 'outline'} size="icon"
+                  className={`h-8 w-8 text-xs dark:border-slate-700 ${p === localPageClamped ? 'bg-blue-600 text-white border-blue-600' : ''}`}
+                  onClick={() => setLocalPage(p)}>
+                  {p}
+                </Button>
+              );
+            })}
+            <Button variant="outline" size="icon" className="h-8 w-8 dark:border-slate-700"
+              disabled={localPageClamped >= localTotalPages} onClick={() => setLocalPage(p => Math.min(localTotalPages, p + 1))}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      ) : (
+        !isServerPaged && sorted.length > 0 && (
+          <p className="text-xs text-kx-text-2 text-right">
+            {search && sorted.length !== data.length
+              ? `${sorted.length} de ${data.length} registros`
+              : `${sorted.length} registros`}
+          </p>
+        )
       )}
     </div>
   );

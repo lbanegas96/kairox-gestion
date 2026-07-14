@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, ChevronDown, Pencil } from 'lucide-react';
+import { ChevronRight, ChevronDown, Pencil, Power } from 'lucide-react';
 
 export const TIPO_COLOR = {
   activo:     'bg-blue-500/10 text-blue-400 border-blue-500/30',
@@ -22,7 +22,7 @@ export const ESTADO_COLOR = {
 
 export const fmt = (n) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2 }).format(n ?? 0);
 
-export function CuentaNode({ cuenta, depth = 0, onEdit, search }) {
+export function CuentaNode({ cuenta, depth = 0, onEdit, onToggleActiva, search }) {
   const [open, setOpen] = useState(depth < 2);
   const hasChildren = cuenta.hijos?.length > 0;
   const highlight = search && (
@@ -68,6 +68,16 @@ export function CuentaNode({ cuenta, depth = 0, onEdit, search }) {
           </span>
         )}
 
+        {onToggleActiva && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleActiva(cuenta); }}
+            title={cuenta.activa ? 'Desactivar cuenta' : 'Activar cuenta'}
+            className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-all ${cuenta.activa ? 'text-kx-text-3 hover:text-kx-text' : 'text-green-400 hover:text-green-300'}`}
+          >
+            <Power size={12} />
+          </button>
+        )}
+
         {cuenta.permite_movimientos && (
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(cuenta); }}
@@ -81,7 +91,7 @@ export function CuentaNode({ cuenta, depth = 0, onEdit, search }) {
       {open && hasChildren && (
         <div className="overflow-hidden">
           {cuenta.hijos.map((h) => (
-            <CuentaNode key={h.id} cuenta={h} depth={depth + 1} onEdit={onEdit} search={search} />
+            <CuentaNode key={h.id} cuenta={h} depth={depth + 1} onEdit={onEdit} onToggleActiva={onToggleActiva} search={search} />
           ))}
         </div>
       )}

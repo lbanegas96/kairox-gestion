@@ -151,10 +151,6 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
     }
   };
 
-  const pagoLabel = pagos.length > 1
-    ? pagos.map(p => `${p.metodo}: $${Number(p.monto).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`).join(' | ')
-    : comprobante?.forma_pago || '';
-
   const usarFacturaPreview =
     empresaData?.usa_factura_electronica &&
     comprobante?.cae_estado === 'emitido' &&
