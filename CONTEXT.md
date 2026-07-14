@@ -34,6 +34,23 @@ pendiente ahí, contrario a lo que sugería una nota vieja en `AUDITORIA_VISUAL_
 **4. Alícuota IIBB de Buenos Aires**: sacada del roadmap a pedido del usuario (no se va a cargar por
 ahora).
 
+**Cierre de sesión — 2026-07-14, commit `47c98d4`.** Todo el flujo pedido está hecho: CONTEXT.md
+actualizado, commit + push a GitHub (`4f7c11e..47c98d4`), branch local `claude/agitated-panini-a29997`
+mergeada a master (no-op — ya no tenía commits propios, todo su contenido útil se había recuperado a
+mano en el punto 1 de arriba), deploy a producción en Vercel confirmado (READY).
+
+**Para retomar la próxima sesión — único pendiente real:**
+- **Migration `204_revoke_public_execute_cae_rpcs.sql`** está escrita en el repo pero **NO aplicada**
+  a la base de producción — quedó bloqueada por el sistema de seguridad porque es un cambio de
+  permisos de base de datos no pedido explícitamente. Revoca `EXECUTE ... FROM PUBLIC` en
+  `marcar_cae_resuelto_manual` y `reintentar_caes_lote` (mismo gap de ACL que la mig.194 ya había
+  cerrado para otras 7 funciones — ambas seguían siendo llamables por `anon` sin sesión, sin exploit
+  activo pero como defensa en profundidad). Para aplicarla: confirmar con el usuario y correr
+  `apply_migration` contra el proyecto `wuznppxeonmhfcvnqfbf`, o pedirle que la corra él desde el
+  dashboard de Supabase.
+- Todo lo demás (migración visual, Cheques→Bancos, Monitor AFIP, worktree huérfano) quedó 100% cerrado,
+  verificado y deployado — no hay nada más pendiente detectado en el barrido de esta sesión.
+
 
 ## ✅ Migración de tokens visuales — alcance adicional cerrado + 2 bugs estructurales (Luciano, 2026-07-14, sesión 63 cont.)
 
