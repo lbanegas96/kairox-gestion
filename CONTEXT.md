@@ -1,5 +1,36 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-15 (Nadia — Selector de Centro de Costo agregado al módulo de Reportes)
+**Última actualización:** 2026-07-15 (Nadia — auditoría de seguridad módulo AFIP/CAE: postura sólida, 1 drift repo↔prod corregido)
+
+## ✅ Auditoría de seguridad — módulo AFIP/CAE (sesión 67 Nadia)
+
+Pasada de seguridad sobre el módulo de facturación electrónica (maneja el certificado fiscal + clave
+privada + tokens WSAA — mismo perfil de riesgo que MercadoPago).
+
+**Postura general: sólida.**
+- Certificado (.crt) y clave privada RSA viven **cifrados en Supabase Vault** (`afip_cert_<empresa>`,
+  `afip_key_<empresa>`), leídos solo por `service_role` vía `vault_secret_read`. La clave privada se
+  genera en `generar-csr` y **nunca sale al frontend** (solo se devuelve el CSR).
+- Todas las edge functions expuestas (`generar-csr`, `probar-conexion-afip`) validan `verifyAdmin(req)`
+  internamente aunque tengan `verify_jwt=false` a nivel plataforma.
+- `emitir-cae` (emisión síncrona desde el front) está **deprecado (410 Gone)** — la emisión es asíncrona
+  vía `arca-worker` (cron */5, solo `service_role`), única fuente de verdad. El patrón de cola
+  (`facturas_pendientes_arca`) evita la doble emisión que existía antes.
+- El TA (token WSAA, ~12h) se cachea en `afip_tickets` (RLS sin políticas, solo `service_role`).
+
+**1 hallazgo real — drift repo↔producción en `probar-conexion-afip`:** el código fuente en el repo
+tenía la firma vieja de `getLastVoucherNumber` (época del SDK, pre-sesión 63) — llamaba con 6 args
+en vez de 8, sin `admin` ni `empresaId`, lo que desplazaba todos los parámetros y hacía que
+`getValidTA` reventara al hacer `.from()` sobre un string. **La versión desplegada en producción está
+correcta** (se arregló al reescribir a WSAA+WSFE manual en sesión 63), pero ese fix nunca volvió al
+repo. No es un bug vivo, pero un redeploy desde el código fuente hubiera regresado el botón "Probar
+conexión AFIP". Sincronizado el archivo del repo con la versión de producción (idéntico byte a byte).
+`arca-worker` (el que emite de verdad) sí estaba correcto en el repo — verificado ambos call-sites.
+
+**Nota sistémica:** no hay CI que despliegue los edge functions automáticamente, así que el repo puede
+divergir de producción. Vale la pena, en una sesión futura, comparar el resto de las funciones
+desplegadas contra el repo para detectar otros drifts.
+
+## ✅ Selector de Centro de Costo en Reportes — Ventas y Compras (sesión 67 Nadia)
 
 ## ✅ Selector de Centro de Costo en Reportes — Ventas y Compras (sesión 67 Nadia)
 
