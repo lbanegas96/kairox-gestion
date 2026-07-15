@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity, RefreshCw, Loader2, Search, CheckCircle, Clock, AlertTriangle,
-  AlertCircle, Minus, FileText, X,
+  AlertCircle, Minus, FileText, X, ShieldCheck,
 } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -30,7 +30,14 @@ const ESTADOS = {
   error:            { label: 'Error de datos',  icon: AlertTriangle, badge: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',                dot: 'bg-red-500' },
   error_definitivo: { label: 'Revisión manual', icon: AlertCircle,   badge: 'bg-rose-200 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300',            dot: 'bg-rose-600' },
   no_aplica:        { label: 'No relevante',    icon: Minus,         badge: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',           dot: 'bg-slate-400' },
+  caea:             { label: 'Autorizado (CAEA)', icon: ShieldCheck, badge: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400',     dot: 'bg-violet-500' },
 };
+
+// Un comprobante con modo_autorizacion='CAEA' tiene cae_estado='no_aplica' (no
+// necesita CAE individual — mig.104), pero visualmente no es lo mismo que un
+// documento genuinamente no-fiscal: se autorizó offline y falta informarlo a
+// ARCA al cierre de la quincena. Se muestra como estado propio 'caea'.
+const estadoVisual = (row) => (row.modo_autorizacion === 'CAEA' ? 'caea' : row.cae_estado);
 
 // Estados sobre los que tiene sentido reintentar (nunca 'emitido' ni 'no_aplica').
 const REINTENTABLES = ['error', 'error_definitivo', 'pendiente'];
@@ -204,6 +211,26 @@ const MonitorFacturacionAFIP = () => {
       invalidar();
     } catch (e) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setRowBusy(null);
+    }
+  };
+
+  // CAEA — contingencia offline: usar cuando ARCA está caído y hay un CAEA
+  // vigente solicitado de antemano (Configuración → Facturación).
+  const usarCaea = async (row) => {
+    setRowBusy(row.comprobante_id);
+    try {
+      const { data, error } = await supabase.rpc('usar_caea_para_comprobante', { p_comprobante_id: row.comprobante_id });
+      if (error) throw error;
+      toast({
+        title: 'Autorizado con CAEA',
+        description: `CAEA ${data?.caea} — comprobante Nº ${data?.nro_cbte}. Se informará a ARCA al cierre de la quincena.`,
+        className: 'bg-green-600 text-white border-green-500',
+      });
+      invalidar();
+    } catch (e) {
+      toast({ title: 'No se pudo usar CAEA', description: e.message, variant: 'destructive' });
     } finally {
       setRowBusy(null);
     }
@@ -385,7 +412,7 @@ const MonitorFacturacionAFIP = () => {
                     <td className="px-3 py-2 text-kx-text-2 max-w-[160px] truncate">{row.cliente_nombre ?? 'Consumidor Final'}</td>
                     <td className="px-3 py-2 text-kx-text text-right font-medium tabular-nums whitespace-nowrap">{money(row.total)}</td>
                     <td className="px-3 py-2 text-kx-text-2 font-mono text-xs whitespace-nowrap">{row.numero_afip ?? '—'}</td>
-                    <td className="px-3 py-2"><EstadoBadge estado={row.cae_estado} /></td>
+                    <td className="px-3 py-2"><EstadoBadge estado={estadoVisual(row)} /></td>
                     <td className="px-3 py-2 text-center text-kx-text-2 text-xs tabular-nums">
                       {row.intentos != null ? `${row.intentos}/${row.max_intentos ?? 5}` : '—'}
                     </td>
@@ -398,6 +425,16 @@ const MonitorFacturacionAFIP = () => {
                             className="text-xs px-2 py-1 rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 transition-colors"
                           >
                             {busy ? <Loader2 className="w-3 h-3 animate-spin inline" /> : 'Reintentar'}
+                          </button>
+                        )}
+                        {esError && (
+                          <button
+                            onClick={() => usarCaea(row)}
+                            disabled={busy}
+                            title="Autorizar con el CAEA vigente (contingencia offline) en vez de reintentar CAE"
+                            className="text-xs px-2 py-1 rounded border border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 disabled:opacity-50 transition-colors"
+                          >
+                            {busy ? <Loader2 className="w-3 h-3 animate-spin inline" /> : 'Usar CAEA'}
                           </button>
                         )}
                         <button
@@ -438,13 +475,17 @@ const MonitorFacturacionAFIP = () => {
           {detalle && (
             <div className="space-y-3 mt-2 text-sm">
               <div className="grid grid-cols-2 gap-3">
-                <Campo label="Estado"><EstadoBadge estado={detalle.cae_estado} /></Campo>
+                <Campo label="Estado"><EstadoBadge estado={estadoVisual(detalle)} /></Campo>
                 <Campo label="Tipo">{tipoLabel(detalle)}</Campo>
                 <Campo label="Fecha">{detalle.fecha ? formatDateAR(detalle.fecha) : '—'}</Campo>
                 <Campo label="Total"><span className="tabular-nums">{money(detalle.total)}</span></Campo>
                 <Campo label="Cliente">{detalle.cliente_nombre ?? 'Consumidor Final'}</Campo>
                 <Campo label="Intentos">{detalle.intentos != null ? `${detalle.intentos}/${detalle.max_intentos ?? 5}` : '—'}</Campo>
-                <Campo label="Nº AFIP"><span className="font-mono">{detalle.numero_afip ?? '—'}</span></Campo>
+                {detalle.modo_autorizacion === 'CAEA' ? (
+                  <Campo label="CAEA"><span className="font-mono">{detalle.caea_codigo ?? '—'}</span></Campo>
+                ) : (
+                  <Campo label="Nº AFIP"><span className="font-mono">{detalle.numero_afip ?? '—'}</span></Campo>
+                )}
                 <Campo label="CAE"><span className="font-mono">{detalle.cae ?? '—'}</span></Campo>
                 <Campo label="Venc. CAE">{detalle.cae_vencimiento ? formatDateAR(detalle.cae_vencimiento) : '—'}</Campo>
                 <Campo label="Estado cola">{detalle.estado_cola ?? '—'}</Campo>

@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCuit } from '@/lib/cuitUtils';
 import { formatDateAR, getTodayAR } from '@/lib/dateUtils';
+import CardCAEA from '@/components/configuracion/CardCAEA';
 
 const TIPO_DOCUMENTO_LABEL = {
   venta:         'Venta',
@@ -322,6 +323,9 @@ const TabFacturacion = ({
         )}
       </div>
     )}
+
+    {/* CAEA — contingencia offline */}
+    {afipConfig.usa_factura_electronica && <CardCAEA />}
 
     {/* Series de Numeración */}
     <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">

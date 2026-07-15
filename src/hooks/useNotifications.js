@@ -197,6 +197,27 @@ export function useNotifications() {
     ...REFETCH_OPTS,
   });
 
+  // ── CAEA por vencer sin informar (contingencia offline AFIP/ARCA) ─────────
+  const { data: caeaPorVencer = [] } = useQuery({
+    queryKey: ['notif', 'caea_por_vencer', empresaId],
+    queryFn: async () => {
+      const hoy  = getTodayAR();
+      const in3d = new Date(new Date(hoy + 'T00:00:00Z').getTime() + 3 * 86400000).toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from('caea_registros')
+        .select('id, caea, fecha_tope_inf, comprobantes_emitidos')
+        .eq('empresa_id', empresaId)
+        .eq('estado', 'activo')
+        .not('fecha_tope_inf', 'is', null)
+        .lte('fecha_tope_inf', in3d)
+        .gt('comprobantes_emitidos', 0);
+      if (error) return [];
+      return data ?? [];
+    },
+    enabled: !!empresaId && hasPermission('configuracion'),
+    ...REFETCH_OPTS,
+  });
+
   // ── Armar lista unificada ──────────────────────────────────────────────────
   const items = [
     ...(facturasErrorDefinitivo.length > 0 ? [{
@@ -210,6 +231,16 @@ export function useNotifications() {
       seccion: 'configuracion',
       action: 'tab-facturacion',
       raw: facturasErrorDefinitivo,
+    }] : []),
+    ...(caeaPorVencer.length > 0 ? [{
+      id: 'caea-por-vencer',
+      tipo: 'caea_por_vencer',
+      titulo: `${caeaPorVencer.length} CAEA por vencer sin informar`,
+      detalle: 'Informá la quincena a ARCA antes de la fecha tope desde Configuración → Facturación.',
+      nivel: 'advertencia',
+      seccion: 'configuracion',
+      action: 'tab-facturacion',
+      raw: caeaPorVencer,
     }] : []),
     ...(chequesProximos.length > 0 ? [{
       id: 'cheques-proximos',
@@ -288,6 +319,7 @@ export function useNotifications() {
     facturasErrorDefinitivo,
     chequesProximos,
     retencionesPracticadas,
+    caeaPorVencer,
     hasNotifications: items.length > 0,
   };
 }
