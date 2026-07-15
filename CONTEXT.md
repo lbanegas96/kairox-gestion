@@ -1,5 +1,22 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-15 (Nadia — cierre de jornada: features + 3 auditorías de seguridad)
+**Última actualización:** 2026-07-15 (Luciano — sesión 68: CAEA conectado a la UI + auditoría de guards)
+
+> 📌 **Luciano, para retomar (sesión 68):** a partir del informe de estado vs. mercado (ver sección de
+> abajo), se atacaron los 3 primeros puntos más débiles: se conectó **CAEA** (contingencia offline de
+> ARCA) a la UI por primera vez — antes solo existía en el backend desde hace semanas sin ningún punto
+> de uso real. Ahora: card en Configuración → Facturación (solicitar/informar quincena), botón "Usar
+> CAEA" en el Monitor de Facturación AFIP para autorizar manualmente un comprobante atascado en error,
+> alerta de vencimiento, y job diario que marca CAEAs vencidos. Nuevo RPC `usar_caea_para_comprobante`
+> (mig.206) calcula el próximo número con lock atómico — no confía en un número pre-calculado por el
+> frontend. Verificado con `BEGIN...ROLLBACK` antes de aplicar a producción. Además: auditoría de guards
+> de tenant en las 6 RPCs más nuevas (todas ya correctas, sin fix necesario) y evaluación de mover
+> `pg_net` fuera de `public` (decisión: no aplicar — no es relocalizable, el riesgo de un DROP/CREATE en
+> el cron de CAE en producción no vale la pena por un hallazgo de higiene de bajo riesgo real).
+>
+> **Informe de estado vs. mercado** (generado esta sesión, a pedido explícito): el ERP en sí está
+> maduro y bien auditado — lo que falta para lanzar no es código de producto, es infraestructura
+> comercial (0 referencias a Stripe/suscripciones en todo el repo) y los primeros clientes reales fuera
+> de Nalux. Detalle completo en el artifact generado en esta conversación, no reproducido acá.
 
 > 📌 **Luciano, para retomar:** nada quedó a medias ni roto, build verde y todo pusheado a `master`.
 > Lo que se hizo hoy (detalle abajo): feature de Centro de Costo en Reportes, auditorías de seguridad
