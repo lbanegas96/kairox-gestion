@@ -1,11 +1,95 @@
-# supabase/config.toml — Configuración de Edge Functions y scheduler
-# Proyecto: KAIROX Gestión (wuznppxeonmhfcvnqfbf)
-# Este archivo se usa con Supabase CLI para configurar schedules y opciones de deploy.
+# supabase/config.toml — KAIROX Gestión (project ref remoto: wuznppxeonmhfcvnqfbf)
+#
+# Generado a partir de `supabase init` (CLI 2.109.1) para incluir todos los
+# campos que la CLI actual exige para `supabase start`/`supabase test db`
+# (usado por .github/workflows/pgtap-tests.yml). El archivo anterior, escrito
+# a mano, sólo tenía la config de Edge Functions y le faltaba [db].major_version
+# (obligatorio) — eso hacía fallar `supabase start` en ~1s en CI, antes de que
+# Docker llegara a bajar ninguna imagen.
+#
+# Servicios que no hacen falta para correr los tests pgTAP (Storage, Studio,
+# Realtime, SMTP local, Analytics, Edge Runtime) quedan deshabilitados para que
+# la corrida en CI sea más rápida y tenga menos superficie de falla — no afecta
+# en nada al deploy real de Edge Functions a producción, que sigue siendo
+# vía MCP/CLI apuntando al proyecto remoto, no a este config local.
+#
+# Referencia completa: https://supabase.com/docs/guides/local-development/cli/config
 
-# project_id: nombre local usado por `supabase start`/`supabase test db` para
-# nombrar los contenedores Docker — NO es el project ref remoto (ese es
-# wuznppxeonmhfcvnqfbf, usado solo para link/deploy, nunca acá).
 project_id = "kairox-gestion"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+health_timeout = "2m"
+# Debe coincidir con la versión del proyecto remoto (Postgres 17 en Supabase).
+major_version = 17
+
+[db.pooler]
+enabled = false
+
+[db.migrations]
+enabled = true
+schema_paths = []
+
+[db.seed]
+# No hay supabase/seed.sql en este proyecto — los tests pgTAP crean sus
+# propios tenants sintéticos dentro de BEGIN...ROLLBACK (ver supabase/tests/README.md).
+enabled = false
+
+[realtime]
+enabled = false
+
+[studio]
+enabled = false
+
+[local_smtp]
+enabled = false
+
+[storage]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["https://127.0.0.1:3000"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+minimum_password_length = 6
+password_requirements = ""
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+secure_password_change = false
+max_frequency = "1s"
+otp_length = 6
+otp_expiry = 3600
+
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+template = "Your code is {{ `{{ .Code }}` }}"
+max_frequency = "5s"
+
+[edge_runtime]
+enabled = false
+
+[analytics]
+enabled = false
+
+# ── Edge Functions (deploy real a producción, no relacionado con supabase start local) ──
 
 [functions.arca-worker]
 verify_jwt = false   # el worker es un proceso interno (service_role), sin JWT de usuario
