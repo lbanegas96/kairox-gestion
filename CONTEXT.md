@@ -1,5 +1,39 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-15 (Nadia — comparación completa de los 14 edge functions repo↔producción: 2 drifts reales corregidos)
+**Última actualización:** 2026-07-15 (Nadia — auditoría de seguridad módulo Caja/POS/Ventas: limpio, 3 observaciones menores)
+
+## ✅ Auditoría de seguridad — módulo Caja / POS / Ventas (sesión 67 Nadia)
+
+Pasada de seguridad sobre el núcleo del manejo de dinero (crea comprobantes, descuenta stock, multipago,
+movimientos de caja, cuenta corriente). Foco: aislamiento por `empresa_id`, guards en RPC `SECURITY
+DEFINER`, y controles de acceso.
+
+**Resultado: bill of health limpio, 0 vulnerabilidades reales.**
+- `crear_venta` valida `p_empresa_id IS DISTINCT FROM get_my_empresa_id()` (rechaza si no coincide) +
+  `has_module_permission('ventas')`, y todas sus queries internas filtran por `empresa_id`. No confía en
+  el `empresa_id` del cliente.
+- `decrement_stock`/`increment_stock` derivan la empresa del servidor (`get_my_empresa_id()` en el WHERE)
+  y chequean permiso de módulo. `decrement_stock` usa `auth.uid()` directo para el user_id (patrón ideal).
+- Las 23 RPC `SECURITY DEFINER` que reciben `p_empresa_id` tienen el guard de tenant (verificado con un
+  barrido de `pg_proc.prosrc`). Las únicas sin guard son pre-auth/onboarding por diseño (`record_attempt`,
+  `check_rate_limit`, `create_tenant`, `email_exists_in_system`).
+- **`vault_secret_read`/`vault_secret_upsert`: EXECUTE solo para `postgres` y `service_role`** (ACL
+  explícito, PUBLIC revocado). Confirmado que `authenticated`/`anon` NO pueden ejecutarlas → los tokens de
+  MP y la clave privada de AFIP en el Vault son inaccesibles para usuarios finales. Este es el cimiento de
+  todo el modelo de secretos.
+- RLS de `comprobantes`, `comprobante_items`, `caja_sesiones`, `movimientos_caja`,
+  `cuenta_corriente_movimientos`: SELECT por `empresa_id = get_my_empresa_id()`; INSERT/UPDATE/DELETE con
+  `get_my_empresa_id() AND has_module_permission(...)` y `WITH CHECK` que impide mover filas a otra empresa.
+
+**3 observaciones menores (no explotables, decisión del usuario si endurecer):**
+1. `contabilizar_movimiento_bancario` y `revertir_contabilizacion_movimiento` tienen guard de empresa
+   (tenant-safe) pero no chequean `has_module_permission` — granularidad de permiso dentro de la misma
+   empresa, no fuga cross-tenant.
+2. `crear_venta` confía en `p_user_id` del cliente para atribución de auditoría (en vez de `auth.uid()`).
+   Falsificable dentro del mismo tenant; solo afecta el "quién" del registro, no el aislamiento de datos.
+3. `registrar_pago_proveedor` tiene 2 overloads (9 y 10 args) — posible código muerto, sin impacto de
+   seguridad (ambos con guard correcto).
+
+## ✅ Comparación repo ↔ producción de los 14 edge functions (sesión 67 Nadia)
 
 ## ✅ Comparación repo ↔ producción de los 14 edge functions (sesión 67 Nadia)
 
