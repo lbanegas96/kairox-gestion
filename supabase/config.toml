@@ -2,6 +2,11 @@
 # Proyecto: KAIROX Gestión (wuznppxeonmhfcvnqfbf)
 # Este archivo se usa con Supabase CLI para configurar schedules y opciones de deploy.
 
+# project_id: nombre local usado por `supabase start`/`supabase test db` para
+# nombrar los contenedores Docker — NO es el project ref remoto (ese es
+# wuznppxeonmhfcvnqfbf, usado solo para link/deploy, nunca acá).
+project_id = "kairox-gestion"
+
 [functions.arca-worker]
 verify_jwt = false   # el worker es un proceso interno (service_role), sin JWT de usuario
 

@@ -1,0 +1,36 @@
+name: pgTAP DB Tests
+
+# Corre los 16 archivos de supabase/tests/*.test.sql contra un Postgres local
+# (Docker, vía Supabase CLI) con todas las migrations aplicadas desde cero.
+#
+# Contexto: estos tests existían hace semanas pero nunca corrían solos — se
+# pegaban a mano vía el MCP de Supabase contra el proyecto remoto, siempre
+# dentro de BEGIN...ROLLBACK (ver supabase/tests/README.md), porque el entorno
+# de desarrollo no tiene Docker. Los runners de GitHub Actions sí lo tienen,
+# así que acá corren de verdad con pg_prove, no pegados a mano.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  pgtap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Levantar stack local de Supabase (Postgres + extensiones)
+        run: supabase start --exclude studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor
+
+      - name: Aplicar migrations y correr tests pgTAP
+        run: supabase test db
+
+      - name: Bajar el stack
+        if: always()
+        run: supabase stop --no-backup
