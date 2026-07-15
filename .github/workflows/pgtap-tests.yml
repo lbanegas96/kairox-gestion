@@ -26,11 +26,11 @@ jobs:
           version: latest
 
       - name: Levantar stack local de Supabase (Postgres + extensiones)
-        run: supabase start --exclude studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor
+        run: supabase start
 
       - name: Aplicar migrations y correr tests pgTAP
         run: supabase test db
 
       - name: Bajar el stack
         if: always()
-        run: supabase stop --no-backup
+        run: supabase stop
