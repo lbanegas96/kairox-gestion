@@ -1,5 +1,20 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-15 (Nadia — auditoría de seguridad módulo Caja/POS/Ventas: limpio, 3 observaciones menores)
+**Última actualización:** 2026-07-15 (Nadia — cierre de jornada: features + 3 auditorías de seguridad)
+
+> 📌 **Luciano, para retomar:** nada quedó a medias ni roto, build verde y todo pusheado a `master`.
+> Lo que se hizo hoy (detalle abajo): feature de Centro de Costo en Reportes, auditorías de seguridad
+> de **AFIP/CAE** y **Caja/POS/Ventas** (ambas sólidas), y una **comparación completa repo↔producción
+> de los 14 edge functions** que destapó 2 drifts reales ya corregidos (`probar-conexion-afip` y
+> `generar-csr` — el repo tenía versiones viejas que producción ya no usaba).
+>
+> **Opcional para seguir (nada urgente, en orden de valor):**
+> 1. **Check de drift automatizado** (GitHub Action que compare repo vs edge functions desplegados) —
+>    ataca la causa raíz de los 2 drifts de hoy. No hay CI que despliegue los edge functions.
+> 2. Seguir el barrido de seguridad módulo por módulo: faltan **Cuenta Corriente, Cheques, Cuentas
+>    Bancarias/conciliación, Impuestos, Ofertas/Listas de precio**.
+> 3. 3 observaciones menores del módulo Caja/POS (ver sección de abajo) — no explotables, decidir si
+>    endurecer.
+> 4. Leaked Password Protection en Supabase Auth (requiere plan Pro — decisión de negocio).
 
 ## ✅ Auditoría de seguridad — módulo Caja / POS / Ventas (sesión 67 Nadia)
 
