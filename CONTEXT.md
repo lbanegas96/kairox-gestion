@@ -1,10 +1,28 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-14 (Luciano — Access Token de MercadoPago cifrado en Vault, cierre del ítem de hardening dejado abierto por Nadia)
+**Última actualización:** 2026-07-15 (Nadia — Selector de Centro de Costo agregado al módulo de Reportes)
 
-> 📌 **Luciano, leé esto antes de seguir:** se cerró el ítem de hardening que Nadia dejó marcado
-> como "no urgente" en sesión 65 (token de MP en texto plano). Ya está corregido, deployado en
-> Supabase y pusheado a `master` (commit `27bb3e1`) — no requiere ninguna acción tuya. Detalle
-> técnico completo en el historial de commits, no reproducido acá por tratarse de un repo público.
+## ✅ Selector de Centro de Costo en Reportes — Ventas y Compras (sesión 67 Nadia)
+
+Extensión del selector de centro de costo (ya implementado en POS, Compras rápidas y Estado de
+Resultados) al módulo general de Reportes (`ReportesSection.jsx`). Mismo patrón que
+`TabEstadoResultados.jsx`: fetch de `empresas.usa_centros_costo` y de `centros_costo` activos,
+selector oculto si la empresa no usa centros de costo o no hay ninguno cargado.
+
+**Alcance:** solo los reportes **Ventas** y **Compras** lo soportan (`supportsCentroCosto: true` en
+`reportDefinitions.jsx`) — son los únicos con columna `centro_costo_id` en su tabla origen
+(`comprobantes` y `compras` respectivamente). Cartera de Clientes, Cta. Corriente, Financiero y
+MercadoPago por Tipo no tienen esa columna en sus tablas (`clientes`, `cuenta_corriente_movimientos`,
+`movimientos_caja`, `movimientos_bancarios`) — no se les agregó el selector.
+
+**Archivos tocados:** `reportDefinitions.jsx` (flag `supportsCentroCosto`), `ReportHeader.jsx`
+(UI del selector, condicional a `showCentroCosto && centrosCosto.length > 0`), `ModalReporte.jsx`
+(pasa las props), `ReportesSection.jsx` (fetch de centros de costo + filtro `.eq('centro_costo_id', ...)`
+en las queries de ventas y compras, reset en `resetFilters`).
+
+Verificado en vivo (login Nadia, Nalux): selector aparece con la lista real (`Sucursal Centro`) en
+ambos reportes; con "Todos" trae datos reales (ventas y compras); con el centro de costo específico
+no había ventas asignadas (esperable, no es un bug — no hay `centro_costo_id` seteado en las ventas
+de prueba actuales). Build (`npx vite build`) exit 0.
 
 ## ✅ Cifrado del Access Token de MercadoPago (sesión 66 Luciano)
 

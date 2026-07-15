@@ -9,6 +9,7 @@ function ModalReporte({
   startDate, setStartDate, endDate, setEndDate,
   handleGenerate, resetFilters, loading,
   reportData, handleDownloadPDF,
+  centrosCosto, centroCostoId, setCentroCostoId,
 }) {
   return (
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -29,6 +30,10 @@ function ModalReporte({
                 loading={loading}
                 hasData={reportData.length > 0}
                 onDownloadPDF={handleDownloadPDF}
+                showCentroCosto={!!selectedReport.supportsCentroCosto}
+                centrosCosto={centrosCosto}
+                centroCostoId={centroCostoId}
+                setCentroCostoId={setCentroCostoId}
               />
             </div>
 
