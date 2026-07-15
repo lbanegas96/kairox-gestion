@@ -1,5 +1,37 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-15 (Nadia — auditoría de seguridad módulo AFIP/CAE: postura sólida, 1 drift repo↔prod corregido)
+**Última actualización:** 2026-07-15 (Nadia — comparación completa de los 14 edge functions repo↔producción: 2 drifts reales corregidos)
+
+## ✅ Comparación repo ↔ producción de los 14 edge functions (sesión 67 Nadia)
+
+Barrido completo comparando cada edge function desplegada en Supabase contra su copia en el repo,
+motivado por el drift de `probar-conexion-afip` encontrado en la auditoría de AFIP. Metodología:
+`get_edge_function` (MCP) por cada una, diff del entrypoint normalizado (ignorando el prefijo de
+import `../_shared`↔`./_shared` que reescribe el deploy).
+
+**Resultado — 14 funciones, 2 drifts reales:**
+- ✅ **Idénticas** (o solo prefijo de import): `arca-worker`, `invite-user`, `create-user`,
+  `delete-user`, `mp-webhook` (v9), `mp-save-config`, `mp-sync`, `mp-verify-token`.
+- ✅ **Lógica idéntica** (repo documentado / deploy condensado, mismo comportamiento): `emitir-cae`
+  (stub 410), `verificar-caea-vigente`, `solicitar-caea`, `informar-caea`.
+- ⚠️ **`probar-conexion-afip`** — drift real (repo con firma vieja de `getLastVoucherNumber`, rota).
+  Corregido en commit `850dcd1` (repo←prod).
+- 🔴 **`generar-csr`** — drift real GRANDE: dos implementaciones distintas. Producción (v6) usa una
+  implementación manual de ASN.1/DER sin dependencias; el repo tenía una versión con `@peculiar/x509`
+  que **nunca se desplegó**. Resuelto sincronizando repo←prod (traer la manual-DER que corre).
+
+**Evidencia para `generar-csr` (por qué la manual-DER es la buena):** timestamps del Vault vs. deploy.
+La clave privada de Nalux se creó en el Vault el 2026-06-26 01:47:54 UTC, ~4 min DESPUÉS del deploy de
+la versión manual-DER (v6, 2026-06-26 01:43:43 UTC). O sea, el cert real que hoy emite facturas lo
+generó la manual-DER. El commit del repo con `@peculiar` (`bc1cf9e`, 04:18 UTC) es posterior pero nunca
+se desplegó — probablemente `@peculiar` no funcionaba en Edge runtime y se reemplazó por la manual al
+desplegar, sin traerla al repo. Ninguna acción en producción (ya corre la correcta); solo se sincronizó
+el código fuente.
+
+**Nota sistémica confirmada:** sin CI que despliegue los edge functions, el repo diverge de producción.
+Se encontraron 2 drifts reales en 14 funciones. Recomendación a futuro: al reescribir/redesplegar un
+edge function, commitear exactamente lo que se despliega (o agregar un check en CI).
+
+## ✅ Auditoría de seguridad — módulo AFIP/CAE (sesión 67 Nadia)
 
 ## ✅ Auditoría de seguridad — módulo AFIP/CAE (sesión 67 Nadia)
 
