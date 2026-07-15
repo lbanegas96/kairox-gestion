@@ -23,7 +23,8 @@ export const REPORTS = [
     description: 'Detalle de ventas por período con totales.',
     icon: <BarChart3 className="w-8 h-8 text-kx-violet" />,
     borderClass: 'border-t-kx-violet',
-    requiresDate: true
+    requiresDate: true,
+    supportsCentroCosto: true
   },
   {
     id: 'compras',
@@ -31,7 +32,8 @@ export const REPORTS = [
     description: 'Registro detallado de compras a proveedores.',
     icon: <ShoppingCart className="w-8 h-8 text-kx-blue" />,
     borderClass: 'border-t-kx-blue',
-    requiresDate: true
+    requiresDate: true,
+    supportsCentroCosto: true
   },
   {
     id: 'clientes',

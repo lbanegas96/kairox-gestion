@@ -1,7 +1,6 @@
 // supabase/functions/probar-conexion-afip/index.ts
 // Valida que el certificado AFIP/ARCA esté cargado en el Vault y que ARCA responda.
-// Llama a getLastVoucherNumber en el primer PdV activo con Factura C (tipo 11).
-// Devuelve { ok: true, lastNumber, pvNumero, cuit } o { ok: false, error }.
+// Usa implementación manual WSAA+WSFE (sin SDK).
 import { buildCorsHeaders, verifyAdmin, adminClient } from '../_shared/auth.ts';
 import { getLastVoucherNumber } from '../_shared/afip.ts';
 
@@ -16,36 +15,35 @@ Deno.serve(async (req) => {
         status: 401, headers: { ...cors, 'Content-Type': 'application/json' },
       });
     }
+    const empresaId = auth.empresaId;
 
-    // 1. CUIT de la empresa
     const { data: empresa } = await adminClient
       .from('empresas')
       .select('afip_cuit')
-      .eq('id', auth.empresaId)
+      .eq('id', empresaId)
       .single();
     if (!empresa?.afip_cuit) throw new Error('CUIT no configurado en la empresa.');
 
-    // 2. Primer punto de venta activo
     const { data: pv } = await adminClient
       .from('puntos_venta')
       .select('numero')
-      .eq('empresa_id', auth.empresaId)
+      .eq('empresa_id', empresaId)
       .eq('activo', true)
       .order('numero', { ascending: true })
       .limit(1)
       .single();
     if (!pv) throw new Error('No hay puntos de venta activos. Configurá al menos uno en la sección Facturación.');
 
-    // 3. Cert + clave desde Vault
-    const { data: certPem } = await adminClient.rpc('vault_secret_read', { p_name: `afip_cert_${auth.empresaId}` });
-    const { data: keyPem }  = await adminClient.rpc('vault_secret_read', { p_name: `afip_key_${auth.empresaId}` });
+    const { data: certPem } = await adminClient.rpc('vault_secret_read', { p_name: `afip_cert_${empresaId}` });
+    const { data: keyPem }  = await adminClient.rpc('vault_secret_read', { p_name: `afip_key_${empresaId}` });
     if (!certPem || !keyPem) {
       throw new Error('Certificado AFIP no configurado. Generá el CSR y subí el .crt desde el portal ARCA.');
     }
 
-    // 4. Llamada de prueba: último número emitido para Factura C en ese PdV
     const environment = Deno.env.get('AFIP_ENVIRONMENT') === 'production' ? 'production' : 'sandbox';
     const lastNumber = await getLastVoucherNumber(
+      adminClient,
+      empresaId,
       empresa.afip_cuit,
       certPem,
       keyPem,
@@ -55,12 +53,12 @@ Deno.serve(async (req) => {
     );
 
     return new Response(
-      JSON.stringify({ ok: true, lastNumber, pvNumero: pv.numero, cuit: empresa.afip_cuit }),
+      JSON.stringify({ ok: true, lastNumber, pvNumero: pv.numero, cuit: empresa.afip_cuit, environment }),
       { headers: { ...cors, 'Content-Type': 'application/json' } },
     );
   } catch (err) {
     return new Response(
-      JSON.stringify({ ok: false, error: (err as Error).message }),
+      JSON.stringify({ ok: false, error: (err as Error).message ?? String(err) }),
       { status: 200, headers: { ...cors, 'Content-Type': 'application/json' } },
     );
   }

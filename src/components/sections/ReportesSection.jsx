@@ -50,6 +50,20 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
       .then(({ data }) => setAfipActivo(data?.usa_factura_electronica === true));
   }, [user?.empresa_id]);
 
+  // Centro de costo (mismo patrón que TabEstadoResultados) — opcional, solo si la empresa lo usa.
+  const [centrosCosto, setCentrosCosto] = useState([]);
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    supabase.from('empresas').select('usa_centros_costo').eq('id', user.empresa_id).single()
+      .then(({ data: emp }) => {
+        if (!emp?.usa_centros_costo) { setCentrosCosto([]); return; }
+        supabase.from('centros_costo').select('id, nombre')
+          .eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre')
+          .then(({ data }) => setCentrosCosto(data || []));
+      });
+  }, [user?.empresa_id]);
+  const [centroCostoId, setCentroCostoId] = useState('');
+
   // Filters
   const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
@@ -60,6 +74,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   const resetFilters = () => {
     setStartDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
     setEndDate(new Date().toISOString().split('T')[0]);
+    setCentroCostoId('');
     setReportData([]);
   };
 
@@ -87,14 +102,15 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
       // (hallazgo auditoría sesión 59, confirmado con datos reales: sobreestimaba
       // el total ~14%). Mismo filtro que ya usa ReporteLibroIVA.jsx.
       if (selectedReport.id === 'ventas') {
-        const { data: sales, error } = await supabase
+        let query = supabase
           .from('comprobantes')
           .select('*, comprobante_items(*)')
           .eq('empresa_id', user.empresa_id)
           .eq('tipo', 'venta')
           .gte('fecha', start)
-          .lte('fecha', end)
-          .order('fecha', { ascending: false });
+          .lte('fecha', end);
+        if (centroCostoId) query = query.eq('centro_costo_id', centroCostoId);
+        const { data: sales, error } = await query.order('fecha', { ascending: false });
 
         if (error) throw error;
 
@@ -110,13 +126,14 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
 
       // 2. COMPRAS
       else if (selectedReport.id === 'compras') {
-         const { data: purchases, error } = await supabase
+         let query = supabase
           .from('compras')
           .select('*, proveedores(nombre)')
           .eq('empresa_id', user.empresa_id)
           .gte('fecha', start)
-          .lte('fecha', end)
-          .order('fecha', { ascending: false });
+          .lte('fecha', end);
+         if (centroCostoId) query = query.eq('centro_costo_id', centroCostoId);
+         const { data: purchases, error } = await query.order('fecha', { ascending: false });
 
         if (error) throw error;
 
@@ -259,6 +276,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate}
         handleGenerate={handleGenerate} resetFilters={resetFilters} loading={loading}
         reportData={reportData} handleDownloadPDF={handleDownloadPDF}
+        centrosCosto={centrosCosto} centroCostoId={centroCostoId} setCentroCostoId={setCentroCostoId}
       />
     </div>
   );

@@ -1,10 +1,140 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-14 (Luciano — Access Token de MercadoPago cifrado en Vault, cierre del ítem de hardening dejado abierto por Nadia)
+**Última actualización:** 2026-07-15 (Nadia — cierre de jornada: features + 3 auditorías de seguridad)
 
-> 📌 **Luciano, leé esto antes de seguir:** se cerró el ítem de hardening que Nadia dejó marcado
-> como "no urgente" en sesión 65 (token de MP en texto plano). Ya está corregido, deployado en
-> Supabase y pusheado a `master` (commit `27bb3e1`) — no requiere ninguna acción tuya. Detalle
-> técnico completo en el historial de commits, no reproducido acá por tratarse de un repo público.
+> 📌 **Luciano, para retomar:** nada quedó a medias ni roto, build verde y todo pusheado a `master`.
+> Lo que se hizo hoy (detalle abajo): feature de Centro de Costo en Reportes, auditorías de seguridad
+> de **AFIP/CAE** y **Caja/POS/Ventas** (ambas sólidas), y una **comparación completa repo↔producción
+> de los 14 edge functions** que destapó 2 drifts reales ya corregidos (`probar-conexion-afip` y
+> `generar-csr` — el repo tenía versiones viejas que producción ya no usaba).
+>
+> **Opcional para seguir (nada urgente, en orden de valor):**
+> 1. **Check de drift automatizado** (GitHub Action que compare repo vs edge functions desplegados) —
+>    ataca la causa raíz de los 2 drifts de hoy. No hay CI que despliegue los edge functions.
+> 2. Seguir el barrido de seguridad módulo por módulo: faltan **Cuenta Corriente, Cheques, Cuentas
+>    Bancarias/conciliación, Impuestos, Ofertas/Listas de precio**.
+> 3. 3 observaciones menores del módulo Caja/POS (ver sección de abajo) — no explotables, decidir si
+>    endurecer.
+> 4. Leaked Password Protection en Supabase Auth (requiere plan Pro — decisión de negocio).
+
+## ✅ Auditoría de seguridad — módulo Caja / POS / Ventas (sesión 67 Nadia)
+
+Pasada de seguridad sobre el núcleo del manejo de dinero (crea comprobantes, descuenta stock, multipago,
+movimientos de caja, cuenta corriente). Foco: aislamiento por `empresa_id`, guards en RPC `SECURITY
+DEFINER`, y controles de acceso.
+
+**Resultado: bill of health limpio, 0 vulnerabilidades reales.**
+- `crear_venta` valida `p_empresa_id IS DISTINCT FROM get_my_empresa_id()` (rechaza si no coincide) +
+  `has_module_permission('ventas')`, y todas sus queries internas filtran por `empresa_id`. No confía en
+  el `empresa_id` del cliente.
+- `decrement_stock`/`increment_stock` derivan la empresa del servidor (`get_my_empresa_id()` en el WHERE)
+  y chequean permiso de módulo. `decrement_stock` usa `auth.uid()` directo para el user_id (patrón ideal).
+- Las 23 RPC `SECURITY DEFINER` que reciben `p_empresa_id` tienen el guard de tenant (verificado con un
+  barrido de `pg_proc.prosrc`). Las únicas sin guard son pre-auth/onboarding por diseño (`record_attempt`,
+  `check_rate_limit`, `create_tenant`, `email_exists_in_system`).
+- **`vault_secret_read`/`vault_secret_upsert`: EXECUTE solo para `postgres` y `service_role`** (ACL
+  explícito, PUBLIC revocado). Confirmado que `authenticated`/`anon` NO pueden ejecutarlas → los tokens de
+  MP y la clave privada de AFIP en el Vault son inaccesibles para usuarios finales. Este es el cimiento de
+  todo el modelo de secretos.
+- RLS de `comprobantes`, `comprobante_items`, `caja_sesiones`, `movimientos_caja`,
+  `cuenta_corriente_movimientos`: SELECT por `empresa_id = get_my_empresa_id()`; INSERT/UPDATE/DELETE con
+  `get_my_empresa_id() AND has_module_permission(...)` y `WITH CHECK` que impide mover filas a otra empresa.
+
+**3 observaciones menores (no explotables, decisión del usuario si endurecer):**
+1. `contabilizar_movimiento_bancario` y `revertir_contabilizacion_movimiento` tienen guard de empresa
+   (tenant-safe) pero no chequean `has_module_permission` — granularidad de permiso dentro de la misma
+   empresa, no fuga cross-tenant.
+2. `crear_venta` confía en `p_user_id` del cliente para atribución de auditoría (en vez de `auth.uid()`).
+   Falsificable dentro del mismo tenant; solo afecta el "quién" del registro, no el aislamiento de datos.
+3. `registrar_pago_proveedor` tiene 2 overloads (9 y 10 args) — posible código muerto, sin impacto de
+   seguridad (ambos con guard correcto).
+
+## ✅ Comparación repo ↔ producción de los 14 edge functions (sesión 67 Nadia)
+
+## ✅ Comparación repo ↔ producción de los 14 edge functions (sesión 67 Nadia)
+
+Barrido completo comparando cada edge function desplegada en Supabase contra su copia en el repo,
+motivado por el drift de `probar-conexion-afip` encontrado en la auditoría de AFIP. Metodología:
+`get_edge_function` (MCP) por cada una, diff del entrypoint normalizado (ignorando el prefijo de
+import `../_shared`↔`./_shared` que reescribe el deploy).
+
+**Resultado — 14 funciones, 2 drifts reales:**
+- ✅ **Idénticas** (o solo prefijo de import): `arca-worker`, `invite-user`, `create-user`,
+  `delete-user`, `mp-webhook` (v9), `mp-save-config`, `mp-sync`, `mp-verify-token`.
+- ✅ **Lógica idéntica** (repo documentado / deploy condensado, mismo comportamiento): `emitir-cae`
+  (stub 410), `verificar-caea-vigente`, `solicitar-caea`, `informar-caea`.
+- ⚠️ **`probar-conexion-afip`** — drift real (repo con firma vieja de `getLastVoucherNumber`, rota).
+  Corregido en commit `850dcd1` (repo←prod).
+- 🔴 **`generar-csr`** — drift real GRANDE: dos implementaciones distintas. Producción (v6) usa una
+  implementación manual de ASN.1/DER sin dependencias; el repo tenía una versión con `@peculiar/x509`
+  que **nunca se desplegó**. Resuelto sincronizando repo←prod (traer la manual-DER que corre).
+
+**Evidencia para `generar-csr` (por qué la manual-DER es la buena):** timestamps del Vault vs. deploy.
+La clave privada de Nalux se creó en el Vault el 2026-06-26 01:47:54 UTC, ~4 min DESPUÉS del deploy de
+la versión manual-DER (v6, 2026-06-26 01:43:43 UTC). O sea, el cert real que hoy emite facturas lo
+generó la manual-DER. El commit del repo con `@peculiar` (`bc1cf9e`, 04:18 UTC) es posterior pero nunca
+se desplegó — probablemente `@peculiar` no funcionaba en Edge runtime y se reemplazó por la manual al
+desplegar, sin traerla al repo. Ninguna acción en producción (ya corre la correcta); solo se sincronizó
+el código fuente.
+
+**Nota sistémica confirmada:** sin CI que despliegue los edge functions, el repo diverge de producción.
+Se encontraron 2 drifts reales en 14 funciones. Recomendación a futuro: al reescribir/redesplegar un
+edge function, commitear exactamente lo que se despliega (o agregar un check en CI).
+
+## ✅ Auditoría de seguridad — módulo AFIP/CAE (sesión 67 Nadia)
+
+## ✅ Auditoría de seguridad — módulo AFIP/CAE (sesión 67 Nadia)
+
+Pasada de seguridad sobre el módulo de facturación electrónica (maneja el certificado fiscal + clave
+privada + tokens WSAA — mismo perfil de riesgo que MercadoPago).
+
+**Postura general: sólida.**
+- Certificado (.crt) y clave privada RSA viven **cifrados en Supabase Vault** (`afip_cert_<empresa>`,
+  `afip_key_<empresa>`), leídos solo por `service_role` vía `vault_secret_read`. La clave privada se
+  genera en `generar-csr` y **nunca sale al frontend** (solo se devuelve el CSR).
+- Todas las edge functions expuestas (`generar-csr`, `probar-conexion-afip`) validan `verifyAdmin(req)`
+  internamente aunque tengan `verify_jwt=false` a nivel plataforma.
+- `emitir-cae` (emisión síncrona desde el front) está **deprecado (410 Gone)** — la emisión es asíncrona
+  vía `arca-worker` (cron */5, solo `service_role`), única fuente de verdad. El patrón de cola
+  (`facturas_pendientes_arca`) evita la doble emisión que existía antes.
+- El TA (token WSAA, ~12h) se cachea en `afip_tickets` (RLS sin políticas, solo `service_role`).
+
+**1 hallazgo real — drift repo↔producción en `probar-conexion-afip`:** el código fuente en el repo
+tenía la firma vieja de `getLastVoucherNumber` (época del SDK, pre-sesión 63) — llamaba con 6 args
+en vez de 8, sin `admin` ni `empresaId`, lo que desplazaba todos los parámetros y hacía que
+`getValidTA` reventara al hacer `.from()` sobre un string. **La versión desplegada en producción está
+correcta** (se arregló al reescribir a WSAA+WSFE manual en sesión 63), pero ese fix nunca volvió al
+repo. No es un bug vivo, pero un redeploy desde el código fuente hubiera regresado el botón "Probar
+conexión AFIP". Sincronizado el archivo del repo con la versión de producción (idéntico byte a byte).
+`arca-worker` (el que emite de verdad) sí estaba correcto en el repo — verificado ambos call-sites.
+
+**Nota sistémica:** no hay CI que despliegue los edge functions automáticamente, así que el repo puede
+divergir de producción. Vale la pena, en una sesión futura, comparar el resto de las funciones
+desplegadas contra el repo para detectar otros drifts.
+
+## ✅ Selector de Centro de Costo en Reportes — Ventas y Compras (sesión 67 Nadia)
+
+## ✅ Selector de Centro de Costo en Reportes — Ventas y Compras (sesión 67 Nadia)
+
+Extensión del selector de centro de costo (ya implementado en POS, Compras rápidas y Estado de
+Resultados) al módulo general de Reportes (`ReportesSection.jsx`). Mismo patrón que
+`TabEstadoResultados.jsx`: fetch de `empresas.usa_centros_costo` y de `centros_costo` activos,
+selector oculto si la empresa no usa centros de costo o no hay ninguno cargado.
+
+**Alcance:** solo los reportes **Ventas** y **Compras** lo soportan (`supportsCentroCosto: true` en
+`reportDefinitions.jsx`) — son los únicos con columna `centro_costo_id` en su tabla origen
+(`comprobantes` y `compras` respectivamente). Cartera de Clientes, Cta. Corriente, Financiero y
+MercadoPago por Tipo no tienen esa columna en sus tablas (`clientes`, `cuenta_corriente_movimientos`,
+`movimientos_caja`, `movimientos_bancarios`) — no se les agregó el selector.
+
+**Archivos tocados:** `reportDefinitions.jsx` (flag `supportsCentroCosto`), `ReportHeader.jsx`
+(UI del selector, condicional a `showCentroCosto && centrosCosto.length > 0`), `ModalReporte.jsx`
+(pasa las props), `ReportesSection.jsx` (fetch de centros de costo + filtro `.eq('centro_costo_id', ...)`
+en las queries de ventas y compras, reset en `resetFilters`).
+
+Verificado en vivo (login Nadia, Nalux): selector aparece con la lista real (`Sucursal Centro`) en
+ambos reportes; con "Todos" trae datos reales (ventas y compras); con el centro de costo específico
+no había ventas asignadas (esperable, no es un bug — no hay `centro_costo_id` seteado en las ventas
+de prueba actuales). Build (`npx vite build`) exit 0.
 
 ## ✅ Cifrado del Access Token de MercadoPago (sesión 66 Luciano)
 
