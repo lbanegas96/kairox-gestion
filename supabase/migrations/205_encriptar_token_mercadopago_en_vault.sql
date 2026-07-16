@@ -18,10 +18,23 @@
 -- pegar el Access Token de producción a mano, sin refresh).
 
 -- 1) Backfill: migrar cada token existente a Vault antes de borrar la columna.
+-- En un replay desde cero (CI) la columna `access_token` no existe: el schema base
+-- (000_schema_base.sql) se escribió DESPUÉS de que esta migration corriera en
+-- producción y ya no la tiene. Sin este guard, el SELECT de abajo rompía con
+-- "column access_token does not exist" — no hay nada que hacer backfill en una
+-- base nueva, así que se salta directamente al DROP (que ya es IF EXISTS).
 DO $$
 DECLARE
   v_row RECORD;
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'integraciones_bancarias'
+       AND column_name = 'access_token'
+  ) THEN
+    RETURN;
+  END IF;
+
   FOR v_row IN
     SELECT empresa_id, access_token
       FROM public.integraciones_bancarias
