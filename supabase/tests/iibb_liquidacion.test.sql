@@ -204,13 +204,18 @@ INSERT INTO tap_output SELECT is(
 -- suman 100 y debe bloquear la liquidación.
 -- ───────────────────────────────────────────────────────────────────────────
 
+-- Período DISTINTO al de Caso 6 (2026-02) a propósito: generar_liquidacion_iibb
+-- chequea "período solapado con una liquidación existente" ANTES que el guard de
+-- coeficientes/alícuotas — si reusáramos febrero, siempre saltaría el guard de
+-- solapamiento primero (por la liquidación real que Caso 6 ya creó) y nunca
+-- llegaríamos a probar lo que este caso quiere probar.
 UPDATE public.iibb_coeficientes SET activo = false
 WHERE empresa_id = '00000000-aadd-0000-0000-000000000002' AND jurisdiccion = 'Buenos Aires';
 
 INSERT INTO tap_output SELECT throws_like(
   $t$ SELECT public.generar_liquidacion_iibb(
     '00000000-aadd-0000-0000-000000000002'::uuid, '00000000-aadd-0000-0000-00000000000b'::uuid,
-    '2026-02-01'::date, '2026-02-28'::date
+    '2026-03-01'::date, '2026-03-31'::date
   ) $t$,
   '%deberían sumar 100%',
   'Caso 7: bloquea liquidar si los coeficientes vigentes no suman 100'
@@ -227,10 +232,13 @@ WHERE empresa_id = '00000000-aadd-0000-0000-000000000002' AND jurisdiccion = 'Bu
 DELETE FROM public.alicuotas_impuestos
 WHERE empresa_id = '00000000-aadd-0000-0000-000000000002' AND jurisdiccion = 'Buenos Aires';
 
+-- Mismo período de Caso 7 (marzo): Caso 7 nunca llegó a persistir una liquidación
+-- ahí — throws_like atrapa la excepción antes del INSERT en iibb_liquidaciones —
+-- así que no hay solapamiento real que bloquee este intento.
 INSERT INTO tap_output SELECT throws_like(
   $t$ SELECT public.generar_liquidacion_iibb(
     '00000000-aadd-0000-0000-000000000002'::uuid, '00000000-aadd-0000-0000-00000000000b'::uuid,
-    '2026-02-01'::date, '2026-02-28'::date
+    '2026-03-01'::date, '2026-03-31'::date
   ) $t$,
   '%Falta la alícuota de IIBB para Buenos Aires%',
   'Caso 8: bloquea liquidar si falta la alícuota de una jurisdicción del CM'

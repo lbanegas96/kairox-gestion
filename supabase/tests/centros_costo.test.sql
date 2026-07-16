@@ -80,26 +80,20 @@ SELECT is(
 );
 
 -- ───────────────────────────────────────────────────────────────────────────
--- Caso 4 (hallazgo documentado, no un bug): las FK de Postgres NO respetan RLS
--- al validar la referencia — es una limitación conocida y documentada de
--- Postgres, no algo que esta migration pueda arreglar con una FK simple. Un
--- comprobante de Tenant F PUEDE terminar apuntando al centro_costo_id de
--- Tenant G si alguien lo fuerza (nunca pasa por la UI normal, que solo lista
--- los centros de costo visibles del propio tenant). Impacto real: bajo — el
--- único dato expuesto sería el `nombre` del centro de costo ajeno en un JOIN,
--- nunca datos financieros. Si esto se quiere cerrar del todo, hace falta un
--- trigger BEFORE INSERT/UPDATE que valide centro_costo_id.empresa_id =
--- comprobante.empresa_id — no se implementa acá, queda para un futuro
--- hardening pass si se decide que vale la pena.
+-- Caso 4: actualizado — el gap que este comentario documentaba ("la FK no
+-- valida tenant, un centro de costo ajeno puede colarse si se lo fuerza") se
+-- cerró después con la migration 187 (trigger fn_validar_tenant_centro_costo,
+-- BEFORE INSERT/UPDATE OF centro_costo_id en comprobantes/compras/
+-- asientos_contables). Ahora un comprobante de Tenant F NO puede apuntar al
+-- centro_costo_id de Tenant G — el trigger lo bloquea con excepción. Este caso
+-- se actualizó para probar esa mejora real en vez de la limitación vieja.
 -- ───────────────────────────────────────────────────────────────────────────
 
-INSERT INTO public.comprobantes (id, empresa_id, numero_venta, cliente_nombre, total, tipo, centro_costo_id)
-VALUES ('00000000-ffff-0000-0000-0000000000b3', '00000000-ffff-0000-0000-000000000001', '__PGTAP_TEST__ 0003', 'Consumidor Final', 100, 'venta', '00000000-9999-0000-0000-0000000000c2');
-
-SELECT is(
-  (SELECT centro_costo_id FROM public.comprobantes WHERE id = '00000000-ffff-0000-0000-0000000000b3'),
-  '00000000-9999-0000-0000-0000000000c2'::uuid,
-  'Caso 4: documentado — la FK no valida tenant, un centro de costo ajeno puede asignarse si se lo fuerza (ver comentario arriba)'
+SELECT throws_like(
+  $t$ INSERT INTO public.comprobantes (id, empresa_id, numero_venta, cliente_nombre, total, tipo, centro_costo_id)
+      VALUES ('00000000-ffff-0000-0000-0000000000b3', '00000000-ffff-0000-0000-000000000001', '__PGTAP_TEST__ 0003', 'Consumidor Final', 100, 'venta', '00000000-9999-0000-0000-0000000000c2') $t$,
+  '%no pertenece a la empresa del registro%',
+  'Caso 4: el trigger de la mig.187 bloquea asignar un centro de costo de otro tenant (hardening real, ya no es un gap documentado)'
 );
 
 -- ───────────────────────────────────────────────────────────────────────────
