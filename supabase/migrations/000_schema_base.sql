@@ -503,6 +503,29 @@ CREATE TABLE IF NOT EXISTS public.configuracion (
 );
 
 -- =============================================================================
+-- TABLA: periodos_contables
+-- =============================================================================
+-- 008_oc_approval_periodos.sql creaba esta tabla con un diseño viejo
+-- (empresa_id, anio, mes, cerrado) que quedó obsoleto al rediseñarla en
+-- producción, sin migration, a esta forma (igual a la que ya recrea
+-- 027_cierre_periodos.sql). Se adelanta acá porque 016_security_hardening.sql
+-- (que corre antes que la 027) ya hace DROP POLICY/CREATE TRIGGER sobre ella.
+CREATE TABLE IF NOT EXISTS public.periodos_contables (
+  id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id        UUID        NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
+  nombre            TEXT        NOT NULL,
+  fecha_inicio      DATE        NOT NULL,
+  fecha_cierre      DATE        NOT NULL,
+  estado            TEXT        NOT NULL DEFAULT 'abierto'
+                                CHECK (estado IN ('abierto', 'cerrado')),
+  cerrado_por       UUID        REFERENCES public.profiles(id),
+  fecha_cierre_real TIMESTAMPTZ,
+  observaciones     TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT periodos_fechas_check CHECK (fecha_cierre >= fecha_inicio)
+);
+
+-- =============================================================================
 -- 11 tablas más en el mismo caso: creadas a mano contra producción en algún
 -- momento (nunca versionadas en ninguna migration), y referenciadas por
 -- migrations tempranas (016, etc.) antes de que la migration que "debería"
