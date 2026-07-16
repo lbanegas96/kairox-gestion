@@ -656,6 +656,18 @@ CREATE TABLE IF NOT EXISTS public.movimientos_uala (
   empresa_id    UUID
 );
 
+-- RLS + policy SELECT ad-hoc original de movimientos_uala. Se creó a mano por
+-- dashboard (nombre en español, sin filtro de empresa_id — la fuga cross-tenant
+-- que 071 arregla después). 067_performance_rls_initplan hace ALTER POLICY sobre
+-- ella para performance, así que debe existir antes. La cadena real es:
+--   000 crea (fugada) → 067 ALTER (perf, sigue fugada) → 071 DROP + CREATE
+--   "...su empresa" (scoped a empresa_id, cierra la fuga). Estado final: seguro.
+ALTER TABLE public.movimientos_uala ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "usuarios autenticados pueden leer" ON public.movimientos_uala;
+CREATE POLICY "usuarios autenticados pueden leer" ON public.movimientos_uala
+  FOR SELECT
+  USING (auth.role() = 'authenticated'::text);
+
 CREATE TABLE IF NOT EXISTS public.ofertas (
   id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   empresa_id             UUID NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
