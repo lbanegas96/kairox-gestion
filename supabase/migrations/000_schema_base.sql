@@ -684,30 +684,15 @@ ALTER TABLE public.cuenta_corriente_movimientos
 ALTER TABLE public.movimientos_inventario
   ADD COLUMN IF NOT EXISTS user_id UUID;
 
-CREATE TABLE IF NOT EXISTS public.ofertas (
-  id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  empresa_id             UUID NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
-  nombre                 VARCHAR(100) NOT NULL,
-  descripcion            TEXT,
-  tipo_descuento         VARCHAR(20) NOT NULL DEFAULT 'porcentaje' CHECK (tipo_descuento IN ('porcentaje','monto_fijo')),
-  valor_descuento        NUMERIC(10,2) NOT NULL CHECK (valor_descuento >= 0),
-  producto_id            UUID REFERENCES public.productos(id) ON DELETE CASCADE,
-  categoria_nombre       VARCHAR(100),
-  medio_pago             VARCHAR(50),
-  dia_semana             SMALLINT[],
-  monto_minimo_carrito   NUMERIC(12,2),
-  cantidad_minima        NUMERIC(10,3),
-  fecha_desde            DATE,
-  fecha_hasta            DATE,
-  activo                 BOOLEAN NOT NULL DEFAULT true,
-  prioridad              SMALLINT NOT NULL DEFAULT 0,
-  acumulable             BOOLEAN NOT NULL DEFAULT false,
-  created_at             TIMESTAMPTZ DEFAULT now(),
-  updated_at             TIMESTAMPTZ DEFAULT now(),
-  CONSTRAINT chk_porcentaje_maximo CHECK (
-    (tipo_descuento = 'porcentaje' AND valor_descuento <= 100) OR (tipo_descuento = 'monto_fijo')
-  )
-);
+-- NOTA: `ofertas` NO va acá. La crea la migration 108 (motor de ofertas) y no es
+-- un objeto ad-hoc: ninguna migration anterior a la 108 la menciona. Estuvo un rato
+-- en este archivo y rompía el replay, porque la 108 hace `CREATE TABLE ofertas` sin
+-- IF NOT EXISTS → "relation already exists". Tampoco alcanzaba con agregarle el
+-- IF NOT EXISTS a la 108: esta copia definía los CHECK inline (Postgres los
+-- auto-nombra `ofertas_tipo_descuento_check`, etc.) mientras que producción tiene los
+-- nombres explícitos de la 108 (`chk_tipo_descuento`, `chk_valor_descuento_positivo`,
+-- `chk_porcentaje_maximo`) — verificado contra prod. Dejarla acá hacía que la base del
+-- CI quedara distinta de la real.
 
 CREATE TABLE IF NOT EXISTS public.pedidos (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

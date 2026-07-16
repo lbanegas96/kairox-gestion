@@ -36,7 +36,12 @@ jobs:
           code=$?
           printf '%s\n' "$out"
           if [ $code -ne 0 ]; then
-            msg=$(printf '%s\n' "$out" | tail -40 | sed 's/%/%25/g; s/\r//g' | awk '{printf "%s%%0A", $0}')
+            # Priorizar la linea ERROR: y la ultima migration aplicada — un CREATE TABLE
+            # largo empuja el ERROR fuera de un tail plano.
+            msg=$( { printf '%s\n' "$out" | grep -aiE "^(ERROR|FATAL)|SQLSTATE|Applying migration" | tail -8
+                     echo "----- tail -----"
+                     printf '%s\n' "$out" | tail -25
+                   } | sed 's/%/%25/g; s/\r//g' | awk '{printf "%s%%0A", $0}')
             echo "::error title=supabase start fallo (replay de migrations)::${msg}"
           fi
           exit $code
@@ -48,7 +53,12 @@ jobs:
           code=$?
           printf '%s\n' "$out"
           if [ $code -ne 0 ]; then
-            msg=$(printf '%s\n' "$out" | tail -40 | sed 's/%/%25/g; s/\r//g' | awk '{printf "%s%%0A", $0}')
+            # Priorizar la linea ERROR: y la ultima migration aplicada — un CREATE TABLE
+            # largo empuja el ERROR fuera de un tail plano.
+            msg=$( { printf '%s\n' "$out" | grep -aiE "^(ERROR|FATAL)|SQLSTATE|Applying migration" | tail -8
+                     echo "----- tail -----"
+                     printf '%s\n' "$out" | tail -25
+                   } | sed 's/%/%25/g; s/\r//g' | awk '{printf "%s%%0A", $0}')
             echo "::error title=pgTAP fallo::${msg}"
           fi
           exit $code
