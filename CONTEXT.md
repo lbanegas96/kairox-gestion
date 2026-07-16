@@ -1,5 +1,49 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-15 (Luciano — sesión 68: CAEA conectado a la UI + auditoría de guards)
+**Última actualización:** 2026-07-16 (Luciano — sesión 69: CI de pgTAP en GitHub Actions — EN PROGRESO)
+
+> 🔧 **Luciano, para retomar (sesión 69) — TAREA A MEDIO TERMINAR, no está rota nada:**
+> Estamos armando el **CI de pgTAP**: una GitHub Action (`.github/workflows/pgtap-tests.yml`) que corre
+> los 16 tests pgTAP solos en cada push. Objetivo = red de seguridad automática para las funciones de plata.
+>
+> **El problema de fondo (importante entenderlo):** para correr los tests, el CI arma una base de datos
+> **desde cero** aplicando las ~207 migrations en orden. Es la **primera vez en la historia** que se
+> replican desde vacío (antes los tests se pegaban a mano contra producción, que ya tenía todo). Al
+> replayar destapa **años de objetos ad-hoc** (tablas, columnas, funciones, policies) que se crearon a
+> mano en producción y **nunca se anotaron como migration**. Cada corrida encuentra uno, lo agregamos a
+> `supabase/migrations/000_schema_base.sql` (copia idempotente del schema base, solo para CI — nunca se
+> re-aplica a producción), y avanza al siguiente.
+>
+> **Progreso real:** arrancamos trabados en la migration 16, hoy vamos por la **98 de ~207**. Cada fix es
+> un bug latente real que llevaba años sin verse.
+>
+> **Clases de error ya cerradas con scans exhaustivos (no de a uno):**
+> - ✅ Funciones referenciadas antes de crearse (crucé las 177 referencias REVOKE/GRANT/ALTER).
+> - ✅ Tablas referenciadas antes de crearse (scan filtrado contra tablas reales de prod).
+> - ✅ Tabla creada 2 veces con drift (`periodos_contables` — la 008 tenía diseño viejo).
+> - ✅ `ALTER POLICY` sobre policy ad-hoc (`movimientos_uala`).
+> - ✅ `DROP` sin `IF EXISTS` (todos los DROP POLICY sin guard están en bucles `DO` sobre pg_policies).
+> - ✅ Columnas ad-hoc en índices (scan de las 180 columnas indexadas → solo 2: `cuenta_corriente_
+>   movimientos.proveedor_id` y `movimientos_inventario.user_id`, ambas ya agregadas a la 000).
+>
+> **Dónde quedó:** último push `37e8931`. La corrida 13 (run id 29468676409) **seguía fallando** en el
+> paso "Levantar stack" (aplicar migrations), ya pasada la 98. **Falta ver el error de esa corrida.**
+>
+> **Cómo retomar exactamente:**
+> 1. Ver la última corrida: `curl -s "https://api.github.com/repos/lbanegas96/kairox-gestion/actions/workflows/pgtap-tests.yml/runs?per_page=1"`.
+> 2. La API pública **solo devuelve "exit code 1"** sin el SQL real → pedirle a Luciano la **captura del
+>    log del paso rojo** en la UI de GitHub Actions (logueado). Ese es el único modo de ver el error.
+> 3. El error SIEMPRE es un objeto ad-hoc que falta en el replay desde cero. Sacar su definición real de
+>    producción con el MCP de Supabase (`pg_get_functiondef`, `information_schema.columns`, etc.),
+>    agregarla a `000_schema_base.sql` en orden, commitear con mensaje que cite el error real, pushear.
+> 4. Repetir hasta que la corrida quede **verde**. Ahí: marcar tarea 211 completa, documentar acá que el
+>    CI de pgTAP corre solo, y listo — de ahí en más cada push testea las funciones de plata automático.
+>
+> **Archivos tocados esta sesión:** `.github/workflows/pgtap-tests.yml` (nuevo), `supabase/config.toml`
+> (reescrito con todos los campos que la CLI 2.109.1 exige), `supabase/migrations/000_schema_base.sql`
+> (el que crece con cada objeto ad-hoc), `008_oc_approval_periodos.sql` (saqué tabla obsoleta),
+> `063_revocar_anon_y_search_path.sql` (saqué REVOKE de función creada más tarde).
+> **De regalo:** al terminar, el "manual" (las migrations) queda completo — se podrá reconstruir la base
+> desde cero, cosa que hoy no funcionaba.
 
 > 📌 **Luciano, para retomar (sesión 68):** a partir del informe de estado vs. mercado (ver sección de
 > abajo), se atacaron los 3 primeros puntos más débiles: se conectó **CAEA** (contingencia offline de
