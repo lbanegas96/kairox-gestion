@@ -29,5 +29,17 @@ REVOKE EXECUTE ON FUNCTION public.registrar_pago_proveedor(uuid, uuid, uuid, tex
 REVOKE EXECUTE ON FUNCTION public.reintentar_cae_comprobante(uuid) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.has_module_permission(text) FROM PUBLIC;
 
+-- El comentario de arriba dice "authenticated conserva su grant explícito" — pero
+-- ese grant nunca se escribió en ninguna migration, para NINGUNA de las 7 funciones
+-- de esta lista salvo has_module_permission, que necesita uno explícito porque a
+-- diferencia de crear_venta/cambiar_estado_cheque/etc. (RPCs "de entrada" que sí
+-- reciben su GRANT EXECUTE TO authenticated en su propia migration de creación),
+-- has_module_permission es un helper interno que hasta ahora solo se llamaba
+-- indirectamente y confiaba en el EXECUTE implícito de PUBLIC. Al revocarlo acá,
+-- production ya tenía el grant explícito puesto a mano (verificado con pg_proc.proacl);
+-- el replay desde cero no. Sin esto, cualquier RPC que llame has_module_permission()
+-- rompe con "permission denied for function has_module_permission".
+GRANT EXECUTE ON FUNCTION public.has_module_permission(text) TO authenticated, service_role;
+
 -- ROLLBACK (comentado): GRANT EXECUTE ON FUNCTION public.<fn>(...) TO PUBLIC;
 -- (no debería hacer falta — authenticated conserva su grant explícito).

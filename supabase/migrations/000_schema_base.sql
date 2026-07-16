@@ -25,6 +25,26 @@
 -- Habilitar extensión UUID
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Ninguna migration en todo el repo hace GRANT explícito sobre ninguna tabla — las
+-- 69 tablas de producción son accesibles para anon/authenticated/service_role vía
+-- el mecanismo de Supabase Cloud que auto-otorga esos privilegios a toda tabla del
+-- proyecto (verificado: 69/69 tienen el CRUD completo para `authenticated`). Un
+-- `supabase start` local NO replica ese bootstrap de la plataforma. La mayoría de
+-- las RPCs igual funcionan porque son SECURITY DEFINER (corren con los privilegios
+-- del dueño, no del que llama) — pero cualquier INSERT/SELECT directo contra una
+-- tabla desde una conexión 'authenticated'/'service_role' (como hacen los fixtures
+-- de los tests pgTAP) rompe con "permission denied for table X".
+--
+-- ALTER DEFAULT PRIVILEGES (no GRANT ALL ON ALL TABLES) a propósito: este archivo
+-- es la PRIMERA migration — si usáramos GRANT sobre las tablas ya existentes,
+-- solo cubriría las que ESTE archivo crea, dejando afuera cualquier tabla que
+-- creen las migrations numeradas (001-207) que corren después. ALTER DEFAULT
+-- PRIVILEGES, en cambio, aplica automáticamente a toda tabla que la sesión actual
+-- cree de ahora en más — mismo mecanismo, sin tener que tocar esto de nuevo cada
+-- vez que una migration futura cree una tabla nueva.
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT ALL ON TABLES TO anon, authenticated, service_role;
+
 -- =============================================================================
 -- TABLA: empresas
 -- =============================================================================
@@ -910,17 +930,13 @@ ALTER TABLE public.compras
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS last_login_at timestamptz;
 
--- `empresas` y `comprobantes` son las ÚNICAS 2 tablas de toda la base que ninguna
--- migration crea (ad-hoc puras, existían antes de que arrancara el sistema de
--- migrations). Ninguna migration en todo el repo hace GRANT explícito sobre
--- ninguna tabla — el resto de las ~66 tablas quedan accesibles para
--- anon/authenticated/service_role vía el mecanismo de Supabase Cloud que
--- auto-otorga privilegios a las tablas creadas por el proyecto, algo que un
--- `supabase start` local no replica igual. Sin este GRANT explícito, el CI
--- rompía con "permission denied for table comprobantes/empresas" (visto en los
--- tests centros_costo y sync_uala_to_bancos) apenas alguna RPC autenticada
--- intentaba tocarlas — las únicas 2 tablas con ese problema en toda la corrida.
-GRANT ALL ON TABLE public.empresas, public.comprobantes TO anon, authenticated, service_role;
+-- Todas las tablas ya creadas hasta acá (por este mismo archivo) necesitan el
+-- GRANT explícito también — el ALTER DEFAULT PRIVILEGES del principio del
+-- archivo solo alcanza a las tablas creadas DESPUÉS de esa línea. Como abrió
+-- con "empresas" inmediatamente después, en la práctica esto sólo re-confirma
+-- lo mismo; se deja explícito para no depender del orden exacto de secciones
+-- dentro de este archivo.
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
 
 -- =============================================================================
 -- DATOS INICIALES (opcional — ejecutar después del primer registro de usuario)
