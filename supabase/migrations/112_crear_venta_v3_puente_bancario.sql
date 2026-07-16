@@ -5,6 +5,17 @@
 -- Si no hay mapeo configurado, el comportamiento es idéntico a v2 (sin impacto).
 -- ROLLBACK: recrear v2 sin el bloque de puente (ver migration 108 para el body).
 
+-- La 108 dejó `p_pedido_id UUID DEFAULT NULL` y acá la firma lo declara sin default.
+-- Postgres no deja quitar defaults con CREATE OR REPLACE ("cannot remove parameter
+-- defaults from existing function", SQLSTATE 42P13). En producción no se notó porque
+-- el estado previo de la función era otro, pero en un replay desde cero la 108 corre
+-- justo antes de ésta y el default está puesto. DROP + CREATE deja la misma firma
+-- final que tiene producción hoy (p_pedido_id sin default).
+DROP FUNCTION IF EXISTS public.crear_venta(
+  UUID, UUID, TEXT, TIMESTAMPTZ, UUID, TEXT, NUMERIC, TEXT, TEXT, TEXT,
+  NUMERIC, NUMERIC, NUMERIC, JSONB, JSONB, BOOLEAN, UUID, UUID
+);
+
 CREATE OR REPLACE FUNCTION public.crear_venta(
   p_empresa_id       UUID,
   p_user_id          UUID,
