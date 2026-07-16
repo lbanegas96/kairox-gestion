@@ -1,7 +1,48 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-16 (Luciano — sesión 69: CI de pgTAP en GitHub Actions — EN PROGRESO)
+**Última actualización:** 2026-07-16 (Nadia — sesión 70: CI de pgTAP, replay de la 98 → 170 — EN PROGRESO)
 
-> 🔧 **Luciano, para retomar (sesión 69) — TAREA A MEDIO TERMINAR, no está rota nada:**
+> 🔧 **Para retomar (sesión 70, Nadia) — continuación directa de la 69 de Luciano:**
+>
+> **Lo más importante que cambió: ya NO hace falta que un humano copie el log.** El log crudo de
+> GitHub Actions requiere estar logueado, pero las **annotations se leen por la API pública**. El
+> workflow ahora republica la cola del log (priorizando la línea `ERROR:` y la última migration
+> aplicada) como annotation cuando falla. Se lee así:
+> ```
+> SHA=$(curl -s ".../actions/workflows/pgtap-tests.yml/runs?per_page=1" | ... head_sha)
+> CR=$(curl -s ".../commits/$SHA/check-runs" | ... .check_runs[0].id)
+> curl -s ".../check-runs/$CR/annotations"   # -> el error real, sin login
+> ```
+> ⚠ **Ojo con el rate limit:** la API sin autenticar da **60 requests/hora por IP**. Nada de
+> pollear cada 15s (se agota en minutos). Esperar ~90s fijos post-push y consultar 1 vez (3-4
+> requests por iteración).
+>
+> **Progreso: el replay pasó de la migration 98 a la 170 de ~207.** Quedan ~37.
+>
+> **Errores resueltos esta sesión (cada uno cerrando su CLASE con un scan, no de a un objeto):**
+> | Mig | Error | Clase cerrada |
+> |---|---|---|
+> | 100 | `comprobantes.tipo` no existe | (ver barrido de columnas abajo) |
+> | 104 | constraint duplicado | La 104 parcheaba un `ADD COLUMN` que en prod fue **no-op** (la columna ya existía a mano) → su CHECK inline nunca se creó. En un replay limpio sí se crea y la 104 lo duplicaba. Fix: `DROP CONSTRAINT IF EXISTS` antes. Scan: no hay otras colisiones de auto-nombre. |
+> | 108 | `relation "ofertas" already exists` | `ofertas` estaba en la 000 **por error** (nada anterior a la 108 la menciona) y encima con los CHECK inline auto-nombrados, cuando prod tiene los nombres explícitos de la 108 (`chk_tipo_descuento`…). Se sacó de la 000. Único `CREATE TABLE` sin `IF NOT EXISTS` del repo. |
+> | 112 | `cannot remove parameter defaults` | La 108 deja `p_pedido_id DEFAULT NULL` y la 112 redefine la misma firma sin default; Postgres no lo permite con `CREATE OR REPLACE`. Fix: `DROP FUNCTION` antes. Scan de las 16 firmas de `crear_venta`: es el único punto donde se quita un default con igual aridad. |
+> | 143 | trigger duplicado | La 016 crea `trg_audit_*` en bucle con guard `IF EXISTS(tabla)`; en prod salteaba `periodos_contables` (se creaba recién en la 027) → de ahí la 143. Al adelantar esa tabla a la 000, el bucle ahora sí la agarra y la 143 chocaba. Fix: `DROP TRIGGER IF EXISTS`. **Efecto colateral de un fix anterior — pasa seguido, ojo.** |
+> | 157 | `No se encontraron las cuentas 1.1.6 / 3.2` | **Clase nueva: migration de DATOS** (ajuste contable one-shot con el `empresa_id` de Nalux hardcodeado). Imposible en base vacía. Fix: se omite sólo si la empresa no existe; si existe pero le faltan las cuentas, sigue abortando (no se debilitó el guard). Solo 3 migrations tienen UUID hardcodeado (068/094/157); las otras 2 no abortan. |
+> | 170 | `column co.moneda does not exist` | **Barrido exhaustivo de la clase**: script que parsea los `CREATE TABLE` + `ADD COLUMN` de las ~207 migrations vs. las columnas reales de las 68 tablas de prod → en TODA la base hay sólo **3 columnas ad-hoc**: `compras.moneda`, `compras.tipo_cambio_tasa` (la 013 multi_moneda se las agregó a comprobantes y cotizaciones pero se olvidó de compras) y `profiles.last_login_at`. Ya están las 3 en la 000. **Clase cerrada para siempre.** |
+>
+> ⚠ **Al scanear, verificar SIEMPRE antes de escribir:** de 12 columnas candidatas, 9 eran falsos
+> positivos del parser. Agregarlas a ciegas hubiera roto migrations que ya andaban. Mismo error tuve
+> con una regex de 400 chars que truncaba el bloque largo de la 025.
+>
+> 🔴 **PENDIENTE IMPORTANTE cuando el CI quede verde — el replay que no explota NO garantiza que la
+> base del CI sea igual a producción.** Hay **9 tablas que la 000 crea y que su migration "real"
+> también crea** con `IF NOT EXISTS` (`plan_cuentas`, `pedidos`, `listas_precio`, `tipos_cambio`,
+> `asientos_contables`, `asientos_items`, `lista_precio_items`, `pedido_items`, `periodos_contables`).
+> Ahí **gana la copia de la 000** silenciosamente: si alguna divergió, los tests pasarían contra un
+> schema que no existe en prod. `ofertas` fue exactamente ese caso pero ruidoso (lo detectamos sólo
+> porque la 108 no tenía `IF NOT EXISTS`). **Hay que verificar esas 9 contra prod.**
+>
+> ---
+> **Contexto original de la sesión 69 (Luciano), sigue vigente:**
 > Estamos armando el **CI de pgTAP**: una GitHub Action (`.github/workflows/pgtap-tests.yml`) que corre
 > los 16 tests pgTAP solos en cada push. Objetivo = red de seguridad automática para las funciones de plata.
 >
