@@ -526,6 +526,24 @@ CREATE TABLE IF NOT EXISTS public.periodos_contables (
 );
 
 -- =============================================================================
+-- FUNCIÓN: email_exists_in_system
+-- =============================================================================
+-- Función ad-hoc: se creó a mano contra producción (la usa checkEmailExists()
+-- en el formulario de signup, ANTES de que exista sesión — por eso es la única
+-- excepción intencional que conserva acceso anon en 063). Nunca se versionó en
+-- ninguna migration, pero 063_revocar_anon_y_search_path.sql hace
+-- ALTER FUNCTION sobre ella, así que debe existir antes. Definición tomada 1:1
+-- del proyecto remoto (pg_get_functiondef).
+CREATE OR REPLACE FUNCTION public.email_exists_in_system(p_email text)
+  RETURNS boolean
+  LANGUAGE sql
+  STABLE SECURITY DEFINER
+  SET search_path TO 'public'
+AS $$
+  SELECT EXISTS (SELECT 1 FROM auth.users WHERE lower(email) = lower(p_email))
+$$;
+
+-- =============================================================================
 -- 11 tablas más en el mismo caso: creadas a mano contra producción en algún
 -- momento (nunca versionadas en ninguna migration), y referenciadas por
 -- migrations tempranas (016, etc.) antes de que la migration que "debería"
