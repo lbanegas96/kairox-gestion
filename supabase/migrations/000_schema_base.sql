@@ -857,25 +857,11 @@ CREATE TRIGGER trg_update_cliente_saldo
 -- (como estaba antes) hacía que 013's CREATE TABLE IF NOT EXISTS fuera un
 -- no-op total (skip a nivel tabla) y esos 2 CHECK jamás se aplicaran en el
 -- replay del CI — drift real detectado contra pg_constraint de producción.
-
-ALTER TABLE public.tipos_cambio ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "tc_all" ON public.tipos_cambio;
-CREATE POLICY "tc_all" ON public.tipos_cambio
-  AS PERMISSIVE FOR ALL
-  USING      (empresa_id = get_my_empresa_id())
-  WITH CHECK (empresa_id = get_my_empresa_id());
-
-DROP POLICY IF EXISTS "tipos_cambio_empresa_all" ON public.tipos_cambio;
-CREATE POLICY "tipos_cambio_empresa_all" ON public.tipos_cambio
-  AS PERMISSIVE FOR ALL
-  USING      (empresa_id = get_my_empresa_id())
-  WITH CHECK (empresa_id = get_my_empresa_id());
-
-DROP TRIGGER IF EXISTS trg_audit_tipos_cambio ON public.tipos_cambio;
-CREATE TRIGGER trg_audit_tipos_cambio
-  AFTER INSERT OR UPDATE OR DELETE ON public.tipos_cambio
-  FOR EACH ROW EXECUTE FUNCTION public.fn_audit_trigger();
+-- El RLS/policies/trigger (antes adelantados acá desde 040) también se sacan:
+-- tanto 013 como 040_retroactive_tipos_cambio.sql ya los configuran por su
+-- cuenta una vez que la tabla existe de verdad — tenerlos acá quedaba
+-- huérfano (ALTER TABLE sobre una tabla que en este punto no existe todavía)
+-- y rompía el replay con "relation tipos_cambio does not exist".
 
 -- Columnas de moneda paralela / open-item (de 041)
 ALTER TABLE public.empresas
