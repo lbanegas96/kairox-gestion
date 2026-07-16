@@ -25,9 +25,9 @@ SELECT plan(12);
 -- trg_fn_seed_maestros_empresa exige empresa_id = get_my_empresa_id() al
 -- crear una empresa, así que crear el segundo tenant después de "loguearse"
 -- como el primero rompería el guard (protección real, no bug del test).
-INSERT INTO public.empresas (id, nombre, modalidad_iibb) VALUES
-  ('00000000-aadd-0000-0000-000000000001', '__PGTAP_TEST__ Tenant J', 'jurisdiccion_unica'),
-  ('00000000-aadd-0000-0000-000000000002', '__PGTAP_TEST__ Tenant K', 'convenio_multilateral');
+INSERT INTO public.empresas (id, nombre, modalidad_iibb, usa_impuestos_avanzados) VALUES
+  ('00000000-aadd-0000-0000-000000000001', '__PGTAP_TEST__ Tenant J', 'jurisdiccion_unica', true),
+  ('00000000-aadd-0000-0000-000000000002', '__PGTAP_TEST__ Tenant K', 'convenio_multilateral', true);
 
 SELECT public.seed_plan_cuentas('00000000-aadd-0000-0000-000000000001');
 

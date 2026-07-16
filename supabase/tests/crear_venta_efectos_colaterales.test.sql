@@ -264,7 +264,7 @@ SELECT is(
   (SELECT ci.cantidad_entregada FROM public.comprobante_items ci
    JOIN public.comprobantes c ON c.id = ci.comprobante_id
    WHERE c.numero_venta = 'V-CASO6'),
-  4,
+  4::numeric,
   'Caso 6c: comprobante_items.cantidad_entregada tambien se completa al reconciliar con entrega manual'
 );
 

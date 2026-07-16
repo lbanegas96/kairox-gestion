@@ -192,7 +192,11 @@ CREATE TABLE IF NOT EXISTS public.movimientos_inventario (
   empresa_id   UUID NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
   tenant_id    UUID REFERENCES public.empresas(id) ON DELETE SET NULL,
   producto_id  UUID NOT NULL REFERENCES public.productos(id) ON DELETE CASCADE,
-  tipo         TEXT NOT NULL CHECK (tipo IN ('entrada', 'salida', 'ajuste')),
+  -- 'ingreso'/'egreso' se agregaron en producción a mano (ALTER TABLE, sin
+  -- migration) — verificado contra el CHECK real de prod (pg_get_constraintdef),
+  -- que ya tiene los 5 valores. Sin ellos, crear_devolucion/crear_recepcion
+  -- rompían el replay al insertar esos tipos.
+  tipo         TEXT NOT NULL CHECK (tipo IN ('entrada', 'salida', 'ajuste', 'ingreso', 'egreso')),
   cantidad     INTEGER NOT NULL,
   motivo       TEXT,
   fecha        TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -905,6 +909,18 @@ ALTER TABLE public.compras
 
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS last_login_at timestamptz;
+
+-- `empresas` y `comprobantes` son las ÚNICAS 2 tablas de toda la base que ninguna
+-- migration crea (ad-hoc puras, existían antes de que arrancara el sistema de
+-- migrations). Ninguna migration en todo el repo hace GRANT explícito sobre
+-- ninguna tabla — el resto de las ~66 tablas quedan accesibles para
+-- anon/authenticated/service_role vía el mecanismo de Supabase Cloud que
+-- auto-otorga privilegios a las tablas creadas por el proyecto, algo que un
+-- `supabase start` local no replica igual. Sin este GRANT explícito, el CI
+-- rompía con "permission denied for table comprobantes/empresas" (visto en los
+-- tests centros_costo y sync_uala_to_bancos) apenas alguna RPC autenticada
+-- intentaba tocarlas — las únicas 2 tablas con ese problema en toda la corrida.
+GRANT ALL ON TABLE public.empresas, public.comprobantes TO anon, authenticated, service_role;
 
 -- =============================================================================
 -- DATOS INICIALES (opcional — ejecutar después del primer registro de usuario)
