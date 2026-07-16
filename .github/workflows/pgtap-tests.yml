@@ -53,11 +53,12 @@ jobs:
           code=$?
           printf '%s\n' "$out"
           if [ $code -ne 0 ]; then
-            # Priorizar la linea ERROR: y la ultima migration aplicada — un CREATE TABLE
-            # largo empuja el ERROR fuera de un tail plano.
-            msg=$( { printf '%s\n' "$out" | grep -aiE "^(ERROR|FATAL)|SQLSTATE|Applying migration" | tail -8
+            # "Bad plan. You planned N tests but ran 0" no trae el motivo real — el
+            # ERROR/FATAL que aborta ANTES del primer assert suele estar bien arriba
+            # del resumen final de prove, así que priorizamos esas líneas.
+            msg=$( { printf '%s\n' "$out" | grep -aiE "^(ERROR|FATAL|psql:)|SQLSTATE|not ok|# +Failed" | head -40
                      echo "----- tail -----"
-                     printf '%s\n' "$out" | tail -25
+                     printf '%s\n' "$out" | tail -40
                    } | sed 's/%/%25/g; s/\r//g' | awk '{printf "%s%%0A", $0}')
             echo "::error title=pgTAP fallo::${msg}"
           fi
