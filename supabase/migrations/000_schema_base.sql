@@ -487,6 +487,193 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- =============================================================================
+-- TABLA: configuracion
+-- =============================================================================
+-- No estaba en schema.sql original — se creó a mano contra producción en algún
+-- momento (igual que get_my_empresa_id() en su día), sin quedar en ningún
+-- archivo versionado. Definición tomada de information_schema/pg_constraint
+-- del proyecto remoto (wuznppxeonmhfcvnqfbf) para que el replay de CI la
+-- tenga disponible antes de 016_security_hardening.sql, que ya la referencia.
+CREATE TABLE IF NOT EXISTS public.configuracion (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  empresa_id  UUID NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
+  clave       TEXT NOT NULL,
+  valor       TEXT,
+  UNIQUE (empresa_id, clave)
+);
+
+-- =============================================================================
+-- 11 tablas más en el mismo caso: creadas a mano contra producción en algún
+-- momento (nunca versionadas en ninguna migration), y referenciadas por
+-- migrations tempranas (016, etc.) antes de que la migration que "debería"
+-- haberlas creado (168_centros_costo.sql, 011_cuentas_bancarias.sql, etc.)
+-- llegue a correr. Definiciones tomadas 1:1 de information_schema/
+-- pg_constraint del proyecto remoto.
+--
+-- Simplificación deliberada: `asientos_contables.centro_costo_id` e
+-- `integraciones_bancarias.cuenta_bancaria_id` NO llevan su FK inline acá
+-- (a `centros_costo`/`cuentas_bancarias`, tablas que en el historial real
+-- se crean más tarde, en 168/011) — se agrega solo la columna, sin
+-- REFERENCES, para no tener que editar esas migrations ya aplicadas en
+-- producción. No afecta ningún test pgTAP existente.
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS public.plan_cuentas (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id            UUID NOT NULL,
+  codigo                VARCHAR(20) NOT NULL,
+  nombre                VARCHAR(200) NOT NULL,
+  tipo                  VARCHAR(20) NOT NULL CHECK (tipo IN ('activo','pasivo','patrimonio','ingreso','egreso')),
+  nivel                 INTEGER NOT NULL DEFAULT 1,
+  cuenta_padre_id       UUID REFERENCES public.plan_cuentas(id) ON DELETE RESTRICT,
+  permite_movimientos   BOOLEAN DEFAULT true,
+  saldo_actual          NUMERIC(15,2) DEFAULT 0,
+  activa                BOOLEAN DEFAULT true,
+  created_at            TIMESTAMPTZ DEFAULT now(),
+  UNIQUE (empresa_id, codigo)
+);
+
+CREATE TABLE IF NOT EXISTS public.asientos_contables (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id       UUID NOT NULL,
+  user_id          UUID NOT NULL,
+  numero           VARCHAR(20) NOT NULL,
+  fecha            DATE NOT NULL,
+  descripcion      TEXT,
+  estado           VARCHAR(20) DEFAULT 'borrador' CHECK (estado IN ('borrador','confirmado','anulado')),
+  total_debe       NUMERIC(15,2) DEFAULT 0,
+  total_haber      NUMERIC(15,2) DEFAULT 0,
+  origen           VARCHAR(50),
+  origen_id        UUID,
+  created_at       TIMESTAMPTZ DEFAULT now(),
+  centro_costo_id  UUID,  -- sin FK acá a propósito, ver nota arriba
+  UNIQUE (empresa_id, numero)
+);
+
+CREATE TABLE IF NOT EXISTS public.asientos_items (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  asiento_id    UUID NOT NULL REFERENCES public.asientos_contables(id) ON DELETE CASCADE,
+  empresa_id    UUID NOT NULL,
+  cuenta_id     UUID NOT NULL REFERENCES public.plan_cuentas(id),
+  descripcion   TEXT,
+  debe          NUMERIC(15,2) DEFAULT 0,
+  haber         NUMERIC(15,2) DEFAULT 0,
+  created_at    TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.comprobante_pagos (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  comprobante_id  UUID NOT NULL REFERENCES public.comprobantes(id) ON DELETE CASCADE,
+  empresa_id      UUID NOT NULL,
+  metodo          TEXT NOT NULL CHECK (metodo IN ('Efectivo','Transferencia','Tarjeta','Cuenta Corriente','Cheque')),
+  monto           NUMERIC(12,2) NOT NULL CHECK (monto > 0),
+  created_at      TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.listas_precio (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id    UUID NOT NULL,
+  user_id       UUID NOT NULL,
+  nombre        TEXT NOT NULL,
+  descripcion   TEXT,
+  activo        BOOLEAN NOT NULL DEFAULT true,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.lista_precio_items (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lista_precio_id   UUID NOT NULL REFERENCES public.listas_precio(id) ON DELETE CASCADE,
+  empresa_id        UUID NOT NULL,
+  producto_id       UUID NOT NULL,
+  precio            NUMERIC(12,2) NOT NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (lista_precio_id, producto_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.integraciones_bancarias (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id           UUID NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
+  cuenta_bancaria_id   UUID,  -- sin FK acá a propósito, ver nota arriba
+  proveedor            TEXT NOT NULL CHECK (proveedor IN ('mercadopago','naranja_x','modo','uala','otro')),
+  activo               BOOLEAN NOT NULL DEFAULT true,
+  token_expiry         TIMESTAMPTZ,
+  config               JSONB DEFAULT '{}'::jsonb,
+  ultimo_sync          TIMESTAMPTZ,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (empresa_id, proveedor)
+);
+
+CREATE TABLE IF NOT EXISTS public.movimientos_uala (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  fecha         TIMESTAMP NOT NULL,
+  monto         NUMERIC(12,2) NOT NULL,
+  destinatario  TEXT,
+  created_at    TIMESTAMP DEFAULT now(),
+  user_id       UUID,
+  empresa_id    UUID
+);
+
+CREATE TABLE IF NOT EXISTS public.ofertas (
+  id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id             UUID NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
+  nombre                 VARCHAR(100) NOT NULL,
+  descripcion            TEXT,
+  tipo_descuento         VARCHAR(20) NOT NULL DEFAULT 'porcentaje' CHECK (tipo_descuento IN ('porcentaje','monto_fijo')),
+  valor_descuento        NUMERIC(10,2) NOT NULL CHECK (valor_descuento >= 0),
+  producto_id            UUID REFERENCES public.productos(id) ON DELETE CASCADE,
+  categoria_nombre       VARCHAR(100),
+  medio_pago             VARCHAR(50),
+  dia_semana             SMALLINT[],
+  monto_minimo_carrito   NUMERIC(12,2),
+  cantidad_minima        NUMERIC(10,3),
+  fecha_desde            DATE,
+  fecha_hasta            DATE,
+  activo                 BOOLEAN NOT NULL DEFAULT true,
+  prioridad              SMALLINT NOT NULL DEFAULT 0,
+  acumulable             BOOLEAN NOT NULL DEFAULT false,
+  created_at             TIMESTAMPTZ DEFAULT now(),
+  updated_at             TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT chk_porcentaje_maximo CHECK (
+    (tipo_descuento = 'porcentaje' AND valor_descuento <= 100) OR (tipo_descuento = 'monto_fijo')
+  )
+);
+
+CREATE TABLE IF NOT EXISTS public.pedidos (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  empresa_id      UUID NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
+  user_id         UUID NOT NULL,
+  numero          TEXT NOT NULL,
+  cliente_id      UUID REFERENCES public.clientes(id) ON DELETE SET NULL,
+  cliente_nombre  TEXT,
+  fecha           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  fecha_entrega   DATE,
+  estado          TEXT NOT NULL DEFAULT 'borrador' CHECK (estado IN ('borrador','confirmado','en_preparacion','facturado','cancelado')),
+  subtotal        NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total           NUMERIC(12,2) NOT NULL DEFAULT 0,
+  notas           TEXT,
+  comprobante_id  UUID REFERENCES public.comprobantes(id) ON DELETE SET NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (empresa_id, numero)
+);
+
+CREATE TABLE IF NOT EXISTS public.pedido_items (
+  id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  pedido_id             UUID NOT NULL REFERENCES public.pedidos(id) ON DELETE CASCADE,
+  empresa_id            UUID NOT NULL,
+  producto_id           UUID REFERENCES public.productos(id) ON DELETE SET NULL,
+  descripcion           TEXT NOT NULL,
+  cantidad              NUMERIC(10,3) NOT NULL DEFAULT 1,
+  precio_unitario       NUMERIC(12,2) NOT NULL DEFAULT 0,
+  subtotal              NUMERIC(12,2) NOT NULL DEFAULT 0,
+  unidad_medida         TEXT,
+  cantidad_entregada    NUMERIC(12,3) NOT NULL DEFAULT 0,
+  cantidad_facturada    NUMERIC(12,3) NOT NULL DEFAULT 0
+);
+
+-- =============================================================================
 -- DATOS INICIALES (opcional — ejecutar después del primer registro de usuario)
 -- =============================================================================
 -- Para crear la primera empresa y vincularla al primer usuario:
