@@ -25,11 +25,33 @@ jobs:
         with:
           version: latest
 
+      # El log crudo de un step sólo se puede leer estando logueado en GitHub, así
+      # que cada fallo del replay obligaba a que un humano copiara el error a mano.
+      # Las *annotations*, en cambio, se leen por la API pública — así que si algo
+      # falla republicamos la cola del log como annotation y queda visible sin login.
       - name: Levantar stack local de Supabase (Postgres + extensiones)
-        run: supabase start
+        run: |
+          set +e
+          out=$(supabase start 2>&1)
+          code=$?
+          printf '%s\n' "$out"
+          if [ $code -ne 0 ]; then
+            msg=$(printf '%s\n' "$out" | tail -40 | sed 's/%/%25/g; s/\r//g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=supabase start fallo (replay de migrations)::${msg}"
+          fi
+          exit $code
 
       - name: Aplicar migrations y correr tests pgTAP
-        run: supabase test db
+        run: |
+          set +e
+          out=$(supabase test db 2>&1)
+          code=$?
+          printf '%s\n' "$out"
+          if [ $code -ne 0 ]; then
+            msg=$(printf '%s\n' "$out" | tail -40 | sed 's/%/%25/g; s/\r//g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=pgTAP fallo::${msg}"
+          fi
+          exit $code
 
       - name: Bajar el stack
         if: always()

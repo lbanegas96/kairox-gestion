@@ -878,6 +878,17 @@ ALTER TABLE public.comprobantes
   ADD COLUMN IF NOT EXISTS tc_paralelo           numeric,
   ADD COLUMN IF NOT EXISTS comprobante_origen_id uuid;
 
+-- Columnas ad-hoc de comprobantes: existen en producción desde siempre pero
+-- ninguna migration las creaba (se agregaron a mano). Las referencian statements
+-- ejecutables que fallaban en el replay desde cero:
+--   `tipo`      → 100 (UPDATE self-heal de series), 169/170 (UPDATE), vistas de 202/206.
+--   `motivo_nc` → INSERT de NC en crear_devolucion/crear_nota_credito (060/086/096/140).
+-- Definición copiada exacta de producción (incluido el CHECK comprobantes_tipo_check).
+ALTER TABLE public.comprobantes
+  ADD COLUMN IF NOT EXISTS tipo      text NOT NULL DEFAULT 'venta'
+                                     CHECK (tipo IN ('venta', 'nota_credito')),
+  ADD COLUMN IF NOT EXISTS motivo_nc text;
+
 ALTER TABLE public.movimientos_caja
   ADD COLUMN IF NOT EXISTS monto_paralelo numeric,
   ADD COLUMN IF NOT EXISTS tc_paralelo    numeric;
