@@ -42,6 +42,17 @@ DECLARE
   v_asiento_id      uuid;
   v_desc            text := 'Ajuste de apertura — Cheques de terceros anteriores al alta del asiento automático (mig. 145)';
 BEGIN
+  -- Esta migration es un ajuste de datos one-shot sobre la empresa Nalux (UUID fijo
+  -- arriba). En una base recién creada desde cero (el CI, que replaya todas las
+  -- migrations sobre un Postgres vacío) esa empresa no existe y no hay ningún cheque
+  -- que corregir → salir sin hacer nada. El chequeo de las cuentas de abajo se
+  -- mantiene tal cual para el caso real: si la empresa SÍ existe pero le faltan las
+  -- cuentas 1.1.6/3.2, eso sigue siendo un error y aborta como siempre.
+  IF NOT EXISTS (SELECT 1 FROM public.empresas WHERE id = v_empresa_id) THEN
+    RAISE NOTICE 'mig157: la empresa % no existe (base nueva) — no hay cheques que ajustar, se omite', v_empresa_id;
+    RETURN;
+  END IF;
+
   SELECT id INTO v_cta_cartera    FROM public.plan_cuentas WHERE empresa_id = v_empresa_id AND codigo = '1.1.6' AND activa;
   SELECT id INTO v_cta_resultados FROM public.plan_cuentas WHERE empresa_id = v_empresa_id AND codigo = '3.2'   AND activa;
 
