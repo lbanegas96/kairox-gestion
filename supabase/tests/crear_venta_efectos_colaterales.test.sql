@@ -31,7 +31,7 @@ VALUES
 -- El trigger on_auth_user_created ya insertó la fila en profiles (con
 -- empresa_id NULL) al insertar en auth.users arriba — solo hace falta
 -- completarla, no insertar de nuevo (insertar de nuevo viola la PK).
-UPDATE public.profiles SET empresa_id = '00000000-cafe-0000-0000-000000000001'
+UPDATE public.profiles SET empresa_id = '00000000-cafe-0000-0000-000000000001', role = 'admin'
 WHERE id = '00000000-cafe-0000-0000-00000000000c';
 
 INSERT INTO public.clientes (id, empresa_id, nombre) VALUES

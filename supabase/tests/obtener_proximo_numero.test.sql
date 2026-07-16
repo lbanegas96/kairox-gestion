@@ -40,8 +40,8 @@ VALUES
 -- El trigger on_auth_user_created ya insertó la fila en profiles (con
 -- empresa_id NULL) al insertar en auth.users arriba — solo hace falta
 -- completarla, no insertar de nuevo (insertar de nuevo viola la PK).
-UPDATE public.profiles SET empresa_id = '00000000-aaaa-0000-0000-000000000001' WHERE id = '00000000-aaaa-0000-0000-00000000000a';
-UPDATE public.profiles SET empresa_id = '00000000-bbbb-0000-0000-000000000002' WHERE id = '00000000-bbbb-0000-0000-00000000000b';
+UPDATE public.profiles SET empresa_id = '00000000-aaaa-0000-0000-000000000001', role = 'admin' WHERE id = '00000000-aaaa-0000-0000-00000000000a';
+UPDATE public.profiles SET empresa_id = '00000000-bbbb-0000-0000-000000000002', role = 'admin' WHERE id = '00000000-bbbb-0000-0000-00000000000b';
 
 -- ───────────────────────────────────────────────────────────────────────────
 -- Caso 1: secuencia simple, mismo tenant, mismo tipo_documento.
