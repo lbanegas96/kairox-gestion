@@ -888,6 +888,24 @@ ALTER TABLE public.compras
   ADD COLUMN IF NOT EXISTS monto_paralelo numeric,
   ADD COLUMN IF NOT EXISTS tc_paralelo    numeric;
 
+-- Columnas ad-hoc restantes (barrido exhaustivo de las 68 tablas: prod vs. lo que
+-- crean las migrations — estas 3 son las únicas que no crea ninguna).
+--
+--   compras.moneda / compras.tipo_cambio_tasa → la 013 (multi_moneda) se las agregó a
+--     `comprobantes` y a `cotizaciones` pero se olvidó de `compras`; se agregaron a mano.
+--     Las necesita la vista `compras_saldo_pendiente` de la 170 (un CREATE VIEW sí
+--     valida las columnas → rompía el replay).
+--   profiles.last_login_at → nunca se migró. Ninguna migration la referencia, pero va
+--     igual para que la base del CI sea fiel a producción.
+--
+-- Definiciones copiadas exactas de prod.
+ALTER TABLE public.compras
+  ADD COLUMN IF NOT EXISTS moneda           text    NOT NULL DEFAULT 'ARS',
+  ADD COLUMN IF NOT EXISTS tipo_cambio_tasa numeric NOT NULL DEFAULT 1;
+
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS last_login_at timestamptz;
+
 -- =============================================================================
 -- DATOS INICIALES (opcional — ejecutar después del primer registro de usuario)
 -- =============================================================================
