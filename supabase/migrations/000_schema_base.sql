@@ -575,12 +575,20 @@ $$;
 -- llegue a correr. Definiciones tomadas 1:1 de information_schema/
 -- pg_constraint del proyecto remoto.
 --
--- Simplificación deliberada: `asientos_contables.centro_costo_id` e
--- `integraciones_bancarias.cuenta_bancaria_id` NO llevan su FK inline acá
--- (a `centros_costo`/`cuentas_bancarias`, tablas que en el historial real
--- se crean más tarde, en 168/011) — se agrega solo la columna, sin
--- REFERENCES, para no tener que editar esas migrations ya aplicadas en
+-- Simplificación deliberada: `integraciones_bancarias.cuenta_bancaria_id`
+-- NO lleva su FK inline acá (a `cuentas_bancarias`, tabla que en el historial
+-- real se crea más tarde, en 011) — se agrega solo la columna, sin
+-- REFERENCES, para no tener que editar esa migration ya aplicada en
 -- producción. No afecta ningún test pgTAP existente.
+--
+-- `asientos_contables.centro_costo_id` NO va acá (auditoría sesión 71):
+-- nada antes de la migration 168_centros_costo.sql la referencia, así que
+-- 168 la agrega en su posición natural vía
+-- `ALTER TABLE ... ADD COLUMN IF NOT EXISTS centro_costo_id UUID REFERENCES
+-- centros_costo(id) ON DELETE SET NULL`. Pre-incluir la columna acá (como
+-- estaba antes, sin la FK) hacía que el ADD COLUMN de 168 fuera un no-op
+-- (la columna ya existía) y la FK real nunca se aplicaba — drift real
+-- detectado contra pg_constraint de producción.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.plan_cuentas (
@@ -611,7 +619,6 @@ CREATE TABLE IF NOT EXISTS public.asientos_contables (
   origen           VARCHAR(50),
   origen_id        UUID,
   created_at       TIMESTAMPTZ DEFAULT now(),
-  centro_costo_id  UUID,  -- sin FK acá a propósito, ver nota arriba
   UNIQUE (empresa_id, numero)
 );
 
@@ -733,8 +740,14 @@ CREATE TABLE IF NOT EXISTS public.pedidos (
   notas           TEXT,
   comprobante_id  UUID REFERENCES public.comprobantes(id) ON DELETE SET NULL,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (empresa_id, numero)
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+  -- Sin UNIQUE(empresa_id, numero) inline a propósito (auditoría sesión 71):
+  -- 017_pedidos_condiciones.sql (la migration "real") tampoco lo tenía —
+  -- ese constraint lo agrega recién 094_unique_numero_por_empresa.sql vía
+  -- ADD CONSTRAINT uq_pedidos_empresa_numero. Tenerlo acá duplicaba el
+  -- constraint en el replay del CI (el auto-nombrado de acá + el de 094),
+  -- drift real detectado contra pg_constraint de producción (que solo
+  -- tiene uq_pedidos_empresa_numero).
 );
 
 CREATE TABLE IF NOT EXISTS public.pedido_items (
@@ -837,25 +850,13 @@ CREATE TRIGGER trg_update_cliente_saldo
   AFTER INSERT OR UPDATE OR DELETE ON public.cuenta_corriente_movimientos
   FOR EACH ROW EXECUTE FUNCTION public.fn_update_cliente_saldo();
 
--- tipos_cambio (de 040)
-CREATE TABLE IF NOT EXISTS public.tipos_cambio (
-  id         uuid        NOT NULL DEFAULT gen_random_uuid(),
-  empresa_id uuid        NOT NULL,
-  moneda     text        NOT NULL DEFAULT 'USD',
-  tasa       numeric     NOT NULL,
-  fecha      date        NOT NULL,
-  created_at timestamptz          DEFAULT now(),
-  CONSTRAINT tipos_cambio_pkey PRIMARY KEY (id),
-  CONSTRAINT tipos_cambio_empresa_id_moneda_fecha_key UNIQUE (empresa_id, moneda, fecha),
-  CONSTRAINT tipos_cambio_empresa_id_fkey
-    FOREIGN KEY (empresa_id) REFERENCES public.empresas(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_tc_empresa_moneda_fecha
-  ON public.tipos_cambio (empresa_id, moneda, fecha DESC);
-
-CREATE INDEX IF NOT EXISTS idx_tipos_cambio_empresa_fecha
-  ON public.tipos_cambio (empresa_id, moneda, fecha DESC);
+-- tipos_cambio: NO se pre-crea acá a propósito (auditoría sesión 71). Ningún
+-- objeto anterior a la migration 013_multi_moneda.sql la referencia, así que
+-- 013 la crea en su posición natural — con los 2 CHECK (tasa > 0, moneda IN
+-- ('USD','EUR','BRL')) que producción sí tiene. Pre-crearla acá sin esos CHECK
+-- (como estaba antes) hacía que 013's CREATE TABLE IF NOT EXISTS fuera un
+-- no-op total (skip a nivel tabla) y esos 2 CHECK jamás se aplicaran en el
+-- replay del CI — drift real detectado contra pg_constraint de producción.
 
 ALTER TABLE public.tipos_cambio ENABLE ROW LEVEL SECURITY;
 
