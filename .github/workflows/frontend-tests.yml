@@ -1,0 +1,35 @@
+name: Frontend Tests + Build
+
+# Corre los tests de Vitest (hooks de lógica de negocio: multipago, límite de
+# crédito, determinación de tipo de comprobante AFIP) + un build de producción
+# completo en cada push. Mismo espíritu que pgtap-tests.yml para el backend:
+# red de seguridad automática, esta vez del lado del frontend.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Correr tests (Vitest)
+        run: npm run test
+
+      - name: Build de producción
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
