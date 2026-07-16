@@ -79,6 +79,19 @@ REVOKE ALL ON FUNCTION public.usar_caea_en_venta FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.usar_caea_en_venta TO authenticated;
 
 -- Agregar CHECK constraint a modo_autorizacion (faltaba en migration 103)
+--
+-- Por qué "faltaba", y por qué el DROP de abajo: en producción, cuando corrió la 103
+-- la columna `modo_autorizacion` YA existía (creada a mano), así que su
+-- `ADD COLUMN IF NOT EXISTS ... CHECK (...)` fue un no-op y el CHECK inline nunca se
+-- creó — de ahí esta migration. Pero en un replay desde cero (CI) la columna no existe,
+-- la 103 sí la crea, y Postgres auto-nombra su CHECK inline exactamente igual
+-- (`comprobantes_modo_autorizacion_check`) → este ADD CONSTRAINT chocaba con
+-- "already exists". El DROP IF EXISTS lo hace idempotente en ambos escenarios:
+-- en prod no encuentra nada que dropear, en el replay dropea el de la 103 y lo
+-- vuelve a crear idéntico.
+ALTER TABLE public.comprobantes
+  DROP CONSTRAINT IF EXISTS comprobantes_modo_autorizacion_check;
+
 ALTER TABLE public.comprobantes
   ADD CONSTRAINT comprobantes_modo_autorizacion_check
   CHECK (modo_autorizacion IN ('CAE', 'CAEA'));
