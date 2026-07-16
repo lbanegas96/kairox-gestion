@@ -668,6 +668,22 @@ CREATE POLICY "usuarios autenticados pueden leer" ON public.movimientos_uala
   FOR SELECT
   USING (auth.role() = 'authenticated'::text);
 
+-- =============================================================================
+-- Columnas ad-hoc "bolt-on": se agregaron a mano contra producción a tablas que
+-- ya existían (nunca vía migration). Ninguna migration las crea, pero
+-- 098_fk_indexes_y_drop_unused.sql crea índices sobre ellas — así que deben
+-- existir antes. Confirmado con scan repo-wide de los 180 columnas indexadas:
+-- estas 2 son las ÚNICAS columnas ad-hoc referenciadas por índices.
+--   • cuenta_corriente_movimientos.proveedor_id  (cobros/pagos a proveedor)
+--   • movimientos_inventario.user_id  (024 documentaba "NO tiene user_id";
+--     se bolteó después, y 059/062 ya la usan en sus INSERT).
+-- Nullable, sin conflicto: ninguna migration hace ADD COLUMN de estas.
+-- =============================================================================
+ALTER TABLE public.cuenta_corriente_movimientos
+  ADD COLUMN IF NOT EXISTS proveedor_id UUID REFERENCES public.proveedores(id);
+ALTER TABLE public.movimientos_inventario
+  ADD COLUMN IF NOT EXISTS user_id UUID;
+
 CREATE TABLE IF NOT EXISTS public.ofertas (
   id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   empresa_id             UUID NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
