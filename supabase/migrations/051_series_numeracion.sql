@@ -33,9 +33,13 @@ CREATE TABLE IF NOT EXISTS public.series_numeracion (
   proximo_numero  INTEGER NOT NULL DEFAULT 1,
   periodo_actual  TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- 'devolucion' se agregó en producción a mano (ALTER TABLE, sin migration) cuando
+  -- la 086 sumó ese tipo a seed_series_numeracion — verificado contra el CHECK real
+  -- de prod (pg_get_constraintdef), que ya lo tiene. Se agrega acá para que el
+  -- replay desde cero no reviente al insertar la fila 'devolucion' del seed.
   CONSTRAINT chk_series_tipo_documento CHECK (tipo_documento IN (
     'venta', 'factura', 'nota_credito', 'nota_debito',
-    'orden_compra', 'cotizacion', 'pedido', 'entrega', 'recepcion'
+    'orden_compra', 'cotizacion', 'pedido', 'entrega', 'recepcion', 'devolucion'
   )),
   CONSTRAINT chk_series_formato_fecha CHECK (formato_fecha IN ('YYYYMMDD', 'YYYY', 'ninguno')),
   UNIQUE (empresa_id, tipo_documento)
