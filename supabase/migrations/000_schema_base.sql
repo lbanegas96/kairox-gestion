@@ -674,6 +674,156 @@ CREATE TABLE IF NOT EXISTS public.pedido_items (
 );
 
 -- =============================================================================
+-- Adelanto de las migrations "retroactivas" 040/041/042 — mismo problema que
+-- las 11 tablas de arriba, pero con funciones/columnas: 023_indices_faltantes.sql
+-- (y otras tempranas) ya asumen que `comprobantes.estado_pago` existe y que
+-- `fn_audit_trigger` está definida, pero esas migrations retroactivas corren
+-- recién en 040-042. Se adelanta acá solo lo que no depende de tablas creadas
+-- después de 000 (`v_saldo_proveedores`, que sí depende de
+-- `cuenta_corriente_proveedores` creada en 014, se deja para que 042 la cree
+-- en su posición normal — no hace falta adelantarla, nada temprano la usa).
+-- =============================================================================
+
+-- fn_audit_trigger (definición final de 042 — row_to_json ya migrado a to_jsonb)
+CREATE OR REPLACE FUNCTION public.fn_audit_trigger()
+  RETURNS trigger
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path TO 'public'
+AS $$
+DECLARE
+  v_empresa_id  UUID;
+  v_registro_id UUID;
+  v_old         JSONB;
+  v_new         JSONB;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    v_old         := to_jsonb(OLD);
+    v_new         := NULL;
+    v_empresa_id  := (to_jsonb(OLD) ->> 'empresa_id')::UUID;
+    v_registro_id := (to_jsonb(OLD) ->> 'id')::UUID;
+  ELSIF TG_OP = 'INSERT' THEN
+    v_old         := NULL;
+    v_new         := to_jsonb(NEW);
+    v_empresa_id  := (to_jsonb(NEW) ->> 'empresa_id')::UUID;
+    v_registro_id := (to_jsonb(NEW) ->> 'id')::UUID;
+  ELSE
+    v_old         := to_jsonb(OLD);
+    v_new         := to_jsonb(NEW);
+    v_empresa_id  := (to_jsonb(NEW) ->> 'empresa_id')::UUID;
+    v_registro_id := (to_jsonb(NEW) ->> 'id')::UUID;
+  END IF;
+
+  INSERT INTO public.audit_log(tabla, operacion, registro_id, empresa_id, user_id, old_data, new_data)
+  VALUES (TG_TABLE_NAME, TG_OP, v_registro_id, v_empresa_id, auth.uid(), v_old, v_new);
+
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- fn_update_cliente_saldo + trigger (de 042) — cuenta_corriente_movimientos ya existe arriba
+CREATE OR REPLACE FUNCTION public.fn_update_cliente_saldo()
+  RETURNS trigger
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path TO 'public'
+AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE public.clientes
+      SET saldo_actual = saldo_actual + CASE WHEN NEW.tipo = 'DEBE' THEN NEW.monto ELSE -NEW.monto END
+    WHERE id = NEW.cliente_id;
+
+  ELSIF TG_OP = 'DELETE' THEN
+    UPDATE public.clientes
+      SET saldo_actual = saldo_actual + CASE WHEN OLD.tipo = 'DEBE' THEN -OLD.monto ELSE OLD.monto END
+    WHERE id = OLD.cliente_id;
+
+  ELSIF TG_OP = 'UPDATE' THEN
+    UPDATE public.clientes
+      SET saldo_actual = saldo_actual + CASE WHEN OLD.tipo = 'DEBE' THEN -OLD.monto ELSE OLD.monto END
+    WHERE id = OLD.cliente_id;
+    UPDATE public.clientes
+      SET saldo_actual = saldo_actual + CASE WHEN NEW.tipo = 'DEBE' THEN NEW.monto ELSE -NEW.monto END
+    WHERE id = NEW.cliente_id;
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_update_cliente_saldo ON public.cuenta_corriente_movimientos;
+CREATE TRIGGER trg_update_cliente_saldo
+  AFTER INSERT OR UPDATE OR DELETE ON public.cuenta_corriente_movimientos
+  FOR EACH ROW EXECUTE FUNCTION public.fn_update_cliente_saldo();
+
+-- tipos_cambio (de 040)
+CREATE TABLE IF NOT EXISTS public.tipos_cambio (
+  id         uuid        NOT NULL DEFAULT gen_random_uuid(),
+  empresa_id uuid        NOT NULL,
+  moneda     text        NOT NULL DEFAULT 'USD',
+  tasa       numeric     NOT NULL,
+  fecha      date        NOT NULL,
+  created_at timestamptz          DEFAULT now(),
+  CONSTRAINT tipos_cambio_pkey PRIMARY KEY (id),
+  CONSTRAINT tipos_cambio_empresa_id_moneda_fecha_key UNIQUE (empresa_id, moneda, fecha),
+  CONSTRAINT tipos_cambio_empresa_id_fkey
+    FOREIGN KEY (empresa_id) REFERENCES public.empresas(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_tc_empresa_moneda_fecha
+  ON public.tipos_cambio (empresa_id, moneda, fecha DESC);
+
+CREATE INDEX IF NOT EXISTS idx_tipos_cambio_empresa_fecha
+  ON public.tipos_cambio (empresa_id, moneda, fecha DESC);
+
+ALTER TABLE public.tipos_cambio ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "tc_all" ON public.tipos_cambio;
+CREATE POLICY "tc_all" ON public.tipos_cambio
+  AS PERMISSIVE FOR ALL
+  USING      (empresa_id = get_my_empresa_id())
+  WITH CHECK (empresa_id = get_my_empresa_id());
+
+DROP POLICY IF EXISTS "tipos_cambio_empresa_all" ON public.tipos_cambio;
+CREATE POLICY "tipos_cambio_empresa_all" ON public.tipos_cambio
+  AS PERMISSIVE FOR ALL
+  USING      (empresa_id = get_my_empresa_id())
+  WITH CHECK (empresa_id = get_my_empresa_id());
+
+DROP TRIGGER IF EXISTS trg_audit_tipos_cambio ON public.tipos_cambio;
+CREATE TRIGGER trg_audit_tipos_cambio
+  AFTER INSERT OR UPDATE OR DELETE ON public.tipos_cambio
+  FOR EACH ROW EXECUTE FUNCTION public.fn_audit_trigger();
+
+-- Columnas de moneda paralela / open-item (de 041)
+ALTER TABLE public.empresas
+  ADD COLUMN IF NOT EXISTS usa_tc_paralelo boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS moneda_paralela text    NOT NULL DEFAULT 'USD';
+
+ALTER TABLE public.comprobantes
+  ADD COLUMN IF NOT EXISTS estado_pago           text    NOT NULL DEFAULT 'pagada',
+  ADD COLUMN IF NOT EXISTS monto_paralelo        numeric,
+  ADD COLUMN IF NOT EXISTS tc_paralelo           numeric,
+  ADD COLUMN IF NOT EXISTS comprobante_origen_id uuid;
+
+ALTER TABLE public.movimientos_caja
+  ADD COLUMN IF NOT EXISTS monto_paralelo numeric,
+  ADD COLUMN IF NOT EXISTS tc_paralelo    numeric;
+
+ALTER TABLE public.cuenta_corriente_movimientos
+  ADD COLUMN IF NOT EXISTS comprobante_id uuid,
+  ADD COLUMN IF NOT EXISTS metodo_cobro   text,
+  ADD COLUMN IF NOT EXISTS monto_paralelo numeric,
+  ADD COLUMN IF NOT EXISTS tc_paralelo    numeric;
+
+ALTER TABLE public.compras
+  ADD COLUMN IF NOT EXISTS monto_paralelo numeric,
+  ADD COLUMN IF NOT EXISTS tc_paralelo    numeric;
+
+-- =============================================================================
 -- DATOS INICIALES (opcional — ejecutar después del primer registro de usuario)
 -- =============================================================================
 -- Para crear la primera empresa y vincularla al primer usuario:
