@@ -1,37 +1,26 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-16 (Nadia — sesión 70: CI de pgTAP ✅ VERDE. 2 bugs reales de producción encontrados, a decidir con Luciano antes de aplicar)
+**Última actualización:** 2026-07-16 (Luciano — sesión 71: CI de pgTAP ✅ VERDE + 2 bugs reales YA APLICADOS a prod)
 
-> 🟢 **CI de pgTAP: VERDE.** El replay completo de las 207 migrations + los 16 tests pgTAP corren
-> solos en cada push (corrida #30, `7b460ce`, `conclusion: success`). Esto era el objetivo de la
-> sesión 69 de Luciano (arrancó trabado en la migration 98) — quedó terminado. Detalle de todo el
-> camino (17 iteraciones, cada una cerrando una *clase* de error, no un objeto puntual) más abajo.
+> 🟢 **CI de pgTAP: VERDE y TAREA CERRADA.** El replay completo de las 207 migrations + los 16 tests
+> pgTAP corren solos en cada push. Objetivo de la sesión 69 de Luciano — terminado.
 >
-> ⚠️ **PENDIENTE — 2 bugs reales de producción encontrados en el camino, NO aplicados todavía a
-> la base real a propósito.** El usuario decidió consultarlo con Luciano antes de tocar producción.
-> Ambos ya están **verificados** (con `BEGIN...ROLLBACK` contra la base real) y **commiteados en el
-> repo** (el CI los aplica en su replay), pero falta el `apply_migration` real:
+> ✅ **RESUELTO — los 2 bugs reales encontrados en el camino se APLICARON a producción** (sesión 71,
+> aprobado por Luciano, vía `apply_migration` del MCP). Verificado post-aplicación contra las 3
+> empresas reales:
 >
-> 1. **Migration 208** — `insertar_movimiento_bancario_externo` tiene 2 versiones ambiguas (7 y 8
->    parámetros) en producción. El trigger `sync_uala_to_bancos` la llama de una forma que Postgres
->    no puede resolver → `function ... is not unique`. Impacto real hoy: **cero** (ninguna empresa
->    tiene la integración Ualá activa todavía), pero es un bug latente — la primera vez que alguien
->    la active, cada transferencia real fallaría. Fix: `DROP FUNCTION` de la versión de 7 params
->    (la de 8, con `p_subtipo` opcional, ya cubre a todos los callers reales — verificado).
+> 1. **Migration 208 aplicada** — se dropeó la versión de 7 params de
+>    `insertar_movimiento_bancario_externo`; quedó solo la canónica de 8 (con `p_subtipo` opcional).
+>    Se acabó el `function ... is not unique` que rompería la integración Ualá al activarse.
 >
-> 2. **Migration 209 — este es el más importante de aplicar.** `seed_plan_cuentas()` (la función que
->    arma el plan de cuentas de TODA empresa nueva) perdió 3 cuentas (`2.1.6`, `1.1.6`, `1.1.7`) que
->    los triggers de contabilización de cheques necesitan. La migration 166 las había agregado; la
->    170 (al redefinir la misma función para otra cosa) copió una versión vieja y las volvió a
->    perder, sin que nadie lo notara — porque los triggers de cheques tragan cualquier error en
->    silencio (`EXCEPTION WHEN OTHERS THEN NULL`). **Esto viene pasando desde que corrió la
->    migration 170**: toda empresa nueva creada desde entonces no tiene estas 3 cuentas, y la
->    contabilización de cheques le falla sin ningún aviso. Verificado contra las 2 empresas reales
->    de producción: Nalux las tiene las 3 (parcheadas a mano en algún momento); la empresa del
->    fundador solo tiene 2 de las 3. El fix corrige el seed para toda empresa futura + hace un
->    backfill retroactivo idempotente para las que ya existen y les falte alguna.
+> 2. **Migration 209 aplicada** — `seed_plan_cuentas()` recuperó las 3 cuentas de cheques (`1.1.6`,
+>    `1.1.7`, `2.1.6`) para toda empresa futura + backfill idempotente a las existentes. Estado final
+>    verificado: **las 3 empresas de prod ahora tienen las 3 cuentas** (la del fundador `db21dfad`
+>    pasó 40→41 al recuperar `1.1.6`; `3dd5ce01` pasó 2→5; Nalux ya las tenía). La contabilización
+>    silenciosa de cheques que fallaba desde la migration 170 queda cerrada.
 >
-> **Para retomar:** hablar con Luciano, decidir si aplicar 208/209 a producción (recomendado que sí,
-> sobre todo la 209), y aplicarlas vía `apply_migration` del MCP de Supabase si se aprueba.
+> 🔸 **Cabo suelto que queda (no urgente, ver callout de abajo):** verificar las **9 tablas** que la
+> 000 crea con `IF NOT EXISTS` y que su migration "real" también crea — si alguna divergió, el CI
+> testea contra un schema que no es igual a prod. `ofertas` fue ese caso (detectado por ruido).
 
 > 🔧 **Para retomar (sesión 70, Nadia) — continuación directa de la 69 de Luciano:**
 >
