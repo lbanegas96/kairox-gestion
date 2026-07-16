@@ -21,9 +21,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Version pineada (no "latest"): "latest" hace que la action resuelva la
+      # release mas reciente contra la API de GitHub en cada corrida, y esa
+      # llamada puede pegarle al mismo rate limit compartido de runners que ya
+      # nos afecto en esta sesion ("Failed to resolve latest Supabase CLI
+      # release: rate limit exceeded", exit 127, antes de llegar a correr nada).
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.109.1
 
       # El log crudo de un step sólo se puede leer estando logueado en GitHub, así
       # que cada fallo del replay obligaba a que un humano copiara el error a mano.
