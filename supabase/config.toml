@@ -94,5 +94,8 @@ enabled = false
 [functions.arca-worker]
 verify_jwt = false   # el worker es un proceso interno (service_role), sin JWT de usuario
 
-[functions.arca-worker.cron]
-schedule = "*/5 * * * *"   # cada 5 minutos
+# El cron real que dispara arca-worker cada 5 min vive en Postgres (pg_cron,
+# migration 102: job "arca-worker-every-5-min") — NO en este archivo.
+# `[functions.arca-worker.cron]` fue un intento previo que nunca surtió efecto
+# al desplegar vía MCP (ver migration 102), y además rompe `supabase start`
+# en versiones recientes de la CLI ("invalid keys: cron"). Se quita acá.
