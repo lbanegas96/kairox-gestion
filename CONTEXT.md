@@ -1,5 +1,37 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-16 (Nadia — sesión 70: CI de pgTAP, replay de la 98 → 170 — EN PROGRESO)
+**Última actualización:** 2026-07-16 (Nadia — sesión 70: CI de pgTAP ✅ VERDE. 2 bugs reales de producción encontrados, a decidir con Luciano antes de aplicar)
+
+> 🟢 **CI de pgTAP: VERDE.** El replay completo de las 207 migrations + los 16 tests pgTAP corren
+> solos en cada push (corrida #30, `7b460ce`, `conclusion: success`). Esto era el objetivo de la
+> sesión 69 de Luciano (arrancó trabado en la migration 98) — quedó terminado. Detalle de todo el
+> camino (17 iteraciones, cada una cerrando una *clase* de error, no un objeto puntual) más abajo.
+>
+> ⚠️ **PENDIENTE — 2 bugs reales de producción encontrados en el camino, NO aplicados todavía a
+> la base real a propósito.** El usuario decidió consultarlo con Luciano antes de tocar producción.
+> Ambos ya están **verificados** (con `BEGIN...ROLLBACK` contra la base real) y **commiteados en el
+> repo** (el CI los aplica en su replay), pero falta el `apply_migration` real:
+>
+> 1. **Migration 208** — `insertar_movimiento_bancario_externo` tiene 2 versiones ambiguas (7 y 8
+>    parámetros) en producción. El trigger `sync_uala_to_bancos` la llama de una forma que Postgres
+>    no puede resolver → `function ... is not unique`. Impacto real hoy: **cero** (ninguna empresa
+>    tiene la integración Ualá activa todavía), pero es un bug latente — la primera vez que alguien
+>    la active, cada transferencia real fallaría. Fix: `DROP FUNCTION` de la versión de 7 params
+>    (la de 8, con `p_subtipo` opcional, ya cubre a todos los callers reales — verificado).
+>
+> 2. **Migration 209 — este es el más importante de aplicar.** `seed_plan_cuentas()` (la función que
+>    arma el plan de cuentas de TODA empresa nueva) perdió 3 cuentas (`2.1.6`, `1.1.6`, `1.1.7`) que
+>    los triggers de contabilización de cheques necesitan. La migration 166 las había agregado; la
+>    170 (al redefinir la misma función para otra cosa) copió una versión vieja y las volvió a
+>    perder, sin que nadie lo notara — porque los triggers de cheques tragan cualquier error en
+>    silencio (`EXCEPTION WHEN OTHERS THEN NULL`). **Esto viene pasando desde que corrió la
+>    migration 170**: toda empresa nueva creada desde entonces no tiene estas 3 cuentas, y la
+>    contabilización de cheques le falla sin ningún aviso. Verificado contra las 2 empresas reales
+>    de producción: Nalux las tiene las 3 (parcheadas a mano en algún momento); la empresa del
+>    fundador solo tiene 2 de las 3. El fix corrige el seed para toda empresa futura + hace un
+>    backfill retroactivo idempotente para las que ya existen y les falte alguna.
+>
+> **Para retomar:** hablar con Luciano, decidir si aplicar 208/209 a producción (recomendado que sí,
+> sobre todo la 209), y aplicarlas vía `apply_migration` del MCP de Supabase si se aprueba.
 
 > 🔧 **Para retomar (sesión 70, Nadia) — continuación directa de la 69 de Luciano:**
 >
