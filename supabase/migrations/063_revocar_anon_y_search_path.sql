@@ -46,7 +46,14 @@ REVOKE EXECUTE ON FUNCTION public.seed_maestros_default(uuid) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.seed_plan_cuentas(uuid) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.seed_series_numeracion(uuid) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.siguiente_numero_documento(uuid, text, text, text) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION public.sync_uala_to_caja() FROM PUBLIC, anon;
+-- sync_uala_to_caja() ya existía en producción cuando esta migration corrió
+-- (creada ad-hoc antes, nunca versionada), por eso el REVOKE de acá no fallaba
+-- en producción. Al replayar desde cero en CI, esa función recién nace en
+-- 069_uala_de_caja_a_bancos.sql (después de esta), y REVOKE sobre una función
+-- inexistente sí es un error real (a diferencia de un GRANT ausente, que es
+-- no-op). Se saca la línea: 070_revocar_anon_sync_uala_to_bancos.sql ya
+-- revoca el reemplazo (sync_uala_to_bancos) cuando nace, cerrando el mismo
+-- hallazgo sin este hueco de orden.
 REVOKE EXECUTE ON FUNCTION public.trg_fn_seed_maestros_empresa() FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.trg_fn_seed_series_numeracion() FROM PUBLIC, anon;
 
