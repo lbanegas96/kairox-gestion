@@ -1,5 +1,37 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-17 (Nadia — sesión 72: barrido de seguridad COMPLETO — Cheques/Cta.Cte. (3 bugs), Bancos/Impuestos (limpio), Ofertas/Listas (1 hardening menor))
+**Última actualización:** 2026-07-17 (Nadia — sesión 72: barrido de seguridad completo, 4 migrations esperando tu OK)
+
+> 📋 **LUCIANO — leé esto primero, hay una decisión tuya pendiente.** Terminé el barrido de
+> seguridad módulo por módulo que quedaba (Cheques, Cuenta Corriente, Bancos/Conciliación,
+> Impuestos, Ofertas/Listas de precio — con esto quedan TODOS los módulos auditados). Encontré 4
+> hallazgos reales, cada uno con su migration ya escrita y **verificada contra producción real**
+> (`BEGIN...ROLLBACK`, no toca nada) — pero NINGUNA aplicada todavía, mismo criterio que la 208/209
+> de la sesión pasada: decisión tuya antes de tocar prod.
+>
+> **La que más importa — migration 210 (bug real de integridad contable):** `cambiar_estado_cheque`
+> podía duplicar un movimiento de cuenta corriente (deuda de un cliente o crédito a un proveedor) si
+> se lo invocaba 2 veces con el mismo estado destino (doble click en 2 pestañas, un retry de red).
+> No pasó todavía en los datos reales, pero es un bug de plata real, no solo un gap teórico.
+>
+> **Mismo patrón que ya nos mordió con Ualá — migration 212:** `registrar_pago_proveedor` quedó con
+> 2 versiones ambiguas en prod (la 184 agregó `p_fecha` sin dropear la firma vieja de 9 params). Hoy
+> no rompe nada porque el único caller manda todos los parámetros, pero es la misma bomba de tiempo
+> que la 208 — el primer caller nuevo que no la copie explota con `function ... is not unique`.
+>
+> **2 de hardening, defensa en profundidad, no explotadas — migrations 211 y 213:** crear un cheque
+> no validaba que cliente/proveedor/cuenta bancaria fueran de tu propia empresa (211); mismo gap en
+> `producto_id` de ofertas/listas de precio (213). Nada urgente, RLS ya cubre el caso real.
+>
+> **Para aplicar cuando decidas que sí:** los 4 archivos están en `supabase/migrations/`
+> (`210_fix_idempotencia_cambiar_estado_cheque.sql`, `211_hardening_tenant_crear_cheque.sql`,
+> `212_fix_overload_ambiguo_registrar_pago_proveedor.sql`,
+> `213_hardening_tenant_producto_ofertas_listas_precio.sql`), cada uno con el detalle completo del
+> hallazgo comentado arriba del SQL — se aplican con `apply_migration` del MCP de Supabase, en ese
+> orden. Si querés arrancar por la que más importa, es la 210 sola.
+>
+> Detalle técnico completo de cada módulo auditado (qué se revisó y por qué quedó bien/mal), abajo.
+
+---
 
 > 🏁 **Barrido de seguridad módulo por módulo: TERMINADO.** Con Ofertas/Listas de precio se cerró
 > el último módulo que quedaba del plan original (Caja/POS/Ventas, AFIP/CAE, Cheques, Cuenta
@@ -25,8 +57,6 @@
 >   con producto_id NULL). **Menor prioridad que las 210/211/212** — es higiene, no vulnerabilidad.
 >
 > **Estado de las migrations repo-only pendientes de decidir con Luciano: 210, 211, 212, 213.**
-
-**Última actualización previa:** 2026-07-17 (Nadia — sesión 72: barrido de seguridad Cheques+Cta.Cte. (3 bugs) y Bancos+Impuestos (limpio))
 
 > ✅ **Barrido de seguridad — módulos Cuentas Bancarias/Conciliación e Impuestos (sesión 72,
 > continuación).** Mismo método que Cheques/Cta.Cte.: leer las definiciones reales de producción, no
