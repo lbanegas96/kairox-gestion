@@ -1,33 +1,19 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-17 (Nadia — sesión 72: barrido de seguridad completo, 4 migrations esperando tu OK)
+**Última actualización:** 2026-07-17 (Luciano — sesión 73: migrations 210-213 aplicadas a producción + CI frontend confirmado verde)
 
-> 📋 **LUCIANO — leé esto primero, hay una decisión tuya pendiente.** Terminé el barrido de
-> seguridad módulo por módulo que quedaba (Cheques, Cuenta Corriente, Bancos/Conciliación,
-> Impuestos, Ofertas/Listas de precio — con esto quedan TODOS los módulos auditados). Encontré 4
-> hallazgos reales, cada uno con su migration ya escrita y **verificada contra producción real**
-> (`BEGIN...ROLLBACK`, no toca nada) — pero NINGUNA aplicada todavía, mismo criterio que la 208/209
-> de la sesión pasada: decisión tuya antes de tocar prod.
+> ✅ **Migrations 210, 211, 212 y 213 aplicadas a producción — Luciano dio el OK.** Las 4 quedaron
+> aplicadas en ese orden vía `apply_migration` del MCP de Supabase, sin errores. Resumen:
+> - **210** (el bug real): `cambiar_estado_cheque` ya no puede duplicar un movimiento de cuenta
+>   corriente si se lo invoca 2 veces con el mismo estado destino.
+> - **212** (preventivo, mismo patrón que 208/209): se eliminó el overload ambiguo de 9 params de
+>   `registrar_pago_proveedor`, sólo queda la firma con `p_fecha`.
+> - **211 / 213** (hardening, defensa en profundidad): `crear_cheque_propio`/`crear_cheque_tercero`
+>   y el trigger `fn_validar_tenant_producto` en `ofertas`/`lista_precio_items` ahora validan tenant
+>   en el servidor, no sólo confían en RLS.
+> - Advisor de seguridad corrido después: **0 hallazgos ERROR**, nada roto.
 >
-> **La que más importa — migration 210 (bug real de integridad contable):** `cambiar_estado_cheque`
-> podía duplicar un movimiento de cuenta corriente (deuda de un cliente o crédito a un proveedor) si
-> se lo invocaba 2 veces con el mismo estado destino (doble click en 2 pestañas, un retry de red).
-> No pasó todavía en los datos reales, pero es un bug de plata real, no solo un gap teórico.
->
-> **Mismo patrón que ya nos mordió con Ualá — migration 212:** `registrar_pago_proveedor` quedó con
-> 2 versiones ambiguas en prod (la 184 agregó `p_fecha` sin dropear la firma vieja de 9 params). Hoy
-> no rompe nada porque el único caller manda todos los parámetros, pero es la misma bomba de tiempo
-> que la 208 — el primer caller nuevo que no la copie explota con `function ... is not unique`.
->
-> **2 de hardening, defensa en profundidad, no explotadas — migrations 211 y 213:** crear un cheque
-> no validaba que cliente/proveedor/cuenta bancaria fueran de tu propia empresa (211); mismo gap en
-> `producto_id` de ofertas/listas de precio (213). Nada urgente, RLS ya cubre el caso real.
->
-> **Para aplicar cuando decidas que sí:** los 4 archivos están en `supabase/migrations/`
-> (`210_fix_idempotencia_cambiar_estado_cheque.sql`, `211_hardening_tenant_crear_cheque.sql`,
-> `212_fix_overload_ambiguo_registrar_pago_proveedor.sql`,
-> `213_hardening_tenant_producto_ofertas_listas_precio.sql`), cada uno con el detalle completo del
-> hallazgo comentado arriba del SQL — se aplican con `apply_migration` del MCP de Supabase, en ese
-> orden. Si querés arrancar por la que más importa, es la 210 sola.
+> ✅ **CI de frontend (`frontend-tests.yml`) confirmado en verde** para el commit del fix de env vars
+> y para los 4 pushes posteriores de Nadia — 27 tests + build, sin depender de secrets locales.
 >
 > Detalle técnico completo de cada módulo auditado (qué se revisó y por qué quedó bien/mal), abajo.
 
