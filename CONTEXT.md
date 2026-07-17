@@ -1,5 +1,27 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-17 (Nadia — sesión 72: barrido de seguridad Cheques + Cuenta Corriente, 3 bugs reales encontrados, fixes escritos en el repo — SIN aplicar a prod)
+**Última actualización:** 2026-07-17 (Nadia — sesión 72: barrido de seguridad Cheques+Cta.Cte. (3 bugs) y Bancos+Impuestos (limpio))
+
+> ✅ **Barrido de seguridad — módulos Cuentas Bancarias/Conciliación e Impuestos (sesión 72,
+> continuación).** Mismo método que Cheques/Cta.Cte.: leer las definiciones reales de producción, no
+> las migrations. **Resultado: bill of health limpio, 0 hallazgos.**
+>
+> - RLS activo y correcto en las 8 tablas (`cuentas_bancarias`, `movimientos_bancarios`,
+>   `extractos_bancarios`, `integraciones_bancarias`, `metodo_pago_cuenta_bancaria`,
+>   `alicuotas_impuestos`, `iibb_coeficientes`, `iibb_liquidaciones`).
+> - `contabilizar_movimiento_bancario`/`revertir_contabilizacion_movimiento`: tenant + `is_admin()` +
+>   período cerrado + guard de doble-contabilización, todo presente.
+> - `movimientos_bancarios` no tiene policy de DELETE bloqueando en RLS, pero SÍ tiene un trigger
+>   dedicado (`trg_bloquear_delete_mov_contabilizado`, mig.128) que impide borrar un movimiento con
+>   `asiento_id` seteado — cubierto por otra capa, no es un gap.
+> - `generar_liquidacion_iibb`/`confirmar_liquidacion_iibb`: tenant, permisos, guard de solapamiento
+>   de período, guard de doble-confirmación, todo presente.
+> - `integraciones_bancarias` (Ualá) no guarda ningún token/secreto — solo referencia a
+>   `cuenta_bancaria_id`; la integración real es un Apps Script externo vía Gmail, no OAuth. Nada que
+>   mover a Vault acá (a diferencia de MercadoPago, mig.205).
+> - `insertar_movimiento_bancario_externo` (post mig.208) ya valida `cuenta_bancaria_id` pertenece a
+>   la empresa — el fix de la sesión anterior quedó completo.
+>
+> **Sigue pendiente del barrido original:** Ofertas/Listas de precio (único módulo que falta).
 
 > 🟡 **Barrido de seguridad — módulos Cheques y Cuenta Corriente (sesión 72).** Continuación del
 > barrido módulo por módulo que quedó pendiente en sesiones anteriores (Caja/POS/Ventas ya auditado,
