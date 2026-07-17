@@ -1,5 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-17 (Nadia — sesión 72: barrido de seguridad Cheques+Cta.Cte. (3 bugs) y Bancos+Impuestos (limpio))
+**Última actualización:** 2026-07-17 (Nadia — sesión 72: barrido de seguridad COMPLETO — Cheques/Cta.Cte. (3 bugs), Bancos/Impuestos (limpio), Ofertas/Listas (1 hardening menor))
+
+> 🏁 **Barrido de seguridad módulo por módulo: TERMINADO.** Con Ofertas/Listas de precio se cerró
+> el último módulo que quedaba del plan original (Caja/POS/Ventas, AFIP/CAE, Cheques, Cuenta
+> Corriente, Cuentas Bancarias/Conciliación, Impuestos, y ahora Ofertas/Listas — todos auditados).
+>
+> ✅ **Ofertas + Listas de precio (sesión 72, cierre del barrido).** RLS correcto en las 3 tablas
+> (`ofertas`, `listas_precio`, `lista_precio_items`), constraints de descuento sólidos
+> (`chk_porcentaje_maximo` ≤100, `chk_valor_descuento_positivo`), `calcular_ofertas_carrito` valida
+> tenant y usa timezone AR para el día de semana. **Datos 100% limpios: 0 filas cross-tenant** en
+> ninguna de las FK del módulo (verificado con query directa a prod).
+>
+> - **De regalo cierra 2 de las 9 tablas del cabo suelto de Luciano:** `listas_precio` y
+>   `lista_precio_items` en el `000_schema_base.sql` coinciden EXACTAMENTE con su migration real
+>   (021) — sin drift. Quedan 7 de las 9 por verificar.
+>
+> - **Migration 213 (hardening, severidad INFO — repo-only, sin aplicar).** Ni `ofertas.producto_id`
+>   ni `lista_precio_items.producto_id` validaban pertenencia al tenant (el FK de ofertas sólo chequea
+>   existencia global, lista_precio_items no tiene FK sobre producto_id). NO es explotable: la RLS ya
+>   impide ver productos ajenos, así que una fila con producto_id de otro tenant queda como basura
+>   muda sin filtrar ni afectar a nadie. Se cierra con un trigger `fn_validar_tenant_producto`
+>   (BEFORE INSERT/UPDATE OF producto_id), mismo idioma que la mig.187 (centro de costo). Verificado
+>   con `BEGIN...ROLLBACK` + 3 casos (bloquea cross-tenant, acepta mismo-tenant, acepta oferta global
+>   con producto_id NULL). **Menor prioridad que las 210/211/212** — es higiene, no vulnerabilidad.
+>
+> **Estado de las migrations repo-only pendientes de decidir con Luciano: 210, 211, 212, 213.**
+
+**Última actualización previa:** 2026-07-17 (Nadia — sesión 72: barrido de seguridad Cheques+Cta.Cte. (3 bugs) y Bancos+Impuestos (limpio))
 
 > ✅ **Barrido de seguridad — módulos Cuentas Bancarias/Conciliación e Impuestos (sesión 72,
 > continuación).** Mismo método que Cheques/Cta.Cte.: leer las definiciones reales de producción, no
