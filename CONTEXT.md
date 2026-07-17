@@ -1,5 +1,51 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-16 (Luciano — sesión 71: CI de pgTAP ✅ VERDE + 2 bugs reales YA APLICADOS a prod)
+**Última actualización:** 2026-07-17 (Nadia — sesión 72: barrido de seguridad Cheques + Cuenta Corriente, 3 bugs reales encontrados, fixes escritos en el repo — SIN aplicar a prod)
+
+> 🟡 **Barrido de seguridad — módulos Cheques y Cuenta Corriente (sesión 72).** Continuación del
+> barrido módulo por módulo que quedó pendiente en sesiones anteriores (Caja/POS/Ventas ya auditado,
+> bill of health limpio). Método: leer las definiciones REALES de producción (`pg_get_functiondef`,
+> `pg_policies`) en vez de confiar en las migrations del repo, dado el historial de drifts ya
+> encontrado esta misma semana.
+>
+> **Resultado general: RLS y aislamiento multi-tenant sólidos** en las 6 tablas del módulo (`cheques`,
+> `cheques_historial`, `cuenta_corriente_movimientos`, `cuenta_corriente_proveedores`,
+> `cuenta_corriente_imputaciones`, `cuenta_corriente_proveedores_imputaciones`) — RLS activo en las 6,
+> `registrar_cobro_cliente`/`registrar_pago_proveedor` validan tenant y permisos correctamente, y las
+> tablas de imputaciones solo se escriben vía RPC `SECURITY DEFINER` (sin policy de INSERT directo).
+> Pero aparecieron **3 hallazgos reales, con migration ya escrita en el repo para cada uno — NINGUNA
+> aplicada a producción, a la espera de decidir con Luciano** (mismo criterio que 208/209):
+>
+> 1. **Migration 210 — bug de idempotencia real en `cambiar_estado_cheque`.** Los triggers de asiento
+>    contable (`fn_asiento_cheque_propio/tercero`) SÍ comparan `OLD.estado <> NEW.estado` antes de
+>    postear al libro diario — están bien. Pero el RPC `cambiar_estado_cheque`, que además escribe
+>    DIRECTO en `cuenta_corriente_movimientos`/`cuenta_corriente_proveedores`, no tenía ese mismo
+>    guard. Llamarlo 2 veces con el mismo `p_estado_nuevo` sobre un cheque que YA está en ese estado
+>    (doble click en 2 pestañas, un retry, o una llamada repetida) duplica el movimiento financiero:
+>    una 2da reversión de deuda al cliente (cheque de tercero rechazado) o un 2do crédito al proveedor
+>    (cheque propio entregado, sólo si no tenía `compra_id` — si tenía, el guard de sobre-imputación
+>    ya lo frenaba, por eso no se vio antes). El libro diario quedaba bien pero el subdiario de cuenta
+>    corriente se desincronizaba. Fix: mismo guard que ya usan los triggers de GL.
+>
+> 2. **Migration 211 — hardening: `crear_cheque_propio`/`crear_cheque_tercero` no validaban tenant.**
+>    A diferencia de `registrar_cobro_cliente`/`registrar_pago_proveedor` (que sí chequean
+>    `EXISTS(...WHERE id=... AND empresa_id=p_empresa_id)`), estas 2 RPCs insertaban `cliente_id`/
+>    `proveedor_id`/`cuenta_bancaria_id` tal cual llegaban del cliente, sin confirmar que pertenecen
+>    al tenant del caller. Mismo patrón de defensa en profundidad que la migration 187 (centro de
+>    costo) — no se encontró evidencia de explotación real (adivinar un UUID v4 ajeno es difícil),
+>    pero es la misma clase de gap que ya se cerró en otro lado.
+>
+> 3. **Migration 212 — mismo bug de overload ambiguo que la 208, ahora en `registrar_pago_proveedor`.**
+>    La migration 184 agregó `p_fecha` con `CREATE OR REPLACE` sin dropear la firma vieja de 9 params
+>    → quedaron 2 versiones en prod. Hoy no está roto (el único caller, `proveedoresService.ts`,
+>    siempre manda `p_fecha`), pero es el mismo cheque en blanco que ya mordió a Ualá: el primer
+>    caller nuevo que no lo mande revienta con `function ... is not unique`.
+>
+> **Las 3 migrations (210/211/212) están commiteadas al repo, verificadas con `BEGIN...ROLLBACK`
+> contra producción real (aplican limpio, no rompen los tests pgTAP de `cheques_contabilizacion_166`),
+> pero NO se aplicaron a prod** — falta la conversación con Luciano, mismo criterio que las 208/209.
+>
+> **Sigue pendiente del barrido original:** Cuentas Bancarias/conciliación, Impuestos, Ofertas/Listas
+> de precio.
 
 > 🟢 **CI de pgTAP: VERDE y TAREA CERRADA.** El replay completo de las 207 migrations + los 16 tests
 > pgTAP corren solos en cada push. Objetivo de la sesión 69 de Luciano — terminado.
