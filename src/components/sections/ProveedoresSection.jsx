@@ -4,6 +4,7 @@ import {
   Truck, Plus, Search, Edit, Eye, UserX, UserCheck,
   DollarSign, FileText, ShoppingBag, Banknote, RefreshCw
 } from 'lucide-react';
+import PaymentRunModal from '@/components/proveedores/PaymentRunModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -52,6 +53,7 @@ function ProveedoresSection() {
   const [editando, setEditando]     = useState(null);   // proveedor a editar
   const [form, setForm]             = useState({ ...EMPTY_FORM });
   const [detalleId, setDetalleId]   = useState(null);
+  const [runOpen, setRunOpen]       = useState(false);
   const [pagoOpen, setPagoOpen]     = useState(false);
   const [pagoForm, setPagoForm]     = useState({ monto: '', descripcion: '', metodo: 'Efectivo', forma_pago_id: '' });
   // Imputación por factura (Open Item clearing, migration 169/170) — opcional.
@@ -312,9 +314,14 @@ function ProveedoresSection() {
           </h2>
           <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-1">Gestión de proveedores y cuenta corriente</p>
         </div>
-        <Button onClick={openCrear} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
-          <Plus className="w-4 h-4" /> Nuevo Proveedor
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setRunOpen(true)} variant="outline" className="gap-2 dark:border-kx-border dark:text-slate-300">
+            <Banknote className="w-4 h-4" /> Pagar varias facturas
+          </Button>
+          <Button onClick={openCrear} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
+            <Plus className="w-4 h-4" /> Nuevo Proveedor
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -775,6 +782,8 @@ function ProveedoresSection() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <PaymentRunModal empresaId={empresaId} formasPago={formasPago} open={runOpen} onOpenChange={setRunOpen} />
     </div>
   );
 }

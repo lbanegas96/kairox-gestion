@@ -1,5 +1,57 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-17 (Luciano — sesión 75: Tesorería Fase 2 aplicada a producción)
+**Última actualización:** 2026-07-18 (Luciano — sesión 76: Tesorería Fase 3 — Payment Run proveedores, repo-only)
+
+> 🟡 **Fase 3 de Tesorería (Payment Run liviano) — escrita y verificada, sin push/commit remoto
+> todavía.** Cierra el punto pendiente que quedaba abierto desde la Fase 2 (`registrar_pago_proveedor`
+> ya soportaba imputar UN pago a varias facturas de UN proveedor — mig.169 — pero no había forma de
+> pagar a VARIOS proveedores en un solo paso, como el Payment Run F110 de SAP).
+>
+> **Decisión de diseño clave: CERO migrations.** `registrar_pago_proveedor` (mig.169/184/212/215) ya
+> es exactamente la unidad atómica que hace falta por proveedor (imputación por factura, asiento,
+> forma de pago, no bloqueante ante período cerrado). Un Payment Run multi-proveedor no necesita una
+> función SQL nueva que reimplemente esa lógica — solo necesita orquestar varias llamadas a la que ya
+> existe, una por proveedor. Igual que en SAP, cada documento de pago por proveedor es su propia
+> unidad: si el pago a un proveedor falla, los demás se procesan igual (no es una transacción única
+> de todo el lote) — se reporta el resultado por proveedor al final.
+>
+> **Qué se agregó — 100% frontend:**
+> - `paymentRunService.ts` (nuevo): `getFacturasPendientes(empresaId)` trae TODAS las compras con
+>   saldo pendiente de la empresa (no solo de un proveedor, a diferencia de
+>   `fetchFacturasAbiertas` en `ProveedoresSection.jsx`) reusando la vista `compras_saldo_pendiente`
+>   (mig.169) + join client-side a `compras` (numero_factura/fecha) y `proveedores`
+>   (nombre/plazo_pago_dias) para calcular `fecha_vencimiento_estimada` con `addDaysAR` — mismo
+>   patrón de 2 pasos que ya usaba el modal de pago individual. `ejecutarPaymentRun(...)` agrupa la
+>   selección por `proveedor_id` y llama `proveedoresService.registrarPago` una vez por grupo.
+> - `PaymentRunModal.jsx` (nuevo, `src/components/proveedores/`): tabla de facturas pendientes de
+>   TODA la empresa con checkbox por fila, ordenada por vencimiento estimado (más urgente primero),
+>   badge ámbar si está vencida, botón "Seleccionar vencidas", buscador por proveedor/N° factura, una
+>   forma de pago única para todo el lote, y footer con conteo de proveedores + monto total. Al
+>   confirmar, muestra el resultado por proveedor (✓/✗) sin cerrar el modal — si alguno falla, no
+>   bloquea a los demás.
+> - **Alcance deliberado: se excluyen del lote las facturas en moneda extranjera** (checkbox
+>   deshabilitado con tooltip) — pagarlas requiere ingresar `monto_moneda_extranjera` por factura
+>   (mig.170), que no encaja bien en una tabla de selección masiva. Se pagan individualmente desde la
+>   ficha del proveedor, como hasta ahora.
+> - Botón "Pagar varias facturas" nuevo en el header de `ProveedoresSection.jsx`, junto a "Nuevo
+>   Proveedor".
+> - Verificado el patrón de orquestación (2 llamadas secuenciales a `registrar_pago_proveedor` para
+>   2 proveedores distintos, Alibaba y Amazon) con `BEGIN...ROLLBACK` contra datos reales de Nalux:
+>   ambos generaron su `cuenta_corriente_proveedores` + asiento balanceado (DEBE 2.1.1 / HABER 1.1.1)
+>   por separado, y ambas compras quedaron `estado_pago='pagada'` — confirma que agrupar por
+>   proveedor y llamar el RPC existente N veces produce el mismo resultado contable correcto que N
+>   pagos individuales.
+> - Verificado en preview real logueado como Nadia (Nalux, que tiene 16 facturas de proveedores
+>   pendientes por $8.447.591 reales): el modal carga y ordena las 16 correctamente, "Seleccionar
+>   vencidas" marcó 8 proveedores por $8.262.591 (excluyendo las 2 en USD), el buscador filtra bien,
+>   y los totales del footer coinciden exacto con la suma manual verificada por SQL. **No se hizo
+>   clic en "Confirmar pago"** para no ejecutar pagos reales contra Nalux — esa parte quedó validada
+>   por el test de SQL con ROLLBACK.
+> - Build + lint: verde (solo warnings pre-existentes de `prop-types`).
+>
+> **Para pushear cuando decidas que sí:** no hay ninguna migration pendiente de aplicar — todo el
+> cambio es frontend, así que solo hace falta el `git push`.
+
+---
 
 > ✅ **Fase 2 de Tesorería aplicada a producción — Luciano dio el OK.** Migration 216 aplicada vía
 > `apply_migration`, sin errores. Advisor de seguridad corrido después: **0 hallazgos ERROR** (solo
