@@ -39,10 +39,23 @@ solo si `SUPABASE_URL` apunta a `supabase.co`.
    MAX_VUS=100 .tools/k6-v2.1.0-windows-amd64/k6.exe run loadtest/k6/escenario-a-multitenant.js
    ```
 
+   Comandos largos (siembra grande, ramp-up alto) — correr con `run_in_background` si el entorno
+   corta ejecuciones foreground largas (pasó en sesión 77, ver `REPORTE.md`).
+
 ## Estructura
 
 - `scripts/loadtest/seed.mjs` — generador de datos sintéticos (empresas, usuarios con login real,
-  clientes, productos, historial de ventas vía RPC real).
+  clientes, productos, historial de ventas vía RPC real). Escribe `fixtures.json`
+  incrementalmente, así una corrida cortada no pierde lo ya sembrado.
 - `loadtest/k6/escenario-a-multitenant.js` — muchas empresas concurrentes vendiendo (Fase 2).
+- `loadtest/k6/escenario-b-contencion.js` — muchos VUs vendiendo para LA MISMA empresa
+  (`MODO=productos_distintos` o `MODO=mismo_producto`) — mide el lock de
+  `series_numeracion`/`stock_actual` bajo contención real (Fase 3).
+- `loadtest/k6/escenario-c-dashboard.js` — simula el path de lectura del Dashboard (9 queries en
+  paralelo + 6 secuenciales de `getFlujoCajaMensual` + 2 más), escalando sesiones concurrentes
+  (Fase 3).
+- `loadtest/k6/escenario-d-cobros-pagos.js` — `registrar_cobro_cliente` real en loop (Fase 3;
+  alcance acotado — ver el propio archivo, no cubre contención sobre la misma factura porque el
+  seed no genera facturas con cliente_id real todavía).
 - `loadtest/SEGURIDAD.md` — resultado de la auditoría de seguridad multi-tenant (Fase 1).
 - `loadtest/REPORTE.md` — resultados reales de cada corrida de carga (Fase 2 en adelante).

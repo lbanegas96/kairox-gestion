@@ -87,7 +87,11 @@ async function seedEmpresa(i) {
     nombre: `__LOADTEST__ Producto ${i}-${j}`,
     costo_compra: rand(500, 5000),
     precio_venta: rand(1000, 10000),
-    stock_actual: rand(100, 500),
+    // Stock deliberadamente muy alto (no realista) — un valor bajo (100-500) se
+    // agota bajo carga sostenida y el guard de "Stock insuficiente" de crear_venta
+    // se confunde con una falla de capacidad (pasó 2 veces en sesión 77). El
+    // objetivo acá es medir el sistema bajo concurrencia, no simular un negocio real.
+    stock_actual: rand(500000, 1000000),
   }));
   const { data: productos, error: errProductos } = await admin.from('productos').insert(productosRows).select('id');
   if (errProductos) throw new Error(`productos ${i}: ${errProductos.message}`);

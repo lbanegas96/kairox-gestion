@@ -1,5 +1,30 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-19 (Luciano — sesión 77: Sometimiento a estrés Fase 2 — infra de carga + Escenario A, repo-only)
+**Última actualización:** 2026-07-19 (Luciano — sesión 77: Sometimiento a estrés Fases 2 y 3 completas, repo-only)
+
+> 🟡 **Fases 2 y 3 del plan de sometimiento a estrés cerradas — infra de carga + 4 escenarios
+> corridos con datos reales, repo-only (nada que aplicar a producción).**
+>
+> **Resultado final, con hipótesis corregida en el camino**: se sembraron 131 empresas reales
+> (login real, ventas vía RPC real) y se corrieron los 4 escenarios (A: multi-tenant, B:
+> contención por-tenant, C: dashboard, D: cobros). Con 131 empresas concurrentes o con 100 VUs
+> concentrados en UNA sola empresa/producto (contención máxima), el sistema no degrada: p95 entre
+> 19-26ms, 0% errores en ambos casos. La degradación que se había visto al principio (p95~700ms con
+> 500 VUs) **no es el lock de `series_numeracion`/`stock_actual` como se pensó en un primer
+> momento** — es el `max_connections=100` del Postgres LOCAL de desarrollo (`supabase start`), no
+> una limitación de KAIROX. Confirmado con `SHOW max_connections` y con el hecho de que 100 VUs en
+> contención máxima (peor caso posible del lock) no degradó nada.
+>
+> Se corrigieron 2 errores de metodología propios en el camino: (1) la siembra masiva fallaba en
+> foreground por un límite de esta sesión de Claude Code (no del sistema) — resuelto corriendo en
+> background; (2) el stock sintético bajo (100-500 u.) se agotaba bajo carga sostenida y el guard
+> de "Stock insuficiente" se confundía con una falla de capacidad — corregido subiendo el stock
+> por defecto a 500k-1M en `seed.mjs`.
+>
+> Detalle completo, con todos los números y la tabla de lo que falta (confirmar el límite de
+> conexiones contra un proyecto hosted con pooling, Escenario D con imputación a la misma factura,
+> Fase 4 Playwright) en `loadtest/REPORTE.md`.
+
+---
 
 > 🟡 **Fase 2 del plan de sometimiento a estrés — infra de carga construida y Escenario A corrido
 > con datos reales, repo-only (nada que aplicar a producción, es 100% infra local).**
