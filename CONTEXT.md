@@ -1,10 +1,15 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-17 (Luciano — sesión 75: Tesorería Fase 2 — cuenta puente Tarjetas a Acreditar, repo-only)
+**Última actualización:** 2026-07-17 (Luciano — sesión 75: Tesorería Fase 2 aplicada a producción)
 
-> 🟡 **Fase 2 de Tesorería — cuenta puente "Tarjetas a Acreditar" + liquidación real de
-> comisión/neto (sesión 75). Escrita y verificada con `BEGIN...ROLLBACK` contra datos reales de
-> Nalux, PERO NO APLICADA A PRODUCCIÓN todavía** — pendiente de que Luciano dé el OK, mismo patrón
-> que la Fase 1.
+> ✅ **Fase 2 de Tesorería aplicada a producción — Luciano dio el OK.** Migration 216 aplicada vía
+> `apply_migration`, sin errores. Advisor de seguridad corrido después: **0 hallazgos ERROR** (solo
+> los WARN genéricos de "SECURITY DEFINER ejecutable por anon/authenticated" que ya tienen todas
+> las demás RPCs del sistema, mitigados por los checks de tenant/permisos internos). Verificado en
+> preview real logueado como Nadia: la tab "Tarjetas pendientes" ya no tira el error de columna
+> faltante, consulta bien el schema nuevo.
+>
+> Cuenta puente "Tarjetas a Acreditar" + liquidación real de comisión/neto. Escrita y verificada
+> con `BEGIN...ROLLBACK` contra datos reales de Nalux antes de aplicar.
 >
 > **El hallazgo contable (por qué esto no es cosmético):** cuando se cobra con una `forma_pago` de
 > tipo tarjeta (`dias_acreditacion > 0`), KAIROX acreditaba el BRUTO a "1.1.1 Caja y Bancos" el
@@ -53,8 +58,8 @@
 > - Build + lint: verde (solo warnings pre-existentes de `prop-types`, mismo patrón que el resto del
 >   módulo).
 >
-> **Para aplicar cuando decidas que sí:** `supabase/migrations/216_liquidacion_tarjetas.sql` vía
-> `apply_migration`. Rollback documentado en el pie del archivo.
+> Rollback documentado en el pie de `supabase/migrations/216_liquidacion_tarjetas.sql` por si hace
+> falta revertir.
 >
 > **Fase 3 (no empezada):** Payment Run liviano para pagar varias facturas de proveedor juntas
 > (solo relevante para el perfil PyME) — menor prioridad, no hay drive urgente todavía.
