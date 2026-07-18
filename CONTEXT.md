@@ -1,5 +1,33 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-19 (Luciano — sesión 77: Sometimiento a estrés Fase 1 — auditoría de seguridad multi-tenant, aplicada a producción)
+**Última actualización:** 2026-07-19 (Luciano — sesión 77: Sometimiento a estrés Fase 2 — infra de carga + Escenario A, repo-only)
+
+> 🟡 **Fase 2 del plan de sometimiento a estrés — infra de carga construida y Escenario A corrido
+> con datos reales, repo-only (nada que aplicar a producción, es 100% infra local).**
+>
+> Se construyó `scripts/loadtest/seed.mjs` (genera empresas sintéticas con login real y ventas
+> vía el RPC real `crear_venta`) y `loadtest/k6/escenario-a-multitenant.js` (k6, instalado como
+> binario portable en `.tools/`). Corrido contra el stack local de Supabase (nunca hosted).
+>
+> **Resultado**: con 30 empresas distintas operando en simultáneo, **cero degradación** (p95
+> plano en 22ms) — confirma que el aislamiento multi-tenant por-empresa (lock de
+> `series_numeracion`, hallazgo de la Fase 1) funciona en la práctica, no solo en la teoría. Al
+> extender a 500 VUs reusando esas mismas 30 empresas (contención real dentro de un tenant), la
+> latencia sí sube (~700ms p95) — confirma el otro hallazgo de la Fase 1, que ese lock es un
+> cuello de botella real bajo concurrencia alta *dentro* de una empresa. La tasa de error real es
+> ~0% una vez corregido un artefacto del propio test (productos sintéticos se quedaban sin stock
+> bajo venta sostenida — el sistema bloqueaba la sobreventa correctamente, no era una falla de
+> capacidad).
+>
+> **Pendiente real, sin resolver todavía**: sembrar 100-500 empresas ÚNICAS de forma confiable —
+> la siembra masiva falló de forma intermitente esta sesión (causa identificada: 3 procesos de
+> `winget` colgados de un intento anterior de instalar k6, compitiendo por recursos de la
+> máquina — no es un límite del sistema bajo prueba). Corregido el script para escribir
+> `fixtures.json` incrementalmente para no perder progreso en la próxima corrida larga.
+>
+> Detalle completo en `loadtest/REPORTE.md`, incluyendo el listado de lo que falta (Escenarios
+> B/C/D, Fase 4 Playwright).
+
+---
 
 > ✅ **Fase 1 del plan de sometimiento a estrés (`.claude/plans/fluffy-sauteeing-panda.md`)
 > completa y aplicada a producción.** Auditoría de seguridad multi-tenant: 272 policies RLS +

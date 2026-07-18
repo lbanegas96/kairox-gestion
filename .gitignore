@@ -25,3 +25,6 @@ supabase/.temp/
 
 # Fixtures del sometimiento a estrés (contienen JWTs de empresas sintéticas locales)
 scripts/loadtest/fixtures.json
+
+# Binario de k6 descargado localmente para el sometimiento a estrés (no versionar)
+.tools/
