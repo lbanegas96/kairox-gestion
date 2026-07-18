@@ -9,8 +9,13 @@ import { parseNumberLocale } from '@/lib/currencyUtils';
  *
  * `total` es el total de la venta en ARS (cart), recalculado por el caller en cada
  * render — el hook no fetchea ni posee el carrito.
+ *
+ * `formasPago` (maestro de ConfiguracionSection → Finanzas, mig.214): lista de
+ * formas de pago activas de la empresa. Se usa solo para resolver forma_pago_id
+ * por nombre al construir los pagos finales — el resto de la lógica sigue
+ * operando sobre nombres de método (Set/objeto), sin tocar la exclusividad de CC.
  */
-export function useMultipago(total) {
+export function useMultipago(total, formasPago = []) {
   const [selectedMethods, setSelectedMethods] = useState(new Set(['Efectivo']));
   const [methodAmounts, setMethodAmounts] = useState({});
 
@@ -64,14 +69,16 @@ export function useMultipago(total) {
    * debe mostrar el toast con ese error (title/description) tal cual.
    * Misma lógica/mensajes exactos que vivían inline en handleConfirmSale.
    */
+  const formaPagoIdPorNombre = (nombre) => formasPago.find(f => f.nombre === nombre)?.id ?? null;
+
   const construirPagosFinales = () => {
     if (isCC) {
-      return { pagos: [{ metodo: 'Cuenta Corriente', monto: total }], error: null };
+      return { pagos: [{ metodo: 'Cuenta Corriente', monto: total, forma_pago_id: null }], error: null };
     }
     if (isMultiPago) {
       const pagos = Array.from(selectedMethods).map(m => {
         const parsed = parseNumberLocale(methodAmounts[m]);
-        return { metodo: m, monto: isNaN(parsed) ? 0 : parsed };
+        return { metodo: m, monto: isNaN(parsed) ? 0 : parsed, forma_pago_id: formaPagoIdPorNombre(m) };
       });
       const invalido = Array.from(selectedMethods).some(m => {
         const v = methodAmounts[m];
@@ -99,7 +106,7 @@ export function useMultipago(total) {
       return { pagos, error: null };
     }
     const [singleMethod] = Array.from(selectedMethods);
-    return { pagos: [{ metodo: singleMethod, monto: total }], error: null };
+    return { pagos: [{ metodo: singleMethod, monto: total, forma_pago_id: formaPagoIdPorNombre(singleMethod) }], error: null };
   };
 
   return {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ShoppingCart } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
@@ -290,8 +291,25 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     return totalARS / tipoCambioTasa;
   };
 
+  // Formas de pago (maestro de ConfiguracionSection → Finanzas, mig.214) — reemplaza
+  // la lista hardcodeada que tenía PanelPago.
+  const { data: formasPago = [] } = useQuery({
+    queryKey: ['formas_pago', user?.empresa_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('formas_pago')
+        .select('*')
+        .eq('empresa_id', user.empresa_id)
+        .eq('activo', true)
+        .order('nombre');
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!user?.empresa_id,
+  });
+
   // ── Multi-pago (hook) ────────────────────────────────────────────────────────
-  const multipago = useMultipago(calculateTotal());
+  const multipago = useMultipago(calculateTotal(), formasPago);
   const {
     selectedMethods,
     methodAmounts,
@@ -542,6 +560,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           monto:          pago.monto,
           monto_paralelo: pagoParalelo ?? '',
           tc_paralelo:    pagoParalelo !== null ? tcParaleloFinalValue : '',
+          forma_pago_id:  pago.forma_pago_id ?? null,
         };
       });
 
@@ -685,6 +704,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
               tcParalelo={tcParalelo} setShowParaleloTCModal={setShowParaleloTCModal}
               selectedMethods={selectedMethods} toggleMethod={toggleMethod} isMultiPago={isMultiPago}
               methodAmounts={methodAmounts} setMethodAmounts={setMethodAmounts} restante={restante}
+              formasPago={formasPago}
               listaNombre={listaNombre}
               selectedClient={selectedClient} clients={clients} handleSelectClient={handleSelectClient}
               isCC={isCC}

@@ -53,7 +53,7 @@ function ProveedoresSection() {
   const [form, setForm]             = useState({ ...EMPTY_FORM });
   const [detalleId, setDetalleId]   = useState(null);
   const [pagoOpen, setPagoOpen]     = useState(false);
-  const [pagoForm, setPagoForm]     = useState({ monto: '', descripcion: '', metodo: 'Efectivo' });
+  const [pagoForm, setPagoForm]     = useState({ monto: '', descripcion: '', metodo: 'Efectivo', forma_pago_id: '' });
   // Imputación por factura (Open Item clearing, migration 169/170) — opcional.
   // Si no se imputa nada, el pago se comporta igual que siempre (reduce el
   // saldo corrido, sin marcar ninguna compra puntual como cancelada).
@@ -73,6 +73,23 @@ function ProveedoresSection() {
   const { data: stats } = useQuery({
     queryKey: ['proveedores_stats', empresaId],
     queryFn: () => proveedoresService.getStats(empresaId),
+    enabled: !!empresaId,
+  });
+
+  // Formas de pago (maestro configurable en ConfiguracionSection → Finanzas) — reemplaza
+  // la lista hardcodeada que tenía el modal de pago.
+  const { data: formasPago = [] } = useQuery({
+    queryKey: ['formas_pago', empresaId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('formas_pago')
+        .select('*')
+        .eq('empresa_id', empresaId)
+        .eq('activo', true)
+        .order('nombre');
+      if (error) throw error;
+      return data ?? [];
+    },
     enabled: !!empresaId,
   });
 
@@ -156,8 +173,8 @@ function ProveedoresSection() {
   };
 
   const pagoMutation = useMutation({
-    mutationFn: ({ monto, descripcion, metodo, imputaciones: imp }) =>
-      proveedoresService.registrarPago(empresaId, detalleId, detalle?.nombre, monto, metodo, descripcion, user.id, currentSession?.id ?? null, imp),
+    mutationFn: ({ monto, descripcion, metodo, imputaciones: imp, formaPagoId }) =>
+      proveedoresService.registrarPago(empresaId, detalleId, detalle?.nombre, monto, metodo, descripcion, user.id, currentSession?.id ?? null, imp, formaPagoId),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: PROV_KEYS.cuentaCorriente(detalleId) });
       invalidate();
@@ -177,7 +194,8 @@ function ProveedoresSection() {
         });
       }
       setPagoOpen(false);
-      setPagoForm({ monto: '', descripcion: '', metodo: 'Efectivo' });
+      const efectivo = formasPago.find(f => f.tipo_instrumento === 'efectivo');
+      setPagoForm({ monto: '', descripcion: '', metodo: efectivo?.nombre ?? 'Efectivo', forma_pago_id: efectivo?.id ?? '' });
       setImputaciones({});
       setImputacionesFX({});
     },
@@ -228,7 +246,8 @@ function ProveedoresSection() {
   };
 
   const openPagoDialog = () => {
-    setPagoForm({ monto: '', descripcion: '', metodo: 'Efectivo' });
+    const efectivo = formasPago.find(f => f.tipo_instrumento === 'efectivo');
+    setPagoForm({ monto: '', descripcion: '', metodo: efectivo?.nombre ?? 'Efectivo', forma_pago_id: efectivo?.id ?? '' });
     setImputaciones({});
     setImputacionesFX({});
     setFacturasAbiertas([]);
@@ -276,6 +295,7 @@ function ProveedoresSection() {
       descripcion: pagoForm.descripcion || `Pago a ${detalle?.nombre}`,
       metodo: pagoForm.metodo,
       imputaciones: imputacionesArray.length > 0 ? imputacionesArray : null,
+      formaPagoId: pagoForm.forma_pago_id || null,
     });
   };
 
@@ -673,14 +693,19 @@ function ProveedoresSection() {
             <div className="space-y-1">
               <Label className="dark:text-kx-text">Método de pago *</Label>
               <select
-                value={pagoForm.metodo}
-                onChange={e => setPagoForm(p => ({ ...p, metodo: e.target.value }))}
+                value={pagoForm.forma_pago_id}
+                onChange={e => {
+                  const forma = formasPago.find(f => f.id === e.target.value);
+                  setPagoForm(p => ({ ...p, forma_pago_id: e.target.value, metodo: forma?.nombre ?? 'Otro' }));
+                }}
                 className="w-full h-10 rounded-md border border-kx-border bg-kx-surface px-3 text-sm text-kx-text dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
               >
-                <option value="Efectivo">Efectivo (Caja)</option>
-                <option value="Transferencia">Transferencia (Bancos)</option>
-                <option value="Tarjeta de débito">Tarjeta de débito (Bancos)</option>
-                <option value="Tarjeta de crédito">Tarjeta de crédito (Bancos)</option>
+                {formasPago.length === 0 && <option value="">Efectivo</option>}
+                {formasPago.map(f => (
+                  <option key={f.id} value={f.id}>
+                    {f.nombre}{f.tipo_instrumento === 'efectivo' ? ' (Caja)' : f.cuenta_bancaria_id ? ' (Bancos)' : ''}
+                  </option>
+                ))}
               </select>
               <p className="text-2xs text-kx-text-3">Efectivo descuenta de la Caja; los demás, de la cuenta bancaria mapeada.</p>
             </div>

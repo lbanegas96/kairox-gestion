@@ -9,6 +9,7 @@ function PanelPago({
   setMoneda, setTipoCambioTasa, setTcMissing,
   tcParalelo, setShowParaleloTCModal,
   selectedMethods, toggleMethod, isMultiPago, methodAmounts, setMethodAmounts, restante,
+  formasPago = [],
   listaNombre,
   selectedClient, clients, handleSelectClient,
   isCC,
@@ -65,7 +66,7 @@ function PanelPago({
           )}
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {['Efectivo', 'Transferencia', 'Tarjeta', 'Cuenta Corriente'].map(method => (
+          {[...formasPago.map(f => f.nombre), 'Cuenta Corriente'].map(method => (
             <div key={method}
               className={`cursor-pointer border rounded-lg p-3 text-center text-sm transition-colors select-none ${
                 selectedMethods.has(method)

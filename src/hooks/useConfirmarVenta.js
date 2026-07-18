@@ -131,6 +131,7 @@ export function useConfirmarVenta() {
         monto:          p.monto,
         monto_paralelo: '',
         tc_paralelo:    '',
+        forma_pago_id:  p.forma_pago_id ?? null,
       }));
 
       const { data: rpcResult, error: rpcError } = await supabase.rpc('crear_venta', {

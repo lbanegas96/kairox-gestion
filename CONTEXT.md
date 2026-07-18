@@ -1,5 +1,41 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-17 (Luciano — sesión 73: migrations 210-213 aplicadas a producción + CI frontend confirmado verde)
+**Última actualización:** 2026-07-17 (Luciano — sesión 74: maestro Formas de Pago — Fase 1 lista en repo, pendiente aplicar a producción)
+
+> 📋 **LUCIANO — Fase 1 de Tesorería completa en el repo, falta tu OK para aplicar a producción.**
+> Reemplacé el "medio de pago" de texto libre (repetido con listas ligeramente distintas en 3
+> pantallas: ModalCobro, ProveedoresSection, PanelPago/PanelCarrito) por un maestro real
+> `formas_pago` (ConfiguracionSection → Finanzas), con instrumento fijo (efectivo/transferencia/
+> tarjeta_debito/tarjeta_credito/cheque/billetera/otro), cuenta bancaria destino opcional, y los
+> campos `dias_acreditacion`/`comision_porcentaje` ya creados (sin usar todavía — para la Fase 2).
+>
+> **Qué cambia técnicamente:**
+> - Migration **214**: tabla `formas_pago` + RLS + seed retroactivo a las 3 empresas existentes
+>   (preservando el mapeo a cuenta bancaria que ya tenía Nalux en `metodo_pago_cuenta_bancaria`) +
+>   auto-seed para empresas nuevas (extiende `seed_maestros_default`).
+> - Migration **215**: `registrar_cobro_cliente`, `registrar_pago_proveedor` y `crear_venta` (POS)
+>   aceptan `forma_pago_id` (nuevo, opcional — 100% retrocompatible) y resuelven el texto desde el
+>   maestro server-side (no confían en que el frontend mande el nombre correcto). El trigger
+>   `trg_fn_puente_caja_bancos` prefiere `forma_pago_id` sobre el match por texto viejo, que queda
+>   como fallback. **Nada de esto se aplicó a producción todavía** — verificado con `BEGIN...ROLLBACK`
+>   contra datos reales de Nalux (cobro con Tarjeta Débito resolvió bien el texto y generó el
+>   movimiento bancario en la cuenta correcta).
+> - Frontend: los 3 selects (`ModalCobro.jsx`, `ProveedoresSection.jsx`, `PanelPago.jsx`/
+>   `useMultipago.js`, `caja/PanelCarrito.jsx`) leen ahora del maestro por empresa en vez de un
+>   array hardcodeado, y mandan `forma_pago_id` a los RPCs. UI de CRUD nueva en
+>   ConfiguracionSection → Finanzas (`TabFinanzas.jsx`), mismo patrón visual que Condiciones de Pago.
+> - Build + 28 tests (incluye 1 nuevo para `useMultipago` con `formasPago`) + lint: todo verde.
+>   Verificado también en preview real logueado como Nadia (empresa Nalux): la card "Formas de
+>   Pago" renderiza bien, maneja el estado vacío sin romper (la tabla todavía no existe en prod), y
+>   el modal de alta oculta correctamente "Cuenta bancaria destino" cuando el instrumento es Efectivo.
+>
+> **Para aplicar cuando decidas que sí:** `supabase/migrations/214_formas_pago.sql` y
+> `215_forma_pago_id_en_rpcs.sql`, en ese orden, vía `apply_migration`.
+>
+> **Fases siguientes (no empezadas):** Fase 2 — cuenta puente "Tarjetas a acreditar" + cálculo real
+> de comisión/neto de tarjeta (el hallazgo contable real). Fase 3 — Payment Run liviano para pagar
+> varias facturas de proveedor juntas (solo relevante para el perfil PyME).
+
+---
 
 > ✅ **Migrations 210, 211, 212 y 213 aplicadas a producción — Luciano dio el OK.** Las 4 quedaron
 > aplicadas en ese orden vía `apply_migration` del MCP de Supabase, sin errores. Resumen:

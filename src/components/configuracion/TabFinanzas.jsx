@@ -11,10 +11,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
  * auditoría de código). Componente presentacional: estado y handlers vienen por
  * props; el modal de alta/edición de condición vive en el padre.
  */
+export const TIPO_INSTRUMENTO_LABEL = {
+  efectivo: 'Efectivo',
+  transferencia: 'Transferencia',
+  tarjeta_debito: 'Tarjeta de Débito',
+  tarjeta_credito: 'Tarjeta de Crédito',
+  cheque: 'Cheque',
+  billetera: 'Billetera virtual',
+  otro: 'Otro',
+};
+
 const TabFinanzas = ({
   tcConfig, setTcConfig, loadingTC, savingTC, onSaveTC,
   condicionesPago, loadingCondiciones,
   onNuevaCondicion, onEditarCondicion, onToggleCondicion,
+  formasPago, loadingFormasPago, cuentasBancariasLista,
+  onNuevaFormaPago, onEditarFormaPago, onToggleFormaPago,
   centrosCosto, loadingCentrosCosto,
   onNuevoCentroCosto, onEditarCentroCosto, onToggleCentroCosto,
   impuestosAvanzados, loadingImpuestosAv, savingImpuestosAv, onToggleImpuestosAv,
@@ -166,6 +178,59 @@ const TabFinanzas = ({
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+
+    {/* Formas de Pago */}
+    <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <CreditCard className="w-5 h-5 text-kx-text-3" />
+          <h3 className="font-semibold text-kx-text">Formas de Pago</h3>
+        </div>
+        <Button size="sm" onClick={onNuevaFormaPago}>+ Nueva</Button>
+      </div>
+      <p className="text-sm text-kx-text-2 mb-4">
+        Los medios que aparecen al cobrar o pagar (Caja, Ventas, Proveedores). Cada uno se puede
+        vincular a una cuenta bancaria para que se acredite ahí automáticamente.
+      </p>
+
+      {loadingFormasPago ? (
+        <div className="flex items-center gap-2 text-kx-text-3 py-4">
+          <Loader2 className="h-4 w-4 animate-spin" /> Cargando...
+        </div>
+      ) : formasPago.length === 0 ? (
+        <p className="text-sm text-kx-text-3 py-4 text-center">No hay formas de pago cargadas.</p>
+      ) : (
+        <div className="border border-kx-border rounded-xl overflow-hidden">
+          {formasPago.map(f => {
+            const cuenta = cuentasBancariasLista.find(cb => cb.id === f.cuenta_bancaria_id);
+            return (
+              <div key={f.id} className="flex items-center justify-between px-4 py-2.5 border-b border-kx-border last:border-0">
+                <div className={`flex items-center gap-2 flex-wrap ${!f.activo ? 'opacity-40' : ''}`}>
+                  <span className="text-sm font-medium text-kx-text">{f.nombre}</span>
+                  <span className="text-xs text-kx-text-2">{TIPO_INSTRUMENTO_LABEL[f.tipo_instrumento] ?? f.tipo_instrumento}</span>
+                  {cuenta && (
+                    <span className="text-xs text-kx-text-3">→ {cuenta.nombre}</span>
+                  )}
+                  {f.comision_porcentaje > 0 && (
+                    <span className="text-xs text-kx-text-3">{f.comision_porcentaje}% com.</span>
+                  )}
+                  {f.dias_acreditacion > 0 && (
+                    <span className="text-xs text-kx-text-3">{f.dias_acreditacion}d acred.</span>
+                  )}
+                  {!f.activo && <Badge variant="outline" className="text-xs text-kx-text-2">Inactiva</Badge>}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Switch checked={f.activo} onCheckedChange={(v) => onToggleFormaPago(f.id, v)} />
+                  <Button size="sm" variant="ghost" onClick={() => onEditarFormaPago(f)}>
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

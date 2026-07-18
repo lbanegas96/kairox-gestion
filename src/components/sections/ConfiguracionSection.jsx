@@ -23,7 +23,7 @@ import ConfigMercadoPagoModal from '@/components/bancos/ConfigMercadoPagoModal';
 import ConfigUalaModal from '@/components/bancos/ConfigUalaModal';
 import { formatCuit } from '@/lib/cuitUtils';
 import TabEmpresa from '@/components/configuracion/TabEmpresa';
-import TabFinanzas from '@/components/configuracion/TabFinanzas';
+import TabFinanzas, { TIPO_INSTRUMENTO_LABEL } from '@/components/configuracion/TabFinanzas';
 import TabInventario from '@/components/configuracion/TabInventario';
 import TabIntegraciones from '@/components/configuracion/TabIntegraciones';
 import TabFacturacion from '@/components/configuracion/TabFacturacion';
@@ -110,6 +110,17 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [editingCondicion, setEditingCondicion] = useState(null);
   const [condicionForm, setCondicionForm] = useState({ nombre: '', dias_credito: '', descuento_pct: '' });
   const [savingCondicion, setSavingCondicion] = useState(false);
+
+  // ── Tab 2: Formas de Pago ────────────────────────────────────────────────
+  const [formasPago, setFormasPago] = useState([]);
+  const [loadingFormasPago, setLoadingFormasPago] = useState(true);
+  const [showFormaPagoModal, setShowFormaPagoModal] = useState(false);
+  const [editingFormaPago, setEditingFormaPago] = useState(null);
+  const [formaPagoForm, setFormaPagoForm] = useState({
+    nombre: '', tipo_instrumento: 'efectivo', cuenta_bancaria_id: '',
+    dias_acreditacion: '', comision_porcentaje: '',
+  });
+  const [savingFormaPago, setSavingFormaPago] = useState(false);
 
   // ── Tab 2: Centros de Costo (Fase 1 del plan de 4 frentes contables) ────
   const [centrosCosto, setCentrosCosto] = useState([]);
@@ -599,6 +610,26 @@ const ConfiguracionSection = ({ initialTab }) => {
   };
 
   useEffect(() => { fetchCondicionesPago(); }, [user?.empresa_id]);
+
+  const fetchFormasPago = async () => {
+    if (!user?.empresa_id) return;
+    setLoadingFormasPago(true);
+    try {
+      const { data, error } = await supabase
+        .from('formas_pago')
+        .select('*')
+        .eq('empresa_id', user.empresa_id)
+        .order('nombre');
+      if (error) throw error;
+      setFormasPago(data ?? []);
+    } catch (e) {
+      console.error('[Formas de Pago] Error al cargar:', e);
+    } finally {
+      setLoadingFormasPago(false);
+    }
+  };
+
+  useEffect(() => { fetchFormasPago(); }, [user?.empresa_id]);
 
   const fetchCentrosCosto = async () => {
     if (!user?.empresa_id) return;
@@ -1269,6 +1300,69 @@ const ConfiguracionSection = ({ initialTab }) => {
     }
   };
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Tab 2: Formas de Pago — handlers
+  // ─────────────────────────────────────────────────────────────────────────
+  const openNuevaFormaPago = () => {
+    setEditingFormaPago(null);
+    setFormaPagoForm({ nombre: '', tipo_instrumento: 'efectivo', cuenta_bancaria_id: '', dias_acreditacion: '', comision_porcentaje: '' });
+    setShowFormaPagoModal(true);
+  };
+
+  const openEditarFormaPago = (f) => {
+    setEditingFormaPago(f);
+    setFormaPagoForm({
+      nombre: f.nombre,
+      tipo_instrumento: f.tipo_instrumento,
+      cuenta_bancaria_id: f.cuenta_bancaria_id ?? '',
+      dias_acreditacion: String(f.dias_acreditacion ?? 0),
+      comision_porcentaje: String(f.comision_porcentaje ?? 0),
+    });
+    setShowFormaPagoModal(true);
+  };
+
+  const toggleActivoFormaPago = async (id, activo) => {
+    const { error } = await supabase.from('formas_pago').update({ activo }).eq('id', id);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
+    }
+    fetchFormasPago();
+  };
+
+  const handleGuardarFormaPago = async () => {
+    if (!formaPagoForm.nombre.trim()) {
+      toast({ title: 'El nombre es obligatorio', variant: 'destructive' });
+      return;
+    }
+    setSavingFormaPago(true);
+    try {
+      const payload = {
+        nombre: formaPagoForm.nombre.trim(),
+        tipo_instrumento: formaPagoForm.tipo_instrumento,
+        cuenta_bancaria_id: formaPagoForm.tipo_instrumento === 'efectivo' || !formaPagoForm.cuenta_bancaria_id
+          ? null : formaPagoForm.cuenta_bancaria_id,
+        dias_acreditacion: formaPagoForm.dias_acreditacion !== '' ? parseInt(formaPagoForm.dias_acreditacion, 10) : 0,
+        comision_porcentaje: formaPagoForm.comision_porcentaje !== '' ? parseFloat(formaPagoForm.comision_porcentaje) : 0,
+      };
+      if (editingFormaPago) {
+        const { error } = await supabase.from('formas_pago').update(payload).eq('id', editingFormaPago.id);
+        if (error) throw error;
+        toast({ title: 'Forma de pago actualizada' });
+      } else {
+        const { error } = await supabase.from('formas_pago').insert({ ...payload, empresa_id: user.empresa_id });
+        if (error) throw error;
+        toast({ title: 'Forma de pago creada' });
+      }
+      setShowFormaPagoModal(false);
+      fetchFormasPago();
+    } catch (e) {
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingFormaPago(false);
+    }
+  };
+
   // ── Handlers Centros de Costo ────────────────────────────────────────────
   const openNuevoCentroCosto = () => {
     setEditingCentroCosto(null);
@@ -1391,6 +1485,12 @@ const ConfiguracionSection = ({ initialTab }) => {
             onNuevaCondicion={openNuevaCondicion}
             onEditarCondicion={openEditarCondicion}
             onToggleCondicion={toggleActivoCondicion}
+            formasPago={formasPago}
+            loadingFormasPago={loadingFormasPago}
+            cuentasBancariasLista={cuentasBancariasLista}
+            onNuevaFormaPago={openNuevaFormaPago}
+            onEditarFormaPago={openEditarFormaPago}
+            onToggleFormaPago={toggleActivoFormaPago}
             centrosCosto={centrosCosto}
             loadingCentrosCosto={loadingCentrosCosto}
             onNuevoCentroCosto={openNuevoCentroCosto}
@@ -1704,6 +1804,92 @@ const ConfiguracionSection = ({ initialTab }) => {
             <Button variant="outline" onClick={() => setShowCondicionModal(false)}>Cancelar</Button>
             <Button onClick={handleGuardarCondicion} disabled={savingCondicion}>
               {savingCondicion ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Guardando...</> : 'Guardar'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          MODAL — Nueva/Editar Forma de Pago (fuera del sistema de tabs)
+      ═══════════════════════════════════════════════════════════════════ */}
+      <Dialog open={showFormaPagoModal} onOpenChange={setShowFormaPagoModal}>
+        <DialogContent className="sm:max-w-[420px] bg-kx-surface border-kx-border">
+          <DialogHeader>
+            <DialogTitle className="text-kx-text">{editingFormaPago ? 'Editar' : 'Nueva'} Forma de Pago</DialogTitle>
+            <DialogDescription>Medio que va a aparecer al cobrar o pagar.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-kx-text">Nombre *</Label>
+              <Input
+                value={formaPagoForm.nombre}
+                onChange={e => setFormaPagoForm(f => ({ ...f, nombre: e.target.value }))}
+                placeholder="Ej: Posnet Galicia Visa/Master"
+                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-kx-text">Instrumento</Label>
+              <Select
+                value={formaPagoForm.tipo_instrumento}
+                onValueChange={v => setFormaPagoForm(f => ({ ...f, tipo_instrumento: v, ...(v === 'efectivo' ? { cuenta_bancaria_id: '' } : {}) }))}
+              >
+                <SelectTrigger className="h-9 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(TIPO_INSTRUMENTO_LABEL).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {formaPagoForm.tipo_instrumento !== 'efectivo' && (
+              <div className="space-y-1.5">
+                <Label className="text-kx-text">Cuenta bancaria destino (opcional)</Label>
+                <Select
+                  value={formaPagoForm.cuenta_bancaria_id || '__none__'}
+                  onValueChange={v => setFormaPagoForm(f => ({ ...f, cuenta_bancaria_id: v === '__none__' ? '' : v }))}
+                >
+                  <SelectTrigger className="h-9 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"><SelectValue placeholder="— Sin acreditación bancaria —" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— Sin acreditación bancaria —</SelectItem>
+                    {cuentasBancariasLista.map(cb => (
+                      <SelectItem key={cb.id} value={cb.id}>{cb.nombre} ({cb.banco})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-kx-text">Días de acreditación</Label>
+                <Input
+                  type="number" min="0"
+                  value={formaPagoForm.dias_acreditacion}
+                  onChange={e => setFormaPagoForm(f => ({ ...f, dias_acreditacion: e.target.value }))}
+                  placeholder="0"
+                  className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-kx-text">Comisión %</Label>
+                <Input
+                  type="number" min="0" max="100" step="0.01"
+                  value={formaPagoForm.comision_porcentaje}
+                  onChange={e => setFormaPagoForm(f => ({ ...f, comision_porcentaje: e.target.value }))}
+                  placeholder="0"
+                  className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                />
+              </div>
+            </div>
+            <p className="text-2xs text-kx-text-3">
+              Días de acreditación y comisión se guardan para el cálculo automático de una fase próxima —
+              hoy no afectan el asiento contable.
+            </p>
+          </div>
+          <div className="flex gap-2 justify-end pt-2 border-t border-kx-border">
+            <Button variant="outline" onClick={() => setShowFormaPagoModal(false)}>Cancelar</Button>
+            <Button onClick={handleGuardarFormaPago} disabled={savingFormaPago}>
+              {savingFormaPago ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Guardando...</> : 'Guardar'}
             </Button>
           </div>
         </DialogContent>

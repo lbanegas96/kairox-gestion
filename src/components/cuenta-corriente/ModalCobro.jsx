@@ -9,6 +9,7 @@ function ModalCobro({
   isPaymentDialogOpen, setIsPaymentDialogOpen,
   selectedClient,
   paymentData, setPaymentData,
+  formasPago = [],
   tcParalelo,
   isProcessingPayment,
   handleRegisterPayment,
@@ -83,14 +84,16 @@ function ModalCobro({
             <select
               id="method-list"
               className="flex h-10 w-full rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-bg px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              value={paymentData.metodo}
-              onChange={(e) => setPaymentData({ ...paymentData, metodo: e.target.value })}
+              value={paymentData.forma_pago_id}
+              onChange={(e) => {
+                const forma = formasPago.find(f => f.id === e.target.value);
+                setPaymentData({ ...paymentData, forma_pago_id: e.target.value, metodo: forma?.nombre ?? 'Otro' });
+              }}
             >
-              <option value="Efectivo">Efectivo</option>
-              <option value="Transferencia">Transferencia</option>
-              <option value="Tarjeta">Tarjeta Débito/Crédito</option>
-              <option value="Cheque">Cheque</option>
-              <option value="Otro">Otro</option>
+              {formasPago.length === 0 && <option value="">Efectivo</option>}
+              {formasPago.map(f => (
+                <option key={f.id} value={f.id}>{f.nombre}</option>
+              ))}
             </select>
           </div>
           <div className="grid gap-2">

@@ -10,7 +10,8 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 const fmt = (n) =>
   Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const METODOS = ['Efectivo', 'Transferencia', 'Tarjeta', 'Cuenta Corriente'];
+// Fallback si la empresa todavía no tiene el maestro formas_pago seedeado.
+const METODOS_FALLBACK = ['Efectivo', 'Transferencia', 'Tarjeta', 'Cuenta Corriente'];
 
 // OFERTAS — calcula precio final de un item considerando oferta automática + descuento manual
 function getPrecioConDescuento(item, oferta, descuentoManualPct) {
@@ -137,9 +138,13 @@ function CarritoItem({ item, onModificar, onEliminar, oferta, descuentoManual, o
 function PanelCarrito({
   carrito, onModificarCarrito, onVentaExitosa,
   onTogglePack, onUpdatePacks,
+  formasPago = [],
   ofertasCarrito = {}, descuentosManuales = {},
   onDescuentoManualChange, medioPago = 'Efectivo', onMedioPagoChange,
 }) {
+  const METODOS = formasPago.length > 0
+    ? [...formasPago.map(f => f.nombre), 'Cuenta Corriente']
+    : METODOS_FALLBACK;
   const { user }    = useAuth();
   const [clientes, setClientes]     = useState([]);
   const [clienteId, setClienteId]   = useState('');
@@ -211,7 +216,8 @@ function PanelCarrito({
   };
 
   const handleConfirmar = async () => {
-    const pagos = [{ metodo: medioPago, monto: total }];
+    const formaPagoId = formasPago.find(f => f.nombre === medioPago)?.id ?? null;
+    const pagos = [{ metodo: medioPago, monto: total, forma_pago_id: formaPagoId }];
     const result = await confirmar({
       cart: carrito, selectedClient, pagos,
       ofertasCarrito, descuentosManuales,

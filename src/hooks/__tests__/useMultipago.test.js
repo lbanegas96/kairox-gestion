@@ -49,14 +49,14 @@ describe('useMultipago', () => {
     act(() => result.current.toggleMethod('Cuenta Corriente'));
     const { pagos, error } = result.current.construirPagosFinales();
     expect(error).toBeNull();
-    expect(pagos).toEqual([{ metodo: 'Cuenta Corriente', monto: 1500 }]);
+    expect(pagos).toEqual([{ metodo: 'Cuenta Corriente', monto: 1500, forma_pago_id: null }]);
   });
 
   it('un solo método (no CC) asigna el total completo a ese método', () => {
     const { result } = renderHook(() => useMultipago(800));
     const { pagos, error } = result.current.construirPagosFinales();
     expect(error).toBeNull();
-    expect(pagos).toEqual([{ metodo: 'Efectivo', monto: 800 }]);
+    expect(pagos).toEqual([{ metodo: 'Efectivo', monto: 800, forma_pago_id: null }]);
   });
 
   it('multipago con montos que suman el total: sin error', () => {
@@ -66,9 +66,16 @@ describe('useMultipago', () => {
     const { pagos, error } = result.current.construirPagosFinales();
     expect(error).toBeNull();
     expect(pagos.sort((a, b) => a.metodo.localeCompare(b.metodo))).toEqual([
-      { metodo: 'Efectivo', monto: 600 },
-      { metodo: 'Tarjeta', monto: 400 },
+      { metodo: 'Efectivo', monto: 600, forma_pago_id: null },
+      { metodo: 'Tarjeta', monto: 400, forma_pago_id: null },
     ]);
+  });
+
+  it('resuelve forma_pago_id por nombre cuando se pasa el maestro formasPago', () => {
+    const formasPago = [{ id: 'fp-efectivo', nombre: 'Efectivo' }, { id: 'fp-tarjeta', nombre: 'Tarjeta' }];
+    const { result } = renderHook(() => useMultipago(800, formasPago));
+    const { pagos } = result.current.construirPagosFinales();
+    expect(pagos).toEqual([{ metodo: 'Efectivo', monto: 800, forma_pago_id: 'fp-efectivo' }]);
   });
 
   it('multipago con montos que NO suman el total: error "Pago incompleto"', () => {

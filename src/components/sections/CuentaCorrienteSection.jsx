@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { AlertTriangle, DollarSign, ArrowDownCircle, ArrowUpCircle, Users, Clock } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -43,7 +43,26 @@ function CuentaCorrienteSection() {
   const [paymentData, setPaymentData] = useState({
     monto: '',
     metodo: 'Efectivo',
+    forma_pago_id: '',
     nota: ''
+  });
+
+  // Formas de pago (maestro configurable en ConfiguracionSection → Finanzas) — reemplaza
+  // la lista hardcodeada que tenía ModalCobro. Efectivo siempre disponible como fallback
+  // por si la empresa todavía no tiene el maestro seedeado.
+  const { data: formasPago = [] } = useQuery({
+    queryKey: ['formas_pago', user?.empresa_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('formas_pago')
+        .select('*')
+        .eq('empresa_id', user.empresa_id)
+        .eq('activo', true)
+        .order('nombre');
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!user?.empresa_id,
   });
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   // Imputación por factura (Open Item clearing, migration 169) — opcional.
@@ -208,7 +227,8 @@ function CuentaCorrienteSection() {
   const openPaymentDialog = (client, e) => {
     e?.stopPropagation();
     setSelectedClient(client);
-    setPaymentData({ monto: '', metodo: 'Efectivo', nota: '' });
+    const efectivo = formasPago.find(f => f.tipo_instrumento === 'efectivo');
+    setPaymentData({ monto: '', metodo: efectivo?.nombre ?? 'Efectivo', forma_pago_id: efectivo?.id ?? '', nota: '' });
     setImputaciones({});
     setImputacionesFX({});
     setFacturasAbiertas([]);
@@ -345,6 +365,7 @@ function CuentaCorrienteSection() {
         p_monto_paralelo: pagoParalelo,
         p_tc_paralelo:    pagoParalelo !== null ? tcParalelo.tcHoy : null,
         p_imputaciones:   imputacionesArray.length > 0 ? imputacionesArray : null,
+        p_forma_pago_id:  paymentData.forma_pago_id || null,
       });
 
       if (cobroError) throw cobroError;
@@ -494,6 +515,7 @@ function CuentaCorrienteSection() {
         isPaymentDialogOpen={isPaymentDialogOpen} setIsPaymentDialogOpen={setIsPaymentDialogOpen}
         selectedClient={selectedClient}
         paymentData={paymentData} setPaymentData={setPaymentData}
+        formasPago={formasPago}
         tcParalelo={tcParalelo}
         isProcessingPayment={isProcessingPayment}
         handleRegisterPayment={handleRegisterPayment}

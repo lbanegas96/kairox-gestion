@@ -40,6 +40,9 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
   const [ofertasCarrito, setOfertasCarrito] = useState({});
   const [descuentosManuales, setDescuentosManuales] = useState({});
   const [medioPagoSeleccionado, setMedioPagoSeleccionado] = useState('Efectivo');
+  // Formas de pago (maestro de ConfiguracionSection → Finanzas, mig.214) — reemplaza
+  // la lista hardcodeada que tenía PanelCarrito.
+  const [formasPago, setFormasPago] = useState([]);
   // RESPONSIVE-MOBILE
   const [tabMobile, setTabMobile] = useState('productos'); // 'productos' | 'carrito'
 
@@ -62,6 +65,18 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
       if (empresa?.nombre) setEmpresaNombre(empresa.nombre);
       if (empresa) setEmpresaData(empresa);
     });
+  }, [user?.empresa_id]);
+
+  // Formas de pago activas de la empresa (maestro, mig.214)
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    supabase
+      .from('formas_pago')
+      .select('*')
+      .eq('empresa_id', user.empresa_id)
+      .eq('activo', true)
+      .order('nombre')
+      .then(({ data }) => setFormasPago(data ?? []));
   }, [user?.empresa_id]);
 
   // OFERTAS — llamar al RPC cuando cambia el carrito o medio de pago
@@ -318,6 +333,7 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
             onModificarCarrito={setCarrito}
             onTogglePack={togglePackMode}
             onUpdatePacks={updatePacks}
+            formasPago={formasPago}
             ofertasCarrito={ofertasCarrito}
             descuentosManuales={descuentosManuales}
             onDescuentoManualChange={(productoId, pct) =>
