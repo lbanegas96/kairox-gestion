@@ -1,5 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-18 (Luciano — sesión 76: Tesorería Fase 3 — Payment Run proveedores, repo-only)
+**Última actualización:** 2026-07-19 (Luciano — sesión 77: Sometimiento a estrés Fase 1 — auditoría de seguridad multi-tenant, aplicada a producción)
+
+> ✅ **Fase 1 del plan de sometimiento a estrés (`.claude/plans/fluffy-sauteeing-panda.md`)
+> completa y aplicada a producción.** Auditoría de seguridad multi-tenant: 272 policies RLS +
+> ~30 RPCs `SECURITY DEFINER` auditadas estáticamente, más un **test activo** real
+> (`supabase/tests/aislamiento_multitenant.test.sql`, 9 casos pgTAP) que simula un tenant
+> atacando a otro — corrido por primera vez contra un **stack de Supabase 100% local**
+> (`supabase start`, Docker+CLI ya disponibles en esta máquina) en vez de `execute_sql` contra
+> el hosted. Resultado: **el aislamiento multi-tenant funciona correctamente**.
+>
+> **Hallazgo real (no de seguridad, de reproducibilidad) — corregido**: al levantar el stack
+> local desde cero, `crear_venta` no era ejecutable por `authenticated` — un `GRANT` que
+> producción tiene puesto a mano desde la sesión 60 (migration 194, que ya documentó este mismo
+> patrón para 6 funciones y solo alcanzó a re-otorgar 1) nunca quedó capturado en ninguna
+> migration. **Sin impacto en producción** (ya tenía el grant) — `migration 217` lo agrega para
+> que `supabase db reset` local sea un espejo fiel del hosted, aplicada a producción como no-op
+> confirmado (`has_function_privilege` = true antes y después).
+>
+> `record_attempt()` (sin guard de tenant, hallazgo de la auditoría estática) se confirmó como
+> riesgo ya conocido y aceptado (mig. 120) — la prueba activa mostró que el riesgo real es menor
+> de lo que sugiere el código solo: `authenticated` ni siquiera tiene permiso `EXECUTE` sobre la
+> función. No se tocó nada ahí.
+>
+> Detalle completo, tabla de lo auditado, y el listado de lo que falta (Fases 2-4: infra de carga
+> k6, escenarios de contención/dashboard/cobros, Playwright con navegadores reales) en
+> `loadtest/SEGURIDAD.md`.
+
+---
 
 > 🟡 **Fase 3 de Tesorería (Payment Run liviano) — escrita y verificada, sin push/commit remoto
 > todavía.** Cierra el punto pendiente que quedaba abierto desde la Fase 2 (`registrar_pago_proveedor`
