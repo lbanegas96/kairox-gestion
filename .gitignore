@@ -18,3 +18,10 @@ build_output.txt
 .vercel
 
 .claude/worktrees/
+
+# Supabase CLI local state (Docker stack, branch pointer, versions) — nunca commitear
+supabase/.branches/
+supabase/.temp/
+
+# Fixtures del sometimiento a estrés (contienen JWTs de empresas sintéticas locales)
+scripts/loadtest/fixtures.json
