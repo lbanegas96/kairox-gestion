@@ -1,5 +1,65 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-17 (Luciano — sesión 74: maestro Formas de Pago — Fase 1 aplicada a producción)
+**Última actualización:** 2026-07-17 (Luciano — sesión 75: Tesorería Fase 2 — cuenta puente Tarjetas a Acreditar, repo-only)
+
+> 🟡 **Fase 2 de Tesorería — cuenta puente "Tarjetas a Acreditar" + liquidación real de
+> comisión/neto (sesión 75). Escrita y verificada con `BEGIN...ROLLBACK` contra datos reales de
+> Nalux, PERO NO APLICADA A PRODUCCIÓN todavía** — pendiente de que Luciano dé el OK, mismo patrón
+> que la Fase 1.
+>
+> **El hallazgo contable (por qué esto no es cosmético):** cuando se cobra con una `forma_pago` de
+> tipo tarjeta (`dias_acreditacion > 0`), KAIROX acreditaba el BRUTO a "1.1.1 Caja y Bancos" el
+> mismo día de la venta. En la realidad argentina (Comunicación BCRA A 7153) la plata entra 8-10
+> días hábiles después y por un NETO menor (comisión descontada) — el saldo de Bancos nunca podía
+> cerrar bien mientras hubiera ventas con tarjeta, porque el sistema asumía liquidez que todavía no
+> existía. Se llegó a este diseño después de pedirle a la skill `sap-reference` un diagnóstico
+> contra el modelo estándar SAP B1/S4HANA (Formas de Pago como maestro), y a la skill
+> `auditor-contable` la validación del circuito de partida doble contra RT FACPCE — más una ronda de
+> research de mercado (Odoo, Tango, Xubio, Modern Treasury) para no quedarnos solo con SAP.
+>
+> **Qué cambia técnicamente — migration `216_liquidacion_tarjetas.sql` (repo-only, sin aplicar):**
+> - Cuenta nueva **1.1.8 "Tarjetas a Acreditar"** en el plan de cuentas (mismo patrón puente que
+>   1.1.6/1.1.7 de Cheques, mig.209), backfill a empresas existentes + `seed_plan_cuentas` para las
+>   nuevas.
+> - `movimientos_caja` suma columnas de estado de liquidación (`estado_liquidacion`,
+>   `monto_comision`, `monto_neto`, `fecha_acreditacion_estimada`, `fecha_acreditacion_real`,
+>   `asiento_liquidacion_id`) — se reutiliza la tabla existente en vez de crear una nueva, porque ya
+>   trackea "este pago con esta forma_pago".
+> - `registrar_cobro_cliente` resuelve `dias_acreditacion`/`comision_porcentaje` desde `formas_pago`
+>   y, si corresponde, debita el bruto a 1.1.8 en vez de 1.1.1 y calcula neto/comisión/fecha
+>   estimada. `trg_fn_puente_caja_bancos` no acredita en Bancos si el estado es `pendiente`.
+> - RPC nueva **`acreditar_movimiento_caja(p_movimiento_caja_id)`**: arma el asiento de liquidación
+>   (DEBE 1.1.1 neto + DEBE 5.5 Gastos Financieros comisión / HABER 1.1.8 bruto — partida doble
+>   balanceada verificada), inserta el `movimiento_bancario` real por el neto (origen
+>   `liquidacion_tarjeta`, agregado al CHECK constraint), y marca el movimiento como `acreditado`.
+>   Guards: tenant + `has_module_permission('bancos')` con bypass `service_role`, período cerrado,
+>   forma de pago con cuenta bancaria configurada.
+> - **Alcance deliberado: SOLO `registrar_cobro_cliente`** (Cuenta Corriente / cobros manuales).
+>   `crear_venta` (POS) queda sin tocar — su asiento lo arma `asientosAutoService.crearAsientoVenta`
+>   en el frontend, que hoy no distingue por medio de pago; extenderlo es un cambio aparte, no
+>   shoehornearlo acá a medias. `registrar_pago_proveedor` tampoco — el delay de liquidación no
+>   aplica simétricamente a pagos salientes con tarjeta propia.
+> - Verificado con `BEGIN...ROLLBACK` contra Nalux real (forma de pago "Tarjeta Débito",
+>   `dias_acreditacion=10`, `comision_porcentaje=3.5`, cobro de $10.000): asiento de cobro debitó
+>   1.1.8 (no 1.1.1) por el bruto; asiento de liquidación con el split correcto DEBE 1.1.1 $9.650 +
+>   DEBE 5.5 $350 = HABER 1.1.8 $10.000; movimiento bancario generado por $9.650, origen
+>   `liquidacion_tarjeta`, sin conciliar.
+> - **Frontend nuevo**: tab "Tarjetas pendientes" en `CuentasBancariasSection.jsx` →
+>   `TarjetasPendientesTab.jsx` (nuevo) + `liquidacionTarjetasService.ts` (nuevo). Lista los cobros
+>   con `estado_liquidacion='pendiente'` (bruto, comisión, neto, fecha estimada con badge de
+>   vencida) y botón "Marcar acreditada" que llama al RPC. Badge de conteo en el tab. Verificado en
+>   preview real logueado como Nadia: la tab renderiza bien vacía (Nalux no tiene cobros pendientes
+>   porque la migration todavía no corrió en prod — el error de columna faltante en consola es
+>   esperado y desaparece al aplicar 216).
+> - Build + lint: verde (solo warnings pre-existentes de `prop-types`, mismo patrón que el resto del
+>   módulo).
+>
+> **Para aplicar cuando decidas que sí:** `supabase/migrations/216_liquidacion_tarjetas.sql` vía
+> `apply_migration`. Rollback documentado en el pie del archivo.
+>
+> **Fase 3 (no empezada):** Payment Run liviano para pagar varias facturas de proveedor juntas
+> (solo relevante para el perfil PyME) — menor prioridad, no hay drive urgente todavía.
+
+---
 
 > ✅ **Fase 1 de Tesorería aplicada a producción — Luciano dio el OK.** Migrations 214 y 215
 > aplicadas en orden vía `apply_migration`, sin errores. Advisor de seguridad corrido después:

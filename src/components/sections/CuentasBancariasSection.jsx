@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
-import { Landmark, Plus, Upload, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle, RefreshCw, FileText, ChevronRight, Building2, Wallet, Eye, EyeOff, User, Bot, Check, Scale } from 'lucide-react';
+import { Landmark, Plus, Upload, Pencil, Trash2, ArrowUpCircle, ArrowDownCircle, RefreshCw, FileText, ChevronRight, Building2, Wallet, Eye, EyeOff, User, Bot, Check, Scale, CreditCard } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { cuentasService, movimientosService, CB_KEYS } from '@/services/cuentasBancariasService';
+import { liquidacionTarjetasService, LIQUIDACION_KEYS } from '@/services/liquidacionTarjetasService';
 import { formatDateAR } from '@/lib/dateUtils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,7 @@ import CuentaModal from '@/components/cuentas-bancarias/CuentaModal';
 import MovimientoModal from '@/components/cuentas-bancarias/MovimientoModal';
 import ImportCSVModal from '@/components/cuentas-bancarias/ImportCSVModal';
 import ConciliacionTab from '@/components/cuentas-bancarias/ConciliacionTab';
+import TarjetasPendientesTab from '@/components/cuentas-bancarias/TarjetasPendientesTab';
 
 function CuentasBancariasSection() {
   const { user } = useAuth();
@@ -70,6 +72,12 @@ function CuentasBancariasSection() {
     () => [...saldos.values()].reduce((a, b) => a + b, 0),
     [saldos]
   );
+
+  const { data: pendientesLiq = [] } = useQuery({
+    queryKey: LIQUIDACION_KEYS.pendientes(empresaId),
+    queryFn: () => liquidacionTarjetasService.getPendientes(empresaId),
+    enabled: !!empresaId,
+  });
 
   const isAdmin = user?.role === 'admin';
 
@@ -198,6 +206,14 @@ function CuentasBancariasSection() {
           <TabsTrigger value="cuentas">Cuentas ({cuentas.length})</TabsTrigger>
           <TabsTrigger value="movimientos">Movimientos ({movimientosTabla.length})</TabsTrigger>
           <TabsTrigger value="conciliacion">Conciliación</TabsTrigger>
+          <TabsTrigger value="tarjetas" className="gap-1.5">
+            <CreditCard className="w-3.5 h-3.5" /> Tarjetas pendientes
+            {pendientesLiq.length > 0 && (
+              <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 h-4 px-1.5 text-2xs">
+                {pendientesLiq.length}
+              </Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         {/* Tab: Cuentas */}
@@ -442,6 +458,11 @@ function CuentasBancariasSection() {
         {/* Tab: Conciliación */}
         <TabsContent value="conciliacion" className="mt-4">
           <ConciliacionTab cuentas={cuentas} empresaId={empresaId} userId={user?.id} />
+        </TabsContent>
+
+        {/* Tab: Tarjetas pendientes de acreditación */}
+        <TabsContent value="tarjetas" className="mt-4">
+          <TarjetasPendientesTab empresaId={empresaId} />
         </TabsContent>
       </Tabs>
 
