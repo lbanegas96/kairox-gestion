@@ -1,7 +1,11 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-17 (Luciano — sesión 74: maestro Formas de Pago — Fase 1 lista en repo, pendiente aplicar a producción)
+**Última actualización:** 2026-07-17 (Luciano — sesión 74: maestro Formas de Pago — Fase 1 aplicada a producción)
 
-> 📋 **LUCIANO — Fase 1 de Tesorería completa en el repo, falta tu OK para aplicar a producción.**
+> ✅ **Fase 1 de Tesorería aplicada a producción — Luciano dio el OK.** Migrations 214 y 215
+> aplicadas en orden vía `apply_migration`, sin errores. Advisor de seguridad corrido después:
+> **0 hallazgos ERROR**. Datos verificados: las 3 empresas tienen sus 4 formas de pago
+> (Efectivo/Transferencia/Tarjeta Débito/Tarjeta Crédito), Nalux con la cuenta bancaria heredada
+> correctamente en los 3 medios que ya tenía mapeados en `metodo_pago_cuenta_bancaria`.
 > Reemplacé el "medio de pago" de texto libre (repetido con listas ligeramente distintas en 3
 > pantallas: ModalCobro, ProveedoresSection, PanelPago/PanelCarrito) por un maestro real
 > `formas_pago` (ConfiguracionSection → Finanzas), con instrumento fijo (efectivo/transferencia/
