@@ -20,7 +20,7 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 
-SELECT plan(10);
+SELECT plan(12);
 
 -- ───────────────────────────────────────────────────────────────────────────
 -- Fixtures: 2 tenants de prueba, 100% sintéticos, creados dentro de esta
@@ -132,6 +132,37 @@ SELECT is(
   (SELECT proximo_numero FROM public.series_numeracion WHERE empresa_id = '00000000-aaaa-0000-0000-000000000001' AND tipo_documento = 'factura'),
   2,
   'Caso 4c: proximo_numero avanza a 2 tras consumir el 1 del periodo nuevo'
+);
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- Caso 5: self-heal anti-colision, extendido a TODOS los tipo_documento
+-- (migration 221, sesion 78). Antes de esta migration, solo 'venta' se
+-- autocorregia si el contador de series_numeracion quedaba atras del maximo
+-- real de la tabla de destino. Este caso prueba 'entrega' (el tipo que
+-- disparo el hallazgo real durante la Fase 4 del sometimiento a estres):
+-- se inserta una entrega con un numero MAS ALTO que el proximo_numero
+-- vigente (simulando una desincronizacion real) y se confirma que la funcion
+-- salta por encima de esa colision en vez de repetir el numero.
+-- ───────────────────────────────────────────────────────────────────────────
+
+INSERT INTO public.entregas (empresa_id, numero_entrega)
+VALUES (
+  '00000000-aaaa-0000-0000-000000000001',
+  'ENT-' || (SELECT to_char(NOW() - INTERVAL '3 hours', 'YYYY')) || '-0050'
+);
+
+SELECT set_config('request.jwt.claims', '{"sub":"00000000-aaaa-0000-0000-00000000000a","role":"authenticated"}', true);
+
+SELECT is(
+  public.obtener_proximo_numero('00000000-aaaa-0000-0000-000000000001'::uuid, 'entrega'),
+  'ENT-' || (SELECT to_char(NOW() - INTERVAL '3 hours', 'YYYY')) || '-0051',
+  'Caso 5a: self-heal de entrega salta a 0051 (maximo real 0050 + 1), no repite ni colisiona'
+);
+
+SELECT is(
+  public.obtener_proximo_numero('00000000-aaaa-0000-0000-000000000001'::uuid, 'entrega'),
+  'ENT-' || (SELECT to_char(NOW() - INTERVAL '3 hours', 'YYYY')) || '-0052',
+  'Caso 5b: la siguiente llamada continua consecutiva (0052) desde el valor ya corregido'
 );
 
 SELECT * FROM finish();
