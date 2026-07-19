@@ -1,5 +1,35 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-19 (Luciano — sesión 78: Sometimiento a estrés Fase 4 (Playwright) completa, repo-only)
+**Última actualización:** 2026-07-19 (Luciano — sesión 78: Fix de egress (cuota Supabase superada) + Fase 4 sometimiento a estrés)
+
+> 🔴→✅ **Cuota de Supabase superada por EGRESS (6.4 GB / 5 GB en un ciclo) — causa raíz
+> encontrada y corregida, desplegada a producción.**
+>
+> **NO fue por el sometimiento a estrés** (confirmado: todos los scripts de carga abortan si no
+> apuntan a `127.0.0.1`; nunca tocaron el proyecto hosted). Era un bug de arquitectura
+> preexistente: el logo de empresa se guarda como base64 (~960 KB) en `configuracion.valor`,
+> duplicado en 2 claves (`logo_base64` + `company_logo`). El `ConfigContext` hacía
+> `select('clave,valor')` **sin filtro** en cada montaje de la app y en cada login, arrastrando
+> ese blob app-wide para algo que solo consume la pantalla de login (que, sin sesión, ni lo
+> usaba). Multiplicado por miles de cargas de página de uso real → 6.4 GB.
+>
+> **Fix (commit `ac26ca9`, desplegado a prod vía `vercel deploy --prod`)**:
+> - `ConfigContext` ahora solo trae `nombre_empresa` (clave chica); el logo del login sale de un
+>   cache en `localStorage`. Verificado en preview: la request a `configuracion` es
+>   `...&clave=in.(nombre_empresa)`, sin el blob.
+> - `ConfiguracionSection` trae el logo por su cuenta (filtrado por clave) para la vista previa y
+>   puebla el cache; persiste solo `logo_base64`, nunca `company_logo`.
+> - Migration 220 + `DELETE FROM configuracion WHERE clave='company_logo'` aplicado a prod (borró
+>   las filas duplicadas).
+> - Migration 219: grant faltante `calcular_ofertas_carrito` (hallazgo de Fase 4, mismo patrón que
+>   217/218). Grants 218/219 confirmados ya presentes en prod, aplicados por Luciano.
+>
+> **Seguimiento**: mirar el dashboard de Uso de Supabase en unos días con el fix ya vivo. Si el
+> egress del ciclo nuevo baja de 5 GB, queda resuelto sin migrar ni pagar. Plan B documentado en
+> `MIGRACION_SUPABASE.md` (cómo mover a otra cuenta/proyecto). Mejora estructural pendiente (no
+> urgente): mover el logo a Supabase Storage en vez de base64 en la DB.
+
+---
+
 
 > 🟡 **Fase 4 del plan de sometimiento a estrés cerrada — Playwright con navegadores reales,
 > repo-only (nada aplicado a producción todavía).**
