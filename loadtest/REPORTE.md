@@ -143,3 +143,97 @@ pagando la MISMA factura" (lock de `comprobantes.total`) que pedía el plan orig
 
 El stack local queda con 131 empresas `__LOADTEST__` y decenas de miles de ventas de prueba — es
 data local descartable (`supabase db reset` la borra en segundos).
+
+---
+
+# Fase 4 — Playwright con navegadores reales
+**Sesión 78 (2026-07-18/19).**
+
+## Resumen ejecutivo
+
+A diferencia de las Fases 2-3 (que llaman RPCs directamente por REST), esta fase simula un cajero
+real: login por UI → Punto de Venta → click en un producto → click en "Confirmar Venta" → esperar
+el diálogo "¡Venta confirmada!" — con Chromium real (Playwright), no `fetch`. Se corrió con 1, 10,
+25 y 50 sesiones concurrentes, cada una en su propio contexto de browser con su propia empresa
+`__LOADTEST__` de `fixtures.json`.
+
+**Resultado: 0 errores de aplicación en las 4 corridas (86 sesiones reales en total).** La
+degradación observada al escalar es la esperada de un navegador real consumiendo CPU/RAM de esta
+máquina — no señal de que KAIROX tenga un techo bajo de concurrencia real de usuarios.
+
+| Sesiones concurrentes | Fallidas | p50 login→dashboard | p50 confirmar venta | Tiempo total del batch |
+|---|---|---|---|---|
+| 1 | 0 | 2.5s | 0.27s | 3.6s |
+| 10 | 0 | ~4.8s | ~0.43s | 9.1s |
+| 25 | 0 | ~12.4s | ~1.1s | 22.0s |
+| 50 | 0 | ~27.7s | ~4.7s | 53.7s |
+
+A 50 sesiones, el login pasó de ~2.5s (1 sesión) a ~27-40s — la caída no es un error, es contención
+real de CPU en esta máquina por 50 procesos Chromium simultáneos (confirmado indirectamente: cero
+errores de red/aplicación en ninguna corrida, solo tiempos más largos). Como anticipaba el plan
+original, acá el cuello de botella pasa a ser la máquina de test, no KAIROX — para medir una cifra
+de "techo de usuarios reales" haría falta un grid de browsers en la nube (BrowserStack/similar),
+fuera de alcance de esta sesión salvo pedido explícito.
+
+## Hallazgos reales encontrados (no artefactos de metodología)
+
+Estas 3 cosas solo aparecieron al probar por UI real — ninguna la había mostrado antes un test
+pgTAP o un escenario k6 de las Fases 2-3, porque esos llaman RPCs directo y nunca pasan por el
+`SELECT` a `profiles` ni por el flujo completo del POS:
+
+1. **🔴 `is_admin()` sin `GRANT EXECUTE` a `authenticated`** — encontrado primero, ya corregido
+   localmente (migration `218_fix_grant_faltante_is_admin.sql`, repo-only, no aplicada a
+   producción todavía — producción YA tiene el grant puesto a mano, así que el fix solo hace que
+   `supabase db reset` local reproduzca fielmente ese estado). Sin este fix, el login se rompía
+   con `permission denied for function is_admin` (42501) porque la policy `profiles_select` invoca
+   `is_admin()` en su `USING`, y una policy corre con los privilegios del rol que hace la query.
+2. **🟡 `calcular_ofertas_carrito()` con el mismo problema** — encontrado durante esta fase,
+   **NO corregido todavía, no aplicado a ningún lado**. Confirmado con `read_console_messages`:
+   `permission denied for function calcular_ofertas_carrito` (42501) en cada carga del carrito del
+   POS. Es el mismo patrón de la migration 063 (revocación en bloque de EXECUTE FROM PUBLIC sin
+   re-grant explícito por función) — no bloquea la venta (el cálculo de ofertas falla en silencio,
+   el POS sigue funcionando sin descuentos automáticos), pero es un gap de reproducibilidad real y
+   probablemente afecta a más funciones de la misma migration 063 que todavía no se auditaron una
+   por una. **Pendiente**: confirmar con `has_function_privilege` contra el proyecto hosted si
+   producción ya tiene el grant (como pasó con `is_admin`) antes de escribir el fix.
+3. **🔴 Overloads duplicados de `crear_venta` con numeración de entregas inconsistente** —
+   encontrado al confirmar una venta real por UI contra una empresa con historial previo grande
+   (`__LOADTEST__ Empresa 1`, 9999 entregas de la carga k6 de Fases 2-3): `crear_venta` devolvió
+   409 `duplicate key value violates unique constraint "uq_entregas_empresa_numero"` con
+   `numero_entrega=ENT-2026-1000` — muy por debajo del máximo real. Hay DOS overloads de
+   `crear_venta` en la base: uno viejo que numera con `siguiente_numero_documento` (no sincronizado
+   con `series_numeracion`) y uno nuevo que usa `obtener_proximo_numero` (la vía atómica correcta).
+   PostgREST puede resolver al overload viejo según el payload exacto, produciendo números que
+   colisionan con filas reales. **Flageado como task separada (`task_9958f7f4`), no investigado a
+   fondo ni corregido en esta sesión** — para no mezclar este hallazgo (bug real de negocio) con
+   el resultado de concurrencia de UI que era el objetivo de esta fase. Para evitarlo en las
+   corridas de escala, el spec arranca desde `__LOADTEST__ Empresa 2` en adelante.
+
+## Fricciones de metodología (no bugs de KAIROX, corregidas en el spec)
+
+- **`useConfirmarVenta.js` bloquea "Efectivo" si la caja está cerrada** — regla de negocio real
+  (`CajaSection`/regla documentada en `CLAUDE.md`), no un bug. Las empresas `__LOADTEST__` nunca
+  abren caja, así que el spec confirma con "Transferencia" en vez de "Efectivo".
+- **Wizard de onboarding no se puede saltar con Escape** — `OnboardingWizard.jsx` usa
+  `onOpenChange={() => {}}` (no-op), así que un contexto de browser nuevo (sin
+  `onboarding_completado=true`) queda bloqueado indefinidamente. Se resolvió con un
+  `UPDATE empresas SET onboarding_completado=true` de una sola vez sobre las 131 empresas
+  `__LOADTEST__` del stack local — no es un fix de producción, es limpieza del dataset sintético
+  para que el flujo de Playwright no tenga que simular 3 pasos de wizard por sesión.
+- **El grid de productos usa las mismas clases CSS para skeletons de carga y cards reales** — bajo
+  contención de CPU (10+ browsers concurrentes), el primer `.grid > div` a veces era un skeleton
+  sin `onClick`, no un producto real. Corregido filtrando por `hasText: '$'` y esperando
+  explícitamente a que la card sea visible antes de clickear.
+
+## Archivos
+
+- `loadtest/playwright/flujo-pos.spec.js` — spec único, parametrizado por `N_SESSIONS` (env var).
+- `.env.loadtest.local` (gitignored) — apunta el frontend al stack local de Supabase.
+- `.claude/launch.json` — config `kairox-loadtest` (`vite --mode loadtest --port 3001`).
+
+## Pendiente / no hecho en esta sesión
+
+- Aplicar o no la migration 218 (`is_admin`) a producción — repo-only, no preguntado todavía.
+- Investigar y corregir el gap de grant de `calcular_ofertas_carrito` (mismo patrón que `is_admin`).
+- Resolver `task_9958f7f4` (overloads de `crear_venta`).
+- Escalar más allá de 50 sesiones requeriría infraestructura de browsers en la nube — no intentado.

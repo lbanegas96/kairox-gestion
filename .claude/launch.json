@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "kairox-loadtest",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--mode", "loadtest", "--host", "::", "--port", "3001"],
+      "port": 3001
     }
   ]
 }

@@ -28,3 +28,8 @@ scripts/loadtest/fixtures.json
 
 # Binario de k6 descargado localmente para el sometimiento a estrés (no versionar)
 .tools/
+
+# Output efímero de Playwright (Fase 4 del sometimiento a estrés) — trazas, screenshots,
+# error-context.md de cada corrida, nunca versionar
+test-results/
+playwright-report/

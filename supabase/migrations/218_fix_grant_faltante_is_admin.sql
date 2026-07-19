@@ -1,0 +1,32 @@
+-- Fix de reproducibilidad, NO de seguridad en producción — mismo patron que la
+-- migration 217 (crear_venta), esta vez encontrado durante la Fase 4 del
+-- sometimiento a estres (sesion 78) probando el login/dashboard REAL por UI
+-- con Playwright contra el stack local recien reseteado.
+--
+-- La migration 063 (revocar_anon_y_search_path, sesion 47) revoco EXECUTE FROM
+-- PUBLIC (que incluye lo heredado por `authenticated`) de 28 funciones de
+-- golpe, incluyendo is_admin(). De esas 28, 8 son funciones de trigger
+-- (fn_*/trg_fn_*/handle_new_user) que Postgres invoca internamente y nunca
+-- necesitan grant directo a `authenticated` — correcto que sigan sin el.
+-- Pero is_admin() es distinta: no es un RPC de entrada, es una funcion que la
+-- policy `profiles_select` (migration 158) invoca dentro de su propia clausula
+-- USING (`id = auth.uid() OR (is_admin() AND empresa_id = get_my_empresa_id())`)
+-- — y la evaluacion de una policy corre con los privilegios del rol que hace
+-- la query (`authenticated` via PostgREST), asi que SI necesita el grant,
+-- aunque nunca se llame via /rpc/is_admin directamente.
+--
+-- Nunca se detecto en sesiones anteriores porque los tests pgTAP y los
+-- escenarios de carga (Fases 1-3 del sometimiento a estres) llaman RPCs
+-- directamente, sin pasar nunca por un SELECT a `profiles` con un usuario
+-- autenticado real via REST — recien la Fase 4 (login real por UI) lo
+-- encontro. Confirmado con has_function_privilege contra el proyecto hosted:
+-- ya tiene el grant puesto a mano (true), el replay desde cero no (false).
+--
+-- Impacto en producción: NINGUNO — producción ya tiene este grant. El efecto
+-- es que ahora `supabase db reset` local reproduce fielmente el estado real,
+-- y que loguearse en el frontend contra el stack local funciona sin errores.
+
+GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
+
+-- ROLLBACK (comentado): REVOKE EXECUTE ON FUNCTION public.is_admin() FROM authenticated;
+-- (no debería hacer falta — esto solo iguala el estado local al que producción ya tenía).

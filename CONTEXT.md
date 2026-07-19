@@ -1,5 +1,29 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-19 (Luciano — sesión 77: Sometimiento a estrés Fases 2 y 3 completas, repo-only)
+**Última actualización:** 2026-07-19 (Luciano — sesión 78: Sometimiento a estrés Fase 4 (Playwright) completa, repo-only)
+
+> 🟡 **Fase 4 del plan de sometimiento a estrés cerrada — Playwright con navegadores reales,
+> repo-only (nada aplicado a producción todavía).**
+>
+> Flujo real por UI (login → Punto de Venta → click producto → Confirmar Venta) corrido con 1, 10,
+> 25 y 50 contextos de Chromium concurrentes (86 sesiones reales en total): **0 errores de
+> aplicación en las 4 corridas**. La degradación de tiempos al escalar (login ~2.5s→~30s) es
+> contención de CPU de esta máquina por los procesos Chromium, no un techo de KAIROX.
+>
+> **3 hallazgos reales, solo visibles probando por UI real (no por RPC directa como en Fases 2-3)**:
+> 1. 🔴 `is_admin()` sin `GRANT EXECUTE` a `authenticated` — mismo patrón que la migration 217
+>    (`crear_venta`), corregido localmente (migration `218`, repo-only, producción ya tenía el
+>    grant puesto a mano).
+> 2. 🟡 `calcular_ofertas_carrito()` con el mismo gap de grant — **NO corregido todavía**. No rompe
+>    la venta (falla en silencio, sin ofertas automáticas) pero es reproducibilidad rota.
+> 3. 🔴 Dos overloads de `crear_venta` con numeración de `entregas` inconsistente entre sí — uno usa
+>    `series_numeracion` (correcto), el otro `siguiente_numero_documento` (desincronizado) —
+>    provoca `duplicate key` real en empresas con historial de ventas grande. Flageado como task
+>    separada (`task_9958f7f4`), **no investigado a fondo ni corregido esta sesión**.
+>
+> Detalle completo (tabla de tiempos por escala, fricciones de metodología corregidas en el spec)
+> en `loadtest/REPORTE.md`, sección "Fase 4".
+
+---
 
 > 🟡 **Fases 2 y 3 del plan de sometimiento a estrés cerradas — infra de carga + 4 escenarios
 > corridos con datos reales, repo-only (nada que aplicar a producción).**
