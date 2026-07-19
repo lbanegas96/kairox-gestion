@@ -14,7 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useConfig } from '@/contexts/ConfigContext';
+import { useConfig, LOGO_CACHE_KEY } from '@/contexts/ConfigContext';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -334,7 +334,8 @@ const ConfiguracionSection = ({ initialTab }) => {
       setFormData(prev => ({
         ...prev,
         nombre_empresa:  config.nombre_empresa  || '',
-        company_logo:    config.company_logo    || config.logo_base64 || '',
+        // EGRESS-FIX: el logo ya no viaja por el contexto (era un blob de ~960KB que
+        // se traía en cada montaje). Lo trae el efecto dedicado de abajo, filtrado.
         email_empresa:   config.email_empresa   || '',
         direccion:       config.direccion       || '',
         rubro:           config.rubro           || '',
@@ -344,6 +345,27 @@ const ConfiguracionSection = ({ initialTab }) => {
       }));
     }
   }, [config]);
+
+  // EGRESS-FIX (sesión 78): traer el logo existente por su cuenta, filtrado por clave
+  // (nunca más vía el contexto global). Además lo cachea en localStorage para que la
+  // pantalla de login pueda mostrar el branding sin pegarle a la DB.
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    supabase
+      .from('configuracion')
+      .select('valor')
+      .eq('empresa_id', user.empresa_id)
+      .eq('clave', 'logo_base64')
+      .maybeSingle()
+      .then(({ data }) => {
+        const logo = data?.valor || '';
+        setFormData(prev => ({ ...prev, company_logo: logo }));
+        try {
+          if (logo) localStorage.setItem(LOGO_CACHE_KEY, logo);
+          else localStorage.removeItem(LOGO_CACHE_KEY);
+        } catch { /* no crítico */ }
+      });
+  }, [user?.empresa_id]);
 
   // Hidratar afip_cuit/condicion_iva en el form cuando llega desde empresas
   useEffect(() => {
@@ -716,7 +738,8 @@ const ConfiguracionSection = ({ initialTab }) => {
       const base64 = file.type === 'image/svg+xml'
         ? await convertToBase64(file)
         : await resizeImageToBase64(file, { maxSide: 400 });
-      setFormData(prev => ({ ...prev, company_logo: base64, logo_base64: base64 }));
+      setFormData(prev => ({ ...prev, company_logo: base64 }));
+      try { localStorage.setItem(LOGO_CACHE_KEY, base64); } catch { /* no crítico */ }
       const kb = Math.round(base64.length / 1024);
       toast({
         title: 'Logo cargado',
@@ -733,6 +756,7 @@ const ConfiguracionSection = ({ initialTab }) => {
 
   const handleRemoveLogo = () => {
     setFormData(prev => ({ ...prev, company_logo: '' }));
+    try { localStorage.removeItem(LOGO_CACHE_KEY); } catch { /* no crítico */ }
     if (fileInputRef.current) fileInputRef.current.value = '';
     toast({ title: 'Logo eliminado', description: 'El logo se ha eliminado de la vista previa.' });
   };

@@ -1,0 +1,21 @@
+-- EGRESS-FIX (sesión 78): limpieza del logo duplicado.
+--
+-- El logo de la empresa se guardaba como base64 (~960KB en Nalux) DOS veces en la
+-- tabla `configuracion`: bajo la clave `logo_base64` Y bajo `company_logo`, con
+-- contenido byte-a-byte idéntico. El frontend escribía ambas (ConfigContext.updateConfig
+-- y ConfiguracionSection.handleFileSelect). A partir de la sesión 78 el frontend
+-- persiste SOLO `logo_base64` y nunca más `company_logo`.
+--
+-- Esta migration borra las filas huérfanas `company_logo` que quedaron. `logo_base64`
+-- (la que sí usan los tickets, PDFs y la vista previa de Configuración) NO se toca.
+--
+-- Impacto: reduce a la mitad el tamaño almacenado del logo por empresa y elimina la
+-- copia muerta. No afecta ninguna funcionalidad — ningún componente lee `company_logo`
+-- desde la DB (era un alias en memoria del frontend).
+--
+-- NOTA: el problema de EGRESS (6.4GB en un ciclo) NO lo causaba el tamaño almacenado
+-- sino que ConfigContext re-fetcheaba el blob en cada montaje/login app-wide. Eso se
+-- corrigió en el frontend (ConfigContext ya no trae el logo). Esta limpieza es
+-- complementaria: baja el peso en reposo y saca la duplicación.
+
+DELETE FROM public.configuracion WHERE clave = 'company_logo';
