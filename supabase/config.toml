@@ -53,7 +53,10 @@ enabled = false
 enabled = false
 
 [storage]
-enabled = false
+# Habilitado desde la sesión 78: el logo de empresa se mueve de base64-en-DB
+# a Storage (migration 223, bucket logos-empresa) — la app ahora depende
+# realmente de este servicio, no es solo para pruebas.
+enabled = true
 
 [auth]
 enabled = true

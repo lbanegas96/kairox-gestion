@@ -681,17 +681,12 @@ const ConfiguracionSection = ({ initialTab }) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const convertToBase64 = (file) => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
-    reader.readAsDataURL(file);
-  });
-
-  // Redimensiona y comprime el logo en el browser antes de guardarlo.
-  // Objetivo: que el base64 final pese <300KB para que los PDFs (@react-pdf/renderer)
-  // no se cuelguen renderizando imágenes gigantes.
-  const resizeImageToBase64 = (file, { maxSide = 400, quality = 0.85 } = {}) =>
+  // STORAGE-FIX (sesión 78, follow-up del fix de egress): el logo ya no se
+  // guarda como base64 en Postgres — se sube al bucket `logos-empresa`
+  // (migration 223) y solo se persiste la URL pública. Sigue redimensionado
+  // en el browser antes de subir (perf/tamaño), pero el resultado ahora es
+  // un Blob para `storage.upload`, no un data URI para una columna de texto.
+  const resizeImageToBlob = (file, { maxSide = 400, quality = 0.85 } = {}) =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
@@ -707,13 +702,16 @@ const ConfiguracionSection = ({ initialTab }) => {
           canvas.height = h;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, w, h);
-          // PNG conserva transparencia; JPEG si no la necesita. Probamos PNG primero,
-          // si pesa demasiado caemos a JPEG comprimido.
-          let out = canvas.toDataURL('image/png');
-          if (out.length > 300_000) {
-            out = canvas.toDataURL('image/jpeg', quality);
-          }
-          resolve(out);
+          // PNG conserva transparencia; JPEG si no la necesita.
+          canvas.toBlob(pngBlob => {
+            if (pngBlob && pngBlob.size <= 300_000) {
+              resolve({ blob: pngBlob, ext: 'png', contentType: 'image/png' });
+              return;
+            }
+            canvas.toBlob(jpgBlob => {
+              resolve({ blob: jpgBlob, ext: 'jpg', contentType: 'image/jpeg' });
+            }, 'image/jpeg', quality);
+          }, 'image/png');
         };
         img.src = reader.result;
       };
@@ -722,7 +720,7 @@ const ConfiguracionSection = ({ initialTab }) => {
 
   const handleFileSelect = async (e) => {
     const file = e.target.files[0];
-    if (!file) return;
+    if (!file || !user?.empresa_id) return;
     const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp'];
     if (!validTypes.includes(file.type)) {
       toast({ title: 'Formato no soportado', description: 'Sube una imagen PNG, JPG, SVG o WEBP.', variant: 'destructive' });
@@ -734,16 +732,28 @@ const ConfiguracionSection = ({ initialTab }) => {
     }
     try {
       setUploading(true);
-      // SVG no necesita resize (suele ser chico y vectorial). El resto va al canvas.
-      const base64 = file.type === 'image/svg+xml'
-        ? await convertToBase64(file)
-        : await resizeImageToBase64(file, { maxSide: 400 });
-      setFormData(prev => ({ ...prev, company_logo: base64 }));
-      try { localStorage.setItem(LOGO_CACHE_KEY, base64); } catch { /* no crítico */ }
-      const kb = Math.round(base64.length / 1024);
+      // SVG no necesita resize (suele ser chico y vectorial) — se sube tal cual.
+      const { blob, ext, contentType } = file.type === 'image/svg+xml'
+        ? { blob: file, ext: 'svg', contentType: file.type }
+        : await resizeImageToBlob(file, { maxSide: 400 });
+
+      const path = `${user.empresa_id}/logo.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('logos-empresa')
+        .upload(path, blob, { upsert: true, contentType, cacheControl: '3600' });
+      if (uploadError) throw uploadError;
+
+      // Cache-bust: la URL pública es siempre la misma para un mismo path,
+      // así que sin esto el <img> no refresca tras re-subir un logo nuevo.
+      const { data: { publicUrl } } = supabase.storage.from('logos-empresa').getPublicUrl(path);
+      const urlConCacheBust = `${publicUrl}?v=${Date.now()}`;
+
+      setFormData(prev => ({ ...prev, company_logo: urlConCacheBust }));
+      try { localStorage.setItem(LOGO_CACHE_KEY, urlConCacheBust); } catch { /* no crítico */ }
+      const kb = Math.round(blob.size / 1024);
       toast({
         title: 'Logo cargado',
-        description: `Redimensionado a ${kb}KB. Hacé clic en Guardar para aplicar.`,
+        description: `Subido a Storage (${kb}KB). Hacé clic en Guardar para aplicar.`,
         className: 'bg-blue-600 text-white border-blue-500',
       });
     } catch (error) {
@@ -754,9 +764,15 @@ const ConfiguracionSection = ({ initialTab }) => {
     }
   };
 
-  const handleRemoveLogo = () => {
+  const handleRemoveLogo = async () => {
     setFormData(prev => ({ ...prev, company_logo: '' }));
     try { localStorage.removeItem(LOGO_CACHE_KEY); } catch { /* no crítico */ }
+    if (user?.empresa_id) {
+      // Best-effort: borra los 3 posibles paths (no sabemos qué extensión tenía).
+      await supabase.storage.from('logos-empresa').remove(
+        ['png', 'jpg', 'svg'].map(ext => `${user.empresa_id}/logo.${ext}`)
+      );
+    }
     if (fileInputRef.current) fileInputRef.current.value = '';
     toast({ title: 'Logo eliminado', description: 'El logo se ha eliminado de la vista previa.' });
   };

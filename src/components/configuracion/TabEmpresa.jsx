@@ -128,7 +128,7 @@ const TabEmpresa = ({
           </div>
           <div className="flex items-start gap-2 text-xs text-slate-500 bg-kx-surface-2 dark:bg-slate-900/50 p-3 rounded border kairox-border">
             <AlertCircle className="w-4 h-4 shrink-0" />
-            <div>Formatos: PNG, JPG, SVG, WEBP.<br />Tamaño máximo: 2MB.<br />El logo se guarda directamente en la base de datos.</div>
+            <div>Formatos: PNG, JPG, SVG, WEBP.<br />Tamaño máximo: 2MB.<br />El logo se sube a almacenamiento en la nube.</div>
           </div>
         </div>
 
