@@ -64,7 +64,8 @@ SELECT public.crear_venta(
   p_items           := '[{"producto_id":"00000000-bead-0000-0000-0000000000a1","cantidad":3,"subtotal":300,"precio_unitario":100,"alicuota_iva":"21"}]'::jsonb,
   p_pagos           := '[]'::jsonb,
   p_es_cc           := false,
-  p_caja_sesion_id  := NULL
+  p_caja_sesion_id  := NULL,
+  p_pedido_id       := NULL
 );
 
 SELECT is(
@@ -96,7 +97,8 @@ SELECT throws_like(
        p_items           := '[{"producto_id":"00000000-bead-0000-0000-0000000000a2","cantidad":5,"subtotal":500,"precio_unitario":100,"alicuota_iva":"21"}]'::jsonb,
        p_pagos           := '[]'::jsonb,
        p_es_cc           := false,
-       p_caja_sesion_id  := NULL
+       p_caja_sesion_id  := NULL,
+       p_pedido_id       := NULL
      ) $$,
   'Stock insuficiente%',
   'Caso 2a: crear_venta bloquea si no hay stock suficiente'
@@ -131,7 +133,8 @@ SELECT throws_like(
        p_items           := '[{"producto_id":"00000000-bead-0000-0000-0000000000a1","cantidad":1,"subtotal":100,"precio_unitario":100,"alicuota_iva":"21"}]'::jsonb,
        p_pagos           := '[]'::jsonb,
        p_es_cc           := false,
-       p_caja_sesion_id  := NULL
+       p_caja_sesion_id  := NULL,
+       p_pedido_id       := NULL
      ) $$,
   'Acceso denegado%',
   'Caso 3: crear_venta bloquea si p_empresa_id no coincide con el usuario autenticado'

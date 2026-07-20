@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { defineConfig } from 'vitest/config';
+import { defineConfig, configDefaults } from 'vitest/config';
 
 // Config separada de vite.config.js a propósito: ese archivo trae plugins
 // específicos de la plataforma (visual editor, error overlays inyectados en el
@@ -25,5 +25,10 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    // loadtest/playwright/*.spec.js matchea el glob por default de Vitest
+    // (**/*.spec.js) pero es un spec de Playwright (API distinta, depende de
+    // scripts/loadtest/fixtures.json generado localmente por seed.mjs) — no
+    // un test unitario. Se corre aparte con `npx playwright test`, nunca acá.
+    exclude: [...configDefaults.exclude, 'loadtest/**'],
   },
 });

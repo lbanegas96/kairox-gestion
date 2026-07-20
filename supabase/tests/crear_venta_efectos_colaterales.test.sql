@@ -79,7 +79,8 @@ SELECT public.crear_venta(
   p_items           := '[{"producto_id":"00000000-cafe-0000-0000-0000000000a1","cantidad":1,"subtotal":300,"precio_unitario":300,"alicuota_iva":"21"}]'::jsonb,
   p_pagos           := '[{"metodo":"Efectivo","monto":300}]'::jsonb,
   p_es_cc           := false,
-  p_caja_sesion_id  := NULL
+  p_caja_sesion_id  := NULL,
+  p_pedido_id       := NULL
 );
 
 SELECT is(
@@ -113,7 +114,8 @@ SELECT public.crear_venta(
   p_items           := '[{"producto_id":"00000000-cafe-0000-0000-0000000000a2","cantidad":1,"subtotal":300,"precio_unitario":300,"alicuota_iva":"21"}]'::jsonb,
   p_pagos           := '[{"metodo":"Cuenta Corriente","monto":300}]'::jsonb,
   p_es_cc           := true,
-  p_caja_sesion_id  := NULL
+  p_caja_sesion_id  := NULL,
+  p_pedido_id       := NULL
 );
 
 SELECT is(
@@ -159,7 +161,8 @@ SELECT public.crear_venta(
   p_items           := '[{"producto_id":"00000000-cafe-0000-0000-0000000000a4","cantidad":1,"subtotal":200,"precio_unitario":200,"alicuota_iva":"21"}]'::jsonb,
   p_pagos           := '[{"metodo":"Efectivo","monto":200}]'::jsonb,
   p_es_cc           := false,
-  p_caja_sesion_id  := NULL
+  p_caja_sesion_id  := NULL,
+  p_pedido_id       := NULL
 );
 
 SELECT is(
@@ -191,7 +194,8 @@ SELECT public.crear_venta(
   p_items           := '[{"producto_id":"00000000-cafe-0000-0000-0000000000a5","cantidad":2,"subtotal":400,"precio_unitario":200,"alicuota_iva":"21"}]'::jsonb,
   p_pagos           := '[{"metodo":"Efectivo","monto":400}]'::jsonb,
   p_es_cc           := false,
-  p_caja_sesion_id  := NULL
+  p_caja_sesion_id  := NULL,
+  p_pedido_id       := NULL
 );
 
 SELECT is(
