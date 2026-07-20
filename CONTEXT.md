@@ -1,7 +1,9 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-20 (Nadia — sesión 79: + hardening de `crear_venta` — migration 224, repo-only)
+**Última actualización:** 2026-07-20 (Nadia — sesión 79: migration 224 aplicada a producción — hardening de `crear_venta` completo)
 
-> 🟡 **Migration 224 — `crear_venta` deja de confiar en `p_user_id` (repo-only, sin aplicar).**
+> ✅ **Migration 224 — `crear_venta` deja de confiar en `p_user_id` — APLICADA A PRODUCCIÓN.**
+> Nadia dio el OK, aplicada vía `apply_migration` del MCP de Supabase. Verificado post-aplicación:
+> la función real en prod ya usa `auth.uid()` en los 3 inserts, sin rastro del patrón viejo.
 > Cierre del punto 1 del hardening menor de Caja/POS que quedó dando vueltas desde la sesión 67.
 > Reevalué el otro punto (`contabilizar_movimiento_bancario`/`revertir_contabilizacion_movimiento`
 > "sin `has_module_permission`") y **no hace falta tocarlo**: hoy exigen `is_admin()`, que ya implica
@@ -19,7 +21,8 @@
 > el `p_user_id` de un usuario B distinto — los 3 registros quedaron atribuidos a A (el auth.uid()
 > real), confirmando que el fix cierra el hueco. Corrido con `BEGIN...ROLLBACK` contra prod real.
 >
-> **Para aplicar cuando decidas que sí:** `supabase/migrations/224_crear_venta_no_confiar_en_p_user_id.sql`.
+> Con esto, **las 3 observaciones menores del hardening de Caja/POS de la sesión 67 quedan
+> cerradas** — 2 no necesitaban cambio (ya cubiertas por `is_admin()`) y esta se aplicó a prod.
 
 > 🔑 **NADIA/LUCIANO — acción pendiente para activar el nuevo check: agregar el secret
 > `SUPABASE_ACCESS_TOKEN`.** Nuevo workflow `.github/workflows/edge-functions-drift.yml` — ataca la
