@@ -135,9 +135,35 @@ pagando la MISMA factura" (lock de `comprobantes.total`) que pedía el plan orig
 |---|---|---|
 | Confirmar si el límite de conexiones aplica igual contra un proyecto hosted con pooling (Supavisor) | Requeriría un branch de Supabase Cloud o subir `max_connections` localmente y re-correr | Alta — es la pregunta que queda abierta sobre el "techo real" |
 | Aislar contención de locks real (subir `max_connections` local y repetir Escenario B a 300-500 VUs, sin el ruido de conexión agotada) | Quedó pendiente por tiempo — es un cambio de una línea en `postgresql.conf` del stack local | Media |
-| Escenario D con imputación a la MISMA factura (lock de `comprobantes.total`) | El seed no genera facturas con `cliente_id` real todavía | Media |
+| Escenario D con imputación a la MISMA factura (lock de `comprobantes.total`) | ✅ **Código listo (sesión 79)**, corrida pendiente — ver nota abajo | Media |
 | Empujar Escenario A más allá de 131 empresas únicas | El corte de ~15s en foreground sigue sin resolverse del todo — sembrar en tandas acumulando sobre `fixtures.json` | Baja — 131 ya es una muestra sólida |
 | Fase 4 — Playwright con navegadores reales | No empezado | Baja (depende de que el backend cierre primero) |
+
+## Nota (sesión 79, Nadia) — código de la "factura compartida" listo, corrida pendiente
+
+Sin Docker en esta máquina no se pudo levantar el stack local (`npx supabase start`) para
+efectivamente correr el escenario, así que este punto queda **escrito y sin ejecutar** — el próximo
+que tenga el stack local a mano (Luciano, o esta sesión desde otra máquina) solo tiene que correr:
+
+```bash
+npx supabase start
+EMPRESAS=20 node scripts/loadtest/seed.mjs     # ahora crea 1 factura compartida por empresa
+MODO=misma_factura MAX_VUS=100 npx k6 run loadtest/k6/escenario-d-cobros-pagos.js
+```
+
+Qué cambió — ambos 100% repo-only, nada tocó producción ni el proyecto hosted:
+- **`scripts/loadtest/seed.mjs`**: además del historial de siempre, cada empresa genera 1 venta en
+  Cuenta Corriente a un cliente real (`p_es_cc=true`, `estado_pago='pendiente'`,
+  `FACTURA_COMPARTIDA_MONTO` = $10M por defecto — grande a propósito para no agotarse a mitad de una
+  corrida larga). Su `comprobante_id` queda en el fixture como `factura_compartida_id`.
+- **`loadtest/k6/escenario-d-cobros-pagos.js`**: nuevo `MODO=misma_factura` (default sigue siendo
+  `clientes_random`, sin romper el uso anterior). En ese modo, cada VU imputa un pago chico
+  ($10-100) contra `fixture.factura_compartida_id` — con varios VUs mapeados a la misma empresa
+  (`__VU % fixtures.length`), varios terminan imputando a la MISMA fila de `comprobantes` al mismo
+  tiempo, forzando el `SELECT...FOR UPDATE` real que `registrar_cobro_cliente` hace sobre esa fila.
+  Esperado: 0% error hasta el límite de conexiones ya conocido (~100-200 en el stack local); el
+  interés del test es confirmar que el lock serializa correctamente sin errores de aplicación
+  (deadlock, datos corruptos), no que sea rápido.
 
 ## Limpieza pendiente
 

@@ -3,19 +3,26 @@
 // camino de escritura pesado del sistema (además de crear_venta): inserta
 // cuenta_corriente_movimientos + movimientos_caja + asiento automático.
 //
-// ALCANCE ACOTADO A PROPÓSITO: el seed.mjs actual no genera facturas con
-// cliente_id real (todas las ventas históricas son "Consumidor Final"), así
-// que este escenario mide el costo de la RPC en sí (sin imputación a una
-// factura puntual) — NO cubre el caso específico "2 VUs pagando la MISMA
-// factura al mismo tiempo" (lock de comprobantes.total) que pedía el plan
-// original. Para cubrir eso hace falta extender seed.mjs con clientes que
-// tengan facturas reales — pendiente, documentado en el reporte.
+// 2 modos (mismo patrón que MODO de escenario-b-contencion.js):
+//   - clientes_random (default): cada cobro va a un cliente al azar de la
+//     empresa, SIN imputar a ninguna factura puntual — mide el costo de la
+//     RPC en sí, sin contención sobre una fila particular.
+//   - misma_factura (sesión 79, cierra el pendiente del reporte Fase 2/3):
+//     todos los VUs de una misma empresa imputan pagos contra la MISMA
+//     "factura compartida" que seed.mjs genera por empresa
+//     (fixture.factura_compartida_id, saldo grande a propósito). Es el caso
+//     real de contención sobre comprobantes.total ("2 VUs pagando la MISMA
+//     factura al mismo tiempo") que el modo original no cubría — cada
+//     imputación hace un SELECT...FOR UPDATE sobre esa fila, así que con
+//     varios VUs mapeados a la misma empresa (VU % fixtures.length) el lock
+//     se serializa de verdad, no solo en teoría.
 //
 // Corre EXCLUSIVAMENTE contra el stack local. Requiere scripts/loadtest/seed.mjs.
 //
 // Uso:
 //   k6 run loadtest/k6/escenario-d-cobros-pagos.js
 //   MAX_VUS=100 k6 run loadtest/k6/escenario-d-cobros-pagos.js
+//   MODO=misma_factura MAX_VUS=100 k6 run loadtest/k6/escenario-d-cobros-pagos.js
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
@@ -59,15 +66,36 @@ export const options = {
   },
 };
 
+const MODO = __ENV.MODO || 'clientes_random'; // 'clientes_random' | 'misma_factura'
+
 export default function () {
   const fixture = fixtures[__VU % fixtures.length];
-  const clienteId = fixture.cliente_ids[Math.floor(Math.random() * fixture.cliente_ids.length)];
-  const monto = 500 + Math.floor(Math.random() * 4500);
+  // Montos chicos a propósito en modo misma_factura: con FACTURA_COMPARTIDA_MONTO
+  // ($10M default) y pagos de $10-100, la factura aguanta decenas de miles de
+  // imputaciones antes de agotar el saldo — no queremos que el "sobre-imputación"
+  // legítimo del final de la factura contamine la tasa de error del test.
+  const monto = MODO === 'misma_factura'
+    ? 10 + Math.floor(Math.random() * 90)
+    : 500 + Math.floor(Math.random() * 4500);
 
-  const payload = JSON.stringify({
+  const payload = JSON.stringify(MODO === 'misma_factura' ? {
     p_empresa_id: fixture.empresa_id,
     p_user_id: fixture.user_id,
-    p_cliente_id: clienteId,
+    p_cliente_id: fixture.factura_compartida_cliente_id,
+    p_cliente_nombre: 'Cliente de prueba (factura compartida)',
+    p_monto: monto,
+    p_metodo: 'Efectivo',
+    p_fecha: new Date().toISOString(),
+    p_descripcion: `LOADTEST-D-MISMA-FACTURA-${__VU}-${__ITER}`,
+    p_caja_sesion_id: null,
+    p_monto_paralelo: null,
+    p_tc_paralelo: null,
+    p_imputaciones: [{ comprobante_id: fixture.factura_compartida_id, monto }],
+    p_forma_pago_id: null,
+  } : {
+    p_empresa_id: fixture.empresa_id,
+    p_user_id: fixture.user_id,
+    p_cliente_id: fixture.cliente_ids[Math.floor(Math.random() * fixture.cliente_ids.length)],
     p_cliente_nombre: 'Cliente de prueba',
     p_monto: monto,
     p_metodo: 'Efectivo',

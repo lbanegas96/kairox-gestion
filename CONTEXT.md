@@ -1,5 +1,26 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-20 (Nadia — sesión 79: reparé el CI que rompió el push de la 78 + migración del logo a Storage corrida en prod)
+**Última actualización:** 2026-07-20 (Nadia — sesión 79: CI reparado + logo migrado a Storage + código del Escenario D "misma factura" listo)
+
+> 📋 **Los 3 pendientes del sometimiento a estrés que dejó la sesión 78 — estado real (verificado
+> contra prod, no solo leído del reporte):**
+>
+> 1. **`is_admin` / `calcular_ofertas_carrito` / overloads de `crear_venta`** (los 3 bugs REALES que
+>    encontró la Fase 4) — **ya estaban los 3 resueltos en producción** antes de arrancar esta
+>    sesión, confirmado con `has_function_privilege` y contando overloads. Nada que hacer ahí.
+> 2. **Escenario D con imputación a la MISMA factura** (lock de `comprobantes.total`) — **código
+>    listo, corrida pendiente**. Extendí `scripts/loadtest/seed.mjs` (cada empresa genera 1 "factura
+>    compartida" en Cuenta Corriente con saldo grande) y `loadtest/k6/escenario-d-cobros-pagos.js`
+>    (nuevo `MODO=misma_factura`, retrocompatible). **No lo pude correr**: esta máquina no tiene
+>    Docker instalado, y el stack local (`supabase start`) lo necesita. Instrucciones exactas de cómo
+>    correrlo en `loadtest/REPORTE.md` → "Nota (sesión 79)".
+> 3. **Confirmar `max_connections` contra un proyecto hosted con pooling** y **escalar más allá de
+>    131 empresas / 50 browsers** — **no se tocaron**, y a propósito: son pruebas de carga real, y
+>    correrlas contra producción hoy sería mala idea (la organización está pasada de cuota, ver el
+>    aviso de Supabase — cargarle más tráfico solo empeoraría eso, además de arriesgar afectar a
+>    Nalux operando en vivo). Quedan para cuando alguien tenga el stack local con Docker a mano.
+>
+> ✅ **Migración del logo corrida en producción** (ver detalle abajo) y **CI reparado** (ver detalle
+> abajo) — esto sí quedó 100% cerrado hoy.
 
 > 🔧 **LUCIANO — leé esto: tu último push de la sesión 78 (`2d73a9b`) dejó el CI en ROJO** (los dos
 > jobs, `pgtap` y `test-and-build`), sin que quedara documentado. Ya está **reparado y verde**

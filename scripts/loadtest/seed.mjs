@@ -14,6 +14,18 @@
 // Requiere el stack local levantado (`npx supabase start`). Las credenciales de
 // abajo son las credenciales DEMO fijas que imprime `supabase start` en cualquier
 // instalacion local (no son secretas, son iguales para todo el mundo).
+//
+// FACTURA COMPARTIDA (sesión 79, cierra el pendiente "Escenario D con imputación
+// a la MISMA factura" del reporte Fase 2/3): además del historial de ventas
+// "Consumidor Final" de siempre, cada empresa genera UNA venta adicional en
+// Cuenta Corriente (es_cc=true) a un cliente real, con estado_pago='pendiente' y
+// un total grande (FACTURA_COMPARTIDA_MONTO, default $10.000.000 — a propósito
+// muy por encima de lo que un load test normal llega a imputar, para no agotar
+// el saldo a mitad de la corrida y contaminar la métrica de error con
+// "sobre-imputación" legítima). Su comprobante_id queda en el fixture
+// (factura_compartida_id) para que escenario-d-cobros-pagos.js pueda hacer que
+// MUCHOS VUs imputen pagos contra ESA MISMA fila al mismo tiempo — el caso real
+// de contención sobre comprobantes.total que el escenario original no cubría.
 
 import { createClient } from '@supabase/supabase-js';
 import { writeFileSync } from 'fs';
@@ -37,6 +49,7 @@ const EMPRESAS = Number(process.env.EMPRESAS || 5);
 const CLIENTES_POR_EMPRESA = Number(process.env.CLIENTES_POR_EMPRESA || 20);
 const PRODUCTOS_POR_EMPRESA = Number(process.env.PRODUCTOS_POR_EMPRESA || 30);
 const VENTAS_POR_EMPRESA = Number(process.env.VENTAS_POR_EMPRESA || 15);
+const FACTURA_COMPARTIDA_MONTO = Number(process.env.FACTURA_COMPARTIDA_MONTO || 10000000);
 const PASSWORD = 'LoadTest2026!Kairox';
 
 const admin = createClient(API_URL, SERVICE_ROLE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
@@ -131,6 +144,36 @@ async function seedEmpresa(i) {
     if (errVenta) throw new Error(`venta ${i}-${v}: ${errVenta.message}`);
   }
 
+  // Factura compartida en Cuenta Corriente — ver comentario de cabecera. Un solo
+  // cliente real, un solo comprobante, saldo grande para que muchos VUs puedan
+  // imputar pagos contra ÉL AL MISMO TIEMPO en escenario-d-cobros-pagos.js.
+  const clienteCompartido = clientes[0];
+  const productoFactura = productos[0];
+  const { data: ventaCC, error: errVentaCC } = await empresaClient.rpc('crear_venta', {
+    p_empresa_id: empresaId,
+    p_user_id: userId,
+    p_numero_venta: `LOADTEST-SEED-CC-${i}`,
+    p_fecha: new Date().toISOString(),
+    p_cliente_id: clienteCompartido.id,
+    p_cliente_nombre: `__LOADTEST__ Cliente ${i}-0`,
+    p_total: FACTURA_COMPARTIDA_MONTO,
+    p_forma_pago: 'Cuenta Corriente',
+    p_estado_pago: 'pendiente',
+    p_moneda: 'ARS',
+    p_tipo_cambio_tasa: 1,
+    p_monto_paralelo: null,
+    p_tc_paralelo: null,
+    p_items: [{
+      producto_id: productoFactura.id, cantidad: 1,
+      subtotal: FACTURA_COMPARTIDA_MONTO, precio_unitario: FACTURA_COMPARTIDA_MONTO, alicuota_iva: '21',
+    }],
+    p_pagos: [],
+    p_es_cc: true,
+    p_caja_sesion_id: null,
+    p_pedido_id: null,
+  });
+  if (errVentaCC) throw new Error(`factura compartida ${i}: ${errVentaCC.message}`);
+
   return {
     empresa_id: empresaId,
     empresa_nombre: nombre,
@@ -139,11 +182,14 @@ async function seedEmpresa(i) {
     jwt,
     producto_ids: productos.map(p => p.id),
     cliente_ids: clientes.map(c => c.id),
+    factura_compartida_id: ventaCC.comprobante_id,
+    factura_compartida_cliente_id: clienteCompartido.id,
+    factura_compartida_monto: FACTURA_COMPARTIDA_MONTO,
   };
 }
 
 async function main() {
-  console.log(`Sembrando ${EMPRESAS} empresas (${CLIENTES_POR_EMPRESA} clientes, ${PRODUCTOS_POR_EMPRESA} productos, ${VENTAS_POR_EMPRESA} ventas históricas c/u) contra ${API_URL}...`);
+  console.log(`Sembrando ${EMPRESAS} empresas (${CLIENTES_POR_EMPRESA} clientes, ${PRODUCTOS_POR_EMPRESA} productos, ${VENTAS_POR_EMPRESA} ventas históricas + 1 factura compartida de $${FACTURA_COMPARTIDA_MONTO.toLocaleString('es-AR')} c/u) contra ${API_URL}...`);
   const outPath = join(__dirname, 'fixtures.json');
   const fixtures = [];
   const fallos = [];
