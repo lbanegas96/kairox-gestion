@@ -115,6 +115,28 @@ comportamiento limpio que `crear_venta`. **Alcance acotado**: el seed actual no 
 el costo de la RPC en sí, sin imputación a una factura puntual — no cubre el caso específico "2 VUs
 pagando la MISMA factura" (lock de `comprobantes.total`) que pedía el plan original.
 
+### Escenario D — `MODO=misma_factura` — CORRIDO (2026-07-20, Luciano)
+
+Código escrito por Nadia en la sesión 79 (ver nota más abajo), ejecutado esta sesión apenas hubo
+Docker disponible en esta máquina. 20 empresas sembradas (`EMPRESAS=20`), cada una con 1 factura
+compartida de $10.000.000 en Cuenta Corriente, rampa hasta **100 VUs** — con `__VU % 20` empresas,
+hasta 5 VUs distintos imputando pagos contra la MISMA fila de `comprobantes` al mismo tiempo.
+
+**Resultado: 7.525 cobros, 0.00% error, p95=26.99ms, max=88.7ms** — igual de limpio que el modo
+`clientes_random`, sin degradación por la contención adicional del lock.
+
+**Verificado además a nivel de datos (no solo que la RPC devolviera 200)**, contra el Postgres local
+vía `docker exec`: la suma de `cuenta_corriente_imputaciones.monto` por factura compartida coincide
+con la cantidad de imputaciones reales (7.530 = 7.525 de esta corrida + 5 del smoke test previo),
+**0 facturas con total negativo**, y las 20 quedaron en `estado_pago='parcial'` como se esperaba (el
+monto imputado, ~$17-24k por factura, es una fracción chica de los $10M). Esto confirma que el
+`SELECT...FOR UPDATE` de `registrar_cobro_cliente` serializa de verdad bajo concurrencia real — sin
+deadlocks, sin updates perdidos, sin doble conteo — que era el objetivo real del escenario, no la
+velocidad.
+
+Con esto, el punto 2 de "Lo que falta probar" (Escenario D con imputación a la misma factura) queda
+**cerrado**. 100% repo-only / stack local — nada tocó producción.
+
 ## Errores de metodología encontrados y corregidos en el camino
 
 1. **Siembra masiva falló repetidamente en foreground** (corte a los ~15s, exit 127,
@@ -135,15 +157,16 @@ pagando la MISMA factura" (lock de `comprobantes.total`) que pedía el plan orig
 |---|---|---|
 | Confirmar si el límite de conexiones aplica igual contra un proyecto hosted con pooling (Supavisor) | Requeriría un branch de Supabase Cloud o subir `max_connections` localmente y re-correr | Alta — es la pregunta que queda abierta sobre el "techo real" |
 | Aislar contención de locks real (subir `max_connections` local y repetir Escenario B a 300-500 VUs, sin el ruido de conexión agotada) | Quedó pendiente por tiempo — es un cambio de una línea en `postgresql.conf` del stack local | Media |
-| Escenario D con imputación a la MISMA factura (lock de `comprobantes.total`) | ✅ **Código listo (sesión 79)**, corrida pendiente — ver nota abajo | Media |
+| Escenario D con imputación a la MISMA factura (lock de `comprobantes.total`) | ✅ **CERRADO (2026-07-20)** — 7.525 cobros, 0% error, verificado a nivel de datos, sin corrupción — ver resultado en "Escenario D" arriba | — |
 | Empujar Escenario A más allá de 131 empresas únicas | El corte de ~15s en foreground sigue sin resolverse del todo — sembrar en tandas acumulando sobre `fixtures.json` | Baja — 131 ya es una muestra sólida |
 | Fase 4 — Playwright con navegadores reales | No empezado | Baja (depende de que el backend cierre primero) |
 
-## Nota (sesión 79, Nadia) — código de la "factura compartida" listo, corrida pendiente
+## Nota (sesión 79, Nadia) — código de la "factura compartida" — CORRIDO en la sesión siguiente
 
 Sin Docker en esta máquina no se pudo levantar el stack local (`npx supabase start`) para
-efectivamente correr el escenario, así que este punto queda **escrito y sin ejecutar** — el próximo
-que tenga el stack local a mano (Luciano, o esta sesión desde otra máquina) solo tiene que correr:
+efectivamente correr el escenario, así que este punto quedó **escrito y sin ejecutar** en la sesión
+79. **Corrido y cerrado el 2026-07-20** (ver sub-sección "Escenario D — `MODO=misma_factura`" arriba)
+— se dejan los comandos igual, quedan como referencia reproducible:
 
 ```bash
 npx supabase start

@@ -1,24 +1,28 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-20 (Nadia — sesión 79: contingencia AFIP/CAEA automática — Pasos 1-2 listos, repo-only)
+**Última actualización:** 2026-07-20 (Luciano — Escenario D corrido y cerrado; CAEA sigue esperando tu decisión)
 
-> 📋 **LUCIANO — leé esto primero, hay 2 bloques de trabajo esperando tu aprobación.** Sesión larga
-> (79) con Nadia. Resumen de los 2 temas que te quedan a vos para decidir, antes del detalle técnico
-> completo más abajo:
+> 📋 **LUCIANO — leé esto primero, queda 1 solo bloque esperando tu aprobación** (el otro, loadtest,
+> ya se cerró esta sesión).
 >
-> **Bloque 1 — Contingencia AFIP/CAEA automática (código listo, NADA aplicado ni desplegado).**
+> **Contingencia AFIP/CAEA automática (código listo, NADA aplicado ni desplegado).**
 > El pedido de Nadia era: que si AFIP/ARCA está caído, las facturas no queden trabadas esperando que
 > un humano las destrabe a mano desde el Monitor. Se armó y verificó (con `BEGIN...ROLLBACK` contra
 > prod real) la migration 225 + un cambio en `arca-worker` — ver detalle justo debajo de este bloque.
-> **No se aplicó ni desplegó nada a propósito**: además de tu OK, hace falta un trámite en el portal
-> real de AFIP (dar de alta un punto de venta nuevo tipo CAEA — Nalux hoy solo tiene uno, tipo CAE, y
-> AFIP no permite mezclar los dos en el mismo PdV) y probar en homologación antes de ir a producción.
+> Repasado de nuevo esta sesión (revisión de seguridad independiente): el patrón de bypass es
+> correcto, no debilita el camino humano, sin hallazgos. **No se aplicó ni desplegó nada a
+> propósito**: además de tu OK, hace falta un trámite en el portal real de AFIP (dar de alta un punto
+> de venta nuevo tipo CAEA — Nalux hoy solo tiene uno, tipo CAE, y AFIP no permite mezclar los dos en
+> el mismo PdV) y probar en homologación antes de ir a producción.
 > **Decisión que necesito de vos:** ¿aplico la migration 225 y despliego el worker actualizado ahora
 > (queda inactivo hasta que exista el PdV CAEA y `afip_usa_caea=true`), o esperamos a tener el trámite
 > de AFIP resuelto primero?
 >
-> **Bloque 2 — Pendiente de loadtest (para vos, sesión 79):** correr el Escenario D "misma factura"
-> — Nadia no tiene espacio en disco para Docker, vos ya tenés el stack local armado. Comandos exactos
-> más abajo, en el bloque correspondiente. Nada urgente.
+> ✅ **Escenario D "misma factura" — CORRIDO y CERRADO (2026-07-20).** 100 VUs, 7.525 cobros
+> concurrentes contra las mismas 20 facturas compartidas, 0% error, y verificado también a nivel de
+> datos (sin corrupción, sin updates perdidos) — ver `loadtest/REPORTE.md` → "Escenario D". Con esto
+> se cierran los 3 puntos del sometimiento a estrés que quedaban pendientes desde la sesión 78; de
+> los otros 2 (pooling real, escalar más allá de 131 empresas) ninguno es urgente y ambos requieren
+> infraestructura que no vale la pena tocar solo por completitud (ver "Lo que falta probar").
 >
 > Se descartó explícitamente el plan grande de "POS 100% offline" (PowerSync, migración de meses) —
 > Nadia confirmó que el caso real es cortes CORTOS de conexión o AFIP caído, no el local sin internet
