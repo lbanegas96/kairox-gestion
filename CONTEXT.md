@@ -1,6 +1,29 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-07-20 (Nadia — sesión 79: contingencia AFIP/CAEA automática — Pasos 1-2 listos, repo-only)
 
+> 📋 **LUCIANO — leé esto primero, hay 2 bloques de trabajo esperando tu aprobación.** Sesión larga
+> (79) con Nadia. Resumen de los 2 temas que te quedan a vos para decidir, antes del detalle técnico
+> completo más abajo:
+>
+> **Bloque 1 — Contingencia AFIP/CAEA automática (código listo, NADA aplicado ni desplegado).**
+> El pedido de Nadia era: que si AFIP/ARCA está caído, las facturas no queden trabadas esperando que
+> un humano las destrabe a mano desde el Monitor. Se armó y verificó (con `BEGIN...ROLLBACK` contra
+> prod real) la migration 225 + un cambio en `arca-worker` — ver detalle justo debajo de este bloque.
+> **No se aplicó ni desplegó nada a propósito**: además de tu OK, hace falta un trámite en el portal
+> real de AFIP (dar de alta un punto de venta nuevo tipo CAEA — Nalux hoy solo tiene uno, tipo CAE, y
+> AFIP no permite mezclar los dos en el mismo PdV) y probar en homologación antes de ir a producción.
+> **Decisión que necesito de vos:** ¿aplico la migration 225 y despliego el worker actualizado ahora
+> (queda inactivo hasta que exista el PdV CAEA y `afip_usa_caea=true`), o esperamos a tener el trámite
+> de AFIP resuelto primero?
+>
+> **Bloque 2 — Pendiente de loadtest (para vos, sesión 79):** correr el Escenario D "misma factura"
+> — Nadia no tiene espacio en disco para Docker, vos ya tenés el stack local armado. Comandos exactos
+> más abajo, en el bloque correspondiente. Nada urgente.
+>
+> Se descartó explícitamente el plan grande de "POS 100% offline" (PowerSync, migración de meses) —
+> Nadia confirmó que el caso real es cortes CORTOS de conexión o AFIP caído, no el local sin internet
+> por días. CAEA (ya construido hace varias sesiones, solo que 100% manual) cubre exactamente eso.
+
 > 🟡 **Contingencia AFIP automática (CAEA) — Pasos 1 y 2 escritos, repo-only, SIN aplicar/desplegar.**
 > Objetivo (pedido de Nadia): que si AFIP/ARCA está caído, las facturas no queden trabadas esperando
 > que un humano las destrabe a mano. Análisis completo: se descartó el plan grande de "POS 100%
