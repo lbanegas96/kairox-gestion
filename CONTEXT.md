@@ -1,5 +1,38 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-19 (Luciano — sesión 78: Fix egress + Fase 4 estrés + numeración self-heal + logo a Storage)
+**Última actualización:** 2026-07-20 (Nadia — sesión 79: reparé el CI que rompió el push de la 78 + migración del logo a Storage corrida en prod)
+
+> 🔧 **LUCIANO — leé esto: tu último push de la sesión 78 (`2d73a9b`) dejó el CI en ROJO** (los dos
+> jobs, `pgtap` y `test-and-build`), sin que quedara documentado. Ya está **reparado y verde**
+> (commit `43bffda`). Las 2 causas:
+>
+> 1. **pgtap:** la migration 222 (correcta) dropeó el overload fantasma de `crear_venta` de 17
+>    params. Pero `crear_venta.test.sql` y `crear_venta_efectos_colaterales.test.sql` llamaban a la
+>    función SIN `p_pedido_id` (que no tiene default) — dependían sin saberlo de esa firma fantasma
+>    que la 222 eliminó. El código real de producción (`useConfirmarVenta.js`, `NuevaVentaModal.jsx`)
+>    siempre pasa `p_pedido_id`, así que era solo un gap de las 6 llamadas de test. Agregado
+>    `p_pedido_id := NULL` a las que faltaban. Verificadas las 2 (15 asserts) con `BEGIN...ROLLBACK`
+>    contra prod real.
+> 2. **test-and-build:** tu `loadtest/playwright/flujo-pos.spec.js` matchea el glob por default de
+>    Vitest (`**/*.spec.js`) pero es un spec de Playwright que depende de
+>    `scripts/loadtest/fixtures.json` (generado local por `seed.mjs`) — nunca existe en CI. Excluido
+>    `loadtest/**` de `vitest.config.js`. Verificado local: `npm ci` limpio + Vitest 28/28 + build verde.
+>
+> ✅ **Migración del logo a Storage CORRIDA en producción (cierra el punto 4 de tu sesión 78).**
+> Nadia corrió `scripts/migrar_logo_a_storage.mjs` con la service_role desde su terminal. Resultado
+> verificado contra prod: las 2 empresas con logo base64 quedaron migradas —
+> `configuracion.logo_base64` ahora tiene una URL de ~141 bytes (antes: **937 KB** la del fundador
+> `db21dfad`, 22 KB Nalux `cbc4db74`). Los 2 archivos están en el bucket `logos-empresa`
+> (`db21dfad/logo.png` 703KB, `cbc4db74/logo.jpg` 17KB), servidos por CDN. Sin filas `company_logo`
+> duplicadas. **El fix de egress queda 100% cerrado** — el logo ya no viaja desde la DB.
+> 🔑 Nota de seguridad: la service_role secret key quedó visible en una captura del chat, así que se
+> **rotó** (se eliminó la vieja `sb_secret_GFU4d...` y se creó una nueva). Nada dependía de ella (la
+> app usa la publicable), así que rotarla no rompió nada.
+>
+> **Sigue pendiente de la sesión 78 (nada urgente):** los 3 puntos del sometimiento a estrés que
+> Luciano dejó anotados abajo (max_connections con pooling real, Escenario D misma factura, escalar
+> browsers en la nube).
+
+---
 
 > ✅ **Sesión 78 (larga) — 4 frentes cerrados y en producción. Pendiente para Nadia mañana: los
 > 3 puntos restantes del sometimiento a estrés (abajo).**
@@ -23,9 +56,8 @@
 > sube al bucket público `logos-empresa` (servido por CDN) y solo se persiste la URL (~100 bytes)
 > en `configuracion.logo_base64`, no el base64. Verificado de punta a punta contra el stack local.
 > Hallazgo: la policy de INSERT/UPDATE no alcanza sin una policy de SELECT también (la Storage API
-> usa `RETURNING *`). **Pendiente que corra Luciano/Nadia:** `scripts/migrar_logo_a_storage.mjs`
-> con la `SUPABASE_SERVICE_ROLE_KEY` para migrar el logo base64 que ya tiene Nalux cargado (hasta
-> que se corra, el logo viejo se sigue viendo por el fallback a base64).
+> usa `RETURNING *`). ✅ **YA CORRIDO (sesión 79, Nadia):** `scripts/migrar_logo_a_storage.mjs` se
+> ejecutó contra prod, las 2 empresas migradas y verificadas — ver callout del tope del archivo.
 >
 > **Pendiente para Nadia (mañana) — 3 puntos del sometimiento a estrés que quedaron sin cubrir**
 > (ver `loadtest/REPORTE.md` → "Lo que falta"): (a) confirmar el techo de `max_connections` contra
