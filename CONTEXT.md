@@ -1,5 +1,41 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-19 (Luciano — sesión 78: Fix de egress (cuota Supabase superada) + Fase 4 sometimiento a estrés)
+**Última actualización:** 2026-07-19 (Luciano — sesión 78: Fix egress + Fase 4 estrés + numeración self-heal + logo a Storage)
+
+> ✅ **Sesión 78 (larga) — 4 frentes cerrados y en producción. Pendiente para Nadia mañana: los
+> 3 puntos restantes del sometimiento a estrés (abajo).**
+>
+> **1. Fix de egress (crítico, causa raíz):** el logo base64 (~960KB) se re-traía app-wide en cada
+> montaje/login vía `ConfigContext` sin filtro → 6.4GB de egress en un ciclo. Corregido: el
+> contexto solo trae `nombre_empresa`, el logo del login sale de cache en localStorage. NO fue por
+> el sometimiento a estrés (los scripts abortan si no apuntan a 127.0.0.1). Desplegado.
+>
+> **2. Numeración self-heal extendida (migration 221, en prod):** `obtener_proximo_numero` solo
+> se autocorregía para `'venta'` — extendido a los 9 tipos de documento. Hallazgo de la
+> investigación de la Fase 4 (la hipótesis de "PostgREST elige overload viejo" quedó refutada; el
+> gap real era el self-heal parcial). 12/12 tests pgTAP.
+>
+> **3. Overload fantasma de `crear_venta` (migration 222, en prod como no-op):** una firma vieja
+> de 17 params (sin `p_pedido_id`, con EXECUTE a `anon` y sin chequeo de módulo) quedó huérfana en
+> el historial de migrations desde la 033 — nunca dropeada. No existía en prod (nunca se hizo
+> `db reset` ahí), pero reaparecía en cualquier replay desde cero. Dropeada.
+>
+> **4. Logo a Supabase Storage (migration 223, en prod):** follow-up del fix de egress. El logo se
+> sube al bucket público `logos-empresa` (servido por CDN) y solo se persiste la URL (~100 bytes)
+> en `configuracion.logo_base64`, no el base64. Verificado de punta a punta contra el stack local.
+> Hallazgo: la policy de INSERT/UPDATE no alcanza sin una policy de SELECT también (la Storage API
+> usa `RETURNING *`). **Pendiente que corra Luciano/Nadia:** `scripts/migrar_logo_a_storage.mjs`
+> con la `SUPABASE_SERVICE_ROLE_KEY` para migrar el logo base64 que ya tiene Nalux cargado (hasta
+> que se corra, el logo viejo se sigue viendo por el fallback a base64).
+>
+> **Pendiente para Nadia (mañana) — 3 puntos del sometimiento a estrés que quedaron sin cubrir**
+> (ver `loadtest/REPORTE.md` → "Lo que falta"): (a) confirmar el techo de `max_connections` contra
+> un entorno con pooling real (Supavisor), no solo el local de 100; (b) Escenario D con imputación
+> a la MISMA factura (lock de `comprobantes.total`) — requiere extender el seed para generar
+> facturas con `cliente_id` real; (c) escalar más allá de 131 empresas / 50 browsers (requiere
+> browsers en la nube). Ninguno es urgente ni bloquea nada.
+
+---
+
 
 > 🔴→✅ **Cuota de Supabase superada por EGRESS (6.4 GB / 5 GB en un ciclo) — causa raíz
 > encontrada y corregida, desplegada a producción.**
