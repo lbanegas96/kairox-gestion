@@ -1,5 +1,25 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-20 (Nadia — sesión 79: CI reparado + logo a Storage + Escenario D + cabo suelto de 9 tablas + check de drift de edge functions)
+**Última actualización:** 2026-07-20 (Nadia — sesión 79: + hardening de `crear_venta` — migration 224, repo-only)
+
+> 🟡 **Migration 224 — `crear_venta` deja de confiar en `p_user_id` (repo-only, sin aplicar).**
+> Cierre del punto 1 del hardening menor de Caja/POS que quedó dando vueltas desde la sesión 67.
+> Reevalué el otro punto (`contabilizar_movimiento_bancario`/`revertir_contabilizacion_movimiento`
+> "sin `has_module_permission`") y **no hace falta tocarlo**: hoy exigen `is_admin()`, que ya implica
+> `has_module_permission` para cualquier admin (confirmado leyendo la función real) — es una barrera
+> MÁS estricta que la que pedía el hallazgo original, no un gap.
+>
+> El fix real: `crear_venta` usaba el `p_user_id` que manda el cliente tal cual para atribuir 3
+> inserts (`entregas.user_id`, `movimientos_caja.user_id`, `cuenta_corriente_movimientos.user_id`) —
+> falsificable dentro del mismo tenant (un vendedor podría atribuirle la venta a otro empleado). Fix:
+> usar `auth.uid()` (de la sesión JWT real) en esos 3 inserts en vez de `p_user_id`. Se mantiene
+> `p_user_id` en la firma (no se tocó el frontend) — solo se dejó de confiar en su valor. Seguro
+> porque `crear_venta` nunca tiene bypass de `service_role`, así que `auth.uid()` siempre existe.
+>
+> **Verificado con un test funcional real** (no solo lectura de código): usuario A autenticado manda
+> el `p_user_id` de un usuario B distinto — los 3 registros quedaron atribuidos a A (el auth.uid()
+> real), confirmando que el fix cierra el hueco. Corrido con `BEGIN...ROLLBACK` contra prod real.
+>
+> **Para aplicar cuando decidas que sí:** `supabase/migrations/224_crear_venta_no_confiar_en_p_user_id.sql`.
 
 > 🔑 **NADIA/LUCIANO — acción pendiente para activar el nuevo check: agregar el secret
 > `SUPABASE_ACCESS_TOKEN`.** Nuevo workflow `.github/workflows/edge-functions-drift.yml` — ataca la
