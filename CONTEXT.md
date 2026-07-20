@@ -1,5 +1,23 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-20 (Nadia — sesión 79: CI reparado + logo migrado a Storage + código del Escenario D "misma factura" listo)
+**Última actualización:** 2026-07-20 (Nadia — sesión 79: CI reparado + logo migrado a Storage + código del Escenario D + cabo suelto de las 9 tablas CERRADO)
+
+> ✅ **CERRADO — el cabo suelto de "9 tablas duplicadas en `000_schema_base.sql`" que Luciano dejó
+> marcado como 🔴 PENDIENTE IMPORTANTE hace varias sesiones.** El riesgo: `000_schema_base.sql`
+> pre-crea con `IF NOT EXISTS` 9 tablas que su migration "real" también crea — en el replay del CI
+> gana la copia de la 000 en silencio, así que si alguna hubiera divergido, el CI testearía contra
+> un schema que no existe en producción (`ofertas` fue exactamente ese caso, hace unas sesiones).
+>
+> **Verificación de hoy — las 6 que faltaban** (`plan_cuentas`, `pedidos`, `asientos_contables`,
+> `asientos_items`, `pedido_items`, `periodos_contables`): comparé columna por columna Y **constraint
+> por constraint** (CHECK/UNIQUE/FK con su nombre auto-generado, que es donde estaban los 3 bugs
+> reales que ya se encontraron antes en este mismo cabo suelto — `ofertas`, `pedidos`,
+> `tipos_cambio`) contra `information_schema.columns` y `pg_constraint` de producción real.
+> **Resultado: 0 drift. Las 6 están limpias, ni un nombre de constraint distinto.** No hizo falta
+> tocar `000_schema_base.sql` — nada que commitear, el archivo ya estaba bien.
+>
+> Con esto, las **9 de 9 tablas del cabo suelto quedan verificadas** (las otras 3 ya se habían
+> cerrado en sesiones previas: `tipos_cambio` en la 71, `listas_precio`/`lista_precio_items` en el
+> barrido de Ofertas). **No queda ningún hallazgo de este tipo pendiente.**
 
 > 📋 **Los 3 pendientes del sometimiento a estrés que dejó la sesión 78 — estado real (verificado
 > contra prod, no solo leído del reporte):**
