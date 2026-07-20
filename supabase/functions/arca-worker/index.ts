@@ -3,13 +3,21 @@
 //
 // Casos que maneja:
 //   1. ARCA caído (timeout/503) → estado='reintentando', backoff exponencial
-//      [1,5,15,30,60] min, máx 5 intentos → error_definitivo.
+//      [1,5,15,30,60] min, máx 5 intentos. Al agotarlos, ANTES de rendirse a
+//      error_definitivo intenta CAEA como contingencia (ver caso 5).
 //   2. Error de datos (ARCA rechaza dato inválido) → estado='error_datos' directo,
-//      NO reintentar — el usuario debe corregir manualmente.
+//      NO reintentar — el usuario debe corregir manualmente. NUNCA se le aplica
+//      CAEA: CAEA no arregla datos inválidos, autorizar datos malos sería peor.
 //   3. Estado ambiguo (timeout sin respuesta) → consultar getLastVoucherNumber()
 //      ANTES de reintentar — si ARCA ya emitió, sincronizar en vez de reemitir.
 //   4. Numeración desincronizada → SIEMPRE getLastVoucherNumber() para obtener
 //      el próximo número real, nunca usar el contador local.
+//   5. CONTINGENCIA CAEA (mig.225): si tras agotar los 5 reintentos de CAE por
+//      ARCA caído la empresa tiene afip_usa_caea=true y un CAEA vigente para el
+//      tipo de comprobante, se autoriza con CAEA (RPC usar_caea_para_comprobante)
+//      en vez de quedar en error_definitivo esperando que un humano lo destrabe a
+//      mano desde el Monitor. Si no hay CAEA disponible, cae al error_definitivo
+//      normal — comportamiento idéntico al de hoy para quien no usa CAEA.
 //
 // Auth: service_role (adminClient) — no requiere usuario autenticado.
 // Procesa hasta 10 registros por corrida para no exceder el timeout de Edge Function.
@@ -279,9 +287,15 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
         resultados.push({ id: fpa.id, resultado: 'error_datos' });
 
       } else if (intentos >= MAX_INTENTOS) {
-        // Agotados los intentos → error definitivo
-        await marcarErrorDefinitivo(fpa.id, fpa.comprobante_id, errMsg);
-        resultados.push({ id: fpa.id, resultado: 'error_definitivo' });
+        // Agotados los reintentos de CAE con ARCA caído. Antes de rendirse,
+        // intentar CAEA como contingencia (caso 5). Si no aplica, error definitivo.
+        const usoCaea = await intentarCaeaContingencia(fpa);
+        if (usoCaea) {
+          resultados.push({ id: fpa.id, resultado: 'autorizada_caea' });
+        } else {
+          await marcarErrorDefinitivo(fpa.id, fpa.comprobante_id, errMsg);
+          resultados.push({ id: fpa.id, resultado: 'error_definitivo' });
+        }
 
       } else {
         // Caso 1 / 3: transient o ambiguo — reintentar con backoff
@@ -331,4 +345,43 @@ async function marcarErrorDefinitivo(fpaId: string, comprobanteId: string, msg: 
       error_afip:  msg,
     }).eq('id', comprobanteId),
   ]);
+}
+
+// ── Contingencia CAEA (caso 5) ───────────────────────────────────────────────
+// Solo se llama tras agotar los reintentos de CAE por ARCA caído (error
+// transitorio, nunca 'data'). Si la empresa habilitó CAEA y hay un CAEA vigente
+// para el tipo de comprobante, lo autoriza con CAEA vía la RPC
+// usar_caea_para_comprobante (que corre bajo service_role gracias a mig.225) en
+// vez de dejarlo en error_definitivo esperando intervención manual. Devuelve true
+// si autorizó; false si la empresa no usa CAEA, no hay uno vigente, o cualquier
+// otro problema — en cuyo caso el caller cae al error_definitivo normal.
+async function intentarCaeaContingencia(fpa: {
+  id: string; empresa_id: string; comprobante_id: string;
+}): Promise<boolean> {
+  const { data: emp } = await adminClient
+    .from('empresas')
+    .select('afip_usa_caea')
+    .eq('id', fpa.empresa_id)
+    .single();
+
+  if (!emp?.afip_usa_caea) return false;
+
+  // usar_caea_para_comprobante exige cae_estado IN ('error','error_definitivo').
+  // En este punto el comprobante todavía no está marcado — dejarlo en 'error'
+  // antes de intentar. Si CAEA falla, el caller lo pisa con error_definitivo.
+  await adminClient.from('comprobantes')
+    .update({ cae_estado: 'error' })
+    .eq('id', fpa.comprobante_id);
+
+  const { data, error } = await adminClient.rpc('usar_caea_para_comprobante', {
+    p_comprobante_id: fpa.comprobante_id,
+  });
+
+  if (error) {
+    console.warn('[arca-worker] CAEA contingencia no disponible:', error.message);
+    return false;
+  }
+
+  console.log('[arca-worker] Autorizado con CAEA:', JSON.stringify(data));
+  return true;
 }

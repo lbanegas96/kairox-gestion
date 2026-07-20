@@ -1,7 +1,42 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-20 (Nadia — sesión 79: cierre del día — solo queda 1 pendiente, para Luciano)
+**Última actualización:** 2026-07-20 (Nadia — sesión 79: contingencia AFIP/CAEA automática — Pasos 1-2 listos, repo-only)
 
-> 📌 **LUCIANO — el único pendiente que queda de la sesión 79 es tuyo: correr el Escenario D
+> 🟡 **Contingencia AFIP automática (CAEA) — Pasos 1 y 2 escritos, repo-only, SIN aplicar/desplegar.**
+> Objetivo (pedido de Nadia): que si AFIP/ARCA está caído, las facturas no queden trabadas esperando
+> que un humano las destrabe a mano. Análisis completo: se descartó el plan grande de "POS 100%
+> offline" (PowerSync, meses de trabajo) porque el caso real es cortes CORTOS y AFIP caído, no el
+> local sin internet por días. Lo que ya existía cubre justo eso — CAEA — pero era 100% manual.
+>
+> **Qué se hizo esta sesión (2 piezas, ambas repo-only):**
+> - **Migration 225** (`225_caea_rpcs_service_role_bypass.sql`): las 2 RPCs de CAEA
+>   (`usar_caea_para_comprobante` + interna `usar_caea_en_venta`) exigían un usuario humano logueado;
+>   el worker corre como `service_role` sin usuario y no las podía llamar. Se agregó el bypass
+>   `IF auth.role() IS DISTINCT FROM 'service_role'` (mismo patrón que registrar_cobro_cliente).
+>   **Verificado con BEGIN...ROLLBACK**: funciona como service_role sin usuario, Y sigue bloqueando a
+>   un usuario de otra empresa (el camino humano no se debilitó).
+> - **`arca-worker/index.ts`** (edge function): tras agotar los 5 reintentos de CAE por ARCA caído,
+>   antes de rendirse a `error_definitivo` ahora intenta CAEA (nueva helper `intentarCaeaContingencia`)
+>   si la empresa tiene `afip_usa_caea=true` y un CAEA vigente. Si no, cae al error_definitivo de
+>   siempre — comportamiento idéntico para quien no usa CAEA. Solo para errores transitorios, NUNCA
+>   para error de datos (CAEA no arregla datos inválidos).
+>
+> **Por qué NO se aplicó/desplegó nada:** el feature recién "prende" cuando se juntan 5 cosas —
+> (1) mig.225 aplicada, (2) worker desplegado, (3) **un PdV tipo CAEA dado de alta en el portal de
+> AFIP** (trámite administrativo, NO código — AFIP exige que un PdV sea CAE **o** CAEA, nunca ambos;
+> Nalux hoy tiene 1 solo PdV, tipo web/CAE), (4) `afip_usa_caea=true`, (5) un CAEA solicitado. Deben
+> activarse juntas y probarse primero en **homologación de AFIP** (ambiente de test), no de a pedazos.
+>
+> **Pendiente para avanzar (en orden):**
+> 1. **Trámite AFIP (Nadia/contador):** dar de alta un PdV nuevo tipo CAEA en el portal real de AFIP.
+> 2. Probar el flujo completo en homologación de AFIP (necesita ese PdV + credenciales de test).
+> 3. Recién ahí: aplicar mig.225 + desplegar arca-worker + activar `afip_usa_caea` para Nalux.
+>
+> ⚠️ **`CAEA_IMPLEMENTACION.md` está DESACTUALIZADO** — describe una RPC vieja (`usar_caea_en_venta`
+> con 11 args como entrypoint) y una sección "Pendiente" que ya no aplica (la UI CardCAEA ya existe,
+> el pg_cron de vencimiento es la mig.207). El entrypoint real hoy es `usar_caea_para_comprobante`.
+> Limpiar ese doc quedó como tarea menor, no se hizo esta sesión para no mezclar scope.
+
+> 📌 **LUCIANO — pendiente de loadtest, para vos: correr el Escenario D
 > "misma factura".** Nadia no tiene espacio en disco para instalar Docker en su máquina — vos ya
 > tenés el stack local armado (lo usaste en las sesiones 77/78), así que te queda a vos. Comandos
 > exactos en `loadtest/REPORTE.md` → "Nota (sesión 79)":
