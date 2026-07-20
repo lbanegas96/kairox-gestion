@@ -1,5 +1,16 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-20 (Nadia — sesión 79: migration 224 aplicada a producción — hardening de `crear_venta` completo)
+**Última actualización:** 2026-07-20 (Nadia — sesión 79: cierre del día — solo queda 1 pendiente, para Luciano)
+
+> 📌 **LUCIANO — el único pendiente que queda de la sesión 79 es tuyo: correr el Escenario D
+> "misma factura".** Nadia no tiene espacio en disco para instalar Docker en su máquina — vos ya
+> tenés el stack local armado (lo usaste en las sesiones 77/78), así que te queda a vos. Comandos
+> exactos en `loadtest/REPORTE.md` → "Nota (sesión 79)":
+> ```bash
+> npx supabase start
+> EMPRESAS=20 node scripts/loadtest/seed.mjs     # ahora crea 1 factura compartida por empresa
+> MODO=misma_factura MAX_VUS=100 npx k6 run loadtest/k6/escenario-d-cobros-pagos.js
+> ```
+> No es urgente ni bloquea nada — es la última medición que quedaba del sometimiento a estrés.
 
 > ✅ **Migration 224 — `crear_venta` deja de confiar en `p_user_id` — APLICADA A PRODUCCIÓN.**
 > Nadia dio el OK, aplicada vía `apply_migration` del MCP de Supabase. Verificado post-aplicación:
