@@ -1,0 +1,77 @@
+name: Edge Functions Drift Check
+
+# Compara el código de supabase/functions/ del repo contra lo que está REALMENTE
+# desplegado en el proyecto hosted (no lo que el repo dice que debería estar).
+# Ataca la causa raíz de los 2 drifts reales que se encontraron a mano en una
+# auditoría completa de los 14 edge functions (probar-conexion-afip tenía una
+# firma vieja de getLastVoucherNumber rota; generar-csr tenía 2 implementaciones
+# completamente distintas entre repo y producción): alguien hace
+# `supabase functions deploy` (o edita desde el dashboard) sin commitear el mismo
+# código al repo, y el repo queda mintiendo silenciosamente sobre qué corre en
+# producción — sin este check, la única forma de notarlo es una auditoría manual.
+#
+# Corre por `schedule` además de por `push`: el caso real que ataca es un deploy
+# hecho POR FUERA de un push a este repo, así que depender solo de push nunca
+# lo agarraría (ese push no existe).
+#
+# Requiere el secret SUPABASE_ACCESS_TOKEN — el token PERSONAL de la cuenta de
+# Supabase (Dashboard → cuenta → Access Tokens), NO la anon key ni la
+# service_role key. Es el mismo tipo de credencial que usa `supabase login`.
+# Sin ese secret configurado en GitHub (Settings → Secrets and variables →
+# Actions), el job se salta solo con un warning — no rompe el resto del CI.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'supabase/functions/**'
+  schedule:
+    - cron: '0 12 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Chequear que el secret esté configurado
+        id: check-secret
+        run: |
+          if [ -z "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ]; then
+            echo "::warning title=Edge Functions Drift Check::Falta el secret SUPABASE_ACCESS_TOKEN (ver comentario de cabecera de este workflow). Se salta el check."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: supabase/setup-cli@v1
+        if: steps.check-secret.outputs.skip == 'false'
+        with:
+          version: 2.109.1
+
+      - name: Descargar funciones desplegadas y comparar contra el repo
+        if: steps.check-secret.outputs.skip == 'false'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -e
+          # --use-api evita depender de Docker (no hace falta acá, a diferencia
+          # de pgtap-tests.yml que sí necesita levantar el stack completo).
+          supabase functions download --project-ref wuznppxeonmhfcvnqfbf --use-api
+
+          if git diff --quiet -- supabase/functions; then
+            echo "Sin drift: el repo coincide con lo realmente desplegado en producción." >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## 🔴 Drift detectado en edge functions"
+              echo ""
+              echo "El código desplegado en producción difiere del repo. Diff (repo → desplegado):"
+              echo ""
+              echo '```diff'
+              git diff -- supabase/functions
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error title=Drift en edge functions::El código desplegado difiere del repo — ver el Job Summary de esta corrida para el diff completo."
+            exit 1
+          fi

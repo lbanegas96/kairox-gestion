@@ -1,5 +1,22 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-20 (Nadia — sesión 79: CI reparado + logo migrado a Storage + código del Escenario D + cabo suelto de las 9 tablas CERRADO)
+**Última actualización:** 2026-07-20 (Nadia — sesión 79: CI reparado + logo a Storage + Escenario D + cabo suelto de 9 tablas + check de drift de edge functions)
+
+> 🔑 **NADIA/LUCIANO — acción pendiente para activar el nuevo check: agregar el secret
+> `SUPABASE_ACCESS_TOKEN`.** Nuevo workflow `.github/workflows/edge-functions-drift.yml` — ataca la
+> causa raíz de los 2 drifts reales de edge functions que se encontraron a mano (sesión ~66):
+> descarga lo que está REALMENTE desplegado en producción y lo compara con `git diff` contra
+> `supabase/functions/` del repo. Corre en cada push a esa carpeta + 1 vez por día (el caso real que
+> ataca es un deploy manual hecho FUERA de un push a este repo, así que solo `push` nunca lo
+> agarraría). **Hoy se salta solo con un warning** — no rompe nada — porque le falta el secret:
+> 1. Dashboard de Supabase → ícono de cuenta (arriba a la derecha) → **Access Tokens** → generar uno
+>    nuevo (no es la anon/service_role key del proyecto, es un token personal de la cuenta).
+> 2. GitHub → este repo → **Settings → Secrets and variables → Actions → New repository secret** →
+>    nombre `SUPABASE_ACCESS_TOKEN`, valor el token generado.
+> 3. Listo — la próxima corrida (push a `supabase/functions/**`, el cron diario, o "Run workflow" a
+>    mano) ya compara de verdad. No se pudo verificar el comando exacto contra el proyecto real esta
+>    sesión (no hay ese token acá, y no corresponde pedirlo) — si la primera corrida real tira ruido
+>    (diffs falsos por formato de bundling, no por código real), es un ajuste chico, mismo patrón
+>    iterativo que se usó para poner verde `pgtap-tests.yml`.
 
 > ✅ **CERRADO — el cabo suelto de "9 tablas duplicadas en `000_schema_base.sql`" que Luciano dejó
 > marcado como 🔴 PENDIENTE IMPORTANTE hace varias sesiones.** El riesgo: `000_schema_base.sql`
