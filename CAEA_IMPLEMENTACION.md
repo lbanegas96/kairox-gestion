@@ -32,9 +32,8 @@ El **Código de Autorización Electrónica Anticipado (CAEA)** permite emitir fa
 │  ConfiguracionSection                                           │
 │  └── "Solicitar CAEA" → POST /solicitar-caea                   │
 │                                                                 │
-│  POS (offline)                                                  │
-│  └── "¿Hay CAEA?" → POST /verificar-caea-vigente              │
-│  └── Venta offline → RPC usar_caea_en_venta                   │
+│  Monitor de Facturación AFIP (comprobante en error/error_definitivo)         │
+│  └── "Usar CAEA" → RPC usar_caea_para_comprobante                          │
 │                                                                 │
 │  ConfiguracionSection                                           │
 │  └── "Informar quincena" → POST /informar-caea                 │
@@ -44,6 +43,18 @@ El **Código de Autorización Electrónica Anticipado (CAEA)** permite emitir fa
    AFIP FECAEASolicitar   DB only (offline)   AFIP FECAEAInformarComprobante
                                               AFIP FECAEASinMovimiento
 ```
+
+**Entrypoint real (no `usar_caea_en_venta` directo):** el humano usa
+`usar_caea_para_comprobante(p_comprobante_id)` desde el Monitor de Facturación
+AFIP — resuelve internamente el CAEA vigente, el tipo/doc del cliente y el
+próximo número, y recién ahí llama a `usar_caea_en_venta` con los 11
+parámetros. Desde la sesión 79 (migration 225), `usar_caea_para_comprobante`
+también puede correr como `service_role` sin usuario logueado — la usa el
+`arca-worker` (edge function, cron) para autorizar con CAEA automáticamente
+cuando ARCA está caído y se agotaron los reintentos de CAE, en vez de dejar
+el comprobante trabado en `error_definitivo` (ver `arca-worker/index.ts`,
+función `intentarCaeaContingencia`). **Repo-only, sin desplegar todavía** —
+falta el trámite de un PdV tipo CAEA en AFIP (ver `CONTEXT.md`).
 
 ---
 
@@ -133,22 +144,22 @@ Cola de comprobantes offline pendientes de informar a AFIP.
 }
 ```
 
-### RPC `usar_caea_en_venta`
+### RPC `usar_caea_para_comprobante` (entrypoint real)
+Único parámetro: el comprobante debe estar en `cae_estado IN ('error', 'error_definitivo')`.
+Resuelve solo el CAEA vigente para el tipo de comprobante, el doc_tipo/doc_nro
+del cliente y el próximo número correlativo, y llama a `usar_caea_en_venta`
+(interna, no se invoca directo desde afuera salvo por tests).
+
 ```sql
-SELECT usar_caea_en_venta(
-  p_empresa_id       := 'uuid',
-  p_comprobante_id   := 'uuid',
-  p_caea_registro_id := 'uuid',
-  p_tipo_cbte        := 11,        -- 11 = Factura C
-  p_nro_cbte         := 42,
-  p_fecha_cbte       := '2026-07-03',
-  p_doc_tipo         := 99,        -- 99 = Consumidor Final
-  p_doc_nro          := '0',
-  p_imp_total        := 1210.00,
-  p_imp_neto         := 1000.00,
-  p_imp_iva          := 210.00
-);
+SELECT usar_caea_para_comprobante(p_comprobante_id := 'uuid');
+-- Response: { "caea": "...", "nro_cbte": 42, "fecha_hasta": "2026-07-15" }
 ```
+
+Llamable por (a) un usuario humano autenticado con permiso de módulo `ventas`
+sobre un comprobante de su propia empresa (desde `MonitorFacturacionAFIP.jsx`),
+o (b) `service_role` sin usuario (el `arca-worker`, migration 225) — en ese
+caso el chequeo de tenant/permiso se saltea porque no hay JWT de usuario que
+verificar, no porque se haya debilitado para nadie más.
 
 ---
 
@@ -197,22 +208,19 @@ curl -X POST https://wuznppxeonmhfcvnqfbf.supabase.co/functions/v1/verificar-cae
   -d '{"empresa_id": "<uuid>"}'
 ```
 
-#### 4. Registrar una venta offline con CAEA
-Primero crear el comprobante normalmente (crear_venta), luego vincularlo al CAEA:
+#### 4. Autorizar con CAEA un comprobante trabado
+El comprobante debe existir ya (creado por `crear_venta`, normalmente con
+`cae_estado IN ('error', 'error_definitivo')` tras un fallo real o simulado de
+ARCA). Vía el entrypoint real:
 
 ```sql
--- El comprobante queda en cae_estado='pendiente_caea' y modo_autorizacion='CAEA'
-SELECT usar_caea_en_venta(
-  '<empresa_id>',
-  '<comprobante_id>',   -- id del comprobante creado por crear_venta
-  '<caea_registro_id>', -- id del caea_registros vigente
-  11,       -- tipo C
-  1,        -- número correlativo
-  CURRENT_DATE,
-  99, '0',  -- consumidor final
-  100.00, 82.64, 17.36
-);
+-- Deja el comprobante en modo_autorizacion='CAEA', cae_estado='no_aplica'
+SELECT usar_caea_para_comprobante(p_comprobante_id := '<comprobante_id>');
 ```
+
+Manualmente esto es el botón "Usar CAEA" en `MonitorFacturacionAFIP.jsx`. De
+forma automática (repo-only, sin desplegar — ver arriba) lo hace el
+`arca-worker` como `service_role` cuando se agotan los reintentos de CAE.
 
 #### 5. Informar la quincena
 ```bash
@@ -266,19 +274,21 @@ caea_registros.estado = 'activo'
 
 ---
 
-## Pendiente (no implementado — frontend)
+## Estado real de cada pieza (actualizado sesión 79)
 
-- UI en `ConfiguracionSection` tab Facturación: card "CAEA Vigente" con botón "Solicitar" y "Informar"
-- Lógica en `useConfirmarVenta` / `NuevaVentaModal` para usar CAEA cuando AFIP no responde
-- Alerta proactiva cuando la quincena está por vencer y hay comprobantes sin informar
-- Job pg_cron para marcar CAEAs como `vencido` automáticamente al pasar `fecha_hasta`
+- ✅ UI en `ConfiguracionSection` → tab Facturación: `CardCAEA.jsx` — "Solicitar" e "Informar" ya implementados.
+- ✅ Uso manual desde `MonitorFacturacionAFIP.jsx` — botón "Usar CAEA" sobre un comprobante trabado (llama `usar_caea_para_comprobante`).
+- ✅ Job pg_cron para marcar CAEAs como `vencido` al pasar `fecha_hasta` — migration `207_caea_cron_vencimiento.sql`.
+- 🟡 Contingencia automática en el `arca-worker` (sin intervención humana) — código listo (migration 225 + `intentarCaeaContingencia`), **repo-only, sin desplegar**: falta el trámite de PdV tipo CAEA en AFIP + probar en homologación. Ver `CONTEXT.md`.
+- ❌ Pendiente real: alerta proactiva cuando la quincena está por vencer y hay comprobantes sin informar (no existe todavía, ni UI ni job).
 
 ---
 
 ## Seguridad
 
-- Todas las funciones requieren `verifyAdmin` (JWT de usuario con role=admin)
+- Las Edge Functions (`solicitar-caea`, `verificar-caea-vigente`, `informar-caea`) requieren `verifyAdmin` (JWT de usuario con role=admin)
 - Las tablas tienen RLS con `get_my_empresa_id()` — aislamiento multi-tenant garantizado
-- `usar_caea_en_venta` es SECURITY DEFINER con guard de tenant explícito
+- `usar_caea_en_venta` / `usar_caea_para_comprobante` son SECURITY DEFINER con guard de tenant explícito (`empresa_id = get_my_empresa_id()` + `has_module_permission('ventas')`)
+- Desde migration 225, ambas aceptan además `service_role` sin usuario (el `arca-worker`) — el guard de tenant/permiso se salta SOLO cuando `auth.role() = 'service_role'`, nunca para un usuario humano; `service_role` solo la tiene el backend, nunca el frontend
 - Los certificados AFIP se leen del vault (`vault_secret_read`) — nunca en columnas plain
-- `REVOKE ALL ON FUNCTION usar_caea_en_venta FROM PUBLIC, anon` — solo `authenticated`
+- `REVOKE ALL ... FROM PUBLIC, anon` — solo `authenticated` (+ `service_role`, que ya bypasea RLS/grants por diseño)
