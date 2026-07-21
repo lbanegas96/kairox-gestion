@@ -1,6 +1,14 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-07-20 (Nadia — barrido general de bugs: base sana, 1 hallazgo de hardening cerrado en prod [mig.226])
 
+> 📌 **LUCIANO — único pendiente real que queda, y es tuyo/de Nadia (no de código): el trámite de
+> AFIP para CAEA.** La contingencia automática de AFIP caído (migration 225 + `arca-worker` v10) está
+> **100% en producción y funcionando** — pero para que sea REAL (no solo posible) hace falta dar de
+> alta un punto de venta nuevo, tipo CAEA, en el portal oficial de AFIP. Nalux hoy tiene un solo PdV
+> (tipo CAE) — AFIP no permite mezclar los dos en el mismo punto de venta. Sin ese trámite, aunque el
+> código esté perfecto, no hay ningún PdV habilitado para usar CAEA de verdad. Detalle completo más
+> abajo, buscar "contingencia CAEA".
+
 > ✅ **Barrido general de bugs (sesión 80) — la base está sana. 1 hallazgo real, ya cerrado en prod.**
 > Método: `get_advisors` de Supabase (seguridad + performance) + 13 chequeos de integridad de datos
 > directos contra producción real.
