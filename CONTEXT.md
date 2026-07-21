@@ -40,13 +40,25 @@
 > un staff real existente de una empresa ya existente → intento de auto-ascenso directo → **sigue
 > bloqueado**, la protección original de la 085 no se debilitó.
 >
-> **Pendiente tuyo (no técnico, no urgente)**: tus 2 empresas de prueba (las que usaste para
-> encontrar el bug) siguen varadas en staff/sin-admin — no las toqué porque no sé cuáles son. Decime
-> los emails/nombres cuando puedas y las dejo arregladas a mano (correrles `create_tenant`), o las
-> borrás vos y las recreás frescas — el signup ya funciona bien.
+> ✅ **Las 2 empresas de prueba, arregladas.** Luciano pasó los emails —
+> `lucianobanegas96@gmail.com` (empresa "CAEA Test") y `mi.negocio029@gmail.com` (empresa "CAEA Test
+> 2") — corridas a mano vía `create_tenant()` (mismo mecanismo que usa el fix en producción), las dos
+> quedaron `role='admin'` de su empresa. Por pedido de Luciano, **"CAEA Test 2" se borró** (empresa +
+> usuario, sin dejar rastro) para no acumular cuentas de prueba sueltas — queda solo **"CAEA Test"**
+> como la empresa aislada para el plan de homologación de abajo.
 >
-> 🟢 **Desbloqueado**: el plan de armar una empresa de prueba aislada para probar CAEA en homologación
-> (ver más abajo) ya puede retomarse — dependía de este fix.
+> **"CAEA Test" configurada** (`afip_ambiente='sandbox'`, `afip_usa_caea=true`) — lista para seguir el
+> plan de CAEA en homologación. **Lo que sigue requiere a Luciano directamente** (no hay más para mí
+> acá sin su participación):
+> 1. Decidir el CUIT a usar (real de Nalux reusado para homologación, o uno propio/genérico —
+>    depende de con qué Clave Fiscal vaya a entrar al portal de AFIP).
+> 2. Loguearse como admin de "CAEA Test" (su contraseña, no la tengo ni la necesito) → Configuración →
+>    Facturación → "Generar CSR" → descargar.
+> 3. Subir el CSR al portal de homologación de AFIP (WSASS), autorizar el servicio WSFE de prueba,
+>    conseguir el `.crt` + un número de PdV para CAEA — esto es 100% externo, con su Clave Fiscal real,
+>    no lo puedo hacer yo.
+> 4. Pegar el `.crt` en la misma pantalla (ya soporta esto — botón "Subir certificado").
+> 5. Pasarme el número de PdV que le asigne AFIP para cargarlo (`afip_pv_numero`).
 
 > 📌 **Pendiente — el trámite de AFIP para CAEA.** La contingencia automática de AFIP caído (migration 225 + `arca-worker` v10) está
 > **100% en producción y funcionando** — pero para que sea REAL (no solo posible) hace falta dar de
