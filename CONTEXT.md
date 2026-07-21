@@ -24,6 +24,16 @@
 > desplegado mientras hay deploys pendientes). Detalle en la cabecera de
 > `.github/workflows/edge-functions-drift.yml`.
 >
+> **Corrida real confirmada VERDE** (workflow_dispatch, commit `d213fdd`). Se leyó el diff completo
+> del Job Summary: **100% ruido esperado, cero drift real** — todas las líneas `+` son (a) copias de
+> `_shared/` bundleadas por función, (b) imports reescritos `../_shared`/`./_shared`, o (c) comentarios
+> condensados en los bundles. Ningún `+` es lógica desplegada que no esté en el repo.
+> 🔧 **Mejora opcional (nice-to-have, no urgente):** el summary es ruidoso por el bundling. Con el
+> layout ya conocido de la corrida real se puede normalizar en el workflow (restaurar el `_shared`
+> top-level con `git checkout`, borrar las copias `_shared` por-función, revertir el `sed` del import)
+> para que solo queden las diferencias reales de entrypoint. Se dejó para una próxima sesión donde se
+> pueda iterar sobre una corrida real — no se hizo a ciegas al cierre.
+>
 > 🟡 **Cabo suelto encontrado de paso (NO urgente, NO tocado — requiere confirmación explícita, es
 > acción fiscal en prod):** 15 facturas quedaron trabadas el **8-jul** por el error 10246 (RG 5616),
 > ANTES de que el fix de `CondicionIVAReceptorId` se desplegara. Se parchearon con
