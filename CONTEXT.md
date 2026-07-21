@@ -1,18 +1,24 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-20 (Nadia — migration 225 APLICADA a producción, contingencia CAEA lista, falta desplegar el worker)
+**Última actualización:** 2026-07-20 (Nadia — contingencia CAEA: código 100% desplegado, solo falta el trámite AFIP)
 
-> ✅ **Migration 225 — APLICADA A PRODUCCIÓN.** Bypass de `service_role` en `usar_caea_en_venta` +
-> `usar_caea_para_comprobante`, vía `apply_migration`. Verificado post-aplicación con
-> `pg_get_functiondef`: las 2 funciones ya tienen el bloque `IF auth.role() IS DISTINCT FROM
-> 'service_role'`. Sin efecto observable todavía (nada llama a estas RPCs como service_role hasta
-> que el `arca-worker` actualizado se despliegue — ver Paso 2 abajo).
+> ✅ **Migration 225 + `arca-worker` v10 — AMBOS APLICADOS/DESPLEGADOS A PRODUCCIÓN.**
+> - Migration 225: bypass de `service_role` en `usar_caea_en_venta` + `usar_caea_para_comprobante`,
+>   verificado post-aplicación con `pg_get_functiondef`.
+> - `arca-worker` versión 10 (ACTIVE): desplegado con `intentarCaeaContingencia`. Verificado
+>   descargando el código realmente desplegado — contiene la función nueva y el caso 5. Verificado
+>   también que la cola (`facturas_pendientes_arca`) hoy no tiene nada en `pendiente`/`reintentando`
+>   (37 `emitida`, 16 `error_definitivo` — estas últimas ya con CAE real, ver hallazgo de más abajo),
+>   así que el código nuevo queda dormido hasta que haga falta de verdad — no se disparó nada.
 >
-> **Sigue pendiente para que la contingencia CAEA quede lista (inactiva hasta el trámite de AFIP):**
-> 1. ~~Aplicar migration 225~~ ✅ hecho.
-> 2. **Desplegar `arca-worker`** (edge function) con el cambio de `intentarCaeaContingencia` — el
->    código ya está en el repo (commit `421b6bd`), solo falta `deploy_edge_function`.
-> 3. Trámite AFIP (Nadia/contador): dar de alta un PdV tipo CAEA — sigue sin hacer, bloquea la
->    activación real aunque el código esté 100% listo.
+> **El código de la contingencia CAEA está 100% completo y en producción.** Lo único que falta para
+> que sea REAL (no solo posible) es el **trámite administrativo con AFIP**:
+> 1. ~~Aplicar migration 225~~ ✅
+> 2. ~~Desplegar `arca-worker`~~ ✅
+> 3. **Trámite AFIP (Nadia/contador):** dar de alta un punto de venta nuevo, tipo CAEA, en el portal
+>    real de AFIP (Nalux hoy tiene 1 solo PdV, tipo web/CAE — AFIP no permite mezclar los dos en el
+>    mismo PdV). Sin esto, `afip_usa_caea=true` + solicitar un CAEA no van a funcionar contra AFIP
+>    real, aunque todo el código ya esté andando.
+> 4. Probar el flujo completo en homologación de AFIP antes de activarlo en producción real.
 
 > ✅ **Pendiente #2 de Luciano ("15 facturas trabadas del 8-jul") — YA ESTABA RESUELTO, verificado
 > con SQL directo contra prod, sin acción tomada.** Luciano se guio por la fila VIEJA de
