@@ -1,5 +1,19 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-20 (Luciano — Escenario D + drift-check cerrados; 3 pendientes pasados a Nadia para mañana)
+**Última actualización:** 2026-07-20 (Nadia — el pendiente #2 de Luciano [15 facturas trabadas] ya estaba resuelto — verificado, sin acción)
+
+> ✅ **Pendiente #2 de Luciano ("15 facturas trabadas del 8-jul") — YA ESTABA RESUELTO, verificado
+> con SQL directo contra prod, sin acción tomada.** Luciano se guio por la fila VIEJA de
+> `facturas_pendientes_arca` (el primer intento, `error_definitivo`, previo al deploy del fix) — pero
+> cada uno de esos comprobantes ya tiene una fila NUEVA y posterior con `estado='emitida'`, y **las 20
+> facturas del rango 3-8/jul ya tienen `cae_estado='emitido'` con `numero_afip` real** (verificado
+> `0001-00000014` a `0001-00000032`). Cero comprobantes con `relevante_fiscal=false` en toda la base
+> (el "revertir" que pedía la nota original ya se había hecho). Chequeo exhaustivo adicional: **cero**
+> comprobantes en TODO el sistema (cualquier empresa, cualquier fecha) con `relevante_fiscal=true` y
+> `cae_estado` fuera de `emitido`/`no_aplica` — no hay ninguna factura trabada, en ningún lado.
+>
+> **No se reencoló nada** — hacerlo hubiera sido contraproducente: reencolar una factura que ya tiene
+> CAE real generaría un rechazo real de AFIP por intento de emisión duplicada. Este pendiente queda
+> **cerrado sin acción**, no aplazado.
 
 > 👩‍💻 **NADIA — para mañana (Luciano te pasa estos 3, en orden de prioridad).** El detalle técnico de
 > cada uno está en los callouts de más abajo; acá va el resumen accionable:
