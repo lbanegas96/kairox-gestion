@@ -65,8 +65,33 @@ export const AuthProvider = ({ children }) => {
       // Registrar último acceso
       supabase.from('profiles').update({ last_login_at: new Date().toISOString() }).eq('id', currentSession.user.id).then(() => {});
 
-      const profileData = await fetchProfile(currentSession.user.id);
-      
+      let profileData = await fetchProfile(currentSession.user.id);
+
+      // Onboarding: el signup público (AuthPage) solo crea el usuario de auth —
+      // guarda `nombre_empresa` en user_metadata pero nada lo consumía nunca para
+      // crear la empresa real (la pantalla OnboardingPage.jsx que llamaba a
+      // create_tenant() nunca se llegó a enlazar en App.jsx). Resultado: el
+      // usuario fundador quedaba con empresa_id=NULL y role='staff' (default de
+      // handle_new_user), sin poder hacer nada. Self-heal acá en vez de en el
+      // signup: cubre tanto sesión inmediata post-signup como el primer login
+      // real si el proyecto tiene confirmación de email activada (en ese caso
+      // signUp() no devuelve sesión, así que no hay otro momento confiable).
+      // create_tenant() es idempotente (si el profile ya tiene empresa_id, no
+      // hace nada), así que repetir el chequeo en cada carga de sesión es seguro.
+      const nombreEmpresaPendiente = currentSession.user?.user_metadata?.nombre_empresa;
+      if (profileData && !profileData.empresa_id && nombreEmpresaPendiente) {
+        const { error: tenantError } = await supabase.rpc('create_tenant', {
+          p_nombre_empresa: nombreEmpresaPendiente,
+          p_first_name: currentSession.user?.user_metadata?.first_name ?? '',
+          p_last_name: currentSession.user?.user_metadata?.last_name ?? '',
+        });
+        if (tenantError) {
+          logger.error('create_tenant error:', tenantError.message);
+        } else {
+          profileData = await fetchProfile(currentSession.user.id);
+        }
+      }
+
       if (profileData && profileData.active === false) {
           await supabase.auth.signOut();
           setUser(null);
