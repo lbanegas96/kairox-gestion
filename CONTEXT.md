@@ -1,8 +1,57 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-20 (Nadia — barrido general de bugs: base sana, 1 hallazgo de hardening cerrado en prod [mig.226])
+**Última actualización:** 2026-07-21 (Luciano — 🔴 BUG CRÍTICO de onboarding encontrado y arreglado, repo-only, esperando tu OK para aplicar/pushear)
 
-> 📌 **LUCIANO — único pendiente real que queda, y es tuyo/de Nadia (no de código): el trámite de
-> AFIP para CAEA.** La contingencia automática de AFIP caído (migration 225 + `arca-worker` v10) está
+> 🔴 **CRÍTICO — el signup público estaba roto de raíz, nunca se había probado de punta a punta.**
+> Luciano detectó que el usuario fundador de una empresa nueva arrancaba como `staff` en vez de
+> `admin` (creó 2 empresas de prueba y le pasó en las dos). Investigado a fondo — son **2 bugs
+> compuestos**, ambos arreglados y verificados con dry-runs `BEGIN...ROLLBACK` contra prod real, pero
+> **NADA aplicado ni pusheado todavía** — necesito tu OK (ver el bloque de decisión más abajo).
+>
+> **Bug 1 — el signup nunca creaba la empresa.** `AuthPage.jsx` → `SupabaseAuthContext.signUp()` solo
+> llama a `supabase.auth.signUp()`, que dispara el trigger `handle_new_user()` y crea un `profiles` con
+> `role='staff'` (default) y `empresa_id=NULL`. El nombre de la empresa queda guardado en
+> `user_metadata.nombre_empresa` pero **nada lo consumía nunca**. Existía una función `create_tenant()`
+> (migration 006, ya asigna `role='admin'` bien) y una pantalla `OnboardingPage.jsx` pensada para
+> llamarla "después del primer login" — pero **`OnboardingPage.jsx` nunca se importó ni se renderizó
+> en `App.jsx`**. Código muerto desde que se escribió, nadie lo notó porque nunca se probó un signup
+> real de punta a punta hasta ahora.
+> **Fix**: moví el auto-provisioning a `SupabaseAuthContext.jsx` → `handleSession` (corre en cada
+> carga de sesión, no depende de una pantalla separada): si el profile no tiene `empresa_id` pero el
+> usuario tiene `nombre_empresa` pendiente en su metadata, llama a `create_tenant()` ahí mismo. Cubre
+> tanto la sesión inmediata post-signup como el primer login real si el proyecto tuviera confirmación
+> de email activada. Es idempotente (repetirlo en cada carga es seguro).
+>
+> **Bug 2 — al arreglar el llamado, `create_tenant()` fallaba igual.** Primera vez que se ejercitó esta
+> ruta de verdad: `create_tenant()` explota con *"No autorizado: el cambio de role requiere permisos de
+> admin"*. Causa: el trigger `fn_protect_profile_role` (migration 085 — cierre real de una escalación
+> de privilegios, un staff podía auto-ascenderse a admin con un UPDATE directo) no contemplaba el caso
+> legítimo de un usuario **sin empresa** auto-promoviéndose a admin de la empresa que está creando en
+> ese mismo momento.
+> **Fix (migration 228)**: agregué una 4ta condición acotada al trigger — permite el auto-ascenso a
+> `admin` SOLO si la fila no tenía empresa antes (`OLD.empresa_id IS NULL`) y tiene una después. **No
+> reabre el hueco de la 085**: el `WITH CHECK` de la policy `profiles_update` (migration 158) ya exige
+> que un self-update vía REST directo mantenga el role sin cambios — este camino nuevo del trigger es
+> inalcanzable por ahí, solo lo usa `create_tenant()` (que además tiene su propio guard: si el caller
+> ya tiene empresa, no toca la fila). Verificado con 2 dry-runs reales: (a) el usuario de prueba
+> varado en staff/sin-empresa → `create_tenant()` corre limpio → queda admin de su empresa nueva; (b)
+> un staff real existente de una empresa ya existente → intento de auto-ascenso directo → **sigue
+> bloqueado**, la protección original de la 085 no se debilitó.
+>
+> **Decisión que necesito de vos**: ¿aplico la migration 228 + pusheo los 2 commits (`212fcce` la
+> migration 227 de CAEA que ya habías confirmado, y `96cdca2` este fix de onboarding)? Sin esto, **todo
+> signup nuevo sigue roto en producción** — Nalux no se ve afectada (ya tiene su empresa hace rato),
+> pero cualquier cliente nuevo que se registre hoy queda varado igual que tus 2 pruebas.
+>
+> **Nota**: tus 2 empresas de prueba (las que usaste para encontrar el bug) siguen ahí, varadas en
+> staff/sin-admin — no las toqué porque no sé cuáles son. Decime los emails/nombres y las dejo
+> arregladas manualmente (correrles `create_tenant` a mano) en el mismo momento en que aplique la
+> migration, o si preferís las borrás vos y las recreás frescas una vez que esto esté en producción.
+>
+> 🟡 **Pendiente relacionado, bloqueado hasta que esto se resuelva**: el plan de armar una empresa de
+> prueba aislada para probar CAEA en homologación (ver más abajo) necesitaba el signup público
+> funcionando — quedó en pausa por este hallazgo. Retomarlo apenas el fix de onboarding esté en prod.
+
+> 📌 **Pendiente — el trámite de AFIP para CAEA.** La contingencia automática de AFIP caído (migration 225 + `arca-worker` v10) está
 > **100% en producción y funcionando** — pero para que sea REAL (no solo posible) hace falta dar de
 > alta un punto de venta nuevo, tipo CAEA, en el portal oficial de AFIP. Nalux hoy tiene un solo PdV
 > (tipo CAE) — AFIP no permite mezclar los dos en el mismo punto de venta. Sin ese trámite, aunque el
