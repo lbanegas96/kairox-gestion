@@ -44,14 +44,16 @@
 > comillas simples y dobles): las copias se borran, el `_shared/` de nivel superior queda intacto, y
 > el import vuelve exacto a como está en el repo en ambos casos.
 >
-> **No pude correrlo contra una corrida real** (no tengo el `SUPABASE_ACCESS_TOKEN`, ni `gh` CLI para
-> disparar `workflow_dispatch` desde acá) — se valida solo en el próximo cron diario o cuando alguien
-> lo corra a mano desde Actions → "Edge Functions Drift Check" → Run workflow. Si el formato de
-> bundling de Supabase cambió desde la última corrida real, puede necesitar un ajuste — la cabecera
-> del workflow ya deja anotado que ese es el primer lugar para mirar si vuelve a aparecer ruido.
+> ✅ **CONFIRMADO contra una corrida real (2026-07-21, Luciano) — la normalización funciona.**
+> `workflow_dispatch` manual, run #5, verde. El diff que quedó es **100% comentarios/formato
+> condensados durante el bundling** (emitir-cae, generar-csr, informar-caea, solicitar-caea,
+> verificar-caea-vigente, mp-webhook) — **cero cambio de lógica, cero `_shared/*` en el diff** (antes
+> era el 90% del ruido; ahora coincide byte a byte con el repo, confirma que la normalización limpia
+> bien las copias anidadas). `arca-worker` tampoco aparece — coincide exacto ahora que v10 ya está
+> desplegado. El check queda validado de punta a punta.
 >
 > **Con esto, los 3 pendientes que dejó Luciano quedan cerrados: CAEA aplicada/desplegada, las 15
-> facturas ya estaban resueltas, y el drift-check normalizado.**
+> facturas ya estaban resueltas, y el drift-check normalizado y validado contra una corrida real.**
 
 > ✅ **Migration 225 + `arca-worker` v10 — AMBOS APLICADOS/DESPLEGADOS A PRODUCCIÓN.**
 > - Migration 225: bypass de `service_role` en `usar_caea_en_venta` + `usar_caea_para_comprobante`,
