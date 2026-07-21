@@ -1,5 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-20 (Nadia — 3/3 pendientes de Luciano cerrados; ruido del drift-check normalizado)
+**Última actualización:** 2026-07-20 (Nadia — barrido general de bugs: base sana, 1 hallazgo de hardening cerrado en prod [mig.226])
+
+> ✅ **Barrido general de bugs (sesión 80) — la base está sana. 1 hallazgo real, ya cerrado en prod.**
+> Método: `get_advisors` de Supabase (seguridad + performance) + 13 chequeos de integridad de datos
+> directos contra producción real.
+>
+> **Integridad de datos: 13/13 chequeos en CERO.** Asientos contables balancean (cabecera Y items,
+> debe=haber), sin `confirmado_sin_items`, sin stock negativo, sin numeración duplicada
+> (comprobantes/asientos), sin comprobantes fiscales atascados, sin sobre-imputación (cliente ni
+> proveedor), y **cero cruces cross-tenant** en asientos_items, cuenta_corriente_movimientos,
+> cuenta_corriente_proveedores, cheques (cliente y proveedor), movimientos_bancarios,
+> comprobante_items — el aislamiento multi-tenant se sostiene en los datos reales, no solo en las
+> policies. Sin registros huérfanos (comprobante_sin_empresa, asiento_origen_huerfano).
+>
+> **Advisors de seguridad: 0 de nivel ERROR.** El único hallazgo accionable:
+> ✅ **Migration 226 — APLICADA A PRODUCCIÓN.** 3 RPCs de dinero (`registrar_cobro_cliente`,
+> `registrar_pago_proveedor`, `acreditar_movimiento_caja`) habían recuperado el grant de EXECUTE a
+> `anon` al recrearse con firma nueva (mig.215/216) — el REVOKE de mig.192/194 dejó de aplicar por el
+> cambio de firma. NO explotable (las 3 tienen guard `auth.role()`/`get_my_empresa_id()` que aborta
+> para anon), era hardening/consistencia. Revocado + re-grant a authenticated/service_role.
+> Verificado post-aplicación: anon=false, authenticated=true, service_role=true en las 3. Scan
+> confirmatorio: no hay OTRAS funciones SECURITY DEFINER con grant a anon fuera de estas 3 +
+> `email_exists_in_system` (esta última intencional — la usa el signup sin sesión).
+>
+> **Advisors menores NO tocados (conocidos/aceptados, no bugs):** bucket público `logos-empresa`
+> permite listar archivos (logos no sensibles, riesgo bajo); `pg_net` en schema public (decisión ya
+> tomada en sesión 68: no relocalizable, no vale el riesgo); Leaked Password Protection (decisión de
+> negocio, requiere plan Pro).
 
 > ✅ **Drift-check de edge functions — ruido de empaquetado normalizado (repo-only, sin correr todavía
 > contra una corrida real).** Punto 3 (opcional) que dejó Luciano. Agregado al workflow un paso que,
