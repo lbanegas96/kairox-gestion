@@ -1,5 +1,22 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-20 (Nadia — contingencia CAEA: código 100% desplegado, solo falta el trámite AFIP)
+**Última actualización:** 2026-07-20 (Nadia — 3/3 pendientes de Luciano cerrados; ruido del drift-check normalizado)
+
+> ✅ **Drift-check de edge functions — ruido de empaquetado normalizado (repo-only, sin correr todavía
+> contra una corrida real).** Punto 3 (opcional) que dejó Luciano. Agregado al workflow un paso que,
+> después de `functions download`, borra las copias anidadas de `_shared/` que Supabase mete dentro
+> de cada función y revierte el import reescrito `./_shared` → `../_shared` — antes de hacer el diff.
+> **Verificado con una simulación local** del patrón de bundling real (copias anidadas + import con
+> comillas simples y dobles): las copias se borran, el `_shared/` de nivel superior queda intacto, y
+> el import vuelve exacto a como está en el repo en ambos casos.
+>
+> **No pude correrlo contra una corrida real** (no tengo el `SUPABASE_ACCESS_TOKEN`, ni `gh` CLI para
+> disparar `workflow_dispatch` desde acá) — se valida solo en el próximo cron diario o cuando alguien
+> lo corra a mano desde Actions → "Edge Functions Drift Check" → Run workflow. Si el formato de
+> bundling de Supabase cambió desde la última corrida real, puede necesitar un ajuste — la cabecera
+> del workflow ya deja anotado que ese es el primer lugar para mirar si vuelve a aparecer ruido.
+>
+> **Con esto, los 3 pendientes que dejó Luciano quedan cerrados: CAEA aplicada/desplegada, las 15
+> facturas ya estaban resueltas, y el drift-check normalizado.**
 
 > ✅ **Migration 225 + `arca-worker` v10 — AMBOS APLICADOS/DESPLEGADOS A PRODUCCIÓN.**
 > - Migration 225: bypass de `service_role` en `usar_caea_en_venta` + `usar_caea_para_comprobante`,

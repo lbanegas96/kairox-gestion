@@ -13,13 +13,16 @@ name: Edge Functions Drift Check
 #   1. Ruido de empaquetado: `supabase functions download` bundlea una copia de
 #      _shared/ dentro de CADA función (congelada a su último deploy) y reescribe
 #      los imports (../_shared → ./_shared). Un `git diff` crudo mezcla ese ruido
-#      con drift real. (Fue justo lo que pasó la primera corrida real: el diff
-#      salió gigante y casi todo era bundling + un deploy pendiente, no bugs.)
+#      con drift real (pasó justo eso en la primera corrida real: diff gigante,
+#      100% bundling + un deploy pendiente, cero bugs). El paso de abajo
+#      NORMALIZA esto automáticamente (borra las copias anidadas de _shared/ y
+#      revierte el rewrite de imports) antes de comparar — si Supabase cambia el
+#      formato de bundling en el futuro y esto deja de alcanzar, va a volver a
+#      aparecer ruido en el diff; ese es el primer lugar para mirar.
 #   2. Flujo repo-first de KAIROX: se commitea el código y se despliega DESPUÉS,
 #      tras aprobación (política repo-only del proyecto). Por eso es NORMAL y
 #      esperado que el repo esté ADELANTE de lo desplegado en funciones con un
-#      deploy pendiente (p. ej. hoy `arca-worker`, con la contingencia CAEA
-#      commiteada pero a propósito sin desplegar).
+#      deploy pendiente — un `-` en el diff no es alarma por sí solo.
 #
 # La señal de alarma REAL es la INVERSA: contenido DESPLEGADO que no está en el
 # repo. En el diff de abajo (repo → desplegado) eso aparece como líneas `+`.
@@ -81,6 +84,18 @@ jobs:
             exit 0
           fi
 
+          # ── Normalizar ruido de empaquetado (ver cabecera del workflow) ───────
+          # `functions download` bundlea una copia congelada de _shared/ DENTRO de
+          # cada función que lo importa (nunca así en el repo, donde vive una sola
+          # vez en supabase/functions/_shared/) y reescribe el import relativo
+          # ../_shared → ./_shared en el index.ts descargado. Sin esto, el diff
+          # marca "archivo nuevo" por cada copia anidada + una línea reescrita por
+          # cada import — 100% ruido, nunca drift real.
+          git checkout -- supabase/functions/_shared 2>/dev/null || true
+          find supabase/functions -mindepth 2 -maxdepth 2 -type d -name '_shared' -exec rm -rf {} +
+          grep -rlZE "['\"]\./_shared/" supabase/functions --include='*.ts' 2>/dev/null \
+            | xargs -0 -r sed -i -E "s|(['\"])\./_shared/|\1../_shared/|g"
+
           # `git add -A` para que el diff incluya también funciones DESPLEGADAS que
           # no existan en el repo (aparecerían como archivos nuevos = alarma real).
           git add -A -- supabase/functions
@@ -95,14 +110,14 @@ jobs:
             echo ""
             echo "**Cómo leer esto** (ver también la cabecera del workflow):"
             echo ""
-            echo "- Diff en dirección **repo → desplegado**."
-            echo "- Líneas \`-\` = está en el repo pero no en lo desplegado. Esperado:"
-            echo "  deploy pendiente (repo-first) o comentarios que el bundling saca. **No es alarma.**"
+            echo "- Diff en dirección **repo → desplegado**. El ruido de empaquetado conocido"
+            echo "  (copias anidadas de \`_shared/\`, import reescrito \`./_shared\`) ya se normaliza"
+            echo "  antes de este diff — si ves algo abajo, probablemente sea real."
+            echo "- Líneas \`-\` = está en el repo pero no en lo desplegado. Esperado si hay un"
+            echo "  deploy pendiente (repo-first) — **no es alarma por sí sola.**"
             echo "- Líneas \`+\` = está DESPLEGADO pero no en el repo. **Esto sí hay que mirarlo:**"
-            echo "  puede indicar un deploy hecho a mano sin commitear (o, más probable, ruido de"
-            echo "  empaquetado como el import reescrito \`./_shared\` → revisar antes de asumir lo peor)."
-            echo ""
-            echo "Deploys pendientes conocidos hoy (repo adelante, esperado): \`arca-worker\` (contingencia CAEA sin desplegar)."
+            echo "  puede indicar un deploy hecho a mano sin commitear, o un caso de bundling que"
+            echo "  la normalización de arriba no cubrió — revisar antes de asumir lo peor."
             echo ""
             echo '```diff'
             git diff --cached -- supabase/functions
