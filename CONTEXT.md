@@ -1,11 +1,14 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-21 (Luciano — 🔴 BUG CRÍTICO de onboarding encontrado y arreglado, repo-only, esperando tu OK para aplicar/pushear)
+**Última actualización:** 2026-07-21 (Luciano — ✅ BUG CRÍTICO de onboarding CERRADO: aplicado, pusheado y verificado en vivo con un signup real)
 
-> 🔴 **CRÍTICO — el signup público estaba roto de raíz, nunca se había probado de punta a punta.**
+> ✅ **CERRADO — el signup público estaba roto de raíz (nunca se había probado de punta a punta), ya
+> arreglado, desplegado y verificado con un signup real end-to-end.**
 > Luciano detectó que el usuario fundador de una empresa nueva arrancaba como `staff` en vez de
-> `admin` (creó 2 empresas de prueba y le pasó en las dos). Investigado a fondo — son **2 bugs
-> compuestos**, ambos arreglados y verificados con dry-runs `BEGIN...ROLLBACK` contra prod real, pero
-> **NADA aplicado ni pusheado todavía** — necesito tu OK (ver el bloque de decisión más abajo).
+> `admin` (creó 2 empresas de prueba y le pasó en las dos). Eran **2 bugs compuestos** — ver detalle
+> abajo. Migration 228 aplicada a producción, commits `96cdca2`/`5c52ba4` pusheados. **Verificado con
+> un signup real por UI contra producción** (no solo dry-run): usuario nuevo → `role='admin'`,
+> `empresa_id` asignado, empresa creada con el nombre correcto, dashboard cargó normal con el
+> checklist de "Configuración inicial" — datos de prueba borrados después, sin dejar rastro.
 >
 > **Bug 1 — el signup nunca creaba la empresa.** `AuthPage.jsx` → `SupabaseAuthContext.signUp()` solo
 > llama a `supabase.auth.signUp()`, que dispara el trigger `handle_new_user()` y crea un `profiles` con
@@ -37,19 +40,13 @@
 > un staff real existente de una empresa ya existente → intento de auto-ascenso directo → **sigue
 > bloqueado**, la protección original de la 085 no se debilitó.
 >
-> **Decisión que necesito de vos**: ¿aplico la migration 228 + pusheo los 2 commits (`212fcce` la
-> migration 227 de CAEA que ya habías confirmado, y `96cdca2` este fix de onboarding)? Sin esto, **todo
-> signup nuevo sigue roto en producción** — Nalux no se ve afectada (ya tiene su empresa hace rato),
-> pero cualquier cliente nuevo que se registre hoy queda varado igual que tus 2 pruebas.
+> **Pendiente tuyo (no técnico, no urgente)**: tus 2 empresas de prueba (las que usaste para
+> encontrar el bug) siguen varadas en staff/sin-admin — no las toqué porque no sé cuáles son. Decime
+> los emails/nombres cuando puedas y las dejo arregladas a mano (correrles `create_tenant`), o las
+> borrás vos y las recreás frescas — el signup ya funciona bien.
 >
-> **Nota**: tus 2 empresas de prueba (las que usaste para encontrar el bug) siguen ahí, varadas en
-> staff/sin-admin — no las toqué porque no sé cuáles son. Decime los emails/nombres y las dejo
-> arregladas manualmente (correrles `create_tenant` a mano) en el mismo momento en que aplique la
-> migration, o si preferís las borrás vos y las recreás frescas una vez que esto esté en producción.
->
-> 🟡 **Pendiente relacionado, bloqueado hasta que esto se resuelva**: el plan de armar una empresa de
-> prueba aislada para probar CAEA en homologación (ver más abajo) necesitaba el signup público
-> funcionando — quedó en pausa por este hallazgo. Retomarlo apenas el fix de onboarding esté en prod.
+> 🟢 **Desbloqueado**: el plan de armar una empresa de prueba aislada para probar CAEA en homologación
+> (ver más abajo) ya puede retomarse — dependía de este fix.
 
 > 📌 **Pendiente — el trámite de AFIP para CAEA.** La contingencia automática de AFIP caído (migration 225 + `arca-worker` v10) está
 > **100% en producción y funcionando** — pero para que sea REAL (no solo posible) hace falta dar de
