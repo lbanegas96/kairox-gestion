@@ -1,5 +1,18 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-20 (Nadia — el pendiente #2 de Luciano [15 facturas trabadas] ya estaba resuelto — verificado, sin acción)
+**Última actualización:** 2026-07-20 (Nadia — migration 225 APLICADA a producción, contingencia CAEA lista, falta desplegar el worker)
+
+> ✅ **Migration 225 — APLICADA A PRODUCCIÓN.** Bypass de `service_role` en `usar_caea_en_venta` +
+> `usar_caea_para_comprobante`, vía `apply_migration`. Verificado post-aplicación con
+> `pg_get_functiondef`: las 2 funciones ya tienen el bloque `IF auth.role() IS DISTINCT FROM
+> 'service_role'`. Sin efecto observable todavía (nada llama a estas RPCs como service_role hasta
+> que el `arca-worker` actualizado se despliegue — ver Paso 2 abajo).
+>
+> **Sigue pendiente para que la contingencia CAEA quede lista (inactiva hasta el trámite de AFIP):**
+> 1. ~~Aplicar migration 225~~ ✅ hecho.
+> 2. **Desplegar `arca-worker`** (edge function) con el cambio de `intentarCaeaContingencia` — el
+>    código ya está en el repo (commit `421b6bd`), solo falta `deploy_edge_function`.
+> 3. Trámite AFIP (Nadia/contador): dar de alta un PdV tipo CAEA — sigue sin hacer, bloquea la
+>    activación real aunque el código esté 100% listo.
 
 > ✅ **Pendiente #2 de Luciano ("15 facturas trabadas del 8-jul") — YA ESTABA RESUELTO, verificado
 > con SQL directo contra prod, sin acción tomada.** Luciano se guio por la fila VIEJA de
