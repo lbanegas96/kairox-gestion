@@ -90,6 +90,26 @@ el lock tan poco tiempo que el muestreo puntual casi nunca lo agarra en el acto.
 confirmar contención de locks real y visible; la señal de latencia agregada es la evidencia que
 queda.
 
+### Repetido con `max_connections=300` local (2026-07-20, Luciano) — confirma la causa raíz
+
+Para aislar de verdad la variable (sin depender de un ambiente hosted), se subió `max_connections`
+del Postgres local de 100 a 300 (edit directo a `postgresql.conf` dentro del contenedor + restart —
+cambio de infraestructura de desarrollo únicamente, no toca ninguna migration ni el proyecto hosted)
+y se repitió Escenario B `MODO=mismo_producto` hasta **300 VUs** sobre la misma empresa/producto:
+
+| Corrida | `max_connections` | VUs | Resultado |
+|---|---|---|---|
+| Original (sesión 77) | 100 | 300-500 | mayoría `EOF`, techo ~100-200 VUs |
+| Repetida (sesión 79→80) | **300** | 300 | **10.487 ventas, 4.85% error — errores concentrados casi todos en los últimos ~15-20 VUs de la rampa (297-300) y en el ramp-down**, el resto (hasta ~280 VUs) limpio |
+
+El techo de errores se corrió en proporción directa al `max_connections` subido (~100-200 → ~280-300)
+— confirma que la causa real es el límite de conexiones del Postgres local, no el lock de
+`series_numeracion`/`stock_actual` (que ya se había descartado). **Esto no confirma el comportamiento
+contra un proyecto hosted con pooling real (Supavisor)** — el pooler multiplexa muchas conexiones de
+cliente sobre menos conexiones reales a Postgres, un mecanismo distinto a simplemente subir
+`max_connections` — pero sí refuerza que el techo es de infraestructura de desarrollo, no
+arquitectónico de KAIROX: el propósito completo de Supavisor es absorber justo este tipo de límite.
+
 ## Escenario C — dashboard/lectura
 
 90 sesiones concurrentes simulando el Dashboard completo (9 queries paralelas + 6 secuenciales de
@@ -155,8 +175,8 @@ Con esto, el punto 2 de "Lo que falta probar" (Escenario D con imputación a la 
 
 | Qué | Por qué no se hizo | Prioridad |
 |---|---|---|
-| Confirmar si el límite de conexiones aplica igual contra un proyecto hosted con pooling (Supavisor) | Requeriría un branch de Supabase Cloud o subir `max_connections` localmente y re-correr | Alta — es la pregunta que queda abierta sobre el "techo real" |
-| Aislar contención de locks real (subir `max_connections` local y repetir Escenario B a 300-500 VUs, sin el ruido de conexión agotada) | Quedó pendiente por tiempo — es un cambio de una línea en `postgresql.conf` del stack local | Media |
+| Confirmar si el límite de conexiones aplica igual contra un proyecto hosted con pooling (Supavisor) | Requeriría un branch de Supabase Cloud — no vale la pena correrlo contra el proyecto real de Nalux (cuota ya ajustada, datos en vivo) | Alta — sigue siendo la pregunta abierta sobre el techo real *hosted*, la parte local ya se aisló (ver fila de abajo) |
+| ✅ Aislar contención de locks real (subir `max_connections` local y repetir Escenario B a 300-500 VUs) | **CERRADO (2026-07-20)** — con `max_connections=300` el techo de errores se corrió a ~280-300 VUs, confirma que es el límite de conexiones y no el lock — ver "Escenario B" arriba | — |
 | Escenario D con imputación a la MISMA factura (lock de `comprobantes.total`) | ✅ **CERRADO (2026-07-20)** — 7.525 cobros, 0% error, verificado a nivel de datos, sin corrupción — ver resultado en "Escenario D" arriba | — |
 | Empujar Escenario A más allá de 131 empresas únicas | El corte de ~15s en foreground sigue sin resolverse del todo — sembrar en tandas acumulando sobre `fixtures.json` | Baja — 131 ya es una muestra sólida |
 | Fase 4 — Playwright con navegadores reales | No empezado | Baja (depende de que el backend cierre primero) |
