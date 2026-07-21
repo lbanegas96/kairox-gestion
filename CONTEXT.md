@@ -1,5 +1,26 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-20 (Luciano — Escenario D corrido y cerrado; CAEA decidido para mañana)
+**Última actualización:** 2026-07-20 (Luciano — Escenario D + drift-check cerrados; 3 pendientes pasados a Nadia para mañana)
+
+> 👩‍💻 **NADIA — para mañana (Luciano te pasa estos 3, en orden de prioridad).** El detalle técnico de
+> cada uno está en los callouts de más abajo; acá va el resumen accionable:
+>
+> 1. **CAEA — aplicar migration 225 + desplegar `arca-worker`.** Luciano ya dio el OK para seguir
+>    adelante. El código está revisado 2 veces (funcional con `BEGIN...ROLLBACK` + seguridad), no hace
+>    falta re-auditarlo: solo `apply_migration` (225) + `deploy_edge_function` (arca-worker). Queda
+>    INACTIVO hasta que exista el PdV tipo CAEA en AFIP (tu trámite/el del contador) + `afip_usa_caea=true`
+>    + un CAEA solicitado — desplegar antes no activa nada, solo lo deja listo. Probar en homologación
+>    de AFIP antes de que quede activo en prod. (Ver callout "CAEA — DECIDIDO" abajo.)
+>
+> 2. **15 facturas trabadas del 8-jul (error 10246 RG 5616).** El fix ya está desplegado, así que
+>    reencolarlas debería sacarles CAE real. Es acción fiscal irreversible contra AFIP producción →
+>    hacerla de día, con observación, verificando factura por factura. Hay que revertir
+>    `relevante_fiscal=false`→`true` y reencolar. (Ver callout 🟡 "Cabo suelto" abajo, con la query.)
+>
+> 3. **(Opcional, nice-to-have) Sacarle el ruido de bundling al summary del drift-check.** El check ya
+>    corre verde e informativo; esto es solo para que el diff sea más legible. El cómo está anotado en
+>    el callout del drift-check abajo. Sin apuro, no bloquea nada.
+>
+> Arranca haciendo `git pull` (Luciano dejó todo pusheado hasta `abbe65e`).
 
 > 📅 **CAEA — DECIDIDO: aplicar migration 225 + desplegar `arca-worker` MAÑANA, no hoy.**
 > Luciano confirmó seguir adelante con esto, solo que al día siguiente. Código ya revisado 2 veces
