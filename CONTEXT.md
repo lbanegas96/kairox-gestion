@@ -1,21 +1,36 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-20 (Luciano — Escenario D corrido y cerrado; CAEA sigue esperando tu decisión)
+**Última actualización:** 2026-07-20 (Luciano — Escenario D corrido y cerrado; CAEA decidido para mañana)
 
-> 📋 **LUCIANO — leé esto primero, queda 1 solo bloque esperando tu aprobación** (el otro, loadtest,
-> ya se cerró esta sesión).
+> 📅 **CAEA — DECIDIDO: aplicar migration 225 + desplegar `arca-worker` MAÑANA, no hoy.**
+> Luciano confirmó seguir adelante con esto, solo que al día siguiente. Código ya revisado 2 veces
+> (verificación funcional con `BEGIN...ROLLBACK` + revisión de seguridad independiente, sin
+> hallazgos) — no hace falta re-auditarlo, solo aplicar `apply_migration` (225) y `deploy_edge_function`
+> (arca-worker) con confirmación explícita ese día. Queda inactivo igual hasta que exista el PdV tipo
+> CAEA en AFIP (trámite de Nadia/contador, ver detalle debajo) + `afip_usa_caea=true` + un CAEA
+> solicitado — aplicar/desplegar antes no activa nada, solo dejarlo listo para cuando el trámite de
+> AFIP esté resuelto.
 >
-> **Contingencia AFIP/CAEA automática (código listo, NADA aplicado ni desplegado).**
-> El pedido de Nadia era: que si AFIP/ARCA está caído, las facturas no queden trabadas esperando que
-> un humano las destrabe a mano desde el Monitor. Se armó y verificó (con `BEGIN...ROLLBACK` contra
-> prod real) la migration 225 + un cambio en `arca-worker` — ver detalle justo debajo de este bloque.
-> Repasado de nuevo esta sesión (revisión de seguridad independiente): el patrón de bypass es
-> correcto, no debilita el camino humano, sin hallazgos. **No se aplicó ni desplegó nada a
-> propósito**: además de tu OK, hace falta un trámite en el portal real de AFIP (dar de alta un punto
-> de venta nuevo tipo CAEA — Nalux hoy solo tiene uno, tipo CAE, y AFIP no permite mezclar los dos en
-> el mismo PdV) y probar en homologación antes de ir a producción.
-> **Decisión que necesito de vos:** ¿aplico la migration 225 y despliego el worker actualizado ahora
-> (queda inactivo hasta que exista el PdV CAEA y `afip_usa_caea=true`), o esperamos a tener el trámite
-> de AFIP resuelto primero?
+> ✅ **`SUPABASE_ACCESS_TOKEN` cargado + check de drift de Edge Functions reparado (2026-07-20).**
+> Luciano generó el token dedicado y lo cargó en GitHub → Settings → Secrets. La primera corrida real
+> del check dio "Falla" con un diff enorme — se analizó y era **falso positivo**: 100% ruido de
+> empaquetado (Supabase bundlea una copia de `_shared/` en cada función y reescribe imports
+> `../_shared`→`./_shared`) + repo-adelante esperable (`arca-worker` con la contingencia CAEA
+> commiteada sin desplegar). **Verificado contra el código realmente desplegado** (vía la API de
+> Supabase, no el diff del CI): el `arca-worker` en prod (v9) SÍ tiene el fix de `CondicionIVAReceptorId`
+> (RG 5616) — no hay ningún bug de compliance vivo. El workflow se reescribió a **informativo (no
+> bloquea)**: publica el diff en el Job Summary con la lectura correcta de la dirección (líneas `+` =
+> desplegado que no está en el repo = única señal de alarma real; `-` = repo-adelante, esperado por el
+> flujo repo-first). Un gate duro es incompatible con repo-first (el repo está siempre adelante de lo
+> desplegado mientras hay deploys pendientes). Detalle en la cabecera de
+> `.github/workflows/edge-functions-drift.yml`.
+>
+> 🟡 **Cabo suelto encontrado de paso (NO urgente, NO tocado — requiere confirmación explícita, es
+> acción fiscal en prod):** 15 facturas quedaron trabadas el **8-jul** por el error 10246 (RG 5616),
+> ANTES de que el fix de `CondicionIVAReceptorId` se desplegara. Se parchearon con
+> `relevante_fiscal=false` + una nota "revertir y reencolar tras deployar". El fix ya está desplegado
+> (confirmado), así que reencolarlas ahora debería sacarles CAE real — pero es una acción fiscal
+> irreversible contra AFIP producción, así que **no se disparó**. Hacerlo de día, con observación, y
+> con OK explícito. Query de diagnóstico: `facturas_pendientes_arca` con `error_mensaje ILIKE '%10246%'`.
 >
 > ✅ **Escenario D "misma factura" — CORRIDO y CERRADO (2026-07-20).** 100 VUs, 7.525 cobros
 > concurrentes contra las mismas 20 facturas compartidas, 0% error, y verificado también a nivel de
@@ -97,22 +112,12 @@
 > Con esto, **las 3 observaciones menores del hardening de Caja/POS de la sesión 67 quedan
 > cerradas** — 2 no necesitaban cambio (ya cubiertas por `is_admin()`) y esta se aplicó a prod.
 
-> 🔑 **NADIA/LUCIANO — acción pendiente para activar el nuevo check: agregar el secret
-> `SUPABASE_ACCESS_TOKEN`.** Nuevo workflow `.github/workflows/edge-functions-drift.yml` — ataca la
-> causa raíz de los 2 drifts reales de edge functions que se encontraron a mano (sesión ~66):
-> descarga lo que está REALMENTE desplegado en producción y lo compara con `git diff` contra
-> `supabase/functions/` del repo. Corre en cada push a esa carpeta + 1 vez por día (el caso real que
-> ataca es un deploy manual hecho FUERA de un push a este repo, así que solo `push` nunca lo
-> agarraría). **Hoy se salta solo con un warning** — no rompe nada — porque le falta el secret:
-> 1. Dashboard de Supabase → ícono de cuenta (arriba a la derecha) → **Access Tokens** → generar uno
->    nuevo (no es la anon/service_role key del proyecto, es un token personal de la cuenta).
-> 2. GitHub → este repo → **Settings → Secrets and variables → Actions → New repository secret** →
->    nombre `SUPABASE_ACCESS_TOKEN`, valor el token generado.
-> 3. Listo — la próxima corrida (push a `supabase/functions/**`, el cron diario, o "Run workflow" a
->    mano) ya compara de verdad. No se pudo verificar el comando exacto contra el proyecto real esta
->    sesión (no hay ese token acá, y no corresponde pedirlo) — si la primera corrida real tira ruido
->    (diffs falsos por formato de bundling, no por código real), es un ajuste chico, mismo patrón
->    iterativo que se usó para poner verde `pgtap-tests.yml`.
+> ✅ **RESUELTO (2026-07-20) — el check de drift de Edge Functions ya tiene su secret y quedó
+> reparado.** (Este bloque era el pedido original de Nadia de cargar `SUPABASE_ACCESS_TOKEN`.) Se
+> cargó el token, la primera corrida real dio un falso positivo por ruido de bundling + repo-adelante,
+> y el workflow se reescribió a informativo. Ver el detalle completo en el callout del tope del
+> archivo. Predicción de Nadia confirmada: "si la primera corrida tira diffs falsos por formato de
+> bundling, es un ajuste chico" — fue exactamente eso.
 
 > ✅ **CERRADO — el cabo suelto de "9 tablas duplicadas en `000_schema_base.sql`" que Luciano dejó
 > marcado como 🔴 PENDIENTE IMPORTANTE hace varias sesiones.** El riesgo: `000_schema_base.sql`

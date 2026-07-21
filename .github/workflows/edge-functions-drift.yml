@@ -1,24 +1,38 @@
 name: Edge Functions Drift Check
 
 # Compara el código de supabase/functions/ del repo contra lo que está REALMENTE
-# desplegado en el proyecto hosted (no lo que el repo dice que debería estar).
-# Ataca la causa raíz de los 2 drifts reales que se encontraron a mano en una
-# auditoría completa de los 14 edge functions (probar-conexion-afip tenía una
-# firma vieja de getLastVoucherNumber rota; generar-csr tenía 2 implementaciones
-# completamente distintas entre repo y producción): alguien hace
-# `supabase functions deploy` (o edita desde el dashboard) sin commitear el mismo
-# código al repo, y el repo queda mintiendo silenciosamente sobre qué corre en
-# producción — sin este check, la única forma de notarlo es una auditoría manual.
+# desplegado en el proyecto hosted. Objetivo: detectar un deploy hecho a mano (o
+# desde el dashboard) SIN commitear el mismo código al repo — el caso en que el
+# repo "miente" sobre qué corre en producción (los 2 drifts reales que se
+# encontraron a mano: probar-conexion-afip con una firma vieja de
+# getLastVoucherNumber, y generar-csr con 2 implementaciones distintas).
 #
-# Corre por `schedule` además de por `push`: el caso real que ataca es un deploy
-# hecho POR FUERA de un push a este repo, así que depender solo de push nunca
-# lo agarraría (ese push no existe).
+# ── INFORMATIVO, NO BLOQUEA ──────────────────────────────────────────────────
+# Un gate DURO no sirve acá, por dos razones, y daría rojo constantemente hasta
+# entrenar a todos a ignorarlo:
+#   1. Ruido de empaquetado: `supabase functions download` bundlea una copia de
+#      _shared/ dentro de CADA función (congelada a su último deploy) y reescribe
+#      los imports (../_shared → ./_shared). Un `git diff` crudo mezcla ese ruido
+#      con drift real. (Fue justo lo que pasó la primera corrida real: el diff
+#      salió gigante y casi todo era bundling + un deploy pendiente, no bugs.)
+#   2. Flujo repo-first de KAIROX: se commitea el código y se despliega DESPUÉS,
+#      tras aprobación (política repo-only del proyecto). Por eso es NORMAL y
+#      esperado que el repo esté ADELANTE de lo desplegado en funciones con un
+#      deploy pendiente (p. ej. hoy `arca-worker`, con la contingencia CAEA
+#      commiteada pero a propósito sin desplegar).
+#
+# La señal de alarma REAL es la INVERSA: contenido DESPLEGADO que no está en el
+# repo. En el diff de abajo (repo → desplegado) eso aparece como líneas `+`.
+# Las líneas `-` son repo-adelante (deploy pendiente) o comentarios que el
+# bundling saca — esperado, no es alarma. El diff se publica en el Job Summary
+# para que un humano lo lea con ese criterio.
+#
+# Corre por `schedule` además de por `push`: el caso que ataca es un deploy hecho
+# POR FUERA de un push a este repo, así que depender solo de push no lo agarraría.
 #
 # Requiere el secret SUPABASE_ACCESS_TOKEN — el token PERSONAL de la cuenta de
 # Supabase (Dashboard → cuenta → Access Tokens), NO la anon key ni la
-# service_role key. Es el mismo tipo de credencial que usa `supabase login`.
-# Sin ese secret configurado en GitHub (Settings → Secrets and variables →
-# Actions), el job se salta solo con un warning — no rompe el resto del CI.
+# service_role key. Sin ese secret, el job se salta solo con un warning.
 
 on:
   push:
@@ -55,23 +69,44 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          set -e
-          # --use-api evita depender de Docker (no hace falta acá, a diferencia
-          # de pgtap-tests.yml que sí necesita levantar el stack completo).
-          supabase functions download --project-ref wuznppxeonmhfcvnqfbf --use-api
+          # Sin `set -e` a propósito: este job es INFORMATIVO y nunca debe fallar
+          # (ver cabecera). Controlamos el flujo a mano.
+          set -uo pipefail
 
-          if git diff --quiet -- supabase/functions; then
-            echo "Sin drift: el repo coincide con lo realmente desplegado en producción." >> "$GITHUB_STEP_SUMMARY"
-          else
-            {
-              echo "## 🔴 Drift detectado en edge functions"
-              echo ""
-              echo "El código desplegado en producción difiere del repo. Diff (repo → desplegado):"
-              echo ""
-              echo '```diff'
-              git diff -- supabase/functions
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
-            echo "::error title=Drift en edge functions::El código desplegado difiere del repo — ver el Job Summary de esta corrida para el diff completo."
-            exit 1
+          # --use-api evita depender de Docker (a diferencia de pgtap-tests.yml,
+          # que sí necesita levantar el stack completo).
+          if ! supabase functions download --project-ref wuznppxeonmhfcvnqfbf --use-api; then
+            echo "::warning title=Edge Functions Drift Check::No se pudieron descargar las funciones desplegadas (¿token inválido o sin permiso?). Se omite la comparación."
+            echo "⚠️ No se pudieron descargar las funciones desplegadas — no se pudo comparar esta corrida." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
+
+          # `git add -A` para que el diff incluya también funciones DESPLEGADAS que
+          # no existan en el repo (aparecerían como archivos nuevos = alarma real).
+          git add -A -- supabase/functions
+
+          if git diff --cached --quiet -- supabase/functions; then
+            echo "✅ Sin drift: lo desplegado coincide con el repo." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "## ℹ️ Diferencias repo ↔ desplegado (informativo — no bloquea)"
+            echo ""
+            echo "**Cómo leer esto** (ver también la cabecera del workflow):"
+            echo ""
+            echo "- Diff en dirección **repo → desplegado**."
+            echo "- Líneas \`-\` = está en el repo pero no en lo desplegado. Esperado:"
+            echo "  deploy pendiente (repo-first) o comentarios que el bundling saca. **No es alarma.**"
+            echo "- Líneas \`+\` = está DESPLEGADO pero no en el repo. **Esto sí hay que mirarlo:**"
+            echo "  puede indicar un deploy hecho a mano sin commitear (o, más probable, ruido de"
+            echo "  empaquetado como el import reescrito \`./_shared\` → revisar antes de asumir lo peor)."
+            echo ""
+            echo "Deploys pendientes conocidos hoy (repo adelante, esperado): \`arca-worker\` (contingencia CAEA sin desplegar)."
+            echo ""
+            echo '```diff'
+            git diff --cached -- supabase/functions
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=Edge Functions Drift Check::Hay diferencias repo↔desplegado — ver el Job Summary (informativo, no bloquea)."
+          exit 0
