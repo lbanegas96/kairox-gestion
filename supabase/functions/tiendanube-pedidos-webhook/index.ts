@@ -134,6 +134,15 @@ serve(async (req) => {
     let sinMapear = 0;
     const total = Number(orden.total) || 0;
 
+    // El shape exacto de "customer" varía (name combinado vs first_name/last_name
+    // separados según cómo se cargó el pedido) — probamos varias formas antes
+    // de caer al genérico, sin asumir un único formato.
+    const cliente = orden.customer ?? {};
+    const nombreCliente =
+      cliente.name ||
+      [cliente.first_name, cliente.last_name].filter(Boolean).join(' ').trim() ||
+      'Cliente Tiendanube';
+
     // Insertar el pedido cabecera
     const { data: pedido, error: pedError } = await adminClient
       .from('pedidos')
@@ -141,7 +150,7 @@ serve(async (req) => {
         empresa_id: integracion.empresa_id,
         user_id: adminProfile.id,
         numero,
-        cliente_nombre: orden.customer?.name ?? 'Cliente Tiendanube',
+        cliente_nombre: nombreCliente,
         estado: 'borrador',
         subtotal: total,
         total,
