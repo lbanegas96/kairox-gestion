@@ -1,6 +1,21 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-07-22 (Nadia+Claude — arranque capa de integración/Tiendanube; Luciano — ronda de pulido visual/UX, roadmap en ROADMAP.md)
 
+> 📣 **Para Luciano — al bajar el proyecto, ANTES de cualquier otra cosa, hacé esto en orden:**
+> 1. Andá a **vercel.com → proyecto kairox-gestion → pestaña "Deployments"**. El commit `e11c475`
+>    (o el más nuevo en `master`) tiene que aparecer ahí como **"Ready"**. Si no aparece, si está en
+>    error, o si el de arriba de todo es viejo (de antes de hoy 2026-07-22), hacé un **"Redeploy"**
+>    manual, y de paso fijate que el GitHub → Vercel esté bien conectado (rama de producción =
+>    `master`) — esto quedó sin resolver en la sesión de hoy, ver detalle más abajo.
+> 2. Una vez que el deploy esté en Ready, entrá a la URL real de KAIROX (`kairox-gestion.vercel.app`)
+>    → **Configuración → Integraciones**. Tiene que aparecer una card de **"Tiendanube"**. Si no
+>    aparece, el deploy sigue sin tomar el commit correcto — repetir el paso 1.
+> 3. El backend YA está probado y funcionando (no hace falta tocar nada de Supabase/credenciales) —
+>    solo falta confirmar que el frontend llegó. Si querés, probá vos mismo el botón "Conectar" contra
+>    la tienda demo "KAIROX Demo" (están las credenciales en el panel de Partners de Tiendanube, cuenta
+>    "Kairox IA") para verificarlo de punta a punta con tus propios ojos.
+> 4. Detalle técnico completo de todo lo construido hoy, en el bloque de abajo.
+>
 > 🚧 **EN CURSO (Nadia) — capa de integración + adapter Tiendanube, arrancada hoy siguiendo ROADMAP.md.**
 > Backend **probado de punta a punta y funcionando en prod**. Frontend escrito, commiteado y pusheado,
 > pero **todavía no visible en producción** — ver bloqueante al final, es lo único que falta.
