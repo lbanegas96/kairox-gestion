@@ -25,6 +25,23 @@ function App() {
     }
   }, []);
 
+  // Volver de un flujo OAuth de integraciones (ej: Tiendanube) — integraciones-oauth-callback
+  // redirige acá con ?integracion=X&status=ok|error. Esta app no usa router, por eso el
+  // query param cae en la raíz en vez de una ruta dedicada (ver CONTEXT.md).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const integracion = params.get('integracion');
+    const status = params.get('status');
+    if (integracion && status) {
+      if (status === 'ok') {
+        toast({ title: `✓ ${integracion} conectado correctamente`, className: 'bg-green-600 text-white border-green-700' });
+      } else {
+        toast({ title: `No se pudo conectar ${integracion}`, description: params.get('detalle') ?? undefined, variant: 'destructive' });
+      }
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
+
   // Debug visualizer for long loading times
   useEffect(() => {
     let timer;

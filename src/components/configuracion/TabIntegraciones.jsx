@@ -17,10 +17,10 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
  * Usa useAuth/useToast directamente (cross-cutting) para no inflar la lista de props.
  */
 const TabIntegraciones = ({
-  integracionMP, integracionUala, afipConfig,
+  integracionMP, integracionUala, integracionTiendanube, afipConfig,
   showWebhookUrl, setShowWebhookUrl,
   mapeosCuentas, setMapeosCuentas, savingMapeos, cuentasBancariasLista,
-  onConfigMP, onConfigUala, onGoFacturacion, onSaveMapeos,
+  onConfigMP, onConfigUala, onConectarTiendanube, onMapeoProductosTiendanube, onGoFacturacion, onSaveMapeos,
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -129,6 +129,42 @@ const TabIntegraciones = ({
           <p className="text-xs text-kx-text-2 leading-relaxed">
             Las transferencias de Ualá sincronizadas desde Gmail por el Apps Script se registran automáticamente en Bancos (no en Caja) una vez que elegís a qué cuenta bancaria corresponden.
           </p>
+        </div>
+
+        {/* ── Tiendanube — card rica con estado real ── */}
+        <div className="kairox-bg-card border kairox-border p-5 rounded-xl shadow-sm flex flex-col gap-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#00C7B1] flex items-center justify-center text-white font-bold text-sm shrink-0">
+                TN
+              </div>
+              <div>
+                <h4 className="font-semibold text-kx-text text-sm">Tiendanube</h4>
+                {integracionTiendanube?.activo ? (
+                  <span className="inline-block text-2xs font-medium px-2 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 mt-1">
+                    ✓ Conectado
+                  </span>
+                ) : (
+                  <span className="inline-block text-2xs font-medium px-2 py-0.5 rounded-full border bg-kx-surface-2 text-kx-text-3 border-kx-border mt-1">
+                    Sin configurar
+                  </span>
+                )}
+              </div>
+            </div>
+            <Button size="sm" variant="outline" className="text-xs h-8 shrink-0" onClick={onConectarTiendanube}>
+              {integracionTiendanube?.activo ? 'Reconectar' : 'Conectar'}
+            </Button>
+          </div>
+
+          <p className="text-xs text-kx-text-2 leading-relaxed">
+            Sincronización de catálogo y pedidos con tu tienda Tiendanube. Los pedidos pagados se registran como ventas en KAIROX.
+          </p>
+
+          {integracionTiendanube?.activo && (
+            <Button size="sm" variant="ghost" className="text-xs h-8 self-start -ml-2" onClick={onMapeoProductosTiendanube}>
+              Mapear productos →
+            </Button>
+          )}
         </div>
 
         <IntegracionCard

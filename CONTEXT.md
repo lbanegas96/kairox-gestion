@@ -1,9 +1,37 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-22 (Luciano — ronda de pulido visual/UX; roadmap en ROADMAP.md)
+**Última actualización:** 2026-07-22 (Nadia+Claude — arranque capa de integración/Tiendanube; Luciano — ronda de pulido visual/UX, roadmap en ROADMAP.md)
 
-> 📣 **Para Nadia — al arrancar mañana: empezá con el ROADMAP, no con ajustes visuales.**
+> 🚧 **EN CURSO (Nadia) — capa de integración + adapter Tiendanube, arrancada hoy siguiendo ROADMAP.md.**
+> Escrito y verificado, **nada desplegado a producción todavía** (se decidió esperar a tener
+> credenciales reales de Tiendanube antes de subir todo junto funcionando de punta a punta):
+> - **Migration 230 (YA aplicada a prod)**: 2 tablas nuevas — `integraciones_canales` (conexión por
+>   canal: Tiendanube/Shopify/MercadoLibre, sin secretos adentro) e `integraciones_producto_mapeo`
+>   (producto KAIROX ↔ id externo, `UNIQUE(integracion_id, producto_id)` para permitir el mismo
+>   producto mapeado en varios canales a la vez). RLS admin-only, mismo criterio que
+>   `integraciones_bancarias` (migración 124).
+> - **Capa compartida (código listo, SIN desplegar)**: `_shared/integraciones.ts` (helpers de
+>   Vault + manejo de `state` OAuth con anti-replay, verificado con dry-run contra prod) +
+>   `integraciones-oauth-iniciar`/`integraciones-oauth-callback` (edge functions). Intercambio
+>   Tiendanube verificado contra su doc oficial real (no de memoria):
+>   https://tiendanube.github.io/api-documentation/authentication — el access token de Tiendanube
+>   NO expira (no hay refresh_token).
+> - **UI mínima (código listo, SIN desplegar)**: card "Tiendanube" en Configuración → Integraciones
+>   (`TabIntegraciones.jsx`) + `ConectarTiendanubeModal.jsx` (dispara el OAuth) +
+>   `MapeoProductosModal.jsx` (mapeo manual producto↔id externo — todavía no trae el catálogo real
+>   de Tiendanube, eso necesita su propio edge function para llamar a la API de productos). Build de
+>   producción (`npm run build`) corrido limpio con todo esto adentro.
+> - **⚠️ BLOQUEANTE fuera de código — falta antes de que esto funcione de verdad:** registrar una
+>   app en el panel de Partners de Tiendanube (partners.tiendanube.com o similar) para conseguir
+>   `TIENDANUBE_APP_ID` y `TIENDANUBE_CLIENT_SECRET` reales, y configurar ahí el `redirect_uri` fijo
+>   apuntando a la URL pública de `integraciones-oauth-callback`. Sin esto, `integraciones-oauth-
+>   iniciar` responde "Integración no configurada" — no es un bug, es exactamente el mismo tipo de
+>   trámite administrativo que quedó pendiente con AFIP para CAEA (ver más abajo).
+> - **Próximo paso**: cuando existan las credenciales, cargarlas como secret de Edge Functions en
+>   Supabase y recién ahí desplegar todo junto (las 2 edge functions + el frontend).
+
+> 📣 **Para Nadia — al arrancar mañana: seguir con el ROADMAP (arriba), no con ajustes visuales.**
 > Luciano se está encargando personalmente de la ronda de pulido visual/UX (navega el sistema y va
-> pasando correcciones parte por parte, ver debajo). Mientras tanto, arrancá vos con lo de
+> pasando correcciones parte por parte, ver debajo). Mientras tanto, seguir con lo de
 > [`ROADMAP.md`](./ROADMAP.md) — capa de integración reutilizable (OAuth+refresh, webhook receiver,
 > jobs de sync idempotentes, mapeo SKU↔producto) y el primer adapter del gradiente (Tiendanube/
 > Shopify, el más fácil). Objetivo: primer cliente en agosto 2026.

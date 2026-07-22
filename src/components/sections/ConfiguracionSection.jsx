@@ -26,6 +26,8 @@ import TabEmpresa from '@/components/configuracion/TabEmpresa';
 import TabFinanzas, { TIPO_INSTRUMENTO_LABEL } from '@/components/configuracion/TabFinanzas';
 import TabInventario from '@/components/configuracion/TabInventario';
 import TabIntegraciones from '@/components/configuracion/TabIntegraciones';
+import ConectarTiendanubeModal from '@/components/integraciones/ConectarTiendanubeModal';
+import MapeoProductosModal from '@/components/integraciones/MapeoProductosModal';
 import TabFacturacion from '@/components/configuracion/TabFacturacion';
 import { MAGNITUDES } from '@/lib/unidadesMedida';
 
@@ -192,6 +194,9 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [integracionUala, setIntegracionUala] = useState(null);
   const [showConfigUala,  setShowConfigUala]  = useState(false);
   const [showWebhookUrl, setShowWebhookUrl] = useState(false); // SECURITY-WEBHOOK-URL
+  const [integracionTiendanube,    setIntegracionTiendanube]    = useState(null);
+  const [showConectarTiendanube,   setShowConectarTiendanube]   = useState(false);
+  const [showMapeoProductosTN,     setShowMapeoProductosTN]     = useState(false);
 
   // ── Puente Caja ↔ Bancos ──────────────────────────────────────────────────
   const METODOS_BANCARIOS = ['Transferencia', 'Tarjeta'];
@@ -554,6 +559,29 @@ const ConfiguracionSection = ({ initialTab }) => {
   };
 
   useEffect(() => { reloadIntegracionUala(); }, [user?.empresa_id]);
+
+  const reloadIntegracionTiendanube = () => {
+    if (!user?.empresa_id) return;
+    supabase
+      .from('integraciones_canales')
+      .select('id, empresa_id, canal, activo, external_store_id, ultimo_sync_productos, ultimo_sync_pedidos')
+      .eq('empresa_id', user.empresa_id)
+      .eq('canal', 'tiendanube')
+      .maybeSingle()
+      .then(({ data }) => setIntegracionTiendanube(data ?? null));
+  };
+
+  useEffect(() => { reloadIntegracionTiendanube(); }, [user?.empresa_id]);
+
+  // Volver de un flujo OAuth (integraciones-oauth-callback redirige acá con
+  // ?integracion=X&status=ok|error) — refrescar el estado para que la card
+  // muestre "Conectado" sin que el usuario tenga que recargar a mano.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('integracion') === 'tiendanube') {
+      reloadIntegracionTiendanube();
+    }
+  }, [user?.empresa_id]);
 
   useEffect(() => {
     if (!user?.empresa_id) return;
@@ -1620,6 +1648,7 @@ const ConfiguracionSection = ({ initialTab }) => {
           <TabIntegraciones
             integracionMP={integracionMP}
             integracionUala={integracionUala}
+            integracionTiendanube={integracionTiendanube}
             afipConfig={afipConfig}
             showWebhookUrl={showWebhookUrl}
             setShowWebhookUrl={setShowWebhookUrl}
@@ -1629,6 +1658,8 @@ const ConfiguracionSection = ({ initialTab }) => {
             cuentasBancariasLista={cuentasBancariasLista}
             onConfigMP={() => setShowConfigMP(true)}
             onConfigUala={() => setShowConfigUala(true)}
+            onConectarTiendanube={() => setShowConectarTiendanube(true)}
+            onMapeoProductosTiendanube={() => setShowMapeoProductosTN(true)}
             onGoFacturacion={() => setActiveTab('facturacion')}
             onSaveMapeos={handleSaveMapeos}
           />
@@ -2225,6 +2256,19 @@ const ConfiguracionSection = ({ initialTab }) => {
         onOpenChange={setShowConfigUala}
         integracion={integracionUala}
         onSuccess={reloadIntegracionUala}
+      />
+
+      {/* ── Modal conectar Tiendanube (OAuth) ──────────────────────────────── */}
+      <ConectarTiendanubeModal
+        open={showConectarTiendanube}
+        onOpenChange={setShowConectarTiendanube}
+      />
+
+      {/* ── Modal mapeo de productos Tiendanube ────────────────────────────── */}
+      <MapeoProductosModal
+        open={showMapeoProductosTN}
+        onOpenChange={setShowMapeoProductosTN}
+        integracion={integracionTiendanube}
       />
 
     </div>
