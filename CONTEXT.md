@@ -9,6 +9,23 @@
 > Entrá a Configuración → Integraciones y vas a ver la card de "Tiendanube" con "✓ Conectado" (ya se
 > probó una conexión real contra la tienda demo "KAIROX Demo"). Detalle técnico completo abajo.
 >
+> 🔍 **REVISAR — último cambio (pedidos siguiendo su ciclo de vida completo) NO reprobado por Nadia,
+> lo dejo para que lo mires vos.** Hasta hace un rato solo escuchábamos `order/paid` (probado y
+> verificado con un pedido real). Lo último que se hizo fue ampliar a los 3 eventos del ciclo de vida
+> de un pedido (`order/created`, `order/paid`, `order/cancelled` — ver detalle técnico más abajo,
+> sección "Pedidos de Tiendanube siguen su ciclo de vida completo"). Esto SÍ se desplegó a prod, pero
+> **no se volvió a probar de punta a punta con una orden real después del cambio** (la tienda demo
+> quedó con el webhook viejo — solo `order/paid` registrado; hace falta un "Reconectar" desde
+> Configuración → Integraciones para que Tiendanube registre los 3 eventos nuevos). Cosas puntuales
+> para que chequees vos:
+> - Que al reconectar se registren los 3 webhooks (revisar logs de `integraciones-oauth-callback` o
+>   la lista de webhooks en el panel de Tiendanube de la tienda).
+> - Probar los 3 casos con pedidos de prueba: uno "Pago no realizado"/"Pago pendiente" (debería
+>   aparecer en KAIROX como pedido `borrador`), uno marcado "Pago recibido" después de creado
+>   (debería pasar ese MISMO pedido a `confirmado`, no crear uno nuevo), y uno cancelado.
+> - La lógica de "no retroceder si el pedido ya está en estado final" (`facturado`/`cancelado`) —
+>   revisarla con un caso real si tenés tiempo, quedó solo con revisión de código, sin probar.
+>
 > 🚧 **EN CURSO (Nadia) — capa de integración + adapter Tiendanube, arrancada hoy siguiendo ROADMAP.md.**
 > Backend y frontend **probados de punta a punta y funcionando en prod** (`kairox-gestion-chi.vercel.app`).
 >
@@ -37,18 +54,45 @@
 >   Partners): conectar → autorizar en Tiendanube → volver → verificado en `integraciones_canales`:
 >   `activo=true`, `external_store_id=7996233`, `scope=read_products,write_products,read_orders`. El
 >   flujo OAuth + Vault + tabla funciona correctamente en producción.
-> - **UI mínima (código commiteado y pusheado, commit `feb7cee` en `master`)**: card "Tiendanube" en
->   Configuración → Integraciones (`TabIntegraciones.jsx`) + `ConectarTiendanubeModal.jsx` +
->   `MapeoProductosModal.jsx` (mapeo manual producto↔id externo — todavía no trae el catálogo real
->   de Tiendanube, eso necesita su propio edge function para llamar a la API de productos) + toast de
->   retorno en `App.jsx`.
+> - **UI mínima**: card "Tiendanube" en Configuración → Integraciones (`TabIntegraciones.jsx`) +
+>   `ConectarTiendanubeModal.jsx` + `MapeoProductosModal.jsx` + toast de retorno en `App.jsx`.
+> - **✅ Catálogo real de Tiendanube (paso 1 del roadmap de adapter)**: nuevo edge function
+>   `tiendanube-catalogo` (lee `/products` vía la API de Tiendanube con el token de Vault, pagina con
+>   `Link rel=next`, aplana a variantes). `MapeoProductosModal.jsx` ahora ofrece un dropdown con el
+>   catálogo real y auto-sugiere el match por SKU/código de barras (icono ✨) en vez de pegar el ID a
+>   mano — el usuario confirma antes de guardar.
+> - **✅ Pedidos de Tiendanube siguen su ciclo de vida completo (paso 2 del roadmap de adapter)**:
+>   se registran 3 eventos (`order/created`, `order/paid`, `order/cancelled`, antes solo `order/paid`)
+>   vía `integraciones-oauth-callback` → `registrarWebhookPedidosTiendanube`. El webhook
+>   `tiendanube-pedidos-webhook` mapea a `pedidos.estado` así — mismo criterio que una Orden de Venta
+>   en un ERP (SAP): el pedido existe como documento comercial apenas se crea, no recién cuando se
+>   cobra:
+>   - `order/created` (sin pagar) → `borrador`
+>   - `order/paid` → `confirmado` (listo para que el operador revise y facture)
+>   - `order/cancelled` → `cancelado`
+>   - Nunca retrocede un pedido que ya esté en estado final (`facturado`/`cancelado`) si llega un
+>     evento tardío fuera de orden.
+>   - Migración 232: columnas `canal_externo`/`external_order_id` en `pedidos` + índice único de
+>     idempotencia (probado: un pedido reenviado no duplica) + bypass service_role en
+>     `obtener_proximo_numero` (mismo patrón que `crear_venta`, migraciones 224/225).
+>   - **NADA fiscal se genera solo** — decisión de negocio explícita de Nadia: el pedido llega en
+>     borrador/confirmado, el operador lo revisa y confirma la venta/factura a mano.
+>   - **Probado de punta a punta SOLO el caso `order/paid` simple** (antes de ampliar a los 3
+>     eventos): pedido de prueba pagado en la tienda demo → llegó como `PED-20260722-001` en KAIROX,
+>     total y item correctos. El cambio a los 3 eventos se hizo DESPUÉS y no se volvió a probar — ver
+>     el callout "REVISAR" al principio de este archivo.
+>   - Fix de robustez: el nombre del cliente ahora prueba `customer.name` y también
+>     `first_name`+`last_name` antes de caer al genérico (el pedido de prueba reveló que Tiendanube no
+>     siempre manda `name` combinado).
 > - **✅ CERRADO — la falsa alarma de "Vercel no despliega".** Durante la sesión se verificó
 >   `kairox-gestion.vercel.app` (sin "-chi") y no tenía la card nueva — se interpretó como que el
 >   deploy automático estaba roto. Era un error de URL: el dominio real conectado a GitHub es
->   **`kairox-gestion-chi.vercel.app`**, que sí tenía el deploy correcto (`e11c475`, confirmado en el
->   repo de GitHub como "Producción" hace minutos). El otro dominio (`kairox-gestion.vercel.app`) sigue
->   existiendo como alias/dominio secundario en `ALLOWED_ORIGINS` (`_shared/auth.ts`) por las dudas,
->   pero no es al que hay que mirar para verificar deploys. **Vercel nunca dejó de auto-desplegar.**
+>   **`kairox-gestion-chi.vercel.app`**, que sí tenía el deploy correcto, confirmado en el repo de
+>   GitHub como "Producción". El otro dominio (`kairox-gestion.vercel.app`) sigue existiendo como
+>   alias/dominio secundario en `ALLOWED_ORIGINS` (`_shared/auth.ts`) por las dudas, pero no es al que
+>   hay que mirar para verificar deploys. **Vercel nunca dejó de auto-desplegar.**
+> - **Pendiente (no bloqueante, de cara al roadmap)**: paso 3 (sync de stock KAIROX → Tiendanube) —
+>   todavía no arrancado.
 
 > 📣 **Para Nadia — al arrancar mañana: seguir con el ROADMAP (arriba), no con ajustes visuales.**
 > Luciano se está encargando personalmente de la ronda de pulido visual/UX (navega el sistema y va
