@@ -26,6 +26,14 @@
 > - La lógica de "no retroceder si el pedido ya está en estado final" (`facturado`/`cancelado`) —
 >   revisarla con un caso real si tenés tiempo, quedó solo con revisión de código, sin probar.
 >
+> 🔍 **REVISAR también — sync de stock KAIROX → Tiendanube (paso 3, recién construido) NUNCA
+> probado contra la API real de Tiendanube.** Solo se verificó la lógica de la cola/trigger a nivel
+> de base de datos (con dry-run, sin llamar a Tiendanube de verdad). Para probarlo de punta a punta:
+> mapear un producto real con "Sincronizar stock" tildado, cambiar su `stock_actual` en KAIROX
+> (ej. una venta), esperar el cron de 5 min (o invocar `tiendanube-stock-worker` a mano), y verificar
+> que el stock cambió en el panel de Tiendanube de esa variante. Si falla, mirar
+> `integraciones_stock_pendiente` (columna `error_mensaje`) y los logs del worker.
+>
 > 🚧 **EN CURSO (Nadia) — capa de integración + adapter Tiendanube, arrancada hoy siguiendo ROADMAP.md.**
 > Backend y frontend **probados de punta a punta y funcionando en prod** (`kairox-gestion-chi.vercel.app`).
 >
@@ -91,8 +99,23 @@
 >   GitHub como "Producción". El otro dominio (`kairox-gestion.vercel.app`) sigue existiendo como
 >   alias/dominio secundario en `ALLOWED_ORIGINS` (`_shared/auth.ts`) por las dudas, pero no es al que
 >   hay que mirar para verificar deploys. **Vercel nunca dejó de auto-desplegar.**
-> - **Pendiente (no bloqueante, de cara al roadmap)**: paso 3 (sync de stock KAIROX → Tiendanube) —
->   todavía no arrancado.
+> - **✅ Sync de stock KAIROX → Tiendanube (paso 3 del adapter)**: migración 233 —
+>   `external_product_id` en `integraciones_producto_mapeo` (la API de stock de Tiendanube exige el
+>   product_id padre, no alcanza con el id de variante) + cola `integraciones_stock_pendiente` +
+>   trigger `fn_queue_stock_tiendanube` (encola SOLO si el producto tiene mapeo activo con
+>   `sincronizar_stock=true` — evita ruido de productos sin ninguna integración) + pg_cron cada 5 min
+>   corriendo `tiendanube-stock-worker`. Mismo patrón ya probado en el código para AFIP
+>   (`facturas_pendientes_arca` + `arca-worker`): cola async con reintentos/backoff, no bloquea la
+>   venta. Dirección única KAIROX → Tiendanube. El worker siempre lee el `stock_actual` MÁS RECIENTE
+>   al procesar, no un valor guardado en el momento del encolado.
+>   **Verificado solo a nivel de base de datos con dry-run** (producto sin mapeo no encola; 3 cambios
+>   de stock seguidos generan una sola fila en la cola) — **la llamada real a la API de Tiendanube
+>   nunca se probó** — ver el callout "REVISAR también" al principio de este archivo.
+>   Detalle no menor encontrado en el camino: `ON CONFLICT ON CONSTRAINT` no funciona con un índice
+>   único PARCIAL (`CREATE UNIQUE INDEX ... WHERE ...`) — Postgres no lo trata como una constraint
+>   real. Hay que usar `ON CONFLICT (columnas) WHERE <mismo predicado> DO NOTHING`. Se verificó que la
+>   versión REAL desplegada de `fn_queue_factura_arca` (AFIP) ya usa la sintaxis correcta — no es un
+>   bug vigente ahí, solo una trampa a tener en cuenta para código nuevo.
 
 > 📣 **Para Nadia — al arrancar mañana: seguir con el ROADMAP (arriba), no con ajustes visuales.**
 > Luciano se está encargando personalmente de la ronda de pulido visual/UX (navega el sistema y va
