@@ -50,6 +50,50 @@ const TOKEN_EXCHANGERS: Record<string, (code: string) => Promise<ResultadoExchan
   },
 };
 
+// Registra el webhook de pedidos (order/paid) en Tiendanube apuntando a
+// tiendanube-pedidos-webhook. Idempotente: chequea los webhooks ya registrados
+// antes de crear. No fatal: si falla, la conexión igual queda hecha (se puede
+// re-registrar), solo se loguea — no tiene sentido tirar abajo toda la conexión
+// porque el registro del webhook falló.
+async function registrarWebhookPedidosTiendanube(storeId: string, token: string): Promise<void> {
+  const TN_API_BASE = 'https://api.tiendanube.com/2025-03';
+  const USER_AGENT = 'KAIROX Gestion (soporte@kairox.app)';
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  if (!supabaseUrl) {
+    console.error('[integraciones-oauth-callback] Sin SUPABASE_URL para registrar webhook');
+    return;
+  }
+  const webhookUrl = `${supabaseUrl}/functions/v1/tiendanube-pedidos-webhook`;
+  const headers = { Authorization: `Bearer ${token}`, 'User-Agent': USER_AGENT, 'Content-Type': 'application/json' };
+
+  try {
+    // ¿Ya está registrado order/paid a esta URL?
+    const listRes = await fetch(`${TN_API_BASE}/${storeId}/webhooks`, { headers });
+    if (listRes.ok) {
+      const existentes = await listRes.json();
+      const yaEsta = Array.isArray(existentes) &&
+        existentes.some((w: Record<string, unknown>) => w.event === 'order/paid' && w.url === webhookUrl);
+      if (yaEsta) {
+        console.log('[integraciones-oauth-callback] Webhook order/paid ya registrado');
+        return;
+      }
+    }
+
+    const res = await fetch(`${TN_API_BASE}/${storeId}/webhooks`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ event: 'order/paid', url: webhookUrl }),
+    });
+    if (!res.ok) {
+      console.error('[integraciones-oauth-callback] No se pudo registrar webhook order/paid:', res.status, await res.text());
+    } else {
+      console.log('[integraciones-oauth-callback] ✓ Webhook order/paid registrado');
+    }
+  } catch (e) {
+    console.error('[integraciones-oauth-callback] Error registrando webhook:', e);
+  }
+}
+
 function redirectAResultado(status: 'ok' | 'error', canal: string, detalle?: string): Response {
   const url = new URL(SITE_URL);
   url.searchParams.set('integracion', canal);
@@ -85,6 +129,12 @@ serve(async (req) => {
     const resultado = await exchange(code);
     await guardarTokenCanal(empresaId, canal as Canal, resultado);
     console.log(`[integraciones-oauth-callback] ✓ Conectado — empresa: ${empresaId} canal: ${canal}`);
+
+    // Registrar el webhook de pedidos (no fatal si falla)
+    if (canal === 'tiendanube' && resultado.externalStoreId) {
+      await registrarWebhookPedidosTiendanube(resultado.externalStoreId, resultado.accessToken);
+    }
+
     return redirectAResultado('ok', canal);
   } catch (e) {
     console.error('[integraciones-oauth-callback] Error en intercambio:', e);
