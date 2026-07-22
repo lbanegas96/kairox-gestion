@@ -50,11 +50,14 @@ const TOKEN_EXCHANGERS: Record<string, (code: string) => Promise<ResultadoExchan
   },
 };
 
-// Registra el webhook de pedidos (order/paid) en Tiendanube apuntando a
-// tiendanube-pedidos-webhook. Idempotente: chequea los webhooks ya registrados
-// antes de crear. No fatal: si falla, la conexión igual queda hecha (se puede
-// re-registrar), solo se loguea — no tiene sentido tirar abajo toda la conexión
-// porque el registro del webhook falló.
+// Registra los webhooks de pedidos en Tiendanube apuntando a
+// tiendanube-pedidos-webhook. Se registran los 3 eventos del ciclo de vida de
+// un pedido (created/paid/cancelled) — no solo "paid" — para que KAIROX vea el
+// pedido apenas existe (mismo criterio que una Orden de Venta en un ERP: existe
+// como documento comercial antes de estar pagada), no recién cuando se cobra.
+// Idempotente por evento: chequea los webhooks ya registrados antes de crear.
+// No fatal: si falla, la conexión igual queda hecha (se puede reintentar
+// reconectando), solo se loguea.
 async function registrarWebhookPedidosTiendanube(storeId: string, token: string): Promise<void> {
   const TN_API_BASE = 'https://api.tiendanube.com/2025-03';
   const USER_AGENT = 'KAIROX Gestion (soporte@kairox.app)';
@@ -65,32 +68,35 @@ async function registrarWebhookPedidosTiendanube(storeId: string, token: string)
   }
   const webhookUrl = `${supabaseUrl}/functions/v1/tiendanube-pedidos-webhook`;
   const headers = { Authorization: `Bearer ${token}`, 'User-Agent': USER_AGENT, 'Content-Type': 'application/json' };
+  const EVENTOS = ['order/created', 'order/paid', 'order/cancelled'];
 
   try {
-    // ¿Ya está registrado order/paid a esta URL?
     const listRes = await fetch(`${TN_API_BASE}/${storeId}/webhooks`, { headers });
-    if (listRes.ok) {
-      const existentes = await listRes.json();
-      const yaEsta = Array.isArray(existentes) &&
-        existentes.some((w: Record<string, unknown>) => w.event === 'order/paid' && w.url === webhookUrl);
-      if (yaEsta) {
-        console.log('[integraciones-oauth-callback] Webhook order/paid ya registrado');
-        return;
+    const existentes = listRes.ok ? await listRes.json() : [];
+    const registrados = new Set(
+      Array.isArray(existentes)
+        ? existentes.filter((w: Record<string, unknown>) => w.url === webhookUrl).map((w: Record<string, unknown>) => w.event)
+        : [],
+    );
+
+    for (const evento of EVENTOS) {
+      if (registrados.has(evento)) {
+        console.log(`[integraciones-oauth-callback] Webhook ${evento} ya registrado`);
+        continue;
+      }
+      const res = await fetch(`${TN_API_BASE}/${storeId}/webhooks`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ event: evento, url: webhookUrl }),
+      });
+      if (!res.ok) {
+        console.error(`[integraciones-oauth-callback] No se pudo registrar webhook ${evento}:`, res.status, await res.text());
+      } else {
+        console.log(`[integraciones-oauth-callback] ✓ Webhook ${evento} registrado`);
       }
     }
-
-    const res = await fetch(`${TN_API_BASE}/${storeId}/webhooks`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ event: 'order/paid', url: webhookUrl }),
-    });
-    if (!res.ok) {
-      console.error('[integraciones-oauth-callback] No se pudo registrar webhook order/paid:', res.status, await res.text());
-    } else {
-      console.log('[integraciones-oauth-callback] ✓ Webhook order/paid registrado');
-    }
   } catch (e) {
-    console.error('[integraciones-oauth-callback] Error registrando webhook:', e);
+    console.error('[integraciones-oauth-callback] Error registrando webhooks:', e);
   }
 }
 
