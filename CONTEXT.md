@@ -1,5 +1,30 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-21 (Luciano — ✅ BUG CRÍTICO de onboarding CERRADO: aplicado, pusheado y verificado en vivo con un signup real)
+**Última actualización:** 2026-07-22 (Luciano — maestros Formas de Pago + Unidades de Medida CONFIRMADOS 100% hechos; hardening RLS formas_pago aplicado)
+
+> ✅ **Formas de Pago y Unidades de Medida: maestros COMPLETOS — no re-investigar ni "construir".**
+> (Anotado porque la skill `sap-reference` los sigue listando como "pendientes / texto libre /
+> hardcoded" — ESO ESTÁ DESACTUALIZADO. La skill es un archivo de plugin, no se puede editar desde el
+> repo; ignorar esos markers.) Estado real verificado esta sesión contra prod:
+> - **Formas de Pago**: tabla maestra + RLS + sembrado por empresa + **ABM completo** (alta/edición/
+>   activar-desactivar en `ConfiguracionSection.jsx` → `TabFinanzas`, modal `showFormaPagoModal`) +
+>   `crear_venta`/`registrar_cobro_cliente` **validan y persisten** `forma_pago_id` en
+>   `movimientos_caja`/`cuenta_corriente_movimientos`. (El "0 de 182 movimientos con forma_pago_id" NO
+>   es bug: es data vieja, sin ventas de caja nuevas desde el 11-jul.)
+> - **Unidades de Medida**: tabla maestra + RLS + sembrado + **ABM completo** (`TabInventario`, modal
+>   `showUMModal`) + productos ya la usan con multi-unidad (compra/venta) y factores de conversión
+>   (`factorEntreUnidades`, mig.186/188). 12/13 productos con `unidad_medida_id`.
+>
+> 🔒 **Hardening aplicado a prod (migration 229): RLS de `formas_pago`.** Tenía una sola policy
+> `FOR ALL` con solo `empresa_id = get_my_empresa_id()` → cualquier usuario del tenant (staff/
+> solo_caja) podía crear/editar/borrar formas de pago por API directa (el gate "solo admin" existía
+> solo en la UI). Como rutean plata (cuenta bancaria, comisión), se separó en 4 policies espejando
+> `unidades_medida`: SELECT abierto al tenant (el POS/cobro necesita listar), INSERT/UPDATE/DELETE con
+> `has_module_permission('configuracion')`. Verificado con dry-runs BEGIN...ROLLBACK (admin escribe,
+> staff lee pero no escribe → 42501). Migration 229 aplicada + commit `01…` pusheado.
+>
+> 📌 **Nota de método**: KAIROX está bastante más maduro que lo que sugieren los docs de roadmap
+> viejos y la skill `sap-reference`. Antes de "construir" un maestro/feature que un doc marca como
+> pendiente, VERIFICAR primero contra el código y prod real — varias cosas ya están hechas.
 
 > ✅ **CERRADO — el signup público estaba roto de raíz (nunca se había probado de punta a punta), ya
 > arreglado, desplegado y verificado con un signup real end-to-end.**
