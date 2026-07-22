@@ -73,6 +73,23 @@
 > function — `supabase.functions.invoke()` no expone el body en `error.message`, hay que parsear
 > `error.context`. Sin esto no se veía el error real de AFIP. Aplica a "Solicitar CAEA" e "Informar".
 
+> 💡 **Idea para adelante (investigación breve, NO implementar ahora — pedido de Luciano): POS con
+> cola offline liviana.** Luciano preguntó si había un camino más liviano que el "POS 100% offline"
+> (PowerSync, descartado antes) para "guardar la venta temporal y enviarla al reconectar". Sí lo hay:
+> el patrón **outbox / cola de salida** — mucho más chico que local-first completo. Estado hoy
+> (verificado): CERO infra offline (sin service worker, sin caché que sobreviva un reload — React
+> Query es 10 min en memoria solo, sin detección online/offline). Los 3 obstáculos reales específicos
+> de KAIROX: (1) la app ni carga sin internet → prerequisito: `vite-plugin-pwa`/service worker +
+> cachear productos/precios/clientes; (2) el número de venta sale de `obtener_proximo_numero` (contador
+> atómico con lock server-side) y el CAE lo da AFIP → las ventas offline serían "tickets internos", NO
+> facturas válidas, hasta sincronizar — para validez fiscal offline se necesita **CAEA** (todo vuelve
+> a CAEA); (3) falta idempotencia (hoy `numero_venta` lo asigna el server; para reenviar la cola sin
+> duplicar haría falta un id único del cliente + dedup en `crear_venta`). **Esfuerzo: semanas, no
+> meses**, aceptando límites (solo ventas contado/simples offline, un terminal, comprobantes válidos
+> al sincronizar). **Sinergia clave**: el outbox (poder operar offline) + CAEA (validez fiscal offline)
+> = POS offline real; por separado cada uno es la mitad. Queda como candidato "para adelante", no
+> priorizado ahora.
+
 > 📌 **Pendiente — el trámite de AFIP para CAEA.** La contingencia automática de AFIP caído (migration 225 + `arca-worker` v10) está
 > **100% en producción y funcionando** — pero para que sea REAL (no solo posible) hace falta dar de
 > alta un punto de venta nuevo, tipo CAEA, en el portal oficial de AFIP. Nalux hoy tiene un solo PdV
