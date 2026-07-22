@@ -1,24 +1,16 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-07-22 (Nadia+Claude — arranque capa de integración/Tiendanube; Luciano — ronda de pulido visual/UX, roadmap en ROADMAP.md)
 
-> 📣 **Para Luciano — al bajar el proyecto, ANTES de cualquier otra cosa, hacé esto en orden:**
-> 1. Andá a **vercel.com → proyecto kairox-gestion → pestaña "Deployments"**. El commit `e11c475`
->    (o el más nuevo en `master`) tiene que aparecer ahí como **"Ready"**. Si no aparece, si está en
->    error, o si el de arriba de todo es viejo (de antes de hoy 2026-07-22), hacé un **"Redeploy"**
->    manual, y de paso fijate que el GitHub → Vercel esté bien conectado (rama de producción =
->    `master`) — esto quedó sin resolver en la sesión de hoy, ver detalle más abajo.
-> 2. Una vez que el deploy esté en Ready, entrá a la URL real de KAIROX (`kairox-gestion.vercel.app`)
->    → **Configuración → Integraciones**. Tiene que aparecer una card de **"Tiendanube"**. Si no
->    aparece, el deploy sigue sin tomar el commit correcto — repetir el paso 1.
-> 3. El backend YA está probado y funcionando (no hace falta tocar nada de Supabase/credenciales) —
->    solo falta confirmar que el frontend llegó. Si querés, probá vos mismo el botón "Conectar" contra
->    la tienda demo "KAIROX Demo" (están las credenciales en el panel de Partners de Tiendanube, cuenta
->    "Kairox IA") para verificarlo de punta a punta con tus propios ojos.
-> 4. Detalle técnico completo de todo lo construido hoy, en el bloque de abajo.
+> 📣 **Para Luciano — capa de integración + adapter Tiendanube: LISTO Y FUNCIONANDO en producción.**
+> Todo probado de punta a punta (backend + frontend), nada pendiente de deploy. La URL real es
+> **`https://kairox-gestion-chi.vercel.app`** (ojo, NO `kairox-gestion.vercel.app` sin el "-chi" —
+> ese es otro dominio/alias que quedó desactualizado y generó una confusión falsa de "el deploy no
+> anda" durante la sesión de hoy; era solo estar mirando la URL equivocada, Vercel nunca estuvo roto).
+> Entrá a Configuración → Integraciones y vas a ver la card de "Tiendanube" con "✓ Conectado" (ya se
+> probó una conexión real contra la tienda demo "KAIROX Demo"). Detalle técnico completo abajo.
 >
 > 🚧 **EN CURSO (Nadia) — capa de integración + adapter Tiendanube, arrancada hoy siguiendo ROADMAP.md.**
-> Backend **probado de punta a punta y funcionando en prod**. Frontend escrito, commiteado y pusheado,
-> pero **todavía no visible en producción** — ver bloqueante al final, es lo único que falta.
+> Backend y frontend **probados de punta a punta y funcionando en prod** (`kairox-gestion-chi.vercel.app`).
 >
 > - **Migration 230 + 231 (YA aplicadas a prod)**: `integraciones_canales` + `integraciones_producto_mapeo`
 >   (esquema del canal + mapeo de productos, RLS admin-only) y `vault_secret_delete` (faltaba el
@@ -50,15 +42,13 @@
 >   `MapeoProductosModal.jsx` (mapeo manual producto↔id externo — todavía no trae el catálogo real
 >   de Tiendanube, eso necesita su propio edge function para llamar a la API de productos) + toast de
 >   retorno en `App.jsx`.
-> - **⚠️ BLOQUEANTE ACTUAL — Vercel no está redesplegando solo con el push.** El push a `master`
->   llegó bien a GitHub (confirmado), pero producción (`kairox-gestion.vercel.app`) sigue sirviendo un
->   build viejo — se verificó entrando a Configuración → Integraciones en prod real y la card de
->   Tiendanube no está. La cuenta de Vercel conectada a las herramientas de Claude no ve ningún
->   proyecto (0 resultados), así que no se pudo diagnosticar ni disparar el deploy desde ahí.
->   **Quien tenga acceso al dashboard de Vercel (vercel.com → proyecto kairox-gestion → Deployments)
->   tiene que revisar**: ¿hay un deploy reciente con el commit `feb7cee` o el de hoy? ¿Falló? ¿Está
->   bien conectado el GitHub → Vercel (webhook, rama de producción = `master`)? Puede necesitar un
->   "Redeploy" manual desde ahí. Una vez resuelto esto, la card de Tiendanube va a aparecer sola.
+> - **✅ CERRADO — la falsa alarma de "Vercel no despliega".** Durante la sesión se verificó
+>   `kairox-gestion.vercel.app` (sin "-chi") y no tenía la card nueva — se interpretó como que el
+>   deploy automático estaba roto. Era un error de URL: el dominio real conectado a GitHub es
+>   **`kairox-gestion-chi.vercel.app`**, que sí tenía el deploy correcto (`e11c475`, confirmado en el
+>   repo de GitHub como "Producción" hace minutos). El otro dominio (`kairox-gestion.vercel.app`) sigue
+>   existiendo como alias/dominio secundario en `ALLOWED_ORIGINS` (`_shared/auth.ts`) por las dudas,
+>   pero no es al que hay que mirar para verificar deploys. **Vercel nunca dejó de auto-desplegar.**
 
 > 📣 **Para Nadia — al arrancar mañana: seguir con el ROADMAP (arriba), no con ajustes visuales.**
 > Luciano se está encargando personalmente de la ronda de pulido visual/UX (navega el sistema y va
