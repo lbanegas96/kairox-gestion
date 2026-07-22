@@ -47,18 +47,31 @@
 > usuario, sin dejar rastro) para no acumular cuentas de prueba sueltas — queda solo **"CAEA Test"**
 > como la empresa aislada para el plan de homologación de abajo.
 >
-> **"CAEA Test" configurada** (`afip_ambiente='sandbox'`, `afip_usa_caea=true`) — lista para seguir el
-> plan de CAEA en homologación. **Lo que sigue requiere a Luciano directamente** (no hay más para mí
-> acá sin su participación):
-> 1. Decidir el CUIT a usar (real de Nalux reusado para homologación, o uno propio/genérico —
->    depende de con qué Clave Fiscal vaya a entrar al portal de AFIP).
-> 2. Loguearse como admin de "CAEA Test" (su contraseña, no la tengo ni la necesito) → Configuración →
->    Facturación → "Generar CSR" → descargar.
-> 3. Subir el CSR al portal de homologación de AFIP (WSASS), autorizar el servicio WSFE de prueba,
->    conseguir el `.crt` + un número de PdV para CAEA — esto es 100% externo, con su Clave Fiscal real,
->    no lo puedo hacer yo.
-> 4. Pegar el `.crt` en la misma pantalla (ya soporta esto — botón "Subir certificado").
-> 5. Pasarme el número de PdV que le asigne AFIP para cargarlo (`afip_pv_numero`).
+> ✅ **Setup de "CAEA Test" en homologación COMPLETO y pipeline técnico validado de punta a punta
+> (2026-07-22).** Se hizo TODO el circuito con Luciano: CUIT `20393249006`, `afip_ambiente='sandbox'`,
+> `afip_usa_caea=true`, `afip_pv_numero=1`. Certificado generado (CSR desde KAIROX → alias `caeatest`
+> en WSASS homologación → `.crt` obtenido y subido al Vault), WSFE autorizado para ese cert en WSASS.
+> Verificado en el Vault: `afip_cert_*` + `afip_key_*` presentes.
+>
+> **Descubrimiento clave (buena noticia): el pipeline técnico funciona 100%.** Al apretar "Solicitar
+> CAEA", KAIROX firmó el request, se conectó a AFIP homologación, y **AFIP lo recibió, procesó y
+> respondió con un error de NEGOCIO** (no de conexión/auth): `WSFE FECAEAConsultar: [602] No existen
+> datos en nuestros registros para los parámetros ingresados`. O sea WSAA + WSFE + lectura de
+> cert/key del Vault + firma + red → todo anda. Lo que faltaba probar quedó probado.
+>
+> **Blocker real, confirmado (mismo que en producción): CAEA requiere que AFIP dé de alta MANUALMENTE
+> un PdV tipo CAEA** — no es autoservicio. El error 602 en homologación es un caso conocido y
+> documentado (foro pyafipws + manual AFIP): en homologación hay que pedirle a AFIP por mail que
+> active un PdV CAEA para el CUIT. **Mail dejado listo para que Luciano lo envíe** a `sri@arca.gob.ar`,
+> asunto "Consulta de Negocio", pidiendo alta de PdV CAEA en homologación para WSFEV1, CUIT
+> 20393249006 (ver el texto completo en el chat de esta sesión). Esto confirma que el trámite de AFIP
+> es inevitable en ambos ambientes — el código está 100% listo de los dos lados, solo falta la acción
+> administrativa de AFIP.
+>
+> 🐛 **Fix colateral desplegado (`4fdb4e1`, en prod vía Vercel):** `CardCAEA.jsx` mostraba el error
+> genérico del SDK ("Edge Function returned a non-2xx status code") en vez del mensaje real de la edge
+> function — `supabase.functions.invoke()` no expone el body en `error.message`, hay que parsear
+> `error.context`. Sin esto no se veía el error real de AFIP. Aplica a "Solicitar CAEA" e "Informar".
 
 > 📌 **Pendiente — el trámite de AFIP para CAEA.** La contingencia automática de AFIP caído (migration 225 + `arca-worker` v10) está
 > **100% en producción y funcionando** — pero para que sea REAL (no solo posible) hace falta dar de
