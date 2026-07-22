@@ -1,5 +1,33 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-22 (Nadia+Claude — arranque capa de integración/Tiendanube; Luciano — ronda de pulido visual/UX, roadmap en ROADMAP.md)
+**Última actualización:** 2026-07-22 noche (Luciano — cerró pruebas del adapter Tiendanube + diseño de publicar catálogo)
+
+> 📣 **Para Nadia — próxima tarea de integraciones: PUBLICAR CATÁLOGO KAIROX → Tiendanube.**
+> Luciano pidió el "doble sentido" de productos (armar el catálogo en KAIROX y publicarlo en TN).
+> Hoy el adapter es solo TN→KAIROX; falta el sentido inverso. **NO lo construí** — es un feature de
+> 2-3 días y cae en tu carril, no en el pulido visual de Luciano. Dejé el **diseño completo de
+> arquitectura** en [`docs/DISENO_publicar_catalogo_tiendanube.md`](docs/DISENO_publicar_catalogo_tiendanube.md)
+> (modelo de datos, edge worker, mapeo de campos KAIROX→TN, trigger, UI, orden de implementación,
+> riesgos). **Antes de codear, confirmar con Luciano 2 decisiones** que están marcadas como bloqueantes
+> en el doc: (1) fuente de verdad del catálogo (el diseño asume KAIROX, unidireccional), (2) si la V1
+> va **sin imágenes** (recomendado — baja el build de ~3 a ~1.5 días).
+>
+> ✅ **Pruebas del adapter Tiendanube que Nadia dejó pendientes — CERRADAS por Luciano (2026-07-22 noche):**
+> - **Reconexión + 3 webhooks:** Luciano reconectó desde Configuración → Integraciones; el callback
+>   corrió en v4 y registró los 3 eventos. (La 1ª vez terminó en el panel de TN sin completar el OAuth;
+>   a la 2ª salió bien — confirmado en logs: `oauth-iniciar` 200 → `oauth-callback` 302.)
+> - **`order/created` de punta a punta:** la tienda demo NO tiene medio de pago real, así que se activó
+>   una transferencia (dLocal) y se creó un pedido real → llegó a KAIROX como `PED-20260722-002`,
+>   `estado='borrador'`, con el texto de notas de la rama nueva del código (v4). Esto es justo lo que
+>   Nadia no había podido probar tras ampliar a 3 eventos. Los otros 2 estados (`paid`→confirmado,
+>   `cancelled`→cancelado) son la misma función/patrón; riesgo residual mínimo (nada fiscal se genera
+>   solo, el operador revisa antes de facturar).
+> - **Mapeo de stock:** Batidora Eléctrica mapeada a la única variante de la tienda demo,
+>   `sincronizar_stock=true`. El envío real de stock a la API de TN **quedó sin probar** porque no se
+>   cambió el `stock_actual` (la cola solo encola ante un cambio real de número). Pendiente menor:
+>   cambiar el stock de un producto mapeado y verificar `integraciones_stock_pendiente` + panel de TN.
+> - **Nota sobre `PED-20260722-001`** (el de Nadia): quedó en `borrador` con notas de una versión vieja
+>   del webhook (v2). NO es bug — es data de las iteraciones de construcción, no refleja el código actual.
+
 
 > 📣 **Para Luciano — capa de integración + adapter Tiendanube: LISTO Y FUNCIONANDO en producción.**
 > Todo probado de punta a punta (backend + frontend), nada pendiente de deploy. La URL real es

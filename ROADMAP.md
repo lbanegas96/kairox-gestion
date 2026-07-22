@@ -50,7 +50,7 @@ fácil y llegar al difícil con el patrón ya rodado:
 
 | # | Canal | Dificultad | Por qué / qué lo hace difícil |
 |---|-------|-----------|-------------------------------|
-| 1 | **Tiendanube / Shopify** | 🟢 Fácil | OAuth estándar, bien documentado. **Primer adapter** — estrena la capa sin pelear con stock bidireccional. |
+| 1 | **Tiendanube / Shopify** | 🟢 Fácil | OAuth estándar, bien documentado. **Primer adapter** — estrena la capa sin pelear con stock bidireccional. ✅ Sentido TN→KAIROX (catálogo, pedidos, stock) hecho. Falta **publicar catálogo KAIROX→TN** — diseño en [`docs/DISENO_publicar_catalogo_tiendanube.md`](docs/DISENO_publicar_catalogo_tiendanube.md), pedido por Luciano, 2-3 días, carril de Nadia. |
 | 2 | **MercadoLibre** | 🟡 Medio | La apuesta grande del mercado AR (órdenes + stock + factura AFIP auto). Plomería resuelta; lo difícil es el **stock bidireccional** (¿quién es la fuente de verdad?) + idempotencia. |
 | 3 | **Bancos** | 🔴 Difícil | Argentina no tiene open-banking estándar (no hay PSD2). MP / Ualá que ya se sincroniza es el **atajo práctico** por ahora. |
 
