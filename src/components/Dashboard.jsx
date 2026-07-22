@@ -1,27 +1,31 @@
-import { useState, useEffect, Suspense, lazy } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { Loader2 } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import SectionErrorBoundary from '@/components/SectionErrorBoundary';
+import { lazyWithRetry } from '@/lib/lazyWithRetry';
 import { AuroraBackground } from '@/components/ui/AuroraBackground';
 // DashboardSection queda con import estático: es la vista de aterrizaje al
 // hacer login, lazy-cargarla agregaría un flash de spinner en el camino más
 // común. Las demás 16 secciones se cargan bajo demanda (code-splitting).
+// `lazyWithRetry` recarga la app si un chunk quedó viejo tras un deploy, en vez
+// de tumbar la pantalla al import fallido.
 import DashboardSection from '@/components/sections/DashboardSection';
-const ProductosSection = lazy(() => import('@/components/sections/ProductosSection'));
-const VentasSection = lazy(() => import('@/components/sections/VentasSection'));
-const ComprasSection = lazy(() => import('@/components/sections/ComprasSection'));
-const CajaSection = lazy(() => import('@/components/sections/CajaSection'));
-const ClientesSection = lazy(() => import('@/components/sections/ClientesSection'));
-const CuentaCorrienteSection = lazy(() => import('@/components/sections/CuentaCorrienteSection'));
-const ReportesSection = lazy(() => import('@/components/sections/ReportesSection'));
-const ConfiguracionSection = lazy(() => import('@/components/sections/ConfiguracionSection'));
-const ListasPrecioSection = lazy(() => import('@/components/sections/ListasPrecioSection'));
-const OfertasSection = lazy(() => import('@/components/sections/OfertasSection'));
-const PlanCuentasSection = lazy(() => import('@/components/sections/PlanCuentasSection'));
-const CuentasBancariasSection = lazy(() => import('@/components/sections/CuentasBancariasSection'));
-const ChequesSection = lazy(() => import('@/components/sections/ChequesSection'));
-const ImpuestosSection = lazy(() => import('@/components/ImpuestosSection'));
-const ProveedoresSection = lazy(() => import('@/components/sections/ProveedoresSection'));
+const ProductosSection = lazyWithRetry(() => import('@/components/sections/ProductosSection'), 'productos');
+const VentasSection = lazyWithRetry(() => import('@/components/sections/VentasSection'), 'ventas');
+const ComprasSection = lazyWithRetry(() => import('@/components/sections/ComprasSection'), 'compras');
+const CajaSection = lazyWithRetry(() => import('@/components/sections/CajaSection'), 'caja');
+const ClientesSection = lazyWithRetry(() => import('@/components/sections/ClientesSection'), 'clientes');
+const CuentaCorrienteSection = lazyWithRetry(() => import('@/components/sections/CuentaCorrienteSection'), 'cuentacorriente');
+const ReportesSection = lazyWithRetry(() => import('@/components/sections/ReportesSection'), 'reportes');
+const ConfiguracionSection = lazyWithRetry(() => import('@/components/sections/ConfiguracionSection'), 'configuracion');
+const ListasPrecioSection = lazyWithRetry(() => import('@/components/sections/ListasPrecioSection'), 'listas_precio');
+const OfertasSection = lazyWithRetry(() => import('@/components/sections/OfertasSection'), 'ofertas');
+const PlanCuentasSection = lazyWithRetry(() => import('@/components/sections/PlanCuentasSection'), 'plan_cuentas');
+const CuentasBancariasSection = lazyWithRetry(() => import('@/components/sections/CuentasBancariasSection'), 'bancos');
+const ChequesSection = lazyWithRetry(() => import('@/components/sections/ChequesSection'), 'cheques');
+const ImpuestosSection = lazyWithRetry(() => import('@/components/ImpuestosSection'), 'impuestos');
+const ProveedoresSection = lazyWithRetry(() => import('@/components/sections/ProveedoresSection'), 'proveedores');
 import { CommandPalette, useCommandPalette } from '@/components/CommandPalette';
 import { supabase } from '@/lib/customSupabaseClient';
 import { OnboardingWizard } from '@/components/OnboardingWizard';
@@ -114,9 +118,11 @@ function Dashboard({ user, onLogout, onEnterPOS }) {
 
           <main className="flex-1 overflow-y-auto p-6">
             <div key={activeSection} className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-              <Suspense fallback={<SectionFallback />}>
-                {renderSection()}
-              </Suspense>
+              <SectionErrorBoundary resetKey={activeSection}>
+                <Suspense fallback={<SectionFallback />}>
+                  {renderSection()}
+                </Suspense>
+              </SectionErrorBoundary>
             </div>
           </main>
         </div>

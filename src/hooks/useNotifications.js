@@ -1,8 +1,14 @@
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { getNowAR, getTodayAR } from '@/lib/dateUtils';
+import {
+  useDismissedNotifications,
+  dismissNotification,
+  pruneDismissed,
+} from '@/hooks/useDismissedNotifications';
 
 // Notificaciones tienen que sentirse "vivas" — refrescamos cada 30s
 // y siempre que el usuario vuelve al tab del navegador.
@@ -219,7 +225,7 @@ export function useNotifications() {
   });
 
   // ── Armar lista unificada ──────────────────────────────────────────────────
-  const items = [
+  const allItems = [
     ...(facturasErrorDefinitivo.length > 0 ? [{
       id: 'facturas-error-definitivo',
       tipo: 'facturas_error_cae',
@@ -308,9 +314,23 @@ export function useNotifications() {
     })),
   ];
 
+  // ── Descartadas ("vistas") ─────────────────────────────────────────────────
+  // El usuario abre una alerta → "vuela" de la lista. Filtramos las descartadas
+  // y limpiamos del set las que ya no aplican (condición resuelta), para que
+  // puedan volver a notificar si reaparecen.
+  const dismissed = useDismissedNotifications();
+  const liveIds = allItems.map((i) => i.id).join('|');
+  useEffect(() => {
+    pruneDismissed(allItems.map((i) => i.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveIds]);
+
+  const items = allItems.filter((i) => !dismissed.has(i.id));
+
   return {
     items,
     count: items.length,
+    dismiss: dismissNotification,
     stockBajo,
     deudaVencida,
     ocPendientes,

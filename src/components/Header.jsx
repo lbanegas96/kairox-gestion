@@ -156,6 +156,7 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch, activ
                                 title: `${n} factura${n === 1 ? '' : 's'} re-encolada${n === 1 ? '' : 's'}`,
                                 description: 'El worker emitirá los CAE en los próximos minutos.',
                               });
+                              notifications.dismiss(item.id);
                               queryClient.invalidateQueries({ queryKey: ['ventas'] });
                               queryClient.invalidateQueries({ queryKey: ['notif'] });
                             }).catch(err => {
@@ -163,8 +164,10 @@ function Header({ user, onLogout, toggleSidebar, onNavigate, onOpenSearch, activ
                             });
                           });
                         } else if (item.action === 'tab-facturacion') {
+                          notifications.dismiss(item.id);
                           onNavigate?.(item.seccion, { initialTab: 'facturacion' });
                         } else {
+                          notifications.dismiss(item.id);
                           onNavigate?.(item.seccion);
                         }
                       }}
