@@ -2,32 +2,48 @@
 **Última actualización:** 2026-07-22 (Nadia+Claude — arranque capa de integración/Tiendanube; Luciano — ronda de pulido visual/UX, roadmap en ROADMAP.md)
 
 > 🚧 **EN CURSO (Nadia) — capa de integración + adapter Tiendanube, arrancada hoy siguiendo ROADMAP.md.**
-> Escrito y verificado, **nada desplegado a producción todavía** (se decidió esperar a tener
-> credenciales reales de Tiendanube antes de subir todo junto funcionando de punta a punta):
-> - **Migration 230 (YA aplicada a prod)**: 2 tablas nuevas — `integraciones_canales` (conexión por
->   canal: Tiendanube/Shopify/MercadoLibre, sin secretos adentro) e `integraciones_producto_mapeo`
->   (producto KAIROX ↔ id externo, `UNIQUE(integracion_id, producto_id)` para permitir el mismo
->   producto mapeado en varios canales a la vez). RLS admin-only, mismo criterio que
->   `integraciones_bancarias` (migración 124).
-> - **Capa compartida (código listo, SIN desplegar)**: `_shared/integraciones.ts` (helpers de
->   Vault + manejo de `state` OAuth con anti-replay, verificado con dry-run contra prod) +
->   `integraciones-oauth-iniciar`/`integraciones-oauth-callback` (edge functions). Intercambio
->   Tiendanube verificado contra su doc oficial real (no de memoria):
->   https://tiendanube.github.io/api-documentation/authentication — el access token de Tiendanube
->   NO expira (no hay refresh_token).
-> - **UI mínima (código listo, SIN desplegar)**: card "Tiendanube" en Configuración → Integraciones
->   (`TabIntegraciones.jsx`) + `ConectarTiendanubeModal.jsx` (dispara el OAuth) +
+> Backend **probado de punta a punta y funcionando en prod**. Frontend escrito, commiteado y pusheado,
+> pero **todavía no visible en producción** — ver bloqueante al final, es lo único que falta.
+>
+> - **Migration 230 + 231 (YA aplicadas a prod)**: `integraciones_canales` + `integraciones_producto_mapeo`
+>   (esquema del canal + mapeo de productos, RLS admin-only) y `vault_secret_delete` (faltaba el
+>   wrapper de borrado en Vault — lo necesitó el webhook de compliance, ver abajo).
+> - **Backend desplegado y funcionando (Supabase)**: `_shared/integraciones.ts` (Vault + manejo de
+>   `state` OAuth anti-replay) + `integraciones-oauth-iniciar` (verify_jwt=true, la llama el
+>   frontend logueado) + `integraciones-oauth-callback` (verify_jwt=false, la llama Tiendanube por
+>   redirect sin sesión) + `tiendanube-compliance-webhook` (verify_jwt=false — ver bloque LGPD abajo).
+> - **✅ Cuenta de Tiendanube Partners creada y app registrada**: "Kairox IA" → app "KAIROX Gestión"
+>   (#37256), distribución **"Para tus clientes"** (privada, sin revisión ni revenue share — no
+>   hace falta pagar nada para el programa de Socios Tecnológicos, confirmado contra
+>   ayuda.tiendanube.com). Redirect URL configurada, permisos otorgados: Productos (lectura+escritura)
+>   y Órdenes (solo lectura — nosotros no escribimos pedidos en Tiendanube, solo los leemos para crear
+>   la venta en KAIROX). Credenciales (`TIENDANUBE_APP_ID=37256`, `TIENDANUBE_CLIENT_SECRET`) cargadas
+>   como Edge Function secrets en Supabase.
+> - **⚠️ Hallazgo no previsto en el plan original — webhooks LGPD obligatorios**: Tiendanube exige a
+>   CUALQUIER app (pública o privada) 3 URLs de compliance de datos personales (store/redact,
+>   customers/redact, customers/data_request — mismo espíritu que la Ley 25.326). Se construyeron y
+>   desplegaron (`tiendanube-compliance-webhook?tipo=...`, firma verificada vía
+>   `x-linkedstore-hmac-sha256`). Hoy `customers_redact`/`customers_data_request` son no-op porque
+>   todavía no sincronizamos pedidos/clientes de Tiendanube — **cuando se construya el sync de
+>   pedidos, hay que volver a este archivo y hacer que realmente borren/exporten datos de clientes.**
+> - **✅ Probado de punta a punta contra una tienda demo real** ("KAIROX Demo", creada en el panel de
+>   Partners): conectar → autorizar en Tiendanube → volver → verificado en `integraciones_canales`:
+>   `activo=true`, `external_store_id=7996233`, `scope=read_products,write_products,read_orders`. El
+>   flujo OAuth + Vault + tabla funciona correctamente en producción.
+> - **UI mínima (código commiteado y pusheado, commit `feb7cee` en `master`)**: card "Tiendanube" en
+>   Configuración → Integraciones (`TabIntegraciones.jsx`) + `ConectarTiendanubeModal.jsx` +
 >   `MapeoProductosModal.jsx` (mapeo manual producto↔id externo — todavía no trae el catálogo real
->   de Tiendanube, eso necesita su propio edge function para llamar a la API de productos). Build de
->   producción (`npm run build`) corrido limpio con todo esto adentro.
-> - **⚠️ BLOQUEANTE fuera de código — falta antes de que esto funcione de verdad:** registrar una
->   app en el panel de Partners de Tiendanube (partners.tiendanube.com o similar) para conseguir
->   `TIENDANUBE_APP_ID` y `TIENDANUBE_CLIENT_SECRET` reales, y configurar ahí el `redirect_uri` fijo
->   apuntando a la URL pública de `integraciones-oauth-callback`. Sin esto, `integraciones-oauth-
->   iniciar` responde "Integración no configurada" — no es un bug, es exactamente el mismo tipo de
->   trámite administrativo que quedó pendiente con AFIP para CAEA (ver más abajo).
-> - **Próximo paso**: cuando existan las credenciales, cargarlas como secret de Edge Functions en
->   Supabase y recién ahí desplegar todo junto (las 2 edge functions + el frontend).
+>   de Tiendanube, eso necesita su propio edge function para llamar a la API de productos) + toast de
+>   retorno en `App.jsx`.
+> - **⚠️ BLOQUEANTE ACTUAL — Vercel no está redesplegando solo con el push.** El push a `master`
+>   llegó bien a GitHub (confirmado), pero producción (`kairox-gestion.vercel.app`) sigue sirviendo un
+>   build viejo — se verificó entrando a Configuración → Integraciones en prod real y la card de
+>   Tiendanube no está. La cuenta de Vercel conectada a las herramientas de Claude no ve ningún
+>   proyecto (0 resultados), así que no se pudo diagnosticar ni disparar el deploy desde ahí.
+>   **Quien tenga acceso al dashboard de Vercel (vercel.com → proyecto kairox-gestion → Deployments)
+>   tiene que revisar**: ¿hay un deploy reciente con el commit `feb7cee` o el de hoy? ¿Falló? ¿Está
+>   bien conectado el GitHub → Vercel (webhook, rama de producción = `master`)? Puede necesitar un
+>   "Redeploy" manual desde ahí. Una vez resuelto esto, la card de Tiendanube va a aparecer sola.
 
 > 📣 **Para Nadia — al arrancar mañana: seguir con el ROADMAP (arriba), no con ajustes visuales.**
 > Luciano se está encargando personalmente de la ronda de pulido visual/UX (navega el sistema y va
