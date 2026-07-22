@@ -131,6 +131,8 @@ function DashboardSection({ onNavigate }) {
         </Button>
       </div>
 
+      <AccionesRapidas onNavigate={onNavigate} canAccessSection={canAccessSection} />
+
       <ChecklistOnboarding onNavigate={onNavigate} />
 
       <HeroRow
@@ -158,8 +160,6 @@ function DashboardSection({ onNavigate }) {
         ventasLoading={ventasLoading} ventasDia={ventasDia}
         flujoLoading={flujoLoading} flujoCaja={flujoCaja}
       />
-
-      <AccionesRapidas onNavigate={onNavigate} canAccessSection={canAccessSection} />
 
     </div>
   );

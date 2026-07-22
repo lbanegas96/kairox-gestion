@@ -1,7 +1,12 @@
 import { CheckCircle2, Timer, AlertTriangle } from 'lucide-react';
+import { getNowAR } from '@/lib/dateUtils';
 
+// Usa getNowAR() (hora Argentina calculada desde epoch, sin depender de la TZ
+// del dispositivo) en vez de `new Date().getHours()` — si el navegador/SO del
+// usuario tiene mal configurada la zona horaria, getHours() da la hora local
+// del dispositivo y el saludo queda desincronizado de la hora real en AR.
 export function saludoSegunHora() {
-  const h = new Date().getHours();
+  const h = getNowAR().getUTCHours();
   if (h < 12) return 'Buenos días';
   if (h < 19) return 'Buenas tardes';
   return 'Buenas noches';
@@ -47,12 +52,12 @@ export const QuickActionButton = ({ icon: Icon, label, onClick, gradient, disabl
   <button
     onClick={onClick}
     disabled={disabled}
-    className={`flex flex-col items-center justify-center p-5 rounded-xl bg-gradient-to-br ${gradient} shadow-lg hover:shadow-xl transition-all duration-200 group relative overflow-hidden hover:-translate-y-0.5 active:scale-95 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+    className={`flex flex-col items-center justify-center p-3 rounded-lg bg-gradient-to-br ${gradient} shadow-sm hover:shadow-md transition-all duration-200 group relative overflow-hidden hover:-translate-y-0.5 active:scale-95 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
   >
     <div className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-colors duration-200" />
-    <div className="p-2.5 rounded-full bg-white/20 mb-2.5 group-hover:bg-white/30 transition-all relative z-10">
-      <Icon className="h-5 w-5 text-white" />
+    <div className="p-1.5 rounded-full bg-white/20 mb-1.5 group-hover:bg-white/30 transition-all relative z-10">
+      <Icon className="h-3.5 w-3.5 text-white" />
     </div>
-    <span className="text-xs font-semibold text-white relative z-10">{label}</span>
+    <span className="text-[10.5px] font-semibold text-white relative z-10">{label}</span>
   </button>
 );

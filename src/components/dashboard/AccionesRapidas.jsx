@@ -3,9 +3,9 @@ import { QuickActionButton } from './shared';
 
 function AccionesRapidas({ onNavigate, canAccessSection }) {
   return (
-    <div className="bg-kx-surface border border-kx-border rounded-2xl p-5 shadow-sm dark:shadow-none transition-all duration-200 ease-out hover:shadow-lg dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:-translate-y-0.5 hover:border-kx-border-hover">
-      <div className="text-[13px] font-semibold text-kx-text mb-4">Acciones Rápidas</div>
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+    <div className="bg-kx-surface border border-kx-border rounded-xl p-3.5 shadow-sm dark:shadow-none transition-all duration-200 ease-out hover:shadow-lg dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:border-kx-border-hover">
+      <div className="text-[11.5px] font-semibold text-kx-text-2 mb-2.5">Acciones Rápidas</div>
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
         <QuickActionButton icon={ShoppingCart} label="Nueva Venta"
           onClick={() => onNavigate?.('pos')} gradient="from-blue-600 to-blue-500"
           disabled={!canAccessSection('ventas')} />
