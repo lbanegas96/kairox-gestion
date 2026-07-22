@@ -1,6 +1,37 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-22 (Luciano — maestros Formas de Pago + Unidades de Medida CONFIRMADOS 100% hechos; hardening RLS formas_pago aplicado)
+**Última actualización:** 2026-07-22 (Luciano — ronda de pulido visual/UX; roadmap en ROADMAP.md)
 
+> 📣 **Para Nadia — al arrancar mañana: empezá con el ROADMAP, no con ajustes visuales.**
+> Luciano se está encargando personalmente de la ronda de pulido visual/UX (navega el sistema y va
+> pasando correcciones parte por parte, ver debajo). Mientras tanto, arrancá vos con lo de
+> [`ROADMAP.md`](./ROADMAP.md) — capa de integración reutilizable (OAuth+refresh, webhook receiver,
+> jobs de sync idempotentes, mapeo SKU↔producto) y el primer adapter del gradiente (Tiendanube/
+> Shopify, el más fácil). Objetivo: primer cliente en agosto 2026.
+>
+> ✅ **Ronda de pulido visual/UX de hoy (2026-07-22) — 3 bugs + 1 feature, todo en prod:**
+> - **Notificaciones que no desaparecían al abrirlas** — eran derivadas (sin flag `leida` en DB), se
+>   agregó un store de "descartadas" (`useDismissedNotifications`, localStorage) que las hace "volar"
+>   al abrirlas y las repone si la condición vuelve a cumplirse.
+> - **Crash de pantalla completa al entrar a algunas notificaciones** — causa real: chunk lazy viejo
+>   post-deploy (`index.html` cacheado pide un hash que Vercel ya no sirve → `text/html` en vez de JS
+>   → import dinámico explota) y no había error boundary arriba del `Suspense`, así que tumbaba toda
+>   la app. Fix: `lazyWithRetry()` (recarga una vez si detecta el chunk viejo) + `SectionErrorBoundary`
+>   (contiene el fallo, muestra "Recargar" en vez de pantalla negra).
+> - **Saludo del dashboard pegado en "Buenos días"** — 2 bugs compuestos: (1) usaba
+>   `new Date().getHours()` (hora del dispositivo/navegador) en vez de `getNowAR()` como el resto del
+>   código — quedó desincronizado de la hora real de Argentina; (2) aun corrigiendo la TZ, el umbral
+>   `h<12` metía 00:00–05:59 dentro de "Buenos días" — a la 1 AM decía "Buenos días" (Nadia lo vio en
+>   vivo). Fix: umbral con corte en las 6 AM.
+> - **Acciones Rápidas reordenadas + Escape para volver al Dashboard** — el bloque de 6 accesos
+>   directos (Nueva Venta/Cotización/Orden Compra/Caja/Cliente/Reportes) estaba al final del
+>   dashboard, después de 6-7 secciones de scroll; se movió arriba (debajo del saludo) y se achicó
+>   para que sea sutil. Además: `Escape` ahora vuelve al Dashboard desde cualquier sección — antes
+>   solo la POS tenía un "Volver al panel" (es una pantalla aparte, fuera del switch de secciones); se
+>   generalizó como atajo global en `Dashboard.jsx`, con guards para no interrumpir: no dispara si hay
+>   un modal Radix abierto (`[role="dialog"]`, que se cierre él primero), si el CommandPalette está
+>   abierto (maneja su propio Escape), o si el foco está en un input/textarea/select (no cortar una
+>   carga de datos en curso).
+>
 > ✅ **Formas de Pago y Unidades de Medida: maestros COMPLETOS — no re-investigar ni "construir".**
 > (Anotado porque la skill `sap-reference` los sigue listando como "pendientes / texto libre /
 > hardcoded" — ESO ESTÁ DESACTUALIZADO. La skill es un archivo de plugin, no se puede editar desde el

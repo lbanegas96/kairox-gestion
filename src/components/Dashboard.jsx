@@ -61,6 +61,26 @@ function Dashboard({ user, onLogout, onEnterPOS }) {
       });
   }, [user?.empresa_id]);
 
+  // Escape vuelve al Dashboard desde cualquier sección — generaliza el "Volver
+  // al panel" que hoy solo tiene la POS (que es una pantalla aparte, fuera de
+  // este switch). Se frena si: el CommandPalette está abierto (maneja su
+  // propio Escape), hay un modal/dialog Radix abierto (que lo cierre él, no
+  // saltar dos niveles a la vez), o el foco está en un campo de texto (no
+  // interrumpir una carga de datos en curso).
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key !== 'Escape' || activeSection === 'dashboard' || cmdOpen) return;
+      const el = document.activeElement;
+      const enCampoDeTexto = el && (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable);
+      if (enCampoDeTexto) return;
+      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+      setActiveSection('dashboard');
+      setSectionParams({});
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [activeSection, cmdOpen]);
+
   const renderSection = () => {
     switch (activeSection) {
       case 'dashboard':     return <DashboardSection onNavigate={navigateTo} />;
