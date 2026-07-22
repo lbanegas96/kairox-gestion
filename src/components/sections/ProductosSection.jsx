@@ -132,6 +132,11 @@ const ProductosSection = () => {
     // Unidad de venta / pack (roadmap SAP, mig.189/190) — opcional. Vacío = se vende en
     // la unidad de stock. precio_venta_pack vacío = proporcional; descuento_pack_pct = auto.
     unidad_venta_id: '', factor_conversion_venta: '1', precio_venta_pack: '', descuento_pack_pct: '',
+    // Tipo de artículo estilo SAP B1 (OITM: InvntItem/SellItem/PrchseItem) + servicio
+    // (mig.234). Defaults = producto físico de venta y compra (comportamiento actual).
+    es_inventariable: true, es_articulo_venta: true, es_articulo_compra: true, es_servicio: false,
+    // Exposición a ecommerce (Tiendanube). Default off — el usuario lo tilda explícito.
+    publicar_ecommerce: false,
   };
 
   const [newProduct, setNewProduct] = useState(initialProductState);
@@ -202,6 +207,13 @@ const ProductosSection = () => {
         factor_conversion_venta: parseNumberLocale(newProduct.factor_conversion_venta) || 1,
         precio_venta_pack: (newProduct.precio_venta_pack ?? '') !== '' ? parseNumberLocale(newProduct.precio_venta_pack) : null,
         descuento_pack_pct: parseNumberLocale(newProduct.descuento_pack_pct) || 0,
+        // Tipo de artículo SAP (mig.234). Un servicio nunca es inventariable (lo
+        // fuerza el CHECK chk_servicio_no_inventariable) — la UI ya lo refleja.
+        es_inventariable: newProduct.es_servicio ? false : !!newProduct.es_inventariable,
+        es_articulo_venta: !!newProduct.es_articulo_venta,
+        es_articulo_compra: !!newProduct.es_articulo_compra,
+        es_servicio: !!newProduct.es_servicio,
+        publicar_ecommerce: !!newProduct.publicar_ecommerce,
         descripcion: newProduct.descripcion,
         activo: true,
         fecha_creacion: getNowAR().toISOString()
@@ -256,6 +268,12 @@ const ProductosSection = () => {
         // directo acá permitía revertir en silencio ventas/compras concurrentes al
         // guardar el form con el valor stale que tenía al abrirlo.
         stock_minimo: parseInt(editProduct.stock_minimo) || 0,
+        // Tipo de artículo SAP (mig.234) — mismo criterio que el alta.
+        es_inventariable: editProduct.es_servicio ? false : !!editProduct.es_inventariable,
+        es_articulo_venta: !!editProduct.es_articulo_venta,
+        es_articulo_compra: !!editProduct.es_articulo_compra,
+        es_servicio: !!editProduct.es_servicio,
+        publicar_ecommerce: !!editProduct.publicar_ecommerce,
         descripcion: editProduct.descripcion
       };
 

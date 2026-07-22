@@ -1,11 +1,26 @@
 import { useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Boxes, ShoppingCart, ShoppingBag, Wrench, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { factorEntreUnidades, sonConvertibles, getMagnitudLabel } from '@/lib/unidadesMedida';
+
+// Fila de toggle tipo de artículo (estilo SAP B1 OITM) — ícono + label + descripción + Switch.
+const ToggleTipoArticulo = ({ icon: Icon, label, hint, checked, onCheckedChange, disabled }) => (
+  <div className={`flex items-center justify-between gap-3 rounded-lg border border-kx-border p-3 ${disabled ? 'opacity-50' : ''}`}>
+    <div className="flex items-start gap-2.5 min-w-0">
+      <Icon className="w-4 h-4 mt-0.5 shrink-0 text-kx-text-2" />
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-kx-text">{label}</p>
+        <p className="text-xs text-kx-text-3 leading-snug">{hint}</p>
+      </div>
+    </div>
+    <Switch checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
+  </div>
+);
 
 // Defined outside ProductosSection to keep a stable component identity across renders.
 // If defined inside, React creates a new function reference every render, causing
@@ -348,6 +363,58 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
         </div>
       </>
     )}
+
+    {/* ── Tipo de artículo (SAP B1 OITM) — en qué procesos participa ────────── */}
+    <div className="col-span-1 md:col-span-2 space-y-2">
+      <Label>Tipo de artículo</Label>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <ToggleTipoArticulo
+          icon={Wrench}
+          label="Es un servicio"
+          hint="Mano de obra, flete, honorarios. No maneja stock."
+          checked={!!data.es_servicio}
+          onCheckedChange={(v) => setData({
+            ...data,
+            es_servicio: v,
+            // Un servicio nunca es inventariable (lo fuerza el CHECK en DB).
+            ...(v ? { es_inventariable: false } : {}),
+          })}
+        />
+        <ToggleTipoArticulo
+          icon={Boxes}
+          label="Inventariable"
+          hint="Mueve stock. Se descuenta al vender, se suma al comprar."
+          checked={!!data.es_inventariable}
+          disabled={!!data.es_servicio}
+          onCheckedChange={(v) => setData({ ...data, es_inventariable: v })}
+        />
+        <ToggleTipoArticulo
+          icon={ShoppingCart}
+          label="Artículo de venta"
+          hint="Aparece en cotizaciones, pedidos y facturas de venta."
+          checked={!!data.es_articulo_venta}
+          onCheckedChange={(v) => setData({ ...data, es_articulo_venta: v })}
+        />
+        <ToggleTipoArticulo
+          icon={ShoppingBag}
+          label="Artículo de compra"
+          hint="Aparece en órdenes de compra y facturas de proveedor."
+          checked={!!data.es_articulo_compra}
+          onCheckedChange={(v) => setData({ ...data, es_articulo_compra: v })}
+        />
+      </div>
+    </div>
+
+    {/* ── Exposición a ecommerce (Tiendanube) ──────────────────────────────── */}
+    <div className="col-span-1 md:col-span-2">
+      <ToggleTipoArticulo
+        icon={Globe}
+        label="Publicar en ecommerce"
+        hint="Expone este artículo a los canales conectados (Tiendanube). KAIROX es la fuente de verdad: los cambios de acá se publican allá."
+        checked={!!data.publicar_ecommerce}
+        onCheckedChange={(v) => setData({ ...data, publicar_ecommerce: v })}
+      />
+    </div>
 
     <div className="col-span-1 md:col-span-2 space-y-2">
       <Label htmlFor="desc">Descripción</Label>
