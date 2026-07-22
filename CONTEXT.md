@@ -34,8 +34,10 @@
 > que el stock cambió en el panel de Tiendanube de esa variante. Si falla, mirar
 > `integraciones_stock_pendiente` (columna `error_mensaje`) y los logs del worker.
 >
-> 🚧 **EN CURSO (Nadia) — capa de integración + adapter Tiendanube, arrancada hoy siguiendo ROADMAP.md.**
-> Backend y frontend **probados de punta a punta y funcionando en prod** (`kairox-gestion-chi.vercel.app`).
+> ✅ **Sesión cerrada (Nadia, 2026-07-22) — capa de integración + adapter Tiendanube, siguiendo
+> ROADMAP.md.** Los 3 pasos del gradiente de adapter (catálogo, pedidos, stock) quedaron construidos
+> y desplegados a prod hoy. Quedan 2 cosas puntuales para que Luciano revise (ver arriba) antes de
+> darlo por 100% cerrado — el resto está probado de punta a punta.
 >
 > - **Migration 230 + 231 (YA aplicadas a prod)**: `integraciones_canales` + `integraciones_producto_mapeo`
 >   (esquema del canal + mapeo de productos, RLS admin-only) y `vault_secret_delete` (faltaba el
