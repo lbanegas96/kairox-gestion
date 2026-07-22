@@ -5,8 +5,13 @@ import { getNowAR } from '@/lib/dateUtils';
 // del dispositivo) en vez de `new Date().getHours()` — si el navegador/SO del
 // usuario tiene mal configurada la zona horaria, getHours() da la hora local
 // del dispositivo y el saludo queda desincronizado de la hora real en AR.
+//
+// El rango horario tiene que arrancar en las 6 AM, no en medianoche: de 00:00
+// a 05:59 sigue siendo de noche coloquialmente (nadie dice "buenos días" a la
+// 1 AM), así que esas horas caen en "Buenas noches", no en "Buenos días".
 export function saludoSegunHora() {
   const h = getNowAR().getUTCHours();
+  if (h < 6)  return 'Buenas noches';
   if (h < 12) return 'Buenos días';
   if (h < 19) return 'Buenas tardes';
   return 'Buenas noches';
