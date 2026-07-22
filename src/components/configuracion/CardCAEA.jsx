@@ -11,6 +11,21 @@ import { formatDateAR } from '@/lib/dateUtils';
 const TIPO_CBTE_LABEL = { 1: 'Factura A', 6: 'Factura B', 11: 'Factura C' };
 
 /**
+ * `supabase.functions.invoke()` no expone el body de la respuesta en
+ * `error.message` cuando la función devuelve un status no-2xx — queda como
+ * "Edge Function returned a non-2xx status code", genérico e inútil para
+ * saber qué pasó realmente (ej. el motivo que dio AFIP). El detalle real
+ * viene en `error.context` (un Response) — hay que parsearlo a mano.
+ */
+async function extraerMensajeError(error) {
+  try {
+    const body = await error?.context?.json?.();
+    if (body?.error) return body.error;
+  } catch { /* context no era JSON parseable — usar el mensaje genérico */ }
+  return error?.message ?? 'Error desconocido';
+}
+
+/**
  * Card "CAEA — Contingencia offline" en Configuración → Facturación.
  *
  * CAEA permite seguir facturando si ARCA está caído: se solicita el código de
@@ -70,7 +85,7 @@ const CardCAEA = () => {
       const { data: res, error } = await supabase.functions.invoke('solicitar-caea', {
         body: { empresa_id: empresaId },
       });
-      if (error) throw error;
+      if (error) throw new Error(await extraerMensajeError(error));
       if (res?.error) throw new Error(res.error);
       toast({
         title: 'CAEA obtenido',
@@ -91,7 +106,7 @@ const CardCAEA = () => {
       const { data: res, error } = await supabase.functions.invoke('informar-caea', {
         body: { empresa_id: empresaId, caea_registro_id: registro.id },
       });
-      if (error) throw error;
+      if (error) throw new Error(await extraerMensajeError(error));
       if (res?.error) throw new Error(res.error);
       toast({
         title: res.sin_movimiento ? 'Informado — sin movimiento' : `${res.informados} comprobante(s) informado(s)`,
