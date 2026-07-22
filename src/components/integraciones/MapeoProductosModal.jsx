@@ -98,6 +98,7 @@ function MapeoProductosModal({ open, onOpenChange, integracion }) {
           integracion_id: integracion.id,
           producto_id: productoId,
           external_id: v.external_id.trim(),
+          external_product_id: variante?.external_product_id ?? null,
           external_sku: variante?.external_sku ?? null,
           sincronizar_stock: v.sincronizar_stock ?? true,
         };

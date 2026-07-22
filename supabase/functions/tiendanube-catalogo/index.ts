@@ -24,6 +24,7 @@ const MAX_PAGINAS = 50; // tope duro anti-loop (50 * 200 = 10.000 variantes)
 
 interface VariantePlana {
   external_id: string;      // id de la variante en Tiendanube
+  external_product_id: string; // id del producto padre — lo exige la API de stock
   external_sku: string | null;
   nombre: string;           // nombre del producto (+ atributos de la variante si aplica)
   stock: number | null;
@@ -96,6 +97,7 @@ serve(async (req) => {
         for (const v of p.variants ?? []) {
           variantes.push({
             external_id: String(v.id),
+            external_product_id: String(p.id),
             external_sku: v.sku ?? null,
             nombre: nombreBase + sufijoVariante(v.values),
             stock: typeof v.stock === 'number' ? v.stock : null,
