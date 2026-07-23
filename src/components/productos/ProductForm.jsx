@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { factorEntreUnidades, sonConvertibles, getMagnitudLabel } from '@/lib/unidadesMedida';
 import ProductoImagenes from '@/components/productos/ProductoImagenes';
+import EstadoPublicacionEcommerce from '@/components/productos/EstadoPublicacionEcommerce';
 
 // Fila de toggle tipo de artículo (estilo SAP B1 OITM) — ícono + label + descripción + Switch.
 const ToggleTipoArticulo = ({ icon: Icon, label, hint, checked, onCheckedChange, disabled }) => (
@@ -415,6 +416,9 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
         checked={!!data.publicar_ecommerce}
         onCheckedChange={(v) => setData({ ...data, publicar_ecommerce: v })}
       />
+      {isEdit && data.id && (
+        <EstadoPublicacionEcommerce productoId={data.id} publicarEcommerce={!!data.publicar_ecommerce} />
+      )}
     </div>
 
     {/* ── Imágenes ─────────────────────────────────────────────────────────── */}

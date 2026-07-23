@@ -32,10 +32,10 @@
 > **LO QUE FALTA (retomar acá):**
 > - ⬜ **`vercel deploy --prod` del front** — Luciano lo corre a mano (el clasificador me lo bloquea).
 >   Sin esto, los toggles/imágenes del maestro no se ven en producción todavía.
-> - ⬜ **Fase 3 — UI de estado de publicación**: mostrar publicado/pendiente/error + botón reintentar
->   (leyendo `integraciones_producto_pendiente`). Hoy el usuario tilda "publicar" pero no ve el
->   resultado en la UI — hay que chequear la tabla/logs a mano. Patrón a copiar: `MonitorFacturacionAFIP`
->   o el Monitor de la card CAEA.
+> - ✅ **Fase 3 — UI de estado de publicación** (`EstadoPublicacionEcommerce.jsx`): debajo del toggle
+>   "Publicar en ecommerce" del ProductForm muestra Publicado ✓ / En cola / Error + Reintentar,
+>   leyendo `integraciones_producto_pendiente` + el mapeo; auto-refresca cada 8s mientras hay algo en
+>   curso. Construido; falta el `vercel deploy` del front (mismo pendiente de arriba).
 > - ⬜ **Probar de punta a punta** contra la tienda demo: tildar "publicar" en un producto de KAIROX
 >   → verificar que aparece en el panel de TN + que se completó `external_product_id` en el mapeo.
 > - ⬜ **Update de imágenes** (V2): el worker sube imágenes solo al CREAR; en editar no las reconcilia
