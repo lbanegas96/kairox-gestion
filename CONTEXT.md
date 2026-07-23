@@ -24,9 +24,14 @@
 >   imágenes inline, guarda IDs en `integraciones_producto_mapeo`) o actualiza (PUT product + PUT
 >   variant precio). Reintentos/backoff igual que stock-worker. Commit `f7a45cb`.
 >
+> **✅ APLICADO A PROD (2026-07-22 noche, con OK de Luciano):** migraciones 234 y 235 aplicadas,
+> edge function `tiendanube-catalogo-publicar` desplegada (v1, verify_jwt=false), cron
+> `tiendanube-catalogo-worker-every-5-min` activo, advisors de seguridad SIN errores nuevos (RLS OK
+> en las 2 tablas nuevas), front pusheado. Smoke-test del worker OK (`{ok:true,procesados:0}`).
+>
 > **LO QUE FALTA (retomar acá):**
-> - ⬜ **Aplicar a prod** (con OK de Luciano): `apply_migration` de 234 y 235, `deploy_edge_function`
->   de `tiendanube-catalogo-publicar`, push + `vercel deploy` del front.
+> - ⬜ **`vercel deploy --prod` del front** — Luciano lo corre a mano (el clasificador me lo bloquea).
+>   Sin esto, los toggles/imágenes del maestro no se ven en producción todavía.
 > - ⬜ **Fase 3 — UI de estado de publicación**: mostrar publicado/pendiente/error + botón reintentar
 >   (leyendo `integraciones_producto_pendiente`). Hoy el usuario tilda "publicar" pero no ve el
 >   resultado en la UI — hay que chequear la tabla/logs a mano. Patrón a copiar: `MonitorFacturacionAFIP`
