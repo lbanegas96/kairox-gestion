@@ -1,5 +1,27 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-22 noche (Luciano — cerró pruebas del adapter Tiendanube + diseño de publicar catálogo)
+**Última actualización:** 2026-07-23 madrugada (Luciano — publicar catálogo a Tiendanube 100% funcional y probado en prod)
+
+> ✅ **PUBLICAR CATÁLOGO KAIROX → Tiendanube — CERRADO, PROBADO Y CONFIRMADO POR LUCIANO
+> (2026-07-23).** Todo el build de la noche del 22/23-jul quedó aplicado a producción y validado con
+> productos reales (Batidora, Camiseta, Celulares — creación + actualización + reconciliación de
+> imágenes, todo verificado). Detalle técnico completo abajo (fases 1a-2b + fix de CORS).
+>
+> **Para Nadia — al arrancar mañana:**
+> 1. Dale una pasada de pruebas vos también a esto (mapear productos reales, tildar "Publicar en
+>    ecommerce", subir/sacar imágenes, editar precio) — está probado por Luciano pero conviene una
+>    segunda mirada antes de darlo 100% por cerrado.
+> 2. Después, seguí con el resto de **ROADMAP.md**: el próximo paso del gradiente de adapters es
+>    MercadoLibre (🟡 medio — la apuesta grande del mercado AR), o si preferís, la capa reutilizable
+>    todavía tiene pendiente el UI de reintentar-webhook genérico. Luciano está enfocado en
+>    **Reportería** (ver sesión de hoy más abajo si ya se subió), así que no hay solapamiento.
+>
+> ⚠️ **Bug real encontrado y arreglado esta madrugada — anotar para no repetirlo:** la edge function
+> `tiendanube-catalogo-publicar` rechazaba el preflight CORS (`OPTIONS`) con 405 sin headers CORS —
+> **cualquier función nueva que se vaya a invocar desde el frontend con `supabase.functions.invoke()`
+> necesita manejar `OPTIONS` con `buildCorsHeaders(req)` ANTES del check de método**, si no el
+> navegador bloquea la llamada en silencio (fire-and-forget no muestra error). Patrón correcto:
+> mirar `integraciones-oauth-iniciar/index.ts` o el fix en `tiendanube-catalogo-publicar/index.ts`
+> (commit `6efc062`).
 
 > 🚧 **PUBLICAR CATÁLOGO KAIROX → Tiendanube — EN CONSTRUCCIÓN (repo-only, NADA aplicado a prod).**
 > Luciano decidió construirlo esta noche (2026-07-22), fuente de verdad = KAIROX, versión completa
