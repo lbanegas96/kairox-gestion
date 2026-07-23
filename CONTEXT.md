@@ -1,15 +1,40 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-07-22 noche (Luciano — cerró pruebas del adapter Tiendanube + diseño de publicar catálogo)
 
-> 📣 **Para Nadia — próxima tarea de integraciones: PUBLICAR CATÁLOGO KAIROX → Tiendanube.**
-> Luciano pidió el "doble sentido" de productos (armar el catálogo en KAIROX y publicarlo en TN).
-> Hoy el adapter es solo TN→KAIROX; falta el sentido inverso. **NO lo construí** — es un feature de
-> 2-3 días y cae en tu carril, no en el pulido visual de Luciano. Dejé el **diseño completo de
-> arquitectura** en [`docs/DISENO_publicar_catalogo_tiendanube.md`](docs/DISENO_publicar_catalogo_tiendanube.md)
-> (modelo de datos, edge worker, mapeo de campos KAIROX→TN, trigger, UI, orden de implementación,
-> riesgos). **Antes de codear, confirmar con Luciano 2 decisiones** que están marcadas como bloqueantes
-> en el doc: (1) fuente de verdad del catálogo (el diseño asume KAIROX, unidireccional), (2) si la V1
-> va **sin imágenes** (recomendado — baja el build de ~3 a ~1.5 días).
+> 🚧 **PUBLICAR CATÁLOGO KAIROX → Tiendanube — EN CONSTRUCCIÓN (repo-only, NADA aplicado a prod).**
+> Luciano decidió construirlo esta noche (2026-07-22), fuente de verdad = KAIROX, versión completa
+> **CON imágenes y con maestro de artículos estilo SAP B1**. Diseño base en
+> [`docs/DISENO_publicar_catalogo_tiendanube.md`](docs/DISENO_publicar_catalogo_tiendanube.md).
+>
+> **HASTA DÓNDE LLEGAMOS (todo commiteado repo-only, ⚠️ NINGUNA migración aplicada ni edge function
+> desplegada — falta el OK de Luciano para `apply_migration` + `deploy_edge_function` + push/deploy front):**
+> - ✅ **Fase 1a — migración 234** (`234_maestro_articulos_sap_y_ecommerce.sql`): a `productos` agrega
+>   flags SAP OITM (`es_inventariable`/`es_articulo_venta`/`es_articulo_compra`) + `es_servicio` +
+>   `publicar_ecommerce`. CHECK: servicio no puede ser inventariable. Crea tabla `producto_imagenes`
+>   + bucket storage `productos-imagenes` (patrón del logo, mig.223). Commit `8193af1`.
+> - ✅ **Fase 1b — toggles SAP + tilde ecommerce** en `ProductForm.jsx`; persisten en alta y edición
+>   (`ProductosSection.jsx`). Commit `8193af1`.
+> - ✅ **Fase 1c — gestor de imágenes** (`ProductoImagenes.jsx`): sube al bucket, marca principal,
+>   borra. Solo en edición (en el alta no hay id todavía). Commit `3e47f25`.
+> - ✅ **Fase 2a — migración 235** (`235_publicar_catalogo_pendiente_tiendanube.sql`): cola
+>   `integraciones_producto_pendiente` + trigger `fn_queue_publicar_tiendanube` (encola al crear/editar
+>   con `publicar_ecommerce=true` si hay TN activa; ignora cambios de solo-stock) + pg_cron 5 min.
+>   Commit `f7a45cb`.
+> - ✅ **Fase 2b — edge worker** `tiendanube-catalogo-publicar`: crea (POST /products con variante +
+>   imágenes inline, guarda IDs en `integraciones_producto_mapeo`) o actualiza (PUT product + PUT
+>   variant precio). Reintentos/backoff igual que stock-worker. Commit `f7a45cb`.
+>
+> **LO QUE FALTA (retomar acá):**
+> - ⬜ **Aplicar a prod** (con OK de Luciano): `apply_migration` de 234 y 235, `deploy_edge_function`
+>   de `tiendanube-catalogo-publicar`, push + `vercel deploy` del front.
+> - ⬜ **Fase 3 — UI de estado de publicación**: mostrar publicado/pendiente/error + botón reintentar
+>   (leyendo `integraciones_producto_pendiente`). Hoy el usuario tilda "publicar" pero no ve el
+>   resultado en la UI — hay que chequear la tabla/logs a mano. Patrón a copiar: `MonitorFacturacionAFIP`
+>   o el Monitor de la card CAEA.
+> - ⬜ **Probar de punta a punta** contra la tienda demo: tildar "publicar" en un producto de KAIROX
+>   → verificar que aparece en el panel de TN + que se completó `external_product_id` en el mapeo.
+> - ⬜ **Update de imágenes** (V2): el worker sube imágenes solo al CREAR; en editar no las reconcilia
+>   (para no duplicar). Documentado en el worker.
 >
 > ✅ **Pruebas del adapter Tiendanube que Nadia dejó pendientes — CERRADAS por Luciano (2026-07-22 noche):**
 > - **Reconexión + 3 webhooks:** Luciano reconectó desde Configuración → Integraciones; el callback
