@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { factorEntreUnidades, sonConvertibles, getMagnitudLabel } from '@/lib/unidadesMedida';
+import ProductoImagenes from '@/components/productos/ProductoImagenes';
 
 // Fila de toggle tipo de artículo (estilo SAP B1 OITM) — ícono + label + descripción + Switch.
 const ToggleTipoArticulo = ({ icon: Icon, label, hint, checked, onCheckedChange, disabled }) => (
@@ -415,6 +416,15 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
         onCheckedChange={(v) => setData({ ...data, publicar_ecommerce: v })}
       />
     </div>
+
+    {/* ── Imágenes ─────────────────────────────────────────────────────────── */}
+    {isEdit && data.id ? (
+      <ProductoImagenes productoId={data.id} />
+    ) : (
+      <div className="col-span-1 md:col-span-2 text-xs text-kx-text-3 border border-dashed border-kx-border rounded-lg p-3">
+        📷 Guardá el producto primero para poder agregarle imágenes.
+      </div>
+    )}
 
     <div className="col-span-1 md:col-span-2 space-y-2">
       <Label htmlFor="desc">Descripción</Label>
