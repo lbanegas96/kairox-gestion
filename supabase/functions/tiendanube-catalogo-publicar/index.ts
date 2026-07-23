@@ -3,23 +3,13 @@ import { adminClient } from '../_shared/auth.ts';
 import { leerTokenCanal } from '../_shared/integraciones.ts';
 
 /**
- * Worker de PUBLICACIÓN de catálogo KAIROX → Tiendanube (FASE 2 del build
- * "Publicar catálogo", diseño en docs/DISENO_publicar_catalogo_tiendanube.md).
- * Disparado por pg_cron cada 5 min (migración 235), mismo patrón que
- * tiendanube-stock-worker / arca-worker: procesa la cola
- * integraciones_producto_pendiente con reintentos y backoff.
- *
- * Dirección ÚNICA KAIROX → Tiendanube (KAIROX es la fuente de verdad del
- * catálogo). Por cada producto encolado:
- *   - Si NO tiene mapeo con external_product_id → CREA el producto en TN
- *     (POST /products, con variante + imágenes inline) y guarda los IDs que
- *     devuelve TN en integraciones_producto_mapeo.
- *   - Si YA tiene external_product_id → ACTUALIZA (PUT /products/{id} para
- *     nombre/descripción + PUT /products/{id}/variants/{variant_id} para precio).
- *
- * V1: en ACTUALIZAR no se reconcilian imágenes (evita duplicarlas en cada
- * edición) ni stock (lo maneja su propia cola). Ver "iteraciones futuras" en el
- * doc de diseño.
+ * Worker de PUBLICACIÓN de catálogo KAIROX → Tiendanube.
+ * Disparado por pg_cron cada 5 min (migración 235). Dirección ÚNICA KAIROX → TN
+ * (KAIROX es la fuente de verdad). Por cada producto encolado:
+ *   - CREA (POST /products) si no tiene mapeo con external_product_id, o
+ *   - ACTUALIZA (PUT product + PUT variant) si ya está publicado.
+ * En AMBOS casos reconcilia imágenes: sube las nuevas, borra las que se quitaron
+ * en KAIROX, sin re-subir las que ya están (mig.237, external_image_id).
  */
 const TN_API_BASE = 'https://api.tiendanube.com/2025-03';
 const USER_AGENT = 'KAIROX Gestion (soporte@kairox.app)';
@@ -41,22 +31,65 @@ interface Producto {
   publicar_ecommerce: boolean;
 }
 
-function armarPayloadCrear(p: Producto, imagenes: string[]) {
-  const variante: Record<string, unknown> = {
-    price: String(p.precio_venta ?? 0),
-  };
-  if (p.codigo_sku) variante.sku = p.codigo_sku;
-  if (p.codigo_barras) variante.barcode = p.codigo_barras;
-  // Solo mandar stock si el artículo maneja inventario (un servicio no).
-  if (p.es_inventariable) variante.stock = p.stock_actual ?? 0;
+type Headers = Record<string, string>;
 
-  const payload: Record<string, unknown> = {
-    name: { es: p.nombre },
-    variants: [variante],
-  };
-  if (p.descripcion) payload.description = { es: p.descripcion };
-  if (imagenes.length > 0) payload.images = imagenes.map(src => ({ src }));
-  return payload;
+/**
+ * Reconcilia las imágenes del producto en Tiendanube con las de KAIROX (fuente
+ * de verdad). Sube las que faltan (guardando el id que devuelve TN), borra las
+ * que ya no están en KAIROX, y no re-sube las que ya tienen external_image_id.
+ * Corre tanto en CREAR como en ACTUALIZAR.
+ */
+async function sincronizarImagenes(
+  storeId: string,
+  externalProductId: string,
+  headers: Headers,
+  productoId: string,
+): Promise<void> {
+  // Imágenes en KAIROX (principal primero, luego por orden).
+  const { data: kx } = await adminClient
+    .from('producto_imagenes')
+    .select('id, url, external_image_id, es_principal, orden')
+    .eq('producto_id', productoId)
+    .order('es_principal', { ascending: false })
+    .order('orden', { ascending: true });
+  const kxImgs = kx ?? [];
+
+  // Imágenes actualmente en Tiendanube.
+  const tnRes = await fetch(`${TN_API_BASE}/${storeId}/products/${externalProductId}/images`, { headers });
+  const tnImgs: Array<{ id: number | string }> = tnRes.ok ? await tnRes.json() : [];
+
+  const kxExternalIds = new Set(kxImgs.map(i => i.external_image_id).filter(Boolean).map(String));
+
+  // Borrar de TN las imágenes que ya no existen en KAIROX (quitadas por el usuario).
+  for (const t of tnImgs) {
+    if (!kxExternalIds.has(String(t.id))) {
+      await fetch(`${TN_API_BASE}/${storeId}/products/${externalProductId}/images/${t.id}`, {
+        method: 'DELETE', headers,
+      });
+      await sleep(250);
+    }
+  }
+
+  // Subir a TN las imágenes de KAIROX que todavía no están (sin external_image_id).
+  for (const img of kxImgs) {
+    if (img.external_image_id) continue;
+    const r = await fetch(`${TN_API_BASE}/${storeId}/products/${externalProductId}/images`, {
+      method: 'POST', headers, body: JSON.stringify({ src: img.url }),
+    });
+    if (r.ok) {
+      const creada = await r.json();
+      if (creada?.id != null) {
+        // Este UPDATE NO re-encola (el trigger fn_queue_publicar_imagenes ignora
+        // cambios que solo tocan external_image_id — mig.237).
+        await adminClient.from('producto_imagenes')
+          .update({ external_image_id: String(creada.id) })
+          .eq('id', img.id);
+      }
+    } else {
+      console.warn('[tiendanube-catalogo-publicar] No se pudo subir imagen:', r.status, await r.text());
+    }
+    await sleep(250);
+  }
 }
 
 serve(async (req) => {
@@ -87,23 +120,21 @@ serve(async (req) => {
     await adminClient.from('integraciones_producto_pendiente').update({ estado: 'procesando' }).eq('id', item.id);
 
     try {
-      const { data: producto } = await adminClient
+      const { data: p } = await adminClient
         .from('productos')
         .select('nombre, descripcion, precio_venta, codigo_sku, codigo_barras, stock_actual, es_inventariable, publicar_ecommerce')
         .eq('id', item.producto_id)
         .single();
 
-      if (!producto) throw new Error('Producto no encontrado');
+      if (!p) throw new Error('Producto no encontrado');
+      const producto = p as Producto;
 
-      // El usuario pudo destildar "publicar" desde que se encoló — no despublicamos
-      // en TN (destildar no borra), solo dejamos de intentar.
       if (!producto.publicar_ecommerce) {
         await adminClient.from('integraciones_producto_pendiente').update({ estado: 'publicado' }).eq('id', item.id);
         resultados.push({ id: item.id, resultado: 'ya_no_aplica' });
         continue;
       }
 
-      // Integración activa de Tiendanube para la empresa.
       const { data: integracion } = await adminClient
         .from('integraciones_canales')
         .select('id, external_store_id')
@@ -120,13 +151,12 @@ serve(async (req) => {
       if (!token) throw new Error('Sin token vigente para la integración');
 
       const storeId = integracion.external_store_id;
-      const headers = {
+      const headers: Headers = {
         Authorization: `Bearer ${token}`,
         'User-Agent': USER_AGENT,
         'Content-Type': 'application/json',
       };
 
-      // ¿Ya está publicado (tiene mapeo con external_product_id)?
       const { data: mapeo } = await adminClient
         .from('integraciones_producto_mapeo')
         .select('id, external_id, external_product_id')
@@ -134,9 +164,13 @@ serve(async (req) => {
         .eq('integracion_id', integracion.id)
         .maybeSingle();
 
+      let externalProductId: string;
+
       if (mapeo?.external_product_id) {
         // ── ACTUALIZAR ──────────────────────────────────────────────────────
-        const resProd = await fetch(`${TN_API_BASE}/${storeId}/products/${mapeo.external_product_id}`, {
+        externalProductId = mapeo.external_product_id;
+
+        const resProd = await fetch(`${TN_API_BASE}/${storeId}/products/${externalProductId}`, {
           method: 'PUT',
           headers,
           body: JSON.stringify({
@@ -146,43 +180,42 @@ serve(async (req) => {
         });
         if (!resProd.ok) throw new Error(`TN PUT product ${resProd.status}: ${await resProd.text()}`);
 
-        // Precio vive en la variante.
+        // Variante: precio + SKU + código de barras. El stock lo maneja su propia
+        // cola (fn_queue_stock_tiendanube) — no se toca acá para no pisarlo.
         if (mapeo.external_id) {
+          const variante: Record<string, unknown> = { price: String(producto.precio_venta ?? 0) };
+          if (producto.codigo_sku) variante.sku = producto.codigo_sku;
+          if (producto.codigo_barras) variante.barcode = producto.codigo_barras;
           const resVar = await fetch(
-            `${TN_API_BASE}/${storeId}/products/${mapeo.external_product_id}/variants/${mapeo.external_id}`,
-            { method: 'PUT', headers, body: JSON.stringify({ price: String(producto.precio_venta ?? 0) }) },
+            `${TN_API_BASE}/${storeId}/products/${externalProductId}/variants/${mapeo.external_id}`,
+            { method: 'PUT', headers, body: JSON.stringify(variante) },
           );
           if (!resVar.ok) throw new Error(`TN PUT variant ${resVar.status}: ${await resVar.text()}`);
         }
-
-        await adminClient.from('integraciones_producto_pendiente').update({ estado: 'publicado' }).eq('id', item.id);
-        resultados.push({ id: item.id, resultado: 'actualizado' });
-        console.log('[tiendanube-catalogo-publicar] ✓ Producto actualizado:', item.producto_id);
       } else {
         // ── CREAR ───────────────────────────────────────────────────────────
-        const { data: imgs } = await adminClient
-          .from('producto_imagenes')
-          .select('url')
-          .eq('producto_id', item.producto_id)
-          .order('es_principal', { ascending: false })
-          .order('orden', { ascending: true });
-        const imagenes = (imgs ?? []).map(i => i.url as string).filter(Boolean);
+        // Sin imágenes inline: se suben después con sincronizarImagenes para
+        // capturar el external_image_id de cada una (create y update comparten
+        // la misma reconciliación).
+        const variante: Record<string, unknown> = { price: String(producto.precio_venta ?? 0) };
+        if (producto.codigo_sku) variante.sku = producto.codigo_sku;
+        if (producto.codigo_barras) variante.barcode = producto.codigo_barras;
+        if (producto.es_inventariable) variante.stock = producto.stock_actual ?? 0;
+
+        const payload: Record<string, unknown> = { name: { es: producto.nombre }, variants: [variante] };
+        if (producto.descripcion) payload.description = { es: producto.descripcion };
 
         const res = await fetch(`${TN_API_BASE}/${storeId}/products`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(armarPayloadCrear(producto as Producto, imagenes)),
+          method: 'POST', headers, body: JSON.stringify(payload),
         });
         if (!res.ok) throw new Error(`TN POST product ${res.status}: ${await res.text()}`);
 
         const creado = await res.json();
-        const externalProductId = creado?.id != null ? String(creado.id) : null;
+        externalProductId = creado?.id != null ? String(creado.id) : '';
         const primeraVariante = Array.isArray(creado?.variants) && creado.variants[0]?.id != null
           ? String(creado.variants[0].id) : null;
-
         if (!externalProductId) throw new Error('TN no devolvió id de producto al crear');
 
-        // Guardar el mapeo (upsert: puede existir una fila de stock sin external_product_id).
         if (mapeo?.id) {
           await adminClient.from('integraciones_producto_mapeo').update({
             external_id: primeraVariante ?? mapeo.external_id ?? externalProductId,
@@ -199,11 +232,14 @@ serve(async (req) => {
             sincronizar_stock: producto.es_inventariable,
           });
         }
-
-        await adminClient.from('integraciones_producto_pendiente').update({ estado: 'publicado' }).eq('id', item.id);
-        resultados.push({ id: item.id, resultado: 'creado' });
-        console.log('[tiendanube-catalogo-publicar] ✓ Producto creado en TN:', item.producto_id, '→', externalProductId);
       }
+
+      // Reconciliar imágenes (crear y actualizar).
+      await sincronizarImagenes(storeId, externalProductId, headers, item.producto_id);
+
+      await adminClient.from('integraciones_producto_pendiente').update({ estado: 'publicado' }).eq('id', item.id);
+      resultados.push({ id: item.id, resultado: mapeo?.external_product_id ? 'actualizado' : 'creado' });
+      console.log('[tiendanube-catalogo-publicar] ✓ Publicado:', item.producto_id, '→', externalProductId);
     } catch (e) {
       const intentos = item.intentos + 1;
       const mensaje = e instanceof Error ? e.message : String(e);
@@ -227,7 +263,6 @@ serve(async (req) => {
       }
     }
 
-    // Pausa chica entre productos — respeta el rate limit de Tiendanube (2 req/s).
     await sleep(400);
   }
 
