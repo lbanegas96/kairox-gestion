@@ -1,5 +1,35 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-23 (Luciano — 5 bugs reales del Reporte de Ventas PDF arreglados y confirmados en prod)
+**Última actualización:** 2026-07-23 (Nadia — adapter MercadoLibre Fase 1 arrancada; Luciano — 5 bugs del Reporte de Ventas PDF)
+
+> 🚧 **EN CURSO (Nadia) — adapter MercadoLibre, segunda tarea del gradiente del ROADMAP. Fase 1
+> (OAuth + refresh de token) DESPLEGADA a prod, pero NO probada de punta a punta (falta el trámite).**
+> Reutiliza toda la capa de Tiendanube (integraciones_canales ya aceptaba 'mercadolibre', flujo OAuth
+> genérico, Vault, mapeo). Commit `cb3b3c5`, edge functions `integraciones-oauth-iniciar` (v5) y
+> `-callback` (v7) desplegadas, frontend pusheado.
+> - **Lo nuevo/difícil de MELI vs Tiendanube**: el access token expira a las 6h (el de TN no expiraba).
+>   Se construyó `obtenerTokenValido()` en `_shared/integraciones.ts` — renueva el token solo antes de
+>   vencer usando el refresh_token (que en MELI es de un solo uso: cada refresh devuelve uno nuevo que
+>   hay que guardar sí o sí). Es el mecanismo que la capa se diseñó para soportar pero que TN nunca
+>   ejercitó. **Cualquier worker que le pegue a la API de MELI DEBE usar `obtenerTokenValido`, NO
+>   `leerTokenCanal`** (esa no renueva). Bug que se cazó en el camino: el refresh NO debe pasar por
+>   `guardarTokenCanal` (hace upsert de la fila completa y borraría external_store_id/config) — se
+>   guardan los tokens directo en Vault + solo se toca `token_expiry`.
+> - **UI**: card de MercadoLibre en Configuración → Integraciones (aparece con el toggle Ecommerce
+>   activo) + `ConectarMercadoLibreModal`. No se tocó NADA de la lógica de Tiendanube, solo se
+>   agregaron ramas nuevas.
+> - **⚠️ BLOQUEANTE — Fase 0 (trámite, lo hace Nadia/Luciano):** registrar una app en MercadoLibre
+>   Developers (developers.mercadolibre.com.ar) para tener `MELI_APP_ID` y `MELI_CLIENT_SECRET`, con el
+>   redirect_uri EXACTO = `https://wuznppxeonmhfcvnqfbf.supabase.co/functions/v1/integraciones-oauth-callback`.
+>   Cargar ambas como Edge Function secrets en Supabase. Sin eso, la card aparece pero "Conectar"
+>   devuelve "Integración no configurada" (degradación limpia, igual que TN antes de sus credenciales).
+>   **El refresh de token está escrito a spec pero NO se pudo probar de verdad sin credenciales reales.**
+> - **Fases que faltan** (mismo esquema que TN): Fase 2 catálogo + mapeo · Fase 3 órdenes → pedido
+>   (webhook con topics orders_v2, misma decisión: nada fiscal automático) · Fase 4 stock KAIROX→MELI
+>   (unidireccional; el bidireccional queda explícitamente afuera, es la parte difícil del roadmap).
+> - **Barrido de estado que hizo Nadia hoy antes de arrancar**: lo de Luciano (publicar catálogo TN,
+>   reportería) quedó sólido — 0 errores en logs/advisors, colas limpias. Se detectaron 2 temas de
+>   consumo/cuota (mp-sync cron roto desde 14-jul que tira 401 — decisión de Nadia: dejarlo, el webhook
+>   cubre el tiempo real; y el cron de publicar catálogo cada 1 min, decisión de Luciano a consultarle).
 
 > ✅ **REPORTERÍA — Reporte de Ventas PDF: 5 bugs reales encontrados y arreglados (2026-07-23).**
 > Luciano adjuntó el PDF real que arroja el sistema hoy y se compararon contra estándares de
