@@ -187,8 +187,6 @@ export const generatePDF = async ({
       fontSize:   8.5,
     },
     didDrawPage: ({ pageNumber }) => {
-      const totalPages = doc.internal.getNumberOfPages();
-
       // Footer line
       doc.setLineWidth(0.3);
       doc.setDrawColor(203, 213, 225);
@@ -198,9 +196,16 @@ export const generatePDF = async ({
       doc.setTextColor(...GRAY_TEXT);
       doc.setFont('helvetica', 'normal');
       doc.text('KAIROX Gestión — Sistema Integral de Gestión', 14, ph - 8);
-      doc.text(`Página ${pageNumber} de ${totalPages}`, pw - 14, ph - 8, { align: 'right' });
+      // Placeholder: al momento de dibujar la página 1, autoTable todavía no
+      // creó la página 2 (las crea recién cuando la tabla las necesita), así
+      // que getNumberOfPages() da un total parcial acá ("Página 1 de 1" en
+      // vez de "1 de 2" — visto en el PDF real). putTotalPages() más abajo
+      // reemplaza este placeholder por el total final ya con todas las páginas creadas.
+      doc.text(`Página ${pageNumber} de {total_pages_count_string}`, pw - 14, ph - 8, { align: 'right' });
     },
   });
+
+  doc.putTotalPages('{total_pages_count_string}');
 
   doc.save(`${filename}_${new Date().toISOString().slice(0, 10)}.pdf`);
 };
