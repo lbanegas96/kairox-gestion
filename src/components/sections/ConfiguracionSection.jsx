@@ -205,6 +205,7 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [integracionMercadoLibre,  setIntegracionMercadoLibre]  = useState(null);
   const [showConectarMercadoLibre, setShowConectarMercadoLibre] = useState(false);
   const [showMapeoProductosTN,     setShowMapeoProductosTN]     = useState(false);
+  const [showMapeoProductosML,     setShowMapeoProductosML]     = useState(false);
 
   // ── Puente Caja ↔ Bancos ──────────────────────────────────────────────────
   const METODOS_BANCARIOS = ['Transferencia', 'Tarjeta'];
@@ -1723,6 +1724,7 @@ const ConfiguracionSection = ({ initialTab }) => {
             onConectarTiendanube={() => setShowConectarTiendanube(true)}
             onMapeoProductosTiendanube={() => setShowMapeoProductosTN(true)}
             onConectarMercadoLibre={() => setShowConectarMercadoLibre(true)}
+            onMapeoProductosMercadoLibre={() => setShowMapeoProductosML(true)}
             onGoFacturacion={() => setActiveTab('facturacion')}
             onSaveMapeos={handleSaveMapeos}
           />
@@ -2338,6 +2340,15 @@ const ConfiguracionSection = ({ initialTab }) => {
         open={showMapeoProductosTN}
         onOpenChange={setShowMapeoProductosTN}
         integracion={integracionTiendanube}
+        canal="tiendanube"
+      />
+
+      {/* ── Modal mapeo de productos MercadoLibre ───────────────────────────── */}
+      <MapeoProductosModal
+        open={showMapeoProductosML}
+        onOpenChange={setShowMapeoProductosML}
+        integracion={integracionMercadoLibre}
+        canal="mercadolibre"
       />
 
     </div>

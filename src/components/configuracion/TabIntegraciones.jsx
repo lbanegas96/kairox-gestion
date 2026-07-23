@@ -22,7 +22,7 @@ const TabIntegraciones = ({
   integracionMP, integracionUala, integracionTiendanube, integracionMercadoLibre, afipConfig,
   showWebhookUrl, setShowWebhookUrl,
   mapeosCuentas, setMapeosCuentas, savingMapeos, cuentasBancariasLista,
-  onConfigMP, onConfigUala, onConectarTiendanube, onMapeoProductosTiendanube, onConectarMercadoLibre, onGoFacturacion, onSaveMapeos,
+  onConfigMP, onConfigUala, onConectarTiendanube, onMapeoProductosTiendanube, onConectarMercadoLibre, onMapeoProductosMercadoLibre, onGoFacturacion, onSaveMapeos,
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -219,6 +219,12 @@ const TabIntegraciones = ({
           <p className="text-xs text-kx-text-2 leading-relaxed">
             Sincronización de publicaciones, órdenes y stock con tu cuenta de MercadoLibre. Las órdenes pagadas se registran como pedidos en KAIROX.
           </p>
+
+          {integracionMercadoLibre?.activo && (
+            <Button size="sm" variant="ghost" className="text-xs h-8 self-start -ml-2" onClick={onMapeoProductosMercadoLibre}>
+              Mapear productos →
+            </Button>
+          )}
         </div>
         )}
 

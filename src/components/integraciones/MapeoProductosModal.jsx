@@ -10,15 +10,24 @@ import { supabase } from '@/lib/customSupabaseClient';
 
 const SIN_MAPEAR = '__none__';
 
+// Config por canal: edge function que trae el catálogo real + nombre para mostrar.
+// Agregar un canal nuevo (Shopify) es sumar su entrada acá — el resto del modal
+// (auto-sugerencia por SKU, guardado en integraciones_producto_mapeo) no cambia.
+const CANAL_CONFIG = {
+  tiendanube: { edgeFunction: 'tiendanube-catalogo', nombre: 'Tiendanube' },
+  mercadolibre: { edgeFunction: 'mercadolibre-catalogo', nombre: 'MercadoLibre' },
+};
+
 /**
- * Mapeo producto KAIROX ↔ variante de Tiendanube. Trae el catálogo real vía el
- * edge function tiendanube-catalogo y lo ofrece en un dropdown por producto, con
- * auto-sugerencia: si el SKU/código de barras de KAIROX coincide con el SKU de una
- * variante de Tiendanube, la pre-selecciona (el usuario confirma al guardar).
+ * Mapeo producto KAIROX ↔ publicación/variante del canal (Tiendanube o MercadoLibre).
+ * Trae el catálogo real vía el edge function del canal y lo ofrece en un dropdown
+ * por producto, con auto-sugerencia: si el SKU/código de barras de KAIROX coincide
+ * con el SKU externo, la pre-selecciona (el usuario confirma al guardar).
  */
-function MapeoProductosModal({ open, onOpenChange, integracion }) {
+function MapeoProductosModal({ open, onOpenChange, integracion, canal = 'tiendanube' }) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { edgeFunction, nombre: nombreCanal } = CANAL_CONFIG[canal] ?? CANAL_CONFIG.tiendanube;
   const [productos, setProductos] = useState([]);
   const [variantes, setVariantes] = useState([]); // catálogo Tiendanube: [{external_id, external_sku, nombre, stock}]
   const [mapeos, setMapeos] = useState({});        // producto_id -> { external_id, sincronizar_stock }
@@ -43,7 +52,7 @@ function MapeoProductosModal({ open, onOpenChange, integracion }) {
         supabase.from('integraciones_producto_mapeo')
           .select('producto_id, external_id, sincronizar_stock')
           .eq('integracion_id', integracion.id),
-        supabase.functions.invoke('tiendanube-catalogo', { body: {} }),
+        supabase.functions.invoke(edgeFunction, { body: {} }),
       ]);
 
       const listaProductos = prods ?? [];
@@ -79,7 +88,7 @@ function MapeoProductosModal({ open, onOpenChange, integracion }) {
       setMapeos(map);
       setLoading(false);
     })();
-  }, [open, user?.empresa_id, integracion?.id]);
+  }, [open, user?.empresa_id, integracion?.id, edgeFunction]);
 
   const setCampo = (productoId, campo, valor) => {
     setMapeos(prev => ({
@@ -105,7 +114,7 @@ function MapeoProductosModal({ open, onOpenChange, integracion }) {
       });
 
     if (filas.length === 0) {
-      toast({ title: 'Nada para guardar', description: 'Asigná al menos un producto de Tiendanube.', variant: 'destructive' });
+      toast({ title: 'Nada para guardar', description: `Asigná al menos un producto de ${nombreCanal}.`, variant: 'destructive' });
       return;
     }
 
@@ -132,16 +141,16 @@ function MapeoProductosModal({ open, onOpenChange, integracion }) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[680px] bg-kx-surface border-kx-border max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-kx-text">Mapeo de productos — Tiendanube</DialogTitle>
+          <DialogTitle className="text-kx-text">Mapeo de productos — {nombreCanal}</DialogTitle>
           <DialogDescription>
-            Asigná a cada producto de KAIROX su variante correspondiente en Tiendanube. Los que tienen el
+            Asigná a cada producto de KAIROX su variante correspondiente en {nombreCanal}. Los que tienen el
             mismo SKU / código de barras se sugieren solos — revisá y guardá. Se puede completar de a poco.
           </DialogDescription>
         </DialogHeader>
 
         {loading ? (
           <div className="flex items-center justify-center py-10 text-kx-text-2">
-            <Loader2 className="w-5 h-5 animate-spin mr-2" /> Cargando productos y catálogo de Tiendanube...
+            <Loader2 className="w-5 h-5 animate-spin mr-2" /> Cargando productos y catálogo de {nombreCanal}...
           </div>
         ) : productos.length === 0 ? (
           <div className="p-4 text-sm text-kx-text-2">No hay productos activos para mapear.</div>
@@ -149,7 +158,7 @@ function MapeoProductosModal({ open, onOpenChange, integracion }) {
           <>
             {errorCatalogo && (
               <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-700 dark:text-amber-400">
-                No se pudo leer el catálogo de Tiendanube ({errorCatalogo}). Podés mapear igual cuando se resuelva, o reconectar la integración.
+                No se pudo leer el catálogo de {nombreCanal} ({errorCatalogo}). Podés mapear igual cuando se resuelva, o reconectar la integración.
               </div>
             )}
             {!errorCatalogo && autoMatch > 0 && (

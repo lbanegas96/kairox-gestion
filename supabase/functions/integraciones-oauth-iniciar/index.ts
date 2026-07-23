@@ -26,6 +26,9 @@ const AUTHORIZE_URL_BUILDERS: Record<string, (state: string) => string | null> =
       client_id: appId,
       redirect_uri: REDIRECT_URI,
       state,
+      // offline_access es obligatorio para que MELI emita refresh_token
+      // (sin esto el access token muere a las 6h sin forma de renovarlo).
+      scope: 'offline_access read write',
     });
     return `https://auth.mercadolibre.com.ar/authorization?${params}`;
   },
