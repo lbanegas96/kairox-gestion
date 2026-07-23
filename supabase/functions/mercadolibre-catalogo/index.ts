@@ -32,6 +32,21 @@ interface VariantePlana {
   stock: number | null;
 }
 
+// MercadoLibre guarda el SKU del vendedor en dos lugares según cómo se cargó la
+// publicación: el campo legacy `seller_custom_field`, o como un atributo con
+// id 'SELLER_SKU' dentro de `attributes` (publicaciones más nuevas). Buscamos en
+// ambos — item y variación tienen la misma forma. Sin esto, el auto-match por SKU
+// del modal de mapeo no encuentra nada en publicaciones nuevas.
+function extraerSku(obj: Record<string, unknown>): string | null {
+  const legacy = obj?.seller_custom_field;
+  if (typeof legacy === 'string' && legacy.trim()) return legacy;
+
+  const attrs = Array.isArray(obj?.attributes) ? obj.attributes : [];
+  const skuAttr = attrs.find((a: Record<string, unknown>) => a?.id === 'SELLER_SKU');
+  const val = skuAttr?.value_name;
+  return typeof val === 'string' && val.trim() ? val : null;
+}
+
 function sufijoVariacion(combinaciones: unknown): string {
   if (!Array.isArray(combinaciones)) return '';
   const partes = combinaciones
@@ -100,7 +115,7 @@ serve(async (req) => {
     for (let i = 0; i < itemIds.length; i += MULTIGET_BATCH) {
       const lote = itemIds.slice(i, i + MULTIGET_BATCH);
       const res = await fetch(
-        `${ML_API_BASE}/items?ids=${lote.join(',')}&attributes=id,title,available_quantity,variations,seller_custom_field`,
+        `${ML_API_BASE}/items?ids=${lote.join(',')}&attributes=id,title,available_quantity,variations,seller_custom_field,attributes`,
         { headers },
       );
       if (!res.ok) {
@@ -114,12 +129,13 @@ serve(async (req) => {
         if (entry.code !== 200 || !entry.body) continue;
         const item = entry.body;
         const variaciones = Array.isArray(item.variations) ? item.variations : [];
+        const skuItem = extraerSku(item);
 
         if (variaciones.length === 0) {
           variantes.push({
             external_id: String(item.id),
             external_product_id: String(item.id),
-            external_sku: item.seller_custom_field ?? null,
+            external_sku: skuItem,
             nombre: item.title ?? '(sin nombre)',
             stock: typeof item.available_quantity === 'number' ? item.available_quantity : null,
           });
@@ -128,7 +144,7 @@ serve(async (req) => {
             variantes.push({
               external_id: String(v.id),
               external_product_id: String(item.id),
-              external_sku: v.seller_custom_field ?? item.seller_custom_field ?? null,
+              external_sku: extraerSku(v) ?? skuItem,
               nombre: (item.title ?? '(sin nombre)') + sufijoVariacion(v.attribute_combinations),
               stock: typeof v.available_quantity === 'number' ? v.available_quantity : null,
             });
