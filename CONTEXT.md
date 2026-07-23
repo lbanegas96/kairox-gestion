@@ -1,5 +1,44 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-23 madrugada (Luciano — publicar catálogo a Tiendanube 100% funcional y probado en prod)
+**Última actualización:** 2026-07-23 (Luciano — 5 bugs reales del Reporte de Ventas PDF arreglados y confirmados en prod)
+
+> ✅ **REPORTERÍA — Reporte de Ventas PDF: 5 bugs reales encontrados y arreglados (2026-07-23).**
+> Luciano adjuntó el PDF real que arroja el sistema hoy y se compararon contra estándares de
+> mercado (vía skill `sap-reference`, sin sección dedicada a reportería — se sintetizó de sus
+> principios generales de Document Flow / letterhead). 5 bugs confirmados con evidencia del PDF
+> real (no especulados) y arreglados:
+> 1. **Mojibake en el período** (`"2026-07-01 !' 2026-"` en vez de `→`) — la fuente `helvetica` de
+>    jsPDF usa WinAnsi, no tiene el glyph de flecha unicode. Fix: `"... al ..."` en texto plano.
+> 2. **Decimales inconsistentes** (`$32.230,491` en las cajas KPI vs `$709.070,80` en la tabla) —
+>    `toLocaleString` sin `maximumFractionDigits` permite hasta 3 decimales por spec de `Intl`.
+>    Fix: `maximumFractionDigits: 2` fijo en `reportDefinitions.jsx`.
+> 3. **TOTALES repetido en cada página** — default de `jspdf-autotable` con `foot`. Fix:
+>    `showFoot: 'lastPage'`.
+> 4. **Logo de la empresa ausente** — no estaba wireado pese a que `config.logo_base64` ya existía
+>    en el contexto. Fix: `cargarLogoComoDataURL()` (fetch + blob + FileReader) en `pdfUtils.js`,
+>    soporta PNG/JPEG/WEBP (no SVG), `logoUrl` nuevo param de `generatePDF`.
+> 5. **"Página 1 de 1" / "Página 2 de 2"** (debería ser "1 de 2" / "2 de 2") — encontrado recién al
+>    revisar el PDF real post-fix #1-4. `didDrawPage` llama a `getNumberOfPages()` antes de que
+>    `autoTable` termine de crear todas las páginas (las crea de forma lazy). Fix: patrón estándar
+>    de jsPDF con placeholder `{total_pages_count_string}` + `doc.putTotalPages()` al final.
+>
+> Commits: `25f1960` (bugs #1-4 + logo), `799ea4e` (bug #5, paginación). Verificado en prod real:
+> se bajó el bundle deployado (`ReportesSection-*.js`) y se confirmó por contenido (`logo_base64`,
+> `showFoot`) que el código exacto de estos commits está live — no solo "dijo que deployó".
+> Luciano confirmó visualmente con un PDF real bajado de prod que #1-4 se ven bien; #5 se encontró
+> en esa misma revisión y ya está commiteado (repo-only al momento de escribir esto).
+>
+> **Roadmap de reportería — deferred, NO arrancar sin pedido explícito** (Luciano dijo "el resto
+> está bien" = de acuerdo en principio con la propuesta, no instrucción de construir ahora):
+> agrupamiento/subtotales (día / método de pago / cliente), vínculo de cada fila a su comprobante
+> real (tipo+número), comparación de períodos (% variación), envío por WhatsApp. **Export Excel +
+> PDF únicamente — CSV explícitamente fuera de alcance** salvo que el mercado lo pida (instrucción
+> directa de Luciano).
+>
+> **Ramas `claude/*` revisadas (2026-07-23):** `claude/agitated-panini-a29997`,
+> `claude/practical-proskuriakova-34cfb7`, `claude/upbeat-pasteur-20adef` — las 3 son ancestros
+> directos de `master` (0 commits propios, `master` las contiene por completo). No requieren
+> merge, son leftovers de sesiones anteriores. No se borraron por las dudas (no es una acción
+> reversible y no fue pedida explícitamente).
 
 > ✅ **PUBLICAR CATÁLOGO KAIROX → Tiendanube — CERRADO, PROBADO Y CONFIRMADO POR LUCIANO
 > (2026-07-23).** Todo el build de la noche del 22/23-jul quedó aplicado a producción y validado con
