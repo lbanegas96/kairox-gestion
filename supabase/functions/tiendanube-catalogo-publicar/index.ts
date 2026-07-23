@@ -4,8 +4,11 @@ import { leerTokenCanal } from '../_shared/integraciones.ts';
 
 /**
  * Worker de PUBLICACIÓN de catálogo KAIROX → Tiendanube.
- * Disparado por pg_cron cada 5 min (migración 235). Dirección ÚNICA KAIROX → TN
- * (KAIROX es la fuente de verdad). Por cada producto encolado:
+ * Se dispara de 2 formas: inmediato desde el frontend al guardar (fire-and-
+ * forget, dispararPublicacionCatalogo) y por pg_cron cada 1 min como red de
+ * seguridad (migración 238) para lo que el disparo inmediato no cubrió.
+ * Dirección ÚNICA KAIROX → TN (KAIROX es la fuente de verdad). Por cada
+ * producto encolado:
  *   - CREA (POST /products) si no tiene mapeo con external_product_id, o
  *   - ACTUALIZA (PUT product + PUT variant) si ya está publicado.
  * En AMBOS casos reconcilia imágenes: sube las nuevas, borra las que se quitaron
@@ -117,7 +120,23 @@ serve(async (req) => {
   const resultados: Array<{ id: string; resultado: string }> = [];
 
   for (const item of pendientes) {
-    await adminClient.from('integraciones_producto_pendiente').update({ estado: 'procesando' }).eq('id', item.id);
+    // CAS (compare-and-swap): solo toma el ítem si su estado sigue siendo
+    // 'pendiente'. Necesario porque ahora el worker se dispara tanto por cron
+    // (cada 1 min) como inmediatamente al guardar desde el frontend — sin este
+    // guard, dos invocaciones podrían leer el mismo ítem antes de que ninguna lo
+    // bloquee y publicarlo DUPLICADO en Tiendanube (mismo patrón que el lock de
+    // arca-worker, mig.201, para el mismo tipo de condición de carrera).
+    const { data: tomado } = await adminClient
+      .from('integraciones_producto_pendiente')
+      .update({ estado: 'procesando' })
+      .eq('id', item.id)
+      .eq('estado', 'pendiente')
+      .select('id');
+
+    if (!tomado?.length) {
+      resultados.push({ id: item.id, resultado: 'skip (otra invocación lo tomó)' });
+      continue;
+    }
 
     try {
       const { data: p } = await adminClient

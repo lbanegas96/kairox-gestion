@@ -5,6 +5,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
+import { dispararPublicacionCatalogo } from '@/services/integracionesService';
 
 const BUCKET = 'productos-imagenes';
 const MAX_BYTES = 5 * 1024 * 1024; // 5MB, igual que el límite del bucket (mig.234)
@@ -19,7 +20,7 @@ const TIPOS_OK = ['image/png', 'image/jpeg', 'image/webp'];
  * asociar la imagen ni armar el path {empresa_id}/{producto_id}/... — se le pide
  * al usuario guardar primero.
  */
-const ProductoImagenes = ({ productoId }) => {
+const ProductoImagenes = ({ productoId, publicarEcommerce = false }) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -80,6 +81,7 @@ const ProductoImagenes = ({ productoId }) => {
 
       toast({ title: 'Imagen agregada' });
       qc.invalidateQueries({ queryKey });
+      if (publicarEcommerce) dispararPublicacionCatalogo();
     } catch (err) {
       toast({ title: 'No se pudo subir', description: err.message, variant: 'destructive' });
     } finally {
@@ -110,6 +112,7 @@ const ProductoImagenes = ({ productoId }) => {
       if (error) throw error;
       toast({ title: 'Imagen eliminada' });
       qc.invalidateQueries({ queryKey });
+      if (publicarEcommerce) dispararPublicacionCatalogo();
     } catch (err) {
       toast({ title: 'No se pudo eliminar', description: err.message, variant: 'destructive' });
     }

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { formatDateAR } from '@/lib/dateUtils';
+import { dispararPublicacionCatalogo } from '@/services/integracionesService';
 
 /**
  * Estado de publicación de un producto a ecommerce (Tiendanube). Lee la cola
@@ -59,6 +60,7 @@ const EstadoPublicacionEcommerce = ({ productoId, publicarEcommerce }) => {
     }
     toast({ title: 'Reintento encolado', description: 'El worker lo procesará en los próximos minutos.' });
     qc.invalidateQueries({ queryKey });
+    dispararPublicacionCatalogo();
   };
 
   if (!productoId || isLoading) return null;

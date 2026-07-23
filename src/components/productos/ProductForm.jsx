@@ -430,7 +430,7 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
 
     {/* ── Imágenes ─────────────────────────────────────────────────────────── */}
     {isEdit && data.id ? (
-      <ProductoImagenes productoId={data.id} />
+      <ProductoImagenes productoId={data.id} publicarEcommerce={!!data.publicar_ecommerce} />
     ) : (
       <div className="col-span-1 md:col-span-2 text-xs text-kx-text-3 border border-dashed border-kx-border rounded-lg p-3">
         📷 Guardá el producto primero para poder agregarle imágenes.

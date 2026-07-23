@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from '@/lib/customSupabaseClient';
 import { productosService } from '@/services/productosService';
+import { dispararPublicacionCatalogo } from '@/services/integracionesService';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { getNowAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
@@ -227,6 +228,8 @@ const ProductosSection = () => {
       setNewProduct(initialProductState);
       invalidateProductos();
       invalidateNotifs();
+      // Disparo inmediato del worker de publicación — no esperar al cron.
+      if (payload.publicar_ecommerce) dispararPublicacionCatalogo();
     } catch (error) {
       console.error("Create product error:", error);
       const msg = error.message?.includes('productos_empresa_id_codigo_sku_key')
@@ -288,6 +291,7 @@ const ProductosSection = () => {
       setIsEditProductOpen(false);
       invalidateProductos();
       invalidateNotifs();
+      if (updates.publicar_ecommerce) dispararPublicacionCatalogo();
     } catch (error) {
       console.error("Update product error:", error);
       toast({ title: "Error", description: error.message, variant: "destructive" });
