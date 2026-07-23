@@ -71,7 +71,11 @@ export const REPORTS = [
 ];
 
 export const buildSummaryMetrics = (reportId, data) => {
-  const fc = (n) => `$${Number(n).toLocaleString('es-AR', { minimumFractionDigits: 0 })}`;
+  // maximumFractionDigits fijo en 2: sin esto, toLocaleString puede mostrar
+  // hasta 3 decimales (spec de Intl.NumberFormat) — se vio en el PDF real como
+  // "$32.230,491" en vez de "$32.230,49", inconsistente con formatCurrency()
+  // que sí usa la tabla de abajo (esa sí tiene el tope).
+  const fc = (n) => `$${Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   if (reportId === 'ventas') {
     const total = data.reduce((s, r) => s + (r.total || 0), 0);
     const max   = data.length ? Math.max(...data.map(r => r.total || 0)) : 0;

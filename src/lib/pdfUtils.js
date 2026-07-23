@@ -7,6 +7,36 @@ const GRAY_LIGHT  = [241, 245, 249]; // slate-100
 const GRAY_TEXT   = [100, 116, 139]; // slate-500
 
 /**
+ * Descarga la imagen de una URL (ej. el logo en Storage) y la devuelve como
+ * data URL base64 + su formato ('PNG'/'JPEG'/'WEBP'), listo para
+ * doc.addImage(). jsPDF no puede pedir una URL remota directo — necesita los
+ * bytes ya en mano. Si falla (red, CORS, SVG no soportado por addImage) o no
+ * hay logoUrl, devuelve null y el PDF se genera igual, solo sin el logo.
+ */
+async function cargarLogoComoDataURL(logoUrl) {
+  if (!logoUrl) return null;
+  try {
+    const res = await fetch(logoUrl);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    // addImage soporta PNG/JPEG/WEBP — SVG no (necesitaría rasterizarlo aparte).
+    const FORMATOS = { 'image/png': 'PNG', 'image/jpeg': 'JPEG', 'image/webp': 'WEBP' };
+    const formato = FORMATOS[blob.type];
+    if (!formato) return null;
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    return { dataUrl, formato };
+  } catch (e) {
+    console.warn('[pdfUtils] No se pudo cargar el logo para el PDF, se genera sin logo:', e.message);
+    return null;
+  }
+}
+
+/**
  * @param {object}   opts
  * @param {string}   opts.title
  * @param {string}   opts.startDate
@@ -16,9 +46,10 @@ const GRAY_TEXT   = [100, 116, 139]; // slate-500
  * @param {any[]|null} opts.totals       – row for foot section (raw cell values)
  * @param {string}   opts.filename
  * @param {string}   [opts.companyName]  – nombre de empresa (de config)
+ * @param {string}   [opts.logoUrl]      – URL pública del logo (config.logo_base64)
  * @param {{label:string, value:string}[]} [opts.summaryMetrics]  – cajas KPI antes de la tabla
  */
-export const generatePDF = ({
+export const generatePDF = async ({
   title,
   startDate,
   endDate,
@@ -27,31 +58,46 @@ export const generatePDF = ({
   totals = null,
   filename = 'reporte',
   companyName = 'KAIROX Gestión',
+  logoUrl = null,
   summaryMetrics = null,
 }) => {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pw  = doc.internal.pageSize.width;
   const ph  = doc.internal.pageSize.height;
 
+  const logo = await cargarLogoComoDataURL(logoUrl);
+
   // ── Header band ───────────────────────────────────────────────────────────
   doc.setFillColor(...BRAND_BLUE);
   doc.rect(0, 0, pw, 28, 'F');
 
+  // Logo a la izquierda (si hay) — empuja el texto del nombre de empresa.
+  const textX = logo ? 32 : 14;
+  if (logo) {
+    // Alto fijo 16mm centrado en la banda de 28mm; ancho proporcional simple
+    // (18mm) — suficiente para un isologo, no distorsiona relación de aspecto
+    // de forma perceptible a este tamaño.
+    doc.addImage(logo.dataUrl, logo.formato, 14, 6, 16, 16);
+  }
+
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
-  doc.text(companyName, 14, 12);
+  doc.text(companyName, textX, 12);
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text(title, 14, 20);
+  doc.text(title, textX, 20);
 
   // Fecha generado — derecha del header
   const genLabel = `Generado: ${new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}`;
   doc.setFontSize(8);
   doc.text(genLabel, pw - 14, 12, { align: 'right' });
 
-  const periodoLabel = `Período: ${startDate} → ${endDate}`;
+  // " al " en vez de "→": la fuente 'helvetica' de jsPDF usa codificación
+  // WinAnsi (base-14, sin embeber fuente propia) y no tiene el glyph de la
+  // flecha unicode — se veía como basura en el PDF real ("!'" en vez de "→").
+  const periodoLabel = `Período: ${startDate} al ${endDate}`;
   doc.text(periodoLabel, pw - 14, 20, { align: 'right' });
 
   // ── Summary metrics (KPI boxes) ───────────────────────────────────────────
@@ -129,6 +175,11 @@ export const generatePDF = ({
       fillColor: [248, 250, 252], // slate-50
     },
     foot: totals ? [totals] : undefined,
+    // Sin esto, autoTable repite el foot (TOTALES) en CADA página — se vio en
+    // el PDF real como "TOTALES 22 $709.070,80" también en la página 2, que
+    // solo tenía 1 fila, dando la falsa impresión de que esa página también
+    // sumaba 22 ventas. Con 'lastPage' aparece una sola vez, al final real.
+    showFoot: 'lastPage',
     footStyles: {
       fillColor:  [226, 232, 240],
       textColor:  BRAND_DARK,

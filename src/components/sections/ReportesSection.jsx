@@ -230,12 +230,12 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   };
 
   // --- PDF DOWNLOAD ---
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     try {
       const { columns, totals } = getTableConfig(selectedReport.id, reportData);
       const summaryMetrics = buildSummaryMetrics(selectedReport.id, reportData);
 
-      generatePDF({
+      await generatePDF({
         title:           selectedReport.title,
         startDate:       startDate,
         endDate:         endDate,
@@ -244,6 +244,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         totals:          totals ? totals.map(t => t.content) : null,
         filename:        selectedReport.id,
         companyName:     config?.nombre_empresa || 'KAIROX Gestión',
+        logoUrl:         config?.logo_base64 || null,
         summaryMetrics,
       });
 
