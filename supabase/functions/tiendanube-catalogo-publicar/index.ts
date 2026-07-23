@@ -1,5 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { adminClient } from '../_shared/auth.ts';
+import { adminClient, buildCorsHeaders } from '../_shared/auth.ts';
 import { leerTokenCanal } from '../_shared/integraciones.ts';
 
 /**
@@ -96,7 +96,15 @@ async function sincronizarImagenes(
 }
 
 serve(async (req) => {
-  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+  // El cron (pg_net, server-to-server) nunca manda OPTIONS — solo lo necesita
+  // el disparo inmediato desde el navegador (dispararPublicacionCatalogo), que
+  // hace un preflight CORS antes del POST real. Sin este handler explícito,
+  // el preflight caía en la rama "Method not allowed" (405, sin headers CORS)
+  // y el navegador bloqueaba el POST real en silencio — el disparo inmediato
+  // nunca llegaba a ejecutarse, aunque el fire-and-forget no mostraba error.
+  const cors = buildCorsHeaders(req);
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: cors });
 
   const { data: pendientes, error: fetchError } = await adminClient
     .from('integraciones_producto_pendiente')
@@ -108,12 +116,14 @@ serve(async (req) => {
 
   if (fetchError) {
     console.error('[tiendanube-catalogo-publicar] Error leyendo la cola:', fetchError);
-    return new Response(JSON.stringify({ error: fetchError.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: fetchError.message }), {
+      status: 500, headers: { ...cors, 'Content-Type': 'application/json' },
+    });
   }
 
   if (!pendientes?.length) {
     return new Response(JSON.stringify({ ok: true, procesados: 0 }), {
-      status: 200, headers: { 'Content-Type': 'application/json' },
+      status: 200, headers: { ...cors, 'Content-Type': 'application/json' },
     });
   }
 
@@ -286,6 +296,6 @@ serve(async (req) => {
   }
 
   return new Response(JSON.stringify({ ok: true, procesados: resultados.length, resultados }), {
-    status: 200, headers: { 'Content-Type': 'application/json' },
+    status: 200, headers: { ...cors, 'Content-Type': 'application/json' },
   });
 });
