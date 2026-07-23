@@ -1,5 +1,6 @@
-import { EyeOff, Eye, Copy, CreditCard, Loader2, Save } from 'lucide-react';
+import { EyeOff, Eye, Copy, CreditCard, Loader2, Save, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import IntegracionCard from '@/components/shared/IntegracionCard';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -17,6 +18,7 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
  * Usa useAuth/useToast directamente (cross-cutting) para no inflar la lista de props.
  */
 const TabIntegraciones = ({
+  usaEcommerce, savingUsaEcommerce, onToggleUsaEcommerce,
   integracionMP, integracionUala, integracionTiendanube, afipConfig,
   showWebhookUrl, setShowWebhookUrl,
   mapeosCuentas, setMapeosCuentas, savingMapeos, cuentasBancariasLista,
@@ -27,6 +29,25 @@ const TabIntegraciones = ({
 
   return (
     <>
+      {/* ── Switch maestro de ecommerce (toggle de plan, mig.236) ──
+          Siempre visible. Con OFF, se oculta la card de Tiendanube (y el tilde
+          "Publicar" del producto en Inventario). Es la puerta del módulo. */}
+      <div className="kairox-bg-card border kairox-border rounded-xl shadow-sm p-5 mb-4 flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#00C7B1]/10 flex items-center justify-center shrink-0">
+            <ShoppingBag className="w-5 h-5 text-[#00C7B1]" />
+          </div>
+          <div>
+            <h4 className="font-semibold text-kx-text text-sm">Ecommerce</h4>
+            <p className="text-xs text-kx-text-2 leading-relaxed mt-0.5 max-w-xl">
+              Conectá tu tienda online (Tiendanube) y publicá tu catálogo directo desde KAIROX.
+              Al activarlo aparece la integración acá y la opción "Publicar en ecommerce" en cada producto.
+            </p>
+          </div>
+        </div>
+        <Switch checked={!!usaEcommerce} onCheckedChange={onToggleUsaEcommerce} disabled={savingUsaEcommerce} />
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 
         {/* ── Mercado Pago — card rica con estado real ── */}
@@ -131,7 +152,8 @@ const TabIntegraciones = ({
           </p>
         </div>
 
-        {/* ── Tiendanube — card rica con estado real ── */}
+        {/* ── Tiendanube — card rica con estado real (solo si el plan tiene ecommerce) ── */}
+        {usaEcommerce && (
         <div className="kairox-bg-card border kairox-border p-5 rounded-xl shadow-sm flex flex-col gap-3">
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-3">
@@ -166,6 +188,7 @@ const TabIntegraciones = ({
             </Button>
           )}
         </div>
+        )}
 
         <IntegracionCard
           nombre="Ualá QR"

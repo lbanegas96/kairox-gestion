@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { factorEntreUnidades, sonConvertibles, getMagnitudLabel } from '@/lib/unidadesMedida';
 import ProductoImagenes from '@/components/productos/ProductoImagenes';
 import EstadoPublicacionEcommerce from '@/components/productos/EstadoPublicacionEcommerce';
+import { useEcommerceHabilitado } from '@/hooks/useEcommerceHabilitado';
 
 // Fila de toggle tipo de artículo (estilo SAP B1 OITM) — ícono + label + descripción + Switch.
 const ToggleTipoArticulo = ({ icon: Icon, label, hint, checked, onCheckedChange, disabled }) => (
@@ -28,6 +29,10 @@ const ToggleTipoArticulo = ({ icon: Icon, label, hint, checked, onCheckedChange,
 // If defined inside, React creates a new function reference every render, causing
 // Radix UI portal (Select, Dialog) DOM nodes to unmount/remount and throw removeChild errors.
 const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categories, isSubmitting, unidadesMedida = [] }) => {
+  // Gate de plan: si la empresa no tiene ecommerce (mig.236), se oculta el tilde
+  // "Publicar en ecommerce" y su estado — el resto del maestro (flags SAP, imágenes) sigue.
+  const { habilitado: ecommerceHabilitado } = useEcommerceHabilitado();
+
   // En alta (no edit), si todavía no se eligió unidad y ya cargó el maestro, default a "Unidad".
   useEffect(() => {
     if (!isEdit && !data.unidad_medida_id && unidadesMedida.length > 0) {
@@ -407,19 +412,21 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
       </div>
     </div>
 
-    {/* ── Exposición a ecommerce (Tiendanube) ──────────────────────────────── */}
-    <div className="col-span-1 md:col-span-2">
-      <ToggleTipoArticulo
-        icon={Globe}
-        label="Publicar en ecommerce"
-        hint="Expone este artículo a los canales conectados (Tiendanube). KAIROX es la fuente de verdad: los cambios de acá se publican allá."
-        checked={!!data.publicar_ecommerce}
-        onCheckedChange={(v) => setData({ ...data, publicar_ecommerce: v })}
-      />
-      {isEdit && data.id && (
-        <EstadoPublicacionEcommerce productoId={data.id} publicarEcommerce={!!data.publicar_ecommerce} />
-      )}
-    </div>
+    {/* ── Exposición a ecommerce (Tiendanube) — solo si el plan tiene ecommerce ── */}
+    {ecommerceHabilitado && (
+      <div className="col-span-1 md:col-span-2">
+        <ToggleTipoArticulo
+          icon={Globe}
+          label="Publicar en ecommerce"
+          hint="Expone este artículo a los canales conectados (Tiendanube). KAIROX es la fuente de verdad: los cambios de acá se publican allá."
+          checked={!!data.publicar_ecommerce}
+          onCheckedChange={(v) => setData({ ...data, publicar_ecommerce: v })}
+        />
+        {isEdit && data.id && (
+          <EstadoPublicacionEcommerce productoId={data.id} publicarEcommerce={!!data.publicar_ecommerce} />
+        )}
+      </div>
+    )}
 
     {/* ── Imágenes ─────────────────────────────────────────────────────────── */}
     {isEdit && data.id ? (

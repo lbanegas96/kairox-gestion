@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Settings, Building, Loader2, TrendingUp, FileText, Check, Download,
   Users, Puzzle, Bell, Package2, Info, Cpu, Shield, Scale,
@@ -49,6 +50,7 @@ const ConfiguracionSection = ({ initialTab }) => {
   const { config, updateConfig } = useConfig();
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const fileInputRef = useRef(null);
 
   const [activeTab, setActiveTab] = useState(
@@ -88,6 +90,9 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [usaCentrosCosto, setUsaCentrosCosto] = useState(false);
   const [loadingUsaCentrosCosto, setLoadingUsaCentrosCosto] = useState(false);
   const [savingUsaCentrosCosto, setSavingUsaCentrosCosto] = useState(false);
+  // Toggle de plan: integración de ecommerce (mig.236)
+  const [usaEcommerce, setUsaEcommerce] = useState(false);
+  const [savingUsaEcommerce, setSavingUsaEcommerce] = useState(false);
 
   // ── Tab 4: Inventario — Método de Valoración de Stock ────────────────────
   const [valoracionStock, setValoracionStock] = useState('ultimo_costo');
@@ -439,6 +444,16 @@ const ConfiguracionSection = ({ initialTab }) => {
       }
     };
     loadUsaCentrosCosto();
+  }, [user?.empresa_id]);
+
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    supabase
+      .from('empresas')
+      .select('usa_ecommerce')
+      .eq('id', user.empresa_id)
+      .single()
+      .then(({ data }) => { if (data) setUsaEcommerce(data.usa_ecommerce ?? false); });
   }, [user?.empresa_id]);
 
   useEffect(() => {
@@ -890,6 +905,33 @@ const ConfiguracionSection = ({ initialTab }) => {
       toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
     } finally {
       setSavingImpuestosAv(false);
+    }
+  };
+
+  const handleSaveUsaEcommerce = async (nuevoValor) => {
+    if (!user?.empresa_id) return;
+    setSavingUsaEcommerce(true);
+    setUsaEcommerce(nuevoValor); // optimista
+    try {
+      const { error } = await supabase
+        .from('empresas')
+        .update({ usa_ecommerce: nuevoValor })
+        .eq('id', user.empresa_id);
+      if (error) throw error;
+      // Invalidar el hook cacheado que gatea la UI (ProductForm, etc.).
+      queryClient.invalidateQueries({ queryKey: ['usa_ecommerce', user.empresa_id] });
+      toast({
+        title: nuevoValor ? 'Ecommerce activado' : 'Ecommerce desactivado',
+        description: nuevoValor
+          ? 'Ya podés conectar Tiendanube y publicar productos a tu tienda online.'
+          : 'Se ocultó la integración de ecommerce y la opción de publicar productos.',
+        className: 'bg-green-600 text-white border-green-700',
+      });
+    } catch (e) {
+      setUsaEcommerce(!nuevoValor); // revertir si falla
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingUsaEcommerce(false);
     }
   };
 
@@ -1646,6 +1688,9 @@ const ConfiguracionSection = ({ initialTab }) => {
         ═══════════════════════════════════════════════════════════════════ */}
         <TabsContent value="integraciones">
           <TabIntegraciones
+            usaEcommerce={usaEcommerce}
+            savingUsaEcommerce={savingUsaEcommerce}
+            onToggleUsaEcommerce={handleSaveUsaEcommerce}
             integracionMP={integracionMP}
             integracionUala={integracionUala}
             integracionTiendanube={integracionTiendanube}

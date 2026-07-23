@@ -129,14 +129,21 @@ function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen }) {
           isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
         ].join(' ')}
       >
-        {/* Logo */}
-        <div className="px-5 py-4 flex items-center gap-2.5 border-b border-kx-border flex-shrink-0">
-          <img
-            src="/kairox-logo.png"
-            alt="Kairox"
-            className="w-7 h-7 flex-shrink-0 object-contain"
-          />
-          <span className="text-sm font-semibold text-kx-text tracking-tight">KAIROX</span>
+        {/* Logo — clickeable: vuelve al Dashboard principal (mismo destino que Escape) */}
+        <div className="px-5 py-4 border-b border-kx-border flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => handleNavigate('dashboard')}
+            title="Ir al Dashboard"
+            className="flex items-center gap-2.5 rounded-lg -m-1 p-1 hover:bg-kx-surface-2 transition-colors w-full"
+          >
+            <img
+              src="/kairox-logo.png"
+              alt="Kairox"
+              className="w-7 h-7 flex-shrink-0 object-contain"
+            />
+            <span className="text-sm font-semibold text-kx-text tracking-tight">KAIROX</span>
+          </button>
         </div>
 
         {/* Nav */}
