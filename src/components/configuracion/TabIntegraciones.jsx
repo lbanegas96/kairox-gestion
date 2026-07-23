@@ -19,10 +19,10 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
  */
 const TabIntegraciones = ({
   usaEcommerce, savingUsaEcommerce, onToggleUsaEcommerce,
-  integracionMP, integracionUala, integracionTiendanube, afipConfig,
+  integracionMP, integracionUala, integracionTiendanube, integracionMercadoLibre, afipConfig,
   showWebhookUrl, setShowWebhookUrl,
   mapeosCuentas, setMapeosCuentas, savingMapeos, cuentasBancariasLista,
-  onConfigMP, onConfigUala, onConectarTiendanube, onMapeoProductosTiendanube, onGoFacturacion, onSaveMapeos,
+  onConfigMP, onConfigUala, onConectarTiendanube, onMapeoProductosTiendanube, onConectarMercadoLibre, onGoFacturacion, onSaveMapeos,
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -187,6 +187,38 @@ const TabIntegraciones = ({
               Mapear productos →
             </Button>
           )}
+        </div>
+        )}
+
+        {/* ── MercadoLibre — card rica con estado real (solo si el plan tiene ecommerce) ── */}
+        {usaEcommerce && (
+        <div className="kairox-bg-card border kairox-border p-5 rounded-xl shadow-sm flex flex-col gap-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#FFE600] flex items-center justify-center text-[#2D3277] font-bold text-sm shrink-0">
+                ML
+              </div>
+              <div>
+                <h4 className="font-semibold text-kx-text text-sm">MercadoLibre</h4>
+                {integracionMercadoLibre?.activo ? (
+                  <span className="inline-block text-2xs font-medium px-2 py-0.5 rounded-full border bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 mt-1">
+                    ✓ Conectado
+                  </span>
+                ) : (
+                  <span className="inline-block text-2xs font-medium px-2 py-0.5 rounded-full border bg-kx-surface-2 text-kx-text-3 border-kx-border mt-1">
+                    Sin configurar
+                  </span>
+                )}
+              </div>
+            </div>
+            <Button size="sm" variant="outline" className="text-xs h-8 shrink-0" onClick={onConectarMercadoLibre}>
+              {integracionMercadoLibre?.activo ? 'Reconectar' : 'Conectar'}
+            </Button>
+          </div>
+
+          <p className="text-xs text-kx-text-2 leading-relaxed">
+            Sincronización de publicaciones, órdenes y stock con tu cuenta de MercadoLibre. Las órdenes pagadas se registran como pedidos en KAIROX.
+          </p>
         </div>
         )}
 

@@ -2,14 +2,32 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { verifyAdmin, buildCorsHeaders, errorResponse, okResponse } from '../_shared/auth.ts';
 import { generarState, guardarStatePendiente, type Canal } from '../_shared/integraciones.ts';
 
-// Mapa de adapters implementados. Agregar un canal nuevo (Shopify, MercadoLibre)
-// implica sumar su entrada acá + su rama de intercambio en integraciones-oauth-callback
-// — el resto de la capa (state, Vault, tabla) ya queda armado y no se toca.
+// URL fija del callback (redirect_uri) — MELI la exige tanto en la URL de
+// autorización como en el intercambio del code, y debe coincidir EXACTO con la
+// registrada en la app de MercadoLibre Developers. Tiendanube no la pide acá.
+const REDIRECT_URI = `${Deno.env.get('SUPABASE_URL')}/functions/v1/integraciones-oauth-callback`;
+
+// Mapa de adapters implementados. Agregar un canal nuevo (Shopify) implica sumar
+// su entrada acá + su rama de intercambio en integraciones-oauth-callback —
+// el resto de la capa (state, Vault, tabla) ya queda armado y no se toca.
 const AUTHORIZE_URL_BUILDERS: Record<string, (state: string) => string | null> = {
   tiendanube: (state) => {
     const appId = Deno.env.get('TIENDANUBE_APP_ID');
     if (!appId) return null;
     return `https://www.tiendanube.com/apps/${appId}/authorize?state=${state}`;
+  },
+  // MercadoLibre Argentina — auth.mercadolibre.com.ar. Token de 6h + refresh
+  // (ver obtenerTokenValido en _shared/integraciones.ts).
+  mercadolibre: (state) => {
+    const appId = Deno.env.get('MELI_APP_ID');
+    if (!appId) return null;
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: appId,
+      redirect_uri: REDIRECT_URI,
+      state,
+    });
+    return `https://auth.mercadolibre.com.ar/authorization?${params}`;
   },
 };
 

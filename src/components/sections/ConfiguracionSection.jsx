@@ -28,6 +28,7 @@ import TabFinanzas, { TIPO_INSTRUMENTO_LABEL } from '@/components/configuracion/
 import TabInventario from '@/components/configuracion/TabInventario';
 import TabIntegraciones from '@/components/configuracion/TabIntegraciones';
 import ConectarTiendanubeModal from '@/components/integraciones/ConectarTiendanubeModal';
+import ConectarMercadoLibreModal from '@/components/integraciones/ConectarMercadoLibreModal';
 import MapeoProductosModal from '@/components/integraciones/MapeoProductosModal';
 import TabFacturacion from '@/components/configuracion/TabFacturacion';
 import { MAGNITUDES } from '@/lib/unidadesMedida';
@@ -201,6 +202,8 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [showWebhookUrl, setShowWebhookUrl] = useState(false); // SECURITY-WEBHOOK-URL
   const [integracionTiendanube,    setIntegracionTiendanube]    = useState(null);
   const [showConectarTiendanube,   setShowConectarTiendanube]   = useState(false);
+  const [integracionMercadoLibre,  setIntegracionMercadoLibre]  = useState(null);
+  const [showConectarMercadoLibre, setShowConectarMercadoLibre] = useState(false);
   const [showMapeoProductosTN,     setShowMapeoProductosTN]     = useState(false);
 
   // ── Puente Caja ↔ Bancos ──────────────────────────────────────────────────
@@ -588,14 +591,27 @@ const ConfiguracionSection = ({ initialTab }) => {
 
   useEffect(() => { reloadIntegracionTiendanube(); }, [user?.empresa_id]);
 
+  const reloadIntegracionMercadoLibre = () => {
+    if (!user?.empresa_id) return;
+    supabase
+      .from('integraciones_canales')
+      .select('id, empresa_id, canal, activo, external_store_id, ultimo_sync_productos, ultimo_sync_pedidos')
+      .eq('empresa_id', user.empresa_id)
+      .eq('canal', 'mercadolibre')
+      .maybeSingle()
+      .then(({ data }) => setIntegracionMercadoLibre(data ?? null));
+  };
+
+  useEffect(() => { reloadIntegracionMercadoLibre(); }, [user?.empresa_id]);
+
   // Volver de un flujo OAuth (integraciones-oauth-callback redirige acá con
   // ?integracion=X&status=ok|error) — refrescar el estado para que la card
   // muestre "Conectado" sin que el usuario tenga que recargar a mano.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('integracion') === 'tiendanube') {
-      reloadIntegracionTiendanube();
-    }
+    const integracion = params.get('integracion');
+    if (integracion === 'tiendanube') reloadIntegracionTiendanube();
+    if (integracion === 'mercadolibre') reloadIntegracionMercadoLibre();
   }, [user?.empresa_id]);
 
   useEffect(() => {
@@ -1694,6 +1710,7 @@ const ConfiguracionSection = ({ initialTab }) => {
             integracionMP={integracionMP}
             integracionUala={integracionUala}
             integracionTiendanube={integracionTiendanube}
+            integracionMercadoLibre={integracionMercadoLibre}
             afipConfig={afipConfig}
             showWebhookUrl={showWebhookUrl}
             setShowWebhookUrl={setShowWebhookUrl}
@@ -1705,6 +1722,7 @@ const ConfiguracionSection = ({ initialTab }) => {
             onConfigUala={() => setShowConfigUala(true)}
             onConectarTiendanube={() => setShowConectarTiendanube(true)}
             onMapeoProductosTiendanube={() => setShowMapeoProductosTN(true)}
+            onConectarMercadoLibre={() => setShowConectarMercadoLibre(true)}
             onGoFacturacion={() => setActiveTab('facturacion')}
             onSaveMapeos={handleSaveMapeos}
           />
@@ -2307,6 +2325,12 @@ const ConfiguracionSection = ({ initialTab }) => {
       <ConectarTiendanubeModal
         open={showConectarTiendanube}
         onOpenChange={setShowConectarTiendanube}
+      />
+
+      {/* ── Modal conectar MercadoLibre (OAuth) ────────────────────────────── */}
+      <ConectarMercadoLibreModal
+        open={showConectarMercadoLibre}
+        onOpenChange={setShowConectarMercadoLibre}
       />
 
       {/* ── Modal mapeo de productos Tiendanube ────────────────────────────── */}

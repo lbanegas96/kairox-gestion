@@ -48,6 +48,47 @@ const TOKEN_EXCHANGERS: Record<string, (code: string) => Promise<ResultadoExchan
       extraConfig: { scope: data.scope },
     };
   },
+
+  // MercadoLibre — https://developers.mercadolibre.com.ar/en_us/authentication-and-authorization
+  // access_token dura 6h; devuelve refresh_token (uso único) y expires_in. El
+  // redirect_uri debe coincidir EXACTO con el de integraciones-oauth-iniciar y
+  // el registrado en la app de MELI. La renovación se hace después con
+  // obtenerTokenValido (_shared/integraciones.ts).
+  mercadolibre: async (code) => {
+    const clientId = Deno.env.get('MELI_APP_ID');
+    const clientSecret = Deno.env.get('MELI_CLIENT_SECRET');
+    if (!clientId || !clientSecret) {
+      throw new Error('Falta configurar MELI_APP_ID / MELI_CLIENT_SECRET');
+    }
+    const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/integraciones-oauth-callback`;
+
+    const res = await fetch('https://api.mercadolibre.com/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        redirect_uri: redirectUri,
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`MercadoLibre token exchange falló (${res.status}): ${body}`);
+    }
+
+    const data = await res.json();
+    const expiresIn = Number(data.expires_in) || 21600; // 6h default
+    return {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token,
+      tokenExpiry: new Date(Date.now() + expiresIn * 1000).toISOString(),
+      externalStoreId: data.user_id != null ? String(data.user_id) : null,
+      extraConfig: { scope: data.scope },
+    };
+  },
 };
 
 // Registra los webhooks de pedidos en Tiendanube apuntando a
