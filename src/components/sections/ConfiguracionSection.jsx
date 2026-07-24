@@ -1203,7 +1203,7 @@ const ConfiguracionSection = ({ initialTab }) => {
 
   const openAddPv = () => {
     setEditingPv(null);
-    setPvForm({ numero: '', nombre: 'Nuevo Punto de Venta', tipo: 'web', cai_remito: '', cai_remito_vencimiento: '', proximo_numero_remito: 1, es_default: false, activo: true });
+    setPvForm({ numero: '', nombre: 'Nuevo Punto de Venta', tipo: 'web', envia_arca: true, cai_remito: '', cai_remito_vencimiento: '', proximo_numero_remito: 1, es_default: false, activo: true });
     setShowPvModal(true);
   };
 
@@ -1213,6 +1213,7 @@ const ConfiguracionSection = ({ initialTab }) => {
       numero: String(pv.numero),
       nombre: pv.nombre,
       tipo: pv.tipo ?? 'web',
+      envia_arca: pv.envia_arca ?? true,
       cai_remito: pv.cai_remito ?? '',
       cai_remito_vencimiento: pv.cai_remito_vencimiento ?? '',
       proximo_numero_remito: pv.proximo_numero_remito ?? 1,
@@ -1239,6 +1240,7 @@ const ConfiguracionSection = ({ initialTab }) => {
           numero,
           nombre: pvForm.nombre.trim(),
           tipo: pvForm.tipo,
+          envia_arca: pvForm.envia_arca,
           cai_remito: pvForm.cai_remito || null,
           cai_remito_vencimiento: pvForm.cai_remito_vencimiento || null,
           proximo_numero_remito: Number(pvForm.proximo_numero_remito) || 1,
@@ -1875,6 +1877,17 @@ const ConfiguracionSection = ({ initialTab }) => {
                   className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
                 />
               </div>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-kx-border p-3 bg-kx-surface-2">
+              <div>
+                <Label className="text-kx-text text-sm">Envía a ARCA</Label>
+                <p className="text-xs text-kx-text-3 mt-0.5">
+                  {pvForm.envia_arca
+                    ? 'Los comprobantes de este PdV se encolan para CAE automático.'
+                    : 'PdV interno: nunca se envía a ARCA (ej. remitos con CAI).'}
+                </p>
+              </div>
+              <Switch checked={pvForm.envia_arca} onCheckedChange={v => setPvForm(f => ({ ...f, envia_arca: v }))} />
             </div>
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">

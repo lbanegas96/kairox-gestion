@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Truck, Search, ChevronDown, ChevronRight, Package } from 'lucide-react';
+import { Truck, Search, ChevronDown, ChevronRight, Package, FileOutput, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -38,6 +39,7 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
   const [search, setSearch]     = useState('');
   const [filtroOrigen, setFiltroOrigen] = useState('todos');
   const [expanded, setExpanded] = useState({});
+  const [emitiendoId, setEmitiendoId] = useState(null);
 
   const fetchEntregas = async () => {
     if (!user?.empresa_id) return;
@@ -94,6 +96,27 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
 
   const toggleExpand = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
 
+  const handleEmitirRemito = async (entregaId) => {
+    setEmitiendoId(entregaId);
+    try {
+      const { data, error } = await supabase.rpc('emitir_remito', {
+        p_empresa_id: user.empresa_id,
+        p_entrega_id: entregaId,
+      });
+      if (error) throw error;
+      toast({
+        title: `Remito Nº ${data.numero_remito} emitido`,
+        description: `CAI ${data.cai} — ${data.punto_venta_nombre}`,
+        className: 'bg-green-600 text-white border-green-700',
+      });
+      await fetchEntregas();
+    } catch (err) {
+      toast({ title: 'No se pudo emitir el remito', description: err.message, variant: 'destructive' });
+    } finally {
+      setEmitiendoId(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Filtros */}
@@ -133,13 +156,14 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
                 <th className="text-left p-3 font-semibold text-kx-text-2">Factura</th>
                 <th className="text-center p-3 font-semibold text-kx-text-2">Ítems</th>
                 <th className="text-center p-3 font-semibold text-kx-text-2">Estado</th>
+                <th className="text-left p-3 font-semibold text-kx-text-2">Remito</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-kx-border">
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 9 }).map((_, j) => (
+                    {Array.from({ length: 10 }).map((_, j) => (
                       <td key={j} className="p-3">
                         <div className="h-4 bg-kx-surface-2 rounded animate-pulse w-16" />
                       </td>
@@ -148,7 +172,7 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
                 ))
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-12 text-center text-kx-text-3">
+                  <td colSpan={10} className="p-12 text-center text-kx-text-3">
                     <Truck className="w-10 h-10 mx-auto mb-3 opacity-20" />
                     <p className="font-medium text-kx-text-2">
                       {filtroOrigen !== 'todos' || search
@@ -199,12 +223,31 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
                         <td className="p-3 text-center">
                           <EstadoBadge estado={entrega.estado} />
                         </td>
+                        <td className="p-3" onClick={e => e.stopPropagation()}>
+                          {entrega.numero_remito ? (
+                            <span className="font-mono text-xs text-kx-text-2" title={`CAI ${entrega.cai_remito_usado || '—'}`}>
+                              {entrega.numero_remito}
+                            </span>
+                          ) : (
+                            <Button
+                              size="sm" variant="outline"
+                              disabled={emitiendoId === entrega.id}
+                              onClick={() => handleEmitirRemito(entrega.id)}
+                              className="h-7 text-xs"
+                            >
+                              {emitiendoId === entrega.id
+                                ? <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                : <FileOutput className="w-3 h-3 mr-1" />}
+                              Emitir remito
+                            </Button>
+                          )}
+                        </td>
                       </tr>
 
                       {isOpen && items.length > 0 && (
                         <tr>
                           <td />
-                          <td colSpan={8} className="pb-3 pr-3">
+                          <td colSpan={9} className="pb-3 pr-3">
                             <div className="bg-kx-surface-2 rounded-lg border border-kx-border p-3">
                               <p className="text-xs font-semibold text-kx-text-3 uppercase mb-2">
                                 Detalle de ítems

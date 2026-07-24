@@ -188,6 +188,7 @@ const TabFacturacion = ({
                 <tr>
                   <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3 w-12">Nº</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3">Nombre</th>
+                  <th className="px-3 py-2 text-center text-xs font-medium text-kx-text-3 w-16">ARCA</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3 hidden sm:table-cell">Tipo</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3 hidden md:table-cell">CAI Remito</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3 hidden md:table-cell">Venc. CAI</th>
@@ -206,6 +207,15 @@ const TabFacturacion = ({
                     <tr key={pv.id} className="border-t border-kx-border hover:bg-kx-surface-2/50">
                       <td className="px-3 py-2 font-mono text-kx-text font-medium">{pv.numero}</td>
                       <td className="px-3 py-2 text-kx-text">{pv.nombre}</td>
+                      <td className="px-3 py-2 text-center">
+                        {pv.envia_arca !== false ? (
+                          <span title="Envía a ARCA (fiscal)" className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                            <Check className="w-3.5 h-3.5" />
+                          </span>
+                        ) : (
+                          <span title="PdV interno — no envía a ARCA" className="text-xs font-medium text-kx-text-3">—</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-kx-text-2 hidden sm:table-cell capitalize">{pv.tipo ?? 'web'}</td>
                       <td className="px-3 py-2 text-kx-text-2 font-mono text-xs hidden md:table-cell">
                         {pv.cai_remito ? pv.cai_remito.slice(0, 12) + '…' : '—'}
