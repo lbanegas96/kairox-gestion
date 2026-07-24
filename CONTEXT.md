@@ -1,35 +1,60 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-23 (Nadia — adapter MercadoLibre Fase 1 arrancada; Luciano — 5 bugs del Reporte de Ventas PDF)
+**Última actualización:** 2026-07-23/24 (Nadia — adapter MercadoLibre Fases 0-5 construidas y probadas; Fase 5 tiene un bloqueante real de la API de MELI, ver abajo)
 
-> 🚧 **EN CURSO (Nadia) — adapter MercadoLibre, segunda tarea del gradiente del ROADMAP. Fase 1
-> (OAuth + refresh de token) DESPLEGADA a prod, pero NO probada de punta a punta (falta el trámite).**
-> Reutiliza toda la capa de Tiendanube (integraciones_canales ya aceptaba 'mercadolibre', flujo OAuth
-> genérico, Vault, mapeo). Commit `cb3b3c5`, edge functions `integraciones-oauth-iniciar` (v5) y
-> `-callback` (v7) desplegadas, frontend pusheado.
-> - **Lo nuevo/difícil de MELI vs Tiendanube**: el access token expira a las 6h (el de TN no expiraba).
->   Se construyó `obtenerTokenValido()` en `_shared/integraciones.ts` — renueva el token solo antes de
->   vencer usando el refresh_token (que en MELI es de un solo uso: cada refresh devuelve uno nuevo que
->   hay que guardar sí o sí). Es el mecanismo que la capa se diseñó para soportar pero que TN nunca
->   ejercitó. **Cualquier worker que le pegue a la API de MELI DEBE usar `obtenerTokenValido`, NO
->   `leerTokenCanal`** (esa no renueva). Bug que se cazó en el camino: el refresh NO debe pasar por
->   `guardarTokenCanal` (hace upsert de la fila completa y borraría external_store_id/config) — se
->   guardan los tokens directo en Vault + solo se toca `token_expiry`.
-> - **UI**: card de MercadoLibre en Configuración → Integraciones (aparece con el toggle Ecommerce
->   activo) + `ConectarMercadoLibreModal`. No se tocó NADA de la lógica de Tiendanube, solo se
->   agregaron ramas nuevas.
-> - **⚠️ BLOQUEANTE — Fase 0 (trámite, lo hace Nadia/Luciano):** registrar una app en MercadoLibre
->   Developers (developers.mercadolibre.com.ar) para tener `MELI_APP_ID` y `MELI_CLIENT_SECRET`, con el
->   redirect_uri EXACTO = `https://wuznppxeonmhfcvnqfbf.supabase.co/functions/v1/integraciones-oauth-callback`.
->   Cargar ambas como Edge Function secrets en Supabase. Sin eso, la card aparece pero "Conectar"
->   devuelve "Integración no configurada" (degradación limpia, igual que TN antes de sus credenciales).
->   **El refresh de token está escrito a spec pero NO se pudo probar de verdad sin credenciales reales.**
-> - **Fases que faltan** (mismo esquema que TN): Fase 2 catálogo + mapeo · Fase 3 órdenes → pedido
->   (webhook con topics orders_v2, misma decisión: nada fiscal automático) · Fase 4 stock KAIROX→MELI
->   (unidireccional; el bidireccional queda explícitamente afuera, es la parte difícil del roadmap).
-> - **Barrido de estado que hizo Nadia hoy antes de arrancar**: lo de Luciano (publicar catálogo TN,
->   reportería) quedó sólido — 0 errores en logs/advisors, colas limpias. Se detectaron 2 temas de
->   consumo/cuota (mp-sync cron roto desde 14-jul que tira 401 — decisión de Nadia: dejarlo, el webhook
->   cubre el tiempo real; y el cron de publicar catálogo cada 1 min, decisión de Luciano a consultarle).
+> 🚧 **EN CURSO (Nadia) — adapter MercadoLibre. Fases 0-4 CERRADAS y probadas en prod con datos
+> reales. Fase 5 (publicar catálogo nuevo) CONSTRUIDA pero BLOQUEADA por una limitación real de la
+> API de MELI — necesita Fase 6 (enganche a catálogo oficial) para funcionar. Detalle completo abajo.**
+>
+> - **Fase 0 (trámite) — CERRADA.** App creada en MercadoLibre Developers, `MELI_APP_ID` /
+>   `MELI_CLIENT_SECRET` cargados como Edge Function secrets. `external_store_id` real: `3562241031`.
+> - **Fase 1 (OAuth + refresh) — CERRADA Y PROBADA end-to-end.** Conexión real hecha por Nadia,
+>   token vigente, `obtenerTokenValido()` (`_shared/integraciones.ts`) renovando bien antes de las 6h
+>   de expiración. Recordatorio del bug ya documentado: el refresh NUNCA debe pasar por
+>   `guardarTokenCanal` (pisa external_store_id/config) — va directo a Vault + solo toca `token_expiry`.
+> - **Fase 2 (catálogo + mapeo) — CERRADA.** `mercadolibre-catalogo` lee el catálogo real (scan +
+>   multiget de a 20). Bug encontrado y arreglado: publicaciones nuevas de MELI guardan el SKU en el
+>   atributo `SELLER_SKU`, no en el legacy `seller_custom_field` — `extraerSku()` chequea ambos.
+>   `MapeoProductosModal.jsx` generalizado con prop `canal` (sirve para TN y MELI, un solo componente).
+>   **⚠️ Bug real detectado hoy 2026-07-23, sin causa raíz confirmada:** un mapeo guardado a mano en la
+>   sesión anterior (producto "Aramis TESTE") apareció con toast de éxito pero **no persistió** —
+>   `integraciones_producto_mapeo` no tenía la fila al otro día. Se re-mapeó y esta vez sí quedó
+>   guardado. Si vuelve a pasar, revisar si el `upsert(..., {onConflict:'integracion_id,producto_id'})`
+>   de `MapeoProductosModal.handleGuardar` puede estar fallando en algún caso silencioso (no debería,
+>   el código chequea `error` y muestra toast si falla — pero el síntoma observado no cuadra con eso).
+> - **Fase 3 (pedidos → webhook) — CERRADA.** `mercadolibre-pedidos-webhook` (verify_jwt=false, MELI no
+>   firma sus notificaciones — se valida `application_id` + se re-consulta la orden con token propio
+>   como fuente de verdad). Mapea `paid→confirmado`, `cancelled→cancelado`, resto→`borrador`. Nada
+>   fiscal se genera solo, mismo criterio que Tiendanube.
+> - **Fase 4 (stock KAIROX→MELI) — CERRADA.** `mercadolibre-stock-worker`, unidireccional. Se
+>   generalizó la arquitectura de colas a **multi-canal** (columna `canal` en
+>   `integraciones_stock_pendiente` e `integraciones_producto_pendiente`, migraciones 239/240/241) —
+>   un producto puede sincronizar a Tiendanube y a MercadoLibre de forma independiente, con **toggles
+>   separados** en `ProductForm.jsx` (`publicar_ecommerce` = Tiendanube, `publicar_mercadolibre` =
+>   MercadoLibre nuevo). A pedido explícito de Nadia: "son cosas separadas, tiene que haber dos
+>   opciones ahí" — no un solo toggle genérico de ecommerce.
+> - **Fase 5 (publicar catálogo nuevo) — CONSTRUIDA, BLOQUEADA POR MELI, no usar en este estado.**
+>   `mercadolibre-catalogo-publicar` + `mercadolibre-categorias` (predictor de categoría + atributos) +
+>   `ConfigMercadoLibreModal.jsx` (formulario por producto: categoría, condición, marca/modelo).
+>   **Hallazgo real (probado contra la API real, no especulado):** MELI rechaza el `POST /items` con
+>   `body.required_fields [family_name]` en la inmensa mayoría de las categorías — se confirmó contra
+>   3 rubros distintos (ropa/camisetas, mates, electrodomésticos/depiladoras), los 3 con
+>   `catalog_domain` en la categoría. En cuanto se manda `family_name` en el body (nivel raíz, no como
+>   atributo — ahí NO alcanza aunque el endpoint de atributos no lo marque `required`), MELI exige que
+>   el ítem se enganche a su catálogo oficial y rechaza el `title` propio con
+>   `body.invalid_fields [title]`. **Conclusión: no se puede publicar un producto 100% nuevo desde
+>   KAIROX sin implementar el enganche real al catálogo de MELI** (`GET /products/search` por
+>   marca/modelo/categoría → `catalog_product_id` → publicar contra esa ficha en vez de title/pictures
+>   armados a mano). Estimado: media jornada a una jornada completa, con el riesgo extra de que la
+>   búsqueda de catálogo tenga sus propias mañas (como pasó hoy con `family_name`).
+>   El código de la rama CREAR quedó documentado in-line con este hallazgo
+>   (`mercadolibre-catalogo-publicar/index.ts`, comentario arriba del handler) — **no perder tiempo
+>   reintentando parches de atributos, hace falta la Fase 6 completa.** La rama ACTUALIZAR (producto ya
+>   mapeado a mano, como se sigue haciendo con Tiendanube) sí funciona bien.
+> - **Próximo paso sugerido:** Fase 6 (enganche a catálogo MELI) cuando haya prioridad — hasta
+>   entonces, productos nuevos en MercadoLibre se siguen publicando a mano desde la web de MELI y
+>   mapeando en KAIROX con `MapeoProductosModal` (igual que "Aramis Teste").
+> - **Pendiente sin resolver, decisión ya tomada de dejarlo así:** cron de `mp-sync` roto desde 14-jul
+>   (401) — el webhook de MercadoPago cubre el tiempo real, no es bloqueante.
 
 > ✅ **REPORTERÍA — Reporte de Ventas PDF: 5 bugs reales encontrados y arreglados (2026-07-23).**
 > Luciano adjuntó el PDF real que arroja el sistema hoy y se compararon contra estándares de

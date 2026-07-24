@@ -19,6 +19,18 @@ import { obtenerTokenValido } from '../_shared/integraciones.ts';
  *     el stock lo maneja su propia cola, no se toca acá para no pisarlo).
  *
  * API MELI: POST /items  https://api.mercadolibre.com/items  (token del vendedor).
+ *
+ * LIMITACIÓN CONOCIDA (probado 2026-07-23): la rama CREAR falla en la práctica
+ * para casi cualquier categoría con "MELI POST item 400: body.required_fields
+ * [family_name]". Confirmado que TODAS las categorías de MELI (incluso ropa,
+ * mates, electrodomésticos) están atadas a un catalog_domain, y en cuanto se
+ * manda family_name en el body, MELI exige que el item se enganche al catálogo
+ * oficial (rechaza el título propio con "body.invalid_fields [title]"). Para
+ * que CREAR funcione de verdad hace falta Fase 6: buscar el producto en el
+ * catálogo de MELI (GET /products/search) y publicar contra su catalog_product_id
+ * en vez de title/pictures/attributes armados a mano. Hasta entonces, esta rama
+ * sirve solo como referencia — no la uses para publicar productos nuevos.
+ * La rama ACTUALIZAR (PUT, producto ya mapeado a mano) sí funciona.
  */
 const ML_API_BASE = 'https://api.mercadolibre.com';
 const CURRENCY = 'ARS';
