@@ -8,7 +8,7 @@ function ModalReporte({
   selectedReport,
   startDate, setStartDate, endDate, setEndDate,
   handleGenerate, resetFilters, loading,
-  reportData, handleDownloadPDF,
+  reportData, handleDownloadPDF, handleDownloadExcel,
   centrosCosto, centroCostoId, setCentroCostoId,
 }) {
   return (
@@ -30,6 +30,7 @@ function ModalReporte({
                 loading={loading}
                 hasData={reportData.length > 0}
                 onDownloadPDF={handleDownloadPDF}
+                onDownloadExcel={handleDownloadExcel}
                 showCentroCosto={!!selectedReport.supportsCentroCosto}
                 centrosCosto={centrosCosto}
                 centroCostoId={centroCostoId}

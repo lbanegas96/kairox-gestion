@@ -34,6 +34,43 @@ export function exportToExcel({ rows, headers, labels, filename = 'exportacion',
   XLSX.writeFile(wb, `${filename}_${date}.xlsx`);
 }
 
+/**
+ * Exporta un reporte del módulo Reportería a .xlsx, reusando la misma config
+ * de columnas/totales que ya arma reportDefinitions.getTableConfig() para
+ * pantalla y PDF (formato {header,key,pdfRender}). Columnas numéricas (total,
+ * monto, saldo) se exportan como número real -no como string formateado- para
+ * que Excel pueda sumarlas/graficarlas; el resto usa pdfRender si existe
+ * (fechas, labels) o el valor crudo.
+ */
+export function exportReporte({ title, columns, data, totals = null, filename = 'reporte' }) {
+  const header = columns.map(c => c.header);
+  const rows = data.map(row =>
+    columns.map(col => {
+      const raw = row[col.key];
+      if (typeof raw === 'number') return raw;
+      return col.pdfRender ? col.pdfRender(row) : (raw ?? '');
+    })
+  );
+
+  const aoa = [header, ...rows];
+  if (totals) {
+    const totalsRow = [];
+    totals.forEach(t => {
+      totalsRow.push(t.content);
+      for (let i = 1; i < (t.colSpan || 1); i++) totalsRow.push('');
+    });
+    aoa.push(totalsRow);
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = columns.map(() => ({ wch: 18 }));
+
+  const wb = XLSX.utils.book_new();
+  // Nombre de hoja tope 31 caracteres (límite de Excel/XLSX).
+  XLSX.utils.book_append_sheet(wb, ws, (title || 'Reporte').slice(0, 31));
+  XLSX.writeFile(wb, `${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
 // Helpers por módulo
 
 export function exportProductos(productos) {

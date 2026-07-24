@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Download, FilterX, RefreshCw } from 'lucide-react';
+import { Loader2, Download, FileSpreadsheet, FilterX, RefreshCw } from 'lucide-react';
 
 const ReportHeader = ({
   title,
@@ -14,6 +14,7 @@ const ReportHeader = ({
   loading,
   hasData,
   onDownloadPDF,
+  onDownloadExcel,
   showCentroCosto,
   centrosCosto,
   centroCostoId,
@@ -27,14 +28,24 @@ const ReportHeader = ({
         </h3>
         <div className="flex items-center gap-2">
            {hasData && (
-             <Button
-               onClick={onDownloadPDF}
-               disabled={loading}
-               className="bg-red-600 hover:bg-red-700 text-white shadow-sm"
-             >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : <Download className="h-4 w-4 mr-2"/>}
-                Descargar PDF
-             </Button>
+             <>
+               <Button
+                 onClick={onDownloadExcel}
+                 disabled={loading}
+                 className="bg-green-700 hover:bg-green-800 text-white shadow-sm"
+               >
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : <FileSpreadsheet className="h-4 w-4 mr-2"/>}
+                  Descargar Excel
+               </Button>
+               <Button
+                 onClick={onDownloadPDF}
+                 disabled={loading}
+                 className="bg-red-600 hover:bg-red-700 text-white shadow-sm"
+               >
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : <Download className="h-4 w-4 mr-2"/>}
+                  Descargar PDF
+               </Button>
+             </>
            )}
         </div>
       </div>

@@ -145,12 +145,13 @@ export const getTableConfig = (reportId, data) => {
       columns: [
         { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
         { header: 'Cliente', key: 'cliente', align: 'left' },
+        { header: 'Comprobante', key: 'comprobante', align: 'left' },
         { header: 'Pago', key: 'metodo_pago', align: 'center' },
         { header: 'Items', key: 'items', align: 'center' },
         { header: 'Total', key: 'total', align: 'right', render: (r) => formatCurrency(r.total), pdfRender: (r) => formatCurrency(r.total) }
       ],
       totals: [
-        { content: 'TOTALES', colSpan: 3, align: 'right' },
+        { content: 'TOTALES', colSpan: 4, align: 'right' },
         { content: data.length, align: 'center' },
         { content: formatCurrency(totalAmount), align: 'right' }
       ]

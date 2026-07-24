@@ -8,6 +8,7 @@ import { useConfig } from '@/contexts/ConfigContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { generatePDF } from '@/lib/pdfUtils';
+import { exportReporte } from '@/lib/excelUtils';
 import { buildSummaryMetrics, getTableConfig } from '@/components/reportes/reportDefinitions';
 import GridReportes from '@/components/reportes/GridReportes';
 import ModalReporte from '@/components/reportes/ModalReporte';
@@ -118,6 +119,11 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
           id: s.id,
           fecha: s.fecha,
           cliente: s.cliente_nombre || 'Consumidor Final',
+          // Con CAE (factura fiscal AFIP) → tipo + número real. Sin CAE (venta
+          // POS sin facturar) → número interno de KAIROX, siempre disponible.
+          comprobante: s.numero_afip
+            ? `${s.tipo_comprobante_afip || ''} ${s.numero_afip}`.trim()
+            : `Venta #${s.numero_venta || '-'}`,
           metodo_pago: s.forma_pago,
           items: s.comprobante_items?.length || 0,
           total: s.total
@@ -255,6 +261,26 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
     }
   };
 
+  // --- EXCEL DOWNLOAD ---
+  const handleDownloadExcel = () => {
+    try {
+      const { columns, totals } = getTableConfig(selectedReport.id, reportData);
+
+      exportReporte({
+        title:    selectedReport.title,
+        columns:  columns,
+        data:     reportData,
+        totals:   totals,
+        filename: selectedReport.id,
+      });
+
+      toast({ title: "Éxito", description: "Excel generado correctamente.", className: "bg-green-600 text-white" });
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "Falló la generación del Excel.", variant: "destructive" });
+    }
+  };
+
   // Reportes inline: reemplazan el grid
   if (showParidad) {
     return <ReporteParidad onBack={() => setShowParidad(false)} />;
@@ -276,7 +302,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         selectedReport={selectedReport}
         startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate}
         handleGenerate={handleGenerate} resetFilters={resetFilters} loading={loading}
-        reportData={reportData} handleDownloadPDF={handleDownloadPDF}
+        reportData={reportData} handleDownloadPDF={handleDownloadPDF} handleDownloadExcel={handleDownloadExcel}
         centrosCosto={centrosCosto} centroCostoId={centroCostoId} setCentroCostoId={setCentroCostoId}
       />
     </div>
