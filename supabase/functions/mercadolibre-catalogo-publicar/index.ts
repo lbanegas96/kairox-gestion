@@ -200,6 +200,7 @@ serve(async (req) => {
           // acá solo va precio/stock/condición (+ SKU propio para el mapeo).
           bodyNew = {
             catalog_product_id: config.catalog_product_id,
+            catalog_listing: true,
             category_id: config.category_id,
             price: precio,
             currency_id: CURRENCY,
