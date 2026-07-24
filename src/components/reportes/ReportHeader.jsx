@@ -1,7 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Download, FileSpreadsheet, FilterX, RefreshCw } from 'lucide-react';
+import { Loader2, Download, FileSpreadsheet, MessageCircle, FilterX, RefreshCw } from 'lucide-react';
+import { GROUP_BY_OPTIONS } from './reportDefinitions';
 
 const ReportHeader = ({
   title,
@@ -15,10 +16,14 @@ const ReportHeader = ({
   hasData,
   onDownloadPDF,
   onDownloadExcel,
+  onShareWhatsApp,
   showCentroCosto,
   centrosCosto,
   centroCostoId,
   setCentroCostoId,
+  showGroupBy,
+  groupBy,
+  setGroupBy,
 }) => {
   return (
     <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
@@ -45,6 +50,15 @@ const ReportHeader = ({
                   {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : <Download className="h-4 w-4 mr-2"/>}
                   Descargar PDF
                </Button>
+               <Button
+                 onClick={onShareWhatsApp}
+                 disabled={loading}
+                 title="Abre WhatsApp con el resumen — adjuntá el PDF/Excel descargado a mano"
+                 className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+               >
+                  <MessageCircle className="h-4 w-4 mr-2"/>
+                  WhatsApp
+               </Button>
              </>
            )}
         </div>
@@ -69,6 +83,18 @@ const ReportHeader = ({
             >
               <option value="">Todos</option>
               {centrosCosto.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+            </select>
+          </div>
+        )}
+        {showGroupBy && (
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-kx-text-2 uppercase">Agrupar por</Label>
+            <select
+              value={groupBy}
+              onChange={(e) => setGroupBy(e.target.value)}
+              className="h-9 w-full rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm text-kx-text px-2"
+            >
+              {GROUP_BY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
         )}

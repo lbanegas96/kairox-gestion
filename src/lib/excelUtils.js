@@ -44,13 +44,24 @@ export function exportToExcel({ rows, headers, labels, filename = 'exportacion',
  */
 export function exportReporte({ title, columns, data, totals = null, filename = 'reporte' }) {
   const header = columns.map(c => c.header);
-  const rows = data.map(row =>
-    columns.map(col => {
+  const rows = data.map(row => {
+    // Filas sintéticas de agrupamiento (reportDefinitions.applyGrouping) —
+    // mismo criterio que ReportTable/pdfUtils, no son un registro real.
+    if (row.__rowType === 'group') {
+      return [row.label];
+    }
+    if (row.__rowType === 'subtotal') {
+      const r = new Array(columns.length).fill('');
+      r[0] = row.label;
+      r[columns.length - 1] = row.valueText;
+      return r;
+    }
+    return columns.map(col => {
       const raw = row[col.key];
       if (typeof raw === 'number') return raw;
       return col.pdfRender ? col.pdfRender(row) : (raw ?? '');
-    })
-  );
+    });
+  });
 
   const aoa = [header, ...rows];
   if (totals) {

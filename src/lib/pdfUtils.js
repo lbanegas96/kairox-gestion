@@ -43,11 +43,11 @@ async function cargarLogoComoDataURL(logoUrl) {
  * @param {string}   opts.endDate
  * @param {object[]} opts.columns        – { header, key, align?, pdfRender? }
  * @param {object[]} opts.data
- * @param {any[]|null} opts.totals       – row for foot section (raw cell values)
+ * @param {object[]|null} opts.totals    – fila de pie: {content, colSpan?, align?}[], mismo shape que getTableConfig().totals
  * @param {string}   opts.filename
  * @param {string}   [opts.companyName]  – nombre de empresa (de config)
  * @param {string}   [opts.logoUrl]      – URL pública del logo (config.logo_base64)
- * @param {{label:string, value:string}[]} [opts.summaryMetrics]  – cajas KPI antes de la tabla
+ * @param {{label:string, value:string, delta?:{text:string,positivo:boolean}}[]} [opts.summaryMetrics]  – cajas KPI antes de la tabla
  */
 export const generatePDF = async ({
   title,
@@ -106,7 +106,9 @@ export const generatePDF = async ({
   if (summaryMetrics?.length) {
     const cols      = Math.min(summaryMetrics.length, 4);
     const boxW      = (pw - 28 - (cols - 1) * 4) / cols;
-    const boxH      = 18;
+    // Con delta (comparación de período) la caja necesita una 3ra línea chica.
+    const hasDelta  = summaryMetrics.some(m => m.delta);
+    const boxH      = hasDelta ? 22 : 18;
     const startX    = 14;
 
     summaryMetrics.slice(0, 4).forEach((m, i) => {
@@ -128,6 +130,13 @@ export const generatePDF = async ({
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
       doc.text(String(m.value), x + boxW / 2, cursorY + 13, { align: 'center' });
+
+      if (m.delta) {
+        doc.setTextColor(...(m.delta.positivo ? [22, 163, 74] : [220, 38, 38]));
+        doc.setFontSize(6.5);
+        doc.setFont('helvetica', 'normal');
+        doc.text(m.delta.text, x + boxW / 2, cursorY + 19, { align: 'center' });
+      }
     });
 
     cursorY += boxH + 6;
@@ -140,9 +149,20 @@ export const generatePDF = async ({
   cursorY += 4;
 
   // ── Table ─────────────────────────────────────────────────────────────────
-  const bodyData = data.map(row =>
-    columns.map(col => (col.pdfRender ? col.pdfRender(row) : row[col.key]))
-  );
+  // Filas sintéticas de agrupamiento (reportDefinitions.applyGrouping) — se
+  // pintan como una fila especial en vez de mapearlas contra `columns`.
+  const bodyData = data.map(row => {
+    if (row.__rowType === 'group') {
+      return [{ content: row.label, colSpan: columns.length, styles: { fillColor: GRAY_LIGHT, fontStyle: 'bold', textColor: BRAND_DARK } }];
+    }
+    if (row.__rowType === 'subtotal') {
+      return [
+        { content: row.label, colSpan: columns.length - 1, styles: { fontStyle: 'bold', halign: 'right' } },
+        { content: row.valueText, styles: { fontStyle: 'bold', halign: 'right' } },
+      ];
+    }
+    return columns.map(col => (col.pdfRender ? col.pdfRender(row) : row[col.key]));
+  });
 
   const columnStyles = columns.reduce((acc, col, idx) => {
     if (col.align) acc[idx] = { halign: col.align };
@@ -174,7 +194,18 @@ export const generatePDF = async ({
     alternateRowStyles: {
       fillColor: [248, 250, 252], // slate-50
     },
-    foot: totals ? [totals] : undefined,
+    // `totals` es el mismo array de celdas {content,colSpan,align} que arma
+    // reportDefinitions.getTableConfig() para la tabla en pantalla — se
+    // traduce 1:1 a la sintaxis de celda de autoTable (content/colSpan/
+    // styles.halign) en vez de pasar solo el texto ya "pelado", que perdía el
+    // colSpan y desalineaba el pie con reportes de muchas columnas (ej. la
+    // fila de un solo texto ancho de Financiero/Cta. Corriente) o al agregar
+    // una columna nueva (Comprobante en Ventas).
+    foot: totals ? [totals.map(t => ({
+      content: t.content,
+      colSpan: t.colSpan || 1,
+      styles: { halign: t.align || 'left' },
+    }))] : undefined,
     // Sin esto, autoTable repite el foot (TOTALES) en CADA página — se vio en
     // el PDF real como "TOTALES 22 $709.070,80" también en la página 2, que
     // solo tenía 1 fila, dando la falsa impresión de que esa página también

@@ -9,7 +9,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { generatePDF } from '@/lib/pdfUtils';
 import { exportReporte } from '@/lib/excelUtils';
-import { buildSummaryMetrics, getTableConfig } from '@/components/reportes/reportDefinitions';
+import { buildSummaryMetrics, getTableConfig, applyGrouping } from '@/components/reportes/reportDefinitions';
 import GridReportes from '@/components/reportes/GridReportes';
 import ModalReporte from '@/components/reportes/ModalReporte';
 
@@ -26,6 +26,8 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   const [showLibroIVA, setShowLibroIVA] = useState(false);
   const [libroIVAOrigen, setLibroIVAOrigen] = useState(null);
   const [afipActivo, setAfipActivo] = useState(false);
+  const [groupBy, setGroupBy] = useState('none');
+  const [previousPeriodStats, setPreviousPeriodStats] = useState(null);
 
   useEffect(() => {
     if (initialView === 'libro_iva') {
@@ -77,6 +79,8 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
     setEndDate(new Date().toISOString().split('T')[0]);
     setCentroCostoId('');
     setReportData([]);
+    setGroupBy('none');
+    setPreviousPeriodStats(null);
   };
 
   const openReportDialog = (report) => {
@@ -128,6 +132,26 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
           items: s.comprobante_items?.length || 0,
           total: s.total
         }));
+
+        // Período anterior (mismo largo de días, corrido hacia atrás) para el
+        // % variación de las cajas KPI del PDF. Solo se necesita el total y la
+        // cantidad — no items/cliente/comprobante — así que es una query liviana.
+        const rangeMs = new Date(end).getTime() - new Date(start).getTime();
+        const prevEnd = new Date(new Date(start).getTime() - 1);
+        const prevStart = new Date(prevEnd.getTime() - rangeMs);
+        let prevQuery = supabase
+          .from('comprobantes')
+          .select('total')
+          .eq('empresa_id', user.empresa_id)
+          .eq('tipo', 'venta')
+          .gte('fecha', prevStart.toISOString())
+          .lte('fecha', prevEnd.toISOString());
+        if (centroCostoId) prevQuery = prevQuery.eq('centro_costo_id', centroCostoId);
+        const { data: prevSales } = await prevQuery;
+        setPreviousPeriodStats(prevSales ? {
+          total: prevSales.reduce((s, r) => s + (r.total || 0), 0),
+          count: prevSales.length,
+        } : null);
       }
 
       // 2. COMPRAS
@@ -239,15 +263,17 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   const handleDownloadPDF = async () => {
     try {
       const { columns, totals } = getTableConfig(selectedReport.id, reportData);
-      const summaryMetrics = buildSummaryMetrics(selectedReport.id, reportData);
+      const isVentas = selectedReport.id === 'ventas';
+      const summaryMetrics = buildSummaryMetrics(selectedReport.id, reportData, isVentas ? previousPeriodStats : null);
+      const displayData = applyGrouping(selectedReport.id, reportData, groupBy);
 
       await generatePDF({
         title:           selectedReport.title,
         startDate:       startDate,
         endDate:         endDate,
         columns:         columns,
-        data:            reportData,
-        totals:          totals ? totals.map(t => t.content) : null,
+        data:            displayData,
+        totals:          totals,
         filename:        selectedReport.id,
         companyName:     config?.nombre_empresa || 'KAIROX Gestión',
         logoUrl:         config?.logo_base64 || null,
@@ -265,11 +291,12 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   const handleDownloadExcel = () => {
     try {
       const { columns, totals } = getTableConfig(selectedReport.id, reportData);
+      const displayData = applyGrouping(selectedReport.id, reportData, groupBy);
 
       exportReporte({
         title:    selectedReport.title,
         columns:  columns,
-        data:     reportData,
+        data:     displayData,
         totals:   totals,
         filename: selectedReport.id,
       });
@@ -279,6 +306,23 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
       console.error(error);
       toast({ title: "Error", description: "Falló la generación del Excel.", variant: "destructive" });
     }
+  };
+
+  // --- WHATSAPP SHARE ---
+  // wa.me abre WhatsApp con un mensaje pre-armado, sin adjuntar el PDF/Excel
+  // (WhatsApp no permite adjuntar archivos vía link sin la API paga de
+  // Business) — el usuario elige el contacto y adjunta el archivo a mano.
+  const handleShareWhatsApp = () => {
+    const isVentas = selectedReport.id === 'ventas';
+    const summaryMetrics = buildSummaryMetrics(selectedReport.id, reportData, isVentas ? previousPeriodStats : null);
+    const lineas = [
+      `📊 *${selectedReport.title}*`,
+      `Período: ${startDate} al ${endDate}`,
+      ...(summaryMetrics || []).map(m => `${m.label}: ${m.value}${m.delta ? ` (${m.delta.text})` : ''}`),
+    ];
+    const texto = encodeURIComponent(lineas.join('\n'));
+    window.open(`https://wa.me/?text=${texto}`, '_blank');
+    toast({ description: "Se abrió WhatsApp con el resumen. Adjuntá el PDF/Excel descargado si querés mandarlo completo.", duration: 4000 });
   };
 
   // Reportes inline: reemplazan el grid
@@ -302,8 +346,9 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         selectedReport={selectedReport}
         startDate={startDate} setStartDate={setStartDate} endDate={endDate} setEndDate={setEndDate}
         handleGenerate={handleGenerate} resetFilters={resetFilters} loading={loading}
-        reportData={reportData} handleDownloadPDF={handleDownloadPDF} handleDownloadExcel={handleDownloadExcel}
+        reportData={reportData} handleDownloadPDF={handleDownloadPDF} handleDownloadExcel={handleDownloadExcel} handleShareWhatsApp={handleShareWhatsApp}
         centrosCosto={centrosCosto} centroCostoId={centroCostoId} setCentroCostoId={setCentroCostoId}
+        groupBy={groupBy} setGroupBy={setGroupBy}
       />
     </div>
   );

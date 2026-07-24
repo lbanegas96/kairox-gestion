@@ -41,6 +41,8 @@ const ReportTable = ({ columns, data, loading, totals }) => {
   const paginated = data.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const from = (page - 1) * PAGE_SIZE + 1;
   const to = Math.min(page * PAGE_SIZE, data.length);
+  // Filas sintéticas de agrupamiento no cuentan como "registros" reales.
+  const recordCount = data.filter(d => !d.__rowType).length;
 
   return (
     <div className="border rounded-md overflow-hidden bg-kx-surface dark:bg-kx-bg shadow-sm dark:border-kx-border">
@@ -60,19 +62,44 @@ const ReportTable = ({ columns, data, loading, totals }) => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginated.map((row, rowIdx) => (
-              <TableRow key={rowIdx} className="hover:bg-kx-surface-2 dark:hover:bg-slate-900/50 transition-colors dark:border-kx-border">
-                {columns.map((col, colIdx) => (
-                  <TableCell
-                    key={colIdx}
-                    className={`whitespace-nowrap dark:text-slate-300 ${col.className || ''}`}
-                    style={{ textAlign: col.align || 'left' }}
-                  >
-                    {col.render ? col.render(row) : row[col.key]}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
+            {paginated.map((row, rowIdx) => {
+              // Filas sintéticas de agrupamiento (reportDefinitions.applyGrouping)
+              // — no son un registro real, se pintan distinto y sin usar `columns`.
+              if (row.__rowType === 'group') {
+                return (
+                  <TableRow key={rowIdx} className="bg-slate-200 dark:bg-slate-800 dark:border-kx-border">
+                    <TableCell colSpan={columns.length} className="font-bold text-slate-700 dark:text-kx-text">
+                      {row.label}
+                    </TableCell>
+                  </TableRow>
+                );
+              }
+              if (row.__rowType === 'subtotal') {
+                return (
+                  <TableRow key={rowIdx} className="bg-slate-50 dark:bg-slate-900/50 dark:border-kx-border">
+                    <TableCell colSpan={columns.length - 1} className="text-right font-semibold text-kx-text-2">
+                      {row.label}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold dark:text-kx-text">
+                      {row.valueText}
+                    </TableCell>
+                  </TableRow>
+                );
+              }
+              return (
+                <TableRow key={rowIdx} className="hover:bg-kx-surface-2 dark:hover:bg-slate-900/50 transition-colors dark:border-kx-border">
+                  {columns.map((col, colIdx) => (
+                    <TableCell
+                      key={colIdx}
+                      className={`whitespace-nowrap dark:text-slate-300 ${col.className || ''}`}
+                      style={{ textAlign: col.align || 'left' }}
+                    >
+                      {col.render ? col.render(row) : row[col.key]}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              );
+            })}
           </TableBody>
           {/* Totals always reflect ALL data, not just the current page */}
           {totals && (
@@ -98,8 +125,8 @@ const ReportTable = ({ columns, data, loading, totals }) => {
       <div className="bg-kx-surface-2 dark:bg-kx-surface px-4 py-2 border-t border-slate-100 dark:border-kx-border flex items-center justify-between gap-4">
         <p className="text-xs text-kx-text-3 dark:text-kx-text-3">
           {totalPages > 1
-            ? `Mostrando ${from}–${to} de ${data.length} registros`
-            : `${data.length} registros`}
+            ? `Mostrando ${from}–${to} de ${data.length} filas (${recordCount} registros)`
+            : `${recordCount} registros`}
         </p>
 
         {totalPages > 1 && (

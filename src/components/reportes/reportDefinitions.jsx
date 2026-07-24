@@ -24,7 +24,8 @@ export const REPORTS = [
     icon: <BarChart3 className="w-8 h-8 text-kx-violet" />,
     borderClass: 'border-t-kx-violet',
     requiresDate: true,
-    supportsCentroCosto: true
+    supportsCentroCosto: true,
+    supportsGroupBy: true
   },
   {
     id: 'compras',
@@ -70,7 +71,16 @@ export const REPORTS = [
   },
 ];
 
-export const buildSummaryMetrics = (reportId, data) => {
+// % variación vs. un valor anterior — null si no hay base de comparación
+// válida (sin datos del período anterior, o el anterior fue 0).
+const deltaLabel = (actual, anterior) => {
+  if (!anterior) return null;
+  const pct = ((actual - anterior) / anterior) * 100;
+  const signo = pct >= 0 ? '+' : '';
+  return { text: `${signo}${pct.toFixed(1)}% vs período anterior`, positivo: pct >= 0 };
+};
+
+export const buildSummaryMetrics = (reportId, data, previousPeriod = null) => {
   // maximumFractionDigits fijo en 2: sin esto, toLocaleString puede mostrar
   // hasta 3 decimales (spec de Intl.NumberFormat) — se vio en el PDF real como
   // "$32.230,491" en vez de "$32.230,49", inconsistente con formatCurrency()
@@ -79,12 +89,17 @@ export const buildSummaryMetrics = (reportId, data) => {
   if (reportId === 'ventas') {
     const total = data.reduce((s, r) => s + (r.total || 0), 0);
     const max   = data.length ? Math.max(...data.map(r => r.total || 0)) : 0;
-    return [
+    const metrics = [
       { label: 'Total Ventas',    value: fc(total) },
       { label: 'Cantidad',        value: data.length },
       { label: 'Ticket Promedio', value: data.length ? fc(total / data.length) : '—' },
       { label: 'Venta Mayor',     value: fc(max) },
     ];
+    if (previousPeriod) {
+      metrics[0].delta = deltaLabel(total, previousPeriod.total);
+      metrics[1].delta = deltaLabel(data.length, previousPeriod.count);
+    }
+    return metrics;
   }
   if (reportId === 'compras') {
     const total = data.reduce((s, r) => s + (r.total || 0), 0);
@@ -272,3 +287,47 @@ export const getTableConfig = (reportId, data) => {
 
   return { columns: [], totals: [] };
 };
+
+export const GROUP_BY_OPTIONS = [
+  { value: 'none',        label: 'Sin agrupar' },
+  { value: 'dia',         label: 'Por día' },
+  { value: 'metodo_pago', label: 'Por método de pago' },
+  { value: 'cliente',     label: 'Por cliente' },
+];
+
+const GROUP_KEY_FN = {
+  dia:         (r) => formatDateAR(r.fecha),
+  metodo_pago: (r) => r.metodo_pago || 'Sin método',
+  cliente:     (r) => r.cliente || 'Sin cliente',
+};
+
+/**
+ * Inserta filas de encabezado de grupo + subtotal en los datos de Ventas
+ * cuando el usuario elige agrupar (día/método de pago/cliente). Mantiene el
+ * orden de aparición del primer registro de cada grupo (no reordena por
+ * alfabético ni por monto) para no romper el orden cronológico que el
+ * usuario ya conoce. Las filas sintéticas se marcan con `__rowType` — los 3
+ * renderers (ReportTable, pdfUtils, excelUtils) las detectan y las pintan
+ * distinto en vez de tratarlas como una fila de datos más.
+ */
+export function applyGrouping(reportId, data, groupBy) {
+  if (reportId !== 'ventas' || !groupBy || groupBy === 'none') return data;
+  const keyFn = GROUP_KEY_FN[groupBy];
+  if (!keyFn) return data;
+
+  const groups = new Map();
+  data.forEach(row => {
+    const key = keyFn(row);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  });
+
+  const result = [];
+  groups.forEach((rows, key) => {
+    const subtotal = rows.reduce((s, r) => s + (r.total || 0), 0);
+    result.push({ __rowType: 'group', label: `${key} (${rows.length})` });
+    result.push(...rows);
+    result.push({ __rowType: 'subtotal', label: `Subtotal — ${key}`, valueText: formatCurrency(subtotal) });
+  });
+  return result;
+}
