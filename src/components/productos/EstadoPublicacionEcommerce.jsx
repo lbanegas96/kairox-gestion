@@ -27,6 +27,7 @@ const EstadoPublicacionEcommerce = ({ productoId, publicarEcommerce }) => {
           .from('integraciones_producto_pendiente')
           .select('id, estado, intentos, max_intentos, error_mensaje, updated_at')
           .eq('producto_id', productoId)
+          .eq('canal', 'tiendanube') // cola multi-canal (mig.240): este estado es el de Tiendanube
           .order('updated_at', { ascending: false })
           .limit(1)
           .maybeSingle(),

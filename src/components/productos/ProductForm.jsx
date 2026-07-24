@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2, Boxes, ShoppingCart, ShoppingBag, Wrench, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { factorEntreUnidades, sonConvertibles, getMagnitudLabel } from '@/lib/unidadesMedida';
 import ProductoImagenes from '@/components/productos/ProductoImagenes';
 import EstadoPublicacionEcommerce from '@/components/productos/EstadoPublicacionEcommerce';
+import ConfigMercadoLibreModal from '@/components/productos/ConfigMercadoLibreModal';
 import { useEcommerceHabilitado } from '@/hooks/useEcommerceHabilitado';
+import { supabase } from '@/lib/customSupabaseClient';
 
 // Fila de toggle tipo de artículo (estilo SAP B1 OITM) — ícono + label + descripción + Switch.
 const ToggleTipoArticulo = ({ icon: Icon, label, hint, checked, onCheckedChange, disabled }) => (
@@ -32,6 +34,24 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
   // Gate de plan: si la empresa no tiene ecommerce (mig.236), se oculta el tilde
   // "Publicar en ecommerce" y su estado — el resto del maestro (flags SAP, imágenes) sigue.
   const { habilitado: ecommerceHabilitado } = useEcommerceHabilitado();
+
+  // MercadoLibre exige categoría + atributos por producto (a diferencia de
+  // Tiendanube): mostramos el botón de configurar solo si hay una integración
+  // MELI activa (Fase 5).
+  const [meliConectado, setMeliConectado] = useState(false);
+  const [showConfigMeli, setShowConfigMeli] = useState(false);
+  useEffect(() => {
+    if (!ecommerceHabilitado) return;
+    let vivo = true;
+    supabase
+      .from('integraciones_canales')
+      .select('id')
+      .eq('canal', 'mercadolibre')
+      .eq('activo', true)
+      .maybeSingle()
+      .then(({ data }) => { if (vivo) setMeliConectado(!!data); });
+    return () => { vivo = false; };
+  }, [ecommerceHabilitado]);
 
   // En alta (no edit), si todavía no se eligió unidad y ya cargó el maestro, default a "Unidad".
   useEffect(() => {
@@ -424,6 +444,27 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
         />
         {isEdit && data.id && (
           <EstadoPublicacionEcommerce productoId={data.id} publicarEcommerce={!!data.publicar_ecommerce} />
+        )}
+
+        {/* MercadoLibre: configurar categoría + atributos obligatorios (Fase 5). */}
+        {isEdit && data.id && data.publicar_ecommerce && meliConectado && (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="mt-2 h-8 text-xs gap-1.5"
+              onClick={() => setShowConfigMeli(true)}
+            >
+              <span className="w-4 h-4 rounded bg-[#FFE600] text-[#2D3277] text-[10px] font-bold flex items-center justify-center">ML</span>
+              Configurar publicación en MercadoLibre
+            </Button>
+            <ConfigMercadoLibreModal
+              open={showConfigMeli}
+              onOpenChange={setShowConfigMeli}
+              producto={{ id: data.id, nombre: data.nombre }}
+            />
+          </>
         )}
       </div>
     )}

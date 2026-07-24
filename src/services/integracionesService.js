@@ -15,3 +15,15 @@ export function dispararPublicacionCatalogo() {
     console.warn('[integracionesService] No se pudo disparar el worker de catálogo, el cron lo va a tomar igual:', e.message);
   });
 }
+
+/**
+ * Igual que dispararPublicacionCatalogo pero para MercadoLibre (Fase 5). Se llama
+ * al guardar la config MELI de un producto (categoría + atributos) para publicar
+ * al toque, sin esperar al cron de 5 min. Fire-and-forget: el cron es la red de
+ * seguridad y el worker tiene su propio CAS por ítem para no duplicar.
+ */
+export function dispararPublicacionMercadoLibre() {
+  supabase.functions.invoke('mercadolibre-catalogo-publicar', { body: {} }).catch((e) => {
+    console.warn('[integracionesService] No se pudo disparar el worker de MercadoLibre, el cron lo va a tomar igual:', e.message);
+  });
+}
