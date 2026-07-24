@@ -1,60 +1,48 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-23/24 (Nadia — adapter MercadoLibre Fases 0-5 construidas y probadas; Fase 5 tiene un bloqueante real de la API de MELI, ver abajo)
+**Última actualización:** 2026-07-24 (Nadia — adapter MercadoLibre CERRADO end-to-end, Fases 0-7 probadas en prod con productos reales)
 
-> 🚧 **EN CURSO (Nadia) — adapter MercadoLibre. Fases 0-4 CERRADAS y probadas en prod con datos
-> reales. Fase 5 (publicar catálogo nuevo) CONSTRUIDA pero BLOQUEADA por una limitación real de la
-> API de MELI — necesita Fase 6 (enganche a catálogo oficial) para funcionar. Detalle completo abajo.**
+> ✅ **CERRADO — adapter MercadoLibre completo (Fases 0-7), probado en prod con productos reales
+> (2026-07-24).** El bloqueante de Fase 5 documentado ayer (MELI exige `family_name` → rechaza
+> `title` propio en casi todas las categorías) se resolvió construyendo la Fase 6 (enganche a
+> catálogo oficial). Publicó con éxito un producto 100% nuevo ("Depiladora IPL 5 niveles" →
+> `MLA3662648680`) y se confirmó el sync de stock en vivo sobre otro producto ya mapeado ("Aramis
+> TESTE" → `MLA1917485311`, bajó de 5854 a 5852 unidades, verificado visualmente en MELI).
 >
-> - **Fase 0 (trámite) — CERRADA.** App creada en MercadoLibre Developers, `MELI_APP_ID` /
->   `MELI_CLIENT_SECRET` cargados como Edge Function secrets. `external_store_id` real: `3562241031`.
-> - **Fase 1 (OAuth + refresh) — CERRADA Y PROBADA end-to-end.** Conexión real hecha por Nadia,
->   token vigente, `obtenerTokenValido()` (`_shared/integraciones.ts`) renovando bien antes de las 6h
->   de expiración. Recordatorio del bug ya documentado: el refresh NUNCA debe pasar por
->   `guardarTokenCanal` (pisa external_store_id/config) — va directo a Vault + solo toca `token_expiry`.
-> - **Fase 2 (catálogo + mapeo) — CERRADA.** `mercadolibre-catalogo` lee el catálogo real (scan +
->   multiget de a 20). Bug encontrado y arreglado: publicaciones nuevas de MELI guardan el SKU en el
->   atributo `SELLER_SKU`, no en el legacy `seller_custom_field` — `extraerSku()` chequea ambos.
->   `MapeoProductosModal.jsx` generalizado con prop `canal` (sirve para TN y MELI, un solo componente).
->   **⚠️ Bug real detectado hoy 2026-07-23, sin causa raíz confirmada:** un mapeo guardado a mano en la
->   sesión anterior (producto "Aramis TESTE") apareció con toast de éxito pero **no persistió** —
->   `integraciones_producto_mapeo` no tenía la fila al otro día. Se re-mapeó y esta vez sí quedó
->   guardado. Si vuelve a pasar, revisar si el `upsert(..., {onConflict:'integracion_id,producto_id'})`
->   de `MapeoProductosModal.handleGuardar` puede estar fallando en algún caso silencioso (no debería,
->   el código chequea `error` y muestra toast si falla — pero el síntoma observado no cuadra con eso).
-> - **Fase 3 (pedidos → webhook) — CERRADA.** `mercadolibre-pedidos-webhook` (verify_jwt=false, MELI no
->   firma sus notificaciones — se valida `application_id` + se re-consulta la orden con token propio
->   como fuente de verdad). Mapea `paid→confirmado`, `cancelled→cancelado`, resto→`borrador`. Nada
->   fiscal se genera solo, mismo criterio que Tiendanube.
-> - **Fase 4 (stock KAIROX→MELI) — CERRADA.** `mercadolibre-stock-worker`, unidireccional. Se
->   generalizó la arquitectura de colas a **multi-canal** (columna `canal` en
->   `integraciones_stock_pendiente` e `integraciones_producto_pendiente`, migraciones 239/240/241) —
->   un producto puede sincronizar a Tiendanube y a MercadoLibre de forma independiente, con **toggles
->   separados** en `ProductForm.jsx` (`publicar_ecommerce` = Tiendanube, `publicar_mercadolibre` =
->   MercadoLibre nuevo). A pedido explícito de Nadia: "son cosas separadas, tiene que haber dos
->   opciones ahí" — no un solo toggle genérico de ecommerce.
-> - **Fase 5 (publicar catálogo nuevo) — CONSTRUIDA, BLOQUEADA POR MELI, no usar en este estado.**
->   `mercadolibre-catalogo-publicar` + `mercadolibre-categorias` (predictor de categoría + atributos) +
->   `ConfigMercadoLibreModal.jsx` (formulario por producto: categoría, condición, marca/modelo).
->   **Hallazgo real (probado contra la API real, no especulado):** MELI rechaza el `POST /items` con
->   `body.required_fields [family_name]` en la inmensa mayoría de las categorías — se confirmó contra
->   3 rubros distintos (ropa/camisetas, mates, electrodomésticos/depiladoras), los 3 con
->   `catalog_domain` en la categoría. En cuanto se manda `family_name` en el body (nivel raíz, no como
->   atributo — ahí NO alcanza aunque el endpoint de atributos no lo marque `required`), MELI exige que
->   el ítem se enganche a su catálogo oficial y rechaza el `title` propio con
->   `body.invalid_fields [title]`. **Conclusión: no se puede publicar un producto 100% nuevo desde
->   KAIROX sin implementar el enganche real al catálogo de MELI** (`GET /products/search` por
->   marca/modelo/categoría → `catalog_product_id` → publicar contra esa ficha en vez de title/pictures
->   armados a mano). Estimado: media jornada a una jornada completa, con el riesgo extra de que la
->   búsqueda de catálogo tenga sus propias mañas (como pasó hoy con `family_name`).
->   El código de la rama CREAR quedó documentado in-line con este hallazgo
->   (`mercadolibre-catalogo-publicar/index.ts`, comentario arriba del handler) — **no perder tiempo
->   reintentando parches de atributos, hace falta la Fase 6 completa.** La rama ACTUALIZAR (producto ya
->   mapeado a mano, como se sigue haciendo con Tiendanube) sí funciona bien.
-> - **Próximo paso sugerido:** Fase 6 (enganche a catálogo MELI) cuando haya prioridad — hasta
->   entonces, productos nuevos en MercadoLibre se siguen publicando a mano desde la web de MELI y
->   mapeando en KAIROX con `MapeoProductosModal` (igual que "Aramis Teste").
+> - **Fases 0-4 (OAuth, catálogo/mapeo, pedidos, stock)** — sin cambios respecto a ayer, siguen
+>   sólidas. Ver detalle de cada una más abajo en el historial de sesiones si hace falta.
+> - **Fase 6 — enganche a catálogo oficial (migración 242, NUEVO hoy).** `producto_mercadolibre_config`
+>   suma `catalog_product_id`/`catalog_product_name`. Nueva acción `catalog_search` en
+>   `mercadolibre-categorias` (`GET /products/search?category_id=...&q=...`, requiere token del
+>   vendedor — a diferencia de `predict`/`attributes` que son públicas). `ConfigMercadoLibreModal`
+>   deja buscar y elegir la ficha correcta antes de guardar. El worker
+>   (`mercadolibre-catalogo-publicar`) arma un body mínimo con `catalog_product_id` + **`catalog_listing:
+>   true`** — este último campo es la pieza que faltaba y no está en la doc pública de MELI: sin él,
+>   MELI seguía validando como publicación libre y pedía `family_name` igual. Con ambos campos, MELI
+>   deriva título/fotos/características de la ficha compartida.
+>   **Límite real confirmado contra la API (no folklore):** en un ítem `catalog_listing`, ni `title`
+>   ni `pictures` son editables — un PUT con `pictures` da 400 `field_not_updatable`, tanto al crear
+>   como al actualizar. "Sugerir corrección" en la web de MELI NO es "mi foto para mi publicación": es
+>   proponerle a MELI un cambio a la ficha **compartida** entre todos los vendedores de ese producto,
+>   sujeto a revisión — no se automatiza desde KAIROX. Update path (precio/stock) sí respeta esta
+>   restricción (no reintenta tocar title/pictures de un ítem de catálogo).
+> - **Fase 7 — envío gratis y garantía por producto (migración 243, NUEVO hoy).** A pedido explícito
+>   de Nadia se evaluó (y se decidió NO construir) replicar toda la pantalla de edición de MELI:
+>   cuotas/financiación y "retiro en persona"/información regulatoria quedan con el default de MELI
+>   (son más config de cuenta/logística que decisiones por producto); **factura A no aplica** (Nadia
+>   no factura así). Sí se agregaron `envio_gratis` (checkbox) y `garantia` (texto libre) en
+>   `producto_mercadolibre_config` + `ConfigMercadoLibreModal`. En el worker: `shipping.free_shipping`
+>   se manda tal cual sin problema; **el campo top-level `warranty` está deprecado y MELI lo rechaza
+>   con 400 `item.warranty.not_updatable`** (probado) — el reemplazo son los atributos
+>   `WARRANTY_TYPE`/`WARRANTY_TIME`, que si funcionan en creación y actualización, con o sin catálogo.
+> - **Bug del mapeo "se guarda pero no persiste" (mencionado ayer) — RESUELTO, era error de usuario,
+>   no bug de código.** La fila SÍ se guardaba, pero apuntando al `producto_id` equivocado (Nadia
+>   seleccionó "Mouse Vertical" en vez de "Aramis TESTE Azul marino" al mapear a mano) — se detectó
+>   comparando `codigo_sku` del producto contra `external_sku` de la fila de mapeo y se corrigió con un
+>   UPDATE directo. No requiere ningún cambio en `MapeoProductosModal.jsx`.
 > - **Pendiente sin resolver, decisión ya tomada de dejarlo así:** cron de `mp-sync` roto desde 14-jul
 >   (401) — el webhook de MercadoPago cubre el tiempo real, no es bloqueante.
+> - **Nada bloqueante para Luciano** — el adapter MELI puede darse por cerrado salvo que aparezca un
+>   caso real que lo requiera (ej. un producto/categoría con comportamiento nuevo no visto hoy).
 
 > ✅ **REPORTERÍA — Reporte de Ventas PDF: 5 bugs reales encontrados y arreglados (2026-07-23).**
 > Luciano adjuntó el PDF real que arroja el sistema hoy y se compararon contra estándares de
