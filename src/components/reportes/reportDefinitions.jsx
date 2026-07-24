@@ -168,7 +168,7 @@ export const getTableConfig = (reportId, data) => {
       totals: [
         { content: 'TOTALES', colSpan: 4, align: 'right' },
         { content: data.length, align: 'center' },
-        { content: formatCurrency(totalAmount), align: 'right' }
+        { content: formatCurrency(totalAmount), align: 'right', value: totalAmount }
       ]
     };
   }
@@ -184,7 +184,7 @@ export const getTableConfig = (reportId, data) => {
       ],
       totals: [
         { content: 'TOTAL COMPRAS', colSpan: 3, align: 'right' },
-        { content: formatCurrency(totalAmount), align: 'right' }
+        { content: formatCurrency(totalAmount), align: 'right', value: totalAmount }
       ]
     };
   }
@@ -200,7 +200,7 @@ export const getTableConfig = (reportId, data) => {
       ],
       totals: [
         { content: 'TOTAL CARTERA', colSpan: 3, align: 'right' },
-        { content: formatCurrency(totalBalance), align: 'right' }
+        { content: formatCurrency(totalBalance), align: 'right', value: totalBalance }
       ]
     };
   }
@@ -327,7 +327,7 @@ export function applyGrouping(reportId, data, groupBy) {
     const subtotal = rows.reduce((s, r) => s + (r.total || 0), 0);
     result.push({ __rowType: 'group', label: `${key} (${rows.length})` });
     result.push(...rows);
-    result.push({ __rowType: 'subtotal', label: `Subtotal — ${key}`, valueText: formatCurrency(subtotal) });
+    result.push({ __rowType: 'subtotal', label: `Subtotal — ${key}`, value: subtotal, valueText: formatCurrency(subtotal) });
   });
   return result;
 }

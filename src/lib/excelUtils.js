@@ -53,7 +53,9 @@ export function exportReporte({ title, columns, data, totals = null, filename = 
     if (row.__rowType === 'subtotal') {
       const r = new Array(columns.length).fill('');
       r[0] = row.label;
-      r[columns.length - 1] = row.valueText;
+      // Número real (no el texto "$ X.XXX,XX") — así se puede sumar/graficar
+      // en Excel, mismo criterio que las columnas numéricas de detalle.
+      r[columns.length - 1] = row.value ?? row.valueText;
       return r;
     }
     return columns.map(col => {
@@ -67,7 +69,9 @@ export function exportReporte({ title, columns, data, totals = null, filename = 
   if (totals) {
     const totalsRow = [];
     totals.forEach(t => {
-      totalsRow.push(t.content);
+      // t.value (número crudo) si getTableConfig lo definió — igual criterio
+      // que las filas de subtotal: el texto formateado queda solo para PDF/pantalla.
+      totalsRow.push(t.value ?? t.content);
       for (let i = 1; i < (t.colSpan || 1); i++) totalsRow.push('');
     });
     aoa.push(totalsRow);
