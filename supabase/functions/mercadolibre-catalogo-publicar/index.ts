@@ -57,6 +57,8 @@ interface MeliConfig {
   listing_type_id: string;
   atributos: Array<{ id: string; value_name?: string; value_id?: string }>;
   catalog_product_id: string | null;
+  envio_gratis: boolean;
+  garantia: string | null;
 }
 
 type Hdrs = Record<string, string>;
@@ -81,7 +83,21 @@ function construirAtributos(config: MeliConfig, codigoSku: string | null) {
   if (codigoSku && !yaTieneSku) {
     attrs.push({ id: 'SELLER_SKU', value_name: codigoSku });
   }
+  // Garantía: el campo top-level "warranty" está deprecado y MELI lo rechaza
+  // con "item.warranty.not_updatable" (probado 2026-07-24) — el reemplazo son
+  // los atributos WARRANTY_TYPE/WARRANTY_TIME.
+  if (config.garantia?.trim() && !attrs.some(a => a.id === 'WARRANTY_TYPE')) {
+    attrs.push({ id: 'WARRANTY_TYPE', value_name: 'Garantía del vendedor' });
+    attrs.push({ id: 'WARRANTY_TIME', value_name: config.garantia.trim() });
+  }
   return attrs;
+}
+
+// Envío gratis: a diferencia de title/pictures, es un dato del VENDEDOR (no de
+// la ficha de catálogo) — MELI lo deja tocar tanto en items libres como
+// enganchados a catálogo, en creación y en actualización.
+function camposEnvio(config: MeliConfig): Record<string, unknown> {
+  return config.envio_gratis ? { shipping: { mode: 'me2', free_shipping: true } } : {};
 }
 
 serve(async (req) => {
@@ -143,7 +159,7 @@ serve(async (req) => {
 
       const { data: cfg } = await adminClient
         .from('producto_mercadolibre_config')
-        .select('category_id, condicion, listing_type_id, atributos, catalog_product_id')
+        .select('category_id, condicion, listing_type_id, atributos, catalog_product_id, envio_gratis, garantia')
         .eq('producto_id', item.producto_id)
         .maybeSingle();
       const config = cfg as MeliConfig | null;
@@ -183,8 +199,8 @@ serve(async (req) => {
         // (probado contra la API real 2026-07-24) — solo se actualiza precio +
         // atributos propios (SKU).
         const bodyUpd: Record<string, unknown> = config.catalog_product_id
-          ? { price: precio, attributes: construirAtributos(config, producto.codigo_sku) }
-          : { title: producto.nombre, price: precio, attributes: construirAtributos(config, producto.codigo_sku) };
+          ? { price: precio, attributes: construirAtributos(config, producto.codigo_sku), ...camposEnvio(config) }
+          : { title: producto.nombre, price: precio, attributes: construirAtributos(config, producto.codigo_sku), ...camposEnvio(config) };
         if (!config.catalog_product_id && pics.length) bodyUpd.pictures = pics;
 
         const res = await fetch(`${ML_API_BASE}/items/${mapeo.external_product_id}`, {
@@ -194,7 +210,6 @@ serve(async (req) => {
       } else {
         // ── CREAR ──────────────────────────────────────────────────────────
         const stock = Math.max(0, Math.trunc(Number(producto.stock_actual ?? 0)));
-        const atributosSku = producto.codigo_sku ? [{ id: 'SELLER_SKU', value_name: producto.codigo_sku }] : [];
 
         let bodyNew: Record<string, unknown>;
         if (config.catalog_product_id) {
@@ -214,7 +229,8 @@ serve(async (req) => {
             available_quantity: producto.es_inventariable ? stock : 1,
             condition: config.condicion || 'new',
             listing_type_id: config.listing_type_id || 'bronze',
-            attributes: atributosSku,
+            attributes: construirAtributos(config, producto.codigo_sku),
+            ...camposEnvio(config),
           };
         } else {
           if (!pics.length) {
@@ -231,6 +247,7 @@ serve(async (req) => {
             condition: config.condicion || 'new',
             pictures: pics,
             attributes: construirAtributos(config, producto.codigo_sku),
+            ...camposEnvio(config),
           };
         }
 

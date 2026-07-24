@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, Save, Search, Sparkles, CheckCircle2, XCircle } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -19,6 +20,11 @@ import { dispararPublicacionMercadoLibre } from '@/services/integracionesService
  * en casi todas las categorías reales (exige family_name → obliga catálogo, ver
  * CONTEXT.md). Al guardar, hace upsert en producto_mercadolibre_config — el
  * trigger de la mig.240 encola la publicación, y disparamos el worker al toque.
+ *
+ * Fase 7 (envío gratis / garantía, mig.243): a pedido explícito de Nadia — no se
+ * intenta replicar TODA la pantalla de edición de MELI (cuotas, retiro en
+ * persona, información regulatoria, etc.), esos quedan con el default de MELI
+ * salvo que se pida puntualmente.
  */
 function ConfigMercadoLibreModal({ open, onOpenChange, producto }) {
   const { user } = useAuth();
@@ -40,6 +46,8 @@ function ConfigMercadoLibreModal({ open, onOpenChange, producto }) {
   const [buscandoCatalogo, setBuscandoCatalogo] = useState(false);
   const [catalogProductId, setCatalogProductId] = useState('');
   const [catalogProductName, setCatalogProductName] = useState('');
+  const [envioGratis, setEnvioGratis] = useState(false);
+  const [garantia, setGarantia] = useState('');
 
   const predecir = useCallback(async (q) => {
     if (!q?.trim()) return;
@@ -105,7 +113,7 @@ function ConfigMercadoLibreModal({ open, onOpenChange, producto }) {
     (async () => {
       const { data: cfg } = await supabase
         .from('producto_mercadolibre_config')
-        .select('category_id, category_name, condicion, atributos, catalog_product_id, catalog_product_name')
+        .select('category_id, category_name, condicion, atributos, catalog_product_id, catalog_product_name, envio_gratis, garantia')
         .eq('producto_id', producto.id)
         .maybeSingle();
 
@@ -113,6 +121,8 @@ function ConfigMercadoLibreModal({ open, onOpenChange, producto }) {
       setCatalogProductName(cfg?.catalog_product_name ?? '');
       setCatalogResultados([]);
       setCatalogQuery(producto.nombre ?? '');
+      setEnvioGratis(cfg?.envio_gratis ?? false);
+      setGarantia(cfg?.garantia ?? '');
 
       if (cfg?.category_id) {
         setCategoryId(cfg.category_id);
@@ -176,6 +186,8 @@ function ConfigMercadoLibreModal({ open, onOpenChange, producto }) {
           atributos,
           catalog_product_id: catalogProductId || null,
           catalog_product_name: catalogProductId ? catalogProductName : null,
+          envio_gratis: envioGratis,
+          garantia: garantia.trim() || null,
         }, { onConflict: 'producto_id' });
 
       if (error) {
@@ -316,6 +328,23 @@ function ConfigMercadoLibreModal({ open, onOpenChange, producto }) {
                   <SelectItem value="used">Usado</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Envío gratis */}
+            <label className="flex items-center gap-2 text-xs text-kx-text cursor-pointer">
+              <Checkbox checked={envioGratis} onCheckedChange={v => setEnvioGratis(v === true)} />
+              Ofrecer envío gratis en esta publicación
+            </label>
+
+            {/* Garantía */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Garantía (opcional)</Label>
+              <Input
+                value={garantia}
+                onChange={e => setGarantia(e.target.value)}
+                placeholder="Ej: 6 meses de garantía de fábrica"
+                className="kairox-input h-9 text-sm"
+              />
             </div>
 
             {/* Atributos obligatorios de la categoría */}
