@@ -115,23 +115,6 @@ serve(async (req) => {
       console.warn('[mp-webhook] Integración sin mp_user_id guardado — asumiendo ingreso. Re-verificar el Access Token en Configuración para habilitar detección de egresos.');
     }
 
-    // ── Deduplicación: MP puede reenviar el mismo evento más de una vez ──────
-    const descripcionPrefix = `MP #${paymentId}`;
-    const { data: existente } = await supabase
-      .from('movimientos_bancarios')
-      .select('id')
-      .eq('empresa_id', empresaId)
-      .like('descripcion', `${descripcionPrefix}%`)
-      .maybeSingle();
-
-    if (existente) {
-      console.log('[mp-webhook] Duplicado ignorado — pago ya registrado:', paymentId);
-      return new Response(
-        JSON.stringify({ ok: true, duplicate: true }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
     // ── Mapear tipo de cobro ─────────────────────────────────────────────────
     const subtipo = SUBTIPO_MAP[pago.payment_type_id] ?? null;
 
@@ -142,6 +125,11 @@ serve(async (req) => {
       pago.payer?.email ?? pago.payer?.identification?.number ?? 'Pagador desconocido',
     ].filter(Boolean).join(' — ');
 
+    // Idempotencia real: external_ref + índice único (empresa_id, origen,
+    // external_ref) en la DB — el INSERT hace ON CONFLICT DO NOTHING y
+    // devuelve el registro existente si MP reenvía el mismo evento. Ya no
+    // depende de un SELECT previo (no atómico, vulnerable a reenvíos casi
+    // simultáneos).
     const { data: resultado, error: errRPC } = await supabase.rpc(
       'insertar_movimiento_bancario_externo',
       {
@@ -153,12 +141,21 @@ serve(async (req) => {
         p_tipo:               tipoMovimiento,
         p_origen:             'mercadopago',
         p_subtipo:            subtipo,
+        p_external_ref:       paymentId,
       }
     );
 
     if (errRPC) {
       console.error('[mp-webhook] Error en RPC insertar_movimiento_bancario_externo:', errRPC);
       return new Response('Error', { status: 500 });
+    }
+
+    if (resultado?.duplicate) {
+      console.log('[mp-webhook] Duplicado ignorado — pago ya registrado:', paymentId);
+      return new Response(
+        JSON.stringify({ ok: true, duplicate: true, id: resultado?.id }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
     // Actualizar timestamp de último sync (ignorar si la columna no existe)
