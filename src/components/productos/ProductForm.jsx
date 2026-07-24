@@ -438,7 +438,7 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
         <ToggleTipoArticulo
           icon={Globe}
           label="Publicar en ecommerce"
-          hint="Expone este artículo a los canales conectados (Tiendanube). KAIROX es la fuente de verdad: los cambios de acá se publican allá."
+          hint="Expone este artículo a los canales conectados (Tiendanube y MercadoLibre). KAIROX es la fuente de verdad: los cambios de acá se publican allá."
           checked={!!data.publicar_ecommerce}
           onCheckedChange={(v) => setData({ ...data, publicar_ecommerce: v })}
         />

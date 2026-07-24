@@ -137,7 +137,7 @@ const ProductoImagenes = ({ productoId, publicarEcommerce = false }) => {
       ) : imagenes.length === 0 ? (
         <div className="flex flex-col items-center gap-1.5 py-6 text-center border border-dashed border-kx-border rounded-lg">
           <ImageOff className="w-6 h-6 text-kx-text-3" />
-          <p className="text-xs text-kx-text-3">Sin imágenes. La principal se publica primero en Tiendanube.</p>
+          <p className="text-xs text-kx-text-3">Sin imágenes. La principal se publica primero en el canal de ecommerce.</p>
         </div>
       ) : (
         <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
