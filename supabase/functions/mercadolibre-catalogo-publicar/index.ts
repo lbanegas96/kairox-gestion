@@ -178,8 +178,10 @@ serve(async (req) => {
       if (mapeo?.external_product_id) {
         // ── ACTUALIZAR ─────────────────────────────────────────────────────
         // No se toca available_quantity: lo maneja la cola de stock.
-        // Enganchado al catálogo, el título/fotos son de la ficha y MELI no
-        // deja tocarlos — solo se actualiza precio + atributos propios (SKU).
+        // Enganchado al catálogo: title Y pictures son de la ficha compartida y
+        // MELI los rechaza con 400 "field_not_updatable" si se los manda acá
+        // (probado contra la API real 2026-07-24) — solo se actualiza precio +
+        // atributos propios (SKU).
         const bodyUpd: Record<string, unknown> = config.catalog_product_id
           ? { price: precio, attributes: construirAtributos(config, producto.codigo_sku) }
           : { title: producto.nombre, price: precio, attributes: construirAtributos(config, producto.codigo_sku) };
@@ -196,8 +198,13 @@ serve(async (req) => {
 
         let bodyNew: Record<string, unknown>;
         if (config.catalog_product_id) {
-          // Enganchado al catálogo oficial: MELI trae título/fotos de la ficha,
-          // acá solo va precio/stock/condición (+ SKU propio para el mapeo).
+          // Enganchado al catálogo oficial: título Y fotos son de la ficha
+          // compartida entre todos los vendedores — MELI no deja poner las
+          // propias (probado: PUT con pictures da 400 field_not_updatable).
+          // "Sugerir corrección" en la web de MELI no es "mi foto para mi
+          // publicación": es proponerle a MELI un cambio a la ficha compartida,
+          // sujeto a su revisión y visible para todos los que vendan ese mismo
+          // producto — no lo hacemos automático desde acá.
           bodyNew = {
             catalog_product_id: config.catalog_product_id,
             catalog_listing: true,
