@@ -60,11 +60,19 @@ async function urlsImagenes(productoId: string): Promise<string[]> {
 
 // Arma la lista de atributos para MELI: los que cargó el usuario + SELLER_SKU
 // (para que el mapeo/stock por SKU matchee después), sin duplicar.
-function construirAtributos(config: MeliConfig, codigoSku: string | null) {
+function construirAtributos(config: MeliConfig, codigoSku: string | null, nombre: string) {
   const attrs = (config.atributos ?? []).filter(a => a && a.id);
-  const yaTieneSku = attrs.some(a => a.id === 'SELLER_SKU');
-  if (codigoSku && !yaTieneSku) {
+  const tiene = (id: string) => attrs.some(a => a.id === id);
+
+  // SELLER_SKU: para que el mapeo/stock por SKU matchee después.
+  if (codigoSku && !tiene('SELLER_SKU')) {
     attrs.push({ id: 'SELLER_SKU', value_name: codigoSku });
+  }
+  // FAMILY_NAME: MELI lo exige al crear en varias categorías aunque no lo marque
+  // como "required" en la lista de atributos (maña conocida de su API). Si el
+  // usuario no lo cargó, lo derivamos del nombre del producto.
+  if (!tiene('FAMILY_NAME') && nombre) {
+    attrs.push({ id: 'FAMILY_NAME', value_name: nombre.slice(0, 255) });
   }
   return attrs;
 }
@@ -166,7 +174,7 @@ serve(async (req) => {
         const bodyUpd: Record<string, unknown> = {
           title: producto.nombre,
           price: precio,
-          attributes: construirAtributos(config, producto.codigo_sku),
+          attributes: construirAtributos(config, producto.codigo_sku, producto.nombre),
         };
         if (pics.length) bodyUpd.pictures = pics;
 
@@ -190,7 +198,7 @@ serve(async (req) => {
           listing_type_id: config.listing_type_id || 'bronze',
           condition: config.condicion || 'new',
           pictures: pics,
-          attributes: construirAtributos(config, producto.codigo_sku),
+          attributes: construirAtributos(config, producto.codigo_sku, producto.nombre),
         };
 
         const res = await fetch(`${ML_API_BASE}/items`, {
