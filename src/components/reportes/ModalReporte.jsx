@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import ReportHeader from '@/components/reportes/ReportHeader';
 import ReportTable from '@/components/reportes/ReportTable';
-import { getTableConfig, applyGrouping } from './reportDefinitions';
+import { getTableConfig, applyGrouping, getGroupByOptions } from './reportDefinitions';
 
 function ModalReporte({
   isDialogOpen, setIsDialogOpen,
@@ -46,6 +46,7 @@ function ModalReporte({
                 showGroupBy={!!selectedReport.supportsGroupBy}
                 groupBy={groupBy}
                 setGroupBy={setGroupBy}
+                groupByOptions={getGroupByOptions(selectedReport.id)}
               />
             </div>
 

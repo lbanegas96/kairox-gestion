@@ -2,7 +2,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Download, FileSpreadsheet, MessageCircle, FilterX, RefreshCw } from 'lucide-react';
-import { GROUP_BY_OPTIONS } from './reportDefinitions';
 
 const ReportHeader = ({
   title,
@@ -24,6 +23,7 @@ const ReportHeader = ({
   showGroupBy,
   groupBy,
   setGroupBy,
+  groupByOptions,
 }) => {
   return (
     <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
@@ -94,7 +94,7 @@ const ReportHeader = ({
               onChange={(e) => setGroupBy(e.target.value)}
               className="h-9 w-full rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm text-kx-text px-2"
             >
-              {GROUP_BY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {(groupByOptions || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
         )}

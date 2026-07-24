@@ -101,6 +101,24 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
 
       let data = [];
 
+      // Período anterior (mismo largo de días, corrido hacia atrás) para el
+      // % variación de las cajas KPI — compartido entre Ventas y Compras,
+      // ambos reportes con supportsPeriodComparison.
+      const rangeMs  = new Date(end).getTime() - new Date(start).getTime();
+      const prevEnd  = new Date(new Date(start).getTime() - 1);
+      const prevStart = new Date(prevEnd.getTime() - rangeMs);
+      const fetchPreviousPeriodStats = async (table, extraFilters = {}) => {
+        let q = supabase
+          .from(table)
+          .select('total')
+          .eq('empresa_id', user.empresa_id)
+          .gte('fecha', prevStart.toISOString())
+          .lte('fecha', prevEnd.toISOString());
+        Object.entries(extraFilters).forEach(([k, v]) => { if (v) q = q.eq(k, v); });
+        const { data: prev } = await q;
+        return prev ? { total: prev.reduce((s, r) => s + (r.total || 0), 0), count: prev.length } : null;
+      };
+
       // 1. VENTAS — lee de comprobantes/comprobante_items (schema actual).
       // tipo='venta' explícito: `comprobantes` también guarda Notas de Crédito
       // (tipo='nota_credito') — sin este filtro se sumaban como si fueran ventas
@@ -133,25 +151,10 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
           total: s.total
         }));
 
-        // Período anterior (mismo largo de días, corrido hacia atrás) para el
-        // % variación de las cajas KPI del PDF. Solo se necesita el total y la
-        // cantidad — no items/cliente/comprobante — así que es una query liviana.
-        const rangeMs = new Date(end).getTime() - new Date(start).getTime();
-        const prevEnd = new Date(new Date(start).getTime() - 1);
-        const prevStart = new Date(prevEnd.getTime() - rangeMs);
-        let prevQuery = supabase
-          .from('comprobantes')
-          .select('total')
-          .eq('empresa_id', user.empresa_id)
-          .eq('tipo', 'venta')
-          .gte('fecha', prevStart.toISOString())
-          .lte('fecha', prevEnd.toISOString());
-        if (centroCostoId) prevQuery = prevQuery.eq('centro_costo_id', centroCostoId);
-        const { data: prevSales } = await prevQuery;
-        setPreviousPeriodStats(prevSales ? {
-          total: prevSales.reduce((s, r) => s + (r.total || 0), 0),
-          count: prevSales.length,
-        } : null);
+        setPreviousPeriodStats(await fetchPreviousPeriodStats('comprobantes', {
+          tipo: 'venta',
+          centro_costo_id: centroCostoId,
+        }));
       }
 
       // 2. COMPRAS
@@ -172,7 +175,12 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
           fecha: p.fecha,
           proveedor: p.proveedores?.nombre || 'Desconocido',
           numero_factura: p.numero_factura,
+          forma_pago: p.forma_pago,
           total: p.total
+        }));
+
+        setPreviousPeriodStats(await fetchPreviousPeriodStats('compras', {
+          centro_costo_id: centroCostoId,
         }));
       }
 
@@ -263,8 +271,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   const handleDownloadPDF = async () => {
     try {
       const { columns, totals } = getTableConfig(selectedReport.id, reportData);
-      const isVentas = selectedReport.id === 'ventas';
-      const summaryMetrics = buildSummaryMetrics(selectedReport.id, reportData, isVentas ? previousPeriodStats : null);
+      const summaryMetrics = buildSummaryMetrics(selectedReport.id, reportData, selectedReport.supportsPeriodComparison ? previousPeriodStats : null);
       const displayData = applyGrouping(selectedReport.id, reportData, groupBy);
 
       await generatePDF({
@@ -313,8 +320,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   // (WhatsApp no permite adjuntar archivos vía link sin la API paga de
   // Business) — el usuario elige el contacto y adjunta el archivo a mano.
   const handleShareWhatsApp = () => {
-    const isVentas = selectedReport.id === 'ventas';
-    const summaryMetrics = buildSummaryMetrics(selectedReport.id, reportData, isVentas ? previousPeriodStats : null);
+    const summaryMetrics = buildSummaryMetrics(selectedReport.id, reportData, selectedReport.supportsPeriodComparison ? previousPeriodStats : null);
     const lineas = [
       `📊 *${selectedReport.title}*`,
       `Período: ${startDate} al ${endDate}`,

@@ -25,7 +25,8 @@ export const REPORTS = [
     borderClass: 'border-t-kx-violet',
     requiresDate: true,
     supportsCentroCosto: true,
-    supportsGroupBy: true
+    supportsGroupBy: true,
+    supportsPeriodComparison: true
   },
   {
     id: 'compras',
@@ -34,7 +35,9 @@ export const REPORTS = [
     icon: <ShoppingCart className="w-8 h-8 text-kx-blue" />,
     borderClass: 'border-t-kx-blue',
     requiresDate: true,
-    supportsCentroCosto: true
+    supportsCentroCosto: true,
+    supportsGroupBy: true,
+    supportsPeriodComparison: true
   },
   {
     id: 'clientes',
@@ -103,11 +106,16 @@ export const buildSummaryMetrics = (reportId, data, previousPeriod = null) => {
   }
   if (reportId === 'compras') {
     const total = data.reduce((s, r) => s + (r.total || 0), 0);
-    return [
+    const metrics = [
       { label: 'Total Compras', value: fc(total) },
       { label: 'Cantidad',      value: data.length },
       { label: 'Promedio',      value: data.length ? fc(total / data.length) : '—' },
     ];
+    if (previousPeriod) {
+      metrics[0].delta = deltaLabel(total, previousPeriod.total);
+      metrics[1].delta = deltaLabel(data.length, previousPeriod.count);
+    }
+    return metrics;
   }
   if (reportId === 'clientes') {
     const deuda = data.reduce((s, r) => s + (r.saldo || 0), 0);
@@ -180,10 +188,11 @@ export const getTableConfig = (reportId, data) => {
         { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
         { header: 'Proveedor', key: 'proveedor', align: 'left' },
         { header: 'N° Factura', key: 'numero_factura', align: 'left' },
+        { header: 'Pago', key: 'forma_pago', align: 'center', render: (r) => r.forma_pago || '-' },
         { header: 'Total', key: 'total', align: 'right', render: (r) => formatCurrency(r.total), pdfRender: (r) => formatCurrency(r.total) }
       ],
       totals: [
-        { content: 'TOTAL COMPRAS', colSpan: 3, align: 'right' },
+        { content: 'TOTAL COMPRAS', colSpan: 4, align: 'right' },
         { content: formatCurrency(totalAmount), align: 'right', value: totalAmount }
       ]
     };
@@ -288,31 +297,50 @@ export const getTableConfig = (reportId, data) => {
   return { columns: [], totals: [] };
 };
 
-export const GROUP_BY_OPTIONS = [
-  { value: 'none',        label: 'Sin agrupar' },
-  { value: 'dia',         label: 'Por día' },
-  { value: 'metodo_pago', label: 'Por método de pago' },
-  { value: 'cliente',     label: 'Por cliente' },
-];
+const GROUP_BY_OPTIONS_POR_REPORTE = {
+  ventas: [
+    { value: 'none',        label: 'Sin agrupar' },
+    { value: 'dia',         label: 'Por día' },
+    { value: 'metodo_pago', label: 'Por método de pago' },
+    { value: 'cliente',     label: 'Por cliente' },
+  ],
+  compras: [
+    { value: 'none',        label: 'Sin agrupar' },
+    { value: 'dia',         label: 'Por día' },
+    { value: 'metodo_pago', label: 'Por método de pago' },
+    { value: 'proveedor',   label: 'Por proveedor' },
+  ],
+};
 
-const GROUP_KEY_FN = {
-  dia:         (r) => formatDateAR(r.fecha),
-  metodo_pago: (r) => r.metodo_pago || 'Sin método',
-  cliente:     (r) => r.cliente || 'Sin cliente',
+export function getGroupByOptions(reportId) {
+  return GROUP_BY_OPTIONS_POR_REPORTE[reportId] || [{ value: 'none', label: 'Sin agrupar' }];
+}
+
+const GROUP_KEY_FN_POR_REPORTE = {
+  ventas: {
+    dia:         (r) => formatDateAR(r.fecha),
+    metodo_pago: (r) => r.metodo_pago || 'Sin método',
+    cliente:     (r) => r.cliente || 'Sin cliente',
+  },
+  compras: {
+    dia:         (r) => formatDateAR(r.fecha),
+    metodo_pago: (r) => r.forma_pago || 'Sin método',
+    proveedor:   (r) => r.proveedor || 'Sin proveedor',
+  },
 };
 
 /**
- * Inserta filas de encabezado de grupo + subtotal en los datos de Ventas
- * cuando el usuario elige agrupar (día/método de pago/cliente). Mantiene el
- * orden de aparición del primer registro de cada grupo (no reordena por
- * alfabético ni por monto) para no romper el orden cronológico que el
- * usuario ya conoce. Las filas sintéticas se marcan con `__rowType` — los 3
- * renderers (ReportTable, pdfUtils, excelUtils) las detectan y las pintan
- * distinto en vez de tratarlas como una fila de datos más.
+ * Inserta filas de encabezado de grupo + subtotal en los datos (Ventas o
+ * Compras, los dos reportes con supportsGroupBy) cuando el usuario elige
+ * agrupar. Mantiene el orden de aparición del primer registro de cada grupo
+ * (no reordena por alfabético ni por monto) para no romper el orden
+ * cronológico que el usuario ya conoce. Las filas sintéticas se marcan con
+ * `__rowType` — los 3 renderers (ReportTable, pdfUtils, excelUtils) las
+ * detectan y las pintan distinto en vez de tratarlas como una fila de datos.
  */
 export function applyGrouping(reportId, data, groupBy) {
-  if (reportId !== 'ventas' || !groupBy || groupBy === 'none') return data;
-  const keyFn = GROUP_KEY_FN[groupBy];
+  if (!groupBy || groupBy === 'none') return data;
+  const keyFn = (GROUP_KEY_FN_POR_REPORTE[reportId] || {})[groupBy];
   if (!keyFn) return data;
 
   const groups = new Map();
