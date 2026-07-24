@@ -110,6 +110,7 @@ serve(async (req) => {
     .from('integraciones_producto_pendiente')
     .select('id, empresa_id, producto_id, intentos, max_intentos')
     .eq('estado', 'pendiente')
+    .eq('canal', 'tiendanube') // la cola es multi-canal (mig. 240): tomar solo lo de Tiendanube
     .lte('proximo_intento', new Date().toISOString())
     .order('proximo_intento', { ascending: true })
     .limit(LOTE);
