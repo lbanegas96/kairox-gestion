@@ -73,12 +73,20 @@ async function urlsImagenes(productoId: string): Promise<string[]> {
   return (data ?? []).map(i => i.url).filter(Boolean);
 }
 
+// Atributos que MELI ignora (con warning "item.attributes.ignored") si el ítem
+// está enganchado a catálogo — son propiedad de la ficha compartida (BRAND/MODEL
+// los carga el usuario en el formulario para poder buscar el match, pero una vez
+// enganchado no hace falta reenviarlos).
+const ATRIBUTOS_DE_FICHA = new Set(['BRAND', 'MODEL']);
+
 // Arma la lista de atributos para MELI: los que cargó el usuario + SELLER_SKU
 // (para que el mapeo/stock por SKU matchee después), sin duplicar. Nota:
 // FAMILY_NAME como atributo NO satisface el requisito de MELI (probado
 // 2026-07-23) — lo que hace falta es catalog_product_id, ver Fase 6 arriba.
 function construirAtributos(config: MeliConfig, codigoSku: string | null) {
-  const attrs = (config.atributos ?? []).filter(a => a && a.id);
+  const attrs = (config.atributos ?? []).filter(a =>
+    a && a.id && (!config.catalog_product_id || !ATRIBUTOS_DE_FICHA.has(a.id)),
+  );
   const yaTieneSku = attrs.some(a => a.id === 'SELLER_SKU');
   if (codigoSku && !yaTieneSku) {
     attrs.push({ id: 'SELLER_SKU', value_name: codigoSku });
