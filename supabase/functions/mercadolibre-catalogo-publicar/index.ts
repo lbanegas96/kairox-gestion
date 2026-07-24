@@ -20,17 +20,17 @@ import { obtenerTokenValido } from '../_shared/integraciones.ts';
  *
  * API MELI: POST /items  https://api.mercadolibre.com/items  (token del vendedor).
  *
- * LIMITACIÓN CONOCIDA (probado 2026-07-23): la rama CREAR falla en la práctica
- * para casi cualquier categoría con "MELI POST item 400: body.required_fields
- * [family_name]". Confirmado que TODAS las categorías de MELI (incluso ropa,
- * mates, electrodomésticos) están atadas a un catalog_domain, y en cuanto se
- * manda family_name en el body, MELI exige que el item se enganche al catálogo
- * oficial (rechaza el título propio con "body.invalid_fields [title]"). Para
- * que CREAR funcione de verdad hace falta Fase 6: buscar el producto en el
- * catálogo de MELI (GET /products/search) y publicar contra su catalog_product_id
- * en vez de title/pictures/attributes armados a mano. Hasta entonces, esta rama
- * sirve solo como referencia — no la uses para publicar productos nuevos.
- * La rama ACTUALIZAR (PUT, producto ya mapeado a mano) sí funciona.
+ * FASE 6 — enganche a catálogo (2026-07-24): se confirmó contra la API real
+ * que la inmensa mayoría de las categorías de MELI (ropa, mates, electrodomésticos)
+ * exigen `family_name` en el body y, en cuanto se lo manda, rechazan el `title`
+ * propio ("body.invalid_fields [title]") — MELI exige engancharse a una ficha de
+ * su catálogo oficial en vez de crear un ítem libre. Por eso `producto_mercadolibre_config`
+ * ahora tiene `catalog_product_id` (elegido por el usuario en el formulario, que
+ * busca con la acción `catalog_search` de `mercadolibre-categorias`). Si está
+ * presente, CREAR arma un body mínimo enganchado a esa ficha (MELI trae título/
+ * fotos de ahí — KAIROX solo pone precio/stock/condición + SELLER_SKU). Si NO
+ * está presente, se intenta el camino viejo (title propio) — que en la práctica
+ * solo sirve para las pocas categorías sin catalog_domain.
  */
 const ML_API_BASE = 'https://api.mercadolibre.com';
 const CURRENCY = 'ARS';
@@ -56,6 +56,7 @@ interface MeliConfig {
   condicion: string;
   listing_type_id: string;
   atributos: Array<{ id: string; value_name?: string; value_id?: string }>;
+  catalog_product_id: string | null;
 }
 
 type Hdrs = Record<string, string>;
@@ -71,20 +72,14 @@ async function urlsImagenes(productoId: string): Promise<string[]> {
 }
 
 // Arma la lista de atributos para MELI: los que cargó el usuario + SELLER_SKU
-// (para que el mapeo/stock por SKU matchee después), sin duplicar.
-function construirAtributos(config: MeliConfig, codigoSku: string | null, nombre: string) {
+// (para que el mapeo/stock por SKU matchee después), sin duplicar. Nota:
+// FAMILY_NAME como atributo NO satisface el requisito de MELI (probado
+// 2026-07-23) — lo que hace falta es catalog_product_id, ver Fase 6 arriba.
+function construirAtributos(config: MeliConfig, codigoSku: string | null) {
   const attrs = (config.atributos ?? []).filter(a => a && a.id);
-  const tiene = (id: string) => attrs.some(a => a.id === id);
-
-  // SELLER_SKU: para que el mapeo/stock por SKU matchee después.
-  if (codigoSku && !tiene('SELLER_SKU')) {
+  const yaTieneSku = attrs.some(a => a.id === 'SELLER_SKU');
+  if (codigoSku && !yaTieneSku) {
     attrs.push({ id: 'SELLER_SKU', value_name: codigoSku });
-  }
-  // FAMILY_NAME: MELI lo exige al crear en varias categorías aunque no lo marque
-  // como "required" en la lista de atributos (maña conocida de su API). Si el
-  // usuario no lo cargó, lo derivamos del nombre del producto.
-  if (!tiene('FAMILY_NAME') && nombre) {
-    attrs.push({ id: 'FAMILY_NAME', value_name: nombre.slice(0, 255) });
   }
   return attrs;
 }
@@ -148,7 +143,7 @@ serve(async (req) => {
 
       const { data: cfg } = await adminClient
         .from('producto_mercadolibre_config')
-        .select('category_id, condicion, listing_type_id, atributos')
+        .select('category_id, condicion, listing_type_id, atributos, catalog_product_id')
         .eq('producto_id', item.producto_id)
         .maybeSingle();
       const config = cfg as MeliConfig | null;
@@ -183,12 +178,12 @@ serve(async (req) => {
       if (mapeo?.external_product_id) {
         // ── ACTUALIZAR ─────────────────────────────────────────────────────
         // No se toca available_quantity: lo maneja la cola de stock.
-        const bodyUpd: Record<string, unknown> = {
-          title: producto.nombre,
-          price: precio,
-          attributes: construirAtributos(config, producto.codigo_sku, producto.nombre),
-        };
-        if (pics.length) bodyUpd.pictures = pics;
+        // Enganchado al catálogo, el título/fotos son de la ficha y MELI no
+        // deja tocarlos — solo se actualiza precio + atributos propios (SKU).
+        const bodyUpd: Record<string, unknown> = config.catalog_product_id
+          ? { price: precio, attributes: construirAtributos(config, producto.codigo_sku) }
+          : { title: producto.nombre, price: precio, attributes: construirAtributos(config, producto.codigo_sku) };
+        if (!config.catalog_product_id && pics.length) bodyUpd.pictures = pics;
 
         const res = await fetch(`${ML_API_BASE}/items/${mapeo.external_product_id}`, {
           method: 'PUT', headers, body: JSON.stringify(bodyUpd),
@@ -196,22 +191,40 @@ serve(async (req) => {
         if (!res.ok) throw new Error(`MELI PUT item ${res.status}: ${await res.text()}`);
       } else {
         // ── CREAR ──────────────────────────────────────────────────────────
-        if (!pics.length) {
-          throw new Error('MercadoLibre exige al menos una foto — agregá una imagen al producto');
-        }
         const stock = Math.max(0, Math.trunc(Number(producto.stock_actual ?? 0)));
-        const bodyNew: Record<string, unknown> = {
-          title: producto.nombre,
-          category_id: config.category_id,
-          price: precio,
-          currency_id: CURRENCY,
-          available_quantity: producto.es_inventariable ? stock : 1,
-          buying_mode: 'buy_it_now',
-          listing_type_id: config.listing_type_id || 'bronze',
-          condition: config.condicion || 'new',
-          pictures: pics,
-          attributes: construirAtributos(config, producto.codigo_sku, producto.nombre),
-        };
+        const atributosSku = producto.codigo_sku ? [{ id: 'SELLER_SKU', value_name: producto.codigo_sku }] : [];
+
+        let bodyNew: Record<string, unknown>;
+        if (config.catalog_product_id) {
+          // Enganchado al catálogo oficial: MELI trae título/fotos de la ficha,
+          // acá solo va precio/stock/condición (+ SKU propio para el mapeo).
+          bodyNew = {
+            catalog_product_id: config.catalog_product_id,
+            category_id: config.category_id,
+            price: precio,
+            currency_id: CURRENCY,
+            available_quantity: producto.es_inventariable ? stock : 1,
+            condition: config.condicion || 'new',
+            listing_type_id: config.listing_type_id || 'bronze',
+            attributes: atributosSku,
+          };
+        } else {
+          if (!pics.length) {
+            throw new Error('MercadoLibre exige al menos una foto — agregá una imagen al producto');
+          }
+          bodyNew = {
+            title: producto.nombre,
+            category_id: config.category_id,
+            price: precio,
+            currency_id: CURRENCY,
+            available_quantity: producto.es_inventariable ? stock : 1,
+            buying_mode: 'buy_it_now',
+            listing_type_id: config.listing_type_id || 'bronze',
+            condition: config.condicion || 'new',
+            pictures: pics,
+            attributes: construirAtributos(config, producto.codigo_sku),
+          };
+        }
 
         const res = await fetch(`${ML_API_BASE}/items`, {
           method: 'POST', headers, body: JSON.stringify(bodyNew),
@@ -223,7 +236,8 @@ serve(async (req) => {
         if (!itemId) throw new Error('MELI no devolvió id de publicación al crear');
 
         // Descripción (endpoint aparte en MELI: POST /items/{id}/description).
-        if (producto.descripcion) {
+        // Enganchado al catálogo, MELI ya trae su propia ficha — no se pisa.
+        if (producto.descripcion && !config.catalog_product_id) {
           await fetch(`${ML_API_BASE}/items/${itemId}/description`, {
             method: 'POST', headers, body: JSON.stringify({ plain_text: producto.descripcion }),
           });

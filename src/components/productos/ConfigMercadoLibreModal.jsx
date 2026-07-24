@@ -4,18 +4,21 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Save, Search, Sparkles } from 'lucide-react';
+import { Loader2, Save, Search, Sparkles, CheckCircle2, XCircle } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { dispararPublicacionMercadoLibre } from '@/services/integracionesService';
 
 /**
- * Formulario de publicación a MercadoLibre por producto (Fase 5). Deja elegir la
- * categoría (con el predictor de MELI a partir del nombre) y completar los
- * atributos obligatorios (marca/modelo/etc.). Al guardar, hace upsert en
- * producto_mercadolibre_config — el trigger de la mig.240 encola la publicación,
- * y disparamos el worker al toque.
+ * Formulario de publicación a MercadoLibre por producto (Fase 5/6). Deja elegir la
+ * categoría (con el predictor de MELI a partir del nombre), completar los
+ * atributos obligatorios (marca/modelo/etc.) y — Fase 6 — buscar y enganchar el
+ * producto a una ficha del catálogo oficial de MELI. Esto último es necesario en
+ * la práctica: MELI rechaza crear una publicación libre (título/fotos propios)
+ * en casi todas las categorías reales (exige family_name → obliga catálogo, ver
+ * CONTEXT.md). Al guardar, hace upsert en producto_mercadolibre_config — el
+ * trigger de la mig.240 encola la publicación, y disparamos el worker al toque.
  */
 function ConfigMercadoLibreModal({ open, onOpenChange, producto }) {
   const { user } = useAuth();
@@ -32,6 +35,11 @@ function ConfigMercadoLibreModal({ open, onOpenChange, producto }) {
   const [atributosDef, setAtributosDef] = useState([]);    // definición de atributos de la categoría
   const [cargandoAttrs, setCargandoAttrs] = useState(false);
   const [valores, setValores] = useState({});              // { [attrId]: value_name }
+  const [catalogQuery, setCatalogQuery] = useState('');
+  const [catalogResultados, setCatalogResultados] = useState([]); // [{catalog_product_id, name, pictures}]
+  const [buscandoCatalogo, setBuscandoCatalogo] = useState(false);
+  const [catalogProductId, setCatalogProductId] = useState('');
+  const [catalogProductName, setCatalogProductName] = useState('');
 
   const predecir = useCallback(async (q) => {
     if (!q?.trim()) return;
@@ -64,6 +72,32 @@ function ConfigMercadoLibreModal({ open, onOpenChange, producto }) {
     }
   }, [toast]);
 
+  const buscarCatalogo = useCallback(async (q, catId) => {
+    if (!q?.trim() || !catId) return;
+    setBuscandoCatalogo(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('mercadolibre-categorias', {
+        body: { action: 'catalog_search', category_id: catId, q: q.trim() },
+      });
+      if (error) throw error;
+      setCatalogResultados(data?.resultados ?? []);
+    } catch (e) {
+      toast({ title: 'No se pudo buscar en el catálogo', description: e.message, variant: 'destructive' });
+    } finally {
+      setBuscandoCatalogo(false);
+    }
+  }, [toast]);
+
+  const elegirCatalogo = (p) => {
+    setCatalogProductId(p.catalog_product_id);
+    setCatalogProductName(p.name);
+  };
+
+  const quitarCatalogo = () => {
+    setCatalogProductId('');
+    setCatalogProductName('');
+  };
+
   // Al abrir: cargar config existente; si no hay, predecir desde el nombre.
   useEffect(() => {
     if (!open || !producto?.id) return;
@@ -71,9 +105,14 @@ function ConfigMercadoLibreModal({ open, onOpenChange, producto }) {
     (async () => {
       const { data: cfg } = await supabase
         .from('producto_mercadolibre_config')
-        .select('category_id, category_name, condicion, atributos')
+        .select('category_id, category_name, condicion, atributos, catalog_product_id, catalog_product_name')
         .eq('producto_id', producto.id)
         .maybeSingle();
+
+      setCatalogProductId(cfg?.catalog_product_id ?? '');
+      setCatalogProductName(cfg?.catalog_product_name ?? '');
+      setCatalogResultados([]);
+      setCatalogQuery(producto.nombre ?? '');
 
       if (cfg?.category_id) {
         setCategoryId(cfg.category_id);
@@ -98,6 +137,8 @@ function ConfigMercadoLibreModal({ open, onOpenChange, producto }) {
     setCategoryId(catId);
     setCategoryName(cat?.category_name ?? '');
     setValores({}); // los atributos dependen de la categoría
+    quitarCatalogo(); // el catálogo también es por categoría — no vale el de otra
+    setCatalogResultados([]);
     await cargarAtributos(catId);
   };
 
@@ -133,6 +174,8 @@ function ConfigMercadoLibreModal({ open, onOpenChange, producto }) {
           category_name: categoryName,
           condicion,
           atributos,
+          catalog_product_id: catalogProductId || null,
+          catalog_product_name: catalogProductId ? catalogProductName : null,
         }, { onConflict: 'producto_id' });
 
       if (error) {
@@ -198,6 +241,70 @@ function ConfigMercadoLibreModal({ open, onOpenChange, producto }) {
                 </p>
               )}
             </div>
+
+            {/* Enganche al catálogo oficial de MELI — necesario en casi todas las categorías reales */}
+            {categoryId && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Producto del catálogo de MercadoLibre</Label>
+                <p className="text-2xs text-kx-text-3">
+                  MercadoLibre exige en la mayoría de las categorías enganchar la publicación a una
+                  ficha de su catálogo oficial (no deja crear un aviso 100% libre). Buscá por marca y
+                  modelo y elegí el que coincida.
+                </p>
+                {catalogProductId ? (
+                  <div className="flex items-center justify-between gap-2 p-2 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20">
+                    <span className="text-xs text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 min-w-0">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">{catalogProductName}</span>
+                    </span>
+                    <Button type="button" variant="ghost" size="sm" className="h-7 text-xs shrink-0" onClick={quitarCatalogo}>
+                      Quitar
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex gap-2">
+                      <Input
+                        value={catalogQuery}
+                        onChange={e => setCatalogQuery(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); buscarCatalogo(catalogQuery, categoryId); } }}
+                        placeholder="Ej: Philips Satinelle Advanced"
+                        className="kairox-input h-9 text-sm"
+                      />
+                      <Button
+                        type="button" variant="outline" size="sm" className="h-9 shrink-0 gap-1"
+                        onClick={() => buscarCatalogo(catalogQuery, categoryId)} disabled={buscandoCatalogo}
+                      >
+                        {buscandoCatalogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                        Buscar
+                      </Button>
+                    </div>
+                    {catalogResultados.length > 0 && (
+                      <div className="space-y-1 max-h-40 overflow-y-auto">
+                        {catalogResultados.map(p => (
+                          <button
+                            type="button" key={p.catalog_product_id}
+                            onClick={() => elegirCatalogo(p)}
+                            className="w-full flex items-center gap-2 p-1.5 rounded-lg border border-kx-border hover:bg-kx-surface-2 text-left"
+                          >
+                            {p.pictures?.[0] && (
+                              <img src={p.pictures[0]} alt="" className="w-8 h-8 rounded object-cover shrink-0" />
+                            )}
+                            <span className="text-xs text-kx-text truncate">{p.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {!buscandoCatalogo && catalogResultados.length === 0 && (
+                      <p className="text-2xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                        <XCircle className="w-3 h-3 shrink-0" />
+                        Sin match todavía, esta publicación puede fallar sin un producto de catálogo.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Condición */}
             <div className="space-y-1.5">
