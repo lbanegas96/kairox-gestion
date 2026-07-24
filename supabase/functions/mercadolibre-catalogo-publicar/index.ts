@@ -36,7 +36,7 @@ interface Producto {
   codigo_sku: string | null;
   stock_actual: number;
   es_inventariable: boolean;
-  publicar_ecommerce: boolean;
+  publicar_mercadolibre: boolean;
 }
 
 interface MeliConfig {
@@ -114,13 +114,13 @@ serve(async (req) => {
     try {
       const { data: p } = await adminClient
         .from('productos')
-        .select('nombre, descripcion, precio_venta, codigo_sku, stock_actual, es_inventariable, publicar_ecommerce')
+        .select('nombre, descripcion, precio_venta, codigo_sku, stock_actual, es_inventariable, publicar_mercadolibre')
         .eq('id', item.producto_id)
         .single();
       if (!p) throw new Error('Producto no encontrado');
       const producto = p as Producto;
 
-      if (!producto.publicar_ecommerce) {
+      if (!producto.publicar_mercadolibre) {
         await adminClient.from('integraciones_producto_pendiente').update({ estado: 'publicado' }).eq('id', item.id);
         resultados.push({ id: item.id, resultado: 'ya_no_aplica' });
         continue;

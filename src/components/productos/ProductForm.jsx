@@ -39,17 +39,22 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
   // Tiendanube): mostramos el botón de configurar solo si hay una integración
   // MELI activa (Fase 5).
   const [meliConectado, setMeliConectado] = useState(false);
+  const [tiendanubeConectado, setTiendanubeConectado] = useState(false);
   const [showConfigMeli, setShowConfigMeli] = useState(false);
   useEffect(() => {
     if (!ecommerceHabilitado) return;
     let vivo = true;
     supabase
       .from('integraciones_canales')
-      .select('id')
-      .eq('canal', 'mercadolibre')
+      .select('canal')
       .eq('activo', true)
-      .maybeSingle()
-      .then(({ data }) => { if (vivo) setMeliConectado(!!data); });
+      .in('canal', ['tiendanube', 'mercadolibre'])
+      .then(({ data }) => {
+        if (!vivo) return;
+        const canales = new Set((data ?? []).map(r => r.canal));
+        setTiendanubeConectado(canales.has('tiendanube'));
+        setMeliConectado(canales.has('mercadolibre'));
+      });
     return () => { vivo = false; };
   }, [ecommerceHabilitado]);
 
@@ -432,39 +437,55 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
       </div>
     </div>
 
-    {/* ── Exposición a ecommerce (Tiendanube) — solo si el plan tiene ecommerce ── */}
-    {ecommerceHabilitado && (
-      <div className="col-span-1 md:col-span-2">
-        <ToggleTipoArticulo
-          icon={Globe}
-          label="Publicar en ecommerce"
-          hint="Expone este artículo a los canales conectados (Tiendanube y MercadoLibre). KAIROX es la fuente de verdad: los cambios de acá se publican allá."
-          checked={!!data.publicar_ecommerce}
-          onCheckedChange={(v) => setData({ ...data, publicar_ecommerce: v })}
-        />
-        {isEdit && data.id && (
-          <EstadoPublicacionEcommerce productoId={data.id} publicarEcommerce={!!data.publicar_ecommerce} />
+    {/* ── Exposición a ecommerce — un toggle por canal conectado (Fase 5) ─────── */}
+    {ecommerceHabilitado && (tiendanubeConectado || meliConectado) && (
+      <div className="col-span-1 md:col-span-2 space-y-2">
+        {/* Tiendanube */}
+        {tiendanubeConectado && (
+          <div>
+            <ToggleTipoArticulo
+              icon={Globe}
+              label="Publicar en Tiendanube"
+              hint="Expone este artículo en tu tienda Tiendanube. KAIROX es la fuente de verdad: los cambios de acá se publican allá."
+              checked={!!data.publicar_ecommerce}
+              onCheckedChange={(v) => setData({ ...data, publicar_ecommerce: v })}
+            />
+            {isEdit && data.id && (
+              <EstadoPublicacionEcommerce productoId={data.id} publicarEcommerce={!!data.publicar_ecommerce} />
+            )}
+          </div>
         )}
 
-        {/* MercadoLibre: configurar categoría + atributos obligatorios (Fase 5). */}
-        {isEdit && data.id && data.publicar_ecommerce && meliConectado && (
-          <>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="mt-2 h-8 text-xs gap-1.5"
-              onClick={() => setShowConfigMeli(true)}
-            >
-              <span className="w-4 h-4 rounded bg-[#FFE600] text-[#2D3277] text-[10px] font-bold flex items-center justify-center">ML</span>
-              Configurar publicación en MercadoLibre
-            </Button>
-            <ConfigMercadoLibreModal
-              open={showConfigMeli}
-              onOpenChange={setShowConfigMeli}
-              producto={{ id: data.id, nombre: data.nombre }}
+        {/* MercadoLibre */}
+        {meliConectado && (
+          <div>
+            <ToggleTipoArticulo
+              icon={Globe}
+              label="Publicar en MercadoLibre"
+              hint="Publica este artículo en MercadoLibre. Necesita categoría + datos obligatorios (marca, etc.) y al menos una foto."
+              checked={!!data.publicar_mercadolibre}
+              onCheckedChange={(v) => setData({ ...data, publicar_mercadolibre: v })}
             />
-          </>
+            {isEdit && data.id && data.publicar_mercadolibre && (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 h-8 text-xs gap-1.5"
+                  onClick={() => setShowConfigMeli(true)}
+                >
+                  <span className="w-4 h-4 rounded bg-[#FFE600] text-[#2D3277] text-[10px] font-bold flex items-center justify-center">ML</span>
+                  Configurar categoría y datos de MercadoLibre
+                </Button>
+                <ConfigMercadoLibreModal
+                  open={showConfigMeli}
+                  onOpenChange={setShowConfigMeli}
+                  producto={{ id: data.id, nombre: data.nombre }}
+                />
+              </>
+            )}
+          </div>
         )}
       </div>
     )}

@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from '@/lib/customSupabaseClient';
 import { productosService } from '@/services/productosService';
-import { dispararPublicacionCatalogo } from '@/services/integracionesService';
+import { dispararPublicacionCatalogo, dispararPublicacionMercadoLibre } from '@/services/integracionesService';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { getNowAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
@@ -136,6 +136,7 @@ const ProductosSection = () => {
     // Tipo de artículo estilo SAP B1 (OITM: InvntItem/SellItem/PrchseItem) + servicio
     // (mig.234). Defaults = producto físico de venta y compra (comportamiento actual).
     es_inventariable: true, es_articulo_venta: true, es_articulo_compra: true, es_servicio: false,
+    publicar_mercadolibre: false,
     // Exposición a ecommerce (Tiendanube). Default off — el usuario lo tilda explícito.
     publicar_ecommerce: false,
   };
@@ -215,6 +216,7 @@ const ProductosSection = () => {
         es_articulo_compra: !!newProduct.es_articulo_compra,
         es_servicio: !!newProduct.es_servicio,
         publicar_ecommerce: !!newProduct.publicar_ecommerce,
+        publicar_mercadolibre: !!newProduct.publicar_mercadolibre,
         descripcion: newProduct.descripcion,
         activo: true,
         fecha_creacion: getNowAR().toISOString()
@@ -230,6 +232,7 @@ const ProductosSection = () => {
       invalidateNotifs();
       // Disparo inmediato del worker de publicación — no esperar al cron.
       if (payload.publicar_ecommerce) dispararPublicacionCatalogo();
+      if (payload.publicar_mercadolibre) dispararPublicacionMercadoLibre();
     } catch (error) {
       console.error("Create product error:", error);
       const msg = error.message?.includes('productos_empresa_id_codigo_sku_key')
@@ -277,6 +280,7 @@ const ProductosSection = () => {
         es_articulo_compra: !!editProduct.es_articulo_compra,
         es_servicio: !!editProduct.es_servicio,
         publicar_ecommerce: !!editProduct.publicar_ecommerce,
+        publicar_mercadolibre: !!editProduct.publicar_mercadolibre,
         descripcion: editProduct.descripcion
       };
 
@@ -292,6 +296,7 @@ const ProductosSection = () => {
       invalidateProductos();
       invalidateNotifs();
       if (updates.publicar_ecommerce) dispararPublicacionCatalogo();
+      if (updates.publicar_mercadolibre) dispararPublicacionMercadoLibre();
     } catch (error) {
       console.error("Update product error:", error);
       toast({ title: "Error", description: error.message, variant: "destructive" });
