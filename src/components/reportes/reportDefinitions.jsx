@@ -60,10 +60,12 @@ export const REPORTS = [
   {
     id: 'financiero',
     title: 'Reporte Financiero',
-    description: 'Balance de ingresos y egresos de caja.',
+    description: 'Libro de caja: ingresos, egresos y saldo acumulado.',
     icon: <Banknote className="w-8 h-8 text-kx-green" />,
     borderClass: 'border-t-kx-green',
-    requiresDate: true
+    requiresDate: true,
+    supportsGroupBy: true,
+    supportsPeriodComparison: true
   },
   {
     id: 'mp_movimientos',
@@ -137,14 +139,25 @@ export const buildSummaryMetrics = (reportId, data, previousPeriod = null) => {
     ];
   }
   if (reportId === 'financiero') {
-    const ing = data.filter(r => r.tipo === 'ingreso').reduce((s, r) => s + r.monto, 0);
-    const egr = data.filter(r => r.tipo === 'egreso').reduce((s, r) => s + r.monto, 0);
-    return [
-      { label: 'Ingresos',  value: fc(ing) },
-      { label: 'Egresos',   value: fc(egr) },
-      { label: 'Balance',   value: fc(ing - egr) },
-      { label: 'Registros', value: data.length },
+    // Libro de caja: arranca de un Saldo Inicial (movimientos previos al
+    // período, fila sintética) y termina en un Saldo Final acumulado —
+    // mismo criterio que el extracto de Cuenta Corriente, aplicado acá a la
+    // caja en vez de a un cliente.
+    const ing = data.reduce((s, r) => s + (r.ingreso || 0), 0);
+    const egr = data.reduce((s, r) => s + (r.egreso || 0), 0);
+    const saldoInicial = data[0]?.esSaldoInicial ? data[0].saldo : 0;
+    const saldoFinal = data.length ? data[data.length - 1].saldo : 0;
+    const metrics = [
+      { label: 'Saldo Inicial', value: fc(saldoInicial) },
+      { label: 'Ingresos',      value: fc(ing) },
+      { label: 'Egresos',       value: fc(egr) },
+      { label: 'Saldo Final',   value: fc(saldoFinal) },
     ];
+    if (previousPeriod) {
+      metrics[1].delta = deltaLabel(ing, previousPeriod.ingresos);
+      metrics[2].delta = deltaLabel(egr, previousPeriod.egresos);
+    }
+    return metrics;
   }
   if (reportId === 'cuenta_corriente') {
     const debe  = data.reduce((s, r) => s + (r.debe || 0), 0);
@@ -281,18 +294,33 @@ export const getTableConfig = (reportId, data) => {
   }
 
   if (reportId === 'financiero') {
-    const ingresos = data.filter(d => d.tipo === 'ingreso').reduce((acc, curr) => acc + curr.monto, 0);
-    const egresos = data.filter(d => d.tipo === 'egreso').reduce((acc, curr) => acc + curr.monto, 0);
+    // Formato "Libro de Caja" estándar (fecha, concepto, ingreso, egreso,
+    // saldo) en vez de una lista plana Tipo+Monto — orden cronológico
+    // ascendente + saldo acumulado, arrancando de la fila sintética "Saldo
+    // Inicial" armada en ReportesSection.
+    const totalIngresos = data.reduce((s, r) => s + (r.ingreso || 0), 0);
+    const totalEgresos  = data.reduce((s, r) => s + (r.egreso  || 0), 0);
+    const saldoFinal = data.length ? data[data.length - 1].saldo : 0;
+
     return {
       columns: [
         { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
-        { header: 'Tipo', key: 'tipo', align: 'center', render: (r) => r.tipo.toUpperCase() },
-        { header: 'Categoría', key: 'categoria', align: 'left' },
-        { header: 'Concepto', key: 'concepto', align: 'left' },
-        { header: 'Monto', key: 'monto', align: 'right', render: (r) => formatCurrency(r.monto), pdfRender: (r) => formatCurrency(r.monto) }
+        { header: 'Categoría', key: 'categoria', align: 'left', render: (r) => r.categoria || '-', pdfRender: (r) => r.categoria || '-' },
+        { header: 'Concepto', key: 'concepto', align: 'left', render: (r) => <span className={r.esSaldoInicial ? 'italic text-kx-text-2' : ''}>{r.concepto}</span>, pdfRender: (r) => r.concepto },
+        { header: 'Pago', key: 'metodo_pago', align: 'center', render: (r) => r.metodo_pago || '-', pdfRender: (r) => r.metodo_pago || '-' },
+        { header: 'Ingreso', key: 'ingreso', align: 'right', render: (r) => r.ingreso ? formatCurrency(r.ingreso) : '-', pdfRender: (r) => r.ingreso ? formatCurrency(r.ingreso) : '-' },
+        { header: 'Egreso', key: 'egreso', align: 'right', render: (r) => r.egreso ? formatCurrency(r.egreso) : '-', pdfRender: (r) => r.egreso ? formatCurrency(r.egreso) : '-' },
+        {
+          header: 'Saldo', key: 'saldo', align: 'right',
+          render: (r) => <span className={r.saldo < 0 ? 'font-bold text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>{formatCurrency(r.saldo)}</span>,
+          pdfRender: (r) => formatCurrency(r.saldo),
+        },
       ],
       totals: [
-        { content: `INGRESOS: ${formatCurrency(ingresos)} | EGRESOS: ${formatCurrency(egresos)} | BALANCE: ${formatCurrency(ingresos - egresos)}`, colSpan: 5, align: 'right' }
+        { content: 'TOTALES', colSpan: 4, align: 'right' },
+        { content: formatCurrency(totalIngresos), align: 'right', value: totalIngresos },
+        { content: formatCurrency(totalEgresos),  align: 'right', value: totalEgresos },
+        { content: formatCurrency(saldoFinal),    align: 'right', value: saldoFinal },
       ]
     };
   }
@@ -357,6 +385,12 @@ const GROUP_BY_OPTIONS_POR_REPORTE = {
     { value: 'metodo_pago', label: 'Por método de pago' },
     { value: 'proveedor',   label: 'Por proveedor' },
   ],
+  financiero: [
+    { value: 'none',        label: 'Sin agrupar' },
+    { value: 'dia',         label: 'Por día' },
+    { value: 'categoria',   label: 'Por categoría' },
+    { value: 'metodo_pago', label: 'Por método de pago' },
+  ],
 };
 
 export function getGroupByOptions(reportId) {
@@ -374,6 +408,18 @@ const GROUP_KEY_FN_POR_REPORTE = {
     metodo_pago: (r) => r.forma_pago || 'Sin método',
     proveedor:   (r) => r.proveedor || 'Sin proveedor',
   },
+  financiero: {
+    dia:         (r) => formatDateAR(r.fecha),
+    categoria:   (r) => r.categoria || 'Sin categoría',
+    metodo_pago: (r) => r.metodo_pago || 'Sin método',
+  },
+};
+
+// Subtotal por grupo — ventas/compras suman `total`; financiero (Libro de
+// Caja) no tiene un solo campo "total" por fila (Ingreso y Egreso son
+// columnas separadas), el subtotal ahí es el neto ingreso-egreso del grupo.
+const GROUP_SUBTOTAL_FN_POR_REPORTE = {
+  financiero: (r) => (r.ingreso || 0) - (r.egreso || 0),
 };
 
 /**
@@ -390,16 +436,23 @@ export function applyGrouping(reportId, data, groupBy) {
   const keyFn = (GROUP_KEY_FN_POR_REPORTE[reportId] || {})[groupBy];
   if (!keyFn) return data;
 
+  // Filas sintéticas de saldo inicial/anterior (Libro de Caja, extracto de
+  // Cta. Corriente) no son un movimiento real agrupable — se muestran
+  // siempre primero, fuera de cualquier grupo.
+  const fijas = data.filter(r => r.esSaldoInicial || r.esSaldoAnterior);
+  const agrupables = data.filter(r => !r.esSaldoInicial && !r.esSaldoAnterior);
+
+  const subtotalFn = GROUP_SUBTOTAL_FN_POR_REPORTE[reportId] || ((r) => r.total || 0);
   const groups = new Map();
-  data.forEach(row => {
+  agrupables.forEach(row => {
     const key = keyFn(row);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(row);
   });
 
-  const result = [];
+  const result = [...fijas];
   groups.forEach((rows, key) => {
-    const subtotal = rows.reduce((s, r) => s + (r.total || 0), 0);
+    const subtotal = rows.reduce((s, r) => s + subtotalFn(r), 0);
     result.push({ __rowType: 'group', label: `${key} (${rows.length})` });
     result.push(...rows);
     result.push({ __rowType: 'subtotal', label: `Subtotal — ${key}`, value: subtotal, valueText: formatCurrency(subtotal) });

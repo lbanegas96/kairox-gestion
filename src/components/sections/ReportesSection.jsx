@@ -327,17 +327,61 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
          ];
       }
 
-      // 5. FINANCIERO
+      // 5. FINANCIERO — Libro de Caja: saldo inicial + ingreso/egreso/saldo
+      // acumulado fila a fila (mismo criterio que el extracto de Cta.
+      // Corriente, aplicado a los movimientos de caja en vez de a un cliente).
       else if (selectedReport.id === 'financiero') {
+         const { data: anteriores, error: errAnt } = await supabase
+           .from('movimientos_caja')
+           .select('tipo, monto')
+           .eq('empresa_id', user.empresa_id)
+           .lt('fecha', start);
+         if (errAnt) throw errAnt;
+         const saldoInicial = (anteriores || []).reduce(
+           (s, m) => s + (m.tipo === 'ingreso' ? m.monto : -m.monto), 0
+         );
+
          const { data: fins, error } = await supabase
             .from('movimientos_caja')
-            .select('*')
+            .select('id, fecha, categoria, concepto, metodo_pago, tipo, monto')
             .eq('empresa_id', user.empresa_id)
             .gte('fecha', start)
             .lte('fecha', end)
-            .order('fecha', { ascending: false });
+            .order('fecha', { ascending: true });
          if (error) throw error;
-         data = fins;
+
+         let saldoCorrido = saldoInicial;
+         const movimientos = (fins || []).map(m => {
+           const ingreso = m.tipo === 'ingreso' ? m.monto : 0;
+           const egreso  = m.tipo === 'egreso'  ? m.monto : 0;
+           saldoCorrido += ingreso - egreso;
+           return {
+             id: m.id,
+             fecha: m.fecha,
+             categoria: m.categoria,
+             concepto: m.concepto,
+             metodo_pago: m.metodo_pago,
+             ingreso,
+             egreso,
+             saldo: Math.round(saldoCorrido * 100) / 100,
+           };
+         });
+
+         data = [
+           { id: 'saldo_inicial', fecha: start, categoria: '', concepto: 'Saldo inicial', metodo_pago: '', ingreso: 0, egreso: 0, saldo: Math.round(saldoInicial * 100) / 100, esSaldoInicial: true },
+           ...movimientos,
+         ];
+
+         const { data: prevFins } = await supabase
+           .from('movimientos_caja')
+           .select('tipo, monto')
+           .eq('empresa_id', user.empresa_id)
+           .gte('fecha', prevStart.toISOString())
+           .lte('fecha', prevEnd.toISOString());
+         setPreviousPeriodStats({
+           ingresos: (prevFins || []).filter(m => m.tipo === 'ingreso').reduce((s, m) => s + (m.monto || 0), 0),
+           egresos:  (prevFins || []).filter(m => m.tipo === 'egreso').reduce((s, m) => s + (m.monto || 0), 0),
+         });
       }
 
       // 6. MERCADOPAGO POR TIPO
