@@ -1,5 +1,49 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-25 (Luciano — MercadoPago por Tipo separa ingreso/egreso + conciliación, fix de columnas de PDF que se cortaban; roadmap de Reportería cerrado del todo; próximo: avanzar con Ventas)
+**Última actualización:** 2026-07-25 (Luciano — Reporte de Paridad: histórico completo (Ventas+Compras+Caja) + nueva vista Posición Actual al TC de hoy, commit `6944801`; queda Libro IVA y después Ventas)
+
+> ✅ **Reporte de Paridad — histórico completo + Posición Actual (nueva), commit
+> `6944801` (2026-07-25).** Antes de construir se investigó a fondo (a pedido
+> explícito de Luciano: "seamos finos... veamos qué es lo que piden los
+> usuarios y cómo lo resuelven los ERP de primer nivel") — la respuesta no es
+> "elegir entre histórico o TC de hoy", es que **son dos cosas distintas que
+> todo ERP de primer nivel separa a propósito**: RT FACPCE exige valuar
+> activos/pasivos en moneda extranjera al cierre (TC vigente), mientras que
+> las transacciones ya liquidadas se registran al TC del día en que
+> ocurrieron y NUNCA se revalúan retroactivamente — mismo patrón que SAP/
+> NetSuite llaman "Foreign Currency Revaluation" (transaction rate vs closing
+> rate). `ReporteParidad.jsx` pasa a ser un container con 2 tabs:
+> - **`TabHistorico.jsx`** (reemplaza la lógica vieja, que era Ventas-only y
+>   CSV a mano): ahora Ventas + Compras + Movimientos de Caja, cada uno con
+>   su TC del día. **Bug real encontrado y corregido durante la verificación
+>   en vivo:** cada Venta/Compra aparecía 2 VECES — una desde
+>   `comprobantes`/`compras` y otra desde su eco automático en
+>   `movimientos_caja` (`categoria='Venta'`/`'Compra'`, que `crear_venta`/
+>   `CompraRapidaSection` ya escriben para cada operación) — se excluyen esas
+>   categorías del fetch de Caja para no duplicar. Exporta por el pipeline
+>   estándar (`generatePDF`/`exportReporte` + WhatsApp) en vez del CSV
+>   artesanal de antes.
+> - **`TabPosicionActual.jsx`** (nuevo): snapshot de HOY (no un rango de
+>   fechas) — revalúa Caja + Bancos (por cuenta, respeta la moneda propia de
+>   cada una vía `cuentas_bancarias.moneda`) + Cuentas por Cobrar
+>   (`clientes.saldo_actual`) + Cuentas por Pagar (`v_saldo_proveedores`,
+>   solo saldos positivos — nunca netear deudores/acreedores, mismo criterio
+>   de siempre) al TC de hoy. Si no hay TC cargado, bloquea con el mismo
+>   `TipoCambioModal` que ya usa el resto de la app en vez de inventar un
+>   número con TC viejo. Se auto-genera al entrar al tab (es "ahora", no
+>   tiene sentido un botón "Generar").
+>
+> Verificado en vivo con datos reales de Nalux: Caja $-878.046,20 exacto
+> contra el Saldo Final de Financiero (mismo período); Cuentas por Cobrar
+> $342.880,00 exacto contra Dashboard/Cartera de Clientes; Posición Neta
+> USD 688,84 cuadra sumando cada fila a mano (Caja -605,55 + 3 bancos +
+> CxC 236,47 - CxP 6,90). PDF/Excel/WhatsApp sin errores en ambas vistas.
+> El gateo por Configuración (`tcParaleloEnabled` en `GridReportes.jsx`) ya
+> estaba bien hecho de antes, no se tocó. Se cargó un TC de prueba (USD
+> 1.450) en `tipos_cambio` de Nalux durante la verificación — reemplazar por
+> el real cuando corresponda.
+>
+> Pusheado y deployado. **Próximo en la cola de Luciano: Libro IVA, después
+> sí se pasa de lleno a Ventas** (sin alcance definido todavía).
 
 > ✅ **MercadoPago por Tipo — fix real (ingreso/egreso mezclados) + conciliación,
 > commit `8ec1b5e` — más fix de PDF de alcance general, commit `5a072a3`
