@@ -1,5 +1,29 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-25 (Luciano — Cuenta Corriente: antigüedad de saldos reconciliada + extracto por cliente con saldo acumulado, ambos deployados y verificados con PDF real)
+**Última actualización:** 2026-07-25 (Luciano — Reporte Financiero rediseñado como Libro de Caja, cierra el roadmap de Reportería; próximo: avanzar con Ventas)
+
+> ✅ **REPORTE FINANCIERO rediseñado como Libro de Caja (2026-07-25), commit `918fc7e` — cierra el
+> roadmap de Reportería.** Era una lista plana Tipo+Monto sin contexto; ahora sigue el formato
+> estándar de un libro de caja (fecha, concepto, ingreso/egreso separados, saldo acumulado):
+> - Fila sintética "Saldo Inicial" + columna Saldo acumulada fila a fila, orden cronológico
+>   ascendente — mismo criterio que el extracto de Cta. Corriente (ver entrada de abajo), aplicado
+>   acá a `movimientos_caja` en vez de a un cliente.
+> - Agrupar por Día/Categoría/Método de pago (mismo patrón de Ventas/Compras). Requirió generalizar
+>   el subtotal de `applyGrouping()` (antes hardcodeado a `r.total`, no aplicable porque acá
+>   Ingreso/Egreso son columnas separadas) vía `GROUP_SUBTOTAL_FN_POR_REPORTE`, y excluir las filas
+>   sintéticas de saldo inicial/anterior de caer dentro de un grupo (quedan fijas arriba).
+> - % vs período anterior en Ingresos/Egresos.
+>
+> Verificado en vivo con datos reales de Nalux: saldo acumulado correcto fila a fila, TOTALES
+> cuadra exacto (Ingresos $7.875.613,80 − Egresos $8.753.660,00 = Saldo Final $-878.046,20 — saldo
+> negativo esperado, es la base de pruebas sucia ya documentada), subtotal por categoría correcto
+> (Cobro: $-12.977,00), PDF/Excel descargan sin errores. Pusheado y deployado a
+> `kairox-gestion-chi.vercel.app`.
+>
+> **Con esto el roadmap de Reportería queda cerrado** (los 4 puntos originales — agrupamiento,
+> comparación de período, WhatsApp, vínculo a comprobante — ya estaban en Ventas/Compras; Cartera de
+> Clientes, Cta. Corriente y ahora Financiero tienen sus propias mejoras específicas cerradas).
+> **Próximo paso pedido por Luciano: avanzar con el módulo de Ventas** — sin alcance definido
+> todavía, retomar con él para acotarlo antes de construir nada.
 
 > ✅ **CUENTA CORRIENTE — antigüedad de saldos reconciliada + Movimientos Cta. Corriente rediseñado
 > como extracto por cliente (2026-07-25).** Tres piezas encadenadas, todas deployadas a prod y
