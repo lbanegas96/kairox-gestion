@@ -164,8 +164,29 @@ export const generatePDF = async ({
     return columns.map(col => (col.pdfRender ? col.pdfRender(row) : row[col.key]));
   });
 
+  // Columnas alineadas a la derecha son siempre montos (convención del
+  // proyecto: align:'right' nunca se usa para texto libre) — reservarles el
+  // ancho real que necesita su valor más largo. Sin esto, autoTable calcula
+  // el ancho de "Saldo" a partir del header (5 letras) y lo comprime por
+  // debajo de lo que necesita un monto de 7 cifras cuando otra columna
+  // (Concepto) pide mucho espacio para texto largo — el número se parte en
+  // 2 líneas ("$" arriba, "1.078.116,00" abajo), visto real en el PDF del
+  // Reporte Financiero con saldos de millones.
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
   const columnStyles = columns.reduce((acc, col, idx) => {
-    if (col.align) acc[idx] = { halign: col.align };
+    const style = {};
+    if (col.align) style.halign = col.align;
+    if (col.align === 'right') {
+      let maxW = doc.getTextWidth(col.header);
+      data.forEach(row => {
+        if (row.__rowType) return; // filas sintéticas de agrupamiento
+        const text = String((col.pdfRender ? col.pdfRender(row) : row[col.key]) ?? '');
+        maxW = Math.max(maxW, doc.getTextWidth(text));
+      });
+      style.cellWidth = maxW + 6;
+    }
+    acc[idx] = style;
     return acc;
   }, {});
 
