@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import {
   BookOpen, Calendar, Download, RefreshCw, Check, Clock,
-  AlertTriangle, ArrowLeft, AlertCircle
+  AlertTriangle, ArrowLeft, AlertCircle, FileSpreadsheet, MessageCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,11 +12,22 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useConfig } from '@/contexts/ConfigContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { getTodayAR, formatDateAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
+import { generatePDF } from '@/lib/pdfUtils';
+import { exportReporte } from '@/lib/excelUtils';
 
 const PAGE_SIZE = 100;
+
+const ALICUOTA_LABELS = {
+  '21':         '21%',
+  '10.5':       '10,5%',
+  '0':          '0%',
+  'exento':     'Exento',
+  'no_gravado': 'No Gravado',
+};
 
 // Usa iva_discriminado real (calculado por crear_venta según la alícuota de cada
 // ítem — 21/10.5/0/exento). Fallback a estimación /1.21 solo para comprobantes
@@ -46,6 +57,7 @@ function brutoDeComprobante(c) {
 
 function ReporteLibroIVA({ onBack }) {
   const { user } = useAuth();
+  const { config } = useConfig();
   const { toast } = useToast();
 
   const todayStr = getTodayAR();
@@ -54,6 +66,7 @@ function ReporteLibroIVA({ onBack }) {
   const [fechaDesde, setFechaDesde] = useState(firstOfMonthStr);
   const [fechaHasta, setFechaHasta] = useState(todayStr);
   const [comprobantes, setComprobantes] = useState([]);
+  const [itemsPorComprobante, setItemsPorComprobante] = useState({});
   const [loading, setLoading] = useState(false);
   const [generated, setGenerated] = useState(false);
   const [filtroTipo, setFiltroTipo] = useState('todos');
@@ -81,7 +94,41 @@ function ReporteLibroIVA({ onBack }) {
         .order('numero_afip', { ascending: true });
 
       if (error) throw error;
-      setComprobantes(data ?? []);
+
+      // CUIT/DNI del receptor — dato real que ya existe en clientes.documento
+      // pero el reporte no lo traía (Libro IVA Compras sí muestra el CUIT del
+      // proveedor; Ventas no mostraba el del cliente, inconsistencia real).
+      // Traído en 2 pasos (sin embedded select) — mismo patrón que
+      // ReporteLibroIVACompras, no depende de la FK estar bien configurada.
+      const clienteIds = [...new Set((data ?? []).map(c => c.cliente_id).filter(Boolean))];
+      let clienteMap = {};
+      if (clienteIds.length > 0) {
+        const { data: clientesData } = await supabase
+          .from('clientes').select('id, documento')
+          .in('id', clienteIds);
+        clienteMap = Object.fromEntries((clientesData ?? []).map(cl => [cl.id, cl.documento]));
+      }
+      const merged = (data ?? []).map(c => ({ ...c, cliente_documento: clienteMap[c.cliente_id] || '' }));
+
+      // Items por comprobante — para el resumen por alícuota (Neto/IVA
+      // discriminados por 21%/10.5%/exento, lo que un contador necesita para
+      // la declaración de IVA real, no un único "IVA 21%" que mezcla todo).
+      const compIds = merged.map(c => c.id);
+      let itemsMap = {};
+      if (compIds.length > 0) {
+        const { data: itemsData } = await supabase
+          .from('comprobante_items')
+          .select('comprobante_id, subtotal, alicuota_iva')
+          .in('comprobante_id', compIds);
+        itemsMap = {};
+        (itemsData ?? []).forEach(it => {
+          if (!itemsMap[it.comprobante_id]) itemsMap[it.comprobante_id] = [];
+          itemsMap[it.comprobante_id].push(it);
+        });
+      }
+
+      setItemsPorComprobante(itemsMap);
+      setComprobantes(merged);
       setGenerated(true);
       setPage(1);
     } catch (err) {
@@ -108,43 +155,122 @@ function ReporteLibroIVA({ onBack }) {
     });
   }, [comprobantes, filtroTipo, filtroEstado]);
 
+  // Resumen por alícuota — lo que un contador realmente necesita para la
+  // declaración de IVA (totales por 21%/10.5%/exento del período), no un
+  // único "IVA 21%" que mezcla todas las tasas. Reparte el neto/IVA REAL de
+  // cada comprobante (netoDeComprobante/ivaDeComprobante, siempre correcto)
+  // proporcionalmente al peso de cada alícuota entre sus items — funciona
+  // aunque dos modales de venta distintos usen convenciones distintas para
+  // `comprobante_items.subtotal` (neto vs. bruto), porque el reparto es una
+  // proporción DENTRO de un mismo comprobante, donde todos los items
+  // comparten siempre la misma convención (se cargan juntos, en la misma
+  // operación). Solo comprobantes con CAE emitido, igual criterio que kpis.
+  const alicuotaResumen = useMemo(() => {
+    const buckets = {};
+    const addTo = (key, neto, iva) => {
+      buckets[key] = buckets[key] || { neto: 0, iva: 0 };
+      buckets[key].neto += neto;
+      buckets[key].iva += iva;
+    };
+    comprobantesFiltrados
+      .filter(c => c.cae_estado === 'emitido')
+      .forEach(c => {
+        const items = itemsPorComprobante[c.id] || [];
+        const netoTotal = netoDeComprobante(c);
+        const ivaTotal = ivaDeComprobante(c);
+        const totalSubtotal = items.reduce((s, it) => s + Number(it.subtotal || 0), 0);
+        if (items.length === 0 || totalSubtotal === 0) {
+          // Sin detalle de items (comprobantes viejos) — mismo fallback 21%
+          // que ya usa netoDeComprobante/ivaDeComprobante.
+          addTo('21', netoTotal, ivaTotal);
+          return;
+        }
+        const porAlicuota = {};
+        items.forEach(it => {
+          const key = it.alicuota_iva || '21';
+          porAlicuota[key] = (porAlicuota[key] || 0) + Number(it.subtotal || 0);
+        });
+        Object.entries(porAlicuota).forEach(([key, subtotalAlicuota]) => {
+          const share = subtotalAlicuota / totalSubtotal;
+          addTo(key, netoTotal * share, ivaTotal * share);
+        });
+      });
+    return buckets;
+  }, [comprobantesFiltrados, itemsPorComprobante]);
+
   const totalPages = Math.max(1, Math.ceil(comprobantesFiltrados.length / PAGE_SIZE));
   const paginatedData = comprobantesFiltrados.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const exportarCSV = () => {
-    const rows = comprobantesFiltrados.map(c => {
-      const neto = netoDeComprobante(c).toFixed(2);
-      const iva  = ivaDeComprobante(c).toFixed(2);
-      return [
-        c.numero_afip ?? c.numero_venta,
-        (c.tipo === 'nota_credito' ? 'NC-' : '') + (c.tipo_comprobante_afip ?? ''),
-        c.fecha?.slice(0, 10) ?? '',
-        `"${(c.cliente_nombre ?? 'Consumidor Final').replace(/"/g, '""')}"`,
-        brutoDeComprobante(c).toFixed(2),
-        neto,
-        iva,
-        c.cae ?? '',
-        c.cae_vencimiento ?? '',
-        c.cae_estado ?? '',
-      ].join(',');
-    });
-    const headers = [
-      'Nro_Comprobante', 'Tipo', 'Fecha', 'Cliente',
-      'Total_Bruto', 'Neto_Gravado', 'IVA_21',
-      'CAE', 'Vto_CAE', 'Estado_CAE',
-    ].join(',');
-    const csv = '﻿' + headers + '\n' + rows.join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `libro_iva_ventas_${fechaDesde}_${fechaHasta}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   const fmtARS = (n) =>
     `$${Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  // Columnas compartidas por PDF/Excel — reemplaza el CSV artesanal de antes,
+  // mismo pipeline que ya usa el resto del módulo de Reportería.
+  const columns = useMemo(() => [
+    { header: 'Nro. Comprobante', key: 'numero', align: 'left', pdfRender: (c) => String(c.numero_afip ?? c.numero_venta ?? '-') },
+    { header: 'Tipo', key: 'tipo_comprobante_afip', align: 'center', pdfRender: (c) => (c.tipo === 'nota_credito' ? 'NC-' : 'F-') + (c.tipo_comprobante_afip ?? '') },
+    { header: 'Fecha', key: 'fecha', align: 'left', pdfRender: (c) => formatDateAR(c.fecha) },
+    { header: 'Cliente', key: 'cliente_nombre', align: 'left', pdfRender: (c) => c.cliente_nombre || 'Consumidor Final' },
+    { header: 'CUIT/DNI', key: 'cliente_documento', align: 'left', pdfRender: (c) => c.cliente_documento || '-' },
+    { header: 'Total Bruto', key: 'bruto', align: 'right', pdfRender: (c) => fmtARS(brutoDeComprobante(c)) },
+    { header: 'Neto Gravado', key: 'neto', align: 'right', pdfRender: (c) => fmtARS(netoDeComprobante(c)) },
+    { header: 'IVA', key: 'iva', align: 'right', pdfRender: (c) => fmtARS(ivaDeComprobante(c)) },
+    { header: 'Estado CAE', key: 'cae_estado', align: 'center', pdfRender: (c) => c.cae_estado ?? '-' },
+  ], []);
+
+  const totalsRow = useMemo(() => ([
+    { content: `TOTALES (${comprobantesFiltrados.length} comp.)`, colSpan: 5, align: 'right' },
+    { content: fmtARS(comprobantesFiltrados.reduce((s, c) => s + brutoDeComprobante(c), 0)), align: 'right' },
+    { content: fmtARS(comprobantesFiltrados.reduce((s, c) => s + netoDeComprobante(c), 0)), align: 'right', value: comprobantesFiltrados.reduce((s, c) => s + netoDeComprobante(c), 0) },
+    { content: fmtARS(comprobantesFiltrados.reduce((s, c) => s + ivaDeComprobante(c), 0)), align: 'right', value: comprobantesFiltrados.reduce((s, c) => s + ivaDeComprobante(c), 0) },
+    { content: '', align: 'center' },
+  ]), [comprobantesFiltrados]);
+
+  const resumenAlicuotaMetrics = useMemo(() => Object.entries(alicuotaResumen).map(([key, v]) => ({
+    label: `${ALICUOTA_LABELS[key] || key} · Neto / IVA`,
+    value: `${fmtARS(v.neto)} / ${fmtARS(v.iva)}`,
+  })), [alicuotaResumen]);
+
+  const handleDownloadPDF = async () => {
+    try {
+      await generatePDF({
+        title: 'Libro IVA Ventas',
+        startDate: fechaDesde, endDate: fechaHasta,
+        columns, data: comprobantesFiltrados, totals: totalsRow,
+        filename: 'libro_iva_ventas',
+        companyName: config?.nombre_empresa || 'KAIROX Gestión',
+        logoUrl: config?.logo_base64 || null,
+        summaryMetrics: resumenAlicuotaMetrics.length ? resumenAlicuotaMetrics : undefined,
+      });
+      toast({ title: 'Éxito', description: 'PDF generado correctamente.', className: 'bg-green-600 text-white' });
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Error', description: 'Falló la generación del PDF.', variant: 'destructive' });
+    }
+  };
+
+  const handleDownloadExcel = () => {
+    try {
+      exportReporte({ title: 'Libro IVA Ventas', columns, data: comprobantesFiltrados, totals: totalsRow, filename: 'libro_iva_ventas' });
+      toast({ title: 'Éxito', description: 'Excel generado correctamente.', className: 'bg-green-600 text-white' });
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Error', description: 'Falló la generación del Excel.', variant: 'destructive' });
+    }
+  };
+
+  const handleShareWhatsApp = () => {
+    const lineas = [
+      `📊 *Libro IVA Ventas*`,
+      `Período: ${fechaDesde} al ${fechaHasta}`,
+      `Comprobantes: ${kpis.emitidos} emitidos`,
+      `Total Bruto: ${fmtARS(kpis.totalBruto)}`,
+      `Neto Gravado: ${fmtARS(kpis.totalNeto)}`,
+      `IVA: ${fmtARS(kpis.totalIVA)}`,
+      ...resumenAlicuotaMetrics.map(m => `${m.label}: ${m.value}`),
+    ];
+    window.open(`https://wa.me/?text=${encodeURIComponent(lineas.join('\n'))}`, '_blank');
+  };
 
   const caeEstadoBadge = (estado) => {
     if (estado === 'emitido')
@@ -235,9 +361,17 @@ function ReporteLibroIVA({ onBack }) {
             Generar
           </Button>
           {generated && comprobantesFiltrados.length > 0 && (
-            <Button variant="outline" onClick={exportarCSV} className="h-9 dark:border-kx-border dark:text-slate-300">
-              <Download className="h-4 w-4 mr-1.5" /> Exportar CSV
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleDownloadExcel} className="h-9 dark:border-kx-border dark:text-slate-300">
+                <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Excel
+              </Button>
+              <Button variant="outline" onClick={handleDownloadPDF} className="h-9 dark:border-kx-border dark:text-slate-300">
+                <Download className="h-4 w-4 mr-1.5" /> PDF
+              </Button>
+              <Button variant="outline" onClick={handleShareWhatsApp} className="h-9 dark:border-kx-border dark:text-slate-300">
+                <MessageCircle className="h-4 w-4 mr-1.5" /> WhatsApp
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -278,7 +412,7 @@ function ReporteLibroIVA({ onBack }) {
             <p className="text-xs text-kx-text-3 mt-1">base imponible estimada</p>
           </Card>
           <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
-            <p className="text-xs text-kx-text-3 uppercase tracking-wide">IVA 21%</p>
+            <p className="text-xs text-kx-text-3 uppercase tracking-wide">IVA</p>
             <p className="text-2xl font-black text-violet-600 dark:text-violet-400 mt-1 font-mono">
               {fmtARS(kpis.totalIVA)}
             </p>
@@ -286,6 +420,25 @@ function ReporteLibroIVA({ onBack }) {
               <p className="text-xs text-kx-amber mt-1">{kpis.pendientes} sin CAE aún</p>
             )}
           </Card>
+        </div>
+      )}
+
+      {/* Resumen por alícuota — lo que se necesita para la declaración de IVA real */}
+      {generated && resumenAlicuotaMetrics.length > 0 && (
+        <div className="bg-kx-surface dark:bg-kx-surface p-4 rounded-xl border border-kx-border dark:border-kx-border shadow-sm">
+          <p className="text-xs font-semibold text-kx-text-2 uppercase tracking-wide mb-3">
+            Resumen por alícuota (Neto / IVA)
+          </p>
+          <div className="flex flex-wrap gap-x-8 gap-y-2">
+            {Object.entries(alicuotaResumen).map(([key, v]) => (
+              <div key={key}>
+                <p className="text-xs text-kx-text-3">{ALICUOTA_LABELS[key] || key}</p>
+                <p className="text-sm font-bold font-mono text-kx-text dark:text-kx-text">
+                  {fmtARS(v.neto)} <span className="text-kx-text-3 font-normal">/</span> {fmtARS(v.iva)}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -300,9 +453,10 @@ function ReporteLibroIVA({ onBack }) {
                   <th className="p-4 w-20 text-center">Tipo</th>
                   <th className="p-4 w-28">Fecha</th>
                   <th className="p-4">Cliente</th>
+                  <th className="p-4 w-32">CUIT/DNI</th>
                   <th className="p-4 text-right w-32">Total Bruto</th>
                   <th className="p-4 text-right w-32">Neto Gravado</th>
-                  <th className="p-4 text-right w-28">IVA 21%</th>
+                  <th className="p-4 text-right w-28">IVA</th>
                   <th className="p-4 w-32">CAE</th>
                   <th className="p-4 w-28">Vto. CAE</th>
                   <th className="p-4 w-28 text-center">Estado</th>
@@ -312,14 +466,14 @@ function ReporteLibroIVA({ onBack }) {
                 {loading ? (
                   Array.from({ length: 6 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 10 }).map((_, j) => (
+                      {Array.from({ length: 11 }).map((_, j) => (
                         <td key={j} className="p-4"><Skeleton className="h-4 w-full" /></td>
                       ))}
                     </tr>
                   ))
                 ) : comprobantesFiltrados.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="p-12 text-center text-slate-500 dark:text-kx-text-2">
+                    <td colSpan={11} className="p-12 text-center text-slate-500 dark:text-kx-text-2">
                       <BookOpen className="h-10 w-10 mx-auto mb-2 opacity-20" />
                       <p>No hay comprobantes con CAE en el período seleccionado</p>
                     </td>
@@ -341,6 +495,9 @@ function ReporteLibroIVA({ onBack }) {
                         </td>
                         <td className="p-4 font-medium text-kx-text dark:text-kx-text">
                           {c.cliente_nombre || <span className="text-kx-text-3 italic">Consumidor Final</span>}
+                        </td>
+                        <td className="p-4 font-mono text-xs text-slate-500 dark:text-kx-text-2">
+                          {c.cliente_documento || <span className="text-slate-300 dark:text-kx-text-2">—</span>}
                         </td>
                         <td className="p-4 text-right font-bold font-mono text-slate-700 dark:text-kx-text">
                           {fmtARS(brutoDeComprobante(c))}
@@ -378,11 +535,11 @@ function ReporteLibroIVA({ onBack }) {
               {generated && comprobantesFiltrados.length > 0 && !loading && (
                 <tfoot>
                   <tr className="border-t-2 border-slate-300 dark:border-kx-border bg-kx-surface-2 dark:bg-slate-900/80 font-bold">
-                    <td colSpan={4} className="p-4 text-right text-sm text-slate-500 dark:text-kx-text-2 uppercase tracking-wide">
+                    <td colSpan={5} className="p-4 text-right text-sm text-slate-500 dark:text-kx-text-2 uppercase tracking-wide">
                       TOTALES ({comprobantesFiltrados.length} comp.)
                     </td>
                     <td className="p-4 text-right font-black text-kx-text dark:text-kx-text font-mono">
-                      {fmtARS(comprobantesFiltrados.reduce((s, c) => s + Number(c.total), 0))}
+                      {fmtARS(comprobantesFiltrados.reduce((s, c) => s + brutoDeComprobante(c), 0))}
                     </td>
                     <td className="p-4 text-right font-black text-blue-600 dark:text-blue-400 font-mono">
                       {fmtARS(comprobantesFiltrados.reduce((s, c) => s + netoDeComprobante(c), 0))}
