@@ -8,6 +8,7 @@ import {
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
+import { useCotizacionesActivo } from '@/hooks/useCotizacionesActivo';
 
 // SECURITY-SIDEBAR-PERMS: cada item declara `permission` (key en profiles.permissions).
 // Admin ve todo. Staff ve solo los items cuyo permission esté en true.
@@ -77,10 +78,18 @@ function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen }) {
   const { user, signOut } = useAuth();
   const { isSessionOpen } = useCaja();
   const { hasPermission } = useUserPermissions();
+  const cotizacionesActivo = useCotizacionesActivo();
 
   // SECURITY-SIDEBAR-PERMS: filtramos items por permiso y descartamos grupos vacíos.
+  // Cotizaciones además se apaga a nivel empresa (Configuración → Facturación),
+  // independiente del permiso de usuario.
   const visibleGroups = NAV_GROUPS
-    .map(g => ({ ...g, items: g.items.filter(i => hasPermission(i.permission)) }))
+    .map(g => ({
+      ...g,
+      items: g.items.filter(i =>
+        hasPermission(i.permission) && (i.id !== 'cotizaciones' || cotizacionesActivo)
+      ),
+    }))
     .filter(g => g.items.length > 0);
 
   const [collapsed, setCollapsed] = useState(() => {

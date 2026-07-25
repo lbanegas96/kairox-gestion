@@ -18,10 +18,11 @@ function FormNuevaOC({
   tcMissingOC, setTcMissingOC,
   total,
   handleSubmit, resetForm,
+  onCancel,
   createMutation,
 }) {
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl">
+    <form onSubmit={handleSubmit} className="space-y-6">
       <Card className="dark:bg-kx-bg dark:border-kx-border">
         <CardHeader><CardTitle className="text-base dark:text-kx-text">Datos del Pedido</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -159,6 +160,9 @@ function FormNuevaOC({
       </Card>
 
       <div className="flex gap-3 justify-end">
+        {onCancel && (
+          <Button type="button" variant="outline" onClick={onCancel} className="dark:border-kx-border dark:text-slate-300">Cancelar</Button>
+        )}
         <Button type="button" variant="outline" onClick={resetForm} className="dark:border-kx-border dark:text-slate-300">Limpiar</Button>
         <div className="flex flex-col items-end gap-1">
           <Button

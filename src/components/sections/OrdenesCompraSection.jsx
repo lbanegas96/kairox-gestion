@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { ordenesCompraService, OC_KEYS } from '@/services/ordenesCompraService';
@@ -21,7 +21,7 @@ function OrdenesCompraSection() {
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const [tab, setTab] = useState('lista');
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [estadoFiltro, setEstadoFiltro] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -120,7 +120,7 @@ function OrdenesCompraSection() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] });
       toast({ title: 'Orden de compra creada ✓', className: 'bg-green-600 text-white' });
-      setTab('lista');
+      setIsModalOpen(false);
       resetForm();
     },
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
@@ -232,7 +232,7 @@ function OrdenesCompraSection() {
             Gestioná pedidos a proveedores con seguimiento de recepción y actualización de stock automática
           </p>
         </div>
-        <Button onClick={() => setTab('nueva')} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
+        <Button onClick={() => setIsModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
           <Plus className="w-4 h-4" /> Nueva OC
         </Button>
       </div>
@@ -262,30 +262,22 @@ function OrdenesCompraSection() {
         })}
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="bg-transparent gap-2">
-          <TabsTrigger value="lista" className="data-[state=active]:bg-indigo-500 data-[state=active]:text-white bg-slate-100 dark:bg-kx-surface rounded-md px-4 py-2 text-slate-500 dark:text-kx-text-2">
-            <ShoppingBag className="w-4 h-4 mr-2" /> Lista
-          </TabsTrigger>
-          <TabsTrigger value="nueva" className="data-[state=active]:bg-indigo-500 data-[state=active]:text-white bg-slate-100 dark:bg-kx-surface rounded-md px-4 py-2 text-slate-500 dark:text-kx-text-2">
-            <Plus className="w-4 h-4 mr-2" /> Nueva OC
-          </TabsTrigger>
-        </TabsList>
+      <TablaOrdenesCompra
+        search={search} setSearch={setSearch}
+        estadoFiltro={estadoFiltro} setEstadoFiltro={setEstadoFiltro}
+        isLoading={isLoading} filteredList={filteredList}
+        listData={listData} page={page} setPage={setPage}
+        setDetalleId={setDetalleId} setGenRecepId={setGenRecepId} setDevolverOC={setDevolverOC}
+        estadoMutation={estadoMutation} cancelarMutation={cancelarMutation}
+      />
 
-        {/* ── LISTA ── */}
-        <TabsContent value="lista" className="space-y-4">
-          <TablaOrdenesCompra
-            search={search} setSearch={setSearch}
-            estadoFiltro={estadoFiltro} setEstadoFiltro={setEstadoFiltro}
-            isLoading={isLoading} filteredList={filteredList}
-            listData={listData} page={page} setPage={setPage}
-            setDetalleId={setDetalleId} setGenRecepId={setGenRecepId} setDevolverOC={setDevolverOC}
-            estadoMutation={estadoMutation} cancelarMutation={cancelarMutation}
-          />
-        </TabsContent>
-
-        {/* ── NUEVA OC ── */}
-        <TabsContent value="nueva">
+      {/* ── MODAL: Nueva OC ── */}
+      <Dialog open={isModalOpen} onOpenChange={v => { if (!v) setIsModalOpen(false); }}>
+        <DialogContent className="max-w-4xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="dark:text-kx-text">Nueva Orden de Compra</DialogTitle>
+            <DialogDescription className="dark:text-kx-text-2">Cargá los ítems y datos de la orden de compra.</DialogDescription>
+          </DialogHeader>
           <FormNuevaOC
             form={form} setForm={setForm}
             items={items} setItems={setItems}
@@ -297,10 +289,11 @@ function OrdenesCompraSection() {
             tcMissingOC={tcMissingOC} setTcMissingOC={setTcMissingOC}
             total={total}
             handleSubmit={handleSubmit} resetForm={resetForm}
+            onCancel={() => setIsModalOpen(false)}
             createMutation={createMutation}
           />
-        </TabsContent>
-      </Tabs>
+        </DialogContent>
+      </Dialog>
 
       {/* ── MODAL: Detalle OC ── */}
       <ModalDetalleOC

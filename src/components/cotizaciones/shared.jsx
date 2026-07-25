@@ -7,4 +7,4 @@ export const ESTADOS = {
   convertida: { label: 'Convertida', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
 };
 
-export const EMPTY_ITEM = { descripcion: '', cantidad: 1, precio_unitario: '', producto_id: null, unidad_medida: '' };
+export const EMPTY_ITEM = { descripcion: '', cantidad: 1, precio_unitario: '', descuento_item: '', producto_id: null, unidad_medida: '' };

@@ -18,7 +18,7 @@ import ModalPedidoForm from '@/components/pedidos/ModalPedidoForm';
 import ModalDetallePedido from '@/components/pedidos/ModalDetallePedido';
 
 // ── Componente principal ───────────────────────────────────────────────────────
-function PedidosSection({ onNavigate } = {}) {
+function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -62,9 +62,40 @@ function PedidosSection({ onNavigate } = {}) {
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
 
+  // Origen de la cotización cuando el pedido se prellenó vía "Copiar a Pedido"
+  const [origenCotizacionId, setOrigenCotizacionId] = useState(null);
+
   useEffect(() => {
     if (user?.empresa_id) fetchAll();
   }, [user]);
+
+  // Copiar a Pedido — prellenar el form con los ítems/cliente de una cotización
+  useEffect(() => {
+    if (!prefillCotizacion) return;
+    setEditingPedido(null);
+    setOrigenCotizacionId(prefillCotizacion.id);
+    setForm({
+      cliente_id: prefillCotizacion.cliente_id || '',
+      notas: `Copiado de cotización ${prefillCotizacion.numero}`,
+      fecha_entrega: '',
+      items: (prefillCotizacion.cotizacion_items ?? []).map(it => {
+        const cantidad = Number(it.cantidad) || 1;
+        const precioNeto = cantidad > 0 ? Number(it.subtotal) / cantidad : Number(it.precio_unitario);
+        return {
+          producto_id: it.producto_id || '',
+          descripcion: it.descripcion,
+          cantidad,
+          precio_unitario: precioNeto,
+        };
+      }),
+    });
+    setIsModalOpen(true);
+    if (!prefillCotizacion.cliente_id) {
+      toast({ title: 'La cotización no tenía un cliente registrado', description: 'Seleccionalo manualmente en el pedido.', variant: 'destructive' });
+    }
+    onPrefillConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillCotizacion]);
 
   // Fetch entregas del pedido abierto en el modal de detalle
   useEffect(() => {
@@ -91,7 +122,7 @@ function PedidosSection({ onNavigate } = {}) {
       const [{ data: p }, { data: c }, { data: pr }] = await Promise.all([
         supabase
           .from('pedidos')
-          .select('*, pedido_items(*)')
+          .select('*, pedido_items(*), cotizaciones(numero)')
           .eq('empresa_id', user.empresa_id)
           .order('created_at', { ascending: false }),
         supabase.from('clientes').select('id, nombre').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre'),
@@ -141,7 +172,7 @@ function PedidosSection({ onNavigate } = {}) {
     (s, it) => s + (parseFloat(it.cantidad) || 0) * (parseFloat(it.precio_unitario) || 0), 0
   );
 
-  const openNew = () => { setEditingPedido(null); setForm(emptyForm()); setIsModalOpen(true); };
+  const openNew = () => { setEditingPedido(null); setForm(emptyForm()); setOrigenCotizacionId(null); setIsModalOpen(true); };
   const openEdit = (p) => {
     setEditingPedido(p);
     setForm({
@@ -211,6 +242,7 @@ function PedidosSection({ onNavigate } = {}) {
           fecha_entrega: form.fecha_entrega || null,
           total,
           fecha: now,
+          cotizacion_id: origenCotizacionId,
         }]).select().single();
         if (error) throw error;
 
@@ -228,6 +260,7 @@ function PedidosSection({ onNavigate } = {}) {
         toast({ title: `Pedido ${numero} creado` });
       }
       setIsModalOpen(false);
+      setOrigenCotizacionId(null);
       fetchAll();
     } catch (err) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });

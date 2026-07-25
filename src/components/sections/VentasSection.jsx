@@ -10,14 +10,18 @@ import HistorialVentas from '@/components/ventas/HistorialVentas';
 import DevolucionesSection from '@/components/ventas/DevolucionesSection';
 import MonitorFacturacionAFIP from '@/components/ventas/MonitorFacturacionAFIP';
 import { useAfipConfig } from '@/hooks/useAfipConfig';
+import { useCotizacionesActivo } from '@/hooks/useCotizacionesActivo';
 
 function VentasSection({ initialTab = 'historial' }) {
   const { afipActivo } = useAfipConfig();
+  const cotizacionesActivo = useCotizacionesActivo();
   const [activeTab, setActiveTab]           = useState(initialTab);
   const [showNuevaFactura, setShowNuevaFactura] = useState(false);
   const [refreshKey, setRefreshKey]         = useState(0);
   const [navigateSaleId, setNavigateSaleId] = useState(null);
   const [navigateEntregaId, setNavigateEntregaId] = useState(null);
+  const [navigateCotizacionId, setNavigateCotizacionId] = useState(null);
+  const [prefillPedidoCotizacion, setPrefillPedidoCotizacion] = useState(null);
 
   const handleSaleSuccess = () => setRefreshKey(k => k + 1);
 
@@ -46,7 +50,7 @@ function VentasSection({ initialTab = 'historial' }) {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="bg-transparent p-0 gap-1 flex justify-start border-b border-kx-border rounded-none h-auto pb-0">
           {[
-            { value: 'cotizaciones', label: 'Cotizaciones' },
+            ...(cotizacionesActivo ? [{ value: 'cotizaciones', label: 'Cotizaciones' }] : []),
             { value: 'pedidos',      label: 'Pedidos'      },
             { value: 'entregas',     label: 'Entregas'     },
             { value: 'historial',    label: 'Facturas'     },
@@ -69,14 +73,24 @@ function VentasSection({ initialTab = 'historial' }) {
         </TabsList>
 
         <TabsContent value="cotizaciones" className="mt-4">
-          <CotizacionesSection onNavigateToSale={(id) => { setActiveTab('historial'); setNavigateSaleId(id); }} />
+          <CotizacionesSection
+            onNavigateToSale={(id) => { setActiveTab('historial'); setNavigateSaleId(id); }}
+            onCopiarAPedido={(cot) => { setPrefillPedidoCotizacion(cot); setActiveTab('pedidos'); }}
+            navigateCotizacionId={navigateCotizacionId}
+            onNavigated={() => setNavigateCotizacionId(null)}
+          />
         </TabsContent>
 
         <TabsContent value="pedidos" className="mt-4">
-          <PedidosSection onNavigate={(tipo, id) => {
-            if (tipo === 'entrega') { setActiveTab('entregas'); setNavigateEntregaId(id); }
-            else if (tipo === 'factura' || tipo === 'comprobante') { setActiveTab('historial'); setNavigateSaleId(id); }
-          }} />
+          <PedidosSection
+            onNavigate={(tipo, id) => {
+              if (tipo === 'entrega') { setActiveTab('entregas'); setNavigateEntregaId(id); }
+              else if (tipo === 'factura' || tipo === 'comprobante') { setActiveTab('historial'); setNavigateSaleId(id); }
+              else if (tipo === 'cotizacion') { setActiveTab('cotizaciones'); setNavigateCotizacionId(id); }
+            }}
+            prefillCotizacion={prefillPedidoCotizacion}
+            onPrefillConsumed={() => setPrefillPedidoCotizacion(null)}
+          />
         </TabsContent>
 
         <TabsContent value="entregas" className="mt-4">

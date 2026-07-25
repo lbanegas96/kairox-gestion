@@ -49,7 +49,11 @@ function TablaCotizaciones({
             ) : filteredData.length === 0 ? (
               <tr><td colSpan={7} className="p-8 text-center text-kx-text-3">No hay cotizaciones</td></tr>
             ) : filteredData.map(cot => (
-              <tr key={cot.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/40">
+              <tr
+                key={cot.id}
+                className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/40 cursor-pointer"
+                onClick={(e) => { if (e.target.closest('[data-acciones]')) return; setViewId(cot.id); }}
+              >
                 <td className="p-4 font-mono font-semibold text-blue-600 dark:text-blue-400">{cot.numero}</td>
                 <td className="p-4 text-slate-700 dark:text-slate-300">{cot.cliente_nombre ?? cot.clientes?.nombre ?? '—'}</td>
                 <td className="p-4 text-slate-500 dark:text-kx-text-2">{formatDateAR(cot.created_at)}</td>
@@ -62,14 +66,9 @@ function TablaCotizaciones({
                   </span>
                 </td>
                 <td className="p-4 text-right font-mono font-bold text-kx-text dark:text-kx-text">
-                  {(() => {
-                    const tc = Number(cot.tipo_cambio_tasa) || 1;
-                    const esExt = cot.moneda && cot.moneda !== 'ARS' && tc > 0;
-                    const valor = esExt ? Number(cot.total) / tc : Number(cot.total);
-                    return formatCurrency(valor, cot.moneda ?? 'ARS');
-                  })()}
+                  {formatCurrency(Number(cot.total), cot.moneda ?? 'ARS')}
                 </td>
-                <td className="p-4">
+                <td className="p-4" data-acciones>
                   <div className="flex items-center justify-center gap-1">
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-blue" onClick={() => setViewId(cot.id)} title="Ver detalle">
                       <Eye className="w-3.5 h-3.5" />

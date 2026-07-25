@@ -1,5 +1,5 @@
 import {
-  FileText, Loader2, Check, AlertCircle, Shield, RefreshCw, Plus, Pencil, Save,
+  FileText, Loader2, Check, AlertCircle, Shield, RefreshCw, Plus, Pencil, Save, ClipboardList,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,8 +58,31 @@ const TabFacturacion = ({
   loadingSeries, seriesNumeracion, savingSerieId, updateSerieLocal, handleSaveSerie,
   // Pie de documento
   pieDoc, setPieDoc, savingPieDoc, handleSavePieDoc,
+  // Módulo Cotizaciones
+  cotizacionesActivo, loadingCotizacionesActivo, savingCotizacionesActivo, onToggleCotizacionesActivo,
 }) => (
   <div className="space-y-6 max-w-2xl">
+    {/* Módulo Cotizaciones */}
+    <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg flex items-center justify-center">
+            <ClipboardList className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-kx-text dark:text-kx-text">Módulo Cotizaciones</h3>
+            <p className="text-sm text-slate-500 dark:text-kx-text-2">
+              Si no usás presupuestos, desactivalo para sacarlo del menú y de Ventas.
+            </p>
+          </div>
+        </div>
+        {loadingCotizacionesActivo || savingCotizacionesActivo
+          ? <Loader2 className="h-5 w-5 animate-spin text-kx-text-3" />
+          : <Switch checked={cotizacionesActivo ?? true} onCheckedChange={onToggleCotizacionesActivo} />
+        }
+      </div>
+    </div>
+
     {/* AFIP toggle */}
     <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
       <div className="flex items-center justify-between mb-4">

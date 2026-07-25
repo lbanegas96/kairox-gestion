@@ -87,6 +87,9 @@ const ConfiguracionSection = ({ initialTab }) => {
   // ── Tab 2: Finanzas — Toggle Impuestos Avanzados (IIBB / Retenciones) ──────
   const [impuestosAvanzados, setImpuestosAvanzados] = useState(false);
   const [loadingImpuestosAv, setLoadingImpuestosAv] = useState(false);
+  const [cotizacionesActivo, setCotizacionesActivo] = useState(true);
+  const [loadingCotizacionesActivo, setLoadingCotizacionesActivo] = useState(false);
+  const [savingCotizacionesActivo, setSavingCotizacionesActivo] = useState(false);
   const [savingImpuestosAv, setSavingImpuestosAv] = useState(false);
   const [usaCentrosCosto, setUsaCentrosCosto] = useState(false);
   const [loadingUsaCentrosCosto, setLoadingUsaCentrosCosto] = useState(false);
@@ -428,6 +431,26 @@ const ConfiguracionSection = ({ initialTab }) => {
       }
     };
     loadImpuestosAv();
+  }, [user?.empresa_id]);
+
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    const loadCotizacionesActivo = async () => {
+      setLoadingCotizacionesActivo(true);
+      try {
+        const { data } = await supabase
+          .from('empresas')
+          .select('cotizaciones_activo')
+          .eq('id', user.empresa_id)
+          .single();
+        if (data) setCotizacionesActivo(data.cotizaciones_activo ?? true);
+      } catch (e) {
+        console.error('[Módulo Cotizaciones] Error al cargar config:', e);
+      } finally {
+        setLoadingCotizacionesActivo(false);
+      }
+    };
+    loadCotizacionesActivo();
   }, [user?.empresa_id]);
 
   useEffect(() => {
@@ -922,6 +945,32 @@ const ConfiguracionSection = ({ initialTab }) => {
       toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
     } finally {
       setSavingImpuestosAv(false);
+    }
+  };
+
+  const handleToggleCotizacionesActivo = async (nuevoValor) => {
+    if (!user?.empresa_id) return;
+    setSavingCotizacionesActivo(true);
+    setCotizacionesActivo(nuevoValor); // optimista
+    try {
+      const { error } = await supabase
+        .from('empresas')
+        .update({ cotizaciones_activo: nuevoValor })
+        .eq('id', user.empresa_id);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ['cotizaciones-activo', user.empresa_id] });
+      toast({
+        title: nuevoValor ? 'Módulo Cotizaciones activado' : 'Módulo Cotizaciones desactivado',
+        description: nuevoValor
+          ? 'Ya está disponible en el menú y dentro de Ventas.'
+          : 'Se ocultó del menú y de Ventas. Las cotizaciones ya cargadas no se borran.',
+        className: 'bg-green-600 text-white border-green-700',
+      });
+    } catch (e) {
+      setCotizacionesActivo(!nuevoValor); // revertir si falla
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingCotizacionesActivo(false);
     }
   };
 
@@ -1677,6 +1726,10 @@ const ConfiguracionSection = ({ initialTab }) => {
             setPieDoc={setPieDoc}
             savingPieDoc={savingPieDoc}
             handleSavePieDoc={handleSavePieDoc}
+            cotizacionesActivo={cotizacionesActivo}
+            loadingCotizacionesActivo={loadingCotizacionesActivo}
+            savingCotizacionesActivo={savingCotizacionesActivo}
+            onToggleCotizacionesActivo={handleToggleCotizacionesActivo}
           />
         </TabsContent>
 

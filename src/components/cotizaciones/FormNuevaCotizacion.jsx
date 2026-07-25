@@ -11,10 +11,12 @@ function FormNuevaCotizacion({
   items, addItem, removeItem, updateItem,
   prodSearch, prodResults, prodOpen, setProdOpen, searchProducto, selectProducto,
   unidadesMedida,
+  condicionesPago,
   allClientes, showClienteDropdown, setShowClienteDropdown, clienteWrapperRef,
   tcMissing, setTcMissing,
-  total,
+  totales,
   handleSubmit, resetForm,
+  onCancel,
   createMutation,
 }) {
   return (
@@ -39,7 +41,7 @@ function FormNuevaCotizacion({
         <option value="día" />
         <option value="servicio" />
       </datalist>
-      <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl">
+      <form onSubmit={handleSubmit} className="space-y-6">
         <Card className="dark:bg-kx-bg dark:border-kx-border">
           <CardHeader><CardTitle className="text-base dark:text-kx-text">Datos del Cliente</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -65,7 +67,16 @@ function FormNuevaCotizacion({
                         key={c.id}
                         type="button"
                         className="w-full text-left px-3 py-2 text-sm hover:bg-kx-surface-2 dark:hover:bg-slate-800 dark:text-kx-text"
-                        onClick={() => { setForm(f => ({ ...f, cliente_id: c.id, cliente_nombre: c.nombre })); setShowClienteDropdown(false); }}
+                        onClick={() => {
+                          const condicionCliente = condicionesPago.find(cp => cp.id === c.condicion_pago_id);
+                          setForm(f => ({
+                            ...f,
+                            cliente_id: c.id,
+                            cliente_nombre: c.nombre,
+                            ...(condicionCliente ? { condiciones_pago: condicionCliente.nombre } : {}),
+                          }));
+                          setShowClienteDropdown(false);
+                        }}
                       >
                         {c.nombre}
                       </button>
@@ -81,7 +92,21 @@ function FormNuevaCotizacion({
             </div>
             <div className="space-y-2">
               <Label className="dark:text-kx-text">Condiciones de Pago</Label>
-              <Input value={form.condiciones_pago} onChange={e => setForm(f => ({ ...f, condiciones_pago: e.target.value }))} className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+              <select
+                value={form.condiciones_pago}
+                onChange={e => setForm(f => ({ ...f, condiciones_pago: e.target.value }))}
+                className="w-full h-10 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {form.condiciones_pago === '' && <option value="">— Elegí —</option>}
+                {condicionesPago.map(c => {
+                  const yaMencionaDias = /d[ií]as?/i.test(c.nombre);
+                  return (
+                    <option key={c.id} value={c.nombre}>
+                      {c.nombre}{!yaMencionaDias && c.dias_credito > 0 ? ` (${c.dias_credito} días)` : ''}{c.descuento_pct > 0 ? ` · ${c.descuento_pct}% desc.` : ''}
+                    </option>
+                  );
+                })}
+              </select>
             </div>
             <div className="space-y-2">
               <Label className="dark:text-kx-text">Fecha de Vencimiento</Label>
@@ -113,7 +138,7 @@ function FormNuevaCotizacion({
           <CardContent className="space-y-3">
             {items.map((item, idx) => (
               <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-5 space-y-1 relative" data-prod-row>
+                <div className="col-span-4 space-y-1 relative" data-prod-row>
                   <Label className="text-xs dark:text-kx-text-2">Descripción / Producto</Label>
                   <Input
                     value={prodSearch[idx] ?? item.descripcion}
@@ -155,6 +180,10 @@ function FormNuevaCotizacion({
                   <Label className="text-xs dark:text-kx-text-2">Precio Unit.</Label>
                   <Input type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unitario} onChange={e => updateItem(idx, 'precio_unitario', e.target.value)} className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
                 </div>
+                <div className="col-span-1 space-y-1">
+                  <Label className="text-xs dark:text-kx-text-2">% Desc.</Label>
+                  <Input type="text" inputMode="decimal" placeholder="0" value={item.descuento_item} onChange={e => updateItem(idx, 'descuento_item', e.target.value)} className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
+                </div>
                 <div className="col-span-1 flex justify-end pb-0.5">
                   <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-kx-text-3 hover:text-kx-red" onClick={() => removeItem(idx)} disabled={items.length === 1}>
                     <Trash2 className="w-3.5 h-3.5" />
@@ -164,17 +193,32 @@ function FormNuevaCotizacion({
             ))}
 
             <div className="flex justify-end pt-4 border-t border-kx-border dark:border-kx-border">
-              <div className="text-right">
-                <span className="text-sm text-slate-500 dark:text-kx-text-2 mr-4">Total:</span>
-                <span className="text-2xl font-bold text-slate-900 dark:text-kx-text font-mono">
-                  {formatCurrency(total, form.moneda)}
-                </span>
+              <div className="text-right space-y-1 min-w-[220px]">
+                <div className="flex justify-between text-sm text-slate-500 dark:text-kx-text-2">
+                  <span>Subtotal</span>
+                  <span className="font-mono">{formatCurrency(totales.subtotal, form.moneda)}</span>
+                </div>
+                {totales.descuento > 0 && (
+                  <div className="flex justify-between text-sm text-kx-red">
+                    <span>Descuento</span>
+                    <span className="font-mono">-{formatCurrency(totales.descuento, form.moneda)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between pt-1">
+                  <span className="text-sm text-slate-500 dark:text-kx-text-2 self-center">Total</span>
+                  <span className="text-2xl font-bold text-slate-900 dark:text-kx-text font-mono">
+                    {formatCurrency(totales.total, form.moneda)}
+                  </span>
+                </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
         <div className="flex gap-3 justify-end">
+          {onCancel && (
+            <Button type="button" variant="outline" onClick={onCancel} className="dark:border-kx-border dark:text-slate-300">Cancelar</Button>
+          )}
           <Button type="button" variant="outline" onClick={resetForm} className="dark:border-kx-border dark:text-slate-300">Limpiar</Button>
           <Button
             type="submit"

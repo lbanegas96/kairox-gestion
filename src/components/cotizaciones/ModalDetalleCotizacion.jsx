@@ -1,10 +1,61 @@
-import { FileText, CheckCircle } from 'lucide-react';
+import { useState } from 'react';
+import { FileText, CheckCircle, Download, Loader2, Send, PackageCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useToast } from '@/components/ui/use-toast';
+import { getEmpresaParaPDF } from '@/lib/empresaUtils';
 import { formatDateAR } from '@/lib/dateUtils';
 import { ESTADOS } from './shared';
 
-function ModalDetalleCotizacion({ viewId, setViewId, detalle }) {
+// Mismos estados desde los que hoy se permite "Convertir en Venta" (TablaCotizaciones.jsx)
+const ESTADOS_COPIABLES = ['aprobada', 'enviada'];
+
+function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido }) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [generatingPDF, setGeneratingPDF] = useState(false);
+
+  const handleDownloadPDF = async () => {
+    if (!detalle) return;
+    setGeneratingPDF(true);
+    try {
+      const [{ pdf }, { CotizacionPDF }, empresa] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('./CotizacionPDF'),
+        getEmpresaParaPDF(user.empresa_id),
+      ]);
+      const blob = await pdf(<CotizacionPDF cotizacion={detalle} empresa={empresa} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Cotizacion_${detalle.numero}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[CotizacionPDF] Error al generar:', err);
+      toast({ title: 'Error al generar PDF', description: err.message, variant: 'destructive' });
+    } finally {
+      setGeneratingPDF(false);
+    }
+  };
+
+  const handleShareWhatsApp = () => {
+    if (!detalle) return;
+    const clienteNombre = detalle.cliente_nombre ?? detalle.clientes?.nombre ?? 'cliente';
+    const simbolo = detalle.moneda && detalle.moneda !== 'ARS' ? `${detalle.moneda} ` : '$';
+    const fmt = (n) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const lineas = [
+      `Cotización ${detalle.numero}`,
+      `Para: ${clienteNombre}`,
+      `Total: ${simbolo}${fmt(detalle.total)}`,
+      detalle.fecha_vencimiento ? `Válida hasta: ${formatDateAR(detalle.fecha_vencimiento)}` : null,
+      '',
+      'Adjunto el PDF con el detalle completo.',
+    ].filter(Boolean);
+    window.open(`https://wa.me/?text=${encodeURIComponent(lineas.join('\n'))}`, '_blank');
+  };
+
   return (
     <Dialog open={!!viewId} onOpenChange={() => setViewId(null)}>
       <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border">
@@ -37,10 +88,8 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle }) {
             </div>
 
             {(() => {
-              const tc = Number(detalle.tipo_cambio_tasa) || 1;
-              const esExtranjera = detalle.moneda && detalle.moneda !== 'ARS' && tc > 0;
-              const conv = esExtranjera ? (n) => Number(n) / tc : (n) => Number(n);
-              const fmt = (n) => n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+              const esExtranjera = detalle.moneda && detalle.moneda !== 'ARS';
+              const fmt = (n) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
               const monedaDisp = esExtranjera ? detalle.moneda : 'ARS';
               const simbolo = esExtranjera ? `${detalle.moneda} ` : '$';
               return (
@@ -56,28 +105,16 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle }) {
                       <tr key={item.id}>
                         <td className="py-2 dark:text-slate-300">{item.descripcion}</td>
                         <td className="py-2 text-right dark:text-slate-300">{item.cantidad} {item.unidad_medida}</td>
-                        <td className="py-2 text-right dark:text-slate-300">{simbolo}{fmt(conv(item.precio_unitario))}</td>
-                        <td className="py-2 text-right font-medium dark:text-kx-text">{simbolo}{fmt(conv(item.subtotal))}</td>
+                        <td className="py-2 text-right dark:text-slate-300">{simbolo}{fmt(item.precio_unitario)}</td>
+                        <td className="py-2 text-right font-medium dark:text-kx-text">{simbolo}{fmt(item.subtotal)}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
                     <tr className="border-t-2 border-kx-border dark:border-kx-border">
                       <td colSpan={3} className="py-3 text-right font-bold dark:text-kx-text">TOTAL</td>
-                      <td className="py-3 text-right font-bold text-lg dark:text-kx-text">{simbolo}{fmt(conv(detalle.total))}</td>
+                      <td className="py-3 text-right font-bold text-lg dark:text-kx-text">{simbolo}{fmt(detalle.total)}</td>
                     </tr>
-                    {esExtranjera && (
-                      <>
-                        <tr className="text-xs text-slate-500 dark:text-kx-text-2">
-                          <td colSpan={3} className="py-1 text-right">Tipo de cambio</td>
-                          <td className="py-1 text-right">1 {detalle.moneda} = ${fmt(tc)}</td>
-                        </tr>
-                        <tr className="text-xs text-slate-500 dark:text-kx-text-2">
-                          <td colSpan={3} className="py-1 text-right">Equivale a</td>
-                          <td className="py-1 text-right">${fmt(Number(detalle.total))} ARS</td>
-                        </tr>
-                      </>
-                    )}
                   </tfoot>
                 </table>
               );
@@ -96,8 +133,24 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle }) {
             )}
           </div>
         )}
-        <DialogFooter>
+        <DialogFooter className="flex-wrap gap-2 sm:justify-between">
           <Button variant="outline" onClick={() => setViewId(null)} className="dark:border-kx-border dark:text-slate-300">Cerrar</Button>
+          <div className="flex gap-2 flex-wrap">
+            {onCopiarAPedido && detalle && ESTADOS_COPIABLES.includes(detalle.estado) && (
+              <Button variant="outline" onClick={() => onCopiarAPedido(detalle)} className="dark:border-kx-border dark:text-slate-300">
+                <PackageCheck className="w-4 h-4 mr-2" /> Copiar a Pedido
+              </Button>
+            )}
+            <Button variant="outline" onClick={handleShareWhatsApp} className="dark:border-kx-border dark:text-slate-300">
+              <Send className="w-4 h-4 mr-2" /> WhatsApp
+            </Button>
+            <Button onClick={handleDownloadPDF} disabled={generatingPDF} className="bg-blue-600 hover:bg-blue-700 text-white">
+              {generatingPDF
+                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generando...</>
+                : <><Download className="w-4 h-4 mr-2" /> Descargar PDF</>
+              }
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

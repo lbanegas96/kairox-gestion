@@ -59,10 +59,11 @@ export const cotizacionesService = {
       .rpc('obtener_proximo_numero', { p_empresa_id: empresaId, p_tipo_documento: 'cotizacion' });
     if (numError) throw new Error(numError.message);
 
-    const subtotal = items.reduce(
-      (s, i) => s + (Number(i.cantidad) || 0) * (Number(i.precio_unitario) || 0),
-      0
-    );
+    const subtotal = items.reduce((s, i) => {
+      const bruto = (Number(i.cantidad) || 0) * (Number(i.precio_unitario) || 0);
+      const descPct = Number(i.descuento_item) || 0;
+      return s + bruto * (1 - descPct / 100);
+    }, 0);
 
     const { data: cot, error: cotError } = await supabase
       .from('cotizaciones')
@@ -85,17 +86,22 @@ export const cotizacionesService = {
       .single();
     if (cotError) throw new Error(cotError.message);
 
-    const detalles = items.map((item) => ({
-      cotizacion_id: (cot as Cotizacion).id,
-      empresa_id: empresaId,
-      producto_id: item.producto_id ?? null,
-      descripcion: item.descripcion ?? '',
-      cantidad: parseFloat(String(item.cantidad)),
-      precio_unitario: parseFloat(String(item.precio_unitario)),
-      descuento_item: parseFloat(String(item.descuento_item ?? 0)),
-      subtotal: parseFloat(String(item.cantidad)) * parseFloat(String(item.precio_unitario)),
-      unidad_medida: item.unidad_medida ?? null,
-    }));
+    const detalles = items.map((item) => {
+      const cantidad = parseFloat(String(item.cantidad));
+      const precioUnitario = parseFloat(String(item.precio_unitario));
+      const descuentoItem = parseFloat(String(item.descuento_item ?? 0));
+      return {
+        cotizacion_id: (cot as Cotizacion).id,
+        empresa_id: empresaId,
+        producto_id: item.producto_id ?? null,
+        descripcion: item.descripcion ?? '',
+        cantidad,
+        precio_unitario: precioUnitario,
+        descuento_item: descuentoItem,
+        subtotal: cantidad * precioUnitario * (1 - descuentoItem / 100),
+        unidad_medida: item.unidad_medida ?? null,
+      };
+    });
 
     const { error: detError } = await supabase.from('cotizacion_items').insert(detalles);
     if (detError) throw new Error(detError.message);

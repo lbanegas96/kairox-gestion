@@ -29,6 +29,12 @@ function ModalDetallePedido({
 
           const entregaConFactura = entregasDetalle.find(ent => ent.comprobante_id);
           const flowChips = [
+            ...(detailPedido.cotizacion_id ? [{
+              tipo: 'cotizacion',
+              id: detailPedido.cotizacion_id,
+              numero: detailPedido.cotizaciones?.numero,
+              active: false,
+            }] : []),
             { tipo: 'pedido', id: detailPedido.id, numero: detailPedido.numero, active: true },
             ...entregasDetalle.map(ent => ({
               tipo: 'entrega',

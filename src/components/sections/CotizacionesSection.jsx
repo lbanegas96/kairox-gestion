@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { cotizacionesService, COTIZACIONES_KEYS } from '@/services/cotizacionesService';
@@ -14,12 +14,12 @@ import TablaCotizaciones from '@/components/cotizaciones/TablaCotizaciones';
 import FormNuevaCotizacion from '@/components/cotizaciones/FormNuevaCotizacion';
 import ModalDetalleCotizacion from '@/components/cotizaciones/ModalDetalleCotizacion';
 
-function CotizacionesSection({ onNavigateToSale } = {}) {
+function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, navigateCotizacionId, onNavigated } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
 
-  const [tab, setTab] = useState('lista');
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [estadoFiltro, setEstadoFiltro] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -29,7 +29,7 @@ function CotizacionesSection({ onNavigateToSale } = {}) {
     cliente_id: '',
     cliente_nombre: '',
     notas: '',
-    condiciones_pago: 'Pago a 30 días',
+    condiciones_pago: '',
     fecha_vencimiento: '',
     moneda: 'ARS',
     tipoCambioTasa: 1,
@@ -54,6 +54,14 @@ function CotizacionesSection({ onNavigateToSale } = {}) {
 
   const empresaId = user?.empresa_id;
 
+  // Navegación desde el Flujo del Documento de otra sección (ej. Pedido → Cotización de origen)
+  useEffect(() => {
+    if (navigateCotizacionId) {
+      setViewId(navigateCotizacionId);
+      onNavigated?.();
+    }
+  }, [navigateCotizacionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Productos y clientes para autocompletar
   const { data: allProducts = [] } = useQuery({
     queryKey: ['cotizaciones_productos_autocomplete', empresaId],
@@ -68,12 +76,38 @@ function CotizacionesSection({ onNavigateToSale } = {}) {
   const { data: allClientes = [] } = useQuery({
     queryKey: ['cotizaciones_clientes_autocomplete', empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from('clientes').select('id, nombre').eq('empresa_id', empresaId).order('nombre').limit(500);
+      const { data, error } = await supabase.from('clientes').select('id, nombre, condicion_pago_id').eq('empresa_id', empresaId).order('nombre').limit(500);
       if (error) throw error;
       return data ?? [];
     },
     enabled: !!empresaId,
   });
+
+  const { data: condicionesPago = [] } = useQuery({
+    queryKey: ['condiciones_pago', empresaId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('condiciones_pago')
+        .select('id, nombre, dias_credito, descuento_pct')
+        .eq('empresa_id', empresaId)
+        .eq('activo', true)
+        .order('dias_credito');
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!empresaId,
+  });
+
+  // Condición de pago por defecto: la de 30 días si existe, si no la primera del maestro
+  const condicionPagoDefault = () => {
+    if (condicionesPago.length === 0) return '';
+    return (condicionesPago.find(c => c.dias_credito === 30) ?? condicionesPago[0]).nombre;
+  };
+
+  useEffect(() => {
+    if (form.condiciones_pago || condicionesPago.length === 0) return;
+    setForm(f => (f.condiciones_pago ? f : { ...f, condiciones_pago: condicionPagoDefault() }));
+  }, [condicionesPago]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cerrar dropdowns al hacer click afuera
   useEffect(() => {
@@ -121,7 +155,7 @@ function CotizacionesSection({ onNavigateToSale } = {}) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cotizaciones', empresaId] });
       toast({ title: 'Cotización creada', className: 'bg-green-600 text-white' });
-      setTab('lista');
+      setIsModalOpen(false);
       resetForm();
     },
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
@@ -165,7 +199,7 @@ function CotizacionesSection({ onNavigateToSale } = {}) {
   };
 
   const resetForm = () => {
-    setForm({ cliente_id: '', cliente_nombre: '', notas: '', condiciones_pago: 'Pago a 30 días', fecha_vencimiento: '', moneda: 'ARS', tipoCambioTasa: 1 });
+    setForm({ cliente_id: '', cliente_nombre: '', notas: '', condiciones_pago: condicionPagoDefault(), fecha_vencimiento: '', moneda: 'ARS', tipoCambioTasa: 1 });
     setItems([{ ...EMPTY_ITEM }]);
     setTcMissing(false);
   };
@@ -197,11 +231,16 @@ function CotizacionesSection({ onNavigateToSale } = {}) {
   const addItem = () => setItems(prev => [...prev, { ...EMPTY_ITEM }]);
   const removeItem = (idx) => setItems(prev => prev.filter((_, i) => i !== idx));
 
-  const total = items.reduce((s, i) => {
+  const totales = items.reduce((acc, i) => {
     const cant = parseInt(i.cantidad) || 0;
     const precio = parseNumberLocale(i.precio_unitario) || 0;
-    return s + cant * precio;
-  }, 0);
+    const descPct = parseNumberLocale(i.descuento_item) || 0;
+    const bruto = cant * precio;
+    acc.subtotal += bruto;
+    acc.descuento += bruto * (descPct / 100);
+    return acc;
+  }, { subtotal: 0, descuento: 0 });
+  totales.total = totales.subtotal - totales.descuento;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -217,7 +256,12 @@ function CotizacionesSection({ onNavigateToSale } = {}) {
       return;
     }
     const validItems = items
-      .map(i => ({ ...i, cantidad: parseInt(i.cantidad) || 0, precio_unitario: parseNumberLocale(i.precio_unitario) || 0 }))
+      .map(i => ({
+        ...i,
+        cantidad: parseInt(i.cantidad) || 0,
+        precio_unitario: parseNumberLocale(i.precio_unitario) || 0,
+        descuento_item: parseNumberLocale(i.descuento_item) || 0,
+      }))
       .filter(i => i.descripcion && i.cantidad > 0 && i.precio_unitario > 0);
     if (validItems.length === 0) {
       return toast({ title: 'Ítems inválidos', description: 'Revisá cantidades y precios (usar coma para decimales).', variant: 'destructive' });
@@ -248,48 +292,44 @@ function CotizacionesSection({ onNavigateToSale } = {}) {
             Genera presupuestos y convierte en ventas
           </p>
         </div>
-        <Button onClick={() => setTab('nueva')} className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
+        <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
           <Plus className="w-4 h-4" /> Nueva Cotización
         </Button>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="bg-transparent gap-2">
-          <TabsTrigger value="lista" className="data-[state=active]:bg-blue-500 data-[state=active]:text-white bg-slate-100 dark:bg-kx-surface rounded-md px-4 py-2 text-slate-500 dark:text-kx-text-2">
-            <FileText className="w-4 h-4 mr-2" /> Lista
-          </TabsTrigger>
-          <TabsTrigger value="nueva" className="data-[state=active]:bg-blue-500 data-[state=active]:text-white bg-slate-100 dark:bg-kx-surface rounded-md px-4 py-2 text-slate-500 dark:text-kx-text-2">
-            <Plus className="w-4 h-4 mr-2" /> Nueva
-          </TabsTrigger>
-        </TabsList>
+      <TablaCotizaciones
+        search={search} setSearch={setSearch}
+        estadoFiltro={estadoFiltro} setEstadoFiltro={setEstadoFiltro} setPage={setPage}
+        isLoading={isLoading} filteredData={filteredData}
+        listData={listData} page={page}
+        setViewId={setViewId} estadoMutation={estadoMutation} deleteMutation={deleteMutation}
+        handleConvertirClick={handleConvertirClick} onNavigateToSale={onNavigateToSale}
+      />
 
-        <TabsContent value="lista" className="space-y-4">
-          <TablaCotizaciones
-            search={search} setSearch={setSearch}
-            estadoFiltro={estadoFiltro} setEstadoFiltro={setEstadoFiltro} setPage={setPage}
-            isLoading={isLoading} filteredData={filteredData}
-            listData={listData} page={page}
-            setViewId={setViewId} estadoMutation={estadoMutation} deleteMutation={deleteMutation}
-            handleConvertirClick={handleConvertirClick} onNavigateToSale={onNavigateToSale}
-          />
-        </TabsContent>
-
-        <TabsContent value="nueva">
+      {/* MODAL NUEVA COTIZACIÓN */}
+      <Dialog open={isModalOpen} onOpenChange={v => { if (!v) setIsModalOpen(false); }}>
+        <DialogContent className="max-w-4xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="dark:text-kx-text">Nueva Cotización</DialogTitle>
+            <DialogDescription className="dark:text-kx-text-2">Cargá los ítems y datos de la cotización.</DialogDescription>
+          </DialogHeader>
           <FormNuevaCotizacion
             form={form} setForm={setForm}
             items={items} addItem={addItem} removeItem={removeItem} updateItem={updateItem}
             prodSearch={prodSearch} prodResults={prodResults} prodOpen={prodOpen} setProdOpen={setProdOpen}
             searchProducto={searchProducto} selectProducto={selectProducto}
             unidadesMedida={unidadesMedida}
+            condicionesPago={condicionesPago}
             allClientes={allClientes} showClienteDropdown={showClienteDropdown}
             setShowClienteDropdown={setShowClienteDropdown} clienteWrapperRef={clienteWrapperRef}
             tcMissing={tcMissing} setTcMissing={setTcMissing}
-            total={total}
+            totales={totales}
             handleSubmit={handleSubmit} resetForm={resetForm}
+            onCancel={() => setIsModalOpen(false)}
             createMutation={createMutation}
           />
-        </TabsContent>
-      </Tabs>
+        </DialogContent>
+      </Dialog>
 
       {/* MODAL CONVERTIR EN VENTA */}
       <NuevaVentaModal
@@ -300,7 +340,10 @@ function CotizacionesSection({ onNavigateToSale } = {}) {
       />
 
       {/* MODAL DETALLE */}
-      <ModalDetalleCotizacion viewId={viewId} setViewId={setViewId} detalle={detalle} />
+      <ModalDetalleCotizacion
+        viewId={viewId} setViewId={setViewId} detalle={detalle}
+        onCopiarAPedido={onCopiarAPedido ? (cot) => { setViewId(null); onCopiarAPedido(cot); } : undefined}
+      />
     </div>
   );
 }

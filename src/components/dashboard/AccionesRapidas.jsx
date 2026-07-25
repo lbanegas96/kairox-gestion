@@ -1,7 +1,9 @@
 import { ShoppingCart, ClipboardList, ShoppingBag, Wallet, UserPlus, FileText } from 'lucide-react';
+import { useCotizacionesActivo } from '@/hooks/useCotizacionesActivo';
 import { QuickActionButton } from './shared';
 
 function AccionesRapidas({ onNavigate, canAccessSection }) {
+  const cotizacionesActivo = useCotizacionesActivo();
   return (
     <div className="bg-kx-surface border border-kx-border rounded-xl p-3.5 shadow-sm dark:shadow-none transition-all duration-200 ease-out hover:shadow-lg dark:hover:shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:border-kx-border-hover">
       <div className="text-[11.5px] font-semibold text-kx-text-2 mb-2.5">Acciones Rápidas</div>
@@ -9,9 +11,11 @@ function AccionesRapidas({ onNavigate, canAccessSection }) {
         <QuickActionButton icon={ShoppingCart} label="Nueva Venta"
           onClick={() => onNavigate?.('pos')} gradient="from-blue-600 to-blue-500"
           disabled={!canAccessSection('ventas')} />
-        <QuickActionButton icon={ClipboardList} label="Cotización"
-          onClick={() => onNavigate?.('cotizaciones')} gradient="from-indigo-600 to-indigo-500"
-          disabled={!canAccessSection('ventas')} />
+        {cotizacionesActivo && (
+          <QuickActionButton icon={ClipboardList} label="Cotización"
+            onClick={() => onNavigate?.('cotizaciones')} gradient="from-indigo-600 to-indigo-500"
+            disabled={!canAccessSection('ventas')} />
+        )}
         <QuickActionButton icon={ShoppingBag} label="Orden Compra"
           onClick={() => onNavigate?.('ordenes_compra')} gradient="from-violet-600 to-purple-500"
           disabled={!canAccessSection('compras')} />
