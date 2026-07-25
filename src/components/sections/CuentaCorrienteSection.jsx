@@ -110,6 +110,21 @@ function CuentaCorrienteSection() {
       if (error) throw error;
       if (!comprobantes?.length) { setAgingData([]); return; }
 
+      // La imputación a factura puntual es opcional en registrar_cobro_cliente
+      // (un "pago a cuenta" genérico reduce saldo_actual sin cancelar ninguna
+      // factura puntual), así que la suma de comprobantes "abiertos" de un
+      // cliente puede sobrestimar su deuda real. Reconciliamos escalando cada
+      // comprobante para que la suma por cliente coincida siempre con
+      // clientes.saldo_actual — mismo criterio que Cartera de Clientes
+      // (reportDefinitions.jsx / ReportesSection.jsx).
+      const saldoRealPorCliente = {};
+      clients.forEach(c => { saldoRealPorCliente[c.id] = c.saldo_actual || 0; });
+
+      const sumaRawPorCliente = {};
+      comprobantes.forEach(comp => {
+        sumaRawPorCliente[comp.cliente_id] = (sumaRawPorCliente[comp.cliente_id] || 0) + Number(comp.saldo_pendiente);
+      });
+
       const now = getNowAR();
       const result = comprobantes.map(comp => {
         const dias = Math.floor((now - new Date(comp.fecha)) / 86400000);
@@ -118,18 +133,30 @@ function CuentaCorrienteSection() {
         else if (dias <= 60) { banda = '31–60 días'; color = 'yellow'; }
         else if (dias <= 90) { banda = '61–90 días'; color = 'orange'; }
         else                 { banda = '+90 días';   color = 'red'; }
+
+        let monto = Number(comp.saldo_pendiente);
+        const saldoReal = saldoRealPorCliente[comp.cliente_id];
+        const sumaRaw = sumaRawPorCliente[comp.cliente_id];
+        if (saldoReal !== undefined) {
+          if (saldoReal <= 0) {
+            monto = 0;
+          } else if (sumaRaw > 0 && Math.abs(sumaRaw - saldoReal) > 0.01) {
+            monto = Math.round(monto * (saldoReal / sumaRaw) * 100) / 100;
+          }
+        }
+
         return {
           comprobante_id: comp.comprobante_id,
           numero_venta:   comp.numero_venta,
           fecha:          comp.fecha,
-          total:          Number(comp.saldo_pendiente),
+          total:          monto,
           cliente_id:     comp.cliente_id,
           cliente_nombre: comp.cliente_nombre,
           dias,
           banda,
           color,
         };
-      });
+      }).filter(comp => comp.total > 0.01);
 
       setAgingData(result.sort((a, b) => b.dias - a.dias));
     } catch (err) {
