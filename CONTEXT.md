@@ -1,5 +1,49 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-25 (Luciano — Reporte Financiero rediseñado como Libro de Caja, cierra el roadmap de Reportería; próximo: avanzar con Ventas)
+**Última actualización:** 2026-07-25 (Luciano — MercadoPago por Tipo separa ingreso/egreso + conciliación, fix de columnas de PDF que se cortaban; roadmap de Reportería cerrado del todo; próximo: avanzar con Ventas)
+
+> ✅ **MercadoPago por Tipo — fix real (ingreso/egreso mezclados) + conciliación,
+> commit `8ec1b5e` — más fix de PDF de alcance general, commit `5a072a3`
+> (2026-07-25).**
+> - **Bug real:** `movimientos_bancarios` con `origen='mercadopago'` incluye
+>   cobros (`tipo='ingreso'`) Y reintegros/contracargos (`tipo='egreso'`) — el
+>   reporte sumaba todo como si fuera cobro. Con datos de Nalux: "Total MP"
+>   daba $1.711.567,17 cuando el ingreso real es $1.241.819,87 (los
+>   $469.747,30 de egresos QR se sumaban en vez de restar). Mismo criterio ya
+>   aplicado a Cartera de Clientes/Financiero/Cta.Corriente esta sesión: nunca
+>   netear ingreso/egreso en una suma ciega.
+> - Columnas Ingreso/Egreso separadas + columna **Conciliado** (Sí/No,
+>   solo lectura — la gestión real está en Cuentas Bancarias > Conciliación,
+>   acá es trazabilidad, no se duplica edición). Agrupar por Día/Tipo de
+>   cobro/Estado de conciliación. KPI "Sin Conciliar" (neto de movimientos con
+>   `conciliado=false` — hoy en Nalux es el 100%, real). % vs período
+>   anterior. Sin saldo acumulado a propósito (es un recorte por `origen`, no
+>   la cuenta completa — un saldo ahí sería engañoso).
+> - **Fix de PDF de alcance general** (no solo este reporte): `autoTable`
+>   calculaba el ancho de columnas de monto (`align:'right'`) a partir del
+>   header corto (ej. "Saldo") y las comprimía por debajo de lo que
+>   necesitaban cuando otra columna de texto largo (ej. "Concepto") competía
+>   por espacio — el monto se partía en 2 líneas ("$" arriba, número abajo).
+>   Visto real en el PDF de Financiero con saldos de 7 cifras. Fix: mide el
+>   ancho real del valor más largo de cada columna de monto con los datos
+>   reales (`doc.getTextWidth`) y se lo reserva vía `columnStyles.cellWidth`.
+>   Corrige todos los reportes con montos grandes.
+> - Nota aparte: durante la revisión del Excel de Financiero se sospechó un
+>   bug de encoding (acentos como "CategorÃ­a") — investigado a fondo, era un
+>   falso positivo de la herramienta de inspección (`Get-Content -Raw` de
+>   PowerShell no lee UTF-8 correctamente sin `-Encoding utf8`), no del
+>   código. El archivo real está bien. Ver esto si en el futuro se sospecha
+>   algo similar: decodificar bytes crudos como UTF-8 explícito antes de
+>   concluir que hay un bug.
+>
+> Verificado en vivo: TOTALES Ingreso/Egreso exactos contra SQL directo,
+> subtotal por grupo QR exacto, PDF/Excel sin errores de consola. Pusheado y
+> deployado.
+>
+> **Con esto el roadmap de Reportería queda cerrado del todo** — los 6
+> reportes del módulo (Ventas, Compras, Clientes, Cta. Corriente, Financiero,
+> MP por Tipo) tienen sus mejoras alineadas a estándar de mercado.
+> **Próximo paso pedido por Luciano: avanzar con el módulo de Ventas** — sin
+> alcance definido todavía.
 
 > ✅ **REPORTE FINANCIERO rediseñado como Libro de Caja (2026-07-25), commit `918fc7e` — cierra el
 > roadmap de Reportería.** Era una lista plana Tipo+Monto sin contexto; ahora sigue el formato
