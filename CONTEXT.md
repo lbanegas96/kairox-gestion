@@ -1,5 +1,81 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-24 (Nadia — adapter MercadoLibre CERRADO end-to-end, Fases 0-7 probadas en prod con productos reales)
+**Última actualización:** 2026-07-25 (Luciano — Cuenta Corriente: antigüedad de saldos reconciliada + extracto por cliente con saldo acumulado, ambos deployados y verificados con PDF real)
+
+> ✅ **CUENTA CORRIENTE — antigüedad de saldos reconciliada + Movimientos Cta. Corriente rediseñado
+> como extracto por cliente (2026-07-25).** Tres piezas encadenadas, todas deployadas a prod y
+> verificadas con datos reales de Nalux:
+> 1. **Cartera de Clientes — antigüedad de saldos (4 buckets 0-30/31-60/61-90/+90), commit `5b57be3`.**
+>    Al construirla se encontraron 2 bugs reales pre-existentes en `facturas_saldo_pendiente` (vista
+>    también usada por Cuenta Corriente > Antigüedad, no introducidos en este pase):
+>    - **Bug A (real, corregido con migration 246):** la vista no filtraba `estado_pago`, así que
+>      ventas ya cobradas al momento (Efectivo/Tarjeta/Transferencia) — que nunca generan fila en
+>      `cuenta_corriente_imputaciones` porque nunca entran al subledger — se mostraban como 100%
+>      pendientes para siempre. Con datos reales de Nalux esto inflaba la antigüedad total a ~$4,3M
+>      contra una deuda real de $342.880. Fix: `AND c.estado_pago <> 'pagada'`.
+>    - **Bug B (estructural, no se "arregla" — se reconcilia):** la imputación a factura puntual es
+>      **opcional** en `registrar_cobro_cliente` (`p_imputaciones` puede venir NULL — "pago a cuenta"
+>      genérico). Un cliente puede tener `saldo_actual` correcto pero facturas viejas que la vista
+>      sigue mostrando como abiertas porque el cobro que las canceló nunca se imputó puntualmente.
+>      Se presentaron 3 opciones a Luciano; eligió **reconciliar**: escalar proporcionalmente los 4
+>      buckets de antigüedad por cliente para que su suma coincida SIEMPRE con `saldo_actual` real
+>      (nunca mostrar un número que contradiga el saldo ya verificado en otra pantalla).
+> 2. **Cuenta Corriente > Antigüedad de Deuda — mismo fix de reconciliación, commit `7702e1f`.** Esa
+>    pantalla usa la misma vista y tenía el mismo Bug B residual (Bug A ya lo resolvía la migration
+>    246 para ambas pantallas al ser una vista compartida) — el KPI "Total Deuda (Filtrada)" (basado
+>    en `saldo_actual`) podía no coincidir con la suma de las 4 tarjetas de banda (basada en facturas
+>    abiertas sin reconciliar). Mismo criterio de escalado proporcional aplicado ahí también.
+> 3. **Movimientos Cta. Corriente — rediseñado de lista global DEBE/HABER a extracto por cliente,
+>    commit `37650c4`.** El reporte pedía mejora exploratoria; se acordó con Luciano: filtro de
+>    cliente ahora **obligatorio** (`requiresCliente`, toast si no se elige) + columnas Debe/Haber
+>    separadas + **Saldo acumulado** fila a fila (estilo resumen bancario), arrancando de una fila
+>    sintética "Saldo Anterior" (suma de movimientos previos al `start` del período, para no arrancar
+>    de $0 como si el cliente no tuviera historia). Verificado en vivo y con PDF real descargado:
+>    extracto de Luciano jun-jul 2026, Saldo Final $107.880,00 exacto contra `saldo_actual`.
+>
+> Las 3 piezas están pusheadas a `origin/master` y deployadas a producción
+> (`kairox-gestion-chi.vercel.app`). El deploy de la 3ra pieza (`vercel deploy --prod`) fue bloqueado
+> por el clasificador de auto mode al primer/segundo intento — se le pasó el comando a Luciano para
+> correrlo manualmente y salió bien a la 3ra.
+>
+> **Ramas `claude/*` revisadas de nuevo hoy** (`agitated-panini-a29997`, `practical-proskuriakova-34cfb7`,
+> `upbeat-pasteur-20adef`) — siguen siendo ancestros directos de `master`, 0 commits propios, nada
+> para mergear. Mismo estado que la revisión del 2026-07-23 (ver entrada más abajo).
+
+> ✅ **Resto de la sesión del 2026-07-24 (previo al bloque de arriba) — 5 piezas, todas ya
+> deployadas a prod.**
+> - **`c220eaa` — `puntos_venta.envia_arca` + emisión real de remitos con CAI (migration 244).**
+>   Antes `puntos_venta.tipo` era decorativo (el trigger de cola ARCA no lo leía) y `cai_remito`
+>   existía en la tabla sin ningún flujo que lo usara. Ahora: switch "Envía a ARCA" por PdV +
+>   RPC `emitir_remito()` (mismo patrón `SELECT...FOR UPDATE` que `obtener_proximo_numero`, valida
+>   CAI cargado y no vencido) + botón "Emitir remito" en `EntregasSection`. A propósito NO se tocó
+>   `useAfipConfig.js` (sigue eligiendo un único PdV fiscal, sin selector) — cambio de mayor
+>   alcance sobre el circuito de facturación ya en prod, queda para decisión futura. Migración
+>   244 bloqueada una vez por el clasificador de auto mode, aplicada manualmente por Luciano vía
+>   SQL Editor de Supabase, verificada después con `execute_sql`.
+> - **`105c194` — idempotencia real en movimientos de MP (migration 245).** Disparado por cruzar
+>   un video de integración MP+ARCA contra el código real: `mp-webhook` dedupeaba reintentos del
+>   mismo evento con un `SELECT...LIKE` sobre `descripcion` (texto libre, sin índice, condición de
+>   carrera real). Fix: columna `external_ref` + índice único `(empresa_id, origen, external_ref)`
+>   + `insertar_movimiento_bancario_externo` con `INSERT...ON CONFLICT DO NOTHING` atómico.
+>   Validado con `BEGIN...ROLLBACK`: la RPC llamada 2 veces con el mismo `external_ref` deja 1 sola
+>   fila. Mismo bloqueo del clasificador, mismo camino manual; `mp-webhook` redeployado v16.
+> - **`1132f22` — totales del Excel como número real, no texto formateado.** `getTableConfig()`
+>   ahora expone `value` (número crudo) además de `content` (string) en las celdas de
+>   TOTALES/subtotal de ventas/compras/clientes — el Excel exportado antes tenía "$ X.XXX,XX" como
+>   texto, rompiendo cualquier fórmula propia de Luciano sobre el archivo. Cuenta
+>   Corriente/Financiero/MP quedan afuera a propósito (su fila de totales combina 3 métricas en un
+>   solo string, no es un total simple).
+> - **`6379810` — agrupamiento + comparación de período en Historial de Compras.** Mismo patrón que
+>   ya tenía Ventas, generalizado (`applyGrouping`/`getGroupByOptions` ya no son ventas-only): selector
+>   Agrupar por (Día/Método de pago/Proveedor), columna "Pago" nueva, % vs período anterior en las
+>   cajas KPI vía `fetchPreviousPeriodStats()` compartido.
+> - **`02c8c69` — Cartera de Clientes neteaba deudores y acreedores en el total.** Bug real: "TOTAL
+>   CARTERA" sumaba saldos positivos y negativos en un solo neto ($280.630) que no coincidía con el
+>   KPI "Deuda Clientes" del Dashboard ($342.880, solo positivos) — se sentía como bug sin serlo un
+>   crash. Fix: Total a Cobrar / Total a Favor siempre separados + columna Límite Crédito (resalta
+>   en rojo si se superó) + filtro "Solo con deuda" (`applyFiltroDeuda`, mismo patrón que
+>   `applyGrouping`). Esta pieza es la base sobre la que se construyó la antigüedad de saldos del
+>   bloque de arriba.
 
 > ✅ **CERRADO — adapter MercadoLibre completo (Fases 0-7), probado en prod con productos reales
 > (2026-07-24).** El bloqueante de Fase 5 documentado ayer (MELI exige `family_name` → rechaza
