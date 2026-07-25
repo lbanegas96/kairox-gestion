@@ -1,5 +1,66 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-25 (Luciano — Reporte de Paridad: histórico completo (Ventas+Compras+Caja) + nueva vista Posición Actual al TC de hoy, commit `6944801`; queda Libro IVA y después Ventas)
+**Última actualización:** 2026-07-25 (Luciano — Libro IVA Ventas mejorado (commit `3dce527`), roadmap de Reportería 100% cerrado del lado "alcance 1"; plan de TC automático y research de RG3685 documentados para después; próximo: Ventas)
+
+> ✅ **Libro IVA Ventas — CUIT, desglose por alícuota, export estándar (commit
+> `3dce527`, 2026-07-25).** Alcance 1 de la mejora acordada con Luciano — el
+> alcance 2 (archivo TXT de ancho fijo que exige AFIP para el Libro IVA
+> Digital real, RG 3685/CITI) queda pendiente A PROPÓSITO, documentado aparte
+> (ver `INVESTIGACION_RG3685_LIBRO_IVA_DIGITAL.md`), es un desarrollo mucho
+> más grande que "mejorar el reporte".
+> - CUIT/DNI del cliente (`clientes.documento`, ya existía el dato, no se
+>   mostraba — Libro IVA Compras sí mostraba el CUIT del proveedor, era una
+>   inconsistencia real entre ambos reportes).
+> - "IVA 21%" → "IVA": el número ya sumaba todas las alícuotas, el rótulo
+>   mentía.
+> - Nuevo "Resumen por alícuota" (Neto/IVA por 21%/10.5%/exento/etc.) — lo
+>   que un contador necesita para la declaración real. Reparte el
+>   neto_gravado/iva_discriminado (siempre correctos, header-level) por
+>   proporción de cada alícuota dentro de los `comprobante_items` de cada
+>   comprobante — **hallazgo importante de paso**: `NuevaVentaModal`/
+>   `crear_venta` y `NuevaFacturaModal` usan convenciones OPUESTAS para
+>   `comprobante_items.subtotal` (bruto vs. neto — confirmado leyendo el
+>   código fuente de ambos, no se tocó, es un problema latente en Ventas
+>   para cuando se entre a ese módulo). El reparto proporcional funciona
+>   igual en los dos casos porque es una proporción DENTRO de un mismo
+>   comprobante, nunca un valor absoluto.
+> - Exporta por el pipeline estándar (PDF/Excel/WhatsApp) en vez del CSV de
+>   antes.
+> - Bug real encontrado y corregido de paso: el footer de TOTALES en pantalla
+>   sumaba "Total Bruto" sin aplicar el signo de las Notas de Crédito,
+>   mientras Neto e IVA en la misma fila sí lo aplicaban — Total Bruto nunca
+>   cerraba contra Neto+IVA cuando había NC en el período. Verificado en
+>   vivo: footer ahora coincide exacto con los KPIs.
+>
+> **Con esto el roadmap de Reportería queda cerrado en su alcance 1** (los 7
+> reportes/vistas del módulo — Ventas, Compras, Clientes, Cta. Corriente,
+> Financiero, MP por Tipo, Paridad — más Libro IVA ahora). Pusheado y
+> deployado.
+>
+> **Dos documentos de planificación nuevos en la raíz del repo, listos para
+> cuando se retomen** (nada construido, solo investigación/diseño a pedido
+> explícito de Luciano):
+> - `PLAN_TC_AUTOMATICO.md` — plan completo para automatizar la carga diaria
+>   del TC vía dolarapi.com (no BNA directo, no tiene API oficial — scrapear
+>   su HTML es frágil). Opt-in por empresa (toggle manual/automático en
+>   Configuración, default apagado). **El gate estricto actual se mantiene
+>   sin cambios** — si `usa_tc_paralelo=true` y no hay TC de hoy, ninguna
+>   transacción se cierra, automatización incluida; si el job automático
+>   falla, cae al banner manual de siempre. Migración propuesta
+>   (`empresas.tc_automatico`, `tipos_cambio.origen`), Edge Function
+>   `tc-diario-sync`, cron vía `pg_cron`/`pg_net`, 4 fases de rollout.
+> - `INVESTIGACION_RG3685_LIBRO_IVA_DIGITAL.md` — lo que se pudo confirmar
+>   del formato real que exige AFIP (TXT ancho fijo, 2 tipos de registro:
+>   comprobante + alícuota, códigos de alícuota 3/4/5/6). El PDF oficial de
+>   AFIP con la tabla exacta de posiciones no se pudo parsear en este
+>   entorno (sin `poppler-utils` ni Python — el texto está en glifos CID
+>   comprimidos, no es texto plano extraíble a mano). Hallazgo importante:
+>   al menos un competidor (EGA Futura) ni genera el archivo — exporta Excel
+>   para carga manual en el portal de AFIP, sugiriendo que el Excel que ya
+>   tenemos podría alcanzar para la mayoría de los casos. Recomendación:
+>   confirmar con un contador real antes de invertir en el archivo exacto.
+>
+> **Próximo paso pedido por Luciano: avanzar con el módulo de Ventas** — sin
+> alcance definido todavía.
 
 > ✅ **Reporte de Paridad — histórico completo + Posición Actual (nueva), commit
 > `6944801` (2026-07-25).** Antes de construir se investigó a fondo (a pedido
