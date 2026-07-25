@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { generatePDF } from '@/lib/pdfUtils';
 import { exportReporte } from '@/lib/excelUtils';
 import { buildSummaryMetrics, getTableConfig, applyGrouping, applyFiltroDeuda } from '@/components/reportes/reportDefinitions';
+import { getNowAR } from '@/lib/dateUtils';
 import GridReportes from '@/components/reportes/GridReportes';
 import ModalReporte from '@/components/reportes/ModalReporte';
 
@@ -197,14 +198,68 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
 
          if (error) throw error;
 
-         data = clients.map(c => ({
-            id: c.id,
-            nombre: c.nombre,
-            telefono: c.telefono,
-            email: c.email,
-            saldo: c.saldo_actual || 0,
-            limite_credito: c.limite_credito || 0
-         }));
+         // Antigüedad de saldos (Open Item Management real, migration 169 —
+         // mismo criterio que ya usa CuentaCorrienteSection.fetchAgingData:
+         // días desde la FECHA de la factura, no desde el vencimiento. Se
+         // mantiene igual a propósito para que el número de "días" de un
+         // mismo comprobante no varíe entre pantallas — pasar a antigüedad
+         // por vencimiento es una decisión de producto distinta, no
+         // implementada en ningún lado todavía.
+         const { data: openItems, error: agingError } = await supabase
+           .from('facturas_saldo_pendiente')
+           .select('cliente_id, fecha, saldo_pendiente')
+           .eq('empresa_id', user.empresa_id)
+           .gt('saldo_pendiente', 0);
+         if (agingError) throw agingError;
+
+         const now = getNowAR();
+         const agingPorCliente = {};
+         (openItems || []).forEach(item => {
+           const dias = Math.floor((now - new Date(item.fecha)) / 86400000);
+           const bucket = dias <= 30 ? 'aging_0_30' : dias <= 60 ? 'aging_31_60' : dias <= 90 ? 'aging_61_90' : 'aging_90_mas';
+           if (!agingPorCliente[item.cliente_id]) {
+             agingPorCliente[item.cliente_id] = { aging_0_30: 0, aging_31_60: 0, aging_61_90: 0, aging_90_mas: 0 };
+           }
+           agingPorCliente[item.cliente_id][bucket] += Number(item.saldo_pendiente);
+         });
+
+         data = clients.map(c => {
+            const raw = agingPorCliente[c.id] || { aging_0_30: 0, aging_31_60: 0, aging_61_90: 0, aging_90_mas: 0 };
+            const saldoReal = c.saldo_actual || 0;
+            const sumaBuckets = raw.aging_0_30 + raw.aging_31_60 + raw.aging_61_90 + raw.aging_90_mas;
+
+            // Reconciliación: la imputación a factura puntual es OPCIONAL en
+            // registrar_cobro_cliente (un "pago a cuenta" genérico no elige
+            // qué facturas cubre) — un cliente puede tener saldo_actual
+            // correcto pero facturas "abiertas" viejas que en realidad ya se
+            // cobraron con un pago no imputado. Sin esto, la antigüedad podía
+            // mostrar $789.000 para un cliente que en realidad debe $107.880.
+            // Se escala proporcionalmente para que el total de antigüedad
+            // SIEMPRE coincida con TOTAL A COBRAR — nunca mostrar un número
+            // que contradiga el saldo real ya verificado.
+            let aging = raw;
+            if (saldoReal <= 0) {
+              aging = { aging_0_30: 0, aging_31_60: 0, aging_61_90: 0, aging_90_mas: 0 };
+            } else if (sumaBuckets > 0 && Math.abs(sumaBuckets - saldoReal) > 0.01) {
+              const factor = saldoReal / sumaBuckets;
+              aging = {
+                aging_0_30:   Math.round(raw.aging_0_30   * factor * 100) / 100,
+                aging_31_60:  Math.round(raw.aging_31_60  * factor * 100) / 100,
+                aging_61_90:  Math.round(raw.aging_61_90  * factor * 100) / 100,
+                aging_90_mas: Math.round(raw.aging_90_mas * factor * 100) / 100,
+              };
+            }
+
+            return {
+              id: c.id,
+              nombre: c.nombre,
+              telefono: c.telefono,
+              email: c.email,
+              saldo: saldoReal,
+              limite_credito: c.limite_credito || 0,
+              ...aging,
+            };
+         });
       }
 
       // 4. CUENTA CORRIENTE

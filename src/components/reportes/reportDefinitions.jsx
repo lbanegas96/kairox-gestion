@@ -228,10 +228,20 @@ export const getTableConfig = (reportId, data) => {
             return <span className={pasado ? 'text-red-700 dark:text-red-400 font-bold' : r.saldo > 0 ? 'text-red-600 font-bold' : 'text-green-600 dark:text-green-400'} title={pasado ? 'Superó el límite de crédito' : undefined}>{formatCurrency(r.saldo)}</span>;
           },
           pdfRender: (r) => formatCurrency(r.saldo),
-        }
+        },
+        // Antigüedad de saldos — Open Item Management real (facturas_saldo_pendiente),
+        // mismo criterio de días que ya usa Cuenta Corriente > Antigüedad.
+        { header: '0-30',  key: 'aging_0_30',   align: 'right', render: (r) => r.aging_0_30   ? formatCurrency(r.aging_0_30)   : '-', pdfRender: (r) => r.aging_0_30   ? formatCurrency(r.aging_0_30)   : '-' },
+        { header: '31-60', key: 'aging_31_60',  align: 'right', render: (r) => r.aging_31_60  ? formatCurrency(r.aging_31_60)  : '-', pdfRender: (r) => r.aging_31_60  ? formatCurrency(r.aging_31_60)  : '-' },
+        { header: '61-90', key: 'aging_61_90',  align: 'right', render: (r) => r.aging_61_90  ? formatCurrency(r.aging_61_90)  : '-', pdfRender: (r) => r.aging_61_90  ? formatCurrency(r.aging_61_90)  : '-' },
+        { header: '+90',   key: 'aging_90_mas', align: 'right', render: (r) => r.aging_90_mas ? <span className="text-red-600 font-bold">{formatCurrency(r.aging_90_mas)}</span> : '-', pdfRender: (r) => r.aging_90_mas ? formatCurrency(r.aging_90_mas) : '-' },
       ],
       totals: [
-        { content: `TOTAL A COBRAR: ${formatCurrency(totalACobrar)} | TOTAL A FAVOR: ${formatCurrency(totalAFavor)}`, colSpan: 5, align: 'right' }
+        { content: `TOTAL A COBRAR: ${formatCurrency(totalACobrar)} | TOTAL A FAVOR: ${formatCurrency(totalAFavor)}`, colSpan: 5, align: 'right' },
+        { content: formatCurrency(data.reduce((s, r) => s + (r.aging_0_30 || 0), 0)),   align: 'right', value: data.reduce((s, r) => s + (r.aging_0_30 || 0), 0) },
+        { content: formatCurrency(data.reduce((s, r) => s + (r.aging_31_60 || 0), 0)),  align: 'right', value: data.reduce((s, r) => s + (r.aging_31_60 || 0), 0) },
+        { content: formatCurrency(data.reduce((s, r) => s + (r.aging_61_90 || 0), 0)),  align: 'right', value: data.reduce((s, r) => s + (r.aging_61_90 || 0), 0) },
+        { content: formatCurrency(data.reduce((s, r) => s + (r.aging_90_mas || 0), 0)), align: 'right', value: data.reduce((s, r) => s + (r.aging_90_mas || 0), 0) },
       ]
     };
   }
