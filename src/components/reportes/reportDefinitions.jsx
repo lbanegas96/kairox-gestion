@@ -51,10 +51,11 @@ export const REPORTS = [
   {
     id: 'cuenta_corriente',
     title: 'Movimientos Cta. Corriente',
-    description: 'Flujo de pagos y deudas global.',
+    description: 'Extracto de cuenta por cliente, con saldo acumulado.',
     icon: <CreditCard className="w-8 h-8 text-kx-amber" />,
     borderClass: 'border-t-kx-amber',
-    requiresDate: true
+    requiresDate: true,
+    requiresCliente: true
   },
   {
     id: 'financiero',
@@ -146,13 +147,15 @@ export const buildSummaryMetrics = (reportId, data, previousPeriod = null) => {
     ];
   }
   if (reportId === 'cuenta_corriente') {
-    const debe  = data.filter(r => r.tipo === 'DEBE').reduce((s, r) => s + r.monto, 0);
-    const haber = data.filter(r => r.tipo === 'HABER').reduce((s, r) => s + r.monto, 0);
+    const debe  = data.reduce((s, r) => s + (r.debe || 0), 0);
+    const haber = data.reduce((s, r) => s + (r.haber || 0), 0);
+    const saldoAnterior = data[0]?.esSaldoAnterior ? data[0].saldo : 0;
+    const saldoFinal = data.length ? data[data.length - 1].saldo : 0;
     return [
-      { label: 'Total DEBE',  value: fc(debe) },
-      { label: 'Total HABER', value: fc(haber) },
-      { label: 'Balance',     value: fc(debe - haber) },
-      { label: 'Movimientos', value: data.length },
+      { label: 'Saldo Anterior', value: fc(saldoAnterior) },
+      { label: 'Total DEBE',     value: fc(debe) },
+      { label: 'Total HABER',    value: fc(haber) },
+      { label: 'Saldo Final',    value: fc(saldoFinal) },
     ];
   }
   if (reportId === 'mp_movimientos') {
@@ -247,20 +250,32 @@ export const getTableConfig = (reportId, data) => {
   }
 
   if (reportId === 'cuenta_corriente') {
-    const totalDebe = data.filter(d => d.tipo === 'DEBE').reduce((acc, c) => acc + c.monto, 0);
-    const totalHaber = data.filter(d => d.tipo === 'HABER').reduce((acc, c) => acc + c.monto, 0);
-    const balance = totalDebe - totalHaber;
+    // Extracto por cliente estilo resumen bancario: orden cronológico
+    // ascendente + saldo acumulado fila a fila, arrancando del saldo previo
+    // al período (fila sintética "Saldo Anterior", armada en ReportesSection).
+    // Debe/Haber en columnas separadas (no Monto+badge Tipo) — es el formato
+    // que un contador/cliente reconoce como "extracto de cuenta corriente".
+    const totalDebe = data.reduce((s, r) => s + (r.debe || 0), 0);
+    const totalHaber = data.reduce((s, r) => s + (r.haber || 0), 0);
+    const saldoFinal = data.length ? data[data.length - 1].saldo : 0;
 
     return {
       columns: [
         { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
-        { header: 'Cliente', key: 'cliente', align: 'left' },
-        { header: 'Tipo', key: 'tipo', align: 'center', render: (r) => <span className={`px-2 py-1 rounded text-xs font-bold ${r.tipo === 'DEBE' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'}`}>{r.tipo}</span> },
-        { header: 'Descripción', key: 'descripcion', align: 'left' },
-        { header: 'Monto', key: 'monto', align: 'right', render: (r) => formatCurrency(r.monto), pdfRender: (r) => formatCurrency(r.monto) }
+        { header: 'Descripción', key: 'descripcion', align: 'left', render: (r) => <span className={r.esSaldoAnterior ? 'italic text-kx-text-2' : ''}>{r.descripcion}</span>, pdfRender: (r) => r.descripcion },
+        { header: 'Debe', key: 'debe', align: 'right', render: (r) => r.debe ? formatCurrency(r.debe) : '-', pdfRender: (r) => r.debe ? formatCurrency(r.debe) : '-' },
+        { header: 'Haber', key: 'haber', align: 'right', render: (r) => r.haber ? formatCurrency(r.haber) : '-', pdfRender: (r) => r.haber ? formatCurrency(r.haber) : '-' },
+        {
+          header: 'Saldo', key: 'saldo', align: 'right',
+          render: (r) => <span className={r.saldo > 0 ? 'font-bold text-red-600 dark:text-red-400' : r.saldo < 0 ? 'text-green-600 dark:text-green-400' : ''}>{formatCurrency(r.saldo)}</span>,
+          pdfRender: (r) => formatCurrency(r.saldo),
+        },
       ],
       totals: [
-        { content: `DEBE: ${formatCurrency(totalDebe)} | HABER: ${formatCurrency(totalHaber)} | NETO: ${formatCurrency(balance)}`, colSpan: 5, align: 'right' }
+        { content: 'TOTALES', colSpan: 2, align: 'right' },
+        { content: formatCurrency(totalDebe),  align: 'right', value: totalDebe },
+        { content: formatCurrency(totalHaber), align: 'right', value: totalHaber },
+        { content: formatCurrency(saldoFinal), align: 'right', value: saldoFinal },
       ]
     };
   }

@@ -10,6 +10,7 @@ function ModalReporte({
   handleGenerate, resetFilters, loading,
   reportData, handleDownloadPDF, handleDownloadExcel, handleShareWhatsApp,
   centrosCosto, centroCostoId, setCentroCostoId,
+  clientesList, clienteId, setClienteId,
   groupBy, setGroupBy,
   soloConDeuda, setSoloConDeuda,
 }) {
@@ -53,6 +54,10 @@ function ModalReporte({
                 showFiltroDeuda={!!selectedReport.supportsFiltroDeuda}
                 soloConDeuda={soloConDeuda}
                 setSoloConDeuda={setSoloConDeuda}
+                showClienteFilter={!!selectedReport.requiresCliente}
+                clientesList={clientesList}
+                clienteId={clienteId}
+                setClienteId={setClienteId}
               />
             </div>
 

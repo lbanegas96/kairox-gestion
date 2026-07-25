@@ -69,6 +69,18 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   }, [user?.empresa_id]);
   const [centroCostoId, setCentroCostoId] = useState('');
 
+  // Selector de cliente — obligatorio para Movimientos Cta. Corriente
+  // (requiresCliente): el saldo acumulado del extracto solo tiene sentido
+  // para un cliente a la vez.
+  const [clientesList, setClientesList] = useState([]);
+  const [clienteId, setClienteId] = useState('');
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    supabase.from('clientes').select('id, nombre').eq('empresa_id', user.empresa_id)
+      .neq('activo', false).order('nombre')
+      .then(({ data }) => setClientesList(data || []));
+  }, [user?.empresa_id]);
+
   // Filters
   const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
@@ -80,6 +92,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
     setStartDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
     setEndDate(new Date().toISOString().split('T')[0]);
     setCentroCostoId('');
+    setClienteId('');
     setReportData([]);
     setGroupBy('none');
     setPreviousPeriodStats(null);
@@ -95,6 +108,10 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   // --- FETCHING LOGIC ---
   const handleGenerate = async () => {
     if (!user?.empresa_id) return;
+    if (selectedReport?.requiresCliente && !clienteId) {
+      toast({ description: "Seleccioná un cliente para generar el extracto.", variant: "destructive" });
+      return;
+    }
     setLoading(true);
     try {
       const [sy, sm, sd] = startDate.split('-').map(Number);
@@ -262,26 +279,52 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
          });
       }
 
-      // 4. CUENTA CORRIENTE
+      // 4. CUENTA CORRIENTE — extracto por cliente con saldo acumulado
+      // (estilo resumen bancario). requiresCliente obliga a elegir un
+      // cliente antes de generar: el saldo acumulado solo tiene sentido
+      // para uno a la vez.
       else if (selectedReport.id === 'cuenta_corriente') {
+         // Saldo previo al período: todo movimiento del cliente anterior a
+         // `start`, para que el extracto no arranque de $0 como si el
+         // cliente no tuviera historia.
+         const { data: anteriores, error: errAnt } = await supabase
+           .from('cuenta_corriente_movimientos')
+           .select('tipo, monto')
+           .eq('empresa_id', user.empresa_id)
+           .eq('cliente_id', clienteId)
+           .lt('fecha', start);
+         if (errAnt) throw errAnt;
+         const saldoAnterior = (anteriores || []).reduce(
+           (s, m) => s + (m.tipo === 'DEBE' ? m.monto : -m.monto), 0
+         );
+
          const { data: movs, error } = await supabase
            .from('cuenta_corriente_movimientos')
-           .select('*, clientes(nombre)')
+           .select('id, fecha, tipo, monto, descripcion')
            .eq('empresa_id', user.empresa_id)
-           .gte('created_at', start)
-           .lte('created_at', end)
-           .order('created_at', { ascending: false });
-
+           .eq('cliente_id', clienteId)
+           .gte('fecha', start)
+           .lte('fecha', end)
+           .order('fecha', { ascending: true });
          if (error) throw error;
 
-         data = movs.map(m => ({
-           id: m.id,
-           fecha: m.created_at,
-           cliente: m.clientes?.nombre || 'Desconocido',
-           tipo: m.tipo,
-           descripcion: m.descripcion,
-           monto: m.monto
-         }));
+         let saldoCorrido = saldoAnterior;
+         const movimientos = (movs || []).map(m => {
+           saldoCorrido += m.tipo === 'DEBE' ? m.monto : -m.monto;
+           return {
+             id: m.id,
+             fecha: m.fecha,
+             descripcion: m.descripcion,
+             debe:  m.tipo === 'DEBE'  ? m.monto : 0,
+             haber: m.tipo === 'HABER' ? m.monto : 0,
+             saldo: Math.round(saldoCorrido * 100) / 100,
+           };
+         });
+
+         data = [
+           { id: 'saldo_anterior', fecha: start, descripcion: 'Saldo anterior', debe: 0, haber: 0, saldo: Math.round(saldoAnterior * 100) / 100, esSaldoAnterior: true },
+           ...movimientos,
+         ];
       }
 
       // 5. FINANCIERO
@@ -415,6 +458,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         handleGenerate={handleGenerate} resetFilters={resetFilters} loading={loading}
         reportData={reportData} handleDownloadPDF={handleDownloadPDF} handleDownloadExcel={handleDownloadExcel} handleShareWhatsApp={handleShareWhatsApp}
         centrosCosto={centrosCosto} centroCostoId={centroCostoId} setCentroCostoId={setCentroCostoId}
+        clientesList={clientesList} clienteId={clienteId} setClienteId={setClienteId}
         groupBy={groupBy} setGroupBy={setGroupBy}
         soloConDeuda={soloConDeuda} setSoloConDeuda={setSoloConDeuda}
       />

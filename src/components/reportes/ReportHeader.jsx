@@ -28,6 +28,10 @@ const ReportHeader = ({
   showFiltroDeuda,
   soloConDeuda,
   setSoloConDeuda,
+  showClienteFilter,
+  clientesList,
+  clienteId,
+  setClienteId,
 }) => {
   return (
     <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
@@ -99,6 +103,19 @@ const ReportHeader = ({
               className="h-9 w-full rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm text-kx-text px-2"
             >
               {(groupByOptions || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+        )}
+        {showClienteFilter && (
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-kx-text-2 uppercase">Cliente <span className="text-red-500">*</span></Label>
+            <select
+              value={clienteId}
+              onChange={(e) => setClienteId(e.target.value)}
+              className="h-9 w-full rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm text-kx-text px-2"
+            >
+              <option value="">Seleccionar cliente...</option>
+              {(clientesList || []).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
             </select>
           </div>
         )}
