@@ -9,7 +9,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { generatePDF } from '@/lib/pdfUtils';
 import { exportReporte } from '@/lib/excelUtils';
-import { buildSummaryMetrics, getTableConfig, applyGrouping } from '@/components/reportes/reportDefinitions';
+import { buildSummaryMetrics, getTableConfig, applyGrouping, applyFiltroDeuda } from '@/components/reportes/reportDefinitions';
 import GridReportes from '@/components/reportes/GridReportes';
 import ModalReporte from '@/components/reportes/ModalReporte';
 
@@ -28,6 +28,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   const [afipActivo, setAfipActivo] = useState(false);
   const [groupBy, setGroupBy] = useState('none');
   const [previousPeriodStats, setPreviousPeriodStats] = useState(null);
+  const [soloConDeuda, setSoloConDeuda] = useState(false);
 
   useEffect(() => {
     if (initialView === 'libro_iva') {
@@ -81,6 +82,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
     setReportData([]);
     setGroupBy('none');
     setPreviousPeriodStats(null);
+    setSoloConDeuda(false);
   };
 
   const openReportDialog = (report) => {
@@ -200,7 +202,8 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
             nombre: c.nombre,
             telefono: c.telefono,
             email: c.email,
-            saldo: c.saldo_actual || 0
+            saldo: c.saldo_actual || 0,
+            limite_credito: c.limite_credito || 0
          }));
       }
 
@@ -270,9 +273,10 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   // --- PDF DOWNLOAD ---
   const handleDownloadPDF = async () => {
     try {
-      const { columns, totals } = getTableConfig(selectedReport.id, reportData);
-      const summaryMetrics = buildSummaryMetrics(selectedReport.id, reportData, selectedReport.supportsPeriodComparison ? previousPeriodStats : null);
-      const displayData = applyGrouping(selectedReport.id, reportData, groupBy);
+      const filteredData = applyFiltroDeuda(selectedReport.id, reportData, soloConDeuda);
+      const { columns, totals } = getTableConfig(selectedReport.id, filteredData);
+      const summaryMetrics = buildSummaryMetrics(selectedReport.id, filteredData, selectedReport.supportsPeriodComparison ? previousPeriodStats : null);
+      const displayData = applyGrouping(selectedReport.id, filteredData, groupBy);
 
       await generatePDF({
         title:           selectedReport.title,
@@ -297,8 +301,9 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   // --- EXCEL DOWNLOAD ---
   const handleDownloadExcel = () => {
     try {
-      const { columns, totals } = getTableConfig(selectedReport.id, reportData);
-      const displayData = applyGrouping(selectedReport.id, reportData, groupBy);
+      const filteredData = applyFiltroDeuda(selectedReport.id, reportData, soloConDeuda);
+      const { columns, totals } = getTableConfig(selectedReport.id, filteredData);
+      const displayData = applyGrouping(selectedReport.id, filteredData, groupBy);
 
       exportReporte({
         title:    selectedReport.title,
@@ -320,7 +325,8 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   // (WhatsApp no permite adjuntar archivos vía link sin la API paga de
   // Business) — el usuario elige el contacto y adjunta el archivo a mano.
   const handleShareWhatsApp = () => {
-    const summaryMetrics = buildSummaryMetrics(selectedReport.id, reportData, selectedReport.supportsPeriodComparison ? previousPeriodStats : null);
+    const filteredData = applyFiltroDeuda(selectedReport.id, reportData, soloConDeuda);
+    const summaryMetrics = buildSummaryMetrics(selectedReport.id, filteredData, selectedReport.supportsPeriodComparison ? previousPeriodStats : null);
     const lineas = [
       `📊 *${selectedReport.title}*`,
       `Período: ${startDate} al ${endDate}`,
@@ -355,6 +361,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         reportData={reportData} handleDownloadPDF={handleDownloadPDF} handleDownloadExcel={handleDownloadExcel} handleShareWhatsApp={handleShareWhatsApp}
         centrosCosto={centrosCosto} centroCostoId={centroCostoId} setCentroCostoId={setCentroCostoId}
         groupBy={groupBy} setGroupBy={setGroupBy}
+        soloConDeuda={soloConDeuda} setSoloConDeuda={setSoloConDeuda}
       />
     </div>
   );

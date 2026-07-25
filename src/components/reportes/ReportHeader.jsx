@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { Loader2, Download, FileSpreadsheet, MessageCircle, FilterX, RefreshCw } from 'lucide-react';
 
 const ReportHeader = ({
@@ -24,6 +25,9 @@ const ReportHeader = ({
   groupBy,
   setGroupBy,
   groupByOptions,
+  showFiltroDeuda,
+  soloConDeuda,
+  setSoloConDeuda,
 }) => {
   return (
     <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
@@ -96,6 +100,12 @@ const ReportHeader = ({
             >
               {(groupByOptions || []).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
+          </div>
+        )}
+        {showFiltroDeuda && (
+          <div className="flex items-center gap-2 h-9">
+            <Switch checked={soloConDeuda} onCheckedChange={setSoloConDeuda} />
+            <Label className="text-sm text-kx-text cursor-pointer" onClick={() => setSoloConDeuda(!soloConDeuda)}>Solo con deuda</Label>
           </div>
         )}
         <div className="flex gap-2 sm:col-span-2 md:col-span-2">

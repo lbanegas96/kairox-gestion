@@ -45,7 +45,8 @@ export const REPORTS = [
     description: 'Estado de cuentas y saldos de clientes.',
     icon: <Users className="w-8 h-8 text-kx-green" />,
     borderClass: 'border-t-kx-green',
-    requiresDate: false
+    requiresDate: false,
+    supportsFiltroDeuda: true
   },
   {
     id: 'cuenta_corriente',
@@ -118,12 +119,20 @@ export const buildSummaryMetrics = (reportId, data, previousPeriod = null) => {
     return metrics;
   }
   if (reportId === 'clientes') {
-    const deuda = data.reduce((s, r) => s + (r.saldo || 0), 0);
+    // Nunca netear deudores y acreedores en un mismo total — un cliente que
+    // debe y otro con saldo a favor son cosas económicamente distintas,
+    // aunque ambos aparezcan en la misma cartera. Sumarlos daba un "Total
+    // Deuda" que no coincidía con el widget "Deuda Clientes" del Dashboard
+    // (ese sí suma solo positivos) — se veía como si el reporte tuviera un
+    // bug.
+    const totalACobrar = data.filter(r => (r.saldo || 0) > 0).reduce((s, r) => s + r.saldo, 0);
+    const totalAFavor  = data.filter(r => (r.saldo || 0) < 0).reduce((s, r) => s + Math.abs(r.saldo), 0);
     const conDeuda = data.filter(r => r.saldo > 0).length;
     return [
       { label: 'Total Clientes', value: data.length },
       { label: 'Con deuda',      value: conDeuda },
-      { label: 'Total Deuda',    value: fc(deuda) },
+      { label: 'Total a Cobrar', value: fc(totalACobrar) },
+      { label: 'Total a Favor',  value: fc(totalAFavor) },
     ];
   }
   if (reportId === 'financiero') {
@@ -199,17 +208,30 @@ export const getTableConfig = (reportId, data) => {
   }
 
   if (reportId === 'clientes') {
-    const totalBalance = data.reduce((acc, curr) => acc + (curr.saldo || 0), 0);
+    // Ver nota en buildSummaryMetrics: nunca netear deudores y acreedores.
+    const totalACobrar = data.filter(r => (r.saldo || 0) > 0).reduce((s, r) => s + r.saldo, 0);
+    const totalAFavor  = data.filter(r => (r.saldo || 0) < 0).reduce((s, r) => s + Math.abs(r.saldo), 0);
     return {
       columns: [
         { header: 'Nombre', key: 'nombre', align: 'left' },
         { header: 'Email', key: 'email', align: 'left', render: (r) => r.email || '-' },
         { header: 'Teléfono', key: 'telefono', align: 'left', render: (r) => r.telefono || '-' },
-        { header: 'Saldo Actual', key: 'saldo', align: 'right', render: (r) => <span className={r.saldo > 0 ? 'text-red-600 font-bold' : 'text-green-600 dark:text-green-400'}>{formatCurrency(r.saldo)}</span>, pdfRender: (r) => formatCurrency(r.saldo) }
+        {
+          header: 'Límite Crédito', key: 'limite_credito', align: 'right',
+          render: (r) => r.limite_credito ? formatCurrency(r.limite_credito) : '-',
+          pdfRender: (r) => r.limite_credito ? formatCurrency(r.limite_credito) : '-',
+        },
+        {
+          header: 'Saldo Actual', key: 'saldo', align: 'right',
+          render: (r) => {
+            const pasado = r.limite_credito > 0 && r.saldo > r.limite_credito;
+            return <span className={pasado ? 'text-red-700 dark:text-red-400 font-bold' : r.saldo > 0 ? 'text-red-600 font-bold' : 'text-green-600 dark:text-green-400'} title={pasado ? 'Superó el límite de crédito' : undefined}>{formatCurrency(r.saldo)}</span>;
+          },
+          pdfRender: (r) => formatCurrency(r.saldo),
+        }
       ],
       totals: [
-        { content: 'TOTAL CARTERA', colSpan: 3, align: 'right' },
-        { content: formatCurrency(totalBalance), align: 'right', value: totalBalance }
+        { content: `TOTAL A COBRAR: ${formatCurrency(totalACobrar)} | TOTAL A FAVOR: ${formatCurrency(totalAFavor)}`, colSpan: 5, align: 'right' }
       ]
     };
   }
@@ -358,4 +380,14 @@ export function applyGrouping(reportId, data, groupBy) {
     result.push({ __rowType: 'subtotal', label: `Subtotal — ${key}`, value: subtotal, valueText: formatCurrency(subtotal) });
   });
   return result;
+}
+
+/**
+ * Filtro "solo con deuda" de Cartera de Clientes — oculta clientes con saldo
+ * 0 o a favor (negativo). En la práctica quien cobra no quiere ver los 7
+ * clientes, quiere ver los 3 que le deben.
+ */
+export function applyFiltroDeuda(reportId, data, soloConDeuda) {
+  if (reportId !== 'clientes' || !soloConDeuda) return data;
+  return data.filter(r => (r.saldo || 0) > 0);
 }

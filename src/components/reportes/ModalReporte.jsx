@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import ReportHeader from '@/components/reportes/ReportHeader';
 import ReportTable from '@/components/reportes/ReportTable';
-import { getTableConfig, applyGrouping, getGroupByOptions } from './reportDefinitions';
+import { getTableConfig, applyGrouping, getGroupByOptions, applyFiltroDeuda } from './reportDefinitions';
 
 function ModalReporte({
   isDialogOpen, setIsDialogOpen,
@@ -11,12 +11,15 @@ function ModalReporte({
   reportData, handleDownloadPDF, handleDownloadExcel, handleShareWhatsApp,
   centrosCosto, centroCostoId, setCentroCostoId,
   groupBy, setGroupBy,
+  soloConDeuda, setSoloConDeuda,
 }) {
-  // Totales/columnas siempre sobre los datos crudos (nunca sobre las filas
-  // sintéticas de agrupamiento, o el total general quedaría duplicado con
-  // los subtotales) — solo la vista de tabla usa los datos agrupados.
-  const { columns, totals } = selectedReport ? getTableConfig(selectedReport.id, reportData) : { columns: [], totals: null };
-  const displayData = selectedReport ? applyGrouping(selectedReport.id, reportData, groupBy) : reportData;
+  // Totales/columnas siempre sobre los datos crudos filtrados (nunca sobre
+  // las filas sintéticas de agrupamiento, o el total general quedaría
+  // duplicado con los subtotales) — solo la vista de tabla usa los datos
+  // agrupados.
+  const filteredData = selectedReport ? applyFiltroDeuda(selectedReport.id, reportData, soloConDeuda) : reportData;
+  const { columns, totals } = selectedReport ? getTableConfig(selectedReport.id, filteredData) : { columns: [], totals: null };
+  const displayData = selectedReport ? applyGrouping(selectedReport.id, filteredData, groupBy) : filteredData;
 
   return (
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -35,7 +38,7 @@ function ModalReporte({
                 onGenerate={handleGenerate}
                 onClear={resetFilters}
                 loading={loading}
-                hasData={reportData.length > 0}
+                hasData={filteredData.length > 0}
                 onDownloadPDF={handleDownloadPDF}
                 onDownloadExcel={handleDownloadExcel}
                 onShareWhatsApp={handleShareWhatsApp}
@@ -47,6 +50,9 @@ function ModalReporte({
                 groupBy={groupBy}
                 setGroupBy={setGroupBy}
                 groupByOptions={getGroupByOptions(selectedReport.id)}
+                showFiltroDeuda={!!selectedReport.supportsFiltroDeuda}
+                soloConDeuda={soloConDeuda}
+                setSoloConDeuda={setSoloConDeuda}
               />
             </div>
 
