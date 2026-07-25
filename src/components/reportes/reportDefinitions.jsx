@@ -70,11 +70,13 @@ export const REPORTS = [
   {
     id: 'mp_movimientos',
     title: 'MercadoPago por Tipo',
-    description: 'Cobros de MP segmentados: CVU/transferencia, QR/billetera, tarjeta crédito y débito.',
+    description: 'Ingresos y egresos de MP por tipo de cobro, con estado de conciliación.',
     icon: <Smartphone className="w-8 h-8 text-kx-blue" />,
     borderClass: 'border-t-kx-blue',
     requiresDate: true,
     badge: 'MP',
+    supportsGroupBy: true,
+    supportsPeriodComparison: true
   },
 ];
 
@@ -172,16 +174,28 @@ export const buildSummaryMetrics = (reportId, data, previousPeriod = null) => {
     ];
   }
   if (reportId === 'mp_movimientos') {
-    const total = data.reduce((s, r) => s + (r.monto || 0), 0);
-    const transf = data.filter(r => r.subtipo === 'transferencia').reduce((s, r) => s + (r.monto || 0), 0);
-    const qr     = data.filter(r => r.subtipo === 'qr').reduce((s, r) => s + (r.monto || 0), 0);
-    const tarj   = data.filter(r => ['tarjeta_credito','tarjeta_debito'].includes(r.subtipo)).reduce((s, r) => s + (r.monto || 0), 0);
-    return [
-      { label: 'Total MP',        value: fc(total) },
-      { label: 'Transferencias',  value: fc(transf) },
-      { label: 'QR / Billetera',  value: fc(qr) },
-      { label: 'Tarjetas',        value: fc(tarj) },
+    // movimientos_bancarios con origen='mercadopago' incluye tanto cobros
+    // (tipo='ingreso') como reintegros/contracargos (tipo='egreso') — sumarlos
+    // todos como si fueran cobros sobrestima el ingreso real de MP (bug real:
+    // con datos de Nalux, "Total MP" daba ~$1,2M cuando el neto real es mucho
+    // menor por los egresos QR). Igual criterio que Financiero/Cta.Corriente:
+    // nunca netear ingreso/egreso en una sola suma ciega.
+    const ingresos = data.reduce((s, r) => s + (r.ingreso || 0), 0);
+    const egresos  = data.reduce((s, r) => s + (r.egreso  || 0), 0);
+    const sinConciliar = data
+      .filter(r => !r.conciliado)
+      .reduce((s, r) => s + (r.ingreso || 0) - (r.egreso || 0), 0);
+    const metrics = [
+      { label: 'Ingresos',       value: fc(ingresos) },
+      { label: 'Egresos',        value: fc(egresos) },
+      { label: 'Neto',           value: fc(ingresos - egresos) },
+      { label: 'Sin Conciliar',  value: fc(sinConciliar) },
     ];
+    if (previousPeriod) {
+      metrics[0].delta = deltaLabel(ingresos, previousPeriod.ingresos);
+      metrics[1].delta = deltaLabel(egresos, previousPeriod.egresos);
+    }
+    return metrics;
   }
   return null;
 };
@@ -326,19 +340,13 @@ export const getTableConfig = (reportId, data) => {
   }
 
   if (reportId === 'mp_movimientos') {
-    const total = data.reduce((acc, m) => acc + (m.monto || 0), 0);
-
-    // Totales por subtipo
-    const bySubtipo = {};
-    data.forEach(m => {
-      const key = m.subtipo || 'otro';
-      bySubtipo[key] = (bySubtipo[key] || 0) + (m.monto || 0);
-    });
-
-    const resumenPartes = Object.entries(bySubtipo).map(
-      ([k, v]) => `${SUBTIPO_LABEL[k] || 'Otro'}: ${formatCurrency(v)}`
-    );
-    const resumen = [...resumenPartes, `TOTAL: ${formatCurrency(total)}`].join(' | ');
+    // Ingreso/Egreso en columnas separadas (ver nota en buildSummaryMetrics —
+    // nunca sumar tipo='ingreso' y tipo='egreso' como si fueran lo mismo).
+    // Sin columna de saldo acumulado a propósito: esto es un recorte por
+    // origen='mercadopago' de movimientos_bancarios, no la cuenta completa —
+    // un "saldo" acá no representaría el saldo real de ninguna cuenta.
+    const totalIngresos = data.reduce((s, r) => s + (r.ingreso || 0), 0);
+    const totalEgresos  = data.reduce((s, r) => s + (r.egreso  || 0), 0);
 
     return {
       columns: [
@@ -358,13 +366,30 @@ export const getTableConfig = (reportId, data) => {
           pdfRender: (r) => SUBTIPO_LABEL[r.subtipo] || 'Otro',
         },
         {
-          header: 'Monto', key: 'monto', align: 'right',
-          render: (r) => formatCurrency(r.monto),
-          pdfRender: (r) => formatCurrency(r.monto),
+          header: 'Ingreso', key: 'ingreso', align: 'right',
+          render: (r) => r.ingreso ? formatCurrency(r.ingreso) : '-',
+          pdfRender: (r) => r.ingreso ? formatCurrency(r.ingreso) : '-',
+        },
+        {
+          header: 'Egreso', key: 'egreso', align: 'right',
+          render: (r) => r.egreso ? formatCurrency(r.egreso) : '-',
+          pdfRender: (r) => r.egreso ? formatCurrency(r.egreso) : '-',
+        },
+        {
+          header: 'Conciliado', key: 'conciliado', align: 'center',
+          render: (r) => (
+            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${r.conciliado ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+              {r.conciliado ? 'Sí' : 'No'}
+            </span>
+          ),
+          pdfRender: (r) => (r.conciliado ? 'Sí' : 'No'),
         },
       ],
       totals: [
-        { content: resumen, colSpan: 4, align: 'right' }
+        { content: 'TOTALES', colSpan: 3, align: 'right' },
+        { content: formatCurrency(totalIngresos), align: 'right', value: totalIngresos },
+        { content: formatCurrency(totalEgresos),  align: 'right', value: totalEgresos },
+        { content: '', align: 'right' },
       ]
     };
   }
@@ -391,6 +416,12 @@ const GROUP_BY_OPTIONS_POR_REPORTE = {
     { value: 'categoria',   label: 'Por categoría' },
     { value: 'metodo_pago', label: 'Por método de pago' },
   ],
+  mp_movimientos: [
+    { value: 'none',       label: 'Sin agrupar' },
+    { value: 'dia',        label: 'Por día' },
+    { value: 'subtipo',    label: 'Por tipo de cobro' },
+    { value: 'conciliado', label: 'Por estado de conciliación' },
+  ],
 };
 
 export function getGroupByOptions(reportId) {
@@ -413,13 +444,20 @@ const GROUP_KEY_FN_POR_REPORTE = {
     categoria:   (r) => r.categoria || 'Sin categoría',
     metodo_pago: (r) => r.metodo_pago || 'Sin método',
   },
+  mp_movimientos: {
+    dia:        (r) => formatDateAR(r.fecha),
+    subtipo:    (r) => SUBTIPO_LABEL[r.subtipo] || 'Otro',
+    conciliado: (r) => r.conciliado ? 'Conciliado' : 'Sin conciliar',
+  },
 };
 
 // Subtotal por grupo — ventas/compras suman `total`; financiero (Libro de
-// Caja) no tiene un solo campo "total" por fila (Ingreso y Egreso son
-// columnas separadas), el subtotal ahí es el neto ingreso-egreso del grupo.
+// Caja) y mp_movimientos no tienen un solo campo "total" por fila (Ingreso y
+// Egreso son columnas separadas), el subtotal ahí es el neto ingreso-egreso
+// del grupo.
 const GROUP_SUBTOTAL_FN_POR_REPORTE = {
-  financiero: (r) => (r.ingreso || 0) - (r.egreso || 0),
+  financiero:      (r) => (r.ingreso || 0) - (r.egreso || 0),
+  mp_movimientos:  (r) => (r.ingreso || 0) - (r.egreso || 0),
 };
 
 /**

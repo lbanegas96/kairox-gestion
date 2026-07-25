@@ -384,11 +384,15 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
          });
       }
 
-      // 6. MERCADOPAGO POR TIPO
+      // 6. MERCADOPAGO POR TIPO — movimientos_bancarios con origen='mercadopago'
+      // incluye cobros (tipo='ingreso') y reintegros/contracargos
+      // (tipo='egreso'); se separan en columnas, nunca se suman ciego (ver
+      // nota en reportDefinitions.jsx). No se agrega saldo acumulado: es un
+      // recorte por origen de una cuenta bancaria, no la cuenta completa.
       else if (selectedReport.id === 'mp_movimientos') {
         const { data: movs, error } = await supabase
           .from('movimientos_bancarios')
-          .select('id, fecha, descripcion, subtipo, monto')
+          .select('id, fecha, descripcion, subtipo, tipo, monto, conciliado')
           .eq('empresa_id', user.empresa_id)
           .eq('origen', 'mercadopago')
           .gte('fecha', start)
@@ -396,7 +400,28 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
           .order('fecha', { ascending: false });
 
         if (error) throw error;
-        data = movs;
+
+        data = (movs || []).map(m => ({
+          id: m.id,
+          fecha: m.fecha,
+          descripcion: m.descripcion,
+          subtipo: m.subtipo,
+          ingreso: m.tipo === 'ingreso' ? m.monto : 0,
+          egreso:  m.tipo === 'egreso'  ? m.monto : 0,
+          conciliado: m.conciliado,
+        }));
+
+        const { data: prevMovs } = await supabase
+          .from('movimientos_bancarios')
+          .select('tipo, monto')
+          .eq('empresa_id', user.empresa_id)
+          .eq('origen', 'mercadopago')
+          .gte('fecha', prevStart.toISOString())
+          .lte('fecha', prevEnd.toISOString());
+        setPreviousPeriodStats({
+          ingresos: (prevMovs || []).filter(m => m.tipo === 'ingreso').reduce((s, m) => s + (m.monto || 0), 0),
+          egresos:  (prevMovs || []).filter(m => m.tipo === 'egreso').reduce((s, m) => s + (m.monto || 0), 0),
+        });
       }
 
       setReportData(data);
