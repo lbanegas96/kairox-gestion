@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, CheckCircle, Download, Loader2, Send, PackageCheck } from 'lucide-react';
+import { FileText, CheckCircle, Download, Loader2, Send, PackageCheck, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -11,7 +11,7 @@ import { ESTADOS } from './shared';
 // Mismos estados desde los que hoy se permite "Convertir en Venta" (TablaCotizaciones.jsx)
 const ESTADOS_COPIABLES = ['aprobada', 'enviada'];
 
-function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido }) {
+function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, onVerPedido }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [generatingPDF, setGeneratingPDF] = useState(false);
@@ -129,6 +129,27 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido })
               <div className="flex items-center gap-2 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800 text-sm text-purple-700 dark:text-purple-300">
                 <CheckCircle className="w-4 h-4 flex-shrink-0" />
                 <span>Esta cotización fue convertida en venta. Comprobante ID: <span className="font-mono text-xs">{detalle.comprobante_id}</span></span>
+              </div>
+            )}
+            {(detalle.pedidos ?? []).length > 0 && (
+              <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800 text-sm text-amber-700 dark:text-amber-300">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>
+                  Ya se copió a {detalle.pedidos.length === 1 ? 'pedido' : `${detalle.pedidos.length} pedidos`}:{' '}
+                  {detalle.pedidos.map((p, i) => (
+                    <span key={p.id}>
+                      {i > 0 && ', '}
+                      {onVerPedido ? (
+                        <button type="button" className="font-mono font-medium underline hover:opacity-80" onClick={() => onVerPedido(p.id)}>
+                          {p.numero}
+                        </button>
+                      ) : (
+                        <span className="font-mono font-medium">{p.numero}</span>
+                      )}
+                    </span>
+                  ))}
+                  . Volver a copiar generará un pedido adicional.
+                </span>
               </div>
             )}
           </div>

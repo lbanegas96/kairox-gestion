@@ -14,7 +14,7 @@ import TablaCotizaciones from '@/components/cotizaciones/TablaCotizaciones';
 import FormNuevaCotizacion from '@/components/cotizaciones/FormNuevaCotizacion';
 import ModalDetalleCotizacion from '@/components/cotizaciones/ModalDetalleCotizacion';
 
-function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, navigateCotizacionId, onNavigated } = {}) {
+function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, navigateCotizacionId, onNavigated } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -303,7 +303,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, navigateCotiza
         isLoading={isLoading} filteredData={filteredData}
         listData={listData} page={page}
         setViewId={setViewId} estadoMutation={estadoMutation} deleteMutation={deleteMutation}
-        handleConvertirClick={handleConvertirClick} onNavigateToSale={onNavigateToSale}
+        handleConvertirClick={handleConvertirClick} onNavigateToSale={onNavigateToSale} onVerPedido={onVerPedido}
       />
 
       {/* MODAL NUEVA COTIZACIÓN */}
@@ -343,6 +343,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, navigateCotiza
       <ModalDetalleCotizacion
         viewId={viewId} setViewId={setViewId} detalle={detalle}
         onCopiarAPedido={onCopiarAPedido ? (cot) => { setViewId(null); onCopiarAPedido(cot); } : undefined}
+        onVerPedido={onVerPedido ? (id) => { setViewId(null); onVerPedido(id); } : undefined}
       />
     </div>
   );

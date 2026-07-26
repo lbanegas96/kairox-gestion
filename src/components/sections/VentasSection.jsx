@@ -21,6 +21,7 @@ function VentasSection({ initialTab = 'historial' }) {
   const [navigateSaleId, setNavigateSaleId] = useState(null);
   const [navigateEntregaId, setNavigateEntregaId] = useState(null);
   const [navigateCotizacionId, setNavigateCotizacionId] = useState(null);
+  const [navigatePedidoId, setNavigatePedidoId] = useState(null);
   const [prefillPedidoCotizacion, setPrefillPedidoCotizacion] = useState(null);
 
   const handleSaleSuccess = () => setRefreshKey(k => k + 1);
@@ -76,6 +77,7 @@ function VentasSection({ initialTab = 'historial' }) {
           <CotizacionesSection
             onNavigateToSale={(id) => { setActiveTab('historial'); setNavigateSaleId(id); }}
             onCopiarAPedido={(cot) => { setPrefillPedidoCotizacion(cot); setActiveTab('pedidos'); }}
+            onVerPedido={(id) => { setActiveTab('pedidos'); setNavigatePedidoId(id); }}
             navigateCotizacionId={navigateCotizacionId}
             onNavigated={() => setNavigateCotizacionId(null)}
           />
@@ -90,6 +92,8 @@ function VentasSection({ initialTab = 'historial' }) {
             }}
             prefillCotizacion={prefillPedidoCotizacion}
             onPrefillConsumed={() => setPrefillPedidoCotizacion(null)}
+            navigatePedidoId={navigatePedidoId}
+            onNavigated={() => setNavigatePedidoId(null)}
           />
         </TabsContent>
 

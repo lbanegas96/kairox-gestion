@@ -25,7 +25,7 @@ export const cotizacionesService = {
   ): Promise<PaginatedResult<Cotizacion>> {
     let query = supabase
       .from('cotizaciones')
-      .select('*, clientes(nombre)', { count: 'exact' })
+      .select('*, clientes(nombre), pedidos(id, numero)', { count: 'exact' })
       .eq('empresa_id', empresaId)
       .order('created_at', { ascending: false });
 
@@ -43,7 +43,7 @@ export const cotizacionesService = {
   async getById(id: string): Promise<Cotizacion> {
     const { data, error } = await supabase
       .from('cotizaciones')
-      .select('*, clientes(*), cotizacion_items(*, productos(nombre, unidad_medida))')
+      .select('*, clientes(*), cotizacion_items(*, productos(nombre, unidad_medida)), pedidos(id, numero)')
       .eq('id', id)
       .single();
     if (error) throw new Error(error.message);
