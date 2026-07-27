@@ -210,7 +210,8 @@ export type CotizacionEstado =
   | 'aprobada'
   | 'rechazada'
   | 'vencida'
-  | 'convertida';
+  | 'convertida'
+  | 'cancelada';
 
 export interface Cotizacion {
   id: string;

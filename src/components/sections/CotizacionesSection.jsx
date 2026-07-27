@@ -343,6 +343,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, navigateCotiza
       <ModalDetalleCotizacion
         viewId={viewId} setViewId={setViewId} detalle={detalle}
         onCopiarAPedido={onCopiarAPedido ? (cot) => { setViewId(null); onCopiarAPedido(cot); } : undefined}
+        onCancelar={(id) => { estadoMutation.mutate({ id, estado: 'cancelada' }); setViewId(null); }}
       />
     </div>
   );

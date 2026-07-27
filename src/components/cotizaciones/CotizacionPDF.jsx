@@ -247,10 +247,6 @@ export function CotizacionPDF({ cotizacion, empresa }) {
           <View style={styles.headerLeft}>
             {empresa?.logo ? <Image src={empresa.logo} style={styles.logo} /> : null}
             <Text style={styles.emisorNombre}>{empresa?.nombre ?? 'Mi Empresa'}</Text>
-            {empresa?.cuit ? <Text style={styles.emisorDato}>CUIT: {empresa.cuit}</Text> : null}
-            {empresa?.condicion_iva ? (
-              <Text style={styles.emisorDato}>Cond. IVA: {empresa.condicion_iva}</Text>
-            ) : null}
             {empresa?.direccion ? <Text style={styles.emisorDato}>{empresa.direccion}</Text> : null}
             {empresa?.telefono ? <Text style={styles.emisorDato}>Tel: {empresa.telefono}</Text> : null}
           </View>

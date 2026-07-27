@@ -5,6 +5,7 @@ export const ESTADOS = {
   rechazada:  { label: 'Rechazada',  color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
   vencida:    { label: 'Vencida',    color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
   convertida: { label: 'Convertida', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
+  cancelada:  { label: 'Cancelada',  color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
 };
 
 export const EMPTY_ITEM = { descripcion: '', cantidad: 1, precio_unitario: '', descuento_item: '', producto_id: null, unidad_medida: '' };

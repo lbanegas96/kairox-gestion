@@ -1,6 +1,6 @@
 import {
   Building, Mail, MapPin, Hash, Upload, Loader2, Trash2, AlertCircle,
-  Image as ImageIcon, Save,
+  Image as ImageIcon, Save, Phone, Landmark, CalendarDays,
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,7 @@ import { formatCuit } from '@/lib/cuitUtils';
 const TabEmpresa = ({
   formData, setFormData, saving, uploading, fileInputRef,
   handleSave, handleChange, handleFileSelect, handleRemoveLogo,
+  usaFacturaElectronica,
 }) => (
   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
     {/* Formulario */}
@@ -51,6 +52,14 @@ const TabEmpresa = ({
           <div className="relative">
             <MapPin className="absolute left-3 top-2.5 h-4 w-4 text-kx-text-3" />
             <Input name="direccion" value={formData.direccion} onChange={handleChange} placeholder="Av. Corrientes 1234" className="pl-9 kairox-input" />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-slate-700 dark:text-slate-300">Teléfono</Label>
+          <div className="relative">
+            <Phone className="absolute left-3 top-2.5 h-4 w-4 text-kx-text-3" />
+            <Input name="telefono" value={formData.telefono} onChange={handleChange} placeholder="351 1234567" className="pl-9 kairox-input" />
           </div>
         </div>
 
@@ -109,6 +118,31 @@ const TabEmpresa = ({
           </select>
           <p className="text-2xs text-kx-text-3">Se usa en certificados de retención y facturas. Si activás AFIP, se usa el mismo dato.</p>
         </div>
+
+        {/* Ingresos Brutos + Fecha de Inicio de Actividades — datos que RG 1415/AFIP
+            exige en el membrete de todo comprobante (factura, remito, nota). */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-slate-700 dark:text-slate-300">N° Ingresos Brutos</Label>
+            <div className="relative">
+              <Landmark className="absolute left-3 top-2.5 h-4 w-4 text-kx-text-3" />
+              <Input name="numero_ingresos_brutos" value={formData.numero_ingresos_brutos} onChange={handleChange} placeholder="Ej. 123456789 o CM" className="pl-9 kairox-input" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-slate-700 dark:text-slate-300">Inicio de actividades</Label>
+            <div className="relative">
+              <CalendarDays className="absolute left-3 top-2.5 h-4 w-4 text-kx-text-3" />
+              <Input type="date" name="fecha_inicio_actividades" value={formData.fecha_inicio_actividades} onChange={handleChange} className="pl-9 kairox-input" />
+            </div>
+          </div>
+        </div>
+        {usaFacturaElectronica && (!formData.numero_ingresos_brutos || !formData.fecha_inicio_actividades) && (
+          <p className="text-2xs text-amber-600 dark:text-amber-400 flex items-start gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
+            Facturación Electrónica está activa: Ingresos Brutos y Fecha de Inicio de Actividades son obligatorios en el membrete de toda factura (RG AFIP 1415).
+          </p>
+        )}
 
         {/* Logo */}
         <div className="space-y-2">

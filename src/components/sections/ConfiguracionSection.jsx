@@ -68,16 +68,21 @@ const ConfiguracionSection = ({ initialTab }) => {
     company_logo: '',
     email_empresa: '',
     direccion: '',
+    telefono: '',
     rubro: '',
     provincia: '',
     localidad: '',
     cp: '',
     afip_cuit: '',
     condicion_iva: '',
+    numero_ingresos_brutos: '',
+    fecha_inicio_actividades: '',
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [empresaDatos, setEmpresaDatos] = useState({ afip_cuit: null, condicion_iva: null });
+  const [empresaDatos, setEmpresaDatos] = useState({
+    afip_cuit: null, condicion_iva: null, numero_ingresos_brutos: null, fecha_inicio_actividades: null,
+  });
 
   // ── Tab 2: Finanzas ───────────────────────────────────────────────────────
   const [tcConfig, setTcConfig] = useState({ usa_tc_paralelo: false, moneda_paralela: 'USD' });
@@ -250,7 +255,7 @@ const ConfiguracionSection = ({ initialTab }) => {
     try {
       const { data: emp } = await supabase
         .from('empresas')
-        .select('usa_factura_electronica, condicion_iva, afip_cuit, nombre')
+        .select('usa_factura_electronica, condicion_iva, afip_cuit, nombre, numero_ingresos_brutos, fecha_inicio_actividades')
         .eq('id', user.empresa_id)
         .single();
       if (emp) {
@@ -260,7 +265,12 @@ const ConfiguracionSection = ({ initialTab }) => {
           afip_cuit: emp.afip_cuit ?? null,
           nombre: emp.nombre ?? '',
         });
-        setEmpresaDatos({ afip_cuit: emp.afip_cuit ?? null, condicion_iva: emp.condicion_iva ?? null });
+        setEmpresaDatos({
+          afip_cuit: emp.afip_cuit ?? null,
+          condicion_iva: emp.condicion_iva ?? null,
+          numero_ingresos_brutos: emp.numero_ingresos_brutos ?? null,
+          fecha_inicio_actividades: emp.fecha_inicio_actividades ?? null,
+        });
       }
       const { data: pvs } = await supabase
         .from('puntos_venta')
@@ -296,7 +306,11 @@ const ConfiguracionSection = ({ initialTab }) => {
   };
 
   useEffect(() => {
-    if (activeTab === 'facturacion') reloadAFIP();
+    // 'empresa' es la tab por defecto (no 'facturacion') — antes esto solo se
+    // disparaba al visitar Facturación, así que CUIT/Cond. IVA/IIBB/Inicio de
+    // Actividades aparecían vacíos en Configuración → Empresa hasta que el
+    // usuario pasara primero por la otra tab.
+    if (activeTab === 'facturacion' || activeTab === 'empresa') reloadAFIP();
   }, [user?.empresa_id, activeTab]);
 
   const reloadTipos = async (pvId) => {
@@ -350,18 +364,43 @@ const ConfiguracionSection = ({ initialTab }) => {
     if (config) {
       setFormData(prev => ({
         ...prev,
-        nombre_empresa:  config.nombre_empresa  || '',
-        // EGRESS-FIX: el logo ya no viaja por el contexto (era un blob de ~960KB que
-        // se traía en cada montaje). Lo trae el efecto dedicado de abajo, filtrado.
-        email_empresa:   config.email_empresa   || '',
-        direccion:       config.direccion       || '',
-        rubro:           config.rubro           || '',
-        provincia:       config.provincia       || '',
-        localidad:       config.localidad       || '',
-        cp:              config.cp              || '',
+        nombre_empresa: config.nombre_empresa || '',
+        // El resto de los campos de contacto (email, dirección, rubro, localidad,
+        // provincia, cp, teléfono) NO viajan por este contexto global (EGRESS-FIX
+        // sesión 78 lo acotó a solo nombre_empresa) — los trae el fetch dedicado
+        // de abajo, dirigido con `.in('clave', [...])` para no repetir el problema
+        // de egress. Antes de este fix quedaban permanentemente en blanco acá
+        // aunque estuvieran guardados en la DB.
       }));
     }
   }, [config]);
+
+  // Contacto/domicilio de la empresa: fetch dedicado y filtrado (no pasa por el
+  // contexto global, ver comentario arriba). Antes de este fix, Configuración →
+  // Empresa mostraba estos campos vacíos en cada carga de página aunque
+  // estuvieran guardados — el usuario podía terminar re-tipeando y pisando datos
+  // reales, y los PDFs (que sí leen esta tabla) mostraban valores desincronizados.
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    supabase
+      .from('configuracion')
+      .select('clave, valor')
+      .eq('empresa_id', user.empresa_id)
+      .in('clave', ['email_empresa', 'direccion', 'telefono', 'rubro', 'provincia', 'localidad', 'cp'])
+      .then(({ data }) => {
+        const cfg = Object.fromEntries((data ?? []).map(r => [r.clave, r.valor]));
+        setFormData(prev => ({
+          ...prev,
+          email_empresa: cfg.email_empresa ?? '',
+          direccion:     cfg.direccion     ?? '',
+          telefono:      cfg.telefono      ?? '',
+          rubro:         cfg.rubro         ?? '',
+          provincia:     cfg.provincia     ?? '',
+          localidad:     cfg.localidad     ?? '',
+          cp:            cfg.cp            ?? '',
+        }));
+      });
+  }, [user?.empresa_id]);
 
   // EGRESS-FIX (sesión 78): traer el logo existente por su cuenta, filtrado por clave
   // (nunca más vía el contexto global). Además lo cachea en localStorage para que la
@@ -384,14 +423,16 @@ const ConfiguracionSection = ({ initialTab }) => {
       });
   }, [user?.empresa_id]);
 
-  // Hidratar afip_cuit/condicion_iva en el form cuando llega desde empresas
+  // Hidratar afip_cuit/condicion_iva/IIBB/inicio de actividades en el form cuando llega desde empresas
   useEffect(() => {
     setFormData(prev => ({
       ...prev,
-      afip_cuit:     empresaDatos.afip_cuit     ? formatCuit(empresaDatos.afip_cuit) : '',
-      condicion_iva: empresaDatos.condicion_iva ?? '',
+      afip_cuit:                empresaDatos.afip_cuit     ? formatCuit(empresaDatos.afip_cuit) : '',
+      condicion_iva:            empresaDatos.condicion_iva ?? '',
+      numero_ingresos_brutos:   empresaDatos.numero_ingresos_brutos ?? '',
+      fecha_inicio_actividades: empresaDatos.fecha_inicio_actividades ?? '',
     }));
-  }, [empresaDatos.afip_cuit, empresaDatos.condicion_iva]);
+  }, [empresaDatos.afip_cuit, empresaDatos.condicion_iva, empresaDatos.numero_ingresos_brutos, empresaDatos.fecha_inicio_actividades]);
 
   useEffect(() => {
     if (!user?.empresa_id) return;
@@ -865,11 +906,11 @@ const ConfiguracionSection = ({ initialTab }) => {
     setSaving(true);
     try {
       // 1. Guardar tabla `configuracion` (datos generales)
-      const { afip_cuit, condicion_iva, ...configFields } = formData;
+      const { afip_cuit, condicion_iva, numero_ingresos_brutos, fecha_inicio_actividades, ...configFields } = formData;
       const result = await updateConfig(configFields);
       if (!result.success) throw new Error('No se pudo guardar en la base de datos.');
 
-      // 2. Guardar `empresas.afip_cuit` y `empresas.condicion_iva` (misma fuente que el wizard AFIP)
+      // 2. Guardar en `empresas` los datos fiscales (misma fuente que el wizard AFIP)
       if (user?.empresa_id) {
         const cuitDigits = (afip_cuit || '').replace(/\D/g, '');
         if (cuitDigits && cuitDigits.length !== 11) {
@@ -878,12 +919,19 @@ const ConfiguracionSection = ({ initialTab }) => {
           const { error: empErr } = await supabase
             .from('empresas')
             .update({
-              afip_cuit:     cuitDigits || null,
-              condicion_iva: condicion_iva || null,
+              afip_cuit:                cuitDigits || null,
+              condicion_iva:            condicion_iva || null,
+              numero_ingresos_brutos:   numero_ingresos_brutos || null,
+              fecha_inicio_actividades: fecha_inicio_actividades || null,
             })
             .eq('id', user.empresa_id);
           if (empErr) throw empErr;
-          setEmpresaDatos({ afip_cuit: cuitDigits || null, condicion_iva: condicion_iva || null });
+          setEmpresaDatos({
+            afip_cuit: cuitDigits || null,
+            condicion_iva: condicion_iva || null,
+            numero_ingresos_brutos: numero_ingresos_brutos || null,
+            fecha_inicio_actividades: fecha_inicio_actividades || null,
+          });
         }
       }
 
@@ -1645,6 +1693,7 @@ const ConfiguracionSection = ({ initialTab }) => {
             handleChange={handleChange}
             handleFileSelect={handleFileSelect}
             handleRemoveLogo={handleRemoveLogo}
+            usaFacturaElectronica={afipConfig.usa_factura_electronica}
           />
         </TabsContent>
 

@@ -1,4 +1,4 @@
-import { Search, Eye, Trash2, CheckCircle, XCircle, Send, ShoppingCart, ExternalLink } from 'lucide-react';
+import { Search, Eye, Trash2, CheckCircle, XCircle, Send, ShoppingCart, ExternalLink, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatCurrency } from '@/lib/currencyUtils';
@@ -107,6 +107,16 @@ function TablaCotizaciones({
                       >
                         <ExternalLink className="w-3 h-3" /> Venta
                       </button>
+                    )}
+                    {['enviada', 'aprobada'].includes(cot.estado) && (
+                      <Button
+                        variant="ghost" size="icon"
+                        className="h-7 w-7 text-kx-text-3 hover:text-kx-red"
+                        onClick={() => estadoMutation.mutate({ id: cot.id, estado: 'cancelada' })}
+                        title="Cancelar cotización"
+                      >
+                        <Ban className="w-3.5 h-3.5" />
+                      </Button>
                     )}
                     {['borrador', 'rechazada'].includes(cot.estado) && (
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-red" onClick={() => deleteMutation.mutate(cot.id)} title="Eliminar">

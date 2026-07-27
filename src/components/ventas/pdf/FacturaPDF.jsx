@@ -363,6 +363,12 @@ export function FacturaPDF({ comprobante, items, pagos, empresa, qrDataUrl }) {
             {empresa?.direccion ? (
               <Text style={styles.emisorDato}>{empresa.direccion}</Text>
             ) : null}
+            {empresa?.numero_ingresos_brutos ? (
+              <Text style={styles.emisorDato}>IIBB: {empresa.numero_ingresos_brutos}</Text>
+            ) : null}
+            {empresa?.fecha_inicio_actividades ? (
+              <Text style={styles.emisorDato}>Inicio activ.: {formatFecha(empresa.fecha_inicio_actividades)}</Text>
+            ) : null}
           </View>
 
           {/* Columna central: Tipo (A/B/C) */}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, CheckCircle, Download, Loader2, Send, PackageCheck } from 'lucide-react';
+import { FileText, CheckCircle, Download, Loader2, Send, PackageCheck, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -10,8 +10,10 @@ import { ESTADOS } from './shared';
 
 // Mismos estados desde los que hoy se permite "Convertir en Venta" (TablaCotizaciones.jsx)
 const ESTADOS_COPIABLES = ['aprobada', 'enviada'];
+// Mismos estados desde los que se puede Cancelar (TablaCotizaciones.jsx)
+const ESTADOS_CANCELABLES = ['aprobada', 'enviada'];
 
-function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido }) {
+function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, onCancelar }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [generatingPDF, setGeneratingPDF] = useState(false);
@@ -136,6 +138,15 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido })
         <DialogFooter className="flex-wrap gap-2 sm:justify-between">
           <Button variant="outline" onClick={() => setViewId(null)} className="dark:border-kx-border dark:text-slate-300">Cerrar</Button>
           <div className="flex gap-2 flex-wrap">
+            {onCancelar && detalle && ESTADOS_CANCELABLES.includes(detalle.estado) && (
+              <Button
+                variant="outline"
+                onClick={() => onCancelar(detalle.id)}
+                className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20"
+              >
+                <Ban className="w-4 h-4 mr-2" /> Cancelar
+              </Button>
+            )}
             {onCopiarAPedido && detalle && ESTADOS_COPIABLES.includes(detalle.estado) && (
               <Button variant="outline" onClick={() => onCopiarAPedido(detalle)} className="dark:border-kx-border dark:text-slate-300">
                 <PackageCheck className="w-4 h-4 mr-2" /> Copiar a Pedido
