@@ -73,7 +73,7 @@ export const documentFlowService = {
     if (!origen && comp.pedido_id) {
       const { data: ped } = await supabase
         .from('pedidos')
-        .select('id, numero, fecha_pedido, total, estado')
+        .select('id, numero, fecha, total, estado')
         .eq('id', comp.pedido_id)
         .single();
       if (ped) {
@@ -81,7 +81,7 @@ export const documentFlowService = {
           id: ped.id,
           tipo: 'pedido',
           numero: ped.numero,
-          fecha: ped.fecha_pedido,
+          fecha: ped.fecha,
           monto: Number(ped.total),
           estado: ped.estado,
           seccion: 'pedidos',

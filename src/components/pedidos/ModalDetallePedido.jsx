@@ -2,6 +2,7 @@ import { FileText, Check, Truck, ArrowRight, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { formatDateAR } from '@/lib/dateUtils';
+import { formatCurrency } from '@/lib/currencyUtils';
 import DocumentFlow from '@/components/shared/DocumentFlow';
 import { getEstado, EstadoBadge } from './shared';
 
@@ -102,6 +103,12 @@ function ModalDetallePedido({
                     <span className="text-sm dark:text-slate-300">{formatDateAR(detailPedido.fecha_entrega)}</span>
                   </div>
                 )}
+                {detailPedido.referencia_cliente && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-kx-text-2">N° Referencia del Cliente</span>
+                    <span className="text-sm dark:text-slate-300">{detailPedido.referencia_cliente}</span>
+                  </div>
+                )}
                 {detailPedido.notas && (
                   <div className="bg-kx-surface-2 dark:bg-kx-surface rounded-lg p-3 text-sm text-kx-text-2 dark:text-kx-text-2">
                     {detailPedido.notas}
@@ -147,7 +154,7 @@ function ModalDetallePedido({
                             {ent}
                           </td>
                           <td className="py-2 text-right font-mono dark:text-kx-text">
-                            ${subEntregado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                            {formatCurrency(subEntregado, detailPedido.moneda ?? 'ARS')}
                           </td>
                         </tr>
                       );
@@ -155,9 +162,9 @@ function ModalDetallePedido({
                   </tbody>
                 </table>
                 <div className="text-right font-bold text-lg dark:text-kx-text">
-                  Total entregado: ${items.reduce((s, it) => s + (Number(it.cantidad_entregada || 0) * Number(it.precio_unitario || 0)), 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                  Total entregado: {formatCurrency(items.reduce((s, it) => s + (Number(it.cantidad_entregada || 0) * Number(it.precio_unitario || 0)), 0), detailPedido.moneda ?? 'ARS')}
                   <div className="text-xs font-normal text-kx-text-3">
-                    Total pedido: ${Number(detailPedido.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    Total pedido: {formatCurrency(detailPedido.total, detailPedido.moneda ?? 'ARS')}
                   </div>
                 </div>
 

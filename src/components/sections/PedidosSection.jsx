@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { getNowAR } from '@/lib/dateUtils';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 import GenerarMovimientoModal from '@/components/shared/GenerarMovimientoModal';
 import NuevaVentaModal from '@/components/ventas/NuevaVentaModal';
 import { ESTADOS, getEstado } from '@/components/pedidos/shared';
@@ -57,10 +58,14 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
     cliente_id: '',
     notas: '',
     fecha_entrega: '',
-    items: [{ producto_id: '', descripcion: '', cantidad: 1, precio_unitario: 0 }],
+    referencia_cliente: '',
+    moneda: 'ARS',
+    tipoCambioTasa: 1,
+    items: [{ producto_id: '', descripcion: '', cantidad: 1, precio_unitario: 0, descuento_item: '' }],
   });
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
+  const [tcMissing, setTcMissing] = useState(false);
 
   // Origen de la cotización cuando el pedido se prellenó vía "Copiar a Pedido"
   const [origenCotizacionId, setOrigenCotizacionId] = useState(null);
@@ -78,16 +83,19 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       cliente_id: prefillCotizacion.cliente_id || '',
       notas: `Copiado de cotización ${prefillCotizacion.numero}`,
       fecha_entrega: '',
-      items: (prefillCotizacion.cotizacion_items ?? []).map(it => {
-        const cantidad = Number(it.cantidad) || 1;
-        const precioNeto = cantidad > 0 ? Number(it.subtotal) / cantidad : Number(it.precio_unitario);
-        return {
-          producto_id: it.producto_id || '',
-          descripcion: it.descripcion,
-          cantidad,
-          precio_unitario: precioNeto,
-        };
-      }),
+      referencia_cliente: '',
+      // La cotización guarda los montos crudos en su propia moneda (sin normalizar
+      // a ARS) — hay que copiar moneda + tasa junto con los ítems, si no el pedido
+      // reinterpreta silenciosamente un monto en USD como si fuera ARS.
+      moneda: prefillCotizacion.moneda || 'ARS',
+      tipoCambioTasa: Number(prefillCotizacion.tipo_cambio_tasa) || 1,
+      items: (prefillCotizacion.cotizacion_items ?? []).map(it => ({
+        producto_id: it.producto_id || '',
+        descripcion: it.descripcion,
+        cantidad: Number(it.cantidad) || 1,
+        precio_unitario: Number(it.precio_unitario) || 0,
+        descuento_item: it.descuento_item || '',
+      })),
     });
     setIsModalOpen(true);
     if (!prefillCotizacion.cliente_id) {
@@ -161,7 +169,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
 
   // ── Form helpers ────────────────────────────────────────────────────────────
   const addItem = () =>
-    setForm(f => ({ ...f, items: [...f.items, { producto_id: '', descripcion: '', cantidad: 1, precio_unitario: 0 }] }));
+    setForm(f => ({ ...f, items: [...f.items, { producto_id: '', descripcion: '', cantidad: 1, precio_unitario: 0, descuento_item: '' }] }));
 
   const removeItem = (i) =>
     setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
@@ -180,9 +188,16 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       return { ...f, items };
     });
 
-  const totalForm = form.items.reduce(
-    (s, it) => s + (parseFloat(it.cantidad) || 0) * (parseFloat(it.precio_unitario) || 0), 0
-  );
+  const totales = form.items.reduce((acc, it) => {
+    const cant = parseFloat(it.cantidad) || 0;
+    const precio = parseFloat(it.precio_unitario) || 0;
+    const descPct = parseNumberLocale(it.descuento_item) || 0;
+    const bruto = cant * precio;
+    acc.subtotal += bruto;
+    acc.descuento += bruto * (descPct / 100);
+    return acc;
+  }, { subtotal: 0, descuento: 0 });
+  totales.total = totales.subtotal - totales.descuento;
 
   const openNew = () => { setEditingPedido(null); setForm(emptyForm()); setOrigenCotizacionId(null); setIsModalOpen(true); };
   const openEdit = (p) => {
@@ -191,6 +206,9 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       cliente_id: p.cliente_id || '',
       notas: p.notas || '',
       fecha_entrega: p.fecha_entrega || '',
+      referencia_cliente: p.referencia_cliente || '',
+      moneda: p.moneda || 'ARS',
+      tipoCambioTasa: Number(p.tipo_cambio_tasa) || 1,
       items: p.pedido_items?.length
         ? p.pedido_items.map(it => ({
             id: it.id,
@@ -198,6 +216,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
             descripcion: it.descripcion,
             cantidad: it.cantidad,
             precio_unitario: it.precio_unitario,
+            descuento_item: it.descuento_item || '',
           }))
         : emptyForm().items,
     });
@@ -210,13 +229,23 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
     if (!validItems.length) {
       toast({ title: 'Agregá al menos un ítem', variant: 'destructive' }); return;
     }
+    if (form.moneda !== 'ARS' && tcMissing) {
+      toast({ title: 'Falta el tipo de cambio del día', description: `Cargá la tasa de ${form.moneda} para hoy antes de guardar el pedido.`, variant: 'destructive' });
+      return;
+    }
     setSaving(true);
     try {
       const clienteObj = clientes.find(c => c.id === form.cliente_id);
       const now = getNowAR().toISOString();
-      const total = validItems.reduce(
-        (s, it) => s + (parseFloat(it.cantidad) || 0) * (parseFloat(it.precio_unitario) || 0), 0
-      );
+      const itemsCalc = validItems.map(it => {
+        const cantidad = parseFloat(it.cantidad) || 1;
+        const precioUnitario = parseFloat(it.precio_unitario) || 0;
+        const descuentoItem = parseNumberLocale(it.descuento_item) || 0;
+        return { ...it, cantidad, precioUnitario, descuentoItem, subtotal: cantidad * precioUnitario * (1 - descuentoItem / 100) };
+      });
+      const subtotal = itemsCalc.reduce((s, it) => s + it.cantidad * it.precioUnitario, 0);
+      const total = itemsCalc.reduce((s, it) => s + it.subtotal, 0);
+      const descuento = subtotal - total;
 
       if (editingPedido) {
         await supabase.from('pedidos').update({
@@ -224,20 +253,26 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
           cliente_nombre: clienteObj?.nombre || 'Sin cliente',
           notas: form.notas,
           fecha_entrega: form.fecha_entrega || null,
+          referencia_cliente: form.referencia_cliente || null,
+          moneda: form.moneda,
+          tipo_cambio_tasa: form.tipoCambioTasa,
+          subtotal,
+          descuento,
           total,
           updated_at: now,
         }).eq('id', editingPedido.id);
 
         await supabase.from('pedido_items').delete().eq('pedido_id', editingPedido.id);
         await supabase.from('pedido_items').insert(
-          validItems.map(it => ({
+          itemsCalc.map(it => ({
             pedido_id: editingPedido.id,
             empresa_id: user.empresa_id,
             producto_id: it.producto_id || null,
             descripcion: it.descripcion,
-            cantidad: parseFloat(it.cantidad) || 1,
-            precio_unitario: parseFloat(it.precio_unitario) || 0,
-            subtotal: (parseFloat(it.cantidad) || 1) * (parseFloat(it.precio_unitario) || 0),
+            cantidad: it.cantidad,
+            precio_unitario: it.precioUnitario,
+            descuento_item: it.descuentoItem,
+            subtotal: it.subtotal,
           }))
         );
         toast({ title: 'Pedido actualizado' });
@@ -252,6 +287,11 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
           estado: 'borrador',
           notas: form.notas,
           fecha_entrega: form.fecha_entrega || null,
+          referencia_cliente: form.referencia_cliente || null,
+          moneda: form.moneda,
+          tipo_cambio_tasa: form.tipoCambioTasa,
+          subtotal,
+          descuento,
           total,
           fecha: now,
           cotizacion_id: origenCotizacionId,
@@ -259,14 +299,15 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
         if (error) throw error;
 
         await supabase.from('pedido_items').insert(
-          validItems.map(it => ({
+          itemsCalc.map(it => ({
             pedido_id: pedido.id,
             empresa_id: user.empresa_id,
             producto_id: it.producto_id || null,
             descripcion: it.descripcion,
-            cantidad: parseFloat(it.cantidad) || 1,
-            precio_unitario: parseFloat(it.precio_unitario) || 0,
-            subtotal: (parseFloat(it.cantidad) || 1) * (parseFloat(it.precio_unitario) || 0),
+            cantidad: it.cantidad,
+            precio_unitario: it.precioUnitario,
+            descuento_item: it.descuentoItem,
+            subtotal: it.subtotal,
           }))
         );
         toast({ title: `Pedido ${numero} creado` });
@@ -443,7 +484,8 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
         addItem={addItem}
         removeItem={removeItem}
         updateItem={updateItem}
-        totalForm={totalForm}
+        totales={totales}
+        tcMissing={tcMissing} setTcMissing={setTcMissing}
         handleSave={handleSave}
         saving={saving}
       />

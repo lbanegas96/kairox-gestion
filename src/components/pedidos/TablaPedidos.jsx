@@ -2,6 +2,7 @@ import { ClipboardList, User, Calendar, Edit3, Truck, ArrowRight, Receipt, X } f
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { formatDateAR } from '@/lib/dateUtils';
+import { formatCurrency } from '@/lib/currencyUtils';
 import { getEstado, EstadoBadge, ProgressoBadge } from './shared';
 
 function TablaPedidos({
@@ -90,7 +91,7 @@ function TablaPedidos({
                       ) : '—'}
                     </td>
                     <td className="p-4 text-right font-mono font-bold dark:text-kx-text">
-                      ${Number(pedido.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                      {formatCurrency(pedido.total, pedido.moneda ?? 'ARS')}
                     </td>
                     <td className="p-4 text-center">
                       <ProgressoBadge items={items} />
