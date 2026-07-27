@@ -1,5 +1,36 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-25 (Luciano — Libro IVA Ventas mejorado (commit `3dce527`), roadmap de Reportería 100% cerrado del lado "alcance 1"; plan de TC automático y research de RG3685 documentados para después; próximo: Ventas)
+**Última actualización:** 2026-07-25 (Luciano — arrancó el módulo de Ventas con el rediseño de Cotizaciones (commit `ef04aed`), sin nota de handoff propia hasta ahora — agregada retroactivamente por Nadia/Claude el 2026-07-26 al no encontrar resumen escrito de ese commit)
+
+> ✅ **Ventas — rediseño de Cotización estilo SAP + "Copiar a Pedido" + toggle de
+> módulo (commit `ef04aed`, 2026-07-25).** Primer paso del módulo de Ventas que
+> Luciano dejó como "próximo, sin alcance definido" en la sesión de Reportería —
+> arrancó por Cotizaciones. **Sin probar en vivo todavía** (retomado recién ahora,
+> 2026-07-26).
+> - Botón "Nueva" (antes duplicado) unificado en un solo modal, mismo patrón que
+>   Factura/Pedido. Condiciones de Pago pasa de texto libre a selector del
+>   maestro `condiciones_pago`. Nuevo % descuento por línea + footer con
+>   desglose Subtotal/Descuento/Total. Export a PDF descargable + WhatsApp con
+>   texto prellenado.
+> - **Fix real:** la lista y el detalle de Cotizaciones dividían el total por
+>   el TC del día como si estuviera en ARS, mostrando montos absurdos en
+>   moneda extranjera (ej. USD 20,74 en vez de $30.000). Los montos se guardan
+>   tal como se ingresan — se sacó la conversión incorrecta.
+> - **"Copiar a Pedido"** (migración 247, `pedidos.cotizacion_id`): desde el
+>   detalle de una cotización aprobada/enviada, genera un Pedido prellenado
+>   (cliente, ítems, precios) con trazabilidad real — NO cambia el estado de
+>   la cotización origen, es solo trazabilidad (mismo criterio que SAP B1: la
+>   fila de cotización queda clickeable, y el Pedido muestra un chip navegable
+>   de vuelta a su cotización de origen).
+> - **Toggle "Módulo Cotizaciones" por empresa** (migración 248,
+>   `empresas.cotizaciones_activo`, default `true` — ninguna empresa existente
+>   cambia de comportamiento sola). En Configuración → Facturación, oculta
+>   Cotizaciones del sidebar/tab de Ventas/Acciones Rápidas sin borrar datos.
+>
+> **Pendiente real:** probar en vivo el flujo completo (crear cotización →
+> aprobar → Copiar a Pedido → confirmar que el Pedido llega bien prellenado y
+> el chip de trazabilidad funciona en ambos sentidos) — no hay evidencia en el
+> commit de que se haya verificado contra datos reales, a diferencia del resto
+> de la sesión de Reportería que sí documentó verificación en vivo paso a paso.
 
 > ✅ **Libro IVA Ventas — CUIT, desglose por alícuota, export estándar (commit
 > `3dce527`, 2026-07-25).** Alcance 1 de la mejora acordada con Luciano — el
@@ -8905,6 +8936,31 @@ Bancos, pago propio debitado por el banco en Bancos. Build sin errores, verifica
 
 Fuera de alcance (documentado): 'endosado' no cancela la compra puntual del proveedor endosado (la
 UI no captura qué compra se paga en ese momento) — 'descontado' sigue sin modelo contable propio.
+
+### Sesión 2026-07-26 — Verificación en vivo del rediseño de Cotizaciones + diagnóstico de "Olvidé mi contraseña"
+
+**1. Fix de trazabilidad "Copiar a Pedido" (commit `6d9d9cf`) — verificado en producción por Nadia.**
+La sesión anterior había dejado "Copiar a Pedido" sin ningún aviso si ya se había copiado antes (podía generar pedidos duplicados sin querer). Se agregó el join `pedidos(id, numero)` a `cotizacionesService.getAll()`/`getById()`, un link ámbar "→ Pedido" en la fila de `TablaCotizaciones.jsx` y un warning ámbar en `ModalDetalleCotizacion.jsx` ("Ya se copió a pedido: PED-... Volver a copiar generará un pedido adicional."), ambos con navegación bidireccional Cotización↔Pedido (`onVerPedido` enhebrado por `CotizacionesSection.jsx` → `VentasSection.jsx` → `PedidosSection.jsx`, que abre el modal de detalle del pedido destino). Probado en vivo por Nadia con COT-00021: copió a PED-20260725-003, el link y el warning aparecieron correctamente, y el `DocumentFlowPanel` del pedido mostró el flujo completo `COT-00021 → PED-20260725-003`. Sin regresiones.
+
+**2. Toggle "Módulo Cotizaciones" — verificado en producción.**
+Desactivar el módulo en Configuración → Facturación oculta correctamente la pestaña y la entrada del sidebar sin borrar datos; reactivarlo la vuelve a mostrar. Confirmado por Nadia con ambos toasts ("desactivado"/"activado") y sin pérdida de las cotizaciones existentes.
+
+**3. Bug reportado: "Olvidé mi contraseña" — diagnosticado, NO resuelto (requiere acción manual fuera del repo).**
+Nadia reportó que al pedir recuperación de contraseña el frontend muestra "Error sending recovery email" y no llega ningún correo. Revisando código (`AuthPage.jsx` `handlePasswordRecovery`, llama a `supabase.auth.resetPasswordForEmail` — implementación correcta, sin bug) y luego los logs de Supabase Auth (`get_logs`, service `auth`) en el momento exacto del intento, se encontró la causa raíz real:
+```
+gomail: could not send email 1: 550 "You can only send testing emails to your own email address
+(naluxind@gmail.com). To send emails to other recipients, please verify a domain at
+resend.com/domains, and change the `from` address to an email using this domain."
+```
+La cuenta de Resend (proveedor SMTP configurado en Supabase Auth, ver `## Infraestructura`) está en **modo sandbox**: solo permite enviar a la casilla dueña de la cuenta (`naluxind@gmail.com`), bloqueando cualquier otro destinatario — por eso nunca llegó el correo a `nalux2430@gmail.com`. No es un bug de código; el `.env`/config del repo no tiene nada de SMTP en producción (`supabase/config.toml` solo deshabilita SMTP para tests locales/CI, no aplica).
+
+**Fix pendiente (requiere login humano, no delegable a Claude por política de seguridad — no se ingresan credenciales ni se cambia config de cuentas):**
+1. Verificar un dominio propio en [resend.com/domains](https://resend.com/domains) (con la cuenta que administra el Resend de Kairox) — requiere agregar registros DNS (SPF/DKIM).
+2. En Supabase Dashboard → Authentication → Emails (SMTP Settings), actualizar el remitente ("From") a una dirección de ese dominio verificado.
+
+**Atajo temporal** (sin esperar verificación de dominio): desactivar el SMTP personalizado de Resend en el mismo panel de Supabase para que use el mailer propio de Supabase — desbloquea recuperación de contraseña de inmediato, pero con rate limit muy bajo (no apto para producción real, solo mientras se verifica el dominio). Usuario decidió no resolverlo en esta sesión; queda para retomar cuando alguien con acceso a Resend/Supabase Dashboard esté disponible.
+
+---
 
 ## 3 grandes proyectos al final
 

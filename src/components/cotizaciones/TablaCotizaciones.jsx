@@ -11,7 +11,7 @@ function TablaCotizaciones({
   isLoading, filteredData,
   listData, page,
   setViewId, estadoMutation, deleteMutation,
-  handleConvertirClick, onNavigateToSale,
+  handleConvertirClick, onNavigateToSale, onVerPedido,
 }) {
   return (
     <div className="space-y-4">
@@ -97,6 +97,16 @@ function TablaCotizaciones({
                       >
                         <ShoppingCart className="w-3.5 h-3.5" />
                       </Button>
+                    )}
+                    {(cot.pedidos ?? []).length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => onVerPedido?.(cot.pedidos[0].id)}
+                        className="text-xs text-amber-600 dark:text-amber-400 hover:opacity-80 font-medium flex items-center gap-1 hover:underline cursor-pointer"
+                        title={`Ya copiada a ${cot.pedidos.length === 1 ? 'pedido' : `${cot.pedidos.length} pedidos`}`}
+                      >
+                        <ExternalLink className="w-3 h-3" /> Pedido{cot.pedidos.length > 1 ? ` (${cot.pedidos.length})` : ''}
+                      </button>
                     )}
                     {cot.estado === 'convertida' && cot.comprobante_id && (
                       <button

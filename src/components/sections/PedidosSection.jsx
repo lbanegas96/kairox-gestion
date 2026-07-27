@@ -18,7 +18,7 @@ import ModalPedidoForm from '@/components/pedidos/ModalPedidoForm';
 import ModalDetallePedido from '@/components/pedidos/ModalDetallePedido';
 
 // ── Componente principal ───────────────────────────────────────────────────────
-function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed } = {}) {
+function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navigatePedidoId, onNavigated } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -96,6 +96,18 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed } = {
     onPrefillConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefillCotizacion]);
+
+  // Navegación desde el Flujo del Documento de otra sección (ej. Cotización → Pedido generado)
+  useEffect(() => {
+    if (!navigatePedidoId || !pedidos.length) return;
+    const pedido = pedidos.find(p => p.id === navigatePedidoId);
+    if (pedido) {
+      setDetailPedido(pedido);
+      setIsDetailOpen(true);
+    }
+    onNavigated?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigatePedidoId, pedidos]);
 
   // Fetch entregas del pedido abierto en el modal de detalle
   useEffect(() => {
