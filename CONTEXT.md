@@ -8960,6 +8960,88 @@ La cuenta de Resend (proveedor SMTP configurado en Supabase Auth, ver `## Infrae
 
 **Atajo temporal** (sin esperar verificación de dominio): desactivar el SMTP personalizado de Resend en el mismo panel de Supabase para que use el mailer propio de Supabase — desbloquea recuperación de contraseña de inmediato, pero con rate limit muy bajo (no apto para producción real, solo mientras se verifica el dominio). Usuario decidió no resolverlo en esta sesión; queda para retomar cuando alguien con acceso a Resend/Supabase Dashboard esté disponible.
 
+### Sesión 2026-07-27/28 — Cierre completo del ciclo O2C: Cotización → Pedido → Entrega → Factura
+
+Metodología usada toda la sesión (a pedido del usuario, se repite en cada módulo): el usuario muestra
+una captura real de SAP Business One del documento equivalente, se mapea campo por campo qué tiene
+KAIROX y qué le falta, se propone una lista priorizada de gaps, el usuario aprueba, se construye
+(migration + código), se verifica en vivo contra producción (autorización explícita del usuario para
+testear con datos reales de Nalux esta sesión — "el entorno de producción está sucio y es justamente
+para eso") y se limpia el dato de prueba antes de seguir. Commits: `5ccff3a`, `bf9a2d9`, `f127edb`,
+`040e200`, `7f4caab`, `7296be6`, `ae16c07`, `312aa7b`, `7f2ad97`.
+
+**1. Cotización (commit `5ccff3a`).** Se agregó estado `cancelada` (mismo patrón que ya tenían Pedidos
+y OC — antes no había forma de cerrar una cotización enviada/aprobada salvo convertirla). Se sacó
+CUIT/condición fiscal del header del PDF, dejando solo datos de contacto (no es un documento fiscal).
+Se agregaron a Empresa los campos legales N° Ingresos Brutos y Fecha de Inicio de Actividades (RG AFIP
+1415), con aviso si Facturación Electrónica está activa y faltan. Se corrigieron dos bugs de datos
+viejos: `getEmpresaParaPDF` leía dirección/teléfono/rubro de columnas huérfanas de `empresas` en vez
+de `configuracion` (la fuente real desde que Configuración → Empresa guarda ahí), y la tab por defecto
+de Configuración → Empresa no recargaba esos campos al aterrizar (solo si se visitaba primero
+"Facturación"). **Pendiente explícito, a pedido del usuario:** no tocar más el CUIT del header por
+ahora — mañana va a comparar contra un documento impreso real de SAP para confirmar si SAP lo lleva o
+no en la cabecera antes de decidir si el cambio fue correcto.
+
+**2. Pedido (commit `bf9a2d9`).** Cerrados los gaps de la comparación con SAP Orden de Venta: moneda +
+tipo de cambio (antes "Copiar a Pedido" reinterpretaba silenciosamente montos en moneda extranjera de
+la cotización como si fueran ARS), %descuento por línea (`pedido_items.descuento_item`, mismo patrón
+que `cotizacion_items`), y "N° Referencia del Cliente" (PO), campo estándar de SAP B1 ausente hasta
+ahora. Fix de bug real: `documentFlowService.ts` consultaba `pedidos.fecha_pedido` (columna
+inexistente) en vez de `pedidos.fecha`.
+
+**3. Entrega — los 5 gaps de la comparación con SAP Entrega, cerrados uno por uno:**
+- **PDF del Remito** (`f127edb`) — `RemitoPDF.jsx`, sin precios/montos a propósito (en Argentina el
+  remito no puede mostrar valores monetarios), con número + CAI + trazabilidad al pedido de origen.
+- **Anular Entrega** (`040e200`) — `anular_entrega()` RPC: repone `productos.stock_actual`, registra
+  el movimiento inverso en `movimientos_inventario` (nunca borra el original) y resta
+  `pedido_items.cantidad_entregada`. Bloqueada si la entrega ya tiene `comprobante_id` (fue
+  facturada) — mismo patrón de "estado fantasma" que ya se había encontrado y cerrado en Cotización.
+- **Vista de detalle + flujo de documento clickeable** (`7f4caab`) — `ModalDetalleEntrega.jsx`
+  reemplaza el expand-inline; chips de Pedido↔Entrega↔Factura navegables. Verificado en vivo en
+  producción.
+- **Creación standalone** (`7296be6`) — `crear_entrega_manual()` RPC: cliente opcional + ítems sin
+  precio + observaciones, sin exigir pedido de origen (violaba el principio SAP de que todo documento
+  debe poder crearse independiente). Verificado en producción con ENT-2026-0084 (stock 5→4).
+
+**4. Factura — rename + Registrar Cobro + atomicidad de caja (commits `ae16c07`, `312aa7b`).**
+"Historial" pasó a llamarse "Facturas" en toda la UI (sidebar, subtítulo, Ctrl+K) — se prestaba a
+confusión. Nuevo botón "Registrar Cobro" en el detalle de una factura pendiente/parcial: navega a
+Cuenta Corriente con el cliente y el diálogo de cobro (imputación FIFO) ya abiertos, vía
+`Dashboard.navigateTo(sectionParams)` (mismo patrón que ya usa Reportes). Bug real encontrado y
+corregido: "Nueva Factura" (alta manual) solo registraba `movimientos_caja` para Efectivo — pagada por
+Tarjeta o Transferencia quedaba "pagada" sin rastro en caja, a diferencia de `crear_venta` (POS), que
+sí lo hace para cualquier medio no-CC. Verificado en vivo contra producción y revertido después.
+
+**5. Factura — cierre final (commit `7f2ad97`, sesión del 28/07).** Con los 3 puntos que quedaban
+pendientes tras el mapeo contra SAP "Factura de Deudores":
+- **Bug real:** `comprobante_items.producto_id` era NOT NULL pero la UI de "Nueva Factura" ofrecía
+  ítems de servicio/texto libre sin producto de catálogo — crear una factura con uno de esos ítems
+  tiraba `23502` y dejaba el comprobante huérfano (sin ítems). Fix: `producto_id` nullable + columna
+  `descripcion` nueva para poder guardar qué era el ítem (antes ni siquiera existía dónde guardar ese
+  texto). Se actualizaron los lugares que arman el nombre a mostrar (`SaleDetailModal`, impresión/PDF,
+  pre-carga de `NuevaNCModal`) para preferir `descripcion` sobre `productos.nombre`.
+- **Cancelar Factura con reversión real**, reemplazando el dropdown crudo de `estado_pago='cancelada'`
+  que no revertía nada (mismo patrón de "estado fantasma" ya visto en Cotización y Entrega). Decisión
+  de negocio del usuario: se permite cancelar con reversión total (repone stock si hubo entrega,
+  revierte el cobro en caja y la deuda en cuenta corriente, todo por *documentos de reversa* — nunca
+  se borra el rastro original, estilo SAP) **solo si la factura no tiene CAE**; si ya tiene CAE
+  emitido o en trámite, se bloquea y corresponde Nota de Crédito (`NuevaNCModal`/`crear_nota_credito`,
+  ya existente). También se bloquea si la factura ya tiene cobros imputados desde Cuenta Corriente. El
+  contra-asiento contable lo genera `asientosAutoService.crearAsientoReversaVenta` (nuevo, en
+  `planCuentasService.ts`), leyendo el asiento original (`origen='venta'`) y creando uno nuevo con
+  débito/haber invertidos — el original queda `confirmado` sin tocar. Se agregó `comprobante_id` a
+  `movimientos_caja` (antes solo se podía inferir por texto de `concepto`) para poder ubicar con
+  certeza qué movimiento revertir.
+- **N° Referencia del Cliente** agregado a Factura (mismo campo que ya tiene Pedido).
+
+Verificado en vivo end-to-end contra producción: factura real con ítem de servicio + Tarjeta,
+cancelada, confirmado en la base que se revirtió el movimiento de caja y se generó el asiento de
+reversa (neto cero), y todo el rastro de prueba borrado después.
+
+Con esto el ciclo O2C completo (Cotización → Pedido → Entrega → Factura) queda al nivel de SAP B1 en
+todos los puntos comparados. Quedan fuera de esta sesión: Devoluciones/NC/ND no se compararon contra
+SAP todavía, y el macroproceso de Compras (S2P) no se tocó.
+
 ---
 
 ## 3 grandes proyectos al final
