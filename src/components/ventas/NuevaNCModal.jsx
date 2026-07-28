@@ -30,11 +30,22 @@ const newItem = () => ({
   alicuota_iva: 21,
 });
 
-const calcNeto = (item) => {
+// precio_unit es SIEMPRE el precio final (IVA incluido) — mismo criterio que
+// crear_venta/NuevaFacturaModal. calcBruto = línea tal como se acredita;
+// calcNetoIva la separa DIVIDIENDO por el factor, nunca sumando el IVA encima
+// (bug real encontrado: NC generadas acá quedaban infladas ×(1+alícuota)).
+const FACTOR_IVA = { '21': 1.21, '10.5': 1.105 };
+const calcBruto = (item) => {
   const c = Number(item.cantidad);
   const p = parseNumberLocale(item.precio_unit) || 0;
   if (!Number.isFinite(c) || !Number.isFinite(p)) return 0;
   return c * p;
+};
+const calcNetoIva = (item) => {
+  const bruto  = calcBruto(item);
+  const factor = FACTOR_IVA[String(item.alicuota_iva)] ?? 1;
+  const neto   = bruto / factor;
+  return { neto, iva: bruto - neto };
 };
 
 // devolucionOrigen: { id, numero_devolucion, cliente_id, cliente_nombre,
@@ -151,10 +162,11 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
   const addItem    = ()   => setItems(prev => [...prev, newItem()]);
 
   // ── Cálculos ────────────────────────────────────────────────────────────────
-  const subtotalNeto = useMemo(() => items.reduce((s, i) => s + calcNeto(i), 0), [items]);
-  const totalIva     = useMemo(() =>
-    items.reduce((s, i) => s + calcNeto(i) * Number(i.alicuota_iva) / 100, 0), [items]);
-  const total = subtotalNeto + totalIva;
+  // total = suma de calcBruto (lo que realmente se acredita) — subtotalNeto e
+  // totalIva son el desglose de ESE total, no un extra a sumarle encima.
+  const subtotalNeto = useMemo(() => items.reduce((s, i) => s + calcNetoIva(i).neto, 0), [items]);
+  const totalIva     = useMemo(() => items.reduce((s, i) => s + calcNetoIva(i).iva, 0), [items]);
+  const total         = useMemo(() => items.reduce((s, i) => s + calcBruto(i), 0), [items]);
 
   // ── Confirmar ───────────────────────────────────────────────────────────────
   const handleConfirmar = async () => {
@@ -355,7 +367,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
                         />
                       </td>
                       <td className="px-2 py-1.5 text-right text-xs font-semibold text-kx-text tabular-nums">
-                        ${fmt(calcNeto(item))}
+                        ${fmt(calcBruto(item))}
                       </td>
                       <td className="px-2 py-1.5 text-center">
                         {items.length > 1 && (

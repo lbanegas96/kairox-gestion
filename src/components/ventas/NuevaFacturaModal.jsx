@@ -35,10 +35,24 @@ const newItem = () => ({
   alicuota_iva:  21,
 });
 
-const calcNeto = (item) => {
+// precio_unit es SIEMPRE el precio final que paga el cliente (IVA incluido) —
+// mismo criterio que crear_venta (POS) y que espera el mercado AR (Ley de
+// Defensa del Consumidor: el precio que se muestra es el precio final).
+// calcBruto = línea tal como se factura (cantidad × precio × descuento).
+// Para separar neto/IVA hay que DIVIDIR por el factor de la alícuota, nunca
+// sumarlo encima — sumarlo duplica el IVA (bug real encontrado en producción:
+// facturas y NC generadas acá quedaban infladas exactamente ×(1+alícuota)).
+const FACTOR_IVA = { '21': 1.21, '10.5': 1.105 }; // resto (exento/0/no_gravado) → factor 1, mismo criterio que crear_venta
+const calcBruto = (item) => {
   const bruto = Number(item.cantidad) * (parseNumberLocale(item.precio_unit) || 0);
   const neto  = bruto * (1 - Number(item.descuento_pct) / 100);
   return isNaN(neto) ? 0 : neto;
+};
+const calcNetoIva = (item) => {
+  const bruto  = calcBruto(item);
+  const factor = FACTOR_IVA[String(item.alicuota_iva)] ?? 1;
+  const neto   = bruto / factor;
+  return { neto, iva: bruto - neto };
 };
 
 function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess }) {
@@ -166,10 +180,11 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
   const addItem    = ()   => setItems(prev => [...prev, newItem()]);
 
   // ── Cálculos ────────────────────────────────────────────────────────────────
-  const subtotalNeto = useMemo(() => items.reduce((s, i) => s + calcNeto(i), 0), [items]);
-  const totalIva     = useMemo(() =>
-    items.reduce((s, i) => s + calcNeto(i) * Number(i.alicuota_iva) / 100, 0), [items]);
-  const total        = subtotalNeto + totalIva;
+  // total = suma de calcBruto (lo que realmente paga el cliente) — subtotalNeto
+  // e totalIva son el desglose de ESE total, no un extra a sumarle encima.
+  const subtotalNeto = useMemo(() => items.reduce((s, i) => s + calcNetoIva(i).neto, 0), [items]);
+  const totalIva     = useMemo(() => items.reduce((s, i) => s + calcNetoIva(i).iva, 0), [items]);
+  const total        = useMemo(() => items.reduce((s, i) => s + calcBruto(i), 0), [items]);
   const isCC         = formaPago === 'Cuenta Corriente';
 
   // ── Generación de número correlativo ────────────────────────────────────────
@@ -252,7 +267,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
           descripcion:     i.descripcion.trim(),
           cantidad:        Number(i.cantidad),
           precio_unitario: parseNumberLocale(i.precio_unit) || 0,
-          subtotal:        calcNeto(i),
+          subtotal:        calcBruto(i),
           alicuota_iva:    String(i.alicuota_iva),
         }))
       );
@@ -537,7 +552,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
                           </select>
                         </td>
                         <td className="px-2 py-1.5 text-right text-xs font-semibold text-kx-text tabular-nums">
-                          ${fmt(calcNeto(item))}
+                          ${fmt(calcBruto(item))}
                         </td>
                         <td className="px-2 py-1.5 text-center">
                           {items.length > 1 && (
