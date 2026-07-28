@@ -85,11 +85,11 @@ function Dashboard({ user, onLogout, onEnterPOS }) {
     switch (activeSection) {
       case 'dashboard':     return <DashboardSection onNavigate={navigateTo} />;
       case 'productos':     return <ProductosSection />;
-      case 'ventas':           return <VentasSection initialTab="historial" />;
-      case 'cotizaciones':     return <VentasSection initialTab="cotizaciones" />;
-      case 'pedidos':          return <VentasSection initialTab="pedidos" />;
-      case 'entregas':         return <VentasSection initialTab="entregas" />;
-      case 'historial_ventas': return <VentasSection initialTab="historial" />;
+      case 'ventas':           return <VentasSection initialTab="historial" onNavigateGlobal={navigateTo} />;
+      case 'cotizaciones':     return <VentasSection initialTab="cotizaciones" onNavigateGlobal={navigateTo} />;
+      case 'pedidos':          return <VentasSection initialTab="pedidos" onNavigateGlobal={navigateTo} />;
+      case 'entregas':         return <VentasSection initialTab="entregas" onNavigateGlobal={navigateTo} />;
+      case 'historial_ventas': return <VentasSection initialTab="historial" onNavigateGlobal={navigateTo} />;
       case 'listas_precio': return <ListasPrecioSection />;
       case 'ofertas':       return <OfertasSection />;
       case 'compra_rapida':          return <ComprasSection initialTab="rapida" />;
@@ -100,7 +100,7 @@ function Dashboard({ user, onLogout, onEnterPOS }) {
       case 'compras':                return <ComprasSection initialTab="rapida" />;
       case 'caja':          return <CajaSection />;
       case 'clientes':      return <ClientesSection />;
-      case 'cuentacorriente':return <CuentaCorrienteSection />;
+      case 'cuentacorriente':return <CuentaCorrienteSection initialClienteId={sectionParams.clienteId} autoAbrirCobro={sectionParams.autoAbrirCobro} />;
       case 'reportes':      return <ReportesSection initialView={sectionParams.initialView ?? null} onNavigate={navigateTo} />;
       case 'usuarios':      return <ConfiguracionSection initialTab="usuarios" />;
       case 'configuracion': return <ConfiguracionSection initialTab={sectionParams.initialTab} />;

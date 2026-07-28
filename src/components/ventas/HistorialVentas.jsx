@@ -21,7 +21,7 @@ import EstadoBadge from '@/components/ui/EstadoBadge';
 import { formatDateAR, formatTimeAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
 
-const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
+const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate, onRegistrarCobro }) => {
   const { user } = useAuth();
   const { toast } = useToast();
   
@@ -616,6 +616,7 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
         saleId={selectedSaleId}
         onUpdateSale={handleSaleUpdate}
         onNavigate={onNavigate}
+        onRegistrarCobro={onRegistrarCobro}
       />
     </div>
   );

@@ -3,7 +3,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter 
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, X, Save, Edit2, Loader2, RefreshCw, ShieldCheck, ShieldAlert, Clock, AlertTriangle } from 'lucide-react';
+import { Printer, X, Save, Edit2, Loader2, RefreshCw, ShieldCheck, ShieldAlert, Clock, AlertTriangle, Banknote } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import ComprobantePrintModal from './ComprobantePrintModal';
@@ -11,7 +11,7 @@ import { formatDateTimeAR, formatDateAR } from '@/lib/dateUtils';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import { DocumentFlowPanel } from '@/components/ui/DocumentFlowPanel';
 
-const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate }) => {
+const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate, onRegistrarCobro }) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [sale, setSale] = useState(null);
@@ -204,7 +204,18 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                       )}
                     </div>
                   ) : (
-                    <div><EstadoBadge estado={sale.estado_pago} /></div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <EstadoBadge estado={sale.estado_pago} />
+                      {['pendiente', 'parcial'].includes(sale.estado_pago) && sale.cliente_id && (
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                          onClick={() => onRegistrarCobro?.(sale.cliente_id)}
+                        >
+                          <Banknote className="h-3.5 w-3.5" /> Registrar Cobro
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

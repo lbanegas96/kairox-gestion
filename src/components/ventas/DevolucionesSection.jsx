@@ -98,7 +98,7 @@ function DevolucionesTab({ onNavigate }) {
           <Undo2 className="h-8 w-8 text-kx-text-3 mb-2" />
           <p className="font-medium text-kx-text-2">Sin devoluciones registradas</p>
           <p className="text-sm text-kx-text-3 mt-1">
-            También podés iniciar una devolución desde el ícono <Undo2 className="inline h-3.5 w-3.5 mx-0.5" /> en el Historial de Facturas.
+            También podés iniciar una devolución desde el ícono <Undo2 className="inline h-3.5 w-3.5 mx-0.5" /> en Facturas.
           </p>
         </div>
       ) : (

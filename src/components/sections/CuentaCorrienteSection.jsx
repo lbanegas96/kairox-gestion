@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { AlertTriangle, DollarSign, ArrowDownCircle, ArrowUpCircle, Users, Clock } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -16,7 +16,7 @@ import TablaClientes from '@/components/cuenta-corriente/TablaClientes';
 import TabAntiguedad from '@/components/cuenta-corriente/TabAntiguedad';
 import ModalCobro from '@/components/cuenta-corriente/ModalCobro';
 
-function CuentaCorrienteSection() {
+function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro } = {}) {
   const { user } = useAuth();
   const { isSessionOpen, currentSession } = useCaja();
   const { toast } = useToast();
@@ -86,6 +86,22 @@ function CuentaCorrienteSection() {
       fetchData();
     }
   }, [user]);
+
+  // Deep-link desde "Registrar Cobro" en el detalle de una Factura (VentasSection →
+  // Dashboard.navigateTo('cuentacorriente', {clienteId, autoAbrirCobro})). Espera a
+  // que `clients` esté cargado para tener el objeto completo (saldo_actual, etc.)
+  // que necesita openPaymentDialog/ModalCobro. El ref evita reabrir el diálogo si
+  // el usuario lo cierra y el componente re-renderiza con los mismos props.
+  const autoAbrioRef = useRef(null);
+  useEffect(() => {
+    if (!autoAbrirCobro || !initialClienteId || clients.length === 0) return;
+    if (autoAbrioRef.current === initialClienteId) return;
+    const cliente = clients.find(c => c.id === initialClienteId);
+    if (cliente) {
+      autoAbrioRef.current = initialClienteId;
+      openPaymentDialog(cliente);
+    }
+  }, [autoAbrirCobro, initialClienteId, clients]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (activeTab === 'antigüedad' && user?.empresa_id) {

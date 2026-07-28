@@ -265,17 +265,22 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
         }]);
       }
 
-      // 4. Efectivo + caja abierta → movimientos_caja
-      if (formaPago === 'Efectivo' && isSessionOpen && currentSession?.id) {
+      // 4. Cualquier medio no-CC → movimientos_caja (mismo criterio que crear_venta:
+      // Efectivo, Tarjeta y Transferencia dejan rastro en caja; caja_sesion_id es
+      // nullable a propósito para poder registrar Tarjeta/Transferencia aunque no
+      // haya una caja de efectivo abierta — antes solo Efectivo generaba el
+      // movimiento, y una factura por Tarjeta/Transferencia quedaba "pagada" sin
+      // ningún rastro en movimientos_caja).
+      if (!isCC) {
         await supabase.from('movimientos_caja').insert([{
           empresa_id:     user.empresa_id,
           user_id:        user.id,
-          caja_sesion_id: currentSession.id,
+          caja_sesion_id: currentSession?.id ?? null,
           tipo:           'ingreso',
           categoria:      'Venta',
           concepto:       `Factura ${numero}`,
           monto:          total,
-          metodo_pago:    'Efectivo',
+          metodo_pago:    formaPago,
           is_automatic:   true,
           fecha:          now,
         }]);

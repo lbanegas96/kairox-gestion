@@ -12,7 +12,7 @@ import MonitorFacturacionAFIP from '@/components/ventas/MonitorFacturacionAFIP';
 import { useAfipConfig } from '@/hooks/useAfipConfig';
 import { useCotizacionesActivo } from '@/hooks/useCotizacionesActivo';
 
-function VentasSection({ initialTab = 'historial' }) {
+function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
   const { afipActivo } = useAfipConfig();
   const cotizacionesActivo = useCotizacionesActivo();
   const [activeTab, setActiveTab]           = useState(initialTab);
@@ -38,6 +38,13 @@ function VentasSection({ initialTab = 'historial' }) {
   const handleDocFlowNavigate = (seccion) => {
     const map = { cotizaciones: 'cotizaciones', pedidos: 'pedidos', ventas: 'historial', historial: 'historial', devoluciones: 'devoluciones' };
     if (map[seccion]) setActiveTab(map[seccion]);
+  };
+
+  // "Registrar Cobro" desde el detalle de una factura impaga — sale del módulo
+  // Ventas hacia Cuenta Corriente (sección de nivel superior en Dashboard.jsx),
+  // con el cliente y el diálogo de cobro ya abiertos.
+  const handleRegistrarCobro = (clienteId) => {
+    onNavigateGlobal?.('cuentacorriente', { clienteId, autoAbrirCobro: true });
   };
 
   return (
@@ -124,6 +131,7 @@ function VentasSection({ initialTab = 'historial' }) {
             navigateSaleId={navigateSaleId}
             onNavigated={() => setNavigateSaleId(null)}
             onNavigate={handleDocFlowNavigate}
+            onRegistrarCobro={handleRegistrarCobro}
           />
         </TabsContent>
 
