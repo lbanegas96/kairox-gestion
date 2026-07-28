@@ -80,7 +80,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
     if (comprobanteOrigen?.id) {
       setClienteId(comprobanteOrigen.cliente_id || '');
       supabase.from('comprobante_items')
-        .select('id, producto_id, cantidad, precio_unitario, alicuota_iva, productos(nombre)')
+        .select('id, producto_id, descripcion, cantidad, precio_unitario, alicuota_iva, productos(nombre)')
         .eq('comprobante_id', comprobanteOrigen.id)
         .eq('empresa_id', user.empresa_id)
         .then(({ data }) => {
@@ -88,7 +88,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
             setItems(data.map(i => ({
               _id:          Math.random().toString(36).slice(2),
               producto_id:  i.producto_id,
-              descripcion:  i.productos?.nombre || '',
+              descripcion:  i.descripcion || i.productos?.nombre || '',
               cantidad:     Number(i.cantidad),
               precio_unit:  Number(i.precio_unitario),
               alicuota_iva: Number(i.alicuota_iva ?? 21),

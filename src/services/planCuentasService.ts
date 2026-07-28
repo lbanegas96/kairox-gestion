@@ -340,6 +340,50 @@ export const asientosAutoService = {
   },
 
   /**
+   * Reversa el asiento de una Factura cancelada (RPC cancelar_factura,
+   * mig.259) — documento de reversa estilo SAP: el asiento original de la
+   * venta queda 'confirmado' tal cual quedó posteado (nunca se borra ni se
+   * reescribe), se crea uno NUEVO con debe/haber invertidos que lo
+   * neutraliza en el balance. Si la factura nunca tuvo asiento (empresa sin
+   * plan de cuentas, o el asiento original no se pudo generar), no hace nada
+   * — mismo criterio permisivo que el resto de este servicio.
+   */
+  async crearAsientoReversaVenta(
+    empresaId: string,
+    userId: string,
+    params: { ventaId: string; numeroVenta: string; fecha: string }
+  ): Promise<void> {
+    const { data: original, error } = await supabase
+      .from('asientos_contables')
+      .select('id, asientos_items(cuenta_id, debe, haber, descripcion)')
+      .eq('empresa_id', empresaId)
+      .eq('origen', 'venta')
+      .eq('origen_id', params.ventaId)
+      .eq('estado', 'confirmado')
+      .maybeSingle();
+    if (error || !original || !(original as any).asientos_items?.length) return;
+
+    const items = ((original as any).asientos_items as any[]).map((i) => ({
+      cuenta_id: i.cuenta_id,
+      debe: Number(i.haber),
+      haber: Number(i.debe),
+      descripcion: `Reversa — ${i.descripcion || ''}`,
+    }));
+
+    const asiento = await asientosService.createAsiento(
+      empresaId, userId,
+      {
+        fecha: params.fecha,
+        descripcion: `Reversa — Cancelación Factura ${params.numeroVenta}`,
+        origen: 'cancelacion_venta',
+        origen_id: params.ventaId,
+      },
+      items
+    );
+    await asientosService.confirmarAsiento(asiento.id);
+  },
+
+  /**
    * Crea y confirma el asiento de una compra.
    *   DEBE  1.1.3 Mercaderías / Inventario
    *   HABER 1.1.1 Caja y Bancos  (o 2.1.1 Cuentas a Pagar si es crédito)

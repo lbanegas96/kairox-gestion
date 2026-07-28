@@ -49,6 +49,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
   const [clientes, setClientes]           = useState([]);
   const [clienteId, setClienteId]         = useState('');
   const [fecha, setFecha]                 = useState(getTodayAR());
+  const [referenciaCliente, setReferenciaCliente] = useState('');
   const [tipoDoc, setTipoDoc]             = useState('Ticket');
   const [formaPago, setFormaPago]         = useState('Efectivo');
   const [items, setItems]                 = useState([newItem()]);
@@ -94,8 +95,9 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
     // Pre-carga desde comprobante origen (flujo "Copiar a Factura")
     if (comprobanteOrigen?.id) {
       setClienteId(comprobanteOrigen.cliente_id || '');
+      setReferenciaCliente(comprobanteOrigen.referencia_cliente || '');
       supabase.from('comprobante_items')
-        .select('id, producto_id, cantidad, precio_unitario, alicuota_iva, productos(nombre)')
+        .select('id, producto_id, descripcion, cantidad, precio_unitario, alicuota_iva, productos(nombre)')
         .eq('comprobante_id', comprobanteOrigen.id)
         .eq('empresa_id', user.empresa_id)
         .then(({ data }) => {
@@ -103,7 +105,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
             setItems(data.map(i => ({
               _id:           Math.random().toString(36).slice(2),
               producto_id:   i.producto_id,
-              descripcion:   i.productos?.nombre || '',
+              descripcion:   i.descripcion || i.productos?.nombre || '',
               cantidad:      Number(i.cantidad),
               precio_unit:   Number(i.precio_unitario),
               descuento_pct: 0,
@@ -119,6 +121,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
     if (!open) {
       setClienteId('');
       setFecha(getTodayAR());
+      setReferenciaCliente('');
       setTipoDoc('Ticket');
       setFormaPago('Efectivo');
       setItems([newItem()]);
@@ -234,15 +237,19 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
         fecha_vencimiento:     fechaVencimiento,
         relevante_fiscal:      !noRelevanteFiscal,
         centro_costo_id:       centroCostoId || null,
+        referencia_cliente:    referenciaCliente.trim() || null,
       }]).select('id').single();
       if (compErr) throw compErr;
 
-      // 2. INSERT comprobante_items — columnas en ESPAÑOL: producto_id, cantidad
+      // 2. INSERT comprobante_items — columnas en ESPAÑOL: producto_id, cantidad.
+      // producto_id es nullable (mig.256): un ítem de servicio no tiene producto
+      // de catálogo, y su descripcion se guarda tal cual la escribió el usuario.
       const { error: itemsErr } = await supabase.from('comprobante_items').insert(
         itemsValidos.map(i => ({
           comprobante_id:  comp.id,
           empresa_id:      user.empresa_id,
           producto_id:     i.producto_id || null,
+          descripcion:     i.descripcion.trim(),
           cantidad:        Number(i.cantidad),
           precio_unitario: parseNumberLocale(i.precio_unit) || 0,
           subtotal:        calcNeto(i),
@@ -283,6 +290,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
           metodo_pago:    formaPago,
           is_automatic:   true,
           fecha:          now,
+          comprobante_id: comp.id,
         }]);
       }
 
@@ -385,6 +393,15 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
               <Input
                 type="date" value={fecha}
                 onChange={e => setFecha(e.target.value)}
+                className="h-10 bg-kx-surface border-kx-border text-kx-text"
+              />
+            </div>
+            <div className="sm:col-span-2 space-y-1.5">
+              <Label className="text-xs font-medium text-kx-text-2">N° Referencia del Cliente (PO)</Label>
+              <Input
+                value={referenciaCliente}
+                onChange={e => setReferenciaCliente(e.target.value)}
+                placeholder="Ej. orden de compra del cliente"
                 className="h-10 bg-kx-surface border-kx-border text-kx-text"
               />
             </div>

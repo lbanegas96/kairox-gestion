@@ -1,28 +1,46 @@
 import { useState, useEffect } from 'react';
-import { 
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter 
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, X, Save, Edit2, Loader2, RefreshCw, ShieldCheck, ShieldAlert, Clock, AlertTriangle, Banknote } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Printer, X, Save, Edit2, Loader2, RefreshCw, ShieldCheck, ShieldAlert, Clock, AlertTriangle, Banknote, Ban } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import ComprobantePrintModal from './ComprobantePrintModal';
-import { formatDateTimeAR, formatDateAR } from '@/lib/dateUtils';
+import { formatDateTimeAR, formatDateAR, getTodayAR } from '@/lib/dateUtils';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import { DocumentFlowPanel } from '@/components/ui/DocumentFlowPanel';
+import { asientosAutoService } from '@/services/planCuentasService';
+
+// CAE emitido o en trámite ante AFIP/ARCA — el documento ya es (o puede
+// llegar a ser) fiscalmente válido, no se puede "deshacer": solo Nota de
+// Crédito. Ver RPC cancelar_factura (mig.259).
+const CAE_BLOQUEA_CANCELACION = ['emitido', 'pendiente', 'pendiente_caea'];
 
 const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate, onRegistrarCobro }) => {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [sale, setSale] = useState(null);
   const [items, setItems] = useState([]);
   const [showPrintModal, setShowPrintModal] = useState(false);
-  
+
   // Edit State
   const [isEditing, setIsEditing] = useState(false);
   const [newStatus, setNewStatus] = useState('');
   const [saving, setSaving] = useState(false);
   const [reintentandoCae, setReintentandoCae] = useState(false);
+
+  // Cancelación (RPC cancelar_factura — reversión total, solo sin CAE)
+  const [showCancelarConfirm, setShowCancelarConfirm] = useState(false);
+  const [motivoCancelacion, setMotivoCancelacion] = useState('');
+  const [cancelando, setCancelando] = useState(false);
 
   useEffect(() => {
     if (open && saleId) {
@@ -62,7 +80,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
 
       const formattedItems = itemsData.map(i => ({
         ...i,
-        producto_nombre: i.productos?.nombre || 'Producto Eliminado'
+        producto_nombre: i.descripcion || i.productos?.nombre || 'Producto Eliminado'
       }));
       setItems(formattedItems);
 
@@ -125,7 +143,42 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
     }
   };
 
+  // Cancelación real (RPC cancelar_factura, mig.259) — reversa stock, caja y
+  // cuenta corriente (documento de reversa, nunca borra el rastro original).
+  // Bloqueada por el propio RPC si la factura tiene CAE o cobros imputados.
+  const handleCancelarFactura = async () => {
+    if (!sale) return;
+    setCancelando(true);
+    try {
+      const { data, error } = await supabase.rpc('cancelar_factura', {
+        p_empresa_id: user.empresa_id,
+        p_user_id: user.id,
+        p_comprobante_id: sale.id,
+        p_motivo: motivoCancelacion.trim() || null,
+      });
+      if (error) throw error;
+
+      asientosAutoService.crearAsientoReversaVenta(user.empresa_id, user.id, {
+        ventaId: sale.id,
+        numeroVenta: data?.numero_venta ?? sale.numero_venta,
+        fecha: getTodayAR(),
+      }).catch(e => console.warn('[Contabilidad] reversa venta:', e.message));
+
+      toast({ title: `Factura ${sale.numero_venta} cancelada`, description: 'Se revirtió stock, caja y cuenta corriente.' });
+      setShowCancelarConfirm(false);
+      setMotivoCancelacion('');
+      await fetchSaleDetails();
+      onUpdateSale?.();
+    } catch (err) {
+      toast({ title: 'No se pudo cancelar la factura', description: err.message, variant: 'destructive' });
+    } finally {
+      setCancelando(false);
+    }
+  };
+
   const hasChanges = sale && newStatus !== sale.estado_pago;
+  const caeBloqueaCancelacion = sale && CAE_BLOQUEA_CANCELACION.includes(sale.cae_estado);
+  const puedeCancelar = sale && sale.tipo === 'venta' && sale.estado_pago !== 'cancelada';
 
   if (!open) return null;
 
@@ -166,7 +219,9 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
                 <div className="bg-kx-surface-2 dark:bg-slate-900/50 p-4 rounded-lg border kairox-border space-y-3">
                   <div className="flex justify-between items-start">
                     <div className="text-xs text-slate-500 font-bold uppercase tracking-wider dark:text-kx-text-2">Estado de Pago</div>
-                    {!isEditing && (
+                    {/* Una factura cancelada es un estado terminal — no se reedita a mano
+                        (eso reabriría el estado sin restaurar lo que cancelar_factura revirtió). */}
+                    {!isEditing && sale.estado_pago !== 'cancelada' && (
                       <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} className="h-6 w-6 p-0 text-kx-text-3 hover:text-kx-blue">
                         <Edit2 className="h-3 w-3" />
                       </Button>
@@ -184,7 +239,6 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
                            <option value="pagada">Pagada</option>
                            <option value="pendiente">Pendiente</option>
                            <option value="parcial">Parcial</option>
-                           <option value="cancelada">Cancelada</option>
                          </select>
                          <Button size="icon" variant="ghost" onClick={() => { setIsEditing(false); setNewStatus(sale.estado_pago); }} className="h-9 w-9 text-slate-500 hover:bg-slate-200 dark:text-kx-text-2 dark:hover:bg-slate-800">
                             <X className="h-4 w-4" />
@@ -214,6 +268,21 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
                         >
                           <Banknote className="h-3.5 w-3.5" /> Registrar Cobro
                         </Button>
+                      )}
+                      {puedeCancelar && !caeBloqueaCancelacion && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20 gap-1.5"
+                          onClick={() => setShowCancelarConfirm(true)}
+                        >
+                          <Ban className="h-3.5 w-3.5" /> Cancelar Factura
+                        </Button>
+                      )}
+                      {puedeCancelar && caeBloqueaCancelacion && (
+                        <span className="text-xs text-kx-text-3 italic">
+                          Tiene CAE — para anularla generá una Nota de Crédito
+                        </span>
                       )}
                     </div>
                   )}
@@ -361,13 +430,40 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
       </Dialog>
       
       {sale && (
-         <ComprobantePrintModal 
-           open={showPrintModal} 
+         <ComprobantePrintModal
+           open={showPrintModal}
            onOpenChange={setShowPrintModal}
            comprobante={sale}
            items={items}
          />
       )}
+
+      <AlertDialog open={showCancelarConfirm} onOpenChange={v => { if (!cancelando) { setShowCancelarConfirm(v); if (!v) setMotivoCancelacion(''); } }}>
+        <AlertDialogContent className="dark:bg-kx-bg dark:border-kx-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="dark:text-kx-text">¿Cancelar Factura {sale?.numero_venta}?</AlertDialogTitle>
+            <AlertDialogDescription className="dark:text-kx-text-2">
+              Se repone el stock entregado, se revierte el cobro en caja (si lo hubo) y la deuda en
+              cuenta corriente (si la hay). Queda un registro completo de la reversión — nada se borra.
+              Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            value={motivoCancelacion}
+            onChange={e => setMotivoCancelacion(e.target.value)}
+            placeholder="Motivo (opcional) — ej. error de carga, cliente equivocado..."
+            className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+            rows={2}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelando} className="dark:text-kx-text dark:border-kx-border">Volver</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancelarFactura} disabled={cancelando} className="bg-red-600 hover:bg-red-700 text-white">
+              {cancelando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Ban className="h-4 w-4 mr-2" />}
+              Sí, cancelar factura
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 };
