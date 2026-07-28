@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Truck, Search, Loader2 } from 'lucide-react';
+import { Truck, Search, Loader2, Plus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -12,6 +13,7 @@ import { formatDateAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
 import { getEmpresaParaPDF } from '@/lib/empresaUtils';
 import ModalDetalleEntrega from '@/components/ventas/ModalDetalleEntrega';
+import ModalNuevaEntrega from '@/components/ventas/ModalNuevaEntrega';
 
 const ORIGEN_LABELS = {
   implicita: { label: 'POS',    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
@@ -48,6 +50,11 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
   const [anularTarget, setAnularTarget] = useState(null);
   const [anulando, setAnulando] = useState(false);
   const [viewEntregaId, setViewEntregaId] = useState(null);
+  const [clientes, setClientes] = useState([]);
+  const [productos, setProductos] = useState([]);
+  const [isNuevaOpen, setIsNuevaOpen] = useState(false);
+  const [nuevaForm, setNuevaForm] = useState({ cliente_id: '', observaciones: '', items: [{ producto_id: '', cantidad: 1 }] });
+  const [savingNueva, setSavingNueva] = useState(false);
 
   const viewEntrega = entregas.find(e => e.id === viewEntregaId) ?? null;
 
@@ -76,6 +83,14 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
   };
 
   useEffect(() => { fetchEntregas(); }, [user?.empresa_id]);
+
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    supabase.from('clientes').select('id, nombre').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre')
+      .then(({ data }) => setClientes(data || []));
+    supabase.from('productos').select('id, nombre, stock_actual').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre')
+      .then(({ data }) => setProductos(data || []));
+  }, [user?.empresa_id]);
 
   // Navegación desde el Flujo del Documento de otra sección (ej. Pedido → Entrega generada)
   useEffect(() => {
@@ -174,6 +189,51 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
     }
   };
 
+  const emptyNuevaForm = () => ({ cliente_id: '', observaciones: '', items: [{ producto_id: '', cantidad: 1 }] });
+
+  const abrirNuevaEntrega = () => { setNuevaForm(emptyNuevaForm()); setIsNuevaOpen(true); };
+
+  const addItemNueva = () =>
+    setNuevaForm(f => ({ ...f, items: [...f.items, { producto_id: '', cantidad: 1 }] }));
+
+  const removeItemNueva = (i) =>
+    setNuevaForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
+
+  const updateItemNueva = (i, field, value) =>
+    setNuevaForm(f => {
+      const items = [...f.items];
+      items[i] = { ...items[i], [field]: value };
+      return { ...f, items };
+    });
+
+  const handleGuardarNuevaEntrega = async () => {
+    const validItems = nuevaForm.items
+      .filter(it => it.producto_id && Number(it.cantidad) > 0)
+      .map(it => ({ producto_id: it.producto_id, cantidad: Number(it.cantidad) }));
+    if (validItems.length === 0) {
+      toast({ title: 'Agregá al menos un ítem con producto y cantidad', variant: 'destructive' });
+      return;
+    }
+    setSavingNueva(true);
+    try {
+      const { data, error } = await supabase.rpc('crear_entrega_manual', {
+        p_empresa_id: user.empresa_id,
+        p_user_id: user.id,
+        p_cliente_id: nuevaForm.cliente_id || null,
+        p_items: validItems,
+        p_observaciones: nuevaForm.observaciones || null,
+      });
+      if (error) throw error;
+      toast({ title: `Entrega ${data.numero_entrega} creada`, className: 'bg-green-600 text-white border-green-700' });
+      setIsNuevaOpen(false);
+      await fetchEntregas();
+    } catch (err) {
+      toast({ title: 'No se pudo crear la entrega', description: err.message, variant: 'destructive' });
+    } finally {
+      setSavingNueva(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Filtros */}
@@ -196,6 +256,9 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
           <option value="manual">Solo manuales</option>
           <option value="implicita">Solo POS</option>
         </select>
+        <Button onClick={abrirNuevaEntrega} className="bg-[rgb(var(--kx-violet))] hover:opacity-90 text-white shrink-0">
+          <Plus className="h-4 w-4 mr-2" /> Nueva Entrega
+        </Button>
       </div>
 
       {/* Tabla */}
@@ -282,6 +345,21 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
           </table>
         </div>
       </Card>
+
+      {/* ── Modal Nueva Entrega (standalone, sin pedido) ────────────────────── */}
+      <ModalNuevaEntrega
+        isOpen={isNuevaOpen}
+        onClose={() => setIsNuevaOpen(false)}
+        clientes={clientes}
+        productos={productos}
+        form={nuevaForm}
+        setForm={setNuevaForm}
+        addItem={addItemNueva}
+        removeItem={removeItemNueva}
+        updateItem={updateItemNueva}
+        handleSave={handleGuardarNuevaEntrega}
+        saving={savingNueva}
+      />
 
       {/* ── Modal Detalle ─────────────────────────────────────────────────── */}
       <ModalDetalleEntrega
