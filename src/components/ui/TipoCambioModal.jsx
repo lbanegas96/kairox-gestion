@@ -97,7 +97,8 @@ export function TipoCambioModal({ open, onOpenChange, moneda, onConfirm }) {
             className="dark:bg-slate-900 dark:border-slate-700 dark:text-white text-lg h-12"
           />
           <p className="text-xs text-slate-400 dark:text-slate-500">
-            Tip: usá el tipo de cambio vendedor del día (ej. dólar blue vendedor).
+            Usá el <strong>oficial vendedor</strong> del día — es el mismo criterio con el que
+            el sistema lo carga solo, así la serie histórica queda consistente.
             <br />
             Formato argentino: <strong>punto</strong> = miles, <strong>coma</strong> = decimal.
             Ej: <code>1.446,50</code> ó <code>1446</code>.

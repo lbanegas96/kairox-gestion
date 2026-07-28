@@ -9134,19 +9134,42 @@ integrados, no los que nunca lo estuvieron. Para verificar cobertura de una feat
 hay que partir de los puntos de escritura a la tabla (acá: quién llama a `crear_venta` /
 inserta en `movimientos_caja`), no de los consumidores del hook.
 
+**Verificación en vivo con Nadia (misma sesión), y saneamiento de datos históricos:**
+Se confirmó el circuito completo con una venta real desde Modo Caja: comprobante `20260728-001`,
+$30.000 → **19,74 USD @ 1520**, guardado tanto en `comprobantes` como en el eco de
+`movimientos_caja`. Es el primer comprobante de Nalux con `monto_paralelo` en toda su historia
+(los 144 anteriores están en NULL).
+
+Con autorización explícita de Nadia se saneó lo histórico:
+- **Borradas 2 filas huérfanas de `tipos_cambio`** del 2026-06-11 (`BRL 36,00` y `EUR 1446,90`,
+  esta última idéntica al USD de ese día — tasa equivocada tipeada). Se verificó primero que
+  **ninguna operación las usaba**. Se borraron en vez de "corregirlas" porque no hay forma de
+  saber cuál era la tasa real de ese día: inventar un número habría sido peor que no tener el dato.
+- **Corregida la venta `20260608-009`** (BRL, $30.000): tenía `tipo_cambio_tasa = 3,60`, lo que la
+  valuaba en 8.333,33 BRL cuando sus dos hermanas del mismo importe daban ~106 BRL — **78x off**.
+  Pasó a 281,47 (la tasa BRL conocida más cercana, del 12/06; el real estuvo estable: 281,47 el 12
+  y 281,01 el 16). Ahora las tres cierran en 106,58 / 106,58 / 106,76 BRL. La venta **no tiene CAE**
+  (`cae_estado='no_aplica'`) ni valores derivados, así que el cambio no toca nada fiscal ni contable
+  — solo la valuación en moneda extranjera. Probado con `BEGIN...ROLLBACK` antes de aplicar.
+  **Nota:** CONTEXT.md afirmaba que esta venta ya había sido corregida en una sesión previa
+  (el `UPDATE ... * 1000` de la sesión 2026-06-09) — la corrección se quedó corta: dejó 3,60
+  cuando el valor real era ~281.
+
 **Pendientes que quedan (no bloquean, requieren decisión):**
-- **2 filas de TC históricas mal cargadas** en Nalux, del 2026-06-11: `BRL 36,00` (las de los días
-  vecinos son ~281 — está off por ~8x) y `EUR 1446,90` (idéntico al USD de ese mismo día, parece
-  haberse tipeado la tasa equivocada). No se tocaron: borrar o corregir datos financieros
-  históricos necesita autorización explícita. Solo afectan reportes retroactivos.
+- **Sospecha menor sin resolver:** la venta `20260607-010` (USD) tiene tasa `1100` cuando al día
+  siguiente ya figuraba 1446 — un salto del 31% en un día, implausible para el dólar oficial.
+  Menos concluyente que el caso BRL (puede ser un valor de prueba de los primeros días de uso),
+  no se tocó.
 - **La fila `2026-07-25 USD 1450`** es el valor de prueba que la sesión de Reportería dejó cargado
   y documentado como tal. Sigue ahí, marcada ahora como `origen='manual'`.
 - **La cobertura histórica sigue en 0%** y no se puede backfillear honestamente: solo hay TC de 6
   días sueltos contra meses de operaciones, así que rellenar exigiría inventar tasas. El Reporte de
   Paridad ya hace cálculo retroactivo con el histórico que hay. De acá en adelante la cobertura
   debería ser ~100% gracias al gate + la carga automática.
-- **El copy del `TipoCambioModal`** sigue diciendo "ej. dólar blue vendedor", que contradice la
-  decisión de usar el oficial. No se tocó para no mezclarlo con este cambio.
+- ✅ ~~El copy del `TipoCambioModal` decía "ej. dólar blue vendedor"~~ — **corregido**: ahora dice
+  "usá el **oficial vendedor** del día — es el mismo criterio con el que el sistema lo carga solo,
+  así la serie histórica queda consistente". Importa para consistencia real: si el cron carga
+  oficial y un humano carga blue el día que la API falla, la serie queda mezclada.
 
 ---
 
