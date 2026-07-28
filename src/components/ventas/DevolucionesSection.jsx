@@ -1,16 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Undo2, FileWarning, ChevronDown, ChevronRight,
-  Check, RefreshCw, Package,
+  Undo2, FileWarning, RefreshCw,
 } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
 import { formatDateAR } from '@/lib/dateUtils';
 import NuevaDevolucionModal from '@/components/shared/NuevaDevolucionModal';
 import NuevaNotaDebitoModal from '@/components/shared/NuevaNotaDebitoModal';
+import NuevaNCModal from '@/components/ventas/NuevaNCModal';
+import ModalDetalleDevolucion from '@/components/ventas/ModalDetalleDevolucion';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -32,11 +34,14 @@ function CompensacionBadge({ value }) {
 
 function DevolucionesTab({ onNavigate }) {
   const { user } = useAuth();
-  const [devoluciones, setDevoluciones] = useState([]);
-  const [loading, setLoading]           = useState(true);
-  const [expanded, setExpanded]         = useState({});
-  const [isModalOpen, setIsModalOpen]   = useState(false);
-  const [refreshKey, setRefreshKey]     = useState(0);
+  const { toast } = useToast();
+  const [devoluciones, setDevoluciones]     = useState([]);
+  const [loading, setLoading]               = useState(true);
+  const [isModalOpen, setIsModalOpen]       = useState(false);
+  const [viewDevolucionId, setViewDevolucionId] = useState(null);
+  const [ncOrigen, setNcOrigen]             = useState(null);
+  const [isNcOpen, setIsNcOpen]             = useState(false);
+  const [refreshKey, setRefreshKey]         = useState(0);
 
   useEffect(() => {
     if (!user?.empresa_id) return;
@@ -45,11 +50,11 @@ function DevolucionesTab({ onNavigate }) {
       .from('devoluciones')
       .select(`
         id, numero_devolucion, fecha, tipo, reingresa_stock, compensacion,
-        reembolso_efectivo, motivo, nota_credito_id, comprobante_id,
+        reembolso_efectivo, motivo, nota_credito_id, comprobante_id, cliente_id,
         clientes(nombre),
-        factura_origen:comprobantes!comprobante_id(numero_venta),
+        factura_origen:comprobantes!comprobante_id(numero_venta, tipo_comprobante_afip),
         nota_credito:comprobantes!nota_credito_id(numero_venta),
-        devolucion_items(id, cantidad, subtotal, precio_unitario, productos(nombre))
+        devolucion_items(id, producto_id, cantidad, subtotal, precio_unitario, alicuota_iva, productos(nombre))
       `)
       .eq('empresa_id', user.empresa_id)
       .eq('tipo', 'cliente')
@@ -61,10 +66,43 @@ function DevolucionesTab({ onNavigate }) {
       });
   }, [user?.empresa_id, refreshKey]);
 
-  const toggleExpand = id => setExpanded(p => ({ ...p, [id]: !p[id] }));
-
   const totalDev = dev =>
     (dev.devolucion_items || []).reduce((s, i) => s + Number(i.subtotal || 0), 0);
+
+  const viewDevolucion = devoluciones.find(d => d.id === viewDevolucionId) ?? null;
+
+  const handleGenerarNC = (dev) => {
+    setNcOrigen({
+      id:                    dev.id,
+      numero_devolucion:     dev.numero_devolucion,
+      cliente_id:            dev.cliente_id,
+      cliente_nombre:        dev.clientes?.nombre,
+      comprobante_id:        dev.comprobante_id,
+      tipo_comprobante_afip: dev.factura_origen?.tipo_comprobante_afip,
+      items: (dev.devolucion_items || []).map(i => ({
+        producto_id:     i.producto_id,
+        descripcion:     i.productos?.nombre || '',
+        cantidad:        i.cantidad,
+        precio_unitario: i.precio_unitario,
+        alicuota_iva:    i.alicuota_iva,
+      })),
+    });
+    setViewDevolucionId(null);
+    setIsNcOpen(true);
+  };
+
+  const handleMarcarReemplazo = async (dev) => {
+    const { error } = await supabase.from('devoluciones')
+      .update({ compensacion: 'reemplazo' })
+      .eq('id', dev.id).eq('empresa_id', user.empresa_id);
+    if (error) {
+      toast({ title: 'No se pudo marcar como reemplazo', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Devolución marcada como Reemplazo' });
+    setViewDevolucionId(null);
+    setRefreshKey(k => k + 1);
+  };
 
   return (
     <>
@@ -106,7 +144,6 @@ function DevolucionesTab({ onNavigate }) {
           <table className="w-full text-sm">
             <thead className="bg-kx-surface-2 dark:bg-kx-surface text-xs uppercase text-slate-500 font-semibold">
               <tr>
-                <th className="px-4 py-2.5 text-left w-8" />
                 <th className="px-4 py-2.5 text-left">Número</th>
                 <th className="px-4 py-2.5 text-left">Fecha</th>
                 <th className="px-4 py-2.5 text-left">Cliente</th>
@@ -118,92 +155,38 @@ function DevolucionesTab({ onNavigate }) {
             </thead>
             <tbody className="divide-y divide-kx-border">
               {devoluciones.map(dev => (
-                <React.Fragment key={dev.id}>
-                  <tr
-                    className="hover:bg-kx-surface-2 cursor-pointer transition-colors"
-                    onClick={() => toggleExpand(dev.id)}
-                  >
-                    <td className="px-4 py-3 text-kx-text-3">
-                      {expanded[dev.id]
-                        ? <ChevronDown className="h-3.5 w-3.5" />
-                        : <ChevronRight className="h-3.5 w-3.5" />}
-                    </td>
-                    <td className="px-4 py-3 font-mono font-medium text-kx-text">
-                      {dev.numero_devolucion}
-                    </td>
-                    <td className="px-4 py-3 text-kx-text-2 text-xs">
-                      {formatDateAR(dev.fecha + 'T00:00:00Z')}
-                    </td>
-                    <td className="px-4 py-3 text-kx-text">
-                      {dev.clientes?.nombre || '—'}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-kx-text-2">
-                      {dev.comprobante_id && onNavigate ? (
-                        <button
-                          className="font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                          onClick={e => { e.stopPropagation(); onNavigate('comprobante', dev.comprobante_id); }}
-                        >
-                          {dev.factura_origen?.numero_venta || 'Ver →'}
-                        </button>
-                      ) : (
-                        dev.factura_origen?.numero_venta || '—'
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {dev.reingresa_stock
-                        ? <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                            <Check className="h-3 w-3" /> Sí
-                          </span>
-                        : <span className="text-xs text-kx-text-3">No</span>
-                      }
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <CompensacionBadge value={dev.compensacion} />
-                      {dev.compensacion === 'nota_credito' && dev.nota_credito?.numero_venta && (
-                        <span className="ml-1 font-mono text-xs text-kx-text-3">
-                          {dev.nota_credito.numero_venta}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right font-mono font-semibold text-kx-text">
-                      ${totalDev(dev).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                    </td>
-                  </tr>
-
-                  {expanded[dev.id] && (
-                    <tr className="bg-kx-surface-2 dark:bg-slate-900/50">
-                      <td colSpan={8} className="px-8 py-3">
-                        {dev.motivo && (
-                          <p className="text-xs text-kx-text-2 italic mb-2">Motivo: {dev.motivo}</p>
-                        )}
-                        <div className="grid grid-cols-[1fr_72px_88px_100px] gap-x-4 text-xs font-semibold text-kx-text-3 uppercase mb-1.5">
-                          <span>Producto</span>
-                          <span className="text-center">Cant.</span>
-                          <span className="text-center">P. Unit.</span>
-                          <span className="text-right">Subtotal</span>
-                        </div>
-                        {(dev.devolucion_items || []).map(item => (
-                          <div
-                            key={item.id}
-                            className="grid grid-cols-[1fr_72px_88px_100px] gap-x-4 text-xs text-kx-text items-center py-0.5"
-                          >
-                            <span className="flex items-center gap-1.5">
-                              <Package className="h-3 w-3 text-kx-text-3 shrink-0" />
-                              {item.productos?.nombre || '—'}
-                            </span>
-                            <span className="text-center">{item.cantidad}</span>
-                            <span className="text-center font-mono">
-                              ${Number(item.precio_unitario).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                            </span>
-                            <span className="text-right font-mono">
-                              ${Number(item.subtotal).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                        ))}
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
+                <tr
+                  key={dev.id}
+                  className="hover:bg-kx-surface-2 cursor-pointer transition-colors"
+                  onClick={() => setViewDevolucionId(dev.id)}
+                >
+                  <td className="px-4 py-3 font-mono font-medium text-kx-text">
+                    {dev.numero_devolucion}
+                  </td>
+                  <td className="px-4 py-3 text-kx-text-2 text-xs">
+                    {formatDateAR(dev.fecha + 'T00:00:00Z')}
+                  </td>
+                  <td className="px-4 py-3 text-kx-text">
+                    {dev.clientes?.nombre || '—'}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-kx-text-2">
+                    {dev.factura_origen?.numero_venta || '—'}
+                  </td>
+                  <td className="px-4 py-3 text-center text-xs text-kx-text-2">
+                    {dev.reingresa_stock ? 'Sí' : 'No'}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <CompensacionBadge value={dev.compensacion} />
+                    {dev.compensacion === 'nota_credito' && dev.nota_credito?.numero_venta && (
+                      <span className="ml-1 font-mono text-xs text-kx-text-3">
+                        {dev.nota_credito.numero_venta}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono font-semibold text-kx-text">
+                    ${totalDev(dev).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table>
@@ -214,6 +197,21 @@ function DevolucionesTab({ onNavigate }) {
         tipo="cliente"
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        onSuccess={() => setRefreshKey(k => k + 1)}
+      />
+
+      <ModalDetalleDevolucion
+        devolucion={viewDevolucion}
+        onClose={() => setViewDevolucionId(null)}
+        onNavigate={onNavigate}
+        onGenerarNC={handleGenerarNC}
+        onMarcarReemplazo={handleMarcarReemplazo}
+      />
+
+      <NuevaNCModal
+        open={isNcOpen}
+        onOpenChange={v => { setIsNcOpen(v); if (!v) setNcOrigen(null); }}
+        devolucionOrigen={ncOrigen}
         onSuccess={() => setRefreshKey(k => k + 1)}
       />
     </>

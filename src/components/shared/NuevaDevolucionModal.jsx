@@ -4,34 +4,11 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Undo2, RotateCcw, Loader2, AlertCircle } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import ClienteSelector from '@/components/shared/ClienteSelector';
-
-const COMPENSACION_OPCIONES = (tipo) => ([
-  {
-    value: 'nota_credito',
-    label: tipo === 'cliente' ? 'Nota de Crédito' : 'Nota de Crédito del proveedor',
-    desc: tipo === 'cliente'
-      ? 'Genera una NC que ajusta la Cuenta Corriente del cliente o permite reembolso en efectivo'
-      : 'El proveedor te emite una NC que reduce lo que le debés en cuenta corriente',
-  },
-  {
-    value: 'reemplazo',
-    label: 'Reemplazo',
-    desc: tipo === 'cliente'
-      ? 'Registra la intención de reemplazo — la entrega de reemplazo se crea manualmente desde Entregas'
-      : 'Registra la intención de reemplazo — la nueva recepción se crea manualmente',
-  },
-  {
-    value: 'pendiente',
-    label: 'Sin compensación por ahora',
-    desc: 'Solo registra la devolución; la compensación se define luego',
-  },
-]);
 
 // Config por tipo — la diferencia de negocio real: cliente permite modo standalone
 // (sin origen, elige Cliente + reembolso en efectivo hacia afuera) y fetch-ea siempre
@@ -52,7 +29,7 @@ const CONFIG = {
     reingresaDescOff: 'Los productos no se sumarán al inventario (ej: dañados o sin condición de reventa).',
     reembolsoLabel: 'Reembolsar en efectivo ahora',
     reembolsoDescOn: 'Se registrará un egreso de caja. Requiere caja abierta.',
-    reembolsoDescOff: 'La NC ajustará el saldo de Cuenta Corriente del cliente (recomendado).',
+    reembolsoDescOff: 'No se mueve caja. Después, desde el detalle de la devolución, podés generar una Nota de Crédito o vincular un reemplazo.',
     reingresaDefault: false,
   },
   proveedor: {
@@ -69,7 +46,7 @@ const CONFIG = {
     reingresaDescOff: 'El stock no se modifica (ej: nunca llegó a entrar al depósito).',
     reembolsoLabel: 'Cobrar reembolso en efectivo ahora',
     reembolsoDescOn: 'Se registrará un ingreso de caja. Requiere caja abierta.',
-    reembolsoDescOff: 'La ND ajustará el saldo de Cuenta Corriente del proveedor (recomendado).',
+    reembolsoDescOff: 'No se mueve caja. Después, desde el detalle de la devolución, podés generar una NC del proveedor o vincular un reemplazo.',
     reingresaDefault: true,
   },
 };
@@ -79,18 +56,18 @@ async function fetchItems(tipo, origen, empresaId) {
   if (tipo === 'cliente') {
     const { data } = await supabase
       .from('comprobante_items')
-      .select('id, producto_id, cantidad, precio_unitario, subtotal, cantidad_entregada, cantidad_devuelta, productos(nombre)')
+      .select('id, producto_id, descripcion, cantidad, precio_unitario, subtotal, alicuota_iva, cantidad_entregada, cantidad_devuelta, productos(nombre)')
       .eq('comprobante_id', origen.id)
       .eq('empresa_id', empresaId);
     return (data || [])
       .filter(i => Number(i.cantidad_entregada || 0) > Number(i.cantidad_devuelta || 0))
-      .map(i => ({ ...i, hecha: Number(i.cantidad_entregada || 0), precio: Number(i.precio_unitario || 0), nombre: i.productos?.nombre }));
+      .map(i => ({ ...i, hecha: Number(i.cantidad_entregada || 0), precio: Number(i.precio_unitario || 0), nombre: i.descripcion || i.productos?.nombre }));
   }
 
   if (origen.fuente === 'compra') {
     const { data } = await supabase
       .from('detalle_compras')
-      .select('id, producto_id, cantidad, costo_unitario, cantidad_devuelta, productos(nombre)')
+      .select('id, producto_id, cantidad, costo_unitario, alicuota_iva, cantidad_devuelta, productos(nombre)')
       .eq('compra_id', origen.id)
       .eq('empresa_id', empresaId);
     return (data || [])
@@ -129,7 +106,6 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
   const [items, setItems]                         = useState([]);
   const [cantidades, setCantidades]               = useState({});
   const [reingresaStock, setReingresaStock]       = useState(cfg.reingresaDefault);
-  const [compensacion, setCompensacion]           = useState('nota_credito');
   const [reembolsoEfectivo, setReembolsoEfectivo] = useState(false);
   const [motivo, setMotivo]                       = useState('');
   const [loadingItems, setLoadingItems]           = useState(false);
@@ -171,7 +147,6 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
       setItems([]);
       setCantidades({});
       setReingresaStock(cfg.reingresaDefault);
-      setCompensacion('nota_credito');
       setReembolsoEfectivo(false);
       setMotivo('');
       setSaving(false);
@@ -198,6 +173,7 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
         producto_id:     i.producto_id,
         cantidad:        Number(cantidades[i.id]),
         precio_unitario: i.precio,
+        alicuota_iva:    i.alicuota_iva || '21',
         ...(tipo === 'proveedor' && origen.fuente === 'compra' ? { [cfg.itemIdParam]: i.id } : {}),
         ...(tipo === 'cliente' ? { [cfg.itemIdParam]: i.id } : {}),
       }));
@@ -217,7 +193,6 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
         [cfg.rpcEntidadParam]: efectivoEntidadId || null,
         [cfg.rpcDocParam]:     tipo === 'proveedor' && origen.fuente === 'compra' ? origen.id : (tipo === 'cliente' ? origen?.id || null : null),
         p_reingresa_stock:    reingresaStock,
-        p_compensacion:       compensacion,
         p_reembolso_efectivo: reembolsoEfectivo,
         p_motivo:             motivo.trim() || null,
       });
@@ -235,10 +210,8 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
         }
       }
 
-      const msg = compensacion === 'nota_credito'
-        ? (data.numero_nc
-            ? `Devolución ${data.numero_devolucion} registrada — Nota de Crédito ${data.numero_nc} generada`
-            : `Devolución ${data.numero_devolucion} registrada — cuenta corriente del proveedor acreditada`)
+      const msg = reembolsoEfectivo
+        ? `Devolución ${data.numero_devolucion} registrada — reembolso en efectivo aplicado`
         : `Devolución ${data.numero_devolucion} registrada`;
       toast({ title: msg });
       onSuccess?.(data);
@@ -375,38 +348,21 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
             </div>
           </div>
 
-          {/* Compensación */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium dark:text-slate-300">Compensación</Label>
-            <RadioGroup value={compensacion} onValueChange={setCompensacion} className="space-y-2">
-              {COMPENSACION_OPCIONES(tipo).map(opt => (
-                <div key={opt.value}
-                  className="flex items-start gap-3 p-3 border border-kx-border rounded-lg cursor-pointer hover:bg-kx-surface-2 transition-colors"
-                  onClick={() => setCompensacion(opt.value)}>
-                  <RadioGroupItem value={opt.value} className="mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium dark:text-kx-text">{opt.label}</p>
-                    <p className="text-xs text-kx-text-3">{opt.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </RadioGroup>
-          </div>
-
-          {/* Reembolso efectivo (solo con NC) */}
-          {compensacion === 'nota_credito' && (
-            <div className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-              <Checkbox id="reembolso" checked={reembolsoEfectivo} onCheckedChange={setReembolsoEfectivo} className="mt-0.5" />
-              <div>
-                <Label htmlFor="reembolso" className="cursor-pointer font-medium text-sm dark:text-kx-text">
-                  {cfg.reembolsoLabel}
-                </Label>
-                <p className="text-xs text-kx-text-3 mt-0.5">
-                  {reembolsoEfectivo ? cfg.reembolsoDescOn : cfg.reembolsoDescOff}
-                </p>
-              </div>
+          {/* Reembolso efectivo — independiente de cómo se termine compensando
+              (NC, reemplazo, o nada): a veces se devuelve plata en el momento
+              sin que eso implique nunca una Nota de Crédito. Generar la NC (si
+              corresponde) es una acción aparte, después, desde el detalle. */}
+          <div className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <Checkbox id="reembolso" checked={reembolsoEfectivo} onCheckedChange={setReembolsoEfectivo} className="mt-0.5" />
+            <div>
+              <Label htmlFor="reembolso" className="cursor-pointer font-medium text-sm dark:text-kx-text">
+                {cfg.reembolsoLabel}
+              </Label>
+              <p className="text-xs text-kx-text-3 mt-0.5">
+                {reembolsoEfectivo ? cfg.reembolsoDescOn : cfg.reembolsoDescOff}
+              </p>
             </div>
-          )}
+          </div>
 
           {/* Motivo */}
           <div className="space-y-1.5">

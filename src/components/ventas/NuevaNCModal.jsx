@@ -37,7 +37,15 @@ const calcNeto = (item) => {
   return c * p;
 };
 
-function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess }) {
+// devolucionOrigen: { id, numero_devolucion, cliente_id, cliente_nombre,
+//   comprobante_id, tipo_comprobante_afip, items: [{producto_id, descripcion,
+//   cantidad, precio_unitario, alicuota_iva}] } — pre-carga desde una Devolución
+// (mig.263/264): la Devolución ya no genera la NC sola, este es el botón
+// "Generar Nota de Crédito" de su detalle. A diferencia de comprobanteOrigen
+// (que re-lee TODOS los ítems de la factura), acá se listan los ítems de la
+// propia Devolución — puede ser una devolución parcial con cantidades/alícuotas
+// ya copiadas correctamente desde el origen.
+function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucionOrigen = null, onSuccess }) {
   const { user }  = useAuth();
   const { toast } = useToast();
 
@@ -52,7 +60,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
   // esta NC nunca se encola para CAE aunque AFIP esté activo.
   const [noRelevanteFiscal, setNoRelevanteFiscal] = useState(false);
 
-  const origenLocked = !!comprobanteOrigen;
+  const origenLocked = !!comprobanteOrigen || !!devolucionOrigen;
 
   // ── Carga de datos al abrir ─────────────────────────────────────────────────
   useEffect(() => {
@@ -76,6 +84,20 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
           .then(({ data: pv }) => { if (pv) setAfipConfig({ ...emp, punto_venta: pv }); });
       });
 
+    // Pre-cargar ítems desde la Devolución origen (sin re-leer la factura completa)
+    if (devolucionOrigen) {
+      setClienteId(devolucionOrigen.cliente_id || '');
+      setItems((devolucionOrigen.items || []).map(i => ({
+        _id:          Math.random().toString(36).slice(2),
+        producto_id:  i.producto_id,
+        descripcion:  i.descripcion || '',
+        cantidad:     Number(i.cantidad),
+        precio_unit:  Number(i.precio_unitario),
+        alicuota_iva: Number(i.alicuota_iva ?? 21),
+      })));
+      return;
+    }
+
     // Pre-cargar ítems desde el comprobante origen
     if (comprobanteOrigen?.id) {
       setClienteId(comprobanteOrigen.cliente_id || '');
@@ -96,7 +118,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
           }
         });
     }
-  }, [open, user?.empresa_id, comprobanteOrigen?.id]);
+  }, [open, user?.empresa_id, comprobanteOrigen?.id, devolucionOrigen?.id]);
 
   // ── Reset al cerrar ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -159,7 +181,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
         p_empresa_id:            user.empresa_id,
         p_user_id:               user.id,
         p_cliente_id:            clienteId || null,
-        p_cliente_nombre:        comprobanteOrigen?.cliente_nombre ?? 'Consumidor Final',
+        p_cliente_nombre:        comprobanteOrigen?.cliente_nombre ?? devolucionOrigen?.cliente_nombre ?? 'Consumidor Final',
         p_motivo_nc:             motivo,
         p_items:                 itemsValidos.map(i => ({
           producto_id:     i.producto_id || null,
@@ -167,7 +189,8 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
           precio_unitario: parseNumberLocale(i.precio_unit) || 0,
           alicuota_iva:    Number(i.alicuota_iva),
         })),
-        p_comprobante_origen_id: comprobanteOrigen?.id || null,
+        p_comprobante_origen_id: comprobanteOrigen?.id || devolucionOrigen?.comprobante_id || null,
+        p_devolucion_id:         devolucionOrigen?.id || null,
       });
       if (error) throw error;
 
@@ -184,7 +207,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
       // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca.
       if (afipConfig?.usa_factura_electronica && afipConfig?.punto_venta && !noRelevanteFiscal) {
         const { error: afipQueueErr } = await supabase.from('comprobantes').update({
-          tipo_comprobante_afip: comprobanteOrigen?.tipo_comprobante_afip ?? 'B',
+          tipo_comprobante_afip: comprobanteOrigen?.tipo_comprobante_afip ?? devolucionOrigen?.tipo_comprobante_afip ?? 'B',
           punto_venta_id:        afipConfig.punto_venta.id,
           cae_estado:            'pendiente',
         }).eq('id', data.comprobante_id);
@@ -212,7 +235,9 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
             <FileMinus className="w-5 h-5 text-kx-amber" />
             {comprobanteOrigen
               ? `Nota de Crédito sobre ${comprobanteOrigen.numero_venta}`
-              : 'Nueva Nota de Crédito'}
+              : devolucionOrigen
+                ? `Nota de Crédito sobre Devolución ${devolucionOrigen.numero_devolucion}`
+                : 'Nueva Nota de Crédito'}
           </DialogTitle>
           <DialogDescription className="text-kx-text-2 text-xs">
             NC aislada — ajuste financiero sin devolución de mercadería
@@ -252,7 +277,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
               <Label className="text-xs font-medium text-kx-text-2">Cliente *</Label>
               {origenLocked ? (
                 <div className="h-10 flex items-center px-3 rounded-md border border-kx-border bg-kx-surface-2 text-sm text-kx-text">
-                  {comprobanteOrigen?.cliente_nombre ?? 'Consumidor Final'}
+                  {comprobanteOrigen?.cliente_nombre ?? devolucionOrigen?.cliente_nombre ?? 'Consumidor Final'}
                 </div>
               ) : (
                 <ClienteSelector
