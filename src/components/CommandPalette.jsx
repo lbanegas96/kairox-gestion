@@ -12,7 +12,7 @@ import {
 const SECCIONES = [
   { id: 'dashboard',       label: 'Dashboard',         icon: LayoutDashboard, keywords: ['inicio', 'home'],                                   permission: 'dashboard' },
   { id: 'pos',             label: 'Punto de Venta',     icon: ShoppingCart,    keywords: ['pos', 'caja', 'cobrar', 'vender', 'venta nueva'],   permission: 'ventas' },
-  { id: 'ventas',          label: 'Ventas (Historial)', icon: Receipt,         keywords: ['factura', 'historial', 'comprobante'],              permission: 'ventas' },
+  { id: 'ventas',          label: 'Facturas',          icon: Receipt,         keywords: ['factura', 'historial', 'comprobante'],              permission: 'ventas' },
   { id: 'productos',       label: 'Inventario',         icon: Package,         keywords: ['stock', 'producto', 'almacen'],                     permission: 'productos' },
   { id: 'compras',         label: 'Compras',            icon: ShoppingCart,    keywords: ['proveedor', 'comprar'],                             permission: 'compras' },
   { id: 'caja',            label: 'Caja',               icon: DollarSign,      keywords: ['efectivo', 'dinero', 'sesion'],                     permission: 'caja' },

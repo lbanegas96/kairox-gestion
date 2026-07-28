@@ -45,7 +45,7 @@ function VentasSection({ initialTab = 'historial' }) {
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold text-kx-text">Ventas</h2>
-        <p className="text-sm text-kx-text-2">Cotizaciones, Pedidos, Entregas e Historial</p>
+        <p className="text-sm text-kx-text-2">Cotizaciones, Pedidos, Entregas y Facturas</p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">

@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, ShoppingCart, Wallet, FileText,
   Settings, LogOut, Contact, CreditCard, ClipboardList, ShoppingBag,
   BookOpen, Landmark, Truck, PackageCheck, Tag, FileCheck, Receipt,
-  Box, ScrollText, RotateCcw, ChevronDown, ChevronRight as ChevronRightIcon, Monitor, Percent,
+  Box, RotateCcw, ChevronDown, ChevronRight as ChevronRightIcon, Monitor, Percent,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
@@ -27,7 +27,7 @@ const NAV_GROUPS = [
       { id: 'cotizaciones',      label: 'Cotizaciones',       icon: ClipboardList, permission: 'ventas' },
       { id: 'pedidos',           label: 'Pedidos',            icon: PackageCheck,  permission: 'pedidos' },
       { id: 'entregas',          label: 'Entregas',           icon: Box,           permission: 'ventas' },
-      { id: 'historial_ventas',  label: 'Historial',          icon: ScrollText,    permission: 'ventas' },
+      { id: 'historial_ventas',  label: 'Facturas',           icon: Receipt,       permission: 'ventas' },
       { id: 'clientes',          label: 'Clientes',           icon: Contact,       permission: 'clientes' },
       { id: 'cuentacorriente',   label: 'Cta. Corriente',    icon: CreditCard,    permission: 'cuentacorriente' },
       { id: 'listas_precio',     label: 'Listas de Precios', icon: Tag,           permission: 'clientes' },
