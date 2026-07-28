@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Truck, Search, ChevronDown, ChevronRight, Package, FileOutput, Loader2 } from 'lucide-react';
+import { Truck, Search, ChevronDown, ChevronRight, Package, FileOutput, Loader2, Download, Send } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -7,6 +7,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { formatDateAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
+import { getEmpresaParaPDF } from '@/lib/empresaUtils';
 
 const ORIGEN_LABELS = {
   implicita: { label: 'POS',    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
@@ -40,6 +41,7 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
   const [filtroOrigen, setFiltroOrigen] = useState('todos');
   const [expanded, setExpanded] = useState({});
   const [emitiendoId, setEmitiendoId] = useState(null);
+  const [generandoPdfId, setGenerandoPdfId] = useState(null);
 
   const fetchEntregas = async () => {
     if (!user?.empresa_id) return;
@@ -49,10 +51,10 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
         .from('entregas')
         .select(`
           *,
-          clientes(nombre),
+          clientes(nombre, documento, direccion),
           pedidos(numero),
           comprobantes(numero_venta),
-          entrega_items(id, cantidad, producto_id, productos(nombre))
+          entrega_items(id, cantidad, producto_id, productos(nombre, unidad_medida))
         `)
         .eq('empresa_id', user.empresa_id)
         .order('created_at', { ascending: false });
@@ -95,6 +97,40 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
   }, [entregas, filtroOrigen, search]);
 
   const toggleExpand = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+
+  const handleDownloadRemito = async (entrega) => {
+    setGenerandoPdfId(entrega.id);
+    try {
+      const [{ pdf }, { RemitoPDF }, empresa] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/components/ventas/pdf/RemitoPDF'),
+        getEmpresaParaPDF(user.empresa_id),
+      ]);
+      const blob = await pdf(<RemitoPDF entrega={entrega} empresa={empresa} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Remito_${entrega.numero_remito}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[RemitoPDF] Error al generar:', err);
+      toast({ title: 'Error al generar el remito', description: err.message, variant: 'destructive' });
+    } finally {
+      setGenerandoPdfId(null);
+    }
+  };
+
+  const handleShareWhatsApp = (entrega) => {
+    const lineas = [
+      `Remito ${entrega.numero_remito}`,
+      `Cliente: ${entrega.clientes?.nombre ?? 'Consumidor Final'}`,
+      entrega.pedidos?.numero ? `Pedido: ${entrega.pedidos.numero}` : null,
+      '',
+      'Adjunto el PDF con el detalle de la entrega.',
+    ].filter(Boolean);
+    window.open(`https://wa.me/?text=${encodeURIComponent(lineas.join('\n'))}`, '_blank');
+  };
 
   const handleEmitirRemito = async (entregaId) => {
     setEmitiendoId(entregaId);
@@ -225,9 +261,30 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
                         </td>
                         <td className="p-3" onClick={e => e.stopPropagation()}>
                           {entrega.numero_remito ? (
-                            <span className="font-mono text-xs text-kx-text-2" title={`CAI ${entrega.cai_remito_usado || '—'}`}>
-                              {entrega.numero_remito}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono text-xs text-kx-text-2" title={`CAI ${entrega.cai_remito_usado || '—'}`}>
+                                {entrega.numero_remito}
+                              </span>
+                              <Button
+                                variant="ghost" size="icon"
+                                className="h-6 w-6 text-kx-text-3 hover:text-kx-blue"
+                                disabled={generandoPdfId === entrega.id}
+                                onClick={() => handleDownloadRemito(entrega)}
+                                title="Descargar PDF"
+                              >
+                                {generandoPdfId === entrega.id
+                                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                                  : <Download className="w-3 h-3" />}
+                              </Button>
+                              <Button
+                                variant="ghost" size="icon"
+                                className="h-6 w-6 text-kx-text-3 hover:text-green-600"
+                                onClick={() => handleShareWhatsApp(entrega)}
+                                title="Compartir por WhatsApp"
+                              >
+                                <Send className="w-3 h-3" />
+                              </Button>
+                            </div>
                           ) : (
                             <Button
                               size="sm" variant="outline"
