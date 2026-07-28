@@ -3,7 +3,10 @@ import { ShoppingCart, Trash2, Plus, Minus, CheckCircle, Loader2, AlertTriangle,
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import ClienteSelector from '@/components/shared/ClienteSelector';
+import { useToast } from '@/components/ui/use-toast';
 import { useConfirmarVenta } from '@/hooks/useConfirmarVenta';
+import { useTCParalelo } from '@/hooks/useTCParalelo';
+import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 
@@ -146,12 +149,15 @@ function PanelCarrito({
     ? [...formasPago.map(f => f.nombre), 'Cuenta Corriente']
     : METODOS_FALLBACK;
   const { user }    = useAuth();
+  const { toast }   = useToast();
   const [clientes, setClientes]     = useState([]);
   const [clienteId, setClienteId]   = useState('');
   const [selectedClient, setSelectedClient] = useState(null);
   const [centrosCosto, setCentrosCosto]     = useState([]);
   const [centroCostoId, setCentroCostoId]   = useState('');
-  const { confirmar, loading }      = useConfirmarVenta();
+  const [showParaleloTCModal, setShowParaleloTCModal] = useState(false);
+  const tcParalelo = useTCParalelo();
+  const { confirmar, loading }      = useConfirmarVenta(tcParalelo);
 
   useEffect(() => {
     if (!user?.empresa_id) return;
@@ -216,6 +222,18 @@ function PanelCarrito({
   };
 
   const handleConfirmar = async () => {
+    // Moneda paralela: mismo gate que NuevaVentaModal. Antes esta pantalla (Modo
+    // Caja) ni siquiera intentaba calcular el equivalente — mandaba moneda ARS
+    // y monto_paralelo=null fijos, sin importar la configuración de la empresa.
+    if (tcParalelo.enabled && tcParalelo.tcMissing) {
+      toast({
+        title: `Falta el TC de paridad ${tcParalelo.monedaParalela}`,
+        description: `La empresa usa moneda paralela. Cargá el TC de ${tcParalelo.monedaParalela} para poder confirmar la venta.`,
+        variant: 'destructive',
+      });
+      setShowParaleloTCModal(true);
+      return;
+    }
     const formaPagoId = formasPago.find(f => f.nombre === medioPago)?.id ?? null;
     const pagos = [{ metodo: medioPago, monto: total, forma_pago_id: formaPagoId }];
     const result = await confirmar({
@@ -344,6 +362,25 @@ function PanelCarrito({
           <span className="text-2xl font-bold text-kx-text tabular-nums">${fmt(total)}</span>
         </div>
 
+        {/* Moneda paralela: equivalente si hay TC del día, o aviso + acceso al modal si falta */}
+        {tcParalelo.enabled && !tcParalelo.loading && (
+          tcParalelo.tcMissing ? (
+            <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2 border border-amber-200 dark:border-amber-800">
+              <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+              <span>Sin TC de paridad {tcParalelo.monedaParalela} del día</span>
+              <Button type="button" size="sm" variant="outline"
+                className="ml-auto h-6 text-xs px-2 border-amber-400 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                onClick={() => setShowParaleloTCModal(true)}>
+                Cargar TC
+              </Button>
+            </div>
+          ) : tcParalelo.tcHoy && total > 0 && (
+            <p className="text-xs text-kx-text-3 text-right -mt-2">
+              ≈ {tcParalelo.calcParalelo(total, 'ARS', 1)?.toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
+            </p>
+          )
+        )}
+
         {/* Botón confirmar */}
         <Button
           onClick={handleConfirmar}
@@ -366,6 +403,14 @@ function PanelCarrito({
           </button>
         )}
       </div>
+
+      {/* Carga del TC de paridad cuando falta — el gate de handleConfirmar lo abre */}
+      <TipoCambioModal
+        open={showParaleloTCModal}
+        onOpenChange={setShowParaleloTCModal}
+        moneda={tcParalelo.monedaParalela}
+        onConfirm={(t) => { tcParalelo.setTC(t); setShowParaleloTCModal(false); }}
+      />
     </div>
   );
 }

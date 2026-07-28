@@ -11,6 +11,12 @@ import { useAfipConfig } from '@/hooks/useAfipConfig';
 // Encapsula crear_venta RPC + asiento contable + encolado de CAE (facturación
 // electrónica). Soporta modo ARS únicamente (el POS del Modo Caja).
 //
+// Moneda paralela (2026-07-28): recibe `tcParalelo` (retorno de useTCParalelo())
+// y calcula el equivalente igual que NuevaVentaModal — la venta siempre es en
+// ARS acá (Modo Caja no tiene selector de moneda), así que solo se usa la rama
+// `calcParalelo(total, 'ARS', 1)`. El gate (bloquear si falta el TC del día) vive
+// en el caller (PanelCarrito.jsx), mismo patrón que Caja/CtaCte/Compras.
+//
 // Facturación electrónica (AFIP): si la empresa tiene usa_factura_electronica=true
 // y un PdV activo, tras crear_venta se hace el UPDATE a cae_estado='pendiente' que
 // dispara fn_queue_factura_arca (migration 087) → encola en facturas_pendientes_arca.
@@ -21,7 +27,7 @@ import { useAfipConfig } from '@/hooks/useAfipConfig';
 //
 // La numeración usa obtener_proximo_numero('venta') (RPC atómica con lock) — nunca
 // MAX+1 en el frontend (patrón inseguro que migration 083 erradicó del resto).
-export function useConfirmarVenta() {
+export function useConfirmarVenta(tcParalelo) {
   const { user }                       = useAuth();
   const { isSessionOpen, currentSession } = useCaja();
   const { toast }                      = useToast();
@@ -126,13 +132,27 @@ export function useConfirmarVenta() {
         };
       });
 
-      const pagosPayload = pagos.map(p => ({
-        metodo:         p.metodo,
-        monto:          p.monto,
-        monto_paralelo: '',
-        tc_paralelo:    '',
-        forma_pago_id:  p.forma_pago_id ?? null,
-      }));
+      // Moneda paralela: la venta de Modo Caja siempre es en ARS, así que el
+      // equivalente de cada pago sale directo de calcParalelo(monto, 'ARS', 1)
+      // (mismo cálculo por pago que NuevaVentaModal, para cuando haya más de un
+      // método). '' en vez de null porque el SQL usa NULLIF(...,'') para
+      // resolver a NULL (mismo convenio que NuevaVentaModal).
+      const montoParaleloTotal = tcParalelo?.enabled && tcParalelo.tcHoy
+        ? tcParalelo.calcParalelo(total, 'ARS', 1)
+        : null;
+
+      const pagosPayload = pagos.map(p => {
+        const pagoParalelo = tcParalelo?.enabled && tcParalelo.tcHoy
+          ? tcParalelo.calcParalelo(p.monto, 'ARS', 1)
+          : null;
+        return {
+          metodo:         p.metodo,
+          monto:          p.monto,
+          monto_paralelo: pagoParalelo ?? '',
+          tc_paralelo:    pagoParalelo !== null ? tcParalelo.tcHoy : '',
+          forma_pago_id:  p.forma_pago_id ?? null,
+        };
+      });
 
       const { data: rpcResult, error: rpcError } = await supabase.rpc('crear_venta', {
         p_empresa_id:       user.empresa_id,
@@ -146,8 +166,8 @@ export function useConfirmarVenta() {
         p_estado_pago:      isCC ? 'pendiente' : 'pagada',
         p_moneda:           'ARS',
         p_tipo_cambio_tasa: 1,
-        p_monto_paralelo:   null,
-        p_tc_paralelo:      null,
+        p_monto_paralelo:   montoParaleloTotal ?? null,
+        p_tc_paralelo:      montoParaleloTotal !== null ? tcParalelo.tcHoy : null,
         p_items:            itemsPayload,
         p_pagos:            pagosPayload,
         p_es_cc:            isCC,
@@ -212,7 +232,7 @@ export function useConfirmarVenta() {
     } finally {
       setLoading(false);
     }
-  }, [user, isSessionOpen, currentSession, toast, afipActivo, afipConfig, determinarTipoComprobante]);
+  }, [user, isSessionOpen, currentSession, toast, afipActivo, afipConfig, determinarTipoComprobante, tcParalelo]);
 
   return { confirmar, loading, lastComprobante };
 }

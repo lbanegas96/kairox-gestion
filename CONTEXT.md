@@ -9115,6 +9115,25 @@ empresa quedó exactamente como estaba.
 **Piloto activado:** Nalux quedó con `tc_automatico=true`. Desde mañana el TC se carga solo a las
 08:00; hoy ya quedó cargado por la corrida manual.
 
+**Hallazgo #2, encontrado durante la verificación en vivo con Nadia (mismo día):** al probar el
+POS, Nadia preguntó dónde veía el dólar y no aparecía por ningún lado. **El "Modo Caja"
+(`ModoCajaLayout` → `PanelCarrito.jsx` → `useConfirmarVenta.js`) es un POS completamente aparte
+del de `NuevaVentaModal`, y no tenía NADA de moneda paralela** — ni siquiera importaba
+`useTCParalelo`. Mandaba `p_moneda:'ARS'`, `p_monto_paralelo:null` y `p_tc_paralelo:null`
+hardcodeados, más `monto_paralelo:''`/`tc_paralelo:''` fijos en cada pago, sin mirar la
+configuración de la empresa. No apareció en el barrido inicial justamente porque el criterio de
+búsqueda fue "quién usa `useTCParalelo`" — y este archivo no lo usaba. Es la pantalla que usan
+los cajeros todos los días, así que era la fuente principal del 0% de cobertura en ventas.
+**Corregido en la misma sesión** (decisión de Nadia: incluirlo, no dejarlo fuera de alcance):
+`useConfirmarVenta(tcParalelo)` ahora recibe el hook y calcula el equivalente a nivel comprobante
+y por pago; `PanelCarrito` tiene el gate, el `TipoCambioModal` y la línea "≈ X USD" bajo el Total,
+más el aviso ámbar con botón "Cargar TC" si falta.
+
+**Lección de proceso:** buscar "quién consume el hook X" encuentra los módulos que ya están
+integrados, no los que nunca lo estuvieron. Para verificar cobertura de una feature transversal
+hay que partir de los puntos de escritura a la tabla (acá: quién llama a `crear_venta` /
+inserta en `movimientos_caja`), no de los consumidores del hook.
+
 **Pendientes que quedan (no bloquean, requieren decisión):**
 - **2 filas de TC históricas mal cargadas** en Nalux, del 2026-06-11: `BRL 36,00` (las de los días
   vecinos son ~281 — está off por ~8x) y `EUR 1446,90` (idéntico al USD de ese mismo día, parece
