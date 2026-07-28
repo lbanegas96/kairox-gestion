@@ -64,6 +64,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
   const [clienteId, setClienteId]     = useState('');
   const [motivoNC, setMotivoNC]       = useState(MOTIVOS_NC[0]);
   const [motivoCustom, setMotivoCustom] = useState('');
+  const [referenciaCliente, setReferenciaCliente] = useState('');
   const [items, setItems]             = useState([newItem()]);
   const [loading, setLoading]         = useState(false);
   const [afipConfig, setAfipConfig]   = useState(null);
@@ -98,6 +99,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
     // Pre-cargar ítems desde la Devolución origen (sin re-leer la factura completa)
     if (devolucionOrigen) {
       setClienteId(devolucionOrigen.cliente_id || '');
+      setReferenciaCliente(devolucionOrigen.referencia_cliente || '');
       setItems((devolucionOrigen.items || []).map(i => ({
         _id:          Math.random().toString(36).slice(2),
         producto_id:  i.producto_id,
@@ -112,6 +114,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
     // Pre-cargar ítems desde el comprobante origen
     if (comprobanteOrigen?.id) {
       setClienteId(comprobanteOrigen.cliente_id || '');
+      setReferenciaCliente(comprobanteOrigen.referencia_cliente || '');
       supabase.from('comprobante_items')
         .select('id, producto_id, descripcion, cantidad, precio_unitario, alicuota_iva, productos(nombre)')
         .eq('comprobante_id', comprobanteOrigen.id)
@@ -137,6 +140,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
       setClienteId('');
       setMotivoNC(MOTIVOS_NC[0]);
       setMotivoCustom('');
+      setReferenciaCliente('');
       setItems([newItem()]);
       setAfipConfig(null);
       setNoRelevanteFiscal(false);
@@ -203,6 +207,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
         })),
         p_comprobante_origen_id: comprobanteOrigen?.id || devolucionOrigen?.comprobante_id || null,
         p_devolucion_id:         devolucionOrigen?.id || null,
+        p_referencia_cliente:    referenciaCliente.trim() || null,
       });
       if (error) throw error;
 
@@ -318,6 +323,17 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
                 />
               )}
             </div>
+          </div>
+
+          {/* Referencia del cliente (SAP: "N° de referencia") — texto libre, opcional */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-kx-text-2">N° de Referencia del Cliente (opcional)</Label>
+            <Input
+              placeholder="Ej. número de la factura o del reclamo del cliente"
+              value={referenciaCliente}
+              onChange={e => setReferenciaCliente(e.target.value)}
+              className="h-9 text-sm bg-kx-surface border-kx-border text-kx-text"
+            />
           </div>
 
           {/* Tabla de ítems */}
