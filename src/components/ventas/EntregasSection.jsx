@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Truck, Search, ChevronDown, ChevronRight, Package, FileOutput, Loader2, Download, Send } from 'lucide-react';
+import { Truck, Search, ChevronDown, ChevronRight, Package, FileOutput, Loader2, Download, Send, Ban } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { formatDateAR } from '@/lib/dateUtils';
@@ -42,6 +46,8 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
   const [expanded, setExpanded] = useState({});
   const [emitiendoId, setEmitiendoId] = useState(null);
   const [generandoPdfId, setGenerandoPdfId] = useState(null);
+  const [anularTarget, setAnularTarget] = useState(null);
+  const [anulando, setAnulando] = useState(false);
 
   const fetchEntregas = async () => {
     if (!user?.empresa_id) return;
@@ -153,6 +159,26 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
     }
   };
 
+  const handleAnularEntrega = async () => {
+    if (!anularTarget) return;
+    setAnulando(true);
+    try {
+      const { error } = await supabase.rpc('anular_entrega', {
+        p_empresa_id: user.empresa_id,
+        p_user_id: user.id,
+        p_entrega_id: anularTarget.id,
+      });
+      if (error) throw error;
+      toast({ title: `Entrega ${anularTarget.numero_entrega} anulada`, description: 'El stock fue repuesto.' });
+      setAnularTarget(null);
+      await fetchEntregas();
+    } catch (err) {
+      toast({ title: 'No se pudo anular la entrega', description: err.message, variant: 'destructive' });
+    } finally {
+      setAnulando(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Filtros */}
@@ -256,8 +282,20 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
                         <td className="p-3 text-center text-kx-text-2">
                           {items.length}
                         </td>
-                        <td className="p-3 text-center">
-                          <EstadoBadge estado={entrega.estado} />
+                        <td className="p-3 text-center" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <EstadoBadge estado={entrega.estado} />
+                            {entrega.estado !== 'anulado' && !entrega.comprobante_id && (
+                              <Button
+                                variant="ghost" size="icon"
+                                className="h-6 w-6 text-kx-text-3 hover:text-kx-red"
+                                onClick={() => setAnularTarget(entrega)}
+                                title="Anular entrega"
+                              >
+                                <Ban className="w-3 h-3" />
+                              </Button>
+                            )}
+                          </div>
                         </td>
                         <td className="p-3" onClick={e => e.stopPropagation()}>
                           {entrega.numero_remito ? (
@@ -334,6 +372,25 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
           </table>
         </div>
       </Card>
+      {/* ── Confirm anular ───────────────────────────────────────────────── */}
+      <AlertDialog open={!!anularTarget} onOpenChange={v => !v && setAnularTarget(null)}>
+        <AlertDialogContent className="dark:bg-kx-bg dark:border-kx-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="dark:text-kx-text">¿Anular entrega?</AlertDialogTitle>
+            <AlertDialogDescription className="dark:text-kx-text-2">
+              La entrega <strong>{anularTarget?.numero_entrega}</strong> se marcará como anulada y el stock de sus ítems
+              se repondrá automáticamente. Esta acción no puede deshacerse.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="dark:text-kx-text dark:border-kx-border">Volver</AlertDialogCancel>
+            <AlertDialogAction onClick={handleAnularEntrega} disabled={anulando} className="bg-red-600 hover:bg-red-700 text-white">
+              {anulando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Sí, anular
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
