@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Truck, Search, ChevronDown, ChevronRight, Package, FileOutput, Loader2, Download, Send, Ban } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Truck, Search, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -12,6 +11,7 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { formatDateAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
 import { getEmpresaParaPDF } from '@/lib/empresaUtils';
+import ModalDetalleEntrega from '@/components/ventas/ModalDetalleEntrega';
 
 const ORIGEN_LABELS = {
   implicita: { label: 'POS',    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
@@ -35,7 +35,7 @@ function EstadoBadge({ estado }) {
   return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.className}`}>{cfg.label}</span>;
 }
 
-function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
+function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -43,11 +43,13 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
   const [loading, setLoading]   = useState(true);
   const [search, setSearch]     = useState('');
   const [filtroOrigen, setFiltroOrigen] = useState('todos');
-  const [expanded, setExpanded] = useState({});
   const [emitiendoId, setEmitiendoId] = useState(null);
   const [generandoPdfId, setGenerandoPdfId] = useState(null);
   const [anularTarget, setAnularTarget] = useState(null);
   const [anulando, setAnulando] = useState(false);
+  const [viewEntregaId, setViewEntregaId] = useState(null);
+
+  const viewEntrega = entregas.find(e => e.id === viewEntregaId) ?? null;
 
   const fetchEntregas = async () => {
     if (!user?.empresa_id) return;
@@ -75,18 +77,12 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
 
   useEffect(() => { fetchEntregas(); }, [user?.empresa_id]);
 
+  // Navegación desde el Flujo del Documento de otra sección (ej. Pedido → Entrega generada)
   useEffect(() => {
-    if (!navigateEntregaId || entregas.length === 0) return;
-    const ent = entregas.find(e => e.id === navigateEntregaId);
-    if (ent) {
-      setSearch(ent.numero_entrega || '');
-      setExpanded(prev => ({ ...prev, [ent.id]: true }));
-      setTimeout(() => {
-        document.getElementById(`entrega-row-${ent.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 100);
-    }
+    if (!navigateEntregaId) return;
+    setViewEntregaId(navigateEntregaId);
     onNavigated?.();
-  }, [navigateEntregaId, entregas]);
+  }, [navigateEntregaId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     let r = entregas;
@@ -101,8 +97,6 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
     }
     return r;
   }, [entregas, filtroOrigen, search]);
-
-  const toggleExpand = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
 
   const handleDownloadRemito = async (entrega) => {
     setGenerandoPdfId(entrega.id);
@@ -171,6 +165,7 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
       if (error) throw error;
       toast({ title: `Entrega ${anularTarget.numero_entrega} anulada`, description: 'El stock fue repuesto.' });
       setAnularTarget(null);
+      setViewEntregaId(null);
       await fetchEntregas();
     } catch (err) {
       toast({ title: 'No se pudo anular la entrega', description: err.message, variant: 'destructive' });
@@ -209,7 +204,6 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
           <table className="w-full text-sm">
             <thead className="bg-kx-surface-2 border-b border-kx-border">
               <tr>
-                <th className="text-left p-3 font-semibold text-kx-text-2 w-8"></th>
                 <th className="text-left p-3 font-semibold text-kx-text-2">Número</th>
                 <th className="text-left p-3 font-semibold text-kx-text-2">Fecha</th>
                 <th className="text-left p-3 font-semibold text-kx-text-2">Cliente</th>
@@ -225,7 +219,7 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 10 }).map((_, j) => (
+                    {Array.from({ length: 9 }).map((_, j) => (
                       <td key={j} className="p-3">
                         <div className="h-4 bg-kx-surface-2 rounded animate-pulse w-16" />
                       </td>
@@ -234,7 +228,7 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
                 ))
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="p-12 text-center text-kx-text-3">
+                  <td colSpan={9} className="p-12 text-center text-kx-text-3">
                     <Truck className="w-10 h-10 mx-auto mb-3 opacity-20" />
                     <p className="font-medium text-kx-text-2">
                       {filtroOrigen !== 'todos' || search
@@ -247,124 +241,40 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
               ) : (
                 filtered.map(entrega => {
                   const items = entrega.entrega_items || [];
-                  const isOpen = !!expanded[entrega.id];
                   return (
-                    <React.Fragment key={entrega.id}>
-                      <tr
-                        id={`entrega-row-${entrega.id}`}
-                        className="hover:bg-kx-surface-2 cursor-pointer transition-colors"
-                        onClick={() => toggleExpand(entrega.id)}
-                      >
-                        <td className="p-3 text-kx-text-3">
-                          {isOpen
-                            ? <ChevronDown className="h-3.5 w-3.5" />
-                            : <ChevronRight className="h-3.5 w-3.5" />
-                          }
-                        </td>
-                        <td className="p-3 font-mono font-semibold text-[rgb(var(--kx-violet))]">
-                          {entrega.numero_entrega}
-                        </td>
-                        <td className="p-3 text-kx-text-2 text-xs">
-                          {formatDateAR(entrega.fecha)}
-                        </td>
-                        <td className="p-3 text-kx-text">
-                          {entrega.clientes?.nombre || '—'}
-                        </td>
-                        <td className="p-3">
-                          <OrigenBadge origen={entrega.origen} />
-                        </td>
-                        <td className="p-3 font-mono text-xs text-kx-text-2">
-                          {entrega.pedidos?.numero || '—'}
-                        </td>
-                        <td className="p-3 font-mono text-xs text-kx-text-2">
-                          {entrega.comprobantes?.numero_venta || '—'}
-                        </td>
-                        <td className="p-3 text-center text-kx-text-2">
-                          {items.length}
-                        </td>
-                        <td className="p-3 text-center" onClick={e => e.stopPropagation()}>
-                          <div className="flex items-center justify-center gap-1.5">
-                            <EstadoBadge estado={entrega.estado} />
-                            {entrega.estado !== 'anulado' && !entrega.comprobante_id && (
-                              <Button
-                                variant="ghost" size="icon"
-                                className="h-6 w-6 text-kx-text-3 hover:text-kx-red"
-                                onClick={() => setAnularTarget(entrega)}
-                                title="Anular entrega"
-                              >
-                                <Ban className="w-3 h-3" />
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                        <td className="p-3" onClick={e => e.stopPropagation()}>
-                          {entrega.numero_remito ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-mono text-xs text-kx-text-2" title={`CAI ${entrega.cai_remito_usado || '—'}`}>
-                                {entrega.numero_remito}
-                              </span>
-                              <Button
-                                variant="ghost" size="icon"
-                                className="h-6 w-6 text-kx-text-3 hover:text-kx-blue"
-                                disabled={generandoPdfId === entrega.id}
-                                onClick={() => handleDownloadRemito(entrega)}
-                                title="Descargar PDF"
-                              >
-                                {generandoPdfId === entrega.id
-                                  ? <Loader2 className="w-3 h-3 animate-spin" />
-                                  : <Download className="w-3 h-3" />}
-                              </Button>
-                              <Button
-                                variant="ghost" size="icon"
-                                className="h-6 w-6 text-kx-text-3 hover:text-green-600"
-                                onClick={() => handleShareWhatsApp(entrega)}
-                                title="Compartir por WhatsApp"
-                              >
-                                <Send className="w-3 h-3" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button
-                              size="sm" variant="outline"
-                              disabled={emitiendoId === entrega.id}
-                              onClick={() => handleEmitirRemito(entrega.id)}
-                              className="h-7 text-xs"
-                            >
-                              {emitiendoId === entrega.id
-                                ? <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                : <FileOutput className="w-3 h-3 mr-1" />}
-                              Emitir remito
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
-
-                      {isOpen && items.length > 0 && (
-                        <tr>
-                          <td />
-                          <td colSpan={9} className="pb-3 pr-3">
-                            <div className="bg-kx-surface-2 rounded-lg border border-kx-border p-3">
-                              <p className="text-xs font-semibold text-kx-text-3 uppercase mb-2">
-                                Detalle de ítems
-                              </p>
-                              <div className="space-y-1">
-                                {items.map(item => (
-                                  <div key={item.id} className="flex items-center justify-between text-sm">
-                                    <div className="flex items-center gap-2 text-kx-text">
-                                      <Package className="h-3.5 w-3.5 text-kx-text-3 shrink-0" />
-                                      {item.productos?.nombre || item.producto_id}
-                                    </div>
-                                    <span className="font-mono text-kx-text-2 text-xs">
-                                      × {Number(item.cantidad).toLocaleString('es-AR')}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
+                    <tr
+                      key={entrega.id}
+                      className="hover:bg-kx-surface-2 cursor-pointer transition-colors"
+                      onClick={() => setViewEntregaId(entrega.id)}
+                    >
+                      <td className="p-3 font-mono font-semibold text-[rgb(var(--kx-violet))]">
+                        {entrega.numero_entrega}
+                      </td>
+                      <td className="p-3 text-kx-text-2 text-xs">
+                        {formatDateAR(entrega.fecha)}
+                      </td>
+                      <td className="p-3 text-kx-text">
+                        {entrega.clientes?.nombre || '—'}
+                      </td>
+                      <td className="p-3">
+                        <OrigenBadge origen={entrega.origen} />
+                      </td>
+                      <td className="p-3 font-mono text-xs text-kx-text-2">
+                        {entrega.pedidos?.numero || '—'}
+                      </td>
+                      <td className="p-3 font-mono text-xs text-kx-text-2">
+                        {entrega.comprobantes?.numero_venta || '—'}
+                      </td>
+                      <td className="p-3 text-center text-kx-text-2">
+                        {items.length}
+                      </td>
+                      <td className="p-3 text-center">
+                        <EstadoBadge estado={entrega.estado} />
+                      </td>
+                      <td className="p-3 font-mono text-xs text-kx-text-2">
+                        {entrega.numero_remito || '—'}
+                      </td>
+                    </tr>
                   );
                 })
               )}
@@ -372,6 +282,20 @@ function EntregasSection({ navigateEntregaId, onNavigated } = {}) {
           </table>
         </div>
       </Card>
+
+      {/* ── Modal Detalle ─────────────────────────────────────────────────── */}
+      <ModalDetalleEntrega
+        entrega={viewEntrega}
+        onClose={() => setViewEntregaId(null)}
+        onNavigate={onNavigate}
+        onEmitirRemito={handleEmitirRemito}
+        emitiendo={emitiendoId === viewEntregaId}
+        onDescargarRemito={handleDownloadRemito}
+        generandoPdf={generandoPdfId === viewEntregaId}
+        onCompartirWhatsApp={handleShareWhatsApp}
+        onAnular={setAnularTarget}
+      />
+
       {/* ── Confirm anular ───────────────────────────────────────────────── */}
       <AlertDialog open={!!anularTarget} onOpenChange={v => !v && setAnularTarget(null)}>
         <AlertDialogContent className="dark:bg-kx-bg dark:border-kx-border">

@@ -98,7 +98,14 @@ function VentasSection({ initialTab = 'historial' }) {
         </TabsContent>
 
         <TabsContent value="entregas" className="mt-4">
-          <EntregasSection navigateEntregaId={navigateEntregaId} onNavigated={() => setNavigateEntregaId(null)} />
+          <EntregasSection
+            navigateEntregaId={navigateEntregaId}
+            onNavigated={() => setNavigateEntregaId(null)}
+            onNavigate={(tipo, id) => {
+              if (tipo === 'pedido') { setActiveTab('pedidos'); setNavigatePedidoId(id); }
+              else if (tipo === 'factura' || tipo === 'comprobante') { setActiveTab('historial'); setNavigateSaleId(id); }
+            }}
+          />
         </TabsContent>
 
         <TabsContent value="historial" className="mt-4">
