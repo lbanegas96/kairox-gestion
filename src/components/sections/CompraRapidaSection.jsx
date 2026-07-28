@@ -344,6 +344,19 @@ function ComprasSection() {
     }
 
     if (!isPurchaseValid()) return;
+
+    // Moneda paralela: mismo gate que NuevaVentaModal. Antes acá se guardaba
+    // monto_paralelo=NULL en silencio cuando faltaba el TC del día.
+    if (tcParalelo.enabled && tcParalelo.tcMissing) {
+      toast({
+        variant: 'destructive',
+        title: `Falta el TC de paridad ${tcParalelo.monedaParalela}`,
+        description: `La empresa usa moneda paralela. Cargá el TC de ${tcParalelo.monedaParalela} para poder registrar la compra.`,
+      });
+      setShowParaleloTCModal(true); // se abre el modal para que pueda cargarlo acá mismo
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {

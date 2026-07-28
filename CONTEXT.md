@@ -7030,7 +7030,7 @@ Sidebar 7 grupos:
 ## Sistema TC del día centralizado (SAP-style)
 
 ### Arquitectura
-- **Tabla:** `tipos_cambio` — columnas: `empresa_id`, `moneda`, `fecha` (YYYY-MM-DD), `tasa`, `user_id`, `updated_at`
+- **Tabla:** `tipos_cambio` — columnas reales (verificadas contra producción 2026-07-28): `id`, `empresa_id`, `moneda`, `fecha` (YYYY-MM-DD), `tasa`, `origen` ('manual' | 'automatico', mig.260), `created_at`. **No existen `user_id` ni `updated_at`** — esta línea los documentaba desde hace tiempo y era incorrecto; `upsertTC` recibe un `_userId` que ignora.
 - **Constraint:** `UNIQUE(empresa_id, moneda, fecha)` — un solo TC por empresa/moneda/día
 - **Servicio:** `src/services/tipoCambioService.js`
   - `getTodayTC(empresaId, moneda)` — busca TC de HOY (hora local Argentina)
@@ -7106,7 +7106,7 @@ Cuando `enabled = true`, los siguientes módulos guardan `monto_paralelo` + `tc_
 1. ✅ **Deploy Vercel** — https://kairox-gestion.vercel.app · `vercel.json` + `vite.config.prod.js` · env vars configuradas
 2. ✅ **Estabilización producción** — fix TDZ crash (framer-motion + BroadcastChannel), Google Translate DOM, stale-session 403
 3. ✅ **TC del día centralizado** — tabla `tipos_cambio` + `TipoCambioModal` + `MonedaSelector` reescrito + bloqueo operaciones
-4. ✅ **Moneda Paralela SAP-style** — toggle config + hook `useTCParalelo` + `monto_paralelo`/`tc_paralelo` en 4 tablas + Reporte Paridad
+4. ✅ **Moneda Paralela SAP-style** — toggle config + hook `useTCParalelo` + `monto_paralelo`/`tc_paralelo` en 4 tablas + Reporte Paridad. **Cerrado de verdad el 2026-07-28** (mig.260/261): hasta entonces el gate solo existía en el POS y la cobertura real era 0%. Ahora hay carga automática del TC (Edge Function `tc-diario-sync` + cron 08:00 AR, dólar oficial vendedor de dolarapi.com) y gate unificado en los 5 módulos.
 5. ✅ **ARCA/AFIP** + Libro IVA — **Fases 1-5 COMPLETAS**: infra DB (migration 025) + Edge Functions `generar-csr`/`emitir-cae` + Wizard de activación UI (ConfiguracionSection) + integración CAE en flujo post-venta (Fase 3) + PDF con QR fiscal RG 4291/2018 (Fase 4) + Libro IVA Ventas digital (Fase 5).
 6. ✅ **Moneda Paralela UI — Caja y Cuenta Corriente** (Prompt 13) — KPIs equivalente, columna separada en tabla Caja con fallback `calcParalelo`, dialog cobro CC con equivalente en tiempo real, aging bandas CC con equivalente.
 7. ✅ **ConfiguracionSection SAP Administración-style** (Prompt 14) — 8 tabs centralizados + IntegracionCard + usuarios embebido en Tab 7 + REGLA DE ORO documentada.
@@ -9041,6 +9041,93 @@ reversa (neto cero), y todo el rastro de prueba borrado después.
 Con esto el ciclo O2C completo (Cotización → Pedido → Entrega → Factura) queda al nivel de SAP B1 en
 todos los puntos comparados. Quedan fuera de esta sesión: Devoluciones/NC/ND no se compararon contra
 SAP todavía, y el macroproceso de Compras (S2P) no se tocó.
+
+---
+
+### Sesión 2026-07-28 — Moneda paralela: TC automático + el gate que solo existía en el POS
+
+**Migraciones:** `260_tc_automatico.sql`, `261_pg_cron_tc_diario_sync.sql` (ambas aplicadas a producción)
+**Edge Function nueva:** `tc-diario-sync` (v1, ACTIVE) · **Cron nuevo:** `tc-diario-sync-8am-ar` (jobid 10)
+
+Nadia pidió "revisar y terminar el tema del dólar". La revisión encontró que el problema real
+era bastante más grave que la automatización pendiente que documentaba `PLAN_TC_AUTOMATICO.md`.
+
+**Diagnóstico — 3 problemas encadenados:**
+1. **Cobertura de moneda paralela = 0%.** En Nalux, con `usa_tc_paralelo=true`: 144 comprobantes,
+   16 compras y 162 movimientos de caja, **ninguno** con `monto_paralelo`. Toda la UI de moneda
+   paralela (construida a lo largo de varias sesiones y marcada ✅ en el roadmap) no estaba
+   persistiendo nada.
+2. **El TC casi nunca se cargaba.** Solo 6 días con TC en toda la historia (8/11/12/13/16 de junio
+   + el 25 de julio, y ese último fue el valor de prueba 1450 que quedó documentado como tal).
+   El día de la revisión tampoco había TC cargado.
+3. **La causa raíz: el "gate estricto" solo existía en el POS.** `PLAN_TC_AUTOMATICO.md` §2 afirma
+   "si `usa_tc_paralelo=true` y no hay TC de hoy, ninguna transacción se cierra — sin excepciones".
+   En el código real **solo `NuevaVentaModal` bloqueaba**. `CajaSection`, `CompraRapidaSection`,
+   `NuevaFacturaProveedorModal` y `CuentaCorrienteSection` hacían `tcParalelo.tcHoy ? calc : null`
+   y escribían NULL sin avisar. Por eso nadie se enteró de que la cobertura era cero: no había
+   ningún síntoma visible, solo un dato que no se guardaba.
+
+**Decisiones de negocio tomadas por Nadia en esta sesión:**
+- **Cotización: dólar OFICIAL vendedor** (`dolarapi.com/v1/dolares/oficial`, campo `venta`). Esto
+  resuelve la contradicción que el plan dejaba abierta — el `TipoCambioModal` sugiere en su texto
+  "dólar blue vendedor", que quedó desactualizado (no se tocó el copy en esta sesión).
+- **Unificar el gate: bloquear en los 4 módulos** que no bloqueaban, en vez de solo avisar.
+
+**Construido:**
+- **Migración 260:** `empresas.tc_automatico` (bool, default false — nadie cambia de comportamiento
+  sin prender el toggle) + `tipos_cambio.origen` ('manual' | 'automatico', default 'manual' — las
+  13 filas históricas quedan correctamente marcadas como lo que fueron). `tipoCambioService.upsert`
+  no cambió: sigue escribiendo sin especificar `origen` y el DEFAULT lo marca manual.
+- **Edge Function `tc-diario-sync`:** trae la cotización una vez, itera empresas con
+  `usa_tc_paralelo AND tc_automatico AND moneda_paralela='USD'`, try/catch por empresa. Guard de
+  sanidad: si dolarapi devuelve algo que no es un número > 0, no escribe nada y todos caen al
+  banner manual de siempre — nunca se inventa una tasa. Es autocontenida (crea su propio
+  adminClient en vez de importar `_shared/auth.ts`) porque el bundling del import relativo falla
+  al deployar via MCP y es lo único que necesitaba de ahí.
+- **Dos cosas más allá del plan original:**
+  1. **Nunca pisa un TC manual.** Si un humano cargó el TC hoy, esa decisión gana; el cron solo
+     refresca filas que escribió él mismo. **Verificado en vivo** con la empresa inerte "CAEA Test":
+     TC manual 1111,1111 quedó intacto (`respetados_manual: 1`) mientras Nalux se actualizaba.
+  2. **Corre todos los días, fin de semana incluido.** El gate busca `fecha = hoy`, así que sin
+     fila de sábado/domingo toda operación de fin de semana quedaría bloqueada (y hay clientes de
+     retail que operan sábados). Con el mercado cerrado dolarapi devuelve la cotización del
+     viernes — que además es el tratamiento financiero correcto.
+- **Cron `0 11 * * *`** = 08:00 AR (offset fijo UTC-3). Mismo patrón que la migración 102.
+- **Sub-toggle en Configuración → Finanzas**, visible solo con moneda paralela activa y
+  habilitado solo si `moneda_paralela='USD'` (para EUR/BRL se muestra deshabilitado con la nota
+  de por qué). `handleSaveTC` fuerza `tc_automatico=false` si no se cumplen ambas condiciones,
+  para que la DB nunca quede en un estado que la UI no puede representar.
+- **Gate unificado** en los 4 módulos, replicando el de `NuevaVentaModal:442`. Se descubrió en el
+  camino que `CajaSection` y `CuentaCorrienteSection` **no tenían `TipoCambioModal`**: bloquear ahí
+  sin darles forma de cargar el TC habría dejado al usuario trabado, así que se les agregó, y los
+  4 gates ahora abren el modal además de mostrar el toast.
+- **Fix de rama muerta en `useTCParalelo.calcParalelo`:** si la operación era en una tercera moneda
+  (ej. EUR con paralela USD), `tcUsed` quedaba null y la función retornaba antes de llegar a la
+  línea que convertía vía ARS — ese camino nunca se ejecutaba. Reescrito para convertir de verdad,
+  validando la tasa de la operación antes de usarla.
+
+**Verificado en producción:** función invocada a mano 3 veces — 0 empresas (trae bien la cotización
+sin escribir nada), 1 empresa (crea la fila de hoy: USD 1520, `origen='automatico'`), y re-corrida
+(`creados: 0, actualizados: 1, respetados_manual: 1` — idempotente, una sola fila por día, sin
+duplicados). Build de producción sin errores. El dato de prueba de "CAEA Test" se borró y la
+empresa quedó exactamente como estaba.
+
+**Piloto activado:** Nalux quedó con `tc_automatico=true`. Desde mañana el TC se carga solo a las
+08:00; hoy ya quedó cargado por la corrida manual.
+
+**Pendientes que quedan (no bloquean, requieren decisión):**
+- **2 filas de TC históricas mal cargadas** en Nalux, del 2026-06-11: `BRL 36,00` (las de los días
+  vecinos son ~281 — está off por ~8x) y `EUR 1446,90` (idéntico al USD de ese mismo día, parece
+  haberse tipeado la tasa equivocada). No se tocaron: borrar o corregir datos financieros
+  históricos necesita autorización explícita. Solo afectan reportes retroactivos.
+- **La fila `2026-07-25 USD 1450`** es el valor de prueba que la sesión de Reportería dejó cargado
+  y documentado como tal. Sigue ahí, marcada ahora como `origen='manual'`.
+- **La cobertura histórica sigue en 0%** y no se puede backfillear honestamente: solo hay TC de 6
+  días sueltos contra meses de operaciones, así que rellenar exigiría inventar tasas. El Reporte de
+  Paridad ya hace cálculo retroactivo con el histórico que hay. De acá en adelante la cobertura
+  debería ser ~100% gracias al gate + la carga automática.
+- **El copy del `TipoCambioModal`** sigue diciendo "ej. dólar blue vendedor", que contradice la
+  decisión de usar el oficial. No se tocó para no mezclarlo con este cambio.
 
 ---
 

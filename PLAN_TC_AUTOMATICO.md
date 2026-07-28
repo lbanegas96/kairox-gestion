@@ -1,7 +1,41 @@
 # Plan de desarrollo — Tipo de cambio diario automático
 
-**Estado:** planificación, nada construido todavía.
+**Estado:** ✅ **CONSTRUIDO Y EN PRODUCCIÓN** (2026-07-28). Fases A, B, C y D completas.
 **Origen:** conversación 2026-07-25 con Luciano — confirmó la dirección, pidió el plan completo antes de construir nada.
+
+---
+
+## ✅ Qué quedó construido (2026-07-28, Nadia)
+
+| Fase | Entregable | Estado |
+|------|-----------|--------|
+| A | Migración `260_tc_automatico.sql` (`empresas.tc_automatico`, `tipos_cambio.origen`) | ✅ Aplicada a producción |
+| A | Edge Function `tc-diario-sync` | ✅ Deployada, v1 ACTIVE |
+| B | Cron `tc-diario-sync-8am-ar` (`0 11 * * *`), migración `261_pg_cron_tc_diario_sync.sql` | ✅ Registrado, jobid 10 |
+| C | Sub-toggle en Configuración → Finanzas (`TabFinanzas.jsx`) | ✅ |
+| D | Piloto: activado para Nalux | ✅ |
+
+**Decisión de la sección 3 resuelta:** la cotización es el **dólar OFICIAL vendedor**
+(`GET https://dolarapi.com/v1/dolares/oficial`, campo `venta`) — confirmado por Nadia el
+2026-07-28. El texto del `TipoCambioModal` que sugería "dólar blue vendedor" quedó
+desactualizado respecto de esta decisión.
+
+**Dos cosas que se agregaron más allá del plan original:**
+1. **Nunca pisar un TC manual.** Si alguien cargó el TC a mano hoy (`origen='manual'`), el
+   cron lo respeta y no lo sobrescribe — esa decisión humana gana. Solo refresca filas que
+   escribió la propia función. Verificado en vivo.
+2. **El cron corre todos los días, fines de semana incluidos.** El caso borde de la sección 5
+   se resolvió así: el gate busca un TC con `fecha = hoy`, de modo que si sábado y domingo no
+   se escribiera fila, toda operación de fin de semana quedaría bloqueada. Con el mercado
+   cerrado dolarapi devuelve la cotización del viernes, que además es el tratamiento
+   financiero correcto (valuar al cierre del último día hábil).
+
+**Hallazgo grave encontrado durante la construcción, corregido en la misma sesión:** el "gate
+estricto" que la sección 2 daba por sentado **solo existía en el POS**. `CajaSection`,
+`CompraRapidaSection`, `NuevaFacturaProveedorModal` y `CuentaCorrienteSection` no bloqueaban:
+guardaban `monto_paralelo = NULL` en silencio. Resultado real medido en Nalux: **0% de
+cobertura** sobre 144 comprobantes, 16 compras y 162 movimientos de caja. Ver CONTEXT.md,
+sesión 2026-07-28.
 
 ---
 

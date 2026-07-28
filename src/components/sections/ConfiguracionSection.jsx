@@ -85,7 +85,7 @@ const ConfiguracionSection = ({ initialTab }) => {
   });
 
   // ── Tab 2: Finanzas ───────────────────────────────────────────────────────
-  const [tcConfig, setTcConfig] = useState({ usa_tc_paralelo: false, moneda_paralela: 'USD' });
+  const [tcConfig, setTcConfig] = useState({ usa_tc_paralelo: false, moneda_paralela: 'USD', tc_automatico: false });
   const [loadingTC, setLoadingTC] = useState(false);
   const [savingTC, setSavingTC] = useState(false);
 
@@ -441,10 +441,14 @@ const ConfiguracionSection = ({ initialTab }) => {
       try {
         const { data } = await supabase
           .from('empresas')
-          .select('usa_tc_paralelo, moneda_paralela')
+          .select('usa_tc_paralelo, moneda_paralela, tc_automatico')
           .eq('id', user.empresa_id)
           .single();
-        if (data) setTcConfig({ usa_tc_paralelo: data.usa_tc_paralelo ?? false, moneda_paralela: data.moneda_paralela ?? 'USD' });
+        if (data) setTcConfig({
+          usa_tc_paralelo: data.usa_tc_paralelo ?? false,
+          moneda_paralela: data.moneda_paralela ?? 'USD',
+          tc_automatico:   data.tc_automatico   ?? false,
+        });
       } catch (e) {
         console.error('[TC Paralela] Error al cargar config:', e);
       } finally {
@@ -950,16 +954,28 @@ const ConfiguracionSection = ({ initialTab }) => {
   const handleSaveTC = async () => {
     if (!user?.empresa_id) return;
     setSavingTC(true);
+    // La carga automática solo tiene sentido con moneda paralela activa y en USD
+    // (la Edge Function tc-diario-sync solo cubre USD en su v1). Si alguna de las
+    // dos condiciones no se cumple, se persiste en false para que la DB nunca
+    // quede en un estado que la UI no puede representar.
+    const autoEfectivo = tcConfig.usa_tc_paralelo && tcConfig.moneda_paralela === 'USD' && tcConfig.tc_automatico;
     try {
       const { error } = await supabase
         .from('empresas')
-        .update({ usa_tc_paralelo: tcConfig.usa_tc_paralelo, moneda_paralela: tcConfig.moneda_paralela })
+        .update({
+          usa_tc_paralelo: tcConfig.usa_tc_paralelo,
+          moneda_paralela: tcConfig.moneda_paralela,
+          tc_automatico:   autoEfectivo,
+        })
         .eq('id', user.empresa_id);
       if (error) throw error;
+      if (autoEfectivo !== tcConfig.tc_automatico) setTcConfig(prev => ({ ...prev, tc_automatico: autoEfectivo }));
       toast({
         title: 'Moneda paralela guardada',
         description: tcConfig.usa_tc_paralelo
-          ? `Activada. El sistema pedirá el TC de ${tcConfig.moneda_paralela} antes de cada operación.`
+          ? (autoEfectivo
+              ? `Activada con carga automática. El TC de ${tcConfig.moneda_paralela} se actualiza solo cada mañana.`
+              : `Activada. El sistema pedirá el TC de ${tcConfig.moneda_paralela} antes de cada operación.`)
           : 'Desactivada. El sistema no requerirá TC paralelo.',
         className: 'bg-green-600 text-white border-green-700',
       });

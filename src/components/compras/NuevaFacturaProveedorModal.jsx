@@ -165,6 +165,17 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
       toast({ title: 'Abrí la caja para registrar pago en Efectivo', variant: 'destructive' });
       return;
     }
+    // Moneda paralela: mismo gate que NuevaVentaModal. Antes acá se guardaba
+    // monto_paralelo=NULL en silencio cuando faltaba el TC del día.
+    if (tcParalelo.enabled && tcParalelo.tcMissing) {
+      toast({
+        title: `Falta el TC de paridad ${tcParalelo.monedaParalela}`,
+        description: `La empresa usa moneda paralela. Cargá el TC de ${tcParalelo.monedaParalela} para poder registrar la factura.`,
+        variant: 'destructive',
+      });
+      setShowParaleloTCModal(true); // se abre el modal para que pueda cargarlo acá mismo
+      return;
+    }
 
     setLoading(true);
     try {

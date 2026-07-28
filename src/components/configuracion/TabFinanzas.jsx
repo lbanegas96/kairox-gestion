@@ -121,6 +121,39 @@ const TabFinanzas = ({
             </div>
           )}
 
+          {/* Carga automática del TC — solo USD: la Edge Function tc-diario-sync
+              lee dolarapi.com, que no cubre EUR/BRL con la misma calidad. */}
+          {tcConfig.usa_tc_paralelo && (
+            <div className={`flex items-start justify-between gap-4 p-4 rounded-lg border ${
+              tcConfig.moneda_paralela === 'USD'
+                ? 'bg-kx-surface-2 dark:bg-slate-900/50 kairox-border'
+                : 'bg-slate-50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800 opacity-70'
+            }`}>
+              <div>
+                <Label className="text-kx-text dark:text-kx-text font-medium">
+                  Actualizar el TC automáticamente todos los días
+                </Label>
+                {tcConfig.moneda_paralela === 'USD' ? (
+                  <p className="text-xs text-slate-500 dark:text-kx-text-2 mt-0.5">
+                    {tcConfig.tc_automatico
+                      ? 'Cada mañana a las 08:00 se carga solo el dólar oficial vendedor (fuente: dolarapi.com). Si un día lo cargás a mano, tu valor tiene prioridad y no se pisa.'
+                      : 'Apagado: seguís cargando el TC vos, como hasta ahora.'}
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                    Solo disponible con moneda paralela <strong>USD</strong>. Para {tcConfig.moneda_paralela} el
+                    TC se sigue cargando a mano.
+                  </p>
+                )}
+              </div>
+              <Switch
+                checked={tcConfig.moneda_paralela === 'USD' && tcConfig.tc_automatico}
+                disabled={tcConfig.moneda_paralela !== 'USD'}
+                onCheckedChange={v => setTcConfig(prev => ({ ...prev, tc_automatico: v }))}
+              />
+            </div>
+          )}
+
           {tcConfig.usa_tc_paralelo && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
               {[

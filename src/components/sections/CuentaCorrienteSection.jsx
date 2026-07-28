@@ -11,6 +11,7 @@ import { getNowAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { tipoCambioService } from '@/services/tipoCambioService';
+import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 import ClientDetailModal from './ClientDetailModal';
 import TablaClientes from '@/components/cuenta-corriente/TablaClientes';
 import TabAntiguedad from '@/components/cuenta-corriente/TabAntiguedad';
@@ -27,6 +28,7 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro } = {}) {
   const invalidateNotifs = () => qc.invalidateQueries({ queryKey: ['notif'] });
 
   // Data State
+  const [showParaleloTCModal, setShowParaleloTCModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -366,6 +368,18 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro } = {}) {
       return;
     }
 
+    // Moneda paralela: mismo gate que NuevaVentaModal. Antes acá se mandaba
+    // p_monto_paralelo=NULL al RPC en silencio cuando faltaba el TC del día.
+    if (tcParalelo.enabled && tcParalelo.tcMissing) {
+      toast({
+        variant: 'destructive',
+        title: `Falta el TC de paridad ${tcParalelo.monedaParalela}`,
+        description: `La empresa usa moneda paralela. Cargá el TC de ${tcParalelo.monedaParalela} para poder registrar el cobro.`,
+      });
+      setShowParaleloTCModal(true); // se abre el modal para que pueda cargarlo acá mismo
+      return;
+    }
+
     setIsProcessingPayment(true);
     const date = getNowAR().toISOString();
 
@@ -566,6 +580,14 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro } = {}) {
         imputaciones={imputaciones} setImputaciones={setImputaciones}
         imputacionesFX={imputacionesFX} setImputacionesFX={setImputacionesFX}
         autoDistribuirFIFO={autoDistribuirFIFO}
+      />
+
+      {/* Carga del TC de paridad cuando falta — el gate de handleRegisterPayment lo abre */}
+      <TipoCambioModal
+        open={showParaleloTCModal}
+        onOpenChange={setShowParaleloTCModal}
+        moneda={tcParalelo.monedaParalela}
+        onConfirm={(t) => { tcParalelo.setTC(t); setShowParaleloTCModal(false); }}
       />
     </div>
   );

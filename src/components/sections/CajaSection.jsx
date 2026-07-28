@@ -17,6 +17,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
+import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { getNowAR, getTodayAR, getStartOfDayAR, getEndOfDayAR, getDateFromInputAR } from '@/lib/dateUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
@@ -35,6 +36,7 @@ function CajaSection() {
   
   // State
   const [activeTab, setActiveTab] = useState("movimientos");
+  const [showParaleloTCModal, setShowParaleloTCModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [movimientos, setMovimientos] = useState([]);
   const [_userProfile, setUserProfile] = useState(null);
@@ -308,6 +310,19 @@ function CajaSection() {
       return;
     }
 
+    // Moneda paralela: si la empresa la usa y falta el TC de hoy, no se registra
+    // el movimiento. Mismo gate que NuevaVentaModal — antes acá se guardaba
+    // monto_paralelo=NULL en silencio, que es lo que dejó la cobertura en 0%.
+    if (tcParalelo.enabled && tcParalelo.tcMissing) {
+      toast({
+        title: `Falta el TC de paridad ${tcParalelo.monedaParalela}`,
+        description: `La empresa usa moneda paralela. Cargá el TC de ${tcParalelo.monedaParalela} para poder registrar el movimiento.`,
+        variant: 'destructive',
+      });
+      setShowParaleloTCModal(true); // se abre el modal para que pueda cargarlo acá mismo
+      return;
+    }
+
     setLoading(true);
     try {
       const montoNum = parseNumberLocale(formData.monto);
@@ -557,6 +572,14 @@ function CajaSection() {
           <AlertDialogFooter><AlertDialogCancel className="dark:text-kx-text dark:border-kx-border dark:hover:bg-slate-800">Cancelar</AlertDialogCancel><AlertDialogAction className="bg-red-600 text-white hover:bg-red-700" onClick={handleConfirmDelete}>Eliminar</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Carga del TC de paridad cuando falta — el gate de handleSubmit lo abre */}
+      <TipoCambioModal
+        open={showParaleloTCModal}
+        onOpenChange={setShowParaleloTCModal}
+        moneda={tcParalelo.monedaParalela}
+        onConfirm={(t) => { tcParalelo.setTC(t); setShowParaleloTCModal(false); }}
+      />
     </div>
   );
 }

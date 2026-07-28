@@ -75,18 +75,28 @@ export function useTCParalelo() {
   const calcParalelo = useCallback((monto, monedaOp = 'ARS', tasaOp = 1) => {
     if (!enabled) return null;
 
-    // Si el TC de la operación es la moneda paralela → ya tenemos el valor directamente
+    // Si la operación ya está en la moneda paralela → el valor es directo
     if (monedaOp === monedaParalela) return Number(monto);
 
-    // Si la operación es en ARS → dividir por TC paralelo
-    const tcUsed = monedaOp === 'ARS' ? tcHoy : null;
-    if (!tcUsed) return null;
+    // Sin TC del día no se puede convertir nada. Nunca se inventa una tasa.
+    if (!tcHoy) return null;
 
-    // Si la operación es en otra moneda extranjera → ARS primero, luego a paralela
-    const inARS = monedaOp === 'ARS' ? Number(monto) : Number(monto) * Number(tasaOp);
+    // Llevar el monto a ARS primero. Si la operación es en una tercera moneda
+    // (ej. EUR con paralela USD), se usa la tasa de esa operación; sin tasa
+    // válida no hay conversión posible y se devuelve null en vez de un número
+    // incorrecto.
+    let inARS;
+    if (monedaOp === 'ARS') {
+      inARS = Number(monto);
+    } else {
+      const tasa = Number(tasaOp);
+      if (!Number.isFinite(tasa) || tasa <= 0) return null;
+      inARS = Number(monto) * tasa;
+    }
+
     // Redondeo a 2 decimales en JS para limitar el error binario de IEEE 754
     // antes de persistir (la columna en DB es numeric(14,4) desde migration 076).
-    return Math.round((inARS / tcUsed) * 100) / 100;
+    return Math.round((inARS / tcHoy) * 100) / 100;
   }, [enabled, tcHoy, monedaParalela]);
 
   return {
