@@ -10,6 +10,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { parseNumberLocale } from '@/lib/currencyUtils';
+import { determinarTipoComprobante } from '@/hooks/useAfipConfig';
 import ClienteSelector from '@/components/shared/ClienteSelector';
 
 const MOTIVOS_NC = [
@@ -80,7 +81,10 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
 
     // Solo cargamos la lista de clientes cuando es standalone (sin origen fijo)
     if (!origenLocked) {
-      supabase.from('clientes').select('id, nombre')
+      // condicion_iva se trae para poder derivar la letra AFIP de una NC
+      // standalone (ver letraAfip en handleSubmit) — mismo dato que usa
+      // NuevaVentaModal para decidir A/B/C.
+      supabase.from('clientes').select('id, nombre, condicion_iva')
         .eq('empresa_id', user.empresa_id).neq('activo', false).order('nombre')
         .then(({ data }) => setClientes(data || []));
     }
@@ -223,8 +227,21 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
       // AFIP — encolar NC en facturas_pendientes_arca vía trigger (SAP async posting).
       // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca.
       if (afipConfig?.usa_factura_electronica && afipConfig?.punto_venta && !noRelevanteFiscal) {
+        // Letra del comprobante. Con origen se hereda (una NC corrige un
+        // documento concreto y debe compartir su letra). Sin origen se deriva
+        // de la condición fiscal, igual que las ventas — acá había un 'B'
+        // hardcodeado, y para un emisor Monotributo o Exento 'B' es una letra
+        // que NO puede emitir (solo el RI emite A/B): una NC standalone de
+        // Nalux (Exento) salía como NC-B en vez de NC-C.
+        const letraAfip =
+          comprobanteOrigen?.tipo_comprobante_afip
+          ?? devolucionOrigen?.tipo_comprobante_afip
+          ?? determinarTipoComprobante(
+               afipConfig.condicion_iva,
+               clientes.find(c => c.id === clienteId)?.condicion_iva ?? 'CF',
+             );
         const { error: afipQueueErr } = await supabase.from('comprobantes').update({
-          tipo_comprobante_afip: comprobanteOrigen?.tipo_comprobante_afip ?? devolucionOrigen?.tipo_comprobante_afip ?? 'B',
+          tipo_comprobante_afip: letraAfip,
           punto_venta_id:        afipConfig.punto_venta.id,
           cae_estado:            'pendiente',
         }).eq('id', data.comprobante_id);

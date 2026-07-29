@@ -213,15 +213,46 @@
 > prefiere no agregar tabla — lo que NO conviene es dejarlo como está, porque
 > el primer NC/ND con letra propia dispara el falso positivo.
 
-> 🔴 **Hallazgo colateral de la tarea #36, más urgente que la #36 misma
-> (2026-07-29, Nadia). NADA TOCADO.**
+> ✅ **Hallazgo colateral de la tarea #36 — CORREGIDO 2026-07-29 (Nadia).**
+> **En el repo, sin desplegar a Vercel todavía y sin probar en vivo (ver
+> abajo por qué).**
 >
-> **La letra de NC y ND está hardcodeada a `'B'` cuando no hay comprobante de
-> origen.** `NuevaNCModal.jsx:227` y `NuevaNDModal.jsx:189` hacen
+> **La letra de NC y ND estaba hardcodeada a `'B'` cuando no hay comprobante
+> de origen.** `NuevaNCModal.jsx` y `NuevaNDModal.jsx` hacían
 > `comprobanteOrigen?.tipo_comprobante_afip ?? … ?? 'B'`. Las ventas NO tienen
 > este problema: derivan la letra con `determinarTipoComprobante()`
 > (`useAfipConfig.js:18`), que aplica bien la regla fiscal — Monotributo y
 > **Exento siempre emiten letra C**, nunca A ni B.
+>
+> **El fix:** ambos modales ahora importan `determinarTipoComprobante` y la
+> usan como fallback en vez del `'B'` fijo, pasándole
+> `afipConfig.condicion_iva` (emisor) y la `condicion_iva` del cliente
+> (receptor, `'CF'` si no hay) — exactamente el mismo llamado que hace
+> `NuevaVentaModal.jsx:643`. Se agregó `condicion_iva` al `select` de
+> `clientes` de ambos modales, que antes solo traía `id, nombre`. **Cuando
+> SÍ hay origen se sigue heredando su letra** (una NC/ND corrige un documento
+> concreto y debe compartir su letra) — eso no cambió.
+>
+> Se verificó que **ninguna** de las RPCs (`crear_nota_credito`,
+> `crear_nota_debito_cliente`, `crear_venta`) toca `tipo_comprobante_afip`:
+> la letra la decide exclusivamente el frontend, así que esos 2 puntos eran
+> los únicos a corregir.
+>
+> **Limitación residual conocida, a propósito:** si se emite una NC/ND *con*
+> origen pero ese origen tiene `tipo_comprobante_afip` NULL (una venta que
+> nunca se mandó a AFIP), no hay letra que heredar y se deriva con receptor
+> `'CF'` porque en modo "origen fijo" la lista de clientes no se carga. Para
+> emisor Monotributo/Exento da igual (siempre C, sin mirar receptor); para un
+> emisor RI cuyo cliente sea RI daría B en vez de A. Es el mismo resultado
+> que daba el código viejo (no es una regresión) y el escenario es raro de
+> por sí — emitir una NC fiscal sobre una factura no fiscal. Si aparece en
+> serio, la solución es traer la `condicion_iva` del cliente del origen.
+>
+> **Verificación:** build de producción limpio, `npm test` 28/28 en verde
+> (incluye los 8 casos de `determinarTipoComprobante`), ESLint sin errores en
+> los 2 archivos. **NO se probó en vivo**: el camino que cambió solo se
+> ejecuta al crear una NC/ND real, que es un acto fiscal contra la cuenta de
+> AFIP de Nalux — lo decide Nadia/Luciano, no se hace de oficio.
 >
 > **Nalux es `condicion_iva = 'Exento'`**, así que sus 31 ventas con CAE están
 > correctamente en **letra C**… pero sus **4 NC quedaron en letra B**, que es

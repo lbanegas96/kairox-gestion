@@ -10,6 +10,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { parseNumberLocale } from '@/lib/currencyUtils';
+import { determinarTipoComprobante } from '@/hooks/useAfipConfig';
 import ClienteSelector from '@/components/shared/ClienteSelector';
 
 const MOTIVOS_ND = [
@@ -76,7 +77,10 @@ function NuevaNDModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
     if (!open || !user?.empresa_id) return;
 
     if (!origenLocked) {
-      supabase.from('clientes').select('id, nombre')
+      // condicion_iva se trae para poder derivar la letra AFIP de una ND
+      // standalone (ver letraAfip en handleSubmit) — mismo dato que usa
+      // NuevaVentaModal para decidir A/B/C.
+      supabase.from('clientes').select('id, nombre, condicion_iva')
         .eq('empresa_id', user.empresa_id).neq('activo', false).order('nombre')
         .then(({ data }) => setClientes(data || []));
     }
@@ -185,8 +189,19 @@ function NuevaNDModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
       }
 
       if (afipConfig?.usa_factura_electronica && afipConfig?.punto_venta && !noRelevanteFiscal) {
+        // Letra del comprobante. Con origen se hereda (una ND ajusta un
+        // documento concreto y debe compartir su letra). Sin origen se deriva
+        // de la condición fiscal, igual que las ventas — acá había un 'B'
+        // hardcodeado, y para un emisor Monotributo o Exento 'B' es una letra
+        // que NO puede emitir (solo el RI emite A/B).
+        const letraAfip =
+          comprobanteOrigen?.tipo_comprobante_afip
+          ?? determinarTipoComprobante(
+               afipConfig.condicion_iva,
+               clientes.find(c => c.id === clienteId)?.condicion_iva ?? 'CF',
+             );
         const { error: afipQueueErr } = await supabase.from('comprobantes').update({
-          tipo_comprobante_afip: comprobanteOrigen?.tipo_comprobante_afip ?? 'B',
+          tipo_comprobante_afip: letraAfip,
           punto_venta_id:        afipConfig.punto_venta.id,
           cae_estado:            'pendiente',
         }).eq('id', data.comprobante_id);
