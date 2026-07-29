@@ -1,5 +1,83 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-25 (Luciano — arrancó el módulo de Ventas con el rediseño de Cotizaciones (commit `ef04aed`), sin nota de handoff propia hasta ahora — agregada retroactivamente por Nadia/Claude el 2026-07-26 al no encontrar resumen escrito de ese commit)
+**Última actualización:** 2026-07-29 (Luciano/Claude — cierre de Ventas: NC referencia+cancelación, fix AFIP CbteTipo, ND rediseñada, arranque de limpieza CAEA)
+
+> ✅ **Ventas — cierre del día: 3 fixes de NC, fix de compliance AFIP CbteTipo, y
+> rediseño completo de ND (Nota de Débito) emitida a Cliente.** Todo esto ya está
+> **pusheado a `master`** (commits `146da4f`, `c57cb77`, `3959992`), migraciones
+> aplicadas y verificadas en vivo con datos de prueba (limpiados después).
+> - **NC**: campo "Referencia Cliente" (mig. 266) + cancelación con reversa de
+>   CC y desvinculación de devoluciones asociadas (mig. 267, RPC
+>   `cancelar_nota_credito`). NC nunca generó asiento contable — gap
+>   pre-existente, no se tocó.
+> - **Fix AFIP CbteTipo (compliance):** `voucherTypeAfip()` en
+>   `_shared/afip.ts` solo miraba la letra (A/B/C) y siempre declaraba
+>   Factura ante ARCA — toda NC emitida con CAE salió como Factura (código
+>   6/B) en vez de NC (8/B). **4 documentos reales ya afectados y
+>   irreversibles** (NC-20260706-003, NC-20260707-001, NC-20260707-002,
+>   NC-20260728-002) — **tema para el contador de Nalux**, no corregible por
+>   código. Fix desplegado como Edge Function `arca-worker` v16, verificado
+>   byte a byte contra el repo. Hacia adelante ya declara bien.
+> - **ND (Nota de Débito) a Cliente — rediseño completo:** pasó de la tabla
+>   plana `notas_debito` (monto+concepto sin IVA) a vivir en `comprobantes`
+>   (tipo='nota_debito') + `comprobante_items`, igual que Factura/NC — ítems
+>   con IVA discriminado, numeración propia `ND-YYYYMMDD-NNN` (mig. 268/269),
+>   Open Item real (`facturas_saldo_pendiente` extendida en mig. 270 para
+>   que la ND aparezca en "Imputar a factura(s)" al Registrar Cobro). Nuevo
+>   componente `NuevaNDModal.jsx`. La ND de **Proveedor** (Compras) NO se
+>   tocó — sigue flat en `notas_debito`, ver pendiente abajo.
+>
+> **⚠️ Trabajo sin terminar de esta sesión — repo-only, sin aplicar/desplegar,
+> Nadia continúa desde acá:**
+> Mientras se mapeaba qué quedaba pendiente, se encontró que el mismo bug de
+> CbteTipo tenía 2 variantes hermanas sin cerrar, ambas en el circuito de
+> **CAEA** (contingencia offline, `afip_usa_caea=false` para todas las
+> empresas reales hoy — **cero impacto en producción**, se cierra por
+> completitud, no por incidente):
+> - `usar_caea_para_comprobante` (RPC, mig. 206/225) tenía el mismo problema
+>   que `voucherTypeAfip` (solo miraba la letra) MÁS un segundo bug real: el
+>   lookup de `caea_registros` filtraba por `tipo_cbte`, pero investigación
+>   confirmó (manual WSFE + doc pública AFIP) que un CAEA es **UNO SOLO por
+>   CUIT+quincena, válido para Factura/NC/ND de cualquier letra** — ese
+>   filtro hacía que una NC/ND nunca encontrara el CAEA de la empresa aunque
+>   fuera válido. **Migración `271_usar_caea_para_comprobante_clase_documento.sql`
+>   ya escrita en el repo, con el fix completo (incluye preservar el bypass
+>   `service_role` de mig. 225) — NO APLICADA A LA BASE TODAVÍA.** Antes de
+>   aplicarla: releer una vez más y aplicar con `apply_migration` (requiere
+>   autorización explícita, como toda migración de este proyecto).
+> - `informar-caea/index.ts` informa a AFIP usando `registro.tipo_cbte` (el
+>   tipo con el que se pidió el CAEA, siempre Factura) para TODOS los
+>   comprobantes pendientes, en vez de agrupar por el `tipo_cbte` real de
+>   cada uno — **sin tocar todavía**. Necesita: agrupar `caea_comprobantes`
+>   pendientes por su propio `tipo_cbte` antes de batchear en lotes de 250,
+>   e `ivaId` debe mirar el tipo del item, no el del registro (mismo tipo de
+>   fix que abajo). Ver tarea #35 en el tracker de la sesión.
+> - **Bug hermano, mismo hallazgo, en el circuito LIVE (no CAEA):**
+>   `callArcaEmit` (`_shared/afip.ts`) chequeaba `esFacturaC = voucherType
+>   === 11` para decidir "no discriminar IVA" — pero ahora que NC-C=13 y
+>   ND-C=12 también existen, una NC/ND de una empresa que factura letra C
+>   quedaría enviando IVA discriminado cuando no debería. **Ya arreglado en
+>   el repo** (`esClaseC = [11,12,13].includes(voucherType)`) — **commiteado
+>   pero el Edge Function `arca-worker` NO fue redesplegado con este cambio
+>   todavía** (sigue corriendo la versión v16 de hoy, que no tiene este
+>   segundo fix). Hoy no afecta a Nalux (factura letra B), pero hay que
+>   desplegarlo antes de dar de alta cualquier cliente Monotributista.
+>
+> **Pedido explícito de Luciano para Nadia:** retomar desde acá con la lista
+> de tareas del tracker de sesión (#34 aplicar mig. 271, #35 fix
+> `informar-caea`, #36 investigar `puntos_venta.ultimo_numero_a/b/c`), y
+> **hacer pruebas sobre todo lo modificado hoy** antes de considerarlo
+> cerrado — en particular el fix de AFIP CbteTipo y la ND rediseñada, que sí
+> están en producción pero solo se probaron con los datos de prueba de esta
+> sesión (limpiados después), no con uso real todavía.
+>
+> **Backlog anotado, no construir sin pedido explícito:**
+> - ND recibida de Proveedor: seguir con monto+concepto flat, o llevarla a
+>   ítems+IVA en `notas_debito_items` (alcance Compras).
+> - ND/NC automática por diferencia de cambio (estilo SAP) al momento de
+>   liquidar — Luciano lo pidió anotar para más adelante, no empezar solo.
+> - `puntos_venta.ultimo_numero_a/b/c` mezcla numeración de Factura y NC/ND
+>   por letra (no afecta números reales, que vienen de AFIP; debilita un
+>   heurístico interno de reintento).
 
 > ✅ **Ventas — rediseño de Cotización estilo SAP + "Copiar a Pedido" + toggle de
 > módulo (commit `ef04aed`, 2026-07-25).** Primer paso del módulo de Ventas que

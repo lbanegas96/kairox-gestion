@@ -145,11 +145,11 @@ export async function callArcaEmit(
   const ultimo = await feCompUltimoAutorizado(params.environment, auth, params.pvNumero, params.voucherType);
   const cbteNro = ultimo + 1;
 
-  // Factura C (11) no discrimina IVA: ImpNeto = ImpTotal, ImpIVA = 0, sin nodo Iva.
-  const esFacturaC = params.voucherType === 11;
-  const impNeto = esFacturaC ? params.total : params.neto;
-  const impIVA  = esFacturaC ? 0 : params.iva;
-  const ivaId   = esFacturaC ? null : ivaIdFromPct(params.iva > 0 && params.neto > 0
+  // Letra C (Factura 11, ND 12, NC 13) no discrimina IVA: ImpNeto = ImpTotal, ImpIVA = 0, sin nodo Iva.
+  const esClaseC = [11, 12, 13].includes(params.voucherType);
+  const impNeto = esClaseC ? params.total : params.neto;
+  const impIVA  = esClaseC ? 0 : params.iva;
+  const ivaId   = esClaseC ? null : ivaIdFromPct(params.iva > 0 && params.neto > 0
     ? Math.round((params.iva / params.neto) * 1000) / 10
     : 21);
 
