@@ -12,11 +12,31 @@ import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getValidTA } from './wsaa.ts';
 import { feCompUltimoAutorizado, feCAESolicitar, type WsfeAuth } from './wsfe.ts';
 
-/** Mapea tipo interno KAIROX (A/B/C) al código AFIP de WSFE. */
-export function voucherTypeAfip(tipo: string): number {
-  if (tipo === 'A') return 1;   // Factura A
-  if (tipo === 'C') return 11;  // Factura C
-  return 6;                     // Factura B (default)
+/**
+ * Mapea tipo interno KAIROX (A/B/C) + clase de documento (comprobantes.tipo)
+ * al código de comprobante AFIP de WSFE.
+ *
+ * HALLAZGO (sesión 2026-07-29): esta función solo miraba la letra y siempre
+ * devolvía el código de Factura (1/6/11) — arca-worker no le pasaba la clase
+ * de documento porque ni siquiera seleccionaba `comprobantes.tipo`. Resultado
+ * en producción: toda Nota de Crédito emitida con CAE salió declarada ante
+ * ARCA como Factura (código 6/B en vez de 8/B) — 4 NC reales afectadas,
+ * confirmadas por consulta directa (NC-20260706-003, NC-20260707-001,
+ * NC-20260707-002, NC-20260728-002). Esos 4 documentos ya autorizados no se
+ * pueden corregir por acá — es un tema para el contador de la empresa. Este
+ * fix solo evita que se repita hacia adelante.
+ */
+export function voucherTypeAfip(
+  tipoLetra: string,
+  claseDocumento: 'venta' | 'nota_credito' | 'nota_debito' = 'venta',
+): number {
+  const CODIGOS: Record<'venta' | 'nota_credito' | 'nota_debito', Record<'A' | 'B' | 'C', number>> = {
+    venta:        { A: 1, B: 6,  C: 11 },
+    nota_credito: { A: 3, B: 8,  C: 13 },
+    nota_debito:  { A: 2, B: 7,  C: 12 },
+  };
+  const fila = CODIGOS[claseDocumento] ?? CODIGOS.venta;
+  return fila[tipoLetra as 'A' | 'B' | 'C'] ?? fila.B;
 }
 
 /** Mapea alícuota IVA KAIROX al porcentaje numérico para WSFE. */

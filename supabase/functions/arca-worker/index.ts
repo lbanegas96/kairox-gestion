@@ -117,7 +117,7 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
       // ── 3. Cargar datos del comprobante ─────────────────────────────────────
       const { data: comp, error: compErr } = await adminClient
         .from('comprobantes')
-        .select('id, numero_venta, fecha, total, neto_gravado, iva_discriminado, cliente_id, cliente_nombre, tipo_comprobante_afip, punto_venta_id, empresa_id')
+        .select('id, numero_venta, tipo, fecha, total, neto_gravado, iva_discriminado, cliente_id, cliente_nombre, tipo_comprobante_afip, punto_venta_id, empresa_id')
         .eq('id', fpa.comprobante_id)
         .single();
 
@@ -151,7 +151,7 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
       }
 
       const tipoComp    = comp.tipo_comprobante_afip ?? 'B';
-      const voucherType = voucherTypeAfip(tipoComp);
+      const voucherType = voucherTypeAfip(tipoComp, comp.tipo);
 
       // ── Caso 3 + 4: getLastVoucherNumber SIEMPRE antes de emitir en retry ───
       // Verifica si ARCA ya emitió (estado ambiguo por timeout previo) y
@@ -196,6 +196,8 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
       const { tipo: docTipo, nro: docNro } = docTipoAfip(cliDocumento);
       const totalNum = Number(comp.total);
       const round2   = (n: number) => Math.round(n * 100) / 100;
+      const etiquetaDoc = comp.tipo === 'nota_credito' ? 'Nota de Crédito'
+        : comp.tipo === 'nota_debito' ? 'Nota de Débito' : 'Venta';
 
       let wsfeItems;
       let neto: number;
@@ -211,7 +213,7 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
           const itemIva  = subtotal - itemNeto;
           netoAcum += itemNeto; ivaAcum += itemIva;
           return {
-            description: `Venta #${comp.numero_venta}`,
+            description: `${etiquetaDoc} #${comp.numero_venta}`,
             quantity:    Number(it.cantidad),
             unitPrice:   Number(it.precio_unitario),
             ivaAliquot:  pct,
@@ -222,7 +224,7 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
       } else {
         neto = comp.neto_gravado  != null ? Number(comp.neto_gravado)  : round2(totalNum / 1.21);
         iva  = comp.iva_discriminado != null ? Number(comp.iva_discriminado) : round2(totalNum - neto);
-        wsfeItems = [{ description: `Venta #${comp.numero_venta}`, quantity: 1, unitPrice: totalNum, ivaAliquot: 21 }];
+        wsfeItems = [{ description: `${etiquetaDoc} #${comp.numero_venta}`, quantity: 1, unitPrice: totalNum, ivaAliquot: 21 }];
       }
 
       // ── 6. Emitir contra ARCA ────────────────────────────────────────────────
