@@ -45,6 +45,18 @@ reversa para NC/ND de Proveedor (espejo de mig.267), Mapa de Relaciones para
 Compras (no existe, es una feature más grande que esto), y todo lo que
 Nadia dejó pendiente para la noche (ver sección de abajo, sin cambios).
 
+**⚠️ Impacto operativo a revisar antes/al aplicar mig.277:** hay un usuario
+`staff` en Nalux (no admin) sin el permiso granular `compras` otorgado
+(`permissions->>'compras'` es NULL). Hoy puede crear NC de Proveedor porque
+el flujo viejo (`NuevaNCProveedorModal.jsx`) hacía un INSERT directo sin
+ningún chequeo de permiso granular. La RPC nueva `crear_nota_credito_proveedor`
+sí exige `has_module_permission('compras')` — mismo gate que ya tiene
+`crear_nota_debito` (precedente real, no invención) — así que ese usuario
+va a quedar bloqueado para NC de Proveedor hasta que se le otorgue el
+permiso `compras` desde Configuración → Usuarios. Es la decisión correcta
+de seguridad (consistente con ND), pero Luciano debería saberlo antes de
+que alguien reporte "no me deja hacer una NC".
+
 Build y lint verificados limpios (0 errores). **No probado en vivo.**
 
 ---
