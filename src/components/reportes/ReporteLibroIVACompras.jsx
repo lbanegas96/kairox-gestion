@@ -34,18 +34,40 @@ function ReporteLibroIVACompras({ onBack }) {
     if (!user?.empresa_id) return;
     setLoading(true);
     try {
-      const { data: comprasData, error } = await supabase
-        .from('compras')
-        .select('id, numero_factura, fecha, proveedor_id, total, neto_gravado, iva_discriminado')
-        .eq('empresa_id', user.empresa_id)
-        .gte('fecha', `${fechaDesde}T00:00:00`)
-        .lte('fecha', `${fechaHasta}T23:59:59`)
-        .order('fecha', { ascending: true });
+      const rangoDesde = `${fechaDesde}T00:00:00`;
+      const rangoHasta = `${fechaHasta}T23:59:59`;
 
-      if (error) throw error;
+      // Espejo Ventas↔Compras: el crédito fiscal de IVA no es solo `compras` —
+      // una ND recibida de proveedor lo aumenta (nos cobran algo con IVA a
+      // favor) y una NC de proveedor lo reduce (nos acreditan). Ambas ya
+      // tienen neto/IVA propio desde mig.276/277 — antes de eso solo existían
+      // como monto plano, así que no se pueden reflejar correctamente acá.
+      const [{ data: comprasData, error: errCompras },
+             { data: ndData, error: errNd },
+             { data: ncpData, error: errNcp }] = await Promise.all([
+        supabase.from('compras')
+          .select('id, numero_factura, fecha, proveedor_id, total, neto_gravado, iva_discriminado')
+          .eq('empresa_id', user.empresa_id)
+          .gte('fecha', rangoDesde).lte('fecha', rangoHasta),
+        supabase.from('notas_debito')
+          .select('id, numero_nd, fecha, proveedor_id, monto, neto_gravado, iva_discriminado')
+          .eq('empresa_id', user.empresa_id).eq('tipo', 'recibida')
+          .gte('fecha', rangoDesde).lte('fecha', rangoHasta),
+        supabase.from('notas_credito_proveedor')
+          .select('id, numero_ncp, fecha, proveedor_id, monto, neto_gravado, iva_discriminado')
+          .eq('empresa_id', user.empresa_id)
+          .gte('fecha', rangoDesde).lte('fecha', rangoHasta),
+      ]);
+      if (errCompras) throw errCompras;
+      if (errNd) throw errNd;
+      if (errNcp) throw errNcp;
 
       // Segundo paso: traer proveedores y mergear en JS (sin embedded select).
-      const provIds = [...new Set((comprasData ?? []).map(c => c.proveedor_id).filter(Boolean))];
+      const provIds = [...new Set([
+        ...(comprasData ?? []).map(c => c.proveedor_id),
+        ...(ndData ?? []).map(n => n.proveedor_id),
+        ...(ncpData ?? []).map(n => n.proveedor_id),
+      ].filter(Boolean))];
       let provMap = {};
       if (provIds.length > 0) {
         const { data: provs } = await supabase
@@ -55,14 +77,31 @@ function ReporteLibroIVACompras({ onBack }) {
         provMap = Object.fromEntries((provs ?? []).map(p => [p.id, p]));
       }
 
-      const merged = (comprasData ?? []).map(c => {
-        const prov = provMap[c.proveedor_id];
-        return {
-          ...c,
-          proveedor_nombre: prov?.razon_social || prov?.nombre || 'Proveedor',
-          proveedor_cuit: prov?.cuit ?? '',
-        };
-      });
+      const nombreProv = (id) => {
+        const p = provMap[id];
+        return p?.razon_social || p?.nombre || 'Proveedor';
+      };
+      const cuitProv = (id) => provMap[id]?.cuit ?? '';
+
+      const merged = [
+        ...(comprasData ?? []).map(c => ({
+          id: c.id, tipo: 'compra', numero: c.numero_factura, fecha: c.fecha,
+          proveedor_nombre: nombreProv(c.proveedor_id), proveedor_cuit: cuitProv(c.proveedor_id),
+          total: Number(c.total), neto_gravado: c.neto_gravado, iva_discriminado: c.iva_discriminado,
+        })),
+        ...(ndData ?? []).map(n => ({
+          id: n.id, tipo: 'nota_debito', numero: n.numero_nd, fecha: n.fecha,
+          proveedor_nombre: nombreProv(n.proveedor_id), proveedor_cuit: cuitProv(n.proveedor_id),
+          total: Number(n.monto), neto_gravado: n.neto_gravado, iva_discriminado: n.iva_discriminado,
+        })),
+        ...(ncpData ?? []).map(n => ({
+          id: n.id, tipo: 'nota_credito', numero: n.numero_ncp, fecha: n.fecha,
+          proveedor_nombre: nombreProv(n.proveedor_id), proveedor_cuit: cuitProv(n.proveedor_id),
+          // NC reduce el crédito fiscal — signo negativo, ya en el monto guardado en pesos.
+          total: -Number(n.monto), neto_gravado: n.neto_gravado != null ? -Number(n.neto_gravado) : null,
+          iva_discriminado: n.iva_discriminado != null ? -Number(n.iva_discriminado) : null,
+        })),
+      ].sort((a, b) => (a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : 0));
 
       setCompras(merged);
       setGenerated(true);
@@ -74,9 +113,14 @@ function ReporteLibroIVACompras({ onBack }) {
     }
   }, [user?.empresa_id, fechaDesde, fechaHasta, toast]);
 
-  // Fallback 21% para compras viejas sin neto_gravado/iva_discriminado.
+  // Fallback 21% para filas viejas sin neto_gravado/iva_discriminado (compras
+  // pre-módulo IVA, o ND recibidas creadas antes de mig.276).
   const netoDe = (c) => c.neto_gravado != null ? Number(c.neto_gravado) : Number(c.total) / 1.21;
   const ivaDe  = (c) => c.iva_discriminado != null ? Number(c.iva_discriminado) : Number(c.total) - netoDe(c);
+
+  const TIPO_LABEL = {
+    compra: 'Compra', nota_debito: 'ND recibida', nota_credito: 'NC proveedor',
+  };
 
   const kpis = useMemo(() => {
     const totalBruto = compras.reduce((s, c) => s + Number(c.total), 0);
@@ -90,7 +134,8 @@ function ReporteLibroIVACompras({ onBack }) {
 
   const exportarCSV = () => {
     const rows = compras.map(c => [
-      c.numero_factura ?? '',
+      TIPO_LABEL[c.tipo] ?? c.tipo,
+      c.numero ?? '',
       `"${(c.proveedor_nombre ?? 'Proveedor').replace(/"/g, '""')}"`,
       c.proveedor_cuit ?? '',
       c.fecha?.slice(0, 10) ?? '',
@@ -99,7 +144,7 @@ function ReporteLibroIVACompras({ onBack }) {
       ivaDe(c).toFixed(2),
     ].join(','));
     const headers = [
-      'Nro_Factura', 'Proveedor', 'CUIT', 'Fecha',
+      'Tipo', 'Nro_Documento', 'Proveedor', 'CUIT', 'Fecha',
       'Total_Bruto', 'Neto_Gravado', 'IVA',
     ].join(',');
     const csv = '﻿' + headers + '\n' + rows.join('\n');
@@ -202,7 +247,8 @@ function ReporteLibroIVACompras({ onBack }) {
             <table className="w-full text-sm text-left">
               <thead className="bg-kx-surface-2 dark:bg-slate-900/50 border-b border-kx-border dark:border-kx-border text-xs uppercase font-semibold text-slate-500 dark:text-kx-text-2">
                 <tr>
-                  <th className="p-4 w-40">Nro. Factura</th>
+                  <th className="p-4 w-28">Tipo</th>
+                  <th className="p-4 w-40">Nro. Documento</th>
                   <th className="p-4">Proveedor</th>
                   <th className="p-4 w-28">Fecha</th>
                   <th className="p-4 text-right w-32">Total Bruto</th>
@@ -215,23 +261,26 @@ function ReporteLibroIVACompras({ onBack }) {
                 {loading ? (
                   Array.from({ length: 6 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 7 }).map((_, j) => (
+                      {Array.from({ length: 8 }).map((_, j) => (
                         <td key={j} className="p-4"><Skeleton className="h-4 w-full" /></td>
                       ))}
                     </tr>
                   ))
                 ) : compras.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-12 text-center text-slate-500 dark:text-kx-text-2">
+                    <td colSpan={8} className="p-12 text-center text-slate-500 dark:text-kx-text-2">
                       <BookOpen className="h-10 w-10 mx-auto mb-2 opacity-20" />
                       <p>No hay compras en el período seleccionado</p>
                     </td>
                   </tr>
                 ) : (
                   paginatedData.map(c => (
-                    <tr key={c.id} className="hover:bg-emerald-50/40 dark:hover:bg-slate-800/40 transition-colors">
+                    <tr key={`${c.tipo}-${c.id}`} className="hover:bg-emerald-50/40 dark:hover:bg-slate-800/40 transition-colors">
+                      <td className="p-4 text-xs text-slate-500 dark:text-kx-text-2">
+                        {TIPO_LABEL[c.tipo] ?? c.tipo}
+                      </td>
                       <td className="p-4 font-mono text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                        {c.numero_factura || '—'}
+                        {c.numero || '—'}
                       </td>
                       <td className="p-4 font-medium text-kx-text dark:text-kx-text">
                         {c.proveedor_nombre}
@@ -249,7 +298,7 @@ function ReporteLibroIVACompras({ onBack }) {
               {generated && compras.length > 0 && !loading && (
                 <tfoot>
                   <tr className="border-t-2 border-slate-300 dark:border-kx-border bg-kx-surface-2 dark:bg-slate-900/80 font-bold">
-                    <td colSpan={3} className="p-4 text-right text-sm text-slate-500 dark:text-kx-text-2 uppercase tracking-wide">
+                    <td colSpan={4} className="p-4 text-right text-sm text-slate-500 dark:text-kx-text-2 uppercase tracking-wide">
                       TOTALES ({compras.length} comp.)
                     </td>
                     <td className="p-4 text-right font-black text-kx-text dark:text-kx-text font-mono">{fmtARS(kpis.totalBruto)}</td>

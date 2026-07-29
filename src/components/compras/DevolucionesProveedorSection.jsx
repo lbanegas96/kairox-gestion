@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RotateCcw, FileWarning, ChevronDown, ChevronRight, Package } from 'lucide-react';
+import { RotateCcw, FileWarning, FileMinus, ChevronDown, ChevronRight, Package } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -232,6 +232,80 @@ function NotasDebitoRecibidas() {
   );
 }
 
+function NotasCreditoRecibidas() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [notas, setNotas]     = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    setLoading(true);
+    supabase
+      .from('notas_credito_proveedor')
+      .select('id, numero_ncp, fecha, motivo, monto, reembolso_efectivo, proveedores(nombre)')
+      .eq('empresa_id', user.empresa_id)
+      .order('fecha', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) toast({ title: 'Error al cargar notas de crédito', description: error.message, variant: 'destructive' });
+        setNotas(data || []);
+        setLoading(false);
+      });
+  }, [user?.empresa_id]);
+
+  return (
+    <Card className="overflow-hidden bg-kx-surface border-kx-border">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-kx-surface-2 border-b border-kx-border">
+            <tr>
+              <th className="text-left p-3 font-semibold text-kx-text-2">Número</th>
+              <th className="text-left p-3 font-semibold text-kx-text-2">Fecha</th>
+              <th className="text-left p-3 font-semibold text-kx-text-2">Proveedor</th>
+              <th className="text-left p-3 font-semibold text-kx-text-2">Motivo</th>
+              <th className="text-left p-3 font-semibold text-kx-text-2">Cobro</th>
+              <th className="text-right p-3 font-semibold text-kx-text-2">Monto</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-kx-border">
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <tr key={i}>
+                  {Array.from({ length: 6 }).map((_, j) => (
+                    <td key={j} className="p-3">
+                      <div className="h-4 bg-kx-surface-2 rounded animate-pulse w-20" />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : notas.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="p-12 text-center text-kx-text-3">
+                  <FileMinus className="w-10 h-10 mx-auto mb-3 opacity-20" />
+                  <p className="font-medium text-kx-text-2">Sin notas de crédito recibidas</p>
+                </td>
+              </tr>
+            ) : (
+              notas.map(nc => (
+                <tr key={nc.id} className="hover:bg-kx-surface-2 transition-colors">
+                  <td className="p-3 font-mono text-xs font-semibold text-[rgb(var(--kx-violet))]">{nc.numero_ncp}</td>
+                  <td className="p-3 text-kx-text-2 text-xs">{formatDateAR(nc.fecha)}</td>
+                  <td className="p-3 text-kx-text">{nc.proveedores?.nombre || '—'}</td>
+                  <td className="p-3 text-kx-text-2 max-w-xs truncate">{nc.motivo}</td>
+                  <td className="p-3 text-xs text-kx-text-2">{nc.reembolso_efectivo ? 'Efectivo' : 'Cta. Cte.'}</td>
+                  <td className="p-3 text-right font-mono font-bold text-kx-text">
+                    ${Number(nc.monto).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
 function DevolucionesProveedorSection({ onNavigate }) {
   const [tab, setTab] = useState('devoluciones');
 
@@ -254,6 +328,10 @@ function DevolucionesProveedorSection({ onNavigate }) {
             <FileWarning className="h-3.5 w-3.5 mr-1.5" />
             Notas de Débito Recibidas
           </TabsTrigger>
+          <TabsTrigger value="notas_credito" className={tabClass}>
+            <FileMinus className="h-3.5 w-3.5 mr-1.5" />
+            Notas de Crédito Recibidas
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="devoluciones" className="mt-4">
@@ -262,6 +340,10 @@ function DevolucionesProveedorSection({ onNavigate }) {
 
         <TabsContent value="notas_debito" className="mt-4">
           <NotasDebitoRecibidas />
+        </TabsContent>
+
+        <TabsContent value="notas_credito" className="mt-4">
+          <NotasCreditoRecibidas />
         </TabsContent>
       </Tabs>
     </div>
