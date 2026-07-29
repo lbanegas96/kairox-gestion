@@ -33,24 +33,48 @@
 > **CAEA** (contingencia offline, `afip_usa_caea=false` para todas las
 > empresas reales hoy — **cero impacto en producción**, se cierra por
 > completitud, no por incidente):
-> - `usar_caea_para_comprobante` (RPC, mig. 206/225) tenía el mismo problema
->   que `voucherTypeAfip` (solo miraba la letra) MÁS un segundo bug real: el
->   lookup de `caea_registros` filtraba por `tipo_cbte`, pero investigación
->   confirmó (manual WSFE + doc pública AFIP) que un CAEA es **UNO SOLO por
->   CUIT+quincena, válido para Factura/NC/ND de cualquier letra** — ese
->   filtro hacía que una NC/ND nunca encontrara el CAEA de la empresa aunque
->   fuera válido. **Migración `271_usar_caea_para_comprobante_clase_documento.sql`
->   ya escrita en el repo, con el fix completo (incluye preservar el bypass
->   `service_role` de mig. 225) — NO APLICADA A LA BASE TODAVÍA.** Antes de
->   aplicarla: releer una vez más y aplicar con `apply_migration` (requiere
->   autorización explícita, como toda migración de este proyecto).
-> - `informar-caea/index.ts` informa a AFIP usando `registro.tipo_cbte` (el
->   tipo con el que se pidió el CAEA, siempre Factura) para TODOS los
->   comprobantes pendientes, en vez de agrupar por el `tipo_cbte` real de
->   cada uno — **sin tocar todavía**. Necesita: agrupar `caea_comprobantes`
->   pendientes por su propio `tipo_cbte` antes de batchear en lotes de 250,
->   e `ivaId` debe mirar el tipo del item, no el del registro (mismo tipo de
->   fix que abajo). Ver tarea #35 en el tracker de la sesión.
+> - ✅ ~~`usar_caea_para_comprobante` (RPC, mig. 206/225)~~ — **APLICADA
+>   2026-07-29 por Nadia** (mig. 271, autorización explícita). Tenía el mismo
+>   problema que `voucherTypeAfip` (solo miraba la letra) MÁS un segundo bug
+>   real: el lookup de `caea_registros` filtraba por `tipo_cbte`, pero
+>   investigación confirmó (manual WSFE + doc pública AFIP) que un CAEA es
+>   **UNO SOLO por CUIT+quincena, válido para Factura/NC/ND de cualquier
+>   letra** — ese filtro hacía que una NC/ND nunca encontrara el CAEA de la
+>   empresa aunque fuera válido.
+>   **Verificado post-aplicación:** función en la base contiene `v_clase_doc`
+>   y los mapeos NC/ND, el filtro viejo `AND tipo_cbte = v_tipo_cbte` ya no
+>   está, el bypass `service_role` de mig. 225 quedó preservado, y los grants
+>   son los correctos (`authenticated`/`service_role`/`postgres`; `anon` y
+>   PUBLIC revocados). La tabla de mapeo se probó contra los 9 casos
+>   clase×letra: venta 1/6/11, NC 3/8/13, ND 2/7/12 — todos correctos.
+>   **Riesgo cero confirmado al aplicar:** `caea_registros` está vacía (0
+>   filas en toda la base) y no hay comprobantes en estado error/
+>   error_definitivo, así que ningún camino de ejecución podía dispararse.
+> - ✅ ~~`informar-caea/index.ts` informa a AFIP usando `registro.tipo_cbte`~~
+>   — **ARREGLADO EN EL REPO 2026-07-29 por Nadia (tarea #35), NO DESPLEGADO
+>   TODAVÍA.** Informaba con el tipo con el que se pidió el CAEA (siempre
+>   Factura, porque es lo único que pide `solicitar-caea`) para TODOS los
+>   comprobantes pendientes. Ahora agrupa por **(`tipo_cbte`, `punto_venta`)**
+>   antes de batchear en lotes de 250 — por ambos y no solo por tipo porque
+>   los dos viajan en el *header* del request de `FECAEAInformarComprobante`,
+>   así que un lote solo puede contener comprobantes que compartan ambos. El
+>   dato correcto ya estaba guardado por fila en `caea_comprobantes.tipo_cbte`
+>   (lo escribe `usar_caea_en_venta`, y desde la mig. 271 ese valor es el
+>   código real de NC/ND) — el bug era solo de lectura. El mensaje de error de
+>   cada lote ahora incluye tipo y PV para saber cuál falló.
+>   **Segundo fix en la misma función, encontrado al arreglar el primero:** la
+>   línea de `ivaId` miraba `registro.tipo_cbte === 11`, que además de leer el
+>   tipo equivocado dejaba afuera NC-C (13) y ND-C (12). Pasó a
+>   `esClaseC = [11,12,13].includes(c.tipo_cbte)`, idéntico al `esClaseC` de
+>   `callArcaEmit` en `_shared/afip.ts`. **Además se alinearon `impNeto`/
+>   `impIVA`**, que se mandaban discriminados incluso para letra C: ahora
+>   `impNeto = impTotal` e `impIVA = 0` cuando es clase C, igual que el
+>   circuito LIVE. Sin esto un comprobante C se habría mandado con `ivaId`
+>   nulo pero importes discriminados — combinación que AFIP rechaza. Este
+>   tercer punto va más allá del enunciado original de la tarea #35; se
+>   incluyó porque es la misma línea de código y dejarlo a medias mantenía
+>   roto el camino de letra C.
+>   **Sin desplegar a propósito:** ver la nota de despliegues pendientes abajo.
 > - **Bug hermano, mismo hallazgo, en el circuito LIVE (no CAEA):**
 >   `callArcaEmit` (`_shared/afip.ts`) chequeaba `esFacturaC = voucherType
 >   === 11` para decidir "no discriminar IVA" — pero ahora que NC-C=13 y
@@ -62,9 +86,36 @@
 >   segundo fix). Hoy no afecta a Nalux (factura letra B), pero hay que
 >   desplegarlo antes de dar de alta cualquier cliente Monotributista.
 >
+> **🚀 Despliegues pendientes de Edge Functions (2 fixes, ninguno desplegado
+> — decisión consciente, requieren autorización explícita):**
+> 1. `arca-worker` — le falta el fix `esClaseC` de `_shared/afip.ts` (sigue en
+>    v16). Circuito **LIVE**: afecta a cualquier cliente Monotributista (letra
+>    C) que emita NC/ND. Ninguno dado de alta hoy, pero es el más urgente de
+>    los dos.
+> 2. `informar-caea` — le falta todo el fix de la tarea #35 de arriba.
+>    Circuito **CAEA** (contingencia offline), hoy sin uso real: `caea_registros`
+>    está vacía y las 4 empresas reales tienen `afip_usa_caea=false`.
+>
+> **Hallazgo menor al aplicar la mig. 271 (2026-07-29):** la afirmación
+> "`afip_usa_caea=false` para todas las empresas" no es exacta — la empresa
+> de pruebas **"CAEA Test" tiene `afip_usa_caea=true`**. Sigue sin impacto
+> real (no tiene ningún `caea_registros` asociado, la tabla está vacía), y es
+> justamente la empresa inerte que ya se había usado para verificar el cron
+> de TC el 2026-07-28. Las 4 empresas reales (Nalux, Creativas, los 2 KAIROX
+> Gestión) sí están en `false`.
+>
+> **Hallazgo aparte, NO tocado (decide Luciano):** en `informar-caea`, el
+> `ivaId` se deriva con `imp_iva > 0 ? 5 : 3` — o sea, cualquier comprobante
+> con IVA se declara como **21%**. Un comprobante al 10,5% se informaría con
+> la alícuota equivocada. El circuito LIVE no tiene este problema: calcula la
+> alícuota real con `ivaIdFromPct(iva/neto)`. Es un bug **pre-existente y de
+> otra familia** (no es el de CbteTipo), por eso no se tocó en esta pasada —
+> pero conviene cerrarlo antes de que el CAEA se use de verdad.
+>
 > **Pedido explícito de Luciano para Nadia:** retomar desde acá con la lista
-> de tareas del tracker de sesión (#34 aplicar mig. 271, #35 fix
-> `informar-caea`, #36 investigar `puntos_venta.ultimo_numero_a/b/c`), y
+> de tareas del tracker de sesión (~~#34 aplicar mig. 271~~ ✅ hecha,
+> ~~#35 fix `informar-caea`~~ ✅ hecha en repo, falta desplegar,
+> #36 investigar `puntos_venta.ultimo_numero_a/b/c`), y
 > **hacer pruebas sobre todo lo modificado hoy** antes de considerarlo
 > cerrado — en particular el fix de AFIP CbteTipo y la ND rediseñada, que sí
 > están en producción pero solo se probaron con los datos de prueba de esta

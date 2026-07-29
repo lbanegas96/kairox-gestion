@@ -8,7 +8,8 @@
  * Flujo:
  *   1. Verificar auth (admin de la empresa)
  *   2. Cargar el registro CAEA y los comprobantes pendientes
- *   3a. Si hay comprobantes pendientes → FECAEAInformarComprobante (batch)
+ *   3a. Si hay comprobantes pendientes → agrupar por (tipo_cbte, punto_venta)
+ *       y por cada grupo → FECAEAInformarComprobante (batch de 250)
  *   3b. Si no hay comprobantes → FECAEASinMovimiento
  *   4. Actualizar estados en DB
  *   5. Retornar resumen
@@ -17,6 +18,8 @@
  *   - Solo se puede informar entre el último día de la quincena y fecha_tope_inf
  *   - Una vez informado no se puede re-informar (AFIP error 15006)
  *   - Máximo 250 comprobantes por llamada a FECAEAInformarComprobante
+ *   - CbteTipo y PtoVta son header del request: un batch solo puede contener
+ *     comprobantes que compartan ambos (de ahí el agrupamiento del paso 3a)
  */
 
 import { adminClient, buildCorsHeaders, errorResponse, okResponse, verifyAdmin } from '../_shared/auth.ts';
@@ -112,49 +115,83 @@ Deno.serve(async (req: Request) => {
       }
 
     } else {
-      // ── 3a. Informar comprobantes (batch de 250) ───────────────────────
-      for (let offset = 0; offset < pendientes.length; offset += BATCH_SIZE) {
-        const lote = pendientes.slice(offset, offset + BATCH_SIZE);
+      // ── 3a. Informar comprobantes ──────────────────────────────────────
+      // Se agrupa por (tipo_cbte, punto_venta) ANTES de batchear: ambos van
+      // en el header del request de FECAEAInformarComprobante, así que un
+      // lote solo puede contener comprobantes que compartan los dos.
+      //
+      // Antes se usaba `registro.tipo_cbte` para TODOS los pendientes — y ese
+      // es el tipo con el que se PIDIÓ el CAEA, que `solicitar-caea` siempre
+      // pide como Factura. Con eso, una NC/ND autorizada por CAEA se informaba
+      // a AFIP declarada como Factura: la misma familia de bug que se arregló
+      // en voucherTypeAfip (_shared/afip.ts) y en usar_caea_para_comprobante
+      // (mig. 271). El tipo correcto de cada comprobante ya está guardado por
+      // fila en caea_comprobantes.tipo_cbte (lo escribe usar_caea_en_venta) —
+      // es lo que hay que usar acá.
+      const grupos = new Map<string, NonNullable<typeof pendientes>>();
+      for (const c of pendientes) {
+        const clave = `${c.tipo_cbte}|${c.punto_venta}`;
+        const grupo = grupos.get(clave);
+        if (grupo) grupo.push(c);
+        else grupos.set(clave, [c]);
+      }
 
-        const items: CaeaComprobanteItem[] = lote.map((c) => ({
-          docTipo:   c.doc_tipo,
-          docNro:    c.doc_nro,
-          cbteDesde: c.nro_cbte_desde,
-          cbteHasta: c.nro_cbte_hasta,
-          cbteFch:   c.fecha_cbte.replace(/-/g, ''),  // YYYYMMDD
-          impTotal:  Number(c.imp_total),
-          impNeto:   Number(c.imp_neto),
-          impIVA:    Number(c.imp_iva),
-          // Factura C no discrimina IVA
-          ivaId:     registro.tipo_cbte === 11 ? null : (Number(c.imp_iva) > 0 ? 5 : 3),
-        }));
+      for (const grupo of grupos.values()) {
+        const tipoCbte   = grupo[0].tipo_cbte;
+        const puntoVenta = grupo[0].punto_venta;
 
-        try {
-          await feCAEAInformarComprobante(
-            environment, wsfeAuth,
-            registro.caea,
-            registro.punto_venta,
-            registro.tipo_cbte,
-            items,
-          );
+        for (let offset = 0; offset < grupo.length; offset += BATCH_SIZE) {
+          const lote = grupo.slice(offset, offset + BATCH_SIZE);
 
-          // Marcar lote como informado
-          await adminClient
-            .from('caea_comprobantes')
-            .update({ estado_informado: 'informado' })
-            .in('id', lote.map((c) => c.id));
+          const items: CaeaComprobanteItem[] = lote.map((c) => {
+            // Letra C (Factura 11, ND 12, NC 13) no discrimina IVA:
+            // ImpNeto = ImpTotal, ImpIVA = 0, sin nodo Iva. Mismo criterio que
+            // `esClaseC` en callArcaEmit (_shared/afip.ts) — antes acá se
+            // miraba `registro.tipo_cbte === 11`, que además de leer el tipo
+            // equivocado dejaba afuera NC-C y ND-C.
+            const esClaseC = [11, 12, 13].includes(c.tipo_cbte);
+            return {
+              docTipo:   c.doc_tipo,
+              docNro:    c.doc_nro,
+              cbteDesde: c.nro_cbte_desde,
+              cbteHasta: c.nro_cbte_hasta,
+              cbteFch:   c.fecha_cbte.replace(/-/g, ''),  // YYYYMMDD
+              impTotal:  Number(c.imp_total),
+              impNeto:   esClaseC ? Number(c.imp_total) : Number(c.imp_neto),
+              impIVA:    esClaseC ? 0 : Number(c.imp_iva),
+              ivaId:     esClaseC ? null : (Number(c.imp_iva) > 0 ? 5 : 3),
+            };
+          });
 
-          informados += lote.length;
+          try {
+            await feCAEAInformarComprobante(
+              environment, wsfeAuth,
+              registro.caea,
+              puntoVenta,
+              tipoCbte,
+              items,
+            );
 
-        } catch (err) {
-          const msg = (err as Error).message;
-          errores.push(`Lote ${offset}-${offset + lote.length}: ${msg}`);
+            // Marcar lote como informado
+            await adminClient
+              .from('caea_comprobantes')
+              .update({ estado_informado: 'informado' })
+              .in('id', lote.map((c) => c.id));
 
-          // Marcar lote como error
-          await adminClient
-            .from('caea_comprobantes')
-            .update({ estado_informado: 'error', error_mensaje: msg })
-            .in('id', lote.map((c) => c.id));
+            informados += lote.length;
+
+          } catch (err) {
+            const msg = (err as Error).message;
+            errores.push(
+              `Tipo ${tipoCbte} PV ${puntoVenta} lote ${offset}-${offset + lote.length}: ${msg}`,
+            );
+
+            // Marcar lote como error
+            await adminClient
+              .from('caea_comprobantes')
+              .update({ estado_informado: 'error', error_mensaje: msg })
+              .in('id', lote.map((c) => c.id));
+          }
         }
       }
     }
