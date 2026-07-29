@@ -173,6 +173,7 @@ function NuevaNDModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
         p_concepto:              motivo,
         p_items:                 itemsValidos.map(i => ({
           producto_id:     i.producto_id || null,
+          descripcion:     i.descripcion.trim(),
           cantidad:        Number(i.cantidad),
           precio_unitario: parseNumberLocale(i.precio_unit) || 0,
           alicuota_iva:    Number(i.alicuota_iva),
