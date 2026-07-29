@@ -26,10 +26,10 @@ function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
 
   const handleSaleSuccess = () => setRefreshKey(k => k + 1);
 
-  // Called from DevolucionesSection: (tipo, id) — 'factura'/'nota_credito' son
-  // ambos filas de comprobantes, mismo destino que 'comprobante'.
+  // Called from DevolucionesSection: (tipo, id) — 'factura'/'nota_credito'/
+  // 'nota_debito' son todos filas de comprobantes, mismo destino que 'comprobante'.
   const handleChildNavigate = (tipo, id) => {
-    if (tipo === 'comprobante' || tipo === 'factura' || tipo === 'nota_credito') {
+    if (tipo === 'comprobante' || tipo === 'factura' || tipo === 'nota_credito' || tipo === 'nota_debito') {
       setActiveTab('historial');
       setNavigateSaleId(id);
     }

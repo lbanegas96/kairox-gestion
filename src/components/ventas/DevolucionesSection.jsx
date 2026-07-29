@@ -10,7 +10,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { formatDateAR } from '@/lib/dateUtils';
 import NuevaDevolucionModal from '@/components/shared/NuevaDevolucionModal';
-import NuevaNotaDebitoModal from '@/components/shared/NuevaNotaDebitoModal';
+import NuevaNDModal from '@/components/ventas/NuevaNDModal';
 import NuevaNCModal from '@/components/ventas/NuevaNCModal';
 import ModalDetalleDevolucion from '@/components/ventas/ModalDetalleDevolucion';
 
@@ -230,21 +230,47 @@ function NotasDebitoTab() {
   useEffect(() => {
     if (!user?.empresa_id) return;
     setLoading(true);
-    supabase
-      .from('notas_debito')
-      .select(`
-        id, numero_nd, fecha, tipo, concepto, monto, moneda,
-        clientes(nombre),
-        comprobantes(numero_venta)
-      `)
-      .eq('empresa_id', user.empresa_id)
-      .eq('tipo', 'emitida')
-      .order('fecha', { ascending: false })
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setNotas(data || []);
-        setLoading(false);
-      });
+    // ND emitida ahora vive en `comprobantes` (tipo='nota_debito', mig.268/269)
+    // — ítems + IVA + Open Item real. `notas_debito` tipo='emitida' queda
+    // como historial congelado (nunca más recibe filas nuevas de este lado),
+    // se sigue mostrando para no perder el histórico real de la empresa.
+    Promise.all([
+      supabase
+        .from('notas_debito')
+        .select(`id, numero_nd, fecha, tipo, concepto, monto, moneda, clientes(nombre), comprobantes(numero_venta)`)
+        .eq('empresa_id', user.empresa_id)
+        .eq('tipo', 'emitida'),
+      supabase
+        .from('comprobantes')
+        .select('id, numero_venta, fecha, cliente_nombre, total, moneda, motivo_nc, comprobante_origen_id')
+        .eq('empresa_id', user.empresa_id)
+        .eq('tipo', 'nota_debito'),
+    ]).then(async ([{ data: legacy }, { data: nuevas }]) => {
+      const origenIds = [...new Set((nuevas || []).map(n => n.comprobante_origen_id).filter(Boolean))];
+      let origenMap = {};
+      if (origenIds.length > 0) {
+        const { data: origenes } = await supabase
+          .from('comprobantes').select('id, numero_venta').in('id', origenIds);
+        origenMap = Object.fromEntries((origenes || []).map(o => [o.id, o.numero_venta]));
+      }
+      const nuevasNormalizadas = (nuevas || []).map(n => ({
+        id: n.id,
+        numero_nd: n.numero_venta,
+        // notas_debito.fecha es DATE puro ("2026-07-07"); comprobantes.fecha es
+        // TIMESTAMPTZ — recortar a YYYY-MM-DD para que ambas formas calcen con
+        // el formatDateAR(fecha + 'T00:00:00Z') que ya usa la tabla más abajo.
+        fecha: n.fecha?.slice(0, 10),
+        concepto: n.motivo_nc,
+        monto: n.total,
+        moneda: n.moneda,
+        clientes: { nombre: n.cliente_nombre },
+        comprobantes: n.comprobante_origen_id ? { numero_venta: origenMap[n.comprobante_origen_id] } : null,
+      }));
+      const merged = [...nuevasNormalizadas, ...(legacy || [])]
+        .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+      setNotas(merged);
+      setLoading(false);
+    });
   }, [user?.empresa_id, refreshKey]);
 
   return (
@@ -316,8 +342,7 @@ function NotasDebitoTab() {
         </div>
       )}
 
-      <NuevaNotaDebitoModal
-        tipo="cliente"
+      <NuevaNDModal
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
         onSuccess={() => setRefreshKey(k => k + 1)}

@@ -15,7 +15,7 @@ import {
 import SaleDetailModal from './SaleDetailModal';
 import NuevaDevolucionModal from '@/components/shared/NuevaDevolucionModal';
 import NuevaNCModal from './NuevaNCModal';
-import NuevaNotaDebitoModal from '@/components/shared/NuevaNotaDebitoModal';
+import NuevaNDModal from './NuevaNDModal';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import { formatDateAR, formatTimeAR } from '@/lib/dateUtils';
@@ -485,8 +485,10 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate, onRegistrarC
                                   e.preventDefault();
                                   setTimeout(() => {
                                     setNdOrigen({
-                                      entidadId: sale.cliente_id,
-                                      docId:     sale.id,
+                                      id:             sale.id,
+                                      numero_venta:   sale.numero_venta,
+                                      cliente_id:     sale.cliente_id,
+                                      cliente_nombre: sale.cliente_nombre,
                                     });
                                     setIsNdOpen(true);
                                   }, 0);
@@ -592,11 +594,10 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate, onRegistrarC
         onSuccess={() => fetchData()}
       />
 
-      <NuevaNotaDebitoModal
-        tipo="cliente"
+      <NuevaNDModal
         open={isNdOpen}
         onOpenChange={v => { setIsNdOpen(v); if (!v) setNdOrigen(null); }}
-        origen={ndOrigen}
+        comprobanteOrigen={ndOrigen}
         onSuccess={() => fetchData()}
       />
 

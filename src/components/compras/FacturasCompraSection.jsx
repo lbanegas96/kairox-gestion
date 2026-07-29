@@ -373,7 +373,6 @@ function FacturasCompraSection() {
       />
 
       <NuevaNotaDebitoModal
-        tipo="proveedor"
         open={isNdOpen}
         onOpenChange={setIsNdOpen}
         origen={ndOrigen}

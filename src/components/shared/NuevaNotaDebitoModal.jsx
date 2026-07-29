@@ -6,11 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, FileWarning, FilePlus } from 'lucide-react';
+import { Loader2, FilePlus } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
-import ClienteSelector from '@/components/shared/ClienteSelector';
 import ProveedorSelector from '@/components/shared/ProveedorSelector';
 
 function parseMontoAR(str) {
@@ -18,76 +17,59 @@ function parseMontoAR(str) {
   return parseFloat(String(str).trim().replace(/\./g, '').replace(',', '.')) || 0;
 }
 
-// Config por tipo — única fuente de las diferencias de negocio entre la ND
-// emitida a un Cliente (con selector de factura relacionada opcional) y la ND
-// recibida de un Proveedor (con origen bloqueado cuando viene de una Factura de Compra).
-const CONFIG = {
-  cliente: {
-    icon: FileWarning,
-    iconClass: 'text-kx-amber',
-    confirmClass: 'bg-amber-500 hover:bg-amber-600 text-white',
-    entidadLabel: 'Cliente',
-    entidadTabla: 'clientes',
-    SelectorComponent: ClienteSelector,
-    rpcTipo: 'emitida',
-    rpcEntidadParam: 'p_cliente_id',
-    rpcDocParam: 'p_comprobante_id',
-    tituloDefault: 'Nueva Nota de Débito',
-    descripcion: 'Cargo adicional al cliente — diferencia de precio, intereses, etc.',
-    montoWarning: null,
-  },
-  proveedor: {
-    icon: FilePlus,
-    iconClass: 'text-kx-red',
-    confirmClass: 'bg-red-500 hover:bg-red-600 text-white',
-    entidadLabel: 'Proveedor',
-    entidadTabla: 'proveedores',
-    SelectorComponent: ProveedorSelector,
-    rpcTipo: 'recibida',
-    rpcEntidadParam: 'p_proveedor_id',
-    rpcDocParam: 'p_compra_id',
-    tituloDefault: 'Nueva ND de Proveedor',
-    tituloOrigen: (docNumero) => `ND de Proveedor sobre ${docNumero}`,
-    descripcion: 'El proveedor nos cobra un monto adicional — flete, diferencia de precio, etc.',
-    montoWarning: 'Esta ND aumenta la deuda con el proveedor en Cuenta Corriente.',
-  },
+// ND recibida de Proveedor — flat monto+concepto, sin ítems/IVA (Compras
+// tiene su propio circuito de CxP vía cuenta_corriente_proveedores).
+// La ND emitida a Cliente vive ahora en NuevaNDModal.jsx (ventas/, ítems +
+// IVA + Open Item real en `comprobantes`, mig.268/269) — dejó de compartir
+// este componente, mismo criterio que ya separaba NuevaNCModal de
+// NuevaNCProveedorModal (divergencia real de negocio: AFIP solo aplica al
+// lado ventas).
+const cfg = {
+  icon: FilePlus,
+  iconClass: 'text-kx-red',
+  confirmClass: 'bg-red-500 hover:bg-red-600 text-white',
+  entidadLabel: 'Proveedor',
+  entidadTabla: 'proveedores',
+  SelectorComponent: ProveedorSelector,
+  rpcTipo: 'recibida',
+  rpcEntidadParam: 'p_proveedor_id',
+  rpcDocParam: 'p_compra_id',
+  tituloDefault: 'Nueva ND de Proveedor',
+  tituloOrigen: (docNumero) => `ND de Proveedor sobre ${docNumero}`,
+  descripcion: 'El proveedor nos cobra un monto adicional — flete, diferencia de precio, etc.',
+  montoWarning: 'Esta ND aumenta la deuda con el proveedor en Cuenta Corriente.',
 };
 
 /**
- * NuevaNotaDebitoModal — registra una ND emitida (cliente) o recibida (proveedor)
- * vía la RPC compartida crear_nota_debito.
+ * NuevaNotaDebitoModal — registra una ND recibida de un Proveedor vía la RPC
+ * crear_nota_debito (proveedor-only, mig.269).
  * props:
- *   tipo:    'cliente' | 'proveedor'
  *   open, onOpenChange
  *   origen:  null | { entidadId, entidadNombre, docId, docNumero, docTotal, lockEntidad }
- *            - cliente: docNumero/docId son opcionales, preseleccionan la factura relacionada
- *              en el dropdown (no bloquean nada).
- *            - proveedor: si lockEntidad es true, el selector de proveedor se reemplaza por
- *              un display fijo (viene de "Copiar a ND" desde una Factura de Compra).
+ *            si lockEntidad es true, el selector de proveedor se reemplaza por
+ *            un display fijo (viene de "Copiar a ND" desde una Factura de Compra).
  *   onSuccess
  */
-function NuevaNotaDebitoModal({ tipo, open, onOpenChange, origen = null, onSuccess }) {
-  const cfg = CONFIG[tipo];
+function NuevaNotaDebitoModal({ open, onOpenChange, origen = null, onSuccess }) {
   const { user } = useAuth();
   const { toast } = useToast();
 
   const [entidades, setEntidades]         = useState([]);
   const [entidadId, setEntidadId]         = useState('');
-  const [comprobantes, setComprobantes]   = useState([]);
   const [comprobanteId, setComprobanteId] = useState('');
   const [concepto, setConcepto]           = useState('');
   const [montoRaw, setMontoRaw]           = useState('');
   const [saving, setSaving]               = useState(false);
 
-  const lockEntidad = tipo === 'proveedor' && !!origen?.lockEntidad;
+  const lockEntidad = !!origen?.lockEntidad;
 
-  // ── Carga de entidades (clientes/proveedores) ───────────────────────────────
+  // ── Carga de entidades (proveedores) ─────────────────────────────────────────
   useEffect(() => {
     if (!open || !user?.empresa_id || lockEntidad) return;
     supabase.from(cfg.entidadTabla).select('id, nombre')
       .eq('empresa_id', user.empresa_id).neq('activo', false).order('nombre')
       .then(({ data }) => setEntidades(data || []));
-  }, [open, user?.empresa_id, tipo, lockEntidad]);
+  }, [open, user?.empresa_id, lockEntidad]);
 
   // ── Preselección desde origen ────────────────────────────────────────────────
   useEffect(() => {
@@ -96,18 +78,6 @@ function NuevaNotaDebitoModal({ tipo, open, onOpenChange, origen = null, onSucce
     if (origen?.docId)     setComprobanteId(origen.docId);
   }, [open, origen?.entidadId, origen?.docId]);
 
-  // ── Cliente: cargar facturas del cliente seleccionado (solo tipo cliente) ───
-  useEffect(() => {
-    if (tipo !== 'cliente' || !entidadId || !user?.empresa_id) {
-      if (tipo === 'cliente') { setComprobantes([]); setComprobanteId(prev => origen?.docId ? prev : ''); }
-      return;
-    }
-    supabase.from('comprobantes').select('id, numero_venta, total')
-      .eq('empresa_id', user.empresa_id).eq('cliente_id', entidadId).eq('tipo', 'venta')
-      .order('fecha', { ascending: false }).limit(50)
-      .then(({ data }) => setComprobantes(data || []));
-  }, [tipo, entidadId, user?.empresa_id]);
-
   // ── Reset al cerrar ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!open) {
@@ -115,7 +85,6 @@ function NuevaNotaDebitoModal({ tipo, open, onOpenChange, origen = null, onSucce
       setComprobanteId('');
       setConcepto('');
       setMontoRaw('');
-      setComprobantes([]);
       setSaving(false);
     }
   }, [open]);
@@ -175,35 +144,16 @@ function NuevaNotaDebitoModal({ tipo, open, onOpenChange, origen = null, onSucce
               </div>
             ) : (
               <cfg.SelectorComponent
-                {...(tipo === 'cliente' ? { clientes: entidades } : { proveedores: entidades })}
+                proveedores={entidades}
                 value={entidadId}
                 onChange={setEntidadId}
-                {...(tipo === 'cliente'
-                  ? { onClienteCreado: c => { setEntidades(p => [...p, c]); setEntidadId(c.id); } }
-                  : { onProveedorCreado: p => { setEntidades(prev => [...prev, p]); setEntidadId(p.id); } })}
+                onProveedorCreado={p => { setEntidades(prev => [...prev, p]); setEntidadId(p.id); }}
               />
             )}
           </div>
 
           {/* Documento relacionado */}
-          {tipo === 'cliente' && entidadId && (
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium dark:text-slate-300">Factura relacionada (opcional)</Label>
-              <select
-                value={comprobanteId}
-                onChange={e => setComprobanteId(e.target.value)}
-                className="w-full h-9 rounded-md border border-kx-border bg-transparent px-3 text-sm dark:bg-kx-surface dark:text-kx-text focus:outline-none focus:ring-1 focus:ring-[rgb(var(--kx-violet))]"
-              >
-                <option value="">Sin factura asociada</option>
-                {comprobantes.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.numero_venta} — ${Number(c.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          {tipo === 'proveedor' && origen && (
+          {origen && (
             <div className="p-2.5 rounded-lg bg-kx-surface-2 border border-kx-border text-xs text-kx-text-2">
               Factura origen: <span className="font-mono font-semibold text-kx-text">{origen.docNumero || 'S/N'}</span>
               {origen.docTotal != null && (
@@ -218,9 +168,7 @@ function NuevaNotaDebitoModal({ tipo, open, onOpenChange, origen = null, onSucce
           <div className="space-y-1.5">
             <Label className="text-sm font-medium dark:text-slate-300">Concepto *</Label>
             <Textarea
-              placeholder={tipo === 'cliente'
-                ? 'Diferencia de precio, intereses por mora, cargo adicional...'
-                : 'Flete adicional, diferencia de precio, recargo, intereses...'}
+              placeholder="Flete adicional, diferencia de precio, recargo, intereses..."
               value={concepto}
               onChange={e => setConcepto(e.target.value)}
               className="resize-none h-16 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm"
