@@ -236,7 +236,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
 
       if (!compra) { setMapa(null); return; }
 
-      const [recepcionesRes, ncsRes, ndsRes, pagosRes] = await Promise.allSettled([
+      const [recepcionesRes, ncsRes, ndsRes, pagosRes, ncFinRes] = await Promise.allSettled([
         // Recepciones vinculadas a esta compra
         supabase.from('recepciones')
           .select('id, numero_recepcion, fecha, estado')
@@ -256,18 +256,26 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
           .eq('compra_id', compraId)
           .eq('empresa_id', user.empresa_id),
 
-        // Pagos / NC financieras en CC proveedores (referencia_id = compraId)
+        // Pagos en CC proveedores (referencia_id = compraId, patrón viejo — solo pagos)
         supabase.from('cuenta_corriente_proveedores')
           .select('id, tipo, monto, fecha, descripcion, referencia_tipo')
           .eq('referencia_id', compraId)
+          .eq('empresa_id', user.empresa_id),
+
+        // NC financieras de proveedor (mig.277 — documento propio, ya no vive
+        // como referencia_id=compraId en cuenta_corriente_proveedores; el CC
+        // ahora apunta a notas_credito_proveedor.id, no a la compra).
+        supabase.from('notas_credito_proveedor')
+          .select('id, numero_ncp, motivo, monto, fecha')
+          .eq('compra_id', compraId)
           .eq('empresa_id', user.empresa_id),
       ]);
 
       const safeArr = (res) => res.status === 'fulfilled' ? (res.value.data ?? []) : [];
 
-      const ccMovs        = safeArr(pagosRes);
-      const pagosCC       = ccMovs.filter(m => m.tipo === 'DEBE' && m.referencia_tipo !== 'nc_proveedor');
-      const ncsFinancieras = ccMovs.filter(m => m.referencia_tipo === 'nc_proveedor');
+      const ccMovs         = safeArr(pagosRes);
+      const pagosCC        = ccMovs.filter(m => m.tipo === 'DEBE' && m.referencia_tipo !== 'nc_proveedor');
+      const ncsFinancieras = safeArr(ncFinRes);
 
       setMapa({
         modo:         'compra',
@@ -526,11 +534,11 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
                         onClick={() => navigate('devolucion', d.id)}
                       />
                     ))}
-                    {/* NC financieras recibidas */}
+                    {/* NC financieras recibidas (mig.277 — notas_credito_proveedor) */}
                     {mapa.ncsFinancieras.map(nc => (
                       <NodoMapa
                         key={nc.id}
-                        nodo={{ id: nc.id, tipo: 'nc_proveedor', numero: nc.descripcion || 'NC', fecha: nc.fecha, monto: nc.monto }}
+                        nodo={{ id: nc.id, tipo: 'nc_proveedor', numero: nc.numero_ncp, fecha: nc.fecha, monto: nc.monto, estado: nc.motivo }}
                       />
                     ))}
                     {/* ND recibidas */}
