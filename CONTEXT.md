@@ -1,16 +1,35 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-29 tarde (Luciano/Claude — espejo Ventas→Compras: NC/ND de Proveedor con ítems+IVA, repo-only sin aplicar/pushear)
+**Última actualización:** 2026-07-29 noche (Luciano/Claude — módulo Compras CERRADO: espejo NC/ND de Proveedor aplicado, probado en vivo y pusheado)
 
 ---
 
-## ⚠️ Trabajo de esta tarde — REPO-ONLY, sin aplicar ni pushear
+## ✅ Compras — CERRADO esta noche (todo aplicado, pusheado y probado en vivo)
 
-Luciano se fue a entrenar y pidió seguir trabajando en paralelo. Se hizo un
-análisis + build completo (commits locales `b347398`, `45c3101`, `4ed8b7b`,
-**ninguno pusheado a origin todavía** — branch local 3 commits arriba de
-`origin/master`) espejando en Compras las mejoras que Ventas ya tenía. Queda
-para revisión de Luciano antes de aplicar migraciones o pushear — ver tarea
-#40/#41 del tracker de sesión.
+Todo lo de la sección de abajo ("Trabajo de esta tarde") ya fue:
+1. Revisado (self-review: se encontró y arregló un guard de tenant faltante en `caja_sesion_id`, commit `4ed8b7b`).
+2. Aplicado a producción — migraciones 275, 276 y 277 aplicadas sin errores.
+3. Pusheado a `origin/master` (commits hasta `fad73fc`).
+4. `mp-sync` redesplegado (v14), verificado byte a byte.
+5. **Probado en vivo, end-to-end, con datos reales creados y eliminados prolijamente:**
+   - ND de Cliente: descripción de ítem ahora se guarda (fix mig.275) ✅
+   - NC de Proveedor: numeración, neto/IVA, vínculo a Cuenta Corriente ✅
+   - ND de Proveedor: ídem, numeración de la serie vieja (`notas_debito`, formato ND-YYYY-NNNN) ✅
+   - **Reembolso en efectivo de NC Proveedor** (el camino que más dudas generaba): `reembolso_efectivo=true` + `caja_movimiento_id` poblado + guard de tenant de la caja, todo funcionando ✅
+6. **Hallazgo y fix adicional (commit `fad73fc`):** el Mapa de Relaciones **ya existía** para Compras (no hacía falta construirlo) — pero la NC de Proveedor nueva (mig.277) rompía el vínculo: antes de mig.277, `cuenta_corriente_proveedores.referencia_id` apuntaba directo a la compra; ahora apunta al id de la NC (que ya tiene su propio `compra_id`). El Mapa buscaba por el patrón viejo y nunca encontraba la NC nueva. Se cambió el fetch para consultar `notas_credito_proveedor` directo por `compra_id` — verificado en vivo, la NC y la ND ahora aparecen correctamente en el árbol de documentos de su compra origen.
+
+**Pendiente real de Compras, todo de baja prioridad:**
+- Cancelación con reversa para NC/ND de Proveedor (espejo de mig.267) — no construida, no pedida todavía.
+- Migración 274 (drop columnas deprecated `puntos_venta.ultimo_numero_*`) — Nadia la dejó a propósito para dentro de ~1 semana.
+- `mp-sync` (el botón manual) ya redesplegado hoy — sin pendientes ahí.
+
+**Con esto, el módulo Compras queda al día con las mejoras que tenía Ventas.** Próximo paso pedido por Luciano: volver a Ventas.
+
+---
+
+## Trabajo de esta tarde (histórico — ya cerrado, ver arriba)
+
+Se hizo un análisis + build completo (commits `b347398`, `45c3101`, `4ed8b7b`)
+espejando en Compras las mejoras que Ventas ya tenía.
 
 **Hallazgo que motivó esto (no solo simetría):** `ReporteLibroIVACompras.jsx`
 solo leía `compras` — nunca veía una NC/ND de proveedor, así que el crédito
@@ -40,10 +59,10 @@ fiscal de IVA reportado nunca se ajustaba por esos documentos.
 proveedor quien declara estos documentos, no nosotros (mismo criterio que
 ya regía para `devoluciones` tipo='proveedor').
 
-**No se tocó** (deliberadamente fuera de alcance esta vez): cancelación con
-reversa para NC/ND de Proveedor (espejo de mig.267), Mapa de Relaciones para
-Compras (no existe, es una feature más grande que esto), y todo lo que
-Nadia dejó pendiente para la noche (ver sección de abajo, sin cambios).
+**No se tocó** (deliberadamente fuera de alcance): cancelación con
+reversa para NC/ND de Proveedor (espejo de mig.267). El Mapa de Relaciones
+para Compras SÍ existía ya (no había que construirlo) — solo necesitó un
+fix puntual, ver arriba.
 
 **⚠️ Impacto operativo a revisar antes/al aplicar mig.277:** hay un usuario
 `staff` en Nalux (no admin) sin el permiso granular `compras` otorgado
@@ -57,25 +76,25 @@ permiso `compras` desde Configuración → Usuarios. Es la decisión correcta
 de seguridad (consistente con ND), pero Luciano debería saberlo antes de
 que alguien reporte "no me deja hacer una NC".
 
-Build y lint verificados limpios (0 errores). **No probado en vivo.**
+Build y lint verificados limpios (0 errores). Probado en vivo esa misma
+noche — ver sección de arriba.
 
 ---
 
 ## Estado actual de producción
 
-Todo desplegado y funcionando al cierre de la sesión del 2026-07-29
-(mañana). Lo de la tarde (arriba) es TODO repo-only, no cambia esta tabla.
+Todo desplegado, aplicado y pusheado al cierre de la sesión del 2026-07-29.
 
 | Servicio | Versión | Estado |
 |---|---|---|
 | `arca-worker` | v18 | ✅ ACTIVO |
 | `mp-sync-worker` | v1 | ✅ ACTIVO |
 | `informar-caea` | v8 | ✅ ACTIVO |
-| `mp-sync` | sin redesplegar | ⚠️ divergido del repo (funcional para el botón del frontend) |
+| `mp-sync` | v14 | ✅ ACTIVO (redesplegado, verificado byte a byte) |
 | Migración 271 | aplicada | ✅ |
 | Migración 272 | aplicada | ✅ |
 | Migración 273 | aplicada | ✅ |
-| Migraciones 275/276/277 | **sin aplicar** | ⚠️ repo-only, ver arriba |
+| Migraciones 275/276/277 | aplicadas | ✅ |
 
 ---
 
