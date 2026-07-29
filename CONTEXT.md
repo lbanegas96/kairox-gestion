@@ -1,5 +1,62 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-29 (Luciano/Claude — cierre de Ventas: NC referencia+cancelación, fix AFIP CbteTipo, ND rediseñada, arranque de limpieza CAEA)
+**Última actualización:** 2026-07-29 (Nadia/Claude — cierre CAEA #34/#35, deploy arca-worker v17, investigación #36, fix de letra NC/ND, y diagnóstico de mp-sync caído)
+
+> 🔴 **INCIDENTE ABIERTO — la sincronización de MercadoPago está caída desde
+> el 2026-07-14 (15 días). Diagnosticado el 2026-07-29 por Nadia, NADA
+> TOCADO: el arreglo es una decisión de seguridad, la toma Luciano.**
+>
+> **Síntoma:** el cron `mp-sync-every-2-min` (jobid 3) devuelve
+> `401 {"error":"Token inválido"}` en el 100% de las corridas — 180 fallos
+> solo en las últimas 6 horas, que es lo que retiene `net._http_response`.
+>
+> **Causa raíz:** el commit `7bccea5` (2026-07-14, *"fix(seguridad): 3
+> hallazgos en integración MercadoPago… mp-sync/mp-verify-token sin chequeo
+> de admin"*) agregó `verifyAdmin(req)` a `mp-sync/index.ts:43` y acotó el
+> query con `.eq('empresa_id', auth.empresaId)`. **El arreglo de seguridad
+> era correcto y necesario** — antes cualquier usuario autenticado de
+> cualquier tenant podía forzar el sync de TODAS las empresas. Lo que no se
+> actualizó fue el cron: invoca con la **anon key** (ver `cron.job.command`),
+> que no es un JWT de usuario, así que `verifyAdmin` la rechaza siempre.
+>
+> **La cronología cierra exacto:** último movimiento MP sincronizado
+> `2026-07-13 21:46` AR → `verifyAdmin` agregado `2026-07-14 15:54` → 401
+> ininterrumpido desde entonces.
+>
+> **Impacto real, no cosmético:** la integración de Nalux está
+> `activo = true` en `integraciones_bancarias`, o sea que se espera que
+> sincronice. `movimientos_bancarios` con `origen='mercadopago'` no recibe
+> una fila nueva desde el 13/07. (El webhook `mp-webhook` es un camino
+> aparte, tiene `verify_jwt=false` y no usa `verifyAdmin`, así que ese sí
+> puede seguir entrando — pero el sync por polling está muerto.)
+>
+> **Opciones (a decidir):**
+> - **B (recomendada) — separar en dos funciones**, que es el patrón que ya
+>   usan las 2 funciones de cron que SÍ funcionan (`arca-worker` y
+>   `tc-diario-sync`): `mp-sync` queda como está (admin + scope por empresa,
+>   para el botón "Actualizar MP" del frontend) y se agrega un
+>   `mp-sync-worker` con `verify_jwt=false`, sin `verifyAdmin`, que itera
+>   todas las integraciones activas con su propio `adminClient`. La lógica
+>   común se extrae a `_shared/`. No mete secretos en el cron y deja intacto
+>   el fix de seguridad.
+> - **A — modo dual con bypass `service_role`**, el mismo patrón que la
+>   mig. 225 usa en las RPC de CAEA: si el llamador presenta la service-role
+>   key corre en modo cron sobre todas las empresas, si no exige admin.
+>   Obliga a poner la service-role key en `cron.job.command`, que hoy
+>   guarda solo la anon key.
+> - **C — secreto compartido** (`CRON_SECRET` en env) que el cron manda en
+>   un header propio.
+>
+> **Nota de posturas de seguridad:** `arca-worker` ya es invocable por
+> cualquiera (`verify_jwt=false`) y se aceptó porque no devuelve datos de
+> ningún tenant, solo hace trabajo. `mp-sync` en modo cron devolvería
+> `{ok, synced}` sin datos de empresa, así que la opción B tiene la misma
+> postura ya aceptada en el repo.
+>
+> **Verificado de paso y SANO:** se sospechó que `tc-diario-sync` tuviera el
+> mismo problema (aparece en un grep de `verifyAdmin`), pero **no lo tiene**
+> — el match era el comentario que dice justamente que no usa ni CORS ni
+> `verifyAdmin`. El TC de hoy se cargó solo a las 08:00:01 AR con
+> `origen='automatico'`. La automatización del dólar funciona bien.
 
 > ✅ **Ventas — cierre del día: 3 fixes de NC, fix de compliance AFIP CbteTipo, y
 > rediseño completo de ND (Nota de Débito) emitida a Cliente.** Todo esto ya está
