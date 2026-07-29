@@ -294,6 +294,11 @@ BEGIN
   IF p_reembolso_efectivo AND p_caja_sesion_id IS NULL THEN
     RAISE EXCEPTION 'Reembolso en efectivo requiere una caja abierta';
   END IF;
+  IF p_caja_sesion_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.caja_sesiones WHERE id = p_caja_sesion_id AND empresa_id = p_empresa_id AND estado = 'abierta'
+  ) THEN
+    RAISE EXCEPTION 'La caja indicada no pertenece a la empresa o no está abierta';
+  END IF;
 
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
     v_cantidad := (v_item->>'cantidad')::NUMERIC;
