@@ -86,15 +86,36 @@
 >   segundo fix). Hoy no afecta a Nalux (factura letra B), pero hay que
 >   desplegarlo antes de dar de alta cualquier cliente Monotributista.
 >
-> **🚀 Despliegues pendientes de Edge Functions (2 fixes, ninguno desplegado
-> — decisión consciente, requieren autorización explícita):**
-> 1. `arca-worker` — le falta el fix `esClaseC` de `_shared/afip.ts` (sigue en
->    v16). Circuito **LIVE**: afecta a cualquier cliente Monotributista (letra
->    C) que emita NC/ND. Ninguno dado de alta hoy, pero es el más urgente de
->    los dos.
-> 2. `informar-caea` — le falta todo el fix de la tarea #35 de arriba.
->    Circuito **CAEA** (contingencia offline), hoy sin uso real: `caea_registros`
->    está vacía y las 4 empresas reales tienen `afip_usa_caea=false`.
+> **🚀 Despliegues de Edge Functions:**
+> 1. ✅ `arca-worker` **v17 desplegado 2026-07-29 por Nadia** (autorización
+>    explícita) — ya corre el fix `esClaseC` de `_shared/afip.ts`. Circuito
+>    **LIVE**: era el más urgente, afecta a cualquier cliente Monotributista
+>    (letra C) que emita NC/ND. Ninguno dado de alta todavía, se desplegó
+>    antes de que haga falta.
+>    **Método (repetible, vale la pena seguirlo para cualquier deploy de Edge
+>    Function por MCP):** el deploy reemplaza TODOS los archivos, no solo el
+>    que cambió, así que hay que mandar el entrypoint + las 5 dependencias de
+>    `_shared/`. Antes de tocar nada se bajó la v16 desplegada con
+>    `get_edge_function` y se comparó archivo por archivo contra el repo
+>    **normalizando CRLF→LF** (el repo está en CRLF y el deploy en LF, así que
+>    una comparación cruda da "todo distinto" y no dice nada): 4 de 5
+>    idénticos y el único cambio real en `_shared/afip.ts`, exactamente el
+>    fix. Después del deploy se repitió la comparación contra los 5 archivos
+>    ya desplegados — **los 5 idénticos al repo, sin deriva de transcripción**.
+>    Se eligió ventana con `facturas_pendientes_arca` sin filas `pendiente`/
+>    `reintentando` (42 emitidas, 17 error_definitivo que el worker no
+>    reintenta), y se guardó la v16 completa en disco como rollback byte-exacto.
+>    `verify_jwt=false` y `entrypoint_path='arca-worker/index.ts'` se
+>    preservaron tal cual estaban.
+>    **Nota:** el CLI de Supabase (`npx supabase`, v2.110.0) sería más seguro
+>    que el MCP para esto porque lee los archivos del disco, pero no hay
+>    `SUPABASE_ACCESS_TOKEN` ni proyecto vinculado, y `supabase login` es
+>    interactivo — no se hizo.
+> 2. ⏳ `informar-caea` — le falta todo el fix de la tarea #35 de arriba,
+>    **sigue sin desplegar**. Circuito **CAEA** (contingencia offline), hoy sin
+>    uso real: `caea_registros` está vacía y las 4 empresas reales tienen
+>    `afip_usa_caea=false`. Cuando se despliegue, seguir el mismo método de
+>    arriba.
 >
 > **Hallazgo menor al aplicar la mig. 271 (2026-07-29):** la afirmación
 > "`afip_usa_caea=false` para todas las empresas" no es exacta — la empresa
