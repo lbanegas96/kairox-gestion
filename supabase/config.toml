@@ -102,3 +102,16 @@ verify_jwt = false   # el worker es un proceso interno (service_role), sin JWT d
 # `[functions.arca-worker.cron]` fue un intento previo que nunca surtió efecto
 # al desplegar vía MCP (ver migration 102), y además rompe `supabase start`
 # en versiones recientes de la CLI ("invalid keys: cron"). Se quita acá.
+
+[functions.mp-sync-worker]
+verify_jwt = false   # igual que arca-worker: lo dispara el cron, no un usuario
+
+# Contraparte sin usuario de `mp-sync` (que SÍ exige admin y se queda en su
+# default verify_jwt=true — es el botón "Actualizar MP" del frontend).
+# Existe porque el cron invoca con la anon key, que `verifyAdmin` rechaza: eso
+# dejó la sincronización de MercadoPago caída del 2026-07-14 al 2026-07-29.
+# El cron real vive en Postgres (pg_cron, migration 272: job
+# "mp-sync-every-2-min"), no acá — misma nota que arca-worker.
+#
+# ⚠️ Este archivo NO se aplica al desplegar vía MCP: hay que pasar
+# `verify_jwt: false` explícitamente en la llamada de deploy.

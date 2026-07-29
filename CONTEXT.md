@@ -1,9 +1,10 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-07-29 (Nadia/Claude — cierre CAEA #34/#35, deploy arca-worker v17, investigación #36, fix de letra NC/ND, y diagnóstico de mp-sync caído)
 
-> 🔴 **INCIDENTE ABIERTO — la sincronización de MercadoPago está caída desde
-> el 2026-07-14 (15 días). Diagnosticado el 2026-07-29 por Nadia, NADA
-> TOCADO: el arreglo es una decisión de seguridad, la toma Luciano.**
+> 🟠 **INCIDENTE — la sincronización de MercadoPago está caída desde el
+> 2026-07-14 (15 días). Diagnosticado y ARREGLADO EN EL REPO el 2026-07-29
+> por Nadia (opción B, aprobada por el usuario). ⏳ FALTA DESPLEGAR — ver
+> "Cómo desplegarlo" al final del bloque, el orden importa.**
 >
 > **Síntoma:** el cron `mp-sync-every-2-min` (jobid 3) devuelve
 > `401 {"error":"Token inválido"}` en el 100% de las corridas — 180 fallos
@@ -29,28 +30,65 @@
 > aparte, tiene `verify_jwt=false` y no usa `verifyAdmin`, así que ese sí
 > puede seguir entrando — pero el sync por polling está muerto.)
 >
-> **Opciones (a decidir):**
-> - **B (recomendada) — separar en dos funciones**, que es el patrón que ya
->   usan las 2 funciones de cron que SÍ funcionan (`arca-worker` y
->   `tc-diario-sync`): `mp-sync` queda como está (admin + scope por empresa,
->   para el botón "Actualizar MP" del frontend) y se agrega un
->   `mp-sync-worker` con `verify_jwt=false`, sin `verifyAdmin`, que itera
->   todas las integraciones activas con su propio `adminClient`. La lógica
->   común se extrae a `_shared/`. No mete secretos en el cron y deja intacto
->   el fix de seguridad.
-> - **A — modo dual con bypass `service_role`**, el mismo patrón que la
->   mig. 225 usa en las RPC de CAEA: si el llamador presenta la service-role
->   key corre en modo cron sobre todas las empresas, si no exige admin.
->   Obliga a poner la service-role key en `cron.job.command`, que hoy
->   guarda solo la anon key.
-> - **C — secreto compartido** (`CRON_SECRET` en env) que el cron manda en
->   un header propio.
+> **Solución implementada (opción B — separar en dos puntos de entrada),
+> mismo patrón que `arca-worker` y `tc-diario-sync`, los 2 crons que SÍ
+> funcionan:**
+> - **`_shared/mpSync.ts` (nuevo):** toda la lógica de sync, movida tal cual
+>   desde `mp-sync` — **cero cambios de reglas de negocio**. La consulta a
+>   `integraciones_bancarias` queda DELIBERADAMENTE fuera de este módulo, en
+>   cada caller: es el punto donde se decide el alcance (una empresa vs.
+>   todas), y esconderlo acá haría fácil perder el filtro por `empresa_id`
+>   sin notarlo — que es justo el agujero que cerró `7bccea5`.
+> - **`mp-sync` (modificada):** mantiene `verifyAdmin` y el
+>   `.eq('empresa_id', auth.empresaId)` intactos, solo delega el trabajo.
+>   Se le agregó un comentario grande avisando que NO se saque ese chequeo
+>   "para arreglar el cron".
+> - **`mp-sync-worker` (nueva):** sin `verifyAdmin`, sin CORS, `adminClient`
+>   propio, itera TODAS las integraciones activas. Devuelve
+>   `{ok, synced, empresas}` — ningún dato de tenant.
+> - **`272_cron_mp_sync_apunta_al_worker.sql` (nueva, NO aplicada):**
+>   re-registra el job `mp-sync-every-2-min` apuntando al worker. Mismo
+>   nombre y mismo schedule (*/2), solo cambia la URL.
+> - **`config.toml`:** entrada `[functions.mp-sync-worker] verify_jwt = false`.
 >
 > **Nota de posturas de seguridad:** `arca-worker` ya es invocable por
 > cualquiera (`verify_jwt=false`) y se aceptó porque no devuelve datos de
-> ningún tenant, solo hace trabajo. `mp-sync` en modo cron devolvería
-> `{ok, synced}` sin datos de empresa, así que la opción B tiene la misma
-> postura ya aceptada en el repo.
+> ningún tenant, solo hace trabajo. `mp-sync-worker` tiene exactamente esa
+> misma postura, ya aceptada en el repo. Las otras 2 opciones descartadas
+> eran: bypass `service_role` estilo mig.225 (obliga a meter la service-role
+> key en `cron.job.command`, que hoy solo guarda la anon key) y un
+> `CRON_SECRET` en header propio.
+>
+> **⚠️ Cómo desplegarlo — el orden importa:**
+> 1. **Primero** desplegar `mp-sync-worker` con `verify_jwt=false` (incluir
+>    `_shared/mpSync.ts` en los archivos del deploy — el deploy por MCP
+>    reemplaza todo, ver la nota de método en el bloque de `arca-worker` v17).
+> 2. **Después** aplicar la mig. 272. Al revés, el cron pega contra una
+>    función que no existe y sigue fallando.
+> 3. Opcionalmente redesplegar `mp-sync` (cambió para usar el módulo
+>    compartido). No urge: la versión desplegada hoy sigue funcionando para
+>    el botón del frontend, solo queda divergida del repo.
+> 4. Verificar con `net._http_response` que deje de dar 401 — **no alcanza**
+>    con ver `cron.job_run_details` en `succeeded`, que solo dice que se
+>    encoló el POST, no qué contestó la función.
+>
+> **⚠️ Ojo con el primer sync después de aplicar:**
+> `integraciones_bancarias.ultimo_sync` de Nalux quedó clavado en
+> **2026-07-14 15:52:02 AR** — dos minutos antes del deploy que rompió todo
+> (15:54), lo que confirma el diagnóstico al minuto. El sync arranca desde
+> ahí, así que el primer POST le va a pedir a MercadoPago ~15 días de pagos
+> de una sola vez, con `limit=100` en la query. **Si en ese período hubo más
+> de 100 pagos aprobados, entran los 100 más viejos y `ultimo_sync` igual
+> avanza hasta "ahora", salteándose el resto.** Conviene contar cuántos
+> entraron y, si faltan, retroceder `ultimo_sync` a mano y volver a correr.
+> No se automatizó el backfill paginado a propósito: es un cambio de
+> comportamiento aparte, no parte de este arreglo.
+>
+> **Observación menor, NO tocada:** el dedup por `descripcion` usa
+> `.like(...).maybeSingle()`, que tira error si alguna vez hubiera 2 filas
+> con el mismo `MP #<id>`. Es preexistente y se movió tal cual para no
+> mezclar un cambio de comportamiento con la extracción. La mig. 245 ya da
+> idempotencia a nivel RPC, así que es defensa redundante.
 >
 > **Verificado de paso y SANO:** se sospechó que `tc-diario-sync` tuviera el
 > mismo problema (aparece en un grep de `verifyAdmin`), pero **no lo tiene**
