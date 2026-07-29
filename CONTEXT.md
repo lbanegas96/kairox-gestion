@@ -1,11 +1,58 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-29 (Nadia/Claude — cierre de tareas #34, #35, #36, fix letra NC/ND, recuperación MP sync, despliegues completos)
+**Última actualización:** 2026-07-29 tarde (Luciano/Claude — espejo Ventas→Compras: NC/ND de Proveedor con ítems+IVA, repo-only sin aplicar/pushear)
+
+---
+
+## ⚠️ Trabajo de esta tarde — REPO-ONLY, sin aplicar ni pushear
+
+Luciano se fue a entrenar y pidió seguir trabajando en paralelo. Se hizo un
+análisis + build completo (commits locales `b347398`, `45c3101`, `4ed8b7b`,
+**ninguno pusheado a origin todavía** — branch local 3 commits arriba de
+`origin/master`) espejando en Compras las mejoras que Ventas ya tenía. Queda
+para revisión de Luciano antes de aplicar migraciones o pushear — ver tarea
+#40/#41 del tracker de sesión.
+
+**Hallazgo que motivó esto (no solo simetría):** `ReporteLibroIVACompras.jsx`
+solo leía `compras` — nunca veía una NC/ND de proveedor, así que el crédito
+fiscal de IVA reportado nunca se ajustaba por esos documentos.
+
+- **Migración 275** (fix, no build nuevo): `crear_nota_debito_cliente`
+  (armada hoy mismo) nunca guardaba `descripcion` del ítem — comparado
+  contra `crear_nota_credito` que sí lo hace. Verificado en la base: cero ND
+  reales creadas todavía, sin historial afectado.
+- **Migración 276**: `notas_debito_items` + `notas_debito.neto_gravado`/
+  `iva_discriminado` + RPC nueva `crear_nota_debito_proveedor` (no se tocó
+  la `crear_nota_debito` vieja, su rama 'emitida' ya está en desuso).
+- **Migración 277**: `notas_credito_proveedor` + items — tabla de documento
+  que ANTES NO EXISTÍA (la NC de proveedor era un insert suelto a
+  `cuenta_corriente_proveedores`, sin numeración propia). RPC
+  `crear_nota_credito_proveedor` con reembolso en efectivo atómico. Incluye
+  un self-fix: la primera versión no validaba que `caja_sesion_id`
+  perteneciera a la empresa (guard-tenant faltante, encontrado en
+  autorevisión antes de que alguien más lo viera).
+- `NuevaNotaDebitoModal.jsx` (shared/, proveedor) y `NuevaNCProveedorModal.jsx`
+  reescritos con tabla de ítems + IVA, mismo patrón que sus pares de Ventas.
+- Nuevo tab "Notas de Crédito Recibidas" en `DevolucionesProveedorSection.jsx`.
+- `ReporteLibroIVACompras.jsx` ahora suma ND recibida (+) y resta NC de
+  proveedor (-) al crédito fiscal, con columna Tipo.
+
+**Ninguna de las 2 RPC nuevas toca `comprobantes` ni AFIP** — es el
+proveedor quien declara estos documentos, no nosotros (mismo criterio que
+ya regía para `devoluciones` tipo='proveedor').
+
+**No se tocó** (deliberadamente fuera de alcance esta vez): cancelación con
+reversa para NC/ND de Proveedor (espejo de mig.267), Mapa de Relaciones para
+Compras (no existe, es una feature más grande que esto), y todo lo que
+Nadia dejó pendiente para la noche (ver sección de abajo, sin cambios).
+
+Build y lint verificados limpios (0 errores). **No probado en vivo.**
 
 ---
 
 ## Estado actual de producción
 
-Todo desplegado y funcionando al cierre de la sesión del 2026-07-29.
+Todo desplegado y funcionando al cierre de la sesión del 2026-07-29
+(mañana). Lo de la tarde (arriba) es TODO repo-only, no cambia esta tabla.
 
 | Servicio | Versión | Estado |
 |---|---|---|
@@ -16,6 +63,7 @@ Todo desplegado y funcionando al cierre de la sesión del 2026-07-29.
 | Migración 271 | aplicada | ✅ |
 | Migración 272 | aplicada | ✅ |
 | Migración 273 | aplicada | ✅ |
+| Migraciones 275/276/277 | **sin aplicar** | ⚠️ repo-only, ver arriba |
 
 ---
 
