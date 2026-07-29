@@ -147,9 +147,93 @@
 >   ítems+IVA en `notas_debito_items` (alcance Compras).
 > - ND/NC automática por diferencia de cambio (estilo SAP) al momento de
 >   liquidar — Luciano lo pidió anotar para más adelante, no empezar solo.
-> - `puntos_venta.ultimo_numero_a/b/c` mezcla numeración de Factura y NC/ND
->   por letra (no afecta números reales, que vienen de AFIP; debilita un
->   heurístico interno de reintento).
+> - ~~`puntos_venta.ultimo_numero_a/b/c` mezcla numeración~~ — **investigado
+>   2026-07-29 (tarea #36), ver bloque de abajo. El diagnóstico original se
+>   quedó corto: no "debilita un heurístico", lo rompe.** Nada construido
+>   todavía, esperando decisión.
+
+> 🔎 **Tarea #36 — investigación de `puntos_venta.ultimo_numero_a/b/c`
+> (2026-07-29, Nadia). NADA CONSTRUIDO — hallazgos y opciones, falta decidir.**
+>
+> **Alcance real:** las 3 columnas se escriben y se leen **solo** desde
+> `arca-worker/index.ts` (líneas 136, 166 y 254). Cero funciones de base
+> (verificado con `pg_get_functiondef ILIKE '%ultimo_numero%'` → 0 filas),
+> cero usos en el frontend. Fuera de eso solo aparecen en la mig. 025 (que las
+> crea) y la 150 (RLS admin-only).
+>
+> **El mecanismo:** el contador está indexado por **letra** (A/B/C), pero la
+> serie correlativa de AFIP está indexada por **(PtoVta, CbteTipo)** — y
+> CbteTipo distingue Factura / NC / ND. Con una sola columna por letra no se
+> pueden seguir 2 o 3 series independientes.
+>
+> **Por qué el fix de CbteTipo de ayer lo empeora (importante):** ANTES del
+> fix, NC y ND se declaraban ante ARCA como Factura, así que compartían una
+> única serie y el contador por letra resultaba —de casualidad— consistente.
+> AHORA que cada clase declara su propio CbteTipo, cada una tiene su serie en
+> AFIP y las 3 escriben en la misma columna. El fix es correcto y necesario;
+> el efecto colateral sobre este contador no estaba visto.
+>
+> **Falla concreta** (con los números reales de Nalux, PV1, letra C — hoy
+> `ultimo_numero_c = 35`, Factura C en AFIP = 34). El chequeo de
+> `arca-worker:166` es
+> `if (lastNumber >= expectedNumero + 1) → marcarErrorDefinitivo('Estado ambiguo')`:
+> 1. Se emite la primera NC-C → `lastNumber`(NC-C)=0 vs `expected`=35 → pasa
+>    bien, obtiene correlativo 1, y **escribe `ultimo_numero_c = 1`, pisando
+>    el 35 de las facturas**.
+> 2. La siguiente Factura C → `lastNumber`(Factura C)=35 vs `expected`=1 →
+>    `35 >= 2` es **verdadero** → la factura se manda a `error_definitivo`
+>    con "Estado ambiguo" **siendo perfectamente válida**, y queda trabada
+>    esperando que un humano la destrabe desde el Monitor.
+>
+> O sea: **falso positivo que bloquea facturas buenas**, y se repite cada vez
+> que se alternan clases de la misma letra. Todavía no pasó porque en Nalux,
+> por casualidad, cada letra tiene una sola clase (C = solo ventas, B = solo
+> NC).
+>
+> **Deriva ya visible en los contadores** (síntoma, no causa): PV1 letra C
+> marca 35 contra un máximo real de 34 (+1); PV2 letra C marca 1 sin tener
+> **ningún** comprobante letra C. Letra B sí cierra exacto en ambos PV.
+>
+> **Opciones (a decidir):**
+> - **A — Indexar el contador por lo mismo que AFIP.** Tabla
+>   `puntos_venta_numeracion(punto_venta_id, cbte_tipo, ultimo_numero)` en vez
+>   de 3 columnas por letra. Es la que respeta el modelo real de AFIP y deja
+>   el guard de ambigüedad funcionando de verdad.
+> - **B — Borrar el heurístico y las 3 columnas.** El número que se emite ya
+>   sale siempre de AFIP (`feCompUltimoAutorizado`, `cbteNro = ultimo + 1`) —
+>   el contador local no participa de la numeración real. Es la opción más
+>   simple, pero se pierde la detección de "ARCA ya emitió el nuestro" tras un
+>   timeout.
+> - **C — Dejar las columnas y corregir solo la comparación**, mapeando por
+>   `voucherType` en vez de por letra. Menos invasivo que A, pero mantiene 3
+>   columnas representando algo que en realidad son 9 series (3 letras × 3
+>   clases).
+>
+> Recomendación de Nadia: **A**, con **B** como alternativa razonable si se
+> prefiere no agregar tabla — lo que NO conviene es dejarlo como está, porque
+> el primer NC/ND con letra propia dispara el falso positivo.
+
+> 🔴 **Hallazgo colateral de la tarea #36, más urgente que la #36 misma
+> (2026-07-29, Nadia). NADA TOCADO.**
+>
+> **La letra de NC y ND está hardcodeada a `'B'` cuando no hay comprobante de
+> origen.** `NuevaNCModal.jsx:227` y `NuevaNDModal.jsx:189` hacen
+> `comprobanteOrigen?.tipo_comprobante_afip ?? … ?? 'B'`. Las ventas NO tienen
+> este problema: derivan la letra con `determinarTipoComprobante()`
+> (`useAfipConfig.js:18`), que aplica bien la regla fiscal — Monotributo y
+> **Exento siempre emiten letra C**, nunca A ni B.
+>
+> **Nalux es `condicion_iva = 'Exento'`**, así que sus 31 ventas con CAE están
+> correctamente en **letra C**… pero sus **4 NC quedaron en letra B**, que es
+> una letra que un Exento no puede emitir. Con el fix de ayer ya desplegado,
+> la próxima NC de Nalux se declararía como **NC-B (código 8)** cuando
+> correspondería **NC-C (13)** — sigue mal, y además `esClaseC` daría falso,
+> mandando IVA discriminado en un comprobante que no debe discriminarlo.
+>
+> ⚠️ **Corrección a este mismo documento:** más arriba se afirma "Hoy no
+> afecta a Nalux (factura letra B)" respecto del fix `esClaseC`. **Es
+> incorrecto: Nalux factura letra C.** El deploy de `arca-worker` v17 de hoy
+> no era preventivo para Nalux, le aplica directamente.
 
 > ✅ **Ventas — rediseño de Cotización estilo SAP + "Copiar a Pedido" + toggle de
 > módulo (commit `ef04aed`, 2026-07-25).** Primer paso del módulo de Ventas que
