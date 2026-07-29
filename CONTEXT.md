@@ -289,24 +289,66 @@
 > marca 35 contra un máximo real de 34 (+1); PV2 letra C marca 1 sin tener
 > **ningún** comprobante letra C. Letra B sí cierra exacto en ambos PV.
 >
-> **Opciones (a decidir):**
-> - **A — Indexar el contador por lo mismo que AFIP.** Tabla
->   `puntos_venta_numeracion(punto_venta_id, cbte_tipo, ultimo_numero)` en vez
->   de 3 columnas por letra. Es la que respeta el modelo real de AFIP y deja
->   el guard de ambigüedad funcionando de verdad.
-> - **B — Borrar el heurístico y las 3 columnas.** El número que se emite ya
->   sale siempre de AFIP (`feCompUltimoAutorizado`, `cbteNro = ultimo + 1`) —
->   el contador local no participa de la numeración real. Es la opción más
->   simple, pero se pierde la detección de "ARCA ya emitió el nuestro" tras un
->   timeout.
-> - **C — Dejar las columnas y corregir solo la comparación**, mapeando por
->   `voucherType` en vez de por letra. Menos invasivo que A, pero mantiene 3
->   columnas representando algo que en realidad son 9 series (3 letras × 3
->   clases).
+> **Solución implementada (opción A — indexar el contador por lo mismo que
+> AFIP), 2026-07-29. EN EL REPO, migración NO aplicada y worker NO
+> desplegado.** Las otras 2 opciones descartadas eran: borrar el heurístico y
+> las columnas (más simple, pero se pierde la detección de "ARCA ya emitió el
+> nuestro" tras un timeout), o corregir solo la comparación mapeando por
+> `voucherType` (mantiene 3 columnas representando lo que en realidad son 9
+> series: 3 letras × 3 clases).
 >
-> Recomendación de Nadia: **A**, con **B** como alternativa razonable si se
-> prefiere no agregar tabla — lo que NO conviene es dejarlo como está, porque
-> el primer NC/ND con letra propia dispara el falso positivo.
+> - **`273_puntos_venta_numeracion_por_cbte_tipo.sql` (nueva, NO aplicada):**
+>   tabla `puntos_venta_numeracion(empresa_id, punto_venta_id, cbte_tipo,
+>   ultimo_numero, updated_at)`, PK `(punto_venta_id, cbte_tipo)`.
+>   **RLS más estricta que las columnas viejas a propósito:** SELECT acotado
+>   al tenant y **ninguna policy de escritura** — ni un admin puede tocarla
+>   desde la app, solo `service_role` (o sea, solo arca-worker). La mig.150
+>   tuvo que cerrar justamente que un staff no-admin pudiera hacer
+>   `UPDATE puntos_venta SET ultimo_numero_b = 0`, y no hay ningún caso de uso
+>   legítimo de editar esto a mano.
+> - **`arca-worker/index.ts`:** lee el contador de la tabla nueva filtrando
+>   por `cbte_tipo = voucherType`, y en el éxito hace `upsert` en vez de
+>   escribir la columna por letra. Ya no lee ni escribe `ultimo_numero_a/b/c`.
+>
+> **Decisión de diseño — sin fila = se saltea el chequeo.** Si no hay registro
+> para (PdV, cbte_tipo), el worker emite sin comparar y después inserta la
+> fila con el correlativo que devolvió AFIP. Inicializar en 0 sería peor:
+> `lastNumber >= 0 + 1` daría verdadero para cualquier serie que ya tenga
+> números en AFIP, o sea marcaría **todo** como ambiguo. Costo real: la
+> primera emisión de cada serie va sin el guard — exposición chica y acotada,
+> contra el estado actual donde el guard produce falsos positivos que bloquean
+> facturas válidas.
+>
+> **Seed: solo ventas, y es a propósito.** El código AFIP de una venta
+> (1/6/11) nunca estuvo afectado por el bug de CbteTipo, así que su máximo
+> correlativo por (PV, letra) sí corresponde a la serie que dice. Las NC/ND
+> históricas NO se siembran porque su código declarado depende de CUÁNDO se
+> emitieron: antes del fix consumieron la serie de **Factura** (una NC-B se
+> declaró como 6, no como 8), después consumen la propia. Sembrarlas por
+> letra+clase las pondría en una serie que nunca tocaron — se prefiere no
+> inventar el dato y dejar que se auto-siembren.
+>
+> **El seed se probó como SELECT contra producción antes de escribirlo:**
+> devuelve una sola fila — Nalux PV1, `cbte_tipo=11`, `ultimo_numero=34`, de
+> 31 comprobantes. Ojo al dato: `puntos_venta.ultimo_numero_c` dice **35**, o
+> sea que la columna vieja ya venía desfasada +1 contra el máximo real. **La
+> tabla nueva arranca más precisa que lo que hay hoy.**
+>
+> **Las columnas viejas quedan, marcadas como muertas.** No se dropean en esta
+> migración: si hay que revertir el deploy del worker, el código viejo las
+> necesita. Se les puso `COMMENT ON COLUMN` diciendo que están deprecadas y
+> pendientes de DROP, para que nadie las vuelva a usar creyendo que están
+> vigentes. Dropearlas es una migración aparte, una vez confirmado en vivo.
+>
+> **Orden de despliegue:** 1) aplicar la mig. 273 (sola es inocua: crea una
+> tabla que nadie lee todavía y no toca las columnas viejas), 2) desplegar
+> `arca-worker`. Al revés también funciona, pero deja al worker escribiendo
+> contra una tabla inexistente entre ambos pasos.
+>
+> **Verificación hecha:** el seed corrido como SELECT (arriba). **NO se
+> ejecutó el DDL, ni siquiera envuelto en `BEGIN…ROLLBACK`** — el riesgo de
+> que quedara persistido no vale la validación de sintaxis, y la migración no
+> está autorizada a aplicarse todavía.
 
 > ✅ **Hallazgo colateral de la tarea #36 — CORREGIDO 2026-07-29 (Nadia).**
 > **En el repo, sin desplegar a Vercel todavía y sin probar en vivo (ver

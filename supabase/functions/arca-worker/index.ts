@@ -133,7 +133,7 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
 
       const { data: pv } = await adminClient
         .from('puntos_venta')
-        .select('numero, ultimo_numero_a, ultimo_numero_b, ultimo_numero_c')
+        .select('numero')
         .eq('id', comp.punto_venta_id)
         .single();
 
@@ -160,18 +160,37 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
         adminClient, comp.empresa_id, empresa.afip_cuit, certPem, keyPem, environment, pv.numero, voucherType,
       );
 
-      // Checar si ARCA ya emitió el CAE para este comprobante
-      // comparando el número afip guardado con el último emitido en ARCA.
-      // Si el comprobante ya tiene numero_afip asignado y ARCA confirma ese número, sincronizar.
-      const expectedNumero = (tipoComp === 'A' ? pv.ultimo_numero_a : tipoComp === 'C' ? pv.ultimo_numero_c : pv.ultimo_numero_b) ?? 0;
-      if (lastNumber >= expectedNumero + 1) {
-        // ARCA ya procesó algo más adelante — puede que ya emitió el nuestro.
-        // Verificar si hay un CAE que corresponda consultando el estado en ARCA.
-        // Por seguridad, no reemitir: marcar para revisión manual.
-        await marcarErrorDefinitivo(fpa.id, comp.id,
-          `Estado ambiguo: ARCA reporta último número ${lastNumber}, local esperaba ${expectedNumero + 1}. Verificar manualmente en portal ARCA.`);
-        resultados.push({ id: fpa.id, resultado: 'error_definitivo (ambiguo)' });
-        continue;
+      // Checar si ARCA ya emitió el CAE para este comprobante comparando el
+      // último correlativo que conocíamos con el último emitido en ARCA.
+      //
+      // El contador vive en `puntos_venta_numeracion`, indexado por
+      // (punto de venta, cbte_tipo) — igual que AFIP indexa sus series
+      // (mig.273). Antes salía de `puntos_venta.ultimo_numero_a/b/c`, indexado
+      // por LETRA: con eso, una NC y una Factura de la misma letra escribían en
+      // el mismo contador aunque en AFIP son series independientes, y la primera
+      // NC pisaba el contador de las facturas — mandando la siguiente factura
+      // VÁLIDA a error_definitivo por "estado ambiguo". Ver tarea #36.
+      const { data: numeracion } = await adminClient
+        .from('puntos_venta_numeracion')
+        .select('ultimo_numero')
+        .eq('punto_venta_id', comp.punto_venta_id)
+        .eq('cbte_tipo', voucherType)
+        .maybeSingle();
+
+      // Sin fila = no tenemos expectativa previa para esta serie (primera vez
+      // que se emite este cbte_tipo en este PdV). Se saltea el chequeo y se
+      // emite: inicializar en 0 haría que `lastNumber >= 1` diera verdadero para
+      // cualquier serie que ya tenga números en AFIP, marcando TODO como ambiguo.
+      if (numeracion) {
+        const expectedNumero = numeracion.ultimo_numero ?? 0;
+        if (lastNumber >= expectedNumero + 1) {
+          // ARCA ya procesó algo más adelante — puede que ya emitió el nuestro.
+          // Por seguridad, no reemitir: marcar para revisión manual.
+          await marcarErrorDefinitivo(fpa.id, comp.id,
+            `Estado ambiguo: ARCA reporta último número ${lastNumber} para el tipo ${voucherType}, local esperaba ${expectedNumero + 1}. Verificar manualmente en portal ARCA.`);
+          resultados.push({ id: fpa.id, resultado: 'error_definitivo (ambiguo)' });
+          continue;
+        }
       }
 
       // ── 5. Cargar items del comprobante ─────────────────────────────────────
@@ -251,7 +270,6 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
       });
 
       // ── 7. Éxito: persistir CAE en comprobantes + cerrar la cola ────────────
-      const campoUltimo = tipoComp === 'A' ? 'ultimo_numero_a' : tipoComp === 'C' ? 'ultimo_numero_c' : 'ultimo_numero_b';
       const numeroAfip  = `${String(pv.numero).padStart(4, '0')}-${String(arcaResult.numeroCorrelativo).padStart(8, '0')}`;
 
       await Promise.all([
@@ -263,9 +281,17 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
           error_afip:      null,
         }).eq('id', comp.id),
 
-        adminClient.from('puntos_venta')
-          .update({ [campoUltimo]: arcaResult.numeroCorrelativo })
-          .eq('id', comp.punto_venta_id),
+        // Contador por (PdV, cbte_tipo) — mig.273. El upsert también cubre el
+        // auto-seed de una serie que todavía no tenía fila (ver el chequeo de
+        // ambigüedad más arriba). Las columnas viejas ultimo_numero_a/b/c
+        // quedaron deprecadas y ya no se escriben.
+        adminClient.from('puntos_venta_numeracion').upsert({
+          empresa_id:     comp.empresa_id,
+          punto_venta_id: comp.punto_venta_id,
+          cbte_tipo:      voucherType,
+          ultimo_numero:  arcaResult.numeroCorrelativo,
+          updated_at:     new Date().toISOString(),
+        }, { onConflict: 'punto_venta_id,cbte_tipo' }),
 
         adminClient.from('facturas_pendientes_arca').update({
           estado:        'emitida',
