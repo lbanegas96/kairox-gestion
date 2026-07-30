@@ -16,13 +16,13 @@ Todo lo de la sección de abajo ("Trabajo de esta tarde") ya fue:
    - ND de Proveedor: ídem, numeración de la serie vieja (`notas_debito`, formato ND-YYYY-NNNN) ✅
    - **Reembolso en efectivo de NC Proveedor** (el camino que más dudas generaba): `reembolso_efectivo=true` + `caja_movimiento_id` poblado + guard de tenant de la caja, todo funcionando ✅
 6. **Hallazgo y fix adicional (commit `fad73fc`):** el Mapa de Relaciones **ya existía** para Compras (no hacía falta construirlo) — pero la NC de Proveedor nueva (mig.277) rompía el vínculo: antes de mig.277, `cuenta_corriente_proveedores.referencia_id` apuntaba directo a la compra; ahora apunta al id de la NC (que ya tiene su propio `compra_id`). El Mapa buscaba por el patrón viejo y nunca encontraba la NC nueva. Se cambió el fetch para consultar `notas_credito_proveedor` directo por `compra_id` — verificado en vivo, la NC y la ND ahora aparecen correctamente en el árbol de documentos de su compra origen.
+7. **Cancelación con reversa para NC/ND de Proveedor** (commit `eeee63f`, mig.278) — último pendiente, cerrado. Mismo patrón que `cancelar_nota_credito` (mig.267): documento de reversa, nunca se borra el original. Columna `estado` nueva en ambas tablas. Guard real: no se puede cancelar una NC ya cobrada en efectivo (el dinero ya cambió de manos). Botón "Cancelar" + confirmación en `DevolucionesProveedorSection.jsx`. **Probado en vivo end-to-end** (creación + cancelación + verificación del movimiento de reversa), datos de prueba limpiados.
 
 **Pendiente real de Compras, todo de baja prioridad:**
-- Cancelación con reversa para NC/ND de Proveedor (espejo de mig.267) — no construida, no pedida todavía.
 - Migración 274 (drop columnas deprecated `puntos_venta.ultimo_numero_*`) — Nadia la dejó a propósito para dentro de ~1 semana.
 - `mp-sync` (el botón manual) ya redesplegado hoy — sin pendientes ahí.
 
-**Con esto, el módulo Compras queda al día con las mejoras que tenía Ventas.** Próximo paso pedido por Luciano: volver a Ventas.
+**Con esto, el módulo Compras queda 100% al día con las mejoras que tenía Ventas — nada pendiente conocido.** Próximo paso pedido por Luciano: volver a Ventas.
 
 ---
 
@@ -59,10 +59,9 @@ fiscal de IVA reportado nunca se ajustaba por esos documentos.
 proveedor quien declara estos documentos, no nosotros (mismo criterio que
 ya regía para `devoluciones` tipo='proveedor').
 
-**No se tocó** (deliberadamente fuera de alcance): cancelación con
-reversa para NC/ND de Proveedor (espejo de mig.267). El Mapa de Relaciones
-para Compras SÍ existía ya (no había que construirlo) — solo necesitó un
-fix puntual, ver arriba.
+El Mapa de Relaciones para Compras SÍ existía ya (no había que
+construirlo) — solo necesitó un fix puntual, ver arriba. La cancelación
+con reversa (mig.278) también se cerró la misma noche, ver punto 7 arriba.
 
 **⚠️ Impacto operativo a revisar antes/al aplicar mig.277:** hay un usuario
 `staff` en Nalux (no admin) sin el permiso granular `compras` otorgado
