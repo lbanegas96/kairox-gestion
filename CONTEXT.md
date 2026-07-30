@@ -1,5 +1,24 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-30 (Nadia/Claude — cerrado #36 con CbteAsoc en arca-worker v19, cerrado el gap de neto/IVA al editar una compra existente, y recupero de contraseña reparado con Gmail SMTP como parche)
+**Última actualización:** 2026-07-30 (Luciano/Claude — auditoría contable completa con agente `sap-motor-contable-auditor`; cerrado el hallazgo crítico: NC/ND sin asiento contable)
+
+## 🔴→✅ Crítico: NC/ND (cliente y proveedor) no generaban asiento contable
+
+La auditoría contable completa de esta noche (agente `sap-motor-contable-auditor`) encontró que `crear_nota_credito`, `crear_nota_debito_cliente`, `crear_nota_credito_proveedor` y `crear_nota_debito_proveedor` (mig.265/275/276/277) tocan `comprobantes`/Cuenta Corriente pero **nunca insertan en `asientos_contables`** — ninguno de los 4 modales (`NuevaNCModal`, `NuevaNDModal`, `NuevaNCProveedorModal`, `NuevaNotaDebitoModal`) llamaba a `asientosAutoService`. Consecuencia real: el Estado de Resultados/Balance de Comprobación quedaba desincronizado de la Cuenta Corriente para cualquier empresa que usara NC/ND — sin ningún error visible.
+
+**Fix:** dos métodos nuevos en `planCuentasService.ts` (mismo patrón no-bloqueante que `crearAsientoVenta`/`crearAsientoCompra`, con guard de período cerrado):
+- `crearAsientoNotaCliente({tipo, comprobanteId, total, neto, iva, ...})` — NC: Debe Ventas (neto) + Debe IVA Débito Fiscal (iva) / Haber Cuentas a Cobrar (total). ND: inverso exacto. Siempre contra 1.1.2 (nunca Caja — el RPC solo toca `cuenta_corriente_movimientos`).
+- `crearAsientoNotaProveedor({tipo, documentoId, total, neto, iva, ...})` — NC: Debe Cuentas a Pagar (total) / Haber Mercaderías (neto) + Haber IVA Crédito Fiscal (iva). ND: inverso exacto. Siempre contra 2.1.1 (el reembolso en efectivo de una NC es un movimiento de Caja aparte, no se tocó ese circuito — fuera de alcance de este fix).
+- Los 4 modales ahora llaman al método correspondiente en el `.then` de éxito de su RPC, usando `subtotalNeto`/`totalIva` que ya calculaban localmente para mostrar en pantalla.
+
+**Probado en vivo contra producción (Nalux):**
+- NC de cliente sobre FAC-20260728-003 ($1.000 total): `neto_gravado=826.45`, `iva_discriminado=173.55` → asiento Debe Ventas $826,45 + Debe IVA Débito $173,55 / Haber CxC $1.000 ✓.
+- NC de proveedor sobre factura de Amazon (ítem $1.210 bruto, 21%): `neto=1.000`, `iva=210` → asiento Debe CxP $1.210 / Haber Mercaderías $1.000 + Haber IVA Crédito $210 ✓.
+- Las ramas ND (cliente y proveedor) no se testearon en vivo — mismo método, mismas cuentas, solo invierten debe/haber respecto a lo ya verificado. Riesgo bajo por simetría de código, pero queda anotado por si alguien quiere el test explícito.
+- Ambas pruebas limpiadas por completo (asiento+ítems, comprobante/NC, movimientos de CC, imputaciones).
+
+**Hallazgo secundario de la misma auditoría, PENDIENTE (no se tocó todavía):** en Ventas/Compras el asiento se dispara en una llamada separada después de que el documento ya se confirmó (no atómico) — a diferencia de CxC/CxP (que sí tienen `asiento_id` en la fila + `regenerar_asiento_cxc/cxp`), no hay forma de regenerar manualmente un asiento de venta/compra que falló. Es la próxima tarea.
+
+---
 
 ## ✅ Compras: recalcular neto/IVA al editar una compra existente
 

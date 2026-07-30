@@ -12,6 +12,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { determinarTipoComprobante } from '@/hooks/useAfipConfig';
 import ClienteSelector from '@/components/shared/ClienteSelector';
+import { getTodayAR } from '@/lib/dateUtils';
+import { asientosAutoService } from '@/services/planCuentasService';
 
 const MOTIVOS_ND = [
   'Diferencia de precio',
@@ -208,6 +210,22 @@ function NuevaNDModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
         }).eq('id', data.comprobante_id);
         if (afipQueueErr) console.warn('[AFIP queue ND]', afipQueueErr.message);
       }
+
+      asientosAutoService.crearAsientoNotaCliente(user.empresa_id, user.id, {
+        comprobanteId: data.comprobante_id,
+        tipo: 'nota_debito',
+        total: data.total,
+        neto: subtotalNeto,
+        iva: totalIva,
+        fecha: getTodayAR(),
+        descripcion: `Nota de Débito ${data.numero_venta}`,
+      }).catch(e => {
+        if (e.message?.startsWith('Período cerrado:')) {
+          toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
+        } else {
+          console.warn('[Contabilidad] Asiento ND (no crítico):', e.message);
+        }
+      });
 
       toast({ title: `Nota de Débito ${data.numero_venta} creada` });
       onSuccess?.({ id: data.comprobante_id, numero_venta: data.numero_venta, total: data.total });

@@ -12,6 +12,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { determinarTipoComprobante } from '@/hooks/useAfipConfig';
 import ClienteSelector from '@/components/shared/ClienteSelector';
+import { getTodayAR } from '@/lib/dateUtils';
+import { asientosAutoService } from '@/services/planCuentasService';
 
 const MOTIVOS_NC = [
   'Bonificación comercial',
@@ -247,6 +249,23 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
         }).eq('id', data.comprobante_id);
         if (afipQueueErr) console.warn('[AFIP queue NC]', afipQueueErr.message);
       }
+
+      // Asiento contable (no bloqueante) — reversa de venta.
+      asientosAutoService.crearAsientoNotaCliente(user.empresa_id, user.id, {
+        comprobanteId: data.comprobante_id,
+        tipo: 'nota_credito',
+        total: data.total,
+        neto: subtotalNeto,
+        iva: totalIva,
+        fecha: getTodayAR(),
+        descripcion: `Nota de Crédito ${data.numero_venta}`,
+      }).catch(e => {
+        if (e.message?.startsWith('Período cerrado:')) {
+          toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
+        } else {
+          console.warn('[Contabilidad] Asiento NC (no crítico):', e.message);
+        }
+      });
 
       toast({ title: `Nota de Crédito ${data.numero_venta} creada` });
       onSuccess?.({ id: data.comprobante_id, numero_venta: data.numero_venta, total: data.total });

@@ -474,6 +474,124 @@ export const asientosAutoService = {
   },
 
   /**
+   * Crea y confirma el asiento de una Nota de Crédito o Débito de CLIENTE.
+   * Ambas SIEMPRE mueven Cuenta Corriente (nunca Caja — `crear_nota_credito`/
+   * `crear_nota_debito_cliente` solo tocan `cuenta_corriente_movimientos`),
+   * así que la contrapartida es siempre 1.1.2 Cuentas a Cobrar.
+   *   NC (reversa de venta):  DEBE 4.1 Ventas (neto) + DEBE 2.1.3 IVA Débito Fiscal (iva)  / HABER 1.1.2 CxC (total)
+   *   ND (cargo adicional):   DEBE 1.1.2 CxC (total)                                        / HABER 4.1 Ventas (neto) + HABER 2.1.3 IVA Débito Fiscal (iva)
+   * Si no hay `neto`/`iva` o falta alguna cuenta, sale silenciosamente —
+   * mismo criterio permisivo que el resto de este servicio.
+   */
+  async crearAsientoNotaCliente(
+    empresaId: string,
+    userId: string,
+    params: {
+      comprobanteId: string;
+      tipo: 'nota_credito' | 'nota_debito';
+      total: number;
+      neto: number;
+      iva: number;
+      fecha: string;       // YYYY-MM-DD
+      descripcion: string;
+      centroCostoId?: string | null;
+    }
+  ): Promise<void> {
+    try {
+      const { data: cerrado } = await supabase.rpc('fecha_en_periodo_cerrado', {
+        p_empresa_id: empresaId, p_fecha: params.fecha,
+      });
+      if (cerrado) throw new Error(`Período cerrado: la fecha ${params.fecha} pertenece a un período contable cerrado.`);
+    } catch (e: any) {
+      if (e.message?.startsWith('Período cerrado:')) throw e;
+    }
+
+    const [cuentaCxC, cuentaVentas, cuentaIvaDebito] = await Promise.all([
+      findCuentaByCodigo(empresaId, '1.1.2'),
+      findCuentaByCodigo(empresaId, '4.1'),
+      findCuentaByCodigo(empresaId, '2.1.3'),
+    ]);
+    if (!cuentaCxC || !cuentaVentas || !cuentaIvaDebito || !(params.neto + params.iva > 0)) return;
+
+    const items = params.tipo === 'nota_credito'
+      ? [
+          { cuenta_id: cuentaVentas,    debe: params.neto, haber: 0,           descripcion: 'Reversa de venta (neto)' },
+          { cuenta_id: cuentaIvaDebito, debe: params.iva,  haber: 0,           descripcion: 'Reversa IVA Débito Fiscal' },
+          { cuenta_id: cuentaCxC,       debe: 0,           haber: params.total, descripcion: 'Nota de Crédito a cliente' },
+        ]
+      : [
+          { cuenta_id: cuentaCxC,       debe: params.total, haber: 0,          descripcion: 'Nota de Débito a cliente' },
+          { cuenta_id: cuentaVentas,    debe: 0,             haber: params.neto, descripcion: 'Cargo adicional (neto)' },
+          { cuenta_id: cuentaIvaDebito, debe: 0,             haber: params.iva,  descripcion: 'IVA Débito Fiscal' },
+        ];
+
+    const asiento = await asientosService.createAsiento(
+      empresaId, userId,
+      { fecha: params.fecha, descripcion: params.descripcion, origen: params.tipo, origen_id: params.comprobanteId, centro_costo_id: params.centroCostoId ?? null },
+      items
+    );
+    await asientosService.confirmarAsiento(asiento.id);
+  },
+
+  /**
+   * Crea y confirma el asiento de una Nota de Crédito o Débito de PROVEEDOR.
+   * Ambas SIEMPRE mueven `cuenta_corriente_proveedores` (el reembolso en
+   * efectivo de una NC es un movimiento de Caja aparte, con su propio
+   * asiento) — la contrapartida es siempre 2.1.1 Cuentas a Pagar.
+   *   NC (reversa de compra): DEBE 2.1.1 CxP (total)                                          / HABER 1.1.3 Mercaderías (neto) + HABER 1.1.4 IVA Crédito Fiscal (iva)
+   *   ND (cargo adicional):   DEBE 1.1.3 Mercaderías (neto) + DEBE 1.1.4 IVA Crédito Fiscal (iva) / HABER 2.1.1 CxP (total)
+   */
+  async crearAsientoNotaProveedor(
+    empresaId: string,
+    userId: string,
+    params: {
+      documentoId: string;
+      tipo: 'nota_credito' | 'nota_debito';
+      total: number;
+      neto: number;
+      iva: number;
+      fecha: string;       // YYYY-MM-DD
+      descripcion: string;
+      centroCostoId?: string | null;
+    }
+  ): Promise<void> {
+    try {
+      const { data: cerrado } = await supabase.rpc('fecha_en_periodo_cerrado', {
+        p_empresa_id: empresaId, p_fecha: params.fecha,
+      });
+      if (cerrado) throw new Error(`Período cerrado: la fecha ${params.fecha} pertenece a un período contable cerrado.`);
+    } catch (e: any) {
+      if (e.message?.startsWith('Período cerrado:')) throw e;
+    }
+
+    const [cuentaCxP, cuentaMercaderias, cuentaIvaCredito] = await Promise.all([
+      findCuentaByCodigo(empresaId, '2.1.1'),
+      findCuentaByCodigo(empresaId, '1.1.3'),
+      findCuentaByCodigo(empresaId, '1.1.4'),
+    ]);
+    if (!cuentaCxP || !cuentaMercaderias || !cuentaIvaCredito || !(params.neto + params.iva > 0)) return;
+
+    const items = params.tipo === 'nota_credito'
+      ? [
+          { cuenta_id: cuentaCxP,         debe: params.total, haber: 0,           descripcion: 'Nota de Crédito de proveedor' },
+          { cuenta_id: cuentaMercaderias, debe: 0,             haber: params.neto, descripcion: 'Reversa de compra (neto)' },
+          { cuenta_id: cuentaIvaCredito,  debe: 0,             haber: params.iva,  descripcion: 'Reversa IVA Crédito Fiscal' },
+        ]
+      : [
+          { cuenta_id: cuentaMercaderias, debe: params.neto, haber: 0,            descripcion: 'Cargo adicional (neto)' },
+          { cuenta_id: cuentaIvaCredito,  debe: params.iva,  haber: 0,            descripcion: 'IVA Crédito Fiscal' },
+          { cuenta_id: cuentaCxP,         debe: 0,           haber: params.total, descripcion: 'Nota de Débito de proveedor' },
+        ];
+
+    const asiento = await asientosService.createAsiento(
+      empresaId, userId,
+      { fecha: params.fecha, descripcion: params.descripcion, origen: params.tipo + '_proveedor', origen_id: params.documentoId, centro_costo_id: params.centroCostoId ?? null },
+      items
+    );
+    await asientosService.confirmarAsiento(asiento.id);
+  },
+
+  /**
    * Crea y confirma el asiento de un movimiento de caja MANUAL
    * (ingresos/egresos cargados a mano desde CajaSection).
    *

@@ -11,6 +11,8 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import ProveedorSelector from '@/components/shared/ProveedorSelector';
+import { getTodayAR } from '@/lib/dateUtils';
+import { asientosAutoService } from '@/services/planCuentasService';
 
 // ND recibida de Proveedor — ítems + IVA discriminado en `notas_debito_items`
 // (mig.276), espejo de NuevaNDModal.jsx (Ventas). Sin AFIP: es el proveedor
@@ -137,6 +139,23 @@ function NuevaNotaDebitoModal({ open, onOpenChange, origen = null, onSuccess }) 
       if (error) throw error;
 
       const numeroNd = data?.numero_nd || 'ND';
+
+      asientosAutoService.crearAsientoNotaProveedor(user.empresa_id, user.id, {
+        documentoId: data.nota_debito_id,
+        tipo: 'nota_debito',
+        total: data.total,
+        neto: subtotalNeto,
+        iva: totalIva,
+        fecha: getTodayAR(),
+        descripcion: `ND de proveedor ${numeroNd}`,
+      }).catch(e => {
+        if (e.message?.startsWith('Período cerrado:')) {
+          toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
+        } else {
+          console.warn('[Contabilidad] Asiento ND proveedor (no crítico):', e.message);
+        }
+      });
+
       toast({ title: `Nota de Débito ${numeroNd} registrada` });
       onSuccess?.(data);
       onOpenChange(false);

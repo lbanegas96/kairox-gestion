@@ -13,6 +13,8 @@ import { useCaja } from '@/contexts/CajaContext';
 import { useToast } from '@/components/ui/use-toast';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import ProveedorSelector from '@/components/shared/ProveedorSelector';
+import { getTodayAR } from '@/lib/dateUtils';
+import { asientosAutoService } from '@/services/planCuentasService';
 
 // Nota: shared/NuevaDevolucionModal (tipo="proveedor") cubre el caso de devolución física con stock.
 // Este modal es para NC financiera (el proveedor nos acredita sin devolución de mercadería).
@@ -153,6 +155,22 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, onSucc
         p_caja_sesion_id:     reembolsoEfectivo ? currentSession?.id ?? null : null,
       });
       if (error) throw error;
+
+      asientosAutoService.crearAsientoNotaProveedor(user.empresa_id, user.id, {
+        documentoId: data.nota_credito_proveedor_id,
+        tipo: 'nota_credito',
+        total: data.total,
+        neto: subtotalNeto,
+        iva: totalIva,
+        fecha: getTodayAR(),
+        descripcion: `NC de proveedor ${data.numero_ncp}`,
+      }).catch(e => {
+        if (e.message?.startsWith('Período cerrado:')) {
+          toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
+        } else {
+          console.warn('[Contabilidad] Asiento NC proveedor (no crítico):', e.message);
+        }
+      });
 
       toast({ title: `NC ${data.numero_ncp} de proveedor registrada — $${Number(data.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}` });
       onSuccess?.(data);
