@@ -10,6 +10,8 @@ import { supabase } from '@/lib/customSupabaseClient';
 import GenerarMovimientoModal from '@/components/shared/GenerarMovimientoModal';
 import NuevaDevolucionModal from '@/components/shared/NuevaDevolucionModal';
 import { parseNumberLocale } from '@/lib/currencyUtils';
+import { asientosAutoService } from '@/services/planCuentasService';
+import { getTodayAR } from '@/lib/dateUtils';
 import { ESTADOS, EMPTY_ITEM } from '@/components/ordenes-compra/shared';
 import TablaOrdenesCompra from '@/components/ordenes-compra/TablaOrdenesCompra';
 import FormNuevaOC from '@/components/ordenes-compra/FormNuevaOC';
@@ -83,10 +85,32 @@ function OrdenesCompraSection() {
 
   const registrarFacturaMutation = useMutation({
     mutationFn: (payload) => ordenesCompraService.registrarFactura(payload),
-    onSuccess: () => {
+    onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: OC_KEYS.factura(detalleId) });
       toast({ title: 'Factura registrada — deuda cargada a Cuenta Corriente del proveedor ✓', className: 'bg-green-600 text-white' });
       setFacturaModal(false);
+
+      // Asiento contable automático (no bloquea el flujo) — mismo patrón que
+      // Compra Rápida. Siempre esCredito=true: esta factura SIEMPRE crea Open
+      // Item en CC (el pago es un evento separado, ver mig.279).
+      const providerName = detalle?.proveedor_nombre ?? detalle?.proveedores?.nombre ?? 'Proveedor';
+      asientosAutoService.crearAsientoCompra(
+        empresaId,
+        user.id,
+        {
+          compraId: data.compra_id,
+          total: data.total,
+          fecha: facturaForm.fecha_factura || getTodayAR(),
+          descripcion: `Compra a ${providerName} - Fac. ${facturaForm.numero_factura || 'S/N'} (OC ${detalle?.numero})`,
+          esCredito: true,
+        }
+      ).catch(e => {
+        if (e.message?.startsWith('Período cerrado:')) {
+          toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
+        } else {
+          console.warn('[Contabilidad] Asiento factura OC (no crítico):', e.message);
+        }
+      });
     },
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
