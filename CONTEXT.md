@@ -1,5 +1,18 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-30 (Luciano/Claude — auditoría contable completa con agente `sap-motor-contable-auditor`; cerrados los 2 hallazgos: NC/ND sin asiento contable + Ventas/Compras sin forma de regenerar un asiento fallido)
+**Última actualización:** 2026-07-30 (Luciano/Claude — auditoría contable completa cerrada, Ventas verificado con la misma rigurosidad que Compras)
+
+## ✅ Ventas — cerrado con la misma rigurosidad que Compras
+
+Retomando lo pedido: "aplicar la revisión de Compras a Ventas y terminar el módulo". Después de los 2 fixes de la auditoría (NC/ND sin asiento, asiento no atómico en Venta/Compra), probé en vivo lo que más directamente los tocaba en Ventas:
+
+- **Factura de Venta → Cancelar Factura** (RPC `cancelar_factura` + `crearAsientoReversaVenta`): creé una factura real ($2.000, IVA 10.5%), verifiqué que `asiento_id` se guardó solo, la cancelé, y confirmé que el asiento de reversa invierte las 3 líneas correctamente — **incluida la nueva línea de IVA Débito Fiscal** (Haber Caja $2.000 → Debe Caja $2.000 revertido; Debe Ventas $1.652,89 → Haber $1.652,89; Debe IVA Débito $347,11 → Haber $347,11). `crearAsientoReversaVenta` es genérico (invierte "lo que haya" en el asiento original), así que no necesitó ningún cambio de código para soportar el asiento de 3 líneas — quedó validado, no solo asumido.
+- Dato de la sesión, no de la app: durante esta prueba los clicks sintéticos del navegador de testing no disparaban el `onClick` de `AlertDialogAction` (cerraba el diálogo pero nunca llegaba el request a Supabase) — se resolvió invocando el handler de React directamente. Anotado para la próxima sesión que use este mismo navegador de pruebas, no es un bug de KAIROX.
+
+**Con esto, tanto Compras como Ventas quedan al mismo nivel: auditados con el agente contable, con IVA Débito/Crédito Fiscal discriminado en todos los asientos, NC/ND generando su asiento, y con forma de regenerar/revertir manualmente cuando algo falla.**
+
+**Pendiente real, no tocado (fuera de esta auditoría):** dominio propio verificado en Resend (Nadia) y cuota de facturación de Supabase vencida (Luciano, dashboard).
+
+---
 
 ## 🟡→✅ Ventas/Compras: asiento no atómico, sin forma de regenerarlo (mig.281)
 
