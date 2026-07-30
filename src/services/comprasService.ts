@@ -51,10 +51,10 @@ export const comprasService = {
     return data as Compra;
   },
 
-  async create(empresaId: string, { compra, items }: CreateCompraPayload): Promise<Compra> {
+  async create(empresaId: string, userId: string, { compra, items }: CreateCompraPayload): Promise<Compra> {
     const { data: newCompra, error: compraError } = await supabase
       .from('compras')
-      .insert([{ ...compra, user_id: empresaId, empresa_id: empresaId }])
+      .insert([{ ...compra, user_id: userId, empresa_id: empresaId }])
       .select()
       .single();
     if (compraError) throw new Error(compraError.message);

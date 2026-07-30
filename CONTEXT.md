@@ -38,12 +38,16 @@ Stress-test de esta noche encontró que el flujo **OC → Recepción → Factura
   - Confirmé también que el botón "Registrar Factura" desaparece solo si la OC ya tiene una (guard de duplicado, reforzado también en la RPC).
   - Ambas pruebas limpiadas por completo (OC, ítems, recepción, compra, detalle, CC, asiento+ítems, stock revertido) y verificadas con conteo en cero.
 
-**Hallazgos relacionados, NO tocados hoy (decisión explícita de no engordar el fix), quedan anotados para otra sesión:**
-- `NuevaFacturaProveedorModal.jsx` ("Facturas de Compra", entrada manual): no llama a `asientosAutoService.crearAsientoCompra` — una factura registrada ahí no genera asiento contable. Además su banner dice "no modifica inventario" pero el código SÍ llama a `aplicar_compra_producto` — texto engañoso, contradicción a resolver.
-- Compra Rápida (`CompraRapidaSection.jsx`): no discrimina IVA por ítem, asume 21% fijo (mismo comentario ya documentado en `ReporteLibroIVACompras.jsx` como "fallback").
-- `comprasService.ts` (código muerto, nadie lo llama): línea 57 inserta `user_id: empresaId` — confunde usuario con empresa. Sin impacto real hoy.
+## ✅ Cierre de los 3 hallazgos de backlog (mismo hilo, Luciano pidió terminarlos antes de Ventas)
 
-**Con esto, el módulo Compras queda 100% al día con las mejoras que tenía Ventas — nada pendiente conocido salvo los 3 puntos de arriba (backlog, no bloqueantes).** Próximo paso pedido por Luciano: volver a Ventas.
+1. **`NuevaFacturaProveedorModal.jsx` ahora genera asiento contable** — agregada la llamada a `asientosAutoService.crearAsientoCompra` (mismo patrón no-bloqueante que Compra Rápida y que la Factura de OC), con `esCredito` según la forma de pago elegida (CC Proveedor → Debe Inventario/Haber Cuentas a Pagar; Efectivo/Transferencia → Haber Caja). Banner corregido: decía "no modifica el inventario" pero el código SÍ suma stock (`aplicar_compra_producto`) — texto engañoso, reemplazado por una advertencia real sobre no duplicar stock si la mercadería ya entró por una OC.
+   - **Probado en vivo**: factura FC-TEST-0003, ítem servicio (sin producto) $1.000 neto + IVA 10.5% = $1.105, forma de pago CC Proveedor → verifiqué `compras` (neto/IVA correctos), `cuenta_corriente_proveedores` (+$1.105) y el asiento (Debe 1.1.3 Mercaderías $1.105 / Haber 2.1.1 Cuentas a Pagar $1.105). Limpiado.
+2. **Compra Rápida ahora discrimina IVA real por ítem** en vez de asumir 21% fijo — usa `productos.alicuota_iva` (ya existía en la tabla, no se usaba acá) con el mismo criterio bruto/factor que ND/NC de Proveedor. `compras.neto_gravado`/`iva_discriminado` y `detalle_compras.alicuota_iva` ahora se completan de verdad (antes quedaban NULL, y `ReporteLibroIVACompras.jsx` caía siempre en su fallback de 21%).
+   - **Probado en vivo**: 1×Mouse Vertical a $5.000 (precio final, IVA incluido, alícuota 21% del producto) → `neto_gravado=4132.23`, `iva_discriminado=867.77` (4132.23×1.21=5000 ✓). Asiento y todo lo demás sin cambios (ya funcionaba). Limpiado.
+   - **Nota, no se tocó**: el flujo de EDICIÓN de una compra existente (`handleUpdatePurchase`) no recalcula `neto_gravado`/`iva_discriminado` al agregar/quitar ítems — sigue siendo un gap menor, separado de este fix (que era sobre la creación).
+3. **`comprasService.ts` (código muerto, nadie lo llama todavía)**: `create()` insertaba `user_id: empresaId` — confundía usuario con empresa. Cambiada la firma para recibir `userId` explícito. Sin impacto real porque no hay callers, pero ya no queda ahí como trampa para quien lo conecte en el futuro.
+
+**Con esto, el módulo Compras queda 100% al día — nada pendiente conocido.** Próximo paso pedido por Luciano: volver a Ventas.
 
 ---
 

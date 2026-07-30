@@ -116,7 +116,7 @@ function ComprasSection() {
     // unidad de stock automáticamente. null/factor 1 = sin cambio de comportamiento.
     const { data } = await supabase
       .from('productos')
-      .select('id, nombre, codigo_sku, costo_compra, stock_actual, unidad_medida, unidad_compra_id, factor_conversion_compra, unidad_compra:unidades_medida!unidad_compra_id(codigo, descripcion)')
+      .select('id, nombre, codigo_sku, costo_compra, stock_actual, unidad_medida, unidad_compra_id, factor_conversion_compra, alicuota_iva, unidad_compra:unidades_medida!unidad_compra_id(codigo, descripcion)')
       .eq('empresa_id', user.empresa_id)
       .eq('activo', true)
       .order('nombre');
@@ -363,6 +363,22 @@ function ComprasSection() {
       const totalCompra = calculateTotal();
       const status = purchaseForm.forma_pago === 'Cuenta Corriente' ? 'pendiente' : 'pagada';
 
+      // IVA por ítem — costo_unitario es precio FINAL (IVA incluido, igual que
+      // siempre se cargó acá), se discrimina neto/IVA con la alícuota real de
+      // cada producto en vez de asumir 21% fijo. Mismo criterio "bruto/factor"
+      // que ND/NC de Proveedor (mig.276/277). Sin esto, ReporteLibroIVACompras.jsx
+      // caía siempre en su fallback de 21% para estas compras.
+      const FACTOR_IVA = { '0': 1, '10.5': 1.105, '21': 1.21, '27': 1.27 };
+      let subtotalNetoReal = 0;
+      let totalIvaReal = 0;
+      cart.forEach(item => {
+        const bruto = (parseInt(item.cantidad) || 0) * (parseNumberLocale(item.costo_unitario) || 0);
+        const factor = FACTOR_IVA[String(item.alicuota_iva ?? 21)] ?? 1.21;
+        const neto = bruto / factor;
+        subtotalNetoReal += neto;
+        totalIvaReal += bruto - neto;
+      });
+
       // Moneda paralela
       const montoParaleloValue = tcParalelo.enabled && tcParalelo.tcHoy
         ? tcParalelo.calcParalelo(totalCompra, moneda, tipoCambioTasa)
@@ -380,6 +396,8 @@ function ComprasSection() {
           proveedor_id: purchaseForm.proveedor_id,
           numero_factura: purchaseForm.numero_factura || 'S/N',
           total: totalCompra,
+          neto_gravado: subtotalNetoReal,
+          iva_discriminado: totalIvaReal,
           forma_pago: purchaseForm.forma_pago,
           estado_pago: status,
           centro_costo_id: purchaseForm.centro_costo_id || null,
@@ -406,7 +424,8 @@ function ComprasSection() {
         producto_id: item.id,
         cantidad: parseInt(item.cantidad),
         costo_unitario: parseNumberLocale(item.costo_unitario),
-        subtotal: parseInt(item.cantidad) * parseNumberLocale(item.costo_unitario)
+        subtotal: parseInt(item.cantidad) * parseNumberLocale(item.costo_unitario),
+        alicuota_iva: String(item.alicuota_iva ?? 21),
       }));
 
       const { error: detailsError } = await supabase

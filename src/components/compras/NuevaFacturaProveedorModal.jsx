@@ -15,6 +15,7 @@ import { parseNumberLocale } from '@/lib/currencyUtils';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 import ProveedorSelector from '@/components/shared/ProveedorSelector';
+import { asientosAutoService } from '@/services/planCuentasService';
 
 const ALICUOTAS = [
   { value: 0,    label: 'Exento 0%' },
@@ -293,6 +294,28 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
         if (cajaErr) throw cajaErr;
       }
 
+      // Asiento contable automático (no bloqueante) — mismo patrón que Compra
+      // Rápida y que la Factura de OC (mig.279). Faltaba acá: la factura
+      // quedaba con deuda real en CC pero sin contrapartida contable.
+      asientosAutoService.crearAsientoCompra(
+        user.empresa_id,
+        user.id,
+        {
+          compraId: compra.id,
+          total,
+          fecha,
+          descripcion: `Compra a ${provNombre}${numeroFactura ? ` - Fac. ${numeroFactura}` : ''}`,
+          esCredito: isCC,
+          centroCostoId: centroCostoId || null,
+        }
+      ).catch(e => {
+        if (e.message?.startsWith('Período cerrado:')) {
+          toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
+        } else {
+          console.warn('[Contabilidad] Asiento factura proveedor (no crítico):', e.message);
+        }
+      });
+
       toast({ title: `Factura de proveedor registrada${numeroFactura ? ` — ${numeroFactura}` : ''}` });
       onSuccess?.({ id: compra.id, total });
       onOpenChange(false);
@@ -317,7 +340,7 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
               : 'Nueva Factura de Proveedor'}
           </DialogTitle>
           <DialogDescription className="text-kx-text-2 text-xs">
-            Factura financiera — no afecta stock. Para registrar mercadería recibida, usá el flujo OC → Recepción.
+            Factura de compra con ítems propios — suma stock y costo directo, sin pasar por una OC.
           </DialogDescription>
         </DialogHeader>
 
@@ -326,7 +349,9 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
           <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-xs text-blue-700 dark:text-blue-300">
             <Info className="w-4 h-4 shrink-0 mt-0.5" />
             <span>
-              Esta factura <strong>no modifica el inventario</strong>. Para registrar mercadería recibida, usá el flujo OC → Recepción.
+              Los ítems con producto asociado <strong>suman stock</strong> al confirmar. Si la mercadería ya ingresó
+              por una Orden de Compra recibida, usá "Registrar Factura del Proveedor" desde esa OC en vez de este
+              formulario — evita duplicar el stock.
             </span>
           </div>
 
