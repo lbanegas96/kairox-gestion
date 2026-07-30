@@ -1,5 +1,5 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-30 (Nadia/Claude — cerrado #36 con CbteAsoc en arca-worker v19, y cerrado el gap de neto/IVA al editar una compra existente)
+**Última actualización:** 2026-07-30 (Nadia/Claude — cerrado #36 con CbteAsoc en arca-worker v19, cerrado el gap de neto/IVA al editar una compra existente, y recupero de contraseña reparado con Gmail SMTP como parche)
 
 ## ✅ Compras: recalcular neto/IVA al editar una compra existente
 
@@ -240,9 +240,16 @@ declaradas ante ARCA como Factura (código 6) en vez de NC (código 8) por el bu
 de `voucherTypeAfip` anterior al fix. Ya autorizadas, no se pueden corregir por
 código — tema para el contador de Nalux.
 
-### Resend sandbox roto
-El recupero de contraseña no funciona en el entorno de desarrollo.
-Requiere acceso humano al dashboard de Resend — no delegable a Claude.
+### Recupero de contraseña — resuelto con parche (Gmail SMTP), dominio propio pendiente
+**Causa raíz encontrada (2026-07-30):** `Authentication → Emails → SMTP Settings` en Supabase tenía Resend configurado con el remitente sandbox `onboarding@resend.dev`. Confirmado en logs de Auth (`get_logs` service=auth): Resend rechazaba con `550 "You can only send testing emails to your own email address (naluxind@gmail.com). To send emails to other recipients, please verify a domain..."` — o sea, ese SMTP solo podía entregar a la propia cuenta de Resend, nunca a un cliente real. Por eso "nunca llegaba" sin ningún error visible en la app.
+
+**Parche aplicado (por Nadia, vía Dashboard, sin tocar código):** se reemplazó el SMTP custom de Resend por **Gmail SMTP** (`smtp.gmail.com:587`, con una cuenta de Gmail dedicada + contraseña de aplicación). Verificado en logs: las solicitudes de recupero después del cambio devuelven `status:200, error:null` — el envío ya funciona.
+
+**Limitación conocida, no arreglada:** el primer email a cada destinatario nuevo puede caer en Spam (Gmail es más estricto con remitentes personales usados para envíos automatizados, al no tener SPF/DKIM/DMARC propios como sí tendría un dominio verificado). Mitigación por ahora: pedirle a cada usuario que la primera vez marque el email como "No es spam" — a partir de ahí llega bien a esa combinación remitente/destinatario.
+
+**Pendiente real, deferido a pedido de Nadia:** comprar un dominio propio (ej. `nalux.com.ar` vía nic.ar) y verificarlo en Resend (`resend.com/domains`) para tener entrega confiable desde el primer email, sin depender de que cada usuario "entrene" su filtro de spam. No es urgente — Gmail SMTP ya resuelve el bloqueo total que había antes.
+
+**Nota aparte, no relacionada:** el dashboard de Supabase mostraba un banner "Organization exceeded its quota in the previous billing cycle — Projects will be restricted from 17 Aug 2026" — revisar `Billing` antes de esa fecha para no perder acceso al proyecto.
 
 ### MELI Factura A
 Deferido hasta que se trabaje ARCA/AFIP específicamente para eso.
