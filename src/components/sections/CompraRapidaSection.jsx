@@ -599,6 +599,7 @@ function ComprasSection() {
       unidad_medida: d.productos?.unidad_medida,
       cantidad: d.cantidad,
       costo_unitario: d.costo_unitario,
+      alicuota_iva: d.alicuota_iva ?? '21',
       is_new: false
     }));
 
@@ -618,6 +619,7 @@ function ComprasSection() {
       unidad_medida: product.unidad_medida,
       cantidad: 1,
       costo_unitario: product.costo_compra || 0,
+      alicuota_iva: String(product.alicuota_iva ?? 21),
       is_new: true
     };
     
@@ -688,6 +690,21 @@ function ComprasSection() {
 
       const newTotal = calculateEditTotal();
 
+      // Neto/IVA reales por ítem (mismo criterio "bruto/factor" que la creación,
+      // ver más arriba en este archivo) — antes este recálculo no existía acá:
+      // el header quedaba con el neto_gravado/iva_discriminado de ANTES de la
+      // edición, desalineado del total nuevo y de los ítems reales.
+      const FACTOR_IVA = { '0': 1, '10.5': 1.105, '21': 1.21, '27': 1.27 };
+      let netoGravadoReal = 0;
+      let ivaDiscriminadoReal = 0;
+      editItems.forEach(item => {
+        const bruto = (Number(item.cantidad) || 0) * (parseNumberLocale(item.costo_unitario) || 0);
+        const factor = FACTOR_IVA[String(item.alicuota_iva ?? 21)] ?? 1.21;
+        const neto = bruto / factor;
+        netoGravadoReal += neto;
+        ivaDiscriminadoReal += bruto - neto;
+      });
+
       // 1. Update Purchase Header
       const { error: headerError } = await supabase
         .from('compras')
@@ -695,7 +712,9 @@ function ComprasSection() {
           proveedor_id: editForm.proveedor_id,
           numero_factura: editForm.numero_factura,
           fecha: editForm.fecha,
-          total: newTotal
+          total: newTotal,
+          neto_gravado: netoGravadoReal,
+          iva_discriminado: ivaDiscriminadoReal
         })
         .eq('id', editForm.id);
 
@@ -739,6 +758,7 @@ function ComprasSection() {
             cantidad: Number(item.cantidad),
             costo_unitario: parseNumberLocale(item.costo_unitario),
             subtotal: Number(item.cantidad) * parseNumberLocale(item.costo_unitario),
+            alicuota_iva: String(item.alicuota_iva ?? 21),
             empresa_id: user.empresa_id
           });
           if (insertError) {
