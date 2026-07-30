@@ -303,6 +303,8 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
         {
           compraId: compra.id,
           total,
+          neto: subtotalNeto,
+          iva: totalIva,
           fecha,
           descripcion: `Compra a ${provNombre}${numeroFactura ? ` - Fac. ${numeroFactura}` : ''}`,
           esCredito: isCC,

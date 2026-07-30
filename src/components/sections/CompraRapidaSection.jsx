@@ -517,6 +517,8 @@ function ComprasSection() {
         {
           compraId: newPurchase.id,
           total: totalCompra,
+          neto: subtotalNetoReal,
+          iva: totalIvaReal,
           fecha: purchaseForm.fecha || getTodayAR(),
           descripcion: `Compra a ${providerName} - Fac. ${purchaseForm.numero_factura || 'S/N'}`,
           esCredito: purchaseForm.forma_pago === 'Cuenta Corriente',

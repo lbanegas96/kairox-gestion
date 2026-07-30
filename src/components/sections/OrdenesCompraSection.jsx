@@ -100,6 +100,8 @@ function OrdenesCompraSection() {
         {
           compraId: data.compra_id,
           total: data.total,
+          neto: data.neto_gravado,
+          iva: data.iva_discriminado,
           fecha: facturaForm.fecha_factura || getTodayAR(),
           descripcion: `Compra a ${providerName} - Fac. ${facturaForm.numero_factura || 'S/N'} (OC ${detalle?.numero})`,
           esCredito: true,

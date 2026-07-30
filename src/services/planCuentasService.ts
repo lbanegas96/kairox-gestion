@@ -286,9 +286,12 @@ async function findCuentaByCodigo(empresaId: string, codigo: string): Promise<st
 export const asientosAutoService = {
   /**
    * Crea y confirma el asiento de una venta al contado.
-   *   DEBE  1.1.1 Caja y Bancos  (o 1.1.2 Cuentas a Cobrar si es crédito)
-   *   HABER 4.1   Ventas de Productos
-   * Si la empresa no tiene plan de cuentas, sale silenciosamente.
+   *   DEBE  1.1.1 Caja y Bancos  (o 1.1.2 Cuentas a Cobrar si es crédito)  total
+   *   HABER 4.1   Ventas de Productos                                      neto
+   *   HABER 2.1.3 IVA Débito Fiscal                                        iva
+   * Si `neto`/`iva` no vienen (o no existe la cuenta 2.1.3), cae al asiento
+   * viejo de 2 líneas con el total entero a Ventas — nunca bloquea la venta
+   * por esto. Si la empresa no tiene plan de cuentas, sale silenciosamente.
    */
   async crearAsientoVenta(
     empresaId: string,
@@ -296,6 +299,8 @@ export const asientosAutoService = {
     params: {
       ventaId: string;
       total: number;
+      neto?: number;
+      iva?: number;
       fecha: string;       // YYYY-MM-DD
       descripcion: string;
       esCredito?: boolean;
@@ -319,11 +324,27 @@ export const asientosAutoService = {
     }
 
     const codigoCobro = params.esCredito ? '1.1.2' : '1.1.1';
-    const [cuentaCobro, cuentaVentas] = await Promise.all([
+    const [cuentaCobro, cuentaVentas, cuentaIvaDebito] = await Promise.all([
       findCuentaByCodigo(empresaId, codigoCobro),
       findCuentaByCodigo(empresaId, '4.1'),
+      findCuentaByCodigo(empresaId, '2.1.3'),
     ]);
     if (!cuentaCobro || !cuentaVentas) return; // empresa sin plan de cuentas
+
+    const iva = Number(params.iva) || 0;
+    const neto = params.neto != null ? Number(params.neto) : params.total;
+    const discriminar = cuentaIvaDebito && iva > 0 && neto + iva > 0;
+
+    const items = discriminar
+      ? [
+          { cuenta_id: cuentaCobro,      debe: params.total, haber: 0,     descripcion: 'Cobro por venta' },
+          { cuenta_id: cuentaVentas,     debe: 0,             haber: neto, descripcion: 'Ingreso por venta (neto)' },
+          { cuenta_id: cuentaIvaDebito!, debe: 0,             haber: iva,  descripcion: 'IVA Débito Fiscal' },
+        ]
+      : [
+          { cuenta_id: cuentaCobro,  debe: params.total, haber: 0,            descripcion: 'Cobro por venta' },
+          { cuenta_id: cuentaVentas, debe: 0,            haber: params.total, descripcion: 'Ingreso por venta' },
+        ];
 
     const asiento = await asientosService.createAsiento(
       empresaId, userId,
@@ -331,10 +352,7 @@ export const asientosAutoService = {
         fecha: params.fecha, descripcion: params.descripcion, origen: 'venta', origen_id: params.ventaId,
         centro_costo_id: params.centroCostoId ?? null,
       },
-      [
-        { cuenta_id: cuentaCobro,  debe: params.total, haber: 0,            descripcion: 'Cobro por venta' },
-        { cuenta_id: cuentaVentas, debe: 0,            haber: params.total, descripcion: 'Ingreso por venta' },
-      ]
+      items
     );
     await asientosService.confirmarAsiento(asiento.id);
   },
@@ -385,8 +403,11 @@ export const asientosAutoService = {
 
   /**
    * Crea y confirma el asiento de una compra.
-   *   DEBE  1.1.3 Mercaderías / Inventario
-   *   HABER 1.1.1 Caja y Bancos  (o 2.1.1 Cuentas a Pagar si es crédito)
+   *   DEBE  1.1.3 Mercaderías / Inventario                                 neto
+   *   DEBE  1.1.4 IVA Crédito Fiscal                                       iva
+   *   HABER 1.1.1 Caja y Bancos  (o 2.1.1 Cuentas a Pagar si es crédito)   total
+   * Mismo criterio permisivo que crearAsientoVenta: si `neto`/`iva` no
+   * vienen o no existe la cuenta 1.1.4, cae al asiento viejo de 2 líneas.
    */
   async crearAsientoCompra(
     empresaId: string,
@@ -394,6 +415,8 @@ export const asientosAutoService = {
     params: {
       compraId: string;
       total: number;
+      neto?: number;
+      iva?: number;
       fecha: string;       // YYYY-MM-DD
       descripcion: string;
       esCredito?: boolean;
@@ -417,11 +440,27 @@ export const asientosAutoService = {
     }
 
     const codigoPago = params.esCredito ? '2.1.1' : '1.1.1';
-    const [cuentaInventario, cuentaPago] = await Promise.all([
+    const [cuentaInventario, cuentaPago, cuentaIvaCredito] = await Promise.all([
       findCuentaByCodigo(empresaId, '1.1.3'),
       findCuentaByCodigo(empresaId, codigoPago),
+      findCuentaByCodigo(empresaId, '1.1.4'),
     ]);
     if (!cuentaInventario || !cuentaPago) return;
+
+    const iva = Number(params.iva) || 0;
+    const neto = params.neto != null ? Number(params.neto) : params.total;
+    const discriminar = cuentaIvaCredito && iva > 0 && neto + iva > 0;
+
+    const items = discriminar
+      ? [
+          { cuenta_id: cuentaInventario,  debe: neto,          haber: 0,            descripcion: 'Compra de mercadería (neto)' },
+          { cuenta_id: cuentaIvaCredito!, debe: iva,           haber: 0,            descripcion: 'IVA Crédito Fiscal' },
+          { cuenta_id: cuentaPago,        debe: 0,             haber: params.total, descripcion: 'Pago por compra' },
+        ]
+      : [
+          { cuenta_id: cuentaInventario, debe: params.total, haber: 0,            descripcion: 'Compra de mercadería' },
+          { cuenta_id: cuentaPago,       debe: 0,            haber: params.total, descripcion: 'Pago por compra' },
+        ];
 
     const asiento = await asientosService.createAsiento(
       empresaId, userId,
@@ -429,10 +468,7 @@ export const asientosAutoService = {
         fecha: params.fecha, descripcion: params.descripcion, origen: 'compra', origen_id: params.compraId,
         centro_costo_id: params.centroCostoId ?? null,
       },
-      [
-        { cuenta_id: cuentaInventario, debe: params.total, haber: 0,            descripcion: 'Compra de mercadería' },
-        { cuenta_id: cuentaPago,       debe: 0,            haber: params.total, descripcion: 'Pago por compra' },
-      ]
+      items
     );
     await asientosService.confirmarAsiento(asiento.id);
   },

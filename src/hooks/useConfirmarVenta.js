@@ -192,6 +192,8 @@ export function useConfirmarVenta(tcParalelo) {
       asientosAutoService.crearAsientoVenta(user.empresa_id, user.id, {
         ventaId:     comprobante.id,
         total,
+        neto:        rpcResult.neto_gravado,
+        iva:         rpcResult.iva_discriminado,
         fecha:       getTodayAR(),
         descripcion: `Venta #${saleNumber}`,
         esCredito:   isCC,

@@ -330,6 +330,8 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
       asientosAutoService.crearAsientoVenta(user.empresa_id, user.id, {
         ventaId:     comp.id,
         total,
+        neto:        subtotalNeto,
+        iva:         totalIva,
         fecha:       getTodayAR(),
         descripcion: `Factura ${numero}`,
         esCredito:   isCC,

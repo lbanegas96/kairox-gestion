@@ -611,6 +611,8 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         {
           ventaId:     comprobante.id,
           total,
+          neto:        rpcResult.neto_gravado,
+          iva:         rpcResult.iva_discriminado,
           fecha:       getTodayAR(),
           descripcion: `Venta #${saleNumber}`,
           esCredito:   isCC,
