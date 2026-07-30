@@ -188,6 +188,20 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
   const hasChanges = sale && newStatus !== sale.estado_pago;
   const caeBloqueaCancelacion = sale && CAE_BLOQUEA_CANCELACION.includes(sale.cae_estado);
   const puedeCancelar = sale && ['venta', 'nota_credito'].includes(sale.tipo) && sale.estado_pago !== 'cancelada';
+  const puedeRegenerarAsiento = sale && sale.tipo === 'venta' && !sale.asiento_id && sale.estado_pago !== 'cancelada';
+
+  const handleRegenerarAsiento = async () => {
+    const { error } = await supabase.rpc('regenerar_asiento_venta', {
+      p_comprobante_id: sale.id,
+      p_user_id: user.id,
+    });
+    if (error) {
+      toast({ title: 'No se pudo regenerar el asiento', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Asiento regenerado', className: 'bg-emerald-600 text-white border-none' });
+    fetchSaleDetails();
+  };
 
   if (!open) return null;
 
@@ -292,6 +306,17 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
                         <span className="text-xs text-kx-text-3 italic">
                           {esNC ? 'Tiene CAE — no se puede anular directamente' : 'Tiene CAE — para anularla generá una Nota de Crédito'}
                         </span>
+                      )}
+                      {puedeRegenerarAsiento && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-900 dark:text-amber-400 dark:hover:bg-amber-900/20 gap-1.5"
+                          onClick={handleRegenerarAsiento}
+                          title="Esta venta no tiene asiento contable — puede pasar si la conexión se cortó justo después de confirmarla"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" /> Regenerar asiento
+                        </Button>
                       )}
                     </div>
                   )}

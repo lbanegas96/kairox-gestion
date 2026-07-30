@@ -1,5 +1,23 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-30 (Luciano/Claude — auditoría contable completa con agente `sap-motor-contable-auditor`; cerrado el hallazgo crítico: NC/ND sin asiento contable)
+**Última actualización:** 2026-07-30 (Luciano/Claude — auditoría contable completa con agente `sap-motor-contable-auditor`; cerrados los 2 hallazgos: NC/ND sin asiento contable + Ventas/Compras sin forma de regenerar un asiento fallido)
+
+## 🟡→✅ Ventas/Compras: asiento no atómico, sin forma de regenerarlo (mig.281)
+
+Segundo hallazgo de la auditoría contable: a diferencia de Cuenta Corriente (mig.181/183, `cuenta_corriente_movimientos.asiento_id` + botón "Regenerar"), una Venta o Compra que confirmó su documento pero cuyo asiento falló (el asiento se dispara en una llamada aparte, no atómica con `crear_venta`/`registrar_factura_compra_oc` — si el segundo request nunca llega, queda contabilizada en CC pero sin nada en el Mayor) no tenía columna de vínculo ni forma de repararse manualmente.
+
+**Fix (mig.281):**
+- `comprobantes.asiento_id`/`compras.asiento_id` (nuevas columnas) — `crearAsientoVenta`/`crearAsientoCompra` (`planCuentasService.ts`) ahora las completan automáticamente después de confirmar el asiento normal.
+- RPCs `regenerar_asiento_venta`/`regenerar_asiento_compra` — mismo patrón que `regenerar_asiento_cxc/cxp` (mig.181): guard de tenant/permiso/ya-tiene-asiento/período cerrado, reconstruye el asiento de 3 líneas con `neto_gravado`/`iva_discriminado` ya guardados en el documento.
+- Botón "Regenerar asiento" (solo visible si `!asiento_id`) en `SaleDetailModal.jsx` y `CompraDetailModal.jsx`, mismo estilo/patrón que el de `CuentaCorrienteSection.jsx`/`ProveedoresSection.jsx`.
+
+**Probado en vivo contra producción (Nalux), simulando la falla real** (crear la venta/compra normal → confirmar que `asiento_id` quedó solo → borrar el asiento y poner `asiento_id=NULL` a mano, simulando que la segunda llamada nunca llegó → abrir el detalle → click en "Regenerar asiento"):
+- Venta POS ($30.000, Mate): asiento regenerado con las 3 líneas correctas (Cobro/Ventas neto/IVA Débito), botón desaparece después. ✓
+- Compra Rápida ($5.000, Mouse Vertical): asiento regenerado con las 3 líneas correctas (Mercaderías neto/IVA Crédito/Pago). ✓
+- Ambas limpiadas por completo.
+
+**Con esto, los 2 hallazgos de la auditoría contable completa quedan cerrados.** Pendiente real, no tocado (fuera de alcance, no es de esta auditoría): dominio propio en Resend (Nadia) y cuota de facturación de Supabase vencida (Luciano).
+
+---
 
 ## 🔴→✅ Crítico: NC/ND (cliente y proveedor) no generaban asiento contable
 

@@ -3,14 +3,16 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter 
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, X, Save, Edit2, Loader2, FileText, User, Clock } from 'lucide-react';
+import { Printer, X, Save, Edit2, Loader2, FileText, User, Clock, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import { formatDateAR } from '@/lib/dateUtils';
 
 const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra }) => {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [compra, setCompra] = useState(null);
   const [items, setItems] = useState([]);
@@ -91,6 +93,20 @@ const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra }) => 
   };
 
   const hasChanges = compra && newStatus !== compra.estado_pago;
+  const puedeRegenerarAsiento = compra && !compra.asiento_id;
+
+  const handleRegenerarAsiento = async () => {
+    const { error } = await supabase.rpc('regenerar_asiento_compra', {
+      p_compra_id: compra.id,
+      p_user_id: user.id,
+    });
+    if (error) {
+      toast({ title: 'No se pudo regenerar el asiento', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Asiento regenerado', className: 'bg-emerald-600 text-white border-none' });
+    fetchCompraDetails();
+  };
 
   if (!open) return null;
 
@@ -172,7 +188,20 @@ const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra }) => 
                       )}
                     </div>
                 ) : (
-                    <div><EstadoBadge estado={compra.estado_pago} /></div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <EstadoBadge estado={compra.estado_pago} />
+                      {puedeRegenerarAsiento && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-900 dark:text-amber-400 dark:hover:bg-amber-900/20 gap-1.5"
+                          onClick={handleRegenerarAsiento}
+                          title="Esta compra no tiene asiento contable — puede pasar si la conexión se cortó justo después de confirmarla"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" /> Regenerar asiento
+                        </Button>
+                      )}
+                    </div>
                 )}
               </div>
             </div>

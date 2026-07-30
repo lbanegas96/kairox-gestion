@@ -355,6 +355,9 @@ export const asientosAutoService = {
       items
     );
     await asientosService.confirmarAsiento(asiento.id);
+    // mig.281: guarda el vínculo para poder detectar "sin asiento" y ofrecer
+    // regenerar_asiento_venta si esta llamada nunca llega (venta ya confirmada).
+    await supabase.from('comprobantes').update({ asiento_id: asiento.id }).eq('id', params.ventaId);
   },
 
   /**
@@ -471,6 +474,8 @@ export const asientosAutoService = {
       items
     );
     await asientosService.confirmarAsiento(asiento.id);
+    // mig.281: mismo vínculo que crearAsientoVenta, para regenerar_asiento_compra.
+    await supabase.from('compras').update({ asiento_id: asiento.id }).eq('id', params.compraId);
   },
 
   /**
