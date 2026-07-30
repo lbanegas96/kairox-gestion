@@ -22,7 +22,23 @@ Todo lo de la sección de abajo ("Trabajo de esta tarde") ya fue:
 
 - `mp-sync` (el botón manual) ya redesplegado hoy — sin pendientes ahí.
 
-**Con esto, el módulo Compras queda 100% al día con las mejoras que tenía Ventas — nada pendiente conocido.** Próximo paso pedido por Luciano: volver a Ventas.
+## ✅ Fix contable: OC → Recepción → Factura (mig.279)
+
+Stress-test de esta noche encontró que el flujo **OC → Recepción → Factura** ("3-way match", pantalla Órdenes de Compra) escribía en `facturas_proveedor` (mig.012) — una tabla que NUNCA se conectó al resto de la contabilidad: la deuda no aparecía en Cuenta Corriente Proveedores, `ReporteLibroIVACompras.jsx` no la veía, y "Marcar pagada" solo cambiaba un estado sin mover Caja/Bancos. Verificado antes de tocar nada: `facturas_proveedor` tenía 0 filas en producción — nadie lo usó, no había datos reales en riesgo.
+
+**Fix aplicado (mig.279, acotado a propósito — no se tocó Compra Rápida ni Facturas de Compra manuales, quedan anotados abajo como backlog):**
+- `compras.orden_compra_id` (nueva columna, único parcial) para vincular la factura a su OC.
+- RPC atómica `registrar_factura_compra_oc`: crea `compras`+`detalle_compras` (ítems con IVA real por alícuota, no un monto suelto) + inserta la deuda en `cuenta_corriente_proveedores` (Open Item, patrón SAP — la Factura crea la deuda, el pago es un evento aparte vía `registrar_pago_proveedor`, que ya existe y ya mueve Caja/asiento). A propósito NO toca stock/costo — el stock físico ya se movió en la Recepción (Regla 8 SAP), volver a tocarlo duplicaría cantidades.
+- `ModalRegistrarFactura.jsx` reescrito: ítems prellenados con lo recibido, alícuota IVA editable por ítem (default 21%), muestra Neto/IVA/Total.
+- `ModalDetalleOC.jsx`: sacado el botón "Marcar pagada" (ya no aplica — Open Item se paga desde Proveedores → Cuenta Corriente), agregado el aviso correspondiente.
+- **Probado en vivo end-to-end** (OC-00013 de prueba, Mercado Libre, 2×Mouse Vertical): creé OC → envié → recibí → registré factura FC-TEST-0001 → verifiqué en SQL `compras` (total $12.100, neto $10.000, IVA $2.100) + `detalle_compras` + el movimiento `cuenta_corriente_proveedores` (tipo='compra', +$12.100, referencia_tipo='compra_oc') — todo correcto. Confirmé también que el botón "Registrar Factura" desaparece solo si la OC ya tiene una (guard de duplicado, reforzado también en la RPC). Datos de prueba limpiados y verificados con conteo en cero.
+
+**Hallazgos relacionados, NO tocados hoy (decisión explícita de no engordar el fix), quedan anotados para otra sesión:**
+- `NuevaFacturaProveedorModal.jsx` ("Facturas de Compra", entrada manual): no llama a `asientosAutoService.crearAsientoCompra` — una factura registrada ahí no genera asiento contable. Además su banner dice "no modifica inventario" pero el código SÍ llama a `aplicar_compra_producto` — texto engañoso, contradicción a resolver.
+- Compra Rápida (`CompraRapidaSection.jsx`): no discrimina IVA por ítem, asume 21% fijo (mismo comentario ya documentado en `ReporteLibroIVACompras.jsx` como "fallback").
+- `comprasService.ts` (código muerto, nadie lo llama): línea 57 inserta `user_id: empresaId` — confunde usuario con empresa. Sin impacto real hoy.
+
+**Con esto, el módulo Compras queda 100% al día con las mejoras que tenía Ventas — nada pendiente conocido salvo los 3 puntos de arriba (backlog, no bloqueantes).** Próximo paso pedido por Luciano: volver a Ventas.
 
 ---
 

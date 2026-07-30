@@ -31,7 +31,7 @@ function OrdenesCompraSection() {
   const [genRecepId, setGenRecepId] = useState(null);
   const [devolverOC, setDevolverOC] = useState(null);
   const [facturaModal, setFacturaModal] = useState(false);
-  const [facturaForm, setFacturaForm] = useState({ numero_factura: '', fecha_factura: '', fecha_vencimiento: '', monto_total: '', notas: '' });
+  const [facturaForm, setFacturaForm] = useState({ numero_factura: '', fecha_factura: '', items: [] });
 
   // form nueva OC
   const [form, setForm] = useState({ proveedor_nombre: '', fecha_entrega_esperada: '', forma_pago: 'Efectivo', notas: '', moneda: 'ARS', tipoCambioTasa: 1 });
@@ -85,33 +85,44 @@ function OrdenesCompraSection() {
     mutationFn: (payload) => ordenesCompraService.registrarFactura(payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: OC_KEYS.factura(detalleId) });
-      toast({ title: 'Factura registrada ✓', className: 'bg-green-600 text-white' });
+      toast({ title: 'Factura registrada — deuda cargada a Cuenta Corriente del proveedor ✓', className: 'bg-green-600 text-white' });
       setFacturaModal(false);
     },
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
-  const pagarFacturaMutation = useMutation({
-    mutationFn: (facturaId) => ordenesCompraService.pagarFactura(facturaId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: OC_KEYS.factura(detalleId) });
-      toast({ title: 'Factura marcada como pagada ✓', className: 'bg-green-600 text-white' });
-    },
-    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
-  });
+  const abrirModalFactura = () => {
+    if (!detalle) return;
+    const itemsRecibidos = (detalle.ordenes_compra_items ?? []).filter(i => Number(i.cantidad_recibida) > 0);
+    setFacturaForm({
+      numero_factura: '',
+      fecha_factura: '',
+      items: itemsRecibidos.map(i => ({
+        producto_id: i.producto_id ?? null,
+        descripcion: i.descripcion,
+        cantidad: i.cantidad_recibida,
+        costo_unitario_neto: i.costo_unitario,
+        alicuota_iva: 21,
+      })),
+    });
+    setFacturaModal(true);
+  };
 
   const handleRegistrarFactura = (e) => {
     e.preventDefault();
     if (!detalle) return;
     registrarFacturaMutation.mutate({
       empresa_id: empresaId,
+      user_id: user.id,
       orden_compra_id: detalle.id,
-      proveedor_id: detalle.proveedor_id ?? null,
       numero_factura: facturaForm.numero_factura,
       fecha_factura: facturaForm.fecha_factura,
-      fecha_vencimiento: facturaForm.fecha_vencimiento || null,
-      monto_total: parseNumberLocale(facturaForm.monto_total) || 0,
-      notas: facturaForm.notas || null,
+      items: facturaForm.items.map(i => ({
+        producto_id: i.producto_id ?? null,
+        cantidad: parseFloat(i.cantidad) || 0,
+        costo_unitario_neto: parseNumberLocale(String(i.costo_unitario_neto)) || 0,
+        alicuota_iva: Number(i.alicuota_iva) || 0,
+      })),
     });
   };
 
@@ -299,9 +310,8 @@ function OrdenesCompraSection() {
       <ModalDetalleOC
         detalleId={detalleId} setDetalleId={setDetalleId}
         detalle={detalle} factura={factura}
-        pagarFacturaMutation={pagarFacturaMutation}
         setDevolverOC={setDevolverOC} setGenRecepId={setGenRecepId}
-        setFacturaModal={setFacturaModal} setFacturaForm={setFacturaForm}
+        abrirModalFactura={abrirModalFactura}
       />
 
       {/* ── MODAL: Registrar Factura del Proveedor ── */}

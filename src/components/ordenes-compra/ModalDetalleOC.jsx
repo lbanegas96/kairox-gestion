@@ -8,9 +8,8 @@ import { ESTADOS, FACTURA_ESTADO_COLORS } from './shared';
 function ModalDetalleOC({
   detalleId, setDetalleId,
   detalle, factura,
-  pagarFacturaMutation,
   setDevolverOC, setGenRecepId,
-  setFacturaModal, setFacturaForm,
+  abrirModalFactura,
 }) {
   return (
     <Dialog open={!!detalleId} onOpenChange={() => setDetalleId(null)}>
@@ -143,30 +142,17 @@ function ModalDetalleOC({
                           {factura.estado.charAt(0).toUpperCase() + factura.estado.slice(1)}
                         </span>
                         <span>N° {factura.numero_factura}</span>
-                        {factura.fecha_vencimiento && (
-                          <span>· Vence: {formatDateAR(factura.fecha_vencimiento)}</span>
-                        )}
                       </div>
                       {factura.estado === 'pendiente' && (
-                        <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"
-                          onClick={() => pagarFacturaMutation.mutate(factura.id)}
-                          disabled={pagarFacturaMutation.isPending}>
-                          <Banknote className="w-3.5 h-3.5" /> Marcar pagada
-                        </Button>
+                        <span className="flex items-center gap-1 text-xs text-kx-text-3">
+                          <Banknote className="w-3.5 h-3.5" /> Pagala desde Proveedores → Cuenta Corriente
+                        </span>
                       )}
                     </div>
                   ) : (
                     ['recibida_parcial', 'recibida'].includes(detalle.estado) && (
                       <Button size="sm" variant="outline" className="w-full gap-2 text-xs"
-                        onClick={() => {
-                          setFacturaForm({
-                            numero_factura: '', fecha_factura: '',
-                            fecha_vencimiento: '',
-                            monto_total: totalRecibido.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-                            notas: ''
-                          });
-                          setFacturaModal(true);
-                        }}>
+                        onClick={abrirModalFactura}>
                         <Receipt className="w-3.5 h-3.5" /> Registrar Factura del Proveedor
                       </Button>
                     )

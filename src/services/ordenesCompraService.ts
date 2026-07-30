@@ -131,43 +131,53 @@ export const ordenesCompraService = {
     if (error) throw new Error(error.message);
   },
 
-  // ── Facturas de proveedor (3-way match) ──────────────────────────────────
+  // ── Factura de proveedor (3-way match) — mig.279 ─────────────────────────
+  // Reemplaza `facturas_proveedor` (mig.012), que nunca se conectó a Cuenta
+  // Corriente/Libro IVA/asiento. Ahora la factura de una OC vive en
+  // `compras`/`detalle_compras` (vía RPC atómica `registrar_factura_compra_oc`),
+  // el mismo lugar que ya usan Compra Rápida y NC/ND de Proveedor.
 
   async getFactura(ordenId: string): Promise<FacturaProveedor | null> {
     const { data, error } = await supabase
-      .from('facturas_proveedor')
-      .select('*')
+      .from('compras')
+      .select('*, detalle_compras(*)')
       .eq('orden_compra_id', ordenId)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    return data;
+    if (!data) return null;
+    return {
+      id: data.id,
+      numero_factura: data.numero_factura,
+      fecha_factura: data.fecha,
+      monto_total: data.total,
+      estado: data.estado_pago === 'pagada' ? 'pagada' : 'pendiente',
+      detalle_compras: data.detalle_compras,
+    } as unknown as FacturaProveedor;
   },
 
   async registrarFactura(payload: {
     empresa_id: string;
+    user_id: string;
     orden_compra_id: string;
-    proveedor_id?: string | null;
     numero_factura: string;
     fecha_factura: string;
-    fecha_vencimiento?: string | null;
-    monto_total: number;
-    notas?: string | null;
-  }): Promise<FacturaProveedor> {
-    const { data, error } = await supabase
-      .from('facturas_proveedor')
-      .upsert([payload], { onConflict: 'orden_compra_id' })
-      .select()
-      .single();
+    items: {
+      producto_id?: string | null;
+      cantidad: number;
+      costo_unitario_neto: number;
+      alicuota_iva: number;
+    }[];
+  }): Promise<{ compra_id: string; total: number }> {
+    const { data, error } = await supabase.rpc('registrar_factura_compra_oc', {
+      p_empresa_id: payload.empresa_id,
+      p_user_id: payload.user_id,
+      p_orden_compra_id: payload.orden_compra_id,
+      p_numero_factura: payload.numero_factura,
+      p_fecha_factura: payload.fecha_factura,
+      p_items: payload.items,
+    });
     if (error) throw new Error(error.message);
-    return data as FacturaProveedor;
-  },
-
-  async pagarFactura(facturaId: string): Promise<void> {
-    const { error } = await supabase
-      .from('facturas_proveedor')
-      .update({ estado: 'pagada' })
-      .eq('id', facturaId);
-    if (error) throw new Error(error.message);
+    return data as { compra_id: string; total: number };
   },
 };
 
