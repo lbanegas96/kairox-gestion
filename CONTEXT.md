@@ -1,5 +1,23 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-30 (Nadia/Claude — cerrado el hallazgo #36 con test real en producción: CbteAsoc para NC/ND, arca-worker v19)
+**Última actualización:** 2026-07-30 (Nadia/Claude — cerrado #36 con CbteAsoc en arca-worker v19, y cerrado el gap de neto/IVA al editar una compra existente)
+
+## ✅ Compras: recalcular neto/IVA al editar una compra existente
+
+Pendiente técnico anotado ayer ("editar una compra existente no recalcula neto_gravado/iva_discriminado"). Confirmado en `CompraRapidaSection.jsx`:
+- `handleSaveEdit` actualizaba `compras.total` pero nunca `neto_gravado`/`iva_discriminado` — quedaban en `NULL` para siempre tras la primera edición, aunque el total cambiara.
+- Los ítems NUEVOS agregados durante una edición tampoco guardaban `alicuota_iva` en `detalle_compras` — quedaba sin setear.
+
+**Fix:**
+- `handleEditClick` ahora trae `alicuota_iva` de cada ítem existente.
+- `addProductToEdit` toma `alicuota_iva` del producto (mismo dato que ya usa Compra Rápida al crear).
+- El insert de ítems nuevos en `handleSaveEdit` ahora incluye `alicuota_iva`.
+- Al guardar, se recalculan `neto_gravado`/`iva_discriminado` sobre el estado final de `editItems` con el mismo criterio bruto/factor que la creación (`FACTOR_IVA`), y se guardan junto al `total` en el mismo `UPDATE`.
+
+**Probado en vivo contra producción** (compra real de Burbujitas, $10.000 → se agregó un ítem de $15.000 al 21%): `neto_gravado=20661.16`, `iva_discriminado=4338.84` — coincide exacto con el cálculo esperado ($25.000/1.21). Prueba revertida por completo por SQL (se removió el ítem, se restauró stock, total, neto/iva y hasta la hora original de `fecha` — ver hallazgo aparte abajo).
+
+**Hallazgo colateral, no arreglado (fuera de alcance):** el modal de edición trunca la hora de `compras.fecha` a medianoche en CUALQUIER edición (`editForm.fecha = compra.fecha.split('T')[0]` descarta la hora, y el `UPDATE` la reescribe así). No es bloqueante — solo se ve en el orden fino de compras del mismo día — pero es un gap de precisión de datos real. Quedó registrado como tarea separada (chip de sesión) para no mezclarlo con este fix.
+
+---
 
 ## ✅ NC/ND: AFIP exige CbteAsoc — encontrado y arreglado con prueba real en producción
 
@@ -76,7 +94,7 @@ Stress-test de esta noche encontró que el flujo **OC → Recepción → Factura
    - **Probado en vivo**: factura FC-TEST-0003, ítem servicio (sin producto) $1.000 neto + IVA 10.5% = $1.105, forma de pago CC Proveedor → verifiqué `compras` (neto/IVA correctos), `cuenta_corriente_proveedores` (+$1.105) y el asiento (Debe 1.1.3 Mercaderías $1.105 / Haber 2.1.1 Cuentas a Pagar $1.105). Limpiado.
 2. **Compra Rápida ahora discrimina IVA real por ítem** en vez de asumir 21% fijo — usa `productos.alicuota_iva` (ya existía en la tabla, no se usaba acá) con el mismo criterio bruto/factor que ND/NC de Proveedor. `compras.neto_gravado`/`iva_discriminado` y `detalle_compras.alicuota_iva` ahora se completan de verdad (antes quedaban NULL, y `ReporteLibroIVACompras.jsx` caía siempre en su fallback de 21%).
    - **Probado en vivo**: 1×Mouse Vertical a $5.000 (precio final, IVA incluido, alícuota 21% del producto) → `neto_gravado=4132.23`, `iva_discriminado=867.77` (4132.23×1.21=5000 ✓). Asiento y todo lo demás sin cambios (ya funcionaba). Limpiado.
-   - **Nota, no se tocó**: el flujo de EDICIÓN de una compra existente (`handleUpdatePurchase`) no recalcula `neto_gravado`/`iva_discriminado` al agregar/quitar ítems — sigue siendo un gap menor, separado de este fix (que era sobre la creación).
+   - **Nota histórica, ya CERRADA** (ver sección de arriba, tope del archivo): el flujo de EDICIÓN de una compra existente no recalculaba `neto_gravado`/`iva_discriminado` al agregar/quitar ítems — arreglado el 2026-07-30.
 3. **`comprasService.ts` (código muerto, nadie lo llama todavía)**: `create()` insertaba `user_id: empresaId` — confundía usuario con empresa. Cambiada la firma para recibir `userId` explícito. Sin impacto real porque no hay callers, pero ya no queda ahí como trampa para quien lo conecte en el futuro.
 
 **Con esto, el módulo Compras queda 100% al día — nada pendiente conocido.** Próximo paso pedido por Luciano: volver a Ventas.
