@@ -96,6 +96,8 @@ export interface ArcaEmitParams {
   neto: number;
   iva: number;
   total: number;
+  // Solo NC/ND: comprobante que le dio origen. AFIP lo exige con [10197] si falta.
+  cbteAsoc?: { tipo: number; ptoVta: number; nro: number } | null;
 }
 
 export interface ArcaEmitResult {
@@ -166,6 +168,7 @@ export async function callArcaEmit(
     impIVA,
     ivaId,
     condicionIVAReceptorId: condicionIvaReceptorId(params.customerCondicionIva, params.customerDocType),
+    cbteAsoc: params.cbteAsoc,
   });
 
   return {

@@ -117,7 +117,7 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
       // ── 3. Cargar datos del comprobante ─────────────────────────────────────
       const { data: comp, error: compErr } = await adminClient
         .from('comprobantes')
-        .select('id, numero_venta, tipo, fecha, total, neto_gravado, iva_discriminado, cliente_id, cliente_nombre, tipo_comprobante_afip, punto_venta_id, empresa_id')
+        .select('id, numero_venta, tipo, fecha, total, neto_gravado, iva_discriminado, cliente_id, cliente_nombre, tipo_comprobante_afip, punto_venta_id, empresa_id, comprobante_origen_id')
         .eq('id', fpa.comprobante_id)
         .single();
 
@@ -152,6 +152,35 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
 
       const tipoComp    = comp.tipo_comprobante_afip ?? 'B';
       const voucherType = voucherTypeAfip(tipoComp, comp.tipo);
+
+      // NC/ND: AFIP exige declarar el comprobante que le dio origen (CbteAsoc)
+      // — sin esto rechaza con [10197] "Si el comprobante es Debito o Credito,
+      // enviar estructura CbteAsoc o PeriodoAsoc" (hallado en producción,
+      // 2026-07-30, primer intento real de emitir una NC con CbteTipo correcto).
+      // Mensajes con "dato inv" caen en classifyArcaError → 'data' → no
+      // reintenta (un comprobante sin origen válido nunca va a poder emitirse).
+      let cbteAsoc: { tipo: number; ptoVta: number; nro: number } | undefined;
+      if (comp.tipo === 'nota_credito' || comp.tipo === 'nota_debito') {
+        if (!comp.comprobante_origen_id) {
+          throw new Error('Dato inválido: nota de crédito/débito sin comprobante de origen — AFIP exige CbteAsoc.');
+        }
+        const { data: origen } = await adminClient
+          .from('comprobantes')
+          .select('tipo, tipo_comprobante_afip, numero_afip')
+          .eq('id', comp.comprobante_origen_id)
+          .single();
+
+        if (!origen?.numero_afip) {
+          throw new Error('Dato inválido: el comprobante de origen no tiene numero_afip (nunca fue autorizado por AFIP) — no se puede armar CbteAsoc.');
+        }
+
+        const [ptoVtaAsocStr, nroAsocStr] = origen.numero_afip.split('-');
+        cbteAsoc = {
+          tipo:   voucherTypeAfip(origen.tipo_comprobante_afip ?? tipoComp, origen.tipo ?? 'venta'),
+          ptoVta: parseInt(ptoVtaAsocStr, 10),
+          nro:    parseInt(nroAsocStr, 10),
+        };
+      }
 
       // ── Caso 3 + 4: getLastVoucherNumber SIEMPRE antes de emitir en retry ───
       // Verifica si ARCA ya emitió (estado ambiguo por timeout previo) y
@@ -267,6 +296,7 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
         customerCondicionIva: cliCondicionIva,
         items:           wsfeItems,
         neto, iva, total: totalNum,
+        cbteAsoc,
       });
 
       // ── 7. Éxito: persistir CAE en comprobantes + cerrar la cola ────────────

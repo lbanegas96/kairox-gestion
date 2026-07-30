@@ -100,6 +100,10 @@ export interface CaeRequest {
   impIVA: number;
   ivaId: number | null; // 5=21%, 4=10.5%, 3=0%; null = Factura C (sin discriminar IVA)
   condicionIVAReceptorId: number; // obligatorio desde RG 5616 (1=RI, 4=Exento, 5=CF, 6=Monotributo, 7=No Categorizado)
+  // Obligatorio para NC/ND (AFIP rechaza con [10197] "Si el comprobante es
+  // Debito o Credito, enviar estructura CbteAsoc o PeriodoAsoc" si falta).
+  // Identifica el comprobante que le dio origen a la NC/ND.
+  cbteAsoc?: { tipo: number; ptoVta: number; nro: number } | null;
 }
 
 export interface CaeResponse {
@@ -333,6 +337,18 @@ export async function feCAESolicitar(
         `</ar:AlicIva></ar:Iva>`
       : '';
 
+  // NC/ND: comprobante que le dio origen, obligatorio por AFIP (error [10197]
+  // si falta). Va DESPUÉS de CondicionIVAReceptorId y ANTES de Iva en el
+  // orden del schema (mismo orden que usa pyafipws, la referencia probada
+  // contra WSFEv1 real).
+  const cbtesAsocNode = req.cbteAsoc
+    ? `<ar:CbtesAsoc><ar:CbteAsoc>` +
+      `<ar:Tipo>${req.cbteAsoc.tipo}</ar:Tipo>` +
+      `<ar:PtoVta>${req.cbteAsoc.ptoVta}</ar:PtoVta>` +
+      `<ar:Nro>${req.cbteAsoc.nro}</ar:Nro>` +
+      `</ar:CbteAsoc></ar:CbtesAsoc>`
+    : '';
+
   const body =
     `<ar:FECAESolicitar>${authBlock(auth)}` +
     `<ar:FeCAEReq>` +
@@ -353,6 +369,7 @@ export async function feCAESolicitar(
     `<ar:MonId>PES</ar:MonId>` +
     `<ar:MonCotiz>1</ar:MonCotiz>` +
     `<ar:CondicionIVAReceptorId>${req.condicionIVAReceptorId}</ar:CondicionIVAReceptorId>` +
+    cbtesAsocNode +
     ivaNode +
     `</ar:FECAEDetRequest></ar:FeDetReq>` +
     `</ar:FeCAEReq></ar:FECAESolicitar>`;

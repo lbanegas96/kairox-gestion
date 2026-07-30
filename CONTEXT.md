@@ -1,5 +1,23 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-30 madrugada (Luciano/Claude — Compras cerrado al 100%, auditoría de Ventas sin gaps estructurales, e IVA Débito/Crédito Fiscal discriminado en asientos de ambos módulos)
+**Última actualización:** 2026-07-30 (Nadia/Claude — cerrado el hallazgo #36 con test real en producción: CbteAsoc para NC/ND, arca-worker v19)
+
+## ✅ NC/ND: AFIP exige CbteAsoc — encontrado y arreglado con prueba real en producción
+
+Retomando el pendiente "Testear NC/ND con CbteTipo correcto en producción" (dejado el 2026-07-29): se creó una NC real contra Nalux desde la UI (Facturas → "..." → "Copiar a NC", $100 sobre la Factura C 0001-00000034) para verificar el fix de la tarea #36.
+
+**Confirmó lo bueno:** el `cbte_tipo` ya se manda como NC (13), no como Factura — se sabe porque AFIP devolvió un error específico de NC/ND, que solo aparece si WSFE ya reconoce el comprobante como Nota de Crédito.
+
+**Encontró un bug nuevo, más grave:** `[10197] Si el comprobante es Debito o Credito, enviar estructura CbteAsoc o PeriodoAsoc`. AFIP exige que toda NC/ND declare el comprobante que le dio origen (tipo, punto de venta y número de la factura asociada) — `arca-worker` no lo enviaba. **Con el código de ayer, ninguna NC/ND real podía obtener CAE** (quedaban todas en `error_datos`, sin reintentar).
+
+**Fix (desplegado como `arca-worker` v19):**
+- `_shared/wsfe.ts` — `CaeRequest` acepta `cbteAsoc?: {tipo, ptoVta, nro}`; `feCAESolicitar` arma el nodo `<CbtesAsoc><CbteAsoc>...` en la posición correcta del schema (después de `CondicionIVAReceptorId`, antes de `Iva` — mismo orden que usa `pyafipws`, la librería de referencia probada contra WSFEv1 real).
+- `_shared/afip.ts` — `ArcaEmitParams`/`callArcaEmit` pasan `cbteAsoc` a `feCAESolicitar`.
+- `arca-worker/index.ts` — para NC/ND, busca el `comprobante_origen_id`, lee su `numero_afip` (formato `PPPP-NNNNNNNN`) y arma `cbteAsoc = { tipo: voucherTypeAfip(origen), ptoVta, nro }`. Si no hay origen o el origen nunca tuvo `numero_afip`, lanza error con mensaje que contiene "Dato inválido" — cae en `classifyArcaError` → `'data'` → no reintenta (nunca va a poder emitirse sin origen válido).
+- Se corrigió también la nota de la sección "Arquitectura de deploy": `arca-worker` en realidad **no** depende de `_shared/integraciones.ts` (nada en su cadena de imports lo usa) — dato heredado incorrecto de una sesión anterior.
+
+**Probado en vivo:** la NC de prueba (NC-20260730-001, comprobante `4300c5bb-9f37-4bfc-b979-4f110f5efce7`) obtuvo CAE `86310698722818` tras el fix. `puntos_venta_numeracion` quedó con dos filas independientes — PV1/cbte_tipo=11 (Factura) en 34, PV1/cbte_tipo=13 (NC) en 1 — confirmando que las series no se pisan entre sí. Con esto la tarea #36 queda cerrada y verificada end-to-end, no solo revisada por código.
+
+---
 
 ## ✅ IVA Débito/Crédito Fiscal discriminado en asientos (Ventas + Compras)
 
@@ -125,7 +143,7 @@ Todo desplegado, aplicado y pusheado al cierre de la sesión del 2026-07-29.
 
 | Servicio | Versión | Estado |
 |---|---|---|
-| `arca-worker` | v18 | ✅ ACTIVO |
+| `arca-worker` | v19 | ✅ ACTIVO (CbteAsoc para NC/ND) |
 | `mp-sync-worker` | v1 | ✅ ACTIVO |
 | `informar-caea` | v8 | ✅ ACTIVO |
 | `mp-sync` | v14 | ✅ ACTIVO (redesplegado, verificado byte a byte) |
@@ -189,27 +207,14 @@ El cron usa la anon key → 401 en el 100% de corridas desde esa fecha.
 
 ## Pendientes técnicos
 
-### DROP de columnas deprecated (baja urgencia)
-Las columnas `puntos_venta.ultimo_numero_a/b/c` están marcadas DEPRECATED pero no dropeadas.
-Esperar ~1 semana de corridas normales del `arca-worker` v18 en producción, luego:
-```sql
-ALTER TABLE public.puntos_venta
-  DROP COLUMN ultimo_numero_a,
-  DROP COLUMN ultimo_numero_b,
-  DROP COLUMN ultimo_numero_c;
-```
-Crear como migración `274_drop_ultimo_numero_obsoleto.sql`.
-
-### Testear NC/ND con CbteTipo correcto en producción
-Crear una NC o ND real desde la UI (Nalux) y verificar:
-1. Que `arca-worker` la procese con `cbte_tipo = 8` (NC-B) o `13` (NC-C)
-2. Que `puntos_venta_numeracion` tenga una fila nueva para ese tipo con su correlativo propio
-3. Que las facturas siguientes no queden bloqueadas por "estado ambiguo"
-
-### Redesplegar `mp-sync`
-El archivo en repo cambió (ahora usa `_shared/mpSync.ts`) pero el desplegado
-sigue siendo la versión anterior (funcional para el botón del frontend).
-No urgente, pero quedó divergido.
+### CbteAsoc en informar-caea (circuito CAEA, sin urgencia)
+El fix de CbteAsoc se aplicó al circuito CAE normal (`arca-worker`/`feCAESolicitar`).
+El circuito CAEA (`informar-caea`/`feCAEAInformarComprobante`, contingencia por caída
+de ARCA) probablemente tenga el mismo requisito de AFIP para NC/ND informadas por
+CAEA, pero no se tocó — hoy nadie usa CAEA en producción (ver nota histórica de
+la tarea #35), así que no hay forma de probarlo en vivo todavía. Si se activa CAEA
+para una empresa que emite NC/ND, revisar si `FECAEAInformarComprobante` también
+rechaza con `[10197]` y replicar el mismo `CbtesAsoc` ahí.
 
 ### 4 NC históricas mal declaradas ante ARCA
 NC-20260706-003, NC-20260707-001, NC-20260707-002, NC-20260728-002 fueron
@@ -234,7 +239,7 @@ Si la función importa archivos de `_shared/`, hay que incluirlos explícitament
 payload con `name: "../_shared/archivo.ts"`.
 
 Funciones que usan `_shared/`:
-- `arca-worker`: necesita `auth.ts`, `afip.ts`, `wsaa.ts`, `wsfe.ts`, `integraciones.ts`
+- `arca-worker`: necesita `auth.ts`, `afip.ts`, `wsaa.ts`, `wsfe.ts` (NO `integraciones.ts` — nada en su cadena de imports lo usa, pese a lo que decía una versión anterior de esta nota)
 - `informar-caea`: necesita `auth.ts`, `wsaa.ts`, `wsfe.ts`
 - `mp-sync-worker`: necesita `auth.ts`, `mpSync.ts`
 - `mp-sync`: necesita `auth.ts`, `mpSync.ts`
