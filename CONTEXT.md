@@ -1,5 +1,25 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08 (Luciano/Claude — Costo de Mercadería Vendida en cada venta, mig.287, probado en vivo end-to-end)
+**Última actualización:** 2026-08 (Luciano/Claude — la Nota de Crédito revierte el Costo de Mercadería Vendida, mig.288, probado en vivo end-to-end)
+
+## ✅ La Nota de Crédito revierte el Costo de Mercadería Vendida — mig.288
+
+Continuación directa de mig.287: con el costo ya contabilizándose en cada venta, verificado que `crear_devolucion` restaura el stock físico correctamente al devolver mercadería, pero la NC que compensa esa devolución solo revertía Ventas + IVA contra CxC — nunca tocaba `5.1 Costo de Mercaderías` ni `1.1.3 Inventario`. Asimetría real: stock vuelve, venta se revierte, pero el costo original quedaba cargado para siempre.
+
+**Fix (mig.288):**
+- `crear_nota_credito` calcula el costo a revertir uniendo `devolucion_items.comprobante_item_id` con `comprobante_items.costo_unitario` (mig.287) — **solo si la devolución asociada tiene `reingresa_stock=true`** (una NC financiera sin devolución física no debe tocar Inventario). Se guarda en `comprobantes.costo_mercaderia_vendida` (mismo campo que usan las Ventas) y se devuelve en el jsonb.
+- `crearAsientoNotaCliente` (JS) agrega 2 líneas si el monto es > 0 y existen las cuentas 1.1.3/5.1: `Debe 1.1.3 Mercaderías/Inventario / Haber 5.1 Costo de Mercaderías`.
+
+**Hallazgo colateral, no relacionado, no corregido:** existe un overload huérfano de `crear_nota_credito` con 8 parámetros (sin `p_referencia_cliente`) que quedó vivo desde mig.264 — mig.265/266 nunca lo dropearon antes de agregar la versión de 9 parámetros. No afecta a la app real (`NuevaNCModal.jsx` siempre manda los 9), solo se manifestó al llamar la RPC directo por curl con exactamente 8 params (PostgREST no puede resolver el overload). Anotado como deuda técnica, no se tocó.
+
+**Probado en vivo end-to-end contra producción (Nalux)**, cadena completa vía RPCs reales (mismo usuario autenticado, mismo `access_token` de sesión) — venta test $1.200 (costo $1.000) → devolución con `reingresa_stock=true` → NC generada desde la devolución:
+- `crear_nota_credito` devolvió `costo_mercaderia_vendida: 1000.00` ✓ (calculado correctamente)
+- Asiento verificado con la estructura completa (5 líneas, balanceado $2.200=$2.200): Debe Ventas $991,74 + Debe IVA Débito $208,26 / Haber CxC $1.200, **Debe Inventario $1.000 / Haber Costo de Mercaderías $1.000** ✓
+- Todo limpiado por completo (asiento, NC, devolución, venta original, movimientos, stock restaurado) — verificado en cero.
+
+**Con esto, el circuito Venta→COGS→Devolución→NC queda completo y simétrico.**
+
+---
+
 
 ## ✅ Costo de Mercadería Vendida (COGS) en el asiento de venta — mig.287
 

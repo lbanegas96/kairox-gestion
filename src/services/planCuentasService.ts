@@ -540,6 +540,7 @@ export const asientosAutoService = {
       fecha: string;       // YYYY-MM-DD
       descripcion: string;
       centroCostoId?: string | null;
+      costoMercaderiaRevertida?: number;
     }
   ): Promise<void> {
     try {
@@ -569,6 +570,23 @@ export const asientosAutoService = {
           { cuenta_id: cuentaVentas,    debe: 0,             haber: params.neto, descripcion: 'Cargo adicional (neto)' },
           { cuenta_id: cuentaIvaDebito, debe: 0,             haber: params.iva,  descripcion: 'IVA Débito Fiscal' },
         ];
+
+    // NC que compensa una devolución con reingreso de stock: revierte también
+    // el Costo de Mercadería que se cargó en la venta original (mig.288) — sin
+    // esto, el stock vuelve pero el costo queda cargado para siempre.
+    const costoRevertido = Math.max(Number(params.costoMercaderiaRevertida) || 0, 0);
+    if (params.tipo === 'nota_credito' && costoRevertido > 0) {
+      const [cuentaInventario, cuentaCostoMercaderia] = await Promise.all([
+        findCuentaByCodigo(empresaId, '1.1.3'),
+        findCuentaByCodigo(empresaId, '5.1'),
+      ]);
+      if (cuentaInventario && cuentaCostoMercaderia) {
+        items.push(
+          { cuenta_id: cuentaInventario,      debe: costoRevertido, haber: 0, descripcion: 'Reingreso de mercadería por NC' },
+          { cuenta_id: cuentaCostoMercaderia, debe: 0, haber: costoRevertido, descripcion: 'Reversa de costo de mercadería vendida' },
+        );
+      }
+    }
 
     const asiento = await asientosService.createAsiento(
       empresaId, userId,

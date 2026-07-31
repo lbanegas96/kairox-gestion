@@ -259,6 +259,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
         iva: totalIva,
         fecha: getTodayAR(),
         descripcion: `Nota de Crédito ${data.numero_venta}`,
+        costoMercaderiaRevertida: data.costo_mercaderia_vendida,
       }).catch(e => {
         if (e.message?.startsWith('Período cerrado:')) {
           toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
