@@ -314,6 +314,7 @@ export const asientosAutoService = {
       esCredito?: boolean;
       centroCostoId?: string | null;
       montoPendienteLiquidacion?: number;
+      costoMercaderiaVendida?: number;
     }
   ): Promise<void> {
     // Non-critical period check — RPC errors never block the sale
@@ -338,11 +339,14 @@ export const asientosAutoService = {
     const montoPendiente = !params.esCredito
       ? Math.min(Math.max(Number(params.montoPendienteLiquidacion) || 0, 0), params.total)
       : 0;
-    const [cuentaCobro, cuentaVentas, cuentaIvaDebito, cuentaPuenteTarjetas] = await Promise.all([
+    const costoMercaderia = Math.max(Number(params.costoMercaderiaVendida) || 0, 0);
+    const [cuentaCobro, cuentaVentas, cuentaIvaDebito, cuentaPuenteTarjetas, cuentaCostoMercaderia, cuentaInventario] = await Promise.all([
       findCuentaByCodigo(empresaId, codigoCobro),
       findCuentaByCodigo(empresaId, '4.1'),
       findCuentaByCodigo(empresaId, '2.1.3'),
       montoPendiente > 0 ? findCuentaByCodigo(empresaId, '1.1.8') : Promise.resolve(null),
+      costoMercaderia > 0 ? findCuentaByCodigo(empresaId, '5.1') : Promise.resolve(null),
+      costoMercaderia > 0 ? findCuentaByCodigo(empresaId, '1.1.3') : Promise.resolve(null),
     ]);
     if (!cuentaCobro || !cuentaVentas) return; // empresa sin plan de cuentas
 
@@ -369,6 +373,18 @@ export const asientosAutoService = {
           ...lineasCobro,
           { cuenta_id: cuentaVentas, debe: 0, haber: params.total, descripcion: 'Ingreso por venta' },
         ];
+
+    // Costo de Mercadería Vendida: sin esto, el Estado de Resultados nunca
+    // refleja el costo de lo vendido y el Inventario nunca se consume
+    // contablemente aunque el stock físico sí baje (hallazgo de auditoría
+    // 2026-08). Se agrega como líneas adicionales balanceadas entre sí — no
+    // afecta el resto del asiento si falta alguna cuenta o el costo es 0.
+    if (costoMercaderia > 0 && cuentaCostoMercaderia && cuentaInventario) {
+      items.push(
+        { cuenta_id: cuentaCostoMercaderia, debe: costoMercaderia, haber: 0, descripcion: 'Costo de mercadería vendida' },
+        { cuenta_id: cuentaInventario,      debe: 0, haber: costoMercaderia, descripcion: 'Salida de mercadería por venta' },
+      );
+    }
 
     const asiento = await asientosService.createAsiento(
       empresaId, userId,

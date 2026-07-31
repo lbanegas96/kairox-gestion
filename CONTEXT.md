@@ -1,5 +1,24 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-31 (Nadia/Claude — liquidación de tarjetas en POS cerrada, mig.286, probado en vivo end-to-end)
+**Última actualización:** 2026-08 (Luciano/Claude — Costo de Mercadería Vendida en cada venta, mig.287, probado en vivo end-to-end)
+
+## ✅ Costo de Mercadería Vendida (COGS) en el asiento de venta — mig.287
+
+Arrancando la auditoría de Inventario/COGS, se encontró el hallazgo más grande de toda la ronda de auditorías: `crear_venta` decrementa `productos.stock_actual` correctamente al vender, pero el asiento contable de la venta **nunca generó la línea de Costo de Mercadería Vendida**. Verificado en producción antes de tocar nada: Ventas acumuladas $7.633.841, Costo de Mercaderías real $0, y `1.1.3 Mercaderías/Inventario` con $8.285.520 de Debe (compras) y **$0 de Haber histórico** — el activo de Inventario nunca se consumía contablemente aunque el stock físico sí bajara. Consecuencia real: el margen/Resultado del Ejercicio que mostraba el sistema estaba sobreestimado en el 100% del costo de lo vendido.
+
+**Fix (mig.287), snapshot del costo al momento de vender (no el costo actual, que puede cambiar después por compras posteriores):**
+- `comprobante_items.costo_unitario` (nueva columna) — `crear_venta` la captura desde `productos.costo_compra` en el mismo `SELECT ... FOR UPDATE` que ya usaba para chequear stock, en el momento exacto de la venta.
+- `comprobantes.costo_mercaderia_vendida` (nueva columna) — acumula el total, mismo patrón que `neto_gravado`/`iva_discriminado` (mig.280).
+- `crearAsientoVenta` (`planCuentasService.ts`) agrega 2 líneas nuevas si el monto es > 0 y existen las cuentas 5.1/1.1.3: `Debe 5.1 Costo de Mercaderías / Haber 1.1.3 Mercaderías-Inventario`. No bloqueante — si falta alguna cuenta, el resto del asiento se genera igual.
+- `regenerar_asiento_venta` (mig.281) también extendido para incluir estas líneas al regenerar.
+- **Gap conocido, no corregido acá:** si el producto viene de una entrega manual previa (`p_pedido_id` con entrega ya hecha), el stock ya se movió en ESE evento anterior y su costo no se captura en esta llamada — haría falta capturarlo en el momento de la entrega, no de la factura (caso raro, documentado en el código).
+
+**Probado en vivo end-to-end contra producción (Nalux)**, desde el POS real (no solo el RPC): venta de 1 unidad de "Aramis TESTE Azul marino" (producto de test preexistente, costo $1.000) por $1.200 en efectivo →
+- `comprobantes.costo_mercaderia_vendida = $1.000` ✓
+- Asiento generado con 5 líneas, balanceado ($2.200 = $2.200): Debe Caja $1.200 / Haber Ventas $991,74 + IVA Débito $208,26 (=$1.200) / **Debe Costo de Mercaderías $1.000 / Haber Mercaderías-Inventario $1.000** ✓
+- Todo limpiado por completo después (asiento+ítems, comprobante+ítems, entrega+ítems, movimiento de caja, movimiento de inventario) y stock restaurado a su valor original — verificado.
+
+---
+
 
 ## ✅ Liquidación de tarjetas en POS (crear_venta) — mig.286
 
