@@ -1,5 +1,23 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-31 (Luciano/Claude — Traslado a Resultados Acumulados, mig.284, cierra el circuito de Cierre de Ejercicio)
+**Última actualización:** 2026-07-31 (Luciano/Claude — auditoría de Bancos/Conciliación/Tarjetas cerrada; pendiente para Nadia: liquidación de tarjetas en POS)
+
+## 🟡 Pendiente para Nadia: liquidación de tarjetas en POS (crear_venta)
+
+Cerrando la auditoría de Bancos, se revisó a fondo Conciliación bancaria (OK, sin gaps — solo vincula visualmente extracto↔movimiento, no genera asientos, que es lo correcto) y Tarjetas pendientes / liquidación de tarjetas (mig.216).
+
+**Hallazgo:** mig.216 documenta en su propio comentario que su alcance fue *solo* `registrar_cobro_cliente` (cobros de Cuenta Corriente) — `crear_venta` (POS) quedó **fuera a propósito**. Verificado hoy: sigue así. Una venta de POS pagada con tarjeta acredita el bruto directo a `1.1.1 Caja y Bancos` el mismo día, sin pasar por la cuenta puente `1.1.8 Tarjetas a Acreditar` ni reflejar la comisión — la misma distorsión de liquidez que mig.216 ya resolvió para CxC (Comunicación BCRA A 7153: la plata entra 8-10 días hábiles después, por el neto).
+
+**Para Nadia, mañana:**
+1. Extender `crear_venta` para que, cuando la forma de pago tenga `dias_acreditacion > 0`, debite `1.1.8` en vez de `1.1.1` y cree el `movimientos_caja` en estado `pendiente` — mismo patrón que `registrar_cobro_cliente` ya usa (mig.216). Así la venta aparecería en el tab "Tarjetas pendientes" y usaría el mismo `acreditar_movimiento_caja` que ya existe.
+2. Además de construirlo, **repasar y probar en vivo (con datos sintéticos, limpiando después) todo lo que se tocó en esta sesión**, ya que quedó sin una segunda revisión cruzada:
+   - Cheques: `regenerar_asiento_cheque` (mig.282) — tabla `cheques_asiento_errores`, botón "Regenerar asiento".
+   - Cierre de Ejercicio (mig.283) — botón "Cerrar Ejercicio" en Períodos.
+   - Traslado a Resultados Acumulados (mig.284) — botón "Trasladar a Acumulados" en Períodos.
+
+Detalle completo de memoria: `project_pendiente_liquidacion_tarjetas_pos.md`, `project_cheques_asiento_fallido_mig282.md`, `project_pendiente_cierre_ejercicio_sap.md`.
+
+---
+
 
 ## ✅ Traslado a Resultados Acumulados — segundo paso del cierre SAP (mig.284)
 
