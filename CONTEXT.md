@@ -1,5 +1,26 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-31 (Nadia/Claude — repaso cruzado de la sesión de Luciano: cerrado el blindspot de cheques 'depositado'/'descontado', mig.285, probado en vivo)
+**Última actualización:** 2026-07-31 (Nadia/Claude — liquidación de tarjetas en POS cerrada, mig.286, probado en vivo end-to-end)
+
+## ✅ Liquidación de tarjetas en POS (crear_venta) — mig.286
+
+Último pendiente que dejó Luciano ("Para Nadia, mañana"): `crear_venta` (POS) quedó fuera del alcance de mig.216, que solo cubrió `registrar_cobro_cliente` (Cuenta Corriente). Una venta de POS pagada con tarjeta acreditaba el bruto directo a `1.1.1 Caja y Bancos` el mismo día, sin pasar por la cuenta puente `1.1.8 Tarjetas a Acreditar` — la plata en realidad tarda 8-10 días hábiles y entra por el neto (Comunicación BCRA A 7153).
+
+**Fix (mig.286), mismo patrón exacto que mig.216, en dos capas:**
+- **`crear_venta` (RPC)**: en el loop de pagos (una venta de POS puede tener VARIOS pagos — split efectivo+tarjeta), por cada pago resuelve `dias_acreditacion`/`comision_porcentaje` de su `forma_pago_id` y completa las columnas de liquidación de `movimientos_caja` (`estado_liquidacion`, `monto_comision`, `monto_neto`, `fecha_acreditacion_estimada`) igual que ya hacía `registrar_cobro_cliente`. Devuelve `monto_pendiente_liquidacion` en el jsonb de retorno.
+- **`crearAsientoVenta` (`planCuentasService.ts`)**: si recibe `montoPendienteLiquidacion > 0` y existe la cuenta `1.1.8`, parte la línea de "cobro" en dos — la porción inmediata sigue a `1.1.1`/`1.1.2` como siempre, la porción pendiente va a `1.1.8`. Si no hay monto pendiente o no existe `1.1.8`, cae exactamente al comportamiento de siempre (no rompe nada para quien no usa esto).
+
+**Hallazgo de arquitectura durante el testing:** el POS real (pantalla "Punto de Venta" / Modo Caja, `ModoCajaLayout.jsx` → `PanelCarrito.jsx`) usa el hook `useConfirmarVenta.js` para confirmar la venta — **no** la función `handleConfirmSale` de `NuevaVentaModal.jsx`, que tiene su propia llamada a `crear_venta` en paralelo (posiblemente un flujo de "Nueva Venta" desde otro punto de entrada, o código legacy — no se investigó cuál). Se aplicó el fix en **los dos lugares** por consistencia, pero el que de verdad se probó en vivo es `useConfirmarVenta.js`, que es el que efectivamente ejecuta el Punto de Venta.
+
+**Probado en vivo end-to-end contra producción (Nalux)** — se activó temporalmente `dias_acreditacion=10`/`comision_porcentaje=3` en la forma de pago real "Tarjeta Crédito" (estaba en 0, nunca se había configurado en ninguna empresa) para poder ejercitar el circuito, y se revirtió a 0 al terminar:
+1. Venta POS $50.000 con "Tarjeta Crédito" → asiento generado: **Debe 1.1.8 Tarjetas a Acreditar $50.000** (antes iba a 1.1.1) / Haber Ventas $41.322,31 + IVA Débito $8.677,69 ✓
+2. `movimientos_caja`: `estado_liquidacion='pendiente'`, comisión $1.500 (3%), neto $48.500, fecha estimada 10/08 (hoy+10) ✓
+3. Apareció automáticamente en **Bancos → Tarjetas pendientes** (sin ningún cambio de UI necesario — la vista ya filtraba por `estado_liquidacion='pendiente'` de forma genérica): "Bruto pendiente $50.000" / "Neto a acreditar $48.500" ✓
+4. Botón "Marcar acreditada" → `acreditar_movimiento_caja` (ya existente, mig.216) generó el asiento de liquidación y el movimiento bancario por el neto — el saldo de "Mercado Pago personal" subió exactamente $48.500 ✓
+5. Todo limpiado por completo (asientos, movimiento bancario, movimientos_caja, comprobante, stock revertido) y la forma de pago devuelta a `dias_acreditacion=0` — verificado con conteo en cero.
+
+**Con esto, los 3 pendientes que dejó Luciano quedan cerrados**: repaso cruzado de Cheques/Cierre de Ejercicio/Traslado (ver abajo) y liquidación de tarjetas en POS.
+
+---
 
 ## ✅ Repaso cruzado de la sesión de Luciano (Cheques, Cierre de Ejercicio, Traslado)
 
@@ -23,15 +44,12 @@ Pedido explícito de Luciano: como Cheques/Cierre de Ejercicio/Traslado a Acumul
 
 ---
 
-## 🟡 Pendiente para Nadia: liquidación de tarjetas en POS (crear_venta)
+## ✅ Nota histórica — pendientes que dejó Luciano, ambos CERRADOS
 
-Cerrando la auditoría de Bancos, se revisó a fondo Conciliación bancaria (OK, sin gaps — solo vincula visualmente extracto↔movimiento, no genera asientos, que es lo correcto) y Tarjetas pendientes / liquidación de tarjetas (mig.216).
+Cerrando la auditoría de Bancos (sesión 2026-07-31, Luciano), se revisó Conciliación bancaria (OK, sin gaps) y quedaron 2 pendientes para el día siguiente: liquidación de tarjetas en POS, y repasar/probar en vivo Cheques/Cierre de Ejercicio/Traslado.
 
-**Hallazgo:** mig.216 documenta en su propio comentario que su alcance fue *solo* `registrar_cobro_cliente` (cobros de Cuenta Corriente) — `crear_venta` (POS) quedó **fuera a propósito**. Verificado hoy: sigue así. Una venta de POS pagada con tarjeta acredita el bruto directo a `1.1.1 Caja y Bancos` el mismo día, sin pasar por la cuenta puente `1.1.8 Tarjetas a Acreditar` ni reflejar la comisión — la misma distorsión de liquidez que mig.216 ya resolvió para CxC (Comunicación BCRA A 7153: la plata entra 8-10 días hábiles después, por el neto).
-
-**Para Nadia:**
-1. Extender `crear_venta` para que, cuando la forma de pago tenga `dias_acreditacion > 0`, debite `1.1.8` en vez de `1.1.1` y cree el `movimientos_caja` en estado `pendiente` — mismo patrón que `registrar_cobro_cliente` ya usa (mig.216). Así la venta aparecería en el tab "Tarjetas pendientes" y usaría el mismo `acreditar_movimiento_caja` que ya existe. **Sigue pendiente, no se tocó todavía.**
-2. ~~Repasar y probar en vivo lo de Cheques/Cierre de Ejercicio/Traslado~~ — **HECHO** (ver sección de arriba): Cierre de Ejercicio y Traslado sin hallazgos; Cheques encontró y cerró un blindspot real (mig.285, 'depositado'/'descontado'), probado en vivo.
+1. ~~Extender `crear_venta` para la liquidación de tarjetas~~ — **HECHO** (mig.286, ver sección de arriba al tope del archivo). Probado en vivo end-to-end contra producción.
+2. ~~Repasar y probar en vivo lo de Cheques/Cierre de Ejercicio/Traslado~~ — **HECHO** (ver sección de abajo): Cierre de Ejercicio y Traslado sin hallazgos; Cheques encontró y cerró un blindspot real (mig.285, 'depositado'/'descontado'), probado en vivo.
 
 Detalle completo de memoria: `project_pendiente_liquidacion_tarjetas_pos.md`, `project_cheques_asiento_fallido_mig282.md`, `project_pendiente_cierre_ejercicio_sap.md`.
 

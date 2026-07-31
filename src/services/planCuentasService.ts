@@ -292,6 +292,14 @@ export const asientosAutoService = {
    * Si `neto`/`iva` no vienen (o no existe la cuenta 2.1.3), cae al asiento
    * viejo de 2 líneas con el total entero a Ventas — nunca bloquea la venta
    * por esto. Si la empresa no tiene plan de cuentas, sale silenciosamente.
+   *
+   * mig.286: si `montoPendienteLiquidacion` viene (venta pagada con tarjeta,
+   * `crear_venta` ya resolvió cuánto tiene `dias_acreditacion > 0`) y existe la
+   * cuenta puente 1.1.8, la línea de cobro se parte en dos: la porción
+   * inmediata sigue yendo a 1.1.1/1.1.2 como siempre, la porción pendiente va a
+   * 1.1.8 — mismo criterio que ya usa `registrar_cobro_cliente` (mig.216). Si
+   * no existe 1.1.8, cae al comportamiento de siempre (todo a Caja) — no
+   * bloquea la venta por faltar esa cuenta.
    */
   async crearAsientoVenta(
     empresaId: string,
@@ -305,6 +313,7 @@ export const asientosAutoService = {
       descripcion: string;
       esCredito?: boolean;
       centroCostoId?: string | null;
+      montoPendienteLiquidacion?: number;
     }
   ): Promise<void> {
     // Non-critical period check — RPC errors never block the sale
@@ -324,10 +333,16 @@ export const asientosAutoService = {
     }
 
     const codigoCobro = params.esCredito ? '1.1.2' : '1.1.1';
-    const [cuentaCobro, cuentaVentas, cuentaIvaDebito] = await Promise.all([
+    // mig.286: solo tiene sentido partir a la cuenta puente en ventas al contado
+    // (una venta a Cuenta Corriente no tiene "cobro" propiamente dicho todavía).
+    const montoPendiente = !params.esCredito
+      ? Math.min(Math.max(Number(params.montoPendienteLiquidacion) || 0, 0), params.total)
+      : 0;
+    const [cuentaCobro, cuentaVentas, cuentaIvaDebito, cuentaPuenteTarjetas] = await Promise.all([
       findCuentaByCodigo(empresaId, codigoCobro),
       findCuentaByCodigo(empresaId, '4.1'),
       findCuentaByCodigo(empresaId, '2.1.3'),
+      montoPendiente > 0 ? findCuentaByCodigo(empresaId, '1.1.8') : Promise.resolve(null),
     ]);
     if (!cuentaCobro || !cuentaVentas) return; // empresa sin plan de cuentas
 
@@ -335,15 +350,24 @@ export const asientosAutoService = {
     const neto = params.neto != null ? Number(params.neto) : params.total;
     const discriminar = cuentaIvaDebito && iva > 0 && neto + iva > 0;
 
+    const usaPuente = montoPendiente > 0 && !!cuentaPuenteTarjetas;
+    const montoInmediato = params.total - (usaPuente ? montoPendiente : 0);
+    const lineasCobro = usaPuente
+      ? [
+          ...(montoInmediato > 0 ? [{ cuenta_id: cuentaCobro, debe: montoInmediato, haber: 0, descripcion: 'Cobro por venta' }] : []),
+          { cuenta_id: cuentaPuenteTarjetas!, debe: montoPendiente, haber: 0, descripcion: 'Cobro por venta (pendiente de acreditar)' },
+        ]
+      : [{ cuenta_id: cuentaCobro, debe: params.total, haber: 0, descripcion: 'Cobro por venta' }];
+
     const items = discriminar
       ? [
-          { cuenta_id: cuentaCobro,      debe: params.total, haber: 0,     descripcion: 'Cobro por venta' },
-          { cuenta_id: cuentaVentas,     debe: 0,             haber: neto, descripcion: 'Ingreso por venta (neto)' },
-          { cuenta_id: cuentaIvaDebito!, debe: 0,             haber: iva,  descripcion: 'IVA Débito Fiscal' },
+          ...lineasCobro,
+          { cuenta_id: cuentaVentas,     debe: 0, haber: neto, descripcion: 'Ingreso por venta (neto)' },
+          { cuenta_id: cuentaIvaDebito!, debe: 0, haber: iva,  descripcion: 'IVA Débito Fiscal' },
         ]
       : [
-          { cuenta_id: cuentaCobro,  debe: params.total, haber: 0,            descripcion: 'Cobro por venta' },
-          { cuenta_id: cuentaVentas, debe: 0,            haber: params.total, descripcion: 'Ingreso por venta' },
+          ...lineasCobro,
+          { cuenta_id: cuentaVentas, debe: 0, haber: params.total, descripcion: 'Ingreso por venta' },
         ];
 
     const asiento = await asientosService.createAsiento(

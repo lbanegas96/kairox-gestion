@@ -198,6 +198,9 @@ export function useConfirmarVenta(tcParalelo) {
         descripcion: `Venta #${saleNumber}`,
         esCredito:   isCC,
         centroCostoId: centroCostoId || null,
+        // mig.286: cuánto de esta venta se pagó con una forma de pago que tarda
+        // en acreditarse (tarjeta) — crear_venta ya lo resolvió por pago.
+        montoPendienteLiquidacion: rpcResult.monto_pendiente_liquidacion,
       }).catch(e => {
         if (e.message?.startsWith('Período cerrado:')) {
           toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
