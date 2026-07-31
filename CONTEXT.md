@@ -1,5 +1,27 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-31 (Luciano/Claude — auditoría de Bancos/Conciliación/Tarjetas cerrada; pendiente para Nadia: liquidación de tarjetas en POS)
+**Última actualización:** 2026-07-31 (Nadia/Claude — repaso cruzado de la sesión de Luciano: cerrado el blindspot de cheques 'depositado'/'descontado', mig.285, probado en vivo)
+
+## ✅ Repaso cruzado de la sesión de Luciano (Cheques, Cierre de Ejercicio, Traslado)
+
+Pedido explícito de Luciano: como Cheques/Cierre de Ejercicio/Traslado a Acumulados se hicieron sin una segunda revisión cruzada, se revisó código + datos reales antes de seguir con la liquidación de tarjetas POS.
+
+**Cierre de Ejercicio (mig.283) y Traslado a Acumulados (mig.284): sin hallazgos.** Revisados línea por línea (balanceo, guards de permisos/idempotencia, caso borde resultado_neto=0) y el cableado de `TabPeriodos.jsx`. Todo consistente.
+
+**Cheques (mig.282): encontrado y cerrado un blindspot real (mig.285).** mig.282 solo cubre asientos que TIRAN EXCEPCIÓN (cuenta faltante, etc.) — pero los estados `'depositado'` y `'descontado'` (ambos válidos en `TRANSICIONES_TERCERO`, `shared.jsx`) no tenían NINGUNA rama en `fn_asiento_cheque_tercero` ni en `regenerar_asiento_cheque`. No fallaban: directamente no existían — así que no quedaban ni logueados en `cheques_asiento_errores`. Verificado en producción antes de tocar nada: 1 cheque real de $80.000 en `depositado` con 0 asientos y 0 errores; y un caso histórico real de $500.500 que pasó por `descontado` sin generar ningún asiento en su momento.
+
+**Fix (mig.285), decisión por estado (no son iguales):**
+- `'depositado'` → sigue sin generar asiento, **a propósito**: el cheque sigue siendo el mismo activo, solo cambió de ubicación física. El circuito ya cierra bien al llegar a `'cobrado'`. Se corrigió solo el mensaje de `regenerar_asiento_cheque` para explicar esto en vez de sonar a bug.
+- `'descontado'` → **sí es un hecho económico real** (el banco adelanta la plata antes del vencimiento) que no se contabilizaba. Se agregó la rama: Debe 1.1.1 Caja / Haber 1.1.6 Cartera, con guard para no duplicar el asiento si después pasa a `'cobrado'` (mismo criterio que ya existía para `'endosado'`). También se agregó la rama de rechazo viniendo de `'descontado'` (contrapartida Caja, no Cartera, porque la plata ya había entrado).
+- **Limitación conocida y documentada**: se contabiliza por el monto BRUTO — `cheques` no tiene campo para el neto/tasa de descuento, así que el gasto financiero de la quita del banco no se registra (no es una regresión, tampoco se registraba antes). Backlog separado si se necesita.
+
+**Probado en vivo contra producción (Nalux)**, cheque de tercero sintético $1.000:
+- `en_cartera → descontado`: generó el asiento nuevo correcto (Debe Caja $1.000 / Haber Cartera $1.000) — antes no generaba nada.
+- `descontado → cobrado`: confirmado que **no** generó un segundo asiento (el guard funcionó) — quedó en 2 asientos totales (recepción + descontado), no 3.
+- Cheque de prueba, asientos e historial limpiados por completo, verificado con conteo en cero.
+
+**Dato adicional del repaso, no arreglado (fuera de alcance, mismo criterio que las 7 facturas sin asiento que ya había dejado Luciano):** 6 cheques de junio (incluido el de $500.500) sin ningún asiento — anteriores a que los triggers estuvieran completos. No se corrigen retroactivamente sin pedido explícito.
+
+---
 
 ## 🟡 Pendiente para Nadia: liquidación de tarjetas en POS (crear_venta)
 
@@ -7,12 +29,9 @@ Cerrando la auditoría de Bancos, se revisó a fondo Conciliación bancaria (OK,
 
 **Hallazgo:** mig.216 documenta en su propio comentario que su alcance fue *solo* `registrar_cobro_cliente` (cobros de Cuenta Corriente) — `crear_venta` (POS) quedó **fuera a propósito**. Verificado hoy: sigue así. Una venta de POS pagada con tarjeta acredita el bruto directo a `1.1.1 Caja y Bancos` el mismo día, sin pasar por la cuenta puente `1.1.8 Tarjetas a Acreditar` ni reflejar la comisión — la misma distorsión de liquidez que mig.216 ya resolvió para CxC (Comunicación BCRA A 7153: la plata entra 8-10 días hábiles después, por el neto).
 
-**Para Nadia, mañana:**
-1. Extender `crear_venta` para que, cuando la forma de pago tenga `dias_acreditacion > 0`, debite `1.1.8` en vez de `1.1.1` y cree el `movimientos_caja` en estado `pendiente` — mismo patrón que `registrar_cobro_cliente` ya usa (mig.216). Así la venta aparecería en el tab "Tarjetas pendientes" y usaría el mismo `acreditar_movimiento_caja` que ya existe.
-2. Además de construirlo, **repasar y probar en vivo (con datos sintéticos, limpiando después) todo lo que se tocó en esta sesión**, ya que quedó sin una segunda revisión cruzada:
-   - Cheques: `regenerar_asiento_cheque` (mig.282) — tabla `cheques_asiento_errores`, botón "Regenerar asiento".
-   - Cierre de Ejercicio (mig.283) — botón "Cerrar Ejercicio" en Períodos.
-   - Traslado a Resultados Acumulados (mig.284) — botón "Trasladar a Acumulados" en Períodos.
+**Para Nadia:**
+1. Extender `crear_venta` para que, cuando la forma de pago tenga `dias_acreditacion > 0`, debite `1.1.8` en vez de `1.1.1` y cree el `movimientos_caja` en estado `pendiente` — mismo patrón que `registrar_cobro_cliente` ya usa (mig.216). Así la venta aparecería en el tab "Tarjetas pendientes" y usaría el mismo `acreditar_movimiento_caja` que ya existe. **Sigue pendiente, no se tocó todavía.**
+2. ~~Repasar y probar en vivo lo de Cheques/Cierre de Ejercicio/Traslado~~ — **HECHO** (ver sección de arriba): Cierre de Ejercicio y Traslado sin hallazgos; Cheques encontró y cerró un blindspot real (mig.285, 'depositado'/'descontado'), probado en vivo.
 
 Detalle completo de memoria: `project_pendiente_liquidacion_tarjetas_pos.md`, `project_cheques_asiento_fallido_mig282.md`, `project_pendiente_cierre_ejercicio_sap.md`.
 
