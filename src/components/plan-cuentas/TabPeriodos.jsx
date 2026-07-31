@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Check, AlertTriangle, Loader2, Lock, Unlock, BookLock } from 'lucide-react';
+import { Plus, Check, AlertTriangle, Loader2, Lock, Unlock, BookLock, ArrowRightLeft } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,9 @@ function TabPeriodos({ empresaId, userId, userRole }) {
   const [showCierreEjercicio, setShowCierreEjercicio] = useState(false);
   const [periodoACerrarEjercicio, setPeriodoACerrarEjercicio] = useState(null);
   const [procesandoCierreEjercicio, setProcesandoCE] = useState(false);
+  const [showTraslado, setShowTraslado]       = useState(false);
+  const [periodoATrasladar, setPeriodoATrasladar] = useState(null);
+  const [procesandoTraslado, setProcesandoT]  = useState(false);
   const [nuevoForm, setNuevoForm]             = useState({ nombre: '', fecha_inicio: '', fecha_cierre: '', observaciones: '' });
   const { toast } = useToast();
   const isAdmin = userRole === 'admin';
@@ -166,6 +169,30 @@ function TabPeriodos({ empresaId, userId, userRole }) {
     }
   };
 
+  const handleTrasladar = async () => {
+    if (!periodoATrasladar) return;
+    setProcesandoT(true);
+    try {
+      const { data, error } = await supabase.rpc('trasladar_resultado_acumulados', {
+        p_periodo_id: periodoATrasladar.id,
+        p_user_id: userId,
+      });
+      if (error) throw error;
+      toast({
+        title: 'Trasladado a Resultados Acumulados',
+        description: `Monto: ${fmt(data.resultado_neto)}`,
+        className: 'bg-green-900 border-green-700 text-white',
+      });
+      setShowTraslado(false);
+      setPeriodoATrasladar(null);
+      fetchPeriodos();
+    } catch (e) {
+      toast({ title: 'Error al trasladar', description: e.message, variant: 'destructive' });
+    } finally {
+      setProcesandoT(false);
+    }
+  };
+
   const fmt = (n) => `$ ${Number(n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const fmtFecha = (d) => new Date(d + 'T12:00:00').toLocaleDateString('es-AR');
@@ -252,9 +279,23 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                           <BookLock size={12} /> Cerrar Ejercicio
                         </button>
                       )}
+                      {p.asiento_cierre_id && !p.asiento_traslado_id && p.resultado_neto != null && p.resultado_neto !== 0 && (
+                        <button
+                          onClick={() => { setPeriodoATrasladar(p); setShowTraslado(true); }}
+                          title="Traslada el saldo de 3.3 Resultado del Ejercicio a 3.2 Resultados Acumulados"
+                          className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-purple-600 dark:text-purple-400 hover:opacity-80 hover:bg-purple-500/10 border border-purple-500/30 transition-colors"
+                        >
+                          <ArrowRightLeft size={12} /> Trasladar a Acumulados
+                        </button>
+                      )}
                       {p.asiento_cierre_id && (
                         <span className="text-2xs px-2 py-1 rounded-full border border-indigo-500/30 text-indigo-600 dark:text-indigo-400 bg-indigo-500/10">
                           Ejercicio cerrado
+                        </span>
+                      )}
+                      {p.asiento_traslado_id && (
+                        <span className="text-2xs px-2 py-1 rounded-full border border-purple-500/30 text-purple-600 dark:text-purple-400 bg-purple-500/10">
+                          Trasladado
                         </span>
                       )}
                     </div>
@@ -440,6 +481,50 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                 ? <Loader2 size={14} className="animate-spin mr-2" />
                 : <BookLock size={14} className="mr-2" />}
               Confirmar cierre de ejercicio
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Confirmar traslado a Resultados Acumulados */}
+      <Dialog
+        open={showTraslado}
+        onOpenChange={v => { if (!procesandoTraslado) { setShowTraslado(v); if (!v) setPeriodoATrasladar(null); } }}
+      >
+        <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-purple-500">
+              <ArrowRightLeft size={18} /> Trasladar a Resultados Acumulados
+            </DialogTitle>
+            <DialogDescription>
+              Mueve el resultado de este ejercicio de 3.3 (Resultado del Ejercicio) a 3.2 (Resultados Acumulados), dejando 3.3 en cero.
+            </DialogDescription>
+          </DialogHeader>
+          {periodoATrasladar && (
+            <div className="space-y-3 py-2">
+              <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
+                <p className="text-sm font-semibold text-purple-500 mb-1">{periodoATrasladar.nombre}</p>
+                <p className="text-xs text-purple-500">
+                  Resultado neto: {fmt(periodoATrasladar.resultado_neto)}
+                </p>
+              </div>
+              <p className="text-sm text-kx-text-3">
+                Esta operación no se puede repetir sobre el mismo período.
+              </p>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" disabled={procesandoTraslado}
+              onClick={() => { setShowTraslado(false); setPeriodoATrasladar(null); }}
+              className="text-kx-text-3">
+              Cancelar
+            </Button>
+            <Button onClick={handleTrasladar} disabled={procesandoTraslado}
+              className="bg-purple-600 hover:bg-purple-700 text-white">
+              {procesandoTraslado
+                ? <Loader2 size={14} className="animate-spin mr-2" />
+                : <ArrowRightLeft size={14} className="mr-2" />}
+              Confirmar traslado
             </Button>
           </DialogFooter>
         </DialogContent>

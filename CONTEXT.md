@@ -1,5 +1,22 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-31 (Luciano/Claude — Cierre de Ejercicio contable, mig.283, probado en vivo con datos sintéticos)
+**Última actualización:** 2026-07-31 (Luciano/Claude — Traslado a Resultados Acumulados, mig.284, cierra el circuito de Cierre de Ejercicio)
+
+## ✅ Traslado a Resultados Acumulados — segundo paso del cierre SAP (mig.284)
+
+Completa lo que mig.283 dejó explícitamente fuera de alcance: pasar el saldo de `3.3 Resultado del Ejercicio` a `3.2 Resultados Acumulados` una vez cerrado el ejercicio, dejando 3.3 en cero para el próximo.
+
+**Fix (mig.284):**
+- `periodos_contables.resultado_neto` (nueva columna) — `cerrar_ejercicio_contable` ahora guarda el neto calculado ahí, en vez de que el traslado tenga que releer el saldo actual de 3.3 (que podría mezclar el resultado de varios ejercicios cerrados y no trasladados aún). Cada traslado mueve exactamente lo que le corresponde a SU período.
+- `periodos_contables.asiento_traslado_id` (nueva columna) — vínculo 1:1, no se puede trasladar dos veces.
+- RPC `trasladar_resultado_acumulados(p_periodo_id, p_user_id)` — requiere `asiento_cierre_id` ya generado, admin, no trasladado antes, resultado neto ≠ 0. Un asiento de 2 líneas: lleva 3.3 a cero, acredita o debita 3.2 por el mismo monto.
+- Botón "Trasladar a Acumulados" en `TabPeriodos.jsx`, visible solo cuando `asiento_cierre_id` existe, `asiento_traslado_id` no, y `resultado_neto != 0`. Badge "Trasladado" una vez hecho.
+
+**Probado en vivo contra producción (Nalux), con datos sintéticos y aislados** (mismo criterio: rango 2020-01, sin actividad real): asiento test Venta $5.000 → período cerrado por fecha → "Cerrar Ejercicio" (resultado neto $5.000 a 3.3) → "Trasladar a Acumulados" → asiento generado correcto: Debe 3.3 $5.000 (a cero) / Haber 3.2 $5.000. Botón desaparece tras usarlo, badge "Trasladado" queda. Todo limpiado por completo después — verificado `count(*)=0`.
+
+**Con esto, el circuito de Cierre de Ejercicio estilo SAP queda completo: cierre de fechas → asiento de cierre (Ingreso/Egreso → 3.3) → traslado (3.3 → 3.2).**
+
+---
+
 
 ## ✅ Cierre de Ejercicio contable — estilo SAP (mig.283)
 
