@@ -1,5 +1,23 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-30 (Luciano/Claude — auditoría contable completa cerrada, Ventas verificado con la misma rigurosidad que Compras)
+**Última actualización:** 2026-07-30 (Luciano/Claude — auditoría de Cheques: asiento fallido ahora visible y regenerable, mig.282)
+
+## 🟡→✅ Cheques: asiento contable fallido quedaba en silencio total (mig.282)
+
+Después de cerrar Ventas/Compras, arrancamos la siguiente auditoría por Bancos/Cheques, navegando la UI en vivo antes de tocar código. Sorpresa: el módulo de Cheques está mucho más maduro de lo que decía la memoria de sesiones anteriores — 10 migraciones (028→211) ya resolvían los 3 gaps que se creían pendientes (asiento por cada transición de estado, vínculo a `movimientos_bancarios` al cobrar, reversión de deuda al rechazar, idempotencia y hardening multi-tenant ya aplicados en la sesión 72).
+
+**El único gap real encontrado:** `fn_asiento_cheque_tercero`/`fn_asiento_cheque_propio` envuelven TODO el bloque contable en `EXCEPTION WHEN OTHERS THEN NULL` — si falta una cuenta del plan (1.1.6, 1.1.7, 2.1.6, etc.) o cualquier otro error inesperado, el cheque cambia de estado igual pero el asiento nunca se genera y no queda ningún rastro visible (a diferencia del patrón toast+"Regenerar asiento" que ya usan Ventas/Compras, mig.281).
+
+**Fix (mig.282):**
+- Tabla `cheques_asiento_errores` (cheque_id, estado, error_mensaje, resuelto) — los triggers ahora loguean ahí en vez de tragarse el error en silencio. Sigue siendo no bloqueante: el cambio de estado del cheque nunca falla por esto.
+- RPC `regenerar_asiento_cheque(p_cheque_id, p_user_id)` — reconstruye el asiento del estado ACTUAL del cheque con la misma lógica que los triggers (recibido/endosado/cobrado/rechazado para terceros; entregado/cobrado/rechazado para propios), incluido el movimiento en `movimientos_bancarios` si corresponde. Solo actúa si hay un error pendiente logueado para ese cheque+estado (evita duplicar un asiento que sí se generó bien).
+- Botón "Regenerar asiento" (ícono ámbar de alerta) en `AccionesCheque` (`shared.jsx`), visible solo si el cheque tiene un error pendiente en `cheques_asiento_errores` — mismo patrón visual que Ventas/Compras.
+- **Gotcha de sesión, no de KAIROX:** después de aplicar la migración vía `apply_migration`, PostgREST tardó en refrescar su caché de schema (`PGRST205 — tabla no encontrada`) hasta correr `NOTIFY pgrst, 'reload schema'` manualmente + agregar el `GRANT SELECT` explícito a `authenticated` sobre la tabla nueva (la política RLS sola no alcanza, PostgREST exige el grant de tabla además). Confirmado resuelto vía curl directo al REST endpoint (pasó de `PGRST205` a `permission denied for function get_my_empresa_id`, que es el error esperado sin sesión autenticada). Si una migración futura crea una tabla nueva, recordar: RLS policy + GRANT + NOTIFY reload — los 3, no alcanza con 1 o 2.
+- Verificado en vivo: la pantalla de Cheques renderiza sin regresiones tras el fix, `cheques_asiento_errores` existe con 0 filas (esperado, no hay errores reales hoy).
+
+**Pendiente real, no tocado:** dominio propio en Resend (Nadia) y cuota de facturación de Supabase vencida (Luciano, dashboard). Bancos/Conciliación y Cheques Propios (UI) aún no se navegaron a fondo — próximo paso de esta auditoría si se retoma.
+
+---
+
 
 ## ✅ Ventas — cerrado con la misma rigurosidad que Compras
 

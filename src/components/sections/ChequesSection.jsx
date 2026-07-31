@@ -23,6 +23,7 @@ export default function ChequesSection() {
 
   const [cheques, setCheques]                     = useState([]);
   const [loading, setLoading]                     = useState(true);
+  const [chequesConAsientoPendiente, setChequesConAsientoPendiente] = useState(new Set());
   const [clientes, setClientes]                   = useState([]);
   const [proveedores, setProveedores]             = useState([]);
   const [cuentasBancarias, setCuentasBancarias]   = useState([]);
@@ -75,6 +76,30 @@ export default function ChequesSection() {
     }
   };
 
+  const fetchAsientosPendientes = async () => {
+    if (!user?.empresa_id) return;
+    const { data, error } = await supabase
+      .from('cheques_asiento_errores')
+      .select('cheque_id')
+      .eq('empresa_id', user.empresa_id)
+      .eq('resuelto', false);
+    if (error) return; // no bloqueante: es solo un indicador visual
+    setChequesConAsientoPendiente(new Set((data ?? []).map(r => r.cheque_id)));
+  };
+
+  const handleRegenerarAsiento = async (cheque) => {
+    const { error } = await supabase.rpc('regenerar_asiento_cheque', {
+      p_cheque_id: cheque.id,
+      p_user_id: user.id,
+    });
+    if (error) {
+      toast({ title: 'No se pudo regenerar el asiento', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Asiento regenerado', className: 'bg-emerald-600 text-white border-none' });
+    fetchAsientosPendientes();
+  };
+
   const abrirDetalle = async (cheque) => {
     setChequeDetalle(cheque);
     setShowDetalle(true);
@@ -98,6 +123,7 @@ export default function ChequesSection() {
   useEffect(() => {
     if (!user?.empresa_id) return;
     fetchCheques();
+    fetchAsientosPendientes();
     Promise.all([
       supabase.from('clientes').select('id, nombre').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre'),
       // SECURITY-RLS-CROSS: RPC scoped id+nombre — Cheques no requiere permiso 'compras' (mig.135)
@@ -180,6 +206,7 @@ export default function ChequesSection() {
       setShowNuevoTercero(false);
       setTerceroForm(emptyTerceroForm());
       fetchCheques();
+      fetchAsientosPendientes();
     } catch (e) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
     } finally {
@@ -261,6 +288,7 @@ export default function ChequesSection() {
       setProveedorEndosoId('');
       setCuentaBancariaCobroId('');
       fetchCheques();
+      fetchAsientosPendientes();
     } catch (e) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
     } finally {
@@ -381,6 +409,8 @@ export default function ChequesSection() {
               onNuevo={() => setShowNuevoTercero(true)}
               onVerDetalle={abrirDetalle}
               onCambiarEstado={abrirCambioEstado}
+              onRegenerarAsiento={handleRegenerarAsiento}
+              chequesConAsientoPendiente={chequesConAsientoPendiente}
             />
           </TabsContent>
 
@@ -391,6 +421,8 @@ export default function ChequesSection() {
               onNuevo={() => setShowNuevoPropio(true)}
               onVerDetalle={abrirDetalle}
               onCambiarEstado={abrirCambioEstado}
+              onRegenerarAsiento={handleRegenerarAsiento}
+              chequesConAsientoPendiente={chequesConAsientoPendiente}
             />
           </TabsContent>
         </Tabs>

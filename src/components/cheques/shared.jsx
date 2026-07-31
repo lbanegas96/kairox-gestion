@@ -1,4 +1,4 @@
-import { Clock, Eye, ArrowRightLeft } from 'lucide-react';
+import { Clock, Eye, ArrowRightLeft, AlertTriangle } from 'lucide-react';
 import { getTodayAR } from '@/lib/dateUtils';
 
 export const BANCOS_AR = [
@@ -83,7 +83,7 @@ export function EstadoBadge({ estado }) {
   );
 }
 
-export function AccionesCheque({ cheque, onVerDetalle, onCambiarEstado }) {
+export function AccionesCheque({ cheque, onVerDetalle, onCambiarEstado, onRegenerarAsiento, tieneAsientoPendiente }) {
   const opciones = cheque.tipo === 'tercero'
     ? TRANSICIONES_TERCERO[cheque.estado]
     : TRANSICIONES_PROPIO[cheque.estado];
@@ -101,6 +101,15 @@ export function AccionesCheque({ cheque, onVerDetalle, onCambiarEstado }) {
           className="px-2 py-1 text-xs rounded text-[#00D4FF] hover:text-kx-text hover:bg-[#00D4FF]/10 border border-[#00D4FF]/30 transition-colors flex items-center gap-1"
         >
           <ArrowRightLeft size={11} /> Mover
+        </button>
+      )}
+      {tieneAsientoPendiente && (
+        <button
+          onClick={() => onRegenerarAsiento(cheque)}
+          title="Este cheque no tiene asiento contable para su estado actual — puede pasar si faltaba una cuenta del plan"
+          className="px-2 py-1 text-xs rounded text-amber-600 dark:text-amber-400 hover:text-kx-text hover:bg-amber-500/10 border border-amber-500/40 transition-colors flex items-center gap-1"
+        >
+          <AlertTriangle size={11} /> Regenerar asiento
         </button>
       )}
     </div>

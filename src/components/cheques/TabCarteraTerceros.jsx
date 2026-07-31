@@ -2,7 +2,7 @@ import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fmt, EstadoBadge, FechaVto, AccionesCheque } from './shared';
 
-function TabCarteraTerceros({ cheques, onNuevo, onVerDetalle, onCambiarEstado }) {
+function TabCarteraTerceros({ cheques, onNuevo, onVerDetalle, onCambiarEstado, onRegenerarAsiento, chequesConAsientoPendiente }) {
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
@@ -40,7 +40,8 @@ function TabCarteraTerceros({ cheques, onNuevo, onVerDetalle, onCambiarEstado })
                 <td className="px-4 py-3"><FechaVto fecha={c.fecha_vencimiento} estado={c.estado} /></td>
                 <td className="px-4 py-3 text-center"><EstadoBadge estado={c.estado} /></td>
                 <td className="px-4 py-3 text-center">
-                  <AccionesCheque cheque={c} onVerDetalle={onVerDetalle} onCambiarEstado={onCambiarEstado} />
+                  <AccionesCheque cheque={c} onVerDetalle={onVerDetalle} onCambiarEstado={onCambiarEstado}
+                    onRegenerarAsiento={onRegenerarAsiento} tieneAsientoPendiente={chequesConAsientoPendiente?.has(c.id)} />
                 </td>
               </tr>
             ))}
