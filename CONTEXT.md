@@ -1,5 +1,20 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-07-30 (Luciano/Claude — auditoría de Cheques: asiento fallido ahora visible y regenerable, mig.282)
+**Última actualización:** 2026-07-31 (Luciano/Claude — Cierre de Ejercicio contable, mig.283, probado en vivo con datos sintéticos)
+
+## ✅ Cierre de Ejercicio contable — estilo SAP (mig.283)
+
+Siguiendo la navegación de Bancos/Conciliación/Cheques, Luciano preguntó puntualmente si existía el cierre mensual/anual con pase de Resultados a Patrimonio, apoyándose en el modelo SAP. Respuesta: el cierre de período (`TabPeriodos.jsx`, mig.027) solo bloqueaba fechas — el "Resultado del Ejercicio" del Balance General era (y para períodos sin cierre de ejercicio sigue siendo) un cálculo en pantalla, nunca un asiento real.
+
+**Fix (mig.283):**
+- `periodos_contables.asiento_cierre_id` (nueva columna) — vínculo 1:1 al asiento de cierre, si existe.
+- RPC `cerrar_ejercicio_contable(p_periodo_id, p_user_id)` — requiere período YA cerrado (fechas bloqueadas) + rol admin + que no tenga ya un asiento de cierre. Por cada cuenta `tipo IN ('ingreso','egreso')` con movimientos confirmados en el rango, inserta la línea que la deja en cero (Debe si tenía saldo acreedor, Haber si tenía saldo deudor), con una única contrapartida contra `3.3 Resultado del Ejercicio` por el neto. Si no hay movimientos de resultado en el rango, no genera nada (evita asientos vacíos).
+- Botón "Cerrar Ejercicio" en `TabPeriodos.jsx`, visible solo si `estado='cerrado' && !asiento_cierre_id`. Una vez generado, muestra badge "Ejercicio cerrado" y el botón "Reabrir" queda bloqueado (toast explicando que hay que anular el asiento desde Plan de Cuentas primero) — evita reabrir fechas que ya tienen resultado contabilizado.
+- **Fuera de alcance, documentado:** el paso de `3.3 Resultado del Ejercicio` a `3.2 Resultados Acumulados` en el cambio de ejercicio (segundo paso del cierre SAP) no se automatizó — quedaría como asiento manual si se necesita.
+
+**Probado en vivo contra producción (Nalux), con datos 100% sintéticos y aislados** (rango 2020-01, sin actividad real): 2 asientos de prueba (Venta $10.000 / Costo $4.000) → período test cerrado por fecha → botón "Cerrar Ejercicio" → asiento generado correcto: Debe Ventas $10.000 (a cero) + Haber Costo $4.000 (a cero) + Haber 3.3 $6.000 (resultado neto = 10.000−4.000, balanceado 10.000=10.000). Confirmado también que "Reabrir" queda bloqueado tras el cierre de ejercicio. Todo limpiado por completo después (asiento+ítems, los 2 asientos de prueba, el período test) — verificado con `count(*)=0`.
+
+---
+
 
 ## 🟡→✅ Cheques: asiento contable fallido quedaba en silencio total (mig.282)
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Check, AlertTriangle, Loader2, Lock, Unlock } from 'lucide-react';
+import { Plus, Check, AlertTriangle, Loader2, Lock, Unlock, BookLock } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,9 @@ function TabPeriodos({ empresaId, userId, userRole }) {
   const [procesandoCierre, setProcesando]     = useState(false);
   const [showReabrirConfirm, setShowReabrir]  = useState(false);
   const [periodoAReabrir, setPeriodoAReabrir] = useState(null);
+  const [showCierreEjercicio, setShowCierreEjercicio] = useState(false);
+  const [periodoACerrarEjercicio, setPeriodoACerrarEjercicio] = useState(null);
+  const [procesandoCierreEjercicio, setProcesandoCE] = useState(false);
   const [nuevoForm, setNuevoForm]             = useState({ nombre: '', fecha_inicio: '', fecha_cierre: '', observaciones: '' });
   const { toast } = useToast();
   const isAdmin = userRole === 'admin';
@@ -105,6 +108,16 @@ function TabPeriodos({ empresaId, userId, userRole }) {
 
   const handleReabrirPeriodo = async () => {
     if (!periodoAReabrir) return;
+    if (periodoAReabrir.asiento_cierre_id) {
+      toast({
+        title: 'No se puede reabrir',
+        description: 'Este período ya tiene un asiento de cierre de ejercicio generado. Anulá ese asiento desde Plan de Cuentas antes de reabrir el período.',
+        variant: 'destructive',
+      });
+      setShowReabrir(false);
+      setPeriodoAReabrir(null);
+      return;
+    }
     setProcesando(true);
     try {
       const { error } = await supabase
@@ -126,6 +139,34 @@ function TabPeriodos({ empresaId, userId, userRole }) {
       setProcesando(false);
     }
   };
+
+  const handleCerrarEjercicio = async () => {
+    if (!periodoACerrarEjercicio) return;
+    setProcesandoCE(true);
+    try {
+      const { data, error } = await supabase.rpc('cerrar_ejercicio_contable', {
+        p_periodo_id: periodoACerrarEjercicio.id,
+        p_user_id: userId,
+      });
+      if (error) throw error;
+      toast({
+        title: data?.asiento_id ? 'Asiento de cierre de ejercicio generado' : 'Sin movimientos para cerrar',
+        description: data?.asiento_id
+          ? `Resultado del ejercicio: ${fmt(data.resultado_neto)}`
+          : data?.mensaje,
+        className: 'bg-green-900 border-green-700 text-white',
+      });
+      setShowCierreEjercicio(false);
+      setPeriodoACerrarEjercicio(null);
+      fetchPeriodos();
+    } catch (e) {
+      toast({ title: 'Error al cerrar ejercicio', description: e.message, variant: 'destructive' });
+    } finally {
+      setProcesandoCE(false);
+    }
+  };
+
+  const fmt = (n) => `$ ${Number(n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const fmtFecha = (d) => new Date(d + 'T12:00:00').toLocaleDateString('es-AR');
 
@@ -186,21 +227,37 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                 </td>
                 {isAdmin && (
                   <td className="px-4 py-3 text-center">
-                    {p.estado === 'abierto' ? (
-                      <button
-                        onClick={() => { setPeriodoACerrar(p); setShowCierre(true); }}
-                        className="flex items-center gap-1 mx-auto px-3 py-1.5 rounded text-xs text-kx-amber hover:opacity-80 hover:bg-kx-amber/10 border border-kx-amber/30 transition-colors"
-                      >
-                        <Lock size={12} /> Cerrar
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => { setPeriodoAReabrir(p); setShowReabrir(true); }}
-                        className="flex items-center gap-1 mx-auto px-3 py-1.5 rounded text-xs text-kx-green hover:opacity-80 hover:bg-kx-green/10 border border-kx-green/30 transition-colors"
-                      >
-                        <Unlock size={12} /> Reabrir
-                      </button>
-                    )}
+                    <div className="flex items-center justify-center gap-2 flex-wrap">
+                      {p.estado === 'abierto' ? (
+                        <button
+                          onClick={() => { setPeriodoACerrar(p); setShowCierre(true); }}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-kx-amber hover:opacity-80 hover:bg-kx-amber/10 border border-kx-amber/30 transition-colors"
+                        >
+                          <Lock size={12} /> Cerrar
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => { setPeriodoAReabrir(p); setShowReabrir(true); }}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-kx-green hover:opacity-80 hover:bg-kx-green/10 border border-kx-green/30 transition-colors"
+                        >
+                          <Unlock size={12} /> Reabrir
+                        </button>
+                      )}
+                      {p.estado === 'cerrado' && !p.asiento_cierre_id && (
+                        <button
+                          onClick={() => { setPeriodoACerrarEjercicio(p); setShowCierreEjercicio(true); }}
+                          title="Genera el asiento que zapatea Ingresos/Egresos contra Resultado del Ejercicio"
+                          className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-indigo-600 dark:text-indigo-400 hover:opacity-80 hover:bg-indigo-500/10 border border-indigo-500/30 transition-colors"
+                        >
+                          <BookLock size={12} /> Cerrar Ejercicio
+                        </button>
+                      )}
+                      {p.asiento_cierre_id && (
+                        <span className="text-2xs px-2 py-1 rounded-full border border-indigo-500/30 text-indigo-600 dark:text-indigo-400 bg-indigo-500/10">
+                          Ejercicio cerrado
+                        </span>
+                      )}
+                    </div>
                   </td>
                 )}
               </tr>
@@ -338,6 +395,51 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                 ? <Loader2 size={14} className="animate-spin mr-2" />
                 : <Unlock size={14} className="mr-2" />}
               Confirmar reapertura
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Confirmar cierre de ejercicio */}
+      <Dialog
+        open={showCierreEjercicio}
+        onOpenChange={v => { if (!procesandoCierreEjercicio) { setShowCierreEjercicio(v); if (!v) setPeriodoACerrarEjercicio(null); } }}
+      >
+        <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-indigo-500">
+              <BookLock size={18} /> Cerrar Ejercicio (asiento contable)
+            </DialogTitle>
+            <DialogDescription>
+              Genera un asiento real que deja en cero las cuentas de Ingreso y Egreso del período, contra Resultado del Ejercicio.
+            </DialogDescription>
+          </DialogHeader>
+          {periodoACerrarEjercicio && (
+            <div className="space-y-3 py-2">
+              <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-lg p-3">
+                <p className="text-sm font-semibold text-indigo-500 mb-1">{periodoACerrarEjercicio.nombre}</p>
+                <p className="text-xs text-indigo-500">
+                  {fmtFecha(periodoACerrarEjercicio.fecha_inicio)} — {fmtFecha(periodoACerrarEjercicio.fecha_cierre)}
+                </p>
+              </div>
+              <p className="text-sm text-kx-text-3">
+                Esta operación no se puede repetir sobre el mismo período. Si necesitás corregir algo después,
+                vas a tener que anular el asiento generado desde Plan de Cuentas.
+              </p>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" disabled={procesandoCierreEjercicio}
+              onClick={() => { setShowCierreEjercicio(false); setPeriodoACerrarEjercicio(null); }}
+              className="text-kx-text-3">
+              Cancelar
+            </Button>
+            <Button onClick={handleCerrarEjercicio} disabled={procesandoCierreEjercicio}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white">
+              {procesandoCierreEjercicio
+                ? <Loader2 size={14} className="animate-spin mr-2" />
+                : <BookLock size={14} className="mr-2" />}
+              Confirmar cierre de ejercicio
             </Button>
           </DialogFooter>
         </DialogContent>
