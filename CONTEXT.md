@@ -1,5 +1,20 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08 (Luciano/Claude — ajuste manual de stock genera asiento contable, mig.289, probado en vivo end-to-end)
+**Última actualización:** 2026-08 (Luciano/Claude — ajuste masivo de precios en Listas de Precios, mig.290, probado en vivo end-to-end)
+
+## ✅ Ajuste masivo de precios en Listas de Precios — mig.290
+
+Investigación previa (post-auditoría Inventario/COGS): `ListasPrecioSection` solo permitía editar precio producto por producto. En PyME argentina con inflación alta esto es inviable para catálogos reales. Se investigó qué ofrece el mercado (Tango, Dragonfish, Bejerman, Xubio) y se identificaron 5 features candidatas; se construyeron las 3 de mejor ROI en esta tanda: ajuste masivo filtrable, preview antes de aplicar, y redondeo configurable. Quedan pendientes para más adelante: historial de cambios de precio y vigencia futura (ver [[project_investigar_ajuste_masivo_listas_precio]]).
+
+**Fix (mig.290):**
+- RPC `ajustar_precios_masivo(lista_precio_id, tipo_ajuste, valor, categoria_id?, busqueda?, redondeo?, aplicar)` — un único cálculo usado tanto para preview (`p_aplicar=false`, no escribe nada) como para aplicar (`p_aplicar=true`, hace upsert real) para que preview y resultado nunca diverjan.
+  - Precio base: el ya guardado en la lista si existe, si no `productos.precio_venta` (mismo criterio que la UI existente).
+  - Ajuste: `porcentaje` o `monto_fijo`, filtrable por categoría y por texto de búsqueda.
+  - Redondeo: `ninguno` / `decena` ($X0) / `centena` ($X00) / `terminar_99` ($X99).
+- `listaPreciosService.ajustarPreciosMasivo` (nuevo método) y modal "Ajuste masivo" en `ListasPrecioSection.jsx`: form de tipo/valor/categoría/redondeo → botón "Previsualizar cambios" (tabla actual→nuevo, nada se graba) → botón "Aplicar a N productos" (recién ahí escribe).
+
+**Probado en vivo end-to-end contra producción (Nalux)**, desde la UI real de Listas de Precios → lista "Mayorista" → filtro "TESTE" (producto de test preexistente) → +10% con redondeo $X99 → preview mostró $1.200→$1.399 ✓ → aplicar → toast "Precios actualizados ✓, 1 producto ajustado" → verificado en DB (`lista_precio_items.precio = 1399.00`) ✓. Ítem de test eliminado después — verificado en cero.
+
+---
 
 ## ✅ Ajuste manual de stock genera asiento contable — mig.289
 

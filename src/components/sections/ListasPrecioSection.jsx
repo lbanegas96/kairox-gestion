@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Tag, Plus, Edit, Trash2, Package, Search, Check,
-  ToggleLeft, ToggleRight, X, Loader2, DollarSign
+  ToggleLeft, ToggleRight, X, Loader2, DollarSign, Sparkles, ArrowRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -35,6 +36,13 @@ function ListasPrecioSection() {
   const [productos, setProductos] = useState([]);
   const [precioEdicion, setPrecioEdicion] = useState({}); // { producto_id: precio_str }
   const [savingItem, setSavingItem] = useState(null);
+
+  const [ajusteModal, setAjusteModal] = useState(false);
+  const [ajusteForm, setAjusteForm] = useState({
+    tipoAjuste: 'porcentaje', valor: '', categoriaId: '', redondeo: 'ninguno',
+  });
+  const [preview, setPreview] = useState(null); // AjusteMasivoItem[] | null
+  const [categorias, setCategorias] = useState([]);
 
   // ── Queries ──────────────────────────────────────────────────────────────────
   const { data: listas = [], isLoading } = useQuery({
@@ -69,6 +77,17 @@ function ListasPrecioSection() {
       .order('nombre')
       .then(({ data }) => setProductos(data ?? []));
   }, [itemsModal, empresaId]);
+
+  // Categorías (para el filtro de ajuste masivo)
+  useEffect(() => {
+    if (!ajusteModal || !empresaId) return;
+    supabase
+      .from('categorias')
+      .select('id, nombre')
+      .eq('empresa_id', empresaId)
+      .order('nombre')
+      .then(({ data }) => setCategorias(data ?? []));
+  }, [ajusteModal, empresaId]);
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
   const saveLista = useMutation({
@@ -110,6 +129,52 @@ function ListasPrecioSection() {
     },
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
+
+  const previewAjuste = useMutation({
+    mutationFn: async () => {
+      const valor = parseNumberLocale(ajusteForm.valor);
+      if (isNaN(valor) || valor === 0) throw new Error('Ingresá un valor de ajuste válido');
+      return listaPreciosService.ajustarPreciosMasivo({
+        listaPrecioId: selectedLista.id,
+        tipoAjuste: ajusteForm.tipoAjuste,
+        valor,
+        categoriaId: ajusteForm.categoriaId || null,
+        busqueda: prodSearch || null,
+        redondeo: ajusteForm.redondeo,
+      }, false);
+    },
+    onSuccess: (items) => setPreview(items),
+    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const aplicarAjuste = useMutation({
+    mutationFn: async () => {
+      const valor = parseNumberLocale(ajusteForm.valor);
+      return listaPreciosService.ajustarPreciosMasivo({
+        listaPrecioId: selectedLista.id,
+        tipoAjuste: ajusteForm.tipoAjuste,
+        valor,
+        categoriaId: ajusteForm.categoriaId || null,
+        busqueda: prodSearch || null,
+        redondeo: ajusteForm.redondeo,
+      }, true);
+    },
+    onSuccess: (items) => {
+      qc.invalidateQueries({ queryKey: ITEMS_KEY(selectedLista.id) });
+      qc.invalidateQueries({ queryKey: LISTAS_KEY(empresaId) });
+      toast({ title: `Precios actualizados ✓`, description: `${items.length} producto${items.length !== 1 ? 's' : ''} ajustado${items.length !== 1 ? 's' : ''}`, className: 'bg-green-600 text-white' });
+      setAjusteModal(false);
+      setPreview(null);
+      setAjusteForm({ tipoAjuste: 'porcentaje', valor: '', categoriaId: '', redondeo: 'ninguno' });
+    },
+    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const openAjusteMasivo = () => {
+    setPreview(null);
+    setAjusteForm({ tipoAjuste: 'porcentaje', valor: '', categoriaId: '', redondeo: 'ninguno' });
+    setAjusteModal(true);
+  };
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
   const openNueva = () => {
@@ -342,14 +407,25 @@ function ListasPrecioSection() {
       <Dialog open={itemsModal} onOpenChange={setItemsModal}>
         <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle className="dark:text-kx-text flex items-center gap-2">
-              <DollarSign className="w-5 h-5 text-kx-violet" />
-              Precios: {selectedLista?.nombre}
-            </DialogTitle>
-            <DialogDescription className="dark:text-kx-text-2">
-              Asigná un precio especial por producto. Solo los productos con precio guardado aparecerán en esta lista.
-              Los productos sin precio usarán el precio de venta estándar.
-            </DialogDescription>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <DialogTitle className="dark:text-kx-text flex items-center gap-2">
+                  <DollarSign className="w-5 h-5 text-kx-violet" />
+                  Precios: {selectedLista?.nombre}
+                </DialogTitle>
+                <DialogDescription className="dark:text-kx-text-2">
+                  Asigná un precio especial por producto. Solo los productos con precio guardado aparecerán en esta lista.
+                  Los productos sin precio usarán el precio de venta estándar.
+                </DialogDescription>
+              </div>
+              <Button
+                size="sm"
+                onClick={openAjusteMasivo}
+                className="bg-violet-600 hover:bg-violet-700 text-white gap-1.5 shrink-0"
+              >
+                <Sparkles className="w-3.5 h-3.5" /> Ajuste masivo
+              </Button>
+            </div>
           </DialogHeader>
 
           {/* Buscador */}
@@ -435,6 +511,168 @@ function ListasPrecioSection() {
               Cerrar
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── MODAL: Ajuste masivo de precios ── */}
+      <Dialog open={ajusteModal} onOpenChange={(open) => { setAjusteModal(open); if (!open) setPreview(null); }}>
+        <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="dark:text-kx-text flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-kx-violet" />
+              Ajuste masivo — {selectedLista?.nombre}
+            </DialogTitle>
+            <DialogDescription className="dark:text-kx-text-2">
+              Aplicá un ajuste por porcentaje o monto fijo a varios productos a la vez.
+              Previsualizá el resultado antes de confirmar — no se graba nada hasta que apliques.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="dark:text-kx-text text-xs">Tipo de ajuste</Label>
+              <Select
+                value={ajusteForm.tipoAjuste}
+                onValueChange={v => { setAjusteForm(f => ({ ...f, tipoAjuste: v })); setPreview(null); }}
+              >
+                <SelectTrigger className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="porcentaje">Porcentaje (%)</SelectItem>
+                  <SelectItem value="monto_fijo">Monto fijo ($)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="dark:text-kx-text text-xs">
+                Valor {ajusteForm.tipoAjuste === 'porcentaje' ? '(ej: 10 = +10%, -5 = -5%)' : '(ej: 500 ó -200)'}
+              </Label>
+              <Input
+                value={ajusteForm.valor}
+                onChange={e => { setAjusteForm(f => ({ ...f, valor: e.target.value })); setPreview(null); }}
+                placeholder={ajusteForm.tipoAjuste === 'porcentaje' ? '10' : '500'}
+                inputMode="decimal"
+                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="dark:text-kx-text text-xs">Categoría <span className="text-kx-text-3 font-normal">(opcional)</span></Label>
+              <Select
+                value={ajusteForm.categoriaId || 'all'}
+                onValueChange={v => { setAjusteForm(f => ({ ...f, categoriaId: v === 'all' ? '' : v })); setPreview(null); }}
+              >
+                <SelectTrigger className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las categorías</SelectItem>
+                  {categorias.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="dark:text-kx-text text-xs">Redondeo</Label>
+              <Select
+                value={ajusteForm.redondeo}
+                onValueChange={v => { setAjusteForm(f => ({ ...f, redondeo: v })); setPreview(null); }}
+              >
+                <SelectTrigger className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ninguno">Sin redondeo</SelectItem>
+                  <SelectItem value="decena">Terminar en $X0</SelectItem>
+                  <SelectItem value="centena">Terminar en $X00</SelectItem>
+                  <SelectItem value="terminar_99">Terminar en $X99</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {prodSearch && (
+            <p className="text-xs text-kx-text-3">
+              Filtro de búsqueda activo: <span className="font-medium">"{prodSearch}"</span> (se mantiene el de la lista)
+            </p>
+          )}
+
+          {!preview ? (
+            <div className="flex-1 flex items-center justify-center py-8">
+              <Button
+                onClick={() => previewAjuste.mutate()}
+                disabled={previewAjuste.isPending || !ajusteForm.valor}
+                className="bg-violet-600 hover:bg-violet-700 text-white gap-2"
+              >
+                {previewAjuste.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                Previsualizar cambios
+              </Button>
+            </div>
+          ) : preview.length === 0 ? (
+            <p className="text-center text-kx-text-3 py-8 text-sm">No hay productos que coincidan con los filtros</p>
+          ) : (
+            <>
+              <div className="flex-1 overflow-y-auto border border-kx-border dark:border-kx-border rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-kx-surface-2 dark:bg-slate-900/50 text-xs uppercase text-slate-500 dark:text-kx-text-2 sticky top-0">
+                    <tr>
+                      <th className="p-2.5 text-left">Producto</th>
+                      <th className="p-2.5 text-right">Actual</th>
+                      <th className="p-2.5 text-center w-8"></th>
+                      <th className="p-2.5 text-right">Nuevo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {preview.map(item => {
+                      const sube = item.precio_nuevo > item.precio_actual;
+                      const baja = item.precio_nuevo < item.precio_actual;
+                      return (
+                        <tr key={item.producto_id}>
+                          <td className="p-2.5 text-kx-text dark:text-kx-text truncate max-w-[200px]">{item.nombre}</td>
+                          <td className="p-2.5 text-right text-kx-text-3 tabular-nums">
+                            ${Number(item.precio_actual).toLocaleString('es-AR')}
+                          </td>
+                          <td className="p-2.5 text-center">
+                            <ArrowRight className="w-3.5 h-3.5 text-kx-text-3 inline" />
+                          </td>
+                          <td className={`p-2.5 text-right font-semibold tabular-nums ${
+                            sube ? 'text-kx-green' : baja ? 'text-kx-red' : 'text-kx-text dark:text-kx-text'
+                          }`}>
+                            ${Number(item.precio_nuevo).toLocaleString('es-AR')}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-xs text-kx-text-3">
+                  {preview.length} producto{preview.length !== 1 ? 's' : ''} — nada se guardó todavía
+                </span>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setPreview(null)} className="dark:border-kx-border dark:text-slate-300">
+                    Volver a editar
+                  </Button>
+                  <Button
+                    onClick={() => aplicarAjuste.mutate()}
+                    disabled={aplicarAjuste.isPending}
+                    className="bg-kx-green hover:bg-green-700 text-white gap-2"
+                  >
+                    {aplicarAjuste.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    Aplicar a {preview.length} producto{preview.length !== 1 ? 's' : ''}
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+
+          <DialogFooter className="pt-2 border-t border-kx-border dark:border-kx-border">
+            <Button variant="outline" onClick={() => setAjusteModal(false)} className="dark:border-kx-border dark:text-slate-300">
+              Cerrar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

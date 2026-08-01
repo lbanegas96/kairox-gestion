@@ -25,6 +25,22 @@ export interface ListaPrecioItem {
 // Mapa { producto_id → precio } para aplicar en NuevaVentaModal
 export type PrecioMap = Record<string, number>;
 
+export interface AjusteMasivoItem {
+  producto_id: string;
+  nombre: string;
+  precio_actual: number;
+  precio_nuevo: number;
+}
+
+export interface AjusteMasivoParams {
+  listaPrecioId: string;
+  tipoAjuste: 'porcentaje' | 'monto_fijo';
+  valor: number;
+  categoriaId?: string | null;
+  busqueda?: string | null;
+  redondeo?: 'ninguno' | 'decena' | 'centena' | 'terminar_99';
+}
+
 export const listaPreciosService = {
   // ── Listas ──────────────────────────────────────────────────────────────────
 
@@ -117,6 +133,23 @@ export const listaPreciosService = {
   async deleteItem(itemId: string): Promise<void> {
     const { error } = await supabase.from('lista_precio_items').delete().eq('id', itemId);
     if (error) throw new Error(error.message);
+  },
+
+  // ── Ajuste masivo ────────────────────────────────────────────────────────────
+  // aplicar=false → preview (no escribe nada); aplicar=true → graba el resultado
+
+  async ajustarPreciosMasivo(params: AjusteMasivoParams, aplicar: boolean): Promise<AjusteMasivoItem[]> {
+    const { data, error } = await supabase.rpc('ajustar_precios_masivo', {
+      p_lista_precio_id: params.listaPrecioId,
+      p_tipo_ajuste: params.tipoAjuste,
+      p_valor: params.valor,
+      p_categoria_id: params.categoriaId ?? null,
+      p_busqueda: params.busqueda ?? null,
+      p_redondeo: params.redondeo ?? 'ninguno',
+      p_aplicar: aplicar,
+    });
+    if (error) throw new Error(error.message);
+    return ((data as any)?.items ?? []) as AjusteMasivoItem[];
   },
 
   // ── Asignar lista a cliente ─────────────────────────────────────────────────
