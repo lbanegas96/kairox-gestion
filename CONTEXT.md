@@ -1,5 +1,25 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08 (Luciano/Claude — criterio fiscal unificado: PdV como único selector, mig.294/295)
+**Última actualización:** 2026-08 (Luciano/Claude — numeración de NC/ND separada por PdV, mig.296)
+
+## ✅ Numeración de NC/ND separada por punto de venta — mig.296
+
+Cierra el pendiente explícito dejado por mig.295 ("Alcance NO cubierto" más abajo). El motor `obtener_proximo_numero` (3-arg) ya soportaba `nota_credito`/`nota_debito_venta` en su CASE de recuento real — sólo el gate `v_es_scoped` los excluía (`p_tipo_documento IN ('venta', 'factura')`). El cambio real fue mínimo: ampliar ese gate a los 4 tipos + hacer que `crear_nota_credito`/`crear_nota_debito_cliente` reciban y usen `p_punto_venta_id`.
+
+**Lección de Postgres (nueva, para no repetir el error):** intenté primero extender las RPCs con `CREATE OR REPLACE FUNCTION` agregando `p_punto_venta_id uuid DEFAULT NULL` al final de la lista de argumentos existente. **No funciona como yo esperaba** — Postgres identifica una función por su lista de tipos de argumentos; agregar un parámetro (aunque tenga DEFAULT) no reemplaza nada, crea un OVERLOAD nuevo y deja el viejo vivo en paralelo (verificado en sandbox: apareció un tercer overload de `crear_nota_credito`). La forma correcta de "extender en el lugar" es `DROP FUNCTION` (firma exacta) + `CREATE FUNCTION` (firma nueva) — mismo conteo total de overloads que antes. Se usó así: el overload huérfano de 8 args de `crear_nota_credito` (mig.264, deuda técnica ya documentada) sigue intacto y sin tocar; la versión de 9 args se reemplazó por una de 10 (agrega `p_punto_venta_id`); `crear_nota_debito_cliente` pasó de 8 a 9 args de la misma forma.
+
+**Garantía de seguridad (misma que mig.295):** el PdV `es_default` sigue usando la fila legacy de siempre — sólo un PdV no-default provisiona una serie nueva.
+
+**Frontend:** `NuevaNCModal`/`NuevaNDModal` ahora pasan `p_punto_venta_id` (ya lo resolvían para mostrar el aviso, sólo faltaba mandarlo al RPC). Como el RPC graba `punto_venta_id` en el `INSERT` de forma atómica, se sacó el `UPDATE comprobantes SET punto_venta_id=...` suelto que hacía el frontend después — una escritura menos, sin ventana entre "comprobante creado" y "PdV grabado".
+
+**Probado en vivo contra producción (Nalux), vía curl con JWT real:**
+- NC con PdV 1 (default) → `NC-20260801-001` (serie legacy, sin fila nueva) ✓
+- NC con PdV 2 (no-default, interno) → `NC-2-20260801-001` (fila nueva provisionada, prefijo distinto, arranca en 1) ✓
+- ND con PdV 2 (no-default) → `ND-2-20260801-001` ✓; ND con PdV 1 (default) → `ND-20260801-001` ✓
+- Los 4 comprobantes de prueba quedaron con `punto_venta_id` correcto grabado por el RPC (confirmado por SELECT, sin necesitar el UPDATE separado)
+- Todo revertido: 4 comprobantes + ítems + movimientos de CC borrados (0 fantasmas verificado), las 2 filas de serie nuevas (PdV 2) borradas, `proximo_numero` de las 2 filas legacy devuelto a 1
+- `npx eslint` y `npx vite build`: 0 errores
+
+---
 
 ## ✅ Criterio fiscal unificado: el punto de venta es el ÚNICO selector — mig.294/295
 
@@ -22,7 +42,7 @@ Pregunta de Luciano tras mig.293: "¿cómo unificamos el criterio entre ERP y PO
 
 **Bug propio introducido y detectado por lint antes de llegar a producción:** al reemplazar el checkbox por el selector en los 4 modales, quedó una llamada huérfana `setNoRelevanteFiscal(false)` en el reset-al-cerrar de los 4 archivos — crasheaba el modal entero (error boundary de `VentasSection`) apenas se abría. `grep` inicial no lo encontró por mayúsculas; `npx eslint` (`no-undef`) lo detectó al toque. Corregido antes de cualquier commit — nunca llegó a producción.
 
-**Alcance NO cubierto, documentado como pendiente honesto:** `crear_nota_credito`/`crear_nota_debito_cliente` generan el número **dentro del RPC SQL**, sin recibir el PdV — no se tocaron hoy (evitar sumar riesgo sobre `crear_nota_credito`, que ya tiene un overload huérfano documentado como deuda técnica). NC/ND comparten un único correlativo entre PdV — no es incorrecto, sólo no está separado por serie todavía.
+**Alcance NO cubierto en esta migración — RESUELTO en mig.296 (ver sección de arriba):** `crear_nota_credito`/`crear_nota_debito_cliente` generaban el número dentro del RPC SQL, sin recibir el PdV.
 
 **Probado en vivo contra producción (Nalux):**
 - `NuevaFacturaModal`: selector de PdV, cambiar a "2 · Remito (interno)" muestra el aviso correcto ✓, sin crashear.

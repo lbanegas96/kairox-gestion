@@ -235,6 +235,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
         p_comprobante_origen_id: comprobanteOrigen?.id || devolucionOrigen?.comprobante_id || null,
         p_devolucion_id:         devolucionOrigen?.id || null,
         p_referencia_cliente:    referenciaCliente.trim() || null,
+        p_punto_venta_id:        afipConfig?.punto_venta?.id ?? null,
       });
       if (error) throw error;
 
@@ -242,12 +243,8 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
       // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca.
       // La relevancia la define el PdV heredado (criterio unificado, mig.294): si el
       // comprobante origen salió por un PdV interno, su NC tampoco se factura.
-      // El PdV se registra siempre, aunque sea interno, para saber por qué serie salió.
-      if (afipConfig?.punto_venta && afipConfig.punto_venta.envia_arca === false) {
-        await supabase.from('comprobantes')
-          .update({ punto_venta_id: afipConfig.punto_venta.id })
-          .eq('id', data.comprobante_id);
-      }
+      // punto_venta_id ya quedó grabado por la RPC (mig.296) — acá sólo se
+      // encola a ARCA cuando corresponde, no se vuelve a escribir el PdV.
       if (afipConfig?.usa_factura_electronica && afipConfig?.punto_venta && afipConfig.punto_venta.envia_arca !== false) {
         // Letra del comprobante. Con origen se hereda (una NC corrige un
         // documento concreto y debe compartir su letra). Sin origen se deriva
@@ -264,7 +261,6 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
              );
         const { error: afipQueueErr } = await supabase.from('comprobantes').update({
           tipo_comprobante_afip: letraAfip,
-          punto_venta_id:        afipConfig.punto_venta.id,
           cae_estado:            'pendiente',
         }).eq('id', data.comprobante_id);
         if (afipQueueErr) console.warn('[AFIP queue NC]', afipQueueErr.message);

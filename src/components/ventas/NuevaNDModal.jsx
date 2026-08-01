@@ -200,17 +200,13 @@ function NuevaNDModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
         })),
         p_comprobante_origen_id: comprobanteOrigen?.id || facturaId || null,
         p_referencia_cliente:    referenciaCliente.trim() || null,
+        p_punto_venta_id:        afipConfig?.punto_venta?.id ?? null,
       });
       if (error) throw error;
 
-      // El PdV se registra siempre, aunque sea interno, para saber por qué serie salió.
-      if (afipConfig?.punto_venta && afipConfig.punto_venta.envia_arca === false) {
-        await supabase.from('comprobantes')
-          .update({ punto_venta_id: afipConfig.punto_venta.id })
-          .eq('id', data.comprobante_id);
-      }
-
-      // La relevancia la define el PdV heredado (criterio unificado, mig.294).
+      // punto_venta_id ya quedó grabado por la RPC (mig.296). La relevancia la
+      // define el PdV heredado (criterio unificado, mig.294) — acá sólo se
+      // encola a ARCA cuando corresponde.
       if (afipConfig?.usa_factura_electronica && afipConfig?.punto_venta && afipConfig.punto_venta.envia_arca !== false) {
         // Letra del comprobante. Con origen se hereda (una ND ajusta un
         // documento concreto y debe compartir su letra). Sin origen se deriva
@@ -225,7 +221,6 @@ function NuevaNDModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
              );
         const { error: afipQueueErr } = await supabase.from('comprobantes').update({
           tipo_comprobante_afip: letraAfip,
-          punto_venta_id:        afipConfig.punto_venta.id,
           cae_estado:            'pendiente',
         }).eq('id', data.comprobante_id);
         if (afipQueueErr) console.warn('[AFIP queue ND]', afipQueueErr.message);
