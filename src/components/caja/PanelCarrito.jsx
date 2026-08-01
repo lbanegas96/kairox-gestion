@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { ShoppingCart, Trash2, Plus, Minus, CheckCircle, Loader2, AlertTriangle, Tag, Boxes } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -140,6 +140,7 @@ function CarritoItem({ item, onModificar, onEliminar, oferta, descuentoManual, o
 }
 
 function PanelCarrito({
+  apiRef,
   carrito, onModificarCarrito, onVentaExitosa,
   onTogglePack, onUpdatePacks,
   formasPago = [],
@@ -157,6 +158,7 @@ function PanelCarrito({
   const [centrosCosto, setCentrosCosto]     = useState([]);
   const [centroCostoId, setCentroCostoId]   = useState('');
   const [showParaleloTCModal, setShowParaleloTCModal] = useState(false);
+  const clienteWrapperRef = useRef(null);
   const tcParalelo = useTCParalelo();
   const { confirmar, loading }      = useConfirmarVenta(tcParalelo);
 
@@ -274,6 +276,24 @@ function PanelCarrito({
     }
   };
 
+  // ATAJOS — F2 cobra, F8 enfoca el cliente, Alt+1..4 elige medio de pago por
+  // posición (ver useAtajosPOS). Sin dependencias: se re-registra en cada
+  // render para no arrastrar closures viejas del carrito/total/multipago.
+  useEffect(() => {
+    if (!apiRef) return;
+    apiRef.current = {
+      ...apiRef.current,
+      confirmar: () => {
+        const bloqueado = carrito.length === 0 || loading
+          || (isCC && !selectedClient)
+          || (isMultiPago && Math.abs(restante) >= 0.01);
+        if (!bloqueado) handleConfirmar();
+      },
+      focusCliente: () => clienteWrapperRef.current?.querySelector('select')?.focus(),
+      seleccionarMedioPago: (idx) => { const m = METODOS[idx]; if (m) toggleMethod(m); },
+    };
+  });
+
   return (
     <div
       className="w-full md:w-[360px] lg:w-[420px] flex-shrink-0 flex flex-col"
@@ -281,18 +301,20 @@ function PanelCarrito({
     >
       {/* Selector de cliente */}
       <div className="p-3 border-b border-kx-border bg-kx-surface flex-shrink-0">
-        <ClienteSelector
-          clientes={clientes}
-          value={clienteId}
-          onChange={(id) => {
-            setClienteId(id);
-            setSelectedClient(id ? (clientes.find(c => c.id === id) ?? null) : null);
-          }}
-          onClienteCreado={async (c) => {
-            setClientes(p => [...p, c]);
-            await handleSelectCliente(c);
-          }}
-        />
+        <div ref={clienteWrapperRef} title="Atajo: F8">
+          <ClienteSelector
+            clientes={clientes}
+            value={clienteId}
+            onChange={(id) => {
+              setClienteId(id);
+              setSelectedClient(id ? (clientes.find(c => c.id === id) ?? null) : null);
+            }}
+            onClienteCreado={async (c) => {
+              setClientes(p => [...p, c]);
+              await handleSelectCliente(c);
+            }}
+          />
+        </div>
         {isCC && !selectedClient && (
           <p className="text-xs text-kx-amber mt-1 flex items-center gap-1">
             <AlertTriangle className="w-3 h-3" /> CC requiere cliente seleccionado
@@ -344,14 +366,15 @@ function PanelCarrito({
           )}
         </div>
         <div className="grid grid-cols-2 gap-1.5">
-          {METODOS.map(m => {
+          {METODOS.map((m, idx) => {
             const activo = selectedMethods.has(m);
             return (
               <button
                 key={m}
                 onClick={() => toggleMethod(m)}
+                title={idx < 4 ? `Atajo: Alt+${idx + 1}` : undefined}
                 className={[
-                  'py-2 px-3 rounded-xl text-xs font-semibold transition-all border text-left',
+                  'relative py-2 px-3 rounded-xl text-xs font-semibold transition-all border text-left',
                   activo
                     ? m === 'Cuenta Corriente'
                       ? 'bg-amber-500/20 border-amber-500 text-amber-600 dark:text-amber-400'
@@ -359,6 +382,11 @@ function PanelCarrito({
                     : 'bg-kx-surface-2 border-kx-border text-kx-text-2 hover:border-kx-text-3',
                 ].join(' ')}
               >
+                {idx < 4 && (
+                  <span className="absolute top-1 right-1.5 text-[9px] font-normal text-kx-text-3 tabular-nums">
+                    {idx + 1}
+                  </span>
+                )}
                 <span className="flex items-center gap-1 justify-center">
                   {activo && <CheckCircle className="w-3 h-3 shrink-0" />}
                   {m}
@@ -450,7 +478,7 @@ function PanelCarrito({
           )
         )}
 
-        {/* Botón confirmar */}
+        {/* Botón confirmar — atajo F2 (ver useAtajosPOS) */}
         <Button
           onClick={handleConfirmar}
           disabled={
@@ -458,12 +486,16 @@ function PanelCarrito({
             (isCC && !selectedClient) ||
             (isMultiPago && Math.abs(restante) >= 0.01)
           }
+          title="Atajo: F2"
           className="w-full h-12 text-base font-bold rounded-xl gap-2 text-white"
           style={{ background: 'rgb(var(--kx-green))' }}
         >
           {loading
             ? <><Loader2 className="w-5 h-5 animate-spin" /> Procesando...</>
-            : <><CheckCircle className="w-5 h-5" /> Confirmar Venta</>
+            : <>
+                <CheckCircle className="w-5 h-5" /> Confirmar Venta
+                <span className="text-2xs font-normal opacity-70 ml-1">F2</span>
+              </>
           }
         </Button>
 

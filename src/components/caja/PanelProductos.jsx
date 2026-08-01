@@ -60,7 +60,7 @@ function ProductoCard({ producto, onAgregar }) {
   );
 }
 
-function PanelProductos({ onAgregarAlCarrito }) {
+function PanelProductos({ onAgregarAlCarrito, apiRef }) {
   const { user }         = useAuth();
   const { toast }        = useToast();
   const [productos, setProductos]  = useState([]);
@@ -106,6 +106,12 @@ function PanelProductos({ onAgregarAlCarrito }) {
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
+
+  // ATAJOS — F4 (ver useAtajosPOS) vuelve el foco acá para retomar el escaneo.
+  useEffect(() => {
+    if (!apiRef) return;
+    apiRef.current = { ...apiRef.current, focusBuscador: () => inputRef.current?.focus() };
+  });
 
   // SCANNER — refocus permanente del input de búsqueda mientras el POS esté abierto.
   // Si el cajero hace clic en cualquier parte (agregar al carrito, cambiar pago, etc.)
@@ -167,6 +173,7 @@ function PanelProductos({ onAgregarAlCarrito }) {
             onChange={e => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Buscar por nombre o código..."
+            title="Atajo: F4"
             className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-kx-surface border border-kx-border
                        text-kx-text text-sm focus:outline-none focus:border-[rgb(var(--kx-violet))]
                        transition-colors"

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Landmark, History, LogOut, Loader2, X, CheckCircle, ArrowLeft, Printer, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { useArqueoCaja } from '@/hooks/useArqueoCaja';
 import { useAfipConfig } from '@/hooks/useAfipConfig';
+import { useAtajosPOS } from '@/hooks/useAtajosPOS';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { precioPackFinal } from '@/lib/unidadesMedida';
 import PanelProductos from './PanelProductos';
@@ -57,6 +58,11 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
   const [formasPago, setFormasPago] = useState([]);
   // RESPONSIVE-MOBILE
   const [tabMobile, setTabMobile] = useState('productos'); // 'productos' | 'carrito'
+  // ATAJOS — ref mutable que PanelProductos/PanelCarrito completan con sus
+  // propias funciones (focusBuscador, confirmar, focusCliente, seleccionarMedioPago).
+  // Ver src/hooks/useAtajosPOS.js para el mapeo de teclas.
+  const posApiRef = useRef({});
+  useAtajosPOS({ apiRef: posApiRef });
 
   // Cargar logo y nombre empresa
   useEffect(() => {
@@ -375,11 +381,12 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
       <div className="flex-1 overflow-hidden flex flex-col md:flex-row min-h-0">
         {/* RESPONSIVE-MOBILE */}
         <div className={`${tabMobile === 'productos' ? 'flex' : 'hidden'} md:flex flex-1 min-w-0 overflow-hidden`}>
-          <PanelProductos onAgregarAlCarrito={handleAgregarAlCarrito} />
+          <PanelProductos onAgregarAlCarrito={handleAgregarAlCarrito} apiRef={posApiRef} />
         </div>
         {/* RESPONSIVE-MOBILE */}
         <div className={`${tabMobile === 'carrito' ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-[360px] lg:w-[420px] flex-shrink-0`}>
           <PanelCarrito
+            apiRef={posApiRef}
             carrito={carrito}
             onModificarCarrito={setCarrito}
             onTogglePack={togglePackMode}
