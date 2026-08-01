@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import ClienteSelector from '@/components/shared/ClienteSelector';
 import { useToast } from '@/components/ui/use-toast';
 import { useConfirmarVenta } from '@/hooks/useConfirmarVenta';
+import { useMultipago } from '@/hooks/useMultipago';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -200,7 +201,23 @@ function PanelCarrito({
   }, [carrito, ofertasCarrito, descuentosManuales]);
 
   const ahorro = totalSinDescuento - total;
-  const isCC = medioPago === 'Cuenta Corriente';
+
+  // Pago mixto — MISMA lógica que NuevaVentaModal (ERP): `useMultipago` es la
+  // capa compartida entre ambos caminos de venta. Sólo cambia la presentación
+  // (acá compacta y táctil; allá el sidebar con moneda/centro de costo/AFIP).
+  // Ambos terminan produciendo el mismo array `pagos` → misma RPC crear_venta →
+  // mismo asiento contable.
+  const multipago = useMultipago(total, formasPago);
+  const { isCC, isMultiPago, selectedMethods, methodAmounts, setMethodAmounts, toggleMethod, restante } = multipago;
+
+  // Ofertas por medio de pago: sólo aplican cuando ese medio cubre el 100% de la
+  // venta (decisión de negocio de Luciano). En pago mixto se manda null para que
+  // el motor no las aplique — si no, pagar $1 por transferencia desbloquearía el
+  // "Descuento transferencia" sobre todo el carrito.
+  const medioParaOfertas = selectedMethods.size === 1 ? Array.from(selectedMethods)[0] : null;
+  useEffect(() => {
+    if (medioParaOfertas !== medioPago) onMedioPagoChange?.(medioParaOfertas);
+  }, [medioParaOfertas]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const modificarItem = (id, nuevaCantidad) => {
     if (nuevaCantidad < 1) {
@@ -234,8 +251,13 @@ function PanelCarrito({
       setShowParaleloTCModal(true);
       return;
     }
-    const formaPagoId = formasPago.find(f => f.nombre === medioPago)?.id ?? null;
-    const pagos = [{ metodo: medioPago, monto: total, forma_pago_id: formaPagoId }];
+    // Misma construcción + validaciones que el ERP (montos que suman el total,
+    // formato argentino, exclusividad de Cuenta Corriente).
+    const { pagos, error: pagoError } = multipago.construirPagosFinales();
+    if (pagoError) {
+      toast({ ...pagoError, variant: 'destructive' });
+      return;
+    }
     const result = await confirmar({
       cart: carrito, selectedClient, pagos,
       ofertasCarrito, descuentosManuales,
@@ -247,7 +269,7 @@ function PanelCarrito({
       setSelectedClient(null);
       setClienteId('');
       setCentroCostoId('');
-      onMedioPagoChange?.('Efectivo');
+      multipago.reset();
       onVentaExitosa?.({ comprobante: result, items: itemsSnapshot });
     }
   };
@@ -314,29 +336,76 @@ function PanelCarrito({
 
       {/* Totales + método de pago + confirmar */}
       <div className="p-3 border-t border-kx-border space-y-3 flex-shrink-0 bg-kx-surface">
-        {/* Método de pago */}
-        <div className="grid grid-cols-2 gap-1.5">
-          {METODOS.map(m => (
-            <button
-              key={m}
-              onClick={() => onMedioPagoChange?.(m)}
-              className={[
-                'py-2 px-3 rounded-xl text-xs font-semibold transition-all border',
-                medioPago === m
-                  ? m === 'Cuenta Corriente'
-                    ? 'bg-amber-500/20 border-amber-500 text-amber-600 dark:text-amber-400'
-                    : 'bg-[rgb(var(--kx-violet)/0.15)] border-[rgb(var(--kx-violet))] text-[rgb(var(--kx-violet))]'
-                  : 'bg-kx-surface-2 border-kx-border text-kx-text-2 hover:border-kx-text-3',
-              ].join(' ')}
-            >
-              {m}
-            </button>
-          ))}
+        {/* Método de pago — tocá varios para dividir el cobro */}
+        <div className="flex items-center justify-between">
+          <span className="text-2xs uppercase tracking-wide text-kx-text-3">Medio de pago</span>
+          {isMultiPago && (
+            <span className="text-2xs text-kx-text-3">{selectedMethods.size} medios · asigná los montos</span>
+          )}
         </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          {METODOS.map(m => {
+            const activo = selectedMethods.has(m);
+            return (
+              <button
+                key={m}
+                onClick={() => toggleMethod(m)}
+                className={[
+                  'py-2 px-3 rounded-xl text-xs font-semibold transition-all border text-left',
+                  activo
+                    ? m === 'Cuenta Corriente'
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-600 dark:text-amber-400'
+                      : 'bg-[rgb(var(--kx-violet)/0.15)] border-[rgb(var(--kx-violet))] text-[rgb(var(--kx-violet))]'
+                    : 'bg-kx-surface-2 border-kx-border text-kx-text-2 hover:border-kx-text-3',
+                ].join(' ')}
+              >
+                <span className="flex items-center gap-1 justify-center">
+                  {activo && <CheckCircle className="w-3 h-3 shrink-0" />}
+                  {m}
+                </span>
+                {/* Monto por medio — sólo en pago mixto */}
+                {isMultiPago && activo && (
+                  <span className="block mt-1.5" onClick={e => e.stopPropagation()}>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="$0,00"
+                      value={methodAmounts[m] || ''}
+                      onChange={e => setMethodAmounts(prev => ({ ...prev, [m]: e.target.value }))}
+                      className="w-full h-7 text-center text-xs rounded-md border border-[rgb(var(--kx-violet))] bg-kx-surface text-kx-text tabular-nums focus:outline-none focus:ring-1 focus:ring-violet-500 px-1"
+                    />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Restante a asignar */}
+        {isMultiPago && (
+          <div className={[
+            'text-xs font-semibold text-center py-2 px-3 rounded-lg tabular-nums',
+            Math.abs(restante) < 0.01
+              ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+              : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400',
+          ].join(' ')}>
+            {Math.abs(restante) < 0.01
+              ? '✓ Pago completo'
+              : restante > 0
+                ? `Falta asignar $${fmt(restante)}`
+                : `Te pasaste por $${fmt(Math.abs(restante))}`}
+          </div>
+        )}
 
         {isCC && (
           <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/15 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
             Se registrará como deuda en cuenta corriente del cliente.
+          </div>
+        )}
+
+        {isMultiPago && ahorro > 0 && (
+          <div className="text-2xs text-kx-text-3 bg-kx-surface-2 border border-kx-border rounded-lg px-3 py-2">
+            Los descuentos por medio de pago sólo aplican cuando ese medio cubre toda la venta.
           </div>
         )}
 
@@ -384,7 +453,11 @@ function PanelCarrito({
         {/* Botón confirmar */}
         <Button
           onClick={handleConfirmar}
-          disabled={carrito.length === 0 || loading || (isCC && !selectedClient)}
+          disabled={
+            carrito.length === 0 || loading ||
+            (isCC && !selectedClient) ||
+            (isMultiPago && Math.abs(restante) >= 0.01)
+          }
           className="w-full h-12 text-base font-bold rounded-xl gap-2 text-white"
           style={{ background: 'rgb(var(--kx-green))' }}
         >

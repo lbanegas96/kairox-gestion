@@ -1,5 +1,25 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08 (Luciano/Claude — arqueo real al cerrar caja desde el POS, probado en vivo end-to-end)
+**Última actualización:** 2026-08 (Luciano/Claude — pago mixto en el POS reusando useMultipago del ERP)
+
+## ✅ Pago mixto en el POS — arquitectura compartida con el ERP
+
+Segunda mejora de POS priorizada. **Hallazgo que simplificó el trabajo:** el pago mixto NO había que diseñarlo — ya existía completo en el camino ERP (`NuevaVentaModal` → `useMultipago`), y el backend también: `crear_venta` ya itera `jsonb_array_elements(p_pagos)` creando un `movimientos_caja` por pago. El único que armaba un solo pago era el POS.
+
+**Decisión de arquitectura (pregunta explícita de Luciano — que venta mostrador y venta ERP sean compatibles):**
+- **Se comparte la lógica, no la presentación.** `useMultipago` (ya testeado, 14 tests) es la capa común: maneja exclusividad de Cuenta Corriente, validación de que los montos sumen el total, formato argentino y resolución de `forma_pago_id`.
+- La presentación queda separada a propósito: el ERP usa `PanelPago` (sidebar con moneda, centro de costo, AFIP, TC paralelo); el POS usa una grilla compacta y táctil. Reusar `PanelPago` en el POS habría arrastrado todo el contexto ERP a una pantalla de mostrador.
+- Ambos caminos convergen en el mismo array `pagos` → misma RPC → mismo asiento. Por construcción no pueden divergir.
+
+**Decisión de negocio (Luciano):** las ofertas condicionadas a un medio de pago (existe una activa, "Descuento transferencia") **sólo aplican cuando ese medio cubre el 100% de la venta**. En pago mixto el POS manda `p_medio_pago = null` al motor de ofertas. Sin esto, pagar $1 por transferencia desbloquearía el descuento sobre todo el carrito.
+
+**Probado en vivo (Nalux):** carrito $1.200 → tocar Efectivo + Transferencia activa el modo mixto con input por medio ✓ → $700 muestra "Falta asignar $500,00" ✓ → +$500 muestra "✓ Pago completo" y habilita Confirmar ✓ → tocar Cuenta Corriente colapsa a CC sola, esconde los inputs y exige cliente ✓. Los 14 tests de `useMultipago` siguen verdes.
+
+**Límite honesto de esta verificación:** NO se confirmó una venta mixta real en producción. Nalux tiene `usa_factura_electronica=true` y el POS —a diferencia del ERP— **no tiene el checkbox "No relevante para AFIP"**, así que una venta de prueba encolaría un CAE real e irreversible ante ARCA. Lo verificado es toda la construcción/validación de los pagos; el tramo `crear_venta` con múltiples pagos es código sin cambios que el ERP ya ejercita a diario en producción.
+
+**Gap detectado, no cerrado:** el POS no tiene el escape fiscal que sí tiene el ERP (`noRelevanteFiscal`). Eso impide testear ventas del POS contra producción sin riesgo fiscal. Candidato claro para la próxima tanda.
+
+---
+
 
 ## ✅ Arqueo real al cerrar caja desde el POS — BUG DE DINERO CORREGIDO
 
