@@ -19,6 +19,8 @@ export interface ListaPrecioItem {
   empresa_id: string;
   producto_id: string;
   precio: number;
+  precio_programado: number | null;
+  fecha_vigencia_programada: string | null;
   productos?: { nombre: string; codigo_sku: string; precio_venta: number };
 }
 
@@ -105,7 +107,7 @@ export const listaPreciosService = {
   async getItems(listaPrecioId: string): Promise<ListaPrecioItem[]> {
     const { data, error } = await supabase
       .from('lista_precio_items')
-      .select('id, lista_precio_id, empresa_id, producto_id, precio, created_at')
+      .select('id, lista_precio_id, empresa_id, producto_id, precio, precio_programado, fecha_vigencia_programada, created_at')
       .eq('lista_precio_id', listaPrecioId)
       .order('created_at');
     if (error) throw new Error(error.message);
@@ -196,6 +198,26 @@ export const listaPreciosService = {
       precioNuevo: r.new_data?.precio != null ? Number(r.new_data.precio) : null,
       usuario: r.user_id ? (nombreMap[r.user_id] ?? 'Usuario') : 'Sistema',
     }));
+  },
+
+  // ── Vigencia futura ───────────────────────────────────────────────────────────
+
+  async programarPrecioFuturo(listaPrecioId: string, productoId: string, precio: number, fechaVigencia: string): Promise<void> {
+    const { error } = await supabase.rpc('programar_precio_futuro', {
+      p_lista_precio_id: listaPrecioId,
+      p_producto_id: productoId,
+      p_precio: precio,
+      p_fecha_vigencia: fechaVigencia,
+    });
+    if (error) throw new Error(error.message);
+  },
+
+  async cancelarPrecioProgramado(listaPrecioId: string, productoId: string): Promise<void> {
+    const { error } = await supabase.rpc('cancelar_precio_programado', {
+      p_lista_precio_id: listaPrecioId,
+      p_producto_id: productoId,
+    });
+    if (error) throw new Error(error.message);
   },
 
   // ── Asignar lista a cliente ─────────────────────────────────────────────────

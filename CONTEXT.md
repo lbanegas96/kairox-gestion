@@ -1,5 +1,17 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08 (Luciano/Claude — historial de cambios de precio, mig.291, probado en vivo end-to-end)
+**Última actualización:** 2026-08 (Luciano/Claude — vigencia futura de precios, mig.292, probado en vivo end-to-end)
+
+## ✅ Vigencia futura de precios — mig.292
+
+Última de las 5 features priorizadas del trabajo de precios (después de mig.290/291). Permite programar un precio para que entre en vigencia en una fecha futura, sin tocar el precio actual hasta entonces — botón "Programar precio futuro" (icono calendario) por producto en `ListasPrecioSection.jsx`.
+
+**Diseño:** 2 columnas nuevas en `lista_precio_items` (`precio_programado`, `fecha_vigencia_programada`) + un cron diario (`pg_cron`, mismo patrón que mig.207 CAEA — sin necesidad de Edge Function) que corre a las 03:05 ART y promueve `precio_programado → precio` cuando `fecha_vigencia_programada <= CURRENT_DATE`. RPCs `programar_precio_futuro` (valida fecha futura, no toca el precio actual) y `cancelar_precio_programado`.
+
+**Probado en vivo contra producción (Nalux):** programé $1.200→$2.000 con vigencia 10/8/2026 sobre el producto de test — el precio mostrado siguió en $1.200, apareció el badge "Cambia a $2.000 el 10/8/2026" ✓. Probé "cancelar" → precio programado se limpió correctamente ✓. Verifiqué la lógica exacta del cron ejecutándola manualmente sobre el item de test con fecha=hoy → promovió correctamente a $2.000 y limpió los campos ✓. Item de test eliminado después — verificado en cero.
+
+**Con esto, las 5 features priorizadas de ajuste de precios quedan completas: ajuste masivo con filtros, preview, redondeo, historial, y vigencia futura.**
+
+---
 
 ## ✅ Historial de cambios de precio — mig.291
 

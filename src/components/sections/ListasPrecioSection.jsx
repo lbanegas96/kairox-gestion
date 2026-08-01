@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Tag, Plus, Edit, Trash2, Package, Search, Check,
-  ToggleLeft, ToggleRight, X, Loader2, DollarSign, Sparkles, ArrowRight, History
+  ToggleLeft, ToggleRight, X, Loader2, DollarSign, Sparkles, ArrowRight, History, CalendarClock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,6 +46,10 @@ function ListasPrecioSection() {
 
   const [historialModal, setHistorialModal] = useState(false);
   const [historialProducto, setHistorialProducto] = useState(null); // { id, nombre }
+
+  const [vigenciaModal, setVigenciaModal] = useState(false);
+  const [vigenciaProducto, setVigenciaProducto] = useState(null); // { id, nombre }
+  const [vigenciaForm, setVigenciaForm] = useState({ precio: '', fecha: '' });
 
   // ── Queries ──────────────────────────────────────────────────────────────────
   const { data: listas = [], isLoading } = useQuery({
@@ -178,6 +182,36 @@ function ListasPrecioSection() {
     },
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
+
+  const programarVigencia = useMutation({
+    mutationFn: async () => {
+      const precio = parseNumberLocale(vigenciaForm.precio);
+      if (isNaN(precio) || precio <= 0) throw new Error('Ingresá un precio válido');
+      if (!vigenciaForm.fecha) throw new Error('Ingresá una fecha de vigencia');
+      return listaPreciosService.programarPrecioFuturo(selectedLista.id, vigenciaProducto.id, precio, vigenciaForm.fecha);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ITEMS_KEY(selectedLista.id) });
+      toast({ title: 'Precio programado ✓', description: `Entrará en vigencia el ${new Date(vigenciaForm.fecha + 'T00:00:00').toLocaleDateString('es-AR')}`, className: 'bg-green-600 text-white' });
+      setVigenciaModal(false);
+    },
+    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const cancelarVigencia = useMutation({
+    mutationFn: (productoId) => listaPreciosService.cancelarPrecioProgramado(selectedLista.id, productoId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ITEMS_KEY(selectedLista.id) });
+      toast({ title: 'Precio programado cancelado' });
+    },
+    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const openVigenciaFutura = (prod) => {
+    setVigenciaProducto({ id: prod.id, nombre: prod.nombre });
+    setVigenciaForm({ precio: '', fecha: '' });
+    setVigenciaModal(true);
+  };
 
   const openAjusteMasivo = () => {
     setPreview(null);
@@ -469,6 +503,19 @@ function ListasPrecioSection() {
                     <p className="text-xs text-kx-text-3">
                       {prod.codigo_sku} · Precio estándar: ${Number(prod.precio_venta).toLocaleString('es-AR')}
                     </p>
+                    {existingItem?.precio_programado != null && (
+                      <p className="text-xs text-amber-500 dark:text-amber-400 flex items-center gap-1 mt-0.5">
+                        <CalendarClock className="w-3 h-3" />
+                        Cambia a ${Number(existingItem.precio_programado).toLocaleString('es-AR')} el {new Date(existingItem.fecha_vigencia_programada + 'T00:00:00').toLocaleDateString('es-AR')}
+                        <button
+                          onClick={() => cancelarVigencia.mutate(prod.id)}
+                          className="underline hover:no-underline"
+                          title="Cancelar precio programado"
+                        >
+                          cancelar
+                        </button>
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <div className="relative">
@@ -503,6 +550,15 @@ function ListasPrecioSection() {
                       title="Ver historial de precio"
                     >
                       <History className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-kx-text-3 hover:text-kx-violet"
+                      onClick={() => openVigenciaFutura(prod)}
+                      title="Programar precio futuro"
+                    >
+                      <CalendarClock className="w-3.5 h-3.5" />
                     </Button>
                     {hasPrice && (
                       <Button
@@ -748,6 +804,60 @@ function ListasPrecioSection() {
           <DialogFooter className="pt-2 border-t border-kx-border dark:border-kx-border">
             <Button variant="outline" onClick={() => setHistorialModal(false)} className="dark:border-kx-border dark:text-slate-300">
               Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── MODAL: Programar precio futuro ── */}
+      <Dialog open={vigenciaModal} onOpenChange={setVigenciaModal}>
+        <DialogContent className="max-w-md dark:bg-kx-bg dark:border-kx-border">
+          <DialogHeader>
+            <DialogTitle className="dark:text-kx-text flex items-center gap-2">
+              <CalendarClock className="w-5 h-5 text-kx-violet" />
+              Programar precio futuro
+            </DialogTitle>
+            <DialogDescription className="dark:text-kx-text-2">
+              {vigenciaProducto?.nombre} — el precio actual no cambia hasta la fecha elegida.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label className="dark:text-kx-text">Nuevo precio *</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-kx-text-3 text-sm">$</span>
+                <Input
+                  value={vigenciaForm.precio}
+                  onChange={e => setVigenciaForm(f => ({ ...f, precio: e.target.value }))}
+                  placeholder="0,00"
+                  inputMode="decimal"
+                  className="pl-6 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="dark:text-kx-text">Entra en vigencia el *</Label>
+              <input
+                type="date"
+                value={vigenciaForm.fecha}
+                min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
+                onChange={e => setVigenciaForm(f => ({ ...f, fecha: e.target.value }))}
+                className="w-full h-9 px-3 rounded-md border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface text-sm dark:text-kx-text focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setVigenciaModal(false)} className="dark:border-kx-border dark:text-slate-300">
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => programarVigencia.mutate()}
+              disabled={programarVigencia.isPending || !vigenciaForm.precio || !vigenciaForm.fecha}
+              className="bg-violet-600 hover:bg-violet-700 text-white"
+            >
+              {programarVigencia.isPending ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <CalendarClock className="w-4 h-4 mr-2" />}
+              Programar
             </Button>
           </DialogFooter>
         </DialogContent>
