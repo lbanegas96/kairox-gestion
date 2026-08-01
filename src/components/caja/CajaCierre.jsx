@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 import { Lock, AlertTriangle, CheckCircle2, Loader2, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,92 +8,32 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useCaja } from '@/contexts/CajaContext';
-import { supabase } from '@/lib/customSupabaseClient';
-import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/components/ui/use-toast';
 import { parseNumberLocale } from '@/lib/currencyUtils';
+import { useArqueoCaja } from '@/hooks/useArqueoCaja';
 
 const CajaCierre = ({ onCancel }) => {
-  const { currentSession, closeSession } = useCaja();
-  const { user } = useAuth();
+  const { closeSession } = useCaja();
   const { toast } = useToast();
   const qc = useQueryClient();
-  
-  const [loading, setLoading] = useState(true);
+
+  const { totals, loading } = useArqueoCaja();
+
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Totals
-  const [totals, setTotals] = useState({
-    inicial: 0,
-    ingresosEfectivo: 0,
-    egresosEfectivo: 0,
-    otrosIngresos: 0, // Cards, transfers, etc.
-    esperado: 0
-  });
 
   // Form
   const [saldoReal, setSaldoReal] = useState('');
   const [observaciones, setObservaciones] = useState('');
 
+  // Pre-cargar el saldo real con el esperado, por comodidad. Sólo una vez:
+  // si el usuario ya escribió algo, un refetch no debe pisárselo.
+  const prefilled = useRef(false);
   useEffect(() => {
-    const fetchSessionTotals = async () => {
-      if (!currentSession || !user || !user.empresa_id) return;
-
-      try {
-        setLoading(true);
-        // Filtrar por caja_sesion_id + empresa_id (no user_id — los movimientos se insertan con user.id)
-        const { data: movements, error } = await supabase
-          .from('movimientos_caja')
-          .select('monto, tipo, metodo_pago')
-          .eq('caja_sesion_id', currentSession.id)
-          .eq('empresa_id', user.empresa_id);
-
-        if (error) throw error;
-
-        let ingresosEf = 0;
-        let egresosEf = 0;
-        let otros = 0;
-
-        movements.forEach(m => {
-          const monto = Number(m.monto);
-          // Normalize payment method check (case insensitive or defaulting)
-          const isEfectivo = !m.metodo_pago || m.metodo_pago.toLowerCase() === 'efectivo';
-          
-          if (m.tipo === 'ingreso') {
-            if (isEfectivo) ingresosEf += monto;
-            else otros += monto;
-          } else if (m.tipo === 'egreso') {
-            // Expenses are usually cash, but could be bank
-            if (isEfectivo) egresosEf += monto;
-            // We usually don't subtract non-cash expenses from cash drawer balance
-          }
-        });
-
-        const inicial = Number(currentSession.monto_inicial || 0);
-        const esperado = inicial + ingresosEf - egresosEf;
-
-        setTotals({
-          inicial,
-          ingresosEfectivo: ingresosEf,
-          egresosEfectivo: egresosEf,
-          otrosIngresos: otros,
-          esperado
-        });
-        
-        // Pre-fill real balance with expected for convenience
-        setSaldoReal(esperado.toString());
-
-      } catch (err) {
-        console.error("Error fetching session details:", err);
-        toast({ title: "Error", description: "No se pudieron calcular los totales.", variant: "destructive" });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSessionTotals();
-  }, [currentSession, user, toast]);
+    if (loading || prefilled.current) return;
+    prefilled.current = true;
+    setSaldoReal(totals.esperado.toString());
+  }, [loading, totals.esperado]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

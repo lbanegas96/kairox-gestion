@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
+import { useArqueoCaja } from '@/hooks/useArqueoCaja';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { precioPackFinal } from '@/lib/unidadesMedida';
 import PanelProductos from './PanelProductos';
@@ -22,6 +23,9 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
   const { isSessionOpen, currentSession, openSession,
           closeSession, loading: cajaLoading }          = useCaja();
   const { toast }                                      = useToast();
+  // Arqueo real del turno — mismo cálculo que el cierre desde el panel administrativo
+  const { totals: arqueo, loading: arqueoLoading,
+          refetch: refetchArqueo }                     = useArqueoCaja();
 
   const [carrito, setCarrito]       = useState([]);
   const [logoUrl, setLogoUrl]       = useState('');
@@ -32,6 +36,7 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
   const [showHistorial, setShowHistorial] = useState(false);
   const [montoApertura, setMontoApertura] = useState('');
   const [montoCierre, setMontoCierre]     = useState('');
+  const [observacionesCierre, setObservacionesCierre] = useState('');
   const [savingCaja, setSavingCaja]       = useState(false);
   // TICKET-PRINT — payload de la última venta exitosa (comprobante + items snapshot)
   const [ventaExitosa, setVentaExitosa] = useState(null);
@@ -205,6 +210,12 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
     }));
   };
 
+  // Refrescar el arqueo al abrir el modal de cierre: entre la carga inicial y el
+  // cierre hubo ventas, y el esperado tiene que reflejarlas.
+  useEffect(() => {
+    if (showCaja && isSessionOpen) refetchArqueo();
+  }, [showCaja, isSessionOpen, refetchArqueo]);
+
   const handleAbrirCaja = async () => {
     const monto = parseNumberLocale(montoApertura) || 0;
     setSavingCaja(true);
@@ -217,15 +228,32 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
   };
 
   const handleCerrarCaja = async () => {
-    const monto = parseNumberLocale(montoCierre) || 0;
+    const monto = parseNumberLocale(montoCierre);
+    if (isNaN(monto) || monto < 0) {
+      toast({
+        title: 'Monto inválido',
+        description: 'Usá formato argentino: punto para miles y coma para decimales (ej: 500.000,00).',
+        variant: 'destructive',
+      });
+      return;
+    }
     setSavingCaja(true);
-    const ok = await closeSession(monto, '', 0, 0);
+    // Arqueo real: esperado calculado desde movimientos_caja (mismo cálculo que
+    // el cierre desde el panel administrativo, vía useArqueoCaja).
+    const ok = await closeSession(monto, observacionesCierre, arqueo.esperado, monto - arqueo.esperado);
     setSavingCaja(false);
     if (ok) {
       setShowCaja(false);
       setMontoCierre('');
+      setObservacionesCierre('');
     }
   };
+
+  // Arqueo — derivados para el modal de cierre
+  const montoCierreParsed = parseNumberLocale(montoCierre);
+  const diferenciaCierre  = (isNaN(montoCierreParsed) ? 0 : montoCierreParsed) - arqueo.esperado;
+  const arqueoPerfecto    = Math.abs(diferenciaCierre) < 0.01;
+  const arqueoSobrante    = diferenciaCierre > 0.01;
 
   return (
     <div className="h-screen bg-kx-bg flex flex-col overflow-hidden">
@@ -366,23 +394,56 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
 
       {/* ── Modal Abrir / Cerrar Caja ───────────────────────────────────────── */}
       <Dialog open={showCaja} onOpenChange={setShowCaja}>
-        <DialogContent className="max-w-sm bg-kx-surface border-kx-border text-kx-text">
+        <DialogContent className={`${isSessionOpen ? 'max-w-md' : 'max-w-sm'} bg-kx-surface border-kx-border text-kx-text`}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Landmark className="w-5 h-5 text-kx-violet" />
-              {isSessionOpen ? 'Cerrar Caja' : 'Abrir Caja'}
+              {isSessionOpen ? 'Arqueo y Cierre de Caja' : 'Abrir Caja'}
             </DialogTitle>
             <DialogDescription className="text-kx-text-2 text-xs">
               {isSessionOpen
-                ? 'Indicá el monto final en efectivo para cerrar el turno.'
+                ? 'Contá el efectivo físico y compará con el saldo esperado por el sistema.'
                 : 'Indicá el monto inicial en efectivo para comenzar el turno.'}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {/* Resumen del arqueo — sólo al cerrar */}
+            {isSessionOpen && (
+              arqueoLoading ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="w-5 h-5 animate-spin text-kx-text-3" />
+                </div>
+              ) : (
+                <div className="bg-kx-bg rounded-lg p-3 space-y-2 border border-kx-border">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-kx-text-2">Saldo inicial</span>
+                    <span className="font-mono">${arqueo.inicial.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-kx-green">Ingresos en efectivo</span>
+                    <span className="font-mono text-kx-green">+${arqueo.ingresosEfectivo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-kx-red">Egresos en efectivo</span>
+                    <span className="font-mono text-kx-red">-${arqueo.egresosEfectivo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-kx-border">
+                    <span className="text-sm font-bold text-kx-text">Esperado en caja</span>
+                    <span className="font-mono font-bold">${arqueo.esperado.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  {arqueo.otrosIngresos > 0 && (
+                    <p className="text-2xs text-kx-text-3 pt-1 border-t border-dashed border-kx-border">
+                      * Otros medios (tarjeta/transf.): ${arqueo.otrosIngresos.toLocaleString('es-AR', { minimumFractionDigits: 2 })} — no cuentan para el efectivo
+                    </p>
+                  )}
+                </div>
+              )
+            )}
+
             <div className="space-y-1.5">
               <Label className="text-sm font-medium text-kx-text-2">
-                {isSessionOpen ? 'Monto final real ($)' : 'Monto de apertura ($)'}
+                {isSessionOpen ? 'Efectivo contado ($)' : 'Monto de apertura ($)'}
               </Label>
               <Input
                 type="text"
@@ -393,10 +454,42 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
                   ? setMontoCierre(e.target.value)
                   : setMontoApertura(e.target.value)
                 }
-                className="bg-kx-surface border-kx-border text-kx-text"
+                className="bg-kx-surface border-kx-border text-kx-text font-mono"
                 autoFocus
               />
             </div>
+
+            {/* Diferencia — sólo al cerrar y con monto ingresado */}
+            {isSessionOpen && !arqueoLoading && montoCierre !== '' && (
+              <div className={`flex items-center justify-between px-3 py-2 rounded-md border text-sm font-bold font-mono ${
+                arqueoPerfecto
+                  ? 'bg-green-50 text-green-600 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
+                  : arqueoSobrante
+                  ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800'
+                  : 'bg-red-50 text-red-700 border-red-300 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'
+              }`}>
+                <span>{diferenciaCierre > 0 ? '+' : ''}{diferenciaCierre.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                <span className="text-2xs font-normal">
+                  {arqueoPerfecto ? '✓ Cuadra' : arqueoSobrante ? '↑ Sobrante' : '↓ Faltante'}
+                </span>
+              </div>
+            )}
+
+            {/* Observaciones — sólo al cerrar */}
+            {isSessionOpen && (
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-kx-text-2">
+                  Observaciones {!arqueoPerfecto && montoCierre !== '' && <span className="text-kx-red">(anotá el motivo de la diferencia)</span>}
+                </Label>
+                <Input
+                  type="text"
+                  placeholder="Incidencias del turno..."
+                  value={observacionesCierre}
+                  onChange={e => setObservacionesCierre(e.target.value)}
+                  className="bg-kx-surface border-kx-border text-kx-text"
+                />
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-kx-border">
@@ -411,7 +504,7 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
             </Button>
             <Button
               size="sm"
-              disabled={savingCaja}
+              disabled={savingCaja || (isSessionOpen && arqueoLoading)}
               onClick={isSessionOpen ? handleCerrarCaja : handleAbrirCaja}
               className={isSessionOpen
                 ? 'bg-red-500 hover:bg-red-600 text-white'

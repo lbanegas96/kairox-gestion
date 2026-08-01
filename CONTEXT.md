@@ -1,5 +1,27 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08 (Luciano/Claude — vigencia futura de precios, mig.292, probado en vivo end-to-end)
+**Última actualización:** 2026-08 (Luciano/Claude — arqueo real al cerrar caja desde el POS, probado en vivo end-to-end)
+
+## ✅ Arqueo real al cerrar caja desde el POS — BUG DE DINERO CORREGIDO
+
+Primera de las mejoras de POS priorizadas tras el análisis de mercado (ver sección siguiente).
+
+**HALLAZGO (bug, no feature):** cerrar caja desde el POS (`ModoCajaLayout.jsx`) llamaba `closeSession(monto, '', 0, 0)` — con `esperado=0` y `diferencia=0` **hardcodeados**, y esos valores se **persisten** en `caja_sesiones`. Es decir: cualquier faltante o sobrante quedaba invisible, grabado como "diferencia $0". El arqueo real (que suma `movimientos_caja` por método) existía sólo en `CajaCierre.jsx`, usado desde el panel administrativo. Dos caminos de cierre, dos comportamientos distintos.
+
+**Ya había afectado datos reales:** la sesión del **2026-07-28** (`87d0f6d2`) tiene `monto_inicial=$150.000` e `ingresos_efectivo=$30.000` → su esperado real era **$180.000**, pero quedó grabado `esperado=0, diferencia=0`. Registro histórico, no corregido (decisión pendiente de Luciano).
+
+**Fix:**
+- Nuevo hook `src/hooks/useArqueoCaja.js` — **fuente única** del cálculo de arqueo, extraído de `CajaCierre.jsx`. Ambos caminos de cierre lo consumen, así no pueden volver a divergir.
+- `CajaCierre.jsx` refactorizado para usarlo (comportamiento idéntico; el pre-llenado del saldo real ahora está guardado con un `useRef` para que un refetch no pise lo que el usuario tipeó).
+- `ModoCajaLayout.jsx`: el modal de cierre ahora muestra el arqueo completo (inicial / ingresos / egresos / **esperado**), la **diferencia en vivo** con color (✓ Cuadra / ↑ Sobrante / ↓ Faltante), y campo de observaciones que se resalta cuando no cuadra. Pasa los valores reales a `closeSession`.
+- Dos guardas contra reintroducir el bug: `staleTime: 0` en el hook (cada venta cambia el esperado — un arqueo cacheado grabaría una diferencia falsa), refetch al abrir el modal, y el botón "Cerrar caja" queda deshabilitado mientras el arqueo carga (si no, `esperado` sería 0 otra vez).
+- Se agregó validación de monto inválido (antes `|| 0` convertía silenciosamente basura en 0).
+
+**Probado en vivo contra producción (Nalux)** desde el POS real: caja abierta con $12.345 → el modal mostró "Esperado en caja $12.345" ✓ → conté $12.000 → mostró **-345,00 ↓ Faltante** en rojo ✓ → cerré con observación → verificado en DB: `esperado=12345.00, diferencia=-345.00` ✓ (antes ambos habrían sido 0). Sesión de prueba y su rastro de auditoría eliminados — verificado en cero, 29 sesiones cerradas como al inicio.
+
+**Anomalía preexistente detectada (no tocada):** hay una sesión de caja **abierta desde el 2026-05-29** (`606de6ee`) con `monto_inicial=$2.030.036` y sin `cierre_fecha`. No la generó esta prueba; es un turno que quedó abierto hace más de dos meses.
+
+---
+
 
 ## ✅ Vigencia futura de precios — mig.292
 
