@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Tag, Plus, Edit, Trash2, Package, Search, Check,
-  ToggleLeft, ToggleRight, X, Loader2, DollarSign, Sparkles, ArrowRight
+  ToggleLeft, ToggleRight, X, Loader2, DollarSign, Sparkles, ArrowRight, History
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +44,9 @@ function ListasPrecioSection() {
   const [preview, setPreview] = useState(null); // AjusteMasivoItem[] | null
   const [categorias, setCategorias] = useState([]);
 
+  const [historialModal, setHistorialModal] = useState(false);
+  const [historialProducto, setHistorialProducto] = useState(null); // { id, nombre }
+
   // ── Queries ──────────────────────────────────────────────────────────────────
   const { data: listas = [], isLoading } = useQuery({
     queryKey: LISTAS_KEY(empresaId),
@@ -55,6 +58,12 @@ function ListasPrecioSection() {
     queryKey: ITEMS_KEY(selectedLista?.id),
     queryFn: () => listaPreciosService.getItems(selectedLista.id),
     enabled: !!selectedLista?.id,
+  });
+
+  const { data: historial = [], isLoading: historialLoading } = useQuery({
+    queryKey: ['historial_precio', selectedLista?.id, historialProducto?.id],
+    queryFn: () => listaPreciosService.getHistorialPrecio(selectedLista.id, historialProducto.id),
+    enabled: historialModal && !!selectedLista?.id && !!historialProducto?.id,
   });
 
   // Inicializar precios de edición cuando cambian los items
@@ -486,6 +495,15 @@ function ListasPrecioSection() {
                         : <Check className="w-3.5 h-3.5" />
                       }
                     </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-kx-text-3 hover:text-kx-violet"
+                      onClick={() => { setHistorialProducto({ id: prod.id, nombre: prod.nombre }); setHistorialModal(true); }}
+                      title="Ver historial de precio"
+                    >
+                      <History className="w-3.5 h-3.5" />
+                    </Button>
                     {hasPrice && (
                       <Button
                         size="icon"
@@ -670,6 +688,65 @@ function ListasPrecioSection() {
 
           <DialogFooter className="pt-2 border-t border-kx-border dark:border-kx-border">
             <Button variant="outline" onClick={() => setAjusteModal(false)} className="dark:border-kx-border dark:text-slate-300">
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── MODAL: Historial de cambios de precio ── */}
+      <Dialog open={historialModal} onOpenChange={setHistorialModal}>
+        <DialogContent className="max-w-lg dark:bg-kx-bg dark:border-kx-border max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="dark:text-kx-text flex items-center gap-2">
+              <History className="w-5 h-5 text-kx-violet" />
+              Historial de precio
+            </DialogTitle>
+            <DialogDescription className="dark:text-kx-text-2">
+              {historialProducto?.nombre} — {selectedLista?.nombre}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto">
+            {historialLoading ? (
+              <div className="p-8 text-center text-kx-text-3 flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" /> Cargando...
+              </div>
+            ) : historial.length === 0 ? (
+              <p className="text-center text-kx-text-3 py-8 text-sm">Sin cambios registrados todavía</p>
+            ) : (
+              <div className="space-y-1">
+                {historial.map((h, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 rounded-lg border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface">
+                    <div>
+                      <p className="text-sm text-kx-text dark:text-kx-text">
+                        {h.operacion === 'INSERT' && (
+                          <>Precio inicial: <span className="font-semibold">${Number(h.precioNuevo).toLocaleString('es-AR')}</span></>
+                        )}
+                        {h.operacion === 'UPDATE' && (
+                          <>
+                            ${Number(h.precioAnterior).toLocaleString('es-AR')}
+                            <ArrowRight className="w-3 h-3 inline mx-1 text-kx-text-3" />
+                            <span className="font-semibold">${Number(h.precioNuevo).toLocaleString('es-AR')}</span>
+                          </>
+                        )}
+                        {h.operacion === 'DELETE' && (
+                          <span className="text-kx-text-3 italic">Precio especial eliminado (volvió al estándar)</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-kx-text-3">{h.usuario}</p>
+                    </div>
+                    <span className="text-xs text-kx-text-3 shrink-0">
+                      {new Date(h.fecha).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="pt-2 border-t border-kx-border dark:border-kx-border">
+            <Button variant="outline" onClick={() => setHistorialModal(false)} className="dark:border-kx-border dark:text-slate-300">
               Cerrar
             </Button>
           </DialogFooter>

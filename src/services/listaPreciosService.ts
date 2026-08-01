@@ -41,6 +41,14 @@ export interface AjusteMasivoParams {
   redondeo?: 'ninguno' | 'decena' | 'centena' | 'terminar_99';
 }
 
+export interface HistorialPrecioEntry {
+  fecha: string;
+  operacion: 'INSERT' | 'UPDATE' | 'DELETE';
+  precioAnterior: number | null;
+  precioNuevo: number | null;
+  usuario: string;
+}
+
 export const listaPreciosService = {
   // ── Listas ──────────────────────────────────────────────────────────────────
 
@@ -150,6 +158,44 @@ export const listaPreciosService = {
     });
     if (error) throw new Error(error.message);
     return ((data as any)?.items ?? []) as AjusteMasivoItem[];
+  },
+
+  // ── Historial de cambios de precio ───────────────────────────────────────────
+
+  async getHistorialPrecio(listaPrecioId: string, productoId: string): Promise<HistorialPrecioEntry[]> {
+    const { data, error } = await supabase
+      .from('audit_log')
+      .select('created_at, operacion, old_data, new_data, user_id')
+      .eq('tabla', 'lista_precio_items')
+      .or(`new_data->>producto_id.eq.${productoId},old_data->>producto_id.eq.${productoId}`)
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+
+    const rows = (data ?? []).filter((r: any) => {
+      const d = r.new_data ?? r.old_data;
+      return d?.lista_precio_id === listaPrecioId && d?.producto_id === productoId;
+    });
+    if (rows.length === 0) return [];
+
+    const userIds = [...new Set(rows.map((r: any) => r.user_id).filter(Boolean))];
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, first_name, last_name, email')
+      .in('id', userIds.length > 0 ? userIds : ['00000000-0000-0000-0000-000000000000']);
+    const nombreMap: Record<string, string> = Object.fromEntries(
+      (profiles ?? []).map((p: any) => [
+        p.id,
+        [p.first_name, p.last_name].filter(Boolean).join(' ') || p.email || 'Usuario',
+      ])
+    );
+
+    return rows.map((r: any) => ({
+      fecha: r.created_at,
+      operacion: r.operacion,
+      precioAnterior: r.old_data?.precio != null ? Number(r.old_data.precio) : null,
+      precioNuevo: r.new_data?.precio != null ? Number(r.new_data.precio) : null,
+      usuario: r.user_id ? (nombreMap[r.user_id] ?? 'Usuario') : 'Sistema',
+    }));
   },
 
   // ── Asignar lista a cliente ─────────────────────────────────────────────────

@@ -1,5 +1,17 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08 (Luciano/Claude — ajuste masivo de precios en Listas de Precios, mig.290, probado en vivo end-to-end)
+**Última actualización:** 2026-08 (Luciano/Claude — historial de cambios de precio, mig.291, probado en vivo end-to-end)
+
+## ✅ Historial de cambios de precio — mig.291
+
+Fase 2 del trabajo de precios (después de mig.290). Se agregó un botón "Ver historial" por producto en el modal de precios de cada lista, que muestra quién cambió el precio, cuándo, y de cuánto a cuánto — leyendo directamente de `audit_log` (sin tabla nueva).
+
+**Hallazgo durante la construcción, corregido en el momento:** se creyó que `lista_precio_items` no tenía trigger de auditoría (a diferencia de `productos`, cubierta desde mig.001) porque el grep inicial solo buscó el patrón `trg_audit_*`. Al aplicar un trigger nuevo (`trg_audit_lista_precio_items`) y probar en vivo aparecieron eventos duplicados en `audit_log` — investigando se confirmó que mig.021 (creación original de Listas de Precio) YA había creado un trigger equivalente con otro nombre (`audit_lista_precio_items`). Se dropeó el trigger duplicado inmediatamente, se corrigió mig.291 a un no-op documentado, y se limpiaron las filas de auditoría generadas por la prueba fallida. **Ninguna funcionalidad quedó rota en producción** — el error se detectó y corrigió en el mismo ciclo de prueba antes de dar por cerrado.
+
+`listaPreciosService.getHistorialPrecio(listaId, productoId)` — filtra `audit_log` por `tabla='lista_precio_items'` y `producto_id` (usando `.or()` sobre `old_data`/`new_data` para no traer toda la tabla), cruza `user_id` con `profiles` para mostrar nombre.
+
+**Probado en vivo contra producción (Nalux):** verificado en un producto real ("Mate", lista "Precio VIP") mostrando su único evento real ("Precio inicial: $1.500 — Nadia Tecera"), solo lectura, sin mutar nada.
+
+---
 
 ## ✅ Ajuste masivo de precios en Listas de Precios — mig.290
 
