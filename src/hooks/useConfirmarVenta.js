@@ -31,7 +31,11 @@ export function useConfirmarVenta(tcParalelo) {
   const { user }                       = useAuth();
   const { isSessionOpen, currentSession } = useCaja();
   const { toast }                      = useToast();
-  const { afipConfig, afipActivo, determinarTipoComprobante } = useAfipConfig();
+  // contexto 'pos': la empresa puede haberle dado al Modo Caja su propio punto
+  // de venta (mig.293) — fiscal independiente, o interno para el local que no
+  // factura. Si ese PdV tiene envia_arca=false, afipActivo queda en false y la
+  // venta nunca se encola a ARCA.
+  const { afipConfig, afipActivo, determinarTipoComprobante } = useAfipConfig('pos');
   const [loading, setLoading]          = useState(false);
   const [lastComprobante, setLastComprobante] = useState(null);
 

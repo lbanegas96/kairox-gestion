@@ -51,6 +51,8 @@ const TabFacturacion = ({
   certStatus, onOpenCertModal, handleProbarConexion, probandoConexion,
   // Puntos de venta
   allPuntosVenta, openAddPv, openEditPv,
+  // Punto de venta del POS (Modo Caja) — mig.293
+  posPuntoVentaId, onChangePosPuntoVenta, savingPosPv,
   // Tipos de comprobante
   selectedPvId, setSelectedPvId, loadingTipos, tiposComprobante, savingTipoId,
   updateTipoLocal, handleSaveTipoProximoNumero,
@@ -276,6 +278,41 @@ const TabFacturacion = ({
             Uno o más CAI de remito vencen en menos de 30 días. Renovalos en ARCA antes de que expiren.
           </div>
         )}
+
+        {/* Punto de venta del POS (Modo Caja) — mig.293 */}
+        <div className="mt-5 pt-5 border-t border-kx-border">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
+              <h4 className="font-semibold text-kx-text dark:text-kx-text text-sm">Punto de venta del Modo Caja</h4>
+              <p className="text-xs text-slate-500 dark:text-kx-text-2 mt-0.5 max-w-md">
+                Qué punto de venta usan las ventas de mostrador. Si elegís uno que no envía a ARCA,
+                el POS emite comprobante interno y nunca factura — para el local que no emite factura electrónica.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {savingPosPv && <Loader2 className="h-4 w-4 animate-spin text-kx-text-3" />}
+              <select
+                value={posPuntoVentaId ?? ''}
+                onChange={e => onChangePosPuntoVenta(e.target.value || null)}
+                disabled={savingPosPv}
+                className="h-9 rounded-md border border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text px-3 text-sm min-w-[15rem] disabled:opacity-50"
+              >
+                <option value="">El mismo que el resto del sistema</option>
+                {allPuntosVenta.filter(pv => pv.activo).map(pv => (
+                  <option key={pv.id} value={pv.id}>
+                    {pv.numero} · {pv.nombre}{pv.envia_arca === false ? ' (interno, no factura)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {posPuntoVentaId && allPuntosVenta.find(pv => pv.id === posPuntoVentaId)?.envia_arca === false && (
+            <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 mt-3">
+              <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              Las ventas del Modo Caja <strong>no se enviarán a ARCA</strong> ni tendrán CAE. Seguirán registrando stock, caja y asiento contable normalmente.
+            </div>
+          )}
+        </div>
       </div>
     )}
 

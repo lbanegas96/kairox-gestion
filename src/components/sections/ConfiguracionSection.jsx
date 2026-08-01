@@ -172,6 +172,9 @@ const ConfiguracionSection = ({ initialTab }) => {
 
   // ── Tab 3: Puntos de Venta + Credenciales AFIP (gestión completa) ────────
   const [allPuntosVenta, setAllPuntosVenta] = useState([]);
+  // PdV propio del Modo Caja (mig.293) — null = el mismo que el resto del sistema
+  const [posPuntoVentaId, setPosPuntoVentaId] = useState(null);
+  const [savingPosPv, setSavingPosPv]         = useState(false);
   const [certStatus, setCertStatus] = useState(null);
   const [certModalOpen, setCertModalOpen] = useState(false);
   const [certForm, setCertForm] = useState({ cert: '', key: '' });
@@ -255,10 +258,11 @@ const ConfiguracionSection = ({ initialTab }) => {
     try {
       const { data: emp } = await supabase
         .from('empresas')
-        .select('usa_factura_electronica, condicion_iva, afip_cuit, nombre, numero_ingresos_brutos, fecha_inicio_actividades')
+        .select('usa_factura_electronica, condicion_iva, afip_cuit, nombre, numero_ingresos_brutos, fecha_inicio_actividades, pos_punto_venta_id')
         .eq('id', user.empresa_id)
         .single();
       if (emp) {
+        setPosPuntoVentaId(emp.pos_punto_venta_id ?? null);
         setAfipConfig({
           usa_factura_electronica: emp.usa_factura_electronica ?? false,
           condicion_iva: emp.condicion_iva ?? null,
@@ -1106,6 +1110,34 @@ const ConfiguracionSection = ({ initialTab }) => {
     }
   };
 
+  // PdV del Modo Caja (mig.293). Guarda al instante — es un selector, no un form.
+  const handleChangePosPuntoVenta = async (nuevoId) => {
+    if (!user?.empresa_id) return;
+    const anterior = posPuntoVentaId;
+    setPosPuntoVentaId(nuevoId);
+    setSavingPosPv(true);
+    try {
+      const { error } = await supabase.from('empresas')
+        .update({ pos_punto_venta_id: nuevoId })
+        .eq('id', user.empresa_id);
+      if (error) throw error;
+      // useAfipConfig cachea la config 5 min: invalidar para que el POS tome el
+      // PdV nuevo sin necesidad de recargar la app.
+      queryClient.invalidateQueries({ queryKey: ['afip-config'] });
+      const pv = allPuntosVenta.find(p => p.id === nuevoId);
+      toast({
+        title: nuevoId ? `Modo Caja usa el PdV ${pv?.numero}` : 'Modo Caja usa el PdV por defecto',
+        description: pv?.envia_arca === false ? 'Las ventas de mostrador no se enviarán a ARCA.' : undefined,
+        className: 'bg-green-600 text-white border-green-700',
+      });
+    } catch (e) {
+      setPosPuntoVentaId(anterior); // revertir el optimista
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingPosPv(false);
+    }
+  };
+
   const handleSaveStockMin = async () => {
     if (!user?.empresa_id) return;
     setSavingStockMin(true);
@@ -1773,6 +1805,9 @@ const ConfiguracionSection = ({ initialTab }) => {
             handleProbarConexion={handleProbarConexion}
             probandoConexion={probandoConexion}
             allPuntosVenta={allPuntosVenta}
+            posPuntoVentaId={posPuntoVentaId}
+            onChangePosPuntoVenta={handleChangePosPuntoVenta}
+            savingPosPv={savingPosPv}
             openAddPv={openAddPv}
             openEditPv={openEditPv}
             selectedPvId={selectedPvId}

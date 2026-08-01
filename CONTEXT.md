@@ -1,5 +1,35 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08 (Luciano/Claude — pago mixto en el POS reusando useMultipago del ERP)
+**Última actualización:** 2026-08 (Luciano/Claude — PdV propio para el POS + opt-out de ARCA, mig.293, probado en vivo end-to-end)
+
+## ✅ Punto de venta propio para el POS + opt-out de ARCA — mig.293
+
+Pregunta de Luciano: *"¿el POS debería tener su propio punto de venta? ¿debería poder elegir si va por ARCA o no, pensando en un local chico que no factura?"*. Respuesta: sí a ambas — y continúa el pendiente que la **mig.244 dejó documentado explícitamente** (creó `puntos_venta.envia_arca` pero nunca lo cableó al circuito de facturación).
+
+**Por qué el POS debe poder tener PdV propio:** AFIP exige un PdV por modalidad de emisión (si el mostrador suma controlador fiscal, va obligatoriamente en otro PdV); numeración independiente del back-office; y conciliación por canal.
+
+**Dos necesidades distintas, no confundirlas:**
+| Necesidad | Alcance | Mecanismo |
+|---|---|---|
+| Local que **no factura** electrónicamente | Permanente | PdV con `envia_arca=false` |
+| Venta puntual no fiscal | Por comprobante | `comprobantes.relevante_fiscal=false` (ya existía, sólo el ERP lo expone) |
+
+**DOS BUGS LATENTES QUE ESTO CERRÓ:**
+1. `useAfipConfig` elegía el PdV con `.eq('activo',true).limit(1)` — **sin ORDER BY ni filtrar `envia_arca`**. No determinístico: Nalux tiene el PdV 1 (fiscal) y el 2 ("Remito", envia_arca=false), y nada garantizaba cuál se usaba para facturar.
+2. `envia_arca=false` **no impedía** que el comprobante fuera a ARCA — el trigger `fn_queue_factura_arca` sólo mira `relevante_fiscal`. Ahora el frontend no marca `cae_estado='pendiente'` si el PdV resuelto no envía a ARCA, así que el trigger nunca se dispara.
+
+**Fix:** `empresas.pos_punto_venta_id` (NULL = el mismo PdV que el resto). `useAfipConfig(contexto)` acepta `'pos' | 'erp'`, resuelve el PdV de forma determinística (PdV del POS si está configurado; si no, primer PdV activo **con envia_arca=true**, ordenado por número) y `afipActivo` ahora exige además que el PdV envíe a ARCA. Selector nuevo en Configuración → Facturación, con aviso explícito cuando el PdV elegido no factura.
+
+**Probado en vivo end-to-end (Nalux)** — venta REAL de mostrador con pago mixto sobre un PdV interno de prueba:
+- Selector guardó y avisó "Las ventas de mostrador no se enviarán a ARCA" ✓
+- Venta $1.200 = $700 Efectivo + $500 Transferencia → **2 filas en `movimientos_caja`**, una por medio ✓ (esto cierra la verificación pendiente del pago mixto)
+- `cae_estado='no_aplica'`, `punto_venta_id=NULL`, **0 filas en `facturas_pendientes_arca`** ✓ — nunca se encoló a ARCA
+- Asiento balanceado $2.200=$2.200, con COGS incluido (mig.287): Debe 1.1.1 $1.200 + Debe 5.1 $1.000 / Haber 4.1 $991,74 + Haber 2.1.3 $208,26 + Haber 1.1.3 $1.000 ✓
+- **Todo limpiado**: asiento, movimientos, comprobante, entrega, stock restaurado a 5851, sesión de caja, PdV de prueba, TC del día, rastros de auditoría, y el correlativo devuelto a 1 para no dejar salto de numeración — verificado en cero.
+
+**Observación para más adelante (no es bug):** el asiento manda TODO el cobro a `1.1.1 Caja y Bancos`, aunque la venta se haya cobrado parte en efectivo y parte por transferencia. Como la cuenta es literalmente "Caja y Bancos" (combinada), es correcto hoy; si en algún momento se separan Caja y Banco en cuentas distintas, `crearAsientoVenta` va a necesitar partir el débito por medio de pago.
+
+---
+
 
 ## ✅ Pago mixto en el POS — arquitectura compartida con el ERP
 
