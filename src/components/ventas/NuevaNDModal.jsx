@@ -70,7 +70,6 @@ function NuevaNDModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
   const [afipConfig, setAfipConfig]   = useState(null);
   // Relevancia fiscal (patrón SAP, mismo que Factura/NC) — tildado, esta ND
   // nunca se encola para CAE aunque AFIP esté activo.
-  const [noRelevanteFiscal, setNoRelevanteFiscal] = useState(false);
 
   const origenLocked = !!comprobanteOrigen;
 
@@ -90,11 +89,31 @@ function NuevaNDModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
     supabase.from('empresas')
       .select('usa_factura_electronica, condicion_iva, afip_cuit')
       .eq('id', user.empresa_id).single()
-      .then(({ data: emp }) => {
+      .then(async ({ data: emp }) => {
         if (!emp?.usa_factura_electronica) return;
-        supabase.from('puntos_venta').select('id')
-          .eq('empresa_id', user.empresa_id).eq('activo', true).limit(1).maybeSingle()
-          .then(({ data: pv }) => { if (pv) setAfipConfig({ ...emp, punto_venta: pv }); });
+        // Punto de venta HEREDADO del comprobante origen (una ND ajusta un
+        // documento concreto y sale por su misma serie). Standalone → el PdV por
+        // defecto (mig.294). Antes había un `.limit(1)` sin ORDER BY ni filtro
+        // de envia_arca, que podía resolver al PdV de remitos.
+        const COLS = 'id, numero, nombre, envia_arca';
+        let pv = null;
+        if (comprobanteOrigen?.punto_venta_id) {
+          const { data } = await supabase.from('puntos_venta').select(COLS)
+            .eq('id', comprobanteOrigen.punto_venta_id).eq('empresa_id', user.empresa_id).maybeSingle();
+          pv = data ?? null;
+        }
+        if (!pv) {
+          const { data } = await supabase.from('puntos_venta').select(COLS)
+            .eq('empresa_id', user.empresa_id).eq('activo', true).eq('es_default', true).maybeSingle();
+          pv = data ?? null;
+        }
+        if (!pv) {
+          const { data } = await supabase.from('puntos_venta').select(COLS)
+            .eq('empresa_id', user.empresa_id).eq('activo', true).eq('envia_arca', true)
+            .order('numero').limit(1).maybeSingle();
+          pv = data ?? null;
+        }
+        if (pv) setAfipConfig({ ...emp, punto_venta: pv });
       });
 
     if (comprobanteOrigen) {
@@ -127,7 +146,6 @@ function NuevaNDModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
       setItems([newItem()]);
       setFacturas([]);
       setAfipConfig(null);
-      setNoRelevanteFiscal(false);
     }
   }, [open]);
 
@@ -185,13 +203,15 @@ function NuevaNDModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
       });
       if (error) throw error;
 
-      if (noRelevanteFiscal) {
-        const { error: relevanteErr } = await supabase.from('comprobantes')
-          .update({ relevante_fiscal: false }).eq('id', data.comprobante_id);
-        if (relevanteErr) console.warn('[relevante_fiscal ND]', relevanteErr.message);
+      // El PdV se registra siempre, aunque sea interno, para saber por qué serie salió.
+      if (afipConfig?.punto_venta && afipConfig.punto_venta.envia_arca === false) {
+        await supabase.from('comprobantes')
+          .update({ punto_venta_id: afipConfig.punto_venta.id })
+          .eq('id', data.comprobante_id);
       }
 
-      if (afipConfig?.usa_factura_electronica && afipConfig?.punto_venta && !noRelevanteFiscal) {
+      // La relevancia la define el PdV heredado (criterio unificado, mig.294).
+      if (afipConfig?.usa_factura_electronica && afipConfig?.punto_venta && afipConfig.punto_venta.envia_arca !== false) {
         // Letra del comprobante. Con origen se hereda (una ND ajusta un
         // documento concreto y debe compartir su letra). Sin origen se deriva
         // de la condición fiscal, igual que las ventas — acá había un 'B'
@@ -261,20 +281,23 @@ function NuevaNDModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
             <span>Esta ND <strong>aumenta la deuda del cliente</strong> en Cuenta Corriente.</span>
           </div>
 
-          {afipConfig?.usa_factura_electronica && (
-            <label className="flex items-start gap-2 p-3 rounded-lg bg-kx-surface-2 border border-kx-border text-xs text-kx-text-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={noRelevanteFiscal}
-                onChange={e => setNoRelevanteFiscal(e.target.checked)}
-                className="mt-0.5"
-              />
+          {/* Punto de venta — HEREDADO, no se elige (mig.294) */}
+          {afipConfig?.punto_venta && (
+            <div className={`flex items-start gap-2 p-3 rounded-lg border text-xs ${
+              afipConfig.punto_venta.envia_arca === false
+                ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400'
+                : 'bg-kx-surface-2 border-kx-border text-kx-text-2'
+            }`}>
               <span>
-                <strong className="text-kx-text">No relevante para AFIP</strong> — ajuste interno o
-                corrección manual. Tildado, esta ND <strong>nunca</strong> se encola para emitir CAE
-                ante ARCA, aunque la facturación electrónica esté activa.
+                Se emite por <strong className="text-kx-text">
+                  PdV {afipConfig.punto_venta.numero} · {afipConfig.punto_venta.nombre}
+                </strong>
+                {comprobanteOrigen ? ' (heredado del comprobante original)' : ' (punto de venta por defecto)'}.
+                {afipConfig.punto_venta.envia_arca === false
+                  ? ' Es un punto de venta interno: no se emite CAE ni se informa a ARCA.'
+                  : ''}
               </span>
-            </label>
+            </div>
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

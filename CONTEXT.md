@@ -1,5 +1,37 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08 (Luciano/Claude — PdV propio para el POS + opt-out de ARCA, mig.293, probado en vivo end-to-end)
+**Última actualización:** 2026-08 (Luciano/Claude — criterio fiscal unificado: PdV como único selector, mig.294/295)
+
+## ✅ Criterio fiscal unificado: el punto de venta es el ÚNICO selector — mig.294/295
+
+Pregunta de Luciano tras mig.293: "¿cómo unificamos el criterio entre ERP y POS?". Se investigó cómo lo resuelve SAP: **no hay dos selectores** (PdV + relevancia). Hay uno: la Serie/PdV, y de ahí se DERIVA si el documento es fiscal. Se aplicó ese modelo.
+
+**mig.294 — `es_default` funcional:** existía la columna hace tiempo, se mostraba y editaba en Configuración, pero **nada la leía** (verificado: 0 PdV con `es_default=true` en las 3 empresas). Trigger que garantiza un único default por empresa (índice único parcial) + backfill al PdV fiscal que cada empresa ya usaba (cero cambio de comportamiento) + `useAfipConfig` ahora lo usa en la cadena de resolución.
+
+**mig.295 — numeración separada por PdV** (alcance acotado a propósito: sólo `venta`/`factura`, ver más abajo). `series_numeracion` suma `punto_venta_id` nullable; `obtener_proximo_numero` gana un overload de 3 params (el de 2 sigue existiendo, ahora filtra explícitamente `punto_venta_id IS NULL` para no volverse ambiguo). **Garantía de seguridad de la migración**: el PdV `es_default` de la empresa sigue usando la fila legacy de siempre — sólo un PdV NO-default provisiona una fila nueva, con prefijo derivado (`"" → "2-"`, `"NC-" → "NC-2-"`).
+
+**Cambio de UI — se sacó el checkbox "No relevante para AFIP" en 4 lugares** (`NuevaVentaModal`, `NuevaFacturaModal`, `NuevaNCModal`, `NuevaNDModal`), reemplazado por:
+- **ERP (Factura/Venta):** selector de PdV real. Si el elegido tiene `envia_arca=false`, aviso "Comprobante interno: no se emite CAE ni se informa a ARCA".
+- **NC/ND:** el PdV se **hereda** del comprobante origen (no se elige) — una NC que anula una factura fiscal tiene que ser fiscal. Sin origen (standalone), usa el PdV por defecto.
+- **POS:** badge de sólo lectura en el topbar ("PdV 1"), configurable únicamente desde Configuración → Facturación (admin).
+
+**Bugs reales encontrados y corregidos en el camino** (el mismo patrón, 4 veces):
+1. `useAfipConfig` — `.limit(1)` sin ORDER BY ni filtro `envia_arca` (ya arreglado en mig.293).
+2. `NuevaFacturaModal.jsx` — copia idéntica del mismo bug, no detectada en mig.293 por revisar sólo `useAfipConfig`.
+3. `NuevaNCModal.jsx` — ídem, ahora además con herencia del PdV origen.
+4. `NuevaNDModal.jsx` — ídem.
+
+**Bug propio introducido y detectado por lint antes de llegar a producción:** al reemplazar el checkbox por el selector en los 4 modales, quedó una llamada huérfana `setNoRelevanteFiscal(false)` en el reset-al-cerrar de los 4 archivos — crasheaba el modal entero (error boundary de `VentasSection`) apenas se abría. `grep` inicial no lo encontró por mayúsculas; `npx eslint` (`no-undef`) lo detectó al toque. Corregido antes de cualquier commit — nunca llegó a producción.
+
+**Alcance NO cubierto, documentado como pendiente honesto:** `crear_nota_credito`/`crear_nota_debito_cliente` generan el número **dentro del RPC SQL**, sin recibir el PdV — no se tocaron hoy (evitar sumar riesgo sobre `crear_nota_credito`, que ya tiene un overload huérfano documentado como deuda técnica). NC/ND comparten un único correlativo entre PdV — no es incorrecto, sólo no está separado por serie todavía.
+
+**Probado en vivo contra producción (Nalux):**
+- `NuevaFacturaModal`: selector de PdV, cambiar a "2 · Remito (interno)" muestra el aviso correcto ✓, sin crashear.
+- POS: badge "PdV 1" visible en el topbar ✓.
+- Numeración (vía curl con JWT real, ya que `execute_sql` no tiene contexto de `auth.uid()`): PdV default → `20260801-001` (serie legacy, sin crear fila) ✓; PdV no-default → `2-20260801-001` (fila nueva, prefijo distinto, arranca en 1) ✓; llamada de 2 args sin PdV → `20260801-002` (sigue la misma serie legacy) ✓. Todo revertido después: `proximo_numero` vuelto a 1, fila de prueba del PdV no-default eliminada — verificado en cero, 0 comprobantes fantasma.
+- `npx eslint` sobre los 5 archivos tocados: 0 errores. Build limpio. 84 tests unitarios verdes.
+
+---
+
 
 ## ✅ Punto de venta propio para el POS + opt-out de ARCA — mig.293
 

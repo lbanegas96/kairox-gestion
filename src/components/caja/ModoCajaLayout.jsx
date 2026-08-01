@@ -9,6 +9,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { useArqueoCaja } from '@/hooks/useArqueoCaja';
+import { useAfipConfig } from '@/hooks/useAfipConfig';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { precioPackFinal } from '@/lib/unidadesMedida';
 import PanelProductos from './PanelProductos';
@@ -26,6 +27,12 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
   // Arqueo real del turno — mismo cálculo que el cierre desde el panel administrativo
   const { totals: arqueo, loading: arqueoLoading,
           refetch: refetchArqueo }                     = useArqueoCaja();
+  // Punto de venta del POS — SOLO LECTURA. Se configura únicamente desde
+  // Configuración → Facturación (admin). Acá se muestra para que el cajero
+  // pueda avisar si está emitiendo por el PdV equivocado. react-query dedupe
+  // esta lectura con la que hace useConfirmarVenta (misma queryKey).
+  const { afipConfig: afipPos }                        = useAfipConfig('pos');
+  const pdvPos                                         = afipPos?.punto_venta ?? null;
 
   const [carrito, setCarrito]       = useState([]);
   const [logoUrl, setLogoUrl]       = useState('');
@@ -272,6 +279,22 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
               : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
           }`}>
             {isSessionOpen ? 'Caja abierta' : 'Caja cerrada'}
+          </span>
+        )}
+
+        {/* Punto de venta — informativo, no editable desde el POS */}
+        {pdvPos && (
+          <span
+            title={pdvPos.envia_arca === false
+              ? 'Comprobante interno — no se factura ante ARCA. Se configura en Configuración → Facturación.'
+              : 'Emite factura electrónica ante ARCA. Se configura en Configuración → Facturación.'}
+            className={`text-2xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 hidden sm:inline ${
+              pdvPos.envia_arca === false
+                ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                : 'bg-kx-surface-2 text-kx-text-2'
+            }`}
+          >
+            PdV {pdvPos.numero}{pdvPos.envia_arca === false ? ' · interno' : ''}
           </span>
         )}
 

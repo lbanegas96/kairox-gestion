@@ -43,14 +43,19 @@ export function determinarTipoComprobante(emisorCondicion, receptorCondicion) {
  * Resolución del punto de venta (mig.293 — antes era `.limit(1)` sin ORDER BY
  * ni filtro de `envia_arca`, o sea NO determinístico: con un PdV fiscal y otro
  * de remitos, nada garantizaba cuál se usaba para facturar):
- *   1. contexto 'pos' y `empresas.pos_punto_venta_id` seteado → ese PdV.
- *   2. si no, el primer PdV activo CON `envia_arca=true`, ordenado por número.
+ *   1. `puntoVentaId` explícito (el selector de la factura en el ERP).
+ *   2. contexto 'pos' y `empresas.pos_punto_venta_id` seteado → ese PdV.
+ *   3. el PdV marcado `es_default` de la empresa (mig.294).
+ *   4. fallback: primer PdV activo CON `envia_arca=true`, ordenado por número.
+ *
+ * @param puntoVentaId fuerza un PdV concreto (selector del ERP). Tiene
+ *   prioridad sobre todo lo demás; si no se pasa, se resuelve por defecto.
  */
-export function useAfipConfig(contexto = 'erp') {
+export function useAfipConfig(contexto = 'erp', puntoVentaId = null) {
   const { user } = useAuth();
 
   const { data: afipConfig } = useQuery({
-    queryKey: ['afip-config', user?.empresa_id, contexto],
+    queryKey: ['afip-config', user?.empresa_id, contexto, puntoVentaId],
     queryFn: async () => {
       if (!user?.empresa_id) return null;
       const { data: empresa } = await supabase
@@ -60,22 +65,41 @@ export function useAfipConfig(contexto = 'erp') {
         .single();
       if (!empresa?.usa_factura_electronica) return null;
 
-      const COLS = 'id, numero, tipo_comprobante_default, envia_arca';
-      let pv = null;
-
-      // 1. PdV propio del POS, si la empresa lo configuró
-      if (contexto === 'pos' && empresa.pos_punto_venta_id) {
+      const COLS = 'id, numero, nombre, tipo_comprobante_default, envia_arca';
+      const porId = async (id) => {
         const { data } = await supabase
           .from('puntos_venta')
           .select(COLS)
-          .eq('id', empresa.pos_punto_venta_id)
+          .eq('id', id)
           .eq('empresa_id', user.empresa_id)
           .eq('activo', true)
+          .maybeSingle();
+        return data ?? null;
+      };
+
+      let pv = null;
+
+      // 1. PdV elegido explícitamente (selector de la factura en el ERP)
+      if (puntoVentaId) pv = await porId(puntoVentaId);
+
+      // 2. PdV propio del POS, si la empresa lo configuró (mig.293)
+      if (!pv && contexto === 'pos' && empresa.pos_punto_venta_id) {
+        pv = await porId(empresa.pos_punto_venta_id);
+      }
+
+      // 3. El PdV marcado por defecto de la empresa (mig.294)
+      if (!pv) {
+        const { data } = await supabase
+          .from('puntos_venta')
+          .select(COLS)
+          .eq('empresa_id', user.empresa_id)
+          .eq('activo', true)
+          .eq('es_default', true)
           .maybeSingle();
         pv = data ?? null;
       }
 
-      // 2. Fallback determinístico: primer PdV fiscal activo, por número
+      // 4. Fallback determinístico: primer PdV fiscal activo, por número
       if (!pv) {
         const { data } = await supabase
           .from('puntos_venta')

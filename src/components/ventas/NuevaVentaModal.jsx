@@ -47,15 +47,20 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   const [centrosCosto, setCentrosCosto] = useState([]);
   const [centroCostoId, setCentroCostoId] = useState('');
 
-  // Relevancia fiscal (patrón SAP, mismo que NuevaFacturaModal.jsx) — tildado,
-  // esta venta nunca se encola para CAE aunque AFIP esté activo.
-  const [noRelevanteFiscal, setNoRelevanteFiscal] = useState(false);
+  // Punto de venta — criterio fiscal unificado (mig.294): el PdV es el ÚNICO
+  // selector. La relevancia fiscal se DERIVA de `envia_arca`, no se elige
+  // aparte (antes había un checkbox "No relevante para AFIP" que permitía la
+  // combinación contradictoria "PdV fiscal + no relevante"). Elegir un PdV
+  // interno es la forma de emitir un comprobante que no va a ARCA.
+  const [puntosVenta, setPuntosVenta] = useState([]);
+  const [puntoVentaId, setPuntoVentaId] = useState('');
 
   // ── Moneda Paralela ─────────────────────────────────────────────────────────
   const tcParalelo = useTCParalelo();
 
   // ── Configuración AFIP (hook compartido con el POS / useConfirmarVenta) ─────
-  const { afipConfig, afipActivo, determinarTipoComprobante } = useAfipConfig();
+  // El PdV elegido manda: afipActivo ya contempla que ese PdV envíe a ARCA.
+  const { afipConfig, afipActivo, determinarTipoComprobante } = useAfipConfig('erp', puntoVentaId || null);
   const [lastComprobante, setLastComprobante] = useState(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [lastItems, setLastItems] = useState([]);
@@ -75,6 +80,17 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
       const { data: clis } = await supabase
         .from('clientes').select('*').eq('empresa_id', user.empresa_id).eq('activo', true);
       setClients(clis || []);
+
+      // Puntos de venta activos — el selector fiscal de la factura (mig.294).
+      // Arranca en el marcado por defecto de la empresa.
+      const { data: pvs } = await supabase
+        .from('puntos_venta')
+        .select('id, numero, nombre, envia_arca, es_default')
+        .eq('empresa_id', user.empresa_id)
+        .eq('activo', true)
+        .order('numero');
+      setPuntosVenta(pvs ?? []);
+      setPuntoVentaId(prev => prev || (pvs?.find(p => p.es_default)?.id ?? ''));
 
       const { data: empresaCC } = await supabase
         .from('empresas').select('usa_centros_costo').eq('id', user.empresa_id).single();
@@ -238,7 +254,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     setListaNombre('');
     setPedidoYaEntregado(false);
     setCentroCostoId('');
-    setNoRelevanteFiscal(false);
+    setPuntoVentaId(''); // vuelve a resolver el PdV por defecto al reabrir
   };
 
   // Cuando cambia el cliente, cargar su lista de precios
@@ -418,9 +434,11 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   };
 
   const generateVentaNumber = async () => {
+    // mig.295: numeración por PdV (sólo si el PdV elegido no es el default).
     const { data, error } = await supabase.rpc('obtener_proximo_numero', {
       p_empresa_id: user.empresa_id,
       p_tipo_documento: 'venta',
+      p_punto_venta_id: puntoVentaId || null,
     });
     if (error) throw error;
     return data;
@@ -630,32 +648,27 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         }
       });
 
-      // Relevancia fiscal (patrón SAP, mismo que NuevaFacturaModal.jsx) — crear_venta
-      // no acepta este campo como parámetro (default relevante_fiscal=true en la
-      // tabla), así que se corrige con un UPDATE de seguimiento antes de decidir si
-      // se encola para AFIP. fn_queue_factura_arca también lo guarda como defensa
-      // en profundidad, pero evitamos el UPDATE de cae_estado innecesario acá.
-      if (noRelevanteFiscal && comprobante?.id) {
-        const { error: relevanteErr } = await supabase.from('comprobantes')
-          .update({ relevante_fiscal: false }).eq('id', comprobante.id);
-        if (relevanteErr) console.warn('[relevante_fiscal]', relevanteErr.message);
-      }
-
-      // ── Encolar CAE vía trigger (SAP async posting — no bloquea la venta) ──────
-      // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca, que inserta
-      // en facturas_pendientes_arca. El arca-worker (cron */5 * * * *) es la única
+      // ── Punto de venta + encolado CAE ─────────────────────────────────────────
+      // El PdV se registra SIEMPRE (aunque sea interno) para saber por qué serie
+      // salió el comprobante. El encolado a ARCA depende de si ese PdV es fiscal:
+      // `afipActivo` ya contempla `envia_arca` (mig.293), así que no hace falta
+      // ninguna decisión extra del usuario — ese es el criterio unificado.
+      // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca, que
+      // inserta en facturas_pendientes_arca. El arca-worker (cron */5) es la única
       // fuente de verdad para llamar a ARCA — nunca desde el frontend.
-      if (afipActivo && comprobante?.id && !noRelevanteFiscal) {
-        const tipoComp = determinarTipoComprobante(
-          afipConfig.condicion_iva,
-          selectedClient?.condicion_iva ?? 'CF'
-        );
-        const { error: afipQueueErr } = await supabase.from('comprobantes').update({
-          tipo_comprobante_afip: tipoComp,
-          punto_venta_id: afipConfig.punto_venta.id,
-          cae_estado: 'pendiente',
-        }).eq('id', comprobante.id);
-        if (afipQueueErr) console.warn('[AFIP queue]', afipQueueErr.message);
+      const pvElegido = puntosVenta.find(p => p.id === puntoVentaId) ?? null;
+      if (comprobante?.id && pvElegido) {
+        const patch = { punto_venta_id: pvElegido.id };
+        if (afipActivo) {
+          patch.tipo_comprobante_afip = determinarTipoComprobante(
+            afipConfig.condicion_iva,
+            selectedClient?.condicion_iva ?? 'CF'
+          );
+          patch.cae_estado = 'pendiente';
+        }
+        const { error: pvErr } = await supabase.from('comprobantes')
+          .update(patch).eq('id', comprobante.id);
+        if (pvErr) console.warn('[PdV/AFIP queue]', pvErr.message);
       }
 
       toast({ title: "¡Venta Exitosa!", description: `Comprobante ${saleNumber} generado.` });
@@ -718,7 +731,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
               handleConfirmSale={handleConfirmSale}
               centrosCosto={centrosCosto} centroCostoId={centroCostoId} setCentroCostoId={setCentroCostoId}
               afipActivo={afipActivo}
-              noRelevanteFiscal={noRelevanteFiscal} setNoRelevanteFiscal={setNoRelevanteFiscal}
+              puntosVenta={puntosVenta} puntoVentaId={puntoVentaId} setPuntoVentaId={setPuntoVentaId}
             />
           </div>
         </DialogContent>

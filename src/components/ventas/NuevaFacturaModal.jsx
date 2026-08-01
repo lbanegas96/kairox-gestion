@@ -75,7 +75,10 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
   // relevante. Tildar acá excluye este comprobante de la emisión de CAE aunque
   // AFIP esté activo — para ajustes internos, pruebas o correcciones manuales
   // que nunca deben presentarse ante ARCA.
-  const [noRelevanteFiscal, setNoRelevanteFiscal] = useState(false);
+  // Punto de venta — criterio fiscal unificado (mig.294): es el ÚNICO selector.
+  // Un PdV con envia_arca=false emite comprobante interno que no va a ARCA.
+  const [puntosVenta, setPuntosVenta] = useState([]);
+  const [puntoVentaId, setPuntoVentaId] = useState('');
   // Centro de costo (Fase 1 del plan de 4 frentes contables) — opcional, para
   // reportar por sucursal/línea de negocio. null = sin asignar, igual que hoy.
   const [centrosCosto, setCentrosCosto]   = useState([]);
@@ -101,9 +104,18 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
           setCentrosCosto([]);
         }
         if (!emp?.usa_factura_electronica) return;
-        supabase.from('puntos_venta').select('id, numero')
-          .eq('empresa_id', user.empresa_id).eq('activo', true).limit(1).maybeSingle()
-          .then(({ data: pv }) => { if (pv) setAfipConfig({ ...emp, punto_venta: pv }); });
+        // Puntos de venta activos — criterio fiscal unificado (mig.294): el PdV
+        // es el único selector y su `envia_arca` define si el comprobante va a
+        // ARCA. Antes acá había un `.limit(1)` sin ORDER BY ni filtro de
+        // envia_arca (mismo bug que useAfipConfig tenía, duplicado en este modal).
+        supabase.from('puntos_venta').select('id, numero, nombre, envia_arca, es_default')
+          .eq('empresa_id', user.empresa_id).eq('activo', true).order('numero')
+          .then(({ data: pvs }) => {
+            setPuntosVenta(pvs ?? []);
+            const porDefecto = pvs?.find(p => p.es_default) ?? pvs?.find(p => p.envia_arca) ?? null;
+            setPuntoVentaId(prev => prev || (porDefecto?.id ?? ''));
+            if (porDefecto) setAfipConfig({ ...emp, punto_venta: porDefecto });
+          });
       });
 
     // Pre-carga desde comprobante origen (flujo "Copiar a Factura")
@@ -141,7 +153,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
       setItems([newItem()]);
       setSearchFocusId(null);
       setAfipConfig(null);
-      setNoRelevanteFiscal(false);
+      setPuntoVentaId(''); // vuelve a resolver el PdV por defecto al reabrir
       setCentroCostoId('');
     }
   }, [open]);
@@ -189,9 +201,11 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
 
   // ── Generación de número correlativo ────────────────────────────────────────
   const generateNumero = async () => {
+    // mig.295: numeración por PdV (sólo si el PdV elegido no es el default).
     const { data, error } = await supabase.rpc('obtener_proximo_numero', {
       p_empresa_id: user.empresa_id,
       p_tipo_documento: 'factura',
+      p_punto_venta_id: puntoVentaId || null,
     });
     if (error) throw error;
     return data;
@@ -250,7 +264,8 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
         tipo:                  'venta',
         tipo_comprobante_afip: tipoAfipInsert,
         fecha_vencimiento:     fechaVencimiento,
-        relevante_fiscal:      !noRelevanteFiscal,
+        relevante_fiscal:      true, // la relevancia la define el PdV, no un flag por documento
+        punto_venta_id:        puntoVentaId || null, // se registra siempre, aunque sea PdV interno
         centro_costo_id:       centroCostoId || null,
         referencia_cliente:    referenciaCliente.trim() || null,
       }]).select('id').single();
@@ -315,12 +330,15 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
       // para llamar a ARCA — nunca desde el frontend. Si el documento se marcó
       // "no relevante", ni siquiera se intenta (el trigger igual lo bloquearía,
       // pero evitamos el UPDATE innecesario).
-      const afipActivo = afipConfig?.usa_factura_electronica && afipConfig?.punto_venta;
-      if (afipActivo && tipoDoc !== 'Ticket' && !noRelevanteFiscal) {
+      // El PdV elegido decide: si no envía a ARCA, es comprobante interno y no se
+      // encola (criterio unificado, mig.294 — ya no hay checkbox aparte).
+      const pvElegido = puntosVenta.find(p => p.id === puntoVentaId) ?? null;
+      const afipActivo = afipConfig?.usa_factura_electronica && pvElegido?.envia_arca !== false;
+      if (afipActivo && pvElegido && tipoDoc !== 'Ticket') {
         const tipoAfip = tipoDoc.replace('Factura ', '');
         const { error: afipQueueErr } = await supabase.from('comprobantes').update({
           tipo_comprobante_afip: tipoAfip,
-          punto_venta_id:        afipConfig.punto_venta.id,
+          punto_venta_id:        pvElegido.id,
           cae_estado:            'pendiente',
         }).eq('id', comp.id);
         if (afipQueueErr) console.warn('[AFIP queue]', afipQueueErr.message);
@@ -437,21 +455,28 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
             )}
           </div>
 
-          {/* Relevancia fiscal (patrón SAP) — solo tiene sentido si AFIP está activo */}
-          {afipConfig?.usa_factura_electronica && tipoDoc !== 'Ticket' && (
-            <label className="flex items-start gap-2 p-3 rounded-lg bg-kx-surface-2 border border-kx-border text-xs text-kx-text-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={noRelevanteFiscal}
-                onChange={e => setNoRelevanteFiscal(e.target.checked)}
-                className="mt-0.5"
-              />
-              <span>
-                <strong className="text-kx-text">No relevante para AFIP</strong> — documento interno,
-                ajuste o corrección manual. Tildado, este comprobante <strong>nunca</strong> se encola
-                para emitir CAE ante ARCA, aunque la facturación electrónica esté activa.
-              </span>
-            </label>
+          {/* Punto de venta — el único selector fiscal (mig.294). Su envia_arca
+              define si el comprobante se factura ante ARCA o queda interno. */}
+          {puntosVenta.length > 0 && tipoDoc !== 'Ticket' && (
+            <div className="space-y-1.5">
+              <Label className="text-kx-text">Punto de venta</Label>
+              <select
+                value={puntoVentaId}
+                onChange={e => setPuntoVentaId(e.target.value)}
+                className="w-full h-10 rounded-md border border-kx-border bg-kx-surface text-kx-text px-3 text-sm"
+              >
+                {puntosVenta.map(pv => (
+                  <option key={pv.id} value={pv.id}>
+                    {pv.numero} · {pv.nombre}{pv.envia_arca === false ? ' (interno)' : ''}
+                  </option>
+                ))}
+              </select>
+              {puntosVenta.find(pv => pv.id === puntoVentaId)?.envia_arca === false && (
+                <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                  Comprobante <strong>interno</strong>: no se emite CAE ni se informa a ARCA.
+                </p>
+              )}
+            </div>
           )}
 
           {/* Sección 2: Tabla de ítems */}

@@ -40,9 +40,12 @@ export function useConfirmarVenta(tcParalelo) {
   const [lastComprobante, setLastComprobante] = useState(null);
 
   const generateVentaNumber = async () => {
+    // mig.295: numeración por PdV (sólo si el PdV del POS no es el default de
+    // la empresa — si lo es, sigue usando la serie única de siempre).
     const { data, error } = await supabase.rpc('obtener_proximo_numero', {
       p_empresa_id: user.empresa_id,
       p_tipo_documento: 'venta',
+      p_punto_venta_id: afipConfig?.punto_venta?.id ?? null,
     });
     if (error) throw error;
     return data;

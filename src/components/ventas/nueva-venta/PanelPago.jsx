@@ -16,7 +16,7 @@ function PanelPago({
   loading, cart, tcMissing,
   handleConfirmSale,
   centrosCosto = [], centroCostoId, setCentroCostoId,
-  afipActivo = false, noRelevanteFiscal, setNoRelevanteFiscal,
+  afipActivo = false, puntosVenta = [], puntoVentaId, setPuntoVentaId,
 }) {
   return (
     <div className="w-full md:w-96 bg-slate-50 dark:bg-slate-900/30 p-6 flex flex-col gap-6 overflow-y-auto border-l border-slate-200 dark:border-slate-800">
@@ -152,20 +152,35 @@ function PanelPago({
           </select>
         </div>
       )}
-      {afipActivo && (
-        <label className="flex items-start gap-2 p-3 rounded-lg bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={noRelevanteFiscal}
-            onChange={e => setNoRelevanteFiscal(e.target.checked)}
-            className="mt-0.5"
-          />
-          <span>
-            <strong className="text-slate-900 dark:text-white">No relevante para AFIP</strong> — venta
-            interna, ajuste o corrección manual. Tildado, este comprobante <strong>nunca</strong> se
-            encola para emitir CAE ante ARCA, aunque la facturación electrónica esté activa.
-          </span>
-        </label>
+      {/* Punto de venta — criterio fiscal unificado (mig.294): es el ÚNICO
+          selector. Si el PdV elegido no envía a ARCA, el comprobante es interno
+          y no se factura. Reemplaza al viejo checkbox "No relevante para AFIP",
+          que permitía la combinación contradictoria "PdV fiscal + no relevante". */}
+      {puntosVenta.length > 0 && (
+        <div className="space-y-2 dark:text-white">
+          <Label>Punto de venta</Label>
+          <select
+            className="w-full h-10 rounded-md border bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white px-3 text-sm focus:border-blue-500 dark:focus:border-[#00D4FF]"
+            value={puntoVentaId ?? ''}
+            onChange={e => setPuntoVentaId(e.target.value)}
+          >
+            {puntosVenta.map(pv => (
+              <option key={pv.id} value={pv.id}>
+                {pv.numero} · {pv.nombre}{pv.envia_arca === false ? ' (interno)' : ''}
+              </option>
+            ))}
+          </select>
+          {puntosVenta.find(pv => pv.id === puntoVentaId)?.envia_arca === false ? (
+            <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+              Comprobante <strong>interno</strong>: no se emite CAE ni se informa a ARCA. Registra
+              stock, caja y asiento contable normalmente.
+            </p>
+          ) : afipActivo ? (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Se emitirá CAE ante ARCA por este punto de venta.
+            </p>
+          ) : null}
+        </div>
       )}
       <div className="mt-auto">
         <Button
