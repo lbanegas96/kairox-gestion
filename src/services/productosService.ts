@@ -89,14 +89,15 @@ export const productosService = {
     if (error) throw new Error(error.message);
   },
 
-  async adjustStock({ id, cantidad, tipo, motivo }: AdjustStockOptions): Promise<void> {
-    const { error } = await supabase.rpc('ajustar_stock_manual', {
+  async adjustStock({ id, cantidad, tipo, motivo }: AdjustStockOptions): Promise<{ delta: number; costo_unitario: number }> {
+    const { data, error } = await supabase.rpc('ajustar_stock_manual', {
       p_producto_id: id,
       p_tipo: tipo,
       p_cantidad: cantidad,
       p_motivo: motivo,
     });
     if (error) throw new Error(error.message);
+    return data as { delta: number; costo_unitario: number };
   },
 };
 

@@ -1,5 +1,23 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08 (Luciano/Claude — la Nota de Crédito revierte el Costo de Mercadería Vendida, mig.288, probado en vivo end-to-end)
+**Última actualización:** 2026-08 (Luciano/Claude — ajuste manual de stock genera asiento contable, mig.289, probado en vivo end-to-end)
+
+## ✅ Ajuste manual de stock genera asiento contable — mig.289
+
+Tercer y último gap de la auditoría de Inventario/COGS: `ajustar_stock_manual` (mig.059, botón "Ajustar Stock" en Productos) cambiaba `stock_actual` y registraba en `movimientos_inventario`, pero nunca generaba asiento — mismo patrón de gap que Ventas (mig.287) pero para correcciones manuales (rotura, faltante, inventario físico). A diferencia de COGS, acá había ambigüedad de negocio real (¿una "entrada" es carga inicial o hallazgo?, ¿una "salida" es pérdida real o corrección de error?) — se le preguntó a Luciano y decidió: **siempre generar asiento**, sin distinguir motivo por ahora.
+
+**Fix (mig.289):**
+- `ajustar_stock_manual` cambia de `RETURNS void` a `RETURNS jsonb` (requirió `DROP FUNCTION` primero — Postgres no permite cambiar el tipo de retorno con `CREATE OR REPLACE`), devolviendo `{delta, costo_unitario}`.
+- `crearAsientoAjusteStock` (nuevo método en `planCuentasService.ts`) — no bloqueante, mismo patrón que Ventas/NC:
+  - Faltante (`delta < 0`): Debe `5.8 Otros Gastos` / Haber `1.1.3 Mercaderías-Inventario`.
+  - Sobrante (`delta > 0`): Debe `1.1.3` / Haber `4.3 Otros Ingresos`.
+- `ProductosSection.jsx` (`handleSubmitMovimiento`) llama al nuevo método tras `productosService.adjustStock`, con `.catch()` no bloqueante (toast solo si es período cerrado).
+
+**Probado en vivo end-to-end contra producción (Nalux)**, desde la UI real de Inventario: "Ajustar Stock" → Salida (Venta/Pérdida) → 1 unidad de "Aramis TESTE Azul marino" (costo $1.000, producto de test preexistente) → stock bajó de 5851 a 5850 ✓ → asiento generado correcto y balanceado: **Debe 5.8 Otros Gastos $1.000 / Haber 1.1.3 Mercaderías-Inventario $1.000** ✓. Todo limpiado por completo después (asiento+ítems, movimiento de inventario, stock restaurado a 5851) — verificado en cero.
+
+**Con esto, la auditoría de Inventario/COGS queda cerrada: los 3 gaps encontrados (COGS en venta, NC no revertía COGS, ajuste manual sin asiento) están resueltos y probados en vivo.**
+
+---
+
 
 ## ✅ La Nota de Crédito revierte el Costo de Mercadería Vendida — mig.288
 

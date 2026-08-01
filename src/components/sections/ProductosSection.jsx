@@ -9,7 +9,8 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { productosService } from '@/services/productosService';
 import { dispararPublicacionCatalogo, dispararPublicacionMercadoLibre } from '@/services/integracionesService';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { getNowAR } from '@/lib/dateUtils';
+import { getNowAR, getTodayAR } from '@/lib/dateUtils';
+import { asientosAutoService } from '@/services/planCuentasService';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import CSVImportModal from '@/components/ui/CSVImportModal';
 import ProductForm from '@/components/productos/ProductForm';
@@ -316,11 +317,26 @@ const ProductosSection = () => {
        const cantidad = parseInt(movimientoForm.cantidad);
        if (isNaN(cantidad) || cantidad <= 0) throw new Error("Cantidad inválida");
 
-       await productosService.adjustStock({
+       const { delta, costo_unitario } = await productosService.adjustStock({
          id: selectedProductForMov.id,
          cantidad,
          tipo: movimientoForm.tipo,
          motivo: movimientoForm.motivo,
+       });
+
+       // Asiento contable — no bloqueante, mismo patrón que Ventas/NC.
+       asientosAutoService.crearAsientoAjusteStock(user.empresa_id, user.id, {
+         productoId: selectedProductForMov.id,
+         delta,
+         costoUnitario: costo_unitario,
+         fecha: getTodayAR(),
+         descripcion: `Ajuste de stock — ${selectedProductForMov.nombre}${movimientoForm.motivo ? ` (${movimientoForm.motivo})` : ''}`,
+       }).catch(e => {
+         if (e.message?.startsWith('Período cerrado:')) {
+           toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
+         } else {
+           console.warn('[Contabilidad] Asiento ajuste de stock:', e.message);
+         }
        });
 
        toast({ title: "Movimiento registrado", description: "Stock actualizado correctamente." });

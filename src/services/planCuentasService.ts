@@ -597,6 +597,62 @@ export const asientosAutoService = {
   },
 
   /**
+   * Crea y confirma el asiento de un ajuste manual de stock (rotura, faltante,
+   * corrección de inventario físico — ProductosSection.jsx → ajustar_stock_manual,
+   * mig.289). Decisión de negocio: siempre generar asiento, sin distinguir motivo.
+   *   Faltante (stock baja): DEBE 5.8 Otros Gastos / HABER 1.1.3 Mercaderías-Inventario
+   *   Sobrante (stock sube): DEBE 1.1.3 Mercaderías-Inventario / HABER 4.3 Otros Ingresos
+   */
+  async crearAsientoAjusteStock(
+    empresaId: string,
+    userId: string,
+    params: {
+      productoId: string;
+      delta: number;       // negativo = faltante, positivo = sobrante
+      costoUnitario: number;
+      fecha: string;        // YYYY-MM-DD
+      descripcion: string;
+    }
+  ): Promise<void> {
+    const monto = Math.abs(Number(params.delta) || 0) * (Number(params.costoUnitario) || 0);
+    if (monto <= 0) return;
+
+    try {
+      const { data: cerrado } = await supabase.rpc('fecha_en_periodo_cerrado', {
+        p_empresa_id: empresaId, p_fecha: params.fecha,
+      });
+      if (cerrado) throw new Error(`Período cerrado: la fecha ${params.fecha} pertenece a un período contable cerrado.`);
+    } catch (e: any) {
+      if (e.message?.startsWith('Período cerrado:')) throw e;
+    }
+
+    const [cuentaInventario, cuentaGastos, cuentaIngresos] = await Promise.all([
+      findCuentaByCodigo(empresaId, '1.1.3'),
+      findCuentaByCodigo(empresaId, '5.8'),
+      findCuentaByCodigo(empresaId, '4.3'),
+    ]);
+    if (!cuentaInventario) return;
+
+    const items = params.delta < 0
+      ? (cuentaGastos ? [
+          { cuenta_id: cuentaGastos,     debe: monto, haber: 0,    descripcion: 'Faltante de inventario (ajuste manual)' },
+          { cuenta_id: cuentaInventario, debe: 0,     haber: monto, descripcion: 'Salida de mercadería por ajuste manual' },
+        ] : null)
+      : (cuentaIngresos ? [
+          { cuenta_id: cuentaInventario, debe: monto, haber: 0,    descripcion: 'Ingreso de mercadería por ajuste manual' },
+          { cuenta_id: cuentaIngresos,   debe: 0,     haber: monto, descripcion: 'Sobrante de inventario (ajuste manual)' },
+        ] : null);
+    if (!items) return;
+
+    const asiento = await asientosService.createAsiento(
+      empresaId, userId,
+      { fecha: params.fecha, descripcion: params.descripcion, origen: 'ajuste_stock', origen_id: params.productoId },
+      items
+    );
+    await asientosService.confirmarAsiento(asiento.id);
+  },
+
+  /**
    * Crea y confirma el asiento de una Nota de Crédito o Débito de PROVEEDOR.
    * Ambas SIEMPRE mueven `cuenta_corriente_proveedores` (el reembolso en
    * efectivo de una NC es un movimiento de Caja aparte, con su propio
