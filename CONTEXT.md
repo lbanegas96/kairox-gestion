@@ -1,5 +1,19 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08 (Luciano/Claude — numeración de NC/ND separada por PdV, mig.296)
+**Última actualización:** 2026-08 (Luciano/Claude — atajos de teclado en el POS)
+
+## ✅ Atajos de teclado en el Modo Caja (POS)
+
+Siguiente ítem del roadmap del POS tras el análisis de mercado. Mapeo: **F2** cobra (Confirmar Venta), **F4** vuelve el foco al buscador de productos, **F8** enfoca el selector de cliente, **Alt+1..Alt+4** elige el medio de pago por posición (soporta pago mixto — activa/desactiva igual que un click). Se evitaron deliberadamente F1/F3/F5/F6/F10/F11/F12 por ser atajos reservados del navegador en Windows (ayuda, buscar en página, recargar, foco a la barra de direcciones, fullscreen, devtools) — F2/F4/F8 y Alt+dígito están libres en Chrome/Edge/Firefox.
+
+**Arquitectura:** `src/hooks/useAtajosPOS.js` — un único listener `keydown` en `window`, montado una sola vez en `ModoCajaLayout`. En vez de que cada panel escuche sus propias teclas, `ModoCajaLayout` pasa un `ref` mutable (`posApiRef`) que `PanelProductos` y `PanelCarrito` van completando en sus propios `useEffect` con las funciones que sólo ellos pueden ejecutar (`focusBuscador`, `confirmar`, `focusCliente`, `seleccionarMedioPago`) — mismo patrón de "un solo punto de verdad" que ya usaba `Dashboard.jsx` para su propio `Escape` global. El guard `[role="dialog"][data-state="open"]` (ya existente en el refocus del buscador) se reusa tal cual para no interceptar teclas mientras hay un modal Radix abierto (por ejemplo, no permitir que F2 dispare `confirmar` de nuevo con el modal "Venta confirmada" abierto).
+
+**Hints visuales:** badge "F2" en el botón Confirmar Venta, números 1-4 en la esquina de los primeros 4 botones de medio de pago, tooltips (`title`) "Atajo: F4"/"Atajo: F8" en buscador y selector de cliente.
+
+**Limitación conocida (no es bug):** en viewport mobile (`<768px`), `ModoCajaLayout` usa tabs Productos/Carrito y oculta el panel no activo con `display:none` — F4 no puede enfocar un input oculto. Es una consecuencia esperada del layout responsive existente, no algo introducido por esta feature.
+
+**Probado en vivo:** Alt+2 activó "Tarjeta Crédito" pasando a pago mixto junto con "Efectivo" ✓; F8 movió el foco al `<select>` de cliente ✓; F4 (en viewport desktop 1280×800) devolvió el foco al buscador ✓. Ningún atajo disparó comportamiento del navegador (recarga, buscar en página, etc.). `npx eslint` y `npx vite build`: 0 errores.
+
+---
 
 ## ✅ Numeración de NC/ND separada por punto de venta — mig.296
 
