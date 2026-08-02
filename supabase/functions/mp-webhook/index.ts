@@ -103,6 +103,35 @@ serve(async (req) => {
       return new Response('OK', { status: 200 });
     }
 
+    // ── QR MercadoPago del POS (mig.297) — bloque ADITIVO, sin early return ──
+    // Si este pago corresponde a una venta QR pendiente (external_reference
+    // generado por crear_venta_pendiente_qr), confirmarla ahora. La ejecución
+    // sigue cayendo al código de conciliación de siempre, así que la misma
+    // llamada deja: movimientos_caja (reconoce la venta, acá) +
+    // movimientos_bancarios (dinero en la cuenta MP, más abajo, sin tocar) —
+    // igual que ya pasa hoy con Tarjeta/Transferencia, sin duplicar nada.
+    if (pago.external_reference) {
+      const { data: qrPendiente } = await supabase
+        .from('qr_pagos_mp')
+        .select('id')
+        .eq('external_reference', pago.external_reference)
+        .eq('empresa_id', empresaId)
+        .maybeSingle();
+
+      if (qrPendiente) {
+        const { data: confirmResult, error: confirmErr } = await supabase.rpc('confirmar_pago_qr', {
+          p_empresa_id: empresaId,
+          p_external_reference: pago.external_reference,
+          p_payment_id: paymentId,
+        });
+        if (confirmErr) {
+          console.error('[mp-webhook] Error confirmar_pago_qr:', confirmErr);
+        } else {
+          console.log('[mp-webhook] ✓ QR confirmado:', pago.external_reference, confirmResult);
+        }
+      }
+    }
+
     // ── Determinar dirección real del dinero ─────────────────────────────────
     // collector_id = quién RECIBE el pago. Si coincide con la cuenta conectada,
     // es un ingreso; si la cuenta conectada es la que paga (payer.id), es un egreso
@@ -193,8 +222,8 @@ async function validarFirmaMP(
 ): Promise<boolean> {
   try {
     const parts = signatureHeader.split(',');
-    const ts = parts.find(p => p.startsWith('ts='))?.split('=')[1];
-    const v1 = parts.find(p => p.startsWith('v1='))?.split('=')[1];
+    const ts = parts.find(p => p.trim().startsWith('ts='))?.split('=')[1];
+    const v1 = parts.find(p => p.trim().startsWith('v1='))?.split('=')[1];
     if (!ts || !v1) return false;
 
     const message = `id:${paymentId};request-id:${requestId};ts:${ts};`;

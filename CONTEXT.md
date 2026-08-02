@@ -1,5 +1,79 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08 (Luciano/Claude — atajos de teclado en el POS)
+**Última actualización:** 2026-08-01/02 (Luciano/Claude — QR MercadoPago Fase 1: backend)
+
+## ⚠️ QR MercadoPago en el POS — Fase 1 (backend) lista, con un bug real pendiente — mig.297/298
+
+Último ítem del roadmap del POS (tanda 2). Se construyó el backend completo del cobro por QR
+Dinámico de MercadoPago: la venta se crea en `estado_pago='pendiente'` apenas se genera el QR
+(mismo patrón "crear ya en pendiente, confirmar después vía cola" que ya usa AFIP con
+`facturas_pendientes_arca`/`arca-worker`), y se confirma cuando llega el webhook de MP.
+
+**Por qué no se pudo reusar `crear_venta`:** inserta en `movimientos_caja` para cualquier método
+salvo el string exacto `'Cuenta Corriente'`, y `crearAsientoVenta` (JS) postea el DEBE a Caja y
+Bancos salvo `esCredito=true` — ambos reconocerían el QR como cobrado antes de tiempo. Tampoco
+había precedente de generar un asiento contable fuera del JS del frontend (`crearAsientoVenta`
+depende indirectamente de `auth.uid()`, que no existe en un webhook con `service_role`). Por eso:
+3 RPCs nuevas dedicadas, con el asiento de confirmación en SQL puro.
+
+**mig.297 (`supabase/migrations/297_qr_mercadopago_pos.sql`):**
+- Tabla `qr_pagos_mp` (empresa_id, comprobante_id, user_id, external_reference único, in_store_order_id, qr_data, monto, estado pendiente/pagado/expirado/cancelado, payment_id, expiracion). Índice único parcial: máximo un QR `pendiente` por comprobante.
+- `crear_venta_pendiente_qr` — copia acotada de `crear_venta` (sin loop de pagos, sin CC, sin encolar AFIP todavía), calcula el total 100% server-side (nunca confía en un total mandado por el cliente, porque acá dispara un cobro externo desatendido). `GRANT` a `authenticated`.
+- `confirmar_pago_qr` — la pieza sensible. Llamada **solo** por `mp-webhook` con `service_role` (GRANT exclusivo a `service_role`, revocado de `authenticated`). Lockea `qr_pagos_mp` FOR UPDATE, es idempotente (no-op si ya no está `pendiente`), inserta `movimientos_caja`, genera el asiento en SQL puro (DEBE 1.1.1 Caja y Bancos / HABER 4.1 Ventas + 2.1.3 IVA Débito Fiscal / + COGS DEBE 5.1 HABER 1.1.3 si aplica — mismo criterio permisivo que `regenerar_asiento_venta`: cuenta faltante → se omite esa línea, nunca bloquea), marca `comprobantes.estado_pago='pagada'`.
+- `cancelar_venta_pendiente_qr` — mismo patrón de reversa de stock que `cancelar_factura`, con lock+recheck de `qr_pagos_mp.estado` para que un cajero no pueda cancelar una venta que el webhook ya confirmó en el ínterin (race real).
+- `formas_pago` — fila "QR MercadoPago" (`tipo_instrumento='billetera'`) **sin** `cuenta_bancaria_id` a propósito: si se le asignara una, el trigger `trg_fn_puente_caja_bancos` duplicaría lo que la conciliación MP existente (`mp-sync-worker`) ya inserta en `movimientos_bancarios` por su cuenta.
+
+**mig.298:** el QR original vencía a los 10 minutos y un test real expiró antes de poder escanearlo — se subió a 15 minutos (`crear_venta_pendiente_qr` y `expiration_date` en `mp-qr-crear`).
+
+**Edge function nueva `mp-qr-crear`:** dos clientes Supabase a propósito — `userClient` (JWT del caller) solo para `crear_venta_pendiente_qr` (así `auth.uid()`/RLS resuelven igual que cualquier venta del frontend, la autorización real vive en el RPC) y `adminClient` (`service_role`) para Vault + llamadas a la API de MP. Dado de alta de tienda+caja MP una única vez por empresa (persistido en `integraciones_bancarias.config.mp_store_id`/`mp_external_pos_id`), con 6 gotchas reales de la API de Stores/POS de MP descubiertos en vivo (no documentados claramente): sin campo `country` en `location` (probar 'AR'/'ARG' da `unknown_country`), `latitude`/`longitude` son obligatorios aunque no figuren como tal, `external_id` debe ser alfanumérico sin guiones y corto (máx. ~20 chars). El `store_id` se persiste apenas se crea (antes de intentar el POS) para no generar tiendas duplicadas si falla el segundo paso.
+
+**`mp-webhook` (existente, editado, bloque aditivo sin `return` — sigue cayendo a la conciliación bancaria de siempre):** si `pago.external_reference` matchea una fila `qr_pagos_mp` pendiente, llama `confirmar_pago_qr`. Verificado que NO duplica con `movimientos_bancarios` (que sigue viniendo, sin tocar, de `mp-sync-worker`/`mp-webhook` de siempre).
+
+### 🔴 Bug real encontrado en la prueba en vivo — sin resolver
+
+Se probó con un pago real de $100 vía QR (Nalux). El pago fue aprobado por MP, pero **el webhook
+`mp-webhook` rechazó la notificación real 3 veces con 401 (firma HMAC inválida)** — la venta se
+quedó en `pendiente` y **no se confirmó sola**. Se tuvo que confirmar manualmente reproduciendo la
+lógica del webhook (fetch a `/v1/payments/{id}` + `confirmar_pago_qr`) para dejar la venta
+correctamente `pagada`, con el asiento (`AS-000202`, balanceado) y `movimientos_bancarios`
+sincronizado por separado por `mp-sync-worker` (sin duplicar).
+
+**Diagnóstico hecho:** se agregó logging temporal (`_webhook_debug_temp`, ya eliminado) que
+capturó el próximo reintento real de MP. Los datos estaban bien formados — `payment_id` correcto,
+`x-request-id` presente (UUID real de 36 chars, no vacío), `ts`/`v1` con formato válido, ambos
+hashes de 64 chars (SHA-256 hex) — pero **el hash calculado nunca coincidió con el `v1` recibido**,
+con el algoritmo exacto que documenta MP (`id:{data.id};request-id:{x-request-id};ts:{ts};`).
+Esto descarta un bug de parseo/formato en el código y apunta a que **el `webhook_secret` guardado
+en `integraciones_bancarias.config` (Vault-free, vive en el config JSON) para Nalux no es el que
+MP usa realmente para firmar hoy** — no fue rotado en esta sesión (`updated_at` de la integración:
+2026-06-27), así que puede estar desalineado desde antes, o corresponder a otra suscripción de
+webhook del panel de MP.
+
+**Impacto real:** como `mp-sync-worker` sincroniza `movimientos_bancarios` por polling
+independientemente del webhook, el dinero SIEMPRE termina apareciendo en Bancos — pero
+`confirmar_pago_qr` (que marca la venta como pagada, genera el asiento y dispara AFIP) **depende
+100% de que el webhook valide la firma correctamente**. Sin eso, una venta QR real se queda
+`pendiente` para siempre hasta que alguien la revise a mano. Este bug puede ser preexistente y
+afectar también la conciliación de Tarjeta/Transferencia — pero ahí pasa desapercibido porque el
+polling compensa; en QR es la única vía.
+
+**Próximo paso (no hecho, requiere el panel de MP):** entrar a panel.mercadopago.com.ar → tu app →
+Webhooks → copiar el "Secreto de firma" actual y compararlo/actualizarlo contra
+`integraciones_bancarias.config.webhook_secret` de Nalux. Después, repetir la prueba de pago real
+para confirmar que el webhook ya no da 401.
+
+**Alcance NO cubierto (Fase 2, deliberadamente fuera de esta sesión):** modal del QR en el POS
+(`PanelCarrito.jsx`), polling/Realtime sobre `qr_pagos_mp.estado`, botón cancelar desde la UI,
+cron de barrido para expirar QRs abandonados. Gaps menores documentados en el código:
+`empresas.direccion` es texto libre (MP Stores necesita campos estructurados, hoy usa
+placeholders de Córdoba Capital para lat/long); pueden existir 1-2 tiendas MP huérfanas en la
+cuenta real de Nalux de intentos fallidos antes de que se agregara la persistencia inmediata del
+`store_id`.
+
+**Probado en vivo (Nalux, pago real de $100):** QR generado y escaneado con la app real de MP ✓,
+pago aprobado por MP ✓, venta confirmada manualmente con asiento balanceado y sin duplicar el
+lado bancario ✓, webhook automático **falló** (pendiente de fix, ver arriba) ✗.
+
+---
 
 ## ✅ Atajos de teclado en el Modo Caja (POS)
 
