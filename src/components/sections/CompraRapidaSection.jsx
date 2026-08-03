@@ -575,6 +575,7 @@ function ComprasSection() {
       proveedor_id: compra.proveedor_id,
       numero_factura: compra.numero_factura,
       fecha: compra.fecha.split('T')[0],
+      fechaOriginal: compra.fecha, // Timestamp completo original (preserva hora si la fecha no se toca)
       total: compra.total
     });
 
@@ -690,6 +691,14 @@ function ComprasSection() {
 
       const newTotal = calculateEditTotal();
 
+      // Si el usuario no tocó el campo Fecha, reusar el timestamp original completo
+      // (preserva hora/minuto/segundo). Si lo cambió, reconstruir con el mismo criterio
+      // que "Nueva Compra" (hoy → hora actual, otro día → 12:00 neutro).
+      const fechaOriginalSoloFecha = editForm.fechaOriginal?.split('T')[0];
+      const fechaParaGuardar = editForm.fecha === fechaOriginalSoloFecha
+        ? editForm.fechaOriginal
+        : getDateFromInputAR(editForm.fecha);
+
       // Neto/IVA reales por ítem (mismo criterio "bruto/factor" que la creación,
       // ver más arriba en este archivo) — antes este recálculo no existía acá:
       // el header quedaba con el neto_gravado/iva_discriminado de ANTES de la
@@ -711,7 +720,7 @@ function ComprasSection() {
         .update({
           proveedor_id: editForm.proveedor_id,
           numero_factura: editForm.numero_factura,
-          fecha: editForm.fecha,
+          fecha: fechaParaGuardar,
           total: newTotal,
           neto_gravado: netoGravadoReal,
           iva_discriminado: ivaDiscriminadoReal
