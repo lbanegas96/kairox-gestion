@@ -1,5 +1,74 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-03 (Nadia/Claude — auditoría de seguridad mig.299-302 + barrido de sanidad mig.303)
+**Última actualización:** 2026-08-03 (Nadia/Claude — auditoría de seguridad mig.299-305 + barrido de sanidad)
+
+## ✅ `anon` ya no puede ejecutar NINGUNA función SECURITY DEFINER — mig.304/305
+
+Cierra el último ítem abierto de la auditoría: los 10 WARN
+`anon_security_definer_function_executable`. **Resultado: 10 → 0.**
+
+**Por qué se hizo aunque ninguna era explotable hoy:** es defensa en profundidad. Las 10 ya se
+defendían (8 con `get_my_empresa_id()`, que para `anon` devuelve NULL y dispara el guard; 1 es
+función de trigger; 1 no toca datos de tenant). Pero mientras exista el permiso, cualquier futura
+edición que se lleve puesto un guard por descuido convierte ese error en un agujero **accesible sin
+login**. Sacando el permiso, ese escenario deja de ser posible por construcción.
+
+### ⚠️ Gotcha de Postgres — la mig.304 fue un NO-OP silencioso
+
+**La mig.304 hizo `REVOKE ... FROM anon` y no cambió absolutamente nada.** Se detectó porque
+después de aplicarla el conteo seguía en 10, idéntico a antes.
+
+El ACL de estas funciones era:
+```
+{=X/postgres, postgres=X/postgres, authenticated=X/postgres, service_role=X/postgres}
+```
+Ese primer `=X` (sin rol a la izquierda del `=`) significa **`PUBLIC` tiene EXECUTE**. En Postgres
+todos los roles heredan de `PUBLIC`, así que `anon` podía ejecutarlas **por herencia, no por un
+GRANT directo**. `REVOKE ... FROM anon` intenta quitar un permiso directo que nunca existió → no
+hace nada, **y no tira error**, así que pasa desapercibido salvo que se verifique el resultado.
+
+**El revoke correcto es `FROM PUBLIC`** (mig.305), y es seguro precisamente por cómo está armado
+ese ACL: `authenticated` y `service_role` tienen entradas **explícitas** que sobreviven intactas. El
+único que pierde acceso es quien lo tenía sólo por herencia: `anon`. Es el mismo patrón que ya usaba
+la mig.063 (`REVOKE ... FROM PUBLIC, anon;`) — la 304 copió sólo la mitad de la fórmula.
+
+**Lección:** después de un `REVOKE`/`GRANT`, verificar siempre el resultado con
+`has_function_privilege()`. Un revoke que no aplica **no falla, simplemente no hace nada**.
+
+### 🔄 Corrección de lo documentado antes: `email_exists_in_system`
+
+La auditoría la había anotado como *"riesgo aceptado — la necesita el alta de usuarios, sacarla
+rompe el registro"*. **Eso era incorrecto.** Verificado con grep sobre todo `src/`: su único caller
+es `validationUtils.checkEmailExists`, y a ese lo llama únicamente `UsuariosSection.jsx:150` — la
+pantalla de **administración de usuarios**, que es autenticada. `AuthPage.jsx` (el registro/login
+público) **no la usa**. O sea que el GRANT a `anon` nunca hizo falta, y encima habilitaba
+enumeración de emails registrados sin login. Se revocó: **ese agujero también quedó cerrado**, sin
+ningún trade-off.
+
+**Probado en vivo contra producción:**
+- `anon` → `permission denied for function email_exists_in_system` ✓ (enumeración cerrada)
+- `authenticated` (el caso real de UsuariosSection) → sigue devolviendo `true`/`false` correctamente ✓
+- `service_role` sobre `insertar_movimiento_bancario_externo` (la usa `mp-webhook`) → intacto ✓
+- **Trigger `fn_punto_venta_unico_default`**: se disparó un UPDATE real sobre `puntos_venta` como
+  usuario autenticado y **funcionó sin error**, confirmando que Postgres verifica el EXECUTE de una
+  función de trigger al CREAR el trigger, no en cada disparo. Invariante intacto: 2 PdV default,
+  los mismos de antes, 0 empresas con más de uno ✓
+
+### 📊 Advisors de seguridad — jornada completa
+
+| Hallazgo | Inicio | Final |
+|---|---|---|
+| 🔴 ERROR `security_definer_view` | 1 | **0** (mig.299) |
+| WARN `anon_security_definer_function_executable` | 10 | **0** (mig.305) |
+| WARN `public_bucket_allows_listing` | 2 | **0** (mig.302) |
+| WARN `authenticated_security_definer_function_executable` | 82 | **81** (mig.300) |
+| WARN `auth_leaked_password_protection` | 1 | 1 — *toggle del dashboard, ver arriba* |
+| WARN `extension_in_public` | 1 | 1 — menor, sin impacto de aislamiento |
+| INFO `rls_enabled_no_policy` | 2 | 2 — tablas de workers, cerradas de hecho |
+| **TOTAL** | **99** | **85** |
+
+Sin hallazgos de nivel ERROR, y sin ninguna función ejecutable por `anon`.
+
+---
 
 ## ✅ 136 asientos reales sin vincular a su venta/compra — mig.303
 
