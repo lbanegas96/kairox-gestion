@@ -1,6 +1,91 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-08-03 (Nadia/Claude — auditoría de seguridad: mig.299/300/301/302, incluye un bug que impedía dar de alta empresas nuevas)
 
+---
+
+# 📋 PARA LUCIANO — 3 cosas que sólo podés hacer vos
+
+> Escrito por Nadia/Claude al cerrar la sesión del **2026-08-03**. Las tres están fuera del alcance
+> del código: dependen de cuentas o paneles a los que Nadia no tiene acceso.
+
+### 1. 🔴 Secreto de firma de MercadoPago — bloquea el cobro por QR
+
+El bug del webhook de QR (mig.297/298) **no se puede cerrar sin vos**: la cuenta de MercadoPago está
+a tu nombre.
+
+**Qué hacer:** [panel.mercadopago.com.ar](https://www.mercadopago.com.ar/developers/panel) → tu
+aplicación → **Webhooks** → copiar el **"Secreto de firma"** actual.
+
+**Lo que ya verificamos (2026-08-03):** se revisó `mp-webhook` línea por línea y la validación HMAC
+está implementada exactamente como documenta MP
+(`id:{payment_id};request-id:{x-request-id};ts:{ts};`, HMAC-SHA256, hex) — **no hay bug de código**.
+Confirma tu diagnóstico. El `webhook_secret` guardado en `integraciones_bancarias.config` para Nalux
+tiene 64 chars y **no se toca desde el 2026-06-27**. Todo apunta a que ése no es el que MP usa hoy
+para firmar.
+
+Para comparar sin pegar el secreto en ningún lado, corré esto y contrastá el prefijo con lo que
+muestra el panel (el valor completo **nunca** va al repo ni al chat):
+```sql
+SELECT left(config->>'webhook_secret', 6) AS prefijo, length(config->>'webhook_secret') AS largo, updated_at
+FROM integraciones_bancarias WHERE proveedor = 'mercadopago';
+```
+
+Con ese valor el fix es inmediato: un `UPDATE` de una fila + repetir una prueba de pago real chico.
+**Mientras tanto, toda venta por QR queda en `pendiente` para siempre** hasta que alguien la confirme
+a mano. El dinero SÍ aparece en Bancos (lo trae `mp-sync-worker` por polling independiente); lo que
+no ocurre es marcar la venta como pagada, generar el asiento y disparar AFIP.
+
+### 2. ⏳ Plan de Supabase — los proyectos se restringen el 17/08/2026
+
+Verificado hoy: la organización **NALUX sigue en plan `free`**, y el dashboard avisaba que los
+proyectos quedan restringidos desde el **17 de agosto**. Quedan **2 semanas**. Es tema de billing, va
+por tu cuenta. Si el proyecto se restringe, se cae la producción de todos los clientes.
+
+### 3. 🔒 Activar "Leaked password protection" (1 clic, gratis)
+
+**Supabase → Authentication → Policies → "Leaked password protection".** No se puede activar por
+migración ni por MCP, es un toggle del dashboard. Hace que Supabase rechace contraseñas que
+aparecen en filtraciones conocidas (HaveIBeenPwned). Dado que el sistema maneja datos contables de
+varias empresas, conviene. Lo puede hacer cualquiera de los dos.
+
+---
+
+# 🗂️ Estado de pendientes al 2026-08-03
+
+**Cerrados hoy** (4 migraciones, todas probadas en vivo contra producción y pusheadas):
+- ✅ mig.299 — `facturas_saldo_pendiente` ignoraba el RLS (fuga multi-tenant, era el único ERROR)
+- ✅ mig.300 — guard de tenant regresionado + `record_attempt` sobre-expuesta
+- ✅ mig.301 — **el alta de empresas nuevas estaba rota desde el 01/08** (nadie lo había notado)
+- ✅ mig.302 — buckets públicos permitían listar archivos de todas las empresas
+
+**Cerrados por Luciano el 01/08, verificados hoy:** las 2 sesiones de caja anómalas (la del 28/07 y
+la que quedó abierta desde el 29/05). No queda ninguna sesión abierta en el sistema (30/30 cerradas).
+
+**Verificados hoy como YA RESUELTOS** (el CONTEXT.md tenía notas viejas que decían lo contrario):
+- El "gap de no relevante fiscal en el POS" → lo resolvió mig.293/294/295, y el badge de solo
+  lectura es una decisión de diseño deliberada, no un descuido.
+- "No hay forma de regenerar un asiento de venta/compra" → `regenerar_asiento_venta` y
+  `regenerar_asiento_compra` existen desde mig.281.
+
+**Abiertos, ordenados por prioridad:**
+
+| Qué | De quién | Nota |
+|---|---|---|
+| Secreto de firma de MP | **Luciano** | Bloquea el QR por completo |
+| Plan free vence 17/08 | **Luciano** | 2 semanas |
+| Toggle leaked passwords | Cualquiera | 1 clic |
+| QR MercadoPago **Fase 2** | Equipo | Modal en el POS, polling sobre `qr_pagos_mp.estado`, botón cancelar, cron que expire QRs abandonados. El backend ya está listo. |
+| Revocar `GRANT` de `anon` sobre 8 funciones | Equipo | Higiene de defensa en profundidad. Ya verificado que **ninguna es explotable hoy** (el guard dispara con `anon`). No urgente. |
+| Dominio propio en Resend | Nadia | Deferido a propósito. Gmail SMTP ya resuelve el bloqueo total. |
+| 4 NC históricas mal declaradas ante ARCA | Contador de Nalux | No es corregible por código |
+| Overload huérfano de `crear_nota_credito` (8 args) | Equipo | Deuda técnica anotada desde mig.264. No afecta a la app. |
+| CbteAsoc en `informar-caea` | Equipo | Sin urgencia — nadie usa CAEA en producción |
+| Posibles 1-2 tiendas MP huérfanas en la cuenta de Nalux | Luciano | De intentos fallidos antes de persistir el `store_id` |
+| Venta puntual no fiscal en el POS | Equipo | **No es un gap hoy** — sólo haría falta si aparece el caso de uso (muestra gratis, consumo interno) |
+| MELI Factura A | — | Deferido. **No construir sin pedido explícito.** |
+
+---
+
 ## ✅ Buckets públicos permitían LISTAR archivos de todas las empresas — mig.302
 
 Los 2 WARN `public_bucket_allows_listing` de los advisors.
@@ -157,35 +242,6 @@ validación alguna → permite enumerar si un email está registrado. Pero lo us
 `src/lib/validationUtils.js:11` para el alta de usuarios, que por definición ocurre **antes** del
 login; sacarlo rompe el registro. Es el trade-off clásico enumeración/UX. Si algún día molesta, la
 mitigación es rate-limitear la llamada, no quitarla.
-
----
-
-## 🔴 PARA LUCIANO — necesitamos el secreto de firma de MercadoPago (bloqueante)
-
-El bug del webhook de QR (mig.297/298, sección más abajo) **no se puede cerrar sin vos**: la cuenta
-de MercadoPago está a tu nombre y Nadia no tiene acceso al panel.
-
-**Lo que hace falta:** entrar a [panel.mercadopago.com.ar](https://www.mercadopago.com.ar/developers/panel)
-→ tu aplicación → **Webhooks** → copiar el **"Secreto de firma"** actual.
-
-**Verificado el 2026-08-03 (Nadia/Claude):** se revisó el código de `mp-webhook` línea por línea y la
-validación HMAC está implementada exactamente como documenta MP
-(`id:{payment_id};request-id:{x-request-id};ts:{ts};`, HMAC-SHA256, hex) — **no hay bug de código**.
-Esto confirma tu diagnóstico. El `webhook_secret` guardado en `integraciones_bancarias.config` para
-Nalux tiene 64 chars y **no se toca desde el 2026-06-27**. Todo apunta a que ése no es el que MP usa
-hoy para firmar.
-
-Para comparar sin pegar el secreto en ningún lado, corré esto y contrastá el prefijo con lo que
-muestra el panel (el valor completo **nunca** va al repo ni al chat):
-```sql
-SELECT left(config->>'webhook_secret', 6) AS prefijo, length(config->>'webhook_secret') AS largo, updated_at
-FROM integraciones_bancarias WHERE proveedor = 'mercadopago';
-```
-
-Con ese valor el fix es inmediato: un `UPDATE` de una fila + repetir una prueba de pago real chico.
-Mientras tanto, **toda venta por QR queda en `pendiente` para siempre** hasta que alguien la
-confirme a mano (el dinero sí aparece en Bancos, porque `mp-sync-worker` lo trae por polling
-independiente — lo que no ocurre es marcar la venta como pagada, generar el asiento y disparar AFIP).
 
 ---
 
