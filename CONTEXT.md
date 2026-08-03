@@ -1,5 +1,79 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-03 (Nadia/Claude — auditoría de seguridad: mig.299/300/301, incluye un bug que impedía dar de alta empresas nuevas)
+**Última actualización:** 2026-08-03 (Nadia/Claude — auditoría de seguridad: mig.299/300/301/302, incluye un bug que impedía dar de alta empresas nuevas)
+
+## ✅ Buckets públicos permitían LISTAR archivos de todas las empresas — mig.302
+
+Los 2 WARN `public_bucket_allows_listing` de los advisors.
+
+**Situación:** `logos-empresa` y `productos-imagenes` estaban **bien** del lado de escritura — las
+políticas de INSERT/UPDATE/DELETE ya exigían
+`(storage.foldername(name))[1] = get_my_empresa_id()::text`, o sea que cada empresa sólo escribe en
+la carpeta que lleva su propio `empresa_id`. Eso no se tocó. El problema era sólo el **SELECT**:
+las políticas `*_select_publico` daban SELECT al rol `public` (que incluye `anon`) sobre **todo** el
+bucket, sin restricción de carpeta.
+
+**La distinción clave:** en un bucket público los objetos se sirven por
+`/storage/v1/object/public/<bucket>/<path>` **sin consultar RLS** — esa es la definición de bucket
+público. La política de SELECT sobre `storage.objects` no habilita **ver** las imágenes: habilita
+**listarlas** (`.list()`), que es otra cosa.
+
+**Qué se filtraba (verificado en vivo simulando el rol `anon`, no asumido):** un anónimo podía
+listar los **15 archivos** de ambos buckets y enumerar **3 `empresa_id` distintos**. Como las
+carpetas SON los `empresa_id`, eso es enumeración de inquilinos: cuántas empresas hay, sus UUID (la
+clave de tenant de todo el sistema), cuántos productos con imagen tiene cada una y los nombres de
+archivo.
+
+**Verificado antes de tocar nada:** la app NO usa `.list()` sobre ninguno de los dos buckets — sólo
+`getPublicUrl()` (puro string del lado del cliente, ni siquiera pega a la API), `upload()` (INSERT) y
+`remove()` (DELETE), en `ProductoImagenes.jsx` y `ConfiguracionSection.jsx`. Los `.list(` del grep
+son constructores de `queryKey` de react-query, no del Storage. Las edge functions usan
+`service_role`, que no pasa por RLS.
+
+**Fix:** en vez de borrar la política (que dejaría a un usuario sin poder listar ni su propia carpeta
+si algún día se agrega una galería), se reemplazó por una acotada: sólo `authenticated` y sólo su
+propio `empresa_id` — el mismo criterio que ya usaban INSERT/UPDATE/DELETE ahí.
+
+**Probado en vivo contra producción:**
+- `anon` listando → **0 archivos, 0 empresas** ✓ (antes: 15 archivos, 3 empresas)
+- usuario de Nalux listando → **13 archivos, 1 sola carpeta** (la suya) ✓
+- **Las imágenes públicas siguen sirviéndose** — comprobado con `curl` real y sin ningún header de
+  autenticación: logo Nalux `HTTP 200 image/jpeg 16907 bytes`, logo CAEA Test `HTTP 200 image/png
+  45780 bytes`, imagen de producto `HTTP 200 image/jpeg 25395 bytes` ✓. Esta era la premisa
+  riesgosa del cambio (si un bucket público NO sirviera sin RLS, se habrían roto todas las imágenes
+  del sistema), por eso se verificó por HTTP y no por deducción.
+
+### 📊 Advisors de seguridad — antes vs. después de la jornada
+
+| Hallazgo | Antes | Ahora |
+|---|---|---|
+| 🔴 ERROR `security_definer_view` | 1 | **0** (mig.299) |
+| WARN `public_bucket_allows_listing` | 2 | **0** (mig.302) |
+| WARN `authenticated_security_definer_function_executable` | 82 | **81** (mig.300) |
+| WARN `anon_security_definer_function_executable` | 10 | 10 |
+| WARN `auth_leaked_password_protection` | 1 | 1 |
+| WARN `extension_in_public` | 1 | 1 |
+| INFO `rls_enabled_no_policy` | 2 | 2 |
+| **TOTAL** | **99** | **95** |
+
+**El proyecto ya no tiene ningún hallazgo de nivel ERROR.**
+
+**Lo que queda y por qué NO se tocó:**
+- **`auth_leaked_password_protection`** — es un toggle del dashboard de Supabase
+  (Authentication → Policies → "Leaked password protection"), no hay forma de activarlo por
+  migración ni por MCP. **Lo tiene que hacer Nadia o Luciano a mano.** Gratis, un clic: hace que
+  Supabase rechace contraseñas que aparecen en filtraciones conocidas (HaveIBeenPwned).
+- **`anon_security_definer_function_executable` (10)** — auditadas una por una: 8 se defienden con
+  `get_my_empresa_id()` (que para `anon` devuelve NULL, así que el guard dispara), 1 es una función
+  de trigger (PostgREST no expone funciones que retornan `trigger`) y 1 es `email_exists_in_system`,
+  que **necesita** ser anon-ejecutable porque la usa el alta de usuarios. Revocar los GRANT de
+  `anon` sobre las 8 no-esenciales sería higiene de defensa en profundidad — candidato para la
+  próxima tanda, no urgente.
+- **`rls_enabled_no_policy` (2)** — `afip_tickets` y `arca_worker_run` tienen RLS activo sin
+  políticas, o sea **cerradas de hecho**: nadie accede. Es lo correcto para tablas internas de
+  workers; el advisor lo marca como INFO, no como problema.
+- **`extension_in_public`** — menor, sin impacto de aislamiento.
+
+---
 
 ## 🔴 BUG CRÍTICO ya corregido: no se podía dar de alta una empresa nueva — mig.301
 
