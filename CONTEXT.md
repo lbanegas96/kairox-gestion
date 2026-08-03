@@ -1,5 +1,61 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-03 (Nadia/Claude — auditoría de seguridad: mig.299/300/301/302, incluye un bug que impedía dar de alta empresas nuevas)
+**Última actualización:** 2026-08-03 (Nadia/Claude — auditoría de seguridad mig.299-302 + barrido de sanidad mig.303)
+
+## ✅ 136 asientos reales sin vincular a su venta/compra — mig.303
+
+Salió del **barrido de sanidad** de cierre de jornada.
+
+**El hallazgo:** la **mig.281** (2026-07-30 18:54) agregó `comprobantes.asiento_id` /
+`compras.asiento_id` y el código que las escribe (`planCuentasService.ts`), pero **nunca corrió un
+backfill** para los asientos que ya existían. Verificado con precisión quirúrgica: **100% de los
+registros ANTERIORES al 2026-07-30 tenían el vínculo roto** (124 de 125 comprobantes, 12 de 12
+compras) y **100% de los posteriores estaban bien**. No era un bug activo — el código actual
+funciona correctamente para todo lo nuevo. Era deuda histórica sin backfillear.
+
+**Por qué importaba (riesgo armado, no disparado):** el botón "Regenerar asiento"
+(`CompraDetailModal` / `FacturaDetailModal`) sólo mira esa columna para decidir si mostrarse. Para
+esos 136 registros viejos el botón aparecía diciendo *"no tiene asiento contable"* cuando en
+realidad **sí tenía uno real, correcto y confirmado**. Y las RPCs `regenerar_asiento_venta` /
+`regenerar_asiento_compra` sólo comprobaban esa misma columna rota antes de insertar → un clic
+habría creado un **SEGUNDO asiento real**, duplicando el impacto contable de esa venta/compra.
+Verificado antes de tocar nada: **0 duplicados existían** — nadie lo había clickeado todavía.
+
+**Fix en dos partes:**
+1. **Backfill** de los 136 vínculos (`UPDATE ... FROM asientos_contables ... WHERE origen_id = c.id`).
+   Seguro porque se verificó que la relación por `origen_id` es 1 a 1, sin ambigüedad.
+2. **Blindaje autoreparador** en ambas RPCs: antes de insertar, ahora buscan si **ya existe** un
+   asiento real por `origen_id`. Si existe, sólo reconectan el vínculo y devuelven
+   `{reconectado: true}` — **nunca duplican**. Así el riesgo no puede repetirse aunque el UPDATE de
+   vinculación vuelva a fallar en el futuro (red cortada, tab cerrada a mitad de camino). El guard
+   original (`asiento_id IS NOT NULL` → excepción) se mantiene intacto arriba del chequeo nuevo.
+
+**Probado en vivo contra producción:**
+- Backfill: **136 → 0 vínculos rotos**, y el total de asientos **se mantuvo en 201** (ni uno creado) ✓
+- Guard principal: sobre una compra real ya reconectada → `"Esta compra ya tiene un asiento
+  contable generado"`, sin duplicar ✓
+- **Rama de autoreparación**: se reprodujo el escenario histórico exacto con datos sintéticos
+  (compra + asiento real con el vínculo roto a propósito) → devolvió `{ok:true, reconectado:true}`
+  con el **mismo** `asiento_id`, la compra quedó con **1 solo asiento** ✓
+- Limpieza: datos de prueba borrados, total de vuelta a **201**, 0 fantasmas ✓
+
+---
+
+## 🧹 Barrido de sanidad 2026-08-03 — resto de los chequeos
+
+Todo lo demás salió limpio. Se verificó: 0 asientos desbalanceados, 0 sesiones de caja abiertas,
+0 cheques con error de asiento sin resolver, 0 comprobantes de venta/factura sin ítems, 0
+comprobantes con `cae` pero sin `numero_afip`, 0 tarjetas pendientes de liquidación vencidas +5
+días, 0 QRs colgados, 0 comprobantes con `cae_estado='error'`, 9/9 cron jobs activos, logs de edge
+functions 100% `POST 200`, advisors de performance sin ningún ERROR, **56/56 tests unitarios verdes**,
+lint y build en 0 errores.
+
+**Basura limpiada:** 8 filas huérfanas en `facturas_pendientes_arca` (`comprobante_id=NULL`,
+`error_definitivo`, del 28-31/07). Diagnóstico: el FK es `ON DELETE SET NULL`, así que al borrar los
+comprobantes de las pruebas end-to-end de mig.286 y 293-296, las filas de la cola quedaban
+desconectadas y el worker las marcaba en error. Basura de auditoría, no bug funcional. Los 16
+errores que quedan son las 4 NC históricas × reintentos, ya documentadas como tema del contador.
+
+---
 
 ---
 
