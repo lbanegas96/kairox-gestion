@@ -1,5 +1,85 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-01/02 (Luciano/Claude — QR MercadoPago Fase 1: backend)
+**Última actualización:** 2026-08-03 (Nadia/Claude — blindspot multi-tenant en `facturas_saldo_pendiente` cerrado, mig.299)
+
+## 🔴 PARA LUCIANO — necesitamos el secreto de firma de MercadoPago (bloqueante)
+
+El bug del webhook de QR (mig.297/298, sección más abajo) **no se puede cerrar sin vos**: la cuenta
+de MercadoPago está a tu nombre y Nadia no tiene acceso al panel.
+
+**Lo que hace falta:** entrar a [panel.mercadopago.com.ar](https://www.mercadopago.com.ar/developers/panel)
+→ tu aplicación → **Webhooks** → copiar el **"Secreto de firma"** actual.
+
+**Verificado el 2026-08-03 (Nadia/Claude):** se revisó el código de `mp-webhook` línea por línea y la
+validación HMAC está implementada exactamente como documenta MP
+(`id:{payment_id};request-id:{x-request-id};ts:{ts};`, HMAC-SHA256, hex) — **no hay bug de código**.
+Esto confirma tu diagnóstico. El `webhook_secret` guardado en `integraciones_bancarias.config` para
+Nalux tiene 64 chars y **no se toca desde el 2026-06-27**. Todo apunta a que ése no es el que MP usa
+hoy para firmar.
+
+Para comparar sin pegar el secreto en ningún lado, corré esto y contrastá el prefijo con lo que
+muestra el panel (el valor completo **nunca** va al repo ni al chat):
+```sql
+SELECT left(config->>'webhook_secret', 6) AS prefijo, length(config->>'webhook_secret') AS largo, updated_at
+FROM integraciones_bancarias WHERE proveedor = 'mercadopago';
+```
+
+Con ese valor el fix es inmediato: un `UPDATE` de una fila + repetir una prueba de pago real chico.
+Mientras tanto, **toda venta por QR queda en `pendiente` para siempre** hasta que alguien la
+confirme a mano (el dinero sí aparece en Bancos, porque `mp-sync-worker` lo trae por polling
+independiente — lo que no ocurre es marcar la venta como pagada, generar el asiento y disparar AFIP).
+
+---
+
+## ✅ Blindspot multi-tenant: `facturas_saldo_pendiente` ignoraba el RLS — mig.299
+
+Encontrado revisando los advisors de Supabase (único hallazgo nivel **ERROR** del proyecto).
+
+**El hallazgo:** de las 5 vistas del esquema `public`, `facturas_saldo_pendiente` era la **única**
+sin `security_invoker`. Sin esa opción Postgres ejecuta la vista con los permisos de su dueño
+(`postgres`, superusuario) en vez de los de quien consulta — o sea **el RLS de `comprobantes` no se
+aplicaba**. Y la vista por dentro tampoco filtra por `empresa_id`. Su gemela `compras_saldo_pendiente`
+(mig.169, la misma vista del lado de Compras) ya lo tenía bien, igual que las otras tres: era un
+descuido puntual, no una decisión de diseño.
+
+**Impacto:** `anon` y `authenticated` tienen `GRANT SELECT` sobre la vista. Cualquier usuario logueado
+de cualquier empresa podía pegarle al endpoint REST sin ningún filtro y leer las facturas impagas de
+**todas** las empresas: razón social del cliente, número de comprobante, monto adeudado y vencimiento.
+Es exactamente lo que `CLAUDE.md` prohíbe ("un usuario de Empresa A ve datos de Empresa B") y son
+datos comerciales + personales alcanzados por la Ley 25.326.
+
+**Alcance real al momento de arreglarlo:** 27 filas, todas de una sola empresa (Nalux) — el agujero
+estaba abierto pero **todavía no se había materializado ninguna fuga entre inquilinos**. Se activaba
+solo con que una segunda empresa tuviera una factura impaga.
+
+**Fix (mig.299):** `ALTER VIEW public.facturas_saldo_pendiente SET (security_invoker = true);` — una
+línea, alineando la vista con las otras cuatro. Seguro porque `comprobantes` (3 políticas) y
+`cuenta_corriente_imputaciones` (1 política) ya tenían RLS activo y funcionando.
+
+**Además, en el frontend:** `fetchFacturasAbiertas` (`CuentaCorrienteSection.jsx`) consultaba la vista
+filtrando **sólo por `cliente_id`, sin `empresa_id`** — otra cosa que `CLAUDE.md` prohíbe. Se le
+agregó el filtro como defensa en profundidad (el RLS ya lo cubre, pero no se deja una query sin
+filtro de empresa). El otro call-site (Antigüedad de saldos) ya lo mandaba bien.
+
+**Probado en vivo contra producción**, simulando cada rol con `SET LOCAL role` + `request.jwt.claims`:
+- **A · usuario de Nalux** → ve sus 27 filas, $1.852.962 ✓ (no se rompió nada)
+- **B · usuario de otra empresa (Creativas)** → ve **0 filas** ✓ (antes veía las 27 de Nalux)
+- **C · `anon` sin login** → `permission denied for function get_my_empresa_id` ✓ (bloqueo duro)
+
+`npx eslint` sobre `CuentaCorrienteSection.jsx`: 0 errores (4 warnings preexistentes de prop-types /
+exhaustive-deps, patrón ya presente en el archivo).
+
+**Pendientes de seguridad que quedaron anotados, NO tocados** (cada uno es una tanda en sí misma):
+82 funciones `SECURITY DEFINER` ejecutables por `authenticated` + 10 por `anon` (WARN — hay que
+auditar una por una); 2 buckets públicos (`logos-empresa`, `productos-imagenes`) con política SELECT
+amplia que permite **listar** todos los archivos, no sólo acceder por URL; protección de contraseñas
+filtradas desactivada en Auth (es un toggle del dashboard); `extension_in_public`; y 2 tablas con RLS
+activo pero sin políticas (`afip_tickets`, `arca_worker_run` — cerradas de hecho, sin acceso).
+
+**⚠️ Aparte, con fecha límite:** la organización **NALUX está en plan `free`** y el dashboard avisaba
+que los proyectos se restringen desde el **17/08/2026**. Verificado el 2026-08-03: sigue en `free`.
+Es tema de Luciano (billing) — faltan 2 semanas.
+
+---
 
 ## ⚠️ QR MercadoPago en el POS — Fase 1 (backend) lista, con un bug real pendiente — mig.297/298
 
@@ -186,7 +266,7 @@ Segunda mejora de POS priorizada. **Hallazgo que simplificó el trabajo:** el pa
 
 **Límite honesto de esta verificación:** NO se confirmó una venta mixta real en producción. Nalux tiene `usa_factura_electronica=true` y el POS —a diferencia del ERP— **no tiene el checkbox "No relevante para AFIP"**, así que una venta de prueba encolaría un CAE real e irreversible ante ARCA. Lo verificado es toda la construcción/validación de los pagos; el tramo `crear_venta` con múltiples pagos es código sin cambios que el ERP ya ejercita a diario en producción.
 
-**Gap detectado, no cerrado:** el POS no tiene el escape fiscal que sí tiene el ERP (`noRelevanteFiscal`). Eso impide testear ventas del POS contra producción sin riesgo fiscal. Candidato claro para la próxima tanda.
+**Gap detectado — ya RESUELTO por mig.293/294/295 (ver secciones de abajo):** el POS no tenía el escape fiscal que sí tiene el ERP. Se cerró, pero no con un checkbox por venta — con `empresas.pos_punto_venta_id` (Configuración → Facturación → "Punto de venta del Modo Caja"): un admin puede asignarle al POS un PdV con `envia_arca=false` y ninguna venta de mostrador se encola a ARCA mientras dure. **Verificado 2026-08-03 (Nadia/Claude):** es una decisión de diseño a propósito, no un descuido — `ModoCajaLayout.jsx` muestra el PdV como badge **de solo lectura** (comentario explícito en el código: "SOLO LECTURA. Se configura únicamente desde Configuración → Facturación (admin)"). El cajero no puede optar por venta si esa venta va o no a ARCA — sólo un admin puede, a nivel de todo el mostrador. Correcto desde compliance: evita que un cajero decida unilateralmente saltear la factura fiscal de una venta puntual. Si en el futuro se necesita marcar UNA venta puntual del POS como no-fiscal (ej. muestra gratis, consumo interno) sin tocar la config global, ese sí sería un gap real — no implementado hoy, a propósito.
 
 ---
 
@@ -197,7 +277,7 @@ Primera de las mejoras de POS priorizadas tras el análisis de mercado (ver secc
 
 **HALLAZGO (bug, no feature):** cerrar caja desde el POS (`ModoCajaLayout.jsx`) llamaba `closeSession(monto, '', 0, 0)` — con `esperado=0` y `diferencia=0` **hardcodeados**, y esos valores se **persisten** en `caja_sesiones`. Es decir: cualquier faltante o sobrante quedaba invisible, grabado como "diferencia $0". El arqueo real (que suma `movimientos_caja` por método) existía sólo en `CajaCierre.jsx`, usado desde el panel administrativo. Dos caminos de cierre, dos comportamientos distintos.
 
-**Ya había afectado datos reales:** la sesión del **2026-07-28** (`87d0f6d2`) tiene `monto_inicial=$150.000` e `ingresos_efectivo=$30.000` → su esperado real era **$180.000**, pero quedó grabado `esperado=0, diferencia=0`. Registro histórico, no corregido (decisión pendiente de Luciano).
+**Ya había afectado datos reales:** la sesión del **2026-07-28** (`87d0f6d2`) tiene `monto_inicial=$150.000` e `ingresos_efectivo=$30.000` → su esperado real era **$180.000**, pero quedó grabado `esperado=0, diferencia=0`. **Corregido por Luciano el 2026-08-01**: `monto_final_esperado` recalculado a `$180.000` desde `movimientos_caja`; `monto_final_real`/`diferencia` quedaron en `NULL` a propósito (el efectivo contado nunca se registró, así que no se asumió un valor) — documentado en `observaciones` de la fila.
 
 **Fix:**
 - Nuevo hook `src/hooks/useArqueoCaja.js` — **fuente única** del cálculo de arqueo, extraído de `CajaCierre.jsx`. Ambos caminos de cierre lo consumen, así no pueden volver a divergir.
@@ -208,7 +288,7 @@ Primera de las mejoras de POS priorizadas tras el análisis de mercado (ver secc
 
 **Probado en vivo contra producción (Nalux)** desde el POS real: caja abierta con $12.345 → el modal mostró "Esperado en caja $12.345" ✓ → conté $12.000 → mostró **-345,00 ↓ Faltante** en rojo ✓ → cerré con observación → verificado en DB: `esperado=12345.00, diferencia=-345.00` ✓ (antes ambos habrían sido 0). Sesión de prueba y su rastro de auditoría eliminados — verificado en cero, 29 sesiones cerradas como al inicio.
 
-**Anomalía preexistente detectada (no tocada):** hay una sesión de caja **abierta desde el 2026-05-29** (`606de6ee`) con `monto_inicial=$2.030.036` y sin `cierre_fecha`. No la generó esta prueba; es un turno que quedó abierto hace más de dos meses.
+**Anomalía preexistente detectada — ya RESUELTA:** había una sesión de caja abierta desde el **2026-05-29** (`606de6ee`, empresa "KAIROX Gestión" — tenant interno, no un cliente real) con `monto_inicial=$2.030.036` y sin `cierre_fecha`, un turno que quedó abierto más de dos meses. **Cerrada administrativamente por Luciano el 2026-08-01**: `monto_final_esperado` recalculado a `$1.981.242,05` desde `movimientos_caja` ($2.030.036 inicial + $9.979,61 ingresos efectivo − $58.773,56 egresos efectivo); `monto_final_real`/`diferencia` en `NULL` (nadie contó el efectivo real, `cerrado_por` en `NULL` porque no lo cerró un cajero) — documentado en `observaciones` de la fila. Verificado 2026-08-03 (Nadia/Claude): no quedan sesiones abiertas en todo el sistema (30/30 en estado `cerrada`).
 
 ---
 
@@ -460,7 +540,7 @@ La auditoría contable completa de esta noche (agente `sap-motor-contable-audito
 - Las ramas ND (cliente y proveedor) no se testearon en vivo — mismo método, mismas cuentas, solo invierten debe/haber respecto a lo ya verificado. Riesgo bajo por simetría de código, pero queda anotado por si alguien quiere el test explícito.
 - Ambas pruebas limpiadas por completo (asiento+ítems, comprobante/NC, movimientos de CC, imputaciones).
 
-**Hallazgo secundario de la misma auditoría, PENDIENTE (no se tocó todavía):** en Ventas/Compras el asiento se dispara en una llamada separada después de que el documento ya se confirmó (no atómico) — a diferencia de CxC/CxP (que sí tienen `asiento_id` en la fila + `regenerar_asiento_cxc/cxp`), no hay forma de regenerar manualmente un asiento de venta/compra que falló. Es la próxima tarea.
+**Hallazgo secundario de la misma auditoría — ya RESUELTO (mig.281):** en Ventas/Compras el asiento se dispara en una llamada separada después de que el documento ya se confirmó (no atómico) y no había forma de regenerar manualmente uno que falló. **Verificado 2026-08-03 (Nadia/Claude):** existen en producción `regenerar_asiento_venta(p_comprobante_id, p_user_id)` y `regenerar_asiento_compra(p_compra_id, p_user_id)`, en paridad con `regenerar_asiento_cxc/cxp` y `regenerar_asiento_cheque`.
 
 ---
 

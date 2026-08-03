@@ -1,0 +1,36 @@
+-- mig.299 — Cerrar blindspot multi-tenant: facturas_saldo_pendiente ignoraba el RLS
+--
+-- HALLAZGO (auditoría de advisors de Supabase, 2026-08-03 — nivel ERROR):
+-- De las 5 vistas del esquema `public`, `facturas_saldo_pendiente` era la ÚNICA
+-- sin `security_invoker`. Sin esa opción, Postgres ejecuta la vista con los
+-- permisos de su dueño (`postgres`, superusuario) en vez de los del usuario que
+-- consulta — o sea, el RLS de `comprobantes` NO se aplicaba. Y la vista por
+-- dentro tampoco filtra por `empresa_id`.
+--
+-- Su hermana gemela `compras_saldo_pendiente` (mig.169, la misma vista pero del
+-- lado de Compras) YA tenía `security_invoker=true`, igual que
+-- `v_saldo_proveedores`, `retenciones_acumulado_mensual` y
+-- `v_facturas_arca_monitor`. Era un descuido puntual, no una decisión de diseño.
+--
+-- IMPACTO: `anon` y `authenticated` tienen SELECT sobre la vista. Cualquier
+-- usuario logueado de cualquier empresa podía pegarle al endpoint REST sin
+-- filtro y leer las facturas impagas de TODAS las empresas (razón social del
+-- cliente, número de comprobante, monto adeudado, vencimiento). Es exactamente
+-- lo que CLAUDE.md prohíbe ("un usuario de Empresa A ve datos de Empresa B") y
+-- son datos comerciales + personales alcanzados por la Ley 25.326.
+--
+-- Al momento de aplicar: 27 filas, todas de una sola empresa — o sea que el
+-- agujero estaba abierto pero todavía no se había materializado ninguna fuga
+-- entre inquilinos. Se activaba solo con que una segunda empresa tuviera una
+-- factura impaga.
+--
+-- POR QUÉ ES SEGURO: `comprobantes` (3 políticas) y `cuenta_corriente_imputaciones`
+-- (1 política) ya tienen RLS activo y funcionando — es de lo que depende el
+-- resto de la app. Al pasar la vista a `security_invoker`, empieza a respetar
+-- esas políticas igual que las otras 4 vistas. Los dos call-sites de la app
+-- (`CuentaCorrienteSection.jsx`) siguen andando: el de Antigüedad de saldos ya
+-- mandaba `empresa_id` explícito, y al de facturas abiertas se le agrega en el
+-- mismo commit (defensa en profundidad — el RLS ya lo cubre, pero no se deja
+-- una query sin filtro de empresa).
+
+ALTER VIEW public.facturas_saldo_pendiente SET (security_invoker = true);

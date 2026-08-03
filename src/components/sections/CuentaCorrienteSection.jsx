@@ -285,6 +285,7 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro } = {}) {
     const { data, error } = await supabase
       .from('facturas_saldo_pendiente')
       .select('comprobante_id, numero_venta, fecha, saldo_pendiente, moneda, tipo_cambio_tasa')
+      .eq('empresa_id', user.empresa_id)
       .eq('cliente_id', clienteId)
       .gt('saldo_pendiente', 0)
       .order('fecha', { ascending: true });
