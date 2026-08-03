@@ -46,8 +46,38 @@ Todo lo demás salió limpio. Se verificó: 0 asientos desbalanceados, 0 sesione
 0 cheques con error de asiento sin resolver, 0 comprobantes de venta/factura sin ítems, 0
 comprobantes con `cae` pero sin `numero_afip`, 0 tarjetas pendientes de liquidación vencidas +5
 días, 0 QRs colgados, 0 comprobantes con `cae_estado='error'`, 9/9 cron jobs activos, logs de edge
-functions 100% `POST 200`, advisors de performance sin ningún ERROR, **56/56 tests unitarios verdes**,
+functions 100% `POST 200`, advisors de performance sin ningún ERROR, **28/28 tests unitarios verdes**,
 lint y build en 0 errores.
+
+**Worktrees fantasma eliminados.** Había dos copias del proyecto colgadas de sesiones viejas:
+`.claude/worktrees/epic-sutherland-3e03f8` (branch `claude/epic-sutherland-3e03f8`, del 30/07) y
+`suspicious-panini-6cb9e5` (17/06, 76K de basura suelta, ni siquiera registrada como worktree en
+git). Vitest escaneaba la primera, así que **contaba cada test dos veces** (reportaba "56 tests"
+cuando en realidad son 28) y fallaba con un spec de Playwright que no podía resolver
+`scripts/loadtest/fixtures.json` porque el worktree había quedado incompleto. Tras limpiar: 28/28
+tests reales, 0 failed suites, y la corrida bajó de **223s a 55s**.
+
+**Antes de borrar se rescató un fix real que había quedado sin commitear ahí** — ver la sección de
+Compra Rápida más abajo. Se verificó byte a byte (`diff --strip-trailing-cr`) que el contenido ya
+estuviera a salvo en master antes de eliminar nada, y la branch se borró con `git branch -d` (no
+`-D`) para que el propio git confirmara que estaba mergeada.
+
+---
+
+## ✅ Editar una compra ya no pisa la hora de la fecha
+
+Rescatado del worktree fantasma antes de limpiarlo — era el bug de truncamiento de fecha en Compra
+Rápida que estaba anotado como pendiente deferido.
+
+**El bug:** `handleEditClick` hacía `compra.fecha.split('T')[0]` para poblar el input `date`
+(correcto — el input necesita `YYYY-MM-DD`), pero después `handleSaveEdit` mandaba **ese mismo
+string truncado** al UPDATE. Resultado: cada vez que alguien editaba una compra —aunque no tocara
+el campo Fecha— la hora original se perdía.
+
+**El fix** guarda el timestamp completo en `editForm.fechaOriginal` y, al guardar, compara: si el
+usuario no tocó la fecha reusa el timestamp original intacto; si la cambió la reconstruye con
+`getDateFromInputAR` (el mismo criterio que ya usa "Nueva Compra": hoy → hora actual, otro día →
+12:00 neutro), que además evita el corrimiento de día por timezone.
 
 **Basura limpiada:** 8 filas huérfanas en `facturas_pendientes_arca` (`comprobante_id=NULL`,
 `error_definitivo`, del 28-31/07). Diagnóstico: el FK es `ON DELETE SET NULL`, así que al borrar los
