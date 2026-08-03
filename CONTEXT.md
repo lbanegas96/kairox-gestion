@@ -1,6 +1,67 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-08-03 (Nadia/Claude — auditoría de seguridad mig.299-305 + barrido de sanidad)
 
+---
+
+# 👉 EMPEZÁ POR ACÁ (Luciano, 2026-08-04)
+
+Nadia cerró la jornada del **03/08**. Todo lo que sigue está **aplicado, probado en vivo y
+pusheado** — no hay nada a medias ni ningún trabajo interrumpido.
+
+### ⏰ Lo único con reloj corriendo
+
+**El plan de Supabase de la organización NALUX sigue en `free`, y los proyectos se restringen el
+17/08/2026.** Verificado el 03/08. Quedan **~2 semanas**. Si se restringe, **se cae la producción de
+todos los clientes**. Es billing, va por tu cuenta.
+
+### 🔴 Lo que bloquea el QR de MercadoPago
+
+Necesitamos el **"Secreto de firma"** de tu panel de MP — la cuenta está a tu nombre y Nadia no
+tiene acceso. Detalle completo y la consulta para comparar el prefijo sin exponer el valor: sección
+**"PARA LUCIANO"** más abajo. Mientras tanto, toda venta por QR queda en `pendiente` para siempre.
+
+### 🔒 Un clic, gratis
+
+**Supabase → Authentication → Policies → "Leaked password protection".** Lo puede hacer cualquiera
+de los dos.
+
+---
+
+### ⚠️ Dos bugs que estaban vivos en producción y ya están corregidos
+
+Los menciono porque **no los habíamos detectado antes** y valen como contexto:
+
+1. **No se podía dar de alta ninguna empresa nueva** (mig.301). Roto desde el **01/08** por la
+   mig.295, que cambió un índice único plano por dos parciales sin actualizar el `ON CONFLICT` de
+   `seed_series_numeracion`. Nadie lo notó porque no hubo altas en esa ventana. Si intentabas dar de
+   alta un cliente esta semana, te fallaba sin explicación clara.
+2. **136 asientos contables reales estaban desvinculados de su venta/compra** (mig.303), deuda de la
+   mig.281 que nunca corrió backfill. El botón "Regenerar asiento" decía *"no tiene asiento"* sobre
+   registros que **sí lo tenían** — un clic habría **duplicado el asiento contable**. Verificado que
+   nadie lo había clickeado: 0 duplicados. Además se blindaron las RPCs para que se autoreparen en
+   vez de duplicar.
+
+### 📌 Trabajo de desarrollo que queda (nada urgente)
+
+**QR MercadoPago Fase 2** es el único ítem grande: modal del QR en el POS, polling sobre
+`qr_pagos_mp.estado`, botón cancelar y un cron que expire los QRs abandonados. El backend ya está
+completo y probado. **Ojo:** aunque se construya, no va a funcionar end-to-end hasta que pases el
+secreto de firma, porque la confirmación del pago depende del webhook.
+
+El resto (4 NC históricas → contador, overload huérfano de `crear_nota_credito`, `CbteAsoc` en CAEA,
+dominio en Resend) está en la tabla de **"Estado de pendientes"** más abajo, todo sin urgencia.
+
+**🚫 No construir sin pedido explícito:** MELI Factura A.
+
+### 📊 Resumen de la jornada del 03/08
+
+9 commits · 7 migraciones (299-305) aplicadas y probadas en vivo contra producción · advisors de
+seguridad **99 → 85**, sin ningún hallazgo de nivel **ERROR** y sin ninguna función ejecutable por
+`anon` · 28/28 tests verdes · lint y build en 0 errores · 0 asientos desbalanceados · 2 worktrees
+fantasma eliminados (rescatando antes un fix que había quedado sin commitear).
+
+---
+
 ## ✅ `anon` ya no puede ejecutar NINGUNA función SECURITY DEFINER — mig.304/305
 
 Cierra el último ítem abierto de la auditoría: los 10 WARN
@@ -153,8 +214,6 @@ usuario no tocó la fecha reusa el timestamp original intacto; si la cambió la 
 comprobantes de las pruebas end-to-end de mig.286 y 293-296, las filas de la cola quedaban
 desconectadas y el worker las marcaba en error. Basura de auditoría, no bug funcional. Los 16
 errores que quedan son las 4 NC históricas × reintentos, ya documentadas como tema del contador.
-
----
 
 ---
 
