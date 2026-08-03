@@ -230,7 +230,7 @@ la que quedó abierta desde el 29/05). No queda ninguna sesión abierta en el si
 | Plan free vence 17/08 | **Luciano** | 2 semanas |
 | Toggle leaked passwords | Cualquiera | 1 clic |
 | QR MercadoPago **Fase 2** | Equipo | Modal en el POS, polling sobre `qr_pagos_mp.estado`, botón cancelar, cron que expire QRs abandonados. El backend ya está listo. |
-| Revocar `GRANT` de `anon` sobre 8 funciones | Equipo | Higiene de defensa en profundidad. Ya verificado que **ninguna es explotable hoy** (el guard dispara con `anon`). No urgente. |
+| ~~Revocar `GRANT` de `anon`~~ | — | ✅ **HECHO** el 03/08 (mig.304/305): `anon` pasó de 10 funciones ejecutables a **0**. |
 | Dominio propio en Resend | Nadia | Deferido a propósito. Gmail SMTP ya resuelve el bloqueo total. |
 | 4 NC históricas mal declaradas ante ARCA | Contador de Nalux | No es corregible por código |
 | Overload huérfano de `crear_nota_credito` (8 args) | Equipo | Deuda técnica anotada desde mig.264. No afecta a la app. |
