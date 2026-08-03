@@ -1,5 +1,90 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-03 (Nadia/Claude — blindspot multi-tenant en `facturas_saldo_pendiente` cerrado, mig.299)
+**Última actualización:** 2026-08-03 (Nadia/Claude — auditoría de seguridad: mig.299/300/301, incluye un bug que impedía dar de alta empresas nuevas)
+
+## 🔴 BUG CRÍTICO ya corregido: no se podía dar de alta una empresa nueva — mig.301
+
+Apareció **probando el guard restaurado por la mig.300** — el test lo destapó, la mig.300 no lo
+introdujo (copió el mismo `ON CONFLICT` que ya estaba desde antes).
+
+**Causa raíz:** la **mig.295** (numeración por punto de venta) reemplazó el índice único plano
+`(empresa_id, tipo_documento)` de `series_numeracion` por dos índices **parciales**
+(`idx_series_numeracion_legacy` … `WHERE punto_venta_id IS NULL` e `idx_series_numeracion_por_pdv`
+… `WHERE punto_venta_id IS NOT NULL`). Pero `seed_series_numeracion` siguió con
+`ON CONFLICT (empresa_id, tipo_documento)` a secas. **Postgres no resuelve un `ON CONFLICT` a un
+índice parcial si no se repite su predicado `WHERE`** → `ERROR 42P10`.
+
+**Por qué era crítico** (verificado paso a paso, no asumido):
+1. El error es de **planificación**, no de datos — comprobado con un `INSERT … WHERE false` que no
+   inserta ninguna fila y **aun así** tira 42P10. O sea: fallaba el 100% de las veces.
+2. El trigger `trg_empresa_seed_series_numeracion` (AFTER INSERT ON empresas) está activo.
+3. Ni el trigger ni `create_tenant()` tienen manejador de excepciones (el único `EXCEPTION` de
+   `create_tenant` es un `RAISE`, no un `WHEN…THEN`), así que la excepción propagaba.
+
+Encadenado: alta de usuario → `create_tenant()` → `INSERT INTO empresas` → trigger → 42P10 →
+**rollback del alta entera. Nadie podía registrar una empresa nueva.**
+
+**Por qué nadie lo notó:** la última empresa se creó el **2026-07-24** y la mig.295 se aplicó el
+**2026-08-01**. No hubo ningún alta en esa ventana.
+
+**Fix (mig.301):** repetir el predicado del índice parcial —
+`ON CONFLICT (empresa_id, tipo_documento) WHERE punto_venta_id IS NULL DO NOTHING`. La función
+siempre inserta con `punto_venta_id` NULL (ni siquiera nombra la columna), así que el índice
+aplicable es el `legacy`.
+
+**Probado en vivo end-to-end contra producción:** se creó una empresa real de prueba
+(`ZZZ-TEST-301-BORRAR`) → el trigger sembró **las 11 series correctamente** ✓ (antes el INSERT
+entero hacía rollback) → `seed_maestros_default` también corrió bien (15 unidades de medida,
+5 condiciones de pago, 4 formas de pago) ✓ → empresa borrada, `ON DELETE CASCADE` limpió las 35
+filas → **verificado en cero**, totales de vuelta a 60 series / 5 empresas ✓. El guard de tenant
+sigue rechazando el cruce de empresas después del cambio ✓.
+
+**Lección para no repetirlo:** cuando una migración cambia un índice único plano por uno **parcial**,
+hay que revisar TODOS los `ON CONFLICT` que apuntaban a él — no fallan al aplicar la migración, sino
+la próxima vez que alguien ejecuta el `INSERT`. Acá pasaron 2 días sin que nadie lo notara sólo
+porque no hubo altas nuevas.
+
+---
+
+## ✅ Auditoría de las 82 funciones SECURITY DEFINER — mig.300
+
+Balance general **tranquilizador**: de las 82 ejecutables por `authenticated`, **69 ya estaban bien
+defendidas** — 50 con guard explícito (`RAISE` si `p_empresa_id` no coincide con
+`get_my_empresa_id()`), 19 que derivan el tenant del JWT sin confiar en parámetros. Otras 7 son
+funciones de trigger (PostgREST no expone funciones que retornan `trigger`, no hay superficie de
+ataque) y 1 tiene el guard inline en el `WHERE` (`get_tasa_cambio`). **Sólo 2 problemas reales**,
+ambos regresiones silenciosas:
+
+**1. `seed_series_numeracion` perdió el guard de tenant de la mig.057.** Rastreado exactamente: la
+057 lo puso, la **086 lo respetó**, y la **mig.268 lo borró** al redefinir la función para agregar
+`nota_debito_venta` — se copió el cuerpo anterior a la 057. La mig.277 arrastró el mismo error.
+Quedó a la vista porque su hermana `seed_maestros_default` (guardada por la misma 057) **sí lo
+conserva**. Severidad baja (el `ON CONFLICT DO NOTHING` lo vuelve no-op contra una empresa ya
+sembrada — el mismo "riesgo residual aceptado" que la 057 documentaba), pero es un control que
+desapareció sin que nadie lo note. Se restauró el guard **exacto** de la 057, no uno más estricto:
+el escape `…AND el usuario ya tiene empresa asignada` es imprescindible, porque durante el alta de
+un tenant nuevo `get_my_empresa_id()` todavía devuelve NULL y un guard estricto rompería **todo**
+alta de empresa.
+
+**2. `record_attempt` era ejecutable por `authenticated`, contra lo que afirma un test propio.**
+`supabase/tests/aislamiento_multitenant.test.sql` (Caso 8) asegura que un usuario autenticado NO
+puede llamarla; en producción el ACL era `{postgres, authenticated, service_role}` — **el test
+estaba fallando**. No lo causó ninguna migración del repo: viene de los *default privileges* de
+Supabase al crear la función (mig.016), y la mig.063 revocó de `PUBLIC` y `anon` pero no de
+`authenticated`. Verificado antes de revocar que la función está **completamente huérfana** — 0
+llamadores en `src/`, en `supabase/functions/` y en `pg_proc` (el comentario del propio test, que
+decía "sólo la llaman otras RPCs internamente", tampoco era exacto). Severidad baja hoy porque el
+rate limiting no está cableado a nada; si se cableara, un atacante autenticado podría llamar
+`record_attempt('login','victima@mail')` N veces y dejar esa cuenta bloqueada. Revocado antes de que
+el riesgo exista. `check_rate_limit` se dejó como está: es de sólo lectura y no expone datos de
+ningún tenant.
+
+**Riesgo aceptado, documentado, NO cambiado:** `email_exists_in_system` es ejecutable por `anon` sin
+validación alguna → permite enumerar si un email está registrado. Pero lo usa
+`src/lib/validationUtils.js:11` para el alta de usuarios, que por definición ocurre **antes** del
+login; sacarlo rompe el registro. Es el trade-off clásico enumeración/UX. Si algún día molesta, la
+mitigación es rate-limitear la llamada, no quitarla.
+
+---
 
 ## 🔴 PARA LUCIANO — necesitamos el secreto de firma de MercadoPago (bloqueante)
 
