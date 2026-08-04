@@ -89,6 +89,43 @@ borrado, PdV del POS revertido a `NULL`. Verificado contra la foto de "antes" to
 **coincide número por número** en las 8 métricas comparadas (comprobantes, asientos, movimientos de
 caja, QRs, cola ARCA, stock, numeración, PdV).
 
+### 🔴→✅ Al revisar el ticket: el QR NUNCA se estaba encolando a ARCA — bug propio de hoy, corregido
+
+Revisando por qué el ticket mostraba "CAE pendiente" en una venta que nunca iba a tener CAE, apareció
+algo más grave: **`useCobroQR.js` nunca resolvía ni mandaba `punto_venta_id`/`tipo_comprobante_afip`**
+a `mp-qr-crear` — quedaban siempre en `NULL`. La RPC (`crear_venta_pendiente_qr`) ya estaba preparada
+para recibirlos y usarlos bien (numeración por PdV, columna en el comprobante); el gap era 100%
+frontend. Consecuencia real: **ninguna venta por QR se iba a encolar a ARCA jamás, ni siquiera las
+que pasaran por el PdV fiscal real de Nalux.** Bug introducido en la sesión de hoy (mig.306/307), no
+preexistente — no llegó a afectar ninguna venta real: la única que hubo fue la de $5 de la prueba
+(que además usó a propósito el PdV no fiscal), ya limpiada.
+
+**Fix:** `useCobroQR` ahora llama `useAfipConfig('pos')` (mismo hook y mismo criterio que ya usa
+`useConfirmarVenta` para las ventas normales) y resuelve `punto_venta_id` +
+`determinarTipoComprobante(...)` (`null` si el PdV no envía a ARCA) antes de invocar `mp-qr-crear`.
+De paso, `TicketPrint.jsx` ahora recibe `venta.cae_estado` y sólo muestra "CAE pendiente" cuando
+corresponde — antes lo mostraba siempre que la empresa facturara electrónicamente, sin importar si
+*ese* comprobante puntual iba a tener CAE alguna vez.
+
+**Probado en vivo contra producción, con mucho cuidado de no pedir un CAE real por error:**
+1. Venta real de $1.200 (Aramis TESTE) por QR desde el POS real → verificado en la base ANTES de
+   confirmar nada: `punto_venta_id` = PdV 1 (el fiscal real, `envia_arca=true`), `tipo_comprobante_afip='C'`
+   — **la resolución del PdV/tipo ya funciona correctamente**. Como confirmar esta venta real habría
+   pedido un CAE real, se **canceló** desde el botón del modal antes de simular nada — verificado:
+   stock de vuelta a 5850, 0 en cola ARCA, `cae_estado='no_aplica'`.
+2. Para probar que `confirmar_pago_qr` sí encola a ARCA cuando el PdV es fiscal, sin arriesgar un CAE
+   real: comprobante + QR **completamente sintéticos y aislados** (sin tocar stock/productos reales),
+   confirmados vía la RPC real → `cae_estado` pasó a `'pendiente'` y apareció una fila real en
+   `facturas_pendientes_arca` (tipo `C`) ✓ — confirma que el circuito completo funciona. Borrado
+   **en segundos**, muy por debajo de la ventana de 5 minutos del cron de `arca-worker` — nunca hubo
+   riesgo de que se llamara a la API real de ARCA.
+3. Todo lo demás limpiado: el comprobante cancelado del navegador se borró entero (no se dejó como
+   registro "cancelada" porque es 100% de prueba), numeración devuelta a 9, movimientos de inventario
+   (salida + reversa) borrados. Verificado contra el estado de siempre: **coincide exacto** en las
+   6 métricas comparadas.
+
+`npx eslint`: 0 errores (75 warnings preexistentes de `react/prop-types`). `npx vite build`: ✓.
+
 ---
 
 # 👉 EMPEZÁ POR ACÁ (Luciano, 2026-08-04)

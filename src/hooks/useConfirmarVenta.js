@@ -194,6 +194,11 @@ export function useConfirmarVenta(tcParalelo) {
         tipo_cambio_tasa: 1,
         forma_pago:      formaPago,
         cliente_nombre:  selectedClient?.nombre ?? 'Consumidor Final',
+        // Mismo criterio que decide si se encola a ARCA (afipActivo), para que
+        // TicketPrint sepa distinguir "CAE pendiente" (PdV fiscal) de "no aplica"
+        // (PdV interno) — antes el ticket asumía "pendiente" siempre que la
+        // empresa facturara electrónicamente, aunque este PdV puntual no envíe.
+        cae_estado:      afipActivo ? 'pendiente' : 'no_aplica',
       };
 
       asientosAutoService.crearAsientoVenta(user.empresa_id, user.id, {

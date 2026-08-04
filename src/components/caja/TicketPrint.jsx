@@ -35,7 +35,13 @@ function TicketPrint({ venta, items = [], empresa = {}, formato = '80mm', oferta
   }, 0);
 
   const showCAE = Boolean(venta.cae);
-  const caePendiente = !showCAE && empresa.usa_factura_electronica;
+  // 'no_aplica' = comprobante emitido por un PdV que no envía a ARCA (interno,
+  // mig.293): nunca va a tener CAE, así que no corresponde decir "pendiente".
+  // Si venta.cae_estado no viene informado (callers viejos), se conserva el
+  // comportamiento anterior — asumir pendiente mientras la empresa facture
+  // electrónicamente, para no perder el aviso en ningún flujo no actualizado.
+  const caeNoAplica = venta.cae_estado === 'no_aplica';
+  const caePendiente = !showCAE && !caeNoAplica && empresa.usa_factura_electronica;
 
   // OFERTAS — helper para obtener precio unitario (con descuento si aplica)
   const getPunit = (it) => {

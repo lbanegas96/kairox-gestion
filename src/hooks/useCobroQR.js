@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import QRCode from 'qrcode';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useAfipConfig } from '@/hooks/useAfipConfig';
 
 // Cobro por QR Dinámico de MercadoPago en el POS — Fase 2 (mig.297/298 + 306/307).
 //
@@ -32,6 +33,14 @@ const POLL_MS = 3000;
 
 export function useCobroQR() {
   const { user } = useAuth();
+  // Mismo contexto 'pos' que usa useConfirmarVenta — resuelve el PdV propio del
+  // Modo Caja (mig.293) si la empresa lo configuró, si no el default. Sin esto,
+  // crear_venta_pendiente_qr recibía punto_venta_id/tipo_comprobante_afip en
+  // NULL siempre: la venta quedaba con numeración de la serie legacy y NUNCA se
+  // encolaba a ARCA, ni siquiera en el PdV fiscal real (hallazgo del 2026-08-04,
+  // corregido antes de que hubiera ventas QR reales de producción de por medio —
+  // la única que existió fue la prueba de $5, ya limpiada).
+  const { afipConfig, afipActivo, determinarTipoComprobante } = useAfipConfig('pos');
 
   const [estado, setEstado]       = useState('idle'); // idle|creando|esperando|pagado|expirado|cancelado|error
   const [qrDataUrl, setQrDataUrl] = useState(null);
@@ -83,14 +92,25 @@ export function useCobroQR() {
       };
     });
 
+    // Mismo cálculo que useConfirmarVenta antes de encolar a ARCA: si el PdV
+    // resuelto no envía a ARCA (interno/no fiscal), tipoComprobanteAfip queda en
+    // null a propósito — confirmar_pago_qr sólo marca cae_estado='pendiente'
+    // cuando el comprobante tiene un tipo_comprobante_afip real.
+    const puntoVentaId = afipConfig?.punto_venta?.id ?? null;
+    const tipoComprobanteAfip = afipActivo
+      ? determinarTipoComprobante(afipConfig.condicion_iva, selectedClient?.condicion_iva ?? 'CF')
+      : null;
+
     try {
       const { data, error: fnError } = await supabase.functions.invoke('mp-qr-crear', {
         body: {
           items,
-          cliente_id:      selectedClient?.id ?? null,
-          cliente_nombre:  selectedClient?.nombre ?? null,
-          caja_sesion_id:  cajaSesionId ?? null,
-          centro_costo_id: centroCostoId || null,
+          cliente_id:            selectedClient?.id ?? null,
+          cliente_nombre:        selectedClient?.nombre ?? null,
+          caja_sesion_id:        cajaSesionId ?? null,
+          centro_costo_id:       centroCostoId || null,
+          punto_venta_id:        puntoVentaId,
+          tipo_comprobante_afip: tipoComprobanteAfip,
         },
       });
 
@@ -108,17 +128,22 @@ export function useCobroQR() {
         color: { dark: '#000000', light: '#FFFFFF' },
       });
 
-      datosRef.current = data;
-      setDatos(data);
+      // cae_estado esperado en el comprobante, para que el ticket (TicketPrint)
+      // distinga "CAE pendiente" de "no aplica" sin tener que reconsultar la
+      // base — mismo criterio que ya decidió si se manda tipo_comprobante_afip.
+      const dataConCae = { ...data, cae_estado: tipoComprobanteAfip ? 'pendiente' : 'no_aplica' };
+
+      datosRef.current = dataConCae;
+      setDatos(dataConCae);
       setQrDataUrl(url);
       setEstado('esperando');
-      return { ok: true, data };
+      return { ok: true, data: dataConCae };
     } catch (e) {
       setEstado('error');
       setError(e.message ?? 'Error inesperado generando el QR');
       return { error: e.message };
     }
-  }, []);
+  }, [afipConfig, afipActivo, determinarTipoComprobante]);
 
   // Polling del estado + cuenta regresiva. Sólo mientras se espera el pago.
   useEffect(() => {

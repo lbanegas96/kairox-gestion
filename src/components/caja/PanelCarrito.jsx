@@ -281,6 +281,10 @@ function PanelCarrito({
           tipo_cambio_tasa: 1,
           forma_pago: FORMA_PAGO_QR,
           cliente_nombre: selectedClient?.nombre ?? 'Consumidor Final',
+          // Resuelto en useCobroQR.iniciar() con el mismo criterio que
+          // useConfirmarVenta — para que TicketPrint no diga "CAE pendiente"
+          // sobre un comprobante que nunca va a tener CAE (PdV no fiscal).
+          cae_estado: d.cae_estado,
         },
         items: itemsSnapshot,
       });
