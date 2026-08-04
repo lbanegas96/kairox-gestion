@@ -3,6 +3,66 @@
 
 ---
 
+# ✅ QR MercadoPago Fase 2 — COMPLETA (mig.306/307) — 2026-08-04
+
+El cobro por QR **ya funciona de punta a punta**, incluso con el webhook todavía roto.
+
+### El hallazgo que cambió el diseño
+
+`crear_venta_pendiente_qr` **descuenta stock** al generar el QR, y
+`cancelar_venta_pendiente_qr` lo devuelve — pero esta última exige
+`get_my_empresa_id()` + permiso de módulo, o sea que **sólo la puede llamar un cajero autenticado,
+nunca un cron**. Sin barrido de expiración, cada cliente que se va del mostrador sin escanear
+dejaría el stock descontado **para siempre**. No había pasado porque no existía UI que generara QRs
+(0 pendientes en producción), pero publicar la Fase 2 sin esto habría abierto una fuga de stock real.
+
+### Cómo se resolvió que el QR funcione sin el secreto de Luciano
+
+`confirmar_pago_qr` (la que marca la venta pagada, genera el asiento y dispara AFIP) sólo la llamaba
+`mp-webhook`, que viene rechazando las notificaciones de MP con 401. Se agregó **`mp-qr-poller`**:
+consulta la API de MP directamente por cada QR pendiente y confirma los pagados. Es el mismo patrón
+que `mp-sync-worker` ya usa con éxito para los movimientos bancarios.
+
+**No reemplaza al webhook** — cuando el secreto se rote, ambos caminos conviven. Es seguro que
+compitan porque `confirmar_pago_qr` lockea con `FOR UPDATE` y es **idempotente** (devuelve
+`ya_procesado` sin tocar nada). Tener las dos vías es lo correcto igual: los webhooks se pierden.
+
+### Piezas
+
+- **mig.306** — la reversa (stock + entregas + comprobante) se **extrae a
+  `_revertir_venta_qr_interno`**, compartida entre cancelar (cajero) y expirar (cron), para que no
+  puedan divergir — mismo criterio que se usó con `useArqueoCaja`. Nueva `expirar_qrs_vencidos()`,
+  service_role-only, con `FOR UPDATE SKIP LOCKED` (si el cajero está cancelando ese mismo QR, lo
+  saltea en vez de bloquear el barrido) y recheck bajo lock para **nunca revertir una venta ya
+  cobrada**.
+- **`mp-qr-poller`** (edge function nueva, `verify_jwt=false` como los otros workers) — confirma
+  pagos y corre el barrido de expiración.
+- **mig.307** — cron cada minuto. **Sin clave embebida**: a diferencia de los crons anteriores
+  (que hardcodean la anon key — hay un TODO al respecto en mig.109), éste no necesita header porque
+  la función va con `verify_jwt=false`. Verificado con `curl` sin headers → `HTTP 200`.
+- **Frontend** — `useCobroQR` (crear, pollear cada 3s, cancelar) + `ModalCobroQR` +
+  bifurcación en `PanelCarrito.handleConfirmar`. El modal **no se cierra con Escape ni clickeando
+  afuera** mientras espera: la venta ya existe con stock descontado, salir sin cancelar la dejaría
+  colgada. El QR se bloquea en pago mixto (no se puede conciliar una parte pendiente con otra ya
+  cobrada).
+
+### Probado en vivo contra producción
+
+Circuito real completo con `crear_venta_pendiente_qr` (no filas armadas a mano):
+venta de 3 unidades → **stock 5850 → 5847** ✓ (confirma que el problema era real) → se fuerza el
+vencimiento → `expirar_qrs_vencidos()` devuelve `{expirados: 1, unidades_devueltas: 3}` →
+**stock de vuelta en 5850** ✓, comprobante `cancelada` ✓, QR `expirado` ✓, entrega anulada ✓,
+movimiento de inventario con su rastro ✓. Todo limpiado después, numeración restaurada — verificado
+en cero. Cron corriendo cada minuto, todas las corridas `succeeded`. Lint 0 errores, build ✓.
+
+### ⚠️ Latencia conocida, y desaparece sola
+
+Con el webhook caído, la confirmación la trae el cron **cada minuto** — el cajero puede esperar
+hasta ~60s. El modal lo dice explícitamente en vez de quedarse mudo. **En cuanto Luciano rote el
+`webhook_secret`, la confirmación vuelve a ser instantánea** y el poller queda sólo como respaldo.
+
+---
+
 # 👉 EMPEZÁ POR ACÁ (Luciano, 2026-08-04)
 
 Nadia cerró la jornada del **03/08**. Todo lo que sigue está **aplicado, probado en vivo y

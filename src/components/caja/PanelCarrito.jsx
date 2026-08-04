@@ -7,9 +7,17 @@ import { useToast } from '@/components/ui/use-toast';
 import { useConfirmarVenta } from '@/hooks/useConfirmarVenta';
 import { useMultipago } from '@/hooks/useMultipago';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
+import { useCobroQR } from '@/hooks/useCobroQR';
 import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
+import ModalCobroQR from '@/components/caja/ModalCobroQR';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useCaja } from '@/contexts/CajaContext';
+
+// Nombre exacto de la forma de pago que dispara el circuito de QR Dinámico
+// (la siembra mig.297). Si el cajero elige ésta, la venta NO va por crear_venta:
+// va por mp-qr-crear, que la deja en `pendiente` hasta que MP confirme el pago.
+const FORMA_PAGO_QR = 'QR MercadoPago';
 
 const fmt = (n) =>
   Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -161,6 +169,9 @@ function PanelCarrito({
   const clienteWrapperRef = useRef(null);
   const tcParalelo = useTCParalelo();
   const { confirmar, loading }      = useConfirmarVenta(tcParalelo);
+  const { currentSession }          = useCaja();
+  const cobroQR                     = useCobroQR();
+  const [cancelandoQR, setCancelandoQR] = useState(false);
 
   useEffect(() => {
     if (!user?.empresa_id) return;
@@ -217,6 +228,13 @@ function PanelCarrito({
   // el motor no las aplique — si no, pagar $1 por transferencia desbloquearía el
   // "Descuento transferencia" sobre todo el carrito.
   const medioParaOfertas = selectedMethods.size === 1 ? Array.from(selectedMethods)[0] : null;
+
+  // El QR sólo puede cubrir el 100% de la venta: la venta queda `pendiente`
+  // hasta que MP confirme, así que no hay forma de mezclarlo con un medio que ya
+  // se cobró. Si el cajero lo combina con otro, se bloquea con un mensaje claro.
+  const qrSeleccionado = selectedMethods.has(FORMA_PAGO_QR);
+  const esCobroQR      = qrSeleccionado && selectedMethods.size === 1;
+  const qrEnMixto      = qrSeleccionado && selectedMethods.size > 1;
   useEffect(() => {
     if (medioParaOfertas !== medioPago) onMedioPagoChange?.(medioParaOfertas);
   }, [medioParaOfertas]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -240,7 +258,60 @@ function PanelCarrito({
     setClienteId(cliente?.id ?? '');
   };
 
+  // Cierra el modal de QR. Si el pago se acreditó, recién ahí se vacía el
+  // carrito y se dispara el ticket — mismo camino que una venta normal.
+  const handleCerrarModalQR = () => {
+    const pagado = cobroQR.estado === 'pagado';
+    const d = cobroQR.datos;
+    const itemsSnapshot = carrito;
+    cobroQR.reset();
+    if (pagado && d) {
+      onModificarCarrito([]);
+      setSelectedClient(null);
+      setClienteId('');
+      setCentroCostoId('');
+      multipago.reset();
+      onVentaExitosa?.({
+        comprobante: {
+          id: d.comprobante_id,
+          numero_venta: d.numero_venta,
+          fecha: new Date().toISOString(),
+          total: d.total,
+          moneda: 'ARS',
+          tipo_cambio_tasa: 1,
+          forma_pago: FORMA_PAGO_QR,
+          cliente_nombre: selectedClient?.nombre ?? 'Consumidor Final',
+        },
+        items: itemsSnapshot,
+      });
+    }
+  };
+
+  const handleCancelarQR = async () => {
+    setCancelandoQR(true);
+    const res = await cobroQR.cancelar();
+    setCancelandoQR(false);
+    if (res?.yaPagado) {
+      toast({
+        title: 'El cliente ya había pagado',
+        description: 'El cobro se acreditó justo antes de cancelar — la venta quedó registrada.',
+      });
+    } else if (res?.error) {
+      toast({ title: 'No se pudo cancelar', description: res.error, variant: 'destructive' });
+    }
+  };
+
   const handleConfirmar = async () => {
+    // El QR deja la venta en `pendiente` hasta que MP confirme; no se puede
+    // combinar con un medio que ya se cobró en el momento.
+    if (qrEnMixto) {
+      toast({
+        title: 'El QR no se puede combinar',
+        description: 'El cobro con QR MercadoPago tiene que cubrir el total de la venta. Dejalo como único medio de pago.',
+        variant: 'destructive',
+      });
+      return;
+    }
     // Moneda paralela: mismo gate que NuevaVentaModal. Antes esta pantalla (Modo
     // Caja) ni siquiera intentaba calcular el equivalente — mandaba moneda ARS
     // y monto_paralelo=null fijos, sin importar la configuración de la empresa.
@@ -253,6 +324,27 @@ function PanelCarrito({
       setShowParaleloTCModal(true);
       return;
     }
+    // ── Cobro por QR: circuito aparte ────────────────────────────────────────
+    // No pasa por crear_venta. La venta se crea en `pendiente` (con el stock ya
+    // descontado) y sólo se confirma cuando MP avisa que el cliente pagó, vía
+    // webhook o vía el cron mp-qr-poller. Por eso tiene su propio modal y no
+    // cierra el carrito hasta que el pago esté acreditado.
+    // Sólo aplica cuando el QR cubre el 100% de la venta: en pago mixto no hay
+    // forma de conciliar una parte pendiente con otra ya cobrada.
+    if (esCobroQR) {
+      const { error: qrError } = await cobroQR.iniciar({
+        carrito,
+        selectedClient,
+        centroCostoId: centroCostoId || null,
+        cajaSesionId: currentSession?.id ?? null,
+        getPrecio: (item) => getPrecioConDescuento(item, ofertasCarrito[item.id], descuentosManuales[item.id] || 0),
+      });
+      if (qrError) {
+        toast({ title: 'No se pudo generar el QR', description: qrError, variant: 'destructive' });
+      }
+      return;
+    }
+
     // Misma construcción + validaciones que el ERP (montos que suman el total,
     // formato argentino, exclusividad de Cuenta Corriente).
     const { pagos, error: pagoError } = multipago.construirPagosFinales();
@@ -515,6 +607,19 @@ function PanelCarrito({
         onOpenChange={setShowParaleloTCModal}
         moneda={tcParalelo.monedaParalela}
         onConfirm={(t) => { tcParalelo.setTC(t); setShowParaleloTCModal(false); }}
+      />
+
+      {/* Cobro por QR MercadoPago — circuito aparte de crear_venta (ver handleConfirmar) */}
+      <ModalCobroQR
+        open={cobroQR.estado !== 'idle'}
+        estado={cobroQR.estado}
+        qrDataUrl={cobroQR.qrDataUrl}
+        datos={cobroQR.datos}
+        error={cobroQR.error}
+        segundosRestantes={cobroQR.segundosRestantes}
+        cancelando={cancelandoQR}
+        onCancelar={handleCancelarQR}
+        onCerrar={handleCerrarModalQR}
       />
     </div>
   );
