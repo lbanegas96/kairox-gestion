@@ -413,7 +413,7 @@ la que quedó abierta desde el 29/05). No queda ninguna sesión abierta en el si
 | Secreto de firma de MP | **Luciano** | Bloquea el QR por completo |
 | Plan free vence 17/08 | **Luciano** | 2 semanas |
 | Toggle leaked passwords | Cualquiera | 1 clic |
-| QR MercadoPago **Fase 2** | Equipo | Modal en el POS, polling sobre `qr_pagos_mp.estado`, botón cancelar, cron que expire QRs abandonados. El backend ya está listo. |
+| ~~QR MercadoPago Fase 2~~ | — | ✅ **HECHO** el 04/08 (mig.306/307): modal, polling, cancelar, cron de expiración y AFIP funcionando de punta a punta — probado con un pago real. |
 | ~~Revocar `GRANT` de `anon`~~ | — | ✅ **HECHO** el 03/08 (mig.304/305): `anon` pasó de 10 funciones ejecutables a **0**. |
 | Dominio propio en Resend | Nadia | Deferido a propósito. Gmail SMTP ya resuelve el bloqueo total. |
 | 4 NC históricas mal declaradas ante ARCA | Contador de Nalux | No es corregible por código |
