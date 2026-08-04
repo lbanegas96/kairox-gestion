@@ -1,5 +1,76 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-03 (Nadia/Claude — auditoría de seguridad mig.299-305 + barrido de sanidad)
+**Última actualización:** 2026-08-04 (Nadia/Claude — QR MercadoPago Fase 2 completa + bug fiscal corregido, mig.306/307)
+
+---
+
+# 👉 EMPEZÁ POR ACÁ (Luciano)
+
+Nadia cerró la jornada del **04/08**. Todo lo que sigue está **aplicado, probado en vivo (incluido
+un pago real) y pusheado** — no hay nada a medias ni ningún trabajo interrumpido.
+
+### ⏰ Lo único con reloj corriendo — y sigue sin moverse
+
+**El plan de Supabase de NALUX sigue en `free`.** Verificado de nuevo hoy 04/08 (no cambió desde
+ayer). Los proyectos se restringen el **17/08/2026 — quedan 13 días**. Si se restringe, **se cae la
+producción de todos los clientes**. Es billing, va por tu cuenta.
+
+### 🔴 El secreto de firma de MP — tampoco se movió
+
+Sigue bloqueando la confirmación automática del QR (aunque el QR **ya funciona igual**, ver abajo).
+`webhook_secret` en la base sin tocar desde el **27/06** — mismo estado que ayer. Detalle completo y
+la consulta para comparar el prefijo sin exponer el valor: sección **"PARA LUCIANO"** más abajo.
+
+### 🔒 Un clic, gratis — sigue pendiente
+
+**Supabase → Authentication → Policies → "Leaked password protection".** Lo puede hacer cualquiera
+de los dos.
+
+---
+
+### ✅ Lo grande de hoy: QR MercadoPago queda 100% funcional, con y sin tu secreto
+
+Se cerró la Fase 2 completa (modal en el POS, cancelar, expiración automática) **y** se agregó
+`mp-qr-poller` — un worker que confirma los pagos consultando la API de MP directamente, sin
+depender del webhook. Cuando rotes el secreto, las dos vías van a convivir sin problema (la RPC de
+confirmación es idempotente). Mientras tanto, el cajero espera hasta ~60s en vez de nada.
+
+**Se probó con un pago real de $5** (Nadia → tu cuenta de MP) — circuito completo: QR → pago →
+confirmación por polling → asiento contable balanceado. Después, revisando el ticket impreso,
+apareció un bug propio de hoy (no preexistente): el frontend nunca le mandaba el punto de venta ni
+el tipo de comprobante a la función que crea el QR, así que **ninguna venta por QR se iba a encolar
+a ARCA**, ni siquiera las del PdV fiscal real. Se corrigió y se verificó con una venta real (PdV 1,
+`envia_arca=true`) que el circuito de facturación ahora sí queda bien armado — se canceló antes de
+confirmarla para no pedir un CAE real de prueba, y se verificó el encolado a ARCA aparte con datos
+100% sintéticos y aislados, borrados en segundos.
+
+### ⚠️ Dos bugs que estaban vivos en producción antes de ayer, ya corregidos
+
+Los menciono porque **no los habíamos detectado antes** y valen como contexto:
+
+1. **No se podía dar de alta ninguna empresa nueva** (mig.301). Roto desde el **01/08** por la
+   mig.295, que cambió un índice único plano por dos parciales sin actualizar el `ON CONFLICT` de
+   `seed_series_numeracion`. Nadie lo notó porque no hubo altas en esa ventana.
+2. **136 asientos contables reales estaban desvinculados de su venta/compra** (mig.303), deuda de la
+   mig.281 que nunca corrió backfill. El botón "Regenerar asiento" decía *"no tiene asiento"* sobre
+   registros que **sí lo tenían** — un clic habría **duplicado el asiento contable**. 0 duplicados
+   verificados. Las RPCs quedaron blindadas para autorepararse en vez de duplicar.
+
+### 📌 Trabajo de desarrollo que queda (nada urgente)
+
+El resto (4 NC históricas → contador, overload huérfano de `crear_nota_credito`, `CbteAsoc` en CAEA,
+dominio en Resend, 1-2 tiendas MP huérfanas) está en la tabla de **"Estado de pendientes"** más
+abajo, todo sin urgencia y sin nada bloqueado por vos salvo lo de arriba.
+
+**🚫 No construir sin pedido explícito:** MELI Factura A.
+
+### 📊 Resumen acumulado de las últimas dos jornadas (03 y 04/08)
+
+12 commits · 9 migraciones (299-307) aplicadas y probadas en vivo contra producción, incluido un
+pago real · QR MercadoPago completo de punta a punta (backend + Fase 2 + poller) · advisors de
+seguridad **99 → 85**, sin ningún hallazgo de nivel **ERROR** y sin ninguna función ejecutable por
+`anon` · alta de empresas y 136 asientos desvinculados, corregidos · lint y build en 0 errores en
+cada entrega · 2 worktrees fantasma eliminados (rescatando antes un fix que había quedado sin
+commitear).
 
 ---
 
@@ -125,65 +196,6 @@ corresponde — antes lo mostraba siempre que la empresa facturara electrónicam
    6 métricas comparadas.
 
 `npx eslint`: 0 errores (75 warnings preexistentes de `react/prop-types`). `npx vite build`: ✓.
-
----
-
-# 👉 EMPEZÁ POR ACÁ (Luciano, 2026-08-04)
-
-Nadia cerró la jornada del **03/08**. Todo lo que sigue está **aplicado, probado en vivo y
-pusheado** — no hay nada a medias ni ningún trabajo interrumpido.
-
-### ⏰ Lo único con reloj corriendo
-
-**El plan de Supabase de la organización NALUX sigue en `free`, y los proyectos se restringen el
-17/08/2026.** Verificado el 03/08. Quedan **~2 semanas**. Si se restringe, **se cae la producción de
-todos los clientes**. Es billing, va por tu cuenta.
-
-### 🔴 Lo que bloquea el QR de MercadoPago
-
-Necesitamos el **"Secreto de firma"** de tu panel de MP — la cuenta está a tu nombre y Nadia no
-tiene acceso. Detalle completo y la consulta para comparar el prefijo sin exponer el valor: sección
-**"PARA LUCIANO"** más abajo. Mientras tanto, toda venta por QR queda en `pendiente` para siempre.
-
-### 🔒 Un clic, gratis
-
-**Supabase → Authentication → Policies → "Leaked password protection".** Lo puede hacer cualquiera
-de los dos.
-
----
-
-### ⚠️ Dos bugs que estaban vivos en producción y ya están corregidos
-
-Los menciono porque **no los habíamos detectado antes** y valen como contexto:
-
-1. **No se podía dar de alta ninguna empresa nueva** (mig.301). Roto desde el **01/08** por la
-   mig.295, que cambió un índice único plano por dos parciales sin actualizar el `ON CONFLICT` de
-   `seed_series_numeracion`. Nadie lo notó porque no hubo altas en esa ventana. Si intentabas dar de
-   alta un cliente esta semana, te fallaba sin explicación clara.
-2. **136 asientos contables reales estaban desvinculados de su venta/compra** (mig.303), deuda de la
-   mig.281 que nunca corrió backfill. El botón "Regenerar asiento" decía *"no tiene asiento"* sobre
-   registros que **sí lo tenían** — un clic habría **duplicado el asiento contable**. Verificado que
-   nadie lo había clickeado: 0 duplicados. Además se blindaron las RPCs para que se autoreparen en
-   vez de duplicar.
-
-### 📌 Trabajo de desarrollo que queda (nada urgente)
-
-**QR MercadoPago Fase 2** es el único ítem grande: modal del QR en el POS, polling sobre
-`qr_pagos_mp.estado`, botón cancelar y un cron que expire los QRs abandonados. El backend ya está
-completo y probado. **Ojo:** aunque se construya, no va a funcionar end-to-end hasta que pases el
-secreto de firma, porque la confirmación del pago depende del webhook.
-
-El resto (4 NC históricas → contador, overload huérfano de `crear_nota_credito`, `CbteAsoc` en CAEA,
-dominio en Resend) está en la tabla de **"Estado de pendientes"** más abajo, todo sin urgencia.
-
-**🚫 No construir sin pedido explícito:** MELI Factura A.
-
-### 📊 Resumen de la jornada del 03/08
-
-9 commits · 7 migraciones (299-305) aplicadas y probadas en vivo contra producción · advisors de
-seguridad **99 → 85**, sin ningún hallazgo de nivel **ERROR** y sin ninguna función ejecutable por
-`anon` · 28/28 tests verdes · lint y build en 0 errores · 0 asientos desbalanceados · 2 worktrees
-fantasma eliminados (rescatando antes un fix que había quedado sin commitear).
 
 ---
 
@@ -344,8 +356,9 @@ errores que quedan son las 4 NC históricas × reintentos, ya documentadas como 
 
 # 📋 PARA LUCIANO — 3 cosas que sólo podés hacer vos
 
-> Escrito por Nadia/Claude al cerrar la sesión del **2026-08-03**. Las tres están fuera del alcance
-> del código: dependen de cuentas o paneles a los que Nadia no tiene acceso.
+> Escrito por Nadia/Claude el **2026-08-03**, reconfirmado sin cambios el **2026-08-04** (ninguna de
+> las tres se movió). Las tres están fuera del alcance del código: dependen de cuentas o paneles a
+> los que Nadia no tiene acceso.
 
 ### 1. 🔴 Secreto de firma de MercadoPago — bloquea el cobro por QR
 
