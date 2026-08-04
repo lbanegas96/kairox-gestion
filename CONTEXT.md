@@ -61,6 +61,34 @@ Con el webhook caído, la confirmación la trae el cron **cada minuto** — el c
 hasta ~60s. El modal lo dice explícitamente en vez de quedarse mudo. **En cuanto Luciano rote el
 `webhook_secret`, la confirmación vuelve a ser instantánea** y el poller queda sólo como respaldo.
 
+### ✅ Probado con un pago real de $5 (Nadia → Luciano, MercadoPago) — 2026-08-04
+
+Antes de la prueba se le asignó al POS el PdV 2 "Remito" (`envia_arca=false`), temporal, para no
+emitir un CAE real e irreversible — mismo mecanismo de la mig.293. Se revirtió después.
+
+**Resultado, verificado en la base:**
+- Confirmación en **71 segundos** (19:44:50 → 19:46:01) — consistente con el cron de 60s, ya que el
+  webhook sigue rechazando las notificaciones.
+- `payment_id` de MP (`171160934391`) coincide exacto con la "Operación" que mostró la app del
+  pagador.
+- Comprobante `20260804-009`, `estado_pago='pagada'`, `cae_estado='no_aplica'` (no se encoló a ARCA,
+  como correspondía con el PdV no fiscal) ✓
+- `movimientos_caja`: ingreso $5, `estado_liquidacion='acreditado'` ✓
+- Asiento **AS-000203**, balanceado $6,00 = $6,00 (incluye COGS): Debe Caja $5 + Debe Costo
+  Mercaderías $1 / Haber Ventas $4,13 + Haber IVA Débito $0,87 + Haber Inventario $1 ✓
+
+**Aclaración sobre la pantalla de MP:** la confirmación de pago en la app del pagador sólo muestra
+monto y a quién le pagó ("Luciano Banegas") — no el título/número de venta que sí le mandamos a MP
+al crear el QR (`mp-qr-crear` los incluye). Es un límite de esa pantalla de MP, no algo corregible
+de nuestro lado. Pendiente de revisar: si el **ticket que imprime el POS** sí muestra bien el número
+de venta.
+
+**Limpieza:** asiento+ítems, movimiento de caja, entrega+ítems, movimiento de inventario (stock
+devuelto), comprobante+ítems, QR, numeración revertida a 9, producto de prueba "Llavero Auto"
+borrado, PdV del POS revertido a `NULL`. Verificado contra la foto de "antes" tomada al inicio —
+**coincide número por número** en las 8 métricas comparadas (comprobantes, asientos, movimientos de
+caja, QRs, cola ARCA, stock, numeración, PdV).
+
 ---
 
 # 👉 EMPEZÁ POR ACÁ (Luciano, 2026-08-04)
