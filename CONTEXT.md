@@ -1,5 +1,22 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-04 (Nadia/Claude — QR MercadoPago Fase 2 completa + bug fiscal corregido, mig.306/307)
+**Última actualización:** 2026-08-04 noche (Luciano/Claude — se intentó el fix del webhook_secret, sigue sin resolverse)
+
+## 🔴 Secreto de firma de MP — Luciano lo actualizó, PERO sigue fallando (dato nuevo)
+
+Luciano entró al panel (`panel.mercadopago.com.ar` → kairox-gestion → Webhooks → Configurar
+notificaciones → Modo productivo) y confirmó: evento marcado **"Pagos (legacy)"** ✓, URL configurada
+coincide exacto con la que usamos ✓. Copió la "Clave secreta" que muestra esa pantalla y se actualizó
+en `integraciones_bancarias.config.webhook_secret` de Nalux.
+
+**Se probó en vivo con un pago real de $2 (venta `20260804-010`):** el webhook (`type=payment&data.id=...`)
+**siguió devolviendo 401** — tres reintentos, mismos que antes. El pago se confirmó igual, pero por
+`mp-qr-poller` (~70s), no por el webhook. Esto **descarta la hipótesis de "secreto desactualizado"**:
+ya se probó con el valor que el panel muestra HOY para el evento "Pagos (legacy)" en modo productivo,
+y tampoco coincide. Puede ser que ese evento/legacy use un esquema de firma distinto al que documenta
+MP para webhooks v2, o que exista otro secreto en otro lugar del panel no explorado todavía.
+**No es urgente resolverlo** — `mp-qr-poller` ya cubre el 100% de los casos con ~60-70s de latencia.
+Si se retoma, la próxima pista a seguir sería contactar al soporte de MP directamente, ya que se
+descartaron tanto el código (revisado línea por línea dos veces) como el secreto configurado.
 
 ---
 
