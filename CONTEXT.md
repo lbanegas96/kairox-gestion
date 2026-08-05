@@ -3,23 +3,32 @@
 
 ---
 
-# 👉 EMPEZÁ POR ACÁ
+# 👉 EMPEZÁ POR ACÁ (Luciano)
 
-**Modo Offline del POS** — que el cajero pueda seguir vendiendo en Efectivo/Transferencia
-si se corta internet, y sincronice al reconectar. Va fase por fase:
-- ✅ **Fase 0** (Luciano) — idempotencia en el backend, mig.309/310.
-- ✅ **Fase 1** (Nadia, hoy) — PWA instalable + detección de conectividad. Ver sección abajo.
-- ⏳ **Fase 2+** — la cola de ventas offline en sí (IndexedDB, sincronización al
-  reconectar). Todavía no arrancada.
+**Modo Offline del POS — parado a propósito en Fase 1, esperándote.** Nadia y Claude
+llegaron hasta acá y decidieron **no seguir sin vos**, para no inventar ni arriesgar un
+error en algo que toca ventas y stock reales:
 
-**⚠️ El plan completo del feature (`.claude/plans/mutable-squishing-crown.md`, mencionado
-como lectura obligatoria) nunca se subió al repo — es un archivo local de la máquina de
-Luciano, no está versionado en ningún commit.** Verificado con `git log --all` sobre esa
-ruta: no aparece. Fase 1 se construyó únicamente con el resumen que quedó acá en
-`CONTEXT.md` (alcance, límites, qué NO tocar). Si la Fase 2 depende de detalles de ese plan
-que no están documentados acá (la investigación de mercado, decisiones de diseño
-específicas), **hay que pedirle a Luciano el archivo o que lo re-explique** antes de seguir
-— no asumir que "está en el plan" resuelve algo que no volvió a quedar escrito.
+- ✅ **Fase 0** (vos) — idempotencia en el backend, mig.309/310.
+- ✅ **Fase 1** (Nadia, 05/08) — PWA instalable + detección de conectividad. Ver sección
+  abajo con el detalle completo.
+- 🛑 **Fase 2 y Fase 3 — NO arrancadas, a propósito.** Dijiste que eran 4 fases en total,
+  pero el plan completo (`.claude/plans/mutable-squishing-crown.md`) **nunca se subió al
+  repo** — es un archivo local de tu máquina, no está en ningún commit (verificado con
+  `git log --all` sobre esa ruta: no aparece).
+
+**Por qué se frenó exactamente acá:** sin ese plan, lo único que había para seguir era una
+reconstrucción lógica de qué "debería" ser la Fase 2 (algo como: cola local con IndexedDB +
+sincronización al reconectar, ya que el backend de la Fase 0 quedó preparado para eso). Pero
+es una suposición, no tu diseño real — no sabemos si contemplaste límites de qué se puede
+vender offline, cómo avisarle al cajero qué falta sincronizar, qué pasa si el stock cambió
+mientras estaba offline, u otras decisiones de producto que puede que ya hayas resuelto y
+simplemente no volvieron a quedar escritas en ningún lado accesible. Construir a ciegas sobre
+algo que mueve plata y stock real parecía más riesgo que valor.
+
+**Para retomar:** subí el archivo del plan al repo (o pegalo en este `CONTEXT.md`), o
+resumilo de nuevo acá mismo con el detalle de las 4 fases. Con eso, seguimos directo por
+Fase 2.
 
 ---
 
@@ -104,9 +113,10 @@ todavía, eso llega con la cola offline real.
   tests del proyecto en verde (28 preexistentes + 5 nuevos).
 - `npx eslint`: 0 errores. `npx vite build`: ✓.
 
-**Sigue: Fase 2+** (la cola de ventas offline en sí) — sin arrancar. Como el plan completo no
-está en el repo (ver aviso arriba), antes de construirla conviene confirmar el alcance exacto
-con quien lo diseñó.
+**Acá se frenó la sesión, a propósito** (ver el bloque "EMPEZÁ POR ACÁ" al principio del
+archivo). Fase 2/3 (la cola de ventas offline y su sincronización) quedan sin arrancar hasta
+tener el plan real de Luciano — no se avanzó por suposición sobre algo que toca ventas y
+stock reales.
 
 ## ✅ Barrido final del backlog del 04-05/08 — 3 ítems cerrados
 
