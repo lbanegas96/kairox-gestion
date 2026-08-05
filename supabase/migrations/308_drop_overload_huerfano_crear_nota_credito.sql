@@ -1,0 +1,12 @@
+-- Elimina el overload huérfano de 8 args de crear_nota_credito (vivo desde mig.264,
+-- reemplazado por la versión de 10 args en mig.266/296). Confirmado sin callers en
+-- src/ ni supabase/functions/ (el único caller, NuevaNCModal.jsx, siempre pasa
+-- p_referencia_cliente/p_punto_venta_id, así que Postgres ya resolvía siempre a la
+-- versión de 10 args por nombre de parámetro).
+--
+-- No era solo deuda técnica cosmética: `authenticated` todavía tenía EXECUTE sobre
+-- esta versión (verificado con has_function_privilege), y a diferencia de la actual
+-- no revierte el costo de mercadería en devoluciones (mig.288) ni respeta el punto
+-- de venta como único selector fiscal (mig.294-296) — una NC creada por esta vía
+-- quedaría con costo_mercaderia_vendida sin revertir y punto_venta_id=NULL.
+DROP FUNCTION IF EXISTS public.crear_nota_credito(uuid, uuid, uuid, text, text, jsonb, uuid, uuid);

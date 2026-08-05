@@ -1,5 +1,15 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-04 noche (Luciano/Claude — se intentó el fix del webhook_secret, sigue sin resolverse)
+**Última actualización:** 2026-08-04 noche (Luciano/Claude — mig.308 lista, sin aplicar; limpieza del overload huérfano de crear_nota_credito)
+
+## 🟡 mig.308 escrita y commiteada, NO aplicada a prod todavía (pendiente de confirmación)
+
+`DROP FUNCTION` del overload de 8 args de `crear_nota_credito` (deuda técnica anotada desde mig.264).
+Confirmado en sandbox (`BEGIN...ROLLBACK`) que el drop no rompe nada — sin callers en `src/` ni en
+`supabase/functions/` (el único caller, `NuevaNCModal.jsx`, siempre manda `p_referencia_cliente`/
+`p_punto_venta_id`, así que Postgres ya resolvía siempre a la versión de 10 args). Hallazgo nuevo: no
+era solo deuda cosmética — `authenticated` todavía tenía `EXECUTE` sobre la versión vieja, que no
+revierte COGS en devoluciones (mig.288) ni respeta el punto de venta (mig.294-296). Falta: aplicar la
+migración a producción (pedir confirmación) y push.
 
 ## 🔴 Secreto de firma de MP — Luciano lo actualizó, PERO sigue fallando (dato nuevo)
 
