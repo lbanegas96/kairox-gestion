@@ -1,6 +1,28 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-08-05 (Luciano/Claude — Modo Offline del POS: Fase 0 (idempotencia) aplicada y probada en vivo)
 
+---
+
+# 👉 EMPEZÁ POR ACÁ (Nadia)
+
+Arrancamos un feature grande: **Modo Offline del POS** (que el cajero pueda seguir
+vendiendo en Efectivo/Transferencia si se corta internet en el local, y
+sincronice solo al reconectar). Plan completo, aprobado por Luciano, en
+`.claude/plans/mutable-squishing-crown.md` — leelo entero antes de tocar nada,
+tiene el contexto de por qué se diseñó así (investigación de mercado, qué se
+verificó del código actual, las 4 fases).
+
+**Hecho hoy: Fase 0 (backend, idempotencia) — mig.309/310, aplicada y probada
+en vivo contra producción.** Detalle abajo. `git pull` antes de seguir.
+
+**Sigue: Fase 1** — PWA instalable (`vite-plugin-pwa`) + detección de
+conectividad (`navigator.onLine`). Cero riesgo de datos, no toca `crear_venta`
+ni nada del flujo de ventas todavía. Está detallada en el plan con los archivos
+exactos a crear/tocar. Empezá por ahí, no por la Fase 2/3 — el plan está pensado
+para aprobar y construir de a una fase.
+
+---
+
 ## ✅ Modo Offline del POS — Fase 0 (backend, idempotencia) — mig.309/310
 
 Primera fase del plan de modo offline del POS (plan completo en
