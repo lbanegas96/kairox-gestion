@@ -1,5 +1,18 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-05 (Luciano/Claude — trámite del PdV CAEA en AFIP resuelto; mig.308 lista, sin aplicar)
+**Última actualización:** 2026-08-05 (Luciano/Claude — mig.308 aplicada, tienda MP huérfana borrada, PdV CAEA resuelto)
+
+## ✅ Barrido final del backlog del 04-05/08 — 3 ítems cerrados
+
+- **mig.308** aplicada a producción y pusheada — elimina el overload huérfano de 8 args de
+  `crear_nota_credito` (ver sección más abajo).
+- **Tienda MP huérfana borrada.** Se confirmó con la API de MP (`GET /users/{id}/stores/search`)
+  que había exactamente 2 tiendas en la cuenta de Nalux: `85561798` (la que usa el sistema hoy) y
+  `85563668` (huérfana del primer intento fallido del 01/08, antes de descubrir que `external_id`
+  no podía tener guiones — nunca tuvo una caja/POS asociada). Se borró la huérfana con
+  `DELETE /users/{id}/stores/{store_id}` — verificado, queda solo 1 tienda.
+- **Criterio fiscal unificado (mig.293-296): revisado, sin nada suelto.** La sección "Alcance NO
+  cubierto" de mig.295 quedó explícitamente resuelta en mig.296 (numeración de NC/ND por PdV). No
+  hay ningún cabo suelto de ese trabajo.
 
 ## ✅ Trámite del PdV CAEA en AFIP — RESUELTO, desbloquea la contingencia automática
 
@@ -470,9 +483,10 @@ la que quedó abierta desde el 29/05). No queda ninguna sesión abierta en el si
 | ~~Revocar `GRANT` de `anon`~~ | — | ✅ **HECHO** el 03/08 (mig.304/305): `anon` pasó de 10 funciones ejecutables a **0**. |
 | Dominio propio en Resend | Nadia | Deferido a propósito. Gmail SMTP ya resuelve el bloqueo total. |
 | 4 NC históricas mal declaradas ante ARCA | Contador de Nalux | No es corregible por código |
-| Overload huérfano de `crear_nota_credito` (8 args) | Equipo | Deuda técnica anotada desde mig.264. No afecta a la app. |
-| CbteAsoc en `informar-caea` | Equipo | Sin urgencia — nadie usa CAEA en producción |
-| Posibles 1-2 tiendas MP huérfanas en la cuenta de Nalux | Luciano | De intentos fallidos antes de persistir el `store_id` |
+| CbteAsoc en `informar-caea` | Equipo | Sin urgencia — probar recién a partir del 12/08 (ver PdV CAEA arriba) |
+| ~~Tienda MP huérfana en la cuenta de Nalux~~ | — | ✅ **HECHO** el 05/08 — verificado con la API de MP y borrada |
+| ~~Overload huérfano de `crear_nota_credito` (8 args)~~ | — | ✅ **HECHO** el 05/08 (mig.308) |
+| ~~Trámite del PdV CAEA en AFIP~~ | — | ✅ **HECHO** el 05/08 — ver sección arriba |
 | Venta puntual no fiscal en el POS | Equipo | **No es un gap hoy** — sólo haría falta si aparece el caso de uso (muestra gratis, consumo interno) |
 | MELI Factura A | — | Deferido. **No construir sin pedido explícito.** |
 
