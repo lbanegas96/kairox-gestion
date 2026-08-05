@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Package } from 'lucide-react';
+import { Search, Package, WifiOff } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { useProductosSnapshot } from '@/hooks/useProductosSnapshot';
 import AlertasStockBanner from './AlertasStockBanner';
 
 const fmt = (n) =>
@@ -68,11 +70,20 @@ function PanelProductos({ onAgregarAlCarrito, apiRef }) {
   const [loading, setLoading]      = useState(true);
   const debounceRef                = useRef(null);
   const inputRef                   = useRef(null);
+  // Modo Offline — Fase 2: si se corta la red, la búsqueda cae al snapshot
+  // local (Dexie) en vez de golpear a Supabase. El stock que se ve ahí puede
+  // estar desactualizado desde el último refresco online — se avisa abajo.
+  const isOnline = useOnlineStatus();
+  const { buscarOffline, buscarPorCodigoBarras } = useProductosSnapshot(user?.empresa_id, isOnline);
 
   const fetchProductos = useCallback(async (q) => {
     if (!user?.empresa_id) return;
     setLoading(true);
     try {
+      if (!isOnline) {
+        setProductos(await buscarOffline(q));
+        return;
+      }
       let query = supabase
         .from('productos')
         .select('id, nombre, codigo_sku, precio_venta, stock_actual, stock_minimo, alicuota_iva, unidad_venta_id, factor_conversion_venta, precio_venta_pack, descuento_pack_pct, unidad_venta:unidades_medida!unidad_venta_id(codigo, descripcion)')
@@ -90,7 +101,7 @@ function PanelProductos({ onAgregarAlCarrito, apiRef }) {
     } finally {
       setLoading(false);
     }
-  }, [user?.empresa_id]);
+  }, [user?.empresa_id, isOnline, buscarOffline]);
 
   useEffect(() => {
     fetchProductos('');
@@ -142,13 +153,16 @@ function PanelProductos({ onAgregarAlCarrito, apiRef }) {
     if (!code) return;
     e.preventDefault();
 
-    const { data: producto } = await supabase
-      .from('productos')
-      .select('*, unidad_venta:unidades_medida!unidad_venta_id(codigo, descripcion)')
-      .eq('empresa_id', user.empresa_id)
-      .eq('codigo_barras', code)
-      .eq('activo', true)
-      .maybeSingle();
+    const producto = isOnline
+      ? (await supabase
+          .from('productos')
+          .select('*, unidad_venta:unidades_medida!unidad_venta_id(codigo, descripcion)')
+          .eq('empresa_id', user.empresa_id)
+          .eq('codigo_barras', code)
+          .eq('activo', true)
+          .maybeSingle()
+        ).data
+      : await buscarPorCodigoBarras(code);
 
     if (producto) {
       onAgregarAlCarrito(producto);
@@ -179,6 +193,12 @@ function PanelProductos({ onAgregarAlCarrito, apiRef }) {
                        transition-colors"
           />
         </div>
+        {/* Modo Offline — Fase 2: catálogo servido desde el snapshot local */}
+        {!isOnline && (
+          <p className="mt-1.5 flex items-center gap-1 text-2xs text-kx-amber">
+            <WifiOff className="w-3 h-3" /> Sin conexión — mostrando catálogo guardado, puede estar desactualizado
+          </p>
+        )}
       </div>
 
       {/* Banner de alertas de stock */}

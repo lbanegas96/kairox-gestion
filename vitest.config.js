@@ -25,6 +25,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    // Modo Offline — Fase 2: shim de IndexedDB (jsdom no lo trae) para los
+    // tests que ejercitan offlineDb.js (Dexie). Ver src/test/setup.js.
+    setupFiles: ['./src/test/setup.js'],
     // loadtest/playwright/*.spec.js matchea el glob por default de Vitest
     // (**/*.spec.js) pero es un spec de Playwright (API distinta, depende de
     // scripts/loadtest/fixtures.json generado localmente por seed.mjs) — no

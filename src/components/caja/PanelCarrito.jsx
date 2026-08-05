@@ -13,6 +13,8 @@ import ModalCobroQR from '@/components/caja/ModalCobroQR';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { guardarSnapshot, leerSnapshot } from '@/lib/offlineDb';
 
 // Nombre exacto de la forma de pago que dispara el circuito de QR Dinámico
 // (la siembra mig.297). Si el cajero elige ésta, la venta NO va por crear_venta:
@@ -160,6 +162,9 @@ function PanelCarrito({
     : METODOS_FALLBACK;
   const { user }    = useAuth();
   const { toast }   = useToast();
+  // Modo Offline — Fase 2: sin conexión, clientes/centros de costo se leen del
+  // último snapshot guardado en Dexie en vez de esperar/fallar contra Supabase.
+  const isOnline    = useOnlineStatus();
   const [clientes, setClientes]     = useState([]);
   const [clienteId, setClienteId]   = useState('');
   const [selectedClient, setSelectedClient] = useState(null);
@@ -175,27 +180,47 @@ function PanelCarrito({
 
   useEffect(() => {
     if (!user?.empresa_id) return;
+    if (!isOnline) {
+      leerSnapshot('clientes', user.empresa_id).then(setClientes);
+      return;
+    }
     supabase
       .from('clientes')
       .select('id, nombre, condicion_iva, documento, telefono, limite_credito, saldo_actual')
       .eq('empresa_id', user.empresa_id)
       .neq('activo', false)
       .order('nombre')
-      .then(({ data }) => setClientes(data || []));
-  }, [user?.empresa_id]);
+      .then(({ data }) => {
+        const filas = data || [];
+        setClientes(filas);
+        guardarSnapshot('clientes', user.empresa_id, filas);
+      });
+  }, [user?.empresa_id, isOnline]);
 
   // Centro de Costo (opcional, toggle empresas.usa_centros_costo) — igual patrón
   // que NuevaVentaModal.jsx: solo se muestra el selector si la empresa lo activó.
   useEffect(() => {
     if (!user?.empresa_id) return;
+    if (!isOnline) {
+      leerSnapshot('centrosCosto', user.empresa_id).then(setCentrosCosto);
+      return;
+    }
     supabase.from('empresas').select('usa_centros_costo').eq('id', user.empresa_id).single()
       .then(({ data: emp }) => {
-        if (!emp?.usa_centros_costo) { setCentrosCosto([]); return; }
+        if (!emp?.usa_centros_costo) {
+          setCentrosCosto([]);
+          guardarSnapshot('centrosCosto', user.empresa_id, []);
+          return;
+        }
         supabase.from('centros_costo').select('id, nombre')
           .eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre')
-          .then(({ data }) => setCentrosCosto(data || []));
+          .then(({ data }) => {
+            const filas = data || [];
+            setCentrosCosto(filas);
+            guardarSnapshot('centrosCosto', user.empresa_id, filas);
+          });
       });
-  }, [user?.empresa_id]);
+  }, [user?.empresa_id, isOnline]);
 
   // OFERTAS — total con descuentos aplicados
   const { total, totalSinDescuento } = useMemo(() => {

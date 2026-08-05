@@ -1,25 +1,26 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-05 (Luciano/Claude — se subió el plan del Modo Offline que faltaba; Nadia puede seguir por la Fase 2)
+**Última actualización:** 2026-08-05 (Nadia/Claude — Fase 2 del Modo Offline cerrada: snapshot local con Dexie)
 
 ---
 
-# 👉 EMPEZÁ POR ACÁ (Nadia)
+# 👉 EMPEZÁ POR ACÁ (Luciano)
 
-**Modo Offline del POS — el plan ya está en el repo, podés seguir por la Fase 2.**
-
-Nadia frenó al terminar la Fase 1 porque el plan completo (4 fases) vivía solo en un archivo
-local de la sesión de Claude que lo escribió (`.claude/plans/...`, fuera del repo — nunca se
-subió a git). Hizo bien en frenar en vez de inventar el resto. **Ya está corregido:** el plan
-completo quedó commiteado en `PLAN_MODO_OFFLINE_POS.md` (raíz del repo), actualizado con el
-estado real de las fases 0 y 1 (ya hechas y probadas).
+**Modo Offline del POS — Fase 2 cerrada. Falta la Fase 3 (cola de ventas + sync).**
 
 - ✅ **Fase 0** (backend) — idempotencia en `crear_venta` + `abrir_caja_sesion`, mig.309/310.
-- ✅ **Fase 1** (Nadia, 05/08) — PWA instalable + detección de conectividad. Ver sección
-  abajo con el detalle completo.
-- ⬜ **Fase 2** — snapshot local de productos/clientes con Dexie (navegación offline
-  read-only, todavía sin poder cobrar). **Nadia: seguí por acá**, está detallada en
-  `PLAN_MODO_OFFLINE_POS.md` con los archivos exactos a crear/tocar y cómo verificarla.
-- ⬜ **Fase 3** — cola de ventas offline + sincronización. No arrancar hasta cerrar la Fase 2.
+- ✅ **Fase 1** (Nadia, 05/08) — PWA instalable + detección de conectividad.
+- ✅ **Fase 2** (Nadia, 05/08) — snapshot local (Dexie) de productos/clientes/formas de
+  pago/centros de costo/datos de empresa. Ver sección abajo con el detalle completo.
+- ⬜ **Fase 3** — cola de ventas offline (Efectivo/Transferencia) + motor de sincronización.
+  Es la fase que realmente permite cobrar sin conexión — hasta acá sólo se puede **navegar**
+  el catálogo offline, no vender. Detallada en `PLAN_MODO_OFFLINE_POS.md`.
+
+**Pendiente detectado en la Fase 1, no bloqueante pero anotado para no perderlo:** el plan
+original pedía que `useOnlineStatus` sumara un "ping activo liviano" además de
+`navigator.onLine`, porque ese último da falso positivo con wifi conectado a un router sin
+salida real a internet (el cajero vería "conectado" y el buscador intentaría ir a Supabase en
+vez de caer al snapshot, con la demora de un timeout de red en el medio). No se implementó en
+la Fase 1 ni se agregó ahora en la Fase 2 — queda como mejora a sumar antes o durante la Fase 3.
 
 ---
 
@@ -104,10 +105,66 @@ todavía, eso llega con la cola offline real.
   tests del proyecto en verde (28 preexistentes + 5 nuevos).
 - `npx eslint`: 0 errores. `npx vite build`: ✓.
 
-**Acá se frenó la sesión, a propósito** (ver el bloque "EMPEZÁ POR ACÁ" al principio del
-archivo). Fase 2/3 (la cola de ventas offline y su sincronización) quedan sin arrancar hasta
-tener el plan real de Luciano — no se avanzó por suposición sobre algo que toca ventas y
-stock reales.
+## ✅ Modo Offline del POS — Fase 2 (snapshot local read-only, Dexie)
+
+Tercera fase del plan (`PLAN_MODO_OFFLINE_POS.md`). Todavía **no se puede cobrar sin
+conexión** — eso es la Fase 3. Esta fase sólo hace que el catálogo/clientes/formas de pago
+sigan siendo buscables si se corta la red, en vez de que el POS se quede con paneles vacíos.
+
+**Nuevo `src/lib/offlineDb.js`** — base local (IndexedDB vía Dexie) con 5 tablas:
+`productos`, `clientes`, `formasPago`, `centrosCosto`, `empresaMeta`. Todas indexadas por
+`empresa_id` — mismo aislamiento multi-tenant que en el backend, replicado acá porque el
+snapshot vive en el dispositivo del cajero. `guardarSnapshot(tabla, empresaId, filas)` borra
+primero todo lo de esa empresa en esa tabla y recién ahí inserta lo nuevo (reemplazo completo,
+no acumula productos dados de baja o renombrados). `empresaMeta` es un registro único por
+empresa (logo/nombre/CUIT/dirección para el encabezado del ticket), no una lista.
+
+**Nuevo `src/hooks/useProductosSnapshot.js`** — mientras hay conexión, refresca en Dexie
+**todos** los productos activos de la empresa (a diferencia de `PanelProductos`, que sólo trae
+los primeros 200 que matchean la búsqueda — el snapshot necesita el catálogo completo porque no
+sabe de antemano qué va a buscar el cajero sin red). Expone `buscarOffline(query)` (filtra por
+nombre/SKU) y `buscarPorCodigoBarras(codigo)` para el flujo de escaneo.
+
+**Modificados** (mismo patrón en los 3: `if (!isOnline) { leer de Dexie; return }` antes del
+fetch a Supabase, y el fetch online guarda su resultado en Dexie al final):
+- `PanelProductos.jsx` — búsqueda por nombre/SKU y por código de barras (Enter en el
+  buscador) caen al snapshot sin red. Aviso visual bajo el buscador: "Sin conexión — mostrando
+  catálogo guardado, puede estar desactualizado" (el stock que se ve puede no reflejar ventas
+  hechas en otro dispositivo desde el último refresco — se avisa, no se oculta el riesgo).
+- `ModoCajaLayout.jsx` — logo/nombre/datos de empresa (para el ticket) y formas de pago activas.
+- `PanelCarrito.jsx` — clientes y centros de costo.
+
+**Por qué el enfoque es "cae a Dexie si `!isOnline`" y no "intentá Supabase y si falla, Dexie"**:
+más simple y predecible — evita que el cajero espere un timeout de red colgado antes de ver el
+fallback. Contrapartida conocida (mismo gap que ya estaba documentado en la Fase 1): si
+`navigator.onLine` da un falso positivo (wifi sin salida real a internet), el POS va a intentar
+Supabase igual y el cajero va a esperar el timeout. Ver nota sobre el "ping activo" pendiente en
+el bloque "EMPEZÁ POR ACÁ".
+
+**Instalado:** `dexie@^4.4.4`, `dexie-react-hooks@^1.1.7` (no se terminó usando `useLiveQuery`
+de esta última en esta fase — el snapshot no necesita reactividad entre pestañas todavía; queda
+disponible para cuando la Fase 3 sí la necesite). También `fake-indexeddb` (sólo devDependency
+de test: jsdom, el entorno de Vitest, no implementa IndexedDB — sin este shim los tests que
+tocan `offlineDb.js` tiran error al abrir la base). Verificado con `npm audit`: **0
+vulnerabilidades nuevas** — sigue en 13 (6 moderate, 5 high, 2 critical), todas preexistentes
+(jspdf, xlsx, vite, vitest, undici, brace-expansion), ninguna de los 3 paquetes agregados.
+
+**Probado:**
+- Tests nuevos: `src/lib/__tests__/offlineDb.test.js` (6 casos — guardar/leer, aislamiento
+  entre empresas, que un refresco reemplaza el snapshot viejo en vez de acumularlo, lista vacía,
+  `empresaMeta`, `null`/`undefined` no explotan) y
+  `src/hooks/__tests__/useProductosSnapshot.test.js` (4 casos — refresca online, un error de
+  Supabase no borra lo que ya había, offline no llama a Supabase y busca por nombre/SKU/código
+  de barras desde el snapshot, sin `empresa_id` no explota).
+- Suite completa: **43/43 tests en verde** (33 preexistentes + 10 nuevos).
+- `npx eslint`: 0 errores (sólo warnings preexistentes de `react/prop-types`, ya estaban en
+  todo el proyecto — nunca se usa PropTypes acá).
+- `npx vite build`: ✓ en 5m 9s, PWA con 72 entries precacheadas, sin regresión en el resto de
+  los bundles.
+- **No se pudo probar clickeando en el navegador real logueada** (misma limitación que la
+  Fase 1 — no se ingresan credenciales por política). Se abrió igual el preview sin login para
+  confirmar que la app carga sin errores de consola con las nuevas dependencias (Dexie, etc.)
+  antes de la pantalla de login — 0 errores.
 
 ## ✅ Barrido final del backlog del 04-05/08 — 3 ítems cerrados
 

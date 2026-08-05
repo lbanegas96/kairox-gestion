@@ -12,6 +12,7 @@ import { useArqueoCaja } from '@/hooks/useArqueoCaja';
 import { useAfipConfig } from '@/hooks/useAfipConfig';
 import { useAtajosPOS } from '@/hooks/useAtajosPOS';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { guardarSnapshot, leerSnapshot, guardarEmpresaMeta, leerEmpresaMeta } from '@/lib/offlineDb';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { precioPackFinal } from '@/lib/unidadesMedida';
 import PanelProductos from './PanelProductos';
@@ -68,9 +69,20 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
   const posApiRef = useRef({});
   useAtajosPOS({ apiRef: posApiRef });
 
-  // Cargar logo y nombre empresa
+  // Cargar logo y nombre empresa. Modo Offline — Fase 2: sin conexión se lee
+  // el último snapshot guardado en Dexie en vez de esperar/fallar contra
+  // Supabase; con conexión se refresca y ese refresco pisa el snapshot.
   useEffect(() => {
     if (!user?.empresa_id) return;
+    if (!isOnline) {
+      leerEmpresaMeta(user.empresa_id).then(meta => {
+        if (!meta) return;
+        setLogoUrl(meta.logoUrl ?? '');
+        setEmpresaNombre(meta.nombre ?? '');
+        setEmpresaData(meta.empresaData ?? {});
+      });
+      return;
+    }
     Promise.all([
       supabase.from('configuracion')
         .select('valor')
@@ -86,20 +98,34 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
       if (logoRow?.valor) setLogoUrl(logoRow.valor);
       if (empresa?.nombre) setEmpresaNombre(empresa.nombre);
       if (empresa) setEmpresaData(empresa);
+      guardarEmpresaMeta(user.empresa_id, {
+        logoUrl: logoRow?.valor ?? '',
+        nombre: empresa?.nombre ?? '',
+        empresaData: empresa ?? {},
+      });
     });
-  }, [user?.empresa_id]);
+  }, [user?.empresa_id, isOnline]);
 
-  // Formas de pago activas de la empresa (maestro, mig.214)
+  // Formas de pago activas de la empresa (maestro, mig.214). Mismo patrón
+  // offline: snapshot Dexie como fallback de lectura sin red.
   useEffect(() => {
     if (!user?.empresa_id) return;
+    if (!isOnline) {
+      leerSnapshot('formasPago', user.empresa_id).then(setFormasPago);
+      return;
+    }
     supabase
       .from('formas_pago')
       .select('*')
       .eq('empresa_id', user.empresa_id)
       .eq('activo', true)
       .order('nombre')
-      .then(({ data }) => setFormasPago(data ?? []));
-  }, [user?.empresa_id]);
+      .then(({ data }) => {
+        const filas = data ?? [];
+        setFormasPago(filas);
+        guardarSnapshot('formasPago', user.empresa_id, filas);
+      });
+  }, [user?.empresa_id, isOnline]);
 
   // OFERTAS — llamar al RPC cuando cambia el carrito o medio de pago
   const calcularOfertas = useCallback(async (carritoActual, medioPago) => {

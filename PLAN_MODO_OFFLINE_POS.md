@@ -1,6 +1,8 @@
 # Modo Offline del POS — Plan de implementación por fases
 
-**Estado:** Fase 0 ✅ hecha y probada en producción (mig.309/310, 2026-08-05). Fase 1 sigue.
+**Estado:** Fase 0 ✅ (mig.309/310), Fase 1 ✅ (PWA + conectividad) y Fase 2 ✅ (snapshot Dexie
+read-only) hechas y probadas — todas 2026-08-05. Fase 3 (cola de ventas + sync) sigue, ver
+detalle en `CONTEXT.md`.
 
 ## Contexto
 
@@ -61,7 +63,7 @@ Investigación de mercado (Square, Toast, Shopify POS): ningún POS real ofrece 
 - `abrir_caja_sesion`: apertura normal → reintento con mismo `client_uuid` (`duplicate:true`, mismo `sesion_id`) → apertura con `client_uuid` distinto mientras la primera sigue abierta (simula 2 dispositivos) → `conflict:true` con los datos de la sesión que ganó, sin error crudo.
 - Todo revertido después: 0 comprobantes con `client_uuid` remanentes, stock y numeración devueltos a como estaban.
 
-### Fase 1 — PWA instalable + detección de conectividad (cero riesgo de datos) — SIGUE
+### ✅ Fase 1 — PWA instalable + detección de conectividad (cero riesgo de datos) — HECHA (2026-08-05)
 
 - Nuevo: `src/hooks/useOnlineStatus.js` (`navigator.onLine` + listeners + ping activo liviano, porque `navigator.onLine` da falsos positivos con wifi conectado sin salida real a internet).
 - Nuevo: `src/components/shared/ConnectivityBanner.jsx`.
@@ -70,7 +72,7 @@ Investigación de mercado (Square, Toast, Shopify POS): ningún POS real ofrece 
 
 **Verificación:** Lighthouse PWA installability en verde; instalar la PWA real desde Chrome; `DevTools → Application → Service Workers` activo; probar contra el dominio real de Hostinger Horizons, no solo local.
 
-### Fase 2 — Snapshot local read-only (Dexie)
+### ✅ Fase 2 — Snapshot local read-only (Dexie) — HECHA (2026-08-05)
 
 - Nuevo: `src/lib/offlineDb.js` (Dexie, stores: `productos`, `clientes`, `formasPago`, `centrosCosto`, `empresaMeta`).
 - Nuevo: `src/hooks/useProductosSnapshot.js`.
