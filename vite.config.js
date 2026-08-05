@@ -1,6 +1,7 @@
 import path from 'node:path';
 import react from '@vitejs/plugin-react';
 import { createLogger, defineConfig } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 import inlineEditPlugin from './plugins/visual-editor/vite-plugin-react-inline-editor.js';
 import editModeDevPlugin from './plugins/visual-editor/vite-plugin-edit-mode.js';
 import iframeRouteRestorationPlugin from './plugins/vite-plugin-iframe-route-restoration.js';
@@ -282,7 +283,36 @@ export default defineConfig({
 	plugins: [
 		...(isDev ? [inlineEditPlugin(), editModeDevPlugin(), iframeRouteRestorationPlugin(), selectionModePlugin()] : []),
 		react(),
-		addTransformIndexHtml
+		addTransformIndexHtml,
+		// Modo Offline del POS — Fase 1 (PWA instalable). A propósito NO se agrega
+		// ningún `runtimeCaching`: sin esa config, workbox sólo precachea los
+		// archivos estáticos del build (JS/CSS/HTML/íconos) — ninguna llamada a
+		// Supabase (datos, ventas, autenticación) pasa por el service worker ni se
+		// cachea. Eso es la Fase 2+ (cola de ventas offline), no ésta.
+		// `devOptions.enabled` queda en su default (false): el SW no se registra en
+		// `npm run dev`, para no arrastrar assets viejos cacheados durante desarrollo.
+		VitePWA({
+			registerType: 'autoUpdate',
+			manifest: {
+				name: 'KAIROX Gestión',
+				short_name: 'KAIROX',
+				description: 'Sistema de gestión empresarial — ventas, caja, stock y contabilidad.',
+				theme_color: '#111114',
+				background_color: '#111114',
+				display: 'standalone',
+				start_url: '/',
+				icons: [
+					{ src: '/kairox-logo.png', sizes: '192x192', type: 'image/png' },
+					{ src: '/kairox-logo.png', sizes: '512x512', type: 'image/png' },
+					{ src: '/kairox-logo.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+				],
+			},
+			workbox: {
+				// Igual que el default de vite-plugin-pwa, explícito a propósito: sólo
+				// el shell estático, nunca rutas de API.
+				globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+			},
+		}),
 	],
 	server: {
 		cors: true,

@@ -1,25 +1,25 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-05 (Luciano/Claude — Modo Offline del POS: Fase 0 (idempotencia) aplicada y probada en vivo)
+**Última actualización:** 2026-08-05 (Nadia/Claude — Modo Offline del POS: Fase 1 (PWA + detección de conectividad) aplicada y probada)
 
 ---
 
-# 👉 EMPEZÁ POR ACÁ (Nadia)
+# 👉 EMPEZÁ POR ACÁ
 
-Arrancamos un feature grande: **Modo Offline del POS** (que el cajero pueda seguir
-vendiendo en Efectivo/Transferencia si se corta internet en el local, y
-sincronice solo al reconectar). Plan completo, aprobado por Luciano, en
-`.claude/plans/mutable-squishing-crown.md` — leelo entero antes de tocar nada,
-tiene el contexto de por qué se diseñó así (investigación de mercado, qué se
-verificó del código actual, las 4 fases).
+**Modo Offline del POS** — que el cajero pueda seguir vendiendo en Efectivo/Transferencia
+si se corta internet, y sincronice al reconectar. Va fase por fase:
+- ✅ **Fase 0** (Luciano) — idempotencia en el backend, mig.309/310.
+- ✅ **Fase 1** (Nadia, hoy) — PWA instalable + detección de conectividad. Ver sección abajo.
+- ⏳ **Fase 2+** — la cola de ventas offline en sí (IndexedDB, sincronización al
+  reconectar). Todavía no arrancada.
 
-**Hecho hoy: Fase 0 (backend, idempotencia) — mig.309/310, aplicada y probada
-en vivo contra producción.** Detalle abajo. `git pull` antes de seguir.
-
-**Sigue: Fase 1** — PWA instalable (`vite-plugin-pwa`) + detección de
-conectividad (`navigator.onLine`). Cero riesgo de datos, no toca `crear_venta`
-ni nada del flujo de ventas todavía. Está detallada en el plan con los archivos
-exactos a crear/tocar. Empezá por ahí, no por la Fase 2/3 — el plan está pensado
-para aprobar y construir de a una fase.
+**⚠️ El plan completo del feature (`.claude/plans/mutable-squishing-crown.md`, mencionado
+como lectura obligatoria) nunca se subió al repo — es un archivo local de la máquina de
+Luciano, no está versionado en ningún commit.** Verificado con `git log --all` sobre esa
+ruta: no aparece. Fase 1 se construyó únicamente con el resumen que quedó acá en
+`CONTEXT.md` (alcance, límites, qué NO tocar). Si la Fase 2 depende de detalles de ese plan
+que no están documentados acá (la investigación de mercado, decisiones de diseño
+específicas), **hay que pedirle a Luciano el archivo o que lo re-explique** antes de seguir
+— no asumir que "está en el plan" resuelve algo que no volvió a quedar escrito.
 
 ---
 
@@ -64,8 +64,49 @@ navegador:**
 - Todo revertido después: 0 comprobantes con `client_uuid` remanentes, stock y
   numeración devueltos a como estaban, sesión de prueba borrada.
 
-**Sigue: Fase 1** (PWA instalable + detección de conectividad, cero riesgo de
-datos) — todavía no arrancada.
+## ✅ Modo Offline del POS — Fase 1 (PWA instalable + detección de conectividad)
+
+Segunda fase del plan. Sin tocar `crear_venta` ni ninguna cola offline todavía — sólo la base
+para que el POS se pueda instalar como app y sepa si hay conexión.
+
+**PWA instalable** — `vite-plugin-pwa@0.21.2` (pineado ahí porque es la última versión que
+sigue soportando Vite 4; la serie 1.x ya pide Vite 5+). Configurado en `vite.config.js`:
+- `manifest`: nombre/colores de KAIROX, íconos apuntando al logo existente
+  (`public/kairox-logo.png`, 1254×1254 — se referencia igual en 192/512/512-maskable; no hay
+  íconos redimensionados de verdad todavía, es cosmético, no bloquea la instalación).
+- **A propósito, sin ningún `runtimeCaching`**: el `generateSW` default de workbox sólo
+  precachea archivos del build (`**/*.{js,css,html,ico,png,svg,woff2}`) — ninguna llamada a
+  Supabase pasa por el service worker ni se cachea. Verificado después del build: `dist/sw.js`
+  tiene **0 menciones** de `supabase`/`rest/v1`/`auth/v1` (`grep -c` sobre el archivo generado).
+  Cachear datos/ventas es la Fase 2+, no ésta.
+- `devOptions.enabled` queda en su default (`false`): el SW no se registra corriendo
+  `npm run dev`, para no arrastrar assets viejos cacheados mientras se desarrolla.
+
+**Detección de conectividad** — `useOnlineStatus()` (`src/hooks/useOnlineStatus.js`):
+`navigator.onLine` + los eventos `online`/`offline` del browser. Límite conocido y aceptado a
+propósito: `navigator.onLine` sólo dice si hay una interfaz de red activa, no si hay salida
+real a internet ni si Supabase específicamente es alcanzable (wifi conectado a un router sin
+internet reporta `true`) — un chequeo real (ping a la API) es de una fase posterior.
+
+**Badge en el POS** — `ModoCajaLayout.jsx` muestra "Sin conexión" en la topbar (mismo estilo
+que los badges de Caja/PdV que ya existían) sólo cuando `isOnline === false`; oculto el resto
+del tiempo para no sumar ruido. Por ahora es sólo un aviso — no bloquea ni habilita nada
+todavía, eso llega con la cola offline real.
+
+**Probado:**
+- Build: `PWA v0.21.2, mode generateSW, precache 72 entries (5603.23 KiB)` — genera
+  `dist/sw.js`, `dist/workbox-*.js`, `dist/manifest.webmanifest` correctamente, con los íconos
+  y colores esperados.
+- **No se pudo probar clickeando en el navegador real** (requiere estar logueada, y no se
+  ingresan credenciales por política) — se verificó en cambio con un **test automatizado**
+  nuevo, `src/hooks/__tests__/useOnlineStatus.test.js` (5 casos: arranca reflejando
+  `navigator.onLine`, reacciona a `offline`→`online`, limpia el listener al desmontar). 33/33
+  tests del proyecto en verde (28 preexistentes + 5 nuevos).
+- `npx eslint`: 0 errores. `npx vite build`: ✓.
+
+**Sigue: Fase 2+** (la cola de ventas offline en sí) — sin arrancar. Como el plan completo no
+está en el repo (ver aviso arriba), antes de construirla conviene confirmar el alcance exacto
+con quien lo diseñó.
 
 ## ✅ Barrido final del backlog del 04-05/08 — 3 ítems cerrados
 
@@ -93,15 +134,21 @@ el **12/08** (2da quincena de agosto) — antes de esa fecha AFIP devuelve error
 la ventana: 1) probar "Solicitar CAEA" manual desde `ConfiguracionSection` con la empresa CAEA Test,
 2) si funciona, desplegar la contingencia automática del `arca-worker` (repo-only hoy).
 
-## 🟡 mig.308 escrita y commiteada, NO aplicada a prod todavía (pendiente de confirmación)
+## ✅ mig.308 — corrección: esta nota había quedado desactualizada, SÍ está aplicada
+
+Esta sección decía "NO aplicada a prod todavía, pendiente de confirmación" — quedó así de un
+borrador anterior a que Luciano la aplicara. **Verificado hoy directamente contra la base**
+(`list_migrations`): `308_drop_overload_huerfano_crear_nota_credito` figura aplicada
+(`20260805015310`), consistente con la sección "Barrido final del backlog" más abajo, que sí
+decía "aplicada y pusheada". No hace falta ninguna acción — era sólo un cabo suelto de
+redacción, no un problema real.
 
 `DROP FUNCTION` del overload de 8 args de `crear_nota_credito` (deuda técnica anotada desde mig.264).
 Confirmado en sandbox (`BEGIN...ROLLBACK`) que el drop no rompe nada — sin callers en `src/` ni en
 `supabase/functions/` (el único caller, `NuevaNCModal.jsx`, siempre manda `p_referencia_cliente`/
 `p_punto_venta_id`, así que Postgres ya resolvía siempre a la versión de 10 args). Hallazgo nuevo: no
 era solo deuda cosmética — `authenticated` todavía tenía `EXECUTE` sobre la versión vieja, que no
-revierte COGS en devoluciones (mig.288) ni respeta el punto de venta (mig.294-296). Falta: aplicar la
-migración a producción (pedir confirmación) y push.
+revierte COGS en devoluciones (mig.288) ni respeta el punto de venta (mig.294-296).
 
 ## 🔴 Secreto de firma de MP — Luciano lo actualizó, PERO sigue fallando (dato nuevo)
 

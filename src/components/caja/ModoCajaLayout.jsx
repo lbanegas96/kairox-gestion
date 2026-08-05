@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Landmark, History, LogOut, Loader2, X, CheckCircle, ArrowLeft, Printer, FileText } from 'lucide-react';
+import { Landmark, History, LogOut, Loader2, X, CheckCircle, ArrowLeft, Printer, FileText, WifiOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +11,7 @@ import { useCaja } from '@/contexts/CajaContext';
 import { useArqueoCaja } from '@/hooks/useArqueoCaja';
 import { useAfipConfig } from '@/hooks/useAfipConfig';
 import { useAtajosPOS } from '@/hooks/useAtajosPOS';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { precioPackFinal } from '@/lib/unidadesMedida';
 import PanelProductos from './PanelProductos';
@@ -34,6 +35,9 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
   // esta lectura con la que hace useConfirmarVenta (misma queryKey).
   const { afipConfig: afipPos }                        = useAfipConfig('pos');
   const pdvPos                                         = afipPos?.punto_venta ?? null;
+  // Modo Offline — Fase 1 (mig.309/310 ya soportan reintentos idempotentes del
+  // lado del backend; esto sólo avisa, todavía no encola nada offline).
+  const isOnline                                       = useOnlineStatus();
 
   const [carrito, setCarrito]       = useState([]);
   const [logoUrl, setLogoUrl]       = useState('');
@@ -285,6 +289,18 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
               : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
           }`}>
             {isSessionOpen ? 'Caja abierta' : 'Caja cerrada'}
+          </span>
+        )}
+
+        {/* Sin conexión — Fase 1 del modo offline: sólo aviso, no bloquea nada
+            todavía (eso llega cuando se encole la venta offline en una fase
+            posterior). Oculto mientras hay conexión, para no sumar ruido. */}
+        {!isOnline && (
+          <span
+            title="Sin conexión a internet. Por ahora esto es solo un aviso — cobrar todavía necesita conexión."
+            className="text-2xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 flex items-center gap-1"
+          >
+            <WifiOff className="w-3 h-3" /> Sin conexión
           </span>
         )}
 
