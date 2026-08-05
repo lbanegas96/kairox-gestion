@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useCaja } from '@/contexts/CajaContext';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useVentaOfflineQueue } from '@/hooks/useVentaOfflineQueue';
 
 // Fuente única del cálculo de arqueo de caja.
 //
@@ -10,6 +11,15 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 // esperado=0 / diferencia=0 hardcodeados — grabando un arqueo falso en
 // caja_sesiones. Extraído acá para que ambos caminos de cierre calculen igual
 // por construcción y no puedan volver a divergir.
+//
+// Modo Offline — Fase 3: `pendienteSyncEfectivo`/`pendienteSyncTransferencia`
+// son ventas encoladas de ESTA sesión que el servidor todavía no reconoce
+// (`movimientos_caja` no tiene fila para ellas hasta que sincronicen) — se
+// exponen aparte, informativas, NUNCA sumadas a `esperado` (que sigue siendo
+// 100% verdad-servidor). En la práctica el cierre de caja ya está bloqueado
+// mientras haya cola pendiente (CajaContext.closeSession), así que esto es
+// más que nada para que el cajero entienda un "esperado" que va a cambiar en
+// cuanto se sincronice, no una corrección real del cálculo.
 
 const EMPTY = {
   inicial: 0,
@@ -24,6 +34,7 @@ export const ARQUEO_KEY = (sesionId) => ['arqueo_caja', sesionId];
 export function useArqueoCaja() {
   const { currentSession } = useCaja();
   const { user } = useAuth();
+  const { ventasPendientes } = useVentaOfflineQueue(user?.empresa_id);
 
   const { data: totals = EMPTY, isLoading, refetch } = useQuery({
     queryKey: ARQUEO_KEY(currentSession?.id),
@@ -70,5 +81,23 @@ export function useArqueoCaja() {
     staleTime: 0,
   });
 
-  return { totals, loading: isLoading, refetch };
+  // Ventas encoladas offline que pertenecen a la sesión actual — por
+  // client_uuid si la sesión en sí también está pendiente de sincronizar
+  // (id todavía null), por id real si ya lo tiene.
+  const perteneceASesionActual = (v) => {
+    if (currentSession?.id) return v.caja_sesion_id === currentSession.id;
+    if (currentSession?.client_uuid) return v.caja_sesion_client_uuid === currentSession.client_uuid;
+    return false;
+  };
+  const sumarPorMetodo = (metodo) => ventasPendientes
+    .filter(v => v.estado !== 'sincronizada' && perteneceASesionActual(v))
+    .reduce((sum, v) => {
+      const pagos = (v.payload?.p_pagos ?? []).filter(p => p.metodo === metodo);
+      return sum + pagos.reduce((s, p) => s + Number(p.monto || 0), 0);
+    }, 0);
+
+  const pendienteSyncEfectivo = sumarPorMetodo('Efectivo');
+  const pendienteSyncTransferencia = sumarPorMetodo('Transferencia');
+
+  return { totals, loading: isLoading, refetch, pendienteSyncEfectivo, pendienteSyncTransferencia };
 }

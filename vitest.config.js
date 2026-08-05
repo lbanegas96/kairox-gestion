@@ -6,6 +6,14 @@ import { defineConfig, configDefaults } from 'vitest/config';
 // HTML) que no aplican ni hacen falta para correr tests con Vitest. Solo se
 // replica acá el alias '@' -> src, que es lo único que los hooks importan.
 export default defineConfig({
+  // vite.config.js trae @vitejs/plugin-react, que configura el runtime JSX
+  // automático (por eso los .jsx del proyecto no importan React explícitamente).
+  // Acá no se usa ese plugin (a propósito, ver comentario de abajo) — sin este
+  // esbuild.jsx, cualquier test que renderice un componente .jsx directamente
+  // (no sólo un hook) explota con "React is not defined".
+  esbuild: {
+    jsx: 'automatic',
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

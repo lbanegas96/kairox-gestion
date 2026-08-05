@@ -14,7 +14,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
-import { guardarSnapshot, leerSnapshot } from '@/lib/offlineDb';
+import { guardarSnapshot, leerSnapshot, medioPagoDisponibleOffline } from '@/lib/offlineDb';
 
 // Nombre exacto de la forma de pago que dispara el circuito de QR Dinámico
 // (la siembra mig.297). Si el cajero elige ésta, la venta NO va por crear_venta:
@@ -173,7 +173,7 @@ function PanelCarrito({
   const [showParaleloTCModal, setShowParaleloTCModal] = useState(false);
   const clienteWrapperRef = useRef(null);
   const tcParalelo = useTCParalelo();
-  const { confirmar, loading }      = useConfirmarVenta(tcParalelo);
+  const { confirmar, loading }      = useConfirmarVenta(tcParalelo, formasPago);
   const { currentSession }          = useCaja();
   const cobroQR                     = useCobroQR();
   const [cancelandoQR, setCancelandoQR] = useState(false);
@@ -361,6 +361,14 @@ function PanelCarrito({
     // Sólo aplica cuando el QR cubre el 100% de la venta: en pago mixto no hay
     // forma de conciliar una parte pendiente con otra ya cobrada.
     if (esCobroQR) {
+      // Modo Offline — Fase 3: el botón ya debería estar deshabilitado sin
+      // red (ver METODOS.map más abajo) — este guard es defensivo, para el
+      // caso borde de perder la conexión entre seleccionar QR y tocar
+      // "Confirmar". Evita colgar esperando una llamada de red condenada.
+      if (!isOnline) {
+        toast({ title: 'El QR necesita conexión', description: 'Sin internet no se puede generar el QR de MercadoPago.', variant: 'destructive' });
+        return;
+      }
       const { error: qrError } = await cobroQR.iniciar({
         carrito,
         selectedClient,
@@ -411,7 +419,14 @@ function PanelCarrito({
         if (!bloqueado) handleConfirmar();
       },
       focusCliente: () => clienteWrapperRef.current?.querySelector('select')?.focus(),
-      seleccionarMedioPago: (idx) => { const m = METODOS[idx]; if (m) toggleMethod(m); },
+      // Modo Offline — Fase 3: el atajo no pasa por el botón (que ya tiene
+      // `disabled`), así que necesita su propio guard.
+      seleccionarMedioPago: (idx) => {
+        const m = METODOS[idx];
+        if (!m) return;
+        if (!isOnline && !medioPagoDisponibleOffline(m, formasPago)) return;
+        toggleMethod(m);
+      },
     };
   });
 
@@ -489,18 +504,29 @@ function PanelCarrito({
         <div className="grid grid-cols-2 gap-1.5">
           {METODOS.map((m, idx) => {
             const activo = selectedMethods.has(m);
+            // Modo Offline — Fase 3: Tarjeta/QR MercadoPago/Cuenta Corriente
+            // necesitan hablar con un tercero (banco, MP) o validar datos
+            // actualizados del cliente en el momento — no se pueden ofrecer
+            // sin conexión. Se decide por tipo_instrumento (mig.214), no por
+            // el nombre (ver medioPagoDisponibleOffline en offlineDb.js).
+            const necesitaConexion = !isOnline && !medioPagoDisponibleOffline(m, formasPago);
             return (
               <button
                 key={m}
-                onClick={() => toggleMethod(m)}
-                title={idx < 4 ? `Atajo: Alt+${idx + 1}` : undefined}
+                onClick={() => !necesitaConexion && toggleMethod(m)}
+                disabled={necesitaConexion}
+                title={necesitaConexion
+                  ? 'Necesita conexión a internet'
+                  : idx < 4 ? `Atajo: Alt+${idx + 1}` : undefined}
                 className={[
                   'relative py-2 px-3 rounded-xl text-xs font-semibold transition-all border text-left',
-                  activo
-                    ? m === 'Cuenta Corriente'
-                      ? 'bg-amber-500/20 border-amber-500 text-amber-600 dark:text-amber-400'
-                      : 'bg-[rgb(var(--kx-violet)/0.15)] border-[rgb(var(--kx-violet))] text-[rgb(var(--kx-violet))]'
-                    : 'bg-kx-surface-2 border-kx-border text-kx-text-2 hover:border-kx-text-3',
+                  necesitaConexion
+                    ? 'bg-kx-surface-2 border-kx-border text-kx-text-3 opacity-40 cursor-not-allowed'
+                    : activo
+                      ? m === 'Cuenta Corriente'
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-600 dark:text-amber-400'
+                        : 'bg-[rgb(var(--kx-violet)/0.15)] border-[rgb(var(--kx-violet))] text-[rgb(var(--kx-violet))]'
+                      : 'bg-kx-surface-2 border-kx-border text-kx-text-2 hover:border-kx-text-3',
                 ].join(' ')}
               >
                 {idx < 4 && (
@@ -549,6 +575,15 @@ function PanelCarrito({
         {isCC && (
           <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/15 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
             Se registrará como deuda en cuenta corriente del cliente.
+          </div>
+        )}
+
+        {/* Modo Offline — Fase 3: el motor de ofertas depende de red (lo salta
+            ModoCajaLayout.calcularOfertas); se avisa acá para no vender en
+            silencio sin un descuento que hubiera aplicado con conexión. */}
+        {!isOnline && carrito.length > 0 && (
+          <div className="text-2xs text-kx-text-3 bg-kx-surface-2 border border-kx-border rounded-lg px-3 py-2">
+            Ofertas no disponibles sin conexión.
           </div>
         )}
 

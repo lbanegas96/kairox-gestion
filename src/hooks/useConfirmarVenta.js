@@ -3,9 +3,11 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { useToast } from '@/components/ui/use-toast';
-import { getNowAR, getTodayAR } from '@/lib/dateUtils';
-import { asientosAutoService } from '@/services/planCuentasService';
+import { getNowAR } from '@/lib/dateUtils';
 import { useAfipConfig } from '@/hooks/useAfipConfig';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { useFinalizarVentaPosterior } from '@/hooks/useFinalizarVentaPosterior';
+import { encolarVenta, decrementarStockLocal, medioPagoDisponibleOffline } from '@/lib/offlineDb';
 
 // Hook compartido entre el POS (PanelCarrito) y cualquier flujo de venta ARS rápido.
 // Encapsula crear_venta RPC + asiento contable + encolado de CAE (facturación
@@ -27,15 +29,30 @@ import { useAfipConfig } from '@/hooks/useAfipConfig';
 //
 // La numeración usa obtener_proximo_numero('venta') (RPC atómica con lock) — nunca
 // MAX+1 en el frontend (patrón inseguro que migration 083 erradicó del resto).
-export function useConfirmarVenta(tcParalelo) {
+//
+// Modo Offline del POS — Fase 3 (`formasPago`, mig.214, para decidir por
+// tipo_instrumento qué medios de pago no necesitan red — ver
+// `medioPagoDisponibleOffline` en offlineDb.js): si no hay conexión y todos
+// los pagos son Efectivo/Transferencia, la venta se ENCOLA en vez de llamar a
+// `obtener_proximo_numero`/`crear_venta` (esa numeración es 100% autoritativa
+// del servidor, no se puede reservar offline). El post-proceso de una venta
+// exitosa (asiento contable + encolado a ARCA) se extrajo a
+// `finalizarVentaPosterior` para que lo llame tanto este hook (camino online,
+// sin cambios de comportamiento) como `useSyncEngine` (después de sincronizar
+// una venta que se encoló offline) — evita duplicar esa lógica en dos lugares.
+export function useConfirmarVenta(tcParalelo, formasPago = []) {
   const { user }                       = useAuth();
   const { isSessionOpen, currentSession } = useCaja();
   const { toast }                      = useToast();
+  const isOnline                       = useOnlineStatus();
   // contexto 'pos': la empresa puede haberle dado al Modo Caja su propio punto
   // de venta (mig.293) — fiscal independiente, o interno para el local que no
   // factura. Si ese PdV tiene envia_arca=false, afipActivo queda en false y la
   // venta nunca se encola a ARCA.
-  const { afipConfig, afipActivo, determinarTipoComprobante } = useAfipConfig('pos');
+  const { afipConfig, afipActivo } = useAfipConfig('pos');
+  // Extraído a su propio hook — lo comparte con useSyncEngine (Fase 3), ver
+  // comentario de useFinalizarVentaPosterior.js.
+  const { finalizarVentaPosterior } = useFinalizarVentaPosterior();
   const [loading, setLoading]          = useState(false);
   const [lastComprobante, setLastComprobante] = useState(null);
 
@@ -75,6 +92,19 @@ export function useConfirmarVenta(tcParalelo) {
       return null;
     }
 
+    // Modo Offline — Fase 3: sin conexión, sólo Efectivo/Transferencia pueden
+    // cobrarse (Tarjeta/QR/CC necesitan hablar con un tercero en el momento).
+    // La UI ya debería haber bloqueado el resto (ver PanelCarrito.jsx) — este
+    // guard es defensivo, "nunca confiar en el cliente" aplica también acá.
+    if (!isOnline && !pagos.every(p => medioPagoDisponibleOffline(p.metodo, formasPago))) {
+      toast({
+        title: 'Ese medio de pago necesita conexión',
+        description: 'Sin internet sólo se puede cobrar en Efectivo o Transferencia.',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
     // OFERTAS — calcular total con descuentos aplicados
     const total = cart.reduce((sum, item) => {
       const oferta = ofertasCarrito[item.id];
@@ -91,7 +121,6 @@ export function useConfirmarVenta(tcParalelo) {
 
     setLoading(true);
     try {
-      const saleNumber  = await generateVentaNumber();
       const now         = getNowAR().toISOString();
       const formaPago   = pagos.length > 1
         ? pagos.map(p => p.metodo).join(' + ')
@@ -161,6 +190,72 @@ export function useConfirmarVenta(tcParalelo) {
         };
       });
 
+      // ── Sin conexión: encolar en vez de llamar al servidor ──────────────────
+      if (!isOnline) {
+        const cajaSesionId = currentSession?.id ?? null;
+        const cajaSesionClientUuid = !cajaSesionId ? (currentSession?.client_uuid ?? null) : null;
+
+        const filaEncolada = await encolarVenta(user.empresa_id, {
+          payload: {
+            p_empresa_id:       user.empresa_id,
+            p_user_id:          user.id,
+            p_fecha:            now,
+            p_cliente_id:       selectedClient?.id   ?? null,
+            p_cliente_nombre:   selectedClient?.nombre ?? 'Consumidor Final',
+            p_total:            total,
+            p_forma_pago:       formaPago,
+            p_estado_pago:      'pagada', // CC nunca llega acá (bloqueada offline)
+            p_moneda:           'ARS',
+            p_tipo_cambio_tasa: 1,
+            p_monto_paralelo:   montoParaleloTotal ?? null,
+            p_tc_paralelo:      montoParaleloTotal !== null ? tcParalelo.tcHoy : null,
+            p_items:            itemsPayload,
+            p_pagos:            pagosPayload,
+            p_es_cc:            false,
+            p_caja_sesion_id:   cajaSesionId,
+            p_pedido_id:        null,
+            p_centro_costo_id:  centroCostoId || null,
+          },
+          itemsSnapshot: cart,
+          clienteCondicionIva: selectedClient?.condicion_iva ?? 'CF',
+          cajaSesionId,
+          cajaSesionClientUuid,
+        });
+
+        // Optimista, sólo para que este mismo dispositivo no se sobre-venda a
+        // sí mismo entre dos ventas encoladas — el servidor vuelve a validar
+        // todo al sincronizar.
+        await decrementarStockLocal(user.empresa_id, cart.map(item => ({
+          producto_id: item.id, cantidad: item.cantidad,
+        })));
+
+        const comprobante = {
+          id:              null,
+          numero_venta:    filaEncolada.numero_provisorio,
+          fecha:           now,
+          total,
+          moneda:          'ARS',
+          tipo_cambio_tasa: 1,
+          forma_pago:      formaPago,
+          cliente_nombre:  selectedClient?.nombre ?? 'Consumidor Final',
+          // Todavía no existe del lado del servidor — no corresponde afirmar
+          // nada sobre CAE hasta que se sincronice de verdad.
+          cae_estado:      'no_aplica',
+          _offline:        true,
+          _localId:        filaEncolada.localId,
+        };
+
+        toast({
+          title: 'Venta guardada — sin conexión',
+          description: `Comprobante provisorio ${filaEncolada.numero_provisorio}. Se sincroniza solo al reconectar.`,
+        });
+        setLastComprobante(comprobante);
+        return comprobante;
+      }
+
+      // ── Con conexión: camino de siempre ──────────────────────────────────────
+      const saleNumber = await generateVentaNumber();
+
       const { data: rpcResult, error: rpcError } = await supabase.rpc('crear_venta', {
         p_empresa_id:       user.empresa_id,
         p_user_id:          user.id,
@@ -201,44 +296,11 @@ export function useConfirmarVenta(tcParalelo) {
         cae_estado:      afipActivo ? 'pendiente' : 'no_aplica',
       };
 
-      asientosAutoService.crearAsientoVenta(user.empresa_id, user.id, {
-        ventaId:     comprobante.id,
-        total,
-        neto:        rpcResult.neto_gravado,
-        iva:         rpcResult.iva_discriminado,
-        fecha:       getTodayAR(),
-        descripcion: `Venta #${saleNumber}`,
-        esCredito:   isCC,
-        centroCostoId: centroCostoId || null,
-        // mig.286: cuánto de esta venta se pagó con una forma de pago que tarda
-        // en acreditarse (tarjeta) — crear_venta ya lo resolvió por pago.
-        montoPendienteLiquidacion: rpcResult.monto_pendiente_liquidacion,
-        costoMercaderiaVendida: rpcResult.costo_mercaderia_vendida,
-      }).catch(e => {
-        if (e.message?.startsWith('Período cerrado:')) {
-          toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
-        } else {
-          console.warn('[Contabilidad] asiento venta:', e.message);
-        }
+      finalizarVentaPosterior({
+        comprobante, rpcResult, total, saleNumber,
+        clienteCondicionIva: selectedClient?.condicion_iva ?? 'CF',
+        centroCostoId, isCC,
       });
-
-      // ── Encolar CAE vía trigger (SAP async posting — no bloquea la venta) ──────
-      // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca, que inserta
-      // en facturas_pendientes_arca. El arca-worker (cron */5 * * * *) es la única
-      // fuente de verdad para llamar a ARCA — nunca desde el frontend.
-      if (afipActivo && comprobante?.id) {
-        const tipoComp = determinarTipoComprobante(
-          afipConfig.condicion_iva,
-          selectedClient?.condicion_iva ?? 'CF'
-        );
-        supabase.from('comprobantes').update({
-          tipo_comprobante_afip: tipoComp,
-          punto_venta_id: afipConfig.punto_venta.id,
-          cae_estado: 'pendiente',
-        }).eq('id', comprobante.id).then(({ error }) => {
-          if (error) console.warn('[AFIP queue]', error.message);
-        });
-      }
 
       toast({ title: '¡Venta Exitosa!', description: `Comprobante ${saleNumber} generado.` });
       setLastComprobante(comprobante);
@@ -250,7 +312,7 @@ export function useConfirmarVenta(tcParalelo) {
     } finally {
       setLoading(false);
     }
-  }, [user, isSessionOpen, currentSession, toast, afipActivo, afipConfig, determinarTipoComprobante, tcParalelo]);
+  }, [user, isSessionOpen, currentSession, toast, afipActivo, afipConfig, tcParalelo, isOnline, formasPago, finalizarVentaPosterior]);
 
-  return { confirmar, loading, lastComprobante };
+  return { confirmar, loading, lastComprobante, finalizarVentaPosterior };
 }

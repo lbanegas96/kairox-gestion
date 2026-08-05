@@ -1,8 +1,11 @@
 # Modo Offline del POS — Plan de implementación por fases
 
-**Estado:** Fase 0 ✅ (mig.309/310), Fase 1 ✅ (PWA + conectividad) y Fase 2 ✅ (snapshot Dexie
-read-only) hechas y probadas — todas 2026-08-05. Fase 3 (cola de ventas + sync) sigue, ver
-detalle en `CONTEXT.md`.
+**Estado:** Fase 0 ✅ (mig.309/310), Fase 1 ✅ (PWA + conectividad), Fase 2 ✅ (snapshot Dexie
+read-only) y Fase 3 ✅ (cola de ventas + sincronización) hechas y probadas — todas 2026-08-05.
+**Las 4 fases del plan están completas** — ya se puede cobrar Efectivo/Transferencia sin
+conexión. Quedan 3 verificaciones que sólo se pueden hacer con dispositivos/red reales (carrera
+de stock multi-dispositivo, JWT viejo reconectando, red real degradada) — detalle en
+`CONTEXT.md`.
 
 ## Contexto
 
@@ -80,7 +83,7 @@ Investigación de mercado (Square, Toast, Shopify POS): ningún POS real ofrece 
 
 **Verificación:** poblar Dexie online, ir offline y recargar (simula abrir la PWA ya sin conexión desde el arranque, no solo perder conexión a mitad de sesión) — buscar por nombre/SKU/código de barras debe seguir andando con el último snapshot.
 
-### Fase 3 — Cola de ventas offline + motor de sincronización
+### ✅ Fase 3 — Cola de ventas offline + motor de sincronización — HECHA (2026-08-05)
 
 - Nuevo: `src/hooks/useVentaOfflineQueue.js`, `src/hooks/useSyncEngine.js`, `src/components/caja/SyncStatusPanel.jsx`, `src/components/caja/SyncConflictModal.jsx`.
 - Extender `offlineDb.js` con stores `ventasPendientes` y `cajaSesionesPendientes`.

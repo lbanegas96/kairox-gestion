@@ -83,6 +83,15 @@ function TicketPrint({ venta, items = [], empresa = {}, formato = '80mm', oferta
           <div>Cliente: {venta.cliente_nombre || 'Consumidor Final'}</div>
         </div>
 
+        {/* Modo Offline del POS — Fase 3: la venta se guardó sin conexión —
+            el número de arriba es provisorio, el comprobante fiscal real
+            (numeración correlativa) recién se asigna al sincronizar. */}
+        {venta._offline && (
+          <div className="text-center font-bold border border-dashed border-current py-1 my-1">
+            PROVISORIO — pendiente de sincronizar
+          </div>
+        )}
+
         <Divider is80={is80} />
 
         {/* DETALLE */}

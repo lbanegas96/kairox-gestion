@@ -12,6 +12,9 @@ import { useArqueoCaja } from '@/hooks/useArqueoCaja';
 import { useAfipConfig } from '@/hooks/useAfipConfig';
 import { useAtajosPOS } from '@/hooks/useAtajosPOS';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { useFinalizarVentaPosterior } from '@/hooks/useFinalizarVentaPosterior';
+import { useSyncEngine } from '@/hooks/useSyncEngine';
+import { useVentaOfflineQueue } from '@/hooks/useVentaOfflineQueue';
 import { guardarSnapshot, leerSnapshot, guardarEmpresaMeta, leerEmpresaMeta } from '@/lib/offlineDb';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { precioPackFinal } from '@/lib/unidadesMedida';
@@ -19,26 +22,58 @@ import PanelProductos from './PanelProductos';
 import PanelCarrito from './PanelCarrito';
 import HistorialTurnoModal from './HistorialTurnoModal';
 import TicketPrint from './TicketPrint';
+import SyncStatusPanel from './SyncStatusPanel';
 
 // Layout pantalla completa para usuarios cajeros (role='solo_caja' o modo_caja=true).
 // No tiene sidebar ni header estándar.
 function ModoCajaLayout({ onLogout, onBack = null }) {
   const { user }                                       = useAuth();
   const { isSessionOpen, currentSession, openSession,
-          closeSession, loading: cajaLoading }          = useCaja();
+          closeSession, refreshSession,
+          loading: cajaLoading }                        = useCaja();
   const { toast }                                      = useToast();
-  // Arqueo real del turno — mismo cálculo que el cierre desde el panel administrativo
+  // Arqueo real del turno — mismo cálculo que el cierre desde el panel administrativo.
+  // Modo Offline — Fase 3: pendienteSyncEfectivo/Transferencia son ventas
+  // encoladas de este turno que el servidor todavía no reconoce — informativo,
+  // nunca se suma al esperado (ver useArqueoCaja.js).
   const { totals: arqueo, loading: arqueoLoading,
-          refetch: refetchArqueo }                     = useArqueoCaja();
+          refetch: refetchArqueo,
+          pendienteSyncEfectivo, pendienteSyncTransferencia }  = useArqueoCaja();
   // Punto de venta del POS — SOLO LECTURA. Se configura únicamente desde
   // Configuración → Facturación (admin). Acá se muestra para que el cajero
   // pueda avisar si está emitiendo por el PdV equivocado. react-query dedupe
   // esta lectura con la que hace useConfirmarVenta (misma queryKey).
   const { afipConfig: afipPos }                        = useAfipConfig('pos');
   const pdvPos                                         = afipPos?.punto_venta ?? null;
-  // Modo Offline — Fase 1 (mig.309/310 ya soportan reintentos idempotentes del
-  // lado del backend; esto sólo avisa, todavía no encola nada offline).
+  // Modo Offline — Fase 1: sólo avisa. Fase 3: dispara el motor de
+  // sincronización apenas vuelve la conexión (ver useSyncEngine más abajo).
   const isOnline                                       = useOnlineStatus();
+  // Modo Offline — Fase 3: post-proceso compartido (asiento contable +
+  // encolado a ARCA) que useSyncEngine corre tras sincronizar una venta que
+  // se había encolado offline — misma función que usa el camino online
+  // dentro de useConfirmarVenta, sin duplicar la lógica.
+  const { finalizarVentaPosterior, puntoVentaId }      = useFinalizarVentaPosterior();
+  const { sincronizarAhora }                           = useSyncEngine({
+    empresaId: user?.empresa_id,
+    isOnline,
+    puntoVentaId,
+    onVentaSincronizada: finalizarVentaPosterior,
+  });
+  // Badge "N sin sincronizar" en la topbar — oculto si no hay nada pendiente.
+  const { cantidadPendiente }                          = useVentaOfflineQueue(user?.empresa_id);
+  const huboOfflineRef                                 = useRef(false);
+
+  // En cuanto la cola de pendientes se vacía (todo sincronizado), refresca la
+  // sesión de caja — si la apertura también estaba encolada, esto reemplaza
+  // la sesión "local" (_pendingSync) por la real ya sincronizada, sin
+  // esperar los hasta 30s del polling periódico de CajaContext.
+  useEffect(() => {
+    if (cantidadPendiente > 0) huboOfflineRef.current = true;
+    if (cantidadPendiente === 0 && huboOfflineRef.current) {
+      huboOfflineRef.current = false;
+      refreshSession?.();
+    }
+  }, [cantidadPendiente, refreshSession]);
 
   const [carrito, setCarrito]       = useState([]);
   const [logoUrl, setLogoUrl]       = useState('');
@@ -127,9 +162,13 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
       });
   }, [user?.empresa_id, isOnline]);
 
-  // OFERTAS — llamar al RPC cuando cambia el carrito o medio de pago
+  // OFERTAS — llamar al RPC cuando cambia el carrito o medio de pago.
+  // Modo Offline — Fase 3: el motor de ofertas depende 100% de la red
+  // (calcular_ofertas_carrito). Sin conexión no se intenta (evita una llamada
+  // condenada a fallar) y se avisa explícitamente en la UI — nunca se vende
+  // en silencio sin el descuento que hubiera aplicado online.
   const calcularOfertas = useCallback(async (carritoActual, medioPago) => {
-    if (!carritoActual.length || !user?.empresa_id) {
+    if (!carritoActual.length || !user?.empresa_id || !isOnline) {
       setOfertasCarrito({});
       return;
     }
@@ -153,7 +192,7 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
       data.forEach(r => { if (r.oferta_id) map[r.producto_id] = r; });
       setOfertasCarrito(map);
     }
-  }, [user?.empresa_id]);
+  }, [user?.empresa_id, isOnline]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -318,17 +357,22 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
           </span>
         )}
 
-        {/* Sin conexión — Fase 1 del modo offline: sólo aviso, no bloquea nada
-            todavía (eso llega cuando se encole la venta offline en una fase
-            posterior). Oculto mientras hay conexión, para no sumar ruido. */}
+        {/* Sin conexión — Fase 1. Desde la Fase 3, Efectivo/Transferencia
+            siguen cobrándose offline (se encolan) — este badge es sólo el
+            aviso de conectividad; el estado de la cola lo muestra
+            SyncStatusPanel, al lado. */}
         {!isOnline && (
           <span
-            title="Sin conexión a internet. Por ahora esto es solo un aviso — cobrar todavía necesita conexión."
+            title="Sin conexión a internet. Efectivo y Transferencia se siguen cobrando (se guardan y sincronizan solos); Tarjeta/QR/Cuenta Corriente quedan deshabilitados."
             className="text-2xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 flex items-center gap-1"
           >
             <WifiOff className="w-3 h-3" /> Sin conexión
           </span>
         )}
+
+        {/* Modo Offline — Fase 3: ventas/aperturas de caja esperando conexión
+            o en conflicto. Oculto si no hay nada pendiente. */}
+        <SyncStatusPanel empresaId={user?.empresa_id} onSincronizarAhora={sincronizarAhora} />
 
         {/* Punto de venta — informativo, no editable desde el POS */}
         {pdvPos && (
@@ -509,6 +553,16 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
                       * Otros medios (tarjeta/transf.): ${arqueo.otrosIngresos.toLocaleString('es-AR', { minimumFractionDigits: 2 })} — no cuentan para el efectivo
                     </p>
                   )}
+                  {/* Modo Offline — Fase 3: ventas encoladas de este turno que
+                      el servidor todavía no reconoce — no están en el
+                      "esperado" de arriba. En la práctica el cierre ya está
+                      bloqueado mientras exista esta cola (ver CajaContext). */}
+                  {(pendienteSyncEfectivo > 0 || pendienteSyncTransferencia > 0) && (
+                    <p className="text-2xs text-amber-600 dark:text-amber-400 pt-1 border-t border-dashed border-kx-border">
+                      ⚠ Sin sincronizar todavía — Efectivo: ${pendienteSyncEfectivo.toLocaleString('es-AR', { minimumFractionDigits: 2 })},
+                      {' '}Transferencia: ${pendienteSyncTransferencia.toLocaleString('es-AR', { minimumFractionDigits: 2 })}. No está en el esperado de arriba.
+                    </p>
+                  )}
                 </div>
               )
             )}
@@ -612,6 +666,13 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
               Comprobante {ventaExitosa?.comprobante?.numero_venta} generado correctamente.
             </DialogDescription>
           </DialogHeader>
+
+          {/* Modo Offline — Fase 3: aviso de que este número es provisorio */}
+          {ventaExitosa?.comprobante?._offline && (
+            <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/15 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+              Guardada sin conexión — el número es provisorio, se sincroniza sola en cuanto vuelva internet.
+            </div>
+          )}
 
           {ventaExitosa && (
             <div className="space-y-3 py-2">

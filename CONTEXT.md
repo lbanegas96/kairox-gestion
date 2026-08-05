@@ -1,26 +1,36 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-05 (Nadia/Claude — Fase 2 del Modo Offline cerrada: snapshot local con Dexie)
+**Última actualización:** 2026-08-05 (Nadia/Claude — Modo Offline del POS: las 4 fases hechas)
 
 ---
 
 # 👉 EMPEZÁ POR ACÁ (Luciano)
 
-**Modo Offline del POS — Fase 2 cerrada. Falta la Fase 3 (cola de ventas + sync).**
+**Modo Offline del POS — las 4 fases del plan están hechas y con tests en verde.**
+Todavía faltan verificaciones que sólo se pueden hacer con dispositivos/red reales — ver
+la lista al final de esta sección antes de dar por "100% probado" el feature.
 
 - ✅ **Fase 0** (backend) — idempotencia en `crear_venta` + `abrir_caja_sesion`, mig.309/310.
 - ✅ **Fase 1** (Nadia, 05/08) — PWA instalable + detección de conectividad.
 - ✅ **Fase 2** (Nadia, 05/08) — snapshot local (Dexie) de productos/clientes/formas de
-  pago/centros de costo/datos de empresa. Ver sección abajo con el detalle completo.
-- ⬜ **Fase 3** — cola de ventas offline (Efectivo/Transferencia) + motor de sincronización.
-  Es la fase que realmente permite cobrar sin conexión — hasta acá sólo se puede **navegar**
-  el catálogo offline, no vender. Detallada en `PLAN_MODO_OFFLINE_POS.md`.
+  pago/centros de costo/datos de empresa.
+- ✅ **Fase 3** (Nadia, 05/08) — cola de ventas offline (Efectivo/Transferencia) + motor de
+  sincronización. **Ya se puede cobrar sin conexión de verdad**, no sólo navegar el catálogo.
+  Ver sección detallada más abajo.
 
 **Pendiente detectado en la Fase 1, no bloqueante pero anotado para no perderlo:** el plan
 original pedía que `useOnlineStatus` sumara un "ping activo liviano" además de
 `navigator.onLine`, porque ese último da falso positivo con wifi conectado a un router sin
-salida real a internet (el cajero vería "conectado" y el buscador intentaría ir a Supabase en
-vez de caer al snapshot, con la demora de un timeout de red en el medio). No se implementó en
-la Fase 1 ni se agregó ahora en la Fase 2 — queda como mejora a sumar antes o durante la Fase 3.
+salida real a internet. Sigue sin implementarse — con la Fase 3 ya en producción, este gap
+ahora importa más: si `navigator.onLine` miente (dice "conectado" sin salida real), el POS va
+a intentar la RPC online, esperar un timeout de red, y recién ahí fallar — en vez de encolar
+la venta al toque. No bloquea el uso, pero es la mejora más valiosa a sumar después.
+
+**Lo que NO se pudo verificar desde este entorno de desarrollo (ver detalle en la sección de
+la Fase 3) — necesita que alguien lo pruebe con dispositivos/red reales antes de confiar el
+100% en el feature:**
+1. Carrera de stock con 2 dispositivos offline vendiendo el mismo último ítem.
+2. JWT viejo (1+ hora offline) reconectando, sin pedir re-login.
+3. Red real degradada (throttling/adaptador desconectado), no sólo `navigator.onLine` emulado.
 
 ---
 
@@ -165,6 +175,116 @@ vulnerabilidades nuevas** — sigue en 13 (6 moderate, 5 high, 2 critical), toda
   Fase 1 — no se ingresan credenciales por política). Se abrió igual el preview sin login para
   confirmar que la app carga sin errores de consola con las nuevas dependencias (Dexie, etc.)
   antes de la pantalla de login — 0 errores.
+
+## ✅ Modo Offline del POS — Fase 3 (cola de ventas + sincronización) — YA SE PUEDE COBRAR OFFLINE
+
+Última fase del plan (`PLAN_MODO_OFFLINE_POS.md`). A diferencia de las Fases 1/2 (que sólo
+avisaban/permitían navegar), ésta es la que de verdad habilita cobrar sin conexión —
+**Efectivo y Transferencia únicamente** (por `tipo_instrumento`, mig.214 — Tarjeta/QR
+MercadoPago/Cuenta Corriente necesitan hablar con un tercero en el momento y quedan
+deshabilitados con tooltip "Necesita conexión a internet").
+
+Es la fase de mayor riesgo real de todo el feature: toca el camino que genera cada venta y
+mueve stock/caja. El diseño mantiene el camino **online exactamente igual que antes** (mismas
+RPC, mismo orden) y agrega el camino offline como una rama nueva — verificado con tests que
+comparan explícitamente que el camino online no cambió de comportamiento.
+
+**Datos locales nuevos (`offlineDb.js` → `version(2)`):**
+- `ventasPendientes` — cada venta encolada: `client_uuid` (dedupe real), `numero_provisorio`
+  (etiqueta tipo `OFFLINE-123456`, sólo visual — el número fiscal real recién se asigna al
+  sincronizar, porque `obtener_proximo_numero` necesita red), `payload` (los mismos `p_*` que
+  siempre recibió `crear_venta`, menos `p_numero_venta`), `itemsSnapshot`, `cliente_condicion_iva`
+  (para el post-proceso de AFIP), `caja_sesion_id`/`caja_sesion_client_uuid` (según si la sesión
+  de caja ya tenía id real o también está encolada), y `estado`: `pendiente` → `sincronizada` |
+  `conflicto`.
+- `cajaSesionesPendientes` — mismo patrón para una apertura de caja hecha sin conexión.
+- Nuevo `medioPagoDisponibleOffline(nombre, formasPago)` — decide por `tipo_instrumento`
+  (`efectivo`/`transferencia` = sí, todo lo demás no), **no por el nombre** de la forma de pago
+  (que cada empresa puede editar). 'Cuenta Corriente' no tiene fila en `formas_pago` (es una
+  modalidad de venta a crédito, no un instrumento) y siempre está bloqueada.
+
+**`useVentaOfflineQueue.js`** — envoltorio reactivo (`dexie-react-hooks`) sobre la cola, usado
+por el badge de la topbar y por `useArqueoCaja`.
+
+**`useSyncEngine.js`** — corre apenas hay conexión (al montar si ya arranca online, o en la
+transición offline→online), con un lock (`isSyncing`) para no correr dos veces en paralelo:
+1. Sincroniza `cajaSesionesPendientes` primero (viejo→nuevo) vía `abrir_caja_sesion` — antes que
+   las ventas, porque una venta encolada puede depender de una sesión que todavía no tenía id
+   real. Si el servidor devuelve `conflict:true` (otra caja ya abrió), esa apertura queda marcada
+   para resolución manual — **no** tiene un "anular" seguro (ver limitación abajo).
+2. Sincroniza `ventasPendientes` (viejo→nuevo — importa para la numeración fiscal correlativa),
+   resolviendo `caja_sesion_id` real si dependía de una apertura recién sincronizada **o de una
+   sincronizada en una corrida anterior** (reconexión intermitente — verificado con test
+   específico). Llama `obtener_proximo_numero` recién acá (ya hay red) y después `crear_venta`
+   con el `client_uuid`.
+   - Éxito → guarda el `numero_venta`/`comprobante_id` reales, corre
+     `finalizarVentaPosterior` (asiento contable + encolado a ARCA).
+   - **Guard importante**: si el resultado es `duplicate:true` (la venta ya se había
+     sincronizado en un intento anterior y sólo faltaba marcarla local), **no** se vuelve a
+     llamar `finalizarVentaPosterior` — evita un asiento contable duplicado en un reintento.
+   - Error (ej. stock insuficiente re-validado por el servidor) → esa venta puntual queda
+     `conflicto` y **la cola sigue con las siguientes**, no se frena entera.
+
+**Refactor en `useConfirmarVenta.js`**: el post-proceso de una venta exitosa (asiento contable +
+encolado a ARCA) se sacó a un hook propio, **`useFinalizarVentaPosterior.js`**, para que lo
+llamen tanto el camino online (sin cambios) como `useSyncEngine` después de sincronizar una
+venta offline — sin duplicar esa lógica en dos lugares. Rama nueva en `confirmar()`: si no hay
+conexión y todos los pagos son Efectivo/Transferencia, encola en vez de llamar al servidor,
+decrementa el stock del snapshot local (Fase 2) de forma optimista (sólo para que el mismo
+dispositivo no se sobre-venda a sí mismo entre varias ventas encoladas — la validación real es
+la del servidor al sincronizar), y devuelve un comprobante con `numero_venta` provisorio +
+`_offline: true`.
+
+**`CajaContext.jsx`**: `openSession` ahora usa la RPC `abrir_caja_sesion` (mig.310) en el camino
+online — antes hacía un INSERT directo (pendiente señalado desde la Fase 0). Sin conexión,
+encola la apertura y arma una sesión "local" (`_pendingSync: true`, sin `id` real, con
+`client_uuid`) contra la que ya se puede vender. `fetchCurrentSession` recupera esa sesión
+pendiente desde Dexie si se recarga la página offline a mitad de turno (si no, se "perdería" la
+caja abierta y el cajero terminaría abriendo una segunda por error). `closeSession` se bloquea
+con un toast si hay ventas o aperturas sin sincronizar.
+
+**UI**: `PanelCarrito.jsx` deshabilita Tarjeta/QR/CC offline con tooltip (atajo `Alt+1..4`
+respeta el mismo guard); `SyncStatusPanel.jsx` (badge "N sin sincronizar" en la topbar, oculto
+si no hay nada pendiente) + `SyncConflictModal.jsx` (detalle, botón "Reintentar ahora", "Anular
+venta" en conflictos — revierte sólo el stock local, la venta nunca tocó stock real);
+`TicketPrint.jsx` muestra "PROVISORIO — pendiente de sincronizar"; el modal de éxito post-venta
+también avisa cuando el comprobante es offline; `useArqueoCaja.js` suma una línea informativa
+(`pendienteSyncEfectivo`/`Transferencia`) separada del `esperado` (que sigue siendo 100%
+verdad-servidor).
+
+**Limitación conocida, no resuelta a propósito (edge case raro):** si la apertura de caja
+offline de un dispositivo entra en conflicto con la de otro (ambos abrieron la misma caja
+física casi al mismo tiempo), no hay un "anular" seguro para esa apertura ni para las ventas que
+dependan de ella — quedan pendientes de resolución manual. El propio plan marca las carreras
+multi-dispositivo como algo que necesita probarse con hardware real, no simulable acá.
+
+**Probado (automatizado, Vitest + mocks de Supabase):**
+- 24 tests nuevos en `offlineDb.test.js` (cola, `medioPagoDisponibleOffline`, stock local).
+- `useVentaOfflineQueue.test.js` (5), `useSyncEngine.test.js` (11 — éxito simple, `duplicate`
+  no duplica el asiento, conflicto no frena la cola, orden cronológico, apertura antes que
+  ventas, apertura sincronizada en una corrida anterior resuelve una venta nueva, apertura en
+  conflicto no vende, lock anti-concurrencia), `useConfirmarVenta.test.js` (9 — camino online
+  intacto + rama offline), `useFinalizarVentaPosterior.test.js` (6), `CajaContext.test.jsx` (7),
+  `PanelCarrito.test.jsx` (5 — botones deshabilitados offline), `SyncStatusPanel.test.jsx` (5),
+  `TicketPrint.test.jsx` (3), `useArqueoCaja.test.jsx` (5).
+- Suite completa: **117/117 tests en verde** (43 previos de Fase 1/2 + 74 nuevos).
+- `npx eslint`: 0 errores (sólo warnings preexistentes de `react/prop-types`).
+- `npx vite build`: ✓ (ver resultado exacto al pie de esta sección).
+- Nota técnica: se agregó `esbuild: { jsx: 'automatic' }` a `vitest.config.js` — sin eso,
+  cualquier test que renderice un componente `.jsx` directamente (no sólo un hook) fallaba con
+  "React is not defined" (ese archivo no usa el plugin de React que sí tiene `vite.config.js`).
+
+**Lo que NO se pudo probar desde este entorno (honesto, no se va a fingir) — son justo los
+puntos que el propio plan marca como los más exigentes de verificar:**
+1. **Carrera de stock con 2 dispositivos offline** vendiendo el mismo último ítem — necesita 2
+   sesiones reales contra la base real, no simulable con mocks.
+2. **JWT viejo (1+ hora offline) reconectando** sin pedir re-login — no se puede simular dejar
+   una sesión colgada una hora real en este entorno.
+3. **Red real degradada** (throttling, desconectar el adaptador físico) — el entorno sólo puede
+   emular `navigator.onLine`, no una red real intermitente.
+
+Estos tres quedan pendientes de que Nadia/Luciano los prueben en vivo con el POS instalado en un
+dispositivo real antes de confiar el 100% en el feature para un día de mucho movimiento.
 
 ## ✅ Barrido final del backlog del 04-05/08 — 3 ítems cerrados
 
