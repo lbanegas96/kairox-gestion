@@ -1,41 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-05 (Nadia/Claude — Modo Offline del POS: Fase 1 (PWA + detección de conectividad) aplicada y probada)
+**Última actualización:** 2026-08-05 (Luciano/Claude — se subió el plan del Modo Offline que faltaba; Nadia puede seguir por la Fase 2)
 
 ---
 
-# 👉 EMPEZÁ POR ACÁ (Luciano)
+# 👉 EMPEZÁ POR ACÁ (Nadia)
 
-**Modo Offline del POS — parado a propósito en Fase 1, esperándote.** Nadia y Claude
-llegaron hasta acá y decidieron **no seguir sin vos**, para no inventar ni arriesgar un
-error en algo que toca ventas y stock reales:
+**Modo Offline del POS — el plan ya está en el repo, podés seguir por la Fase 2.**
 
-- ✅ **Fase 0** (vos) — idempotencia en el backend, mig.309/310.
+Nadia frenó al terminar la Fase 1 porque el plan completo (4 fases) vivía solo en un archivo
+local de la sesión de Claude que lo escribió (`.claude/plans/...`, fuera del repo — nunca se
+subió a git). Hizo bien en frenar en vez de inventar el resto. **Ya está corregido:** el plan
+completo quedó commiteado en `PLAN_MODO_OFFLINE_POS.md` (raíz del repo), actualizado con el
+estado real de las fases 0 y 1 (ya hechas y probadas).
+
+- ✅ **Fase 0** (backend) — idempotencia en `crear_venta` + `abrir_caja_sesion`, mig.309/310.
 - ✅ **Fase 1** (Nadia, 05/08) — PWA instalable + detección de conectividad. Ver sección
   abajo con el detalle completo.
-- 🛑 **Fase 2 y Fase 3 — NO arrancadas, a propósito.** Dijiste que eran 4 fases en total,
-  pero el plan completo (`.claude/plans/mutable-squishing-crown.md`) **nunca se subió al
-  repo** — es un archivo local de tu máquina, no está en ningún commit (verificado con
-  `git log --all` sobre esa ruta: no aparece).
-
-**Por qué se frenó exactamente acá:** sin ese plan, lo único que había para seguir era una
-reconstrucción lógica de qué "debería" ser la Fase 2 (algo como: cola local con IndexedDB +
-sincronización al reconectar, ya que el backend de la Fase 0 quedó preparado para eso). Pero
-es una suposición, no tu diseño real — no sabemos si contemplaste límites de qué se puede
-vender offline, cómo avisarle al cajero qué falta sincronizar, qué pasa si el stock cambió
-mientras estaba offline, u otras decisiones de producto que puede que ya hayas resuelto y
-simplemente no volvieron a quedar escritas en ningún lado accesible. Construir a ciegas sobre
-algo que mueve plata y stock real parecía más riesgo que valor.
-
-**Para retomar:** subí el archivo del plan al repo (o pegalo en este `CONTEXT.md`), o
-resumilo de nuevo acá mismo con el detalle de las 4 fases. Con eso, seguimos directo por
-Fase 2.
+- ⬜ **Fase 2** — snapshot local de productos/clientes con Dexie (navegación offline
+  read-only, todavía sin poder cobrar). **Nadia: seguí por acá**, está detallada en
+  `PLAN_MODO_OFFLINE_POS.md` con los archivos exactos a crear/tocar y cómo verificarla.
+- ⬜ **Fase 3** — cola de ventas offline + sincronización. No arrancar hasta cerrar la Fase 2.
 
 ---
 
 ## ✅ Modo Offline del POS — Fase 0 (backend, idempotencia) — mig.309/310
 
 Primera fase del plan de modo offline del POS (plan completo en
-`.claude/plans/mutable-squishing-crown.md`). El POS podrá seguir vendiendo en
+`PLAN_MODO_OFFLINE_POS.md`). El POS podrá seguir vendiendo en
 **Efectivo y Transferencia** sin internet — Tarjeta/QR MP/Cuenta Corriente quedan
 bloqueados porque necesitan hablar con un tercero (banco/MP) en el momento.
 CAEA (recién resuelto) **no** resuelve este problema — es para cuando ARCA está
