@@ -1,5 +1,49 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-05 (Luciano/Claude — mig.308 aplicada, tienda MP huérfana borrada, PdV CAEA resuelto)
+**Última actualización:** 2026-08-05 (Luciano/Claude — Modo Offline del POS: Fase 0 (idempotencia) aplicada y probada en vivo)
+
+## ✅ Modo Offline del POS — Fase 0 (backend, idempotencia) — mig.309/310
+
+Primera fase del plan de modo offline del POS (plan completo en
+`.claude/plans/mutable-squishing-crown.md`). El POS podrá seguir vendiendo en
+**Efectivo y Transferencia** sin internet — Tarjeta/QR MP/Cuenta Corriente quedan
+bloqueados porque necesitan hablar con un tercero (banco/MP) en el momento.
+CAEA (recién resuelto) **no** resuelve este problema — es para cuando ARCA está
+caído pero el servidor de KAIROX sigue con internet, un caso distinto.
+
+**mig.309** — `crear_venta` gana `p_client_uuid uuid DEFAULT NULL` (patrón
+DROP+CREATE, no `CREATE OR REPLACE`, para no repetir el overload huérfano de
+mig.264/308). Con `client_uuid`, un `pg_advisory_xact_lock` serializa reintentos
+antes de tocar stock — si ya existe una venta con ese `client_uuid`, devuelve el
+resultado existente (`duplicate:true`) sin descontar stock de nuevo. Sin
+`client_uuid` (NULL), comportamiento idéntico al de siempre — cero cambio para
+el ERP y el POS online.
+
+**mig.310** — nueva RPC `abrir_caja_sesion` (reemplaza el INSERT directo que
+hace `CajaContext.openSession`), mismo patrón de idempotencia + maneja el
+choque contra `uq_caja_sesion_abierta` (dos aperturas casi simultáneas — una
+offline, una online) devolviendo `{conflict:true, ...la sesión que ganó}` en vez
+de dejar pasar el error crudo de Postgres.
+
+Ambas funciones nuevas: `REVOKE ALL FROM PUBLIC` + `GRANT authenticated`
+explícito — una función nueva por defecto le da EXECUTE a PUBLIC (mismo agujero
+que Nadia cerró en mig.304/305 para las funciones viejas; acá se evita desde el
+origen).
+
+**Probado en vivo contra producción (Nalux), vía fetch con JWT real desde el
+navegador:**
+- `crear_venta` con `client_uuid` dos veces → 1ra `duplicate:false` (crea la
+  venta), 2da `duplicate:true` (mismo `comprobante_id`, mismo `numero_venta`) —
+  verificado en la base: 1 sola fila en `comprobantes`/`movimientos_caja`/
+  `movimientos_inventario`, stock descontado una sola vez.
+- `abrir_caja_sesion`: apertura normal → reintento con mismo `client_uuid`
+  (`duplicate:true`, mismo `sesion_id`) → apertura con `client_uuid` distinto
+  mientras la primera sigue abierta (simula 2 dispositivos) → `conflict:true`
+  con los datos de la sesión que ganó, sin error crudo.
+- Todo revertido después: 0 comprobantes con `client_uuid` remanentes, stock y
+  numeración devueltos a como estaban, sesión de prueba borrada.
+
+**Sigue: Fase 1** (PWA instalable + detección de conectividad, cero riesgo de
+datos) — todavía no arrancada.
 
 ## ✅ Barrido final del backlog del 04-05/08 — 3 ítems cerrados
 
