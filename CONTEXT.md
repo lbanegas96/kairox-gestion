@@ -1,5 +1,18 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-04 noche (Luciano/Claude — mig.308 lista, sin aplicar; limpieza del overload huérfano de crear_nota_credito)
+**Última actualización:** 2026-08-05 (Luciano/Claude — trámite del PdV CAEA en AFIP resuelto; mig.308 lista, sin aplicar)
+
+## ✅ Trámite del PdV CAEA en AFIP — RESUELTO, desbloquea la contingencia automática
+
+ARCA confirmó el alta del PdV **2** para CAEA en la empresa de pruebas "CAEA Test" (CUIT
+`20393249006`, homologación). Esto era el único bloqueante documentado en `CAEA_IMPLEMENTACION.md`
+para la contingencia automática del `arca-worker` (`intentarCaeaContingencia`, repo-only desde
+migration 225). Se corrigió `empresas.afip_pv_numero` de `1` (placeholder viejo) a `2` (el PdV real
+que AFIP asignó) para esa empresa. Detalle completo en `CAEA_IMPLEMENTACION.md`.
+
+**Sigue sin poder probarse en vivo hoy:** la ventana de solicitud de CAEA por quincena recién abre
+el **12/08** (2da quincena de agosto) — antes de esa fecha AFIP devuelve error 15008. Cuando se abra
+la ventana: 1) probar "Solicitar CAEA" manual desde `ConfiguracionSection` con la empresa CAEA Test,
+2) si funciona, desplegar la contingencia automática del `arca-worker` (repo-only hoy).
 
 ## 🟡 mig.308 escrita y commiteada, NO aplicada a prod todavía (pendiente de confirmación)
 

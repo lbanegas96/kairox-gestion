@@ -279,7 +279,24 @@ caea_registros.estado = 'activo'
 - ✅ UI en `ConfiguracionSection` → tab Facturación: `CardCAEA.jsx` — "Solicitar" e "Informar" ya implementados.
 - ✅ Uso manual desde `MonitorFacturacionAFIP.jsx` — botón "Usar CAEA" sobre un comprobante trabado (llama `usar_caea_para_comprobante`).
 - ✅ Job pg_cron para marcar CAEAs como `vencido` al pasar `fecha_hasta` — migration `207_caea_cron_vencimiento.sql`.
-- 🟡 Contingencia automática en el `arca-worker` (sin intervención humana) — código listo (migration 225 + `intentarCaeaContingencia`), **repo-only, sin desplegar**: falta el trámite de PdV tipo CAEA en AFIP + probar en homologación. Ver `CONTEXT.md`.
+- 🟡 Contingencia automática en el `arca-worker` (sin intervención humana) — código listo (migration 225 + `intentarCaeaContingencia`), **repo-only, sin desplegar**: el trámite de PdV tipo CAEA en AFIP **ya se hizo** (ver abajo) — falta desplegar y probar en homologación.
+
+### ✅ Trámite de PdV CAEA en AFIP — RESUELTO (2026-08-05)
+
+Luciano gestionó con la mesa de ayuda de ARCA (ticket "SRIplus") el alta de un Punto de Venta
+dedicado a CAEA para la empresa de pruebas **"CAEA Test"** (CUIT `20393249006`, ambiente
+homologación/WSFEV1): **PdV número 2** (el PdV 1 de esa empresa sigue siendo el de facturación
+online/CAE normal — AFIP exige que un PdV sea CAE o CAEA, nunca ambos). ARCA confirmó el alta.
+
+`empresas.afip_pv_numero` (columna dedicada a CAEA, migration 227 — deliberadamente separada de
+`puntos_venta`) estaba en `1` desde que se creó la columna — un placeholder, no el PdV real
+reservado para CAEA. Se corrigió a `2` para la empresa CAEA Test. El resto de los prerrequisitos ya
+estaban listos: `afip_usa_caea=true`, `afip_ambiente='sandbox'`, certificado+clave AFIP en Vault.
+
+**Sigue sin poder probarse hoy:** la ventana para solicitar el CAEA de una quincena recién se
+habilita el día 12 (2da quincena) o el día 27 (1ra del mes siguiente) — hoy es 05/08, faltan 7 días
+para la próxima ventana (12/08, 2da quincena de agosto). Antes de esa fecha, "Solicitar CAEA" va a
+devolver el error AFIP 15008 aunque el resto esté bien configurado.
 - ❌ Pendiente real: alerta proactiva cuando la quincena está por vencer y hay comprobantes sin informar (no existe todavía, ni UI ni job).
 
 ---
