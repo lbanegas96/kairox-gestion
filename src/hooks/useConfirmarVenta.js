@@ -280,6 +280,12 @@ export function useConfirmarVenta(tcParalelo, formasPago = []) {
 
       if (rpcError) throw rpcError;
 
+      // Fidelización por puntos (Fase 2) — crear_venta ya devuelve puntos_ganados
+      // desde la Fase 0 (mig.312); acá sólo se propaga para que TicketPrint y el
+      // toast lo puedan mostrar. Sigue en 0 si la empresa no usa fidelización o
+      // la venta no tiene cliente asociado — mismo criterio que ya aplica el RPC.
+      const puntosGanados = rpcResult.puntos_ganados ?? 0;
+
       const comprobante = {
         id:              rpcResult.comprobante_id,
         numero_venta:    rpcResult.numero_venta,
@@ -294,6 +300,7 @@ export function useConfirmarVenta(tcParalelo, formasPago = []) {
         // (PdV interno) — antes el ticket asumía "pendiente" siempre que la
         // empresa facturara electrónicamente, aunque este PdV puntual no envíe.
         cae_estado:      afipActivo ? 'pendiente' : 'no_aplica',
+        puntos_ganados:  puntosGanados,
       };
 
       finalizarVentaPosterior({
@@ -302,7 +309,12 @@ export function useConfirmarVenta(tcParalelo, formasPago = []) {
         centroCostoId, isCC,
       });
 
-      toast({ title: '¡Venta Exitosa!', description: `Comprobante ${saleNumber} generado.` });
+      toast({
+        title: '¡Venta Exitosa!',
+        description: puntosGanados > 0
+          ? `Comprobante ${saleNumber} generado. +${puntosGanados} puntos para ${selectedClient?.nombre}.`
+          : `Comprobante ${saleNumber} generado.`,
+      });
       setLastComprobante(comprobante);
       return comprobante;
     } catch (err) {

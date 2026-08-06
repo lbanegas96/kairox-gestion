@@ -205,6 +205,16 @@ function TicketPrint({ venta, items = [], empresa = {}, formato = '80mm', oferta
           </div>
         </div>
 
+        {/* Fidelización por puntos (Fase 2) — sólo si esta venta sumó puntos */}
+        {venta.puntos_ganados > 0 && (
+          <>
+            <Divider is80={is80} />
+            <div className="text-center font-bold">
+              ¡Ganaste {venta.puntos_ganados} puntos!
+            </div>
+          </>
+        )}
+
         {/* CAE */}
         {showCAE && (
           <>

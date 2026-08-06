@@ -27,3 +27,21 @@ describe('TicketPrint — Fase 3 (venta offline)', () => {
     expect(screen.queryByText(/CAE pendiente/)).toBeNull();
   });
 });
+
+// Fidelización por puntos — Fase 2: el ticket avisa cuando la venta sumó puntos.
+describe('TicketPrint — Fidelización por puntos (Fase 2)', () => {
+  it('venta con puntos_ganados > 0: muestra el banner', () => {
+    render(<TicketPrint venta={{ ...VENTA_BASE, puntos_ganados: 5 }} items={[]} empresa={{}} />);
+    expect(screen.getByText('¡Ganaste 5 puntos!')).toBeTruthy();
+  });
+
+  it('venta sin cliente / sin fidelización (puntos_ganados: 0): no muestra nada', () => {
+    render(<TicketPrint venta={{ ...VENTA_BASE, puntos_ganados: 0 }} items={[]} empresa={{}} />);
+    expect(screen.queryByText(/¡Ganaste/)).toBeNull();
+  });
+
+  it('venta sin el campo puntos_ganados (callers viejos): no rompe ni muestra nada', () => {
+    render(<TicketPrint venta={VENTA_BASE} items={[]} empresa={{}} />);
+    expect(screen.queryByText(/¡Ganaste/)).toBeNull();
+  });
+});

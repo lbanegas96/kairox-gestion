@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Eye, X, CreditCard, Receipt, AlertCircle } from 'lucide-react';
+import { Eye, X, CreditCard, Receipt, AlertCircle, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -21,10 +21,12 @@ function ClienteDrillDown({ cliente }) {
     setLoading(true);
     try {
       // Saldo y límite vienen de `clientes` (no hay tabla cuenta_corriente_clientes).
-      const [{ data: cli }, { data: ventas }] = await Promise.all([
+      // saldo_puntos también vive en `clientes` (mig.312) — se lee siempre, el
+      // toggle usa_fidelizacion de `empresas` decide si el bloque se muestra.
+      const [{ data: cli }, { data: ventas }, { data: emp }] = await Promise.all([
         supabase
           .from('clientes')
-          .select('saldo_actual, limite_credito')
+          .select('saldo_actual, limite_credito, saldo_puntos')
           .eq('empresa_id', user.empresa_id)
           .eq('id', cliente.id)
           .single(),
@@ -36,11 +38,17 @@ function ClienteDrillDown({ cliente }) {
           .eq('tipo', 'venta')
           .order('fecha', { ascending: false })
           .limit(3),
+        supabase
+          .from('empresas')
+          .select('usa_fidelizacion')
+          .eq('id', user.empresa_id)
+          .single(),
       ]);
       const cc = cli ? { saldo: cli.saldo_actual, limite_credito: cli.limite_credito } : null;
-      setInfo({ cc, ventas: ventas || [] });
+      const puntos = emp?.usa_fidelizacion ? { saldo: cli?.saldo_puntos ?? 0 } : null;
+      setInfo({ cc, puntos, ventas: ventas || [] });
     } catch {
-      setInfo({ cc: null, ventas: [] });
+      setInfo({ cc: null, puntos: null, ventas: [] });
     } finally {
       setLoading(false);
     }
@@ -110,6 +118,19 @@ function ClienteDrillDown({ cliente }) {
                     </div>
                   )}
                 </div>
+
+                {/* Saldo de Puntos (mig.312) — sólo si la empresa usa fidelización */}
+                {info?.puntos && (
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-kx-surface-2">
+                    <Gift className="h-4 w-4 text-kx-text-3 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-kx-text-3">Saldo de Puntos</p>
+                      <p className="font-mono font-semibold text-sm text-[rgb(var(--kx-green))]">
+                        {info.puntos.saldo.toLocaleString('es-AR')} pts
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Últimas compras */}
                 {info?.ventas?.length > 0 ? (

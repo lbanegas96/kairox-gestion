@@ -610,6 +610,9 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
 
       if (rpcError) throw rpcError;
 
+      // Fidelización por puntos (Fase 2) — mismo criterio que useConfirmarVenta.js (POS).
+      const puntosGanados = rpcResult.puntos_ganados ?? 0;
+
       // Objeto comprobante para el modal de impresión
       const comprobante = {
         id:                rpcResult.comprobante_id,
@@ -620,6 +623,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         tipo_cambio_tasa:  tipoCambioTasa,
         forma_pago:        formaPago,
         cliente_nombre:    selectedClient?.nombre ?? 'Consumidor Final',
+        puntos_ganados:    puntosGanados,
       };
 
       // Asiento contable — fire & forget, FUERA de la transacción (no crítico)
@@ -671,7 +675,12 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         if (pvErr) console.warn('[PdV/AFIP queue]', pvErr.message);
       }
 
-      toast({ title: "¡Venta Exitosa!", description: `Comprobante ${saleNumber} generado.` });
+      toast({
+        title: "¡Venta Exitosa!",
+        description: puntosGanados > 0
+          ? `Comprobante ${saleNumber} generado. +${puntosGanados} puntos para ${selectedClient?.nombre}.`
+          : `Comprobante ${saleNumber} generado.`,
+      });
       setLastComprobante(comprobante);
       setLastItems(cart.map(i => ({
         producto_nombre: i.nombre, cantidad: i.cantidad, precio_unitario: i.precio_venta, subtotal: i.precio_venta * i.cantidad,

@@ -119,6 +119,40 @@ describe('useConfirmarVenta', () => {
     });
   });
 
+  describe('fidelización por puntos (Fase 2)', () => {
+    it('propaga puntos_ganados del RPC al comprobante devuelto', async () => {
+      mockRpc.mockImplementation((fn) => {
+        if (fn === 'obtener_proximo_numero') return Promise.resolve({ data: '0004', error: null });
+        if (fn === 'crear_venta') return Promise.resolve({
+          data: { comprobante_id: 'c4', numero_venta: '0004', puntos_ganados: 2 }, error: null,
+        });
+        return Promise.resolve({ data: null, error: null });
+      });
+      const { result } = renderHook(() => useConfirmarVenta(null, []));
+      let venta;
+      await act(async () => {
+        venta = await result.current.confirmar({
+          cart: CART, selectedClient: { id: 'cli-1', nombre: 'Juan Pérez' }, pagos: PAGOS_EFECTIVO,
+        });
+      });
+      expect(venta.puntos_ganados).toBe(2);
+    });
+
+    it('sin fidelización activa (RPC no manda el campo) queda en 0, no undefined', async () => {
+      mockRpc.mockImplementation((fn) => {
+        if (fn === 'obtener_proximo_numero') return Promise.resolve({ data: '0005', error: null });
+        if (fn === 'crear_venta') return Promise.resolve({ data: { comprobante_id: 'c5', numero_venta: '0005' }, error: null });
+        return Promise.resolve({ data: null, error: null });
+      });
+      const { result } = renderHook(() => useConfirmarVenta(null, []));
+      let venta;
+      await act(async () => {
+        venta = await result.current.confirmar({ cart: CART, selectedClient: null, pagos: PAGOS_EFECTIVO });
+      });
+      expect(venta.puntos_ganados).toBe(0);
+    });
+  });
+
   describe('camino offline (Fase 3)', () => {
     it('encola la venta en vez de llamar al servidor — ninguna RPC de red', async () => {
       mockIsOnline = false;

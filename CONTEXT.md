@@ -1,7 +1,7 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-08-07 (Nadia — Modo Offline y Multi-caja cerrados de punta a punta
-en producción; Fidelización por Puntos con Fase 0 (backend, mig.312) y Fase 1 (configuración en
-Finanzas) ya hechas)
+en producción; Fidelización por Puntos con Fase 0 (backend, mig.312), Fase 1 (configuración en
+Finanzas) y Fase 2 (ganar puntos, visible) ya hechas)
 
 ---
 
@@ -34,8 +34,17 @@ empezaron a acumular puntos de verdad** (auditable en `movimientos_puntos`), aun
 hay pantalla que lo muestre — eso es lo único que falta de la Fase 2. Canjear sí es un gate real
 de la Fase 3 (ningún caller de `crear_venta` hoy manda `p_puntos_canjeados`, así que nadie puede
 canjear todavía). Avisado esto, **Nadia decidió dejarlo activo** — los puntos siguen sumando en
-segundo plano, listos para mostrarse apenas esté la Fase 2. Sigue la Fase 2 recién con el próximo
-"dale" — detalle completo en `PLAN_FIDELIZACION_PUNTOS.md`.
+segundo plano.
+
+**Fase 2 (Ganar puntos, visible) también ya está hecha (07/08).** Un solo componente cubre los
+dos circuitos de venta: `ClienteDrillDown.jsx` (el popover "ojo" del selector de cliente,
+compartido por POS y ERP) ahora muestra "Saldo de Puntos" junto al de Cuenta Corriente, sólo si
+la empresa tiene fidelización activa. Además, cada venta que suma puntos ahora avisa en el
+momento: toast "+N puntos" y banner en el ticket del POS (`TicketPrint.jsx`) y en el PDF del ERP
+(`TicketPDF.jsx`). Sin cambios de backend — sólo lee `puntos_ganados`, que `crear_venta` ya
+devolvía desde la Fase 0. 5 tests nuevos, suite completa 140/140 en verde, `eslint`/`vite build`
+en 0 errores. Sigue la **Fase 3 (Canjear puntos — input en el checkout, descuento aplicado)**
+recién con el próximo "dale" — detalle completo en `PLAN_FIDELIZACION_PUNTOS.md`.
 
 **✅ Nadia corrió el plan de pruebas hoy (07/08), en `kairox-gestion-chi.vercel.app` — resultado
 de cada bloque:**
@@ -135,17 +144,16 @@ varias veces, y multi-caja con sus propios ojos.
 
 Plan de pruebas usado hoy, con el detalle completo de cada bloque: `PLAN_PRUEBAS_NADIA_2026-08-06.md`.
 
-### 📌 En curso: Fidelización por puntos — Fase 0 y Fase 1 hechas y probadas, sigue Fase 2
+### 📌 En curso: Fidelización por puntos — Fases 0, 1 y 2 hechas, sigue Fase 3
 
 Investigación + plan de 4 fases ya armados (`INVESTIGACION_FIDELIZACION_PUNTOS.md` /
 `PLAN_FIDELIZACION_PUNTOS.md`), decisiones de negocio tomadas por Nadia, **Fase 0 (backend)
-aplicada y probada en vivo (mig.312)** y **Fase 1 (Configuración por empresa: toggle + ratios en
-Finanzas) construida y probada en vivo por Nadia hoy (07/08)** — activó, cargó 100/1, guardó,
-recargó, quedó igual. Está **activa en Nalux ahora mismo**: los clientes ya están acumulando
-puntos reales en segundo plano desde que se guardó (aunque todavía no hay pantalla que lo
-muestre — ver el aviso completo al principio de esta sección). Sigue la **Fase 2 (Ganar puntos
-visible — `ClienteSelector` muestra el saldo que ya se está acumulando)**, recién con el próximo
-"dale" — nunca se arranca una fase sin cerrar la anterior.
+aplicada y probada en vivo (mig.312)**, **Fase 1 (Configuración: toggle + ratios en Finanzas)
+probada en vivo por Nadia** (activó, cargó 100/1, guardó, recargó, quedó igual — activa en Nalux
+ahora mismo) y **Fase 2 (Ganar puntos, visible) construida hoy (07/08)** — el saldo ahora se ve
+en el drill-down del cliente (POS y ERP) y cada venta avisa "+N puntos" en el momento. Sigue la
+**Fase 3 (Canjear puntos — input en el checkout, descuento aplicado, saldo se descuenta)**,
+recién con el próximo "dale" — nunca se arranca una fase sin cerrar la anterior.
 
 ---
 

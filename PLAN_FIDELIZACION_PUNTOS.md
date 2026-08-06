@@ -187,3 +187,34 @@ siguientes:
 con los ratios 100/1 — los puntos de los clientes reales ya empiezan a acumularse desde ahora
 (auditable en `movimientos_puntos`, reversible), listos para mostrarse en cuanto la Fase 2 esté
 lista, sin perder nada del camino ya recorrido.
+
+## ✅ Fase 2 — HECHA (07/08): Ganar puntos, visible
+
+Sin migración nueva — ganar puntos ya corría desde la Fase 0; esta fase sólo lo hace *visible* y
+le da feedback al cajero en el momento. Un solo lugar de datos (`ClienteDrillDown.jsx`) cubre los
+dos circuitos de venta, tal como preveía el diseño original:
+
+- **`ClienteDrillDown.jsx`** (el popover "ojo" que ya usa `ClienteSelector` — compartido por
+  `PanelCarrito.jsx` del POS y `NuevaVentaModal.jsx` del ERP): nuevo bloque "Saldo de Puntos"
+  junto al de "Saldo Cta. Corriente" que ya existía, con el mismo estilo visual. Sólo se muestra
+  si `empresas.usa_fidelizacion` es `true` — se agregó una tercera consulta en el mismo
+  `Promise.all` que ya traía saldo/límite y últimas compras.
+- **`useConfirmarVenta.js`** (POS): `crear_venta` ya devolvía `puntos_ganados` desde la Fase 0 —
+  ahora se propaga al objeto `comprobante` y al toast de éxito (`+N puntos para {cliente}`).
+- **`TicketPrint.jsx`** (ticket térmico del POS): banner "¡Ganaste N puntos!" cuando
+  `venta.puntos_ganados > 0` — mismo lugar donde ya avisa CAE/PROVISORIO.
+- **`NuevaVentaModal.jsx` + `TicketPDF.jsx`** (ERP, factura en PDF): mismo tratamiento — toast
+  con los puntos ganados y una línea en el PDF si corresponde.
+- Sin cambios en `crear_venta` ni en ningún otro RPC — Fase 2 es 100% frontend, sólo lee un campo
+  que el backend ya devolvía.
+
+**Verificación:** 5 tests nuevos (`ClienteDrillDown.test.jsx`, nuevo — con y sin fidelización
+activa, más una prueba de no-regresión del saldo de cta. cte.; 2 casos nuevos en
+`useConfirmarVenta.test.js`; 3 casos nuevos en `TicketPrint.test.jsx`). Suite completa:
+**140/140 en verde**. `npx eslint` sobre los 6 archivos tocados → 0 errores (sólo warnings
+preexistentes, mismo patrón que el resto del proyecto). `npx vite build` → build limpio.
+
+**Sigue la Fase 3** (Canjear puntos — input en el checkout, descuento aplicado, saldo se
+descuenta) recién con el próximo "dale". Hasta entonces los puntos siguen acumulándose y ahora
+además se ven, pero **nadie puede canjearlos todavía** — eso es exactamente lo que decide la
+Fase 3.

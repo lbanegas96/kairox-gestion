@@ -102,6 +102,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
     fontSize: 12,
   },
+  puntosGanados: {
+    textAlign: 'center',
+    fontSize: 9,
+    fontFamily: 'Helvetica-Bold',
+    color: '#15803d',
+    marginTop: 8,
+  },
   footer: {
     position: 'absolute',
     bottom: 20,
@@ -224,6 +231,11 @@ export function TicketPDF({ comprobante, items, pagos, empresa }) {
             </Text>
           </View>
         </View>
+
+        {/* Fidelización por puntos (Fase 2) — sólo si esta venta sumó puntos */}
+        {comprobante.puntos_ganados > 0 ? (
+          <Text style={styles.puntosGanados}>¡Ganaste {comprobante.puntos_ganados} puntos!</Text>
+        ) : null}
 
         {/* Pie */}
         <Text style={styles.footer}>
