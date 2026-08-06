@@ -56,7 +56,7 @@ describe('CajaContext', () => {
     mockIsOnline = true;
     // Por defecto: no hay caja ni sesión abierta del lado del servidor.
     mockFrom.mockImplementation((tabla) => {
-      if (tabla === 'cajas') return chainResolve({ data: CAJA, error: null });
+      if (tabla === 'cajas') return chainResolve({ data: [CAJA], error: null });
       if (tabla === 'caja_sesiones') return chainResolve({ data: null, error: null });
       return chainResolve({ data: null, error: null });
     });
@@ -76,7 +76,7 @@ describe('CajaContext', () => {
       return Promise.resolve({ data: null, error: null });
     });
     mockFrom.mockImplementation((tabla) => {
-      if (tabla === 'cajas') return chainResolve({ data: CAJA, error: null });
+      if (tabla === 'cajas') return chainResolve({ data: [CAJA], error: null });
       if (tabla === 'caja_sesiones') return chainResolve({ data: sesionServidor, error: null });
       return chainResolve({ data: null, error: null });
     });
@@ -142,11 +142,61 @@ describe('CajaContext', () => {
     expect(r2.current.currentSession.monto_inicial).toBe(700);
   });
 
+  describe('multi-caja', () => {
+    const CAJA_2 = { id: 'caja-2', empresa_id: EMPRESA_ID, activo: true };
+
+    it('con 2+ cajas activas y ninguna elegida en este dispositivo, expone needsCajaSelection sin auto-seleccionar', async () => {
+      mockFrom.mockImplementation((tabla) => {
+        if (tabla === 'cajas') return chainResolve({ data: [CAJA, CAJA_2], error: null });
+        return chainResolve({ data: null, error: null });
+      });
+
+      const { result } = renderHook(() => useCaja(), { wrapper });
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      expect(result.current.needsCajaSelection).toBe(true);
+      expect(result.current.activeCaja).toBeNull();
+      expect(result.current.availableCajas).toHaveLength(2);
+    });
+
+    it('selectCaja persiste la elección en localStorage y resuelve la sesión de esa caja', async () => {
+      localStorage.removeItem(`kx_caja_activa_${EMPRESA_ID}`);
+      mockFrom.mockImplementation((tabla) => {
+        if (tabla === 'cajas') return chainResolve({ data: [CAJA, CAJA_2], error: null });
+        if (tabla === 'caja_sesiones') return chainResolve({ data: null, error: null });
+        return chainResolve({ data: null, error: null });
+      });
+
+      const { result } = renderHook(() => useCaja(), { wrapper });
+      await waitFor(() => expect(result.current.needsCajaSelection).toBe(true));
+
+      act(() => { result.current.selectCaja('caja-2'); });
+
+      await waitFor(() => expect(result.current.needsCajaSelection).toBe(false));
+      expect(result.current.activeCaja.id).toBe('caja-2');
+      expect(localStorage.getItem(`kx_caja_activa_${EMPRESA_ID}`)).toBe('caja-2');
+    });
+
+    it('con una elección guardada inválida (caja desactivada/borrada), vuelve a pedir selección', async () => {
+      localStorage.setItem(`kx_caja_activa_${EMPRESA_ID}`, 'caja-inexistente');
+      mockFrom.mockImplementation((tabla) => {
+        if (tabla === 'cajas') return chainResolve({ data: [CAJA, CAJA_2], error: null });
+        return chainResolve({ data: null, error: null });
+      });
+
+      const { result } = renderHook(() => useCaja(), { wrapper });
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      expect(result.current.needsCajaSelection).toBe(true);
+      expect(result.current.activeCaja).toBeNull();
+    });
+  });
+
   describe('closeSession', () => {
     it('bloqueado si hay ventas pendientes de sincronizar', async () => {
       await encolarVenta(EMPRESA_ID, { payload: { p_total: 100 }, itemsSnapshot: [] });
       mockFrom.mockImplementation((tabla) => {
-        if (tabla === 'cajas') return chainResolve({ data: CAJA, error: null });
+        if (tabla === 'cajas') return chainResolve({ data: [CAJA], error: null });
         if (tabla === 'caja_sesiones') return chainResolve({ data: { id: 'sesion-1', estado: 'abierta' }, error: null });
         return chainResolve({ data: null, error: null });
       });
@@ -175,7 +225,7 @@ describe('CajaContext', () => {
     it('cierra normalmente cuando no hay nada pendiente', async () => {
       const mockUpdate = vi.fn().mockReturnValue({ eq: () => Promise.resolve({ error: null }) });
       mockFrom.mockImplementation((tabla) => {
-        if (tabla === 'cajas') return chainResolve({ data: CAJA, error: null });
+        if (tabla === 'cajas') return chainResolve({ data: [CAJA], error: null });
         if (tabla === 'caja_sesiones') {
           return { ...chainResolve({ data: { id: 'sesion-1', estado: 'abierta' }, error: null }), update: mockUpdate };
         }

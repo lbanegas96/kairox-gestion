@@ -138,6 +138,14 @@ const ConfiguracionSection = ({ initialTab }) => {
   });
   const [savingFormaPago, setSavingFormaPago] = useState(false);
 
+  // ── Tab 2: Cajas (multi-caja simultánea del Modo Caja) ───────────────────
+  const [cajas, setCajas] = useState([]);
+  const [loadingCajas, setLoadingCajas] = useState(true);
+  const [showCajaModal, setShowCajaModal] = useState(false);
+  const [editingCaja, setEditingCaja] = useState(null);
+  const [cajaForm, setCajaForm] = useState({ nombre: '' });
+  const [savingCaja, setSavingCaja] = useState(false);
+
   // ── Tab 2: Centros de Costo (Fase 1 del plan de 4 frentes contables) ────
   const [centrosCosto, setCentrosCosto] = useState([]);
   const [loadingCentrosCosto, setLoadingCentrosCosto] = useState(true);
@@ -804,6 +812,26 @@ const ConfiguracionSection = ({ initialTab }) => {
   };
 
   useEffect(() => { fetchCentrosCosto(); }, [user?.empresa_id]);
+
+  const fetchCajas = async () => {
+    if (!user?.empresa_id) return;
+    setLoadingCajas(true);
+    try {
+      const { data, error } = await supabase
+        .from('cajas')
+        .select('*')
+        .eq('empresa_id', user.empresa_id)
+        .order('created_at');
+      if (error) throw error;
+      setCajas(data ?? []);
+    } catch (e) {
+      console.error('[Cajas] Error al cargar:', e);
+    } finally {
+      setLoadingCajas(false);
+    }
+  };
+
+  useEffect(() => { fetchCajas(); }, [user?.empresa_id]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Tab 1 handlers
@@ -1637,6 +1665,72 @@ const ConfiguracionSection = ({ initialTab }) => {
     }
   };
 
+  // ── Handlers Cajas ────────────────────────────────────────────────────────
+  const openNuevaCaja = () => {
+    setEditingCaja(null);
+    setCajaForm({ nombre: '' });
+    setShowCajaModal(true);
+  };
+
+  const openEditarCaja = (c) => {
+    setEditingCaja(c);
+    setCajaForm({ nombre: c.nombre });
+    setShowCajaModal(true);
+  };
+
+  const toggleActivoCaja = async (id, activo) => {
+    if (!activo) {
+      // No dejar apagar por error la caja de un cajero que está trabajando
+      // en este momento — quedaría sin poder revalidar su selección.
+      const { data: sesionAbierta } = await supabase
+        .from('caja_sesiones')
+        .select('id')
+        .eq('caja_id', id)
+        .eq('estado', 'abierta')
+        .maybeSingle();
+      if (sesionAbierta) {
+        toast({
+          title: 'No se puede desactivar',
+          description: 'Esta caja tiene un turno abierto. Pedile al cajero que cierre caja primero.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+    const { error } = await supabase.from('cajas').update({ activo }).eq('id', id);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
+    }
+    fetchCajas();
+  };
+
+  const handleGuardarCaja = async () => {
+    if (!cajaForm.nombre.trim()) {
+      toast({ title: 'El nombre es obligatorio', variant: 'destructive' });
+      return;
+    }
+    setSavingCaja(true);
+    try {
+      const payload = { nombre: cajaForm.nombre.trim() };
+      if (editingCaja) {
+        const { error } = await supabase.from('cajas').update(payload).eq('id', editingCaja.id);
+        if (error) throw error;
+        toast({ title: 'Caja actualizada' });
+      } else {
+        const { error } = await supabase.from('cajas').insert({ ...payload, empresa_id: user.empresa_id });
+        if (error) throw error;
+        toast({ title: 'Caja creada' });
+      }
+      setShowCajaModal(false);
+      fetchCajas();
+    } catch (e) {
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingCaja(false);
+    }
+  };
+
   // ── Handlers Centros de Costo ────────────────────────────────────────────
   const openNuevoCentroCosto = () => {
     setEditingCentroCosto(null);
@@ -1766,6 +1860,11 @@ const ConfiguracionSection = ({ initialTab }) => {
             onNuevaFormaPago={openNuevaFormaPago}
             onEditarFormaPago={openEditarFormaPago}
             onToggleFormaPago={toggleActivoFormaPago}
+            cajas={cajas}
+            loadingCajas={loadingCajas}
+            onNuevaCaja={openNuevaCaja}
+            onEditarCaja={openEditarCaja}
+            onToggleCaja={toggleActivoCaja}
             centrosCosto={centrosCosto}
             loadingCentrosCosto={loadingCentrosCosto}
             onNuevoCentroCosto={openNuevoCentroCosto}
@@ -2192,6 +2291,35 @@ const ConfiguracionSection = ({ initialTab }) => {
             <Button variant="outline" onClick={() => setShowFormaPagoModal(false)}>Cancelar</Button>
             <Button onClick={handleGuardarFormaPago} disabled={savingFormaPago}>
               {savingFormaPago ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Guardando...</> : 'Guardar'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          MODAL — Nueva/Editar Caja (fuera del sistema de tabs)
+      ═══════════════════════════════════════════════════════════════════ */}
+      <Dialog open={showCajaModal} onOpenChange={setShowCajaModal}>
+        <DialogContent className="sm:max-w-[420px] bg-kx-surface border-kx-border">
+          <DialogHeader>
+            <DialogTitle className="text-kx-text">{editingCaja ? 'Editar' : 'Nueva'} Caja</DialogTitle>
+            <DialogDescription>Punto de cobro físico del local (mostrador, terminal).</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-kx-text">Nombre *</Label>
+              <Input
+                value={cajaForm.nombre}
+                onChange={e => setCajaForm(f => ({ ...f, nombre: e.target.value }))}
+                placeholder="Ej: Mostrador 2"
+                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end pt-2 border-t border-kx-border">
+            <Button variant="outline" onClick={() => setShowCajaModal(false)}>Cancelar</Button>
+            <Button onClick={handleGuardarCaja} disabled={savingCaja}>
+              {savingCaja ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Guardando...</> : 'Guardar'}
             </Button>
           </div>
         </DialogContent>

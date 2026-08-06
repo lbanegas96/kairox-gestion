@@ -12,12 +12,22 @@ import {
 
 const CajaContext = createContext(undefined);
 
+// Multi-caja simultánea: qué caja física usa este dispositivo/navegador se
+// guarda acá, no en el servidor — cualquier cajero puede cubrir cualquier
+// caja un día, no tiene sentido una asignación fija por usuario. Incluye el
+// empresa_id en la clave porque el mismo navegador puede loguearse a más de
+// un tenant (mismo patrón que `checklist_dismissed_${empresa_id}` en
+// ChecklistOnboarding.jsx).
+const cajaStorageKey = (empresaId) => `kx_caja_activa_${empresaId}`;
+
 export const CajaProvider = ({ children }) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const isOnline = useOnlineStatus();
 
   const [activeCaja, setActiveCaja] = useState(null);
+  const [availableCajas, setAvailableCajas] = useState([]);
+  const [needsCajaSelection, setNeedsCajaSelection] = useState(false);
   const [currentSession, setCurrentSession] = useState(null);
   const [isSessionOpen, setIsSessionOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -29,7 +39,12 @@ export const CajaProvider = ({ children }) => {
     activeCajaRef.current = activeCaja;
   }, [activeCaja]);
 
-  // Resuelve la caja activa de la empresa (usa ref para evitar re-fetches)
+  // Resuelve la caja de este dispositivo (usa ref para evitar re-fetches).
+  // Con 1 sola caja activa (caso de la inmensa mayoría de empresas hoy) se
+  // auto-selecciona igual que siempre, sin fricción nueva. Con 2+, respeta
+  // la elección guardada en este navegador si sigue siendo válida (por si
+  // esa caja fue desactivada desde Configuración); si no hay ninguna válida,
+  // no elige nada y deja que la UI muestre el selector (needsCajaSelection).
   const resolveActiveCaja = useCallback(async () => {
     if (!user?.empresa_id) return null;
     if (activeCajaRef.current) return activeCajaRef.current;
@@ -39,18 +54,67 @@ export const CajaProvider = ({ children }) => {
       .select('*')
       .eq('empresa_id', user.empresa_id)
       .eq('activo', true)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
+      .order('created_at', { ascending: true });
 
     if (error) {
-      console.error('Error fetching caja:', error);
+      console.error('Error fetching cajas:', error);
       return null;
     }
 
-    setActiveCaja(data);
-    activeCajaRef.current = data;
-    return data;
+    const cajas = data ?? [];
+    setAvailableCajas(cajas);
+
+    if (cajas.length === 0) {
+      setActiveCaja(null);
+      activeCajaRef.current = null;
+      setNeedsCajaSelection(false);
+      return null;
+    }
+
+    if (cajas.length === 1) {
+      setActiveCaja(cajas[0]);
+      activeCajaRef.current = cajas[0];
+      setNeedsCajaSelection(false);
+      return cajas[0];
+    }
+
+    let savedId = null;
+    try { savedId = localStorage.getItem(cajaStorageKey(user.empresa_id)); } catch { /* no crítico */ }
+    const saved = savedId ? cajas.find(c => c.id === savedId) : null;
+
+    if (saved) {
+      setActiveCaja(saved);
+      activeCajaRef.current = saved;
+      setNeedsCajaSelection(false);
+      return saved;
+    }
+
+    setActiveCaja(null);
+    activeCajaRef.current = null;
+    setNeedsCajaSelection(true);
+    return null;
+  }, [user?.empresa_id]);
+
+  const selectCaja = useCallback((cajaId) => {
+    const caja = availableCajas.find(c => c.id === cajaId);
+    if (!caja || !user?.empresa_id) return;
+    try { localStorage.setItem(cajaStorageKey(user.empresa_id), caja.id); } catch { /* no crítico */ }
+    setActiveCaja(caja);
+    activeCajaRef.current = caja;
+    setNeedsCajaSelection(false);
+    // eslint-disable-next-line no-use-before-define
+    fetchCurrentSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableCajas, user?.empresa_id]);
+
+  // Sólo debe invocarse sin turno abierto (esa regla la aplica quien lo
+  // llama, ModoCajaLayout.jsx — mismo criterio que openSession valida
+  // isSessionOpen puertas adentro en vez de acá).
+  const changeCaja = useCallback(() => {
+    try { localStorage.removeItem(cajaStorageKey(user?.empresa_id)); } catch { /* no crítico */ }
+    setActiveCaja(null);
+    activeCajaRef.current = null;
+    setNeedsCajaSelection(true);
   }, [user?.empresa_id]);
 
   const fetchCurrentSession = useCallback(async () => {
@@ -282,11 +346,15 @@ export const CajaProvider = ({ children }) => {
     <CajaContext.Provider value={{
       currentSession,
       activeCaja,
+      availableCajas,
+      needsCajaSelection,
       isSessionOpen,
       loading,
       refreshSession: fetchCurrentSession,
       openSession,
-      closeSession
+      closeSession,
+      selectCaja,
+      changeCaja,
     }}>
       {children}
     </CajaContext.Provider>

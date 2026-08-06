@@ -23,6 +23,7 @@ import PanelCarrito from './PanelCarrito';
 import HistorialTurnoModal from './HistorialTurnoModal';
 import TicketPrint from './TicketPrint';
 import SyncStatusPanel from './SyncStatusPanel';
+import SeleccionarCajaModal from './SeleccionarCajaModal';
 
 // Layout pantalla completa para usuarios cajeros (role='solo_caja' o modo_caja=true).
 // No tiene sidebar ni header estándar.
@@ -30,6 +31,7 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
   const { user }                                       = useAuth();
   const { isSessionOpen, currentSession, openSession,
           closeSession, refreshSession,
+          activeCaja, availableCajas, changeCaja,
           loading: cajaLoading }                        = useCaja();
   const { toast }                                      = useToast();
   // Arqueo real del turno — mismo cálculo que el cierre desde el panel administrativo.
@@ -374,6 +376,24 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
             o en conflicto. Oculto si no hay nada pendiente. */}
         <SyncStatusPanel empresaId={user?.empresa_id} onSincronizarAhora={sincronizarAhora} />
 
+        {/* Multi-caja simultánea: qué caja física usa este dispositivo. Sólo
+            visible con 2+ cajas activas — cero ruido para el caso de hoy (1
+            sola caja). No se puede cambiar con un turno abierto, hay que
+            cerrarlo primero (mismo criterio que el resto del módulo). */}
+        {activeCaja && availableCajas.length > 1 && (
+          <button
+            type="button"
+            onClick={changeCaja}
+            disabled={isSessionOpen}
+            title={isSessionOpen ? 'Cerrá el turno actual para cambiar de caja' : 'Cambiar de caja'}
+            className={`text-2xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 hidden sm:inline-flex items-center gap-1 bg-kx-surface-2 text-kx-text-2 ${
+              isSessionOpen ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-80 cursor-pointer'
+            }`}
+          >
+            <Landmark className="w-3 h-3" /> {activeCaja.nombre}
+          </button>
+        )}
+
         {/* Punto de venta — informativo, no editable desde el POS */}
         {pdvPos && (
           <span
@@ -507,6 +527,9 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
           </span>
         </button>
       )}
+
+      {/* Multi-caja simultánea: elegir con cuál trabajar en este dispositivo. */}
+      <SeleccionarCajaModal />
 
       {/* ── Modal Abrir / Cerrar Caja ───────────────────────────────────────── */}
       <Dialog open={showCaja} onOpenChange={setShowCaja}>

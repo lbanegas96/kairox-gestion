@@ -1,4 +1,4 @@
-import { TrendingUp, Loader2, CheckCircle2, Save, CreditCard, Pencil, Building2, Receipt } from 'lucide-react';
+import { TrendingUp, Loader2, CheckCircle2, Save, CreditCard, Pencil, Building2, Receipt, Landmark } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,7 @@ const TabFinanzas = ({
   onNuevaCondicion, onEditarCondicion, onToggleCondicion,
   formasPago, loadingFormasPago, cuentasBancariasLista,
   onNuevaFormaPago, onEditarFormaPago, onToggleFormaPago,
+  cajas, loadingCajas, onNuevaCaja, onEditarCaja, onToggleCaja,
   centrosCosto, loadingCentrosCosto,
   onNuevoCentroCosto, onEditarCentroCosto, onToggleCentroCosto,
   impuestosAvanzados, loadingImpuestosAv, savingImpuestosAv, onToggleImpuestosAv,
@@ -264,6 +265,46 @@ const TabFinanzas = ({
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+
+    {/* Cajas (puntos de cobro físicos) */}
+    <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Landmark className="w-5 h-5 text-kx-text-3" />
+          <h3 className="font-semibold text-kx-text">Cajas</h3>
+        </div>
+        <Button size="sm" onClick={onNuevaCaja}>+ Nueva</Button>
+      </div>
+      <p className="text-sm text-kx-text-2 mb-4">
+        Puntos de cobro físicos del local (mostrador 1, mostrador 2, etc.). Cada cajero elige con
+        cuál trabaja al entrar al Modo Caja — pueden estar todas abiertas al mismo tiempo.
+      </p>
+
+      {loadingCajas ? (
+        <div className="flex items-center gap-2 text-kx-text-3 py-4">
+          <Loader2 className="h-4 w-4 animate-spin" /> Cargando...
+        </div>
+      ) : cajas.length === 0 ? (
+        <p className="text-sm text-kx-text-3 py-4 text-center">No hay cajas cargadas.</p>
+      ) : (
+        <div className="border border-kx-border rounded-xl overflow-hidden">
+          {cajas.map(c => (
+            <div key={c.id} className="flex items-center justify-between px-4 py-2.5 border-b border-kx-border last:border-0">
+              <div className={`flex items-center gap-2 ${!c.activo ? 'opacity-40' : ''}`}>
+                <span className="text-sm font-medium text-kx-text">{c.nombre}</span>
+                {!c.activo && <Badge variant="outline" className="text-xs text-kx-text-2">Inactiva</Badge>}
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={c.activo} onCheckedChange={(v) => onToggleCaja(c.id, v)} />
+                <Button size="sm" variant="ghost" onClick={() => onEditarCaja(c)}>
+                  <Pencil className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

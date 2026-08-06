@@ -1,10 +1,22 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-06 (Claude — ping activo en `useOnlineStatus` + carrera de
-stock verificada en vivo contra producción)
+**Última actualización:** 2026-08-06 (Claude — Multi-caja simultánea: implementada, deployada y
+verificada en vivo contra producción)
 
 ---
 
 # 👉 EMPEZÁ POR ACÁ (Luciano)
+
+**✅ Nuevo: Multi-caja simultánea.** El Modo Caja ya soporta 2+ puntos de cobro físicos abiertos
+al mismo tiempo (cada cajero elige con cuál trabaja al entrar, se recuerda por dispositivo). Plan
+completo y resultado de la verificación en vivo: `PLAN_MULTI_CAJA.md`. Resumen: la base de datos
+ya soportaba esto de fábrica (índice único por caja, no por empresa) — el trabajo fue sacar el
+cuello de botella del frontend (`resolveActiveCaja` siempre traía la caja más vieja), agregar el
+selector, un badge para cambiar de caja (deshabilitado con turno abierto), un CRUD de cajas nuevo
+en Configuración → Finanzas, y cerrar un gap de seguridad menor en `abrir_caja_sesion` (mig.311,
+no validaba que la caja fuera de la empresa del caller). Probado en vivo: 2 sesiones simultáneas
+sin pisarse, conflicto manejado en la tercera, bloqueo de desactivar una caja con turno abierto,
+y el hardening de seguridad rechazando una caja de otro tenant — todo revertido después, Nalux
+quedó con 1 sola caja como antes. 123/123 tests, 0 errores de lint/build.
 
 **Modo Offline del POS — las 4 fases del plan están hechas y con tests en verde.**
 De las 3 verificaciones que sólo se podían hacer con dispositivos/red reales, ya se cerró la
