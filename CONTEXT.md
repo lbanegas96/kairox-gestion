@@ -16,7 +16,9 @@ en Configuración → Finanzas, y cerrar un gap de seguridad menor en `abrir_caj
 no validaba que la caja fuera de la empresa del caller). Probado en vivo: 2 sesiones simultáneas
 sin pisarse, conflicto manejado en la tercera, bloqueo de desactivar una caja con turno abierto,
 y el hardening de seguridad rechazando una caja de otro tenant — todo revertido después, Nalux
-quedó con 1 sola caja como antes. 123/123 tests, 0 errores de lint/build.
+quedó con 1 sola caja como antes. 123/123 tests, 0 errores de lint/build. Nadia lo va a correr
+también con sus propios ojos (Bloque 3 del plan unificado, ver más abajo) antes de darlo por
+100% cerrado.
 
 **Modo Offline del POS — las 4 fases del plan están hechas y con tests en verde.**
 De las 3 verificaciones que sólo se podían hacer con dispositivos/red reales, ya se cerró la
@@ -44,10 +46,21 @@ sin negativos ni duplicados. Todo el dato de prueba revertido.
 **Lo que sigue sin poder verificarse desde este entorno de desarrollo:**
 1. JWT viejo (1+ hora offline) reconectando, sin pedir re-login.
 2. Red real degradada (throttling/adaptador desconectado), no sólo `navigator.onLine` emulado.
+3. Multi-caja probado por Nadia en persona (yo ya lo probé en vivo, ver arriba) — más que nada
+   para que vea el selector aparecer por primera vez y confirme la experiencia, no porque haya
+   dudas técnicas pendientes.
 
-👉 **Plan detallado paso a paso para que Nadia corra estas 2 pruebas: `PLAN_PRUEBAS_NADIA_2026-08-06.md`.**
-Ya está deployado en `kairox-gestion-chi.vercel.app` con el fix del ping activo confirmado en el
-bundle de producción — no falta nada de código para que las pruebas se puedan correr tal cual.
+👉 **Plan detallado paso a paso, unificado para que Nadia corra las 3 pruebas mañana (07/08) en
+una sola sesión: `PLAN_PRUEBAS_NADIA_2026-08-06.md`.** Todo ya está deployado en
+`kairox-gestion-chi.vercel.app` — no falta nada de código para que las pruebas se puedan correr
+tal cual.
+
+### 📌 Próximo paso (mañana, 07/08): Fidelización por puntos
+
+Con Modo Offline y Multi-caja cerrados, sigue **Fidelización por puntos** — la última pieza
+grande del roadmap de mercado del POS (hueco real: ni Tango ni Rapiboy lo resuelven bien para
+PyMEs locales). Todavía no hay nada diseñado — arranca por investigación/plan, mismo criterio
+que se usó para Modo Offline y Multi-caja (nunca directo a código en features grandes).
 
 ---
 

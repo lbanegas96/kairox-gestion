@@ -1,10 +1,18 @@
-# Plan de Pruebas para Nadia — 2026-08-06
+# Plan de Pruebas para Nadia — para hacer el 2026-08-07
 
-Este plan cubre las **últimas 2 verificaciones del Modo Offline del POS** que quedaron pendientes
-después de la Fase 3 — son justo las que no se pueden simular con mocks ni desde una compu de
-desarrollo, necesitan un dispositivo real y conexión real cortándose de verdad. Todo lo demás del
-feature (las 4 fases, y la carrera de stock con 2 ventas simultáneas) ya se probó y quedó
-documentado en `CONTEXT.md`.
+Quedaron 2 frentes cerrados de mi lado (código, tests, build, y todo lo que se pudo verificar
+desde acá) pero con partes que sólo tienen sentido probadas por vos, con dispositivos/usuarios
+reales:
+
+- **Bloques 1 y 2 — Modo Offline del POS:** las últimas 2 verificaciones que quedaron pendientes
+  después de la Fase 3 — son justo las que no se pueden simular con mocks ni desde una compu de
+  desarrollo, necesitan un dispositivo real y conexión real cortándose de verdad. Todo lo demás
+  del feature (las 4 fases, y la carrera de stock con 2 ventas simultáneas) ya se probó y quedó
+  documentado en `CONTEXT.md`.
+- **Bloque 3 — Multi-caja simultánea (nuevo, de hoy 06/08):** ya lo probé en vivo yo mismo contra
+  Nalux (2 sesiones simultáneas, conflicto manejado, etc. — detalle en `PLAN_MULTI_CAJA.md`), pero
+  vale que lo veas correr una vez con tus propios ojos antes de darlo por cerrado del todo,
+  especialmente el momento en que aparece el selector por primera vez.
 
 **URL de producción a usar:** `https://kairox-gestion-chi.vercel.app` (ya tiene el último fix
 del "ping activo" de conectividad, deployado y verificado hoy). **No uses localhost ni el preview
@@ -101,6 +109,48 @@ contame qué viste, con la hora aproximada.
 
 ---
 
+---
+
+## Bloque 3 — Multi-caja simultánea (podés hacerlo desde tu compu de siempre, sin dispositivo aparte)
+
+**Qué es:** el Modo Caja ahora soporta 2 o más puntos de cobro físicos abiertos al mismo tiempo
+(por ejemplo, 2 cajeros cobrando en simultáneo desde 2 terminales distintas). Antes, sólo existía
+"Caja Principal" para toda la empresa — ahora podés dar de alta cajas nuevas desde Configuración,
+y cada dispositivo elige con cuál trabaja.
+
+**Cómo probar:**
+1. Andá a **Configuración → Finanzas**, bajá hasta la sección **"Cajas"**. Deberías ver "Caja
+   Principal" ya cargada.
+2. Creá una segunda caja de prueba con **"+ Nueva"** — poné un nombre bien identificable, por
+   ejemplo **"Caja Prueba Nadia"**.
+3. Andá a **Punto de Venta** (Modo Caja) en esa misma pestaña. Como es la primera vez que este
+   navegador ve 2 cajas activas, debería aparecerte un modal **"Elegí tu caja"** con las 2
+   opciones. Elegí **"Caja Principal"** y abrí turno con cualquier monto.
+4. Abrí una **ventana de incógnito** (o un navegador distinto, tipo Firefox si usás Chrome) y
+   entrá a KAIROX de nuevo con tu usuario. Andá a Punto de Venta — te debería volver a aparecer el
+   selector **"Elegí tu caja"** (es por navegador, no por usuario). Elegí **"Caja Prueba Nadia"** y
+   abrí turno ahí también.
+5. **Resultado esperado:** las 2 pestañas quedan con **"Caja abierta"** al mismo tiempo, cada una
+   mostrando el nombre de su propia caja en la topbar (al lado de "PdV"), sin que ninguna de las
+   dos te muestre error.
+6. En cualquiera de las 2 pestañas, fijate que el nombre de la caja (el óvalo al lado de "PdV") no
+   se pueda clickear mientras el turno está abierto — pasá el mouse por encima, debería decir "Cerrá
+   el turno actual para cambiar de caja".
+7. Cerrá los 2 turnos (uno en cada pestaña), sin cobrar nada — sólo para probar que cierran bien.
+8. Con los turnos ya cerrados, volvé a **Configuración → Finanzas → Cajas** e intentá apagar el
+   switch de **"Caja Prueba Nadia"**. Como ya no tiene turno abierto, ahora sí debería dejarte
+   (a diferencia de si lo intentás con un turno abierto, que se bloquea con un aviso).
+
+**Si algo no sale así** (no aparece el selector, alguna de las 2 cajas muestra error, el nombre de
+la caja se puede clickear con el turno abierto, etc.): sacá captura y contámelo — no hace falta que
+intentes arreglarlo.
+
+**Al terminar:** dejá "Caja Prueba Nadia" desactivada (no hay botón de borrar a propósito, es
+igual que Centros de Costo/Condiciones de Pago) y contame que hiciste la prueba — si querés que la
+borre del todo de la base en vez de dejarla desactivada, avisame y lo hago yo.
+
+---
+
 ## Qué contarme al terminar
 
 Para cada bloque: ✅ salió como se esperaba, o ⚠️ algo no coincidió (contame qué, con captura si
@@ -112,10 +162,16 @@ que borres nada de tu lado).
 
 ## Cómo seguimos
 
-Con estos dos bloques, las **3 verificaciones que le faltaban al Modo Offline del POS quedan
-cerradas** (la carrera de stock con 2 ventas simultáneas ya se probó ayer contra producción). Si
-todo sale ✅, el feature completo (4 fases + las 3 verificaciones más exigentes) queda 100%
-confirmado de punta a punta, no sólo "probado con tests".
+Con los Bloques 1 y 2, las **3 verificaciones que le faltaban al Modo Offline del POS quedan
+cerradas** (la carrera de stock con 2 ventas simultáneas ya se probó el 06/08 contra producción).
+Con el Bloque 3, el multi-caja queda confirmado también con tus propios ojos, no sólo con mis
+pruebas de ayer. Si todo sale ✅ en los 3 bloques, estos 2 features quedan 100% cerrados de punta
+a punta.
+
+Después de esto, arrancamos con **Fidelización por puntos** — es la próxima feature grande del
+roadmap de mercado del POS (la otra pendiente, multi-caja, ya se cerró el 06/08). Todavía no hay
+nada diseñado ni construido — primero toca investigar/planificar, mismo criterio que usamos para
+el Modo Offline y para multi-caja.
 
 Lo único que sigue sin resolver, y no depende de ninguna prueba técnica:
 1. **Plan de Supabase de Nalux** sigue en `free`, vence el **17/08/2026** — si no se paga antes,
