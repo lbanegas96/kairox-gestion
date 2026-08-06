@@ -33,6 +33,10 @@ sin negativos ni duplicados. Todo el dato de prueba revertido.
 1. JWT viejo (1+ hora offline) reconectando, sin pedir re-login.
 2. Red real degradada (throttling/adaptador desconectado), no sólo `navigator.onLine` emulado.
 
+👉 **Plan detallado paso a paso para que Nadia corra estas 2 pruebas: `PLAN_PRUEBAS_NADIA_2026-08-06.md`.**
+Ya está deployado en `kairox-gestion-chi.vercel.app` con el fix del ping activo confirmado en el
+bundle de producción — no falta nada de código para que las pruebas se puedan correr tal cual.
+
 ---
 
 ## ✅ Modo Offline del POS — Fase 0 (backend, idempotencia) — mig.309/310
