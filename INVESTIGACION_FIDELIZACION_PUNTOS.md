@@ -104,3 +104,12 @@ inventar reglas que después hay que deshacer:
 
 No hay código ni migraciones todavía — el siguiente paso, una vez resueltas estas preguntas, es
 recién ahí armar el plan de fases (mismo formato que `PLAN_MODO_OFFLINE_POS.md`/`PLAN_MULTI_CAJA.md`).
+
+## ✅ Decisiones tomadas (Nadia, 07/08)
+
+1. **Canje: descuento directo en pesos** (no catálogo de premios — queda abierto para una fase
+   futura si se valida que hace falta).
+2. **Gratis para todas las empresas al arrancar** (no es un módulo pago/premium por ahora).
+3. **Los puntos no vencen** (sin lógica de expiración en esta primera versión).
+
+Con esto resuelto, sigue el plan de fases: `PLAN_FIDELIZACION_PUNTOS.md`.
