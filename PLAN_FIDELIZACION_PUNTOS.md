@@ -162,12 +162,28 @@ como los toggles simples de un solo booleano):
 
 **Verificación:** `npx eslint` sobre los 2 archivos → 0 errores (sólo warnings preexistentes de
 `react/prop-types`, mismo patrón que el resto del archivo, que no usa PropTypes en ningún lado).
-`npx vite build` → build limpio. Verificación visual en el preview limitada a "la app carga sin
-errores de consola" — no se pudo ver la pantalla de Configuración en sí porque queda detrás del
-login y, como en las fases anteriores del proyecto, no se inicia sesión desde el entorno de
-verificación automática. Falta la prueba visual real: que Nadia entre a Configuración → Finanzas,
-active el toggle, cargue los 2 ratios y guarde — pendiente para cuando ella lo prueba en vivo.
+`npx vite build` → build limpio.
 
-**Sin esto todavía no pasa nada solo** — activar el toggle y guardar los ratios no hace que las
-ventas sumen o descuenten puntos; eso es la Fase 2 (ganar) y la Fase 3 (canjear), que siguen sin
-arrancar hasta el próximo "dale".
+**Probado en vivo por Nadia en producción (07/08), Nalux:** activó el toggle, cargó
+`puntos_pesos_por_punto=100` / `puntos_valor_pesos=1`, vio el resumen en vivo ("$100 gastados =
+1 punto" / "1 punto = $1 de descuento" / "≈1.00% de devolución efectiva"), guardó (cartel verde
+"Fidelización guardada"), recargó la página y los 3 valores quedaron exactamente igual —
+confirma que persiste de verdad en `empresas`, no sólo en el estado de React.
+
+**⚠️ Corrección importante sobre el alcance real de activar el toggle** (esto NO es lo que decía
+la primera versión de esta sección — se corrige acá tras revisar `crear_venta` con más cuidado):
+**ganar puntos ya funciona de verdad desde que el toggle queda activo**, no depende de que la
+Fase 2 esté construida — la lógica de "sumar puntos al cliente" vive en `crear_venta` desde la
+Fase 0 (mig.312) y corre en **toda venta real con cliente asociado**, en el POS y en el ERP, sin
+que ninguna pantalla nueva tenga que llamarla. Lo único que de verdad depende de fases
+siguientes:
+- **Fase 2** sólo agrega la parte *visible*: que `ClienteSelector` muestre el saldo acumulado.
+  Los puntos ya se están sumando aunque esta fase no esté — sólo que nadie los ve todavía.
+- **Fase 3** sí es un gate real: canjear puntos requiere que la UI arme
+  `p_puntos_canjeados > 0` al llamar `crear_venta`, y ningún caller de hoy (POS ni ERP) lo hace
+  — así que **nadie puede canjear** hasta que esa fase exista, sin importar el toggle.
+
+**Decisión de Nadia (07/08), avisada esta corrección:** deja la fidelización **activa** en Nalux
+con los ratios 100/1 — los puntos de los clientes reales ya empiezan a acumularse desde ahora
+(auditable en `movimientos_puntos`, reversible), listos para mostrarse en cuanto la Fase 2 esté
+lista, sin perder nada del camino ya recorrido.

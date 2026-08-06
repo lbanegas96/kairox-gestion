@@ -19,18 +19,23 @@ sintéticos (simulando una sesión real vía JWT — necesario porque la funció
 `get_my_empresa_id()`): ganar + canjear puntos, saldo insuficiente rechazado limpio,
 fidelización desactivada rechazada limpio, y **una venta sin tocar puntos sigue funcionando
 idéntico a hoy** (cero regresión). Todo el dato de prueba revertido, Nalux quedó como estaba.
-**Fase 1 (Configuración por empresa) también ya está hecha (07/08).** Card nueva "Fidelización
-por Puntos" en Configuración → Finanzas (mismo lugar que Moneda Paralela/Centros de Costo/Cajas):
-toggle `usa_fidelizacion` + 2 inputs de ratio (`puntos_pesos_por_punto`/`puntos_valor_pesos`) +
-resumen en vivo + botón "Guardar" explícito — mismo patrón visual y de guardado que ya usa
-"Moneda Paralela" en esa misma pantalla. Sin migración nueva (usa las columnas de la Fase 0).
-`npx eslint`/`npx vite build` en 0 errores. **Ojo:** activar el toggle y guardar los ratios
-todavía no hace nada solo en las ventas — eso es la Fase 2 (ganar) y Fase 3 (canjear), que siguen
-sin arrancar. Falta que Nadia entre a Configuración → Finanzas y lo pruebe con sus propios ojos
-(activar, cargar ratios, guardar, recargar y confirmar que quedó guardado) — no se pudo verificar
-visualmente desde el entorno automático porque queda detrás del login, mismo límite que las fases
-anteriores del proyecto. Sigue la Fase 2 recién con el próximo "dale" — detalle completo en
-`PLAN_FIDELIZACION_PUNTOS.md`.
+**Fase 1 (Configuración por empresa) también ya está hecha y probada en vivo (07/08).** Card
+nueva "Fidelización por Puntos" en Configuración → Finanzas (mismo lugar que Moneda
+Paralela/Centros de Costo/Cajas): toggle `usa_fidelizacion` + 2 inputs de ratio
+(`puntos_pesos_por_punto`/`puntos_valor_pesos`) + resumen en vivo + botón "Guardar" explícito.
+Sin migración nueva (usa las columnas de la Fase 0). `npx eslint`/`npx vite build` en 0 errores.
+**Nadia lo probó en Nalux:** activó, cargó 100/1, guardó, recargó — quedó igual, confirmado.
+
+**⚠️ Importante, corregido después de revisar `crear_venta` con más cuidado:** activar el toggle
+**no es sólo una pantalla que no hace nada todavía** — la lógica de "ganar puntos" ya vive en
+`crear_venta` desde la Fase 0 y corre en toda venta real con cliente asociado, en POS y ERP, sin
+depender de ninguna UI nueva. Desde que Nadia guardó la configuración, **los clientes de Nalux ya
+empezaron a acumular puntos de verdad** (auditable en `movimientos_puntos`), aunque todavía no
+hay pantalla que lo muestre — eso es lo único que falta de la Fase 2. Canjear sí es un gate real
+de la Fase 3 (ningún caller de `crear_venta` hoy manda `p_puntos_canjeados`, así que nadie puede
+canjear todavía). Avisado esto, **Nadia decidió dejarlo activo** — los puntos siguen sumando en
+segundo plano, listos para mostrarse apenas esté la Fase 2. Sigue la Fase 2 recién con el próximo
+"dale" — detalle completo en `PLAN_FIDELIZACION_PUNTOS.md`.
 
 **✅ Nadia corrió el plan de pruebas hoy (07/08), en `kairox-gestion-chi.vercel.app` — resultado
 de cada bloque:**
@@ -130,16 +135,17 @@ varias veces, y multi-caja con sus propios ojos.
 
 Plan de pruebas usado hoy, con el detalle completo de cada bloque: `PLAN_PRUEBAS_NADIA_2026-08-06.md`.
 
-### 📌 En curso: Fidelización por puntos — Fase 0 y Fase 1 hechas, sigue Fase 2
+### 📌 En curso: Fidelización por puntos — Fase 0 y Fase 1 hechas y probadas, sigue Fase 2
 
 Investigación + plan de 4 fases ya armados (`INVESTIGACION_FIDELIZACION_PUNTOS.md` /
 `PLAN_FIDELIZACION_PUNTOS.md`), decisiones de negocio tomadas por Nadia, **Fase 0 (backend)
 aplicada y probada en vivo (mig.312)** y **Fase 1 (Configuración por empresa: toggle + ratios en
-Finanzas) ya construida hoy (07/08)** — ver el resumen al principio de esta sección. Falta que
-Nadia la pruebe con sus propios ojos (no se pudo verificar visualmente desde acá, queda detrás
-del login). Sigue la **Fase 2 (Ganar puntos automático — `ClienteSelector` muestra el saldo, cada
-venta con cliente suma sola)**, recién con el próximo "dale" — nunca se arranca una fase sin
-cerrar la anterior.
+Finanzas) construida y probada en vivo por Nadia hoy (07/08)** — activó, cargó 100/1, guardó,
+recargó, quedó igual. Está **activa en Nalux ahora mismo**: los clientes ya están acumulando
+puntos reales en segundo plano desde que se guardó (aunque todavía no hay pantalla que lo
+muestre — ver el aviso completo al principio de esta sección). Sigue la **Fase 2 (Ganar puntos
+visible — `ClienteSelector` muestra el saldo que ya se está acumulando)**, recién con el próximo
+"dale" — nunca se arranca una fase sin cerrar la anterior.
 
 ---
 
