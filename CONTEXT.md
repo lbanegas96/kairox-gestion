@@ -1,11 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-07 (Claude — bug real encontrado por Nadia en las pruebas del
-Modo Offline: apertura de caja offline abandonada podía pisar una sesión real y varar ventas.
-Arreglado, testeado, deployado.)
+**Última actualización:** 2026-08-07 (Nadia — corrió el plan de pruebas completo en producción:
+Modo Offline y Multi-caja quedan cerrados de punta a punta, con un bug real encontrado y
+arreglado en el camino)
 
 ---
 
 # 👉 EMPEZÁ POR ACÁ (Luciano)
+
+**✅ Nadia corrió el plan de pruebas hoy (07/08), en `kairox-gestion-chi.vercel.app` — resultado
+de cada bloque:**
+
+- **Bloque 1 (sesión vieja, 1+ hora offline reconectando):** ✅ salió perfecto — encontró en el
+  camino el bug de la apertura offline abandonada (ver abajo), se arregló en vivo, y quedó
+  re-verificado: las 5 ventas que cobró durante la prueba terminaron en la base, cada una una
+  sola vez, con numeración real (`20260806-001` a `005`).
+- **Bloque 2, Escenario A (wifi conectado sin internet real):** ⚠️ **salteado** — no tenía forma
+  de armar esa red específica hoy. Sigue sin verificarse, no es grave (el mecanismo del "ping
+  activo" ya está andando, sólo falta el caso límite exacto).
+- **Bloque 2, Escenario B (conexión que entra y sale varias veces seguidas):** ✅ 5-6 cortes de
+  wifi seguidos, una sola venta sincronizada al final, sin duplicados (confirmado contra la base:
+  `20260806-006`).
+- **Bloque 3 (multi-caja con sus propios ojos):** ✅ 2 cajas simultáneas en 2 ventanas del
+  navegador, selector apareció bien, tooltip de "no se puede cambiar con turno abierto" anduvo,
+  los 2 arqueos de cierre cuadraron perfecto ($0,00 de diferencia en ambos), y pudo desactivar la
+  caja de prueba después de cerrar el turno.
+
+**Con esto, Modo Offline del POS y Multi-caja quedan 100% cerrados** (salvo el Escenario A de
+arriba, anotado como pendiente real, no fingido como probado).
 
 **🐛 Bug real encontrado y arreglado (07/08): apertura offline abandonada varaba ventas reales.**
 Nadia estaba corriendo el Bloque 1 del plan de pruebas (`PLAN_PRUEBAS_NADIA_2026-08-06.md`) y
@@ -45,14 +66,14 @@ en Configuración → Finanzas, y cerrar un gap de seguridad menor en `abrir_caj
 no validaba que la caja fuera de la empresa del caller). Probado en vivo: 2 sesiones simultáneas
 sin pisarse, conflicto manejado en la tercera, bloqueo de desactivar una caja con turno abierto,
 y el hardening de seguridad rechazando una caja de otro tenant — todo revertido después, Nalux
-quedó con 1 sola caja como antes. 123/123 tests, 0 errores de lint/build. Nadia lo va a correr
-también con sus propios ojos (Bloque 3 del plan unificado, ver más abajo) antes de darlo por
-100% cerrado.
+quedó con 1 sola caja como antes. 123/123 tests, 0 errores de lint/build. **07/08: Nadia lo
+corrió también con sus propios ojos (Bloque 3) — 2 cajas simultáneas, tooltip, arqueos
+perfectos. 100% cerrado.**
 
 **Modo Offline del POS — las 4 fases del plan están hechas y con tests en verde.**
-De las 3 verificaciones que sólo se podían hacer con dispositivos/red reales, ya se cerró la
-más crítica (carrera de stock) directo contra producción. Quedan 2 — ver la lista al final de
-esta sección.
+**07/08: las 3 verificaciones que sólo se podían hacer con dispositivos/red reales quedaron
+cerradas** (carrera de stock el 06/08, sesión vieja + reconexión intermitente hoy) — salvo un
+escenario puntual sin forma de armarlo hoy, ver la lista al final de esta sección.
 
 - ✅ **Fase 0** (backend) — idempotencia en `crear_venta` + `abrir_caja_sesion`, mig.309/310.
 - ✅ **Fase 1** (Nadia, 05/08) — PWA instalable + detección de conectividad.
@@ -72,24 +93,24 @@ wifi conectado a un router sin salida real a internet. Implementado: `HEAD` a
 Ver sección detallada más abajo — una ganó, la otra falló limpio con "Stock insuficiente",
 sin negativos ni duplicados. Todo el dato de prueba revertido.
 
-**Lo que sigue sin poder verificarse desde este entorno de desarrollo:**
-1. JWT viejo (1+ hora offline) reconectando, sin pedir re-login.
-2. Red real degradada (throttling/adaptador desconectado), no sólo `navigator.onLine` emulado.
-3. Multi-caja probado por Nadia en persona (yo ya lo probé en vivo, ver arriba) — más que nada
-   para que vea el selector aparecer por primera vez y confirme la experiencia, no porque haya
-   dudas técnicas pendientes.
+**✅ Ya verificado hoy (07/08) por Nadia, en vivo contra producción** (ver el resumen de los 3
+bloques al principio de esta sección): JWT viejo reconectando, conexión entrando y saliendo
+varias veces, y multi-caja con sus propios ojos.
 
-👉 **Plan detallado paso a paso, unificado para que Nadia corra las 3 pruebas mañana (07/08) en
-una sola sesión: `PLAN_PRUEBAS_NADIA_2026-08-06.md`.** Todo ya está deployado en
-`kairox-gestion-chi.vercel.app` — no falta nada de código para que las pruebas se puedan correr
-tal cual.
+**Lo único que sigue sin poder verificarse:**
+1. Escenario A del Bloque 2 (wifi "conectado" a un router sin salida real a internet) — Nadia no
+   tenía forma de armar esa red hoy. No es grave (el "ping activo" que lo cubre ya está andando y
+   probado con mocks, `useOnlineStatus.test.js`), pero quedó sin el check contra un caso real.
+   Retomar si en algún momento hay a mano un router que se pueda apagar sin perder el wifi.
 
-### 📌 Próximo paso (mañana, 07/08): Fidelización por puntos
+Plan de pruebas usado hoy, con el detalle completo de cada bloque: `PLAN_PRUEBAS_NADIA_2026-08-06.md`.
 
-Con Modo Offline y Multi-caja cerrados, sigue **Fidelización por puntos** — la última pieza
-grande del roadmap de mercado del POS (hueco real: ni Tango ni Rapiboy lo resuelven bien para
-PyMEs locales). Todavía no hay nada diseñado — arranca por investigación/plan, mismo criterio
-que se usó para Modo Offline y Multi-caja (nunca directo a código en features grandes).
+### 📌 Próximo paso: Fidelización por puntos
+
+Con Modo Offline y Multi-caja cerrados de punta a punta, sigue **Fidelización por puntos** — la
+última pieza grande del roadmap de mercado del POS (hueco real: ni Tango ni Rapiboy lo resuelven
+bien para PyMEs locales). Todavía no hay nada diseñado — arranca por investigación/plan, mismo
+criterio que se usó para Modo Offline y Multi-caja (nunca directo a código en features grandes).
 
 ---
 
