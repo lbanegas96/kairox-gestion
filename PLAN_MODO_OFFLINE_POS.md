@@ -3,9 +3,10 @@
 **Estado:** Fase 0 ✅ (mig.309/310), Fase 1 ✅ (PWA + conectividad), Fase 2 ✅ (snapshot Dexie
 read-only) y Fase 3 ✅ (cola de ventas + sincronización) hechas y probadas — todas 2026-08-05.
 **Las 4 fases del plan están completas** — ya se puede cobrar Efectivo/Transferencia sin
-conexión. Quedan 3 verificaciones que sólo se pueden hacer con dispositivos/red reales (carrera
-de stock multi-dispositivo, JWT viejo reconectando, red real degradada) — detalle en
-`CONTEXT.md`.
+conexión. De las 3 verificaciones que sólo se podían hacer con dispositivos/red reales, la
+carrera de stock ya se probó en vivo contra producción (06/08, ver `CONTEXT.md`) — la garantía
+real está del lado del servidor (`FOR UPDATE` en `crear_venta`), no requería 2 dispositivos
+físicos. Quedan 2: JWT viejo reconectando, red real degradada — detalle en `CONTEXT.md`.
 
 ## Contexto
 

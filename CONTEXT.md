@@ -1,13 +1,15 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-05 (Nadia/Claude — Modo Offline del POS: las 4 fases hechas)
+**Última actualización:** 2026-08-06 (Claude — ping activo en `useOnlineStatus` + carrera de
+stock verificada en vivo contra producción)
 
 ---
 
 # 👉 EMPEZÁ POR ACÁ (Luciano)
 
 **Modo Offline del POS — las 4 fases del plan están hechas y con tests en verde.**
-Todavía faltan verificaciones que sólo se pueden hacer con dispositivos/red reales — ver
-la lista al final de esta sección antes de dar por "100% probado" el feature.
+De las 3 verificaciones que sólo se podían hacer con dispositivos/red reales, ya se cerró la
+más crítica (carrera de stock) directo contra producción. Quedan 2 — ver la lista al final de
+esta sección.
 
 - ✅ **Fase 0** (backend) — idempotencia en `crear_venta` + `abrir_caja_sesion`, mig.309/310.
 - ✅ **Fase 1** (Nadia, 05/08) — PWA instalable + detección de conectividad.
@@ -17,20 +19,19 @@ la lista al final de esta sección antes de dar por "100% probado" el feature.
   sincronización. **Ya se puede cobrar sin conexión de verdad**, no sólo navegar el catálogo.
   Ver sección detallada más abajo.
 
-**Pendiente detectado en la Fase 1, no bloqueante pero anotado para no perderlo:** el plan
-original pedía que `useOnlineStatus` sumara un "ping activo liviano" además de
-`navigator.onLine`, porque ese último da falso positivo con wifi conectado a un router sin
-salida real a internet. Sigue sin implementarse — con la Fase 3 ya en producción, este gap
-ahora importa más: si `navigator.onLine` miente (dice "conectado" sin salida real), el POS va
-a intentar la RPC online, esperar un timeout de red, y recién ahí fallar — en vez de encolar
-la venta al toque. No bloquea el uso, pero es la mejora más valiosa a sumar después.
+**✅ Resuelto (06/08): "ping activo" en `useOnlineStatus`.** El plan original pedía sumar un
+ping liviano a Supabase además de `navigator.onLine`, porque ese último da falso positivo con
+wifi conectado a un router sin salida real a internet. Implementado: `HEAD` a
+`{SUPABASE_URL}/rest/v1/` cada 20s (timeout 4s) mientras `navigator.onLine` es `true`;
+`isOnline` final = `navOnline && pingOk`. 8/8 tests nuevos en verde. Commit `ce56092`.
 
-**Lo que NO se pudo verificar desde este entorno de desarrollo (ver detalle en la sección de
-la Fase 3) — necesita que alguien lo pruebe con dispositivos/red reales antes de confiar el
-100% en el feature:**
-1. Carrera de stock con 2 dispositivos offline vendiendo el mismo último ítem.
-2. JWT viejo (1+ hora offline) reconectando, sin pedir re-login.
-3. Red real degradada (throttling/adaptador desconectado), no sólo `navigator.onLine` emulado.
+**✅ Resuelto (06/08): carrera de stock con 2 ventas concurrentes, contra producción real.**
+Ver sección detallada más abajo — una ganó, la otra falló limpio con "Stock insuficiente",
+sin negativos ni duplicados. Todo el dato de prueba revertido.
+
+**Lo que sigue sin poder verificarse desde este entorno de desarrollo:**
+1. JWT viejo (1+ hora offline) reconectando, sin pedir re-login.
+2. Red real degradada (throttling/adaptador desconectado), no sólo `navigator.onLine` emulado.
 
 ---
 
@@ -274,17 +275,48 @@ multi-dispositivo como algo que necesita probarse con hardware real, no simulabl
   cualquier test que renderice un componente `.jsx` directamente (no sólo un hook) fallaba con
   "React is not defined" (ese archivo no usa el plugin de React que sí tiene `vite.config.js`).
 
-**Lo que NO se pudo probar desde este entorno (honesto, no se va a fingir) — son justo los
-puntos que el propio plan marca como los más exigentes de verificar:**
-1. **Carrera de stock con 2 dispositivos offline** vendiendo el mismo último ítem — necesita 2
-   sesiones reales contra la base real, no simulable con mocks.
+**Lo que NO se pudo probar desde este entorno con mocks (honesto, no se va a fingir) — son
+justo los puntos que el propio plan marca como los más exigentes de verificar:**
+1. ~~**Carrera de stock con 2 dispositivos offline** vendiendo el mismo último ítem~~ — ✅
+   **resuelto el 06/08, ver sección "Carrera de stock" más abajo.** No hacía falta 2
+   dispositivos reales: se disparó `Promise.all` con 2 llamadas directas a la RPC `crear_venta`
+   (mismo camino que usaría el motor de sync de cada dispositivo) contra un producto real puesto
+   en `stock_actual=1`, con `client_uuid` distinto en cada una — eso alcanza para probar el lock
+   del lado del servidor, que es la garantía real (el resto es orquestación en el cliente, ya
+   cubierta por los tests de Nadia).
 2. **JWT viejo (1+ hora offline) reconectando** sin pedir re-login — no se puede simular dejar
    una sesión colgada una hora real en este entorno.
 3. **Red real degradada** (throttling, desconectar el adaptador físico) — el entorno sólo puede
    emular `navigator.onLine`, no una red real intermitente.
 
-Estos tres quedan pendientes de que Nadia/Luciano los prueben en vivo con el POS instalado en un
-dispositivo real antes de confiar el 100% en el feature para un día de mucho movimiento.
+Los 2 que quedan (JWT viejo, red real degradada) necesitan que Nadia/Luciano los prueben en vivo
+con el POS instalado en un dispositivo real antes de confiar el 100% en el feature para un día
+de mucho movimiento.
+
+## ✅ Carrera de stock — verificado en vivo contra producción (06/08)
+
+Prueba real, no mock: 2 llamadas concurrentes (`Promise.all`) a la RPC `crear_venta` vía
+`fetch` con JWT real de Nalux, cada una con `client_uuid` distinto, compitiendo por la última
+unidad de un producto de prueba (`Aramis TESTE Azul marino`, bajado a propósito de
+`stock_actual=5849` a `1` para el test).
+
+**Resultado:**
+- Venta A → `200 OK`, `duplicate:false`, crea el comprobante y descuenta el stock a `0`.
+- Venta B → `400`, `"Stock insuficiente para producto ... (disponible: 0, requerido: 1)"` — el
+  `SELECT ... FOR UPDATE` sobre `productos.stock_actual` (mig.309) serializó las dos llamadas:
+  la segunda vio el stock ya en `0` y abortó toda su transacción, sin error crudo de Postgres,
+  sin stock negativo, sin comprobante duplicado.
+
+**Todo el dato de prueba revertido después:** `stock_actual` de vuelta en `5849`, comprobante +
+ítems + movimiento de caja + movimiento de inventario + entrega + ítem de entrega borrados,
+`series_numeracion` de `entrega` devuelta de `112` a `111` (la venta usó un `numero_venta` de
+prueba fijo, no consumió la serie fiscal real de ventas — sólo la de entregas, por el
+`obtener_proximo_numero(..., 'entrega')` interno de `crear_venta`).
+
+Esta es la validación que de verdad importa para el modo offline: confirma que aunque 2 cajas
+físicas sincronicen al mismo tiempo por el mismo último ítem, el servidor nunca deja pasar una
+sobreventa silenciosa — la segunda cae en conflicto manejado, que es exactamente el
+comportamiento que `SyncConflictModal.jsx` está preparado para mostrarle al cajero.
 
 ## ✅ Barrido final del backlog del 04-05/08 — 3 ítems cerrados
 
