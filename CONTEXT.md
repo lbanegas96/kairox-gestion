@@ -1,10 +1,39 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-06 (Claude — Multi-caja simultánea: implementada, deployada y
-verificada en vivo contra producción)
+**Última actualización:** 2026-08-07 (Claude — bug real encontrado por Nadia en las pruebas del
+Modo Offline: apertura de caja offline abandonada podía pisar una sesión real y varar ventas.
+Arreglado, testeado, deployado.)
 
 ---
 
 # 👉 EMPEZÁ POR ACÁ (Luciano)
+
+**🐛 Bug real encontrado y arreglado (07/08): apertura offline abandonada varaba ventas reales.**
+Nadia estaba corriendo el Bloque 1 del plan de pruebas (`PLAN_PRUEBAS_NADIA_2026-08-06.md`) y
+encontró esto en producción real, con plata real:
+
+- Intentó "abrir caja sin conexión" desde un arranque en frío (la pestaña nunca había cargado la
+  lista de cajas con internet todavía) — quedó encolada localmente pero sin uso real.
+- Después abrió la caja de nuevo, esta vez bien, ya con internet — sesión real creada
+  (`b61ebb84...`).
+- El poll periódico de `CajaContext.fetchCurrentSession` (corre cada 30s) — estando offline, sin
+  poder reconfirmar la sesión real por red — "resucitó" la apertura vieja abandonada de Dexie y
+  **pisó la sesión real en memoria**. Las siguientes 4 ventas que cobró (offline, reales, ~$160.000
+  entre las 4) quedaron encoladas contra una sesión que el servidor no reconocía, sin forma de
+  sincronizar solas nunca — un callejón sin salida.
+- **Nada se perdió ni se duplicó**: esas 4 ventas nunca llegaron al servidor (0 riesgo de stock/
+  plata mal contados), sólo quedaron atascadas del lado del cliente. La 5ta venta de la prueba (la
+  primera que hizo, antes de que esto pasara) sí había sincronizado bien — confirmado directo
+  contra la base (`comprobantes`, numeración real `20260806-001`).
+
+**Arreglo (ver sección detallada más abajo):** nueva función `reconciliarAperturasViejas()` — en
+vez de dejar un conflicto de apertura muerto, lo resuelve contra la sesión que efectivamente ganó
+(reasigna las ventas dependientes también). Se llama desde 3 lugares: `useSyncEngine` (cuando el
+servidor devuelve `conflict:true` al sincronizar), y `CajaContext` (`openSession` online y
+`fetchCurrentSession` al confirmar una sesión real) — más un guard nuevo para que el poll
+periódico offline nunca vuelva a pisar una sesión real ya confirmada con un dato viejo de Dexie.
+21 tests nuevos, 132/132 en verde, 0 errores de lint/build. **Deployado — las 4 ventas de Nadia
+deberían terminar de sincronizar solas la próxima vez que la app haga el poll (máximo 30s) con
+ella conectada, sin que tenga que hacer nada.**
 
 **✅ Nuevo: Multi-caja simultánea.** El Modo Caja ya soporta 2+ puntos de cobro físicos abiertos
 al mismo tiempo (cada cajero elige con cuál trabaja al entrar, se recuerda por dispositivo). Plan
@@ -321,6 +350,67 @@ justo los puntos que el propio plan marca como los más exigentes de verificar:*
 Los 2 que quedan (JWT viejo, red real degradada) necesitan que Nadia/Luciano los prueben en vivo
 con el POS instalado en un dispositivo real antes de confiar el 100% en el feature para un día
 de mucho movimiento.
+
+## 🐛 Bug real de producción — apertura offline abandonada varaba ventas (07/08)
+
+Encontrado por Nadia corriendo el Bloque 1 de `PLAN_PRUEBAS_NADIA_2026-08-06.md`, con datos
+reales de Nalux (no un test, plata de verdad). Reconstruido paso a paso, verificado contra la
+base (`caja_sesiones`, `comprobantes`):
+
+1. Con la notebook ya offline desde el arranque de esa pestaña (nunca había cargado `cajas` con
+   internet todavía en esa sesión del navegador), intentó **"Abrir caja" sin conexión**. Quedó
+   encolada en Dexie (`cajaSesionesPendientes`), pero ella no llegó a usarla — vio un error al
+   intentar vender y asumió que no había funcionado.
+2. Reconectó, **abrió la caja de nuevo** — esta vez sí, sesión real creada online
+   (`b61ebb84-eefe-...`, `apertura_fecha` 2026-08-06 10:46 UTC, `client_uuid: null` — confirmado
+   por SQL directo).
+3. Desconectó otra vez y cobró **5 ventas offline** a lo largo de ~75 minutos (mezclando Efectivo
+   y Transferencia — el badge "N sin sincronizar" fue subiendo bien 1→5, sin pisarse).
+4. Reconectó. Sólo **1 de las 5 sincronizó** (la primera, $3.000 — confirmado en `comprobantes`,
+   numeración real `20260806-001`). Las otras 4 quedaron "Esperando conexión" para siempre, y el
+   panel mostró la apertura del paso 1 como **"Conflicto — Ya había otra caja abierta al
+   sincronizar"**.
+
+**Causa raíz:** `CajaContext.fetchCurrentSession` corre cada 30s (`setInterval`) para revisar si
+hay una sesión real abierta. Estando offline, esa consulta a `caja_sesiones` no puede llegar al
+servidor — pero el código, al no encontrar respuesta, caía a un fallback pensado para otro caso
+("recargué la página offline, recuperá lo que había en Dexie") y **restauraba la apertura vieja
+abandonada del paso 1 como si fuera la sesión actual**, pisando la sesión real del paso 2 que
+seguía en memoria. Las ventas del paso 3, cobradas después de ese pisado, quedaron con la
+apertura vieja como referencia — y como esa apertura nunca iba a tener un id real (el servidor
+correctamente la rechaza porque ya hay otra sesión abierta para esa caja), no tenían forma de
+sincronizar solas nunca. Un callejón sin salida real, no cosmético.
+
+**Impacto real:** ninguno en datos — las 4 ventas nunca llegaron al servidor (0 stock/plata mal
+contados, 0 duplicados). Sólo quedaron atascadas del lado del navegador de Nadia hasta que se
+arregló el código.
+
+**Arreglo — `reconciliarAperturasViejas(empresaId, cajaId, sesionRealId)` (`offlineDb.js`):** en
+vez de dejar un conflicto de apertura como callejón sin salida, lo resuelve contra la sesión que
+efectivamente ganó — al cajero le da lo mismo bajo qué número haya quedado la caja realmente
+abierta, sólo quiere que su venta entre. Reasigna también cualquier venta que dependiera del
+`client_uuid` de la apertura vieja. Se llama desde:
+- **`useSyncEngine.sincronizarAperturas`** — cuando el servidor devuelve `conflict:true` al
+  sincronizar, en vez de sólo `marcarAperturaConflicto`.
+- **`CajaContext.openSession`** (camino online, éxito) — por si había una apertura vieja de la
+  misma caja esperando.
+- **`CajaContext.fetchCurrentSession`** — apenas confirma una sesión real, reconcilia cualquier
+  apertura vieja de esa caja antes de que el poll periódico tenga chance de toparse con ella.
+
+**Guard nuevo en `fetchCurrentSession`:** si ya había una sesión real (no `_pendingSync`)
+confirmada en memoria, y la consulta no trae nada nuevo (típico estando offline — la llamada de
+red directamente no llega), **ya no cae al fallback de Dexie** — lo deja como estaba. El fallback
+de recuperación original (mount en frío offline con una apertura pendiente en Dexie) se probó
+aparte con una contraprueba, sigue funcionando igual que antes.
+
+**Probado:** 21 tests nuevos (`offlineDb.test.js` +7, `useSyncEngine.test.js` reescribe el caso
+de conflicto, `CajaContext.test.jsx` +3 — incluye la reproducción exacta del bug con mocks, y la
+contraprueba de que el mount en frío offline sigue andando). Suite completa: **132/132 en verde**.
+`npx eslint`: 0 errores. `npx vite build`: ✓. Deployado.
+
+**Para Nadia — no hace falta que hagas nada:** la próxima vez que la app haga el poll automático
+(máximo 30 segundos, ya conectada) debería reconciliar las 4 ventas stranded solas. Si en un par
+de minutos el óvalo "sin sincronizar" no bajó a 0, avisá — ahí sí reviso a mano contra la base.
 
 ## ✅ Carrera de stock — verificado en vivo contra producción (06/08)
 

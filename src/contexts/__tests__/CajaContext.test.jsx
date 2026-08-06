@@ -192,6 +192,105 @@ describe('CajaContext', () => {
     });
   });
 
+  // Bug real de producción (07/08, pruebas de Nadia): un intento de "abrir
+  // caja sin conexión" quedaba encolado y abandonado (el cajero después
+  // terminaba abriendo la caja de nuevo ya con internet). El poll periódico
+  // de fetchCurrentSession podía "resucitar" esa apertura vieja mientras
+  // estaba offline y pisar la sesión real en memoria — dejando cualquier
+  // venta posterior varada, sin forma de sincronizar sola nunca.
+  describe('reconciliación de aperturas offline viejas (bug real de producción, 07/08)', () => {
+    it('openSession online reconcilia una apertura vieja de la misma caja y las ventas que dependían de ella', async () => {
+      const vieja = await offlineDb.cajaSesionesPendientes.add({
+        empresa_id: EMPRESA_ID, client_uuid: 'client-uuid-vieja', estado: 'pendiente',
+        creado_en: new Date().toISOString(),
+        payload: { p_caja_id: 'caja-1', p_monto_inicial: 999 },
+        resultado: null, error: null,
+      });
+      const venta = await encolarVenta(EMPRESA_ID, {
+        payload: { p_total: 500 }, itemsSnapshot: [],
+        cajaSesionClientUuid: 'client-uuid-vieja',
+      });
+
+      mockRpc.mockResolvedValue({ data: { sesion_id: 'sesion-real-1', duplicate: false, conflict: false }, error: null });
+      mockFrom.mockImplementation((tabla) => {
+        if (tabla === 'cajas') return chainResolve({ data: [CAJA], error: null });
+        if (tabla === 'caja_sesiones') return chainResolve({ data: { id: 'sesion-real-1', estado: 'abierta' }, error: null });
+        return chainResolve({ data: null, error: null });
+      });
+
+      const { result } = renderHook(() => useCaja(), { wrapper });
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      await act(async () => { await result.current.openSession('1000'); });
+
+      const filaVieja = await offlineDb.cajaSesionesPendientes.get(vieja);
+      expect(filaVieja.estado).toBe('sincronizada');
+      expect(filaVieja.resultado).toEqual({ sesion_id: 'sesion-real-1', reconciliada: true });
+
+      const filaVenta = await offlineDb.ventasPendientes.get(venta.localId);
+      expect(filaVenta.caja_sesion_id).toBe('sesion-real-1');
+      expect(filaVenta.caja_sesion_client_uuid).toBeNull();
+    });
+
+    it('fetchCurrentSession NO pisa una sesión real en memoria con una apertura vieja mientras está offline', async () => {
+      // El mock de caja_sesiones simula una falla de red real (lo que hace
+      // supabase-js si de verdad no hay conexión) cuando mockIsOnline=false —
+      // así se puede reproducir el poll periódico fallando en el momento
+      // justo, en vez de simplemente no simular nada.
+      mockRpc.mockResolvedValue({ data: { sesion_id: 'sesion-real-1', duplicate: false, conflict: false }, error: null });
+      mockFrom.mockImplementation((tabla) => {
+        if (tabla === 'cajas') return chainResolve({ data: [CAJA], error: null });
+        if (tabla === 'caja_sesiones') {
+          if (!mockIsOnline) return chainResolve({ data: null, error: { message: 'Failed to fetch' } });
+          return chainResolve({ data: { id: 'sesion-real-1', estado: 'abierta' }, error: null });
+        }
+        return chainResolve({ data: null, error: null });
+      });
+
+      const { result } = renderHook(() => useCaja(), { wrapper });
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      await act(async () => { await result.current.openSession('1000'); });
+      expect(result.current.currentSession.id).toBe('sesion-real-1');
+
+      // Aparece una apertura vieja pendiente en Dexie para la MISMA caja
+      // (simula el intento abandonado que Nadia encontró), y se corta la red.
+      await offlineDb.cajaSesionesPendientes.add({
+        empresa_id: EMPRESA_ID, client_uuid: 'client-uuid-vieja', estado: 'pendiente',
+        creado_en: new Date().toISOString(),
+        payload: { p_caja_id: 'caja-1', p_monto_inicial: 1 },
+        resultado: null, error: null,
+      });
+      mockIsOnline = false;
+
+      // Mismo código que corre cada 30s (setInterval) — sin red, no puede
+      // reconfirmar la sesión real.
+      await act(async () => { await result.current.refreshSession(); });
+
+      expect(result.current.currentSession.id).toBe('sesion-real-1');
+      expect(result.current.currentSession._pendingSync).toBeUndefined();
+    });
+
+    it('sin sesión real en memoria todavía (mount offline en frío), sí recupera la apertura pendiente de Dexie', async () => {
+      // Contraprueba del guard: el guard sólo protege una sesión YA
+      // confirmada — si nunca hubo ninguna (primer montaje offline), el
+      // fallback de recuperación original sigue funcionando como siempre.
+      mockIsOnline = false;
+      await offlineDb.cajaSesionesPendientes.add({
+        empresa_id: EMPRESA_ID, client_uuid: 'client-uuid-vieja', estado: 'pendiente',
+        creado_en: new Date().toISOString(),
+        payload: {
+          p_caja_id: 'caja-1', p_user_id: 'user-1', p_monto_inicial: 321,
+          p_apertura_fecha: '2026-08-07T10:00:00.000Z',
+        },
+        resultado: null, error: null,
+      });
+
+      const { result } = renderHook(() => useCaja(), { wrapper });
+      await waitFor(() => expect(result.current.isSessionOpen).toBe(true));
+      expect(result.current.currentSession._pendingSync).toBe(true);
+      expect(result.current.currentSession.monto_inicial).toBe(321);
+    });
+  });
+
   describe('closeSession', () => {
     it('bloqueado si hay ventas pendientes de sincronizar', async () => {
       await encolarVenta(EMPRESA_ID, { payload: { p_total: 100 }, itemsSnapshot: [] });

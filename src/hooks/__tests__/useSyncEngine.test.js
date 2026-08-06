@@ -182,8 +182,8 @@ describe('useSyncEngine', () => {
     expect(mockRpc).not.toHaveBeenCalledWith('abrir_caja_sesion', expect.anything());
   });
 
-  it('apertura en conflicto: la venta que depende de ella queda pendiente, no se intenta vender', async () => {
-    const apertura = await encolarAperturaCaja(EMPRESA_ID, {});
+  it('apertura en conflicto: se reconcilia contra la sesión que ganó (bug real de producción, 07/08) — no queda muerta, y la venta dependiente se sincroniza igual', async () => {
+    const apertura = await encolarAperturaCaja(EMPRESA_ID, { p_caja_id: 'caja-1', p_monto_inicial: 1000 });
     await offlineDb.ventasPendientes.add({
       empresa_id: EMPRESA_ID, client_uuid: 'venta-uuid-3', estado: 'pendiente',
       creado_en: new Date().toISOString(), numero_provisorio: 'OFFLINE-3',
@@ -191,21 +191,25 @@ describe('useSyncEngine', () => {
       payload: { p_total: 10 }, itemsSnapshot: [], resultado: null, error: null,
     });
 
-    mockRpc.mockImplementation((fn) => {
+    mockRpc.mockImplementation((fn, params) => {
       if (fn === 'abrir_caja_sesion') return Promise.resolve({ data: { conflict: true, sesion_id: 'otra-sesion' }, error: null });
+      if (fn === 'obtener_proximo_numero') return Promise.resolve({ data: '0080', error: null });
+      if (fn === 'crear_venta') {
+        expect(params.p_caja_sesion_id).toBe('otra-sesion'); // reconciliada, no varada
+        return Promise.resolve({ data: { comprobante_id: 'c1', numero_venta: '0080' }, error: null });
+      }
       return Promise.resolve({ data: null, error: null });
     });
 
     renderHook(() => useSyncEngine({ empresaId: EMPRESA_ID, isOnline: true }));
 
     await waitFor(async () => {
-      const filaApertura = (await listarAperturasPendientes(EMPRESA_ID))[0];
-      expect(filaApertura.estado).toBe('conflicto');
+      const [filaVenta] = await listarVentasPendientes(EMPRESA_ID);
+      expect(filaVenta.estado).toBe('sincronizada');
     });
-    // crear_venta nunca debía llamarse — la venta sigue esperando.
-    expect(mockRpc).not.toHaveBeenCalledWith('crear_venta', expect.anything());
-    const [filaVenta] = await listarVentasPendientes(EMPRESA_ID);
-    expect(filaVenta.estado).toBe('pendiente');
+    const filaApertura = (await listarAperturasPendientes(EMPRESA_ID))[0];
+    expect(filaApertura.estado).toBe('sincronizada'); // reconciliada, no un conflicto muerto
+    expect(filaApertura.resultado).toEqual({ sesion_id: 'otra-sesion', reconciliada: true });
   });
 
   it('no corre si isOnline es false', async () => {

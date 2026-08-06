@@ -5,6 +5,7 @@ import {
   eliminarVentaPendiente, contarVentasPendientes, decrementarStockLocal,
   encolarAperturaCaja, listarAperturasPendientes, marcarAperturaSincronizada,
   marcarAperturaConflicto, contarAperturasPendientes, medioPagoDisponibleOffline,
+  reconciliarAperturasViejas,
 } from '@/lib/offlineDb';
 
 // Modo Offline del POS — Fase 2. Verifica el aislamiento por empresa (mismo
@@ -220,6 +221,84 @@ describe('offlineDb', () => {
       const otra = await encolarAperturaCaja(EMPRESA_A, {});
       await marcarAperturaConflicto(otra.localId, 'Ya había una caja abierta');
       expect(await contarAperturasPendientes(EMPRESA_A)).toBe(1);
+    });
+  });
+
+  // Bug real de producción (07/08): una apertura offline abandonada quedaba
+  // 'pendiente'/'conflicto' para siempre y podía "resucitarse" y pisar una
+  // sesión real — dejando ventas reales varadas. reconciliarAperturasViejas
+  // las reasigna a la sesión que efectivamente ganó.
+  describe('reconciliarAperturasViejas', () => {
+    const CAJA_ID = 'caja-1';
+
+    it('marca la apertura vieja como sincronizada, apuntando a la sesión real', async () => {
+      const vieja = await encolarAperturaCaja(EMPRESA_A, { p_caja_id: CAJA_ID, p_monto_inicial: 1000 });
+      await reconciliarAperturasViejas(EMPRESA_A, CAJA_ID, 'sesion-real-1');
+
+      const fila = await offlineDb.cajaSesionesPendientes.get(vieja.localId);
+      expect(fila.estado).toBe('sincronizada');
+      expect(fila.resultado).toEqual({ sesion_id: 'sesion-real-1', reconciliada: true });
+      expect(await contarAperturasPendientes(EMPRESA_A)).toBe(0);
+    });
+
+    it('reasigna las ventas que dependían del client_uuid de la apertura vieja', async () => {
+      const vieja = await encolarAperturaCaja(EMPRESA_A, { p_caja_id: CAJA_ID, p_monto_inicial: 1000 });
+      const venta = await encolarVenta(EMPRESA_A, {
+        payload: { p_total: 5000 }, itemsSnapshot: [],
+        cajaSesionClientUuid: vieja.client_uuid,
+      });
+      expect(venta.caja_sesion_id).toBeNull();
+
+      await reconciliarAperturasViejas(EMPRESA_A, CAJA_ID, 'sesion-real-1');
+
+      const filaVenta = await offlineDb.ventasPendientes.get(venta.localId);
+      expect(filaVenta.caja_sesion_id).toBe('sesion-real-1');
+      expect(filaVenta.caja_sesion_client_uuid).toBeNull();
+      expect(filaVenta.estado).toBe('pendiente'); // sigue necesitando sincronizarse, ahora sí puede
+    });
+
+    it('reconcilia también una apertura que ya había quedado en conflicto', async () => {
+      const vieja = await encolarAperturaCaja(EMPRESA_A, { p_caja_id: CAJA_ID, p_monto_inicial: 1000 });
+      await marcarAperturaConflicto(vieja.localId, 'Ya había otra caja abierta al sincronizar.');
+
+      await reconciliarAperturasViejas(EMPRESA_A, CAJA_ID, 'sesion-real-1');
+
+      const fila = await offlineDb.cajaSesionesPendientes.get(vieja.localId);
+      expect(fila.estado).toBe('sincronizada');
+    });
+
+    it('no toca ventas de otra caja, ni ya sincronizadas, ni de otra empresa', async () => {
+      const viejaOtraCaja = await encolarAperturaCaja(EMPRESA_A, { p_caja_id: 'caja-2', p_monto_inicial: 1 });
+      const ventaOtraCaja = await encolarVenta(EMPRESA_A, {
+        payload: {}, itemsSnapshot: [], cajaSesionClientUuid: viejaOtraCaja.client_uuid,
+      });
+      const ventaYaSincronizada = await encolarVenta(EMPRESA_A, { payload: {}, itemsSnapshot: [] });
+      await marcarVentaSincronizada(ventaYaSincronizada.localId, { comprobante_id: 'c1' });
+      await encolarAperturaCaja(EMPRESA_B, { p_caja_id: CAJA_ID, p_monto_inicial: 1 });
+
+      await reconciliarAperturasViejas(EMPRESA_A, CAJA_ID, 'sesion-real-1');
+
+      // La apertura de otra caja sigue intacta (no era la que se resolvió).
+      const filaOtraCaja = await offlineDb.cajaSesionesPendientes.get(viejaOtraCaja.localId);
+      expect(filaOtraCaja.estado).toBe('pendiente');
+      // La venta que dependía de esa OTRA apertura tampoco se tocó.
+      const filaVentaOtraCaja = await offlineDb.ventasPendientes.get(ventaOtraCaja.localId);
+      expect(filaVentaOtraCaja.caja_sesion_id).toBeNull();
+      // La venta ya sincronizada queda como estaba.
+      const filaSincronizada = await offlineDb.ventasPendientes.get(ventaYaSincronizada.localId);
+      expect(filaSincronizada.estado).toBe('sincronizada');
+      // La apertura de EMPRESA_B (misma caja_id por coincidencia) no se toca.
+      expect(await contarAperturasPendientes(EMPRESA_B)).toBe(1);
+    });
+
+    it('sin aperturas viejas para esa caja, no hace nada (no explota)', async () => {
+      await expect(reconciliarAperturasViejas(EMPRESA_A, CAJA_ID, 'sesion-real-1')).resolves.not.toThrow();
+    });
+
+    it('con parámetros faltantes, no hace nada (no explota)', async () => {
+      await expect(reconciliarAperturasViejas(null, CAJA_ID, 'sesion-real-1')).resolves.not.toThrow();
+      await expect(reconciliarAperturasViejas(EMPRESA_A, null, 'sesion-real-1')).resolves.not.toThrow();
+      await expect(reconciliarAperturasViejas(EMPRESA_A, CAJA_ID, null)).resolves.not.toThrow();
     });
   });
 });

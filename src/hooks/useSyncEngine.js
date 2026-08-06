@@ -3,6 +3,7 @@ import { supabase } from '@/lib/customSupabaseClient';
 import {
   listarAperturasPendientes, marcarAperturaSincronizada, marcarAperturaConflicto,
   listarVentasPendientes, marcarVentaSincronizada, marcarVentaConflicto,
+  reconciliarAperturasViejas,
 } from '@/lib/offlineDb';
 
 // Modo Offline del POS — Fase 3. Motor de sincronización: cuando vuelve la
@@ -46,9 +47,17 @@ export function useSyncEngine({ empresaId, isOnline, puntoVentaId, onVentaSincro
         continue;
       }
       if (data?.conflict) {
-        // Otra sesión (online u offline) ganó la apertura de esa caja física.
-        // No hay nada para reintentar solo — se resuelve a mano.
-        await marcarAperturaConflicto(apertura.localId, 'Ya había otra caja abierta al sincronizar.');
+        // Otra sesión (online u offline) ganó la apertura de esa caja física
+        // — típicamente esta MISMA apertura, abandonada (el cajero la
+        // encoló offline pero no llegó a usarla, y después terminó abriendo
+        // la caja de nuevo ya con internet). No es un callejón sin salida:
+        // al cajero le da lo mismo bajo qué sesión haya quedado la caja
+        // realmente abierta, así que se reconcilia contra la que ganó — ella
+        // y cualquier venta que dependiera de su client_uuid quedan
+        // resueltas solas, en vez de varadas para siempre (bug real
+        // encontrado en pruebas de producción, 07/08).
+        await reconciliarAperturasViejas(empresaId, apertura.payload.p_caja_id, data.sesion_id);
+        idsReales.set(apertura.client_uuid, data.sesion_id);
         continue;
       }
       await marcarAperturaSincronizada(apertura.localId, data);

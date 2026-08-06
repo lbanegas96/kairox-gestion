@@ -7,7 +7,7 @@ import { parseNumberLocale } from '@/lib/currencyUtils';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import {
   encolarAperturaCaja, listarAperturasPendientes,
-  contarVentasPendientes, contarAperturasPendientes,
+  contarVentasPendientes, contarAperturasPendientes, reconciliarAperturasViejas,
 } from '@/lib/offlineDb';
 
 const CajaContext = createContext(undefined);
@@ -34,10 +34,15 @@ export const CajaProvider = ({ children }) => {
 
   const isFetching = useRef(false);
   const activeCajaRef = useRef(null);
+  const currentSessionRef = useRef(null);
 
   useEffect(() => {
     activeCajaRef.current = activeCaja;
   }, [activeCaja]);
+
+  useEffect(() => {
+    currentSessionRef.current = currentSession;
+  }, [currentSession]);
 
   // Resuelve la caja de este dispositivo (usa ref para evitar re-fetches).
   // Con 1 sola caja activa (caso de la inmensa mayoría de empresas hoy) se
@@ -142,8 +147,26 @@ export const CajaProvider = ({ children }) => {
       }
 
       if (sesionReal) {
+        // Reconcilia cualquier apertura offline vieja/abandonada de esta
+        // misma caja contra la sesión real recién confirmada — si no se
+        // hiciera, puede quedar "viva" en Dexie y (ver guard más abajo)
+        // terminar tapando esta misma sesión real en un poll futuro.
+        await reconciliarAperturasViejas(user.empresa_id, caja.id, sesionReal.id)
+          .catch(err => console.error('Error reconciliando aperturas viejas:', err));
         setCurrentSession(sesionReal);
         setIsSessionOpen(true);
+        return;
+      }
+
+      // Bug real de producción (07/08): si ya teníamos una sesión real (no
+      // _pendingSync) confirmada antes, y esta consulta no pudo traer nada
+      // nuevo — típico estando offline, la llamada de red directamente no
+      // llega — no hay que pisarla con el fallback de abajo. Sin este guard,
+      // el poll periódico (cada 30s) podía "resucitar" una apertura vieja
+      // abandonada en Dexie y tapar la sesión real en memoria, dejando
+      // cualquier venta posterior varada (nunca podía sincronizar porque
+      // dependía de una sesión que el servidor no reconocía).
+      if (currentSessionRef.current && !currentSessionRef.current._pendingSync) {
         return;
       }
 
@@ -270,6 +293,12 @@ export const CajaProvider = ({ children }) => {
       const { data: sesion, error: sesionError } = await supabase
         .from('caja_sesiones').select('*').eq('id', data.sesion_id).single();
       if (sesionError) throw sesionError;
+
+      // Misma reconciliación que en fetchCurrentSession — si había una
+      // apertura offline vieja/abandonada de esta caja, se resuelve contra
+      // esta sesión recién abierta en vez de quedar viva en Dexie.
+      await reconciliarAperturasViejas(user.empresa_id, caja.id, sesion.id)
+        .catch(err => console.error('Error reconciliando aperturas viejas:', err));
 
       setCurrentSession(sesion);
       setIsSessionOpen(true);

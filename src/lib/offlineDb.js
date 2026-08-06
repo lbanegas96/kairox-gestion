@@ -201,3 +201,57 @@ export async function contarAperturasPendientes(empresaId) {
     .filter(f => f.estado !== 'sincronizada')
     .count();
 }
+
+// Bug real encontrado en pruebas de producción (07/08): un intento de "abrir
+// caja sin conexión" puede quedar encolado y abandonado (ej. el cajero lo
+// intentó, no llegó a usarlo, y después terminó abriendo la caja de nuevo ya
+// con internet). Si nadie lo resuelve, ese registro viejo queda "vivo" en
+// Dexie — y cuando el motor de sync lo procesa más tarde, el servidor
+// correctamente le dice `conflict:true` (ya hay otra sesión real abierta
+// para esa caja). Antes ahí se lo dejaba en un conflicto muerto, sin salida
+// automática — y de paso, mientras seguía 'pendiente', podía llegar a
+// "resucitarse" por error en `CajaContext.fetchCurrentSession` y pisar la
+// sesión real en memoria (exactamente lo que le pasó a Nadia: 4 ventas
+// reales quedaron encoladas contra una sesión que nunca existió del lado
+// del servidor).
+//
+// La resolución correcta no es un callejón sin salida: para el cajero da lo
+// mismo bajo qué número de sesión haya quedado la caja realmente abierta —
+// sólo quiere que su venta entre. Esta función reconcilia CUALQUIER apertura
+// vieja sin resolver de esa misma caja (y las ventas que dependían de su
+// client_uuid) contra la sesión real que se sabe que ganó, en vez de dejarlas
+// varadas para siempre.
+export async function reconciliarAperturasViejas(empresaId, cajaId, sesionRealId) {
+  if (!empresaId || !cajaId || !sesionRealId) return;
+
+  const aperturas = await offlineDb.cajaSesionesPendientes
+    .where('empresa_id').equals(empresaId).toArray();
+  const viejas = aperturas.filter(a =>
+    a.payload?.p_caja_id === cajaId && a.estado !== 'sincronizada'
+  );
+  if (!viejas.length) return;
+
+  const ventas = await offlineDb.ventasPendientes
+    .where('empresa_id').equals(empresaId).toArray();
+
+  for (const vieja of viejas) {
+    // Cualquier venta que se haya encolado dependiendo de esta apertura
+    // abandonada (por client_uuid, porque todavía no tenía id real) ahora sí
+    // lo tiene — se reasigna para que el próximo intento de sync la procese
+    // como una venta normal, ya no como una que espera a una sesión que
+    // nunca va a llegar.
+    for (const venta of ventas) {
+      if (venta.caja_sesion_client_uuid === vieja.client_uuid && venta.estado !== 'sincronizada') {
+        await offlineDb.ventasPendientes.update(venta.localId, {
+          caja_sesion_id: sesionRealId,
+          caja_sesion_client_uuid: null,
+        });
+      }
+    }
+    await offlineDb.cajaSesionesPendientes.update(vieja.localId, {
+      estado: 'sincronizada',
+      resultado: { sesion_id: sesionRealId, reconciliada: true },
+      error: null,
+    });
+  }
+}
