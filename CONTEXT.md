@@ -1,11 +1,35 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-07 (Nadia — Modo Offline y Multi-caja cerrados de punta a punta
-en producción; Fidelización por Puntos con las 4 fases completas — backend, configuración, ganar
-puntos y canjear puntos — en POS y ERP)
+**Última actualización:** 2026-08-07 (Claude — cerrado el gap de QR MercadoPago sin ganar puntos:
+probado en sandbox, migración 313 lista pero **pendiente de aplicar a producción**, esperando
+confirmación. Las 4 fases de Fidelización — backend, configuración, ganar y canjear puntos, en
+POS y ERP — ya estaban 100% cerradas por Nadia, ver más abajo)
 
 ---
 
 # 👉 EMPEZÁ POR ACÁ (Luciano)
+
+## ⏳ Necesita tu confirmación antes de seguir
+
+**`supabase/migrations/313_fidelizacion_puntos_qr.sql` está lista y probada en sandbox, pero NO
+se aplicó a producción.** Cierra el gap de "las ventas por QR MercadoPago no ganan puntos"
+(quedó documentado ayer). Toca `confirmar_pago_qr`, que es el circuito real de confirmación de
+pagos de MercadoPago, así que no la apliqué sin que estuvieras para confirmar. Quedó probada de
+punta a punta en sandbox (`BEGIN...ROLLBACK` contra Nalux, con datos 100% sintéticos, 0 rastro
+después) — detalle completo en `PLAN_FIDELIZACION_PUNTOS.md`. Avisame y la aplico, no hace falta
+volver a probarla.
+
+**Nota de coordinación (sin impacto en vos, sólo para que quede registrado):** mientras
+trabajaba en esto, Nadia (en su propia sesión, en paralelo) ya había replicado la Fase 3 al ERP
+Y de paso encontró y arregló un bug real que mi propia réplica también tenía sin darme cuenta
+(el descuento de puntos se restaba sólo del total, sin repartirlo entre los ítems — eso
+desbalanceaba el asiento contable automático y, con factura electrónica activa, la factura a
+ARCA hubiera informado el monto bruto en vez del cobrado). Al traer sus cambios descarté mi
+versión (tenía el bug) y me quedé con la de ella. **Mi versión con el bug llegó a estar
+deployada en producción unos minutos** (hasta que hice `git fetch` y encontré su commit) — sin
+uso real conocido de "canjear puntos" en Nueva Venta en esa ventana, y redeployado con la versión
+correcta apenas se detectó.
+
+---
 
 **🆕 Fidelización por Puntos — arrancó hoy (07/08), Fase 0 (backend) ya aplicada y probada.**
 Investigación de mercado en `INVESTIGACION_FIDELIZACION_PUNTOS.md` (confirma el hueco: ni Tango
@@ -54,8 +78,9 @@ el toast efímero) — ahora también hay un badge "¡Ganaste N puntos!" en el m
 confirmada!". Los 3 fixes verificados contra la sesión real de Nadia (popover completo dentro de
 pantalla mostrando "270 pts" de Carlos Perez, botón 100% visible en un viewport de 660px de
 alto). **Gap real encontrado de paso:** las ventas por QR MercadoPago no ganan puntos — usan un
-RPC distinto (`crear_venta_pendiente_qr`) que no pasa por la lógica de puntos de `crear_venta`;
-queda documentado como pendiente para una fase futura, no resuelto todavía.
+RPC distinto (`crear_venta_pendiente_qr`) que no pasa por la lógica de puntos de `crear_venta`.
+**Cerrado más tarde el mismo día (mig.313, probada en sandbox) — ver el aviso al principio de
+este archivo, sigue pendiente de aplicar a producción hasta que confirmes.**
 
 Sigue la **Fase 3 (Canjear puntos — input en el checkout, descuento aplicado)** recién con el
 próximo "dale" — detalle completo en `PLAN_FIDELIZACION_PUNTOS.md`.

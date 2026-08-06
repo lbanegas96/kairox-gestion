@@ -360,3 +360,54 @@ Verificado con un test dedicado (`useConfirmarVenta.test.js`): item de $100 x 2 
 canje (factor 0.5) → cada unidad llega a `crear_venta` en $50, subtotal $100 (exacto al
 `p_total`). 17 tests en `useConfirmarVenta.test.js`, suite completa 153/153 en verde,
 `eslint`/`vite build` en 0 errores.
+
+## 🐛 Gap cerrado (07/08, mig.313 — probada en sandbox, PENDIENTE de aplicar): QR MercadoPago ya gana puntos
+
+El gap documentado en la Fase 2 (arriba): las ventas por QR usan `crear_venta_pendiente_qr` +
+`confirmar_pago_qr`, no `crear_venta` — la lógica de puntos (que vive dentro de `crear_venta`)
+nunca corría ahí.
+
+**Diseño:** ganar puntos se agrega a `confirmar_pago_qr`, no a `crear_venta_pendiente_qr` — el
+QR deja la venta en `pendiente` hasta que MP confirma; si se cancela o expira, la venta nunca
+pasó, no corresponde sumar puntos por algo que no se cobró. Mismo momento conceptual en que
+`crear_venta` gana puntos (justo después de que el cobro es un hecho), sólo que acá ese momento
+llega vía el pago confirmado en vez de vía la llamada RPC en sí. El canje de puntos NO se agrega
+al circuito QR (fuera de alcance — el QR cubre el 100% de la venta, no admite descuentos
+manuales en el checkout, así que el "problema del reparto proporcional" de arriba no aplica acá:
+no hay ítems que recalcular, `crear_venta_pendiente_qr` ya calcula `neto_gravado`/`iva_discriminado`
+sobre el total real cobrado).
+
+**`supabase/migrations/313_fidelizacion_puntos_qr.sql`** — `CREATE OR REPLACE FUNCTION` (no
+DROP+CREATE: la firma de `confirmar_pago_qr` no cambia, sólo el cuerpo — a diferencia de agregar
+un parámetro nuevo, esto sí preserva el OID de la función y sus `GRANT`/`REVOKE` existentes).
+Justo después de marcar `estado_pago = 'pagada'`: si el comprobante tiene `cliente_id` y la
+empresa tiene `usa_fidelizacion`, calcula `FLOOR(total / puntos_pesos_por_punto)`, suma el saldo
+del cliente e inserta el movimiento `'ganado'` — mismo patrón que `crear_venta`, con una sola
+diferencia real: `movimientos_puntos.user_id` usa `v_qr.user_id` (el cajero que generó el QR) en
+vez de `auth.uid()`, porque esta función corre sin sesión de usuario (la llama `service_role`
+desde el webhook/poller, mismo criterio que ya usa el `INSERT` de `movimientos_caja` un poco más
+arriba en la misma función).
+
+**Probado en sandbox contra Nalux** (`BEGIN...ROLLBACK`, con la función reemplazada dentro de la
+misma transacción — nunca se comiteó nada, verificado después: 0 filas de test remanentes en
+`clientes`/`comprobantes`/`qr_pagos_mp`/`movimientos_puntos`, y la función real en producción
+sigue sin el fix):
+- Venta QR de $1.000 con cliente asociado (ratio real de Nalux, 100 pesos/punto) → `puntos_ganados: 10`,
+  `saldo_puntos` del cliente sintético termina en 10, exactamente 1 fila en `movimientos_puntos`.
+- Confirmar el mismo QR una segunda vez (simula un webhook duplicado) → `{ya_procesado: true}`,
+  **no vuelve a sumar puntos** — sigue habiendo sólo 1 fila en `movimientos_puntos` después del
+  segundo llamado.
+- Venta QR de $500 sin cliente asociado (Consumidor Final) → `puntos_ganados: 0`, sin ningún
+  error — confirma que el gate `cliente_id IS NOT NULL` funciona.
+
+**⚠️ Esta migración NO se aplicó a producción todavía** — quedó probada en sandbox y commiteada
+al repo, pero tocar el circuito de confirmación de pagos reales de MercadoPago con el usuario
+afuera y sin poder confirmar en el momento cruza la raya que este proyecto ya se puso a sí mismo
+para migraciones (repo sí, aplicar a prod sólo con autorización explícita). Aplicar con
+`apply_migration` en cuanto lo confirmes — no hace falta volver a probarla, ya quedó verificada.
+
+**Nota de coordinación:** este trabajo (investigación del gap + mig.313) se hizo en paralelo a
+que Nadia encontraba y arreglaba el bug del reparto proporcional (sección de arriba) en su propia
+sesión. Ambos trabajos son independientes y no se pisan — el fix del reparto proporcional aplica
+al circuito síncrono de `crear_venta` (POS+ERP), y este gap es específico del circuito asíncrono
+del QR, que no pasa por ahí.
