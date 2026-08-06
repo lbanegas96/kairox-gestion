@@ -283,3 +283,23 @@ completa: **152/152 en verde**. `eslint`/`vite build` en 0 errores.
 **Todavía no está en el ERP** (`NuevaVentaModal.jsx`, la pantalla "Nueva Venta" fuera del POS) —
 mismo criterio de checkpoints del resto del proyecto: se cierra y se prueba el POS primero
 (que es lo que usa Nadia todos los días) antes de replicar el mismo circuito ahí.
+
+### 🐛 Otro bug de "Confirmar Venta cortado", encontrado por Nadia probando Fase 3 (07/08)
+
+El fix anterior (`min-h-0` en el contenedor del listado de items, ver la sección de fixes de la
+Fase 2 más arriba) **no alcanzaba** en todos los casos — con un producto que tiene una oferta
+automática (2 líneas extra: "Subtotal" + "Ahorro"), el botón volvía a quedar tapado. Causa real:
+el propio `<div>` raíz de `PanelCarrito.jsx` tenía `flex-shrink-0` en su className. Esa clase
+originalmente controlaba el ANCHO (no achicarse dentro de la fila `md:flex-row` de
+`ModoCajaLayout`) — pero ese div vive DENTRO de un wrapper que ya fija el ancho por su cuenta
+(`ModoCajaLayout.jsx`, `w-full md:w-[360px] lg:w-[420px]`) y que además es `flex-col`. Para un
+hijo de un contenedor `flex-col`, `flex-shrink` deja de referirse al ancho y pasa a referirse a
+la ALTURA — así que sin querer, ese `flex-shrink-0` le decía a la ALTURA que nunca se achicara,
+anulando por completo el `min-h-0` que se le había puesto al lado. Fix: sacar `flex-shrink-0` de
+ese div (el ancho ya lo controla el wrapper, no hace falta ahí).
+
+Verificado en vivo contra la sesión real de Nadia: con "Batidora Eléctrica" (que dispara una
+oferta automática) en el carrito y un viewport de 638px de alto, el botón "Confirmar Venta"
+quedaba 24px cortado por debajo (`bottom: 662` contra `innerHeight: 638`) — después del fix,
+`bottom: 590` (completo, con margen). 10/10 tests de `PanelCarrito.test.jsx` siguen en verde,
+`eslint`/`vite build` en 0 errores.

@@ -177,6 +177,14 @@ Ticket/modal de venta muestran "Descuento por puntos (N)". 20 tests nuevos, suit
 152/152 en verde, `eslint`/`vite build` en 0 errores. **Todavía no está en el ERP**
 (`NuevaVentaModal.jsx`) — se prueba el POS primero, mismo criterio de checkpoints de siempre.
 
+**🐛 Otro "Confirmar Venta cortado", encontrado y arreglado en vivo (07/08):** el fix anterior
+(`min-h-0`) no alcanzaba con carritos con oferta automática (2 líneas extra: Subtotal/Ahorro).
+Causa real: el propio `<div>` raíz de `PanelCarrito.jsx` tenía `flex-shrink-0` — clase pensada
+para el ANCHO, pero como ese div vive dentro de un wrapper `flex-col` que ya fija el ancho por
+su cuenta, `flex-shrink-0` terminaba aplicando a la ALTURA y anulaba el `min-h-0`. Fix: sacar esa
+clase (el ancho ya lo controla el wrapper). Verificado en vivo: con Batidora Eléctrica (dispara
+oferta) en un viewport de 638px, el botón pasó de cortarse 24px por debajo a quedar completo.
+
 ---
 
 ## ✅ Modo Offline del POS — Fase 0 (backend, idempotencia) — mig.309/310

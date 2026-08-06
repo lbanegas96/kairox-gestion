@@ -475,7 +475,16 @@ function PanelCarrito({
       // Al faltar acá, en ventanas de navegador bajas el contenido de abajo
       // (medio de pago, totales, botón Confirmar Venta) quedaba tapado por el
       // overflow-hidden del layout padre (ModoCajaLayout, h-screen).
-      className="w-full md:w-[360px] lg:w-[420px] flex-shrink-0 flex flex-col min-h-0"
+      //
+      // SIN flex-shrink-0 acá (a propósito, encontrado en vivo 07/08 con
+      // Nadia): este div ya vive DENTRO de un wrapper en ModoCajaLayout.jsx
+      // que es el que fija el ancho (w-full md:w-[360px] lg:w-[420px]) — ese
+      // wrapper es flex-col, así que para este div "flex-shrink" ya no
+      // controla el ancho (eso lo resuelve el wrapper), controla la ALTURA.
+      // Con flex-shrink-0 puesto, este div se negaba a achicarse aunque
+      // tuviera min-h-0, y con carritos con descuentos (líneas extra de
+      // Subtotal/Ahorro) el contenido de abajo volvía a quedar tapado.
+      className="w-full md:w-[360px] lg:w-[420px] flex flex-col min-h-0"
       style={{ borderLeft: '1px solid rgb(var(--kx-border))' }}
     >
       {/* Selector de cliente */}
