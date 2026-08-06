@@ -138,3 +138,36 @@ correctamente.
 
 **Sigue la Fase 1** (Configuración por empresa — toggle + ratios en Finanzas) recién con el
 próximo "dale".
+
+## ✅ Fase 1 — HECHA (07/08): Configuración por empresa (toggle + ratios en Finanzas)
+
+Sin migración nueva — usa las columnas de `empresas` que ya agregó la Fase 0
+(`usa_fidelizacion`, `puntos_pesos_por_punto`, `puntos_valor_pesos`).
+
+**UI nueva**, siguiendo el mismo patrón visual/de guardado que ya usa "Moneda Paralela" en la
+misma pantalla (toggle + campos condicionales + botón "Guardar" explícito, en vez de auto-guardar
+como los toggles simples de un solo booleano):
+
+- **`ConfiguracionSection.jsx`**: nuevo grupo de estado `fidelizacionConfig` (`usa_fidelizacion`,
+  `puntos_pesos_por_punto`, `puntos_valor_pesos`) + `loadingFidelizacion`/`savingFidelizacion`.
+  Se carga desde `empresas` al montar (mismo `useEffect` que el resto de los toggles de la
+  pantalla) y se guarda con `handleSaveFidelizacion`, que valida en el cliente — antes de pegarle
+  a la base — que si `usa_fidelizacion` está en `true` los dos ratios sean números mayores a 0
+  (mismo criterio que los `CHECK (... IS NULL OR > 0)` de la migración 312, pero avisando antes
+  con un toast en vez de esperar el error de Postgres).
+- **`TabFinanzas.jsx`**: card nueva "Fidelización por Puntos" (ícono `Gift`), con el toggle, los
+  2 inputs numéricos (sólo visibles si está activo), un resumen de 3 badges en vivo (cuánto vale
+  cada punto, cuánto hace falta gastar para ganar uno, y el % de devolución efectiva que implica
+  esa combinación) y el botón "Guardar configuración de fidelización".
+
+**Verificación:** `npx eslint` sobre los 2 archivos → 0 errores (sólo warnings preexistentes de
+`react/prop-types`, mismo patrón que el resto del archivo, que no usa PropTypes en ningún lado).
+`npx vite build` → build limpio. Verificación visual en el preview limitada a "la app carga sin
+errores de consola" — no se pudo ver la pantalla de Configuración en sí porque queda detrás del
+login y, como en las fases anteriores del proyecto, no se inicia sesión desde el entorno de
+verificación automática. Falta la prueba visual real: que Nadia entre a Configuración → Finanzas,
+active el toggle, cargue los 2 ratios y guarde — pendiente para cuando ella lo prueba en vivo.
+
+**Sin esto todavía no pasa nada solo** — activar el toggle y guardar los ratios no hace que las
+ventas sumen o descuenten puntos; eso es la Fase 2 (ganar) y la Fase 3 (canjear), que siguen sin
+arrancar hasta el próximo "dale".

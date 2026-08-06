@@ -103,6 +103,13 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [usaEcommerce, setUsaEcommerce] = useState(false);
   const [savingUsaEcommerce, setSavingUsaEcommerce] = useState(false);
 
+  // ── Tab 2: Finanzas — Fidelización por Puntos (mig.312, Fase 1) ────────────
+  const [fidelizacionConfig, setFidelizacionConfig] = useState({
+    usa_fidelizacion: false, puntos_pesos_por_punto: '', puntos_valor_pesos: '',
+  });
+  const [loadingFidelizacion, setLoadingFidelizacion] = useState(false);
+  const [savingFidelizacion, setSavingFidelizacion] = useState(false);
+
   // ── Tab 4: Inventario — Método de Valoración de Stock ────────────────────
   const [valoracionStock, setValoracionStock] = useState('ultimo_costo');
   const [loadingValoracion, setLoadingValoracion] = useState(false);
@@ -528,6 +535,30 @@ const ConfiguracionSection = ({ initialTab }) => {
       }
     };
     loadUsaCentrosCosto();
+  }, [user?.empresa_id]);
+
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    const loadFidelizacion = async () => {
+      setLoadingFidelizacion(true);
+      try {
+        const { data } = await supabase
+          .from('empresas')
+          .select('usa_fidelizacion, puntos_pesos_por_punto, puntos_valor_pesos')
+          .eq('id', user.empresa_id)
+          .single();
+        if (data) setFidelizacionConfig({
+          usa_fidelizacion: data.usa_fidelizacion ?? false,
+          puntos_pesos_por_punto: data.puntos_pesos_por_punto ?? '',
+          puntos_valor_pesos: data.puntos_valor_pesos ?? '',
+        });
+      } catch (e) {
+        console.error('[Fidelización] Error al cargar config:', e);
+      } finally {
+        setLoadingFidelizacion(false);
+      }
+    };
+    loadFidelizacion();
   }, [user?.empresa_id]);
 
   useEffect(() => {
@@ -1015,6 +1046,48 @@ const ConfiguracionSection = ({ initialTab }) => {
       toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
     } finally {
       setSavingTC(false);
+    }
+  };
+
+  const handleSaveFidelizacion = async () => {
+    if (!user?.empresa_id) return;
+    // Si está activo, ambos ratios son obligatorios y positivos — mismo criterio
+    // que los CHECK de la migración 312 (IS NULL OR > 0), pero acá se avisa antes
+    // de pegarle a la base en vez de esperar el error de Postgres.
+    const pesosPorPunto = fidelizacionConfig.puntos_pesos_por_punto === '' ? null : Number(fidelizacionConfig.puntos_pesos_por_punto);
+    const valorPesos = fidelizacionConfig.puntos_valor_pesos === '' ? null : Number(fidelizacionConfig.puntos_valor_pesos);
+    if (fidelizacionConfig.usa_fidelizacion) {
+      if (!(pesosPorPunto > 0) || !(valorPesos > 0)) {
+        toast({
+          title: 'Faltan datos',
+          description: 'Para activar fidelización, cargá los dos valores de ratio (mayores a 0).',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+    setSavingFidelizacion(true);
+    try {
+      const { error } = await supabase
+        .from('empresas')
+        .update({
+          usa_fidelizacion: fidelizacionConfig.usa_fidelizacion,
+          puntos_pesos_por_punto: pesosPorPunto,
+          puntos_valor_pesos: valorPesos,
+        })
+        .eq('id', user.empresa_id);
+      if (error) throw error;
+      toast({
+        title: 'Fidelización guardada',
+        description: fidelizacionConfig.usa_fidelizacion
+          ? `Activada: $${pesosPorPunto} = 1 punto, cada punto vale $${valorPesos} de descuento.`
+          : 'Desactivada. Ningún cliente suma ni puede canjear puntos.',
+        className: 'bg-green-600 text-white border-green-700',
+      });
+    } catch (e) {
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingFidelizacion(false);
     }
   };
 
@@ -1878,6 +1951,11 @@ const ConfiguracionSection = ({ initialTab }) => {
             loadingUsaCentrosCosto={loadingUsaCentrosCosto}
             savingUsaCentrosCosto={savingUsaCentrosCosto}
             onToggleUsaCentrosCosto={handleSaveUsaCentrosCosto}
+            fidelizacionConfig={fidelizacionConfig}
+            setFidelizacionConfig={setFidelizacionConfig}
+            loadingFidelizacion={loadingFidelizacion}
+            savingFidelizacion={savingFidelizacion}
+            onSaveFidelizacion={handleSaveFidelizacion}
           />
         </TabsContent>
 

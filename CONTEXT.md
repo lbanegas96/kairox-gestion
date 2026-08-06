@@ -1,6 +1,7 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-08-07 (Nadia — Modo Offline y Multi-caja cerrados de punta a punta
-en producción; arrancó Fidelización por Puntos, Fase 0 ya aplicada y probada en vivo, mig.312)
+en producción; Fidelización por Puntos con Fase 0 (backend, mig.312) y Fase 1 (configuración en
+Finanzas) ya hechas)
 
 ---
 
@@ -18,7 +19,17 @@ sintéticos (simulando una sesión real vía JWT — necesario porque la funció
 `get_my_empresa_id()`): ganar + canjear puntos, saldo insuficiente rechazado limpio,
 fidelización desactivada rechazada limpio, y **una venta sin tocar puntos sigue funcionando
 idéntico a hoy** (cero regresión). Todo el dato de prueba revertido, Nalux quedó como estaba.
-Sigue la Fase 1 (Configuración por empresa) recién con el próximo "dale" — detalle completo en
+**Fase 1 (Configuración por empresa) también ya está hecha (07/08).** Card nueva "Fidelización
+por Puntos" en Configuración → Finanzas (mismo lugar que Moneda Paralela/Centros de Costo/Cajas):
+toggle `usa_fidelizacion` + 2 inputs de ratio (`puntos_pesos_por_punto`/`puntos_valor_pesos`) +
+resumen en vivo + botón "Guardar" explícito — mismo patrón visual y de guardado que ya usa
+"Moneda Paralela" en esa misma pantalla. Sin migración nueva (usa las columnas de la Fase 0).
+`npx eslint`/`npx vite build` en 0 errores. **Ojo:** activar el toggle y guardar los ratios
+todavía no hace nada solo en las ventas — eso es la Fase 2 (ganar) y Fase 3 (canjear), que siguen
+sin arrancar. Falta que Nadia entre a Configuración → Finanzas y lo pruebe con sus propios ojos
+(activar, cargar ratios, guardar, recargar y confirmar que quedó guardado) — no se pudo verificar
+visualmente desde el entorno automático porque queda detrás del login, mismo límite que las fases
+anteriores del proyecto. Sigue la Fase 2 recién con el próximo "dale" — detalle completo en
 `PLAN_FIDELIZACION_PUNTOS.md`.
 
 **✅ Nadia corrió el plan de pruebas hoy (07/08), en `kairox-gestion-chi.vercel.app` — resultado
@@ -119,13 +130,16 @@ varias veces, y multi-caja con sus propios ojos.
 
 Plan de pruebas usado hoy, con el detalle completo de cada bloque: `PLAN_PRUEBAS_NADIA_2026-08-06.md`.
 
-### 📌 En curso: Fidelización por puntos — Fase 0 hecha, sigue Fase 1
+### 📌 En curso: Fidelización por puntos — Fase 0 y Fase 1 hechas, sigue Fase 2
 
 Investigación + plan de 4 fases ya armados (`INVESTIGACION_FIDELIZACION_PUNTOS.md` /
 `PLAN_FIDELIZACION_PUNTOS.md`), decisiones de negocio tomadas por Nadia, **Fase 0 (backend)
-aplicada y probada en vivo hoy (mig.312)** — ver el resumen al principio de esta sección. Sigue
-la **Fase 1 (Configuración por empresa: toggle + ratios en Finanzas)**, recién con el próximo
-"dale" — nunca se arranca una fase sin cerrar la anterior.
+aplicada y probada en vivo (mig.312)** y **Fase 1 (Configuración por empresa: toggle + ratios en
+Finanzas) ya construida hoy (07/08)** — ver el resumen al principio de esta sección. Falta que
+Nadia la pruebe con sus propios ojos (no se pudo verificar visualmente desde acá, queda detrás
+del login). Sigue la **Fase 2 (Ganar puntos automático — `ClienteSelector` muestra el saldo, cada
+venta con cliente suma sola)**, recién con el próximo "dale" — nunca se arranca una fase sin
+cerrar la anterior.
 
 ---
 

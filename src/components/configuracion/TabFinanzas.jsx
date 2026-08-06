@@ -1,8 +1,9 @@
-import { TrendingUp, Loader2, CheckCircle2, Save, CreditCard, Pencil, Building2, Receipt, Landmark } from 'lucide-react';
+import { TrendingUp, Loader2, CheckCircle2, Save, CreditCard, Pencil, Building2, Receipt, Landmark, Gift } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 /**
@@ -32,6 +33,7 @@ const TabFinanzas = ({
   onNuevoCentroCosto, onEditarCentroCosto, onToggleCentroCosto,
   impuestosAvanzados, loadingImpuestosAv, savingImpuestosAv, onToggleImpuestosAv,
   usaCentrosCosto, loadingUsaCentrosCosto, savingUsaCentrosCosto, onToggleUsaCentrosCosto,
+  fidelizacionConfig, setFidelizacionConfig, loadingFidelizacion, savingFidelizacion, onSaveFidelizacion,
 }) => (
   <div className="space-y-6 max-w-2xl">
     {/* Impuestos Avanzados (IIBB / Retenciones / Convenio) */}
@@ -374,6 +376,88 @@ const TabFinanzas = ({
               ))}
             </div>
           )}
+        </div>
+      )}
+    </div>
+
+    {/* Fidelización por Puntos (mig.312) */}
+    <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+      <div className="flex items-start gap-3 mb-4">
+        <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg mt-0.5">
+          <Gift className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+        </div>
+        <div>
+          <h3 className="text-lg font-bold text-slate-900 dark:text-kx-text">Fidelización por Puntos</h3>
+          <p className="text-sm text-slate-500 dark:text-kx-text-2 mt-0.5">
+            Cada venta con cliente asociado suma puntos solos; el cajero puede canjearlos como
+            descuento directo en pesos al cobrar. Gratis, sin vencimiento.
+          </p>
+        </div>
+      </div>
+
+      {loadingFidelizacion ? (
+        <div className="flex items-center gap-2 text-kx-text-3 py-4">
+          <Loader2 className="h-4 w-4 animate-spin" /> Cargando configuración...
+        </div>
+      ) : (
+        <div className="space-y-5">
+          <div className="flex items-center justify-between p-4 bg-kx-surface-2 dark:bg-slate-900/50 rounded-lg border kairox-border">
+            <div>
+              <Label className="text-kx-text dark:text-kx-text font-medium">Activar fidelización por puntos</Label>
+              <p className="text-xs text-slate-500 dark:text-kx-text-2 mt-0.5">
+                {fidelizacionConfig.usa_fidelizacion
+                  ? 'Los clientes acumulan puntos en cada venta y se pueden canjear como descuento al cobrar.'
+                  : 'Ninguna venta suma puntos ni pide canje.'}
+              </p>
+            </div>
+            <Switch
+              checked={fidelizacionConfig.usa_fidelizacion}
+              onCheckedChange={v => setFidelizacionConfig(prev => ({ ...prev, usa_fidelizacion: v }))}
+            />
+          </div>
+
+          {fidelizacionConfig.usa_fidelizacion && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+              <div className="space-y-2">
+                <Label className="text-slate-700 dark:text-slate-300">Pesos gastados por cada punto ganado</Label>
+                <Input
+                  type="number" min="0.01" step="0.01" placeholder="Ej.: 100"
+                  value={fidelizacionConfig.puntos_pesos_por_punto}
+                  onChange={e => setFidelizacionConfig(prev => ({ ...prev, puntos_pesos_por_punto: e.target.value }))}
+                  className="h-9 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                />
+                <p className="text-xs text-kx-text-3">Ej.: 100 → cada $100 de venta suma 1 punto.</p>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-slate-700 dark:text-slate-300">Valor en pesos de cada punto al canjear</Label>
+                <Input
+                  type="number" min="0.01" step="0.01" placeholder="Ej.: 1"
+                  value={fidelizacionConfig.puntos_valor_pesos}
+                  onChange={e => setFidelizacionConfig(prev => ({ ...prev, puntos_valor_pesos: e.target.value }))}
+                  className="h-9 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                />
+                <p className="text-xs text-kx-text-3">Ej.: 1 → cada punto canjeado descuenta $1 del total.</p>
+              </div>
+            </div>
+          )}
+
+          {fidelizacionConfig.usa_fidelizacion && Number(fidelizacionConfig.puntos_pesos_por_punto) > 0 && Number(fidelizacionConfig.puntos_valor_pesos) > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              {[
+                `$${fidelizacionConfig.puntos_pesos_por_punto} gastados = 1 punto`,
+                `1 punto = $${fidelizacionConfig.puntos_valor_pesos} de descuento`,
+                `≈${((Number(fidelizacionConfig.puntos_valor_pesos) / Number(fidelizacionConfig.puntos_pesos_por_punto)) * 100).toFixed(2)}% de devolución efectiva`,
+              ].map((text, i) => (
+                <div key={i} className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg px-3 py-2 border border-emerald-200 dark:border-emerald-800">
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> {text}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Button onClick={onSaveFidelizacion} disabled={savingFidelizacion} className="bg-blue-600 hover:bg-blue-700 text-white">
+            {savingFidelizacion ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : <><Save className="mr-2 h-4 w-4" /> Guardar configuración de fidelización</>}
+          </Button>
         </div>
       )}
     </div>
