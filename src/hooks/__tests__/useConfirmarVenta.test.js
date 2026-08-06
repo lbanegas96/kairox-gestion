@@ -179,6 +179,38 @@ describe('useConfirmarVenta', () => {
       expect(venta.descuento_puntos_pesos).toBe(100);
     });
 
+    it('reparte el descuento proporcionalmente entre los ítems (bug real de IVA/asiento, 07/08)', async () => {
+      // Sin esto, crear_venta calculaba neto_gravado/iva_discriminado sobre el
+      // precio SIN el descuento de puntos (suma directo de p_items) — el
+      // asiento contable automático quedaba desbalanceado por el monto del
+      // canje. Fix: cada item se manda ya con el descuento adentro, mismo
+      // criterio fiscal que las ofertas.
+      let itemsEnviados;
+      mockRpc.mockImplementation((fn, args) => {
+        if (fn === 'obtener_proximo_numero') return Promise.resolve({ data: '0008', error: null });
+        if (fn === 'crear_venta') {
+          itemsEnviados = args.p_items;
+          return Promise.resolve({ data: { comprobante_id: 'c8', numero_venta: '0008' }, error: null });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+      const { result } = renderHook(() => useConfirmarVenta(null, []));
+      await act(async () => {
+        // CART = 1 item de $100 x 2 = $200. Canjea 20 puntos = $100 de descuento
+        // → factor 0.5. El item tiene que llegar a mitad de precio.
+        await result.current.confirmar({
+          cart: CART, selectedClient: CLIENTE, pagos: PAGOS_EFECTIVO,
+          puntosCanjeados: 20, descuentoPuntosPesos: 100,
+        });
+      });
+      expect(itemsEnviados).toHaveLength(1);
+      expect(itemsEnviados[0].precio_unitario).toBe(50); // 100 * 0.5
+      expect(itemsEnviados[0].subtotal).toBe(100);        // 50 * 2 — suma exacto al p_total (100)
+      // precio_original NO se toca — sigue siendo el precio de lista real,
+      // el descuento por puntos vive aparte (movimientos_puntos + el ticket).
+      expect(itemsEnviados[0].precio_original).toBe(100);
+    });
+
     it('sin canje (default): manda p_puntos_canjeados: 0 y no toca el total', async () => {
       mockRpc.mockImplementation((fn) => {
         if (fn === 'obtener_proximo_numero') return Promise.resolve({ data: '0007', error: null });

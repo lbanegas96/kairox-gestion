@@ -1,7 +1,7 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-08-07 (Nadia — Modo Offline y Multi-caja cerrados de punta a punta
-en producción; Fidelización por Puntos con Fases 0/1/2 hechas y Fase 3 (canjear puntos) hecha en
-el POS — falta replicarla en el ERP)
+en producción; Fidelización por Puntos con las 4 fases completas — backend, configuración, ganar
+puntos y canjear puntos — en POS y ERP)
 
 ---
 
@@ -158,7 +158,7 @@ varias veces, y multi-caja con sus propios ojos.
 
 Plan de pruebas usado hoy, con el detalle completo de cada bloque: `PLAN_PRUEBAS_NADIA_2026-08-06.md`.
 
-### 📌 En curso: Fidelización por puntos — Fases 0/1/2 hechas, Fase 3 hecha en el POS
+### 📌 Fidelización por puntos — las 4 fases completas (07/08), en POS y ERP
 
 Investigación + plan de 4 fases ya armados (`INVESTIGACION_FIDELIZACION_PUNTOS.md` /
 `PLAN_FIDELIZACION_PUNTOS.md`), decisiones de negocio tomadas por Nadia, **Fase 0 (backend)
@@ -168,14 +168,11 @@ ahora mismo) y **Fase 2 (Ganar puntos, visible) probada en vivo por Nadia** — 
 el drill-down del cliente (POS y ERP) y cada venta avisa "+N puntos" en el momento (encontró y ya
 se arreglaron 3 bugs de UI de paso, ver detalle arriba).
 
-**Fase 3 (Canjear puntos) construida hoy (07/08) en el POS** — `PanelCarrito.jsx`: card "Canjear
-puntos" cerca del total, sólo con conexión + fidelización activa + cliente con saldo, clampeada
-en vivo al saldo disponible y a no dejar el total negativo. `useConfirmarVenta.js` resta el
-descuento del total y manda `p_puntos_canjeados` a `crear_venta` (que ya lo soportaba desde la
-Fase 0). Redención **no soportada offline** a propósito (necesita el saldo real del servidor).
-Ticket/modal de venta muestran "Descuento por puntos (N)". 20 tests nuevos, suite completa
-152/152 en verde, `eslint`/`vite build` en 0 errores. **Todavía no está en el ERP**
-(`NuevaVentaModal.jsx`) — se prueba el POS primero, mismo criterio de checkpoints de siempre.
+**Fase 3 (Canjear puntos) construida y probada en vivo por Nadia en el POS** —
+`PanelCarrito.jsx`: card "Canjear puntos" cerca del total, sólo con conexión + fidelización
+activa + cliente con saldo, clampeada en vivo al saldo disponible y a no dejar el total negativo.
+Redención **no soportada offline** a propósito (necesita el saldo real del servidor). Ticket/
+modal de venta muestran "Descuento por puntos (N)".
 
 **🐛 Otro "Confirmar Venta cortado", encontrado y arreglado en vivo (07/08):** el fix anterior
 (`min-h-0`) no alcanzaba con carritos con oferta automática (2 líneas extra: Subtotal/Ahorro).
@@ -184,6 +181,26 @@ para el ANCHO, pero como ese div vive dentro de un wrapper `flex-col` que ya fij
 su cuenta, `flex-shrink-0` terminaba aplicando a la ALTURA y anulaba el `min-h-0`. Fix: sacar esa
 clase (el ancho ya lo controla el wrapper). Verificado en vivo: con Batidora Eléctrica (dispara
 oferta) en un viewport de 638px, el botón pasó de cortarse 24px por debajo a quedar completo.
+
+**🐛 BUG real de fondo, encontrado revisando el mecanismo con más cuidado (no cosmético):** el
+asiento contable automático no se enteraba del descuento por puntos — `crear_venta` calcula
+`neto_gravado`/`iva_discriminado` sumando los ítems, sin saber nada de `p_total`. El asiento
+quedaba desbalanceado por el monto exacto del canje, y una eventual factura AFIP con
+fidelización activa reportaría el monto bruto, distinto al cobrado. **Decisión de Nadia:**
+repartir el descuento proporcionalmente entre los productos de la venta — mismo criterio fiscal
+que ya usan las ofertas automáticas, así el IVA queda sobre lo que el cliente realmente pagó.
+Arreglado en `useConfirmarVenta.js` (POS) antes de replicar el mismo patrón en el ERP, para no
+duplicar el problema.
+
+**Fase 3 también construida en el ERP (`NuevaVentaModal.jsx`)** — mismo circuito, ya con el fix
+del reparto proporcional incluido desde el vínculo. Diferencias: el selector de cliente ahí es
+un `<select>` simple en `PanelPago.jsx` (no el componente compartido del POS); `calculateTotal()`
+(la única función de total del archivo, usada en ~6 lugares) pasó a devolver el neto del canje,
+lo que corrigió automáticamente todos sus usos de una vez; sin modo offline (no aplica el guard).
+
+Suite completa **153/153 en verde**, `eslint`/`vite build` en 0 errores en las dos pantallas.
+Falta que Nadia pruebe el circuito de canje en el ERP en vivo antes de dar la Fase 3 por
+100% cerrada — con eso, Fidelización por Puntos queda con las 4 fases completas en KAIROX.
 
 ---
 

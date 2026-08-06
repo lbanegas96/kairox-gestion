@@ -141,6 +141,19 @@ export function useConfirmarVenta(tcParalelo, formasPago = []) {
     // Fidelización — Fase 3: neto del canje de puntos (0 si no se canjeó nada).
     const total = Math.round((totalBruto - descuentoPuntosPesos) * 100) / 100;
 
+    // Fidelización — Fase 3, corrección de un bug real encontrado en vivo
+    // (07/08): crear_venta calcula neto_gravado/iva_discriminado sumando los
+    // p_items, sin enterarse de p_total — si sólo se restaba el canje del
+    // total, el asiento contable automático (y una eventual factura AFIP)
+    // seguían calculando IVA sobre el precio SIN el descuento de puntos,
+    // quedando desbalanceados. Fix (decisión de Nadia, 07/08): repartir el
+    // descuento de puntos proporcionalmente entre los ítems — mismo criterio
+    // fiscal que ya usan las ofertas (el descuento va DENTRO del precio de
+    // cada ítem, nunca aparte) — así el IVA queda sobre lo que el cliente
+    // realmente pagó. No cambia el ticket (que ya muestra el descuento como
+    // una línea aparte, leyendo el carrito local, no lo que se manda acá).
+    const puntosFactor = puntosCanjeados > 0 && totalBruto > 0 ? total / totalBruto : 1;
+
     setLoading(true);
     try {
       const now         = getNowAR().toISOString();
@@ -171,12 +184,14 @@ export function useConfirmarVenta(tcParalelo, formasPago = []) {
         }
 
         precioFinal = Math.round(precioFinal * 100) / 100;
+        // Fidelización — Fase 3: reparto proporcional del canje (ver comentario arriba).
+        const precioFinalConPuntos = Math.round(precioFinal * puntosFactor * 100) / 100;
 
         return {
           producto_id:          item.id,
           cantidad:             item.cantidad,
-          precio_unitario:      precioFinal,
-          subtotal:             precioFinal * item.cantidad,
+          precio_unitario:      precioFinalConPuntos,
+          subtotal:             precioFinalConPuntos * item.cantidad,
           alicuota_iva:         item.alicuota_iva ?? '21',
           precio_original:      precioOriginal,
           descuento_pct:        descuentoPct,

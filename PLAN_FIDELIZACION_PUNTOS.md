@@ -284,6 +284,34 @@ completa: **152/152 en verde**. `eslint`/`vite build` en 0 errores.
 mismo criterio de checkpoints del resto del proyecto: se cierra y se prueba el POS primero
 (que es lo que usa Nadia todos los días) antes de replicar el mismo circuito ahí.
 
+## ✅ Fase 3 — ERP (`NuevaVentaModal.jsx`) HECHA (07/08)
+
+Mismo circuito que el POS, ya con el fix del reparto proporcional incluido desde el vínculo
+(no hubo que arreglarlo dos veces). Diferencias de esta pantalla respecto al POS:
+
+- El selector de cliente acá es un `<select>` simple dentro de `PanelPago.jsx` (no el
+  `ClienteSelector`/`ClienteDrillDown` compartido) — la fidelización se cableó directo ahí.
+- `calculateTotal()` (la única función de total de este archivo, usada en ~6 lugares:
+  conversión de moneda, cálculo de moneda paralela, verificación de límite de cta. cte., el
+  `p_total` de `crear_venta` y el asiento contable) pasó a devolver el neto del canje —
+  un solo cambio que automáticamente correlgía TODOS los usos, sin tocarlos uno por uno.
+  El bloque de fidelización (fetch + estado + cálculo) se agregó ANTES de esa función, mismo
+  motivo del TDZ que ya prevenía el comentario original del archivo.
+- Esta pantalla no tiene modo offline (siempre asume conexión) — no hizo falta el guard de
+  "sin conexión" que sí tiene el POS.
+- El ítem de acá no tiene ofertas/descuentos manuales (a diferencia del POS) — el reparto
+  proporcional del canje se aplicó directo sobre `item.precio_venta`, sin capas previas.
+
+**Verificación:** `eslint` en 0 errores (sólo warnings preexistentes, mismo patrón sin
+PropTypes de siempre). Sin tests nuevos — ni `NuevaVentaModal.jsx` ni `PanelPago.jsx` tenían
+ninguna cobertura de tests previa (ninguno de sus otros ~15 campos/lógicas la tiene tampoco),
+mismo criterio que el resto del proyecto para componentes 100% de wiring/presentación. Suite
+completa 153/153 en verde, `vite build` en 0 errores.
+
+**Con esto, Fidelización por Puntos queda con las 4 fases completas** (backend, configuración,
+ganar puntos visible, canjear puntos) en los dos circuitos de venta de KAIROX (POS y ERP).
+Pendiente de que Nadia lo pruebe en vivo en el ERP antes de dar la fase por cerrada del todo.
+
 ### 🐛 Otro bug de "Confirmar Venta cortado", encontrado por Nadia probando Fase 3 (07/08)
 
 El fix anterior (`min-h-0` en el contenedor del listado de items, ver la sección de fixes de la
@@ -302,4 +330,33 @@ Verificado en vivo contra la sesión real de Nadia: con "Batidora Eléctrica" (q
 oferta automática) en el carrito y un viewport de 638px de alto, el botón "Confirmar Venta"
 quedaba 24px cortado por debajo (`bottom: 662` contra `innerHeight: 638`) — después del fix,
 `bottom: 590` (completo, con margen). 10/10 tests de `PanelCarrito.test.jsx` siguen en verde,
+`eslint`/`vite build` en 0 errores.
+
+### 🐛 BUG real de fondo: el asiento contable no descontaba el canje de puntos
+
+Probando el canje en vivo (Luciano, 250 puntos → -$250, +297 puntos ganados) salió todo bien
+*visualmente*, pero al revisar el mecanismo con más cuidado apareció un problema de fondo, no
+cosmético: `crear_venta` calcula `neto_gravado`/`iva_discriminado` sumando `p_items` — nunca se
+entera de `p_total`. Si sólo se restaba el canje del total (como hacía la primera versión de esta
+fase), el asiento contable automático (`asientosAutoService.crearAsientoVenta`, vía
+`useFinalizarVentaPosterior.js`) quedaba armado con `total` (neto del canje) contra `neto + iva`
+(brutos, sin el canje) — **desbalanceado por el monto exacto del descuento**. Y si la empresa
+llegara a facturar electrónicamente con fidelización activa, la factura a ARCA reportaría el
+monto bruto, distinto al cobrado.
+
+**Decisión de Nadia (07/08):** repartir el descuento de puntos proporcionalmente entre los
+productos de la venta — mismo criterio fiscal que ya usan las ofertas automáticas (el descuento
+va DENTRO del precio de cada ítem, nunca aparte). Así el IVA queda calculado sobre lo que el
+cliente realmente pagó, todo cierra parejo, y una eventual factura AFIP ya sale bien de una.
+
+**Implementación** (`useConfirmarVenta.js` y `NuevaVentaModal.jsx`): se calcula
+`puntosFactor = totalNeto / totalBruto` y se aplica a cada ítem antes de mandarlo a
+`crear_venta` — `precio_unitario`/`subtotal` de cada línea ya llegan con el descuento adentro.
+`precio_original` NO se toca (sigue mostrando el precio de lista real); `descuento_pct`/
+`descuento_monto` (campos de ofertas) tampoco, son un concepto aparte. El ticket no cambia —
+ya mostraba el descuento como una línea propia, leyendo el carrito local, no lo que se manda acá.
+
+Verificado con un test dedicado (`useConfirmarVenta.test.js`): item de $100 x 2 con $100 de
+canje (factor 0.5) → cada unidad llega a `crear_venta` en $50, subtotal $100 (exacto al
+`p_total`). 17 tests en `useConfirmarVenta.test.js`, suite completa 153/153 en verde,
 `eslint`/`vite build` en 0 errores.

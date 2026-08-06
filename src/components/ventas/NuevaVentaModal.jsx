@@ -244,6 +244,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   const resetForm = () => {
     setCart([]);
     setSelectedClient(null);
+    setPuntosCanjeados('');
     multipago.reset();
     setMoneda('ARS');
     setTipoCambioTasa(1);
@@ -260,6 +261,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   // Cuando cambia el cliente, cargar su lista de precios
   const handleSelectClient = async (client) => {
     setSelectedClient(client);
+    setPuntosCanjeados(''); // Fase 3: el canje es por cliente, no arrastra entre uno y otro
     if (!client) { setPrecioMap({}); setListaNombre(''); return; }
     try {
       const map = await listaPreciosService.getPrecioMapForCliente(client.id);
@@ -297,9 +299,35 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     }
   }, [moneda, tipoCambioTasa, tcParalelo.enabled, tcParalelo.monedaParalela]);
 
+  // Fidelización por puntos (Fase 3, ERP) — mismo circuito que el POS
+  // (PanelCarrito.jsx). Va ANTES de calculateTotal, mismo motivo del TDZ que
+  // ya evitaba el comentario de abajo: calculateTotal necesita
+  // descuentoPuntosPesos ya calculado. Clampeado al saldo del cliente y a no
+  // dejar el total negativo — igual criterio que el POS.
+  const [fidelizacionConfig, setFidelizacionConfig] = useState({ usa_fidelizacion: false, puntos_valor_pesos: null });
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    supabase.from('empresas').select('usa_fidelizacion, puntos_valor_pesos').eq('id', user.empresa_id).single()
+      .then(({ data }) => {
+        if (data) setFidelizacionConfig({ usa_fidelizacion: data.usa_fidelizacion ?? false, puntos_valor_pesos: data.puntos_valor_pesos ?? null });
+      });
+  }, [user?.empresa_id]);
+
+  const [puntosCanjeados, setPuntosCanjeados] = useState('');
+  const totalBrutoCarrito = cart.reduce((sum, item) => sum + (item.precio_venta * item.cantidad), 0);
+  const puntosValorPesos = fidelizacionConfig.puntos_valor_pesos;
+  const mostrarCanjePuntos = fidelizacionConfig.usa_fidelizacion
+    && !!selectedClient && (selectedClient.saldo_puntos ?? 0) > 0 && puntosValorPesos > 0;
+  const maxPuntosCanjeables = mostrarCanjePuntos
+    ? Math.min(selectedClient.saldo_puntos ?? 0, Math.floor(totalBrutoCarrito / puntosValorPesos))
+    : 0;
+  const puntosCanjeadosNum = Math.min(Number(puntosCanjeados) || 0, maxPuntosCanjeables);
+  const descuentoPuntosPesos = Math.round(puntosCanjeadosNum * (puntosValorPesos || 0) * 100) / 100;
+
   // ── IMPORTANTE: definir calculateTotal ANTES de usarla para evitar TDZ ────
-  // Total SIEMPRE en ARS (los productos están cargados en ARS).
-  const calculateTotal = () => cart.reduce((sum, item) => sum + (item.precio_venta * item.cantidad), 0);
+  // Total SIEMPRE en ARS (los productos están cargados en ARS). Neto del
+  // canje de puntos (Fase 3) — descuentoPuntosPesos es 0 si no se canjeó nada.
+  const calculateTotal = () => Math.round((totalBrutoCarrito - descuentoPuntosPesos) * 100) / 100;
   // Total convertido a la moneda elegida (solo para mostrar al cliente).
   const totalEnMonedaSeleccionada = () => {
     const totalARS = calculateTotal();
@@ -554,18 +582,33 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         ? pagosFinales.map(p => p.metodo).join(' + ')
         : pagosFinales[0].metodo;
 
+      // Fidelización — Fase 3, corrección de un bug real encontrado en vivo
+      // (07/08, ver POS): crear_venta calcula neto_gravado/iva_discriminado
+      // sumando p_items, sin enterarse de p_total — si sólo se restara el
+      // canje del total, el asiento contable automático (y una eventual
+      // factura AFIP) seguirían calculando IVA sobre el precio SIN el
+      // descuento de puntos. Fix (decisión de Nadia, 07/08): repartir el
+      // descuento proporcionalmente entre los ítems, para que el IVA quede
+      // sobre lo que el cliente realmente pagó.
+      const puntosFactor = puntosCanjeadosNum > 0 && totalBrutoCarrito > 0
+        ? total / totalBrutoCarrito
+        : 1;
+
       // Items para la RPC
-      const itemsPayload = cart.map(item => ({
-        producto_id:     item.id,
-        cantidad:        item.cantidad,
-        precio_unitario: item.precio_venta,
-        subtotal:        item.precio_venta * item.cantidad,
-        alicuota_iva:    item.alicuota_iva ?? '21',  // snapshot de la alícuota del producto
-        // Venta por pack (mig.190) — solo se manda si la línea está en modo pack.
-        unidad_venta_id:     item._packMode ? item.unidad_venta_id : '',
-        cantidad_venta:      item._packMode ? item._packs : '',
-        precio_unidad_venta: item._packMode ? item._precioUnidadVenta : '',
-      }));
+      const itemsPayload = cart.map(item => {
+        const precioConPuntos = Math.round(item.precio_venta * puntosFactor * 100) / 100;
+        return {
+          producto_id:     item.id,
+          cantidad:        item.cantidad,
+          precio_unitario: precioConPuntos,
+          subtotal:        precioConPuntos * item.cantidad,
+          alicuota_iva:    item.alicuota_iva ?? '21',  // snapshot de la alícuota del producto
+          // Venta por pack (mig.190) — solo se manda si la línea está en modo pack.
+          unidad_venta_id:     item._packMode ? item.unidad_venta_id : '',
+          cantidad_venta:      item._packMode ? item._packs : '',
+          precio_unidad_venta: item._packMode ? item._precioUnidadVenta : '',
+        };
+      });
 
       // Pagos para la RPC (monto_paralelo calculado por pago).
       // Se envía '' en lugar de null para que NULLIF(...,'') del SQL resuelva a NULL.
@@ -606,6 +649,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         // de cambio realizada). Null si la venta es en ARS.
         p_monto_moneda_original: moneda !== 'ARS' ? totalEnMonedaSeleccionada() : null,
         p_centro_costo_id:  centroCostoId || null,
+        p_puntos_canjeados: puntosCanjeadosNum, // Fase 3 — 0 si no se canjeó nada
       });
 
       if (rpcError) throw rpcError;
@@ -624,6 +668,9 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         forma_pago:        formaPago,
         cliente_nombre:    selectedClient?.nombre ?? 'Consumidor Final',
         puntos_ganados:    puntosGanados,
+        // Fase 3 — para que TicketPDF muestre "Descuento por puntos".
+        puntos_canjeados:  puntosCanjeadosNum,
+        descuento_puntos_pesos: descuentoPuntosPesos,
       };
 
       // Asiento contable — fire & forget, FUERA de la transacción (no crítico)
@@ -741,6 +788,9 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
               centrosCosto={centrosCosto} centroCostoId={centroCostoId} setCentroCostoId={setCentroCostoId}
               afipActivo={afipActivo}
               puntosVenta={puntosVenta} puntoVentaId={puntoVentaId} setPuntoVentaId={setPuntoVentaId}
+              mostrarCanjePuntos={mostrarCanjePuntos} maxPuntosCanjeables={maxPuntosCanjeables}
+              puntosCanjeados={puntosCanjeados} setPuntosCanjeados={setPuntosCanjeados}
+              descuentoPuntosPesos={descuentoPuntosPesos}
             />
           </div>
         </DialogContent>

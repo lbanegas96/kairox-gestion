@@ -1,4 +1,4 @@
-import { Check, Loader2, AlertTriangle } from 'lucide-react';
+import { Check, Loader2, AlertTriangle, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { MonedaSelector } from '@/components/ui/MonedaSelector';
@@ -17,11 +17,19 @@ function PanelPago({
   handleConfirmSale,
   centrosCosto = [], centroCostoId, setCentroCostoId,
   afipActivo = false, puntosVenta = [], puntoVentaId, setPuntoVentaId,
+  mostrarCanjePuntos = false, maxPuntosCanjeables = 0,
+  puntosCanjeados = '', setPuntosCanjeados, descuentoPuntosPesos = 0,
 }) {
   return (
     <div className="w-full md:w-96 bg-slate-50 dark:bg-slate-900/30 p-6 flex flex-col gap-6 overflow-y-auto border-l border-slate-200 dark:border-slate-800">
       <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border kairox-border">
         <div className="flex justify-between items-center text-xl font-bold pt-2 dark:text-white"><span>Total</span><span className="text-blue-600 dark:text-[#00D4FF]">{formatCurrency(totalEnMonedaSeleccionada(), moneda)}</span></div>
+        {/* Fidelización por puntos (Fase 3) — canje aplicado en esta venta */}
+        {descuentoPuntosPesos > 0 && (
+          <div className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 text-right">
+            Incluye descuento por puntos: -{formatCurrency(descuentoPuntosPesos, 'ARS')}
+          </div>
+        )}
         {moneda !== 'ARS' && tipoCambioTasa > 0 && (
           <div className="text-xs text-slate-500 dark:text-slate-400 mt-1 text-right">
             Equivale a {formatCurrency(calculateTotal(), 'ARS')} (TC ${Number(tipoCambioTasa).toLocaleString('es-AR')})
@@ -136,6 +144,27 @@ function PanelPago({
                 {' · '}Saldo: ${Number(selectedClient.saldo_actual || 0).toLocaleString('es-AR')}
               </p>
             )}
+          </div>
+        )}
+        {/* Fidelización por puntos (Fase 3) — canje. Mismo criterio que el POS:
+            sólo visible con fidelización activa + cliente con saldo + ratio cargado. */}
+        {mostrarCanjePuntos && (
+          <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg px-3 py-2">
+            <Gift className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span className="text-xs text-emerald-700 dark:text-emerald-400 flex-1">
+              Canjear puntos <span className="opacity-70">({selectedClient.saldo_puntos} disp., máx. {maxPuntosCanjeables})</span>
+            </span>
+            <input
+              type="number" min="0" max={maxPuntosCanjeables} step="1"
+              value={puntosCanjeados}
+              onChange={e => {
+                const v = Math.max(0, Math.min(maxPuntosCanjeables, parseInt(e.target.value, 10) || 0));
+                setPuntosCanjeados(v === 0 ? '' : String(v));
+              }}
+              placeholder="0"
+              aria-label="Canjear puntos"
+              className="w-16 h-7 text-center text-xs rounded border border-emerald-300 dark:border-emerald-700 dark:bg-slate-900 text-slate-900 dark:text-white px-1"
+            />
           </div>
         )}
       </div>
