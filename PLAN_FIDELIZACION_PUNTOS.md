@@ -218,3 +218,34 @@ preexistentes, mismo patrón que el resto del proyecto). `npx vite build` → bu
 descuenta) recién con el próximo "dale". Hasta entonces los puntos siguen acumulándose y ahora
 además se ven, pero **nadie puede canjearlos todavía** — eso es exactamente lo que decide la
 Fase 3.
+
+### 🐛 3 fixes de UI encontrados por Nadia probando Fase 2 en vivo (07/08)
+
+Probando en su notebook (ventana de navegador no maximizada, ~660px de alto visible) encontró:
+
+1. **El popover del "ojo" (`ClienteDrillDown`) se cortaba contra el borde derecho de la
+   pantalla** — usaba `absolute left-0` (abre hacia la derecha desde el botón), y el botón está
+   pegado al borde derecho del panel angosto del carrito en el POS. Fix: `right-0` (abre hacia la
+   izquierda, que siempre tiene más lugar). Verificado con la sesión real de Nadia contra
+   producción: el popover completo (`left ≥ 0, right ≤ innerWidth`) y mostrando
+   "Saldo de Puntos: 270 pts" para Carlos Perez.
+2. **El botón "Confirmar Venta" quedaba tapado en ventanas de navegador bajas** — bug clásico de
+   flexbox: al listado de items del carrito (`flex-1 overflow-y-auto`) le faltaba `min-h-0` en su
+   contenedor, así que no se achicaba y el contenido de abajo (medio de pago/totales/botón) quedaba
+   recortado por el `overflow-hidden` del layout padre (`ModoCajaLayout`, `h-screen`). Ya estaba
+   resuelto así en el PanelCarrito hermano del ERP — se copió el mismo fix acá (`PanelCarrito.jsx`
+   del POS + su wrapper en `ModoCajaLayout.jsx`). Verificado programáticamente contra un viewport
+   de 660px de alto: el botón queda 100% dentro de pantalla.
+3. **Los puntos ganados no se veían lo suficiente** — sólo estaban en el toast (efímero, fácil de
+   no ver) y no en el modal "¡Venta confirmada!" que sí queda en pantalla. Se agregó un badge
+   "¡Ganaste N puntos!" dentro de ese modal, junto al Total.
+
+**Gap real encontrado de paso (documentado, no resuelto todavía):** las ventas cobradas con **QR
+MercadoPago** no ganan puntos — ese flujo usa un RPC totalmente distinto
+(`crear_venta_pendiente_qr` + `confirmar_pago_qr`), no `crear_venta`, así que la lógica de
+ganar puntos (que vive dentro de `crear_venta`) nunca corre ahí. Cambiarlo requiere tocar esas
+migraciones con cuidado — queda anotado para una fase futura, no es parte de esta.
+
+Verificación: suite completa 140/140 en verde (sin tests nuevos — los 3 fixes son CSS/wiring
+puro, mismo criterio que el resto del proyecto para este tipo de cambio), `eslint`/`vite build`
+en 0 errores.

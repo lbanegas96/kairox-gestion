@@ -432,7 +432,13 @@ function PanelCarrito({
 
   return (
     <div
-      className="w-full md:w-[360px] lg:w-[420px] flex-shrink-0 flex flex-col"
+      // min-h-0: sin esto, el listado de items (flex-1 más abajo) no se achica
+      // aunque haya poco espacio vertical — el mismo bug clásico de flexbox que
+      // ya está resuelto en el PanelCarrito hermano del ERP (nueva-venta/PanelCarrito.jsx).
+      // Al faltar acá, en ventanas de navegador bajas el contenido de abajo
+      // (medio de pago, totales, botón Confirmar Venta) quedaba tapado por el
+      // overflow-hidden del layout padre (ModoCajaLayout, h-screen).
+      className="w-full md:w-[360px] lg:w-[420px] flex-shrink-0 flex flex-col min-h-0"
       style={{ borderLeft: '1px solid rgb(var(--kx-border))' }}
     >
       {/* Selector de cliente */}

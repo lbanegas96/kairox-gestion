@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Landmark, History, LogOut, Loader2, X, CheckCircle, ArrowLeft, Printer, FileText, WifiOff } from 'lucide-react';
+import { Landmark, History, LogOut, Loader2, X, CheckCircle, ArrowLeft, Printer, FileText, WifiOff, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -490,7 +490,7 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
           <PanelProductos onAgregarAlCarrito={handleAgregarAlCarrito} apiRef={posApiRef} />
         </div>
         {/* RESPONSIVE-MOBILE */}
-        <div className={`${tabMobile === 'carrito' ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-[360px] lg:w-[420px] flex-shrink-0`}>
+        <div className={`${tabMobile === 'carrito' ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-[360px] lg:w-[420px] flex-shrink-0 min-h-0`}>
           <PanelCarrito
             apiRef={posApiRef}
             carrito={carrito}
@@ -717,6 +717,17 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
                   </span>
                 </div>
               </div>
+
+              {/* Fidelización por puntos (Fase 2) — acá y no sólo en el toast,
+                  que es efímero y fácil de no ver. */}
+              {ventaExitosa.comprobante.puntos_ganados > 0 && (
+                <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg px-3 py-2">
+                  <Gift className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                    ¡Ganaste {ventaExitosa.comprobante.puntos_ganados} puntos!
+                  </span>
+                </div>
+              )}
 
               {/* TICKET-PRINT — botones de impresión */}
               <div className="grid grid-cols-2 gap-2">

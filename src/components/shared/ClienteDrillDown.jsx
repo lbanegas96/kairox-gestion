@@ -79,7 +79,11 @@ function ClienteDrillDown({ cliente }) {
           {/* Overlay for click-outside */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
 
-          <div className="absolute left-0 top-10 z-50 w-72 rounded-xl border border-kx-border bg-kx-surface shadow-xl p-4 space-y-3">
+          {/* right-0 (no left-0): el botón "ojo" suele estar pegado al borde
+              derecho de paneles angostos (carrito del POS) — abrir hacia la
+              derecha lo cortaba contra el borde de la pantalla. Crece hacia
+              la izquierda en vez de la derecha, que siempre tiene más lugar. */}
+          <div className="absolute right-0 top-10 z-50 w-72 rounded-xl border border-kx-border bg-kx-surface shadow-xl p-4 space-y-3">
             {/* Header */}
             <div className="flex items-center justify-between">
               <p className="font-semibold text-kx-text text-sm truncate">{cliente.nombre}</p>

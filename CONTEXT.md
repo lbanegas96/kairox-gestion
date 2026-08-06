@@ -43,8 +43,22 @@ la empresa tiene fidelización activa. Además, cada venta que suma puntos ahora
 momento: toast "+N puntos" y banner en el ticket del POS (`TicketPrint.jsx`) y en el PDF del ERP
 (`TicketPDF.jsx`). Sin cambios de backend — sólo lee `puntos_ganados`, que `crear_venta` ya
 devolvía desde la Fase 0. 5 tests nuevos, suite completa 140/140 en verde, `eslint`/`vite build`
-en 0 errores. Sigue la **Fase 3 (Canjear puntos — input en el checkout, descuento aplicado)**
-recién con el próximo "dale" — detalle completo en `PLAN_FIDELIZACION_PUNTOS.md`.
+en 0 errores.
+
+**Nadia probó Fase 2 en vivo y encontró 3 bugs de UI, ya arreglados (07/08):** el popover del
+"ojo" se cortaba contra el borde derecho de la pantalla (`ClienteDrillDown.jsx`, `left-0` →
+`right-0`); el botón "Confirmar Venta" quedaba tapado en ventanas de navegador bajas (faltaba
+`min-h-0` en el listado de items del carrito del POS — mismo bug ya resuelto en el PanelCarrito
+hermano del ERP, se copió el fix); los puntos ganados no se veían lo suficiente (sólo estaban en
+el toast efímero) — ahora también hay un badge "¡Ganaste N puntos!" en el modal "¡Venta
+confirmada!". Los 3 fixes verificados contra la sesión real de Nadia (popover completo dentro de
+pantalla mostrando "270 pts" de Carlos Perez, botón 100% visible en un viewport de 660px de
+alto). **Gap real encontrado de paso:** las ventas por QR MercadoPago no ganan puntos — usan un
+RPC distinto (`crear_venta_pendiente_qr`) que no pasa por la lógica de puntos de `crear_venta`;
+queda documentado como pendiente para una fase futura, no resuelto todavía.
+
+Sigue la **Fase 3 (Canjear puntos — input en el checkout, descuento aplicado)** recién con el
+próximo "dale" — detalle completo en `PLAN_FIDELIZACION_PUNTOS.md`.
 
 **✅ Nadia corrió el plan de pruebas hoy (07/08), en `kairox-gestion-chi.vercel.app` — resultado
 de cada bloque:**
