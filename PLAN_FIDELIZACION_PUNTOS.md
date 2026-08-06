@@ -96,3 +96,45 @@ posibles fases futuras si algún cliente de KAIROX las pide.
 Mismo criterio que el resto del proyecto: se arranca por la Fase 0 recién con el "dale" de Nadia,
 se verifica y se documenta en `CONTEXT.md` antes de pasar a la Fase 1, y así sucesivamente — no
 se arranca ninguna fase sin haber cerrado (código + tests + verificación) la anterior.
+
+## ✅ Fase 0 — HECHA y probada en vivo (07/08, mig.312)
+
+Aplicada `312_fidelizacion_puntos_fase0.sql`: columnas nuevas en `empresas`/`clientes`, tabla
+`movimientos_puntos` con RLS, y `crear_venta` con `p_puntos_canjeados integer DEFAULT 0` (patrón
+DROP+CREATE).
+
+**Hallazgo de paso, corregido en la misma migración:** `crear_venta` todavía le daba EXECUTE
+directo a `anon` (usuarios sin login) — mig.309 sólo había revocado de `PUBLIC`, un grant aparte
+a `anon` de antes de esa migración nunca se había tocado. Verificado con
+`has_function_privilege` antes (true) y después (false) del REVOKE explícito.
+
+**Probado en vivo contra producción (Nalux), simulando una sesión real** (`set_config`
+`request.jwt.claim.sub` con el user id real de Nadia, mismo mecanismo que usa Supabase para
+`auth.uid()` — necesario porque `crear_venta` valida `get_my_empresa_id()` contra el JWT, no
+alcanza con SQL directo sin JWT) **con un producto y un cliente 100% sintéticos** (nombre
+`TEST-FIDELIZACION-DELETE-ME`, fáciles de identificar y borrar):
+
+- Cliente arranca con 50 puntos. Venta de $1.000 con `puntos_pesos_por_punto=100`,
+  `puntos_valor_pesos=1`, canjeando 20 puntos → devuelve `puntos_ganados: 10` ✅. Verificado
+  contra la base: `saldo_puntos` termina en 40 (50 − 20 + 10), y `movimientos_puntos` tiene
+  exactamente 2 filas (`canjeado` 20→saldo 30, `ganado` 10→saldo 40) con el `comprobante_id`
+  correcto.
+- Canjear más de lo disponible (999 puntos con sólo 40 en saldo) → rechaza limpio con
+  `"Saldo de puntos insuficiente (disponible: 40, solicitado: 999)"`, transacción completa
+  revertida (stock sin tocar, 0 comprobantes creados) ✅.
+- Canjear con `usa_fidelizacion=false` → rechaza limpio con
+  `"Fidelización por puntos no está activada para esta empresa"` ✅.
+- **Una venta sin tocar puntos (`p_puntos_canjeados` en su default 0, exactamente como llama hoy
+  cualquier caller existente) sigue funcionando idéntico a antes** — comprobante creado normal,
+  `puntos_ganados: 0` sin fidelización activa, sin ningún error. Confirma cero regresión para
+  el ERP y el POS online/offline tal como están hoy.
+
+**Todo el dato de prueba revertido después:** 0 comprobantes/productos/clientes con el nombre de
+test remanentes, 0 filas en `movimientos_puntos`, `empresas.usa_fidelizacion` vuelto a `false` y
+los ratios a `NULL` — Nalux quedó exactamente como estaba antes de la prueba.
+
+`get_advisors` (security): 0 alertas nuevas relacionadas a `movimientos_puntos` — RLS reconocida
+correctamente.
+
+**Sigue la Fase 1** (Configuración por empresa — toggle + ratios en Finanzas) recién con el
+próximo "dale".

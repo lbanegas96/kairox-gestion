@@ -1,11 +1,25 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-07 (Nadia — corrió el plan de pruebas completo en producción:
-Modo Offline y Multi-caja quedan cerrados de punta a punta, con un bug real encontrado y
-arreglado en el camino)
+**Última actualización:** 2026-08-07 (Nadia — Modo Offline y Multi-caja cerrados de punta a punta
+en producción; arrancó Fidelización por Puntos, Fase 0 ya aplicada y probada en vivo, mig.312)
 
 ---
 
 # 👉 EMPEZÁ POR ACÁ (Luciano)
+
+**🆕 Fidelización por Puntos — arrancó hoy (07/08), Fase 0 (backend) ya aplicada y probada.**
+Investigación de mercado en `INVESTIGACION_FIDELIZACION_PUNTOS.md` (confirma el hueco: ni Tango
+ni Fudo lo resuelven nativo) y plan de 4 fases en `PLAN_FIDELIZACION_PUNTOS.md`. Decisiones de
+Nadia: canje = descuento directo en pesos, gratis para todas las empresas, sin vencimiento.
+mig.312: columnas nuevas en `empresas`/`clientes`, tabla `movimientos_puntos` (ledger auditable),
+`crear_venta` gana `p_puntos_canjeados` (patrón DROP+CREATE de siempre). De paso se cerró un gap
+de seguridad que se había escapado: `anon` todavía tenía EXECUTE directo sobre `crear_venta`
+(mig.309 sólo había revocado de `PUBLIC`). Probado en vivo contra Nalux con datos 100%
+sintéticos (simulando una sesión real vía JWT — necesario porque la función valida
+`get_my_empresa_id()`): ganar + canjear puntos, saldo insuficiente rechazado limpio,
+fidelización desactivada rechazada limpio, y **una venta sin tocar puntos sigue funcionando
+idéntico a hoy** (cero regresión). Todo el dato de prueba revertido, Nalux quedó como estaba.
+Sigue la Fase 1 (Configuración por empresa) recién con el próximo "dale" — detalle completo en
+`PLAN_FIDELIZACION_PUNTOS.md`.
 
 **✅ Nadia corrió el plan de pruebas hoy (07/08), en `kairox-gestion-chi.vercel.app` — resultado
 de cada bloque:**
@@ -105,12 +119,13 @@ varias veces, y multi-caja con sus propios ojos.
 
 Plan de pruebas usado hoy, con el detalle completo de cada bloque: `PLAN_PRUEBAS_NADIA_2026-08-06.md`.
 
-### 📌 Próximo paso: Fidelización por puntos
+### 📌 En curso: Fidelización por puntos — Fase 0 hecha, sigue Fase 1
 
-Con Modo Offline y Multi-caja cerrados de punta a punta, sigue **Fidelización por puntos** — la
-última pieza grande del roadmap de mercado del POS (hueco real: ni Tango ni Rapiboy lo resuelven
-bien para PyMEs locales). Todavía no hay nada diseñado — arranca por investigación/plan, mismo
-criterio que se usó para Modo Offline y Multi-caja (nunca directo a código en features grandes).
+Investigación + plan de 4 fases ya armados (`INVESTIGACION_FIDELIZACION_PUNTOS.md` /
+`PLAN_FIDELIZACION_PUNTOS.md`), decisiones de negocio tomadas por Nadia, **Fase 0 (backend)
+aplicada y probada en vivo hoy (mig.312)** — ver el resumen al principio de esta sección. Sigue
+la **Fase 1 (Configuración por empresa: toggle + ratios en Finanzas)**, recién con el próximo
+"dale" — nunca se arranca una fase sin cerrar la anterior.
 
 ---
 
