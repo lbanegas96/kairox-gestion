@@ -193,6 +193,13 @@ function TicketPrint({ venta, items = [], empresa = {}, formato = '80mm', oferta
               <span>${formatARS(subtotalBruto)}</span>
             </div>
           )}
+          {/* Fidelización por puntos (Fase 3) — canje aplicado en esta venta */}
+          {venta.descuento_puntos_pesos > 0 && (
+            <div className={is80 ? 'flex justify-between' : 'w-64 flex justify-between'}>
+              <span>Descuento por puntos ({venta.puntos_canjeados}):</span>
+              <span>-${formatARS(venta.descuento_puntos_pesos)}</span>
+            </div>
+          )}
           <div className={is80
             ? 'flex justify-between font-bold text-base border-t-2 border-black mt-1 pt-1'
             : 'w-64 flex justify-between font-bold text-base border-t-2 border-black mt-1 pt-1'

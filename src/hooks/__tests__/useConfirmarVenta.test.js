@@ -153,6 +153,75 @@ describe('useConfirmarVenta', () => {
     });
   });
 
+  describe('fidelización — canje de puntos (Fase 3)', () => {
+    const CLIENTE = { id: 'cli-1', nombre: 'Juan Pérez' };
+
+    it('resta el descuento del total y manda p_puntos_canjeados a crear_venta', async () => {
+      mockRpc.mockImplementation((fn) => {
+        if (fn === 'obtener_proximo_numero') return Promise.resolve({ data: '0006', error: null });
+        if (fn === 'crear_venta') return Promise.resolve({ data: { comprobante_id: 'c6', numero_venta: '0006' }, error: null });
+        return Promise.resolve({ data: null, error: null });
+      });
+      const { result } = renderHook(() => useConfirmarVenta(null, []));
+      let venta;
+      await act(async () => {
+        // CART = $200 (ver arriba). Canjea 20 puntos a $5 c/u = $100 de descuento.
+        venta = await result.current.confirmar({
+          cart: CART, selectedClient: CLIENTE, pagos: PAGOS_EFECTIVO,
+          puntosCanjeados: 20, descuentoPuntosPesos: 100,
+        });
+      });
+      expect(venta.total).toBe(100); // 200 - 100
+      expect(mockRpc).toHaveBeenCalledWith('crear_venta', expect.objectContaining({
+        p_total: 100, p_puntos_canjeados: 20,
+      }));
+      expect(venta.puntos_canjeados).toBe(20);
+      expect(venta.descuento_puntos_pesos).toBe(100);
+    });
+
+    it('sin canje (default): manda p_puntos_canjeados: 0 y no toca el total', async () => {
+      mockRpc.mockImplementation((fn) => {
+        if (fn === 'obtener_proximo_numero') return Promise.resolve({ data: '0007', error: null });
+        if (fn === 'crear_venta') return Promise.resolve({ data: { comprobante_id: 'c7', numero_venta: '0007' }, error: null });
+        return Promise.resolve({ data: null, error: null });
+      });
+      const { result } = renderHook(() => useConfirmarVenta(null, []));
+      let venta;
+      await act(async () => {
+        venta = await result.current.confirmar({ cart: CART, selectedClient: CLIENTE, pagos: PAGOS_EFECTIVO });
+      });
+      expect(venta.total).toBe(200);
+      expect(mockRpc).toHaveBeenCalledWith('crear_venta', expect.objectContaining({ p_puntos_canjeados: 0 }));
+    });
+
+    it('rechaza canjear sin conexión, sin llamar al servidor (defensivo — la UI ya lo oculta)', async () => {
+      mockIsOnline = false;
+      const { result } = renderHook(() => useConfirmarVenta(null, []));
+      let venta;
+      await act(async () => {
+        venta = await result.current.confirmar({
+          cart: CART, selectedClient: CLIENTE, pagos: [{ metodo: 'Efectivo', monto: 100 }],
+          puntosCanjeados: 20, descuentoPuntosPesos: 100,
+        });
+      });
+      expect(venta).toBeNull();
+      expect(mockRpc).not.toHaveBeenCalled();
+    });
+
+    it('rechaza canjear sin cliente asociado (defensivo)', async () => {
+      const { result } = renderHook(() => useConfirmarVenta(null, []));
+      let venta;
+      await act(async () => {
+        venta = await result.current.confirmar({
+          cart: CART, selectedClient: null, pagos: PAGOS_EFECTIVO,
+          puntosCanjeados: 20, descuentoPuntosPesos: 100,
+        });
+      });
+      expect(venta).toBeNull();
+      expect(mockRpc).not.toHaveBeenCalled();
+    });
+  });
+
   describe('camino offline (Fase 3)', () => {
     it('encola la venta en vez de llamar al servidor — ninguna RPC de red', async () => {
       mockIsOnline = false;

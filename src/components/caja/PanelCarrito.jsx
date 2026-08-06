@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { ShoppingCart, Trash2, Plus, Minus, CheckCircle, Loader2, AlertTriangle, Tag, Boxes } from 'lucide-react';
+import { ShoppingCart, Trash2, Plus, Minus, CheckCircle, Loader2, AlertTriangle, Tag, Boxes, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import ClienteSelector from '@/components/shared/ClienteSelector';
@@ -186,7 +186,9 @@ function PanelCarrito({
     }
     supabase
       .from('clientes')
-      .select('id, nombre, condicion_iva, documento, telefono, limite_credito, saldo_actual')
+      // saldo_puntos (mig.312) — se lee siempre, el bloque de canje sólo se
+      // muestra si la empresa tiene fidelización activa (ver fidelizacionConfig).
+      .select('id, nombre, condicion_iva, documento, telefono, limite_credito, saldo_actual, saldo_puntos')
       .eq('empresa_id', user.empresa_id)
       .neq('activo', false)
       .order('nombre')
@@ -194,6 +196,20 @@ function PanelCarrito({
         const filas = data || [];
         setClientes(filas);
         guardarSnapshot('clientes', user.empresa_id, filas);
+      });
+  }, [user?.empresa_id, isOnline]);
+
+  // Fidelización por puntos (Fase 3) — canje. A propósito SIN fallback offline
+  // (a diferencia de clientes/centros de costo): canjear puntos necesita el
+  // saldo real del servidor en el momento — un snapshot viejo podría dejar
+  // canjear más de lo que el cliente tiene de verdad. El bloque de canje
+  // directamente no se muestra sin conexión (ver más abajo).
+  const [fidelizacionConfig, setFidelizacionConfig] = useState({ usa_fidelizacion: false, puntos_valor_pesos: null });
+  useEffect(() => {
+    if (!user?.empresa_id || !isOnline) return;
+    supabase.from('empresas').select('usa_fidelizacion, puntos_valor_pesos').eq('id', user.empresa_id).single()
+      .then(({ data }) => {
+        if (data) setFidelizacionConfig({ usa_fidelizacion: data.usa_fidelizacion ?? false, puntos_valor_pesos: data.puntos_valor_pesos ?? null });
       });
   }, [user?.empresa_id, isOnline]);
 
@@ -240,12 +256,30 @@ function PanelCarrito({
 
   const ahorro = totalSinDescuento - total;
 
+  // Fidelización por puntos (Fase 3) — canje. Se muestra sólo con conexión
+  // (necesita el saldo real del servidor), empresa con fidelización activa,
+  // cliente elegido con saldo > 0, y ratio de canje cargado. Capado al saldo
+  // del cliente Y a no dejar el total en negativo (floor: nunca redondea para
+  // arriba a favor del cliente).
+  const [puntosCanjeados, setPuntosCanjeados] = useState('');
+  const puntosValorPesos = fidelizacionConfig.puntos_valor_pesos;
+  const mostrarCanjePuntos = isOnline && fidelizacionConfig.usa_fidelizacion
+    && !!selectedClient && (selectedClient.saldo_puntos ?? 0) > 0 && puntosValorPesos > 0;
+  const maxPuntosCanjeables = mostrarCanjePuntos
+    ? Math.min(selectedClient.saldo_puntos ?? 0, Math.floor(total / puntosValorPesos))
+    : 0;
+  const puntosCanjeadosNum = Math.min(Number(puntosCanjeados) || 0, maxPuntosCanjeables);
+  const descuentoPuntosPesos = Math.round(puntosCanjeadosNum * (puntosValorPesos || 0) * 100) / 100;
+  const totalFinal = Math.round((total - descuentoPuntosPesos) * 100) / 100;
+
   // Pago mixto — MISMA lógica que NuevaVentaModal (ERP): `useMultipago` es la
   // capa compartida entre ambos caminos de venta. Sólo cambia la presentación
   // (acá compacta y táctil; allá el sidebar con moneda/centro de costo/AFIP).
   // Ambos terminan produciendo el mismo array `pagos` → misma RPC crear_venta →
-  // mismo asiento contable.
-  const multipago = useMultipago(total, formasPago);
+  // mismo asiento contable. Recibe totalFinal (neto del canje de puntos, si
+  // hay) — no total: lo que hay que cobrar de verdad es lo que queda después
+  // del descuento por puntos.
+  const multipago = useMultipago(totalFinal, formasPago);
   const { isCC, isMultiPago, selectedMethods, methodAmounts, setMethodAmounts, toggleMethod, restante } = multipago;
 
   // Ofertas por medio de pago: sólo aplican cuando ese medio cubre el 100% de la
@@ -393,6 +427,8 @@ function PanelCarrito({
       cart: carrito, selectedClient, pagos,
       ofertasCarrito, descuentosManuales,
       centroCostoId: centroCostoId || null,
+      puntosCanjeados: puntosCanjeadosNum,
+      descuentoPuntosPesos,
     });
     if (result) {
       const itemsSnapshot = carrito;
@@ -400,6 +436,7 @@ function PanelCarrito({
       setSelectedClient(null);
       setClienteId('');
       setCentroCostoId('');
+      setPuntosCanjeados('');
       multipago.reset();
       onVentaExitosa?.({ comprobante: result, items: itemsSnapshot });
     }
@@ -450,6 +487,7 @@ function PanelCarrito({
             onChange={(id) => {
               setClienteId(id);
               setSelectedClient(id ? (clientes.find(c => c.id === id) ?? null) : null);
+              setPuntosCanjeados(''); // Fase 3: el canje es por cliente, no arrastra entre uno y otro
             }}
             onClienteCreado={async (c) => {
               setClientes(p => [...p, c]);
@@ -615,10 +653,40 @@ function PanelCarrito({
           </div>
         )}
 
+        {/* Fidelización por puntos (Fase 3) — canje. Sólo con conexión: canjear
+            necesita el saldo real del servidor, no el snapshot offline. */}
+        {mostrarCanjePuntos && (
+          <div className="flex items-center gap-2 bg-kx-surface-2 border border-kx-border rounded-lg px-3 py-2">
+            <Gift className="w-3.5 h-3.5 text-kx-text-3 shrink-0" />
+            <span className="text-xs text-kx-text-2 flex-1">
+              Canjear puntos <span className="text-kx-text-3">({selectedClient.saldo_puntos} disp., máx. {maxPuntosCanjeables})</span>
+            </span>
+            <input
+              type="number" min="0" max={maxPuntosCanjeables} step="1"
+              value={puntosCanjeados}
+              onChange={e => {
+                const v = Math.max(0, Math.min(maxPuntosCanjeables, parseInt(e.target.value, 10) || 0));
+                setPuntosCanjeados(v === 0 ? '' : String(v));
+              }}
+              placeholder="0"
+              aria-label="Canjear puntos"
+              className="w-16 h-7 text-center text-xs rounded border border-kx-border bg-kx-surface text-kx-text px-1"
+            />
+          </div>
+        )}
+        {puntosCanjeadosNum > 0 && (
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-kx-green font-medium flex items-center gap-1">
+              <Gift className="w-3 h-3" /> Descuento por puntos ({puntosCanjeadosNum})
+            </span>
+            <span className="text-kx-green font-semibold tabular-nums">-${fmt(descuentoPuntosPesos)}</span>
+          </div>
+        )}
+
         {/* Total */}
         <div className="flex justify-between items-center py-1">
           <span className="text-kx-text-2 font-medium">Total</span>
-          <span className="text-2xl font-bold text-kx-text tabular-nums">${fmt(total)}</span>
+          <span className="text-2xl font-bold text-kx-text tabular-nums">${fmt(totalFinal)}</span>
         </div>
 
         {/* Moneda paralela: equivalente si hay TC del día, o aviso + acceso al modal si falta */}
@@ -633,9 +701,9 @@ function PanelCarrito({
                 Cargar TC
               </Button>
             </div>
-          ) : tcParalelo.tcHoy && total > 0 && (
+          ) : tcParalelo.tcHoy && totalFinal > 0 && (
             <p className="text-xs text-kx-text-3 text-right -mt-2">
-              ≈ {tcParalelo.calcParalelo(total, 'ARS', 1)?.toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
+              ≈ {tcParalelo.calcParalelo(totalFinal, 'ARS', 1)?.toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
             </p>
           )
         )}

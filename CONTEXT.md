@@ -1,7 +1,7 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-08-07 (Nadia — Modo Offline y Multi-caja cerrados de punta a punta
-en producción; Fidelización por Puntos con Fase 0 (backend, mig.312), Fase 1 (configuración en
-Finanzas) y Fase 2 (ganar puntos, visible) ya hechas)
+en producción; Fidelización por Puntos con Fases 0/1/2 hechas y Fase 3 (canjear puntos) hecha en
+el POS — falta replicarla en el ERP)
 
 ---
 
@@ -158,16 +158,24 @@ varias veces, y multi-caja con sus propios ojos.
 
 Plan de pruebas usado hoy, con el detalle completo de cada bloque: `PLAN_PRUEBAS_NADIA_2026-08-06.md`.
 
-### 📌 En curso: Fidelización por puntos — Fases 0, 1 y 2 hechas, sigue Fase 3
+### 📌 En curso: Fidelización por puntos — Fases 0/1/2 hechas, Fase 3 hecha en el POS
 
 Investigación + plan de 4 fases ya armados (`INVESTIGACION_FIDELIZACION_PUNTOS.md` /
 `PLAN_FIDELIZACION_PUNTOS.md`), decisiones de negocio tomadas por Nadia, **Fase 0 (backend)
 aplicada y probada en vivo (mig.312)**, **Fase 1 (Configuración: toggle + ratios en Finanzas)
 probada en vivo por Nadia** (activó, cargó 100/1, guardó, recargó, quedó igual — activa en Nalux
-ahora mismo) y **Fase 2 (Ganar puntos, visible) construida hoy (07/08)** — el saldo ahora se ve
-en el drill-down del cliente (POS y ERP) y cada venta avisa "+N puntos" en el momento. Sigue la
-**Fase 3 (Canjear puntos — input en el checkout, descuento aplicado, saldo se descuenta)**,
-recién con el próximo "dale" — nunca se arranca una fase sin cerrar la anterior.
+ahora mismo) y **Fase 2 (Ganar puntos, visible) probada en vivo por Nadia** — el saldo se ve en
+el drill-down del cliente (POS y ERP) y cada venta avisa "+N puntos" en el momento (encontró y ya
+se arreglaron 3 bugs de UI de paso, ver detalle arriba).
+
+**Fase 3 (Canjear puntos) construida hoy (07/08) en el POS** — `PanelCarrito.jsx`: card "Canjear
+puntos" cerca del total, sólo con conexión + fidelización activa + cliente con saldo, clampeada
+en vivo al saldo disponible y a no dejar el total negativo. `useConfirmarVenta.js` resta el
+descuento del total y manda `p_puntos_canjeados` a `crear_venta` (que ya lo soportaba desde la
+Fase 0). Redención **no soportada offline** a propósito (necesita el saldo real del servidor).
+Ticket/modal de venta muestran "Descuento por puntos (N)". 20 tests nuevos, suite completa
+152/152 en verde, `eslint`/`vite build` en 0 errores. **Todavía no está en el ERP**
+(`NuevaVentaModal.jsx`) — se prueba el POS primero, mismo criterio de checkpoints de siempre.
 
 ---
 

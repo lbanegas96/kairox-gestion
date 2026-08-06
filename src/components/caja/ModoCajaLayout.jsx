@@ -710,6 +710,15 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
                   <span className="text-kx-text-2">Forma de pago</span>
                   <span className="text-kx-text font-medium">{ventaExitosa.comprobante.forma_pago}</span>
                 </div>
+                {/* Fidelización por puntos (Fase 3) — canje aplicado en esta venta */}
+                {ventaExitosa.comprobante.descuento_puntos_pesos > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-kx-text-2">Descuento por puntos ({ventaExitosa.comprobante.puntos_canjeados})</span>
+                    <span className="text-kx-green font-medium">
+                      -${Number(ventaExitosa.comprobante.descuento_puntos_pesos).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center pt-2 border-t border-kx-border">
                   <span className="text-kx-text-2 text-sm">Total</span>
                   <span className="text-2xl font-bold text-kx-text tabular-nums">

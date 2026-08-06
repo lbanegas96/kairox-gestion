@@ -70,9 +70,29 @@ export function useConfirmarVenta(tcParalelo, formasPago = []) {
 
   // pagos: Array<{ metodo: string, monto: number }>
   // selectedClient: null | { id, nombre, condicion_iva? }  ← condicion_iva define A/B/C
-  const confirmar = useCallback(async ({ cart, selectedClient, pagos, ofertasCarrito = {}, descuentosManuales = {}, centroCostoId = null }) => {
+  // puntosCanjeados/descuentoPuntosPesos (Fase 3): PanelCarrito.jsx ya calculó
+  // el descuento en pesos (puntos * puntos_valor_pesos, capado al saldo del
+  // cliente) — acá sólo se resta del total y se manda el conteo de puntos a
+  // crear_venta, que valida el saldo real y mueve el ledger.
+  const confirmar = useCallback(async ({
+    cart, selectedClient, pagos, ofertasCarrito = {}, descuentosManuales = {}, centroCostoId = null,
+    puntosCanjeados = 0, descuentoPuntosPesos = 0,
+  }) => {
     if (!cart?.length) {
       toast({ title: 'Carrito vacío', variant: 'destructive' });
+      return null;
+    }
+
+    // Fidelización — Fase 3: canjear puntos necesita el saldo real del
+    // servidor, no se soporta offline (a diferencia de Efectivo/Transferencia).
+    // La UI ya oculta el input sin conexión — guard defensivo, "nunca confiar
+    // en el cliente" aplica también acá.
+    if (puntosCanjeados > 0 && (!isOnline || !selectedClient)) {
+      toast({
+        title: 'No se puede canjear puntos',
+        description: !isOnline ? 'Canjear puntos necesita conexión a internet.' : 'Canjear puntos necesita un cliente asociado a la venta.',
+        variant: 'destructive',
+      });
       return null;
     }
 
@@ -106,7 +126,7 @@ export function useConfirmarVenta(tcParalelo, formasPago = []) {
     }
 
     // OFERTAS — calcular total con descuentos aplicados
-    const total = cart.reduce((sum, item) => {
+    const totalBruto = cart.reduce((sum, item) => {
       const oferta = ofertasCarrito[item.id];
       const descManual = descuentosManuales[item.id] || 0;
       let precio = item.precio_venta;
@@ -118,6 +138,8 @@ export function useConfirmarVenta(tcParalelo, formasPago = []) {
       }
       return sum + Math.round(precio * 100) / 100 * item.cantidad;
     }, 0);
+    // Fidelización — Fase 3: neto del canje de puntos (0 si no se canjeó nada).
+    const total = Math.round((totalBruto - descuentoPuntosPesos) * 100) / 100;
 
     setLoading(true);
     try {
@@ -276,6 +298,7 @@ export function useConfirmarVenta(tcParalelo, formasPago = []) {
         p_caja_sesion_id:   currentSession?.id ?? null,
         p_pedido_id:        null, // FIX-CREAR-VENTA-V3
         p_centro_costo_id:  centroCostoId || null,
+        p_puntos_canjeados: puntosCanjeados, // Fase 3 — 0 si no se canjeó nada
       });
 
       if (rpcError) throw rpcError;
@@ -301,6 +324,9 @@ export function useConfirmarVenta(tcParalelo, formasPago = []) {
         // empresa facturara electrónicamente, aunque este PdV puntual no envíe.
         cae_estado:      afipActivo ? 'pendiente' : 'no_aplica',
         puntos_ganados:  puntosGanados,
+        // Fase 3 — para que TicketPrint muestre "Descuento por puntos".
+        puntos_canjeados: puntosCanjeados,
+        descuento_puntos_pesos: descuentoPuntosPesos,
       };
 
       finalizarVentaPosterior({

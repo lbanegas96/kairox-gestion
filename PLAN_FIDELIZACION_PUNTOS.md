@@ -249,3 +249,37 @@ migraciones con cuidado — queda anotado para una fase futura, no es parte de e
 Verificación: suite completa 140/140 en verde (sin tests nuevos — los 3 fixes son CSS/wiring
 puro, mismo criterio que el resto del proyecto para este tipo de cambio), `eslint`/`vite build`
 en 0 errores.
+
+## ✅ Fase 3 — POS (PanelCarrito.jsx) HECHA (07/08): Canjear puntos
+
+Sin migración nueva — `crear_venta` ya soportaba `p_puntos_canjeados` desde la Fase 0. Fase 3 es
+el circuito completo del lado del cliente: el cajero elige cuántos puntos canjear, el total se
+recalcula en vivo, y `crear_venta` valida el saldo real y mueve el ledger.
+
+- **`PanelCarrito.jsx`**: fetch de `usa_fidelizacion`/`puntos_valor_pesos` (online-only, a
+  propósito sin snapshot offline — canjear necesita el saldo real del servidor, no uno viejo) +
+  `saldo_puntos` agregado al select de clientes. Card "Canjear puntos" cerca del total, visible
+  sólo si hay conexión + fidelización activa + cliente elegido con saldo > 0 + ratio cargado.
+  Clampea en vivo al mínimo entre el saldo del cliente y lo que el total permite (nunca deja el
+  total negativo). El total que ve el cajero y el que arma `useMultipago` para dividir el pago
+  ya es el neto (`totalFinal = total - descuentoPuntosPesos`) — no el bruto.
+- **`useConfirmarVenta.js`**: recibe `puntosCanjeados`/`descuentoPuntosPesos`, resta el
+  descuento del total antes de mandarlo a `crear_venta` junto con `p_puntos_canjeados`. Guard
+  defensivo (mismo criterio "nunca confiar en el cliente" que ya usa esta función para
+  offline/medios de pago): si `puntosCanjeados > 0` sin conexión o sin cliente, rechaza antes de
+  llamar al servidor — la UI ya lo oculta, esto es el respaldo.
+  Redención **no soportada offline** — a diferencia de Efectivo/Transferencia, canjear necesita
+  el saldo real del servidor en el momento; el snapshot local podría estar viejo y dejar canjear
+  de más.
+- **`TicketPrint.jsx` / `TicketPDF.jsx` (ERP, para cuando exista) / modal "¡Venta confirmada!"
+  (`ModoCajaLayout.jsx`)**: línea "Descuento por puntos (N)" cuando la venta canjeó puntos —
+  mismo lugar/estilo que la línea de descuentos por ofertas.
+
+**Verificación:** 20 tests nuevos (10 en `PanelCarrito.test.jsx` — visibilidad condicional,
+clamping al saldo, cálculo del descuento, guard offline, llamada a `confirmar()` con los
+parámetros correctos; 4 en `useConfirmarVenta.test.js`; 3 en `TicketPrint.test.jsx`). Suite
+completa: **152/152 en verde**. `eslint`/`vite build` en 0 errores.
+
+**Todavía no está en el ERP** (`NuevaVentaModal.jsx`, la pantalla "Nueva Venta" fuera del POS) —
+mismo criterio de checkpoints del resto del proyecto: se cierra y se prueba el POS primero
+(que es lo que usa Nadia todos los días) antes de replicar el mismo circuito ahí.

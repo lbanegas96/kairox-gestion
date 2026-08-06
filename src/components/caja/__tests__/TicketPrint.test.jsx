@@ -45,3 +45,22 @@ describe('TicketPrint — Fidelización por puntos (Fase 2)', () => {
     expect(screen.queryByText(/¡Ganaste/)).toBeNull();
   });
 });
+
+// Fidelización por puntos — Fase 3: el ticket muestra el descuento cuando la venta canjeó puntos.
+describe('TicketPrint — Fidelización por puntos (Fase 3, canje)', () => {
+  it('venta con descuento_puntos_pesos > 0: muestra la línea con el monto y la cantidad canjeada', () => {
+    render(<TicketPrint venta={{ ...VENTA_BASE, total: 9500, puntos_canjeados: 50, descuento_puntos_pesos: 500 }} items={[]} empresa={{}} />);
+    expect(screen.getByText('Descuento por puntos (50):')).toBeTruthy();
+    expect(screen.getByText('-$500,00')).toBeTruthy();
+  });
+
+  it('venta sin canje (descuento_puntos_pesos: 0): no muestra la línea', () => {
+    render(<TicketPrint venta={{ ...VENTA_BASE, puntos_canjeados: 0, descuento_puntos_pesos: 0 }} items={[]} empresa={{}} />);
+    expect(screen.queryByText(/Descuento por puntos/)).toBeNull();
+  });
+
+  it('venta sin los campos (callers viejos): no rompe ni muestra nada', () => {
+    render(<TicketPrint venta={VENTA_BASE} items={[]} empresa={{}} />);
+    expect(screen.queryByText(/Descuento por puntos/)).toBeNull();
+  });
+});

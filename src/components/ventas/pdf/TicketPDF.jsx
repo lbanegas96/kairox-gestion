@@ -224,6 +224,13 @@ export function TicketPDF({ comprobante, items, pagos, empresa }) {
               </View>
             </>
           ) : null}
+          {/* Fidelización por puntos (Fase 3) — canje aplicado en esta venta */}
+          {comprobante.descuento_puntos_pesos > 0 ? (
+            <View style={styles.pagoRow}>
+              <Text style={{ color: '#64748b' }}>Descuento por puntos ({comprobante.puntos_canjeados})</Text>
+              <Text>-{simbolo}{fmt(conv(comprobante.descuento_puntos_pesos))}</Text>
+            </View>
+          ) : null}
           <View style={styles.totalFinal}>
             <Text style={styles.totalFinalText}>TOTAL</Text>
             <Text style={styles.totalFinalText}>
