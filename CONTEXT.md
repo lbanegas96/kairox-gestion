@@ -1,10 +1,55 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-07 (Claude — 2do bug real encontrado por Luciano probando en
-vivo: CORS rechazaba cobrar por QR MercadoPago desde una URL de deploy de Vercel no aliasada.
-Corregido y redeployado en las 23 edge functions afectadas. Además: impresión térmica y lector de
-código de barras revisados —ya están bien, sin cambios de código necesarios— y escaneo por cámara
-construido a pedido de Luciano. Todo mergeado a `master`, pusheado a GitHub y deployado a
-producción en Vercel. Plan de pruebas para Nadia al final de este documento.)
+**Última actualización:** 2026-08-07 (Claude — barrido general del sistema a pedido de Luciano,
+de cara al objetivo de `ROADMAP.md` de conseguir el primer cliente en agosto. Login rebrandeado
+con el sistema de diseño `kx-*` + logo real; encontrado que el mismo estilo viejo sigue en 32
+archivos más (88 ocurrencias) — alcance del rebrand queda a decisión de Luciano, ver
+`PLAN_PRUEBAS_SABADO_2026-08-08.md`. `ROADMAP.md` actualizado — 2 adapters que decía pendientes
+ya están hechos. Sin gaps funcionales nuevos encontrados en el flujo de ventas/facturación; suite
+153/153 en verde. Plan de pruebas de mañana sábado para Luciano+Claude en
+`PLAN_PRUEBAS_SABADO_2026-08-08.md` — el de Nadia sigue siendo `PLAN_PRUEBAS_NADIA_2026-08-08.md`.)
+
+## 🔍 Barrido general del sistema (07/08) — resultado
+
+Pedido por Luciano: "qué falta, qué queda, tanto para revisar como para terminar", contrastado
+contra el roadmap de mercado (`ROADMAP.md`) y lo ya construido.
+
+**A. `ROADMAP.md` estaba desactualizado en 2 puntos** (corregido): decía "falta publicar catálogo
+KAIROX→Tiendanube" (ya está hecho desde el 22/07) y marcaba el stock bidireccional de MercadoLibre
+como problema abierto (ya resuelto con una decisión de diseño explícita: KAIROX es la única fuente
+de verdad del stock, con cola + reintentos, mismo patrón que Tiendanube — la garantía de no
+sobreventa la da `crear_venta` con `FOR UPDATE`, verificada en vivo el 06/08).
+
+**B. Gaps reales de código:** ninguno en el flujo de ventas/facturación/asientos (esas rutas están
+limpias de TODOs). Lo que sí hay son 3 cosas ya diferidas **a propósito**, con nota explícita en el
+código de por qué no están hechas todavía: series AFIP por letra en vez de por tipo de documento
+(nota "Q3 2026" en `TabFacturacion.jsx`), valoración de stock FIFO (solo activo
+`ultimo_costo`/`promedio_ponderado` por ahora), y el Bearer del cron de `mp-sync` hardcodeado en la
+migración (es la `anon key`, pública por diseño — bajo riesgo, pero sigue siendo un TODO abierto).
+Ninguno bloquea nada hoy.
+
+**C. Suite de tests:** 153/153 en verde, sin deuda técnica visible.
+
+**D. Pendientes técnicos ya conocidos** (sin cambios, ver la sección con ese nombre más abajo):
+dominio propio para email, CbteAsoc en `informar-caea`, 4 NC históricas mal declaradas ante ARCA,
+MELI Factura A.
+
+**E. Hallazgo de branding (no estaba en el pedido original, lo encontré revisando el login):** el
+login (`AuthPage.jsx`) tenía colores hardcodeados viejos (`#00D4FF`/`#A855F7`, cian/violeta) y
+estaba forzado a modo oscuro siempre, ignorando el sistema de diseño `kx-*` (violeta, con soporte
+claro/oscuro) que usa el resto de la app — y cuando no hay logo de empresa cacheado (dispositivo
+nuevo, el caso del primer cliente) mostraba un ícono genérico en vez de la marca real de KAIROX.
+**Corregido:** ahora usa los tokens `kx-*` y muestra `/kairox-logo.png` como fallback. De paso,
+`index.html` tenía el favicon default de Vite (`/vite.svg`) en vez del logo — corregido, más
+`theme-color`/`apple-touch-icon`/`meta description`. Verificado: lint y build limpios, 153/153
+tests, colores computados correctos en ambos temas contra el servidor de dev — no pude sacar
+captura real por una limitación del entorno de pruebas, queda para que Luciano lo confirme
+mañana.
+
+**El mismo estilo viejo sigue en 32 archivos más (88 ocurrencias)** — Ventas, Compras, Cheques,
+Plan de Cuentas, Caja, Reportes, Configuración, y el resto del flujo de auth (`OnboardingPage.jsx`,
+`ResetPasswordPage.jsx`, `PasswordRecoveryModal.jsx`). No se tocó — es una superficie grande y sin
+forma de verificar cada pantalla visualmente en este entorno; lista completa y la pregunta de
+alcance en `PLAN_PRUEBAS_SABADO_2026-08-08.md`.
 
 ## 🧪 Plan de pruebas para Nadia (mañana) — QR MercadoPago + escaneo por cámara
 

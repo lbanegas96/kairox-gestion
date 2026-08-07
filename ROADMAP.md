@@ -50,9 +50,9 @@ fácil y llegar al difícil con el patrón ya rodado:
 
 | # | Canal | Dificultad | Por qué / qué lo hace difícil |
 |---|-------|-----------|-------------------------------|
-| 1 | **Tiendanube / Shopify** | 🟢 Fácil | OAuth estándar, bien documentado. **Primer adapter** — estrena la capa sin pelear con stock bidireccional. ✅ Sentido TN→KAIROX (catálogo, pedidos, stock) hecho. Falta **publicar catálogo KAIROX→TN** — diseño en [`docs/DISENO_publicar_catalogo_tiendanube.md`](docs/DISENO_publicar_catalogo_tiendanube.md), pedido por Luciano, 2-3 días, carril de Nadia. |
-| 2 | **MercadoLibre** | 🟡 Medio | La apuesta grande del mercado AR (órdenes + stock + factura AFIP auto). Plomería resuelta; lo difícil es el **stock bidireccional** (¿quién es la fuente de verdad?) + idempotencia. |
-| 3 | **Bancos** | 🔴 Difícil | Argentina no tiene open-banking estándar (no hay PSD2). MP / Ualá que ya se sincroniza es el **atajo práctico** por ahora. |
+| 1 | **Tiendanube / Shopify** | ✅ Hecho | OAuth estándar. Catálogo bidireccional completo: TN→KAIROX (catálogo, pedidos, stock) y **KAIROX→TN** (construido 22/07 — diseño en [`docs/DISENO_publicar_catalogo_tiendanube.md`](docs/DISENO_publicar_catalogo_tiendanube.md), pruebas en `docs/PRUEBAS_publicar_catalogo.md`). |
+| 2 | **MercadoLibre** | 🟢 Hecho, en producción | Catálogo, categorías, pedidos y stock-worker deployados (`supabase/functions/mercadolibre-*`). El "stock bidireccional" ya no es una pregunta abierta: decisión explícita de **dirección única** (KAIROX es la fuente de verdad del stock, documentado en el propio `mercadolibre-stock-worker/index.ts`), con cola + reintentos + backoff, mismo patrón que Tiendanube. La garantía de no sobreventa la da `crear_venta` (`SELECT...FOR UPDATE`, mig.309) — verificada en vivo contra producción el 06/08. |
+| 3 | **Bancos** | 🔴 Difícil | Argentina no tiene open-banking estándar (no hay PSD2). MP / Ualá que ya se sincroniza sigue siendo el **atajo práctico** — todo el trabajo posterior en Bancos (liquidación de tarjetas POS, conciliación, cheques) profundizó sobre ese mismo atajo, no agregó un adapter nuevo. |
 
 ---
 
@@ -74,9 +74,13 @@ fácil y llegar al difícil con el patrón ya rodado:
 ---
 
 ## ✅ Ya construido (el núcleo — no re-investigar ni reconstruir)
-Facturación AFIP/ARCA nativa + CAEA · Ventas/POS (Modo Caja) · Compras · Inventario multi-unidad ·
-Contabilidad (plan de cuentas + asientos automáticos, partida doble) · Cuentas corrientes (Open
-Item) · Bancos · Cheques · Multimoneda · MercadoPago (sync) · Maestros de Formas de Pago y Unidades
+Facturación AFIP/ARCA nativa + CAEA · Ventas/POS (Modo Caja) con **multi-caja simultánea** y
+**Modo Offline** (cobra Efectivo/Transferencia sin internet, sincroniza al reconectar) · Compras ·
+Inventario multi-unidad + COGS · Contabilidad (plan de cuentas + asientos automáticos, partida
+doble, cierre de ejercicio) · Cuentas corrientes (Open Item) · Bancos · Cheques · Multimoneda ·
+MercadoPago (sync + **cobro QR en el POS**) · Fidelización por puntos (ganar + canjear, POS y ERP) ·
+Tiendanube y MercadoLibre (catálogo bidireccional, pedidos, stock) · Escaneo de código de barras
+por cámara (complemento del lector físico, compatible iOS) · Maestros de Formas de Pago y Unidades
 de Medida (con ABM) · Centros de costo.
 
-_Última actualización: 2026-07-22 (Luciano + análisis de estrategia)._
+_Última actualización: 2026-08-07 (Claude, barrido general pre-primer-cliente)._
