@@ -1,12 +1,49 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-07 (Claude — mig.313 aplicada a producción con confirmación de
-Luciano: cierra el gap de QR MercadoPago sin ganar puntos. Con esto, Fidelización por Puntos
-queda 100% cerrada — backend, configuración, ganar y canjear puntos, en POS y ERP, y ahora
-también QR)
+**Última actualización:** 2026-08-07 (Claude — bug real en producción encontrado por Luciano
+probando el POS: ventas confirmadas después de crear un cliente por Alta Rápida quedaban
+atribuidas a "Consumidor Final" en vez del cliente real, sin ningún error visible. Ya corregido,
+verificado en vivo y deployado)
 
 ---
 
 # 👉 EMPEZÁ POR ACÁ (Luciano)
+
+## ✅ Bug que encontraste recién (venta CC con "cliente ya seleccionado") — arreglado
+
+Reproduje exactamente lo de tu captura (POS mobile, Cuenta Corriente, warning "CC requiere
+cliente seleccionado" con el cliente visible en el dropdown) y encontré la causa real, más
+grave de lo que parecía:
+
+**`ClienteSelector.jsx` disparaba dos actualizaciones de estado al crear un cliente por "Alta
+rápida"** — una correcta (selecciona el cliente con el objeto completo) y otra que buscaba ese
+mismo cliente recién creado en una lista que todavía no se había actualizado, fallaba, y pisaba
+la selección con `null`. El desplegable seguía mostrando bien el nombre (por eso en tu captura
+se veía "seleccionado"), pero por dentro la venta no tenía cliente real asociado.
+
+**Con Cuenta Corriente esto se nota** (bloquea con el warning que viste). **Con cualquier otro
+medio de pago fallaba en silencio** — verifiqué en vivo con datos sintéticos: antes del fix, una
+venta en Efectivo después de crear un cliente por Alta Rápida se confirmaba sin ningún error,
+pero quedaba grabada con `cliente_id: null` / "Consumidor Final" en la base, en vez del cliente
+real recién creado. Corregido y re-verificado con el mismo repro exacto (Efectivo y Cuenta
+Corriente) — ahora el cliente queda bien atribuido en los dos casos, incluidos los puntos de
+fidelización. Todo el dato de prueba revertido después.
+
+**De paso, un hallazgo aparte (no relacionado, pero taponaba la consola mientras investigaba):**
+el "ping activo" de conectividad (`useOnlineStatus.js`) pegaba a `/rest/v1/`, que **siempre**
+devuelve 401 para el rol `anon` de este proyecto (RLS le niega la función `get_my_empresa_id` a
+propósito — no era falta de apikey, lo confirmé mandando el apikey completo y seguía dando 401).
+`supabase-js` parchea `fetch` globalmente y logueaba cada uno como error de consola cada 20
+segundos — exactamente el ruido que se veía en tu captura, tapando la pista real. Cambiado a
+`GET /auth/v1/health` (endpoint público de verdad, sólo necesita el apikey) — 200 limpio,
+verificado en vivo, la consola ya no se llena solo.
+
+`npx eslint`/`npx vite build` en 0 errores, 153/153 tests en verde, deployado y verificado
+contra el bundle real de producción.
+
+**Importante — esto fue una pasada dirigida a lo que reportaste, no un barrido de "todos los
+casos posibles"**: encontré estos 2 problemas siguiendo tu reporte, pero no hice pruebas
+exhaustivas de cada combinación de descuentos/ofertas/atajos/pago mixto. Si seguís probando y
+encontrás algo más, avisame igual que esta vez.
 
 ## ✅ mig.313 aplicada — QR MercadoPago ya suma puntos
 
