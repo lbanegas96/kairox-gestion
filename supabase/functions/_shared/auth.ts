@@ -24,6 +24,19 @@ const ALLOWED_ORIGINS = new Set<string>([
   'http://127.0.0.1:5173',
 ].filter(Boolean));
 
+// Vercel emite una URL nueva y única por cada `vercel deploy` (ej.
+// kairox-gestion-4x0kytc7g-k-gestion.vercel.app), además de alias estables como
+// kairox-gestion-chi.vercel.app. Sin este patrón, la lista de arriba sólo cubre los
+// alias fijos — cualquiera que entre por la URL específica de un deploy (la que Vercel
+// muestra apenas termina de deployar, o un link viejo guardado) se encuentra con CORS
+// roto acá, aunque la app cargue perfecto (bug real encontrado por Luciano, 07/08:
+// mp-qr-crear rechazaba el preflight desde kairox-gestion-4x0kytc7g-k-gestion.vercel.app).
+const VERCEL_DEPLOY_ORIGIN_RE = /^https:\/\/kairox-gestion(-[a-z0-9]+)?-k-gestion\.vercel\.app$/;
+
+function isOriginAllowed(origin: string): boolean {
+  return ALLOWED_ORIGINS.has(origin) || VERCEL_DEPLOY_ORIGIN_RE.test(origin);
+}
+
 /** Headers CORS base (sin Allow-Origin, que se setea por request en buildCorsHeaders) */
 const BASE_CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -33,12 +46,13 @@ const BASE_CORS_HEADERS = {
 
 /**
  * Devuelve headers CORS reflejando el origin del request si está permitido.
- * Esto permite que tanto producción como dev local (cualquier puerto Vite común)
- * puedan llamar a las edge functions sin tener que hardcodear un solo origen.
+ * Esto permite que tanto producción (alias estable o cualquier URL de deploy de
+ * Vercel) como dev local (cualquier puerto Vite común) puedan llamar a las edge
+ * functions sin tener que hardcodear un origen nuevo cada vez que se deploya.
  */
 export function buildCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('Origin') || '';
-  const allowOrigin = ALLOWED_ORIGINS.has(origin) ? origin : (Deno.env.get('SITE_URL') || 'https://kairox-gestion.vercel.app');
+  const allowOrigin = isOriginAllowed(origin) ? origin : (Deno.env.get('SITE_URL') || 'https://kairox-gestion.vercel.app');
   return { ...BASE_CORS_HEADERS, 'Access-Control-Allow-Origin': allowOrigin };
 }
 

@@ -43,9 +43,19 @@ const ALLOWED_ORIGINS = new Set<string>([
   'http://127.0.0.1:5173',
 ].filter(Boolean));
 
+// Vercel emite una URL nueva y única por cada `vercel deploy` (ej.
+// kairox-gestion-4x0kytc7g-k-gestion.vercel.app), además de alias estables como
+// kairox-gestion-chi.vercel.app. Sin este patrón, cualquiera que entre por la URL
+// específica de un deploy se encuentra con CORS roto acá aunque la app cargue
+// perfecto (bug real encontrado por Luciano, 07/08 — el QR no se pudo cobrar por
+// esto exacto). Mismo patrón que _shared/auth.ts — este archivo tiene su propia
+// copia porque no importa el helper compartido (ver comentario del bloque de arriba).
+const VERCEL_DEPLOY_ORIGIN_RE = /^https:\/\/kairox-gestion(-[a-z0-9]+)?-k-gestion\.vercel\.app$/;
+
 function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('Origin') || '';
-  const allowOrigin = ALLOWED_ORIGINS.has(origin) ? origin : (Deno.env.get('SITE_URL') || 'https://kairox-gestion.vercel.app');
+  const isAllowed = ALLOWED_ORIGINS.has(origin) || VERCEL_DEPLOY_ORIGIN_RE.test(origin);
+  const allowOrigin = isAllowed ? origin : (Deno.env.get('SITE_URL') || 'https://kairox-gestion.vercel.app');
   return {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
