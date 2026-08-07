@@ -45,11 +45,15 @@ tests, colores computados correctos en ambos temas contra el servidor de dev —
 captura real por una limitación del entorno de pruebas, queda para que Luciano lo confirme
 mañana.
 
-**El mismo estilo viejo sigue en 32 archivos más (88 ocurrencias)** — Ventas, Compras, Cheques,
+**✅ El mismo estilo viejo estaba en 32 archivos más (88 ocurrencias)** — Ventas, Compras, Cheques,
 Plan de Cuentas, Caja, Reportes, Configuración, y el resto del flujo de auth (`OnboardingPage.jsx`,
-`ResetPasswordPage.jsx`, `PasswordRecoveryModal.jsx`). No se tocó — es una superficie grande y sin
-forma de verificar cada pantalla visualmente en este entorno; lista completa y la pregunta de
-alcance en `PLAN_PRUEBAS_SABADO_2026-08-08.md`.
+`ResetPasswordPage.jsx`, `PasswordRecoveryModal.jsx`). Luciano eligió hacer el rebrand completo de
+una — ya está hecho y deployado: 0 ocurrencias del color viejo en `src/`, lint/build limpios,
+153/153 tests, sin errores de consola en producción. Dos puntos a confirmar visualmente (no hay
+forma de sacar capturas en este entorno): botones sólidos que pasaron de texto negro a blanco
+sobre el violeta (por contraste WCAG AA en modo claro), y `PlanCuentasSection.jsx` (era la que más
+se apartaba del patrón dual claro/oscuro del resto de la app). Detalle en
+`PLAN_PRUEBAS_SABADO_2026-08-08.md`.
 
 ## 🧪 Plan de pruebas para Nadia (mañana) — QR MercadoPago + escaneo por cámara
 

@@ -26,18 +26,28 @@ dejó sacar una captura real — **necesito que lo mires vos con tus propios ojo
 4. Probá también "Registrarse ahora" (formulario de alta de empresa) y "Olvidé mi contraseña".
 5. Si algo se ve mal, mandame captura — lo corrijo al toque.
 
-## 2. Hallazgo grande: el mismo estilo viejo está en 32 archivos más, no solo el login
+## 2. ✅ Resuelto: el mismo estilo viejo estaba en 32 archivos más — ya rebrandeados y deployados
 
 Barriendo el código encontré **88 usos de esos mismos colores hardcodeados (`#00D4FF`/
 `#A855F7`) repartidos en 32 componentes** — Ventas, Compras, Cheques, Plan de Cuentas, Caja,
 Reportes, Configuración, y el resto del flujo de autenticación (`OnboardingPage.jsx`,
-`ResetPasswordPage.jsx`, `PasswordRecoveryModal.jsx`). Es decir, el login no era un caso aislado —
-es una marca vieja que quedó pisada a medias cuando se armó el sistema de diseño `kx-*` actual.
+`ResetPasswordPage.jsx`, `PasswordRecoveryModal.jsx`). El login no era un caso aislado — era una
+marca vieja que quedó pisada a medias cuando se armó el sistema de diseño `kx-*` actual.
 
-**No lo toqué todavía** (es una superficie grande, y no tengo forma de sacar capturas para
-verificar cada pantalla en este entorno) — te dejo la lista completa más abajo para que decidas
-el alcance: ¿todo de una, por lote (empezando por el resto del flujo de auth, que es chico), o lo
-vas marcando vos a medida que navegás (como venís haciendo)?
+**Decidiste hacerlo todo de una — ya está hecho y en producción.** Reemplazados los 88 usos por
+los tokens `kx-*` (kx-violet como acento principal, kx-blue como secundario en gradientes).
+Verificado: 0 ocurrencias del color viejo en todo `src/`, lint limpio, build limpio, 153/153 tests,
+sin errores de consola en producción. **Dos cosas para que confirmes con tus propios ojos** (no
+pude sacar capturas en este entorno):
+
+- **Botones sólidos de un solo acento** (Nuevo Asiento, Nueva Cuenta, Nuevo Período, Registrar
+  Cheque, etc., en Plan de Cuentas y Cheques) pasaron de `bg-violeta + texto negro` a
+  `bg-violeta + texto blanco` — el negro sobre violeta no llegaba al mínimo de contraste
+  accesible en modo claro. Debería verse igual de bien, pero confirmalo.
+- **`PlanCuentasSection.jsx`** (los tabs internos: Plan de Cuentas / Asientos / Balance / Estado
+  de Resultados / Balance General / Libro Mayor / Períodos) es la que más se apartaba del patrón
+  del resto de la app (no tenía distinción clara/oscuro previa) — vale la pena mirarla con más
+  atención que el resto.
 
 <details>
 <summary>Lista completa de archivos con el estilo viejo (88 ocurrencias)</summary>
