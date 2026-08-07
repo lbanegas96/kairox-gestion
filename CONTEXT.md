@@ -1,5 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-07 (Claude — barrido general del sistema a pedido de Luciano,
+**Última actualización:** 2026-08-07 (Claude — confirmadas cerradas las 2 auditorías contables que
+quedaban abiertas de sesiones previas: Cheques→Bancos, Devolución→NC. Detalle abajo. Sin código
+nuevo — solo verificación contra el repo real.)
+
+## ✅ Las 2 auditorías contables pendientes ya estaban cerradas — confirmado 07/08
+
+Luciano preguntó si quedaban cosas por auditar, aparte de lo ya cubierto en el barrido general.
+Revisé el código real (no solo memoria/CONTEXT.md) contra las 2 auditorías que se habían iniciado
+en sesiones previas y encontré que **las dos ya estaban resueltas**, sin que quedara registrado en
+ningún resumen consolidado hasta ahora:
+
+- **Cheques → Bancos ("Valores en Cartera")**: cobrar/depositar un cheque sí genera movimiento en
+  `movimientos_bancarios`, y el rechazo sí restaura la deuda del cliente — resuelto hace más de una
+  semana en 10 migraciones (028→211). El único gap real que quedaba (asiento fallido silencioso) ya
+  se había cerrado en mig.282 (ver [[project_cheques_asiento_fallido_mig282]]).
+- **Devolución → Nota de Crédito**: confirmado en `supabase/migrations/263_crear_devolucion_sin_nc_automatica.sql`
+  — la Devolución es una copia fiel de la Factura que anula (mismos ítems/precio/alícuota real de
+  IVA) y **ya no dispara la NC automáticamente**; la NC pasó a ser una acción explícita y separada
+  (`crear_nota_credito(p_devolucion_id)`, mig.264) desde el detalle de la Devolución — exactamente
+  el rediseño que se había pedido, con el agregado de que corrigió de raíz 2 bugs reales que tenía
+  la rama vieja: la NC nunca se encolaba a AFIP, y siempre asumía IVA 21% sin importar la alícuota
+  real del ítem.
+
+**No queda ninguna auditoría contable abierta.** Lo único pendiente de construir (no de auditar) es
+lo que ya figura en `ROADMAP.md`: WhatsApp (comprobantes + links de cobro) es el único ítem real de
+"construir" sin empezar — el resto del roadmap está deliberadamente pausado o fuera de alcance.
+
+**Última actualización previa:** 2026-08-07 (Claude — barrido general del sistema a pedido de Luciano,
 de cara al objetivo de `ROADMAP.md` de conseguir el primer cliente en agosto. Login rebrandeado
 con el sistema de diseño `kx-*` + logo real; encontrado que el mismo estilo viejo sigue en 32
 archivos más (88 ocurrencias) — alcance del rebrand queda a decisión de Luciano, ver
