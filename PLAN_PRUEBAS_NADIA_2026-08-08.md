@@ -38,33 +38,33 @@ antes de dar la Fase 3 por 100% cerrada — este bloque es exactamente eso.
 
 ---
 
-## Bloque 2 — QR MercadoPago ganando puntos (⚠️ todavía NO está aplicado — leé esto primero)
+## Bloque 2 — QR MercadoPago ganando puntos (✅ ya aplicado, listo para probar)
 
-**Este bloque todavía no se puede probar.** Encontré que las ventas cobradas con QR MercadoPago
-no sumaban puntos (usan un circuito de backend distinto al de las ventas normales), diseñé el
-arreglo y lo probé a fondo en sandbox contra Nalux (con datos 100% sintéticos, revertido después
-sin dejar rastro) — pero **no lo apliqué a producción** porque toca el circuito real de
-confirmación de pagos de MercadoPago y no quise tocar eso sin que Luciano esté para confirmar.
+**Qué se hizo:** las ventas cobradas con QR MercadoPago no sumaban puntos (usan un circuito de
+backend distinto al de las ventas normales). Lo probé a fondo en sandbox contra Nalux (con datos
+100% sintéticos, revertido después sin dejar rastro), y **Luciano ya confirmó y se aplicó a
+producción** (`supabase/migrations/313_fidelizacion_puntos_qr.sql`) — verificado después de
+aplicar: la función tiene el fix, sólo `service_role` puede ejecutarla, sin alertas de seguridad
+nuevas.
 
-**Qué falta antes de este bloque:** que Luciano confirme y se aplique
-`supabase/migrations/313_fidelizacion_puntos_qr.sql`. Una vez aplicada (avisamos acá o en
-`CONTEXT.md` cuando pase), la prueba sería:
+**Cómo probar (con un pago real, no hay forma de simular el webhook de MP):**
 1. Cobrar una venta con **QR MercadoPago** a un cliente con fidelización activa.
-2. Esperar a que se confirme el pago (webhook o el poller, como siempre).
-3. Verificar que el cliente sumó los puntos correspondientes (mismo cálculo que cualquier otra
-   venta: total ÷ pesos-por-punto).
+2. Esperar a que se confirme el pago (webhook o el poller `mp-qr-poller`, como siempre — hasta
+   ~60-70s).
+3. **Resultado esperado:** el cliente suma los puntos correspondientes (total ÷ pesos-por-punto,
+   redondeado hacia abajo) — podés verificarlo en el popover "ojo" del cliente (Saldo de Puntos)
+   o pidiéndome que lo cruce contra `movimientos_puntos`.
 
-No hace falta que hagas nada con este bloque todavía — queda anotado acá para no perderlo de
-vista.
+**Si algo no sale así:** sacá captura y contame, con el número de venta/comprobante.
 
 ---
 
 ## Qué contarme al terminar
 
-Para el Bloque 1: ✅ salió como se esperaba, o ⚠️ algo no coincidió (con captura si podés).
+Para cada bloque: ✅ salió como se esperaba, o ⚠️ algo no coincidió (con captura si podés).
 
 ## Cómo seguimos
 
-Con el Bloque 1 cerrado, Fidelización por Puntos queda funcionando en POS y ERP por igual. Sólo
-falta el Bloque 2 (QR) una vez que Luciano confirme la migración 313 — después de eso, el feature
-completo (investigación → 4 fases → réplica ERP → gap de QR) queda 100% cerrado.
+Con los 2 bloques cerrados, Fidelización por Puntos queda 100% cerrada de punta a punta:
+investigación → 4 fases (backend, configuración, ganar, canjear) → réplica al ERP → gap de QR
+resuelto. Ya no queda nada pendiente de este feature.

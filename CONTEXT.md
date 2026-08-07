@@ -1,22 +1,26 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-07 (Claude — cerrado el gap de QR MercadoPago sin ganar puntos:
-probado en sandbox, migración 313 lista pero **pendiente de aplicar a producción**, esperando
-confirmación. Las 4 fases de Fidelización — backend, configuración, ganar y canjear puntos, en
-POS y ERP — ya estaban 100% cerradas por Nadia, ver más abajo)
+**Última actualización:** 2026-08-07 (Claude — mig.313 aplicada a producción con confirmación de
+Luciano: cierra el gap de QR MercadoPago sin ganar puntos. Con esto, Fidelización por Puntos
+queda 100% cerrada — backend, configuración, ganar y canjear puntos, en POS y ERP, y ahora
+también QR)
 
 ---
 
 # 👉 EMPEZÁ POR ACÁ (Luciano)
 
-## ⏳ Necesita tu confirmación antes de seguir
+## ✅ mig.313 aplicada — QR MercadoPago ya suma puntos
 
-**`supabase/migrations/313_fidelizacion_puntos_qr.sql` está lista y probada en sandbox, pero NO
-se aplicó a producción.** Cierra el gap de "las ventas por QR MercadoPago no ganan puntos"
-(quedó documentado ayer). Toca `confirmar_pago_qr`, que es el circuito real de confirmación de
-pagos de MercadoPago, así que no la apliqué sin que estuvieras para confirmar. Quedó probada de
-punta a punta en sandbox (`BEGIN...ROLLBACK` contra Nalux, con datos 100% sintéticos, 0 rastro
-después) — detalle completo en `PLAN_FIDELIZACION_PUNTOS.md`. Avisame y la aplico, no hace falta
-volver a probarla.
+**`supabase/migrations/313_fidelizacion_puntos_qr.sql` está aplicada a producción**, con tu
+confirmación. Cierra el gap de "las ventas por QR MercadoPago no ganan puntos". Ya había quedado
+probada de punta a punta en sandbox antes de aplicarla (`BEGIN...ROLLBACK` contra Nalux, con
+datos 100% sintéticos, 0 rastro después — detalle completo en `PLAN_FIDELIZACION_PUNTOS.md`), así
+que se aplicó tal cual, sin volver a probar. Verificado después de aplicar: la función tiene el
+fix, `GRANT` sólo a `service_role` (ni `authenticated` ni `anon` pueden ejecutarla), y 0 alertas
+de seguridad nuevas en `get_advisors`.
+
+**Falta sólo la prueba en vivo con un pago real de MercadoPago** (cobrar por QR a un cliente con
+fidelización activa y confirmar que suma los puntos) — es el Bloque 2 de
+`PLAN_PRUEBAS_NADIA_2026-08-08.md`, ya desbloqueado.
 
 **Nota de coordinación (sin impacto en vos, sólo para que quede registrado):** mientras
 trabajaba en esto, Nadia (en su propia sesión, en paralelo) ya había replicado la Fase 3 al ERP
@@ -79,8 +83,7 @@ confirmada!". Los 3 fixes verificados contra la sesión real de Nadia (popover c
 pantalla mostrando "270 pts" de Carlos Perez, botón 100% visible en un viewport de 660px de
 alto). **Gap real encontrado de paso:** las ventas por QR MercadoPago no ganan puntos — usan un
 RPC distinto (`crear_venta_pendiente_qr`) que no pasa por la lógica de puntos de `crear_venta`.
-**Cerrado más tarde el mismo día (mig.313, probada en sandbox) — ver el aviso al principio de
-este archivo, sigue pendiente de aplicar a producción hasta que confirmes.**
+**Cerrado más tarde el mismo día (mig.313) y ya aplicado a producción.**
 
 Sigue la **Fase 3 (Canjear puntos — input en el checkout, descuento aplicado)** recién con el
 próximo "dale" — detalle completo en `PLAN_FIDELIZACION_PUNTOS.md`.
