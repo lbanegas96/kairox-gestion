@@ -18,9 +18,28 @@ function ClienteSelector({ clientes = [], value, onChange, onClienteCreado, clas
 
   const clienteSeleccionado = clientes.find(c => c.id === value) || null;
 
+  // Bug real encontrado por Luciano probando el POS en vivo (07/08): cuando
+  // el caller pasa `onClienteCreado` (como PanelCarrito.jsx, que ahí adentro
+  // selecciona el cliente con el objeto completo), llamar ACÁ ADEMÁS a
+  // `onChange(nuevoCliente.id)` disparaba una segunda actualización de estado
+  // en la misma pasada — y esa segunda búsqueda (`clientes.find` en el caller)
+  // corría contra el array `clientes` todavía viejo (el `setClientes` del
+  // `onClienteCreado` es async, no se aplicó todavía), fallaba, y pisaba la
+  // selección correcta con `null`. El `<select>` seguía mostrando el nombre
+  // bien (porque el id sí quedaba guardado), pero el objeto de cliente
+  // seleccionado quedaba en null — con Cuenta Corriente bloqueaba con un
+  // warning; con cualquier otro medio de pago, la venta se confirmaba SIN
+  // error pero atribuida a "Consumidor Final" en vez del cliente real.
+  // Fix: si el caller pasa `onClienteCreado`, confiar en que ES quien
+  // selecciona (así lo documenta el comentario de props de arriba) y no
+  // duplicar la selección acá. `onChange` sólo se usa como fallback para
+  // callers más simples que no necesiten re-fetchear la lista.
   const handleCreado = (nuevoCliente) => {
-    onClienteCreado?.(nuevoCliente);
-    onChange(nuevoCliente.id);
+    if (onClienteCreado) {
+      onClienteCreado(nuevoCliente);
+    } else {
+      onChange(nuevoCliente.id);
+    }
   };
 
   return (

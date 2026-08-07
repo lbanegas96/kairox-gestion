@@ -20,16 +20,27 @@ const PING_TIMEOUT_MS = 4000;
 
 async function pingSupabase() {
   const url = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
   if (!url) return true; // sin URL configurada (entorno raro) — no bloquear por esto
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
   try {
-    // HEAD a la raíz REST — cualquier respuesta (incluso 401 sin auth) confirma
-    // que hay salida real a internet y que Supabase es alcanzable. Sólo un
-    // error de red (fetch rechaza, o el abort del timeout) significa "sin
-    // conexión real".
-    await fetch(`${url}/rest/v1/`, { method: 'HEAD', signal: controller.signal });
+    // GET a /auth/v1/health — a propósito, no /rest/v1/. Verificado a mano:
+    // /rest/v1/ siempre devuelve 401 para el rol `anon` (RLS le niega
+    // EXECUTE sobre get_my_empresa_id(), por diseño — no es un problema de
+    // falta de apikey), incluso mandando el apikey correcto. El propio
+    // supabase-js parchea `fetch` globalmente y loguea cada 401 como error
+    // de consola, generando ruido cada 20s que tapa errores reales — por
+    // eso el ping antes parecía "funcionar" (isOnline quedaba bien) pero
+    // ensuciaba la consola. /auth/v1/health SÍ es público (sólo necesita el
+    // apikey, ninguna sesión) y devuelve 200 real — sin HEAD (405, no
+    // soportado ahí), por eso GET.
+    await fetch(`${url}/auth/v1/health`, {
+      method: 'GET',
+      headers: anonKey ? { apikey: anonKey } : undefined,
+      signal: controller.signal,
+    });
     return true;
   } catch {
     return false;
