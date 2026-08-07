@@ -1,8 +1,54 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-07 (Claude — bug real en producción encontrado por Luciano
-probando el POS: ventas confirmadas después de crear un cliente por Alta Rápida quedaban
-atribuidas a "Consumidor Final" en vez del cliente real, sin ningún error visible. Ya corregido,
-verificado en vivo y deployado)
+**Última actualización:** 2026-08-07 (Claude — 2do bug real encontrado por Luciano probando en
+vivo: CORS rechazaba cobrar por QR MercadoPago desde una URL de deploy de Vercel no aliasada.
+Corregido y deployado. Además: impresión térmica y lector de código de barras revisados —ya están
+bien, sin cambios de código necesarios— y evaluación de escaneo por cámara, pendiente de decisión)
+
+## ✅ Bug de CORS en el cobro por QR — corregido
+
+Vercel emite una URL nueva y única en cada `vercel deploy` (ej.
+`kairox-gestion-4x0kytc7g-k-gestion.vercel.app`), además del alias estable
+`kairox-gestion-chi.vercel.app`. El allowlist de CORS de las edge functions era una lista fija
+de orígenes exactos — no contemplaba esas URLs de deploy, así que entrar por una de ellas
+rompía el preflight de `mp-qr-crear` (bloqueaba cobrar por QR). Afecta potencialmente **22 edge
+functions más** que comparten el mismo helper (`_shared/auth.ts`) — corregido ahí también en el
+repo, pero **no redeployadas todavía** (son casi todas de Configuración/integraciones, no viste
+error en ninguna todavía — avisame si querés que las redeploye a todas o vamos de a una si aparece
+algo).
+
+Fix: además de la lista fija, aceptar cualquier origen que matchee el patrón real de las URLs de
+deploy de este proyecto (`kairox-gestion-<hash>-k-gestion.vercel.app`). Verificado con `curl`
+contra producción real (no se puede simular esto desde el navegador — el header `Origin` no se
+puede falsear desde JS): el origen exacto de tu captura ahora recibe
+`Access-Control-Allow-Origin` correcto; un origen ajeno (`evil.com`) sigue rechazado.
+`mp-qr-crear` ya deployado (versión 9).
+
+## 🖨️📷 Impresora térmica y lector de código de barras — revisados, sin cambios necesarios
+
+Investigué el código actual y comparé contra lo que usa el mercado en 2026 (fuentes abajo):
+
+- **Impresora térmica**: hoy imprime vía `window.print()` con `@page { size: 80mm auto }` — el
+  navegador manda la página al driver de la impresora instalada en Windows. Es el enfoque
+  correcto: la alternativa "moderna" (WebUSB directo, sin diálogo) sólo funciona en Chrome/Edge y
+  **en Windows específicamente falla si la impresora ya tiene un driver instalado** (que es como
+  vienen casi todas) — el driver se la "adueña" y WebUSB no puede acceder. Nada para tocar.
+- **Papel 80mm vs 58mm**: confirmado por investigación — 80mm es el estándar para comercio con
+  factura electrónica (58mm se usa más en datáfonos de tarjeta, texto obligatorio no entra bien).
+  KAIROX ya usa 80mm por default. Sin pedido explícito de agregar 58mm, no se toca.
+- **Lector de código de barras**: ya usa el estándar del mercado (modo "keyboard wedge" — el
+  95%+ de los lectores comerciales vienen así de fábrica, cero configuración del lado de KAIROX).
+  Tiene además una defensa activa (auto-refocus del buscador tras cualquier click) contra la
+  única limitación documentada de esta tecnología ("si el foco no está en el campo correcto, el
+  texto va a parar a otro lado"). Ya era una fortaleza marcada en el análisis de mercado del POS.
+- **Pendiente de decisión (no construido):** escaneo de código de barras con la cámara del
+  dispositivo (`BarcodeDetector`, API nativa del navegador) — evaluado a pedido de Luciano.
+  **Limitación real encontrada:** no funciona en Safari/iOS (ningún iPhone/iPad) — sólo
+  Chrome/Edge/Android. Para soportar iOS de verdad haría falta una librería aparte (ZXing/WASM),
+  más trabajo que "usar la API del navegador". Tampoco es un diferencial fuerte — ya es una
+  función común/de respaldo en varios POS establecidos (Square, Shopify POS, etc.), no algo que
+  KAIROX tendría en exclusiva. Sirve como complemento (mostrador secundario sin comprar lector,
+  venta ambulante desde un celu), no como reemplazo del lector físico para el mostrador
+  principal. **Sin decisión tomada — evaluación devuelta a Luciano, no se empezó a construir.**
 
 ---
 
