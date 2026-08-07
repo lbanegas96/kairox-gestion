@@ -61,14 +61,14 @@ function OnboardingPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#0F172A]">
-      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-[#00D4FF]/10 rounded-full blur-[100px]" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-[#A855F7]/10 rounded-full blur-[100px]" />
+      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-kx-violet/10 rounded-full blur-[100px]" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-kx-blue/10 rounded-full blur-[100px]" />
 
       <div className="w-full max-w-md relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 shadow-2xl p-8">
           <div className="text-center mb-8">
-            <div className="inline-flex p-3 rounded-2xl bg-gradient-to-br from-[#00D4FF]/20 to-[#A855F7]/20 border border-slate-700 mb-4">
-              <Sparkles className="w-10 h-10 text-[#00D4FF]" />
+            <div className="inline-flex p-3 rounded-2xl bg-gradient-to-br from-kx-violet/20 to-kx-blue/20 border border-slate-700 mb-4">
+              <Sparkles className="w-10 h-10 text-kx-violet" />
             </div>
 
             <h1 className="text-3xl font-bold text-white mb-2">Configurá tu empresa</h1>
@@ -83,13 +83,13 @@ function OnboardingPage() {
                 Nombre de la Empresa *
               </Label>
               <div className="relative group">
-                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-[#00D4FF] transition-colors" />
+                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-kx-violet transition-colors" />
                 <Input
                   id="nombre_empresa"
                   name="nombre_empresa"
                   value={formData.nombre_empresa}
                   onChange={handleChange}
-                  className="pl-10 bg-slate-950/50 border-slate-800 text-white focus:border-[#00D4FF] transition-all"
+                  className="pl-10 bg-slate-950/50 border-slate-800 text-white focus:border-kx-violet transition-all"
                   placeholder="Mi Empresa S.A."
                   disabled={loading}
                   autoFocus
@@ -103,13 +103,13 @@ function OnboardingPage() {
                   Tu Nombre
                 </Label>
                 <div className="relative group">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-[#00D4FF] transition-colors" />
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-kx-violet transition-colors" />
                   <Input
                     id="first_name"
                     name="first_name"
                     value={formData.first_name}
                     onChange={handleChange}
-                    className="pl-10 bg-slate-950/50 border-slate-800 text-white focus:border-[#00D4FF] transition-all"
+                    className="pl-10 bg-slate-950/50 border-slate-800 text-white focus:border-kx-violet transition-all"
                     placeholder="Juan"
                     disabled={loading}
                   />
@@ -120,13 +120,13 @@ function OnboardingPage() {
                   Tu Apellido
                 </Label>
                 <div className="relative group">
-                  <UserCircle className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-[#00D4FF] transition-colors" />
+                  <UserCircle className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-kx-violet transition-colors" />
                   <Input
                     id="last_name"
                     name="last_name"
                     value={formData.last_name}
                     onChange={handleChange}
-                    className="pl-10 bg-slate-950/50 border-slate-800 text-white focus:border-[#00D4FF] transition-all"
+                    className="pl-10 bg-slate-950/50 border-slate-800 text-white focus:border-kx-violet transition-all"
                     placeholder="Pérez"
                     disabled={loading}
                   />
@@ -137,7 +137,7 @@ function OnboardingPage() {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-[#00D4FF] to-[#A855F7] hover:opacity-90 text-white font-bold py-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-[#00D4FF]/25 mt-2"
+              className="w-full bg-gradient-to-r from-kx-violet to-kx-blue hover:opacity-90 text-white font-bold py-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-kx-violet/25 mt-2"
             >
               {loading ? (
                 <Loader2 className="h-5 w-5 animate-spin" />

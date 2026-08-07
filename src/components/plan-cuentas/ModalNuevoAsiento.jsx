@@ -57,7 +57,7 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
       <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
-            <FileText size={18} className="text-[#00D4FF]" /> Nuevo Asiento Contable
+            <FileText size={18} className="text-kx-violet" /> Nuevo Asiento Contable
           </DialogTitle>
           <DialogDescription>Registrá un asiento manual con líneas de debe/haber balanceadas.</DialogDescription>
         </DialogHeader>
@@ -96,7 +96,7 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
                       <select
                         value={l.cuenta_id}
                         onChange={(e) => updateLinea(i, 'cuenta_id', e.target.value)}
-                        className="w-full bg-kx-surface-2 border border-kx-border rounded text-kx-text text-xs px-2 py-1.5 focus:outline-none focus:border-[#00D4FF]"
+                        className="w-full bg-kx-surface-2 border border-kx-border rounded text-kx-text text-xs px-2 py-1.5 focus:outline-none focus:border-kx-violet"
                       >
                         <option value="">— Seleccionar —</option>
                         {movibles.map((c) => (
@@ -134,7 +134,7 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
                 <tr>
                   <td colSpan={2} className="px-3 py-2">
                     <button onClick={() => setLineas((p) => [...p, emptyLinea()])}
-                      className="text-[#00D4FF] text-xs hover:underline flex items-center gap-1">
+                      className="text-kx-violet text-xs hover:underline flex items-center gap-1">
                       <Plus size={12} /> Agregar línea
                     </button>
                   </td>
@@ -165,7 +165,7 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
         <DialogFooter className="gap-2">
           <Button variant="ghost" onClick={onClose} className="text-kx-text-3">Cancelar</Button>
           <Button onClick={handleSave} disabled={saving || !cuadrado}
-            className="bg-[#00D4FF] text-black hover:bg-[#00bfe8]">
+            className="bg-kx-violet text-white hover:opacity-90">
             {saving ? <Loader2 size={14} className="animate-spin mr-2" /> : <Check size={14} className="mr-2" />}
             Crear Asiento
           </Button>

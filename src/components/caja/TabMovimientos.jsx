@@ -8,8 +8,8 @@ import { formatAmount } from './shared';
 function SortIcon({ column, sortConfig }) {
   if (sortConfig.key !== column) return <ArrowUpDown className="ml-2 h-4 w-4 text-kx-text-3" />;
   return sortConfig.direction === 'asc'
-    ? <ArrowUp className="ml-2 h-4 w-4 text-blue-600 dark:text-[#00D4FF]" />
-    : <ArrowDown className="ml-2 h-4 w-4 text-blue-600 dark:text-[#00D4FF]" />;
+    ? <ArrowUp className="ml-2 h-4 w-4 text-blue-600 dark:text-kx-violet" />
+    : <ArrowDown className="ml-2 h-4 w-4 text-blue-600 dark:text-kx-violet" />;
 }
 
 function TabMovimientos({
@@ -34,7 +34,7 @@ function TabMovimientos({
         </div>
         <div className="space-y-2">
           <Label className="dark:text-kx-text">Tipo</Label>
-          <select className="w-full h-10 rounded-md kairox-input pl-3 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00D4FF] dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" value={filters.type} onChange={e => setFilters({...filters, type: e.target.value})}>
+          <select className="w-full h-10 rounded-md kairox-input pl-3 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-kx-violet dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" value={filters.type} onChange={e => setFilters({...filters, type: e.target.value})}>
             <option value="Todos">Todos</option>
             <option value="Ingreso">Ingresos</option>
             <option value="Egreso">Egresos</option>

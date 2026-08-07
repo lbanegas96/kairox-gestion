@@ -410,7 +410,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-3xl font-bold dark:text-kx-text flex items-center gap-3">
-            <ClipboardList className="h-8 w-8 text-blue-600 dark:text-[#00D4FF]" /> Pedidos de Clientes
+            <ClipboardList className="h-8 w-8 text-blue-600 dark:text-kx-violet" /> Pedidos de Clientes
           </h2>
           <p className="text-slate-500 dark:text-kx-text-2 mt-1">Gestioná pedidos desde borrador hasta facturación</p>
         </div>

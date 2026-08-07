@@ -377,13 +377,13 @@ export default function ChequesSection() {
       {/* Tabs */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 size={32} className="animate-spin text-[#00D4FF]" />
+          <Loader2 size={32} className="animate-spin text-kx-violet" />
         </div>
       ) : (
         <Tabs defaultValue="tercero" className="space-y-4">
           <TabsList className="bg-transparent p-0 gap-2">
             <TabsTrigger value="tercero"
-              className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-kx-surface-2 text-kx-text-2 hover:bg-kx-surface-2 rounded-md px-4 py-2 gap-2">
+              className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-kx-violet data-[state=active]:text-white dark:data-[state=active]:text-black bg-kx-surface-2 text-kx-text-2 hover:bg-kx-surface-2 rounded-md px-4 py-2 gap-2">
               Cartera de Terceros
               {kpis.countCartera > 0 && (
                 <span className="ml-1 bg-kx-surface border border-kx-border text-kx-text text-2xs px-1.5 py-0.5 rounded-full font-bold">
@@ -392,7 +392,7 @@ export default function ChequesSection() {
               )}
             </TabsTrigger>
             <TabsTrigger value="propio"
-              className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-kx-surface-2 text-kx-text-2 hover:bg-kx-surface-2 rounded-md px-4 py-2 gap-2">
+              className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-kx-violet data-[state=active]:text-white dark:data-[state=active]:text-black bg-kx-surface-2 text-kx-text-2 hover:bg-kx-surface-2 rounded-md px-4 py-2 gap-2">
               Cheques Propios
               {kpis.countPropios > 0 && (
                 <span className="ml-1 bg-kx-surface border border-kx-border text-kx-text text-2xs px-1.5 py-0.5 rounded-full font-bold">

@@ -48,13 +48,13 @@ function PasswordRecoveryModal({ isOpen, onClose, onRecover }) {
               Email
             </Label>
             <div className="relative group">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-[#00D4FF] transition-colors" />
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-kx-violet transition-colors" />
               <Input
                 id="recovery-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="pl-10 bg-slate-950/50 border-slate-800 focus:border-[#00D4FF] transition-all"
+                className="pl-10 bg-slate-950/50 border-slate-800 focus:border-kx-violet transition-all"
                 placeholder="tu.email@ejemplo.com"
                 disabled={isLoading}
               />
@@ -69,7 +69,7 @@ function PasswordRecoveryModal({ isOpen, onClose, onRecover }) {
           <Button 
             onClick={handleRecoverClick} 
             disabled={isLoading} 
-            className="w-full sm:w-auto bg-gradient-to-r from-[#00D4FF] to-[#A855F7] hover:opacity-90 text-white font-bold transition-all"
+            className="w-full sm:w-auto bg-gradient-to-r from-kx-violet to-kx-blue hover:opacity-90 text-white font-bold transition-all"
           >
             {isLoading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

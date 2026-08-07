@@ -150,7 +150,7 @@ const TabEmpresa = ({
           <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept=".png,.jpg,.jpeg,.svg,.webp" className="hidden" />
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={uploading}
-              className="w-full border-dashed border-2 border-slate-300 dark:border-kx-border hover:border-blue-500 dark:hover:border-[#00D4FF] hover:bg-kx-surface-2">
+              className="w-full border-dashed border-2 border-slate-300 dark:border-kx-border hover:border-blue-500 dark:hover:border-kx-violet hover:bg-kx-surface-2">
               {uploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Subiendo...</> : <><Upload className="w-4 h-4 mr-2" /> Subir Logo</>}
             </Button>
             {formData.company_logo && (
@@ -168,7 +168,7 @@ const TabEmpresa = ({
 
         <div className="pt-2">
           <Button type="submit" disabled={saving || uploading}
-            className="w-full bg-blue-600 hover:bg-blue-700 dark:bg-[#00D4FF] dark:hover:bg-[#00D4FF]/90 text-white dark:text-black font-bold shadow-lg">
+            className="w-full bg-blue-600 hover:bg-blue-700 dark:bg-kx-violet dark:hover:bg-kx-violet/90 text-white dark:text-black font-bold shadow-lg">
             {saving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : <><Save className="mr-2 h-4 w-4" /> Guardar Datos de Empresa</>}
           </Button>
         </div>
@@ -191,7 +191,7 @@ const TabEmpresa = ({
             </div>
           )}
           <div className="w-full">
-            <h4 className="text-xl font-bold bg-gradient-to-r from-[#00D4FF] to-[#A855F7] bg-clip-text text-transparent break-words">
+            <h4 className="text-xl font-bold bg-gradient-to-r from-kx-violet to-kx-blue bg-clip-text text-transparent break-words">
               {formData.nombre_empresa || 'Nombre de Empresa'}
             </h4>
             {(formData.localidad || formData.provincia) && (

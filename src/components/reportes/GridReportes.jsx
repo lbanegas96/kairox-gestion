@@ -12,7 +12,7 @@ function GridReportes({
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-kx-surface dark:bg-transparent p-6 -mx-6 -mt-6 mb-6 border-b border-kx-border dark:border-none">
         <div>
           <h2 className="text-3xl font-bold text-slate-900 dark:text-kx-text mb-2 flex items-center gap-2">
-            <FileSpreadsheet className="w-8 h-8 text-blue-600 dark:text-[#00D4FF]" />
+            <FileSpreadsheet className="w-8 h-8 text-blue-600 dark:text-kx-violet" />
             Centro de Reportes
           </h2>
           <p className="text-slate-500 dark:text-kx-text-2">

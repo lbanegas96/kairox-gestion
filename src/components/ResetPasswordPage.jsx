@@ -44,8 +44,8 @@ function ResetPasswordPage({ onDone }) {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#0F172A]">
-      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-[#00D4FF]/10 rounded-full blur-[100px]" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-[#A855F7]/10 rounded-full blur-[100px]" />
+      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-kx-violet/10 rounded-full blur-[100px]" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-kx-blue/10 rounded-full blur-[100px]" />
 
       <div className="w-full max-w-md relative z-10 animate-in fade-in zoom-in-95 duration-400">
         <div className="bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-800 shadow-2xl p-8">
@@ -58,8 +58,8 @@ function ResetPasswordPage({ onDone }) {
           ) : (
             <>
               <div className="text-center mb-8">
-                <div className="p-3 rounded-2xl bg-gradient-to-br from-[#00D4FF]/20 to-[#A855F7]/20 border border-slate-700 mx-auto w-fit mb-4">
-                  <div className="w-10 h-10 bg-gradient-to-br from-[#00D4FF] to-[#A855F7] rounded-xl flex items-center justify-center shadow-lg">
+                <div className="p-3 rounded-2xl bg-gradient-to-br from-kx-violet/20 to-kx-blue/20 border border-slate-700 mx-auto w-fit mb-4">
+                  <div className="w-10 h-10 bg-gradient-to-br from-kx-violet to-kx-blue rounded-xl flex items-center justify-center shadow-lg">
                     <Lock className="text-white h-6 w-6" />
                   </div>
                 </div>
@@ -73,13 +73,13 @@ function ResetPasswordPage({ onDone }) {
                     Nueva contraseña
                   </Label>
                   <div className="relative group">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-[#00D4FF] transition-colors" />
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-kx-violet transition-colors" />
                     <Input
                       id="new-password"
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10 bg-slate-950/50 border-slate-800 text-white focus:border-[#00D4FF] transition-all"
+                      className="pl-10 bg-slate-950/50 border-slate-800 text-white focus:border-kx-violet transition-all"
                       placeholder="Mínimo 6 caracteres"
                       disabled={loading}
                       autoFocus
@@ -92,13 +92,13 @@ function ResetPasswordPage({ onDone }) {
                     Confirmar contraseña
                   </Label>
                   <div className="relative group">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-[#00D4FF] transition-colors" />
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-kx-violet transition-colors" />
                     <Input
                       id="confirm-password"
                       type="password"
                       value={confirm}
                       onChange={(e) => setConfirm(e.target.value)}
-                      className="pl-10 bg-slate-950/50 border-slate-800 text-white focus:border-[#00D4FF] transition-all"
+                      className="pl-10 bg-slate-950/50 border-slate-800 text-white focus:border-kx-violet transition-all"
                       placeholder="Repetir contraseña"
                       disabled={loading}
                     />
@@ -108,7 +108,7 @@ function ResetPasswordPage({ onDone }) {
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-gradient-to-r from-[#00D4FF] to-[#A855F7] hover:opacity-90 text-white font-bold py-6 rounded-xl transition-all duration-300 shadow-lg mt-2"
+                  className="w-full bg-gradient-to-r from-kx-violet to-kx-blue hover:opacity-90 text-white font-bold py-6 rounded-xl transition-all duration-300 shadow-lg mt-2"
                 >
                   {loading
                     ? <Loader2 className="h-5 w-5 animate-spin" />

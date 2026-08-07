@@ -98,7 +98,7 @@ export function AccionesCheque({ cheque, onVerDetalle, onCambiarEstado, onRegene
       {opciones?.length > 0 && (
         <button
           onClick={() => onCambiarEstado(cheque)}
-          className="px-2 py-1 text-xs rounded text-[#00D4FF] hover:text-kx-text hover:bg-[#00D4FF]/10 border border-[#00D4FF]/30 transition-colors flex items-center gap-1"
+          className="px-2 py-1 text-xs rounded text-kx-violet hover:text-kx-text hover:bg-kx-violet/10 border border-kx-violet/30 transition-colors flex items-center gap-1"
         >
           <ArrowRightLeft size={11} /> Mover
         </button>

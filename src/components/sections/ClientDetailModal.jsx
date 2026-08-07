@@ -198,7 +198,7 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
       <DialogContent className="max-w-4xl kairox-bg-card kairox-text-primary overflow-hidden flex flex-col max-h-[90vh] dark:bg-kx-bg dark:border-kx-border">
         <DialogHeader className="border-b border-slate-100 dark:border-kx-border pb-4">
           <DialogTitle className="flex items-center gap-2 text-xl dark:text-kx-text">
-             <User className="h-6 w-6 text-blue-600 dark:text-[#00D4FF]" />
+             <User className="h-6 w-6 text-blue-600 dark:text-kx-violet" />
              <span>{localClientData?.nombre || 'Detalle Cuenta Corriente'}</span>
           </DialogTitle>
           <DialogDescription className="dark:text-kx-text-2">

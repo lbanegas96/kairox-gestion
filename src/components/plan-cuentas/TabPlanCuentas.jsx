@@ -40,7 +40,7 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
         <BookOpen size={48} className="text-kx-text-2" />
         <p className="text-kx-text-3 text-lg font-medium">Plan de cuentas vacío</p>
         <p className="text-kx-text-2 text-sm">Podés inicializarlo con las cuentas estándar para PyMEs argentinas</p>
-        <Button onClick={handleSeedCuentas} className="bg-[#00D4FF] text-black hover:bg-[#00bfe8] mt-2">
+        <Button onClick={handleSeedCuentas} className="bg-kx-violet text-white hover:opacity-90 mt-2">
           <RefreshCw size={16} className="mr-2" /> Inicializar Plan Estándar
         </Button>
       </div>
@@ -56,7 +56,7 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
             className="pl-9 bg-kx-surface-2 border-kx-border h-9 text-sm" placeholder="Buscar cuenta..." />
         </div>
         <Button onClick={() => setShowModal(true)} size="sm"
-          className="bg-[#00D4FF] text-black hover:bg-[#00bfe8]">
+          className="bg-kx-violet text-white hover:opacity-90">
           <Plus size={14} className="mr-1" /> Nueva cuenta
         </Button>
       </div>
@@ -115,7 +115,7 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
               } catch (e) {
                 toast({ title: 'Error', description: e.message, variant: 'destructive' });
               }
-            }} className="bg-[#00D4FF] text-black hover:bg-[#00bfe8]">
+            }} className="bg-kx-violet text-white hover:opacity-90">
               Guardar
             </Button>
           </DialogFooter>

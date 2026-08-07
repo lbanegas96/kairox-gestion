@@ -854,8 +854,8 @@ function ComprasSection() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="bg-transparent p-0 gap-2 mb-4 w-full flex justify-start">
-          <TabsTrigger value="nueva" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-kx-surface dark:text-kx-text-2 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white rounded-md px-4 py-2"><ShoppingBag className="w-4 h-4 mr-2"/> Nueva Compra</TabsTrigger>
-          <TabsTrigger value="historial" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-kx-surface dark:text-kx-text-2 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white rounded-md px-4 py-2"><Calendar className="w-4 h-4 mr-2"/> Historial de Compras</TabsTrigger>
+          <TabsTrigger value="nueva" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-kx-violet data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-kx-surface dark:text-kx-text-2 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white rounded-md px-4 py-2"><ShoppingBag className="w-4 h-4 mr-2"/> Nueva Compra</TabsTrigger>
+          <TabsTrigger value="historial" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-kx-violet data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-kx-surface dark:text-kx-text-2 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-white rounded-md px-4 py-2"><Calendar className="w-4 h-4 mr-2"/> Historial de Compras</TabsTrigger>
         </TabsList>
 
         {/* TAB: NUEVA COMPRA */}

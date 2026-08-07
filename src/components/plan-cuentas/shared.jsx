@@ -37,7 +37,7 @@ export function CuentaNode({ cuenta, depth = 0, onEdit, onToggleActiva, search }
       <div
         className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors cursor-pointer group
           ${depth === 0 ? 'bg-kx-surface-2/60 mb-1' : 'hover:bg-kx-surface-2/40'}
-          ${highlight ? 'ring-1 ring-[#00D4FF]/30' : ''}
+          ${highlight ? 'ring-1 ring-kx-violet/30' : ''}
         `}
         style={{ paddingLeft: `${12 + depth * 20}px` }}
         onClick={() => hasChildren && setOpen(!open)}

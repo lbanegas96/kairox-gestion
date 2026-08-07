@@ -205,7 +205,7 @@ function TabPeriodos({ empresaId, userId, userRole }) {
         </p>
         {isAdmin && (
           <Button onClick={() => setShowNuevoModal(true)} size="sm"
-            className="bg-[#00D4FF] text-black hover:bg-[#00bfe8] flex-shrink-0 ml-4">
+            className="bg-kx-violet text-white hover:opacity-90 flex-shrink-0 ml-4">
             <Plus size={14} className="mr-1" /> Nuevo período
           </Button>
         )}
@@ -312,7 +312,7 @@ function TabPeriodos({ empresaId, userId, userRole }) {
         <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Plus size={16} className="text-[#00D4FF]" /> Nuevo Período Contable
+              <Plus size={16} className="text-kx-violet" /> Nuevo Período Contable
             </DialogTitle>
             <DialogDescription>Definí el rango de fechas del período. Una vez cerrado bloqueará nuevos asientos.</DialogDescription>
           </DialogHeader>
@@ -348,7 +348,7 @@ function TabPeriodos({ empresaId, userId, userRole }) {
           </div>
           <DialogFooter className="gap-2">
             <Button variant="ghost" onClick={() => setShowNuevoModal(false)} className="text-kx-text-3">Cancelar</Button>
-            <Button onClick={handleCrearPeriodo} className="bg-[#00D4FF] text-black hover:bg-[#00bfe8]">
+            <Button onClick={handleCrearPeriodo} className="bg-kx-violet text-white hover:opacity-90">
               <Check size={14} className="mr-2" /> Crear período
             </Button>
           </DialogFooter>

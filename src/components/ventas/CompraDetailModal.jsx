@@ -116,7 +116,7 @@ const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra }) => 
         <DialogHeader className="border-b border-slate-100 dark:border-kx-border pb-4">
           <DialogTitle className="flex justify-between items-center pr-8 dark:text-kx-text">
             <span className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-blue-600 dark:text-[#00D4FF]" />
+              <FileText className="h-5 w-5 text-blue-600 dark:text-kx-violet" />
               Compra #{compra?.numero_factura || 'S/N'}
               {loading && <Loader2 className="h-4 w-4 animate-spin text-kx-text-3" />}
             </span>

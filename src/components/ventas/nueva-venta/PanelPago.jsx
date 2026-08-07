@@ -23,7 +23,7 @@ function PanelPago({
   return (
     <div className="w-full md:w-96 bg-slate-50 dark:bg-slate-900/30 p-6 flex flex-col gap-6 overflow-y-auto border-l border-slate-200 dark:border-slate-800">
       <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border kairox-border">
-        <div className="flex justify-between items-center text-xl font-bold pt-2 dark:text-white"><span>Total</span><span className="text-blue-600 dark:text-[#00D4FF]">{formatCurrency(totalEnMonedaSeleccionada(), moneda)}</span></div>
+        <div className="flex justify-between items-center text-xl font-bold pt-2 dark:text-white"><span>Total</span><span className="text-blue-600 dark:text-kx-violet">{formatCurrency(totalEnMonedaSeleccionada(), moneda)}</span></div>
         {/* Fidelización por puntos (Fase 3) — canje aplicado en esta venta */}
         {descuentoPuntosPesos > 0 && (
           <div className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 text-right">
@@ -125,7 +125,7 @@ function PanelPago({
           </div>
         )}
         <select
-          className="w-full h-10 rounded-md border bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white px-3 text-sm focus:border-blue-500 dark:focus:border-[#00D4FF]"
+          className="w-full h-10 rounded-md border bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white px-3 text-sm focus:border-blue-500 dark:focus:border-kx-violet"
           value={selectedClient?.id || ''}
           onChange={e => handleSelectClient(clients.find(c => c.id === e.target.value) || null)}
         >
@@ -172,7 +172,7 @@ function PanelPago({
         <div className="space-y-2 dark:text-white">
           <Label>Centro de costo (opcional)</Label>
           <select
-            className="w-full h-10 rounded-md border bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white px-3 text-sm focus:border-blue-500 dark:focus:border-[#00D4FF]"
+            className="w-full h-10 rounded-md border bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white px-3 text-sm focus:border-blue-500 dark:focus:border-kx-violet"
             value={centroCostoId}
             onChange={e => setCentroCostoId(e.target.value)}
           >
@@ -189,7 +189,7 @@ function PanelPago({
         <div className="space-y-2 dark:text-white">
           <Label>Punto de venta</Label>
           <select
-            className="w-full h-10 rounded-md border bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white px-3 text-sm focus:border-blue-500 dark:focus:border-[#00D4FF]"
+            className="w-full h-10 rounded-md border bg-white dark:bg-slate-900 dark:border-slate-700 dark:text-white px-3 text-sm focus:border-blue-500 dark:focus:border-kx-violet"
             value={puntoVentaId ?? ''}
             onChange={e => setPuntoVentaId(e.target.value)}
           >

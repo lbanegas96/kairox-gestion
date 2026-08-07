@@ -1872,7 +1872,7 @@ const ConfiguracionSection = ({ initialTab }) => {
       <div className="flex justify-between items-center bg-kx-surface dark:bg-transparent p-6 -mx-6 -mt-6 mb-6 border-b border-kx-border dark:border-none">
         <div>
           <h2 className="text-3xl font-bold text-slate-900 dark:text-kx-text mb-1 flex items-center gap-2">
-            <Settings className="w-8 h-8 text-blue-600 dark:text-[#00D4FF]" />
+            <Settings className="w-8 h-8 text-blue-600 dark:text-kx-violet" />
             Configuración del Sistema
           </h2>
           <p className="text-slate-500 dark:text-kx-text-2">Administración centralizada — toda la configuración en un solo lugar</p>

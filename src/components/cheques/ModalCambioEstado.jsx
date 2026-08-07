@@ -29,7 +29,7 @@ function ModalCambioEstado({
       <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <ArrowRightLeft size={16} className="text-[#00D4FF]" /> Cambiar estado
+            <ArrowRightLeft size={16} className="text-kx-violet" /> Cambiar estado
           </DialogTitle>
           {chequeACambiar && (
             <DialogDescription>
@@ -100,7 +100,7 @@ function ModalCambioEstado({
             Cancelar
           </Button>
           <Button onClick={onConfirmar} disabled={savingEstado || !estadoNuevo || (requiereProveedor && !proveedorEndosoId) || (requiereCuentaBancaria && !cuentaBancariaCobroId)}
-            className="bg-[#00D4FF] text-black hover:bg-[#00bfe8]">
+            className="bg-kx-violet text-white hover:opacity-90">
             {savingEstado
               ? <Loader2 size={14} className="animate-spin mr-2" />
               : <ArrowRightLeft size={14} className="mr-2" />}

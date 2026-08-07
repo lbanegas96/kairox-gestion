@@ -56,37 +56,37 @@ export default function PlanCuentasSection() {
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
-          <Loader2 size={32} className="animate-spin text-[#00D4FF]" />
+          <Loader2 size={32} className="animate-spin text-kx-violet" />
         </div>
       ) : (
         <Tabs defaultValue="cuentas" className="space-y-4">
           <TabsList className="bg-kx-surface-2 border border-kx-border p-1">
             <TabsTrigger value="cuentas"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-kx-text-3 gap-2">
+              className="data-[state=active]:bg-kx-violet data-[state=active]:text-white text-kx-text-3 gap-2">
               <ListOrdered size={14} /> Plan de Cuentas
             </TabsTrigger>
             <TabsTrigger value="asientos"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-kx-text-3 gap-2">
+              className="data-[state=active]:bg-kx-violet data-[state=active]:text-white text-kx-text-3 gap-2">
               <FileText size={14} /> Asientos
             </TabsTrigger>
             <TabsTrigger value="balance"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-kx-text-3 gap-2">
+              className="data-[state=active]:bg-kx-violet data-[state=active]:text-white text-kx-text-3 gap-2">
               <BarChart2 size={14} /> Balance
             </TabsTrigger>
             <TabsTrigger value="resultados"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-kx-text-3 gap-2">
+              className="data-[state=active]:bg-kx-violet data-[state=active]:text-white text-kx-text-3 gap-2">
               <TrendingUp size={14} /> Estado de Resultados
             </TabsTrigger>
             <TabsTrigger value="balance_general"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-kx-text-3 gap-2">
+              className="data-[state=active]:bg-kx-violet data-[state=active]:text-white text-kx-text-3 gap-2">
               <Scale size={14} /> Balance General
             </TabsTrigger>
             <TabsTrigger value="libro_mayor"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-kx-text-3 gap-2">
+              className="data-[state=active]:bg-kx-violet data-[state=active]:text-white text-kx-text-3 gap-2">
               <BookMarked size={14} /> Libro Mayor
             </TabsTrigger>
             <TabsTrigger value="periodos"
-              className="data-[state=active]:bg-[#00D4FF] data-[state=active]:text-black text-kx-text-3 gap-2">
+              className="data-[state=active]:bg-kx-violet data-[state=active]:text-white text-kx-text-3 gap-2">
               <Lock size={14} /> Períodos
             </TabsTrigger>
           </TabsList>

@@ -48,7 +48,7 @@ function ModalNuevaCuenta({ open, onClose, cuentasFlat, empresaId, onSuccess }) 
       <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-md">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
-            <Plus size={18} className="text-[#00D4FF]" /> Nueva Cuenta
+            <Plus size={18} className="text-kx-violet" /> Nueva Cuenta
           </DialogTitle>
           <DialogDescription>Creá una nueva cuenta contable dentro del plan.</DialogDescription>
         </DialogHeader>
@@ -123,7 +123,7 @@ function ModalNuevaCuenta({ open, onClose, cuentasFlat, empresaId, onSuccess }) 
         <DialogFooter className="gap-2">
           <Button variant="ghost" onClick={onClose} className="text-kx-text-3">Cancelar</Button>
           <Button onClick={handleSave} disabled={saving}
-            className="bg-[#00D4FF] text-black hover:bg-[#00bfe8]">
+            className="bg-kx-violet text-white hover:opacity-90">
             {saving ? <Loader2 size={14} className="animate-spin mr-2" /> : <Check size={14} className="mr-2" />}
             Guardar
           </Button>

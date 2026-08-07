@@ -7,7 +7,7 @@ function TabCarteraTerceros({ cheques, onNuevo, onVerDetalle, onCambiarEstado, o
     <div className="space-y-3">
       <div className="flex justify-end">
         <Button onClick={onNuevo} size="sm"
-          className="bg-[#00D4FF] text-black hover:bg-[#00bfe8]">
+          className="bg-kx-violet text-white hover:opacity-90">
           <Plus size={14} className="mr-1" /> Registrar cheque recibido
         </Button>
       </div>

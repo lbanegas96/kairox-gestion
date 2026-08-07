@@ -532,10 +532,10 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro } = {}) {
       {/* ── Tabs: Clientes / Antigüedad ──────────────────────────────────────── */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="bg-transparent p-0 gap-2 mb-4 flex justify-start">
-          <TabsTrigger value="clientes" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-kx-surface text-slate-500 dark:text-kx-text-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md px-4 py-2">
+          <TabsTrigger value="clientes" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-kx-violet data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-kx-surface text-slate-500 dark:text-kx-text-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md px-4 py-2">
             <Users className="w-4 h-4 mr-2" /> Clientes
           </TabsTrigger>
-          <TabsTrigger value="antigüedad" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-[#00D4FF] data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-kx-surface text-slate-500 dark:text-kx-text-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md px-4 py-2">
+          <TabsTrigger value="antigüedad" className="data-[state=active]:bg-blue-500 dark:data-[state=active]:bg-kx-violet data-[state=active]:text-white dark:data-[state=active]:text-black bg-slate-100 dark:bg-kx-surface text-slate-500 dark:text-kx-text-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md px-4 py-2">
             <Clock className="w-4 h-4 mr-2" /> Antigüedad de Deuda
           </TabsTrigger>
         </TabsList>

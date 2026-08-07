@@ -25,7 +25,7 @@ function ModalEditarCompra({
     <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
       <DialogContent className="max-w-4xl kairox-bg-card border kairox-border kairox-text-primary shadow-2xl max-h-[90vh] overflow-y-auto dark:bg-kx-bg dark:border-kx-border">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold text-blue-800 dark:text-[#00D4FF] flex items-center gap-2 mb-2">
+          <DialogTitle className="text-2xl font-bold text-blue-800 dark:text-kx-violet flex items-center gap-2 mb-2">
             <Edit className="h-6 w-6" />Editar Compra
           </DialogTitle>
           <DialogDescription className="dark:text-kx-text-2">
@@ -40,7 +40,7 @@ function ModalEditarCompra({
               <div className="space-y-2">
                 <Label className="dark:text-kx-text">Proveedor</Label>
                 <select
-                  className="w-full h-9 rounded-md kairox-input px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-[#00D4FF] dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                  className="w-full h-9 rounded-md kairox-input px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-kx-violet dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
                   value={editForm.proveedor_id}
                   onChange={e => setEditForm({...editForm, proveedor_id: e.target.value})}
                 >

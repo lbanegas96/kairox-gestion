@@ -754,7 +754,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         <DialogContent className="max-w-4xl kairox-bg-card kairox-text-primary h-[90vh] flex flex-col p-0 gap-0 overflow-hidden dark:bg-slate-950 dark:border-slate-800">
           <DialogHeader className="p-6 border-b border-slate-200 dark:border-slate-800">
             <DialogTitle className="text-2xl flex items-center gap-2 dark:text-white">
-              <ShoppingCart className="h-6 w-6 text-blue-600 dark:text-[#00D4FF]" />
+              <ShoppingCart className="h-6 w-6 text-blue-600 dark:text-kx-violet" />
               {cotizacion ? `Convertir Cotización ${cotizacion.numero}` : 'Nueva Venta'}
             </DialogTitle>
             <DialogDescription className="dark:text-slate-400">

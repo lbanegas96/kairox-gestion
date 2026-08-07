@@ -63,7 +63,7 @@ function TabAsientos({ empresaId, userId, cuentasFlat }) {
         <div className="flex-1" />
 
         <Button onClick={() => setShowModal(true)} size="sm"
-          className="bg-[#00D4FF] text-black hover:bg-[#00bfe8]">
+          className="bg-kx-violet text-white hover:opacity-90">
           <Plus size={14} className="mr-1" /> Nuevo asiento
         </Button>
       </div>

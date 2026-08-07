@@ -91,7 +91,7 @@ function App() {
     return (
       <div className="min-h-screen kairox-bg-base flex flex-col items-center justify-center transition-colors duration-300 gap-6">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 border-4 border-[#00D4FF] border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-16 h-16 border-4 border-kx-violet border-t-transparent rounded-full animate-spin"></div>
           <div className="kairox-text-primary text-xl font-medium animate-pulse">Cargando KAIROX...</div>
         </div>
         
