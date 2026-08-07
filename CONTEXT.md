@@ -2,8 +2,27 @@
 **Última actualización:** 2026-08-07 (Claude — 2do bug real encontrado por Luciano probando en
 vivo: CORS rechazaba cobrar por QR MercadoPago desde una URL de deploy de Vercel no aliasada.
 Corregido y redeployado en las 23 edge functions afectadas. Además: impresión térmica y lector de
-código de barras revisados —ya están bien, sin cambios de código necesarios— y evaluación de
-escaneo por cámara, pendiente de decisión)
+código de barras revisados —ya están bien, sin cambios de código necesarios— y escaneo por cámara
+construido a pedido de Luciano)
+
+## ✅ Escaneo de código de barras con la cámara — construido
+
+Luciano pidió arrancar esto ("de paso arranca con el 2") tras confirmar que el ancho de papel
+térmico está bien. Complemento del lector físico (keyboard wedge) para un mostrador secundario sin
+lector o venta ambulante desde un celular — no lo reemplaza para el mostrador principal.
+
+Nuevo componente `EscanerCamaraModal.jsx` + botón de cámara junto al buscador en
+`PanelProductos.jsx`. Usa `@zxing/browser` (decodificación en JS puro contra el stream de
+`getUserMedia`) en vez de la `BarcodeDetector` nativa del navegador — esa API **no existe en
+Safari/iOS** (ningún iPhone/iPad), así que con ZXing el escaneo funciona igual en Android y en
+iPhone. La búsqueda por `codigo_barras` se extrajo a una función compartida (`buscarPorCodigo`)
+para no duplicar la lógica entre el Enter del lector físico y la detección por cámara.
+
+Verificado: build + lint limpios, suite de tests 153/153 sin romper nada, y probado en vivo en el
+navegador — el botón abre el modal, y como el sandbox de testing no puede otorgar permiso de
+cámara real, se confirmó el path de manejo de error (mensaje claro de "permiso denegado", sin
+crashear, cierre limpio sin errores en consola). El flujo con cámara real (feedback en vivo del
+escaneo) queda pendiente de que Luciano lo pruebe con su celular.
 
 ## ✅ Bug de CORS en el cobro por QR — corregido y redeployado en las 23 funciones afectadas
 
