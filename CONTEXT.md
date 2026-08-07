@@ -3,7 +3,48 @@
 vivo: CORS rechazaba cobrar por QR MercadoPago desde una URL de deploy de Vercel no aliasada.
 Corregido y redeployado en las 23 edge functions afectadas. Además: impresión térmica y lector de
 código de barras revisados —ya están bien, sin cambios de código necesarios— y escaneo por cámara
-construido a pedido de Luciano)
+construido a pedido de Luciano. Todo mergeado a `master`, pusheado a GitHub y deployado a
+producción en Vercel. Plan de pruebas para Nadia al final de este documento.)
+
+## 🧪 Plan de pruebas para Nadia (mañana) — QR MercadoPago + escaneo por cámara
+
+Dos cosas para probar en producción, apuntando siempre a la empresa de test (no tocar clientes
+reales — ver regla de no mutar datos en vivo). Reportar cualquier resultado inesperado con
+captura de pantalla y hora exacta (ayuda a cruzar contra los logs).
+
+**1) Cobro por QR de MercadoPago — regresión del fix de CORS**
+- Abrir el POS **desde la URL de producción normal** (`kairox-gestion-chi.vercel.app` o el
+  dominio que uses día a día) — no hace falta buscar una URL de deploy específica, cualquier
+  entrada sirve para confirmar que no volvió el error.
+- Hacer una venta de prueba y cobrar con "QR MercadoPago".
+- ✅ Esperado: el QR se genera sin error en pantalla ni en la consola del navegador (F12 →
+  Console, no debería aparecer nada en rojo con "CORS" o "Failed to fetch").
+- Escanear el QR con la app de MercadoPago y pagar un monto chico de prueba.
+- ✅ Esperado: la venta se confirma sola en el POS entre 60 y 70 segundos después de pagado (no
+  hace falta refrescar la pantalla) — esto lo hace el poller automático, no el webhook.
+- Si el QR no se genera o tarda más de 2 minutos en confirmar: anotar la hora y avisar.
+
+**2) Escaneo de código de barras con la cámara — feature nueva, primera prueba real**
+- Este es el que más necesita probarse con hardware real — hasta ahora sólo se probó en un
+  navegador de escritorio sin cámara real disponible.
+- Entrar al POS **desde el celular** (Android y, si hay a mano, un iPhone — son los dos casos que
+  importa diferenciar).
+- En el buscador de productos, tocar el ícono de cámara a la derecha del campo de búsqueda.
+- El navegador va a pedir permiso de cámara → aceptar.
+- ✅ Esperado: se abre un modal con el video de la cámara trasera (no la frontal/selfie) y un
+  recuadro guía en el centro.
+- Apuntar a un código de barras real de un producto cargado en el sistema.
+- ✅ Esperado: en cuanto el código entra en foco y se lee bien, el modal se cierra solo, el
+  producto se agrega al carrito y aparece un toast de confirmación (`✓ Nombre del producto × 1`).
+- Probar también con un código que **no** exista en el catálogo (tachar un código con marcador y
+  escanearlo, o usar el código de un producto de prueba que no esté cargado).
+- ✅ Esperado: toast rojo "Código no encontrado" — el modal se cierra pero no agrega nada al
+  carrito.
+- Probar decir que no al permiso de cámara (denegarlo cuando el navegador pregunta).
+- ✅ Esperado: mensaje claro dentro del modal ("Permiso de cámara denegado...") sin que la
+  pantalla se rompa ni tire error.
+- Si en iPhone la cámara no abre o el modal queda cargando para siempre: esto es justo lo que no
+  se pudo probar en el sandbox — es el dato más importante de todo este plan.
 
 ## ✅ Escaneo de código de barras con la cámara — construido
 
@@ -67,15 +108,9 @@ Investigué el código actual y comparé contra lo que usa el mercado en 2026 (f
   Tiene además una defensa activa (auto-refocus del buscador tras cualquier click) contra la
   única limitación documentada de esta tecnología ("si el foco no está en el campo correcto, el
   texto va a parar a otro lado"). Ya era una fortaleza marcada en el análisis de mercado del POS.
-- **Pendiente de decisión (no construido):** escaneo de código de barras con la cámara del
-  dispositivo (`BarcodeDetector`, API nativa del navegador) — evaluado a pedido de Luciano.
-  **Limitación real encontrada:** no funciona en Safari/iOS (ningún iPhone/iPad) — sólo
-  Chrome/Edge/Android. Para soportar iOS de verdad haría falta una librería aparte (ZXing/WASM),
-  más trabajo que "usar la API del navegador". Tampoco es un diferencial fuerte — ya es una
-  función común/de respaldo en varios POS establecidos (Square, Shopify POS, etc.), no algo que
-  KAIROX tendría en exclusiva. Sirve como complemento (mostrador secundario sin comprar lector,
-  venta ambulante desde un celu), no como reemplazo del lector físico para el mostrador
-  principal. **Sin decisión tomada — evaluación devuelta a Luciano, no se empezó a construir.**
+- **Escaneo por cámara:** evaluado y luego construido a pedido de Luciano — ver sección
+  "✅ Escaneo de código de barras con la cámara" al principio de este documento. Se descartó la
+  `BarcodeDetector` nativa del navegador (no existe en Safari/iOS) en favor de `@zxing/browser`.
 
 ---
 
