@@ -1,27 +1,35 @@
 # KAIROX Gestión — Contexto de Sesión
 **Última actualización:** 2026-08-07 (Claude — 2do bug real encontrado por Luciano probando en
 vivo: CORS rechazaba cobrar por QR MercadoPago desde una URL de deploy de Vercel no aliasada.
-Corregido y deployado. Además: impresión térmica y lector de código de barras revisados —ya están
-bien, sin cambios de código necesarios— y evaluación de escaneo por cámara, pendiente de decisión)
+Corregido y redeployado en las 23 edge functions afectadas. Además: impresión térmica y lector de
+código de barras revisados —ya están bien, sin cambios de código necesarios— y evaluación de
+escaneo por cámara, pendiente de decisión)
 
-## ✅ Bug de CORS en el cobro por QR — corregido
+## ✅ Bug de CORS en el cobro por QR — corregido y redeployado en las 23 funciones afectadas
 
 Vercel emite una URL nueva y única en cada `vercel deploy` (ej.
 `kairox-gestion-4x0kytc7g-k-gestion.vercel.app`), además del alias estable
 `kairox-gestion-chi.vercel.app`. El allowlist de CORS de las edge functions era una lista fija
 de orígenes exactos — no contemplaba esas URLs de deploy, así que entrar por una de ellas
-rompía el preflight de `mp-qr-crear` (bloqueaba cobrar por QR). Afecta potencialmente **22 edge
-functions más** que comparten el mismo helper (`_shared/auth.ts`) — corregido ahí también en el
-repo, pero **no redeployadas todavía** (son casi todas de Configuración/integraciones, no viste
-error en ninguna todavía — avisame si querés que las redeploye a todas o vamos de a una si aparece
-algo).
+rompía el preflight de `mp-qr-crear` (bloqueaba cobrar por QR).
 
 Fix: además de la lista fija, aceptar cualquier origen que matchee el patrón real de las URLs de
 deploy de este proyecto (`kairox-gestion-<hash>-k-gestion.vercel.app`). Verificado con `curl`
 contra producción real (no se puede simular esto desde el navegador — el header `Origin` no se
 puede falsear desde JS): el origen exacto de tu captura ahora recibe
 `Access-Control-Allow-Origin` correcto; un origen ajeno (`evil.com`) sigue rechazado.
-`mp-qr-crear` ya deployado (versión 9).
+
+El fix vive en `_shared/auth.ts`, compartido por las 23 edge functions afectadas — a pedido de
+Luciano ("redeploya, así no nos topamos con errores") se redeployaron **las 23**, no solo
+`mp-qr-crear`: `create-user`, `delete-user`, `generar-csr`, `invite-user`, `mp-save-config`,
+`mp-verify-token`, `tiendanube-compliance-webhook`, `verificar-caea-vigente`,
+`integraciones-oauth-iniciar`, `mercadolibre-catalogo`, `mercadolibre-catalogo-publicar`,
+`mercadolibre-categorias`, `mercadolibre-pedidos-webhook`, `mercadolibre-stock-worker`,
+`tiendanube-catalogo`, `tiendanube-catalogo-publicar`, `tiendanube-pedidos-webhook`,
+`tiendanube-stock-worker`, `arca-worker`, `probar-conexion-afip`, `solicitar-caea`,
+`informar-caea`, `mp-sync`, y `mp-qr-crear` (ya deployado antes, versión 9). El más sensible,
+`arca-worker` (worker fiscal por cron), se verificó post-deploy con una invocación manual —
+respondió `{"procesados":0,"mensaje":"Cola vacía"}`, sin errores.
 
 ## 🖨️📷 Impresora térmica y lector de código de barras — revisados, sin cambios necesarios
 
