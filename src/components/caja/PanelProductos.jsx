@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Package, WifiOff } from 'lucide-react';
+import { Search, Package, WifiOff, Camera } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useProductosSnapshot } from '@/hooks/useProductosSnapshot';
 import AlertasStockBanner from './AlertasStockBanner';
+import EscanerCamaraModal from './EscanerCamaraModal';
 
 const fmt = (n) =>
   Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -68,6 +69,7 @@ function PanelProductos({ onAgregarAlCarrito, apiRef }) {
   const [productos, setProductos]  = useState([]);
   const [search, setSearch]        = useState('');
   const [loading, setLoading]      = useState(true);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const debounceRef                = useRef(null);
   const inputRef                   = useRef(null);
   // Modo Offline — Fase 2: si se corta la red, la búsqueda cae al snapshot
@@ -147,13 +149,8 @@ function PanelProductos({ onAgregarAlCarrito, apiRef }) {
   // está mostrando resultados en el grid de abajo; el cajero clickea uno).
   // El "mismo producto dos veces incrementa cantidad" ya lo maneja
   // ModoCajaLayout.handleAgregarAlCarrito — no hace falta lógica extra acá.
-  const handleKeyDown = async (e) => {
-    if (e.key !== 'Enter') return;
-    const code = search.trim();
-    if (!code) return;
-    e.preventDefault();
-
-    const producto = isOnline
+  const buscarPorCodigo = useCallback(async (code) => {
+    return isOnline
       ? (await supabase
           .from('productos')
           .select('*, unidad_venta:unidades_medida!unidad_venta_id(codigo, descripcion)')
@@ -163,6 +160,15 @@ function PanelProductos({ onAgregarAlCarrito, apiRef }) {
           .maybeSingle()
         ).data
       : await buscarPorCodigoBarras(code);
+  }, [isOnline, user?.empresa_id, buscarPorCodigoBarras]);
+
+  const handleKeyDown = async (e) => {
+    if (e.key !== 'Enter') return;
+    const code = search.trim();
+    if (!code) return;
+    e.preventDefault();
+
+    const producto = await buscarPorCodigo(code);
 
     if (producto) {
       onAgregarAlCarrito(producto);
@@ -171,6 +177,20 @@ function PanelProductos({ onAgregarAlCarrito, apiRef }) {
       inputRef.current?.focus();
     }
   };
+
+  // CÁMARA — complemento del lector físico: escaneo por cámara para un
+  // mostrador secundario sin lector, o venta ambulante desde un celular.
+  const handleDetectadoCamara = useCallback(async (code) => {
+    setScannerOpen(false);
+    const producto = await buscarPorCodigo(code);
+    if (producto) {
+      onAgregarAlCarrito(producto);
+      toast({ title: `✓ ${producto.nombre} × 1`, duration: 1500 });
+    } else {
+      toast({ title: 'Código no encontrado', description: code, variant: 'destructive', duration: 2500 });
+    }
+    inputRef.current?.focus();
+  }, [buscarPorCodigo, onAgregarAlCarrito, toast]);
 
   const productosConAlerta = productos.filter(p => getStockLevel(p) !== 'ok');
 
@@ -188,10 +208,19 @@ function PanelProductos({ onAgregarAlCarrito, apiRef }) {
             onKeyDown={handleKeyDown}
             placeholder="Buscar por nombre o código..."
             title="Atajo: F4"
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-kx-surface border border-kx-border
+            className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-kx-surface border border-kx-border
                        text-kx-text text-sm focus:outline-none focus:border-[rgb(var(--kx-violet))]
                        transition-colors"
           />
+          <button
+            type="button"
+            onClick={() => setScannerOpen(true)}
+            title="Escanear con la cámara"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-kx-text-3
+                       hover:text-kx-text hover:bg-kx-border/50 transition-colors"
+          >
+            <Camera className="w-4 h-4" />
+          </button>
         </div>
         {/* Modo Offline — Fase 2: catálogo servido desde el snapshot local */}
         {!isOnline && (
@@ -227,6 +256,12 @@ function PanelProductos({ onAgregarAlCarrito, apiRef }) {
           </div>
         )}
       </div>
+
+      <EscanerCamaraModal
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onDetectado={handleDetectadoCamara}
+      />
     </div>
   );
 }
