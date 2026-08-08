@@ -37,7 +37,7 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
 
     setSaving(true);
     try {
-      await asientosService.createAsiento(empresaId, userId, form, items);
+      await asientosService.createAsientoManual(empresaId, userId, form, items);
       toast({ title: 'Asiento creado', className: 'bg-green-900 border-green-700 text-white' });
       onSuccess();
       onClose();

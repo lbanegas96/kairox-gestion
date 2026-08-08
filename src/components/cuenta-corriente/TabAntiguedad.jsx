@@ -20,7 +20,8 @@ const BANDA_COLORS = {
 function TabAntiguedad({
   agingBandas, agingLoading, agingData,
   tcParalelo,
-  setSelectedClient, setDetailModalOpen, setActiveTab,
+  onVerDetalle,
+  entityLabel = 'Cliente',
 }) {
   return (
     <div className="space-y-5">
@@ -49,7 +50,7 @@ function TabAntiguedad({
             <thead className="bg-kx-surface-2 dark:bg-slate-800/50 border-b border-kx-border dark:border-kx-border">
               <tr>
                 <th className="text-left p-4 font-semibold text-kx-text-2 dark:text-slate-300">Comprobante</th>
-                <th className="text-left p-4 font-semibold text-kx-text-2 dark:text-slate-300">Cliente</th>
+                <th className="text-left p-4 font-semibold text-kx-text-2 dark:text-slate-300">{entityLabel}</th>
                 <th className="text-right p-4 font-semibold text-kx-text-2 dark:text-slate-300">Monto</th>
                 <th className="text-center p-4 font-semibold text-kx-text-2 dark:text-slate-300">Fecha</th>
                 <th className="text-center p-4 font-semibold text-kx-text-2 dark:text-slate-300">Antigüedad</th>
@@ -107,12 +108,8 @@ function TabAntiguedad({
                           variant="ghost"
                           size="sm"
                           className="h-8 w-8 p-0 rounded-full text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                          onClick={() => {
-                            setSelectedClient({ id: comp.cliente_id, nombre: comp.cliente_nombre });
-                            setDetailModalOpen(true);
-                            setActiveTab('clientes');
-                          }}
-                          title="Ver detalle del cliente"
+                          onClick={() => onVerDetalle({ id: comp.cliente_id, nombre: comp.cliente_nombre })}
+                          title={`Ver detalle del ${entityLabel.toLowerCase()}`}
                         >
                           <Eye className="h-4 w-4" />
                         </Button>

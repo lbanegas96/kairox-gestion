@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Truck, Plus, Search, Edit, Eye, UserX, UserCheck,
-  DollarSign, FileText, ShoppingBag, Banknote, RefreshCw
+  DollarSign, FileText, ShoppingBag, Banknote, RefreshCw, Clock
 } from 'lucide-react';
 import PaymentRunModal from '@/components/proveedores/PaymentRunModal';
 import { Button } from '@/components/ui/button';
@@ -18,8 +18,9 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { proveedoresService, PROV_KEYS } from '@/services/proveedoresService';
 import { supabase } from '@/lib/customSupabaseClient';
-import { formatDateAR } from '@/lib/dateUtils';
+import { formatDateAR, getNowAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
+import TabAntiguedad from '@/components/cuenta-corriente/TabAntiguedad';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const CONDICIONES_IVA = ['RI', 'Monotributo', 'Exento', 'CF', 'No Categorizado'];
@@ -303,6 +304,106 @@ function ProveedoresSection() {
 
   const proveedores = listData?.data ?? [];
 
+  // ── Aging report (antigüedad de deuda) — mig.314, hallazgo #2 de la auditoría
+  // contable: este reporte ya existía para Clientes (TabAntiguedad.jsx) pero no
+  // tenía equivalente del lado de Proveedores. Mismo criterio: reconcilia contra
+  // `proveedores.saldo_actual` para no sobreestimar deuda si hubo pagos a cuenta
+  // sin imputar a una compra puntual.
+  const [activeTab, setActiveTab]         = useState('proveedores');
+  const [agingProvData, setAgingProvData] = useState([]);
+  const [agingLoading, setAgingLoading]   = useState(false);
+
+  const fetchAgingProveedores = useCallback(async () => {
+    if (!empresaId) return;
+    setAgingLoading(true);
+    try {
+      const { data: comprasPendientes, error } = await supabase
+        .from('compras_saldo_pendiente')
+        .select('compra_id, proveedor_id, saldo_pendiente')
+        .eq('empresa_id', empresaId)
+        .gt('saldo_pendiente', 0);
+      if (error) throw error;
+      if (!comprasPendientes?.length) { setAgingProvData([]); return; }
+
+      const compraIds    = comprasPendientes.map(c => c.compra_id);
+      const proveedorIds = [...new Set(comprasPendientes.map(c => c.proveedor_id))];
+      const [{ data: comprasInfo }, { data: proveedoresInfo }] = await Promise.all([
+        supabase.from('compras').select('id, numero_factura, fecha').in('id', compraIds),
+        supabase.from('proveedores').select('id, nombre, saldo_actual').in('id', proveedorIds),
+      ]);
+      const compraInfoPorId = Object.fromEntries((comprasInfo || []).map(c => [c.id, c]));
+      const provPorId       = Object.fromEntries((proveedoresInfo || []).map(p => [p.id, p]));
+
+      // Un pago a cuenta sin imputar a una compra puntual reduce saldo_actual sin
+      // cancelar ninguna compra abierta específica — reconciliamos igual que
+      // Clientes para que la suma por proveedor nunca sobreestime la deuda real.
+      const sumaRawPorProv = {};
+      comprasPendientes.forEach(c => {
+        sumaRawPorProv[c.proveedor_id] = (sumaRawPorProv[c.proveedor_id] || 0) + Number(c.saldo_pendiente);
+      });
+
+      const now = getNowAR();
+      const result = comprasPendientes.map(c => {
+        const info  = compraInfoPorId[c.compra_id];
+        const fecha = info?.fecha;
+        const dias  = fecha ? Math.floor((now - new Date(fecha)) / 86400000) : 0;
+        let banda, color;
+        if (dias <= 30)      { banda = '0–30 días';  color = 'green'; }
+        else if (dias <= 60) { banda = '31–60 días'; color = 'yellow'; }
+        else if (dias <= 90) { banda = '61–90 días'; color = 'orange'; }
+        else                 { banda = '+90 días';   color = 'red'; }
+
+        let monto = Number(c.saldo_pendiente);
+        const saldoReal = provPorId[c.proveedor_id]?.saldo_actual;
+        const sumaRaw    = sumaRawPorProv[c.proveedor_id];
+        if (saldoReal !== undefined) {
+          if (saldoReal <= 0) {
+            monto = 0;
+          } else if (sumaRaw > 0 && Math.abs(sumaRaw - saldoReal) > 0.01) {
+            monto = Math.round(monto * (saldoReal / sumaRaw) * 100) / 100;
+          }
+        }
+
+        return {
+          comprobante_id: c.compra_id,
+          numero_venta:   info?.numero_factura || 'S/N',
+          fecha,
+          total:          monto,
+          cliente_id:     c.proveedor_id,
+          cliente_nombre: provPorId[c.proveedor_id]?.nombre || '—',
+          dias, banda, color,
+        };
+      }).filter(c => c.total > 0.01);
+
+      setAgingProvData(result.sort((a, b) => b.dias - a.dias));
+    } catch (err) {
+      console.error('Error aging proveedores:', err);
+      toast({ title: 'Error', description: 'No se pudo calcular la antigüedad.', variant: 'destructive' });
+    } finally {
+      setAgingLoading(false);
+    }
+  }, [empresaId, toast]);
+
+  useEffect(() => {
+    if (activeTab === 'antigüedad') fetchAgingProveedores();
+  }, [activeTab, fetchAgingProveedores]);
+
+  const agingProvBandas = useMemo(() => {
+    const bandas = {
+      '0–30 días':  { monto: 0, count: 0, color: 'green' },
+      '31–60 días': { monto: 0, count: 0, color: 'yellow' },
+      '61–90 días': { monto: 0, count: 0, color: 'orange' },
+      '+90 días':   { monto: 0, count: 0, color: 'red' },
+    };
+    for (const comp of agingProvData) {
+      if (bandas[comp.banda]) {
+        bandas[comp.banda].monto += comp.total;
+        bandas[comp.banda].count += 1;
+      }
+    }
+    return bandas;
+  }, [agingProvData]);
+
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
@@ -324,119 +425,142 @@ function ProveedoresSection() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {[
-          { label: 'Total', value: stats?.total ?? 0, icon: Truck, color: 'text-indigo-600 dark:text-indigo-500' },
-          { label: 'Activos', value: stats?.activos ?? 0, icon: UserCheck, color: 'text-kx-green' },
-          { label: 'Deuda Total', value: `$${(stats?.deudaTotal ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-kx-red' },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <Card key={label} className="dark:bg-kx-bg dark:border-kx-border">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={`p-2 rounded-lg bg-slate-100 dark:bg-kx-surface-2 ${color}`}>
-                <Icon className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 dark:text-kx-text-2">{label}</p>
-                <p className="text-xl font-bold dark:text-kx-text">{value}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* ── Tabs: Proveedores / Antigüedad ───────────────────────────────────── */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="bg-transparent p-0 gap-2 flex justify-start">
+          <TabsTrigger value="proveedores" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white bg-slate-100 dark:bg-kx-surface text-slate-500 dark:text-kx-text-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md px-4 py-2">
+            <Truck className="w-4 h-4 mr-2" /> Proveedores
+          </TabsTrigger>
+          <TabsTrigger value="antigüedad" className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white bg-slate-100 dark:bg-kx-surface text-slate-500 dark:text-kx-text-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-md px-4 py-2">
+            <Clock className="w-4 h-4 mr-2" /> Antigüedad de Deuda
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Filtros */}
-      <div className="flex gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-2.5 w-4 h-4 text-kx-text-3" />
-          <Input placeholder="Buscar por nombre..." value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }}
-            className="pl-9 dark:bg-kx-surface dark:border-kx-border" />
-        </div>
-        <select value={filtroActivo} onChange={e => { setFiltro(e.target.value); setPage(1); }}
-          className="h-10 rounded-md border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface text-sm px-3 text-slate-700 dark:text-slate-300">
-          <option value="activos">Activos</option>
-          <option value="inactivos">Inactivos</option>
-          <option value="todos">Todos</option>
-        </select>
-      </div>
-
-      {/* Tabla */}
-      <div className="rounded-xl border border-kx-border dark:border-kx-border overflow-hidden shadow-sm">
-        <table className="w-full text-sm">
-          <thead className="bg-kx-surface-2 dark:bg-slate-900/50 text-xs uppercase text-slate-500 dark:text-kx-text-2">
-            <tr>
-              <th className="p-4 text-left">Proveedor</th>
-              <th className="p-4 text-left">CUIT</th>
-              <th className="p-4 text-left">Condición</th>
-              <th className="p-4 text-left">Pago</th>
-              <th className="p-4 text-left">Contacto</th>
-              <th className="p-4 text-center">Estado</th>
-              <th className="p-4 text-center">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {isLoading ? (
-              <tr><td colSpan={7} className="p-8 text-center text-kx-text-3">Cargando...</td></tr>
-            ) : proveedores.length === 0 ? (
-              <tr><td colSpan={7} className="p-8 text-center text-kx-text-3">No hay proveedores</td></tr>
-            ) : proveedores.map(prov => (
-              <tr key={prov.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/40 transition-colors">
-                <td className="p-4">
-                  <div className="font-medium text-slate-900 dark:text-kx-text">{prov.nombre}</div>
-                  {prov.razon_social && <div className="text-xs text-kx-text-3">{prov.razon_social}</div>}
-                </td>
-                <td className="p-4 font-mono text-kx-text-2 dark:text-slate-300">{prov.cuit || '—'}</td>
-                <td className="p-4 text-slate-500 dark:text-kx-text-2">{prov.condicion_iva}</td>
-                <td className="p-4 text-slate-500 dark:text-kx-text-2">{prov.condicion_pago}</td>
-                <td className="p-4 text-slate-500 dark:text-kx-text-2">
-                  {prov.telefono || prov.email ? (
-                    <div className="text-xs">
-                      {prov.telefono && <div>{prov.telefono}</div>}
-                      {prov.email && <div className="text-kx-text-3">{prov.email}</div>}
-                    </div>
-                  ) : '—'}
-                </td>
-                <td className="p-4 text-center">
-                  <Badge variant={prov.activo ? 'default' : 'secondary'}
-                    className={prov.activo ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : ''}>
-                    {prov.activo ? 'Activo' : 'Inactivo'}
-                  </Badge>
-                </td>
-                <td className="p-4">
-                  <div className="flex items-center justify-center gap-1">
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-indigo-600 dark:hover:text-indigo-500"
-                      onClick={() => setDetalleId(prov.id)} title="Ver detalle">
-                      <Eye className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-blue"
-                      onClick={() => openEditar(prov)} title="Editar">
-                      <Edit className="w-3.5 h-3.5" />
-                    </Button>
-                    {isAdmin && (
-                      <Button variant="ghost" size="icon"
-                        className={`h-7 w-7 ${prov.activo ? 'text-kx-text-3 hover:text-kx-red' : 'text-kx-text-3 hover:text-kx-green'}`}
-                        onClick={() => toggleMutation.mutate({ id: prov.id, activo: !prov.activo })}
-                        title={prov.activo ? 'Inactivar' : 'Reactivar'}>
-                        {prov.activo ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
-                      </Button>
-                    )}
+        <TabsContent value="proveedores" className="space-y-6 mt-4">
+          {/* Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[
+              { label: 'Total', value: stats?.total ?? 0, icon: Truck, color: 'text-indigo-600 dark:text-indigo-500' },
+              { label: 'Activos', value: stats?.activos ?? 0, icon: UserCheck, color: 'text-kx-green' },
+              { label: 'Deuda Total', value: `$${(stats?.deudaTotal ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-kx-red' },
+            ].map(({ label, value, icon: Icon, color }) => (
+              <Card key={label} className="dark:bg-kx-bg dark:border-kx-border">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className={`p-2 rounded-lg bg-slate-100 dark:bg-kx-surface-2 ${color}`}>
+                    <Icon className="w-5 h-5" />
                   </div>
-                </td>
-              </tr>
+                  <div>
+                    <p className="text-xs text-slate-500 dark:text-kx-text-2">{label}</p>
+                    <p className="text-xl font-bold dark:text-kx-text">{value}</p>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </div>
 
-      {/* Paginación */}
-      {listData && listData.pages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Anterior</Button>
-          <span className="text-sm text-kx-text-2">{page} / {listData.pages}</span>
-          <Button variant="outline" size="sm" disabled={page >= listData.pages} onClick={() => setPage(p => p + 1)}>Siguiente</Button>
-        </div>
-      )}
+          {/* Filtros */}
+          <div className="flex gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-kx-text-3" />
+              <Input placeholder="Buscar por nombre..." value={search}
+                onChange={e => { setSearch(e.target.value); setPage(1); }}
+                className="pl-9 dark:bg-kx-surface dark:border-kx-border" />
+            </div>
+            <select value={filtroActivo} onChange={e => { setFiltro(e.target.value); setPage(1); }}
+              className="h-10 rounded-md border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface text-sm px-3 text-slate-700 dark:text-slate-300">
+              <option value="activos">Activos</option>
+              <option value="inactivos">Inactivos</option>
+              <option value="todos">Todos</option>
+            </select>
+          </div>
+
+          {/* Tabla */}
+          <div className="rounded-xl border border-kx-border dark:border-kx-border overflow-hidden shadow-sm">
+            <table className="w-full text-sm">
+              <thead className="bg-kx-surface-2 dark:bg-slate-900/50 text-xs uppercase text-slate-500 dark:text-kx-text-2">
+                <tr>
+                  <th className="p-4 text-left">Proveedor</th>
+                  <th className="p-4 text-left">CUIT</th>
+                  <th className="p-4 text-left">Condición</th>
+                  <th className="p-4 text-left">Pago</th>
+                  <th className="p-4 text-left">Contacto</th>
+                  <th className="p-4 text-center">Estado</th>
+                  <th className="p-4 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {isLoading ? (
+                  <tr><td colSpan={7} className="p-8 text-center text-kx-text-3">Cargando...</td></tr>
+                ) : proveedores.length === 0 ? (
+                  <tr><td colSpan={7} className="p-8 text-center text-kx-text-3">No hay proveedores</td></tr>
+                ) : proveedores.map(prov => (
+                  <tr key={prov.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="p-4">
+                      <div className="font-medium text-slate-900 dark:text-kx-text">{prov.nombre}</div>
+                      {prov.razon_social && <div className="text-xs text-kx-text-3">{prov.razon_social}</div>}
+                    </td>
+                    <td className="p-4 font-mono text-kx-text-2 dark:text-slate-300">{prov.cuit || '—'}</td>
+                    <td className="p-4 text-slate-500 dark:text-kx-text-2">{prov.condicion_iva}</td>
+                    <td className="p-4 text-slate-500 dark:text-kx-text-2">{prov.condicion_pago}</td>
+                    <td className="p-4 text-slate-500 dark:text-kx-text-2">
+                      {prov.telefono || prov.email ? (
+                        <div className="text-xs">
+                          {prov.telefono && <div>{prov.telefono}</div>}
+                          {prov.email && <div className="text-kx-text-3">{prov.email}</div>}
+                        </div>
+                      ) : '—'}
+                    </td>
+                    <td className="p-4 text-center">
+                      <Badge variant={prov.activo ? 'default' : 'secondary'}
+                        className={prov.activo ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : ''}>
+                        {prov.activo ? 'Activo' : 'Inactivo'}
+                      </Badge>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center justify-center gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-indigo-600 dark:hover:text-indigo-500"
+                          onClick={() => setDetalleId(prov.id)} title="Ver detalle">
+                          <Eye className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-blue"
+                          onClick={() => openEditar(prov)} title="Editar">
+                          <Edit className="w-3.5 h-3.5" />
+                        </Button>
+                        {isAdmin && (
+                          <Button variant="ghost" size="icon"
+                            className={`h-7 w-7 ${prov.activo ? 'text-kx-text-3 hover:text-kx-red' : 'text-kx-text-3 hover:text-kx-green'}`}
+                            onClick={() => toggleMutation.mutate({ id: prov.id, activo: !prov.activo })}
+                            title={prov.activo ? 'Inactivar' : 'Reactivar'}>
+                            {prov.activo ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Paginación */}
+          {listData && listData.pages > 1 && (
+            <div className="flex items-center justify-center gap-2">
+              <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Anterior</Button>
+              <span className="text-sm text-kx-text-2">{page} / {listData.pages}</span>
+              <Button variant="outline" size="sm" disabled={page >= listData.pages} onClick={() => setPage(p => p + 1)}>Siguiente</Button>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="antigüedad" className="mt-4">
+          <TabAntiguedad
+            agingBandas={agingProvBandas} agingLoading={agingLoading} agingData={agingProvData}
+            tcParalelo={{ enabled: false }}
+            entityLabel="Proveedor"
+            onVerDetalle={(prov) => { setDetalleId(prov.id); setActiveTab('proveedores'); }}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* ── Modal Crear / Editar ────────────────────────────────────────────── */}
       <Dialog open={formOpen} onOpenChange={(o) => { setFormOpen(o); if (!o) { setEditando(null); setForm({ ...EMPTY_FORM }); } }}>

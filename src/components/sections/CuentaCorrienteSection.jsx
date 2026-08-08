@@ -554,7 +554,7 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro } = {}) {
           <TabAntiguedad
             agingBandas={agingBandas} agingLoading={agingLoading} agingData={agingData}
             tcParalelo={tcParalelo}
-            setSelectedClient={setSelectedClient} setDetailModalOpen={setDetailModalOpen} setActiveTab={setActiveTab}
+            onVerDetalle={(cliente) => { setSelectedClient(cliente); setDetailModalOpen(true); setActiveTab('clientes'); }}
           />
         </TabsContent>
       </Tabs>

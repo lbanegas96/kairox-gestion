@@ -119,7 +119,34 @@ export const asientosService = {
     return data as AsientoContable;
   },
 
-  async createAsiento(
+  // mig.314: asientos_contables/asientos_items son de escritura EXCLUSIVA vía RPC
+  // (auditoría contable 2026-08-07, hallazgo crítico: RLS permitía INSERT/UPDATE/
+  // DELETE directo sobre asientos ya confirmados, sin validar partida doble en
+  // ningún lado). createAsientoManual queda en 'borrador' (se confirma después,
+  // ModalNuevoAsiento + TabAsientos); createAsientoAutomatico valida cuadre y
+  // período cerrado server-side y confirma en la misma transacción atómica —
+  // reemplaza el patrón viejo de 2 llamadas separadas (create + confirm) que
+  // podía dejar un borrador huérfano si la segunda fallaba.
+
+  async createAsientoManual(
+    empresaId: string,
+    userId: string,
+    payload: { fecha: string; descripcion?: string; centro_costo_id?: string | null },
+    items: Omit<AsientoItem, 'id' | 'asiento_id' | 'empresa_id' | 'created_at'>[]
+  ): Promise<{ id: string; numero: string; estado: string }> {
+    const { data, error } = await supabase.rpc('crear_asiento_manual', {
+      p_empresa_id: empresaId,
+      p_user_id: userId,
+      p_fecha: payload.fecha,
+      p_descripcion: payload.descripcion ?? null,
+      p_centro_costo_id: payload.centro_costo_id ?? null,
+      p_items: items,
+    });
+    if (error) throw new Error(error.message);
+    return data as { id: string; numero: string; estado: string };
+  },
+
+  async createAsientoAutomatico(
     empresaId: string,
     userId: string,
     payload: {
@@ -130,54 +157,28 @@ export const asientosService = {
       centro_costo_id?: string | null;
     },
     items: Omit<AsientoItem, 'id' | 'asiento_id' | 'empresa_id' | 'created_at'>[]
-  ): Promise<AsientoContable> {
-    const totalDebe  = items.reduce((s, i) => s + Number(i.debe),  0);
-    const totalHaber = items.reduce((s, i) => s + Number(i.haber), 0);
-
-    // Obtener próximo número
-    const { data: numData, error: numError } = await supabase
-      .rpc('next_numero_asiento', { p_empresa_id: empresaId });
-    if (numError) throw new Error(numError.message);
-
-    const { data: asiento, error: aError } = await supabase
-      .from('asientos_contables')
-      .insert([{
-        empresa_id: empresaId,
-        user_id: userId,
-        numero: numData as string,
-        total_debe: totalDebe,
-        total_haber: totalHaber,
-        ...payload,
-      }])
-      .select()
-      .single();
-    if (aError) throw new Error(aError.message);
-
-    const lineas = items.map((i) => ({
-      ...i,
-      asiento_id: (asiento as AsientoContable).id,
-      empresa_id: empresaId,
-    }));
-
-    const { error: iError } = await supabase.from('asientos_items').insert(lineas);
-    if (iError) throw new Error(iError.message);
-
-    return asiento as AsientoContable;
+  ): Promise<{ id: string; numero: string; estado: string }> {
+    const { data, error } = await supabase.rpc('crear_asiento_automatico', {
+      p_empresa_id: empresaId,
+      p_user_id: userId,
+      p_fecha: payload.fecha,
+      p_descripcion: payload.descripcion ?? null,
+      p_origen: payload.origen ?? null,
+      p_origen_id: payload.origen_id ?? null,
+      p_centro_costo_id: payload.centro_costo_id ?? null,
+      p_items: items,
+    });
+    if (error) throw new Error(error.message);
+    return data as { id: string; numero: string; estado: string };
   },
 
   async confirmarAsiento(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('asientos_contables')
-      .update({ estado: 'confirmado' })
-      .eq('id', id);
+    const { error } = await supabase.rpc('confirmar_asiento', { p_asiento_id: id });
     if (error) throw new Error(error.message);
   },
 
   async anularAsiento(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('asientos_contables')
-      .update({ estado: 'anulado' })
-      .eq('id', id);
+    const { error } = await supabase.rpc('anular_asiento', { p_asiento_id: id });
     if (error) throw new Error(error.message);
   },
 
@@ -386,7 +387,7 @@ export const asientosAutoService = {
       );
     }
 
-    const asiento = await asientosService.createAsiento(
+    const asiento = await asientosService.createAsientoAutomatico(
       empresaId, userId,
       {
         fecha: params.fecha, descripcion: params.descripcion, origen: 'venta', origen_id: params.ventaId,
@@ -394,7 +395,6 @@ export const asientosAutoService = {
       },
       items
     );
-    await asientosService.confirmarAsiento(asiento.id);
     // mig.281: guarda el vínculo para poder detectar "sin asiento" y ofrecer
     // regenerar_asiento_venta si esta llamada nunca llega (venta ya confirmada).
     await supabase.from('comprobantes').update({ asiento_id: asiento.id }).eq('id', params.ventaId);
@@ -431,7 +431,7 @@ export const asientosAutoService = {
       descripcion: `Reversa — ${i.descripcion || ''}`,
     }));
 
-    const asiento = await asientosService.createAsiento(
+    await asientosService.createAsientoAutomatico(
       empresaId, userId,
       {
         fecha: params.fecha,
@@ -441,7 +441,6 @@ export const asientosAutoService = {
       },
       items
     );
-    await asientosService.confirmarAsiento(asiento.id);
   },
 
   /**
@@ -505,7 +504,7 @@ export const asientosAutoService = {
           { cuenta_id: cuentaPago,       debe: 0,            haber: params.total, descripcion: 'Pago por compra' },
         ];
 
-    const asiento = await asientosService.createAsiento(
+    const asiento = await asientosService.createAsientoAutomatico(
       empresaId, userId,
       {
         fecha: params.fecha, descripcion: params.descripcion, origen: 'compra', origen_id: params.compraId,
@@ -513,7 +512,6 @@ export const asientosAutoService = {
       },
       items
     );
-    await asientosService.confirmarAsiento(asiento.id);
     // mig.281: mismo vínculo que crearAsientoVenta, para regenerar_asiento_compra.
     await supabase.from('compras').update({ asiento_id: asiento.id }).eq('id', params.compraId);
   },
@@ -588,12 +586,11 @@ export const asientosAutoService = {
       }
     }
 
-    const asiento = await asientosService.createAsiento(
+    await asientosService.createAsientoAutomatico(
       empresaId, userId,
       { fecha: params.fecha, descripcion: params.descripcion, origen: params.tipo, origen_id: params.comprobanteId, centro_costo_id: params.centroCostoId ?? null },
       items
     );
-    await asientosService.confirmarAsiento(asiento.id);
   },
 
   /**
@@ -644,12 +641,11 @@ export const asientosAutoService = {
         ] : null);
     if (!items) return;
 
-    const asiento = await asientosService.createAsiento(
+    await asientosService.createAsientoAutomatico(
       empresaId, userId,
       { fecha: params.fecha, descripcion: params.descripcion, origen: 'ajuste_stock', origen_id: params.productoId },
       items
     );
-    await asientosService.confirmarAsiento(asiento.id);
   },
 
   /**
@@ -702,12 +698,11 @@ export const asientosAutoService = {
           { cuenta_id: cuentaCxP,         debe: 0,           haber: params.total, descripcion: 'Nota de Débito de proveedor' },
         ];
 
-    const asiento = await asientosService.createAsiento(
+    await asientosService.createAsientoAutomatico(
       empresaId, userId,
       { fecha: params.fecha, descripcion: params.descripcion, origen: params.tipo + '_proveedor', origen_id: params.documentoId, centro_costo_id: params.centroCostoId ?? null },
       items
     );
-    await asientosService.confirmarAsiento(asiento.id);
   },
 
   /**
@@ -788,7 +783,7 @@ export const asientosAutoService = {
           { cuenta_id: cuentaContra, debe: 0,            haber: params.monto, descripcion: params.categoria },
         ];
 
-    const asiento = await asientosService.createAsiento(
+    await asientosService.createAsientoAutomatico(
       empresaId, userId,
       {
         fecha: params.fecha,
@@ -798,6 +793,5 @@ export const asientosAutoService = {
       },
       items
     );
-    await asientosService.confirmarAsiento(asiento.id);
   },
 };
