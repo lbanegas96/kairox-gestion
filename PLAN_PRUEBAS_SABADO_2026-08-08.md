@@ -9,6 +9,22 @@ del barrido general del 07/08.
 
 ---
 
+## 0. Auditoría contable (mig.314) — probar una venta/compra real después de esto
+
+Se blindaron `asientos_contables`/`asientos_items` (ya no se pueden editar directo desde el
+navegador, ni siquiera un asiento en borrador puede quedar desbalanceado) y ahora los asientos
+automáticos (venta, compra, ajuste de stock, NC/ND, etc.) se crean y confirman en una sola llamada
+atómica en vez de dos. Probado a fondo en sandbox contra la base real antes de aplicar (detalle en
+`INFORME_AUDITORIA_CONTABLE_2026-08-07.md`), pero **nadie hizo todavía una venta real en
+producción después del deploy** — por favor:
+1. Hacé una venta cualquiera (Efectivo, cualquier monto chico).
+2. Contabilidad → Asientos → confirmá que aparece un asiento nuevo, confirmado, balanceado, con
+   fecha de hoy.
+3. Si algo no genera asiento (no debería bloquear la venta en ningún caso), el botón "Regenerar
+   asiento" del detalle de la venta sigue andando igual que siempre.
+4. También agregué la pestaña "Antigüedad de Deuda" en Proveedores (antes solo existía en
+   Clientes) — con algún proveedor que tenga compras sin pagar, confirmá que aparece ahí.
+
 ## 1. Login rebrandeado — revisar en vivo (recién hecho, sin screenshot para verificar)
 
 Reescribí `AuthPage.jsx`: antes tenía colores viejos hardcodeados (`#00D4FF`/`#A855F7`) y estaba

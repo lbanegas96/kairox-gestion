@@ -4,11 +4,18 @@ Fecha: 2026-08-07
 Versión analizada: `master` @ `ccacb9b` (313 migraciones)
 Marco: RT FACPCE (primario) | IFRS (referencia)
 
+**✅ Actualización 2026-08-07 (mismo día): los 3 fixes priorizados ya están en producción**
+(mig.314 + `master` @ `2be210d`). Detalle de qué se hizo y cómo se verificó en cada
+recomendación, más abajo. El crítico se probó en sandbox (`BEGIN...ROLLBACK` contra la
+base real de Nalux) antes de aplicarse — 7/7 casos correctos, sin dejar rastro.
+
 ---
 
 ## RESUMEN EJECUTIVO
 
-Score global: **6/10 en verde ✅ | 3 en amarillo ⚠️ | 1 en rojo ❌**
+Score global al momento de auditar: **6/10 en verde ✅ | 3 en amarillo ⚠️ | 1 en rojo ❌**.
+**Actualizado a 7/10 verde | 2 amarillo | 0 rojo** tras los fixes del mismo día (ver arriba) —
+solo quedan pendientes las 2 mejoras 🟢 (no bloqueantes, ver Recomendaciones).
 
 El sistema está contablemente maduro en la mayoría de las áreas — partida doble bien modelada,
 AFIP/ARCA completo (incluyendo `CondicionIVAReceptorId` y `CbtesAsoc`), impuestos parametrizables,
@@ -174,24 +181,32 @@ propósito (backlog ya conocido).
 
 ## RECOMENDACIONES PRIORIZADAS
 
-### 🔴 Crítico
+### 🔴 Crítico — ✅ RESUELTO (mig.314, 2026-08-07)
 1. **Blindar `asientos_contables`/`asientos_items` contra edición post-confirmación y validar
-   partida doble en el servidor.** Dos piezas: (a) trigger `BEFORE INSERT OR UPDATE OR DELETE` que
-   rechace cualquier operación sobre líneas de un asiento con `estado='confirmado'`; (b) mover la
-   creación de asientos a una única RPC `SECURITY DEFINER` que valide `sum(debe) = sum(haber)`
-   server-side antes de insertar, dejando las policies RLS de escritura directa cerradas para
-   `authenticated` (mismo patrón "escritura exclusiva vía RPC" ya usado en `facturas_saldo_pendiente`).
-   — Justificación: RT 17 §4.1 exige partida doble real, no solo en la UI; sin esto, el asiento no
-   es una garantía de integridad, es una convención. — Esfuerzo estimado: Medio (una migración con
-   trigger + ajuste de policy, sin tocar el flujo normal que ya usa las RPCs correctamente).
+   partida doble en el servidor.** Implementado distinto a como se planteó acá originalmente (más
+   simple y más alineado con el patrón ya establecido en el proyecto): en vez de un trigger, se
+   revocó el `GRANT` de INSERT/UPDATE/DELETE directo sobre ambas tablas para `authenticated`/`anon`
+   (mismo patrón "escritura exclusiva vía RPC" que `cuenta_corriente_imputaciones`, mig.169) — sin
+   ese permiso, ni siquiera se llega a evaluar RLS. 4 RPCs `SECURITY DEFINER` nuevas
+   (`crear_asiento_manual`, `crear_asiento_automatico`, `confirmar_asiento`, `anular_asiento`)
+   validan `sum(debe) = sum(haber)` y período cerrado server-side antes de escribir. Los 7 sitios
+   de `asientosAutoService.*` (venta, compra, ajuste de stock, NC/ND cliente y proveedor, reversa)
+   ahora crean y confirman el asiento en una sola llamada atómica (antes eran 2 llamadas separadas
+   con una ventana real de asiento huérfano). Probado en sandbox contra Nalux antes de aplicar:
+   automático balanceado → confirmado ✓, automático desbalanceado → rechazado ✓, manual → borrador
+   → confirmar → confirmado ✓, anular → anulado ✓, INSERT/UPDATE directo como `authenticated` →
+   rechazado por falta de privilegios ✓ (7/7, sin residuo).
 
 ### 🟡 Importante
-1. **Aging report para Cuentas por Pagar (Proveedores)**, espejando `TabAntiguedad.jsx` de
-   Clientes — la imputación Open Item ya existe, solo falta el reporte de antigüedad. Esfuerzo
-   estimado: Bajo (reutiliza el patrón ya construido).
-2. **Bloqueo de período cerrado server-side en el flujo principal de ventas** — hoy es best-effort
-   desde el cliente (`try/catch` no bloqueante). Esfuerzo estimado: Bajo-Medio (mover el chequeo
-   dentro de la RPC de creación de asiento, no solo antes de llamarla).
+1. **Aging report para Cuentas por Pagar (Proveedores) — ✅ RESUELTO.** Nueva pestaña "Antigüedad
+   de Deuda" en `ProveedoresSection.jsx`, espejando `TabAntiguedad.jsx` de Clientes (ahora
+   generalizado con props `entityLabel`/`onVerDetalle` para servir a ambos). Reutiliza la vista
+   `compras_saldo_pendiente` ya existente, mismo criterio de reconciliación contra
+   `proveedores.saldo_actual` que ya usaba Clientes.
+2. **Bloqueo de período cerrado server-side en el flujo principal de ventas — ✅ RESUELTO** como
+   efecto directo del fix crítico: `crear_asiento_automatico` valida `fecha_en_periodo_cerrado` de
+   forma bloqueante para las 7 rutas automáticas, ya no depende de que el chequeo best-effort del
+   cliente tenga éxito.
 
 ### 🟢 Mejoras
 1. **Reporte de valorización de inventario a una fecha de corte** — el dato ya existe

@@ -1,7 +1,59 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-07 (Claude — confirmadas cerradas las 2 auditorías contables que
-quedaban abiertas de sesiones previas: Cheques→Bancos, Devolución→NC. Detalle abajo. Sin código
-nuevo — solo verificación contra el repo real.)
+**Última actualización:** 2026-08-07 (Claude — auditoría contable sistemática de las 10 áreas
+(`INFORME_AUDITORIA_CONTABLE_2026-08-07.md`), 1 hallazgo crítico + 2 importantes, los 3 ya
+resueltos y en producción mismo día — mig.314. Antes de eso: confirmadas cerradas las 2 auditorías
+que quedaban abiertas de sesiones previas, Cheques→Bancos y Devolución→NC.)
+
+## ✅ Auditoría contable sistemática (10 áreas) — 3 hallazgos, los 3 ya resueltos — mig.314
+
+Pedido explícito de Luciano ("vamos con las auditorías faltantes"): correr la skill
+`auditor-contable` completa contra el repo real (no memoria de sesiones previas), score por las
+10 áreas RT FACPCE/IFRS. Informe completo en `INFORME_AUDITORIA_CONTABLE_2026-08-07.md`. Score:
+6/10 verde, 3 amarillo, 1 rojo al momento de auditar.
+
+**🔴 Crítico (el único rojo), resuelto mismo día:** `asientos_contables`/`asientos_items` no
+tenían ninguna protección server-side — ni un trigger/constraint validaba `sum(debe)=sum(haber)`
+antes de insertar, ni la política RLS (mig.132) distinguía `estado`, así que cualquier staff con
+el permiso "Configuración" podía editar o borrar un asiento ya confirmado (y ya declarado a AFIP)
+directo desde el navegador, sin pasar por ninguna RPC. Verificado que el gap era real antes de
+tocar nada (`has_table_privilege('authenticated', 'asientos_contables', 'INSERT') = true`).
+
+**Fix (mig.314):** 4 RPCs `SECURITY DEFINER` nuevas (`crear_asiento_manual`,
+`crear_asiento_automatico`, `confirmar_asiento`, `anular_asiento`) + `REVOKE ALL ... FROM anon,
+authenticated` sobre ambas tablas (mismo patrón "escritura exclusiva vía RPC" que
+`cuenta_corriente_imputaciones`, mig.169) — de acá en más la única forma de tocar un asiento es
+por RPC, y esas RPCs validan partida doble y período cerrado server-side antes de escribir. Los 7
+sitios de `asientosAutoService.*` (venta, compra, ajuste de stock, NC/ND cliente y proveedor,
+reversa) pasaron de 2 llamadas separadas (crear + confirmar, con ventana real de asiento huérfano
+si la segunda fallaba) a una sola llamada atómica.
+
+**Probado en sandbox contra Nalux ANTES de aplicar** (`BEGIN...ROLLBACK`, simulando la sesión de
+un admin real vía `SET LOCAL request.jwt.claim.sub`): 7/7 casos correctos — automático balanceado
+→ confirmado, automático desbalanceado → rechazado con el mensaje esperado, manual → borrador →
+confirmar → confirmado, anular → anulado, INSERT/UPDATE directo como `authenticated` → rechazado
+por falta de privilegios. Cero residuo (verificado después: 0 funciones nuevas y 0 filas de test
+en la base real antes del `ROLLBACK`; confirmado que el gap seguía abierto justo antes de aplicar
+la migración de verdad). Aplicada a producción con confirmación explícita de Luciano.
+
+**🟡 Importante #1, resuelto:** el aging de deuda (antigüedad 0-30/31-60/61-90/+90 días) solo
+existía para Clientes (`TabAntiguedad.jsx`). Agregada la misma pestaña para Proveedores en
+`ProveedoresSection.jsx` (que no tenía Tabs a nivel de sección todavía — se agregó), reutilizando
+la vista `compras_saldo_pendiente` ya existente. `TabAntiguedad.jsx` se generalizó con props
+`entityLabel`/`onVerDetalle` en vez de callbacks específicos de Cliente, para servir a los dos.
+
+**🟡 Importante #2, resuelto como efecto directo del fix crítico:** el bloqueo de período cerrado
+para el flujo automático de ventas/compras/etc. era best-effort desde el cliente (si la RPC de
+chequeo fallaba por red, el asiento se posteaba igual). Ahora `crear_asiento_automatico` lo valida
+siempre server-side, de forma bloqueante, para las 7 rutas automáticas.
+
+**🟢 Mejoras (no bloqueantes, no se tocaron):** reporte de valorización de inventario a fecha de
+corte histórico, centros de costo a nivel de línea (hoy solo a nivel de documento).
+
+Verificado: lint/build limpios, 153/153 tests, `get_advisors` post-deploy sin hallazgos nuevos
+más allá del esperado ("SECURITY DEFINER callable por authenticated", mismo patrón que
+`abrir_caja_sesion` y el resto de las RPCs del proyecto — intencional), sin errores de consola en
+producción tras el deploy. **Pendiente de que alguien lo confirme con una venta/compra real** —
+sumado a `PLAN_PRUEBAS_SABADO_2026-08-08.md`.
 
 ## ✅ Las 2 auditorías contables pendientes ya estaban cerradas — confirmado 07/08
 
