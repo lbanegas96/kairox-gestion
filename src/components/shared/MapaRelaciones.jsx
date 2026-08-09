@@ -245,7 +245,16 @@ function PreviewPanel({ nodo, items, loading, onClose, onVerCompleto }) {
 
 // ── Componente principal ─────────────────────────────────────────────────────
 
-function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigate }) {
+// mig.316 — Fase 3 del rediseño (PLAN_MAPA_RELACIONES.md): puntos de acceso desde
+// cualquier eslabón de la cadena, no solo el documento final. Cada uno de estos
+// tipos tiene un FK directo (nullable) al comprobante/compra que ancla el mapa
+// existente — si todavía no existe (documento sin facturar), se muestra un
+// estado "sin facturar" en vez de fallar.
+function MapaRelaciones({
+  open, onOpenChange, onNavigate,
+  comprobanteId, compraId,
+  cotizacionId, pedidoId, entregaId, recepcionId, devolucionId,
+}) {
   const { user }  = useAuth();
   const [loading, setLoading] = useState(false);
   const [mapa, setMapa]       = useState(null);
@@ -253,25 +262,91 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
   const [previewNodo, setPreviewNodo]   = useState(null); // { tipo, id, numero, fecha, total|monto, estado }
   const [previewItems, setPreviewItems] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const isCompra = !!compraId && !comprobanteId;
+  const [activoId, setActivoId] = useState(null);        // id del nodo que se abrió — el que se marca "actual"
+  const [sinFacturar, setSinFacturar] = useState(null);  // { label, nodo } cuando el entry point no tiene comprobante/compra todavía
+  const isCompra = mapa?.modo === 'compra' || (!!compraId && !comprobanteId);
 
   useEffect(() => {
     if (!open || !user?.empresa_id) return;
-    if (comprobanteId) fetchMapaVenta();
-    else if (compraId) fetchMapaCompra();
-  }, [open, comprobanteId, compraId, user?.empresa_id]);
+    resolveAndFetch();
+  }, [open, comprobanteId, compraId, cotizacionId, pedidoId, entregaId, recepcionId, devolucionId, user?.empresa_id]);
 
   useEffect(() => {
-    if (!open) { setMapa(null); setFullscreen(false); setPreviewNodo(null); setPreviewItems(null); }
+    if (!open) { setMapa(null); setFullscreen(false); setPreviewNodo(null); setPreviewItems(null); setActivoId(null); setSinFacturar(null); }
   }, [open]);
 
+  // ── Resolución del punto de entrada ──────────────────────────────────────────
+  const resolveAndFetch = async () => {
+    setSinFacturar(null);
+    if (comprobanteId) { setActivoId(comprobanteId); return fetchMapaVenta(comprobanteId); }
+    if (compraId)       { setActivoId(compraId);      return fetchMapaCompra(compraId); }
+
+    setLoading(true);
+    try {
+      if (cotizacionId) {
+        const { data } = await supabase.from('cotizaciones')
+          .select('id, numero, fecha, total, estado, comprobante_id')
+          .eq('id', cotizacionId).eq('empresa_id', user.empresa_id).maybeSingle();
+        if (!data) return setMapa(null);
+        if (data.comprobante_id) { setActivoId(cotizacionId); return fetchMapaVenta(data.comprobante_id); }
+        return setSinFacturar({ label: 'Cotización', nodo: { tipo: 'cotizacion', numero: data.numero, fecha: data.fecha, total: data.total, estado: data.estado } });
+      }
+      if (pedidoId) {
+        const { data } = await supabase.from('pedidos')
+          .select('id, numero, fecha, total, estado, comprobante_id')
+          .eq('id', pedidoId).eq('empresa_id', user.empresa_id).maybeSingle();
+        if (!data) return setMapa(null);
+        if (data.comprobante_id) { setActivoId(pedidoId); return fetchMapaVenta(data.comprobante_id); }
+        return setSinFacturar({ label: 'Pedido', nodo: { tipo: 'pedido', numero: data.numero, fecha: data.fecha, total: data.total, estado: data.estado } });
+      }
+      if (entregaId) {
+        const { data } = await supabase.from('entregas')
+          .select('id, numero_entrega, fecha, estado, comprobante_id, pedido_id')
+          .eq('id', entregaId).eq('empresa_id', user.empresa_id).maybeSingle();
+        if (!data) return setMapa(null);
+        let compId = data.comprobante_id;
+        if (!compId && data.pedido_id) {
+          const { data: ped } = await supabase.from('pedidos').select('comprobante_id').eq('id', data.pedido_id).maybeSingle();
+          compId = ped?.comprobante_id;
+        }
+        if (compId) { setActivoId(entregaId); return fetchMapaVenta(compId); }
+        return setSinFacturar({ label: 'Entrega', nodo: { tipo: 'entrega', numero: data.numero_entrega, fecha: data.fecha, estado: data.estado } });
+      }
+      if (recepcionId) {
+        const { data } = await supabase.from('recepciones')
+          .select('id, numero_recepcion, fecha, estado, compra_id')
+          .eq('id', recepcionId).eq('empresa_id', user.empresa_id).maybeSingle();
+        if (!data) return setMapa(null);
+        if (data.compra_id) { setActivoId(recepcionId); return fetchMapaCompra(data.compra_id); }
+        return setSinFacturar({ label: 'Recepción', nodo: { tipo: 'recepcion', numero: data.numero_recepcion, fecha: data.fecha, estado: data.estado } });
+      }
+      if (devolucionId) {
+        const { data } = await supabase.from('devoluciones')
+          .select('id, numero_devolucion, fecha, tipo, compensacion, comprobante_id, compra_id')
+          .eq('id', devolucionId).eq('empresa_id', user.empresa_id).maybeSingle();
+        if (!data) return setMapa(null);
+        if (data.tipo === 'cliente' && data.comprobante_id) { setActivoId(devolucionId); return fetchMapaVenta(data.comprobante_id); }
+        if (data.tipo === 'proveedor' && data.compra_id)    { setActivoId(devolucionId); return fetchMapaCompra(data.compra_id); }
+        return setSinFacturar({ label: 'Devolución', nodo: { tipo: data.tipo === 'cliente' ? 'devolucion' : 'devolucion_prov', numero: data.numero_devolucion, fecha: data.fecha, estado: data.compensacion } });
+      }
+      setMapa(null);
+    } catch (err) {
+      console.error('[MapaRelaciones/resolve]', err);
+      setMapa(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ── Fetch lado Ventas ────────────────────────────────────────────────────────
-  const fetchMapaVenta = async () => {
+  // Recibe el id ya resuelto (puede ser el comprobanteId directo, o el que
+  // resolveAndFetch encontró a partir de una cotización/pedido/entrega/devolución).
+  const fetchMapaVenta = async (idComprobante) => {
     setLoading(true);
     try {
       const { data: comp } = await supabase.from('comprobantes')
         .select('id, numero_venta, numero_afip, tipo, total, fecha, cliente_nombre, comprobante_origen_id, pedido_id, cotizacion_id')
-        .eq('id', comprobanteId).single();
+        .eq('id', idComprobante).single();
 
       if (!comp) { setMapa(null); return; }
 
@@ -292,32 +367,32 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
         comp.pedido_id
           ? supabase.from('entregas')
               .select('id, numero_entrega, fecha, estado, origen, pedido_id')
-              .or(`comprobante_id.eq.${comprobanteId},pedido_id.eq.${comp.pedido_id}`)
+              .or(`comprobante_id.eq.${idComprobante},pedido_id.eq.${comp.pedido_id}`)
               .eq('empresa_id', user.empresa_id)
           : supabase.from('entregas')
               .select('id, numero_entrega, fecha, estado, origen, pedido_id')
-              .eq('comprobante_id', comprobanteId)
+              .eq('comprobante_id', idComprobante)
               .eq('empresa_id', user.empresa_id),
 
         supabase.from('comprobantes')
           .select('id, numero_venta, numero_afip, tipo, total, fecha, estado_pago')
-          .eq('comprobante_origen_id', comprobanteId)
+          .eq('comprobante_origen_id', idComprobante)
           .eq('empresa_id', user.empresa_id)
           .eq('tipo', 'nota_credito'),
 
         supabase.from('notas_debito')
           .select('id, numero_nd, concepto, monto, fecha')
-          .eq('comprobante_id', comprobanteId)
+          .eq('comprobante_id', idComprobante)
           .eq('empresa_id', user.empresa_id),
 
         supabase.from('devoluciones')
           .select('id, numero_devolucion, fecha, compensacion')
-          .eq('comprobante_id', comprobanteId)
+          .eq('comprobante_id', idComprobante)
           .eq('empresa_id', user.empresa_id),
 
         supabase.from('cuenta_corriente_movimientos')
           .select('id, tipo, monto, fecha, descripcion')
-          .eq('comprobante_id', comprobanteId)
+          .eq('comprobante_id', idComprobante)
           .eq('empresa_id', user.empresa_id)
           .eq('tipo', 'HABER'),
       ]);
@@ -379,12 +454,14 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
   };
 
   // ── Fetch lado Compras ───────────────────────────────────────────────────────
-  const fetchMapaCompra = async () => {
+  // Recibe el id ya resuelto (el compraId directo, o el que resolveAndFetch
+  // encontró a partir de una recepción/devolución de proveedor).
+  const fetchMapaCompra = async (idCompra) => {
     setLoading(true);
     try {
       const { data: compra } = await supabase.from('compras')
         .select('id, numero_factura, total, fecha, proveedor_id, proveedores(nombre)')
-        .eq('id', compraId).single();
+        .eq('id', idCompra).single();
 
       if (!compra) { setMapa(null); return; }
 
@@ -392,34 +469,34 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
         // Recepciones vinculadas a esta compra
         supabase.from('recepciones')
           .select('id, numero_recepcion, fecha, estado')
-          .eq('compra_id', compraId)
+          .eq('compra_id', idCompra)
           .eq('empresa_id', user.empresa_id),
 
         // Devoluciones (NC físicas) al proveedor
         supabase.from('devoluciones')
           .select('id, numero_devolucion, fecha, compensacion')
-          .eq('compra_id', compraId)
+          .eq('compra_id', idCompra)
           .eq('tipo', 'proveedor')
           .eq('empresa_id', user.empresa_id),
 
         // ND recibidas de este proveedor sobre esta compra
         supabase.from('notas_debito')
           .select('id, numero_nd, concepto, monto, fecha')
-          .eq('compra_id', compraId)
+          .eq('compra_id', idCompra)
           .eq('empresa_id', user.empresa_id),
 
-        // Pagos en CC proveedores (referencia_id = compraId, patrón viejo — solo pagos)
+        // Pagos en CC proveedores (referencia_id = idCompra, patrón viejo — solo pagos)
         supabase.from('cuenta_corriente_proveedores')
           .select('id, tipo, monto, fecha, descripcion, referencia_tipo')
-          .eq('referencia_id', compraId)
+          .eq('referencia_id', idCompra)
           .eq('empresa_id', user.empresa_id),
 
         // NC financieras de proveedor (mig.277 — documento propio, ya no vive
-        // como referencia_id=compraId en cuenta_corriente_proveedores; el CC
+        // como referencia_id=idCompra en cuenta_corriente_proveedores; el CC
         // ahora apunta a notas_credito_proveedor.id, no a la compra).
         supabase.from('notas_credito_proveedor')
           .select('id, numero_ncp, motivo, monto, fecha')
-          .eq('compra_id', compraId)
+          .eq('compra_id', idCompra)
           .eq('empresa_id', user.empresa_id),
       ]);
 
@@ -450,6 +527,10 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
     onNavigate?.(tipo, id);
     onOpenChange(false);
   };
+
+  // "actual" ya no es siempre el comprobante/compra ancla — puede ser
+  // cualquier eslabón desde el que se abrió el mapa (Fase 3).
+  const isActivo = (id) => activoId != null && id === activoId;
 
   // El preview usa el tipo "visual" del nodo (distingue nota_credito de venta,
   // devolucion_prov de devolucion, para el ícono/label correcto) pero
@@ -607,16 +688,29 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
             </div>
           )}
 
-          {!loading && !mapa && (
+          {!loading && !mapa && !sinFacturar && (
             <div className="text-center text-kx-text-3 text-sm py-12">
               No se pudo cargar el mapa de relaciones.
+            </div>
+          )}
+
+          {/* ── Entry point sin facturar todavía (Fase 3): cotización/pedido/entrega/
+              recepción/devolución que aún no tiene un comprobante o compra asociado
+              — no hay cadena para armar, pero tampoco es un error. ── */}
+          {!loading && sinFacturar && (
+            <div className="flex flex-col items-center gap-3 py-8">
+              <NodoMapa nodo={sinFacturar.nodo} activo />
+              <p className="text-xs text-kx-text-3 text-center max-w-xs">
+                {sinFacturar.label} todavía sin facturar — cuando se convierta en factura vas a
+                poder ver la cadena completa acá.
+              </p>
             </div>
           )}
 
           {/* ── VENTAS: sin relaciones ─────────────────────────────────────── */}
           {!loading && mapa?.modo === 'venta' && sinRelacionesVenta && (
             <div className="flex flex-col items-center gap-3 py-8">
-              <NodoMapa nodo={compNodo} activo />
+              <NodoMapa nodo={compNodo} activo={isActivo(compNodo.id)} />
               <p className="text-xs text-kx-text-3">
                 Sin documentos relacionados — comprobante independiente
               </p>
@@ -643,7 +737,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
                     };
                     return (
                       <React.Fragment key="origen">
-                        <NodoMapa nodo={n} onClick={() => openPreview(n)} />
+                        <NodoMapa nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />
                         <Conector />
                       </React.Fragment>
                     );
@@ -659,7 +753,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
                     };
                     return (
                       <React.Fragment key="pedido">
-                        <NodoMapa nodo={n} onClick={() => openPreview(n)} />
+                        <NodoMapa nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />
                         <Conector />
                       </React.Fragment>
                     );
@@ -668,12 +762,12 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
                     const n = { id: e.id, tipo: 'entrega', numero: e.numero_entrega, fecha: e.fecha, estado: e.estado };
                     return (
                       <React.Fragment key={e.id}>
-                        <NodoMapa nodo={n} onClick={() => openPreview(n)} />
+                        <NodoMapa nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />
                         <Conector />
                       </React.Fragment>
                     );
                   })}
-                  <NodoMapa nodo={compNodo} activo />
+                  <NodoMapa nodo={compNodo} activo={isActivo(compNodo.id)} onClick={() => openPreview(compNodo)} />
                 </div>
               </div>
 
@@ -685,23 +779,25 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
                   <div className="flex flex-wrap gap-3">
                     {mapa.ncs.map(nc => {
                       const n = { id: nc.id, tipo: 'nota_credito', numero: nc.numero_afip ?? nc.numero_venta, fecha: nc.fecha, total: nc.total, estado: nc.estado_pago };
-                      return <NodoMapa key={nc.id} nodo={n} onClick={() => openPreview(n)} />;
+                      return <NodoMapa key={nc.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
                     })}
                     {mapa.nds.map(nd => (
                       <NodoMapa
                         key={nd.id}
                         nodo={{ id: nd.id, tipo: 'nota_debito', numero: nd.numero_nd, fecha: nd.fecha, monto: nd.monto, estado: nd.concepto }}
+                        activo={isActivo(nd.id)}
                       />
                     ))}
                     {mapa.cobros.map(c => (
                       <NodoMapa
                         key={c.id}
                         nodo={{ id: c.id, tipo: 'cobro_cc', numero: c.descripcion || 'Cobro CC', fecha: c.fecha, monto: c.monto }}
+                        activo={isActivo(c.id)}
                       />
                     ))}
                     {mapa.devoluciones.map(d => {
                       const n = { id: d.id, tipo: 'devolucion', numero: d.numero_devolucion, fecha: d.fecha, estado: d.compensacion };
-                      return <NodoMapa key={d.id} nodo={n} onClick={() => openPreview(n)} />;
+                      return <NodoMapa key={d.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
                     })}
                   </div>
                 </div>
@@ -721,7 +817,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
           {/* ── COMPRAS: sin relaciones ────────────────────────────────────── */}
           {!loading && mapa?.modo === 'compra' && sinRelacionesCompra && (
             <div className="flex flex-col items-center gap-3 py-8">
-              <NodoMapa nodo={compraNodo} activo />
+              <NodoMapa nodo={compraNodo} activo={isActivo(compraNodo.id)} />
               <p className="text-xs text-kx-text-3">
                 Sin documentos relacionados — factura independiente
               </p>
@@ -743,19 +839,20 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
                     const n = { id: r.id, tipo: 'recepcion', numero: r.numero_recepcion, fecha: r.fecha, estado: r.estado };
                     return (
                       <React.Fragment key={r.id}>
-                        <NodoMapa nodo={n} onClick={() => openPreview(n)} />
+                        <NodoMapa nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />
                         <Conector />
                       </React.Fragment>
                     );
                   })}
                   {/* Factura actual */}
-                  <NodoMapa nodo={compraNodo} activo />
+                  <NodoMapa nodo={compraNodo} activo={isActivo(compraNodo.id)} onClick={() => openPreview(compraNodo)} />
                   {/* Pagos CC */}
                   {mapa.pagos.map(p => (
                     <React.Fragment key={p.id}>
                       <Conector />
                       <NodoMapa
                         nodo={{ id: p.id, tipo: 'pago_proveedor', numero: p.descripcion || 'Pago CC', fecha: p.fecha, monto: p.monto }}
+                        activo={isActivo(p.id)}
                       />
                     </React.Fragment>
                   ))}
@@ -771,13 +868,14 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
                     {/* Devoluciones físicas */}
                     {mapa.devoluciones.map(d => {
                       const n = { id: d.id, tipo: 'devolucion_prov', numero: d.numero_devolucion, fecha: d.fecha, estado: d.compensacion };
-                      return <NodoMapa key={d.id} nodo={n} onClick={() => openPreview(n)} />;
+                      return <NodoMapa key={d.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
                     })}
                     {/* NC financieras recibidas (mig.277 — notas_credito_proveedor) */}
                     {mapa.ncsFinancieras.map(nc => (
                       <NodoMapa
                         key={nc.id}
                         nodo={{ id: nc.id, tipo: 'nc_proveedor', numero: nc.numero_ncp, fecha: nc.fecha, monto: nc.monto, estado: nc.motivo }}
+                        activo={isActivo(nc.id)}
                       />
                     ))}
                     {/* ND recibidas */}
@@ -785,6 +883,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
                       <NodoMapa
                         key={nd.id}
                         nodo={{ id: nd.id, tipo: 'nd_proveedor', numero: nd.numero_nd, fecha: nd.fecha, monto: nd.monto, estado: nd.concepto }}
+                        activo={isActivo(nd.id)}
                       />
                     ))}
                   </div>

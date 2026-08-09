@@ -1,4 +1,4 @@
-import { Search, Eye, Trash2, CheckCircle, XCircle, Send, ShoppingCart, ExternalLink, Ban } from 'lucide-react';
+import { Search, Eye, Trash2, CheckCircle, XCircle, Send, ShoppingCart, ExternalLink, Ban, Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatCurrency } from '@/lib/currencyUtils';
@@ -11,7 +11,7 @@ function TablaCotizaciones({
   isLoading, filteredData,
   listData, page,
   setViewId, estadoMutation, deleteMutation,
-  handleConvertirClick, onNavigateToSale, onVerPedido,
+  handleConvertirClick, onNavigateToSale, onVerPedido, onOpenMapa,
 }) {
   return (
     <div className="space-y-4">
@@ -72,6 +72,9 @@ function TablaCotizaciones({
                   <div className="flex items-center justify-center gap-1">
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-blue" onClick={() => setViewId(cot.id)} title="Ver detalle">
                       <Eye className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-violet" onClick={() => onOpenMapa?.(cot.id)} title="Mapa de relaciones">
+                      <Network className="w-3.5 h-3.5" />
                     </Button>
                     {cot.estado === 'borrador' && (
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-blue-600" onClick={() => estadoMutation.mutate({ id: cot.id, estado: 'enviada' })} title="Marcar como enviada">

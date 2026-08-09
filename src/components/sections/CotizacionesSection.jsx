@@ -13,6 +13,7 @@ import { EMPTY_ITEM } from '@/components/cotizaciones/shared';
 import TablaCotizaciones from '@/components/cotizaciones/TablaCotizaciones';
 import FormNuevaCotizacion from '@/components/cotizaciones/FormNuevaCotizacion';
 import ModalDetalleCotizacion from '@/components/cotizaciones/ModalDetalleCotizacion';
+import MapaRelaciones from '@/components/shared/MapaRelaciones';
 
 function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, navigateCotizacionId, onNavigated } = {}) {
   const { user } = useAuth();
@@ -44,6 +45,10 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, n
 
   // Detail modal
   const [viewId, setViewId] = useState(null);
+
+  // Mapa de relaciones (Fase 3, PLAN_MAPA_RELACIONES.md)
+  const [mapaCotId, setMapaCotId] = useState(null);
+  const [isMapaOpen, setIsMapaOpen] = useState(false);
 
   // Conversión a venta
   const [convertirCot, setConvertirCot] = useState(null);  // cotización completa para convertir
@@ -304,6 +309,17 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, n
         listData={listData} page={page}
         setViewId={setViewId} estadoMutation={estadoMutation} deleteMutation={deleteMutation}
         handleConvertirClick={handleConvertirClick} onNavigateToSale={onNavigateToSale} onVerPedido={onVerPedido}
+        onOpenMapa={(id) => { setMapaCotId(id); setIsMapaOpen(true); }}
+      />
+
+      <MapaRelaciones
+        open={isMapaOpen}
+        onOpenChange={setIsMapaOpen}
+        cotizacionId={mapaCotId}
+        onNavigate={(tipo, id) => {
+          if (tipo === 'comprobante') onNavigateToSale?.(id);
+          else if (tipo === 'pedido') onVerPedido?.(id);
+        }}
       />
 
       {/* MODAL NUEVA COTIZACIÓN */}

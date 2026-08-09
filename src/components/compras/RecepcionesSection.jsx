@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Package, Search, ChevronDown, ChevronRight } from 'lucide-react';
+import { Package, Search, ChevronDown, ChevronRight, Network } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { formatDateAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
+import MapaRelaciones from '@/components/shared/MapaRelaciones';
 
 const ORIGEN_LABELS = {
   implicita: { label: 'Compra Rápida', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
@@ -38,6 +40,8 @@ function RecepcionesSection() {
   const [search, setSearch]           = useState('');
   const [filtroOrigen, setFiltroOrigen] = useState('todos');
   const [expanded, setExpanded]       = useState({});
+  const [mapaRecId, setMapaRecId]     = useState(null);
+  const [isMapaOpen, setIsMapaOpen]   = useState(false);
 
   const fetchRecepciones = async () => {
     if (!user?.empresa_id) return;
@@ -118,13 +122,14 @@ function RecepcionesSection() {
                 <th className="text-left p-3 font-semibold text-kx-text-2">Compra</th>
                 <th className="text-center p-3 font-semibold text-kx-text-2">Ítems</th>
                 <th className="text-center p-3 font-semibold text-kx-text-2">Estado</th>
+                <th className="text-center p-3 font-semibold text-kx-text-2">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-kx-border">
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 9 }).map((_, j) => (
+                    {Array.from({ length: 10 }).map((_, j) => (
                       <td key={j} className="p-3">
                         <div className="h-4 bg-kx-surface-2 rounded animate-pulse w-16" />
                       </td>
@@ -133,7 +138,7 @@ function RecepcionesSection() {
                 ))
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-12 text-center text-kx-text-3">
+                  <td colSpan={10} className="p-12 text-center text-kx-text-3">
                     <Package className="w-10 h-10 mx-auto mb-3 opacity-20" />
                     <p className="font-medium text-kx-text-2">
                       {filtroOrigen !== 'todos' || search
@@ -183,12 +188,22 @@ function RecepcionesSection() {
                         <td className="p-3 text-center">
                           <EstadoBadge estado={rec.estado} />
                         </td>
+                        <td className="p-3 text-center" onClick={ev => ev.stopPropagation()}>
+                          <Button
+                            variant="ghost" size="icon"
+                            className="h-7 w-7 text-kx-text-3 hover:text-kx-violet"
+                            onClick={() => { setMapaRecId(rec.id); setIsMapaOpen(true); }}
+                            title="Mapa de relaciones"
+                          >
+                            <Network className="w-3.5 h-3.5" />
+                          </Button>
+                        </td>
                       </tr>
 
                       {isOpen && items.length > 0 && (
                         <tr>
                           <td />
-                          <td colSpan={8} className="pb-3 pr-3">
+                          <td colSpan={9} className="pb-3 pr-3">
                             <div className="bg-kx-surface-2 rounded-lg border border-kx-border p-3">
                               <p className="text-xs font-semibold text-kx-text-3 uppercase mb-2">
                                 Detalle de ítems
@@ -218,6 +233,12 @@ function RecepcionesSection() {
           </table>
         </div>
       </Card>
+
+      <MapaRelaciones
+        open={isMapaOpen}
+        onOpenChange={setIsMapaOpen}
+        recepcionId={mapaRecId}
+      />
     </div>
   );
 }

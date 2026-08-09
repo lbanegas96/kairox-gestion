@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Truck, Package, Download, Loader2, Send, FileOutput, Ban } from 'lucide-react';
+import { Truck, Package, Download, Loader2, Send, FileOutput, Ban, Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { formatDateAR } from '@/lib/dateUtils';
 import DocumentFlow from '@/components/shared/DocumentFlow';
+import MapaRelaciones from '@/components/shared/MapaRelaciones';
 
 const ORIGEN_LABELS = {
   implicita: { label: 'POS',    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
@@ -24,6 +25,8 @@ function ModalDetalleEntrega({
   onCompartirWhatsApp,
   onAnular,
 }) {
+  const [mapaOpen, setMapaOpen] = useState(false);
+
   if (!entrega) return null;
 
   const items = entrega.entrega_items ?? [];
@@ -78,14 +81,31 @@ function ModalDetalleEntrega({
           )}
 
           <div className="space-y-1.5 pt-1">
-            <p className="text-2xs font-semibold text-kx-text-3 dark:text-kx-text-3 uppercase tracking-wider">
-              Flujo del documento
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-2xs font-semibold text-kx-text-3 dark:text-kx-text-3 uppercase tracking-wider">
+                Flujo del documento
+              </p>
+              <button
+                type="button"
+                onClick={() => setMapaOpen(true)}
+                className="text-2xs text-kx-violet hover:opacity-80 font-medium flex items-center gap-1"
+                title="Ver mapa de relaciones completo"
+              >
+                <Network className="w-3 h-3" /> Mapa de relaciones
+              </button>
+            </div>
             <DocumentFlow
               chips={flowChips}
               onNavigate={(tipo, id) => { onClose(); onNavigate?.(tipo, id); }}
             />
           </div>
+
+          <MapaRelaciones
+            open={mapaOpen}
+            onOpenChange={setMapaOpen}
+            entregaId={entrega.id}
+            onNavigate={(tipo, id) => { setMapaOpen(false); onClose(); onNavigate?.(tipo, id); }}
+          />
 
           <table className="w-full text-sm">
             <thead>
