@@ -1,8 +1,53 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-07 (Claude — auditoría contable sistemática de las 10 áreas
-(`INFORME_AUDITORIA_CONTABLE_2026-08-07.md`), 1 hallazgo crítico + 2 importantes, los 3 ya
-resueltos y en producción mismo día — mig.314. Antes de eso: confirmadas cerradas las 2 auditorías
-que quedaban abiertas de sesiones previas, Cheques→Bancos y Devolución→NC.)
+**Última actualización:** 2026-08-08 (Claude — rediseño del Mapa de Relaciones estilo SAP B1,
+Fases 1 y 2 hechas y deployadas — `PLAN_MAPA_RELACIONES.md`. Circuito de pruebas completo sumado
+a `PLAN_PRUEBAS_SABADO_2026-08-08.md` sección 5, para probar esta noche con Nadia. Antes de eso:
+auditoría contable sistemática de las 10 áreas (`INFORME_AUDITORIA_CONTABLE_2026-08-07.md`), 1
+hallazgo crítico + 2 importantes, los 3 resueltos mismo día — mig.314.)
+
+## ✅ Mapa de Relaciones — rediseño estilo SAP B1, Fases 1 y 2 — 08/08
+
+Pedido de Luciano: replicar la idea del Relationship Map del cliente web de SAP Business One
+(capturas de referencia), con estilo KAIROX, totalmente funcional. Antes de construir: barrido de
+lo que ya existía (`src/components/shared/MapaRelaciones.jsx` — el motor de datos ya era sólido,
+el problema era solo visual) + estudio de mercado sobre el Relationship Map real de SAP B1 (qué
+le gusta a los usuarios, qué les molesta). Plan completo con las 4 fases en
+`PLAN_MAPA_RELACIONES.md`.
+
+**Fase 1 (rediseño visual):** ícono por tipo de documento (antes solo color de borde), badges de
+estado con color unificado, barra de resumen del circuito ("N pasos · Total · N derivados", al
+estilo de la cabecera de SAP), cadena principal en scroll horizontal en vez de `flex-wrap` (ya no
+se desordena con cadenas largas — el problema visual concreto que señaló Luciano), conector tipo
+stepper, botón de pantalla completa. Sin tocar la lógica de datos. Se evaluó sumar React Flow
+mencionado en el plan original pero se decidió no meter una dependencia nueva justo antes de las
+pruebas de esta noche.
+
+**Fase 2 (preview inline al hacer clic) — la mejora sobre SAP, no solo la copia:** el hallazgo más
+repetido en la investigación de mercado fue que el Relationship Map de SAP "solo da alto nivel" —
+para ver qué hay adentro de cada documento hay que abrirlo aparte, perdiendo el contexto del
+circuito completo. Ahora un clic en cualquier nodo navegable (origen, pedido, entrega, NC,
+devolución, recepción) abre un panel al costado DENTRO del mismo modal con los ítems reales del
+documento — el header no pide nada nuevo (ya viaja en el nodo), solo los ítems se buscan aparte,
+por tabla de detalle según el tipo (`comprobante_items`/`pedido_items`/`entrega_items`/
+`recepcion_items`/`devolucion_items`, con `devolucion_prov` como alias de `devolucion` ya que
+comparten tabla). Botón "Ver documento completo" para el que igual quiere navegar de una — ese sí
+cierra el mapa (comportamiento viejo, ahora es una acción explícita en vez de la única opción).
+
+**Probado en vivo contra una venta real** (20260806-011, Entrega→Factura, sesión activa de Nadia
+en el navegador de pruebas — sin mutar nada, solo lectura): clic en el nodo Entrega mostró sus 4
+ítems reales (Máquina de afeitar, Batidora Eléctrica, Mate, Celulares) sin cerrar el mapa; clic en
+la ✕ del preview devolvió el layout a ancho completo; el botón de pantalla completa funcionó bien.
+Verificado además: lint/build limpios, 153/153 tests, sin errores nuevos en consola (el único
+warning que aparece es uno preexistente y no relacionado, de `TopClientes.jsx` en el Dashboard —
+key duplicada "Consumidor Final", anotado pero no es de esta sesión).
+
+**Queda la Fase 3** (agregar el botón "Mapa de relaciones" también en Cotizaciones, Pedidos,
+Recepciones y modales de NC/ND — hoy solo está en el documento final de cada circuito, Ventas y
+Compras) para después de las pruebas de esta noche.
+
+**Circuito de pruebas completo sumado a `PLAN_PRUEBAS_SABADO_2026-08-08.md` (sección 5)** — cubre
+ambos lados (Ventas/Compras), cadena larga vs. sin relaciones, cada tipo de nodo clickeable, cierre
+del preview, pantalla completa, y navegación real desde "Ver documento completo".
 
 ## ✅ Auditoría contable sistemática (10 áreas) — 3 hallazgos, los 3 ya resueltos — mig.314
 

@@ -4,11 +4,25 @@
 de estado con color unificado, barra de resumen del circuito, cadena principal en scroll
 horizontal (ya no se desordena con cadenas largas), conector tipo stepper, botón de pantalla
 completa, contenedor propio para "documentos derivados". Sin tocar la lógica de datos — solo la
-capa visual. Verificado en vivo contra un caso real (venta 20260806-011). Sin librería nueva
-(se evaluó React Flow pero se decidió no sumar una dependencia nueva justo antes de las pruebas
-de esta noche con Nadia — queda como opción para una vuelta futura si hace falta más potencia de
-diagramación). **Quedan las Fases 2 (preview inline al hacer clic) y 3 (extender el botón a toda
-la cadena: Cotizaciones, Pedidos, Recepciones, NC/ND) para después de esta noche.**
+capa visual. Sin librería nueva (se evaluó React Flow pero se decidió no sumar una dependencia
+nueva justo antes de las pruebas de esta noche con Nadia — queda como opción para una vuelta
+futura si hace falta más potencia de diagramación).
+
+**✅ Fase 2 (preview inline al hacer clic) — hecha y deployada (08/08).** La mejora concreta sobre
+SAP B1 que identificó el estudio de mercado: clic en cualquier nodo navegable (origen, pedido,
+entrega, NC, devolución, recepción) abre un panel al costado DENTRO del mismo modal con los ítems
+reales del documento (`comprobante_items`/`pedido_items`/`entrega_items`/`recepcion_items`/
+`devolucion_items`, según el tipo) — sin cerrar el mapa ni perder el contexto del circuito. Botón
+"Ver documento completo" para el que igual quiere navegar de una.
+
+Las dos fases probadas en vivo contra una venta real (20260806-011, Entrega→Factura): el preview
+mostró los 4 ítems reales de la entrega sin cerrar el mapa, y el cierre del panel devuelve el
+layout a ancho completo correctamente. Circuito de pruebas completo (todos los casos, ambos
+lados Ventas/Compras) sumado a `PLAN_PRUEBAS_SABADO_2026-08-08.md`, sección 5.
+
+**Queda la Fase 3** (extender el botón "Mapa de relaciones" a Cotizaciones, Pedidos, Recepciones
+y modales de NC/ND — hoy solo está en el documento final de cada circuito) para después de las
+pruebas.
 
 ---
 

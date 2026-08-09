@@ -107,8 +107,63 @@ cambió mucho últimamente y no tiene un plan de prueba dedicado ya corrido:
 - **Billing de Supabase (Nalux) vence el 17/08/2026** — revisar antes de esa fecha o se restringe
   producción.
 
+## 5. Mapa de Relaciones — circuito completo de pruebas (Fase 1 + Fase 2, 08/08)
+
+Rediseño en dos partes, las dos ya en producción (`PLAN_MAPA_RELACIONES.md` tiene el detalle
+completo del pedido original, el barrido de lo que ya había, y el estudio de mercado sobre el
+Relationship Map de SAP B1 que lo inspiró):
+
+- **Fase 1 (visual):** íconos por tipo de documento, badges de estado con color, barra de resumen
+  del circuito, cadena principal en scroll horizontal en vez de `flex-wrap`, botón de pantalla
+  completa.
+- **Fase 2 (preview inline):** clic en cualquier nodo navegable abre un panel al costado, DENTRO
+  del mismo modal, con los ítems reales de ese documento — sin cerrar el mapa. Botón "Ver
+  documento completo" para el que igual quiere navegar.
+
+Las dos fases ya se probaron en vivo contra una venta real (20260806-011) durante el desarrollo,
+pero falta el circuito completo de punta a punta con varios casos — este bloque es exactamente eso.
+
+**Cómo probar — lado Ventas:**
+1. Ventas → Facturas → elegí cualquier fila → botón "..." → **Mapa de relaciones**.
+2. ✅ Esperado: modal con la barra de resumen arriba ("N pasos en la cadena", "Total: $X", y "N
+   documentos derivados" si aplica), la cadena de documentos con íconos por tipo (cotización,
+   pedido, camión de entrega, factura, etc.), y el nodo actual marcado "ACTUAL" en violeta.
+3. Probá con una venta que tenga **cadena larga** (con pedido + entrega + NC o cobro) — la cadena
+   principal debería scrollear horizontalmente en vez de desordenarse en varias filas.
+4. Hacé clic en un nodo que **no** sea el actual (ej. la Entrega, o el Pedido, o una NC en
+   "documentos derivados"). ✅ Esperado: se abre un panel a la derecha con los ítems reales de ese
+   documento (producto × cantidad, con subtotal cuando corresponde) — el modal **no se cierra**.
+5. Clic en la ✕ del panel de preview. ✅ Esperado: el panel se cierra y la cadena vuelve a ocupar
+   todo el ancho.
+6. Clic en "Ver documento completo" dentro del preview. ✅ Esperado: navega al documento real y
+   cierra el mapa (esto sí es intencional — es la salida "de verdad" para el que quiere editar/ver
+   todo el documento).
+7. Botón de pantalla completa (ícono de flechas arriba a la derecha, al lado de la ✕ de cerrar).
+   ✅ Esperado: el modal ocupa casi toda la pantalla, útil para cadenas con muchos derivados.
+8. Probá también con una **venta del POS sin relaciones** (venta suelta, sin pedido/cotización).
+   ✅ Esperado: mensaje "Sin documentos relacionados — comprobante independiente", sin la barra de
+   resumen ni la sección de derivados.
+
+**Cómo probar — lado Compras:**
+1. Compras → Facturas de Compra → cualquier fila → "..." → **Mapa de relaciones**.
+2. ✅ Esperado: mismo diseño que en Ventas, con badge "Compras" junto al título, cadena
+   Recepción(es) → Factura → Pago(s).
+3. Clic en una Recepción o una Devolución de proveedor (si hay alguna con documentos derivados).
+   ✅ Esperado: mismo panel de preview, con los ítems de esa recepción/devolución.
+
+**Si algo no sale así:** sacá captura (con el nombre/número del documento que estabas mirando) y
+contame — no hace falta que intentes arreglarlo.
+
+**Pendiente, no para esta prueba:** Fase 3 (agregar el botón "Mapa de relaciones" también en
+Cotizaciones, Pedidos, Recepciones y modales de NC/ND — hoy solo está en el documento final de
+cada circuito) queda para más adelante.
+
+---
+
 ## Qué contarme al terminar
 
 Para el punto 1 (login): ✅ se ve bien / ⚠️ algo no coincide (con captura).
 Para el punto 2 (alcance del rebrand): tu decisión sobre qué tan lejos llevarlo.
 Para el punto 3: cualquier cosa rara que encuentres, con captura si aplica.
+Para el punto 5 (Mapa de Relaciones): ✅/⚠️ por cada paso del circuito, con captura si algo no
+coincide.
