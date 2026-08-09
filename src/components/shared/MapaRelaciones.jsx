@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import {
   Loader2, ChevronRight, Network, ExternalLink, Maximize2, Minimize2,
   FileText, ClipboardList, Truck, Receipt, RotateCcw, PlusCircle, Undo2,
-  Wallet, ShoppingCart, PackageCheck, Layers,
+  Wallet, ShoppingCart, PackageCheck, Layers, X,
 } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -163,6 +163,86 @@ function ResumenCircuito({ pasos, total, derivados }) {
   );
 }
 
+// Panel de preview inline — Fase 2 del rediseño (PLAN_MAPA_RELACIONES.md). La
+// queja más repetida de los usuarios de SAP B1 con su Relationship Map es que
+// solo da una vista de alto nivel: para ver qué hay adentro de cada documento
+// hay que abrirlo aparte, perdiendo el contexto del circuito completo. Acá el
+// clic en un nodo abre esto DENTRO del mismo modal — el header ya lo tenemos
+// (viene del propio nodo, sin fetch extra), solo los ítems se piden aparte.
+function PreviewPanel({ nodo, items, loading, onClose, onVerCompleto }) {
+  const config = TIPO_CONFIG[nodo.tipo] ?? TIPO_CONFIG.venta;
+  const Icono  = config.icon;
+  const eColor = estadoColor(nodo.estado);
+
+  return (
+    <div className="w-[280px] flex-shrink-0 border-l border-kx-border pl-4 py-2 overflow-y-auto">
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${config.bg}`}>
+            <Icono className={`w-4 h-4 ${config.accent}`} />
+          </span>
+          <div className="min-w-0">
+            <div className={`text-2xs font-bold uppercase tracking-wider ${config.accent}`}>{config.label}</div>
+            <div className="text-sm font-bold text-kx-text truncate" title={nodo.numero || ''}>{nodo.numero || '—'}</div>
+          </div>
+        </div>
+        <button onClick={onClose} className="text-kx-text-3 hover:text-kx-text flex-shrink-0 p-0.5" title="Cerrar preview">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5 mb-3">
+        {nodo.fecha && <span className="text-2xs text-kx-text-2">{formatDateAR(nodo.fecha)}</span>}
+        {nodo.estado && (
+          <span className={`text-2xs px-1.5 py-0.5 rounded-full capitalize ${eColor ? ESTADO_BADGE[eColor] : 'bg-kx-surface-2 text-kx-text-3'}`}>
+            {nodo.estado}
+          </span>
+        )}
+      </div>
+
+      {(nodo.total != null || nodo.monto != null) && (
+        <div className="text-lg font-bold text-kx-text tabular-nums mb-3">
+          ${fmt(nodo.total ?? nodo.monto)}
+        </div>
+      )}
+
+      <div className="border-t border-kx-border pt-3">
+        <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider mb-2">Ítems</p>
+        {loading ? (
+          <div className="flex items-center gap-2 text-xs text-kx-text-3 py-2">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando...
+          </div>
+        ) : items && items.length > 0 ? (
+          <div className="space-y-2">
+            {items.map((it, i) => (
+              <div key={i} className="flex items-start justify-between gap-2 text-xs">
+                <span className="text-kx-text-2">
+                  <span className="text-kx-text font-medium tabular-nums">{it.cantidad}×</span> {it.nombre}
+                </span>
+                {it.subtotal != null && (
+                  <span className="text-kx-text tabular-nums flex-shrink-0">${fmt(it.subtotal)}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-kx-text-3">Sin ítems para mostrar.</p>
+        )}
+      </div>
+
+      {onVerCompleto && (
+        <Button
+          variant="outline" size="sm"
+          className="w-full mt-4 text-xs border-kx-border text-kx-text-2"
+          onClick={onVerCompleto}
+        >
+          Ver documento completo <ExternalLink className="w-3 h-3 ml-1.5" />
+        </Button>
+      )}
+    </div>
+  );
+}
+
 // ── Componente principal ─────────────────────────────────────────────────────
 
 function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigate }) {
@@ -170,6 +250,9 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
   const [loading, setLoading] = useState(false);
   const [mapa, setMapa]       = useState(null);
   const [fullscreen, setFullscreen] = useState(false);
+  const [previewNodo, setPreviewNodo]   = useState(null); // { tipo, id, numero, fecha, total|monto, estado }
+  const [previewItems, setPreviewItems] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const isCompra = !!compraId && !comprobanteId;
 
   useEffect(() => {
@@ -179,7 +262,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
   }, [open, comprobanteId, compraId, user?.empresa_id]);
 
   useEffect(() => {
-    if (!open) { setMapa(null); setFullscreen(false); }
+    if (!open) { setMapa(null); setFullscreen(false); setPreviewNodo(null); setPreviewItems(null); }
   }, [open]);
 
   // ── Fetch lado Ventas ────────────────────────────────────────────────────────
@@ -368,6 +451,65 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
     onOpenChange(false);
   };
 
+  // El preview usa el tipo "visual" del nodo (distingue nota_credito de venta,
+  // devolucion_prov de devolucion, para el ícono/label correcto) pero
+  // `onNavigate` espera el tipo de RUTA — mismo mapeo que ya hacían los
+  // `navigate(...)` originales antes de este cambio.
+  const navTipoFor = (tipo) => {
+    if (tipo === 'venta' || tipo === 'nota_credito') return 'comprobante';
+    if (tipo === 'devolucion_prov') return 'devolucion';
+    return tipo; // pedido, entrega, recepcion, devolucion
+  };
+
+  // ── Preview inline ───────────────────────────────────────────────────────────
+  // El header del preview no pide nada nuevo — ya viaja en el `nodo` que arma
+  // cada tarjeta del mapa. Solo los ítems se buscan aparte, por tipo de
+  // documento (cada uno vive en su propia tabla de detalle).
+  const openPreview = (nodo) => {
+    setPreviewNodo(nodo);
+    fetchPreviewItems(nodo.tipo, nodo.id);
+  };
+
+  const fetchPreviewItems = async (tipo, id) => {
+    setPreviewLoading(true);
+    setPreviewItems(null);
+    try {
+      let rows = [];
+      if (tipo === 'comprobante') {
+        const { data } = await supabase.from('comprobante_items')
+          .select('cantidad, precio_unitario, subtotal, productos(nombre)')
+          .eq('comprobante_id', id).eq('empresa_id', user.empresa_id);
+        rows = (data ?? []).map(i => ({ nombre: i.productos?.nombre || '—', cantidad: i.cantidad, subtotal: i.subtotal }));
+      } else if (tipo === 'pedido') {
+        const { data } = await supabase.from('pedido_items')
+          .select('descripcion, cantidad, subtotal')
+          .eq('pedido_id', id).eq('empresa_id', user.empresa_id);
+        rows = (data ?? []).map(i => ({ nombre: i.descripcion, cantidad: i.cantidad, subtotal: i.subtotal }));
+      } else if (tipo === 'entrega') {
+        const { data } = await supabase.from('entrega_items')
+          .select('cantidad, productos(nombre)')
+          .eq('entrega_id', id).eq('empresa_id', user.empresa_id);
+        rows = (data ?? []).map(i => ({ nombre: i.productos?.nombre || '—', cantidad: i.cantidad, subtotal: null }));
+      } else if (tipo === 'recepcion') {
+        const { data } = await supabase.from('recepcion_items')
+          .select('cantidad, productos(nombre)')
+          .eq('recepcion_id', id).eq('empresa_id', user.empresa_id);
+        rows = (data ?? []).map(i => ({ nombre: i.productos?.nombre || '—', cantidad: i.cantidad, subtotal: null }));
+      } else if (tipo === 'devolucion' || tipo === 'devolucion_prov') {
+        const { data } = await supabase.from('devolucion_items')
+          .select('cantidad, subtotal, productos(nombre)')
+          .eq('devolucion_id', id).eq('empresa_id', user.empresa_id);
+        rows = (data ?? []).map(i => ({ nombre: i.productos?.nombre || '—', cantidad: i.cantidad, subtotal: i.subtotal }));
+      }
+      setPreviewItems(rows);
+    } catch (err) {
+      console.error('[MapaRelaciones/preview]', err);
+      setPreviewItems([]);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   // ── Nodos para ventas ────────────────────────────────────────────────────────
   const compNodo = mapa?.modo === 'venta' ? {
     id:     mapa.comp.id,
@@ -457,7 +599,8 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
           </DialogDescription>
         </DialogHeader>
 
-        <div className={`overflow-x-auto py-2 ${fullscreen ? 'flex-1 overflow-y-auto' : 'min-h-[180px]'}`}>
+        <div className={`flex gap-0 ${fullscreen ? 'flex-1 overflow-hidden' : 'min-h-[180px]'}`}>
+        <div className={`flex-1 min-w-0 overflow-x-auto py-2 ${fullscreen ? 'overflow-y-auto' : ''}`}>
           {loading && (
             <div className="flex items-center justify-center h-36">
               <Loader2 className="w-6 h-6 animate-spin text-kx-text-3" />
@@ -490,46 +633,46 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
                   Cadena de documentos
                 </p>
                 <div className="flex items-start gap-0 overflow-x-auto pb-1">
-                  {mapa.origen && (
-                    <>
-                      <NodoMapa
-                        nodo={{
-                          id:     mapa.origen.id,
-                          tipo:   mapa.origen.tipo === 'nota_credito' ? 'nota_credito' : 'venta',
-                          numero: mapa.origen.numero_afip ?? mapa.origen.numero_venta,
-                          fecha:  mapa.origen.fecha,
-                          total:  mapa.origen.total,
-                        }}
-                        onClick={() => navigate('comprobante', mapa.origen.id)}
-                      />
-                      <Conector />
-                    </>
-                  )}
-                  {mapa.pedido && (
-                    <>
-                      <NodoMapa
-                        nodo={{
-                          id:     mapa.pedido.id,
-                          tipo:   'pedido',
-                          numero: mapa.pedido.numero,
-                          fecha:  mapa.pedido.fecha,
-                          total:  mapa.pedido.total,
-                          estado: mapa.pedido.estado,
-                        }}
-                        onClick={() => navigate('pedido', mapa.pedido.id)}
-                      />
-                      <Conector />
-                    </>
-                  )}
-                  {mapa.entregas.map((e) => (
-                    <React.Fragment key={e.id}>
-                      <NodoMapa
-                        nodo={{ id: e.id, tipo: 'entrega', numero: e.numero_entrega, fecha: e.fecha, estado: e.estado }}
-                        onClick={() => navigate('entrega', e.id)}
-                      />
-                      <Conector />
-                    </React.Fragment>
-                  ))}
+                  {mapa.origen && (() => {
+                    const n = {
+                      id:     mapa.origen.id,
+                      tipo:   mapa.origen.tipo === 'nota_credito' ? 'nota_credito' : 'venta',
+                      numero: mapa.origen.numero_afip ?? mapa.origen.numero_venta,
+                      fecha:  mapa.origen.fecha,
+                      total:  mapa.origen.total,
+                    };
+                    return (
+                      <React.Fragment key="origen">
+                        <NodoMapa nodo={n} onClick={() => openPreview(n)} />
+                        <Conector />
+                      </React.Fragment>
+                    );
+                  })()}
+                  {mapa.pedido && (() => {
+                    const n = {
+                      id:     mapa.pedido.id,
+                      tipo:   'pedido',
+                      numero: mapa.pedido.numero,
+                      fecha:  mapa.pedido.fecha,
+                      total:  mapa.pedido.total,
+                      estado: mapa.pedido.estado,
+                    };
+                    return (
+                      <React.Fragment key="pedido">
+                        <NodoMapa nodo={n} onClick={() => openPreview(n)} />
+                        <Conector />
+                      </React.Fragment>
+                    );
+                  })()}
+                  {mapa.entregas.map((e) => {
+                    const n = { id: e.id, tipo: 'entrega', numero: e.numero_entrega, fecha: e.fecha, estado: e.estado };
+                    return (
+                      <React.Fragment key={e.id}>
+                        <NodoMapa nodo={n} onClick={() => openPreview(n)} />
+                        <Conector />
+                      </React.Fragment>
+                    );
+                  })}
                   <NodoMapa nodo={compNodo} activo />
                 </div>
               </div>
@@ -540,13 +683,10 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
                     Documentos derivados
                   </p>
                   <div className="flex flex-wrap gap-3">
-                    {mapa.ncs.map(nc => (
-                      <NodoMapa
-                        key={nc.id}
-                        nodo={{ id: nc.id, tipo: 'nota_credito', numero: nc.numero_afip ?? nc.numero_venta, fecha: nc.fecha, total: nc.total, estado: nc.estado_pago }}
-                        onClick={() => navigate('comprobante', nc.id)}
-                      />
-                    ))}
+                    {mapa.ncs.map(nc => {
+                      const n = { id: nc.id, tipo: 'nota_credito', numero: nc.numero_afip ?? nc.numero_venta, fecha: nc.fecha, total: nc.total, estado: nc.estado_pago };
+                      return <NodoMapa key={nc.id} nodo={n} onClick={() => openPreview(n)} />;
+                    })}
                     {mapa.nds.map(nd => (
                       <NodoMapa
                         key={nd.id}
@@ -559,13 +699,10 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
                         nodo={{ id: c.id, tipo: 'cobro_cc', numero: c.descripcion || 'Cobro CC', fecha: c.fecha, monto: c.monto }}
                       />
                     ))}
-                    {mapa.devoluciones.map(d => (
-                      <NodoMapa
-                        key={d.id}
-                        nodo={{ id: d.id, tipo: 'devolucion', numero: d.numero_devolucion, fecha: d.fecha, estado: d.compensacion }}
-                        onClick={() => navigate('devolucion', d.id)}
-                      />
-                    ))}
+                    {mapa.devoluciones.map(d => {
+                      const n = { id: d.id, tipo: 'devolucion', numero: d.numero_devolucion, fecha: d.fecha, estado: d.compensacion };
+                      return <NodoMapa key={d.id} nodo={n} onClick={() => openPreview(n)} />;
+                    })}
                   </div>
                 </div>
               )}
@@ -602,15 +739,15 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
                 </p>
                 <div className="flex items-start gap-0 overflow-x-auto pb-1">
                   {/* Recepciones previas */}
-                  {mapa.recepciones.map((r) => (
-                    <React.Fragment key={r.id}>
-                      <NodoMapa
-                        nodo={{ id: r.id, tipo: 'recepcion', numero: r.numero_recepcion, fecha: r.fecha, estado: r.estado }}
-                        onClick={() => navigate('recepcion', r.id)}
-                      />
-                      <Conector />
-                    </React.Fragment>
-                  ))}
+                  {mapa.recepciones.map((r) => {
+                    const n = { id: r.id, tipo: 'recepcion', numero: r.numero_recepcion, fecha: r.fecha, estado: r.estado };
+                    return (
+                      <React.Fragment key={r.id}>
+                        <NodoMapa nodo={n} onClick={() => openPreview(n)} />
+                        <Conector />
+                      </React.Fragment>
+                    );
+                  })}
                   {/* Factura actual */}
                   <NodoMapa nodo={compraNodo} activo />
                   {/* Pagos CC */}
@@ -632,13 +769,10 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
                   </p>
                   <div className="flex flex-wrap gap-3">
                     {/* Devoluciones físicas */}
-                    {mapa.devoluciones.map(d => (
-                      <NodoMapa
-                        key={d.id}
-                        nodo={{ id: d.id, tipo: 'devolucion_prov', numero: d.numero_devolucion, fecha: d.fecha, estado: d.compensacion }}
-                        onClick={() => navigate('devolucion', d.id)}
-                      />
-                    ))}
+                    {mapa.devoluciones.map(d => {
+                      const n = { id: d.id, tipo: 'devolucion_prov', numero: d.numero_devolucion, fecha: d.fecha, estado: d.compensacion };
+                      return <NodoMapa key={d.id} nodo={n} onClick={() => openPreview(n)} />;
+                    })}
                     {/* NC financieras recibidas (mig.277 — notas_credito_proveedor) */}
                     {mapa.ncsFinancieras.map(nc => (
                       <NodoMapa
@@ -667,6 +801,17 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
               </div>
             </div>
           )}
+        </div>
+
+        {previewNodo && (
+          <PreviewPanel
+            nodo={previewNodo}
+            items={previewItems}
+            loading={previewLoading}
+            onClose={() => { setPreviewNodo(null); setPreviewItems(null); }}
+            onVerCompleto={() => navigate(navTipoFor(previewNodo.tipo), previewNodo.id)}
+          />
+        )}
         </div>
 
         <div className={`flex justify-end pt-3 border-t border-kx-border ${fullscreen ? 'flex-shrink-0' : ''}`}>
