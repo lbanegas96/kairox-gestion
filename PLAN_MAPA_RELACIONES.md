@@ -20,9 +20,27 @@ mostró los 4 ítems reales de la entrega sin cerrar el mapa, y el cierre del pa
 layout a ancho completo correctamente. Circuito de pruebas completo (todos los casos, ambos
 lados Ventas/Compras) sumado a `PLAN_PRUEBAS_SABADO_2026-08-08.md`, sección 5.
 
-**Queda la Fase 3** (extender el botón "Mapa de relaciones" a Cotizaciones, Pedidos, Recepciones
-y modales de NC/ND — hoy solo está en el documento final de cada circuito) para después de las
-pruebas.
+**✅ Fase 3 (puntos de acceso desde toda la cadena) — hecha y deployada (09/08).** El botón "Mapa
+de relaciones" ya no vive solo en el documento final de cada circuito — ahora está disponible
+desde cualquier eslabón: Cotizaciones (ícono en la fila), Pedidos (botón junto a "Flujo del
+documento"), Entregas (ídem), Recepciones (ícono en la fila), y Devoluciones — tanto de cliente
+como de proveedor, un solo componente compartido cubre los dos circuitos.
+
+`MapaRelaciones.jsx` ganó 5 props de entrada nuevas (`cotizacionId`, `pedidoId`, `entregaId`,
+`recepcionId`, `devolucionId`) que se resuelven al comprobante/compra ancla vía los FK directos
+que ya tenía el schema (`pedidos.comprobante_id`, `entregas.comprobante_id`, etc.) — cero cambios
+en la lógica de datos ya probada en las Fases 1/2. El nodo "ACTUAL" ahora es el que efectivamente
+se abrió (no siempre la factura) — nuevo estado `activoId` reemplaza el `activo` hardcodeado de
+antes. Caso nuevo: si el documento de origen todavía no tiene comprobante/compra vinculado (ej.
+un pedido en borrador), se muestra un estado explícito "todavía sin facturar" en vez de fallar.
+
+**Probado en vivo contra datos reales de producción** (solo lectura, sin mutar nada): pedido
+facturado → cadena completa con el Pedido marcado ACTUAL (no la Factura); pedido en borrador →
+"sin facturar todavía"; recepción → resolvió correctamente la compra vinculada; cotización
+aprobada sin convertir → "sin facturar todavía". Cero errores nuevos en consola en ninguno de los
+4 casos. Lint/build limpios, 153/153 tests.
+
+**Con esto, las 3 fases del rediseño del Mapa de Relaciones quedan completas.**
 
 ---
 

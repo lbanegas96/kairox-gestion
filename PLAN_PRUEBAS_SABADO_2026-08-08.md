@@ -107,9 +107,9 @@ cambió mucho últimamente y no tiene un plan de prueba dedicado ya corrido:
 - **Billing de Supabase (Nalux) vence el 17/08/2026** — revisar antes de esa fecha o se restringe
   producción.
 
-## 5. Mapa de Relaciones — circuito completo de pruebas (Fase 1 + Fase 2, 08/08)
+## 5. Mapa de Relaciones — circuito completo de pruebas (Fases 1+2+3, 08/08-09/08)
 
-Rediseño en dos partes, las dos ya en producción (`PLAN_MAPA_RELACIONES.md` tiene el detalle
+Rediseño en tres partes, las tres ya en producción (`PLAN_MAPA_RELACIONES.md` tiene el detalle
 completo del pedido original, el barrido de lo que ya había, y el estudio de mercado sobre el
 Relationship Map de SAP B1 que lo inspiró):
 
@@ -119,9 +119,15 @@ Relationship Map de SAP B1 que lo inspiró):
 - **Fase 2 (preview inline):** clic en cualquier nodo navegable abre un panel al costado, DENTRO
   del mismo modal, con los ítems reales de ese documento — sin cerrar el mapa. Botón "Ver
   documento completo" para el que igual quiere navegar.
+- **Fase 3 (puntos de acceso):** el botón "Mapa de relaciones" ya no vive solo en la Factura —
+  ahora está también en Cotizaciones, Pedidos, Entregas, Recepciones y Devoluciones (cliente y
+  proveedor). El nodo "ACTUAL" marca el documento desde el que realmente abriste el mapa, no
+  siempre la factura final.
 
-Las dos fases ya se probaron en vivo contra una venta real (20260806-011) durante el desarrollo,
-pero falta el circuito completo de punta a punta con varios casos — este bloque es exactamente eso.
+Las tres fases ya se probaron en vivo contra datos reales durante el desarrollo (venta
+20260806-011 para Fases 1/2; un pedido facturado, un pedido en borrador, una recepción y una
+cotización sin convertir para la Fase 3), pero falta el circuito completo de punta a punta con
+varios casos — este bloque es exactamente eso.
 
 **Cómo probar — lado Ventas:**
 1. Ventas → Facturas → elegí cualquier fila → botón "..." → **Mapa de relaciones**.
@@ -151,12 +157,22 @@ pero falta el circuito completo de punta a punta con varios casos — este bloqu
 3. Clic en una Recepción o una Devolución de proveedor (si hay alguna con documentos derivados).
    ✅ Esperado: mismo panel de preview, con los ítems de esa recepción/devolución.
 
+**Cómo probar — puntos de acceso nuevos (Fase 3):**
+1. **Cotizaciones**: fila cualquiera → ícono de red (junto al ojo "Ver detalle"). Probá una
+   cotización ya convertida en venta y una que **no** — en la que no, ✅ esperado: "Cotización
+   todavía sin facturar — cuando se convierta en factura vas a poder ver la cadena completa acá."
+2. **Pedidos**: abrí el detalle de un pedido (clic en la fila) → botón "Mapa de relaciones" junto
+   a "Flujo del documento". Probá un pedido **Facturado** (✅ esperado: cadena completa, con el
+   Pedido marcado ACTUAL — no la Factura) y un pedido en **Borrador** (✅ esperado: mensaje "sin
+   facturar todavía", sin cadena).
+3. **Entregas**: abrí el detalle de una entrega → mismo botón junto a "Flujo del documento".
+4. **Recepciones** (Compras): fila cualquiera → ícono de red en la columna Acciones.
+5. **Devoluciones** (Ventas y Compras): abrí el detalle de una devolución → mismo botón.
+6. En todos los casos: el nodo desde el que abriste el mapa debe aparecer marcado "ACTUAL", no
+   necesariamente la factura.
+
 **Si algo no sale así:** sacá captura (con el nombre/número del documento que estabas mirando) y
 contame — no hace falta que intentes arreglarlo.
-
-**Pendiente, no para esta prueba:** Fase 3 (agregar el botón "Mapa de relaciones" también en
-Cotizaciones, Pedidos, Recepciones y modales de NC/ND — hoy solo está en el documento final de
-cada circuito) queda para más adelante.
 
 ---
 

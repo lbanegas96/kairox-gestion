@@ -1,9 +1,39 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-08 (Claude — rediseño del Mapa de Relaciones estilo SAP B1,
-Fases 1 y 2 hechas y deployadas — `PLAN_MAPA_RELACIONES.md`. Circuito de pruebas completo sumado
-a `PLAN_PRUEBAS_SABADO_2026-08-08.md` sección 5, para probar esta noche con Nadia. Antes de eso:
-auditoría contable sistemática de las 10 áreas (`INFORME_AUDITORIA_CONTABLE_2026-08-07.md`), 1
-hallazgo crítico + 2 importantes, los 3 resueltos mismo día — mig.314.)
+**Última actualización:** 2026-08-09 (Claude — Fase 3 del rediseño del Mapa de Relaciones: puntos
+de acceso desde Cotizaciones, Pedidos, Entregas, Recepciones y Devoluciones, no solo desde la
+Factura. Con esto **las 3 fases del rediseño quedan completas y deployadas** —
+`PLAN_MAPA_RELACIONES.md`. Circuito de pruebas actualizado en `PLAN_PRUEBAS_SABADO_2026-08-08.md`
+sección 5. Antes de eso, mismo hilo (08/08): Fases 1 y 2 del rediseño. Y antes de eso (07/08):
+auditoría contable sistemática de las 10 áreas — mig.314.)
+
+## ✅ Mapa de Relaciones — rediseño estilo SAP B1, Fase 3 (puntos de acceso) — 09/08
+
+Completa el rediseño de 3 fases (Fases 1/2 el 08/08, detalle más abajo). Hasta ahora el mapa solo
+se podía abrir desde el documento final de cada circuito (Factura de venta / Factura de compra),
+igual que en SAP B1 — ahora se puede abrir desde **cualquier eslabón**: Cotizaciones (ícono en la
+fila), Pedidos (botón junto a "Flujo del documento" en el detalle), Entregas (ídem), Recepciones
+(ícono en la fila, lado Compras), y Devoluciones — cliente y proveedor comparten el mismo
+componente de detalle, así que un solo cambio cubrió los dos circuitos.
+
+**Cómo se resuelve sin duplicar lógica:** `MapaRelaciones.jsx` ganó 5 props de entrada nuevas
+(`cotizacionId`, `pedidoId`, `entregaId`, `recepcionId`, `devolucionId`). Cada una se resuelve al
+comprobante/compra ancla vía los FK directos que ya tenía el schema (`pedidos.comprobante_id`,
+`entregas.comprobante_id`, `recepciones.compra_id`, `devoluciones.comprobante_id`/`.compra_id`
+según `tipo`) — cero cambios en `fetchMapaVenta`/`fetchMapaCompra`, que ya estaban probados desde
+la Fase 1. El nodo "ACTUAL" ahora es el que efectivamente se abrió (nuevo estado `activoId` +
+helper `isActivo(id)`), no siempre la factura como antes.
+
+**Caso nuevo manejado con gracia:** si el documento de origen todavía no tiene comprobante/compra
+vinculado (ej. un Pedido en borrador, una Cotización sin convertir), se muestra un mensaje
+explícito ("todavía sin facturar") en vez de fallar o mostrar un mapa vacío confuso.
+
+**Probado en vivo contra datos reales de producción** (solo lectura, sin mutar nada — sesión con
+usuario ya logueado en el navegador de pruebas): pedido facturado (PED-20260707-001) → cadena
+completa de 3 pasos con el Pedido marcado ACTUAL y la Factura como nodo clickeable aparte; pedido
+en borrador (PED-20260725-003) → "Pedido todavía sin facturar..."; recepción (REC-2026-0012) →
+resolvió bien la compra vinculada, badge "Compras" correcto; cotización aprobada sin convertir
+(COT-00021) → "Cotización todavía sin facturar...". Cero errores nuevos en consola en los 4 casos.
+Lint/build limpios, 153/153 tests.
 
 ## ✅ Mapa de Relaciones — rediseño estilo SAP B1, Fases 1 y 2 — 08/08
 
