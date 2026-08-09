@@ -3,7 +3,11 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, ArrowRight, ArrowDown, Network, ExternalLink } from 'lucide-react';
+import {
+  Loader2, ChevronRight, Network, ExternalLink, Maximize2, Minimize2,
+  FileText, ClipboardList, Truck, Receipt, RotateCcw, PlusCircle, Undo2,
+  Wallet, ShoppingCart, PackageCheck, Layers,
+} from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { formatDateAR } from '@/lib/dateUtils';
@@ -11,29 +15,52 @@ import { formatDateAR } from '@/lib/dateUtils';
 const fmt = (n) =>
   Number(n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// mig.315 — Fase 1 del rediseño (PLAN_MAPA_RELACIONES.md): un ícono por tipo de
+// documento, mismo espíritu que los íconos circulares por etapa del Relationship
+// Map de SAP B1 — de un vistazo se distingue el tipo de paso, no solo el color.
 const TIPO_CONFIG = {
   // ── Ventas ─────────────────────────────────────────────────────────────────
-  cotizacion:      { label: 'Cotización',      color: 'border-t-kx-text-3', accent: 'text-kx-text-3'   },
-  pedido:          { label: 'Pedido',          color: 'border-t-kx-blue',   accent: 'text-kx-blue'     },
-  entrega:         { label: 'Entrega',         color: 'border-t-kx-violet', accent: 'text-kx-violet'   },
-  venta:           { label: 'Factura',         color: 'border-t-kx-green',  accent: 'text-kx-green'    },
-  nota_credito:    { label: 'Nota de Crédito', color: 'border-t-kx-amber',  accent: 'text-kx-amber'    },
-  nota_debito:     { label: 'Nota de Débito',  color: 'border-t-kx-red',    accent: 'text-kx-red'      },
-  devolucion:      { label: 'Devolución',      color: 'border-t-kx-amber',  accent: 'text-kx-amber'    },
-  cobro_cc:        { label: 'Cobro CC',        color: 'border-t-kx-green',  accent: 'text-kx-green'    },
+  cotizacion:      { label: 'Cotización',      color: 'border-t-kx-text-3', accent: 'text-kx-text-3', bg: 'bg-kx-text-3/10', icon: FileText },
+  pedido:          { label: 'Pedido',          color: 'border-t-kx-blue',   accent: 'text-kx-blue',   bg: 'bg-kx-blue/10',   icon: ClipboardList },
+  entrega:         { label: 'Entrega',         color: 'border-t-kx-violet', accent: 'text-kx-violet', bg: 'bg-kx-violet/10', icon: Truck },
+  venta:           { label: 'Factura',         color: 'border-t-kx-green',  accent: 'text-kx-green',  bg: 'bg-kx-green/10',  icon: Receipt },
+  nota_credito:    { label: 'Nota de Crédito', color: 'border-t-kx-amber',  accent: 'text-kx-amber',  bg: 'bg-kx-amber/10',  icon: RotateCcw },
+  nota_debito:     { label: 'Nota de Débito',  color: 'border-t-kx-red',    accent: 'text-kx-red',    bg: 'bg-kx-red/10',    icon: PlusCircle },
+  devolucion:      { label: 'Devolución',      color: 'border-t-kx-amber',  accent: 'text-kx-amber',  bg: 'bg-kx-amber/10',  icon: Undo2 },
+  cobro_cc:        { label: 'Cobro CC',        color: 'border-t-kx-green',  accent: 'text-kx-green',  bg: 'bg-kx-green/10',  icon: Wallet },
   // ── Compras ────────────────────────────────────────────────────────────────
-  orden_compra:    { label: 'Orden de Compra', color: 'border-t-kx-blue',   accent: 'text-kx-blue'     },
-  recepcion:       { label: 'Recepción',       color: 'border-t-kx-violet', accent: 'text-kx-violet'   },
-  factura_compra:  { label: 'Factura Compra',  color: 'border-t-kx-blue',   accent: 'text-kx-blue'     },
-  pago_proveedor:  { label: 'Pago CC',         color: 'border-t-kx-green',  accent: 'text-kx-green'    },
-  nc_proveedor:    { label: 'NC Proveedor',    color: 'border-t-kx-amber',  accent: 'text-kx-amber'    },
-  nd_proveedor:    { label: 'ND Recibida',     color: 'border-t-kx-red',    accent: 'text-kx-red'      },
-  devolucion_prov: { label: 'Dev. Proveedor',  color: 'border-t-kx-amber',  accent: 'text-kx-amber'    },
+  orden_compra:    { label: 'Orden de Compra', color: 'border-t-kx-blue',   accent: 'text-kx-blue',   bg: 'bg-kx-blue/10',   icon: ShoppingCart },
+  recepcion:       { label: 'Recepción',       color: 'border-t-kx-violet', accent: 'text-kx-violet', bg: 'bg-kx-violet/10', icon: PackageCheck },
+  factura_compra:  { label: 'Factura Compra',  color: 'border-t-kx-blue',   accent: 'text-kx-blue',   bg: 'bg-kx-blue/10',   icon: Receipt },
+  pago_proveedor:  { label: 'Pago CC',         color: 'border-t-kx-green',  accent: 'text-kx-green',  bg: 'bg-kx-green/10',  icon: Wallet },
+  nc_proveedor:    { label: 'NC Proveedor',    color: 'border-t-kx-amber',  accent: 'text-kx-amber',  bg: 'bg-kx-amber/10',  icon: RotateCcw },
+  nd_proveedor:    { label: 'ND Recibida',     color: 'border-t-kx-red',    accent: 'text-kx-red',    bg: 'bg-kx-red/10',    icon: PlusCircle },
+  devolucion_prov: { label: 'Dev. Proveedor',  color: 'border-t-kx-amber',  accent: 'text-kx-amber',  bg: 'bg-kx-amber/10',  icon: Undo2 },
+};
+
+// Heurística de color de estado — unifica el vocabulario heterogéneo que trae
+// cada tabla (pedido.estado, entrega.estado, nc.estado_pago, devolucion.compensacion...)
+// en los mismos 3 colores que ya usa el resto de KAIROX, sin romper con un valor
+// inesperado (cae a neutral en vez de tirar error).
+function estadoColor(estado) {
+  if (!estado) return null;
+  const e = String(estado).toLowerCase();
+  if (/(rechazad|cancelad|anulad|error)/.test(e)) return 'red';
+  if (/(pendient|abiert|proceso)/.test(e)) return 'amber';
+  if (/(cerrad|confirmad|complet|entregad|cobrad|pagad|recibid)/.test(e)) return 'green';
+  return null;
+}
+const ESTADO_BADGE = {
+  green: 'bg-kx-green/10 text-kx-green',
+  amber: 'bg-kx-amber/10 text-kx-amber',
+  red:   'bg-kx-red/10 text-kx-red',
 };
 
 function NodoMapa({ nodo, activo = false, onClick }) {
   const config    = TIPO_CONFIG[nodo.tipo] ?? TIPO_CONFIG.venta;
+  const Icono     = config.icon;
   const clickable = !!onClick && !activo;
+  const eColor    = estadoColor(nodo.estado);
 
   return (
     <div
@@ -41,7 +68,7 @@ function NodoMapa({ nodo, activo = false, onClick }) {
       role={clickable ? 'button' : undefined}
       className={[
         'bg-kx-surface border border-kx-border rounded-xl p-3',
-        'min-w-[130px] max-w-[160px] flex-shrink-0 select-none',
+        'w-[150px] flex-shrink-0 select-none',
         'border-t-2',
         activo
           ? 'border-t-[rgb(var(--kx-violet))] ring-2 ring-[rgb(var(--kx-violet)/0.18)]'
@@ -51,18 +78,26 @@ function NodoMapa({ nodo, activo = false, onClick }) {
           : 'cursor-default',
       ].join(' ')}
     >
-      <div className={`text-2xs font-bold uppercase tracking-wider mb-1 flex items-center gap-1 ${
-        activo ? 'text-[rgb(var(--kx-violet))]' : config.accent
-      }`}>
-        {config.label}
+      <div className="flex items-center justify-between mb-2">
+        <span className={`w-7 h-7 rounded-full flex items-center justify-center ${
+          activo ? 'bg-[rgb(var(--kx-violet)/0.14)]' : config.bg
+        }`}>
+          <Icono className={`w-3.5 h-3.5 ${activo ? 'text-[rgb(var(--kx-violet))]' : config.accent}`} />
+        </span>
         {activo && (
-          <span className="text-[8px] bg-[rgb(var(--kx-violet)/0.12)] px-1 py-0.5 rounded font-semibold">
+          <span className="text-[8px] bg-[rgb(var(--kx-violet)/0.12)] text-[rgb(var(--kx-violet))] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wide">
             actual
           </span>
         )}
       </div>
 
-      <div className="text-xs font-bold text-kx-text truncate">
+      <div className={`text-2xs font-bold uppercase tracking-wider mb-0.5 ${
+        activo ? 'text-[rgb(var(--kx-violet))]' : config.accent
+      }`}>
+        {config.label}
+      </div>
+
+      <div className="text-xs font-bold text-kx-text truncate" title={nodo.numero || ''}>
         {nodo.numero || '—'}
       </div>
 
@@ -71,13 +106,17 @@ function NodoMapa({ nodo, activo = false, onClick }) {
       )}
 
       {(nodo.total != null || nodo.monto != null) && (
-        <div className="text-2xs font-semibold text-kx-text mt-1 tabular-nums">
+        <div className="text-xs font-semibold text-kx-text mt-1 tabular-nums">
           ${fmt(nodo.total ?? nodo.monto)}
         </div>
       )}
 
       {nodo.estado && (
-        <div className="text-[9px] text-kx-text-3 mt-0.5 capitalize">{nodo.estado}</div>
+        <div className={`text-[9px] mt-1.5 px-1.5 py-0.5 rounded-full inline-block capitalize ${
+          eColor ? ESTADO_BADGE[eColor] : 'bg-kx-surface-2 text-kx-text-3'
+        }`}>
+          {nodo.estado}
+        </div>
       )}
 
       {clickable && (
@@ -89,10 +128,39 @@ function NodoMapa({ nodo, activo = false, onClick }) {
   );
 }
 
-function Flecha({ vertical = false }) {
-  return vertical
-    ? <ArrowDown  className="w-4 h-4 text-kx-text-3 flex-shrink-0 my-1 mx-auto" />
-    : <ArrowRight className="w-4 h-4 text-kx-text-3 flex-shrink-0 mx-1 self-center" />;
+// Conector estilo "stepper" — línea + punta, en vez del ícono de flecha suelto
+// que se desalineaba al haber varias filas (hallazgo del barrido, PLAN_MAPA_RELACIONES.md).
+function Conector() {
+  return (
+    <div className="flex items-center flex-shrink-0 self-center px-0.5 mt-[34px]">
+      <div className="w-3 md:w-5 h-[2px] rounded-full bg-gradient-to-r from-kx-border to-kx-text-3/50" />
+      <ChevronRight className="w-3.5 h-3.5 text-kx-text-3 -ml-1" />
+    </div>
+  );
+}
+
+// Barra de resumen del circuito — inspirada en la fila de estado de SAP B1
+// (íconos por etapa + distribución de estados), simplificada a lo que ya
+// tenemos: cantidad de pasos de la cadena principal, monto del documento
+// activo, y cuántos documentos derivados cuelgan de él.
+function ResumenCircuito({ pasos, total, derivados }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 pb-3 mb-1 border-b border-kx-border">
+      <span className="flex items-center gap-1.5 text-2xs font-medium text-kx-text-2 bg-kx-surface-2 px-2.5 py-1 rounded-full">
+        <Layers className="w-3 h-3 text-kx-text-3" /> {pasos} {pasos === 1 ? 'paso' : 'pasos'} en la cadena
+      </span>
+      {total != null && (
+        <span className="text-2xs font-medium text-kx-text-2 bg-kx-surface-2 px-2.5 py-1 rounded-full tabular-nums">
+          Total: ${fmt(total)}
+        </span>
+      )}
+      {derivados > 0 && (
+        <span className="text-2xs font-medium text-kx-violet bg-kx-violet/10 px-2.5 py-1 rounded-full">
+          {derivados} documento{derivados !== 1 ? 's' : ''} derivado{derivados !== 1 ? 's' : ''}
+        </span>
+      )}
+    </div>
+  );
 }
 
 // ── Componente principal ─────────────────────────────────────────────────────
@@ -101,6 +169,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
   const { user }  = useAuth();
   const [loading, setLoading] = useState(false);
   const [mapa, setMapa]       = useState(null);
+  const [fullscreen, setFullscreen] = useState(false);
   const isCompra = !!compraId && !comprobanteId;
 
   useEffect(() => {
@@ -110,7 +179,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
   }, [open, comprobanteId, compraId, user?.empresa_id]);
 
   useEffect(() => {
-    if (!open) setMapa(null);
+    if (!open) { setMapa(null); setFullscreen(false); }
   }, [open]);
 
   // ── Fetch lado Ventas ────────────────────────────────────────────────────────
@@ -338,25 +407,57 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
     mapa.pagos.length > 0 || mapa.ncsFinancieras.length > 0
   );
 
+  // ── Resumen del circuito ─────────────────────────────────────────────────────
+  const pasosVenta = mapa?.modo === 'venta'
+    ? 1 + (mapa.origen ? 1 : 0) + (mapa.pedido ? 1 : 0) + mapa.entregas.length
+    : 0;
+  const derivadosVenta = mapa?.modo === 'venta'
+    ? mapa.ncs.length + mapa.nds.length + mapa.cobros.length + mapa.devoluciones.length
+    : 0;
+
+  const pasosCompra = mapa?.modo === 'compra'
+    ? 1 + mapa.recepciones.length + mapa.pagos.length
+    : 0;
+  const derivadosCompra = mapa?.modo === 'compra'
+    ? mapa.devoluciones.length + mapa.nds.length + mapa.ncsFinancieras.length
+    : 0;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl bg-kx-surface border-kx-border text-kx-text">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Network className="w-5 h-5 text-kx-violet" />
-            Mapa de Relaciones
-            {isCompra && (
-              <span className="text-2xs font-normal text-kx-text-3 bg-kx-surface-2 px-2 py-0.5 rounded-full">
-                Compras
-              </span>
+      <DialogContent
+        className={[
+          'bg-kx-surface border-kx-border text-kx-text transition-all duration-200',
+          fullscreen ? 'max-w-[96vw] w-[96vw] h-[92vh] flex flex-col' : 'max-w-5xl',
+        ].join(' ')}
+      >
+        <DialogHeader className={fullscreen ? 'flex-shrink-0' : ''}>
+          <div className="flex items-center justify-between pr-8">
+            <DialogTitle className="flex items-center gap-2">
+              <Network className="w-5 h-5 text-kx-violet" />
+              Mapa de Relaciones
+              {isCompra && (
+                <span className="text-2xs font-normal text-kx-text-3 bg-kx-surface-2 px-2 py-0.5 rounded-full">
+                  Compras
+                </span>
+              )}
+            </DialogTitle>
+            {mapa && (
+              <Button
+                variant="ghost" size="icon"
+                className="h-7 w-7 text-kx-text-3 hover:text-kx-text"
+                onClick={() => setFullscreen(f => !f)}
+                title={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+              >
+                {fullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </Button>
             )}
-          </DialogTitle>
+          </div>
           <DialogDescription className="text-kx-text-2 text-xs">
             Árbol de documentos vinculados
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-[180px] overflow-x-auto py-2">
+        <div className={`overflow-x-auto py-2 ${fullscreen ? 'flex-1 overflow-y-auto' : 'min-h-[180px]'}`}>
           {loading && (
             <div className="flex items-center justify-center h-36">
               <Loader2 className="w-6 h-6 animate-spin text-kx-text-3" />
@@ -381,12 +482,14 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
 
           {/* ── VENTAS: con relaciones ─────────────────────────────────────── */}
           {!loading && mapa?.modo === 'venta' && !sinRelacionesVenta && (
-            <div className="space-y-6">
+            <div className="space-y-5">
+              <ResumenCircuito pasos={pasosVenta} total={mapa.comp.total} derivados={derivadosVenta} />
+
               <div>
                 <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider mb-3">
                   Cadena de documentos
                 </p>
-                <div className="flex items-start gap-1 flex-wrap">
+                <div className="flex items-start gap-0 overflow-x-auto pb-1">
                   {mapa.origen && (
                     <>
                       <NodoMapa
@@ -399,7 +502,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
                         }}
                         onClick={() => navigate('comprobante', mapa.origen.id)}
                       />
-                      <Flecha />
+                      <Conector />
                     </>
                   )}
                   {mapa.pedido && (
@@ -415,16 +518,16 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
                         }}
                         onClick={() => navigate('pedido', mapa.pedido.id)}
                       />
-                      <Flecha />
+                      <Conector />
                     </>
                   )}
-                  {mapa.entregas.map((e, i) => (
+                  {mapa.entregas.map((e) => (
                     <React.Fragment key={e.id}>
                       <NodoMapa
                         nodo={{ id: e.id, tipo: 'entrega', numero: e.numero_entrega, fecha: e.fecha, estado: e.estado }}
                         onClick={() => navigate('entrega', e.id)}
                       />
-                      {(i < mapa.entregas.length - 1 || true) && <Flecha />}
+                      <Conector />
                     </React.Fragment>
                   ))}
                   <NodoMapa nodo={compNodo} activo />
@@ -432,8 +535,8 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
               </div>
 
               {tieneDerivadosVenta && (
-                <div className="pl-5 border-l-2 border-dashed border-kx-border ml-4 space-y-3">
-                  <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider">
+                <div className="rounded-xl bg-kx-surface-2/40 border border-kx-border p-4">
+                  <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider mb-3">
                     Documentos derivados
                   </p>
                   <div className="flex flex-wrap gap-3">
@@ -490,20 +593,22 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
 
           {/* ── COMPRAS: con relaciones ────────────────────────────────────── */}
           {!loading && mapa?.modo === 'compra' && !sinRelacionesCompra && (
-            <div className="space-y-6">
+            <div className="space-y-5">
+              <ResumenCircuito pasos={pasosCompra} total={mapa.compra.total} derivados={derivadosCompra} />
+
               <div>
                 <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider mb-3">
                   Cadena de documentos
                 </p>
-                <div className="flex items-start gap-1 flex-wrap">
+                <div className="flex items-start gap-0 overflow-x-auto pb-1">
                   {/* Recepciones previas */}
-                  {mapa.recepciones.map((r, i) => (
+                  {mapa.recepciones.map((r) => (
                     <React.Fragment key={r.id}>
                       <NodoMapa
                         nodo={{ id: r.id, tipo: 'recepcion', numero: r.numero_recepcion, fecha: r.fecha, estado: r.estado }}
                         onClick={() => navigate('recepcion', r.id)}
                       />
-                      {(i < mapa.recepciones.length - 1 || true) && <Flecha />}
+                      <Conector />
                     </React.Fragment>
                   ))}
                   {/* Factura actual */}
@@ -511,7 +616,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
                   {/* Pagos CC */}
                   {mapa.pagos.map(p => (
                     <React.Fragment key={p.id}>
-                      <Flecha />
+                      <Conector />
                       <NodoMapa
                         nodo={{ id: p.id, tipo: 'pago_proveedor', numero: p.descripcion || 'Pago CC', fecha: p.fecha, monto: p.monto }}
                       />
@@ -521,8 +626,8 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
               </div>
 
               {tieneDerivadosCompra && (
-                <div className="pl-5 border-l-2 border-dashed border-kx-border ml-4 space-y-3">
-                  <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider">
+                <div className="rounded-xl bg-kx-surface-2/40 border border-kx-border p-4">
+                  <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider mb-3">
                     Documentos derivados
                   </p>
                   <div className="flex flex-wrap gap-3">
@@ -564,7 +669,7 @@ function MapaRelaciones({ open, onOpenChange, comprobanteId, compraId, onNavigat
           )}
         </div>
 
-        <div className="flex justify-end pt-3 border-t border-kx-border">
+        <div className={`flex justify-end pt-3 border-t border-kx-border ${fullscreen ? 'flex-shrink-0' : ''}`}>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}
             className="border-kx-border text-kx-text-2 text-xs">
             Cerrar
