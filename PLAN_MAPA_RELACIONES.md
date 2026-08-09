@@ -1,5 +1,17 @@
 # Plan — Mapa de Relaciones estilo SAP B1 (rediseño)
 
+**✅ Fase 1 (rediseño visual) — hecha y deployada (08/08).** Íconos por tipo de documento, badges
+de estado con color unificado, barra de resumen del circuito, cadena principal en scroll
+horizontal (ya no se desordena con cadenas largas), conector tipo stepper, botón de pantalla
+completa, contenedor propio para "documentos derivados". Sin tocar la lógica de datos — solo la
+capa visual. Verificado en vivo contra un caso real (venta 20260806-011). Sin librería nueva
+(se evaluó React Flow pero se decidió no sumar una dependencia nueva justo antes de las pruebas
+de esta noche con Nadia — queda como opción para una vuelta futura si hace falta más potencia de
+diagramación). **Quedan las Fases 2 (preview inline al hacer clic) y 3 (extender el botón a toda
+la cadena: Cotizaciones, Pedidos, Recepciones, NC/ND) para después de esta noche.**
+
+---
+
 **Pedido de Luciano (08/08):** replicar la idea del Mapa de Relaciones del cliente web de SAP
 Business One (capturas de referencia adjuntas) — mismo concepto, con el estilo visual de KAIROX,
 totalmente funcional. Antes de construir: barrido de lo que ya existe + estudio de mercado
