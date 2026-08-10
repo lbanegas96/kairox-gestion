@@ -1,8 +1,11 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-10 (Claude — bug real de impresión: el ticket 80mm se imprimía
-con columnas pegadas sin espacio al exportar a PDF desde Adobe. Causa: usaba CSS grid con
-unidades `ch`/`fr`, que algunos exportadores de impresión no calculan bien. Cambiado a tabla HTML
-normal, mismo criterio que ya usaba el formato A4. Antes de eso (09/08): Fase 3 del rediseño del
+**Última actualización:** 2026-08-10 (Claude — Fidelización por Puntos queda 100% cerrada: Nadia
+probó en vivo el canje en el ERP, encontrando de paso que `NuevaVentaModal` sólo se abre
+facturando un Pedido/Cotización, no desde un botón directo. Antes de eso, mismo día: bug real de
+impresión, el ticket 80mm se imprimía con columnas pegadas sin espacio al exportar a PDF desde
+Adobe. Causa: usaba CSS grid con unidades `ch`/`fr`, que algunos exportadores de impresión no
+calculan bien. Cambiado a tabla HTML normal, mismo criterio que ya usaba el formato A4. Antes de
+eso (09/08): Fase 3 del rediseño del
 Mapa de Relaciones — puntos de acceso desde Cotizaciones, Pedidos, Entregas, Recepciones y
 Devoluciones, no solo desde la Factura. Con esto **las 3 fases del rediseño quedan completas y
 deployadas** — `PLAN_MAPA_RELACIONES.md`. Circuito de pruebas actualizado en
@@ -603,8 +606,18 @@ un `<select>` simple en `PanelPago.jsx` (no el componente compartido del POS); `
 lo que corrigió automáticamente todos sus usos de una vez; sin modo offline (no aplica el guard).
 
 Suite completa **153/153 en verde**, `eslint`/`vite build` en 0 errores en las dos pantallas.
-Falta que Nadia pruebe el circuito de canje en el ERP en vivo antes de dar la Fase 3 por
-100% cerrada — con eso, Fidelización por Puntos queda con las 4 fases completas en KAIROX.
+
+**Probado en vivo por Nadia en el ERP (10/08).** Encontrado en el camino: `NuevaVentaModal.jsx`
+no tiene un botón de entrada directa — sólo se abre facturando un Pedido (avanzado hasta "En
+Preparación") o convirtiendo una Cotización; "Nueva Venta" del header y de Acciones Rápidas
+llevan al POS, y "Nueva Factura" abre un modal distinto sin canje. Una vez encontrado el camino
+correcto (Pedidos → avanzar 2 veces → ícono de recibo "Facturar pedido"), probó el circuito
+completo: comprobante 20260810-004, canjeó 200 puntos sobre "Mouse plano" ($5.000 → $4.800), el
+PDF mostró "Descuento por puntos (200) -$200,00" y "¡Ganaste 48 puntos!" — todo correcto.
+
+**Con esto, Fidelización por Puntos queda 100% cerrada** — las 4 fases (backend, configuración,
+ganar puntos, canjear puntos) confirmadas en vivo por Nadia en los dos circuitos de venta
+(POS y ERP). No queda nada pendiente de este feature.
 
 ---
 

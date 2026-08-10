@@ -310,7 +310,21 @@ completa 153/153 en verde, `vite build` en 0 errores.
 
 **Con esto, Fidelización por Puntos queda con las 4 fases completas** (backend, configuración,
 ganar puntos visible, canjear puntos) en los dos circuitos de venta de KAIROX (POS y ERP).
-Pendiente de que Nadia lo pruebe en vivo en el ERP antes de dar la fase por cerrada del todo.
+
+**Probado en vivo por Nadia en el ERP (10/08)** — comprobante 20260810-004: canjeó 200 puntos
+sobre "Mouse plano" ($5.000 → $4.800), el PDF mostró "Descuento por puntos (200) -$200,00" y
+"¡Ganaste 48 puntos!" (floor(4800/100), correcto). **Fidelización por Puntos queda 100% cerrada,
+con las 4 fases confirmadas en vivo por Nadia en los dos circuitos de venta.**
+
+**Hallazgo de navegación de paso (documentado, no es un bug):** `NuevaVentaModal.jsx` no tiene
+ningún botón de entrada directa tipo "Nueva Venta desde cero" en el menú — sólo se abre
+facturando un **Pedido** ya avanzado hasta "En Preparación" (ícono de recibo verde) o
+convirtiendo una **Cotización**. El botón "+ Nueva Venta" del header global y el de Acciones
+Rápidas del Dashboard en realidad llevan al **POS** (Punto de Venta), no a esta pantalla — y
+"Nueva Factura" (dentro de Ventas → Facturas) abre un modal distinto (`NuevaFacturaModal.jsx`)
+que no tiene canje de puntos. Si en algún momento se quiere un acceso directo a
+`NuevaVentaModal.jsx` sin pasar por un Pedido/Cotización, es una decisión de producto para
+Nadia/Luciano, no algo para resolver de oficio.
 
 ### 🐛 Otro bug de "Confirmar Venta cortado", encontrado por Nadia probando Fase 3 (07/08)
 
