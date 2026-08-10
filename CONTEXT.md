@@ -1,10 +1,36 @@
 # KAIROX Gestión — Contexto de Sesión
-**Última actualización:** 2026-08-09 (Claude — Fase 3 del rediseño del Mapa de Relaciones: puntos
-de acceso desde Cotizaciones, Pedidos, Entregas, Recepciones y Devoluciones, no solo desde la
-Factura. Con esto **las 3 fases del rediseño quedan completas y deployadas** —
-`PLAN_MAPA_RELACIONES.md`. Circuito de pruebas actualizado en `PLAN_PRUEBAS_SABADO_2026-08-08.md`
-sección 5. Antes de eso, mismo hilo (08/08): Fases 1 y 2 del rediseño. Y antes de eso (07/08):
-auditoría contable sistemática de las 10 áreas — mig.314.)
+**Última actualización:** 2026-08-10 (Claude — bug real de impresión: el ticket 80mm se imprimía
+con columnas pegadas sin espacio al exportar a PDF desde Adobe. Causa: usaba CSS grid con
+unidades `ch`/`fr`, que algunos exportadores de impresión no calculan bien. Cambiado a tabla HTML
+normal, mismo criterio que ya usaba el formato A4. Antes de eso (09/08): Fase 3 del rediseño del
+Mapa de Relaciones — puntos de acceso desde Cotizaciones, Pedidos, Entregas, Recepciones y
+Devoluciones, no solo desde la Factura. Con esto **las 3 fases del rediseño quedan completas y
+deployadas** — `PLAN_MAPA_RELACIONES.md`. Circuito de pruebas actualizado en
+`PLAN_PRUEBAS_SABADO_2026-08-08.md` sección 5. Antes de eso, mismo hilo (08/08): Fases 1 y 2 del
+rediseño. Y antes de eso (07/08): auditoría contable sistemática de las 10 áreas — mig.314.)
+
+## 🐛 Ticket 80mm imprimía con columnas pegadas — corregido (10/08)
+
+Nadia reportó: al exportar el ticket a PDF desde Adobe (probablemente "Guardar como PDF" en vez
+de mandarlo directo a una impresora térmica real), la tabla de ítems salía con las columnas
+literalmente pegadas sin espacio — "CantDescripción" y "$16.000,00$16.000,00" en la misma
+palabra, ilegible.
+
+**Causa real:** `TicketPrint.jsx` usaba CSS Grid (`grid-cols-[3ch_1fr_9ch_9ch]`) para la tabla de
+ítems del formato 80mm — funciona bien en una impresora térmica real, pero algunos exportadores
+de "imprimir a PDF" no calculan correctamente columnas grid con unidades `ch`/`fr` y las colapsan
+sin separación. El formato A4 (al lado, en el mismo archivo) ya usaba una `<table>` HTML normal
+y no tenía este problema — las tablas HTML son el layout más robusto entre motores de
+impresión/PDF distintos.
+
+**Fix:** se cambió el formato 80mm para usar también una `<table>` HTML (misma estructura y
+alineación visual que antes: Cant/Descripción/P.Unit/Total), en vez de CSS grid. Sin cambios de
+contenido ni de datos — sólo el layout de esa tabla.
+
+Verificado: 9/9 tests de `TicketPrint.test.jsx` en verde (siguen pasando sin cambios), suite
+completa 153/153, `eslint`/`vite build` en 0 errores. **Falta que Nadia vuelva a exportar/
+imprimir un ticket y confirme que las columnas ahora se ven separadas** — no hay forma de
+verificar la salida real de impresión/PDF desde este entorno.
 
 ## ✅ Mapa de Relaciones — rediseño estilo SAP B1, Fase 3 (puntos de acceso) — 09/08
 

@@ -94,40 +94,51 @@ function TicketPrint({ venta, items = [], empresa = {}, formato = '80mm', oferta
 
         <Divider is80={is80} />
 
-        {/* DETALLE */}
+        {/* DETALLE — tabla HTML en los dos formatos (no CSS grid): algunos
+            exportadores de "imprimir a PDF" no calculan bien columnas grid
+            con unidades ch/fr y las pegan sin espacio (bug real reportado
+            por Nadia, 10/8, imprimiendo desde Adobe). Una <table> normal es
+            el layout más robusto entre motores de impresión/PDF distintos —
+            mismo criterio que ya usaba el formato A4 acá abajo. */}
         {is80 ? (
-          <div>
-            <div className="grid grid-cols-[3ch_1fr_9ch_9ch] gap-1 font-bold">
-              <span>Cant</span>
-              <span>Descripción</span>
-              <span className="text-right">P.Unit</span>
-              <span className="text-right">Total</span>
-            </div>
-            {items.map((it, idx) => {
-              const cant = Number(it.cantidad || 0);
-              const punit = getPunit(it);
-              const sub = cant * punit;
-              const oferta = ofertasCarrito[it.id];
-              const isPack = !!it._packMode;
-              const displayCant = isPack ? `${it._packs} ${it.unidad_venta?.codigo || 'pack'}` : cant;
-              const displayPunit = isPack && it._packs ? sub / it._packs : punit;
-              return (
-                <React.Fragment key={idx}>
-                  <div className="grid grid-cols-[5ch_1fr_9ch_9ch] gap-1">
-                    <span>{displayCant}</span>
-                    <span className="break-words">{it.nombre || it.descripcion}</span>
-                    <span className="text-right">${formatARS(displayPunit)}</span>
-                    <span className="text-right">${formatARS(sub)}</span>
-                  </div>
-                  {oferta && (
-                    <div className="pl-2 text-[9px]">
-                      &gt; {oferta.oferta_nombre}: -${formatARS(oferta.descuento_monto * cant)}
-                    </div>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </div>
+          <table className="w-full border-collapse" cellPadding="0" cellSpacing="0">
+            <thead>
+              <tr className="font-bold">
+                <th className="text-left align-top pr-1">Cant</th>
+                <th className="text-left align-top">Descripción</th>
+                <th className="text-right align-top pl-1 whitespace-nowrap">P.Unit</th>
+                <th className="text-right align-top pl-1 whitespace-nowrap">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it, idx) => {
+                const cant = Number(it.cantidad || 0);
+                const punit = getPunit(it);
+                const sub = cant * punit;
+                const oferta = ofertasCarrito[it.id];
+                const isPack = !!it._packMode;
+                const displayCant = isPack ? `${it._packs} ${it.unidad_venta?.codigo || 'pack'}` : cant;
+                const displayPunit = isPack && it._packs ? sub / it._packs : punit;
+                return (
+                  <React.Fragment key={idx}>
+                    <tr>
+                      <td className="align-top pr-1">{displayCant}</td>
+                      <td className="align-top break-words">{it.nombre || it.descripcion}</td>
+                      <td className="text-right align-top pl-1 whitespace-nowrap">${formatARS(displayPunit)}</td>
+                      <td className="text-right align-top pl-1 whitespace-nowrap">${formatARS(sub)}</td>
+                    </tr>
+                    {oferta && (
+                      <tr>
+                        <td colSpan={4} className="pl-2 text-[9px]">
+                          &gt; {oferta.oferta_nombre}: -${formatARS(oferta.descuento_monto * cant)}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
         ) : (
           <table className="w-full text-left border-collapse">
             <thead>
