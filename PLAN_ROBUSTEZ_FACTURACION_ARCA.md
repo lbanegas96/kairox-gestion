@@ -1,5 +1,35 @@
 # Plan — Robustecer el motor de Facturación Electrónica AFIP/ARCA
 
+## Estado — 10/08
+
+**Fase 1: ✅ construida, aplicada a producción y verificada contra los 7 comprobantes reales.**
+Migración 315 (`fn_persistir_cae_emitido` + hardening de permisos) + `arca-worker`
+redesplegado (v21) con `feCompConsultar`/`consultarComprobante` y la reconciliación.
+Resultado real, reencolando los 7 Facturas C atascadas del 06/08 y corriendo el worker
+manualmente:
+
+- **20260810-002** ($30.000) → reconciliado al **N°35 real** (CAE `86300689144388`) — el
+  fantasma genuino, resuelto sin consumir número nuevo ni intervención humana.
+- **20260806-006, 20260810-005, 20260810-001, 20260810-006** → una vez que el contador se
+  puso al día, se emitieron con números reales nuevos (36, 37, 38, 39).
+- **20260806-001 ($3.000) y 20260806-011 ($121.000)** → siguen sin resolver. Los 3 reintentos
+  (incluso solos, con minutos de por medio) dieron el mismo `[10016] El numero o fecha del
+  comprobante no se corresponde con el proximo a autorizar` — el contador local
+  (`puntos_venta_numeracion.ultimo_numero=39`) no se movió entre intentos, así que no es una
+  carrera entre ítems del mismo lote. Lectura más probable: un desfasaje de caché del lado de
+  ARCA entre `FECompUltimoAutorizado` y el estado real de `FECAESolicitar` que no conviene
+  forzar más — el sistema se comportó de forma segura (nunca emitió mal, solo se negó).
+  Quedan en `error_datos` (estable, sin loop) para reintentar más tarde desde el Monitor.
+
+**Fase 2: ✅ construida y aplicada a producción.** Migración 316 — `fn_queue_factura_arca`
+ahora despierta a `arca-worker` con un `net.http_post` fire-and-forget apenas encola algo
+nuevo (mismo patrón ya probado del cron de la mig.102), y `max_intentos` default sincronizado
+a 5. No se probó en vivo con una venta real (para no mutar datos reales de más) — el mecanismo
+es idéntico al que ya corre cada 5 min en producción desde hace meses.
+
+**Fase 3: pendiente**, sin empezar.
+
+
 **Pedido de Luciano (10/08):** reforzar el motor de emisión ya existente en 3 ejes concretos —
 que reintente solo lo máximo posible, que no demore demasiado en resolver casos transitorios, y
 que los mensajes de error sean muy claros y explícitos. Disparado por un caso real: 7 Facturas C
