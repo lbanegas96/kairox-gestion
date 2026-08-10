@@ -158,8 +158,14 @@ corte histórico, centros de costo a nivel de línea (hoy solo a nivel de docume
 Verificado: lint/build limpios, 153/153 tests, `get_advisors` post-deploy sin hallazgos nuevos
 más allá del esperado ("SECURITY DEFINER callable por authenticated", mismo patrón que
 `abrir_caja_sesion` y el resto de las RPCs del proyecto — intencional), sin errores de consola en
-producción tras el deploy. **Pendiente de que alguien lo confirme con una venta/compra real** —
-sumado a `PLAN_PRUEBAS_SABADO_2026-08-08.md`.
+producción tras el deploy.
+
+**Confirmado con una venta real por Nadia (10/08):** venta 20260810-006 ($25.000, Efectivo)
+generó el asiento AS-000215 automáticamente, **confirmado** (no borrador), balanceado — Debe
+$35.000 = Haber $35.000 (la venta $25.000 + el costo de mercadería $10.000, partida doble
+estándar). De paso se revisaron también los asientos de las ventas de fidelización de hoy
+(20260810-002 a 006, incluida una por QR MercadoPago) — todos confirmados y balanceados. **El fix
+de mig.314 queda verificado en producción real, no sólo en sandbox.**
 
 ## ✅ Las 2 auditorías contables pendientes ya estaban cerradas — confirmado 07/08
 
