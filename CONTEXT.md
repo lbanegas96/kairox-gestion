@@ -27,10 +27,12 @@ impresión/PDF distintos.
 alineación visual que antes: Cant/Descripción/P.Unit/Total), en vez de CSS grid. Sin cambios de
 contenido ni de datos — sólo el layout de esa tabla.
 
+**Confirmado por Nadia en vivo (10/08):** volvió a exportar un ticket a PDF (comprobante
+20260810-002) y las columnas ya se ven separadas — "Cant Descripción P.Unit Total" y cada fila
+con sus valores bien alineados. Cerrado.
+
 Verificado: 9/9 tests de `TicketPrint.test.jsx` en verde (siguen pasando sin cambios), suite
-completa 153/153, `eslint`/`vite build` en 0 errores. **Falta que Nadia vuelva a exportar/
-imprimir un ticket y confirme que las columnas ahora se ven separadas** — no hay forma de
-verificar la salida real de impresión/PDF desde este entorno.
+completa 153/153, `eslint`/`vite build` en 0 errores.
 
 ## ✅ Mapa de Relaciones — rediseño estilo SAP B1, Fase 3 (puntos de acceso) — 09/08
 
