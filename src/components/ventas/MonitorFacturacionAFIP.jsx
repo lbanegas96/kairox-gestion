@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity, RefreshCw, Loader2, Search, CheckCircle, Clock, AlertTriangle,
-  AlertCircle, Minus, FileText, X, ShieldCheck,
+  AlertCircle, Minus, FileText, X, ShieldCheck, Code2, Info,
 } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -38,6 +38,13 @@ const ESTADOS = {
 // documento genuinamente no-fiscal: se autorizó offline y falta informarlo a
 // ARCA al cierre de la quincena. Se muestra como estado propio 'caea'.
 const estadoVisual = (row) => (row.modo_autorizacion === 'CAEA' ? 'caea' : row.cae_estado);
+
+// Motivo de un error_definitivo — hoy se veían idénticos en la grilla (mismo
+// badge, mismo "Intentos: 0") pero son causas raíz distintas (Fase 3).
+const MOTIVO_DEFINITIVO_LABEL = {
+  ambiguo_sin_reintento: 'El sistema detectó una ambigüedad de numeración con ARCA y decidió activamente no reintentar sin verificar primero — nunca llegó a gastar un intento real.',
+  reintentos_agotados: 'Se agotaron los 5 reintentos automáticos con backoff — ARCA no respondió o siguió caído en todos los intentos.',
+};
 
 // Estados sobre los que tiene sentido reintentar (nunca 'emitido' ni 'no_aplica').
 const REINTENTABLES = ['error', 'error_definitivo', 'pendiente'];
@@ -89,8 +96,13 @@ const MonitorFacturacionAFIP = () => {
   const [seleccion, setSeleccion] = useState(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [rowBusy, setRowBusy] = useState(null);
-  const [detalle, setDetalle] = useState(null);
+  const [detalle, setDetalleRaw] = useState(null);
+  const [verTecnico, setVerTecnico] = useState(false);
+  const setDetalle = (row) => { setVerTecnico(false); setDetalleRaw(row); };
   const [confirmResuelta, setConfirmResuelta] = useState(null);
+  const [resueltaCae, setResueltaCae] = useState('');
+  const [resueltaNumeroAfip, setResueltaNumeroAfip] = useState('');
+  const [resueltaVencimiento, setResueltaVencimiento] = useState('');
 
   const queryKey = ['monitor_afip', empresaId, fechaDesde, fechaHasta];
   const { data: rows = [], isLoading, isFetching, refetch } = useQuery({
@@ -202,12 +214,23 @@ const MonitorFacturacionAFIP = () => {
     }
   };
 
-  const marcarResuelta = async (row) => {
+  const marcarResuelta = async (row, { cae, numeroAfip, vencimiento } = {}) => {
     setRowBusy(row.comprobante_id);
     try {
-      const { error } = await supabase.rpc('marcar_cae_resuelto_manual', { p_comprobante_id: row.comprobante_id });
+      const { error } = await supabase.rpc('marcar_cae_resuelto_manual', {
+        p_comprobante_id: row.comprobante_id,
+        p_cae: cae || null,
+        p_numero_afip: numeroAfip || null,
+        p_cae_vencimiento: vencimiento || null,
+      });
       if (error) throw error;
-      toast({ title: 'Marcada como resuelta', description: 'La factura quedó registrada como emitida.', className: 'bg-green-600 text-white border-green-500' });
+      toast({
+        title: 'Marcada como resuelta',
+        description: cae
+          ? `La factura quedó registrada como emitida con CAE ${cae}.`
+          : 'La factura quedó registrada como emitida (sin CAE — se emitió por fuera del sistema).',
+        className: 'bg-green-600 text-white border-green-500',
+      });
       invalidar();
     } catch (e) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
@@ -445,7 +468,10 @@ const MonitorFacturacionAFIP = () => {
                         </button>
                         {esError && (
                           <button
-                            onClick={() => setConfirmResuelta(row)}
+                            onClick={() => {
+                              setResueltaCae(''); setResueltaNumeroAfip(''); setResueltaVencimiento('');
+                              setConfirmResuelta(row);
+                            }}
                             disabled={busy}
                             className="text-xs px-2 py-1 rounded border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50 transition-colors"
                           >
@@ -490,12 +516,36 @@ const MonitorFacturacionAFIP = () => {
                 <Campo label="Venc. CAE">{detalle.cae_vencimiento ? formatDateAR(detalle.cae_vencimiento) : '—'}</Campo>
                 <Campo label="Estado cola">{detalle.estado_cola ?? '—'}</Campo>
               </div>
+              {detalle.motivo_definitivo && (
+                <div className="p-3 rounded-lg bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 flex items-start gap-2">
+                  <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-violet-600 dark:text-violet-400" />
+                  <p className="text-xs text-violet-800 dark:text-violet-300">
+                    {MOTIVO_DEFINITIVO_LABEL[detalle.motivo_definitivo] ?? detalle.motivo_definitivo}
+                  </p>
+                </div>
+              )}
               {(detalle.error_afip || detalle.error_cola) && (
                 <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                  <p className="text-xs font-semibold text-red-700 dark:text-red-400 mb-1">Último error</p>
-                  <pre className="text-xs text-red-800 dark:text-red-300 whitespace-pre-wrap break-words font-mono">
-                    {detalle.error_afip ?? detalle.error_cola}
-                  </pre>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs font-semibold text-red-700 dark:text-red-400">Último error</p>
+                    {(detalle.error_afip_usuario || detalle.error_cola_usuario) && (
+                      <button
+                        onClick={() => setVerTecnico((v) => !v)}
+                        className="inline-flex items-center gap-1 text-xs text-red-700 dark:text-red-400 hover:underline"
+                      >
+                        <Code2 className="w-3 h-3" /> {verTecnico ? 'Ocultar detalle técnico' : 'Ver detalle técnico'}
+                      </button>
+                    )}
+                  </div>
+                  {verTecnico || !(detalle.error_afip_usuario || detalle.error_cola_usuario) ? (
+                    <pre className="text-xs text-red-800 dark:text-red-300 whitespace-pre-wrap break-words font-mono">
+                      {detalle.error_afip ?? detalle.error_cola}
+                    </pre>
+                  ) : (
+                    <p className="text-xs text-red-800 dark:text-red-300 leading-relaxed">
+                      {detalle.error_afip_usuario ?? detalle.error_cola_usuario}
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -511,20 +561,37 @@ const MonitorFacturacionAFIP = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Marcar como resuelta {confirmResuelta?.numero_venta}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción marca el comprobante como <strong>Emitido</strong> ante AFIP <strong>sin CAE ni Nº AFIP</strong>. Sólo tiene sentido si ya emitiste este comprobante <strong>por fuera del sistema</strong> (por ejemplo, desde el portal AFIP/ARCA directo).
+              Usá esto solo si ya verificaste (en el portal AFIP/ARCA, o emitiendo por fuera del sistema) que este comprobante <strong>SÍ tiene CAE</strong>. Si en cambio querés que el sistema reintente la emisión automática, cancelá y usá "Reintentar".
               <br /><br />
-              Si en cambio querés reintentar la emisión automática, cancelá y usá "Reintentar".
+              Si cargás el CAE y el Nº de comprobante abajo (recomendado), la factura queda <strong>legalmente completa</strong> en KAIROX. Si los dejás vacíos, queda marcada como emitida <strong>sin esos datos</strong> — solo tiene sentido si el comprobante fiscal en sí vive por fuera del sistema.
               <br /><br />
               La acción es <strong>irreversible</strong> desde esta pantalla.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-2 py-1">
+            <div>
+              <label className="block text-xs text-kx-text-3 mb-1">CAE (opcional)</label>
+              <Input value={resueltaCae} onChange={(e) => setResueltaCae(e.target.value)}
+                placeholder="14 dígitos" className="h-8 text-xs font-mono dark:bg-kx-surface dark:border-kx-border" />
+            </div>
+            <div>
+              <label className="block text-xs text-kx-text-3 mb-1">Nº de comprobante AFIP (opcional)</label>
+              <Input value={resueltaNumeroAfip} onChange={(e) => setResueltaNumeroAfip(e.target.value)}
+                placeholder="0001-00000035" className="h-8 text-xs font-mono dark:bg-kx-surface dark:border-kx-border" />
+            </div>
+            <div>
+              <label className="block text-xs text-kx-text-3 mb-1">Vencimiento del CAE (opcional)</label>
+              <Input type="date" value={resueltaVencimiento} onChange={(e) => setResueltaVencimiento(e.target.value)}
+                className="h-8 text-xs dark:bg-kx-surface dark:border-kx-border" />
+            </div>
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 const row = confirmResuelta;
                 setConfirmResuelta(null);
-                if (row) marcarResuelta(row);
+                if (row) marcarResuelta(row, { cae: resueltaCae.trim(), numeroAfip: resueltaNumeroAfip.trim(), vencimiento: resueltaVencimiento });
               }}
               className="bg-green-600 hover:bg-green-700 text-white"
             >

@@ -27,7 +27,16 @@ nuevo (mismo patrón ya probado del cron de la mig.102), y `max_intentos` defaul
 a 5. No se probó en vivo con una venta real (para no mutar datos reales de más) — el mecanismo
 es idéntico al que ya corre cada 5 min en producción desde hace meses.
 
-**Fase 3: pendiente**, sin empezar.
+**Fase 3: ✅ construida, aplicada a producción y verificada.** Migración 317
+(`error_mensaje_usuario`/`error_afip_usuario`/`motivo_definitivo` + `marcar_cae_resuelto_manual`
+con CAE opcional) + `arca-worker` v22 (`mensajeHumano()` en `_shared/afip.ts`) +
+`MonitorFacturacionAFIP.jsx`/`SaleDetailModal.jsx` (mensaje humano con toggle "Ver detalle
+técnico"). Probado en vivo reencolando uno de los 2 comprobantes atascados: el mensaje humano
+("El número de comprobante quedó momentáneamente desincronizado con ARCA...") se generó y se
+mostró correctamente en el Monitor, con el toggle funcionando en ambas direcciones. `npx eslint`
+0 errores, `npx vite build` limpio, 153/153 tests.
+
+**Las 3 fases del plan quedan completas y en producción.**
 
 
 **Pedido de Luciano (10/08):** reforzar el motor de emisión ya existente en 3 ejes concretos —

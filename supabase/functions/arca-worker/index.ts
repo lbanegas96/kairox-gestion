@@ -18,6 +18,14 @@
 //      en vez de quedar en error_definitivo esperando que un humano lo destrabe a
 //      mano desde el Monitor. Si no hay CAEA disponible, cae al error_definitivo
 //      normal — comportamiento idéntico al de hoy para quien no usa CAEA.
+//   6. Mensajes claros (mig.317, Fase 3 del plan de robustez): cada vez que se
+//      guarda un error_mensaje/error_afip crudo, se guarda en paralelo su
+//      traducción humana (mensajeHumano(), _shared/afip.ts) en
+//      error_mensaje_usuario/error_afip_usuario — el crudo nunca se pierde,
+//      solo se le suma una versión legible. El estado error_definitivo también
+//      guarda `motivo_definitivo` ('ambiguo_sin_reintento' vs
+//      'reintentos_agotados') para que el Monitor distinga "el sistema decidió
+//      no reintentar" de "se acabaron los reintentos" — hoy se veían idénticos.
 //
 // Auth: service_role (adminClient) — no requiere usuario autenticado.
 // Procesa hasta 10 registros por corrida para no exceder el timeout de Edge Function.
@@ -33,6 +41,7 @@ import {
   classifyArcaError,
   backoffMinutes,
   fchToIso,
+  mensajeHumano,
 } from '../_shared/afip.ts';
 
 const MAX_INTENTOS = 5;
@@ -296,7 +305,7 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
           if (usoCaea) {
             resultados.push({ id: fpa.id, resultado: 'autorizada_caea (ambiguo)' });
           } else {
-            await marcarErrorDefinitivo(fpa.id, comp.id, msg);
+            await marcarErrorDefinitivo(fpa.id, comp.id, msg, 'ambiguo_sin_reintento');
             resultados.push({ id: fpa.id, resultado: 'error_definitivo (ambiguo)' });
           }
           continue;
@@ -405,7 +414,7 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
         if (usoCaea) {
           resultados.push({ id: fpa.id, resultado: 'autorizada_caea' });
         } else {
-          await marcarErrorDefinitivo(fpa.id, fpa.comprobante_id, errMsg);
+          await marcarErrorDefinitivo(fpa.id, fpa.comprobante_id, errMsg, 'reintentos_agotados');
           resultados.push({ id: fpa.id, resultado: 'error_definitivo' });
         }
 
@@ -418,6 +427,7 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
           intentos,
           proximo_intento: proxIntento,
           error_mensaje:   errMsg,
+          error_mensaje_usuario: mensajeHumano(errMsg),
           updated_at:      new Date().toISOString(),
         }).eq('id', fpa.id);
 
@@ -431,30 +441,47 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
 }
 
 async function marcarErrorDatos(fpaId: string, comprobanteId: string, msg: string, intentos: number) {
+  const msgUsuario = mensajeHumano(msg);
   await Promise.all([
     adminClient.from('facturas_pendientes_arca').update({
       estado:       'error_datos',
       intentos,
       error_mensaje: msg,
+      error_mensaje_usuario: msgUsuario,
       updated_at:   new Date().toISOString(),
     }).eq('id', fpaId),
     adminClient.from('comprobantes').update({
       cae_estado: 'error',
       error_afip:  msg,
+      error_afip_usuario: msgUsuario,
     }).eq('id', comprobanteId),
   ]);
 }
 
-async function marcarErrorDefinitivo(fpaId: string, comprobanteId: string, msg: string) {
+/**
+ * motivo distingue, para el Monitor, dos causas raíz que hoy se ven idénticas
+ * (intentos=0, mismo badge "Revisión manual") pero son muy distintas:
+ * 'ambiguo_sin_reintento' = el sistema decidió activamente no reintentar
+ * (Fase 1, no pudo reconciliar contra ARCA) — nunca gastó un intento real.
+ * 'reintentos_agotados' = se acabaron los 5 intentos con backoff exponencial.
+ */
+async function marcarErrorDefinitivo(
+  fpaId: string, comprobanteId: string, msg: string,
+  motivo: 'ambiguo_sin_reintento' | 'reintentos_agotados' = 'reintentos_agotados',
+) {
+  const msgUsuario = mensajeHumano(msg);
   await Promise.all([
     adminClient.from('facturas_pendientes_arca').update({
       estado:       'error_definitivo',
       error_mensaje: msg,
+      error_mensaje_usuario: msgUsuario,
+      motivo_definitivo: motivo,
       updated_at:   new Date().toISOString(),
     }).eq('id', fpaId),
     adminClient.from('comprobantes').update({
       cae_estado: 'error_definitivo',
       error_afip:  msg,
+      error_afip_usuario: msgUsuario,
     }).eq('id', comprobanteId),
   ]);
 }

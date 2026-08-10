@@ -235,3 +235,43 @@ export function backoffMinutes(intentos: number): number {
   const SCHEDULE = [1, 5, 15, 30, 60];
   return SCHEDULE[intentos] ?? 60;
 }
+
+// ── Traducción de errores AFIP a lenguaje humano (Fase 3 del plan de robustez) ──
+// Solo códigos con evidencia directa de haber ocurrido en producción de KAIROX
+// (documentados en los comentarios de este mismo archivo y de arca-worker) —
+// deliberadamente NO se completa con códigos "probablemente correctos" sin
+// verificar: un mensaje mal traducido en un sistema fiscal es peor que uno
+// crudo. Ante cualquier código/fragmento no reconocido, mensajeHumano()
+// devuelve el mensaje original sin pérdida de información.
+const CODIGOS_AFIP_HUMANO: Record<string, string> = {
+  '10016': 'El número de comprobante quedó momentáneamente desincronizado con ARCA. El sistema lo reintenta e intenta resolverlo solo — no hace falta que hagas nada todavía.',
+  '10197': 'A esta Nota de Crédito/Débito le falta el vínculo con la factura que le dio origen, o esa factura todavía no tiene CAE. Revisala antes de reintentar.',
+  '10246': 'Al cliente le falta la condición frente al IVA (Responsable Inscripto, Monotributo, Exento, etc.). Completala en su ficha y reintentá.',
+  '15008': 'Todavía no hay un CAEA habilitado para este período. Solicitalo desde Configuración → Facturación antes de usar la contingencia offline.',
+  '15004': 'Ya existe un CAEA solicitado para este período — no hace falta pedir otro.',
+};
+
+// Fragmentos de texto (no ligados a un código puntual) que ya clasifica
+// classifyArcaError() como 'data' — mismo criterio, traducidos.
+const FRAGMENTOS_AFIP_HUMANO: Array<[RegExp, string]> = [
+  [/certificado/i, 'Hay un problema con el certificado digital de AFIP de la empresa. Avisá a soporte antes de seguir facturando.'],
+  [/cuit inv/i, 'El CUIT del cliente no es válido para AFIP. Revisá el documento cargado en su ficha.'],
+  [/punto de venta/i, 'El punto de venta no está habilitado en AFIP para este tipo de comprobante. Revisalo en el portal de ARCA.'],
+  [/comprobante inv/i, 'ARCA rechazó el comprobante por un dato inválido. Revisá el detalle técnico para más precisión.'],
+  [/no autorizado/i, 'ARCA no autorizó este comprobante. Revisá el detalle técnico para saber por qué.'],
+];
+
+/**
+ * Traduce un mensaje de error crudo de ARCA (o nuestro) a una frase que
+ * un usuario no técnico pueda entender y accionar. Nunca lanza, nunca
+ * pierde información: si no reconoce el código/fragmento, devuelve el
+ * mensaje original tal cual.
+ */
+export function mensajeHumano(raw: string): string {
+  const codigo = raw.match(/\[(\d+)\]/)?.[1];
+  if (codigo && CODIGOS_AFIP_HUMANO[codigo]) return CODIGOS_AFIP_HUMANO[codigo];
+  for (const [patron, msg] of FRAGMENTOS_AFIP_HUMANO) {
+    if (patron.test(raw)) return msg;
+  }
+  return raw;
+}

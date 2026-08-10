@@ -1,22 +1,59 @@
 # KAIROX Gestión — Contexto de Sesión
 
-## 🚨 PENDIENTE URGENTE — Facturas C sin CAE desde el 06/08 (hallado 10/08, sin resolver)
+## ✅ Plan de robustez del motor de Facturación AFIP/ARCA — 3 fases completas (10/08)
 
-Mientras se probaba el Mapa de Relaciones se encontró que, desde el 06/08, **ninguna venta que
-factura como Factura C (tipo AFIP 11) consigue CAE**. 7 comprobantes atascados en
-`cae_estado = 'error_definitivo'` (06/08 al 10/08, ~$247.000 entre ventas reales y de prueba,
-incluye las pruebas de fidelización de hoy: 20260810-001/002/005/006), todos con el mismo mensaje
-en `facturas_pendientes_arca.error_mensaje`:
+Pedido de Luciano tras el incidente de abajo ("Facturas C sin CAE"): reforzar el motor de emisión
+existente en 3 ejes — que reintente solo lo máximo posible, que no demore, y que los mensajes de
+error sean claros. Metodología: barrido del motor actual + auditoría de código dedicada
+(`sap-motor-contable-auditor`) + enfoque SAP (`sap-b1-consultor`) + investigación de mercado —
+las 3 fuentes convergieron en la misma causa raíz. Plan completo en
+`PLAN_ROBUSTEZ_FACTURACION_ARCA.md`.
 
-> "Estado ambiguo: ARCA reporta último número 35 para el tipo 11, local esperaba 35. Verificar
-> manualmente en portal ARCA."
+**Causa raíz confirmada:** el worker solo consultaba `FECompUltimoAutorizado` (cuenta el último
+número) pero nunca `FECompConsultar` (trae el comprobante real, con su CAE) — por eso ante
+ambigüedad se rendía directo a revisión manual en vez de verificar primero. Patrón estándar de la
+industria ausente: "confirm-before-repeat".
 
-El sistema no reintenta solo a propósito (para no duplicar una factura si en realidad el N°35 sí
-salió) — queda esperando que alguien chequee a mano en el portal de ARCA si el comprobante N°35 se
-emitió o no, y lo resuelva desde el Monitor de Facturación AFIP (mig.202/203,
-`marcar_cae_resuelto_manual`). **No se tocó nada de esto** — Claude no tiene ni debe tener acceso al
-portal de ARCA. Nadia decidió (10/08) seguir con las pruebas del Mapa de Relaciones primero y
-resolver esto después con Luciano.
+**Fase 1 — Reconciliación automática (mig.315, `arca-worker` v21):**
+`feCompConsultar`/`consultarComprobante` nuevos; ante ambigüedad, el worker ahora consulta cada
+número en disputa contra ARCA (total + documento) antes de rendirse — si matchea, persiste el CAE
+real sin re-emitir; si no, recién ahí intenta CAEA y después revisión manual (antes esa rama nunca
+llegaba a intentar CAEA). Persistencia del CAE movida a una RPC atómica
+(`fn_persistir_cae_emitido`, una sola transacción — antes 3 updates HTTP sueltos con riesgo real de
+"CAE fantasma"). Recuperación de filas `'procesando'` colgadas >10min. Hardening de permisos en
+`facturas_pendientes_arca` (solo RPC, ya no `.update()` directo desde `authenticated`).
+
+**Fase 2 — Velocidad (mig.316):** `fn_queue_factura_arca` ahora despierta a `arca-worker` con un
+`net.http_post` fire-and-forget apenas encola algo nuevo (mismo patrón ya probado del cron de
+mig.102) — el primer intento ocurre en segundos, no hasta 5 min. `max_intentos` default
+sincronizado a 5 (antes 3 en la tabla vs. 5 hardcodeado en el worker — la barra del Monitor mentía).
+
+**Fase 3 — Claridad de errores (mig.317, `arca-worker` v22):** diccionario `mensajeHumano()` en
+`_shared/afip.ts` traduce los códigos AFIP más frecuentes (10016, 10197, 10246, 15008, 15004) a
+lenguaje humano accionable, guardado en paralelo (`error_mensaje_usuario`/`error_afip_usuario`) sin
+pisar el mensaje técnico crudo. Nueva columna `motivo_definitivo` distingue "el sistema decidió no
+reintentar" (ambigüedad) de "se agotaron los 5 reintentos" — antes se veían idénticos en el
+Monitor. `MonitorFacturacionAFIP.jsx` y `SaleDetailModal.jsx` muestran el mensaje humano por
+defecto con un toggle "Ver detalle técnico"; el diálogo "Marcar resuelta" ahora puede capturar el
+CAE/Nº AFIP/vencimiento real si el usuario lo verificó a mano en el portal (antes dejaba el
+comprobante "emitido" sin esos datos, legalmente incompleto).
+
+**Verificado en vivo contra los 7 Facturas C reales atascados desde el 06/08:** 5 resueltos
+(20260810-002 reconciliado directo al CAE real N°35 sin consumir número nuevo; 06-006, 10-005,
+10-001, 10-006 emitidos con numeración real nueva una vez que el contador se puso al día). 2 siguen
+sin resolver (06-001 $3.000, 06-011 $121.000) — 3 reintentos con el mismo `[10016]`, contador local
+sin moverse entre intentos (no es carrera de lote), probable desfasaje de caché del lado de ARCA.
+Quedan en `error_datos`, estables, mensaje humano confirmado visible en el Monitor — reintentar más
+tarde desde ahí. **Nota aparte, sin investigar:** apareció un tercer comprobante en error
+(20260806-008, $25.000, mismo cliente Luciano) no incluido en el lote original de 7 — mismo estado,
+queda para la próxima sesión.
+
+Verificado además: `npx eslint` 0 errores (solo warnings preexistentes de PropTypes), `npx vite
+build` limpio, 153/153 tests, probado en vivo en el Monitor (toggle técnico funcionando, mensaje
+humano visible, sin errores nuevos en consola — el único warning es uno preexistente y no
+relacionado de `TopClientes.jsx`).
+
+## ✅ Facturas C sin CAE desde el 06/08 — causa raíz resuelta, 5/7 casos cerrados (ver arriba)
 
 Aparte, ya documentado y con dueño desde antes: 16 comprobantes viejos (03/07 al 08/07) atascados
 por RG 5616 (Condición IVA del receptor), marcados en el propio `error_mensaje` como
@@ -61,28 +98,30 @@ de acceso nuevos de la Fase 3 del rediseño (09/08).
 
 ---
 
-**Última actualización:** 2026-08-10, cierre del día (Claude — sesión completa: se terminó de
-verificar en vivo TODO lo pendiente que había quedado tras bajar el trabajo de Luciano de la noche
-anterior. Resultado final del día:
+**Última actualización:** 2026-08-10, noche (Claude — plan de robustez del motor AFIP/ARCA,
+3 fases completas y deployadas a producción, ver sección de arriba. Resumen:
 
-1. **Fidelización por Puntos — 100% cerrada**, las 3 fases confirmadas en vivo por Nadia en POS y
-   ERP (canje, saldo, descuento prorrateado en el asiento contable). Bug de UX encontrado (no hay
-   botón directo "Nueva Venta" al ERP, sólo vía Pedido/Cotización) — documentado, no resuelto.
-2. **Bug de impresión del ticket 80mm** (columnas pegadas al exportar a PDF) — corregido, probado
-   por Nadia en producción.
-3. **Fase 3 del rediseño del Mapa de Relaciones** (puntos de acceso desde Cotizaciones, Pedidos,
-   Entregas, Recepciones, Devoluciones) — deployada el 09/08, **verificada en vivo hoy** por Claude
-   (circuito completo, ver sección de arriba). Confirmó que anda bien en casi todo, encontró 1 bug
-   real (el badge "actual" no marca al entrar desde Cotizaciones) — **sin resolver, en el backlog**.
-   Con esto las 3 fases del rediseño quedan completas y deployadas — `PLAN_MAPA_RELACIONES.md`.
-4. **Dos hallazgos pendientes sin tocar, arriba de este archivo** — leer primero:
-   - 🚨 Facturas C sin CAE desde el 06/08 (estado ambiguo N°35 en ARCA) — necesita que alguien
-     entre al portal de ARCA a mano, no lo puede resolver Claude.
-   - 🐛 Bug del Mapa de Relaciones en Cotizaciones — cosmético, baja prioridad, causa raíz ya
-     identificada en el código si alguien lo quiere tomar.
+1. **Motor de Facturación AFIP/ARCA — reforzado en 3 ejes** (reintento automático, velocidad,
+   claridad de errores), a pedido de Luciano tras el incidente de las Facturas C sin CAE de más
+   abajo. Investigación (auditoría de código + enfoque SAP + mercado) + `PLAN_ROBUSTEZ_FACTURACION_ARCA.md`
+   + mig.315/316/317 + `arca-worker` v21→v22, todo en producción. Verificado en vivo contra los 7
+   comprobantes reales atascados: **5 resueltos** (1 reconciliado sin consumir número nuevo, 4 con
+   numeración real nueva), **2 siguen en `error_datos`** (mismo `[10016]` en 3 reintentos,
+   probable caché de ARCA, no una carrera de nuestro lado) — reintentar más tarde desde el Monitor.
+   Apareció además un tercer comprobante suelto en error (20260806-008, $25.000) no investigado
+   todavía.
+2. **Fidelización por Puntos — 100% cerrada** (mismo hilo, antes de esto), las 3 fases confirmadas
+   en vivo por Nadia en POS y ERP. Bug de UX documentado, no resuelto (falta botón directo "Nueva
+   Venta" en el ERP).
+3. **Bug de impresión del ticket 80mm** — corregido y confirmado por Nadia en producción.
+4. **Fase 3 del rediseño del Mapa de Relaciones** — deployada el 09/08, verificada en vivo. 1 bug
+   real sin resolver (badge "actual" no marca desde Cotizaciones) — cosmético, en el backlog.
 
 Antes de este cierre, mismo hilo (09/08): Fases 1 y 2 del rediseño del Mapa de Relaciones. Y antes
 de eso (07/08): auditoría contable sistemática de las 10 áreas — mig.314.
+
+Pendiente real para la próxima sesión: los 2 (o 3, con el hallazgo suelto) comprobantes que
+siguen sin CAE — reintentar desde el Monitor de Facturación AFIP cuando haya pasado más tiempo.
 
 Nada queda a medio hacer ni sin commitear — repo sincronizado con origin/master.)
 

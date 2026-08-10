@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Printer, X, Save, Edit2, Loader2, RefreshCw, ShieldCheck, ShieldAlert, Clock, AlertTriangle, Banknote, Ban } from 'lucide-react';
+import { Printer, X, Save, Edit2, Loader2, RefreshCw, ShieldCheck, ShieldAlert, Clock, AlertTriangle, Banknote, Ban, Code2 } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
@@ -36,6 +36,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
   const [newStatus, setNewStatus] = useState('');
   const [saving, setSaving] = useState(false);
   const [reintentandoCae, setReintentandoCae] = useState(false);
+  const [verTecnicoAfip, setVerTecnicoAfip] = useState(false);
 
   // Cancelación (RPC cancelar_factura — reversión total, solo sin CAE)
   const [showCancelarConfirm, setShowCancelarConfirm] = useState(false);
@@ -380,11 +381,21 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
                   {(sale.cae_estado === 'error' || sale.cae_estado === 'error_definitivo') && (
                     <div className="space-y-3">
                       {sale.error_afip && (
-                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3 text-xs text-red-700 dark:text-red-400 font-mono leading-relaxed">
+                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3 text-xs text-red-700 dark:text-red-400 leading-relaxed">
                           <div className="flex items-start gap-2">
                             <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                            <span>{sale.error_afip}</span>
+                            <span className={verTecnicoAfip || !sale.error_afip_usuario ? 'font-mono' : ''}>
+                              {verTecnicoAfip || !sale.error_afip_usuario ? sale.error_afip : sale.error_afip_usuario}
+                            </span>
                           </div>
+                          {sale.error_afip_usuario && (
+                            <button
+                              onClick={() => setVerTecnicoAfip((v) => !v)}
+                              className="mt-2 inline-flex items-center gap-1 text-xs text-red-700 dark:text-red-400 hover:underline"
+                            >
+                              <Code2 className="w-3 h-3" /> {verTecnicoAfip ? 'Ocultar detalle técnico' : 'Ver detalle técnico'}
+                            </button>
+                          )}
                         </div>
                       )}
                       <Button
