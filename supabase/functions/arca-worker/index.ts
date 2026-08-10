@@ -29,8 +29,10 @@ import {
   docTipoAfip,
   callArcaEmit,
   getLastVoucherNumber,
+  consultarComprobante,
   classifyArcaError,
   backoffMinutes,
+  fchToIso,
 } from '../_shared/afip.ts';
 
 const MAX_INTENTOS = 5;
@@ -81,11 +83,20 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
   // un reencolado masivo puede procesar un comprobante más nuevo antes que uno
   // más viejo del mismo tipo y dejarlo con [10016] "no corresponde al próximo
   // a autorizar" (visto en producción al reencolar 19 facturas, sesión 54).
+  // Además de pendiente/reintentando con su hora ya cumplida, recupera filas
+  // 'procesando' colgadas hace más de 10 min — señal de que una corrida
+  // anterior murió a mitad de camino (Edge Function killeada, corte de red)
+  // entre que ARCA respondió y que se terminó de persistir. Sin esto, esa
+  // fila queda huérfana para siempre: este SELECT es la única puerta de
+  // entrada a la cola y antes no incluía 'procesando'. Mismo criterio de
+  // "10 min = tiempo que no debería tardar una corrida normal" que ya usa el
+  // lock del worker (arca_worker_run, más arriba).
+  const nowIso   = new Date().toISOString();
+  const staleIso = new Date(Date.now() - 10 * 60 * 1000).toISOString();
   const { data: pendientes, error: fetchErr } = await adminClient
     .from('facturas_pendientes_arca')
     .select('*, comprobantes(fecha)')
-    .in('estado', ['pendiente', 'reintentando'])
-    .lte('proximo_intento', new Date().toISOString())
+    .or(`and(estado.in.(pendiente,reintentando),proximo_intento.lte.${nowIso}),and(estado.eq.procesando,updated_at.lt.${staleIso})`)
     .order('fecha', { foreignTable: 'comprobantes', ascending: true, nullsFirst: false })
     .limit(BATCH_SIZE);
 
@@ -182,6 +193,24 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
         };
       }
 
+      // Cliente + doc/total del comprobante — se necesitan tanto para emitir
+      // como para la reconciliación de ambigüedad (más abajo), así que se
+      // cargan antes de esa rama en vez de después.
+      let cliDocumento: string | null = null;
+      let cliCondicionIva: string | null = null;
+      if (comp.cliente_id) {
+        const { data: cli } = await adminClient
+          .from('clientes')
+          .select('documento, condicion_iva')
+          .eq('id', comp.cliente_id)
+          .single();
+        cliDocumento = cli?.documento ?? null;
+        cliCondicionIva = cli?.condicion_iva ?? null;
+      }
+
+      const { tipo: docTipo, nro: docNro } = docTipoAfip(cliDocumento);
+      const totalNum = Number(comp.total);
+
       // ── Caso 3 + 4: getLastVoucherNumber SIEMPRE antes de emitir en retry ───
       // Verifica si ARCA ya emitió (estado ambiguo por timeout previo) y
       // obtiene el próximo número real (nunca usar el contador local).
@@ -213,11 +242,63 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
       if (numeracion) {
         const expectedNumero = numeracion.ultimo_numero ?? 0;
         if (lastNumber >= expectedNumero + 1) {
-          // ARCA ya procesó algo más adelante — puede que ya emitió el nuestro.
-          // Por seguridad, no reemitir: marcar para revisión manual.
-          await marcarErrorDefinitivo(fpa.id, comp.id,
-            `Estado ambiguo: ARCA reporta último número ${lastNumber} para el tipo ${voucherType}, local esperaba ${expectedNumero + 1}. Verificar manualmente en portal ARCA.`);
-          resultados.push({ id: fpa.id, resultado: 'error_definitivo (ambiguo)' });
+          // ARCA ya procesó algo más adelante — puede que ya emitió el
+          // nuestro. Antes de rendirse a revisión manual (patrón
+          // "confirm-before-repeat"): consultar cada número en disputa contra
+          // ARCA y compararlo con este comprobante (total + documento). Si
+          // matchea, es nuestro — persistir el CAE encontrado sin re-emitir.
+          // Gap acotado a 10: un desincronismo mayor a eso ya no es la
+          // "ambigüedad de timeout" típica, es un problema más serio que
+          // reconciliar a ciegas podría empeorar.
+          const GAP_MAX = 10;
+          const gap = lastNumber - expectedNumero;
+          let matched: Awaited<ReturnType<typeof consultarComprobante>> = null;
+
+          if (gap <= GAP_MAX) {
+            for (let n = expectedNumero + 1; n <= lastNumber; n++) {
+              const consulta = await consultarComprobante(
+                adminClient, comp.empresa_id, empresa.afip_cuit, certPem, keyPem, environment, pv.numero, voucherType, n,
+              );
+              if (!consulta) continue; // ARCA no tiene ese número — no es este
+              const mismoTotal = Math.abs(consulta.impTotal - totalNum) < 0.01;
+              const mismoDoc = consulta.docTipo === docTipo && (docTipo === 99 || consulta.docNro === docNro);
+              if (mismoTotal && mismoDoc) { matched = consulta; break; }
+            }
+          }
+
+          if (matched) {
+            const numeroAfipMatch = `${String(pv.numero).padStart(4, '0')}-${String(matched.cbteNro).padStart(8, '0')}`;
+            const { error: persistErr } = await adminClient.rpc('fn_persistir_cae_emitido', {
+              p_fpa_id:             fpa.id,
+              p_comprobante_id:     comp.id,
+              p_empresa_id:         comp.empresa_id,
+              p_punto_venta_id:     comp.punto_venta_id,
+              p_cbte_tipo:          voucherType,
+              p_cae:                matched.cae,
+              p_cae_vencimiento:    fchToIso(matched.caeVto),
+              p_numero_afip:        numeroAfipMatch,
+              p_numero_correlativo: matched.cbteNro,
+            });
+            if (persistErr) throw new Error('Reconciliación encontró el CAE pero no pudo persistirlo: ' + persistErr.message);
+            resultados.push({ id: fpa.id, resultado: `emitida (reconciliada Nº${matched.cbteNro})` });
+            continue;
+          }
+
+          // No matchea ningún número del rango (o el gap es demasiado grande
+          // para reconciliar automáticamente) — recién ahí revisión manual,
+          // intentando CAEA primero si la empresa lo tiene configurado (antes
+          // esta rama nunca llegaba a intentar CAEA, quedaba inalcanzable).
+          const msg = gap <= GAP_MAX
+            ? `Estado ambiguo: se verificaron los comprobantes ${expectedNumero + 1} a ${lastNumber} del tipo ${voucherType} en ARCA y ninguno coincide con este (total $${totalNum.toFixed(2)}, doc ${docTipo}/${docNro}). Verificar manualmente en portal ARCA.`
+            : `Estado ambiguo: ARCA reporta último número ${lastNumber} para el tipo ${voucherType}, local esperaba ${expectedNumero + 1} (diferencia de ${gap}, demasiado grande para reconciliar automáticamente). Verificar manualmente en portal ARCA.`;
+
+          const usoCaea = await intentarCaeaContingencia(fpa);
+          if (usoCaea) {
+            resultados.push({ id: fpa.id, resultado: 'autorizada_caea (ambiguo)' });
+          } else {
+            await marcarErrorDefinitivo(fpa.id, comp.id, msg);
+            resultados.push({ id: fpa.id, resultado: 'error_definitivo (ambiguo)' });
+          }
           continue;
         }
       }
@@ -229,20 +310,6 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
         .eq('comprobante_id', fpa.comprobante_id)
         .eq('empresa_id', comp.empresa_id);
 
-      let cliDocumento: string | null = null;
-      let cliCondicionIva: string | null = null;
-      if (comp.cliente_id) {
-        const { data: cli } = await adminClient
-          .from('clientes')
-          .select('documento, condicion_iva')
-          .eq('id', comp.cliente_id)
-          .single();
-        cliDocumento = cli?.documento ?? null;
-        cliCondicionIva = cli?.condicion_iva ?? null;
-      }
-
-      const { tipo: docTipo, nro: docNro } = docTipoAfip(cliDocumento);
-      const totalNum = Number(comp.total);
       const round2   = (n: number) => Math.round(n * 100) / 100;
       const etiquetaDoc = comp.tipo === 'nota_credito' ? 'Nota de Crédito'
         : comp.tipo === 'nota_debito' ? 'Nota de Débito' : 'Venta';
@@ -300,37 +367,24 @@ async function procesarCola(environment: 'production' | 'sandbox'): Promise<Resp
       });
 
       // ── 7. Éxito: persistir CAE en comprobantes + cerrar la cola ────────────
-      const numeroAfip  = `${String(pv.numero).padStart(4, '0')}-${String(arcaResult.numeroCorrelativo).padStart(8, '0')}`;
+      // Una sola transacción de Postgres (RPC), no 3 llamadas HTTP sueltas: si
+      // el proceso se corta a mitad de camino (Edge Function killeada, corte
+      // de red), antes podía quedar un comprobante con CAE real en ARCA pero
+      // cae_estado='pendiente' para siempre en KAIROX — "CAE fantasma".
+      const numeroAfip = `${String(pv.numero).padStart(4, '0')}-${String(arcaResult.numeroCorrelativo).padStart(8, '0')}`;
 
-      await Promise.all([
-        adminClient.from('comprobantes').update({
-          cae:             arcaResult.cae,
-          cae_vencimiento: arcaResult.caeExpirationDate ?? null,
-          cae_estado:      'emitido',
-          numero_afip:     numeroAfip,
-          error_afip:      null,
-        }).eq('id', comp.id),
-
-        // Contador por (PdV, cbte_tipo) — mig.273. El upsert también cubre el
-        // auto-seed de una serie que todavía no tenía fila (ver el chequeo de
-        // ambigüedad más arriba). Las columnas viejas ultimo_numero_a/b/c
-        // quedaron deprecadas y ya no se escriben.
-        adminClient.from('puntos_venta_numeracion').upsert({
-          empresa_id:     comp.empresa_id,
-          punto_venta_id: comp.punto_venta_id,
-          cbte_tipo:      voucherType,
-          ultimo_numero:  arcaResult.numeroCorrelativo,
-          updated_at:     new Date().toISOString(),
-        }, { onConflict: 'punto_venta_id,cbte_tipo' }),
-
-        adminClient.from('facturas_pendientes_arca').update({
-          estado:        'emitida',
-          cae:           arcaResult.cae,
-          cae_vencimiento: arcaResult.caeExpirationDate ? new Date(arcaResult.caeExpirationDate).toISOString().slice(0, 10) : null,
-          numero_arca:   arcaResult.numeroCorrelativo,
-          updated_at:    new Date().toISOString(),
-        }).eq('id', fpa.id),
-      ]);
+      const { error: persistErr } = await adminClient.rpc('fn_persistir_cae_emitido', {
+        p_fpa_id:             fpa.id,
+        p_comprobante_id:     comp.id,
+        p_empresa_id:         comp.empresa_id,
+        p_punto_venta_id:     comp.punto_venta_id,
+        p_cbte_tipo:          voucherType,
+        p_cae:                arcaResult.cae,
+        p_cae_vencimiento:    arcaResult.caeExpirationDate ?? null,
+        p_numero_afip:        numeroAfip,
+        p_numero_correlativo: arcaResult.numeroCorrelativo,
+      });
+      if (persistErr) throw new Error('ARCA emitió el CAE pero no se pudo persistir: ' + persistErr.message);
 
       resultados.push({ id: fpa.id, resultado: 'emitida' });
 

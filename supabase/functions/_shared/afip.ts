@@ -10,7 +10,7 @@
  */
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getValidTA } from './wsaa.ts';
-import { feCompUltimoAutorizado, feCAESolicitar, type WsfeAuth } from './wsfe.ts';
+import { feCompUltimoAutorizado, feCompConsultar, feCAESolicitar, type WsfeAuth, type CompConsultaResult } from './wsfe.ts';
 
 /**
  * Mapea tipo interno KAIROX (A/B/C) + clase de documento (comprobantes.tipo)
@@ -107,7 +107,7 @@ export interface ArcaEmitResult {
 }
 
 /** Convierte YYYYMMDD → YYYY-MM-DD (o null si vacío). */
-function fchToIso(yyyymmdd: string): string | null {
+export function fchToIso(yyyymmdd: string): string | null {
   if (!yyyymmdd || yyyymmdd.length !== 8) return null;
   return `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
 }
@@ -129,6 +129,27 @@ export async function getLastVoucherNumber(
   const ta = await getValidTA(admin, empresaId, environment, certPem, keyPem);
   const auth: WsfeAuth = { token: ta.token, sign: ta.sign, cuit };
   return await feCompUltimoAutorizado(environment, auth, pvNumero, voucherType);
+}
+
+/**
+ * Detalle real (incl. CAE) de un comprobante puntual — para reconciliar un
+ * estado ambiguo antes de rendirse a revisión manual. Ver el docblock de
+ * `feCompConsultar` en wsfe.ts para el porqué.
+ */
+export async function consultarComprobante(
+  admin: SupabaseClient,
+  empresaId: string,
+  cuit: string,
+  certPem: string,
+  keyPem: string,
+  environment: 'production' | 'sandbox',
+  pvNumero: number,
+  voucherType: number,
+  cbteNro: number,
+): Promise<CompConsultaResult | null> {
+  const ta = await getValidTA(admin, empresaId, environment, certPem, keyPem);
+  const auth: WsfeAuth = { token: ta.token, sign: ta.sign, cuit };
+  return await feCompConsultar(environment, auth, pvNumero, voucherType, cbteNro);
 }
 
 /**

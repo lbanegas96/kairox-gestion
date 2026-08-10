@@ -5,6 +5,7 @@
  *
  * Métodos implementados:
  *   - feCompUltimoAutorizado: último número emitido para un PdV+tipo (FECompUltimoAutorizado)
+ *   - feCompConsultar:        detalle real (incl. CAE) de un comprobante puntual (FECompConsultar)
  *   - feCAESolicitar:         emite el CAE de un comprobante (FECAESolicitar)
  */
 
@@ -85,6 +86,72 @@ export async function feCompUltimoAutorizado(
 
   const nro = tag(text, 'CbteNro');
   return nro ? parseInt(nro, 10) : 0;
+}
+
+export interface CompConsultaResult {
+  cbteNro:   number;
+  cbteFch:   string;   // YYYYMMDD
+  docTipo:   number;
+  docNro:    string;
+  impTotal:  number;
+  impNeto:   number;
+  impIVA:    number;
+  cae:       string;   // CodAutorizacion
+  caeVto:    string;   // FchVto, YYYYMMDD
+  resultado: string;   // 'A' | 'R'
+}
+
+/**
+ * Trae el detalle real (incl. CAE) de un comprobante puntual ya emitido en
+ * ARCA — a diferencia de FECompUltimoAutorizado (que solo dice "hasta qué
+ * número llegó ARCA"), esto permite RECONCILIAR: comparar el comprobante que
+ * ARCA dice tener contra el que el sistema tiene localmente pendiente, para
+ * distinguir "es el nuestro, ya salió" de "es de otro trámite, el nuestro no
+ * salió". Es el patrón recomendado por la comunidad de desarrolladores AFIP
+ * para resolver el estado ambiguo que deja un timeout, en vez de rendirse
+ * directo a revisión manual.
+ * Devuelve null si ARCA no tiene ningún comprobante con ese número (el hueco
+ * es realmente nuestro) — nunca lanza por "no encontrado", solo por errores
+ * de transporte/auth (mismo criterio que el resto de este archivo).
+ */
+export async function feCompConsultar(
+  environment: 'production' | 'sandbox',
+  auth: WsfeAuth,
+  ptoVta: number,
+  cbteTipo: number,
+  cbteNro: number,
+): Promise<CompConsultaResult | null> {
+  const body =
+    `<ar:FECompConsultar>${authBlock(auth)}` +
+    `<ar:FeCompConsReq><ar:CbteTipo>${cbteTipo}</ar:CbteTipo>` +
+    `<ar:CbteNro>${cbteNro}</ar:CbteNro><ar:PtoVta>${ptoVta}</ar:PtoVta>` +
+    `</ar:FeCompConsReq></ar:FECompConsultar>`;
+
+  const text = await postSoap(environment, 'FECompConsultar', body);
+
+  // Errors presente = ARCA no tiene comprobante con ese número (o falló la
+  // consulta) — en ambos casos, null: el caller decide qué hacer, esto no
+  // lanza para no interrumpir el loop de reconciliación por un solo número.
+  if (text.match(/<Errors>([\s\S]*?)<\/Errors>/)) return null;
+
+  const resultGet = text.match(/<ResultGet>([\s\S]*?)<\/ResultGet>/)?.[1];
+  if (!resultGet) return null;
+
+  const cae = tag(resultGet, 'CodAutorizacion');
+  if (!cae) return null;
+
+  return {
+    cbteNro,
+    cbteFch:   tag(resultGet, 'CbteFch') ?? '',
+    docTipo:   parseInt(tag(resultGet, 'DocTipo') ?? '0', 10),
+    docNro:    tag(resultGet, 'DocNro') ?? '',
+    impTotal:  parseFloat(tag(resultGet, 'ImpTotal') ?? '0'),
+    impNeto:   parseFloat(tag(resultGet, 'ImpNeto') ?? '0'),
+    impIVA:    parseFloat(tag(resultGet, 'ImpIVA') ?? '0'),
+    cae,
+    caeVto:    tag(resultGet, 'FchVto') ?? '',
+    resultado: tag(resultGet, 'Resultado') ?? '',
+  };
 }
 
 export interface CaeRequest {
