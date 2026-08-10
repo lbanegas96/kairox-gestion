@@ -1,4 +1,66 @@
 # KAIROX Gestión — Contexto de Sesión
+
+## 🚨 PENDIENTE URGENTE — Facturas C sin CAE desde el 06/08 (hallado 10/08, sin resolver)
+
+Mientras se probaba el Mapa de Relaciones se encontró que, desde el 06/08, **ninguna venta que
+factura como Factura C (tipo AFIP 11) consigue CAE**. 7 comprobantes atascados en
+`cae_estado = 'error_definitivo'` (06/08 al 10/08, ~$247.000 entre ventas reales y de prueba,
+incluye las pruebas de fidelización de hoy: 20260810-001/002/005/006), todos con el mismo mensaje
+en `facturas_pendientes_arca.error_mensaje`:
+
+> "Estado ambiguo: ARCA reporta último número 35 para el tipo 11, local esperaba 35. Verificar
+> manualmente en portal ARCA."
+
+El sistema no reintenta solo a propósito (para no duplicar una factura si en realidad el N°35 sí
+salió) — queda esperando que alguien chequee a mano en el portal de ARCA si el comprobante N°35 se
+emitió o no, y lo resuelva desde el Monitor de Facturación AFIP (mig.202/203,
+`marcar_cae_resuelto_manual`). **No se tocó nada de esto** — Claude no tiene ni debe tener acceso al
+portal de ARCA. Nadia decidió (10/08) seguir con las pruebas del Mapa de Relaciones primero y
+resolver esto después con Luciano.
+
+Aparte, ya documentado y con dueño desde antes: 16 comprobantes viejos (03/07 al 08/07) atascados
+por RG 5616 (Condición IVA del receptor), marcados en el propio `error_mensaje` como
+"no-relevante temporalmente el 2026-07-08 — fix de CondicionIVAReceptorId escrito pero no
+deployado". Ese ya estaba en el radar de Luciano, no es un hallazgo nuevo.
+
+## 🐛 Bug real — Mapa de Relaciones: "actual" nunca marca desde Cotizaciones (hallado 10/08)
+
+Circuito completo probado en vivo (Claude, navegación autónoma por pedido de Nadia — "entrá y
+revisá, todo lo que puedas probar hacelo"). Resultado: **funciona bien en 6 de los 7 puntos de
+entrada**, con un bug real y reproducible en uno.
+
+**Lo que anduvo bien:** barra de resumen (pasos/total/derivados), scroll de la cadena, click en un
+nodo no-actual abre el panel de preview inline sin cerrar el modal, botón "Cerrar preview",
+"Ver documento completo", toggle de pantalla completa, "Sin documentos relacionados — comprobante
+independiente" (venta de POS sin relaciones), "Sin documentos relacionados — factura independiente"
+(factura de compra cargada directa, sin recepción), lado Compras (Recepción→Factura), "Recepción
+todavía sin facturar" (mensaje correcto), y el punto de entrada desde Pedidos (`ModalDetallePedido`
+→ "Mapa de relaciones") marca bien el nodo "actual".
+
+**El bug:** abrir el Mapa de Relaciones desde una Cotización ya convertida en venta **nunca marca
+ningún nodo como "actual"** — se ve la cadena completa (Entrega→Factura) pero sin el badge violeta
+que indica "estás viendo esto desde acá". Causa raíz (confirmada leyendo el código, no es
+timing): en `src/components/shared/MapaRelaciones.jsx`, `resolveAndFetch()` guarda
+`activoId = cotizacionId` (línea 291) pero después llama a `fetchMapaVenta()`, que arma la cadena
+con nodos `origen/pedido/entregas/comprobante` — **nunca un nodo de tipo cotización**. Como
+`isActivo(id)` compara contra nodos que existen en la cadena, un id de cotización nunca va a
+matchear ninguno → el bug es 100% determinístico, no depende de qué cotización se abra. Afecta a
+las 21 cotizaciones convertidas de Nalux (y a cualquier empresa). Los otros 4 puntos de entrada
+(Pedido, Entrega, Recepción, Devolución) sí funcionan porque esas tablas SÍ generan su propio nodo
+en la cadena.
+
+Nota aparte, no confirmada como bug: al abrir el mapa desde un Pedido facturado hubo **una vez**
+un flash de "No se pudo cargar el mapa de relaciones" que se resolvió solo al reintentar (la
+segunda vez cargó perfecto, con "actual" bien marcado). Puede ser sólo lentitud de red del entorno
+local — no se pudo reproducir de nuevo — pero si Nadia/Luciano lo llegan a ver en producción,
+anotarlo.
+
+No se tocó código — es un hallazgo para que Nadia/Luciano decidan cuándo entra en el backlog. No es
+grave (visual/informativo, no rompe nada ni toca datos), pero sí un bug real en 1 de los 5 puntos
+de acceso nuevos de la Fase 3 del rediseño (09/08).
+
+---
+
 **Última actualización:** 2026-08-10 (Claude — Fidelización por Puntos queda 100% cerrada: Nadia
 probó en vivo el canje en el ERP, encontrando de paso que `NuevaVentaModal` sólo se abre
 facturando un Pedido/Cotización, no desde un botón directo. Antes de eso, mismo día: bug real de
