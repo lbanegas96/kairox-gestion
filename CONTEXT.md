@@ -397,9 +397,18 @@ que se aplicó tal cual, sin volver a probar. Verificado después de aplicar: la
 fix, `GRANT` sólo a `service_role` (ni `authenticated` ni `anon` pueden ejecutarla), y 0 alertas
 de seguridad nuevas en `get_advisors`.
 
-**Falta sólo la prueba en vivo con un pago real de MercadoPago** (cobrar por QR a un cliente con
-fidelización activa y confirmar que suma los puntos) — es el Bloque 2 de
-`PLAN_PRUEBAS_NADIA_2026-08-08.md`, ya desbloqueado.
+**Probado parcialmente en vivo por Nadia (10/08):** cobro real por QR de $2 (venta 20260810-005,
+Luciano Rosa) — el pago se acreditó bien, pero $2 con el ratio actual (100 pesos = 1 punto) da
+`floor(2/100) = 0` puntos, así que no hay forma de confirmar desde este monto si el mecanismo de
+sumar puntos realmente corrió (0 puntos y "no corrió" se ven exactamente igual). **Sigue pendiente
+un cobro real más grande (~$100+) para confirmarlo de una vez** — Nadia decidió dejarlo así por
+ahora, no es urgente retomarlo.
+
+**De paso, Nadia preguntó por la demora de ~60-70s en confirmar el pago — no es nada nuevo:** es
+el mismo problema del webhook de MP con 401 ya documentado hace tiempo (ver "🔴 Secreto de firma
+de MP" más abajo) — Luciano ya roteó la clave una vez y se revisó el código dos veces, sigue sin
+resolverse, próximo paso sería contactar al soporte de MP directamente. El poller de 1 minuto
+(`mp-qr-poller`) sigue siendo la red de seguridad mientras tanto, funcionando como se espera.
 
 **Nota de coordinación (sin impacto en vos, sólo para que quede registrado):** mientras
 trabajaba en esto, Nadia (en su propia sesión, en paralelo) ya había replicado la Fase 3 al ERP
