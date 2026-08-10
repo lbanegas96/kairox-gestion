@@ -61,18 +61,30 @@ de acceso nuevos de la Fase 3 del rediseño (09/08).
 
 ---
 
-**Última actualización:** 2026-08-10 (Claude — Fidelización por Puntos queda 100% cerrada: Nadia
-probó en vivo el canje en el ERP, encontrando de paso que `NuevaVentaModal` sólo se abre
-facturando un Pedido/Cotización, no desde un botón directo. Antes de eso, mismo día: bug real de
-impresión, el ticket 80mm se imprimía con columnas pegadas sin espacio al exportar a PDF desde
-Adobe. Causa: usaba CSS grid con unidades `ch`/`fr`, que algunos exportadores de impresión no
-calculan bien. Cambiado a tabla HTML normal, mismo criterio que ya usaba el formato A4. Antes de
-eso (09/08): Fase 3 del rediseño del
-Mapa de Relaciones — puntos de acceso desde Cotizaciones, Pedidos, Entregas, Recepciones y
-Devoluciones, no solo desde la Factura. Con esto **las 3 fases del rediseño quedan completas y
-deployadas** — `PLAN_MAPA_RELACIONES.md`. Circuito de pruebas actualizado en
-`PLAN_PRUEBAS_SABADO_2026-08-08.md` sección 5. Antes de eso, mismo hilo (08/08): Fases 1 y 2 del
-rediseño. Y antes de eso (07/08): auditoría contable sistemática de las 10 áreas — mig.314.)
+**Última actualización:** 2026-08-10, cierre del día (Claude — sesión completa: se terminó de
+verificar en vivo TODO lo pendiente que había quedado tras bajar el trabajo de Luciano de la noche
+anterior. Resultado final del día:
+
+1. **Fidelización por Puntos — 100% cerrada**, las 3 fases confirmadas en vivo por Nadia en POS y
+   ERP (canje, saldo, descuento prorrateado en el asiento contable). Bug de UX encontrado (no hay
+   botón directo "Nueva Venta" al ERP, sólo vía Pedido/Cotización) — documentado, no resuelto.
+2. **Bug de impresión del ticket 80mm** (columnas pegadas al exportar a PDF) — corregido, probado
+   por Nadia en producción.
+3. **Fase 3 del rediseño del Mapa de Relaciones** (puntos de acceso desde Cotizaciones, Pedidos,
+   Entregas, Recepciones, Devoluciones) — deployada el 09/08, **verificada en vivo hoy** por Claude
+   (circuito completo, ver sección de arriba). Confirmó que anda bien en casi todo, encontró 1 bug
+   real (el badge "actual" no marca al entrar desde Cotizaciones) — **sin resolver, en el backlog**.
+   Con esto las 3 fases del rediseño quedan completas y deployadas — `PLAN_MAPA_RELACIONES.md`.
+4. **Dos hallazgos pendientes sin tocar, arriba de este archivo** — leer primero:
+   - 🚨 Facturas C sin CAE desde el 06/08 (estado ambiguo N°35 en ARCA) — necesita que alguien
+     entre al portal de ARCA a mano, no lo puede resolver Claude.
+   - 🐛 Bug del Mapa de Relaciones en Cotizaciones — cosmético, baja prioridad, causa raíz ya
+     identificada en el código si alguien lo quiere tomar.
+
+Antes de este cierre, mismo hilo (09/08): Fases 1 y 2 del rediseño del Mapa de Relaciones. Y antes
+de eso (07/08): auditoría contable sistemática de las 10 áreas — mig.314.
+
+Nada queda a medio hacer ni sin commitear — repo sincronizado con origin/master.)
 
 ## 🐛 Ticket 80mm imprimía con columnas pegadas — corregido (10/08)
 
