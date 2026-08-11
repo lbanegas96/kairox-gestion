@@ -1,5 +1,31 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🔴 DECISIÓN PARA LUCIANO — Plan free de Supabase vence el 17/08, elegir camino (11/08)
+
+**Leer esto primero.** La organización NALUX sigue en plan `free` de Supabase (verificado en vivo
+hoy contra la API: `get_organization` devuelve `"plan":"free"`) y el proyecto queda **restringido
+desde el 17/08/2026** por cuota excedida — quedan **6 días** desde hoy. Si no se resuelve, se cae
+la producción de todos los clientes.
+
+Nadia planteó el tema: el producto todavía no factura como para justificar pagar un plan pago, y
+hoy no hay presupuesto para eso. Dos caminos, a decidir entre los dos:
+
+1. **Pagar el plan Pro** (~US$25/mes) en la cuenta actual — resuelve esto en minutos, sin ningún
+   riesgo de migración, cuando/si hay presupuesto.
+2. **Migrar todo a una organización nueva, también en plan free** — compra tiempo sin gastar, pero
+   es trabajo técnico real y no es una solución permanente (si el uso sigue creciendo, se puede
+   volver a topar con el mismo límite ahí).
+
+**Quedó documentado en detalle, paso a paso, en [`PLAN_MIGRACION_SUPABASE.md`](PLAN_MIGRACION_SUPABASE.md)**
+— qué se copia, qué hay que rehacer a mano (importante: el token de MercadoPago y el certificado de
+AFIP están en el Vault de Supabase, encriptado por proyecto, **no se pueden copiar** — hay que
+volver a cargarlos desde la propia pantalla de Configuración de KAIROX, no es "empezar de cero" la
+integración, solo re-pegar el mismo dato), y las 9 fases de ejecución si se elige migrar.
+
+**No se tocó nada todavía** — es sólo el documento, a la espera de que Luciano decida cuál de los
+dos caminos tomar. Si elige migrar, Claude puede hacer todo el trabajo técnico (volcado de datos,
+redeploy de funciones, verificación); si elige pagar, no hace falta hacer nada de esto.
+
 ## ✅ Plan de robustez ARCA — Bloques 1 y 2 verificados en vivo por Claude (11/08)
 
 Nadia bajó el trabajo de Luciano de anoche (plan de robustez de facturación AFIP/ARCA, ver sección
