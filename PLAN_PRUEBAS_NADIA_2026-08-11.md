@@ -13,6 +13,39 @@ sigue en fase de prueba) — podés facturar sin miedo, no es el ambiente fiscal
 
 ---
 
+## ✅ Resultados — probado por Claude en local (11/08, autorizado por Nadia)
+
+Nadia inició sesión en `localhost:3000` (mismo backend/Supabase que producción) y me pidió
+verificar los Bloques 1 y 2 en su lugar. Resultado:
+
+**Bloque 1 — ✅ pasó, con un detalle a pulir.** Abrí el detalle de 20260806-011 ($121.000) en el
+Monitor: estado mostrado **"Revisión manual"** (no el texto crudo), motivo correcto y claro
+("Se agotaron los 5 reintentos automáticos con backoff — ARCA no respondió o siguió caído en
+todos los intentos"), y el toggle **"Ver detalle técnico"** funciona bien en ambos sentidos
+(muestra `[10016] El numero o fecha del comprobante no se corresponde...` y vuelve).
+⚠️ **Inconsistencia menor encontrada:** el bloque "Último error" sigue mostrando el mensaje humano
+fijo del código 10016 — *"...no hace falta que hagas nada todavía"* — que tiene sentido mientras
+sigue reintentando, pero queda contradictorio una vez que el comprobante ya pasó a "Revisión
+manual / reintentos agotados" (dos frases opuestas, una arriba de la otra, en el mismo panel).
+Causa: `mensajeHumano()` en `supabase/functions/_shared/afip.ts` traduce por código de error fijo,
+sin variar el texto según si todavía está reintentando o ya se rindió. No rompe nada, es sólo
+confuso de leer — queda en el backlog, no se tocó.
+
+Los 3 comprobantes del incidente (20260806-001, -008, -011) terminaron los 5 reintentos sin que
+ARCA destrabara el número — están en "Revisión manual" con `motivo_definitivo='reintentos_agotados'`.
+No es una falla del fix (ver "Cómo seguimos" más abajo).
+
+**Bloque 2 — ✅ pasó, muy por encima de lo esperado.** Venta de prueba (Lapicera, $2, Efectivo) →
+comprobante **20260811-001**. Medido contra la base: encolada a las 14:23:36.05, CAE real
+conseguido a las 14:23:37.62 — **1,6 segundos**, contra los ~30 segundos esperados. Numeración
+real asignada: `0001-00000040`. Sin errores nuevos en consola (solo el warning preexistente y no
+relacionado de `TopClientes.jsx`).
+
+**Bloque 3 — ⬜ no aplica todavía.** Ninguno de los 3 comprobantes tiene un CAE confirmado a mano
+en el portal de ARCA — queda pendiente para cuando Nadia/Luciano lo chequeen ahí directamente.
+
+---
+
 ## Bloque 1 — Monitor de Facturación AFIP: mensajes humanos y auto-reintento
 
 **Qué se hizo:** antes, cualquier error de ARCA se mostraba en el Monitor con el texto crudo del

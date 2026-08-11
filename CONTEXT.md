@@ -1,11 +1,25 @@
 # KAIROX Gestión — Contexto de Sesión
 
-## 🧪 Pendiente para Nadia mañana (11/08): probar el plan de robustez ARCA
+## ✅ Plan de robustez ARCA — Bloques 1 y 2 verificados en vivo por Claude (11/08)
 
-Plan de pruebas dedicado en `PLAN_PRUEBAS_NADIA_2026-08-11.md` — cubre los 3 comprobantes del
-incidente reintentando solos con mensaje humano en el Monitor (Bloque 1), velocidad de una
-factura nueva (Bloque 2), y el diálogo "Marcar resuelta" con CAE real si hiciera falta
-(Bloque 3). Ver la sección de abajo para el detalle técnico completo.
+Nadia bajó el trabajo de Luciano de anoche (plan de robustez de facturación AFIP/ARCA, ver sección
+de abajo), inició sesión en `localhost:3000` y me pidió probar los Bloques 1 y 2 de
+`PLAN_PRUEBAS_NADIA_2026-08-11.md` en su lugar (mismo backend/Supabase que producción). Resultado
+completo y detallado en ese archivo — resumen:
+
+- **Bloque 1 (Monitor de Facturación AFIP) — ✅ pasó.** Estado "Revisión manual" con motivo claro
+  ("se agotaron los 5 reintentos..."), toggle "Ver detalle técnico" funcionando en ambos sentidos.
+  ⚠️ Encontré una inconsistencia menor: el mensaje humano del "Último error" queda desactualizado
+  una vez que el comprobante ya se rindió (sigue diciendo "no hace falta que hagas nada todavía"
+  al lado de "se agotaron los reintentos"). No se tocó — queda en el backlog, no rompe nada.
+- **Bloque 2 (velocidad) — ✅ pasó, mejor de lo esperado.** Venta de prueba $2 (20260811-001):
+  **1,6 segundos** entre encolar y conseguir CAE real (0001-00000040), contra los ~30s esperados.
+- **Bloque 3 — ⬜ no aplica todavía** (ninguno de los 3 comprobantes del incidente tiene CAE
+  confirmado a mano en el portal de ARCA).
+
+Los 3 comprobantes del incidente original (20260806-001/-008/-011) agotaron sus reintentos
+automáticos y quedaron en "Revisión manual" — comportamiento esperado del fix, no una falla (ARCA
+nunca destrabó esos 3 números puntuales). Sin urgencia, sistema sigue en homologación.
 
 ## ✅ Plan de robustez del motor de Facturación AFIP/ARCA — 3 fases completas (10/08)
 
