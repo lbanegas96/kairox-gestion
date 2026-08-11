@@ -40,13 +40,19 @@ comprobante "emitido" sin esos datos, legalmente incompleto).
 
 **Verificado en vivo contra los 7 Facturas C reales atascados desde el 06/08:** 5 resueltos
 (20260810-002 reconciliado directo al CAE real N°35 sin consumir número nuevo; 06-006, 10-005,
-10-001, 10-006 emitidos con numeración real nueva una vez que el contador se puso al día). 2 siguen
-sin resolver (06-001 $3.000, 06-011 $121.000) — 3 reintentos con el mismo `[10016]`, contador local
-sin moverse entre intentos (no es carrera de lote), probable desfasaje de caché del lado de ARCA.
-Quedan en `error_datos`, estables, mensaje humano confirmado visible en el Monitor — reintentar más
-tarde desde ahí. **Nota aparte, sin investigar:** apareció un tercer comprobante en error
-(20260806-008, $25.000, mismo cliente Luciano) no incluido en el lote original de 7 — mismo estado,
-queda para la próxima sesión.
+10-001, 10-006 emitidos con numeración real nueva una vez que el contador se puso al día).
+
+**Los 3 restantes (06-001 $3.000, 06-008 $25.000 — apareció después, no estaba en el lote
+original de 7 —, y 06-011 $121.000) repetían `[10016]` de forma consistente incluso con el
+contador local ya al día.** Se probó y descartó la hipótesis de "un número específico quemado"
+(fallback `ultimo+1`→`ultimo+2` desplegado v24, probado en vivo, `ultimo+2` rechazado igual —
+revertido en v25). **Fix real:** `classifyArcaError` reclasificó `[10016]` de `'data'` a
+`'ambiguous'` — antes exigía reencolar a mano cada vez; ahora reintenta solo con backoff
+exponencial como cualquier error transitorio. Confirmado en producción (v25, ACTIVA): los 3
+comprobantes están en `estado='reintentando'` con `intentos` subiendo automáticamente sin
+intervención humana. Si ARCA no resuelve el desincronismo solo, caen a `error_definitivo` con
+`motivo_definitivo='reintentos_agotados'` tras 5 intentos — parada segura y clara. Detalle
+completo en `PLAN_ROBUSTEZ_FACTURACION_ARCA.md`.
 
 Verificado además: `npx eslint` 0 errores (solo warnings preexistentes de PropTypes), `npx vite
 build` limpio, 153/153 tests, probado en vivo en el Monitor (toggle técnico funcionando, mensaje

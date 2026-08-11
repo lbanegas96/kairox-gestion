@@ -176,6 +176,15 @@ export async function callArcaEmit(
     ? Math.round((params.iva / params.neto) * 1000) / 10
     : 21);
 
+  // NOTA (10/08, homologación): se probó y se descartó un fallback que ante
+  // [10016] reintentaba inmediatamente con ultimo+2 ("¿el número de al lado
+  // quedó quemado?") — confirmado en vivo que NO resuelve: ultimo+2 también
+  // fue rechazado por ARCA para los mismos 3 comprobantes de prueba. No es
+  // un único número bloqueado, es algo más profundo del lado de ARCA (o una
+  // ventana de tiempo mucho más larga de la esperada) — no vale la pena
+  // saltar números a ciegas sin evidencia de que ayude. classifyArcaError sí
+  // clasifica [10016] como 'ambiguous' (reintenta con backoff en vez de
+  // quedar en error_datos esperando reencolado manual) — ver ese comentario.
   const result = await feCAESolicitar(params.environment, auth, {
     ptoVta:   params.pvNumero,
     cbteTipo: params.voucherType,
@@ -207,6 +216,21 @@ export async function callArcaEmit(
  */
 export function classifyArcaError(errorMessage: string): 'transient' | 'data' | 'ambiguous' {
   const msg = errorMessage.toLowerCase();
+
+  // [10016] "El numero o fecha del comprobante no se corresponde con el
+  // proximo a autorizar" — confirmado en vivo (10/08, homologación) que NO
+  // es un dato inválido irrecuperable: 3 comprobantes lo repitieron de forma
+  // consistente incluso con el pre-check de ambigüedad ya resuelto (lastNumber
+  // == esperado localmente), o sea que en el momento exacto de FECAESolicitar
+  // el estado interno de ARCA todavía no coincidía con lo que acababa de
+  // reportar FECompUltimoAutorizado segundos antes — un desincronismo
+  // transitorio del lado de ARCA, no un error de nuestros datos. Se saca de
+  // la familia 1001x (que sí son datos inválidos genuinos) para que
+  // reintente solo con backoff en vez de quedar en error_datos esperando
+  // reencolado manual cada vez.
+  if (/\b10016\b/.test(msg)) {
+    return 'ambiguous';
+  }
 
   // Rechazo explícito de WSFE por datos del comprobante
   if (

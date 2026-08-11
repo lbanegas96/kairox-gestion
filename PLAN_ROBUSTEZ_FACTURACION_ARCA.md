@@ -12,14 +12,25 @@ manualmente:
   fantasma genuino, resuelto sin consumir número nuevo ni intervención humana.
 - **20260806-006, 20260810-005, 20260810-001, 20260810-006** → una vez que el contador se
   puso al día, se emitieron con números reales nuevos (36, 37, 38, 39).
-- **20260806-001 ($3.000) y 20260806-011 ($121.000)** → siguen sin resolver. Los 3 reintentos
-  (incluso solos, con minutos de por medio) dieron el mismo `[10016] El numero o fecha del
-  comprobante no se corresponde con el proximo a autorizar` — el contador local
-  (`puntos_venta_numeracion.ultimo_numero=39`) no se movió entre intentos, así que no es una
-  carrera entre ítems del mismo lote. Lectura más probable: un desfasaje de caché del lado de
-  ARCA entre `FECompUltimoAutorizado` y el estado real de `FECAESolicitar` que no conviene
-  forzar más — el sistema se comportó de forma segura (nunca emitió mal, solo se negó).
-  Quedan en `error_datos` (estable, sin loop) para reintentar más tarde desde el Monitor.
+- **20260806-001 ($3.000), 20260806-008 ($25.000) y 20260806-011 ($121.000)** → apareció un
+  tercer comprobante atascado con el mismo patrón (`-008`, no estaba en el barrido original).
+  Los 3 repiten `[10016] El numero o fecha del comprobante no se corresponde con el proximo a
+  autorizar` de forma consistente, incluso reintentando solos con minutos de por medio y con el
+  contador local ya al día — no es una carrera entre ítems del mismo lote.
+  **Hipótesis probada y descartada:** que un único número específico quedara "quemado" del lado
+  de ARCA sin autorizar nunca — se implementó un fallback que ante `[10016]` reintentaba
+  inmediatamente con `ultimo+2`, se desplegó (v24) y se probó en vivo contra 06-001: `ultimo+2`
+  fue rechazado igual que `ultimo+1`. Descartada y revertida (v25) — no vale la pena saltar
+  números a ciegas sin evidencia de que ayude.
+  **Fix real aplicado:** `classifyArcaError` reclasificó `[10016]` de `'data'` a `'ambiguous'`
+  — antes caía directo a `error_datos` (sin loop, pero requería reencolado manual cada vez);
+  ahora reintenta solo con backoff exponencial como cualquier error transitorio. Verificado en
+  vivo (v25, ACTIVA en producción): los 3 comprobantes están en `estado='reintentando'`,
+  `intentos` subiendo automáticamente (2 y 4 al momento de escribir esto) sin intervención
+  humana. Si ARCA no resuelve el desincronismo solo, el sistema agota los 5 reintentos y cae en
+  `error_definitivo` con `motivo_definitivo='reintentos_agotados'` — una parada segura y clara,
+  no un loop infinito ni un placebo. Dado que el sistema está en fase de prueba (homologación),
+  esto queda como estado de reposo aceptable sin urgencia.
 
 **Fase 2: ✅ construida y aplicada a producción.** Migración 316 — `fn_queue_factura_arca`
 ahora despierta a `arca-worker` con un `net.http_post` fire-and-forget apenas encola algo
