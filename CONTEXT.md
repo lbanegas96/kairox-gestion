@@ -1,5 +1,12 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🧪 Pendiente para Nadia mañana (11/08): probar el plan de robustez ARCA
+
+Plan de pruebas dedicado en `PLAN_PRUEBAS_NADIA_2026-08-11.md` — cubre los 3 comprobantes del
+incidente reintentando solos con mensaje humano en el Monitor (Bloque 1), velocidad de una
+factura nueva (Bloque 2), y el diálogo "Marcar resuelta" con CAE real si hiciera falta
+(Bloque 3). Ver la sección de abajo para el detalle técnico completo.
+
 ## ✅ Plan de robustez del motor de Facturación AFIP/ARCA — 3 fases completas (10/08)
 
 Pedido de Luciano tras el incidente de abajo ("Facturas C sin CAE"): reforzar el motor de emisión
