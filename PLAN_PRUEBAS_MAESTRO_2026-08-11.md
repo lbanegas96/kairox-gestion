@@ -133,6 +133,38 @@ estricta, así el navegador cae de forma prolija a la única cámara disponible 
 demorar/fallar — sin afectar el comportamiento ya correcto en celular (que sí tiene cámara trasera
 y la sigue prefiriendo).
 
+**✅ ARREGLADO (12/08, Claude — a pedido de Nadia, que reprodujo y aportó el síntoma decisivo).**
+Nadia probó de nuevo y sumó un dato que no estaba en el diagnóstico original: *"hay que acercar
+mucho el producto para que tome el código"*, tanto en PC como en celular. Eso reveló que el
+`facingMode` estricto era **solo una de tres causas**, y ni siquiera la principal:
+
+1. **Resolución de video (causa principal del "no lo toma"):** nunca se le pedía calidad a la
+   cámara, así que el navegador entregaba su default (~640x480). A esa resolución un código de
+   barras solo es legible casi pegado al lente. Ahora se piden `1280x720` ideales — 4x el área en
+   píxeles, sin volver lenta la decodificación en JS.
+2. **Sin enfoque continuo:** la cámara quedaba fija en un plano, de ahí el "queda en negro un buen
+   rato" y la dificultad para enfocar de cerca en celular. Se agregó `focusMode: 'continuous'`
+   dentro de `advanced` (los navegadores que no lo soportan lo ignoran en vez de fallar).
+3. **Lector probando todos los formatos:** usaba `BrowserMultiFormatReader`, que en CADA cuadro de
+   video prueba también QR, DataMatrix, PDF417 y Aztec. Cambiado a `BrowserMultiFormatOneDReader`
+   (solo códigos lineales: EAN-13/EAN-8/UPC/Code128/Code39/ITF — los de retail). Menos trabajo por
+   cuadro = lectura más rápida. **Nota:** si alguna vez hiciera falta escanear un QR desde este
+   modal, es volver a `BrowserMultiFormatReader` en el import.
+
+Más el fix que Luciano ya había diagnosticado (`facingMode: { ideal: 'environment' }`, con
+fallback a cualquier cámara solo ante errores de restricción — no ante permiso denegado, para no
+dispararle al usuario un segundo cartel de permiso al pedo), y un **corte de seguridad a los 10
+segundos** que muestra un error claro en vez de dejar el modal colgado con el spinner para siempre.
+
+**Ayuda para diagnosticar en la próxima prueba:** el modal ahora muestra abajo a la derecha del
+video **la resolución real que entregó la cámara**. Si dice `1280×720` o más, la mejora se aplicó;
+si dice `640×480`, esa cámara no da más y es límite físico del hardware, no del código.
+
+Verificado: `eslint` 0 errores, 153/153 tests, `vite build` limpio, modal probado en el navegador
+(el entorno de pruebas bloquea la cámara, así que se confirmó el camino de error — muestra el
+mensaje correcto al instante en vez de colgarse, que era el síntoma). **La lectura real de un
+código de barras con cámara física sigue necesitando prueba manual de Nadia/Luciano.**
+
 ### C.2 — QR MercadoPago con un cobro real (regresión del fix de CORS)
 
 1. Desde el celular o la compu, entrá a la URL de producción normal (no hace falta buscar una URL

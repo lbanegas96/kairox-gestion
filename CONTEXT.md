@@ -1,5 +1,36 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Escaneo por cámara — 3 causas encontradas y arregladas (12/08)
+
+Luciano había diagnosticado el 12/08 que el escáner no abría en PC por pedir la cámara trasera como
+restricción estricta, y lo dejó anotado sin arreglar. Nadia lo volvió a probar y aportó el síntoma
+que destrabó el caso: **"hay que acercar mucho el producto para que tome el código"**, en PC *y* en
+celular. Eso mostró que el `facingMode` era solo una de tres causas, y ni la más importante:
+
+1. **Resolución de video (la causa principal):** nunca se le pedía calidad a la cámara → el
+   navegador entregaba ~640x480, resolución a la que un código de barras solo se lee casi pegado al
+   lente. Ahora pide `1280x720` ideales.
+2. **Sin enfoque continuo:** la cámara quedaba fija en un plano (de ahí el "queda en negro un buen
+   rato" en celular). Agregado `focusMode: 'continuous'` en `advanced`, para que el navegador que
+   no lo soporte lo ignore en vez de fallar el pedido entero.
+3. **Lector probando todos los formatos:** `BrowserMultiFormatReader` prueba QR/DataMatrix/PDF417/
+   Aztec en cada cuadro. Cambiado a `BrowserMultiFormatOneDReader` (solo códigos lineales de
+   retail: EAN-13/EAN-8/UPC/Code128/Code39/ITF) — bastante menos trabajo por cuadro.
+
+Más el fix de `facingMode: { ideal: 'environment' }` que Luciano ya había propuesto (con fallback a
+cualquier cámara **solo** ante errores de restricción, no ante permiso denegado — reintentar ahí no
+arregla nada y le dispara al usuario un segundo cartel de permiso), y un **corte de seguridad a los
+10s** para que el modal no quede colgado en negro con el spinner girando indefinidamente.
+
+Se agregó además un indicador de **la resolución real** que entregó la cámara, abajo a la derecha
+del video: si dice `1280×720` la mejora se aplicó; si dice `640×480`, esa cámara no da más (límite
+físico del hardware, no del código). Sirve para diagnosticar de un vistazo sin adivinar.
+
+Verificado: `eslint` 0 errores, 153/153 tests, `vite build` limpio, camino de error probado en el
+navegador. **Pendiente: la lectura real con cámara física la tienen que confirmar Nadia (PC +
+celular) — el entorno de pruebas no puede acceder a una cámara.** Detalle completo en
+`PLAN_PRUEBAS_MAESTRO_2026-08-11.md`, sección C.1.
+
 ## 📌 Pendiente (sin urgencia) — repo de GitHub público, bajo cuenta personal (12/08)
 
 Verificado hoy: el repo (`github.com/lbanegas96/kairox-gestion`) está **público** y vive en la
