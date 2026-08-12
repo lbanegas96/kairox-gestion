@@ -10,19 +10,28 @@ import { Camera, X, AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
-// Calidad de video pedida a la cámara. Sin esto el navegador entrega su default
-// (típicamente 640x480), resolución con la que un código de barras solo se lee
-// casi pegado al lente — era la causa real de "hay que acercar mucho el
-// producto" (12/08). 1280x720 cuadruplica el área en píxeles sin volver lenta
-// la decodificación en JS, que es el punto de equilibrio recomendado para
-// escaneo con ZXing.
+// Arranque en dos etapas, para no tener que elegir entre "abre rápido" y "lee
+// bien" (12/08 — Nadia reportó desde producción que abría lento y quedaba en
+// negro un buen rato, en PC y celular):
 //
-// `focusMode: continuous` va dentro de `advanced` a propósito: no todos los
-// navegadores lo soportan, y en `advanced` el que no lo entiende simplemente lo
-// ignora, en vez de hacer fallar el pedido de cámara entero.
-const CALIDAD_VIDEO = {
+//   Etapa 1 (CONSTRAINTS_INICIALES): se le pide a la cámara lo mínimo. Pedirle
+//   de entrada alta resolución obliga al hardware a inicializarse directamente
+//   en ese modo, que es justamente lo que hace lenta la apertura. Así el video
+//   aparece cuanto antes.
+//
+//   Etapa 2 (CALIDAD_ALTA): con la cámara ya andando, se sube la calidad sobre
+//   el track existente con applyConstraints — ajusta sin reiniciar el
+//   dispositivo. Acá va la resolución alta (a 640x480 un código de barras solo
+//   se lee casi pegado al lente, causa del "hay que acercar mucho") y el
+//   enfoque continuo. Si la cámara no soporta algo de esto, falla solo esta
+//   parte y se sigue escaneando con lo que haya — nunca rompe el escaneo.
+const CONSTRAINTS_INICIALES = { facingMode: { ideal: 'environment' } };
+
+const CALIDAD_ALTA = {
   width:  { ideal: 1280 },
   height: { ideal: 720 },
+  // `advanced` porque no todos los navegadores soportan focusMode: el que no lo
+  // entiende lo ignora, en vez de rechazar el ajuste entero.
   advanced: [{ focusMode: 'continuous' }],
 };
 
@@ -56,12 +65,16 @@ export default function EscanerCamaraModal({ open, onClose, onDetectado }) {
   // 640x480 igual, saberlo de un vistazo explica al toque por qué cuesta leer
   // el código, en vez de quedar adivinando.
   const [resolucion, setResolucion] = useState(null);
+  // Se enciende si la cámara tarda en abrir, para avisar en pantalla en vez de
+  // dejar un rectángulo negro que parece colgado.
+  const [demorado, setDemorado] = useState(false);
 
   useEffect(() => {
     if (!open) return undefined;
     setError(null);
     setCargando(true);
     setResolucion(null);
+    setDemorado(false);
 
     const reader = new BrowserMultiFormatOneDReader();
     let activo = true; // false al desmontar/cerrar, o apenas se resuelve/falla/agota el timeout
@@ -92,12 +105,34 @@ export default function EscanerCamaraModal({ open, onClose, onDetectado }) {
       setError('La cámara tardó demasiado en responder. Cerrá y volvé a intentar.');
     }, 10000);
 
+    // Avisa que puede demorar, en vez de dejar un rectángulo negro mudo — la
+    // inicialización del hardware de cámara tarda unos segundos y no hay forma
+    // de acelerarla más allá de pedirle poco al arrancar (ver arriba).
+    const demoraId = setTimeout(() => { if (activo) setDemorado(true); }, 2500);
+
+    const leerResolucion = () => {
+      const v = videoRef.current;
+      if (!v) return;
+      const leer = () => { if (activo) setResolucion(v.videoWidth ? `${v.videoWidth}×${v.videoHeight}` : null); };
+      if (v.videoWidth) leer();
+      else v.addEventListener('loadedmetadata', leer, { once: true });
+    };
+
+    // Etapa 2: con la cámara ya abierta, subir calidad sobre el track existente.
+    const subirCalidad = async () => {
+      const track = videoRef.current?.srcObject?.getVideoTracks?.()[0];
+      if (!track) return;
+      try {
+        await track.applyConstraints(CALIDAD_ALTA);
+      } catch {
+        // La cámara no soporta esta calidad/enfoque: se sigue escaneando con lo
+        // que haya. No es un error que valga la pena mostrarle a nadie.
+      }
+      leerResolucion();
+    };
+
     reader
-      .decodeFromConstraints(
-        { video: { ...CALIDAD_VIDEO, facingMode: { ideal: 'environment' } } },
-        videoRef.current,
-        onResultado,
-      )
+      .decodeFromConstraints({ video: CONSTRAINTS_INICIALES }, videoRef.current, onResultado)
       // Fallback: si ni la restricción "ideal" funcionó (cámara/navegador poco
       // común), reintenta sin pedir ninguna cámara en particular. Solo ante
       // errores de RESTRICCIÓN — si el usuario denegó el permiso o no hay
@@ -106,26 +141,24 @@ export default function EscanerCamaraModal({ open, onClose, onDetectado }) {
       .catch((err) => {
         const esDeRestriccion = err?.name === 'OverconstrainedError' || err?.name === 'ConstraintNotSatisfiedError';
         if (!esDeRestriccion) throw err;
-        return reader.decodeFromConstraints({ video: CALIDAD_VIDEO }, videoRef.current, onResultado);
+        return reader.decodeFromConstraints({ video: true }, videoRef.current, onResultado);
       })
       .then((controls) => {
         clearTimeout(timeoutId);
+        clearTimeout(demoraId);
         if (!activo) {
           controls.stop();
           return;
         }
         controlsRef.current = controls;
         setCargando(false);
-        // El <video> ya tiene el stream: leer qué resolución entregó de verdad.
-        const v = videoRef.current;
-        if (v) {
-          const leer = () => setResolucion(v.videoWidth ? `${v.videoWidth}×${v.videoHeight}` : null);
-          if (v.videoWidth) leer();
-          else v.addEventListener('loadedmetadata', leer, { once: true });
-        }
+        setDemorado(false);
+        leerResolucion();  // lo que entregó al abrir
+        subirCalidad();    // y en cuanto se pueda, mejor
       })
       .catch((err) => {
         clearTimeout(timeoutId);
+        clearTimeout(demoraId);
         if (!activo) return;
         activo = false;
         setCargando(false);
@@ -135,6 +168,7 @@ export default function EscanerCamaraModal({ open, onClose, onDetectado }) {
     return () => {
       activo = false;
       clearTimeout(timeoutId);
+      clearTimeout(demoraId);
       controlsRef.current?.stop();
       controlsRef.current = null;
     };
@@ -159,8 +193,14 @@ export default function EscanerCamaraModal({ open, onClose, onDetectado }) {
           <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
 
           {cargando && !error && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 px-4 text-center">
               <Loader2 className="w-8 h-8 animate-spin text-white" />
+              <p className="text-xs text-white/90">Encendiendo la cámara…</p>
+              {demorado && (
+                <p className="text-[11px] text-white/60">
+                  Algunas cámaras tardan unos segundos en arrancar.
+                </p>
+              )}
             </div>
           )}
 

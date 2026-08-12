@@ -27,9 +27,24 @@ del video: si dice `1280×720` la mejora se aplicó; si dice `640×480`, esa cá
 físico del hardware, no del código). Sirve para diagnosticar de un vistazo sin adivinar.
 
 Verificado: `eslint` 0 errores, 153/153 tests, `vite build` limpio, camino de error probado en el
-navegador. **Pendiente: la lectura real con cámara física la tienen que confirmar Nadia (PC +
-celular) — el entorno de pruebas no puede acceder a una cámara.** Detalle completo en
-`PLAN_PRUEBAS_MAESTRO_2026-08-11.md`, sección C.1.
+navegador. Detalle completo en `PLAN_PRUEBAS_MAESTRO_2026-08-11.md`, sección C.1.
+
+**2ª vuelta — Nadia probó en producción y quedó así:**
+- **Celular: ✅ resuelto**, ahora lee el código al instante (antes no lo tomaba).
+- **PC: 🟡 lee, pero cuesta** — hay que enfocar un rato. Esperable: las webcams de notebook son de
+  foco fijo y baja calidad. El indicador de resolución del modal lo confirma de un vistazo (si en
+  PC dice `640×480` y en celular `1280×720`, es límite del hardware, no del código). Para el
+  mostrador el lector físico (keyboard wedge) sigue siendo el camino recomendado.
+- **Apertura lenta con pantalla negra: 🔴 seguía pasando en ambos** — y ya pasaba antes de todos
+  estos cambios (lo reportó Luciano en la primera prueba del Bloque C), no lo introdujo ninguno.
+  **Causa:** pedirle alta resolución a `getUserMedia` *de entrada* obliga al hardware a arrancar
+  directamente en ese modo — era el precio de la mejora de la 1ª vuelta. **Fix (aplicado):**
+  arranque en dos etapas — abrir con lo mínimo (`facingMode` y nada más) para que el video aparezca
+  cuanto antes, y recién con la cámara andando subir a 1280x720 + enfoque continuo vía
+  `track.applyConstraints()`, que ajusta sin reiniciar el dispositivo. Si la cámara no lo soporta,
+  falla solo ese ajuste y el escaneo sigue igual. Más feedback honesto mientras carga ("Encendiendo
+  la cámara…" y, a los 2,5s, "algunas cámaras tardan unos segundos") en vez de un rectángulo negro
+  mudo. **Pendiente: que Nadia confirme en producción si la apertura mejoró.**
 
 ## 📌 Pendiente (sin urgencia) — repo de GitHub público, bajo cuenta personal (12/08)
 

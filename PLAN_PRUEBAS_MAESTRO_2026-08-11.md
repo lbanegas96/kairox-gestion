@@ -165,6 +165,36 @@ Verificado: `eslint` 0 errores, 153/153 tests, `vite build` limpio, modal probad
 mensaje correcto al instante en vez de colgarse, que era el síntoma). **La lectura real de un
 código de barras con cámara física sigue necesitando prueba manual de Nadia/Luciano.**
 
+**🔁 Segunda vuelta (12/08, Nadia probó en PRODUCCIÓN):**
+
+| Qué | Antes | Después de la 1ª vuelta |
+|---|---|---|
+| Lectura del código en **celular** | no lo tomaba / había que pegarlo al lente | ✅ **lo toma al instante** |
+| Lectura del código en **PC** | no lo tomaba | 🟡 lo toma, pero cuesta — hay que enfocar bastante rato |
+| **Apertura de la cámara** (ambos) | lenta | 🔴 **sigue lenta, pantalla negra un buen rato** |
+
+O sea: los 3 fixes de decodificación funcionaron (celular resuelto), pero quedó pendiente la
+**demora de apertura** — que además ya existía antes de todo esto (Luciano la reportó en la primera
+prueba del Bloque C), así que no la introdujo ningún cambio nuestro.
+
+**Causa de la demora y fix (2ª vuelta):** pedirle a `getUserMedia` alta resolución *de entrada*
+obliga al hardware a inicializarse directamente en ese modo, que es lo que hace lenta la apertura —
+justamente el precio de la mejora de la 1ª vuelta. Se pasó a un **arranque en dos etapas**:
+
+1. **Abrir con lo mínimo** (`facingMode: ideal` y nada más) → el video aparece cuanto antes.
+2. **Subir la calidad ya andando**, con `track.applyConstraints()` sobre el track existente (1280x720
+   + `focusMode: continuous`) — ajusta sin reiniciar el dispositivo. Si la cámara no lo soporta,
+   falla solo ese ajuste y se sigue escaneando con lo que haya.
+
+Se agregó además feedback honesto mientras carga ("Encendiendo la cámara…", y a los 2,5s "algunas
+cámaras tardan unos segundos en arrancar"), en vez de un rectángulo negro mudo que parece colgado.
+
+**Sobre la PC:** que ahí cueste leer aun con todo esto es esperable — las webcams de notebook suelen
+ser de foco fijo y baja calidad, pensadas para videollamadas, no para leer códigos finos de cerca.
+El indicador de resolución del modal permite confirmarlo: si en PC muestra `640×480` mientras el
+celular muestra `1280×720`, es límite físico de esa cámara, no del código. El lector físico
+(keyboard wedge) sigue siendo el camino recomendado para el mostrador.
+
 ### C.2 — QR MercadoPago con un cobro real (regresión del fix de CORS)
 
 1. Desde el celular o la compu, entrá a la URL de producción normal (no hace falta buscar una URL
