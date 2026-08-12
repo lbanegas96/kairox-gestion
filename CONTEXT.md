@@ -1,5 +1,35 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Escaneo por cámara — escaneo en tanda + beep (12/08, pedido de Nadia)
+
+Nadia probó los fixes de velocidad/apertura y los confirmó andando, y pidió dos mejoras de UX
+mientras tanto: que la cámara **no se cierre** al leer un código (hoy había que reabrirla producto
+por producto), y un **sonido de confirmación** como los lectores de supermercado.
+
+**`EscanerCamaraModal.jsx` — reescrito para escaneo continuo:**
+- El modal ya no se cierra solo al detectar un código. Queda abierto, cada lectura se suma a una
+  lista lateral ("Escaneados — N productos") con nombre + código, y sigue escaneando.
+- **Anti-repetición:** el mismo código leído dos veces en menos de 2s se ignora — sin esto, un
+  producto quieto frente al lente se cargaría decenas de veces por segundo (la cámara decodifica
+  varias veces por segundo).
+- **Beep sintetizado con Web Audio** (no un archivo de audio — no agrega peso al bundle, no puede
+  fallar por 404/caché): tono agudo corto si el código existe en el catálogo, dos tonos graves si
+  no. El `AudioContext` se crea al abrir el modal, que es un click del usuario — el gesto que los
+  navegadores exigen para permitir audio.
+- **Flash de color** sobre el video (verde/rojo, 600ms) como refuerzo visual del mismo resultado,
+  para cuando el local tiene ruido y no se escucha el beep.
+- `onDetectado` cambió de contrato: antes no devolvía nada (el padre mostraba un toast y cerraba el
+  modal), ahora devuelve `{ ok, nombre }` para que el modal arme su propia lista. Actualizado en
+  `PanelProductos.jsx` (`handleDetectadoCamara`).
+- El callback vive en un `ref` para que un re-render del padre (agregar cada producto dispara
+  render de `PanelProductos`) no reinicie la cámara a mitad del escaneo — el efecto que abre la
+  cámara depende solo de `open`, no de la identidad de `onDetectado`.
+
+Verificado: `eslint`/tests/`vite build` limpios, modal probado en el navegador (abre, muestra la
+lista vacía, el camino de error sigue andando — la cámara real no se puede probar en este entorno).
+**Pendiente: que Nadia confirme en producción** que el beep suena y la lista se va llenando bien
+escaneando varios productos seguidos.
+
 ## ✅ Escaneo por cámara — 3 causas encontradas y arregladas (12/08)
 
 Luciano había diagnosticado el 12/08 que el escáner no abría en PC por pedir la cámara trasera como

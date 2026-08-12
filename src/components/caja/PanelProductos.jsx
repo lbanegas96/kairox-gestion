@@ -180,17 +180,19 @@ function PanelProductos({ onAgregarAlCarrito, apiRef }) {
 
   // CÁMARA — complemento del lector físico: escaneo por cámara para un
   // mostrador secundario sin lector, o venta ambulante desde un celular.
+  //
+  // Escaneo EN TANDA (12/08): el modal NO se cierra al leer un código — queda
+  // abierto sumando productos, como un lector de supermercado. Por eso acá no
+  // se toca `scannerOpen` ni se emiten toasts: el propio modal muestra el
+  // resultado de cada lectura en su lista lateral y suena un beep. Devolver
+  // `{ ok, nombre }` es lo que le permite distinguir un código cargado de uno
+  // que no está en el catálogo.
   const handleDetectadoCamara = useCallback(async (code) => {
-    setScannerOpen(false);
     const producto = await buscarPorCodigo(code);
-    if (producto) {
-      onAgregarAlCarrito(producto);
-      toast({ title: `✓ ${producto.nombre} × 1`, duration: 1500 });
-    } else {
-      toast({ title: 'Código no encontrado', description: code, variant: 'destructive', duration: 2500 });
-    }
-    inputRef.current?.focus();
-  }, [buscarPorCodigo, onAgregarAlCarrito, toast]);
+    if (!producto) return { ok: false };
+    onAgregarAlCarrito(producto);
+    return { ok: true, nombre: producto.nombre };
+  }, [buscarPorCodigo, onAgregarAlCarrito]);
 
   const productosConAlerta = productos.filter(p => getStockLevel(p) !== 'ok');
 
@@ -259,7 +261,7 @@ function PanelProductos({ onAgregarAlCarrito, apiRef }) {
 
       <EscanerCamaraModal
         open={scannerOpen}
-        onClose={() => setScannerOpen(false)}
+        onClose={() => { setScannerOpen(false); inputRef.current?.focus(); }}
         onDetectado={handleDetectadoCamara}
       />
     </div>
