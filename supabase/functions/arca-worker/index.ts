@@ -469,7 +469,7 @@ async function marcarErrorDefinitivo(
   fpaId: string, comprobanteId: string, msg: string,
   motivo: 'ambiguo_sin_reintento' | 'reintentos_agotados' = 'reintentos_agotados',
 ) {
-  const msgUsuario = mensajeHumano(msg);
+  const msgUsuario = mensajeHumano(msg, { agotado: motivo === 'reintentos_agotados' });
   await Promise.all([
     adminClient.from('facturas_pendientes_arca').update({
       estado:       'error_definitivo',

@@ -350,12 +350,22 @@ function MapaRelaciones({
 
       if (!comp) { setMapa(null); return; }
 
-      const [origenRes, pedidoRes, entregasRes, ncsRes, ndsRes, devRes, cobrosRes] = await Promise.allSettled([
+      const [origenRes, cotizacionRes, pedidoRes, entregasRes, ncsRes, ndsRes, devRes, cobrosRes] = await Promise.allSettled([
         comp.comprobante_origen_id
           ? supabase.from('comprobantes')
               .select('id, numero_venta, numero_afip, tipo, total, fecha')
               .eq('id', comp.comprobante_origen_id).single()
           : Promise.resolve({ data: null }),
+
+        // Bugfix 11/08 (badge "actual" no marcaba desde Cotizaciones): la cadena nunca
+        // armaba un nodo de cotización. OJO — la relación real es cotizaciones.comprobante_id
+        // (hacia adelante), NO comprobantes.cotizacion_id: esa columna existe en el schema
+        // pero está siempre en NULL en los datos reales (verificado: 6/20 cotizaciones
+        // convertidas tienen comprobante_id, 0/N comprobantes tienen cotizacion_id) — por
+        // eso hay que buscar por comprobante_id, no confiar en el FK inverso.
+        supabase.from('cotizaciones')
+          .select('id, numero, fecha, total, estado')
+          .eq('comprobante_id', idComprobante).eq('empresa_id', user.empresa_id).maybeSingle(),
 
         comp.pedido_id
           ? supabase.from('pedidos')
@@ -438,6 +448,7 @@ function MapaRelaciones({
         modo:         'venta',
         comp,
         origen:       safe(origenRes),
+        cotizacion:   safe(cotizacionRes),
         pedido,
         entregas,
         ncs:          safeArr(ncsRes),
@@ -561,6 +572,11 @@ function MapaRelaciones({
           .select('cantidad, precio_unitario, subtotal, productos(nombre)')
           .eq('comprobante_id', id).eq('empresa_id', user.empresa_id);
         rows = (data ?? []).map(i => ({ nombre: i.productos?.nombre || '—', cantidad: i.cantidad, subtotal: i.subtotal }));
+      } else if (tipo === 'cotizacion') {
+        const { data } = await supabase.from('cotizacion_items')
+          .select('descripcion, cantidad, subtotal')
+          .eq('cotizacion_id', id).eq('empresa_id', user.empresa_id);
+        rows = (data ?? []).map(i => ({ nombre: i.descripcion, cantidad: i.cantidad, subtotal: i.subtotal }));
       } else if (tipo === 'pedido') {
         const { data } = await supabase.from('pedido_items')
           .select('descripcion, cantidad, subtotal')
@@ -610,7 +626,7 @@ function MapaRelaciones({
   } : null;
 
   // ── Sin relaciones ───────────────────────────────────────────────────────────
-  const sinRelacionesVenta = mapa?.modo === 'venta' && !mapa.origen && !mapa.pedido
+  const sinRelacionesVenta = mapa?.modo === 'venta' && !mapa.origen && !mapa.cotizacion && !mapa.pedido
     && mapa.entregas.length === 0 && mapa.ncs.length === 0
     && mapa.nds.length === 0 && mapa.devoluciones.length === 0
     && mapa.cobros.length === 0;
@@ -632,7 +648,7 @@ function MapaRelaciones({
 
   // ── Resumen del circuito ─────────────────────────────────────────────────────
   const pasosVenta = mapa?.modo === 'venta'
-    ? 1 + (mapa.origen ? 1 : 0) + (mapa.pedido ? 1 : 0) + mapa.entregas.length
+    ? 1 + (mapa.origen ? 1 : 0) + (mapa.cotizacion ? 1 : 0) + (mapa.pedido ? 1 : 0) + mapa.entregas.length
     : 0;
   const derivadosVenta = mapa?.modo === 'venta'
     ? mapa.ncs.length + mapa.nds.length + mapa.cobros.length + mapa.devoluciones.length
@@ -742,6 +758,22 @@ function MapaRelaciones({
                       </React.Fragment>
                     );
                   })()}
+                  {mapa.cotizacion && (() => {
+                    const n = {
+                      id:     mapa.cotizacion.id,
+                      tipo:   'cotizacion',
+                      numero: mapa.cotizacion.numero,
+                      fecha:  mapa.cotizacion.fecha,
+                      total:  mapa.cotizacion.total,
+                      estado: mapa.cotizacion.estado,
+                    };
+                    return (
+                      <React.Fragment key="cotizacion">
+                        <NodoMapa nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />
+                        <Conector />
+                      </React.Fragment>
+                    );
+                  })()}
                   {mapa.pedido && (() => {
                     const n = {
                       id:     mapa.pedido.id,
@@ -804,7 +836,7 @@ function MapaRelaciones({
               )}
 
               <div className="flex flex-wrap gap-3 pt-2 border-t border-kx-border">
-                {['venta', 'pedido', 'entrega', 'nota_credito', 'nota_debito', 'cobro_cc', 'devolucion'].map(tipo => (
+                {['cotizacion', 'venta', 'pedido', 'entrega', 'nota_credito', 'nota_debito', 'cobro_cc', 'devolucion'].map(tipo => (
                   <div key={tipo} className="flex items-center gap-1.5 text-2xs text-kx-text-3">
                     <div className={`w-2 h-2 rounded-full ${TIPO_CONFIG[tipo].accent.replace('text-', 'bg-')}`} />
                     {TIPO_CONFIG[tipo].label}

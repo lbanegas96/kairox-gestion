@@ -275,6 +275,16 @@ const CODIGOS_AFIP_HUMANO: Record<string, string> = {
   '15004': 'Ya existe un CAEA solicitado para este período — no hace falta pedir otro.',
 };
 
+// Variantes de CODIGOS_AFIP_HUMANO para cuando el sistema YA se rindió (agotó los 5
+// reintentos automáticos) — sólo hace falta redefinir los códigos cuyo texto normal habla en
+// presente de un reintento que todavía está en curso (ej. 10016 dice "no hace falta que hagas
+// nada todavía"), porque ese texto queda contradictorio al lado de "reintentos agotados" en el
+// mismo panel del Monitor (hallado por Nadia probando en vivo, 11/08). Los códigos que ya son
+// accionables de por sí (10197, 10246, etc.) no necesitan variante — se usan tal cual.
+const CODIGOS_AFIP_HUMANO_AGOTADO: Record<string, string> = {
+  '10016': 'El número de comprobante siguió desincronizado con ARCA después de 5 reintentos automáticos. Puede resolverse solo con el tiempo (reintentá manualmente más tarde desde acá), o puede requerir confirmar el estado real a mano en el portal de ARCA.',
+};
+
 // Fragmentos de texto (no ligados a un código puntual) que ya clasifica
 // classifyArcaError() como 'data' — mismo criterio, traducidos.
 const FRAGMENTOS_AFIP_HUMANO: Array<[RegExp, string]> = [
@@ -291,8 +301,11 @@ const FRAGMENTOS_AFIP_HUMANO: Array<[RegExp, string]> = [
  * pierde información: si no reconoce el código/fragmento, devuelve el
  * mensaje original tal cual.
  */
-export function mensajeHumano(raw: string): string {
+export function mensajeHumano(raw: string, opts?: { agotado?: boolean }): string {
   const codigo = raw.match(/\[(\d+)\]/)?.[1];
+  if (codigo && opts?.agotado && CODIGOS_AFIP_HUMANO_AGOTADO[codigo]) {
+    return CODIGOS_AFIP_HUMANO_AGOTADO[codigo];
+  }
   if (codigo && CODIGOS_AFIP_HUMANO[codigo]) return CODIGOS_AFIP_HUMANO[codigo];
   for (const [patron, msg] of FRAGMENTOS_AFIP_HUMANO) {
     if (patron.test(raw)) return msg;
