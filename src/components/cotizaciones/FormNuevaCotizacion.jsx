@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +20,13 @@ function FormNuevaCotizacion({
   onCancel,
   createMutation,
 }) {
+  // Texto de búsqueda del combo de cliente — separado de form.cliente_nombre a
+  // propósito. Si filtráramos directo por form.cliente_nombre, abrir el campo
+  // con "Consumidor Final" ya precargado (default nuevo) mostraría solo ESE
+  // resultado en vez de la lista completa. clienteQuery arranca vacío en cada
+  // focus, así tocar el campo siempre muestra todos los clientes primero.
+  const [clienteQuery, setClienteQuery] = useState('');
+
   return (
     <>
       {/* Opciones globales de unidad de medida para los <input list="..."> de los ítems */}
@@ -41,116 +49,129 @@ function FormNuevaCotizacion({
         <option value="día" />
         <option value="servicio" />
       </datalist>
-      <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden">
+      <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
+        {/* Datos del Cliente — una sola fila de 12 columnas (densidad estilo SAP)
+            en vez de 3 filas apiladas: deja mucho más lugar vertical para los
+            ítems, que es lo que crece de verdad en una cotización real. */}
         <Card className="dark:bg-kx-bg dark:border-kx-border shrink-0">
-          <CardHeader><CardTitle className="text-base dark:text-kx-text">Datos del Cliente</CardTitle></CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2 relative" ref={clienteWrapperRef}>
-              <Label className="dark:text-kx-text">Nombre del Cliente</Label>
-              <Input
-                value={form.cliente_nombre}
-                onChange={e => { setForm(f => ({ ...f, cliente_nombre: e.target.value, cliente_id: '' })); setShowClienteDropdown(true); }}
-                onFocus={() => setShowClienteDropdown(true)}
-                placeholder="Buscar cliente existente o escribir uno nuevo"
-                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
-                autoComplete="off"
-              />
-              {showClienteDropdown && (() => {
-                const q = form.cliente_nombre.toLowerCase().trim();
-                const filtered = q ? allClientes.filter(c => c.nombre.toLowerCase().includes(q)) : allClientes;
-                const shown = filtered.slice(0, 8);
-                if (shown.length === 0) return null;
-                return (
-                  <div className="absolute top-full left-0 right-0 z-30 bg-kx-surface dark:bg-kx-surface border border-kx-border dark:border-kx-border rounded-lg shadow-xl mt-1 max-h-56 overflow-y-auto">
-                    {shown.map(c => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-kx-surface-2 dark:hover:bg-slate-800 dark:text-kx-text"
-                        onClick={() => {
-                          const condicionCliente = condicionesPago.find(cp => cp.id === c.condicion_pago_id);
-                          setForm(f => ({
-                            ...f,
-                            cliente_id: c.id,
-                            cliente_nombre: c.nombre,
-                            ...(condicionCliente ? { condiciones_pago: condicionCliente.nombre } : {}),
-                          }));
-                          setShowClienteDropdown(false);
-                        }}
-                      >
-                        {c.nombre}
-                      </button>
-                    ))}
-                    {q && !allClientes.some(c => c.nombre.toLowerCase() === q) && (
-                      <div className="px-3 py-2 text-xs text-slate-500 dark:text-kx-text-2 border-t border-slate-100 dark:border-kx-border italic">
-                        O tipeá un nombre nuevo y se guardará como texto libre.
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
-            <div className="space-y-2">
-              <Label className="dark:text-kx-text">Condiciones de Pago</Label>
-              <select
-                value={form.condiciones_pago}
-                onChange={e => setForm(f => ({ ...f, condiciones_pago: e.target.value }))}
-                className="w-full h-10 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {form.condiciones_pago === '' && <option value="">— Elegí —</option>}
-                {condicionesPago.map(c => {
-                  const yaMencionaDias = /d[ií]as?/i.test(c.nombre);
+          <CardContent className="p-3">
+            <div className="grid grid-cols-12 gap-3 items-start">
+              <div className="col-span-4 space-y-1 relative" ref={clienteWrapperRef}>
+                <Label className="text-xs dark:text-kx-text">Cliente</Label>
+                <Input
+                  value={form.cliente_nombre}
+                  onChange={e => { setForm(f => ({ ...f, cliente_nombre: e.target.value, cliente_id: '' })); setClienteQuery(e.target.value); setShowClienteDropdown(true); }}
+                  onFocus={() => { setClienteQuery(''); setShowClienteDropdown(true); }}
+                  placeholder="Buscar cliente o escribir uno nuevo"
+                  className="h-8 text-sm dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                  autoComplete="off"
+                />
+                {showClienteDropdown && (() => {
+                  const q = clienteQuery.toLowerCase().trim();
+                  const filtered = q ? allClientes.filter(c => c.nombre.toLowerCase().includes(q)) : allClientes;
+                  const shown = filtered.slice(0, 8);
+                  if (shown.length === 0) return null;
                   return (
-                    <option key={c.id} value={c.nombre}>
-                      {c.nombre}{!yaMencionaDias && c.dias_credito > 0 ? ` (${c.dias_credito} días)` : ''}{c.descuento_pct > 0 ? ` · ${c.descuento_pct}% desc.` : ''}
-                    </option>
+                    <div className="absolute top-full left-0 right-0 z-30 bg-kx-surface dark:bg-kx-surface border border-kx-border dark:border-kx-border rounded-lg shadow-xl mt-1 max-h-56 overflow-y-auto">
+                      {shown.map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-kx-surface-2 dark:hover:bg-slate-800 dark:text-kx-text"
+                          onClick={() => {
+                            const condicionCliente = condicionesPago.find(cp => cp.id === c.condicion_pago_id);
+                            setForm(f => ({
+                              ...f,
+                              cliente_id: c.id,
+                              cliente_nombre: c.nombre,
+                              ...(condicionCliente ? { condiciones_pago: condicionCliente.nombre } : {}),
+                            }));
+                            setClienteQuery(c.nombre);
+                            setShowClienteDropdown(false);
+                          }}
+                        >
+                          {c.nombre}
+                        </button>
+                      ))}
+                      {q && !allClientes.some(c => c.nombre.toLowerCase() === q) && (
+                        <div className="px-3 py-2 text-xs text-slate-500 dark:text-kx-text-2 border-t border-slate-100 dark:border-kx-border italic">
+                          O tipeá un nombre nuevo y se guardará como texto libre.
+                        </div>
+                      )}
+                    </div>
                   );
-                })}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label className="dark:text-kx-text">Fecha de Vencimiento</Label>
-              <Input
-                type="date"
-                value={form.fecha_vencimiento}
-                onChange={e => setForm(f => ({ ...f, fecha_vencimiento: e.target.value }))}
-                // Abre el selector de calendario al clickear en cualquier parte del
-                // campo, no solo en el ícono nativo — showPicker() no existe en
-                // todos los navegadores (ej. Safari viejo), por eso el optional
-                // chaining: si no está disponible, el click simplemente pone el
-                // foco en el input como siempre.
-                onClick={e => e.currentTarget.showPicker?.()}
-                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="dark:text-kx-text">Notas</Label>
-              <Input value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} placeholder="Observaciones opcionales" className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
-            </div>
-            <div className="space-y-2 col-span-2">
-              <MonedaSelector
-                moneda={form.moneda}
-                tasa={form.tipoCambioTasa}
-                onMonedaChange={v => setForm(f => ({ ...f, moneda: v, tipoCambioTasa: v === 'ARS' ? 1 : f.tipoCambioTasa }))}
-                onTasaChange={v => setForm(f => ({ ...f, tipoCambioTasa: v }))}
-                onTCMissingChange={setTcMissing}
-              />
+                })()}
+              </div>
+
+              <div className="col-span-2 space-y-1">
+                <Label className="text-xs dark:text-kx-text">Cond. de Pago</Label>
+                <select
+                  value={form.condiciones_pago}
+                  onChange={e => setForm(f => ({ ...f, condiciones_pago: e.target.value }))}
+                  className="w-full h-8 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {form.condiciones_pago === '' && <option value="">— Elegí —</option>}
+                  {condicionesPago.map(c => {
+                    const yaMencionaDias = /d[ií]as?/i.test(c.nombre);
+                    return (
+                      <option key={c.id} value={c.nombre}>
+                        {c.nombre}{!yaMencionaDias && c.dias_credito > 0 ? ` (${c.dias_credito}d)` : ''}{c.descuento_pct > 0 ? ` · ${c.descuento_pct}%` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div className="col-span-2 space-y-1">
+                <Label className="text-xs dark:text-kx-text">Vencimiento</Label>
+                {/* Input date nativo: deja tipear los dígitos directo en sus
+                    segmentos día/mes/año (comportamiento propio del navegador,
+                    según el idioma configurado en el SO) y abre el calendario
+                    al clickear su ícono — sin JS extra que le gane el click al
+                    tipeo. */}
+                <Input
+                  type="date"
+                  value={form.fecha_vencimiento}
+                  onChange={e => setForm(f => ({ ...f, fecha_vencimiento: e.target.value }))}
+                  className="h-8 text-sm dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                />
+              </div>
+
+              <div className="col-span-2">
+                <MonedaSelector
+                  moneda={form.moneda}
+                  tasa={form.tipoCambioTasa}
+                  onMonedaChange={v => setForm(f => ({ ...f, moneda: v, tipoCambioTasa: v === 'ARS' ? 1 : f.tipoCambioTasa }))}
+                  onTasaChange={v => setForm(f => ({ ...f, tipoCambioTasa: v }))}
+                  onTCMissingChange={setTcMissing}
+                />
+              </div>
+
+              <div className="col-span-2 space-y-1">
+                <Label className="text-xs dark:text-kx-text">Notas</Label>
+                <Input
+                  value={form.notas}
+                  onChange={e => setForm(f => ({ ...f, notas: e.target.value }))}
+                  placeholder="Opcional"
+                  className="h-8 text-sm dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
 
         <Card className="dark:bg-kx-bg dark:border-kx-border flex-1 min-h-0 flex flex-col overflow-hidden">
-          <CardHeader className="flex flex-row items-center justify-between shrink-0">
-            <CardTitle className="text-base dark:text-kx-text">Ítems</CardTitle>
-            <Button type="button" variant="outline" size="sm" onClick={addItem} className="dark:border-kx-border dark:text-slate-300 dark:hover:bg-slate-800">
+          <CardHeader className="flex flex-row items-center justify-between shrink-0 p-3">
+            <CardTitle className="text-sm dark:text-kx-text">Ítems</CardTitle>
+            <Button type="button" variant="outline" size="sm" onClick={addItem} className="h-7 text-xs dark:border-kx-border dark:text-slate-300 dark:hover:bg-slate-800">
               <Plus className="w-3.5 h-3.5 mr-1" /> Agregar ítem
             </Button>
           </CardHeader>
-          <CardContent className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
+          <CardContent className="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden p-3 pt-0">
             {/* Solo esta lista scrollea si hay muchos ítems — el resto del modal
                 (datos del cliente, totales, botones de abajo) queda siempre a la
                 vista sin tener que scrollear todo el diálogo. */}
-            <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
             {items.map((item, idx) => (
               <div key={idx} className="grid grid-cols-12 gap-2 items-end">
                 <div className="col-span-4 space-y-1 relative" data-prod-row>
@@ -160,7 +181,7 @@ function FormNuevaCotizacion({
                     onChange={e => { searchProducto(idx, e.target.value); updateItem(idx, 'descripcion', e.target.value); setProdOpen(prev => ({ ...prev, [idx]: true })); }}
                     onFocus={() => { searchProducto(idx, prodSearch[idx] ?? item.descripcion ?? ''); setProdOpen(prev => ({ ...prev, [idx]: true })); }}
                     placeholder="Buscar producto o escribir descripción"
-                    className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm"
+                    className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm"
                     autoComplete="off"
                   />
                   {prodOpen[idx] && (prodResults[idx] ?? []).length > 0 && (
@@ -176,14 +197,14 @@ function FormNuevaCotizacion({
                 </div>
                 <div className="col-span-2 space-y-1">
                   <Label className="text-xs dark:text-kx-text-2">Cantidad</Label>
-                  <Input type="number" min="1" step="1" value={item.cantidad} onChange={e => updateItem(idx, 'cantidad', e.target.value.replace(/[^\d]/g, ''))} className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
+                  <Input type="number" min="1" step="1" value={item.cantidad} onChange={e => updateItem(idx, 'cantidad', e.target.value.replace(/[^\d]/g, ''))} className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
                 </div>
                 <div className="col-span-2 space-y-1">
                   <Label className="text-xs dark:text-kx-text-2">Unidad</Label>
                   <select
                     value={item.unidad_medida || ''}
                     onChange={e => updateItem(idx, 'unidad_medida', e.target.value)}
-                    className="w-full h-10 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full h-8 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">— Elegí —</option>
                     {unidadesMedida.map(u => (
@@ -193,14 +214,14 @@ function FormNuevaCotizacion({
                 </div>
                 <div className="col-span-2 space-y-1">
                   <Label className="text-xs dark:text-kx-text-2">Precio Unit.</Label>
-                  <Input type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unitario} onChange={e => updateItem(idx, 'precio_unitario', e.target.value)} className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
+                  <Input type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unitario} onChange={e => updateItem(idx, 'precio_unitario', e.target.value)} className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
                 </div>
                 <div className="col-span-1 space-y-1">
                   <Label className="text-xs dark:text-kx-text-2">% Desc.</Label>
-                  <Input type="text" inputMode="decimal" placeholder="0" value={item.descuento_item} onChange={e => updateItem(idx, 'descuento_item', e.target.value)} className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
+                  <Input type="text" inputMode="decimal" placeholder="0" value={item.descuento_item} onChange={e => updateItem(idx, 'descuento_item', e.target.value)} className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
                 </div>
                 <div className="col-span-1 flex justify-end pb-0.5">
-                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-kx-text-3 hover:text-kx-red" onClick={() => removeItem(idx)} disabled={items.length === 1}>
+                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-red" onClick={() => removeItem(idx)} disabled={items.length === 1}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
@@ -208,21 +229,21 @@ function FormNuevaCotizacion({
             ))}
             </div>
 
-            <div className="flex justify-end pt-4 border-t border-kx-border dark:border-kx-border shrink-0">
-              <div className="text-right space-y-1 min-w-[220px]">
-                <div className="flex justify-between text-sm text-slate-500 dark:text-kx-text-2">
+            <div className="flex justify-end pt-2 border-t border-kx-border dark:border-kx-border shrink-0">
+              <div className="text-right space-y-0.5 min-w-[200px]">
+                <div className="flex justify-between text-xs text-slate-500 dark:text-kx-text-2">
                   <span>Subtotal</span>
                   <span className="font-mono">{formatCurrency(totales.subtotal, form.moneda)}</span>
                 </div>
                 {totales.descuento > 0 && (
-                  <div className="flex justify-between text-sm text-kx-red">
+                  <div className="flex justify-between text-xs text-kx-red">
                     <span>Descuento</span>
                     <span className="font-mono">-{formatCurrency(totales.descuento, form.moneda)}</span>
                   </div>
                 )}
-                <div className="flex justify-between pt-1">
-                  <span className="text-sm text-slate-500 dark:text-kx-text-2 self-center">Total</span>
-                  <span className="text-2xl font-bold text-slate-900 dark:text-kx-text font-mono">
+                <div className="flex justify-between pt-0.5">
+                  <span className="text-xs text-slate-500 dark:text-kx-text-2 self-center">Total</span>
+                  <span className="text-lg font-bold text-slate-900 dark:text-kx-text font-mono">
                     {formatCurrency(totales.total, form.moneda)}
                   </span>
                 </div>
