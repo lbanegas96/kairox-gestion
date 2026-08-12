@@ -55,6 +55,17 @@ código nunca la usaba para armar un nodo en la cadena. Corregido y deployado ho
 
 **Si algo no sale así:** sacá captura (con el número de cotización) y contame.
 
+**✅ Resultado (12/08, Claude, en local con sesión de Nadia):** los 5 pasos pasaron.
+- Nodo Cotización aparece al principio de la cadena en las 4 cotizaciones convertidas probadas
+  (COT-00018, -00017, -00014, -00001), con el badge "actual" marcando correctamente en las 4
+  (verificado a nivel de clase CSS, no solo texto — `ring-2` presente sólo en el nodo Cotización).
+- Sin regresión: abrir el mapa desde una Factura directamente (20260811-001) y desde un Pedido
+  facturado (PED-20260707-003) siguen marcando "actual" en el nodo correspondiente, igual que
+  siempre. El "flash" transitorio de "No se pudo cargar" que había aparecido una vez el 10/08
+  volvió a aparecer en el primer intento de esta prueba (COT-00018) y se resolvió solo al
+  reintentar — igual que la vez anterior, parece timing del entorno, no el fix. Sin errores nuevos
+  en consola (solo el warning preexistente y no relacionado de `TopClientes.jsx`).
+
 ---
 
 ## Bloque B — Rebrand visual (Luciano, con tus propios ojos)

@@ -1,5 +1,24 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Bloque A del Plan Maestro — fix del Mapa de Relaciones (Cotizaciones) verificado en vivo (12/08)
+
+Nadia bajó el trabajo de Luciano de esta mañana y me pidió correr el Bloque A de
+`PLAN_PRUEBAS_MAESTRO_2026-08-11.md` (el único bloque que nos tocaba a nosotras — el resto es de
+Luciano: celular, sus ojos, o su decisión). Probado en local con su sesión, contra el mismo
+backend de producción.
+
+**Resultado: ✅ pasó completo.** El nodo Cotización aparece al principio de la cadena y el badge
+"actual" marca correctamente — probado en 4 cotizaciones convertidas distintas (COT-00018, -00017,
+-00014, -00001), confirmado a nivel de clase CSS (`ring-2`), no solo leyendo el texto. Sin
+regresión: abrir el mapa desde una Factura o un Pedido facturado sigue marcando "actual" bien,
+como siempre. Sin errores nuevos en consola. Detalle completo en
+`PLAN_PRUEBAS_MAESTRO_2026-08-11.md`, Bloque A.
+
+**Con esto, el fix de Luciano de ayer queda confirmado por una segunda persona (código + prueba en
+vivo) — no queda ningún hilo de prueba abierto salvo lo que ya era exclusivamente de Luciano**
+(Bloque B rebrand, C.1 escaneo de cámara en PC sin arreglar todavía, E acciones administrativas, F
+decisión de Supabase — sigue sin resolverse, quedan 5 días al 17/08).
+
 ## 🧪 Bloque C del Plan Maestro — C.2 OK, C.1 con hallazgo diagnosticado (12/08)
 
 Luciano corrió el Bloque C (hardware real) de `PLAN_PRUEBAS_MAESTRO_2026-08-11.md` desde su celular:
