@@ -111,6 +111,17 @@ todo lo demás ya se probó por código, sandbox o navegador de escritorio.
 **El dato más importante de todo el plan:** si en iPhone la cámara no abre o el modal queda
 cargando para siempre — es justo lo único que el entorno de pruebas no pudo simular.
 
+**⚠️ Resultado (12/08, Luciano):** anduvo desde el celular, pero **demora mucho en levantar la
+cámara**. Además, **desde la cámara de una PC no funcionó**. Causa técnica ya diagnosticada leyendo
+el código (no arreglada todavía — queda para la próxima sesión): `EscanerCamaraModal.jsx` pide la
+cámara con una restricción **estricta** `facingMode: 'environment'` (cámara trasera obligatoria).
+Una notebook/PC normalmente solo tiene una cámara frontal, sin "trasera" — al no poder cumplir esa
+restricción exacta, el navegador puede tardar en negociar antes de fallar, o directamente rechazar
+el acceso. **Fix propuesto (no aplicado):** cambiar a `{ ideal: 'environment' }` en vez de la forma
+estricta, así el navegador cae de forma prolija a la única cámara disponible (frontal) en vez de
+demorar/fallar — sin afectar el comportamiento ya correcto en celular (que sí tiene cámara trasera
+y la sigue prefiriendo).
+
 ### C.2 — QR MercadoPago con un cobro real (regresión del fix de CORS)
 
 1. Desde el celular o la compu, entrá a la URL de producción normal (no hace falta buscar una URL
@@ -122,7 +133,7 @@ cargando para siempre — es justo lo único que el entorno de pruebas no pudo s
 5. ✅ Esperado: la venta se confirma sola en el POS entre 60 y 70 segundos después de pagado (el
    poller automático, no hace falta refrescar la pantalla).
 
-**Si algo no sale así:** anotá la hora exacta (ayuda a cruzar contra los logs) y contame.
+**✅ Resultado (12/08, Luciano): listo y OK.**
 
 ---
 

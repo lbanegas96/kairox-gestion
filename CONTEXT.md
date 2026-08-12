@@ -1,5 +1,24 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🧪 Bloque C del Plan Maestro — C.2 OK, C.1 con hallazgo diagnosticado (12/08)
+
+Luciano corrió el Bloque C (hardware real) de `PLAN_PRUEBAS_MAESTRO_2026-08-11.md` desde su celular:
+
+- **C.2 (QR MercadoPago, cobro real) — ✅ listo y OK.**
+- **C.1 (escaneo de código de barras por cámara) — ⚠️ anduvo, con 2 problemas:** demora mucho en
+  levantar la cámara, y **desde la cámara de una PC no funciona** (sí desde el celular).
+
+**Causa ya diagnosticada leyendo el código, NO arreglada todavía** (queda para la próxima sesión):
+`EscanerCamaraModal.jsx` pide la cámara con `facingMode: 'environment'` como restricción **estricta**
+(cámara trasera obligatoria). Una PC/notebook normalmente solo tiene cámara frontal — al no poder
+cumplir esa restricción exacta, el navegador tarda en negociar antes de fallar, o rechaza el acceso
+directamente. **Fix propuesto:** cambiar a `{ ideal: 'environment' }` en vez de la forma estricta,
+para que caiga de forma prolija a la única cámara disponible en vez de demorar/fallar — sin tocar el
+comportamiento ya correcto en celular (que sí tiene trasera y la sigue prefiriendo). Detalle completo
+en `PLAN_PRUEBAS_MAESTRO_2026-08-11.md`, sección C.1.
+
+Quedan sin probar todavía: Bloque B (rebrand visual) y Bloque E (2 acciones administrativas).
+
 ## 🧪 Plan Maestro de Pruebas — barrido completo de todo lo pendiente (11/08)
 
 `PLAN_PRUEBAS_MAESTRO_2026-08-11.md` junta en un solo documento **todo** lo que seguía abierto,
