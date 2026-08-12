@@ -1,5 +1,34 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🔧 Escaneo por cámara — cuelgue real en producción, cambiado a diagnóstico directo (12/08)
+
+Nadia probó el escaneo en tanda en producción y encontró un problema más serio que el anterior:
+**con el permiso de cámara ya concedido de antes, la pantalla queda en negro y nunca conecta** — no
+vuelve a pedir permiso, no muestra error, se queda así hasta que salta el timeout de 10s. Se
+descartó que fuera otra pestaña/app usando la cámara (confirmado con ella). El error de consola que
+mandó ("A listener indicated an asynchronous response...") es de una extensión de Chrome, no
+relacionado.
+
+**Causa del cambio (no se pudo confirmar la causa RAÍZ — no hay forma de reproducir un cuelgue de
+`getUserMedia` sin la cámara física real):** hasta ahora se usaba `reader.decodeFromConstraints()`,
+que le pide la cámara a `getUserMedia` **por dentro**, como caja negra — si algo se cuelga ahí
+adentro, no hay manera de saber si el problema es el pedido a la cámara en sí o algo posterior en
+la librería ZXing.
+
+**Cambio (12/08):** se separó el pedido de cámara de la decodificación. Ahora se llama
+`navigator.mediaDevices.getUserMedia()` directamente, envuelto en un `Promise.race` con un timeout
+propio de 10s — si el timeout gana la carrera, se dispara un `AbortError` explícito. Recién con el
+stream ya obtenido se lo pasa a `reader.decodeFromStream()` (método público de la misma librería,
+que es lo que `decodeFromConstraints` hace internamente de todos modos). Con esto, la próxima vez
+que pase, el mensaje de error va a decir con precisión si el problema fue conseguir la cámara del
+sistema operativo o algo posterior — antes decía un genérico "tardó demasiado" sin distinguir nada.
+Mensaje de error también mejorado: sugiere directamente cerrar otras pestañas/programas que puedan
+tener la cámara tomada (Zoom, Teams, otra pestaña de KAIROX, la app Cámara de Windows).
+
+Verificado: `eslint` 0 errores, 153/153 tests, `vite build` limpio. **No se pudo verificar que esto
+resuelva el cuelgue real** — el entorno de pruebas no tiene acceso a cámara física. Si vuelve a
+pasar, el mensaje de error que va a mostrar ahora es la pista clave para el próximo paso.
+
 ## ✅ Escaneo por cámara — escaneo en tanda + beep (12/08, pedido de Nadia)
 
 Nadia probó los fixes de velocidad/apertura y los confirmó andando, y pidió dos mejoras de UX

@@ -49,9 +49,28 @@ function mensajeError(err) {
     return 'No se encontró ninguna cámara en este dispositivo.';
   }
   if (err?.name === 'NotReadableError') {
-    return 'La cámara está siendo usada por otra aplicación.';
+    return 'La cámara está siendo usada por otra aplicación. Cerrá otras pestañas o programas que puedan tenerla abierta (Zoom, Teams, otra pestaña de KAIROX, la app Cámara de Windows) e intentá de nuevo.';
   }
-  return 'No se pudo iniciar la cámara.';
+  if (err?.name === 'AbortError' || err?.message === 'timeout') {
+    return 'El navegador no respondió al pedir la cámara. Puede estar tomada por otra app — cerrá otras pestañas/programas que la usen e intentá de nuevo.';
+  }
+  return `No se pudo iniciar la cámara${err?.name ? ` (${err.name})` : ''}.`;
+}
+
+// Se usó `decodeFromConstraints` (que le pide la cámara a `getUserMedia` por
+// dentro, como caja negra) hasta el 12/08 — cuando falla no hay forma de saber
+// SI el problema es el pedido a la cámara o algo posterior en la librería. Acá
+// se pide la cámara directo con la API del navegador, con un timeout propio
+// (`Promise.race`) que si se cumple, dispara un `AbortError` — así un cuelgue
+// real de `getUserMedia` (síntoma reportado en producción el 12/08: permiso ya
+// concedido, pantalla negra, nunca conecta) se distingue de cualquier otro
+// error, y el mensaje se lo puede decir explícitamente al usuario en vez de un
+// genérico "tardó demasiado".
+function getUserMediaConTimeout(constraints, ms) {
+  return Promise.race([
+    navigator.mediaDevices.getUserMedia(constraints),
+    new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('timeout'), { name: 'AbortError' })), ms)),
+  ]);
 }
 
 /**
@@ -189,19 +208,13 @@ export default function EscanerCamaraModal({ open, onClose, onDetectado }) {
     // (notebook), sin demora. Detalle en PLAN_PRUEBAS_MAESTRO_2026-08-11.md,
     // sección C.1.
     //
-    // Timeout de seguridad: si ni así responde en 10s — cámara rara, permiso
-    // colgado en el navegador, lo que sea — se corta solo y muestra un error en
-    // vez de dejar el modal trabado para siempre con el spinner girando.
-    const timeoutId = setTimeout(() => {
-      if (!activo || controlsRef.current) return; // ya conectó bien, no hacer nada
-      activo = false;
-      setCargando(false);
-      setError('La cámara tardó demasiado en responder. Cerrá y volvé a intentar.');
-    }, 10000);
-
-    // Avisa que puede demorar, en vez de dejar un rectángulo negro mudo — la
-    // inicialización del hardware de cámara tarda unos segundos y no hay forma
-    // de acelerarla más allá de pedirle poco al arrancar (ver arriba).
+    // Otro caso real (12/08, producción): con el permiso YA concedido, la
+    // pantalla quedaba en negro sin pedir permiso de nuevo y sin error — es
+    // decir, `getUserMedia` en sí nunca resolvía ni rechazaba. Por eso el
+    // timeout ahora envuelve el pedido a la cámara directamente (ver
+    // `getUserMediaConTimeout` arriba), no la librería de escaneo entera —
+    // así se sabe con certeza que el problema es el pedido a la cámara del
+    // navegador/sistema operativo, no algo de ZXing.
     const demoraId = setTimeout(() => { if (activo) setDemorado(true); }, 2500);
 
     const leerResolucion = () => {
@@ -225,20 +238,19 @@ export default function EscanerCamaraModal({ open, onClose, onDetectado }) {
       leerResolucion();
     };
 
-    reader
-      .decodeFromConstraints({ video: CONSTRAINTS_INICIALES }, videoRef.current, onResultado)
+    getUserMediaConTimeout({ video: CONSTRAINTS_INICIALES }, 10000)
       // Fallback: si ni la restricción "ideal" funcionó (cámara/navegador poco
       // común), reintenta sin pedir ninguna cámara en particular. Solo ante
-      // errores de RESTRICCIÓN — si el usuario denegó el permiso o no hay
-      // cámara, reintentar no arregla nada y encima le dispara un segundo
-      // cartel de permiso al pedo.
+      // errores de RESTRICCIÓN — si el usuario denegó el permiso, no hay
+      // cámara, o se agotó el timeout, reintentar no arregla nada y encima le
+      // dispara un segundo cartel de permiso al pedo.
       .catch((err) => {
         const esDeRestriccion = err?.name === 'OverconstrainedError' || err?.name === 'ConstraintNotSatisfiedError';
         if (!esDeRestriccion) throw err;
-        return reader.decodeFromConstraints({ video: true }, videoRef.current, onResultado);
+        return getUserMediaConTimeout({ video: true }, 10000);
       })
+      .then((stream) => reader.decodeFromStream(stream, videoRef.current, onResultado))
       .then((controls) => {
-        clearTimeout(timeoutId);
         clearTimeout(demoraId);
         if (!activo) {
           controls.stop();
@@ -251,7 +263,6 @@ export default function EscanerCamaraModal({ open, onClose, onDetectado }) {
         subirCalidad();    // y en cuanto se pueda, mejor
       })
       .catch((err) => {
-        clearTimeout(timeoutId);
         clearTimeout(demoraId);
         if (!activo) return;
         activo = false;
@@ -261,7 +272,6 @@ export default function EscanerCamaraModal({ open, onClose, onDetectado }) {
 
     return () => {
       activo = false;
-      clearTimeout(timeoutId);
       clearTimeout(demoraId);
       controlsRef.current?.stop();
       controlsRef.current = null;
