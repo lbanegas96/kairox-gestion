@@ -86,6 +86,7 @@ function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
             onNavigateToSale={(id) => { setActiveTab('historial'); setNavigateSaleId(id); }}
             onCopiarAPedido={(cot) => { setPrefillPedidoCotizacion(cot); setActiveTab('pedidos'); }}
             onVerPedido={(id) => { setActiveTab('pedidos'); setNavigatePedidoId(id); }}
+            onVerEntrega={(id) => { setActiveTab('entregas'); setNavigateEntregaId(id); }}
             navigateCotizacionId={navigateCotizacionId}
             onNavigated={() => setNavigateCotizacionId(null)}
           />

@@ -59,7 +59,13 @@ const ESTADO_BADGE = {
 function NodoMapa({ nodo, activo = false, onClick }) {
   const config    = TIPO_CONFIG[nodo.tipo] ?? TIPO_CONFIG.venta;
   const Icono     = config.icon;
-  const clickable = !!onClick && !activo;
+  // Antes excluía al nodo "actual" (`&& !activo`) — pensado para no ofrecer un preview
+  // redundante del documento que ya se está viendo en otro lado (ej. la Factura activa,
+  // visible en SaleDetailModal). Pero el nodo "sin facturar" (Fase 3) también se marca
+  // `activo` y ES la única vista de sus ítems dentro de este modal — sin este cambio,
+  // nunca se podía abrir su preview (bug real, hallado 11/08). Un nodo con onClick
+  // siempre es clickable ahora; el caller decide si tiene sentido pasarlo o no.
+  const clickable = !!onClick;
   const eColor    = estadoColor(nodo.estado);
 
   return (
@@ -289,7 +295,7 @@ function MapaRelaciones({
           .eq('id', cotizacionId).eq('empresa_id', user.empresa_id).maybeSingle();
         if (!data) return setMapa(null);
         if (data.comprobante_id) { setActivoId(cotizacionId); return fetchMapaVenta(data.comprobante_id); }
-        return setSinFacturar({ label: 'Cotización', nodo: { tipo: 'cotizacion', numero: data.numero, fecha: data.fecha, total: data.total, estado: data.estado } });
+        return setSinFacturar({ label: 'Cotización', nodo: { id: data.id, tipo: 'cotizacion', numero: data.numero, fecha: data.fecha, total: data.total, estado: data.estado } });
       }
       if (pedidoId) {
         const { data } = await supabase.from('pedidos')
@@ -297,7 +303,7 @@ function MapaRelaciones({
           .eq('id', pedidoId).eq('empresa_id', user.empresa_id).maybeSingle();
         if (!data) return setMapa(null);
         if (data.comprobante_id) { setActivoId(pedidoId); return fetchMapaVenta(data.comprobante_id); }
-        return setSinFacturar({ label: 'Pedido', nodo: { tipo: 'pedido', numero: data.numero, fecha: data.fecha, total: data.total, estado: data.estado } });
+        return setSinFacturar({ label: 'Pedido', nodo: { id: data.id, tipo: 'pedido', numero: data.numero, fecha: data.fecha, total: data.total, estado: data.estado } });
       }
       if (entregaId) {
         const { data } = await supabase.from('entregas')
@@ -310,7 +316,7 @@ function MapaRelaciones({
           compId = ped?.comprobante_id;
         }
         if (compId) { setActivoId(entregaId); return fetchMapaVenta(compId); }
-        return setSinFacturar({ label: 'Entrega', nodo: { tipo: 'entrega', numero: data.numero_entrega, fecha: data.fecha, estado: data.estado } });
+        return setSinFacturar({ label: 'Entrega', nodo: { id: data.id, tipo: 'entrega', numero: data.numero_entrega, fecha: data.fecha, estado: data.estado } });
       }
       if (recepcionId) {
         const { data } = await supabase.from('recepciones')
@@ -318,7 +324,7 @@ function MapaRelaciones({
           .eq('id', recepcionId).eq('empresa_id', user.empresa_id).maybeSingle();
         if (!data) return setMapa(null);
         if (data.compra_id) { setActivoId(recepcionId); return fetchMapaCompra(data.compra_id); }
-        return setSinFacturar({ label: 'Recepción', nodo: { tipo: 'recepcion', numero: data.numero_recepcion, fecha: data.fecha, estado: data.estado } });
+        return setSinFacturar({ label: 'Recepción', nodo: { id: data.id, tipo: 'recepcion', numero: data.numero_recepcion, fecha: data.fecha, estado: data.estado } });
       }
       if (devolucionId) {
         const { data } = await supabase.from('devoluciones')
@@ -327,7 +333,7 @@ function MapaRelaciones({
         if (!data) return setMapa(null);
         if (data.tipo === 'cliente' && data.comprobante_id) { setActivoId(devolucionId); return fetchMapaVenta(data.comprobante_id); }
         if (data.tipo === 'proveedor' && data.compra_id)    { setActivoId(devolucionId); return fetchMapaCompra(data.compra_id); }
-        return setSinFacturar({ label: 'Devolución', nodo: { tipo: data.tipo === 'cliente' ? 'devolucion' : 'devolucion_prov', numero: data.numero_devolucion, fecha: data.fecha, estado: data.compensacion } });
+        return setSinFacturar({ label: 'Devolución', nodo: { id: data.id, tipo: data.tipo === 'cliente' ? 'devolucion' : 'devolucion_prov', numero: data.numero_devolucion, fecha: data.fecha, estado: data.compensacion } });
       }
       setMapa(null);
     } catch (err) {
@@ -715,7 +721,7 @@ function MapaRelaciones({
               — no hay cadena para armar, pero tampoco es un error. ── */}
           {!loading && sinFacturar && (
             <div className="flex flex-col items-center gap-3 py-8">
-              <NodoMapa nodo={sinFacturar.nodo} activo />
+              <NodoMapa nodo={sinFacturar.nodo} activo onClick={() => openPreview(sinFacturar.nodo)} />
               <p className="text-xs text-kx-text-3 text-center max-w-xs">
                 {sinFacturar.label} todavía sin facturar — cuando se convierta en factura vas a
                 poder ver la cadena completa acá.

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, CheckCircle, Download, Loader2, Send, PackageCheck, Ban, AlertTriangle } from 'lucide-react';
+import { FileText, CheckCircle, Download, Loader2, Send, PackageCheck, Ban, AlertTriangle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -13,7 +13,7 @@ const ESTADOS_COPIABLES = ['aprobada', 'enviada'];
 // Mismos estados desde los que se puede Cancelar (TablaCotizaciones.jsx)
 const ESTADOS_CANCELABLES = ['aprobada', 'enviada'];
 
-function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, onCancelar, onVerPedido }) {
+function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, onCancelar, onVerPedido, onCambiarEstado }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [generatingPDF, setGeneratingPDF] = useState(false);
@@ -167,6 +167,34 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, o
               >
                 <Ban className="w-4 h-4 mr-2" /> Cancelar
               </Button>
+            )}
+            {onCambiarEstado && detalle?.estado === 'borrador' && (
+              <Button
+                variant="outline"
+                onClick={() => onCambiarEstado(detalle.id, 'enviada')}
+                className="dark:border-kx-border dark:text-slate-300"
+                title="Un borrador tiene que enviarse y aprobarse antes de poder copiarse a Pedido"
+              >
+                <Send className="w-4 h-4 mr-2" /> Marcar como enviada
+              </Button>
+            )}
+            {onCambiarEstado && detalle?.estado === 'enviada' && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => onCambiarEstado(detalle.id, 'rechazada')}
+                  className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  <XCircle className="w-4 h-4 mr-2" /> Rechazar
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => onCambiarEstado(detalle.id, 'aprobada')}
+                  className="border-green-200 text-green-600 hover:bg-green-50 dark:border-green-900 dark:text-green-400 dark:hover:bg-green-900/20"
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" /> Aprobar
+                </Button>
+              </>
             )}
             {onCopiarAPedido && detalle && ESTADOS_COPIABLES.includes(detalle.estado) && (
               <Button variant="outline" onClick={() => onCopiarAPedido(detalle)} className="dark:border-kx-border dark:text-slate-300">

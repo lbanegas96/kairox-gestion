@@ -15,7 +15,7 @@ import FormNuevaCotizacion from '@/components/cotizaciones/FormNuevaCotizacion';
 import ModalDetalleCotizacion from '@/components/cotizaciones/ModalDetalleCotizacion';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 
-function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, navigateCotizacionId, onNavigated } = {}) {
+function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, onVerEntrega, navigateCotizacionId, onNavigated } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -157,11 +157,14 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, n
 
   const createMutation = useMutation({
     mutationFn: (payload) => cotizacionesService.create(empresaId, user.id, payload),
-    onSuccess: () => {
+    onSuccess: (cot) => {
       qc.invalidateQueries({ queryKey: ['cotizaciones', empresaId] });
       toast({ title: 'Cotización creada', className: 'bg-green-600 text-white' });
       setIsModalOpen(false);
       resetForm();
+      // Mostrar el draft recién creado en vez de solo cerrar el modal — el usuario
+      // quiere confirmar de un vistazo qué quedó guardado antes de seguir.
+      setViewId(cot.id);
     },
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
@@ -319,6 +322,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, n
         onNavigate={(tipo, id) => {
           if (tipo === 'comprobante') onNavigateToSale?.(id);
           else if (tipo === 'pedido') onVerPedido?.(id);
+          else if (tipo === 'entrega') onVerEntrega?.(id);
         }}
       />
 
@@ -361,6 +365,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, n
         onCopiarAPedido={onCopiarAPedido ? (cot) => { setViewId(null); onCopiarAPedido(cot); } : undefined}
         onCancelar={(id) => { estadoMutation.mutate({ id, estado: 'cancelada' }); setViewId(null); }}
         onVerPedido={onVerPedido ? (id) => { setViewId(null); onVerPedido(id); } : undefined}
+        onCambiarEstado={(id, estado) => estadoMutation.mutate({ id, estado })}
       />
     </div>
   );
