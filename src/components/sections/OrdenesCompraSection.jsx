@@ -167,6 +167,11 @@ function OrdenesCompraSection() {
   const invalidateOCAndNotifs = () => {
     qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] });
     qc.invalidateQueries({ queryKey: ['notif'] });
+    // OC_KEYS.detail() usa la clave singular 'orden_compra' (no 'ordenes_compra')
+    // — mismo bug encontrado y corregido en CotizacionesSection: sin esto, el
+    // ModalDetalleOC abierto nunca se refresca tras cambiar el estado (el cambio
+    // sí se guarda bien, solo que la UI del modal queda mostrando el estado viejo).
+    qc.invalidateQueries({ queryKey: ['orden_compra'] });
   };
 
   const estadoMutation = useMutation({

@@ -133,6 +133,10 @@ function ProveedoresSection() {
   const invalidate = useCallback(() => {
     qc.invalidateQueries({ queryKey: ['proveedores', empresaId] });
     qc.invalidateQueries({ queryKey: ['proveedores_stats', empresaId] });
+    // PROV_KEYS.detail() usa la clave singular 'proveedor' (no 'proveedores') —
+    // mismo bug encontrado y corregido en CotizacionesSection/OrdenesCompraSection:
+    // sin esto, el detalle de proveedor abierto no se refresca tras editar/activar.
+    qc.invalidateQueries({ queryKey: ['proveedor'] });
   }, [qc, empresaId]);
 
   const saveMutation = useMutation({

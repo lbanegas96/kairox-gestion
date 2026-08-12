@@ -171,7 +171,17 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
 
   const estadoMutation = useMutation({
     mutationFn: ({ id, estado }) => cotizacionesService.updateEstado(id, estado),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['cotizaciones', empresaId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cotizaciones', empresaId] });
+      // COTIZACIONES_KEYS.detail() usa la clave singular 'cotizacion' (no
+      // 'cotizaciones') — sin esto, el modal de detalle abierto (que lee de esa
+      // clave) nunca se refresca tras cambiar el estado, aunque el cambio sí se
+      // haya guardado bien en la base. Bug real encontrado por Luciano probando
+      // "Marcar como enviada" en vivo (11/08): el estado cambiaba en la DB pero
+      // el modal seguía mostrando "Borrador" — parecía que el botón no hacía nada.
+      qc.invalidateQueries({ queryKey: ['cotizacion'] });
+    },
+    onError: (e) => toast({ title: 'Error al cambiar estado', description: e.message, variant: 'destructive' }),
   });
 
   const deleteMutation = useMutation({
@@ -187,6 +197,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
       cotizacionesService.convertir(cotizacionId, comprobanteId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['cotizaciones', empresaId] });
+      qc.invalidateQueries({ queryKey: ['cotizacion'] });
       toast({ title: '✅ Cotización convertida en venta', className: 'bg-green-600 text-white' });
     },
     onError: (e) => toast({ title: 'Error al convertir', description: e.message, variant: 'destructive' }),
@@ -328,7 +339,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
 
       {/* MODAL NUEVA COTIZACIÓN */}
       <Dialog open={isModalOpen} onOpenChange={v => { if (!v) setIsModalOpen(false); }}>
-        <DialogContent className="max-w-4xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="dark:text-kx-text">Nueva Cotización</DialogTitle>
             <DialogDescription className="dark:text-kx-text-2">Cargá los ítems y datos de la cotización.</DialogDescription>

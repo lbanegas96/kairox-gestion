@@ -136,6 +136,10 @@ function FormNuevaCotizacion({
             </Button>
           </CardHeader>
           <CardContent className="space-y-3">
+            {/* Solo esta lista scrollea si hay muchos ítems — el resto del modal
+                (datos del cliente, totales, botones de abajo) queda siempre a la
+                vista sin tener que scrollear todo el diálogo. */}
+            <div className="space-y-3 max-h-[42vh] overflow-y-auto pr-1">
             {items.map((item, idx) => (
               <div key={idx} className="grid grid-cols-12 gap-2 items-end">
                 <div className="col-span-4 space-y-1 relative" data-prod-row>
@@ -191,6 +195,7 @@ function FormNuevaCotizacion({
                 </div>
               </div>
             ))}
+            </div>
 
             <div className="flex justify-end pt-4 border-t border-kx-border dark:border-kx-border">
               <div className="text-right space-y-1 min-w-[220px]">
