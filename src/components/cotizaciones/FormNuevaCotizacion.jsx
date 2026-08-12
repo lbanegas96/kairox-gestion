@@ -41,8 +41,8 @@ function FormNuevaCotizacion({
         <option value="día" />
         <option value="servicio" />
       </datalist>
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <Card className="dark:bg-kx-bg dark:border-kx-border">
+      <form onSubmit={handleSubmit} className="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden">
+        <Card className="dark:bg-kx-bg dark:border-kx-border shrink-0">
           <CardHeader><CardTitle className="text-base dark:text-kx-text">Datos del Cliente</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2 relative" ref={clienteWrapperRef}>
@@ -110,7 +110,18 @@ function FormNuevaCotizacion({
             </div>
             <div className="space-y-2">
               <Label className="dark:text-kx-text">Fecha de Vencimiento</Label>
-              <Input type="date" value={form.fecha_vencimiento} onChange={e => setForm(f => ({ ...f, fecha_vencimiento: e.target.value }))} className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+              <Input
+                type="date"
+                value={form.fecha_vencimiento}
+                onChange={e => setForm(f => ({ ...f, fecha_vencimiento: e.target.value }))}
+                // Abre el selector de calendario al clickear en cualquier parte del
+                // campo, no solo en el ícono nativo — showPicker() no existe en
+                // todos los navegadores (ej. Safari viejo), por eso el optional
+                // chaining: si no está disponible, el click simplemente pone el
+                // foco en el input como siempre.
+                onClick={e => e.currentTarget.showPicker?.()}
+                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+              />
             </div>
             <div className="space-y-2">
               <Label className="dark:text-kx-text">Notas</Label>
@@ -128,18 +139,18 @@ function FormNuevaCotizacion({
           </CardContent>
         </Card>
 
-        <Card className="dark:bg-kx-bg dark:border-kx-border">
-          <CardHeader className="flex flex-row items-center justify-between">
+        <Card className="dark:bg-kx-bg dark:border-kx-border flex-1 min-h-0 flex flex-col overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between shrink-0">
             <CardTitle className="text-base dark:text-kx-text">Ítems</CardTitle>
             <Button type="button" variant="outline" size="sm" onClick={addItem} className="dark:border-kx-border dark:text-slate-300 dark:hover:bg-slate-800">
               <Plus className="w-3.5 h-3.5 mr-1" /> Agregar ítem
             </Button>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
             {/* Solo esta lista scrollea si hay muchos ítems — el resto del modal
                 (datos del cliente, totales, botones de abajo) queda siempre a la
                 vista sin tener que scrollear todo el diálogo. */}
-            <div className="space-y-3 max-h-[42vh] overflow-y-auto pr-1">
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1">
             {items.map((item, idx) => (
               <div key={idx} className="grid grid-cols-12 gap-2 items-end">
                 <div className="col-span-4 space-y-1 relative" data-prod-row>
@@ -197,7 +208,7 @@ function FormNuevaCotizacion({
             ))}
             </div>
 
-            <div className="flex justify-end pt-4 border-t border-kx-border dark:border-kx-border">
+            <div className="flex justify-end pt-4 border-t border-kx-border dark:border-kx-border shrink-0">
               <div className="text-right space-y-1 min-w-[220px]">
                 <div className="flex justify-between text-sm text-slate-500 dark:text-kx-text-2">
                   <span>Subtotal</span>
@@ -220,7 +231,7 @@ function FormNuevaCotizacion({
           </CardContent>
         </Card>
 
-        <div className="flex gap-3 justify-end">
+        <div className="flex gap-3 justify-end shrink-0">
           {onCancel && (
             <Button type="button" variant="outline" onClick={onCancel} className="dark:border-kx-border dark:text-slate-300">Cancelar</Button>
           )}

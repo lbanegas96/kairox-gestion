@@ -114,6 +114,18 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
     setForm(f => (f.condiciones_pago ? f : { ...f, condiciones_pago: condicionPagoDefault() }));
   }, [condicionesPago]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Cliente por defecto: "Consumidor Final" (cliente real en la base, no texto
+  // libre) — evita el paso extra de tener que buscarlo a mano en cada cotización
+  // nueva, igual que ya hace el POS. El usuario puede borrarlo y tipear otro.
+  const clienteFinalDefault = () =>
+    allClientes.find(c => c.nombre?.trim().toLowerCase() === 'consumidor final') ?? null;
+
+  useEffect(() => {
+    if (form.cliente_id || form.cliente_nombre || allClientes.length === 0) return;
+    const cf = clienteFinalDefault();
+    if (cf) setForm(f => (f.cliente_id || f.cliente_nombre) ? f : { ...f, cliente_id: cf.id, cliente_nombre: cf.nombre });
+  }, [allClientes]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Cerrar dropdowns al hacer click afuera
   useEffect(() => {
     const onClick = (e) => {
@@ -218,7 +230,12 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
   };
 
   const resetForm = () => {
-    setForm({ cliente_id: '', cliente_nombre: '', notas: '', condiciones_pago: condicionPagoDefault(), fecha_vencimiento: '', moneda: 'ARS', tipoCambioTasa: 1 });
+    const cf = clienteFinalDefault();
+    setForm({
+      cliente_id: cf?.id ?? '', cliente_nombre: cf?.nombre ?? '',
+      notas: '', condiciones_pago: condicionPagoDefault(), fecha_vencimiento: '',
+      moneda: 'ARS', tipoCambioTasa: 1,
+    });
     setItems([{ ...EMPTY_ITEM }]);
     setTcMissing(false);
   };
@@ -337,10 +354,15 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
         }}
       />
 
-      {/* MODAL NUEVA COTIZACIÓN */}
+      {/* MODAL NUEVA COTIZACIÓN — pantalla completa (mismo criterio de tamaño que
+          el fullscreen de MapaRelaciones) para que el cuerpo de ítems tenga lugar
+          real y los botones de abajo no dependan de escrollear todo el diálogo. */}
       <Dialog open={isModalOpen} onOpenChange={v => { if (!v) setIsModalOpen(false); }}>
-        <DialogContent className="max-w-6xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          className="max-w-[96vw] w-[96vw] h-[92vh] flex flex-col dark:bg-kx-bg dark:border-kx-border"
+        >
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle className="dark:text-kx-text">Nueva Cotización</DialogTitle>
             <DialogDescription className="dark:text-kx-text-2">Cargá los ítems y datos de la cotización.</DialogDescription>
           </DialogHeader>
