@@ -1,5 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 📌 Pendiente (sin urgencia) — repo de GitHub público, bajo cuenta personal (12/08)
+
+Verificado hoy: el repo (`github.com/lbanegas96/kairox-gestion`) está **público** y vive en la
+cuenta **personal** de Luciano, no en una organización. Nadia preguntó si conviene pasarlo a
+privado y le preocupaba que eso tumbara el deploy de Vercel — aclarado que no es así, queda
+anotado acá para cuando decidan hacerlo:
+
+- **Pasar el repo a privado NO tira abajo el sitio ya deployado** — Vercel sigue sirviendo lo que
+  ya está construido, no depende de que el repo siga siendo público en el momento del cambio.
+- **Lo único que puede verse afectado:** los **próximos** pushes podrían dejar de auto-deployar si
+  la integración GitHub↔Vercel no tiene permiso para leer repos privados (depende de cómo esté
+  instalada la GitHub App de Vercel en la cuenta). Se soluciona en 2 minutos desde GitHub →
+  Settings → Applications → Vercel (o desde el panel de Vercel), dándole acceso al repo. No hay
+  ventana de downtime real si se hace con calma.
+- **Por qué conviene hacerlo en algún momento:** con el repo público, cualquiera puede ver toda la
+  arquitectura y lógica de negocio (no las claves — esas están bien afuera vía `.gitignore` — pero
+  sí toda la estructura de RLS, el diseño del sistema, y este mismo `CONTEXT.md` con bastante
+  detalle operativo interno). No es urgente, pero es una mejora de seguridad razonable para un
+  sistema multi-tenant con datos financieros reales.
+- **Sugerencia aparte, no pedida:** en algún momento también podría convenir mover el repo de la
+  cuenta personal de Luciano a una organización de GitHub compartida (Kairox IA), para que el
+  acceso no dependa de una sola persona — pero eso es un tema aparte, más grande, para decidir con
+  calma y no se toca ahora.
+
+No se tocó nada — el repo sigue público como está. Sin relación con la migración de Supabase (son
+sistemas distintos), por eso queda documentado acá aparte y no en `PLAN_MIGRACION_SUPABASE.md`.
+
 ## ✅ Bloque A del Plan Maestro — fix del Mapa de Relaciones (Cotizaciones) verificado en vivo (12/08)
 
 Nadia bajó el trabajo de Luciano de esta mañana y me pidió correr el Bloque A de
