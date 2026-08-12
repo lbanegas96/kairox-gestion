@@ -1,5 +1,35 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ 3 items de backlog cerrados mientras se espera la decisión de Supabase (11/08)
+
+Mientras Luciano decide entre pagar Pro o migrar (ver sección de abajo), se avanzó con el backlog
+menor que había quedado documentado, sin tocar nada relacionado a la migración:
+
+1. **Filas huérfanas en la cola ARCA — investigadas, no borradas.** 3 filas de
+   `facturas_pendientes_arca` con `comprobante_id=NULL` (FK `ON DELETE SET NULL`) eran restos de
+   comprobantes de prueba del 06/08 rechazados por ARCA y luego borrados — invisibles en el Monitor
+   (la vista arranca `FROM comprobantes`), sin riesgo, pero un `DELETE` de limpieza quedó bloqueado
+   por el clasificador de auto mode (acción destructiva en prod). **Pendiente: confirmar con
+   Luciano si se borran** — comando ya armado, solo falta luz verde.
+2. **Mensaje contradictorio de `mensajeHumano()` — resuelto.** El código 10016 mostraba siempre
+   "no hace falta que hagas nada todavía" incluso después de agotar los 5 reintentos automáticos,
+   contradictorio al lado del badge "reintentos agotados". Ahora `mensajeHumano(raw, {agotado})`
+   distingue ambos casos. `arca-worker` redeployado (v26). Los 3 comprobantes del incidente
+   (06-001/-008/-011) tuvieron su mensaje ya guardado corregido a mano (UPDATE dirigido, no
+   destructivo) para que Nadia no vea el texto viejo si los revisa mañana.
+3. **Bug del Mapa de Relaciones ("actual" no marca desde Cotizaciones) — resuelto.**
+   `MapaRelaciones.jsx` nunca armaba un nodo de cotización en la cadena. Al investigar se encontró
+   que el intento inicial de fix (basado en `comprobantes.cotizacion_id`) hubiera sido inefectivo:
+   esa columna existe en el schema pero está **siempre en NULL** en los datos reales — la relación
+   real vive al revés, en `cotizaciones.comprobante_id` (confirmado: 6/20 cotizaciones convertidas
+   la tienen poblada). Corregido para buscar por esa columna; ahora la cotización aparece como
+   nodo propio en la cadena (Cotización → Pedido → Entrega → Factura) y el badge "actual" marca
+   correctamente. Deployado a Vercel.
+
+Verificado: 153/153 tests, `eslint` 0 errores (solo warnings preexistentes de PropTypes), `vite
+build` limpio. No se pudo verificar visualmente en el navegador (sin sesión activa ni credenciales
+a mano) — verificación fue a nivel de código + consultas SQL directas contra los datos reales.
+
 ## 🔴 DECISIÓN PARA LUCIANO — Plan free de Supabase vence el 17/08, elegir camino (11/08)
 
 **Leer esto primero.** La organización NALUX sigue en plan `free` de Supabase (verificado en vivo
