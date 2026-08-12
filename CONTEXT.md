@@ -1,5 +1,15 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🧪 Plan Maestro de Pruebas — barrido completo de todo lo pendiente (11/08)
+
+`PLAN_PRUEBAS_MAESTRO_2026-08-11.md` junta en un solo documento **todo** lo que seguía abierto,
+disperso hasta ahora en varios planes sueltos: verificar el fix del Mapa de Relaciones de hoy
+(Nadia, Bloque A), confirmar visualmente el rebrand de colores (Luciano, Bloque B), las 2 pruebas
+que necesitan hardware real — cámara y QR MercadoPago (Luciano con su celular, Bloque C) —, un
+repaso informativo del motor ARCA ya cerrado (Bloque D), y 2 acciones administrativas de un click
+(Bloque E). Todo lo demás del proyecto (Fidelización, Multi-caja, Modo Offline, COGS, Cierre de
+Ejercicio, etc.) ya está confirmado cerrado — no hace falta retestear nada de eso.
+
 ## ✅ 3 items de backlog cerrados mientras se espera la decisión de Supabase (11/08)
 
 Mientras Luciano decide entre pagar Pro o migrar (ver sección de abajo), se avanzó con el backlog
