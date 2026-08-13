@@ -63,6 +63,23 @@ function FormNuevaCotizacion({
     }
   };
 
+  // Descripción/Producto necesita su propio handler: si el desplegable de
+  // autocompletar está abierto con resultados, Enter debe elegir ese producto
+  // (como en cualquier combo) en vez de agregar una fila nueva — si no, el
+  // atajo de "Enter agrega fila" le gana al gesto natural de confirmar la
+  // sugerencia, y el ítem queda como texto libre sin producto vinculado.
+  const handleDescripcionKeyDown = (idx) => (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const results = prodOpen[idx] ? (prodResults[idx] ?? []) : [];
+      if (results.length > 0) {
+        selectProducto(idx, results[0]);
+        return;
+      }
+      addItem();
+    }
+  };
+
   return (
     <>
       {/* Opciones globales de unidad de medida para los <input list="..."> de los ítems */}
@@ -227,7 +244,7 @@ function FormNuevaCotizacion({
                     value={prodSearch[idx] ?? item.descripcion}
                     onChange={e => { searchProducto(idx, e.target.value); updateItem(idx, 'descripcion', e.target.value); setProdOpen(prev => ({ ...prev, [idx]: true })); }}
                     onFocus={() => { searchProducto(idx, prodSearch[idx] ?? item.descripcion ?? ''); setProdOpen(prev => ({ ...prev, [idx]: true })); }}
-                    onKeyDown={handleItemRowKeyDown}
+                    onKeyDown={handleDescripcionKeyDown(idx)}
                     placeholder="Buscar producto o escribir descripción"
                     className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm"
                     autoComplete="off"
