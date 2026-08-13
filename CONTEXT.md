@@ -1,5 +1,46 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Revisión automática de las Fases 0+1 — 5 bugs reales encontrados y ARREGLADOS (13/08)
+
+A pedido explícito ("desplegá pruebas exhaustivas... si encontrás errores repáralos"), se corrió
+`/code-review` con 8 ángulos en paralelo sobre todo lo construido en las Fases 0 y 1. Bugs reales
+confirmados y corregidos (mig.323 + cambios de frontend), todos verificados en vivo contra
+producción con `ROLLBACK`:
+
+1. **`cancelar_nota_debito` chequeaba la columna equivocada** de `cuenta_corriente_imputaciones`
+   — copiado de `cancelar_nota_credito` sin ajustar la lógica al caso opuesto (una ND es deuda,
+   no crédito). El guard nunca matcheaba nada: se podía cancelar una ND con un cobro ya imputado,
+   generando una reversión de más (saldo de cliente subestimado). Corregido para chequear
+   `factura_comprobante_id`, mismo criterio que `cancelar_factura`. Verificado: simulé un cobro
+   imputado contra una ND real y confirmé que ahora bloquea; confirmé también que una ND sin
+   imputar se sigue pudiendo cancelar normal.
+2. **Sin clamp de 0-100% en los % de descuento** (global y por línea) en las 3 RPCs de edición +
+   los 3 `create()` — un typo como "150" en vez de "15" producía un total negativo persistido en
+   un documento real, sin ningún error. Agregado `LEAST/GREATEST` en las RPCs y un helper
+   `clampPct` en los 3 servicios/secciones (doble capa). Verificado: 150% quedó clampeado a 100%,
+   total $0 (no negativo).
+3. **"Limpiar" durante una edición** (Cotizaciones/OC) limpiaba `editingId` sin cerrar el modal —
+   guardar después creaba un documento **duplicado** en vez de actualizar el original. Oculto el
+   botón mientras se está editando.
+4. **Un ítem con descripción pero cantidad/precio inválido se sacaba en silencio** del payload al
+   guardar — y el diffing de la RPC lo interpreta como "se sacó" y lo **borra** del documento real
+   sin ningún aviso (ej. el usuario borra el precio sin querer al editar, un ítem entero
+   desaparece). Ahora bloquea el guardado con un error claro en vez de perder la línea
+   calladamente (Cotizaciones/Pedidos/OC).
+5. **Hardening**: las 3 RPCs de edición no repetían el filtro `empresa_id` en el DELETE/UPDATE de
+   ítems (regla de oro de CLAUDE.md) — no explotable hoy (el id de cabecera ya estaba validado),
+   pero se agrega como defensa en profundidad.
+
+De paso: `openNew`/`openEdit` en los 3 módulos ahora limpian `prodSearch`/`prodResults`/
+`prodOpen` — un desplegable de autocomplete podía quedar abierto en una fila en blanco al abrir
+un documento distinto.
+
+**No se tocó** (señalado por la revisión pero no son bugs, o quedan fuera de alcance): duplicación
+de código entre Cotizaciones/Pedidos/OC (`FACTOR_IVA`, `HistorialItem`, `getHistorial`, atajo
+Enter — todos copy-pasteados en vez de compartidos; observación de arquitectura válida, no un
+error, requeriría un refactor grande fuera del alcance de "extender el patrón" — candidato para
+una sesión aparte si se decide). 156/156 tests, `eslint` 0 errores, build limpio.
+
 ## 📋 Plan en curso: extender el estándar Cotizaciones al resto de comprobantes (13/08)
 
 Ver `PLAN_COMPROBANTES_ESTANDAR.md` en la raíz del repo para el mapeo completo (10 documentos
