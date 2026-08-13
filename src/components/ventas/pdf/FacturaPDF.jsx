@@ -334,6 +334,13 @@ export function FacturaPDF({ comprobante, items, pagos, empresa, qrDataUrl }) {
   const iva = comprobante.iva_discriminado != null
     ? Number(comprobante.iva_discriminado)
     : totalNum - neto;
+  // Precio de lista SIN descuento — mismo criterio que CotizacionPDF.jsx. Bug
+  // real corregido 13/08: el descuento por línea se calculaba en la UI pero
+  // nunca se guardaba ni se mostraba en el PDF, quedaba invisible para siempre.
+  const subtotalBruto = (items ?? []).reduce((s, i) => s + Number(i.cantidad) * Number(i.precio_unitario), 0);
+  const descuento = Math.max(0, subtotalBruto - totalNum);
+  const descuentoPct = subtotalBruto > 0 ? (descuento / subtotalBruto) * 100 : 0;
+  const formatPct = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
   const tc          = Number(comprobante.tipo_cambio_tasa) || 1;
   const esExtranjera = comprobante.moneda && comprobante.moneda !== 'ARS' && tc > 0;
@@ -475,6 +482,21 @@ export function FacturaPDF({ comprobante, items, pagos, empresa, qrDataUrl }) {
                 <Text style={styles.totalesVal}>{simbolo}{formatARS(conv(pago.monto))}</Text>
               </View>
             )) : null}
+
+            {/* Descuento — monto + % combinado (línea+global no aplica acá, solo
+                línea, pero mismo formato que CotizacionPDF.jsx por consistencia) */}
+            {descuento > 0.005 ? (
+              <>
+                <View style={styles.totalesRow}>
+                  <Text style={styles.totalesLabel}>Subtotal</Text>
+                  <Text style={styles.totalesVal}>{simbolo}{formatARS(conv(subtotalBruto))}</Text>
+                </View>
+                <View style={styles.totalesRow}>
+                  <Text style={styles.totalesLabel}>{`Descuento (${formatPct(descuentoPct)}%)`}</Text>
+                  <Text style={styles.totalesVal}>-{simbolo}{formatARS(conv(descuento))}</Text>
+                </View>
+              </>
+            ) : null}
 
             {/* IVA discriminado (solo Factura A) */}
             {letra === 'A' ? (

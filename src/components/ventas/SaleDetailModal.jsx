@@ -147,15 +147,19 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
   // Cancelación real — Factura: RPC cancelar_factura (mig.259), reversa stock,
   // caja, cuenta corriente y el asiento contable. NC: RPC cancelar_nota_credito
   // (mig.267), reversa solo cuenta corriente (una NC nunca tocó stock/caja/
-  // asiento). Documento de reversa en ambos casos — nunca se borra el rastro
-  // original. Bloqueada por el propio RPC si el comprobante tiene CAE o ya
-  // fue imputado/cobrado.
+  // asiento). ND: RPC cancelar_nota_debito (mig.321) — mismo criterio que NC,
+  // antes ni siquiera tenía RPC de cancelación (bug real, 13/08). Documento de
+  // reversa en los tres casos — nunca se borra el rastro original. Bloqueada
+  // por el propio RPC si el comprobante tiene CAE o ya fue imputado/cobrado.
   const esNC = sale?.tipo === 'nota_credito';
+  const esND = sale?.tipo === 'nota_debito';
+  const nombreTipo = esNC ? 'Nota de Crédito' : esND ? 'Nota de Débito' : 'Factura';
+  const rpcCancelar = esNC ? 'cancelar_nota_credito' : esND ? 'cancelar_nota_debito' : 'cancelar_factura';
   const handleCancelarFactura = async () => {
     if (!sale) return;
     setCancelando(true);
     try {
-      const { data, error } = await supabase.rpc(esNC ? 'cancelar_nota_credito' : 'cancelar_factura', {
+      const { data, error } = await supabase.rpc(rpcCancelar, {
         p_empresa_id: user.empresa_id,
         p_user_id: user.id,
         p_comprobante_id: sale.id,
@@ -163,7 +167,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
       });
       if (error) throw error;
 
-      if (!esNC) {
+      if (!esNC && !esND) {
         asientosAutoService.crearAsientoReversaVenta(user.empresa_id, user.id, {
           ventaId: sale.id,
           numeroVenta: data?.numero_venta ?? sale.numero_venta,
@@ -172,15 +176,15 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
       }
 
       toast({
-        title: `${esNC ? 'Nota de Crédito' : 'Factura'} ${sale.numero_venta} cancelada`,
-        description: esNC ? 'Se revirtió el crédito en cuenta corriente.' : 'Se revirtió stock, caja y cuenta corriente.',
+        title: `${nombreTipo} ${sale.numero_venta} cancelada`,
+        description: (esNC || esND) ? 'Se revirtió el efecto en cuenta corriente.' : 'Se revirtió stock, caja y cuenta corriente.',
       });
       setShowCancelarConfirm(false);
       setMotivoCancelacion('');
       await fetchSaleDetails();
       onUpdateSale?.();
     } catch (err) {
-      toast({ title: `No se pudo cancelar la ${esNC ? 'Nota de Crédito' : 'factura'}`, description: err.message, variant: 'destructive' });
+      toast({ title: `No se pudo cancelar la ${nombreTipo}`, description: err.message, variant: 'destructive' });
     } finally {
       setCancelando(false);
     }
@@ -188,7 +192,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
 
   const hasChanges = sale && newStatus !== sale.estado_pago;
   const caeBloqueaCancelacion = sale && CAE_BLOQUEA_CANCELACION.includes(sale.cae_estado);
-  const puedeCancelar = sale && ['venta', 'nota_credito'].includes(sale.tipo) && sale.estado_pago !== 'cancelada';
+  const puedeCancelar = sale && ['venta', 'nota_credito', 'nota_debito'].includes(sale.tipo) && sale.estado_pago !== 'cancelada';
   const puedeRegenerarAsiento = sale && sale.tipo === 'venta' && !sale.asiento_id && sale.estado_pago !== 'cancelada';
 
   const handleRegenerarAsiento = async () => {
@@ -300,12 +304,12 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
                           className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20 gap-1.5"
                           onClick={() => setShowCancelarConfirm(true)}
                         >
-                          <Ban className="h-3.5 w-3.5" /> {esNC ? 'Cancelar Nota de Crédito' : 'Cancelar Factura'}
+                          <Ban className="h-3.5 w-3.5" /> {`Cancelar ${nombreTipo}`}
                         </Button>
                       )}
                       {puedeCancelar && caeBloqueaCancelacion && (
                         <span className="text-xs text-kx-text-3 italic">
-                          {esNC ? 'Tiene CAE — no se puede anular directamente' : 'Tiene CAE — para anularla generá una Nota de Crédito'}
+                          {esNC || esND ? 'Tiene CAE — no se puede anular directamente' : 'Tiene CAE — para anularla generá una Nota de Crédito'}
                         </span>
                       )}
                       {puedeRegenerarAsiento && (
@@ -487,11 +491,13 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
         <AlertDialogContent className="dark:bg-kx-bg dark:border-kx-border">
           <AlertDialogHeader>
             <AlertDialogTitle className="dark:text-kx-text">
-              ¿Cancelar {esNC ? 'Nota de Crédito' : 'Factura'} {sale?.numero_venta}?
+              ¿Cancelar {nombreTipo} {sale?.numero_venta}?
             </AlertDialogTitle>
             <AlertDialogDescription className="dark:text-kx-text-2">
               {esNC
                 ? 'Se revierte el crédito otorgado en cuenta corriente (la deuda del cliente vuelve a subir). Queda un registro completo de la reversión — nada se borra. Esta acción no se puede deshacer.'
+                : esND
+                ? 'Se revierte el cargo en cuenta corriente (la deuda del cliente vuelve a bajar). Queda un registro completo de la reversión — nada se borra. Esta acción no se puede deshacer.'
                 : 'Se repone el stock entregado, se revierte el cobro en caja (si lo hubo) y la deuda en cuenta corriente (si la hay). Queda un registro completo de la reversión — nada se borra. Esta acción no se puede deshacer.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -506,7 +512,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
             <AlertDialogCancel disabled={cancelando} className="dark:text-kx-text dark:border-kx-border">Volver</AlertDialogCancel>
             <AlertDialogAction onClick={handleCancelarFactura} disabled={cancelando} className="bg-red-600 hover:bg-red-700 text-white">
               {cancelando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Ban className="h-4 w-4 mr-2" />}
-              {esNC ? 'Sí, cancelar NC' : 'Sí, cancelar factura'}
+              {`Sí, cancelar ${esNC ? 'NC' : esND ? 'ND' : 'factura'}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

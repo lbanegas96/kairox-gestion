@@ -15,11 +15,13 @@ import { parseNumberLocale } from '@/lib/currencyUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
 import ClienteSelector from '@/components/shared/ClienteSelector';
 
+// Sin 27% a propósito — viola el CHECK real de comprobante_items.alicuota_iva
+// (mismo set que cotizacion_items/pedido_items: 21/10.5/0/exento/no_gravado).
+// Bug real encontrado 13/08 auditando contra el estándar de Cotizaciones.
 const ALICUOTAS = [
   { value: 0,    label: 'Exento 0%' },
   { value: 10.5, label: '10.5%'     },
   { value: 21,   label: '21%'       },
-  { value: 27,   label: '27%'       },
 ];
 
 const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta', 'Cuenta Corriente'];
@@ -123,7 +125,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
       setClienteId(comprobanteOrigen.cliente_id || '');
       setReferenciaCliente(comprobanteOrigen.referencia_cliente || '');
       supabase.from('comprobante_items')
-        .select('id, producto_id, descripcion, cantidad, precio_unitario, alicuota_iva, productos(nombre)')
+        .select('id, producto_id, descripcion, cantidad, precio_unitario, alicuota_iva, descuento_pct, productos(nombre)')
         .eq('comprobante_id', comprobanteOrigen.id)
         .eq('empresa_id', user.empresa_id)
         .then(({ data }) => {
@@ -134,7 +136,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
               descripcion:   i.descripcion || i.productos?.nombre || '',
               cantidad:      Number(i.cantidad),
               precio_unit:   Number(i.precio_unitario),
-              descuento_pct: 0,
+              descuento_pct: Number(i.descuento_pct) || 0,
               alicuota_iva:  Number(i.alicuota_iva ?? 21),
             })));
           }
@@ -197,6 +199,12 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
   const subtotalNeto = useMemo(() => items.reduce((s, i) => s + calcNetoIva(i).neto, 0), [items]);
   const totalIva     = useMemo(() => items.reduce((s, i) => s + calcNetoIva(i).iva, 0), [items]);
   const total        = useMemo(() => items.reduce((s, i) => s + calcBruto(i), 0), [items]);
+  // Precio de lista SIN descuento — mismo criterio que CotizacionPDF.jsx, para
+  // poder mostrar "Descuento" como línea propia (antes quedaba invisible, el
+  // descuento por línea ni se guardaba — bug real corregido 13/08).
+  const subtotalBruto = useMemo(() => items.reduce((s, i) => s + Number(i.cantidad) * (parseNumberLocale(i.precio_unit) || 0), 0), [items]);
+  const descuento     = Math.max(0, subtotalBruto - total);
+  const descuentoPct  = subtotalBruto > 0 ? (descuento / subtotalBruto) * 100 : 0;
   const isCC         = formaPago === 'Cuenta Corriente';
 
   // ── Generación de número correlativo ────────────────────────────────────────
@@ -284,6 +292,10 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
           precio_unitario: parseNumberLocale(i.precio_unit) || 0,
           subtotal:        calcBruto(i),
           alicuota_iva:    String(i.alicuota_iva),
+          // Bug real encontrado 13/08: el % de descuento se cargaba en la UI y se
+          // usaba para calcular calcBruto()/subtotal, pero nunca se guardaba en la
+          // columna — quedaba invisible para siempre después de crear la factura.
+          descuento_pct:   Number(i.descuento_pct) || 0,
         }))
       );
       if (itemsErr) throw itemsErr;
@@ -601,6 +613,18 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Totales */}
             <div className="bg-kx-surface-2 rounded-xl border border-kx-border p-4 space-y-2 text-sm">
+              {descuento > 0.005 && (
+                <>
+                  <div className="flex justify-between text-kx-text-2">
+                    <span>Subtotal</span>
+                    <span className="tabular-nums">${fmt(subtotalBruto)}</span>
+                  </div>
+                  <div className="flex justify-between text-kx-red">
+                    <span>Descuento ({descuentoPct.toFixed(descuentoPct % 1 === 0 ? 0 : 1)}%)</span>
+                    <span className="tabular-nums">-${fmt(descuento)}</span>
+                  </div>
+                </>
+              )}
               <div className="flex justify-between text-kx-text-2">
                 <span>Subtotal neto</span>
                 <span className="tabular-nums">${fmt(subtotalNeto)}</span>
