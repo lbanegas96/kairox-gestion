@@ -60,8 +60,11 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, o
 
   return (
     <Dialog open={!!viewId} onOpenChange={() => setViewId(null)}>
-      <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border">
-        <DialogHeader>
+      {/* Mismo formato grande que "Nueva Cotización" — consistencia pedida por
+          Luciano: ver una cotización ya guardada debería sentirse igual de
+          espacioso que cargarla. */}
+      <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] flex flex-col dark:bg-kx-bg dark:border-kx-border">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="dark:text-kx-text flex items-center gap-2">
             <FileText className="w-5 h-5 text-kx-blue" />
             Cotización {detalle?.numero}
@@ -69,8 +72,8 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, o
           <DialogDescription className="dark:text-kx-text-2">Detalle y líneas de la cotización.</DialogDescription>
         </DialogHeader>
         {detalle && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
+            <div className="grid grid-cols-4 gap-4 text-sm">
               <div>
                 <span className="text-kx-text-3 dark:text-kx-text-3 text-xs uppercase">Cliente</span>
                 <p className="font-medium dark:text-kx-text">{detalle.cliente_nombre ?? detalle.clientes?.nombre ?? '—'}</p>
@@ -156,7 +159,7 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, o
             )}
           </div>
         )}
-        <DialogFooter className="flex-wrap gap-2 sm:justify-between">
+        <DialogFooter className="flex-wrap gap-2 sm:justify-between shrink-0">
           <Button variant="outline" onClick={() => setViewId(null)} className="dark:border-kx-border dark:text-slate-300">Cerrar</Button>
           <div className="flex gap-2 flex-wrap">
             {onCancelar && detalle && ESTADOS_CANCELABLES.includes(detalle.estado) && (

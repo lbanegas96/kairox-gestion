@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,6 +26,29 @@ function FormNuevaCotizacion({
   // resultado en vez de la lista completa. clienteQuery arranca vacío en cada
   // focus, así tocar el campo siempre muestra todos los clientes primero.
   const [clienteQuery, setClienteQuery] = useState('');
+
+  // Atajo de teclado pedido por Luciano: Enter en cualquier campo de una fila
+  // de ítem agrega la siguiente fila y le pasa el foco a su Descripción, sin
+  // tener que ir hasta el botón "Agregar ítem" cada vez. Guardamos refs a los
+  // inputs de Descripción por índice y, cuando `items` crece, enfocamos el
+  // último. `e.preventDefault()` es necesario además porque sin él, Enter
+  // dentro de un <form> dispara el submit (guardar la cotización a medio
+  // cargar) en vez de nada — efecto secundario que esto corrige de paso.
+  const descRefs = useRef([]);
+  const prevItemsLength = useRef(items.length);
+  useEffect(() => {
+    if (items.length > prevItemsLength.current) {
+      descRefs.current[items.length - 1]?.focus();
+    }
+    prevItemsLength.current = items.length;
+  }, [items.length]);
+
+  const handleItemRowKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addItem();
+    }
+  };
 
   return (
     <>
@@ -177,9 +200,11 @@ function FormNuevaCotizacion({
                 <div className="col-span-4 space-y-1 relative" data-prod-row>
                   <Label className="text-xs dark:text-kx-text-2">Descripción / Producto</Label>
                   <Input
+                    ref={el => { descRefs.current[idx] = el; }}
                     value={prodSearch[idx] ?? item.descripcion}
                     onChange={e => { searchProducto(idx, e.target.value); updateItem(idx, 'descripcion', e.target.value); setProdOpen(prev => ({ ...prev, [idx]: true })); }}
                     onFocus={() => { searchProducto(idx, prodSearch[idx] ?? item.descripcion ?? ''); setProdOpen(prev => ({ ...prev, [idx]: true })); }}
+                    onKeyDown={handleItemRowKeyDown}
                     placeholder="Buscar producto o escribir descripción"
                     className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm"
                     autoComplete="off"
@@ -197,10 +222,14 @@ function FormNuevaCotizacion({
                 </div>
                 <div className="col-span-2 space-y-1">
                   <Label className="text-xs dark:text-kx-text-2">Cantidad</Label>
-                  <Input type="number" min="1" step="1" value={item.cantidad} onChange={e => updateItem(idx, 'cantidad', e.target.value.replace(/[^\d]/g, ''))} className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
+                  <Input type="number" min="1" step="1" value={item.cantidad} onChange={e => updateItem(idx, 'cantidad', e.target.value.replace(/[^\d]/g, ''))} onKeyDown={handleItemRowKeyDown} className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
                 </div>
                 <div className="col-span-2 space-y-1">
                   <Label className="text-xs dark:text-kx-text-2">Unidad</Label>
+                  {/* Sin onKeyDown acá a propósito: Enter en un <select> nativo
+                      confirma la opción resaltada del popup del navegador —
+                      interceptarlo rompería esa selección. El atajo de agregar
+                      fila queda en los inputs de texto de la fila. */}
                   <select
                     value={item.unidad_medida || ''}
                     onChange={e => updateItem(idx, 'unidad_medida', e.target.value)}
@@ -214,11 +243,11 @@ function FormNuevaCotizacion({
                 </div>
                 <div className="col-span-2 space-y-1">
                   <Label className="text-xs dark:text-kx-text-2">Precio Unit.</Label>
-                  <Input type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unitario} onChange={e => updateItem(idx, 'precio_unitario', e.target.value)} className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
+                  <Input type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unitario} onChange={e => updateItem(idx, 'precio_unitario', e.target.value)} onKeyDown={handleItemRowKeyDown} className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
                 </div>
                 <div className="col-span-1 space-y-1">
                   <Label className="text-xs dark:text-kx-text-2">% Desc.</Label>
-                  <Input type="text" inputMode="decimal" placeholder="0" value={item.descuento_item} onChange={e => updateItem(idx, 'descuento_item', e.target.value)} className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
+                  <Input type="text" inputMode="decimal" placeholder="0" value={item.descuento_item} onChange={e => updateItem(idx, 'descuento_item', e.target.value)} onKeyDown={handleItemRowKeyDown} className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
                 </div>
                 <div className="col-span-1 flex justify-end pb-0.5">
                   <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-red" onClick={() => removeItem(idx)} disabled={items.length === 1}>
