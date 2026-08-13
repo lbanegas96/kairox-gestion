@@ -281,6 +281,11 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
             precio_unitario: it.precio_unitario,
             descuento_item: it.descuento_item || '',
             alicuota_iva: it.alicuota_iva ?? '21',
+            // Bug real encontrado por Nadia (13/08): sin esto, editar un pedido
+            // borraba la unidad_medida de cualquier ítem que no se volviera a
+            // seleccionar del buscador — el RPC pisa el campo con lo que venga
+            // en el payload, y acá nunca se lo pasábamos de vuelta.
+            unidad_medida: it.unidad_medida ?? '',
           }))
         : emptyForm().items,
     });
