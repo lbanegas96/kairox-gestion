@@ -1,5 +1,23 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Pedidos: 3° bug del checklist, ARREGLADO — unidad_medida se perdía al editar (13/08)
+
+Luciano se fue a entrenar y pidió seguir sin su presencia con lo que se pudiera. Se tomó el bug
+que Nadia había dejado en el backlog (ver sección de checklist más abajo): **editar un Pedido
+borraba la `unidad_medida` de los ítems que no se volvían a tocar.**
+
+Causa raíz confirmada: `openEdit()` en `PedidosSection.jsx` no incluía `unidad_medida` al
+precargar los ítems en el formulario de edición — la RPC `actualizar_pedido` hace lo que se le
+pide, así que sin ese campo en el payload lo pisaba con `null`. Fix de una línea, mismo patrón
+que ya usa `handleEditarClick()` en `CotizacionesSection.jsx`.
+
+**No se tocó la fila ya afectada en producción** (PED-20260813-001, ítem "Termo Stanley 1L
+Original") — sigue en `null`, mismo criterio que Nadia ya había decidido para el resto de los
+datos de esa prueba (dejarlos como están, sin revertir).
+
+Verificado: `eslint` 0 errores, 156/156 tests, `vite build` limpio. Es un fix puramente de
+frontend (no toca SQL/RPC), así que no requirió verificación adicional contra la base.
+
 ## ✅ Barrido general — 2° bug real encontrado y ARREGLADO (13/08)
 
 A pedido de Nadia ("hacé un barrido de todo para ver si no quedó algún bug suelto"), después del
@@ -49,21 +67,16 @@ como RI** (todos `CF` o sin condición), así que no hay forma de probarlo con d
 es un bug, es que falta el dato — la función que decide (`determinarTipoComprobante`) es la misma
 que ya está confirmada funcionando en Cotizaciones y en las facturas reales.
 
-### 🐛 Bug real encontrado — editar un Pedido borra la "Unidad de Medida" de los ítems no tocados
+### 🐛→✅ Bug real encontrado — editar un Pedido borraba la "Unidad de Medida" de los ítems no tocados
 
-Al editar PED-20260813-001 (agregar un ítem, sacar otro, modificar un tercero), el ítem que quedó
-sin tocar ("Termo Stanley 1L Original") apareció en el historial como "modificado" — comparé el
-detalle técnico del registro de auditoría: **todos los campos idénticos excepto
-`unidad_medida: "Unidad"` → `null`**. Causa raíz: `ModalPedidoForm.jsx` (a diferencia de
-`FormNuevaCotizacion.jsx`) **no tiene ningún campo de Unidad de Medida en su UI** — el dato se
-carga bien al crear el ítem por primera vez (vía `selectProducto`), pero al reabrir "Editar Pedido"
-se pierde para cualquier ítem que no se vuelva a seleccionar desde el buscador.
-
-**Impacto: bajo.** `unidad_medida` no aparece en el detalle del pedido, el PDF, ni en ningún
-cálculo de Pedidos — es metadata que hoy no se usa para nada visible. Pero sigue siendo pérdida de
-datos real cada vez que se edita un pedido con ítems preexistentes. No se tocó código — queda en
-el backlog para que Luciano decida (agregar el campo al form, o preservar el valor existente al
-guardar si no se tocó).
+**ARREGLADO (13/08, ver sección al principio del archivo).** Al editar PED-20260813-001 (agregar
+un ítem, sacar otro, modificar un tercero), el ítem que quedó sin tocar ("Termo Stanley 1L
+Original") apareció en el historial como "modificado" — comparando el detalle técnico del
+registro de auditoría: todos los campos idénticos excepto `unidad_medida: "Unidad"` → `null`.
+Causa raíz: `openEdit()` en `PedidosSection.jsx` no pasaba `unidad_medida` al precargar los ítems
+para editar. Corregido con el mismo patrón que ya usa `handleEditarClick()` en
+`CotizacionesSection.jsx`. La fila ya afectada en producción (ese ítem de PED-20260813-001) sigue
+en `null` — no se tocó, mismo criterio que Nadia decidió para el resto de esos datos de prueba.
 
 No se pudo verificar ni el flujo de cámara con hardware real ni nada que necesite una cámara física
 (el entorno de pruebas no tiene acceso). Sin errores nuevos en consola en todo el recorrido (solo
