@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 // lenta ("no lo toma", 12/08). Si algún día hiciera falta escanear un QR acá,
 // volver a MultiFormat es cambiar solo esta línea.
 import { BrowserMultiFormatOneDReader } from '@zxing/browser';
-import { Camera, X, AlertTriangle, Loader2, Check, Ban } from 'lucide-react';
+import { Camera, AlertTriangle, Loader2, Check, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
@@ -383,8 +383,10 @@ export default function EscanerCamaraModal({ open, onClose, onDetectado }) {
         </div>
 
         <div className="flex justify-end pt-2">
+          {/* Sin ícono a propósito (pedido de Nadia, 12/08): la X de cerrar ya
+              está arriba a la derecha del modal (la de Radix Dialog) — tener
+              otra acá abajo era redundante. */}
           <Button variant="outline" onClick={onClose}>
-            <X className="w-4 h-4 mr-2" />
             Listo
           </Button>
         </div>
