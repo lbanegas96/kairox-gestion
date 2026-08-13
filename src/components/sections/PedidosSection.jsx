@@ -17,6 +17,12 @@ import { ESTADOS, getEstado } from '@/components/pedidos/shared';
 import TablaPedidos from '@/components/pedidos/TablaPedidos';
 import ModalPedidoForm from '@/components/pedidos/ModalPedidoForm';
 import ModalDetallePedido from '@/components/pedidos/ModalDetallePedido';
+import { determinarTipoComprobante } from '@/hooks/useAfipConfig';
+
+// precio_unitario es SIEMPRE el precio final que paga el cliente (IVA incluido) —
+// mismo criterio que en Cotizaciones/Ventas. Para separar neto/IVA hay que
+// DIVIDIR por el factor de la alícuota, nunca sumarlo.
+const FACTOR_IVA = { '21': 1.21, '10.5': 1.105 };
 
 // ── Componente principal ───────────────────────────────────────────────────────
 function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navigatePedidoId, onNavigated } = {}) {
@@ -26,7 +32,14 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
   const [pedidos, setPedidos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
+  const [empresaCondicionIva, setEmpresaCondicionIva] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // Autocompletar Producto/Descripción — mismo patrón que CotizacionesSection.jsx
+  // (búsqueda con desplegable en vez de un <select> con el catálogo entero).
+  const [prodSearch, setProdSearch] = useState({});
+  const [prodResults, setProdResults] = useState({});
+  const [prodOpen, setProdOpen] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEstado, setFilterEstado] = useState('Todos');
 
@@ -61,7 +74,8 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
     referencia_cliente: '',
     moneda: 'ARS',
     tipoCambioTasa: 1,
-    items: [{ producto_id: '', descripcion: '', cantidad: 1, precio_unitario: 0, descuento_item: '' }],
+    descuentoGlobalPct: '',
+    items: [{ producto_id: '', descripcion: '', cantidad: 1, precio_unitario: 0, descuento_item: '', alicuota_iva: '21' }],
   });
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
@@ -89,12 +103,16 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       // reinterpreta silenciosamente un monto en USD como si fuera ARS.
       moneda: prefillCotizacion.moneda || 'ARS',
       tipoCambioTasa: Number(prefillCotizacion.tipo_cambio_tasa) || 1,
+      // La cotización ya trae su propio % de descuento global — mismo significado
+      // en ambos documentos, se copia directo en vez de perderse en la conversión.
+      descuentoGlobalPct: prefillCotizacion.descuento ? String(prefillCotizacion.descuento) : '',
       items: (prefillCotizacion.cotizacion_items ?? []).map(it => ({
         producto_id: it.producto_id || '',
         descripcion: it.descripcion,
         cantidad: Number(it.cantidad) || 1,
         precio_unitario: Number(it.precio_unitario) || 0,
         descuento_item: it.descuento_item || '',
+        alicuota_iva: it.alicuota_iva ?? '21',
       })),
     });
     setIsModalOpen(true);
@@ -139,18 +157,20 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [{ data: p }, { data: c }, { data: pr }] = await Promise.all([
+      const [{ data: p }, { data: c }, { data: pr }, { data: emp }] = await Promise.all([
         supabase
           .from('pedidos')
-          .select('*, pedido_items(*), cotizaciones(numero)')
+          .select('*, pedido_items(*), cotizaciones(numero), clientes(condicion_iva)')
           .eq('empresa_id', user.empresa_id)
           .order('created_at', { ascending: false }),
-        supabase.from('clientes').select('id, nombre').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre'),
-        supabase.from('productos').select('id, nombre, precio_venta, codigo_sku').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre'),
+        supabase.from('clientes').select('id, nombre, condicion_iva').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre'),
+        supabase.from('productos').select('id, nombre, precio_venta, codigo_sku, unidad_medida, alicuota_iva').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre'),
+        supabase.from('empresas').select('condicion_iva').eq('id', user.empresa_id).single(),
       ]);
       setPedidos(p || []);
       setClientes(c || []);
       setProductos(pr || []);
+      setEmpresaCondicionIva(emp?.condicion_iva ?? null);
     } catch (err) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
@@ -169,7 +189,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
 
   // ── Form helpers ────────────────────────────────────────────────────────────
   const addItem = () =>
-    setForm(f => ({ ...f, items: [...f.items, { producto_id: '', descripcion: '', cantidad: 1, precio_unitario: 0, descuento_item: '' }] }));
+    setForm(f => ({ ...f, items: [...f.items, { producto_id: '', descripcion: '', cantidad: 1, precio_unitario: 0, descuento_item: '', alicuota_iva: '21' }] }));
 
   const removeItem = (i) =>
     setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
@@ -178,26 +198,68 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
     setForm(f => {
       const items = [...f.items];
       items[i] = { ...items[i], [field]: value };
-      if (field === 'producto_id' && value) {
-        const prod = productos.find(p => p.id === value);
-        if (prod) {
-          items[i].descripcion = prod.nombre;
-          items[i].precio_unitario = prod.precio_venta;
-        }
-      }
       return { ...f, items };
     });
+
+  // Búsqueda con desplegable (reemplaza el <select> del catálogo entero) — mismo
+  // patrón que CotizacionesSection.jsx, tope de 50 resultados (catálogos chicos/
+  // medianos completos, el filtro por texto reduce antes de llegar ahí).
+  const searchProducto = (idx, q) => {
+    setProdSearch(prev => ({ ...prev, [idx]: q }));
+    const query = (q ?? '').toLowerCase().trim();
+    const filtered = query
+      ? productos.filter(p => p.nombre.toLowerCase().includes(query)).slice(0, 50)
+      : productos.slice(0, 50);
+    setProdResults(prev => ({ ...prev, [idx]: filtered }));
+  };
+
+  const selectProducto = (idx, prod) => {
+    setForm(f => {
+      const items = [...f.items];
+      items[idx] = {
+        ...items[idx],
+        producto_id: prod.id,
+        descripcion: prod.nombre,
+        precio_unitario: prod.precio_venta ?? '',
+        unidad_medida: prod.unidad_medida ?? '',
+        alicuota_iva: prod.alicuota_iva ?? '21',
+      };
+      return { ...f, items };
+    });
+    setProdSearch(prev => ({ ...prev, [idx]: prod.nombre }));
+    setProdResults(prev => ({ ...prev, [idx]: [] }));
+    setProdOpen(prev => ({ ...prev, [idx]: false }));
+  };
+
+  // Letra probable (A/B/C) — misma función que ya deciden las facturas reales
+  // (y que ya usa Cotizaciones), nunca una opción manual aparte.
+  const clienteSeleccionado = clientes.find(c => c.id === form.cliente_id);
+  const letra = determinarTipoComprobante(empresaCondicionIva, clienteSeleccionado?.condicion_iva ?? 'CF');
+  const discrimina = letra === 'A';
 
   const totales = form.items.reduce((acc, it) => {
     const cant = parseFloat(it.cantidad) || 0;
     const precio = parseFloat(it.precio_unitario) || 0;
     const descPct = parseNumberLocale(it.descuento_item) || 0;
-    const bruto = cant * precio;
-    acc.subtotal += bruto;
-    acc.descuento += bruto * (descPct / 100);
+    // "subtotal" es precio de lista sin ningún descuento — mismo criterio que
+    // CotizacionesSection.jsx (bug real corregido 13/08: si no, un ítem con %
+    // Desc. propio no dejaba rastro visible en los totales).
+    const brutoLista = cant * precio;
+    const brutoConDescLinea = brutoLista * (1 - descPct / 100);
+    const factor = FACTOR_IVA[it.alicuota_iva] ?? 1;
+    const neto = brutoConDescLinea / factor;
+    acc.subtotal += brutoLista;
+    acc.subtotalConDescLinea += brutoConDescLinea;
+    acc.subtotalNeto += neto;
+    acc.subtotalIva += brutoConDescLinea - neto;
     return acc;
-  }, { subtotal: 0, descuento: 0 });
-  totales.total = totales.subtotal - totales.descuento;
+  }, { subtotal: 0, subtotalConDescLinea: 0, subtotalNeto: 0, subtotalIva: 0 });
+  const descuentoGlobalPct = parseNumberLocale(form.descuentoGlobalPct) || 0;
+  const factorDescGlobal = 1 - descuentoGlobalPct / 100;
+  totales.total = totales.subtotalConDescLinea * factorDescGlobal;
+  totales.neto = totales.subtotalNeto * factorDescGlobal;
+  totales.iva = totales.subtotalIva * factorDescGlobal;
+  totales.descuento = totales.subtotal - totales.total;
 
   const openNew = () => { setEditingPedido(null); setForm(emptyForm()); setOrigenCotizacionId(null); setIsModalOpen(true); };
   const openEdit = (p) => {
@@ -209,6 +271,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       referencia_cliente: p.referencia_cliente || '',
       moneda: p.moneda || 'ARS',
       tipoCambioTasa: Number(p.tipo_cambio_tasa) || 1,
+      descuentoGlobalPct: p.descuento_global_pct ? String(p.descuento_global_pct) : '',
       items: p.pedido_items?.length
         ? p.pedido_items.map(it => ({
             id: it.id,
@@ -217,6 +280,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
             cantidad: it.cantidad,
             precio_unitario: it.precio_unitario,
             descuento_item: it.descuento_item || '',
+            alicuota_iva: it.alicuota_iva ?? '21',
           }))
         : emptyForm().items,
     });
@@ -224,6 +288,10 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
   };
 
   // ── Guardar ─────────────────────────────────────────────────────────────────
+  // Editar delega TODO el cálculo (subtotal/descuento/total) a la RPC
+  // actualizar_pedido, que además diffea los ítems por id (mig.320) — no repite
+  // el error de "borrar todo y reinsertar" que tuvo la primera versión de
+  // Cotizaciones y generaba ruido en el historial de auditoría.
   const handleSave = async () => {
     const validItems = form.items.filter(it => it.descripcion.trim() || it.producto_id);
     if (!validItems.length) {
@@ -236,47 +304,45 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
     setSaving(true);
     try {
       const clienteObj = clientes.find(c => c.id === form.cliente_id);
-      const now = getNowAR().toISOString();
-      const itemsCalc = validItems.map(it => {
-        const cantidad = parseFloat(it.cantidad) || 1;
-        const precioUnitario = parseFloat(it.precio_unitario) || 0;
-        const descuentoItem = parseNumberLocale(it.descuento_item) || 0;
-        return { ...it, cantidad, precioUnitario, descuentoItem, subtotal: cantidad * precioUnitario * (1 - descuentoItem / 100) };
-      });
-      const subtotal = itemsCalc.reduce((s, it) => s + it.cantidad * it.precioUnitario, 0);
-      const total = itemsCalc.reduce((s, it) => s + it.subtotal, 0);
-      const descuento = subtotal - total;
+      const descGlobal = parseNumberLocale(form.descuentoGlobalPct) || 0;
 
       if (editingPedido) {
-        await supabase.from('pedidos').update({
-          cliente_id: form.cliente_id || null,
-          cliente_nombre: clienteObj?.nombre || 'Sin cliente',
-          notas: form.notas,
-          fecha_entrega: form.fecha_entrega || null,
-          referencia_cliente: form.referencia_cliente || null,
-          moneda: form.moneda,
-          tipo_cambio_tasa: form.tipoCambioTasa,
-          subtotal,
-          descuento,
-          total,
-          updated_at: now,
-        }).eq('id', editingPedido.id);
-
-        await supabase.from('pedido_items').delete().eq('pedido_id', editingPedido.id);
-        await supabase.from('pedido_items').insert(
-          itemsCalc.map(it => ({
-            pedido_id: editingPedido.id,
-            empresa_id: user.empresa_id,
-            producto_id: it.producto_id || null,
-            descripcion: it.descripcion,
-            cantidad: it.cantidad,
-            precio_unitario: it.precioUnitario,
-            descuento_item: it.descuentoItem,
-            subtotal: it.subtotal,
-          }))
-        );
+        const itemsPayload = validItems.map(it => ({
+          id: it.id ?? null,
+          producto_id: it.producto_id || null,
+          descripcion: it.descripcion,
+          cantidad: parseFloat(it.cantidad) || 1,
+          precio_unitario: parseFloat(it.precio_unitario) || 0,
+          descuento_item: parseNumberLocale(it.descuento_item) || 0,
+          unidad_medida: it.unidad_medida || null,
+          alicuota_iva: it.alicuota_iva ?? '21',
+        }));
+        const { error } = await supabase.rpc('actualizar_pedido', {
+          p_pedido_id: editingPedido.id,
+          p_cliente_id: form.cliente_id || null,
+          p_cliente_nombre: clienteObj?.nombre || 'Sin cliente',
+          p_items: itemsPayload,
+          p_notas: form.notas,
+          p_fecha_entrega: form.fecha_entrega || null,
+          p_referencia_cliente: form.referencia_cliente || null,
+          p_moneda: form.moneda,
+          p_tipo_cambio_tasa: form.tipoCambioTasa,
+          p_descuento_global_pct: descGlobal,
+        });
+        if (error) throw error;
         toast({ title: 'Pedido actualizado' });
       } else {
+        const now = getNowAR().toISOString();
+        const itemsCalc = validItems.map(it => {
+          const cantidad = parseFloat(it.cantidad) || 1;
+          const precioUnitario = parseFloat(it.precio_unitario) || 0;
+          const descuentoItem = parseNumberLocale(it.descuento_item) || 0;
+          return { ...it, cantidad, precioUnitario, descuentoItem, subtotal: cantidad * precioUnitario * (1 - descuentoItem / 100) };
+        });
+        const subtotalConDescLinea = itemsCalc.reduce((s, it) => s + it.subtotal, 0);
+        const total = subtotalConDescLinea * (1 - descGlobal / 100);
+        const descuento = subtotalConDescLinea - total;
+
         const numero = await generateNumero();
         const { data: pedido, error } = await supabase.from('pedidos').insert([{
           empresa_id: user.empresa_id,
@@ -290,15 +356,16 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
           referencia_cliente: form.referencia_cliente || null,
           moneda: form.moneda,
           tipo_cambio_tasa: form.tipoCambioTasa,
-          subtotal,
+          subtotal: subtotalConDescLinea,
           descuento,
+          descuento_global_pct: descGlobal,
           total,
           fecha: now,
           cotizacion_id: origenCotizacionId,
         }]).select().single();
         if (error) throw error;
 
-        await supabase.from('pedido_items').insert(
+        const { error: itemsError } = await supabase.from('pedido_items').insert(
           itemsCalc.map(it => ({
             pedido_id: pedido.id,
             empresa_id: user.empresa_id,
@@ -308,8 +375,11 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
             precio_unitario: it.precioUnitario,
             descuento_item: it.descuentoItem,
             subtotal: it.subtotal,
+            unidad_medida: it.unidad_medida || null,
+            alicuota_iva: it.alicuota_iva ?? '21',
           }))
         );
+        if (itemsError) throw itemsError;
         toast({ title: `Pedido ${numero} creado` });
       }
       setIsModalOpen(false);
@@ -480,11 +550,12 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
         editingPedido={editingPedido}
         form={form} setForm={setForm}
         clientes={clientes}
-        productos={productos}
         addItem={addItem}
         removeItem={removeItem}
         updateItem={updateItem}
-        totales={totales}
+        prodSearch={prodSearch} prodResults={prodResults} prodOpen={prodOpen} setProdOpen={setProdOpen}
+        searchProducto={searchProducto} selectProducto={selectProducto}
+        totales={totales} discrimina={discrimina}
         tcMissing={tcMissing} setTcMissing={setTcMissing}
         handleSave={handleSave}
         saving={saving}
@@ -500,6 +571,8 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
         handleAbrirGenerarEntrega={handleAbrirGenerarEntrega}
         handleFacturarPedido={handleFacturarPedido}
         handleAvanzar={handleAvanzar}
+        onEditar={(p) => { setIsDetailOpen(false); openEdit(p); }}
+        discrimina={detailPedido ? determinarTipoComprobante(empresaCondicionIva, detailPedido.clientes?.condicion_iva ?? 'CF') === 'A' : false}
       />
 
       {/* ── Confirm cancelar ─────────────────────────────────────────────────── */}

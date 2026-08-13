@@ -238,6 +238,11 @@ export function CotizacionPDF({ cotizacion, empresa, discrimina = false }) {
   const bruto = items.reduce((s, i) => s + Number(i.cantidad) * Number(i.precio_unitario), 0);
   const totalNum = Number(cotizacion.total) || 0;
   const descuento = Math.max(0, bruto - totalNum);
+  // % efectivo mostrado junto al monto — combina descuentos por línea y global en
+  // un solo número (no siempre coinciden con cotizacion.descuento, que es solo la
+  // parte global) para que el documento impreso diga cuánto se descontó en total.
+  const descuentoPct = bruto > 0 ? (descuento / bruto) * 100 : 0;
+  const formatPct = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
   // Desglose Neto/IVA — solo se muestra si `discrimina` (letra A determinada
   // por determinarTipoComprobante(), mismo criterio que la factura real usará
   // el día que esta cotización se convierta). Escalado por el mismo factor que
@@ -340,7 +345,7 @@ export function CotizacionPDF({ cotizacion, empresa, discrimina = false }) {
                   <Text style={styles.totalesVal}>{simbolo}{formatMonto(bruto)}</Text>
                 </View>
                 <View style={styles.totalesRow}>
-                  <Text style={styles.totalesLabel}>Descuento</Text>
+                  <Text style={styles.totalesLabel}>Descuento ({formatPct(descuentoPct)}%)</Text>
                   <Text style={styles.totalesVal}>-{simbolo}{formatMonto(descuento)}</Text>
                 </View>
               </>

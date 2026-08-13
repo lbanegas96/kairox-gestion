@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react';
 import { Plus, Trash2, Loader2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,24 +8,74 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { MonedaSelector } from '@/components/ui/MonedaSelector';
 import { formatCurrency } from '@/lib/currencyUtils';
 
+// Mismo set que el CHECK de pedido_items.alicuota_iva (mig.320) — mismo criterio
+// que ALICUOTAS_COT en FormNuevaCotizacion.jsx.
+const ALICUOTAS_PED = [
+  { value: '21', label: '21%' },
+  { value: '10.5', label: '10.5%' },
+  { value: '0', label: '0%' },
+  { value: 'exento', label: 'Exento' },
+  { value: 'no_gravado', label: 'No gravado' },
+];
+
 function ModalPedidoForm({
   isModalOpen, setIsModalOpen,
   editingPedido,
   form, setForm,
   clientes,
-  productos,
   addItem,
   removeItem,
   updateItem,
-  totales,
+  prodSearch, prodResults, prodOpen, setProdOpen, searchProducto, selectProducto,
+  totales, discrimina,
   tcMissing, setTcMissing,
   handleSave,
   saving,
 }) {
+  // Mismo patrón que FormNuevaCotizacion.jsx: Enter agrega una fila nueva y le
+  // pasa el foco, salvo en Descripción/Producto con el desplegable de
+  // autocompletar abierto — ahí Enter elige el producto resaltado en vez de
+  // agregar fila, y reenfoca Cantidad a mano (el <button> del desplegable se
+  // desmonta al elegir y el navegador perdía el foco sin este fix).
+  const descRefs = useRef([]);
+  const cantRefs = useRef([]);
+  const prevItemsLength = useRef(form.items.length);
+  useEffect(() => {
+    if (form.items.length > prevItemsLength.current) {
+      descRefs.current[form.items.length - 1]?.focus();
+    }
+    prevItemsLength.current = form.items.length;
+  }, [form.items.length]);
+
+  const handleItemRowKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addItem();
+    }
+  };
+
+  const selectProductoYAvanzar = (idx, prod) => {
+    selectProducto(idx, prod);
+    cantRefs.current[idx]?.focus();
+    cantRefs.current[idx]?.select?.();
+  };
+
+  const handleDescripcionKeyDown = (idx) => (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const results = prodOpen[idx] ? (prodResults[idx] ?? []) : [];
+      if (results.length > 0) {
+        selectProductoYAvanzar(idx, results[0]);
+        return;
+      }
+      addItem();
+    }
+  };
+
   return (
     <Dialog open={isModalOpen} onOpenChange={v => { if (!v) setIsModalOpen(false); }}>
-      <DialogContent className="max-w-3xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] flex flex-col dark:bg-kx-bg dark:border-kx-border">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="dark:text-kx-text">
             {editingPedido ? `Editar ${editingPedido.numero}` : 'Nuevo Pedido'}
           </DialogTitle>
@@ -33,155 +84,179 @@ function ModalPedidoForm({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5 py-2">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label className="dark:text-kx-text">Cliente</Label>
-              <select
-                value={form.cliente_id}
-                onChange={e => setForm(f => ({ ...f, cliente_id: e.target.value }))}
-                className="w-full h-10 rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text px-3 text-sm"
-              >
-                <option value="">Sin cliente</option>
-                {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="dark:text-kx-text">Fecha de Entrega (opcional)</Label>
-              <Input
-                type="date"
-                value={form.fecha_entrega}
-                onChange={e => setForm(f => ({ ...f, fecha_entrega: e.target.value }))}
-                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="dark:text-kx-text">N° Referencia del Cliente (PO)</Label>
-              <Input
-                value={form.referencia_cliente}
-                onChange={e => setForm(f => ({ ...f, referencia_cliente: e.target.value }))}
-                placeholder="Ej. orden de compra del cliente"
-                className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
-              />
-            </div>
-            <div>
-              <MonedaSelector
-                moneda={form.moneda}
-                tasa={form.tipoCambioTasa}
-                onMonedaChange={v => setForm(f => ({ ...f, moneda: v, tipoCambioTasa: v === 'ARS' ? 1 : f.tipoCambioTasa }))}
-                onTasaChange={v => setForm(f => ({ ...f, tipoCambioTasa: v }))}
-                onTCMissingChange={setTcMissing}
-              />
+        <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
+          {/* Datos del pedido — una sola fila de 12 columnas, mismo criterio
+              densidad SAP que FormNuevaCotizacion.jsx. */}
+          <div className="dark:bg-kx-bg dark:border-kx-border border border-kx-border rounded-lg p-3 shrink-0">
+            <div className="grid grid-cols-12 gap-3 items-start">
+              <div className="col-span-4 space-y-1">
+                <Label className="text-xs dark:text-kx-text">Cliente</Label>
+                <select
+                  value={form.cliente_id}
+                  onChange={e => setForm(f => ({ ...f, cliente_id: e.target.value }))}
+                  className="w-full h-8 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Sin cliente</option>
+                  {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                </select>
+              </div>
+              <div className="col-span-2 space-y-1">
+                <Label className="text-xs dark:text-kx-text">Fecha de Entrega</Label>
+                <Input
+                  type="date"
+                  value={form.fecha_entrega}
+                  onChange={e => setForm(f => ({ ...f, fecha_entrega: e.target.value }))}
+                  className="h-8 text-sm dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                />
+              </div>
+              <div className="col-span-3 space-y-1">
+                <Label className="text-xs dark:text-kx-text">N° Referencia del Cliente (PO)</Label>
+                <Input
+                  value={form.referencia_cliente}
+                  onChange={e => setForm(f => ({ ...f, referencia_cliente: e.target.value }))}
+                  placeholder="Ej. orden de compra del cliente"
+                  className="h-8 text-sm dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                />
+              </div>
+              <div className="col-span-2">
+                <MonedaSelector
+                  moneda={form.moneda}
+                  tasa={form.tipoCambioTasa}
+                  onMonedaChange={v => setForm(f => ({ ...f, moneda: v, tipoCambioTasa: v === 'ARS' ? 1 : f.tipoCambioTasa }))}
+                  onTasaChange={v => setForm(f => ({ ...f, tipoCambioTasa: v }))}
+                  onTCMissingChange={setTcMissing}
+                />
+              </div>
+              <div className="col-span-1 space-y-1">
+                <Label className="text-xs dark:text-kx-text" title="Se aplica sobre el subtotal, después de los descuentos por línea">Desc. Global %</Label>
+                <Input
+                  type="text" inputMode="decimal" placeholder="0"
+                  value={form.descuentoGlobalPct}
+                  onChange={e => setForm(f => ({ ...f, descuentoGlobalPct: e.target.value }))}
+                  className="h-8 text-sm dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                />
+              </div>
             </div>
           </div>
 
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <Label className="dark:text-kx-text">Ítems del Pedido</Label>
-              <Button variant="outline" size="sm" onClick={addItem} className="h-8 dark:text-kx-text dark:border-kx-border">
-                <Plus className="h-3.5 w-3.5 mr-1" /> Agregar ítem
+          <div className="dark:bg-kx-bg dark:border-kx-border border border-kx-border rounded-lg flex-1 min-h-0 flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between shrink-0 p-3 pb-2">
+              <Label className="text-sm dark:text-kx-text">Ítems del Pedido</Label>
+              <Button type="button" variant="outline" size="sm" onClick={addItem} className="h-7 text-xs dark:border-kx-border dark:text-slate-300 dark:hover:bg-slate-800">
+                <Plus className="w-3.5 h-3.5 mr-1" /> Agregar ítem
               </Button>
             </div>
-            <div className="space-y-2">
-              <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 dark:text-kx-text-2 px-1">
-                <span className="col-span-4">Producto / Descripción</span>
-                <span className="col-span-3">Descripción libre</span>
-                <span className="col-span-1 text-center">Cant.</span>
-                <span className="col-span-2 text-right">Precio Unit.</span>
-                <span className="col-span-1 text-right">% Desc.</span>
-                <span className="col-span-1"></span>
-              </div>
-              {form.items.map((item, i) => (
-                <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-4">
-                    <select
-                      value={item.producto_id}
-                      onChange={e => updateItem(i, 'producto_id', e.target.value)}
-                      className="w-full h-9 text-sm rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text px-2"
-                    >
-                      <option value="">— sin producto —</option>
-                      {productos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                    </select>
-                  </div>
-                  <div className="col-span-3">
-                    <Input
-                      placeholder="Descripción"
-                      value={item.descripcion}
-                      onChange={e => updateItem(i, 'descripcion', e.target.value)}
-                      className="h-9 text-sm dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
-                    />
-                  </div>
-                  <div className="col-span-1">
-                    <Input
-                      type="number" min="1" step="1"
-                      value={item.cantidad}
-                      onChange={e => updateItem(i, 'cantidad', e.target.value.replace(/[^\d]/g, ''))}
-                      className="h-9 text-sm text-center dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Input
-                      type="text" inputMode="decimal" placeholder="0,00"
-                      value={item.precio_unitario}
-                      onChange={e => updateItem(i, 'precio_unitario', e.target.value)}
-                      className="h-9 text-sm text-right dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
-                    />
-                  </div>
-                  <div className="col-span-1">
-                    <Input
-                      type="text" inputMode="decimal" placeholder="0"
-                      value={item.descuento_item}
-                      onChange={e => updateItem(i, 'descuento_item', e.target.value)}
-                      className="h-9 text-sm text-right dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
-                    />
-                  </div>
-                  <div className="col-span-1 flex justify-center">
-                    {form.items.length > 1 && (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-kx-red"
-                        onClick={() => removeItem(i)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-end mt-3">
-              <div className="text-right space-y-1 min-w-[220px]">
-                {totales.descuento > 0.005 && (
-                  <>
-                    <div className="flex justify-between text-sm text-slate-500 dark:text-kx-text-2">
-                      <span>Subtotal</span>
-                      <span className="font-mono">{formatCurrency(totales.subtotal, form.moneda)}</span>
+            <div className="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden p-3 pt-0">
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
+                {form.items.map((item, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-end">
+                    <div className="col-span-5 space-y-1 relative" data-prod-row>
+                      <Label className="text-xs dark:text-kx-text-2">Descripción / Producto</Label>
+                      <Input
+                        ref={el => { descRefs.current[idx] = el; }}
+                        value={prodSearch[idx] ?? item.descripcion}
+                        onChange={e => { searchProducto(idx, e.target.value); updateItem(idx, 'descripcion', e.target.value); setProdOpen(prev => ({ ...prev, [idx]: true })); }}
+                        onFocus={() => { searchProducto(idx, prodSearch[idx] ?? item.descripcion ?? ''); setProdOpen(prev => ({ ...prev, [idx]: true })); }}
+                        onKeyDown={handleDescripcionKeyDown(idx)}
+                        placeholder="Buscar producto o escribir descripción"
+                        className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm"
+                        autoComplete="off"
+                      />
+                      {prodOpen[idx] && (prodResults[idx] ?? []).length > 0 && (
+                        <div className="absolute top-full left-0 right-0 z-30 bg-kx-surface dark:bg-kx-surface border border-kx-border dark:border-kx-border rounded-lg shadow-xl mt-1 max-h-56 overflow-y-auto">
+                          {prodResults[idx].map(p => (
+                            <button key={p.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-kx-surface-2 dark:hover:bg-slate-800 dark:text-kx-text flex justify-between items-center" onClick={() => selectProductoYAvanzar(idx, p)}>
+                              <span className="truncate">{p.nombre}</span>
+                              <span className="text-kx-text-3 text-xs ml-2 flex-shrink-0">${Number(p.precio_venta ?? 0).toLocaleString('es-AR')}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex justify-between text-sm text-kx-red">
+                    <div className="col-span-1 space-y-1">
+                      <Label className="text-xs dark:text-kx-text-2">Cant.</Label>
+                      <Input
+                        ref={el => { cantRefs.current[idx] = el; }}
+                        type="number" min="1" step="1" value={item.cantidad}
+                        onChange={e => updateItem(idx, 'cantidad', e.target.value.replace(/[^\d]/g, ''))}
+                        onKeyDown={handleItemRowKeyDown}
+                        className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm"
+                      />
+                    </div>
+                    <div className="col-span-2 space-y-1">
+                      <Label className="text-xs dark:text-kx-text-2">Precio Unit.</Label>
+                      <Input type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unitario} onChange={e => updateItem(idx, 'precio_unitario', e.target.value)} onKeyDown={handleItemRowKeyDown} className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
+                    </div>
+                    <div className="col-span-2 space-y-1">
+                      <Label className="text-xs dark:text-kx-text-2">IVA</Label>
+                      <select
+                        value={item.alicuota_iva || '21'}
+                        onChange={e => updateItem(idx, 'alicuota_iva', e.target.value)}
+                        className="w-full h-8 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {ALICUOTAS_PED.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-span-1 space-y-1">
+                      <Label className="text-xs dark:text-kx-text-2">% Desc.</Label>
+                      <Input type="text" inputMode="decimal" placeholder="0" value={item.descuento_item} onChange={e => updateItem(idx, 'descuento_item', e.target.value)} onKeyDown={handleItemRowKeyDown} className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
+                    </div>
+                    <div className="col-span-1 flex justify-end pb-0.5">
+                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-red" onClick={() => removeItem(idx)} disabled={form.items.length === 1}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-end pt-2 border-t border-kx-border dark:border-kx-border shrink-0">
+                <div className="text-right space-y-0.5 min-w-[220px]">
+                  <div className="flex justify-between text-xs text-slate-500 dark:text-kx-text-2">
+                    <span>Subtotal</span>
+                    <span className="font-mono">{formatCurrency(totales.subtotal, form.moneda)}</span>
+                  </div>
+                  {totales.descuento > 0.005 && (
+                    <div className="flex justify-between text-xs text-kx-red">
                       <span>Descuento</span>
                       <span className="font-mono">-{formatCurrency(totales.descuento, form.moneda)}</span>
                     </div>
-                  </>
-                )}
-                <div className="flex justify-between pt-1">
-                  <span className="text-sm text-slate-500 dark:text-kx-text-2 self-center">Total</span>
-                  <span className="text-lg font-bold text-slate-900 dark:text-kx-text font-mono">
-                    {formatCurrency(totales.total, form.moneda)}
-                  </span>
+                  )}
+                  {discrimina && (
+                    <>
+                      <div className="flex justify-between text-xs text-slate-500 dark:text-kx-text-2">
+                        <span>Neto gravado</span>
+                        <span className="font-mono">{formatCurrency(totales.neto, form.moneda)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-slate-500 dark:text-kx-text-2">
+                        <span>IVA</span>
+                        <span className="font-mono">{formatCurrency(totales.iva, form.moneda)}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="flex justify-between pt-0.5">
+                    <span className="text-xs text-slate-500 dark:text-kx-text-2 self-center">Total</span>
+                    <span className="text-lg font-bold text-slate-900 dark:text-kx-text font-mono">
+                      {formatCurrency(totales.total, form.moneda)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="dark:text-kx-text">Notas internas</Label>
+          <div className="space-y-1 shrink-0">
+            <Label className="text-xs dark:text-kx-text">Notas internas</Label>
             <Textarea
               placeholder="Instrucciones especiales, referencias, etc."
               value={form.notas}
               onChange={e => setForm(f => ({ ...f, notas: e.target.value }))}
-              className="resize-none h-20 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+              className="resize-none h-16 text-sm dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
             />
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button variant="outline" onClick={() => setIsModalOpen(false)} className="dark:text-kx-text dark:border-kx-border">
             Cancelar
           </Button>
