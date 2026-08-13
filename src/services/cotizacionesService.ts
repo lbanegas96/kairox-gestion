@@ -16,6 +16,22 @@ interface CreateCotizacionPayload {
   fechaVencimiento?: string | null;
   moneda?: string;
   tipoCambioTasa?: number;
+  descuentoGlobal?: number;
+}
+
+// Igual forma que CreateCotizacionPayload — updateEstado()/actualizar_cotizacion() comparten
+// el mismo shape de items que ya arma FormNuevaCotizacion, así que create/update pueden usar
+// el mismo objeto de payload sin transformarlo distinto en cada caller.
+interface UpdateCotizacionPayload extends CreateCotizacionPayload {}
+
+export interface HistorialEntry {
+  id: number;
+  tabla: 'cotizaciones' | 'cotizacion_items';
+  operacion: 'INSERT' | 'UPDATE' | 'DELETE';
+  old_data: Record<string, unknown> | null;
+  new_data: Record<string, unknown> | null;
+  user_id: string | null;
+  created_at: string;
 }
 
 export const cotizacionesService = {
@@ -53,7 +69,7 @@ export const cotizacionesService = {
   async create(
     empresaId: string,
     userId: string,
-    { cliente, items, notas, condicionesPago, fechaVencimiento, moneda = 'ARS', tipoCambioTasa = 1 }: CreateCotizacionPayload
+    { cliente, items, notas, condicionesPago, fechaVencimiento, moneda = 'ARS', tipoCambioTasa = 1, descuentoGlobal = 0 }: CreateCotizacionPayload
   ): Promise<Cotizacion> {
     const { data: numData, error: numError } = await supabase
       .rpc('obtener_proximo_numero', { p_empresa_id: empresaId, p_tipo_documento: 'cotizacion' });
@@ -64,6 +80,9 @@ export const cotizacionesService = {
       const descPct = Number(i.descuento_item) || 0;
       return s + bruto * (1 - descPct / 100);
     }, 0);
+    // El descuento global se aplica DESPUÉS de los descuentos por línea — mismo orden que
+    // SAP: primero línea, después documento. Nunca al revés (duplicaría el descuento).
+    const total = subtotal * (1 - (Number(descuentoGlobal) || 0) / 100);
 
     const { data: cot, error: cotError } = await supabase
       .from('cotizaciones')
@@ -74,7 +93,8 @@ export const cotizacionesService = {
         cliente_id: cliente?.id ?? null,
         cliente_nombre: cliente?.nombre ?? null,
         subtotal,
-        total: subtotal,
+        descuento: Number(descuentoGlobal) || 0,
+        total,
         notas: notas ?? null,
         condiciones_pago: condicionesPago ?? null,
         fecha_vencimiento: fechaVencimiento ?? null,
@@ -100,6 +120,7 @@ export const cotizacionesService = {
         descuento_item: descuentoItem,
         subtotal: cantidad * precioUnitario * (1 - descuentoItem / 100),
         unidad_medida: item.unidad_medida ?? null,
+        alicuota_iva: item.alicuota_iva ?? '21',
       };
     });
 
@@ -107,6 +128,63 @@ export const cotizacionesService = {
     if (detError) throw new Error(detError.message);
 
     return cot as Cotizacion;
+  },
+
+  // Solo editable mientras la cotización no esté "convertida" — la RPC lo revalida server-side
+  // (no confiar solo en que el frontend oculte el botón). Reemplaza TODOS los ítems (delete +
+  // insert atómico dentro de la RPC), no intenta diffear fila por fila.
+  async update(
+    cotizacionId: string,
+    { cliente, items, notas, condicionesPago, fechaVencimiento, moneda = 'ARS', tipoCambioTasa = 1, descuentoGlobal = 0 }: UpdateCotizacionPayload
+  ): Promise<Cotizacion> {
+    const itemsPayload = items.map((item) => ({
+      producto_id: item.producto_id ?? null,
+      descripcion: item.descripcion ?? '',
+      cantidad: parseFloat(String(item.cantidad)) || 0,
+      precio_unitario: parseFloat(String(item.precio_unitario)) || 0,
+      descuento_item: parseFloat(String(item.descuento_item ?? 0)) || 0,
+      unidad_medida: item.unidad_medida ?? null,
+      alicuota_iva: item.alicuota_iva ?? '21',
+    }));
+
+    const { data, error } = await supabase.rpc('actualizar_cotizacion', {
+      p_cotizacion_id: cotizacionId,
+      p_cliente_id: cliente?.id ?? null,
+      p_cliente_nombre: cliente?.nombre ?? null,
+      p_items: itemsPayload,
+      p_notas: notas ?? null,
+      p_condiciones_pago: condicionesPago ?? null,
+      p_fecha_vencimiento: fechaVencimiento ?? null,
+      p_moneda: moneda,
+      p_tipo_cambio_tasa: tipoCambioTasa,
+      p_descuento: Number(descuentoGlobal) || 0,
+    });
+    if (error) throw new Error(error.message);
+    return data as Cotizacion;
+  },
+
+  // Historial de cambios — junta auditoría de cabecera (cotizaciones) e ítems
+  // (cotizacion_items, filtrados por cotizacion_id dentro del JSONB porque su
+  // propio registro_id es el id del ítem, no el de la cotización) y devuelve
+  // todo ordenado por fecha, más reciente primero.
+  async getHistorial(cotizacionId: string): Promise<HistorialEntry[]> {
+    const [cabeceraRes, itemsRes] = await Promise.all([
+      supabase
+        .from('audit_log')
+        .select('id, tabla, operacion, old_data, new_data, user_id, created_at')
+        .eq('tabla', 'cotizaciones')
+        .eq('registro_id', cotizacionId),
+      supabase
+        .from('audit_log')
+        .select('id, tabla, operacion, old_data, new_data, user_id, created_at')
+        .eq('tabla', 'cotizacion_items')
+        .or(`old_data->>cotizacion_id.eq.${cotizacionId},new_data->>cotizacion_id.eq.${cotizacionId}`),
+    ]);
+    if (cabeceraRes.error) throw new Error(cabeceraRes.error.message);
+    if (itemsRes.error) throw new Error(itemsRes.error.message);
+
+    return [...(cabeceraRes.data ?? []), ...(itemsRes.data ?? [])]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) as HistorialEntry[];
   },
 
   async updateEstado(id: string, estado: CotizacionEstado): Promise<Cotizacion> {

@@ -224,7 +224,11 @@ const formatFecha = (dateStr) => {
   ].join('/');
 };
 
-export function CotizacionPDF({ cotizacion, empresa }) {
+// Mismo criterio que FormNuevaCotizacion/FacturaPDF: precio_unitario ya incluye
+// IVA, se separa dividiendo por el factor de la alícuota (nunca sumando).
+const FACTOR_IVA = { '21': 1.21, '10.5': 1.105 };
+
+export function CotizacionPDF({ cotizacion, empresa, discrimina = false }) {
   const items = cotizacion.cotizacion_items ?? [];
   const moneda = cotizacion.moneda ?? 'ARS';
   const esExtranjera = moneda !== 'ARS';
@@ -234,6 +238,15 @@ export function CotizacionPDF({ cotizacion, empresa }) {
   const bruto = items.reduce((s, i) => s + Number(i.cantidad) * Number(i.precio_unitario), 0);
   const totalNum = Number(cotizacion.total) || 0;
   const descuento = Math.max(0, bruto - totalNum);
+  // Desglose Neto/IVA — solo se muestra si `discrimina` (letra A determinada
+  // por determinarTipoComprobante(), mismo criterio que la factura real usará
+  // el día que esta cotización se convierta). Escalado por el mismo factor que
+  // ya reduce bruto→total (descuento global), para que neto+iva siga dando
+  // exacto el total incluso con varias alícuotas mezcladas en los ítems.
+  const factorDescuento = bruto > 0 ? totalNum / bruto : 1;
+  const netoBruto = items.reduce((s, i) => s + Number(i.subtotal) / (FACTOR_IVA[i.alicuota_iva] ?? 1), 0);
+  const neto = netoBruto * factorDescuento;
+  const iva = totalNum - neto;
 
   const cliente = cotizacion.clientes ?? null;
   const clienteNombre = cotizacion.cliente_nombre ?? cliente?.nombre ?? 'Consumidor Final';
@@ -329,6 +342,18 @@ export function CotizacionPDF({ cotizacion, empresa }) {
                 <View style={styles.totalesRow}>
                   <Text style={styles.totalesLabel}>Descuento</Text>
                   <Text style={styles.totalesVal}>-{simbolo}{formatMonto(descuento)}</Text>
+                </View>
+              </>
+            ) : null}
+            {discrimina ? (
+              <>
+                <View style={styles.totalesRow}>
+                  <Text style={styles.totalesLabel}>Subtotal neto gravado</Text>
+                  <Text style={styles.totalesVal}>{simbolo}{formatMonto(neto)}</Text>
+                </View>
+                <View style={styles.totalesRow}>
+                  <Text style={styles.totalesLabel}>IVA</Text>
+                  <Text style={styles.totalesVal}>{simbolo}{formatMonto(iva)}</Text>
                 </View>
               </>
             ) : null}

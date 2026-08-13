@@ -7,6 +7,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MonedaSelector } from '@/components/ui/MonedaSelector';
 import { formatCurrency } from '@/lib/currencyUtils';
 
+// Mismo set que el CHECK de cotizacion_items.alicuota_iva (mig.318) — igual al
+// que ya usan comprobante_items/devolucion_items, sin el "27%" que ofrece
+// NuevaFacturaModal en su <select> pero que en realidad viola ese mismo CHECK
+// (inconsistencia preexistente ahí, no se repite acá).
+const ALICUOTAS_COT = [
+  { value: '21', label: '21%' },
+  { value: '10.5', label: '10.5%' },
+  { value: '0', label: '0%' },
+  { value: 'exento', label: 'Exento' },
+  { value: 'no_gravado', label: 'No gravado' },
+];
+
 function FormNuevaCotizacion({
   form, setForm,
   items, addItem, removeItem, updateItem,
@@ -15,10 +27,11 @@ function FormNuevaCotizacion({
   condicionesPago,
   allClientes, showClienteDropdown, setShowClienteDropdown, clienteWrapperRef,
   tcMissing, setTcMissing,
-  totales,
+  totales, discrimina,
   handleSubmit, resetForm,
   onCancel,
   createMutation,
+  isEditing = false,
 }) {
   // Texto de búsqueda del combo de cliente — separado de form.cliente_nombre a
   // propósito. Si filtráramos directo por form.cliente_nombre, abrir el campo
@@ -79,7 +92,7 @@ function FormNuevaCotizacion({
         <Card className="dark:bg-kx-bg dark:border-kx-border shrink-0">
           <CardContent className="p-3">
             <div className="grid grid-cols-12 gap-3 items-start">
-              <div className="col-span-4 space-y-1 relative" ref={clienteWrapperRef}>
+              <div className="col-span-3 space-y-1 relative" ref={clienteWrapperRef}>
                 <Label className="text-xs dark:text-kx-text">Cliente</Label>
                 <Input
                   value={form.cliente_nombre}
@@ -170,6 +183,16 @@ function FormNuevaCotizacion({
                 />
               </div>
 
+              <div className="col-span-1 space-y-1">
+                <Label className="text-xs dark:text-kx-text" title="Se aplica sobre el subtotal, después de los descuentos por línea">Desc. Global %</Label>
+                <Input
+                  type="text" inputMode="decimal" placeholder="0"
+                  value={form.descuento}
+                  onChange={e => setForm(f => ({ ...f, descuento: e.target.value }))}
+                  className="h-8 text-sm dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                />
+              </div>
+
               <div className="col-span-2 space-y-1">
                 <Label className="text-xs dark:text-kx-text">Notas</Label>
                 <Input
@@ -197,7 +220,7 @@ function FormNuevaCotizacion({
             <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
             {items.map((item, idx) => (
               <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-4 space-y-1 relative" data-prod-row>
+                <div className="col-span-3 space-y-1 relative" data-prod-row>
                   <Label className="text-xs dark:text-kx-text-2">Descripción / Producto</Label>
                   <Input
                     ref={el => { descRefs.current[idx] = el; }}
@@ -220,8 +243,8 @@ function FormNuevaCotizacion({
                     </div>
                   )}
                 </div>
-                <div className="col-span-2 space-y-1">
-                  <Label className="text-xs dark:text-kx-text-2">Cantidad</Label>
+                <div className="col-span-1 space-y-1">
+                  <Label className="text-xs dark:text-kx-text-2">Cant.</Label>
                   <Input type="number" min="1" step="1" value={item.cantidad} onChange={e => updateItem(idx, 'cantidad', e.target.value.replace(/[^\d]/g, ''))} onKeyDown={handleItemRowKeyDown} className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
                 </div>
                 <div className="col-span-2 space-y-1">
@@ -245,6 +268,16 @@ function FormNuevaCotizacion({
                   <Label className="text-xs dark:text-kx-text-2">Precio Unit.</Label>
                   <Input type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unitario} onChange={e => updateItem(idx, 'precio_unitario', e.target.value)} onKeyDown={handleItemRowKeyDown} className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
                 </div>
+                <div className="col-span-2 space-y-1">
+                  <Label className="text-xs dark:text-kx-text-2">IVA</Label>
+                  <select
+                    value={item.alicuota_iva || '21'}
+                    onChange={e => updateItem(idx, 'alicuota_iva', e.target.value)}
+                    className="w-full h-8 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {ALICUOTAS_COT.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                  </select>
+                </div>
                 <div className="col-span-1 space-y-1">
                   <Label className="text-xs dark:text-kx-text-2">% Desc.</Label>
                   <Input type="text" inputMode="decimal" placeholder="0" value={item.descuento_item} onChange={e => updateItem(idx, 'descuento_item', e.target.value)} onKeyDown={handleItemRowKeyDown} className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
@@ -259,7 +292,7 @@ function FormNuevaCotizacion({
             </div>
 
             <div className="flex justify-end pt-2 border-t border-kx-border dark:border-kx-border shrink-0">
-              <div className="text-right space-y-0.5 min-w-[200px]">
+              <div className="text-right space-y-0.5 min-w-[220px]">
                 <div className="flex justify-between text-xs text-slate-500 dark:text-kx-text-2">
                   <span>Subtotal</span>
                   <span className="font-mono">{formatCurrency(totales.subtotal, form.moneda)}</span>
@@ -269,6 +302,20 @@ function FormNuevaCotizacion({
                     <span>Descuento</span>
                     <span className="font-mono">-{formatCurrency(totales.descuento, form.moneda)}</span>
                   </div>
+                )}
+                {/* Desglose Neto/IVA solo si la letra probable es A — mismo
+                    criterio que FacturaPDF.jsx: B/C no discriminan, solo total. */}
+                {discrimina && (
+                  <>
+                    <div className="flex justify-between text-xs text-slate-500 dark:text-kx-text-2">
+                      <span>Neto gravado</span>
+                      <span className="font-mono">{formatCurrency(totales.neto, form.moneda)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-500 dark:text-kx-text-2">
+                      <span>IVA</span>
+                      <span className="font-mono">{formatCurrency(totales.iva, form.moneda)}</span>
+                    </div>
+                  </>
                 )}
                 <div className="flex justify-between pt-0.5">
                   <span className="text-xs text-slate-500 dark:text-kx-text-2 self-center">Total</span>
@@ -292,7 +339,7 @@ function FormNuevaCotizacion({
             className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
             title={form.moneda !== 'ARS' && tcMissing ? `Cargá el tipo de cambio ${form.moneda} del día para continuar` : undefined}
           >
-            {createMutation.isPending ? 'Guardando...' : 'Guardar Cotización'}
+            {createMutation.isPending ? 'Guardando...' : isEditing ? 'Guardar Cambios' : 'Guardar Cotización'}
           </Button>
         </div>
       </form>

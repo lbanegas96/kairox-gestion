@@ -248,6 +248,7 @@ export interface CotizacionItem {
   descuento_item: number;
   subtotal: number;
   unidad_medida?: string | null;
+  alicuota_iva?: string | null;
   // joins
   productos?: Pick<Producto, 'nombre' | 'unidad_medida'> | null;
 }

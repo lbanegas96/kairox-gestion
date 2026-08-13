@@ -8,4 +8,4 @@ export const ESTADOS = {
   cancelada:  { label: 'Cancelada',  color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
 };
 
-export const EMPTY_ITEM = { descripcion: '', cantidad: 1, precio_unitario: '', descuento_item: '', producto_id: null, unidad_medida: '' };
+export const EMPTY_ITEM = { descripcion: '', cantidad: 1, precio_unitario: '', descuento_item: '', producto_id: null, unidad_medida: '', alicuota_iva: '21' };

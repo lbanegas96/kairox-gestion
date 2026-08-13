@@ -14,6 +14,13 @@ import TablaCotizaciones from '@/components/cotizaciones/TablaCotizaciones';
 import FormNuevaCotizacion from '@/components/cotizaciones/FormNuevaCotizacion';
 import ModalDetalleCotizacion from '@/components/cotizaciones/ModalDetalleCotizacion';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
+import { determinarTipoComprobante } from '@/hooks/useAfipConfig';
+
+// precio_unitario es SIEMPRE el precio final que paga el cliente (IVA incluido) —
+// mismo criterio que NuevaFacturaModal/crear_venta (Ley de Defensa del Consumidor:
+// el precio que se muestra es el precio final). Para separar neto/IVA hay que
+// DIVIDIR por el factor de la alícuota, nunca sumarlo — sumarlo duplica el IVA.
+const FACTOR_IVA = { '21': 1.21, '10.5': 1.105 }; // resto (exento/0/no_gravado) → factor 1
 
 function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, onVerEntrega, navigateCotizacionId, onNavigated } = {}) {
   const { user } = useAuth();
@@ -34,11 +41,16 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
     fecha_vencimiento: '',
     moneda: 'ARS',
     tipoCambioTasa: 1,
+    descuento: '',
   });
   const [items, setItems] = useState([{ ...EMPTY_ITEM }]);
   const [prodSearch, setProdSearch] = useState({});
   const [prodResults, setProdResults] = useState({});
   const [prodOpen, setProdOpen] = useState({});  // qué fila tiene el dropdown abierto
+
+  // Edición (12/08, pedido de Luciano): mismo form/items que "Nueva Cotización" — al editar,
+  // se prefillean acá y el modal reusa el mismo componente. null = modo creación.
+  const [editingId, setEditingId] = useState(null);
 
   const [showClienteDropdown, setShowClienteDropdown] = useState(false);
   const clienteWrapperRef = useRef(null);
@@ -71,7 +83,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
   const { data: allProducts = [] } = useQuery({
     queryKey: ['cotizaciones_productos_autocomplete', empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from('productos').select('id, nombre, precio_venta, unidad_medida').eq('empresa_id', empresaId).eq('activo', true).order('nombre').limit(200);
+      const { data, error } = await supabase.from('productos').select('id, nombre, precio_venta, unidad_medida, alicuota_iva').eq('empresa_id', empresaId).eq('activo', true).order('nombre').limit(200);
       if (error) throw error;
       return data ?? [];
     },
@@ -81,9 +93,23 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
   const { data: allClientes = [] } = useQuery({
     queryKey: ['cotizaciones_clientes_autocomplete', empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from('clientes').select('id, nombre, condicion_pago_id').eq('empresa_id', empresaId).order('nombre').limit(500);
+      const { data, error } = await supabase.from('clientes').select('id, nombre, condicion_pago_id, condicion_iva').eq('empresa_id', empresaId).order('nombre').limit(500);
       if (error) throw error;
       return data ?? [];
+    },
+    enabled: !!empresaId,
+  });
+
+  // Condición de IVA de la propia empresa — determina, junto con la del cliente
+  // elegido, si la cotización va a discriminar IVA (Factura A) o no (B/C) el día
+  // que se convierta — mismo determinarTipoComprobante() que ya usan las facturas
+  // reales, no una opción manual aparte que se pueda desincronizar de la ley.
+  const { data: empresaCondicionIva } = useQuery({
+    queryKey: ['empresa_condicion_iva', empresaId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('empresas').select('condicion_iva').eq('id', empresaId).single();
+      if (error) throw error;
+      return data?.condicion_iva ?? null;
     },
     enabled: !!empresaId,
   });
@@ -181,6 +207,19 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }) => cotizacionesService.update(id, payload),
+    onSuccess: (cot) => {
+      qc.invalidateQueries({ queryKey: ['cotizaciones', empresaId] });
+      qc.invalidateQueries({ queryKey: ['cotizacion'] });
+      toast({ title: 'Cotización actualizada', className: 'bg-green-600 text-white' });
+      setIsModalOpen(false);
+      resetForm();
+      setViewId(cot.id);
+    },
+    onError: (e) => toast({ title: 'Error al guardar los cambios', description: e.message, variant: 'destructive' }),
+  });
+
   const estadoMutation = useMutation({
     mutationFn: ({ id, estado }) => cotizacionesService.updateEstado(id, estado),
     onSuccess: () => {
@@ -234,24 +273,59 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
     setForm({
       cliente_id: cf?.id ?? '', cliente_nombre: cf?.nombre ?? '',
       notas: '', condiciones_pago: condicionPagoDefault(), fecha_vencimiento: '',
-      moneda: 'ARS', tipoCambioTasa: 1,
+      moneda: 'ARS', tipoCambioTasa: 1, descuento: '',
     });
     setItems([{ ...EMPTY_ITEM }]);
     setTcMissing(false);
+    setEditingId(null);
   };
 
+  // "Editar" desde el detalle (solo se ofrece si estado !== 'convertida', ver
+  // ModalDetalleCotizacion) — reusa el mismo form/items/modal de "Nueva
+  // Cotización" en vez de duplicar toda esa UI.
+  const handleEditarClick = async (cot) => {
+    const full = await cotizacionesService.getById(cot.id);
+    setForm({
+      cliente_id: full.cliente_id ?? '',
+      cliente_nombre: full.cliente_nombre ?? full.clientes?.nombre ?? '',
+      notas: full.notas ?? '',
+      condiciones_pago: full.condiciones_pago ?? '',
+      fecha_vencimiento: full.fecha_vencimiento ?? '',
+      moneda: full.moneda ?? 'ARS',
+      tipoCambioTasa: full.tipo_cambio_tasa ?? 1,
+      descuento: full.descuento ? String(full.descuento) : '',
+    });
+    setItems((full.cotizacion_items ?? []).map(i => ({
+      descripcion: i.descripcion,
+      cantidad: i.cantidad,
+      precio_unitario: i.precio_unitario,
+      descuento_item: i.descuento_item || '',
+      producto_id: i.producto_id,
+      unidad_medida: i.unidad_medida ?? '',
+      alicuota_iva: i.alicuota_iva ?? '21',
+    })));
+    setEditingId(full.id);
+    setViewId(null);
+    setIsModalOpen(true);
+  };
+
+  // Bug real encontrado por Luciano (12/08): el combo cortaba a 10 resultados
+  // incluso con el buscador vacío — con Nalux teniendo 17 productos activos,
+  // 7 nunca aparecían al abrir el campo sin tipear nada. Subido a 50 (cubre
+  // catálogos chicos/medianos enteros); si algún día hay más de 50 productos,
+  // el filtro por texto ya reduce la lista antes de llegar a ese tope.
   const searchProducto = (idx, q) => {
     setProdSearch(prev => ({ ...prev, [idx]: q }));
     const query = (q ?? '').toLowerCase().trim();
     const filtered = query
-      ? allProducts.filter(p => p.nombre.toLowerCase().includes(query)).slice(0, 10)
-      : allProducts.slice(0, 10);
+      ? allProducts.filter(p => p.nombre.toLowerCase().includes(query)).slice(0, 50)
+      : allProducts.slice(0, 50);
     setProdResults(prev => ({ ...prev, [idx]: filtered }));
   };
 
   const selectProducto = (idx, prod) => {
     const updated = [...items];
-    updated[idx] = { ...updated[idx], producto_id: prod.id, descripcion: prod.nombre, precio_unitario: prod.precio_venta ?? '', unidad_medida: prod.unidad_medida ?? '' };
+    updated[idx] = { ...updated[idx], producto_id: prod.id, descripcion: prod.nombre, precio_unitario: prod.precio_venta ?? '', unidad_medida: prod.unidad_medida ?? '', alicuota_iva: prod.alicuota_iva ?? '21' };
     setItems(updated);
     setProdSearch(prev => ({ ...prev, [idx]: prod.nombre }));
     setProdResults(prev => ({ ...prev, [idx]: [] }));
@@ -267,16 +341,36 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
   const addItem = () => setItems(prev => [...prev, { ...EMPTY_ITEM }]);
   const removeItem = (idx) => setItems(prev => prev.filter((_, i) => i !== idx));
 
+  // Letra probable (A/B/C) — misma función que ya deciden las facturas reales,
+  // nunca una opción manual aparte. Determina si se discrimina IVA (solo "A")
+  // o se muestra únicamente el total (B/C), igual que el PDF real terminará
+  // mostrando el día que esta cotización se convierta en factura.
+  const clienteSeleccionado = allClientes.find(c => c.id === form.cliente_id);
+  const letra = determinarTipoComprobante(empresaCondicionIva, clienteSeleccionado?.condicion_iva ?? 'CF');
+  const discrimina = letra === 'A';
+
   const totales = items.reduce((acc, i) => {
     const cant = parseInt(i.cantidad) || 0;
     const precio = parseNumberLocale(i.precio_unitario) || 0;
     const descPct = parseNumberLocale(i.descuento_item) || 0;
-    const bruto = cant * precio;
+    const bruto = cant * precio * (1 - descPct / 100);
+    const factor = FACTOR_IVA[i.alicuota_iva] ?? 1;
+    const neto = bruto / factor;
     acc.subtotal += bruto;
-    acc.descuento += bruto * (descPct / 100);
+    acc.subtotalNeto += neto;
+    acc.subtotalIva += bruto - neto;
     return acc;
-  }, { subtotal: 0, descuento: 0 });
-  totales.total = totales.subtotal - totales.descuento;
+  }, { subtotal: 0, subtotalNeto: 0, subtotalIva: 0 });
+  // Descuento global se aplica DESPUÉS de los descuentos por línea (mismo orden
+  // que SAP), y se escala proporcionalmente sobre neto/IVA ya calculados — así
+  // neto + iva sigue dando exacto el total, sin importar cuántas alícuotas
+  // distintas se mezclen en los ítems.
+  const descuentoGlobalPct = parseNumberLocale(form.descuento) || 0;
+  const factorDescGlobal = 1 - descuentoGlobalPct / 100;
+  totales.total = totales.subtotal * factorDescGlobal;
+  totales.neto = totales.subtotalNeto * factorDescGlobal;
+  totales.iva = totales.subtotalIva * factorDescGlobal;
+  totales.descuento = totales.subtotal - totales.total;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -302,7 +396,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
     if (validItems.length === 0) {
       return toast({ title: 'Ítems inválidos', description: 'Revisá cantidades y precios (usar coma para decimales).', variant: 'destructive' });
     }
-    createMutation.mutate({
+    const payload = {
       cliente: form.cliente_nombre ? { id: form.cliente_id || null, nombre: form.cliente_nombre } : null,
       items: validItems,
       notas: form.notas,
@@ -310,7 +404,13 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
       fechaVencimiento: form.fecha_vencimiento || null,
       moneda: form.moneda,
       tipoCambioTasa: form.tipoCambioTasa,
-    });
+      descuentoGlobal: descuentoGlobalPct,
+    };
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, payload });
+    } else {
+      createMutation.mutate(payload);
+    }
   };
 
   const filteredData = (listData?.data ?? []).filter(c =>
@@ -328,7 +428,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
             Genera presupuestos y convierte en ventas
           </p>
         </div>
-        <Button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
+        <Button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
           <Plus className="w-4 h-4" /> Nueva Cotización
         </Button>
       </div>
@@ -357,14 +457,16 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
       {/* MODAL NUEVA COTIZACIÓN — pantalla completa (mismo criterio de tamaño que
           el fullscreen de MapaRelaciones) para que el cuerpo de ítems tenga lugar
           real y los botones de abajo no dependan de escrollear todo el diálogo. */}
-      <Dialog open={isModalOpen} onOpenChange={v => { if (!v) setIsModalOpen(false); }}>
+      <Dialog open={isModalOpen} onOpenChange={v => { if (!v) { setIsModalOpen(false); setEditingId(null); } }}>
         <DialogContent
           onOpenAutoFocus={(e) => e.preventDefault()}
           className="max-w-[96vw] w-[96vw] h-[92vh] flex flex-col dark:bg-kx-bg dark:border-kx-border"
         >
           <DialogHeader className="flex-shrink-0">
-            <DialogTitle className="dark:text-kx-text">Nueva Cotización</DialogTitle>
-            <DialogDescription className="dark:text-kx-text-2">Cargá los ítems y datos de la cotización.</DialogDescription>
+            <DialogTitle className="dark:text-kx-text">{editingId ? 'Editar Cotización' : 'Nueva Cotización'}</DialogTitle>
+            <DialogDescription className="dark:text-kx-text-2">
+              {editingId ? 'Modificá los datos y guardá los cambios.' : 'Cargá los ítems y datos de la cotización.'}
+            </DialogDescription>
           </DialogHeader>
           <FormNuevaCotizacion
             form={form} setForm={setForm}
@@ -376,10 +478,11 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
             allClientes={allClientes} showClienteDropdown={showClienteDropdown}
             setShowClienteDropdown={setShowClienteDropdown} clienteWrapperRef={clienteWrapperRef}
             tcMissing={tcMissing} setTcMissing={setTcMissing}
-            totales={totales}
+            totales={totales} discrimina={discrimina}
             handleSubmit={handleSubmit} resetForm={resetForm}
-            onCancel={() => setIsModalOpen(false)}
-            createMutation={createMutation}
+            onCancel={() => { setIsModalOpen(false); setEditingId(null); }}
+            createMutation={editingId ? updateMutation : createMutation}
+            isEditing={!!editingId}
           />
         </DialogContent>
       </Dialog>
@@ -399,6 +502,8 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
         onCancelar={(id) => { estadoMutation.mutate({ id, estado: 'cancelada' }); setViewId(null); }}
         onVerPedido={onVerPedido ? (id) => { setViewId(null); onVerPedido(id); } : undefined}
         onCambiarEstado={(id, estado) => estadoMutation.mutate({ id, estado })}
+        onEditar={handleEditarClick}
+        discrimina={detalle ? determinarTipoComprobante(empresaCondicionIva, detalle.clientes?.condicion_iva ?? 'CF') === 'A' : false}
       />
     </div>
   );
