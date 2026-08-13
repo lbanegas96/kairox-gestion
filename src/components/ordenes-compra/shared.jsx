@@ -16,4 +16,4 @@ export const FACTURA_ESTADO_COLORS = {
 };
 
 export const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Cheque', 'Tarjeta Crédito', 'Cuenta Corriente'];
-export const EMPTY_ITEM = { descripcion: '', cantidad_pedida: 1, costo_unitario: '', producto_id: null, unidad_medida: '', _prodSearch: '' };
+export const EMPTY_ITEM = { descripcion: '', cantidad_pedida: 1, costo_unitario: '', producto_id: null, unidad_medida: '', descuento_item: '', alicuota_iva: '21', _prodSearch: '' };

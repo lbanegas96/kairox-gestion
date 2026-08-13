@@ -298,6 +298,7 @@ export interface OrdenCompra {
   estado_pago: EstadoPago;
   notas?: string | null;
   compra_id?: string | null;
+  descuento_global_pct?: number;
   created_at: string;
   updated_at: string;
   // joins
@@ -316,6 +317,8 @@ export interface OrdenCompraItem {
   costo_unitario: number;
   subtotal: number;
   unidad_medida?: string | null;
+  alicuota_iva?: string | null;
+  descuento_item?: number;
 }
 
 // ---------------------------------------------------------------------------

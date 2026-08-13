@@ -18,6 +18,11 @@ import FormNuevaOC from '@/components/ordenes-compra/FormNuevaOC';
 import ModalDetalleOC from '@/components/ordenes-compra/ModalDetalleOC';
 import ModalRegistrarFactura from '@/components/ordenes-compra/ModalRegistrarFactura';
 
+// costo_unitario es SIEMPRE el precio final que paga la empresa (IVA incluido) —
+// mismo criterio que Cotizaciones/Pedidos/Ventas. Para separar neto/IVA hay que
+// DIVIDIR por el factor de la alícuota, nunca sumarlo.
+const FACTOR_IVA = { '21': 1.21, '10.5': 1.105 };
+
 function OrdenesCompraSection() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -35,14 +40,16 @@ function OrdenesCompraSection() {
   const [facturaModal, setFacturaModal] = useState(false);
   const [facturaForm, setFacturaForm] = useState({ numero_factura: '', fecha_factura: '', items: [] });
 
-  // form nueva OC
-  const [form, setForm] = useState({ proveedor_nombre: '', fecha_entrega_esperada: '', forma_pago: 'Efectivo', notas: '', moneda: 'ARS', tipoCambioTasa: 1 });
+  // form nueva OC / edición (editingId != null = editando una OC existente)
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState({ proveedor_nombre: '', fecha_entrega_esperada: '', forma_pago: 'Efectivo', notas: '', moneda: 'ARS', tipoCambioTasa: 1, descuentoGlobalPct: '' });
   const [tcMissingOC, setTcMissingOC] = useState(false);
   const [items, setItems] = useState([{ ...EMPTY_ITEM }]);
   const [provSearch, setProvSearch] = useState('');
   const [provResults, setProvResults] = useState([]);
   const [selectedProv, setSelectedProv] = useState(null);
   const [prodResults, setProdResults] = useState({});
+  const [prodOpen, setProdOpen] = useState({});
 
   const empresaId = user?.empresa_id;
 
@@ -163,6 +170,20 @@ function OrdenesCompraSection() {
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
+  // Edición (Fase 1 del plan, 13/08): mismo form/items que "Nueva OC" — reusa el mismo
+  // componente FormNuevaOC, con diffing por id en la RPC (mig.322).
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }) => ordenesCompraService.update(id, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] });
+      qc.invalidateQueries({ queryKey: ['orden_compra'] });
+      toast({ title: 'Orden de compra actualizada ✓', className: 'bg-green-600 text-white' });
+      setIsModalOpen(false);
+      resetForm();
+    },
+    onError: (e) => toast({ title: 'Error al guardar los cambios', description: e.message, variant: 'destructive' }),
+  });
+
   // Helper: invalidar también el cache de notificaciones cuando cambia el estado/stock
   const invalidateOCAndNotifs = () => {
     qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] });
@@ -188,11 +209,43 @@ function OrdenesCompraSection() {
   // ── Helpers de form ───────────────────────────────────────────────────────────
 
   const resetForm = () => {
-    setForm({ proveedor_nombre: '', fecha_entrega_esperada: '', forma_pago: 'Efectivo', notas: '', moneda: 'ARS', tipoCambioTasa: 1 });
+    setForm({ proveedor_nombre: '', fecha_entrega_esperada: '', forma_pago: 'Efectivo', notas: '', moneda: 'ARS', tipoCambioTasa: 1, descuentoGlobalPct: '' });
     setItems([{ ...EMPTY_ITEM }]);
     setSelectedProv(null);
     setProvSearch('');
     setTcMissingOC(false);
+    setEditingId(null);
+  };
+
+  // "Editar" desde el detalle — solo se ofrece si estado IN ('borrador','enviada'),
+  // ver ModalDetalleOC. Reusa el mismo form/items/modal de "Nueva OC".
+  const openEdit = async (oc) => {
+    const full = await ordenesCompraService.getById(oc.id);
+    setForm({
+      proveedor_nombre: full.proveedor_nombre ?? full.proveedores?.nombre ?? '',
+      fecha_entrega_esperada: full.fecha_entrega_esperada ?? '',
+      forma_pago: full.forma_pago ?? 'Efectivo',
+      notas: full.notas ?? '',
+      moneda: full.moneda ?? 'ARS',
+      tipoCambioTasa: Number(full.tipo_cambio_tasa) || 1,
+      descuentoGlobalPct: full.descuento_global_pct ? String(full.descuento_global_pct) : '',
+    });
+    setSelectedProv(full.proveedor_id ? { id: full.proveedor_id, nombre: full.proveedor_nombre ?? full.proveedores?.nombre } : null);
+    setProvSearch(full.proveedor_nombre ?? full.proveedores?.nombre ?? '');
+    setItems((full.ordenes_compra_items ?? []).map(i => ({
+      id: i.id,
+      descripcion: i.descripcion,
+      cantidad_pedida: i.cantidad_pedida,
+      costo_unitario: i.costo_unitario,
+      descuento_item: i.descuento_item || '',
+      producto_id: i.producto_id,
+      unidad_medida: i.unidad_medida ?? '',
+      alicuota_iva: i.alicuota_iva ?? '21',
+      _prodSearch: i.descripcion,
+    })));
+    setEditingId(full.id);
+    setDetalleId(null);
+    setIsModalOpen(true);
   };
 
   const searchProveedor = async (q) => {
@@ -215,15 +268,16 @@ function OrdenesCompraSection() {
     updated[idx] = { ...updated[idx], _prodSearch: q, descripcion: q };
     setItems(updated);
     if (!q || q.length < 2) { setProdResults(p => ({ ...p, [idx]: [] })); return; }
-    const { data } = await supabase.from('productos').select('id, nombre, costo_compra, unidad_medida').eq('empresa_id', empresaId).ilike('nombre', `%${q}%`).limit(6);
+    const { data } = await supabase.from('productos').select('id, nombre, costo_compra, unidad_medida, alicuota_iva').eq('empresa_id', empresaId).ilike('nombre', `%${q}%`).limit(6);
     setProdResults(p => ({ ...p, [idx]: data ?? [] }));
   };
 
   const selectProducto = (idx, prod) => {
     const updated = [...items];
-    updated[idx] = { ...updated[idx], producto_id: prod.id, descripcion: prod.nombre, _prodSearch: prod.nombre, costo_unitario: prod.costo_compra ?? '', unidad_medida: prod.unidad_medida ?? '' };
+    updated[idx] = { ...updated[idx], producto_id: prod.id, descripcion: prod.nombre, _prodSearch: prod.nombre, costo_unitario: prod.costo_compra ?? '', unidad_medida: prod.unidad_medida ?? '', alicuota_iva: prod.alicuota_iva ?? '21' };
     setItems(updated);
     setProdResults(p => ({ ...p, [idx]: [] }));
+    setProdOpen(p => ({ ...p, [idx]: false }));
   };
 
   const updateItem = (idx, field, value) => {
@@ -232,13 +286,39 @@ function OrdenesCompraSection() {
     setItems(updated);
   };
 
-  const total = items.reduce((s, i) => s + (parseFloat(i.cantidad_pedida) || 0) * (parseNumberLocale(i.costo_unitario) || 0), 0);
+  // Totales — mismo criterio que Cotizaciones/Pedidos (13/08): "subtotal" es precio
+  // de lista sin ningún descuento, "descuento" suma línea + global combinados, para
+  // que un ítem con % Desc. propio nunca quede invisible en el resumen. Neto/IVA se
+  // muestran SIEMPRE en Compras (a diferencia de Ventas, que lo condiciona a la letra
+  // A) — como comprador Responsable Inscripto siempre importa el IVA Crédito Fiscal,
+  // sin importar qué letra emitió el proveedor (confirmado por código:
+  // NuevaFacturaProveedorModal.jsx ya lo muestra sin ninguna condición).
+  const totales = items.reduce((acc, i) => {
+    const cant = parseFloat(i.cantidad_pedida) || 0;
+    const costo = parseNumberLocale(i.costo_unitario) || 0;
+    const descPct = parseNumberLocale(i.descuento_item) || 0;
+    const brutoLista = cant * costo;
+    const brutoConDescLinea = brutoLista * (1 - descPct / 100);
+    const factor = FACTOR_IVA[i.alicuota_iva] ?? 1;
+    const neto = brutoConDescLinea / factor;
+    acc.subtotal += brutoLista;
+    acc.subtotalConDescLinea += brutoConDescLinea;
+    acc.subtotalNeto += neto;
+    acc.subtotalIva += brutoConDescLinea - neto;
+    return acc;
+  }, { subtotal: 0, subtotalConDescLinea: 0, subtotalNeto: 0, subtotalIva: 0 });
+  const descuentoGlobalPct = parseNumberLocale(form.descuentoGlobalPct) || 0;
+  const factorDescGlobal = 1 - descuentoGlobalPct / 100;
+  totales.total = totales.subtotalConDescLinea * factorDescGlobal;
+  totales.neto = totales.subtotalNeto * factorDescGlobal;
+  totales.iva = totales.subtotalIva * factorDescGlobal;
+  totales.descuento = totales.subtotal - totales.total;
 
   const handleSubmit = (e) => {
     e.preventDefault();
     const validItems = items.filter(i => i.descripcion && i.cantidad_pedida > 0 && (parseNumberLocale(i.costo_unitario) || 0) > 0);
     if (!validItems.length) { toast({ title: 'Agrega al menos un ítem válido', variant: 'destructive' }); return; }
-    createMutation.mutate({
+    const payload = {
       proveedor_id: selectedProv?.id ?? null,
       proveedor_nombre: form.proveedor_nombre || null,
       fecha_entrega_esperada: form.fecha_entrega_esperada || null,
@@ -246,14 +326,23 @@ function OrdenesCompraSection() {
       notas: form.notas || undefined,
       moneda: form.moneda,
       tipoCambioTasa: form.tipoCambioTasa,
+      descuentoGlobalPct,
       items: validItems.map(i => ({
+        ...(i.id ? { id: i.id } : {}),
         producto_id: i.producto_id ?? null,
         descripcion: i.descripcion,
         cantidad_pedida: parseFloat(i.cantidad_pedida),
         costo_unitario: parseNumberLocale(i.costo_unitario) || 0,
+        descuento_item: parseNumberLocale(i.descuento_item) || 0,
+        alicuota_iva: i.alicuota_iva ?? '21',
         unidad_medida: i.unidad_medida || null,
       })),
-    });
+    };
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, payload });
+    } else {
+      createMutation.mutate(payload);
+    }
   };
 
   const filteredList = (listData?.data ?? []).filter(oc =>
@@ -274,7 +363,7 @@ function OrdenesCompraSection() {
             Gestioná pedidos a proveedores con seguimiento de recepción y actualización de stock automática
           </p>
         </div>
-        <Button onClick={() => setIsModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
+        <Button onClick={() => { resetForm(); setIsModalOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2">
           <Plus className="w-4 h-4" /> Nueva OC
         </Button>
       </div>
@@ -313,26 +402,30 @@ function OrdenesCompraSection() {
         estadoMutation={estadoMutation} cancelarMutation={cancelarMutation}
       />
 
-      {/* ── MODAL: Nueva OC ── */}
-      <Dialog open={isModalOpen} onOpenChange={v => { if (!v) setIsModalOpen(false); }}>
-        <DialogContent className="max-w-4xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="dark:text-kx-text">Nueva Orden de Compra</DialogTitle>
-            <DialogDescription className="dark:text-kx-text-2">Cargá los ítems y datos de la orden de compra.</DialogDescription>
+      {/* ── MODAL: Nueva / Editar OC ── */}
+      <Dialog open={isModalOpen} onOpenChange={v => { if (!v) { setIsModalOpen(false); resetForm(); } }}>
+        <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] flex flex-col dark:bg-kx-bg dark:border-kx-border">
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="dark:text-kx-text">{editingId ? 'Editar Orden de Compra' : 'Nueva Orden de Compra'}</DialogTitle>
+            <DialogDescription className="dark:text-kx-text-2">
+              {editingId ? 'Modificá los datos y guardá los cambios.' : 'Cargá los ítems y datos de la orden de compra.'}
+            </DialogDescription>
           </DialogHeader>
           <FormNuevaOC
             form={form} setForm={setForm}
             items={items} setItems={setItems}
             provSearch={provSearch} provResults={provResults} selectedProv={selectedProv}
             searchProveedor={searchProveedor} selectProveedor={selectProveedor}
-            prodResults={prodResults} searchProducto={searchProducto} selectProducto={selectProducto}
+            prodResults={prodResults} prodOpen={prodOpen} setProdOpen={setProdOpen}
+            searchProducto={searchProducto} selectProducto={selectProducto}
             updateItem={updateItem}
             unidadesMedida={unidadesMedida}
             tcMissingOC={tcMissingOC} setTcMissingOC={setTcMissingOC}
-            total={total}
+            totales={totales}
             handleSubmit={handleSubmit} resetForm={resetForm}
-            onCancel={() => setIsModalOpen(false)}
-            createMutation={createMutation}
+            onCancel={() => { setIsModalOpen(false); resetForm(); }}
+            createMutation={editingId ? updateMutation : createMutation}
+            isEditing={!!editingId}
           />
         </DialogContent>
       </Dialog>
@@ -343,6 +436,7 @@ function OrdenesCompraSection() {
         detalle={detalle} factura={factura}
         setDevolverOC={setDevolverOC} setGenRecepId={setGenRecepId}
         abrirModalFactura={abrirModalFactura}
+        onEditar={openEdit}
       />
 
       {/* ── MODAL: Registrar Factura del Proveedor ── */}

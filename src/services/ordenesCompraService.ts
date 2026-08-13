@@ -16,14 +16,22 @@ interface CreateOCPayload {
   notas?: string;
   moneda?: string;
   tipoCambioTasa?: number;
+  descuentoGlobalPct?: number;
   items: {
+    id?: string;
     producto_id?: string | null;
     descripcion: string;
     cantidad_pedida: number;
     costo_unitario: number;
+    descuento_item?: number;
+    alicuota_iva?: string;
     unidad_medida?: string | null;
   }[];
 }
+
+// Igual forma que CreateOCPayload — actualizar_orden_compra() usa el mismo shape de
+// ítems que ya arma FormNuevaOC.jsx (create/update comparten objeto sin transformarlo distinto).
+interface UpdateOCPayload extends CreateOCPayload {}
 
 export const ordenesCompraService = {
   async getAll(
@@ -67,10 +75,14 @@ export const ordenesCompraService = {
       .rpc('obtener_proximo_numero', { p_empresa_id: empresaId, p_tipo_documento: 'orden_compra' });
     if (numError) throw new Error(numError.message);
 
-    const subtotal = payload.items.reduce(
-      (s, i) => s + i.cantidad_pedida * i.costo_unitario,
+    // Subtotal neto de descuentos por línea, antes del descuento global — mismo orden
+    // que Cotizaciones/Pedidos (línea primero, documento después).
+    const subtotalConDescLinea = payload.items.reduce(
+      (s, i) => s + i.cantidad_pedida * i.costo_unitario * (1 - (Number(i.descuento_item) || 0) / 100),
       0
     );
+    const descuentoGlobalPct = Number(payload.descuentoGlobalPct) || 0;
+    const total = subtotalConDescLinea * (1 - descuentoGlobalPct / 100);
 
     const { data: oc, error: ocError } = await supabase
       .from('ordenes_compra')
@@ -85,8 +97,9 @@ export const ordenesCompraService = {
         notas: payload.notas ?? null,
         moneda: payload.moneda ?? 'ARS',
         tipo_cambio_tasa: payload.tipoCambioTasa ?? 1,
-        subtotal,
-        total: subtotal,
+        descuento_global_pct: descuentoGlobalPct,
+        subtotal: subtotalConDescLinea,
+        total,
         estado: 'borrador' as OrdenCompraEstado,
         estado_pago: 'pendiente' as EstadoPago,
       }])
@@ -102,14 +115,71 @@ export const ordenesCompraService = {
       cantidad_pedida: item.cantidad_pedida,
       cantidad_recibida: 0,
       costo_unitario: item.costo_unitario,
-      subtotal: item.cantidad_pedida * item.costo_unitario,
+      subtotal: item.cantidad_pedida * item.costo_unitario * (1 - (Number(item.descuento_item) || 0) / 100),
       unidad_medida: item.unidad_medida ?? null,
+      alicuota_iva: item.alicuota_iva ?? '21',
+      descuento_item: Number(item.descuento_item) || 0,
     }));
 
     const { error: itemsError } = await supabase.from('ordenes_compra_items').insert(items);
     if (itemsError) throw new Error(itemsError.message);
 
     return oc as OrdenCompra;
+  },
+
+  // Solo editable mientras estado IN ('borrador', 'enviada') — la RPC lo revalida server-side.
+  // Manda el `id` de cada ítem existente para que actualizar_orden_compra pueda diffear fila
+  // por fila (mig.322) — mismo patrón que cotizacionesService.update()/pedidosService (mig.319/320).
+  async update(ordenId: string, payload: UpdateOCPayload): Promise<OrdenCompra> {
+    const itemsPayload = payload.items.map((item) => ({
+      id: item.id ?? null,
+      producto_id: item.producto_id ?? null,
+      descripcion: item.descripcion,
+      cantidad_pedida: item.cantidad_pedida,
+      costo_unitario: item.costo_unitario,
+      descuento_item: Number(item.descuento_item) || 0,
+      alicuota_iva: item.alicuota_iva ?? '21',
+      unidad_medida: item.unidad_medida ?? null,
+    }));
+
+    const { data, error } = await supabase.rpc('actualizar_orden_compra', {
+      p_orden_id: ordenId,
+      p_proveedor_id: payload.proveedor_id ?? null,
+      p_proveedor_nombre: payload.proveedor_nombre ?? null,
+      p_items: itemsPayload,
+      p_notas: payload.notas ?? null,
+      p_fecha_entrega_esperada: payload.fecha_entrega_esperada ?? null,
+      p_forma_pago: payload.forma_pago,
+      p_moneda: payload.moneda ?? 'ARS',
+      p_tipo_cambio_tasa: payload.tipoCambioTasa ?? 1,
+      p_descuento_global_pct: Number(payload.descuentoGlobalPct) || 0,
+    });
+    if (error) throw new Error(error.message);
+    return data as OrdenCompra;
+  },
+
+  // Historial de cambios — junta auditoría de cabecera (ordenes_compra) e ítems
+  // (ordenes_compra_items, filtrados por orden_id dentro del JSONB porque su propio
+  // registro_id es el id del ítem, no el de la orden). Mismo patrón que
+  // cotizacionesService.getHistorial().
+  async getHistorial(ordenId: string) {
+    const [cabeceraRes, itemsRes] = await Promise.all([
+      supabase
+        .from('audit_log')
+        .select('id, tabla, operacion, old_data, new_data, user_id, created_at')
+        .eq('tabla', 'ordenes_compra')
+        .eq('registro_id', ordenId),
+      supabase
+        .from('audit_log')
+        .select('id, tabla, operacion, old_data, new_data, user_id, created_at')
+        .eq('tabla', 'ordenes_compra_items')
+        .or(`old_data->>orden_id.eq.${ordenId},new_data->>orden_id.eq.${ordenId}`),
+    ]);
+    if (cabeceraRes.error) throw new Error(cabeceraRes.error.message);
+    if (itemsRes.error) throw new Error(itemsRes.error.message);
+
+    return [...(cabeceraRes.data ?? []), ...(itemsRes.data ?? [])]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   },
 
   async updateEstado(id: string, estado: OrdenCompraEstado): Promise<OrdenCompra> {

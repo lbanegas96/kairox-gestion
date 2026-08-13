@@ -1,19 +1,46 @@
-import { ShoppingBag, Truck, Receipt, AlertTriangle, BadgeCheck, Banknote, RotateCcw } from 'lucide-react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { ShoppingBag, Truck, Receipt, AlertTriangle, BadgeCheck, Banknote, RotateCcw, Pencil, History, ChevronDown, ChevronRight, Code2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/currencyUtils';
 import { formatDateAR } from '@/lib/dateUtils';
+import { ordenesCompraService } from '@/services/ordenesCompraService';
 import { ESTADOS, FACTURA_ESTADO_COLORS } from './shared';
+
+// Mismo criterio que Cotizaciones/Pedidos: precio_unitario/costo_unitario ya
+// incluye IVA, se separa dividiendo por el factor de la alícuota.
+const FACTOR_IVA = { '21': 1.21, '10.5': 1.105 };
+const ALICUOTA_LABEL = { '21': '21%', '10.5': '10.5%', '0': '0%', exento: 'Exento', no_gravado: 'No gravado' };
+// Editable mientras no haya Recepción generada — mismo criterio que la RPC
+// actualizar_orden_compra (mig.322).
+const ESTADOS_EDITABLES = ['borrador', 'enviada'];
+
+const CAMPOS_HISTORIAL = {
+  proveedor_nombre: 'Proveedor', forma_pago: 'Forma de pago', fecha_entrega_esperada: 'Entrega esperada',
+  moneda: 'Moneda', descuento_global_pct: 'Descuento global', total: 'Total', notas: 'Notas', estado: 'Estado',
+};
 
 function ModalDetalleOC({
   detalleId, setDetalleId,
   detalle, factura,
   setDevolverOC, setGenRecepId,
   abrirModalFactura,
+  onEditar,
 }) {
+  const [showHistorial, setShowHistorial] = useState(false);
+  const [verCrudoId, setVerCrudoId] = useState(null);
+
+  const { data: historial = [] } = useQuery({
+    queryKey: ['orden_compra_historial', detalleId],
+    queryFn: () => ordenesCompraService.getHistorial(detalleId),
+    enabled: !!detalleId && showHistorial,
+  });
+
   return (
     <Dialog open={!!detalleId} onOpenChange={() => setDetalleId(null)}>
-      <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border">
+      {/* Mismo formato grande que Cotizaciones/Pedidos — consistencia (13/08). */}
+      <DialogContent className="max-w-4xl dark:bg-kx-bg dark:border-kx-border max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="dark:text-kx-text flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-indigo-600 dark:text-indigo-500" />
@@ -49,6 +76,7 @@ function ModalDetalleOC({
                   <th className="text-left py-2 text-xs text-kx-text-3">Producto</th>
                   <th className="text-right py-2 text-xs text-kx-text-3">Pedido</th>
                   <th className="text-right py-2 text-xs text-kx-text-3">Recibido</th>
+                  <th className="text-right py-2 text-xs text-kx-text-3">IVA</th>
                   <th className="text-right py-2 text-xs text-kx-text-3">Costo unit.</th>
                   <th className="text-right py-2 text-xs text-kx-text-3">Subtotal</th>
                 </tr>
@@ -68,18 +96,55 @@ function ModalDetalleOC({
                           <div className={`h-1 rounded-full ${progreso >= 100 ? 'bg-green-500' : 'bg-yellow-500'}`} style={{ width: `${Math.min(progreso, 100)}%` }} />
                         </div>
                       </td>
+                      <td className="py-2 text-right text-kx-text-3 text-xs">{ALICUOTA_LABEL[item.alicuota_iva] ?? '21%'}</td>
                       <td className="py-2 text-right dark:text-slate-300">{formatCurrency(item.costo_unitario, detalle.moneda ?? 'ARS')}</td>
                       <td className="py-2 text-right font-medium dark:text-kx-text">{formatCurrency(item.subtotal, detalle.moneda ?? 'ARS')}</td>
                     </tr>
                   );
                 })}
               </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-kx-border dark:border-kx-border">
-                  <td colSpan={4} className="py-3 text-right font-bold dark:text-kx-text">TOTAL {detalle.moneda && detalle.moneda !== 'ARS' && <span className="text-xs font-normal text-kx-text-3 ml-1">({detalle.moneda} — tasa {detalle.tipo_cambio_tasa})</span>}</td>
-                  <td className="py-3 text-right font-bold text-lg dark:text-kx-text">{formatCurrency(detalle.total, detalle.moneda ?? 'ARS')}</td>
-                </tr>
-              </tfoot>
+              {(() => {
+                const items = detalle.ordenes_compra_items ?? [];
+                const subtotalListaSinDescuentos = items.reduce((s, i) => s + Number(i.cantidad_pedida) * Number(i.costo_unitario), 0);
+                const subtotalBruto = items.reduce((s, i) => s + Number(i.subtotal), 0);
+                const descuentoTotal = subtotalListaSinDescuentos - Number(detalle.total);
+                const neto = items.reduce((s, i) => s + Number(i.subtotal) / (FACTOR_IVA[i.alicuota_iva] ?? 1), 0);
+                const iva = subtotalBruto - neto;
+                const factorDesc = subtotalBruto > 0 ? Number(detalle.total) / subtotalBruto : 1;
+                const simbolo = detalle.moneda && detalle.moneda !== 'ARS' ? `${detalle.moneda} ` : '$';
+                const fmt = (n) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                return (
+                  <tfoot>
+                    {descuentoTotal > 0.005 && (
+                      <>
+                        <tr>
+                          <td colSpan={5} className="pt-3 text-right text-xs text-kx-text-3">Subtotal</td>
+                          <td className="pt-3 text-right text-xs text-kx-text-3">{simbolo}{fmt(subtotalListaSinDescuentos)}</td>
+                        </tr>
+                        <tr>
+                          <td colSpan={5} className="text-right text-xs text-kx-red">Descuento{detalle.descuento_global_pct > 0 ? ` (incl. ${detalle.descuento_global_pct}% global)` : ''}</td>
+                          <td className="text-right text-xs text-kx-red">-{simbolo}{fmt(descuentoTotal)}</td>
+                        </tr>
+                      </>
+                    )}
+                    {/* Neto/IVA siempre visible en Compras — como comprador RI siempre
+                        importa el IVA Crédito Fiscal, sin condicionarlo a ninguna letra
+                        (mismo criterio que ya usa NuevaFacturaProveedorModal.jsx). */}
+                    <tr>
+                      <td colSpan={5} className="pt-1 text-right text-xs text-kx-text-3">Neto gravado</td>
+                      <td className="pt-1 text-right text-xs text-kx-text-3">{simbolo}{fmt(neto * factorDesc)}</td>
+                    </tr>
+                    <tr>
+                      <td colSpan={5} className="text-right text-xs text-kx-text-3">IVA</td>
+                      <td className="text-right text-xs text-kx-text-3">{simbolo}{fmt(iva * factorDesc)}</td>
+                    </tr>
+                    <tr className="border-t-2 border-kx-border dark:border-kx-border">
+                      <td colSpan={5} className="py-3 text-right font-bold dark:text-kx-text">TOTAL {detalle.moneda && detalle.moneda !== 'ARS' && <span className="text-xs font-normal text-kx-text-3 ml-1">({detalle.moneda} — tasa {detalle.tipo_cambio_tasa})</span>}</td>
+                      <td className="py-3 text-right font-bold text-lg dark:text-kx-text">{formatCurrency(detalle.total, detalle.moneda ?? 'ARS')}</td>
+                    </tr>
+                  </tfoot>
+                );
+              })()}
             </table>
 
             {detalle.notas && (
@@ -160,9 +225,41 @@ function ModalDetalleOC({
                 </div>
               );
             })()}
+
+            {/* Historial de cambios — mismo patrón que Cotizaciones/Pedidos, colapsado
+                por defecto. */}
+            <div className="border border-kx-border dark:border-kx-border rounded-lg">
+              <button
+                type="button"
+                onClick={() => setShowHistorial(v => !v)}
+                className="w-full flex items-center justify-between p-3 text-sm font-medium text-kx-text-2 dark:text-kx-text-2 hover:bg-kx-surface-2 dark:hover:bg-slate-800/50 rounded-lg"
+              >
+                <span className="flex items-center gap-2"><History className="w-4 h-4" /> Historial de cambios</span>
+                {showHistorial ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </button>
+              {showHistorial && (
+                <div className="p-3 pt-0 space-y-2 text-xs">
+                  {historial.length === 0 && (
+                    <p className="text-kx-text-3 py-2">Sin cambios registrados todavía.</p>
+                  )}
+                  {historial.map(entry => (
+                    <HistorialItem key={`${entry.tabla}-${entry.id}`} entry={entry}
+                      verCrudo={verCrudoId === `${entry.tabla}-${entry.id}`}
+                      onToggleCrudo={() => setVerCrudoId(v => v === `${entry.tabla}-${entry.id}` ? null : `${entry.tabla}-${entry.id}`)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 flex-wrap">
+          {onEditar && detalle && ESTADOS_EDITABLES.includes(detalle.estado) && (
+            <Button variant="outline" className="gap-2 dark:border-kx-border dark:text-slate-300"
+              onClick={() => onEditar(detalle)}>
+              <Pencil className="w-4 h-4" /> Editar
+            </Button>
+          )}
           {detalle && ['recibida', 'recibida_parcial'].includes(detalle.estado) && (
             <Button variant="outline" className="gap-2 text-orange-600 border-orange-200 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-900/20"
               onClick={() => { setDetalleId(null); setDevolverOC(detalle); }}>
@@ -179,6 +276,57 @@ function ModalDetalleOC({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Traduce una fila cruda de audit_log a algo legible — mismo patrón que
+// HistorialItem en ModalDetalleCotizacion.jsx/ModalDetallePedido.jsx.
+function HistorialItem({ entry, verCrudo, onToggleCrudo }) {
+  const fecha = new Date(entry.created_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+
+  const resumen = (() => {
+    if (entry.tabla === 'ordenes_compra_items') {
+      const item = entry.new_data ?? entry.old_data;
+      const nombre = item?.descripcion || 'ítem';
+      if (entry.operacion === 'INSERT') return `Ítem agregado: ${nombre} (x${item?.cantidad_pedida ?? '?'})`;
+      if (entry.operacion === 'DELETE') return `Ítem quitado: ${nombre}`;
+      return `Ítem modificado: ${nombre}`;
+    }
+    if (entry.operacion === 'INSERT') return 'Orden de compra creada';
+    if (entry.operacion === 'DELETE') return 'Orden de compra eliminada';
+    const cambios = Object.entries(CAMPOS_HISTORIAL)
+      .filter(([campo]) => JSON.stringify(entry.old_data?.[campo]) !== JSON.stringify(entry.new_data?.[campo]))
+      .map(([campo, label]) => {
+        const antes = entry.old_data?.[campo];
+        const despues = entry.new_data?.[campo];
+        const fmtVal = (v) => {
+          if (v == null || v === '') return '—';
+          if (campo === 'estado') return ESTADOS[v]?.label ?? v;
+          if (campo === 'total') return `$${Number(v).toLocaleString('es-AR')}`;
+          if (campo === 'descuento_global_pct') return `${v}%`;
+          if (campo === 'fecha_entrega_esperada') return formatDateAR(v);
+          return String(v);
+        };
+        return `${label}: ${fmtVal(antes)} → ${fmtVal(despues)}`;
+      });
+    return cambios.length > 0 ? cambios.join(' · ') : 'Cambio sin campos relevantes visibles';
+  })();
+
+  return (
+    <div className="border-b border-kx-border dark:border-kx-border last:border-0 pb-2">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-kx-text-2 dark:text-kx-text-2">{resumen}</span>
+        <span className="text-kx-text-3 whitespace-nowrap">{fecha}</span>
+      </div>
+      <button type="button" onClick={onToggleCrudo} className="text-kx-text-3 hover:text-kx-text flex items-center gap-1 mt-0.5">
+        <Code2 className="w-3 h-3" /> {verCrudo ? 'Ocultar detalle técnico' : 'Ver detalle técnico'}
+      </button>
+      {verCrudo && (
+        <pre className="mt-1 p-2 bg-kx-surface-2 dark:bg-slate-900 rounded text-[10px] overflow-x-auto text-kx-text-2">
+          {JSON.stringify({ old: entry.old_data, new: entry.new_data }, null, 2)}
+        </pre>
+      )}
+    </div>
   );
 }
 
