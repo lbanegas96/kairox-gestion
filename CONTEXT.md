@@ -1,5 +1,62 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🧪 Pendiente de prueba en vivo — Nadia (13/08)
+
+Todo lo de abajo ya está en producción (`kairox-gestion-chi.vercel.app`), verificado con tests
+automáticos + SQL contra la base real, pero falta la confirmación de un humano navegando la app
+de verdad. Marcar cada ítem al probarlo; si algo no se comporta como dice "Esperado", avisar con
+captura antes de seguir a la siguiente sección.
+
+### Cotizaciones — combo de productos
+
+- [ ] Abrir "Nueva Cotización", escribir el nombre de un producto en Descripción/Producto hasta
+      que aparezca en el desplegable, presionar **Enter**.
+      **Esperado:** selecciona ese producto (llena precio, unidad e IVA solo), NO agrega una fila
+      vacía nueva.
+- [ ] Después de elegir un producto (con Enter o con click), presionar **Tab**.
+      **Esperado:** el foco avanza al campo Cantidad de esa misma fila. NO debería saltar de
+      vuelta al campo Cliente al principio del formulario.
+- [ ] En una fila sin desplegable abierto (cursor en Cantidad, Precio, IVA o %Desc.), presionar
+      **Enter**. **Esperado:** agrega una fila nueva y le pasa el foco a Descripción.
+
+### Cotizaciones — totales y descuento
+
+- [ ] Cargar un ítem con **% Desc.** propio (ej. 10%) y dejar el "Desc. Global %" en 0.
+      **Esperado:** el resumen de totales ahora SÍ muestra una línea "Descuento" con el monto
+      correspondiente (antes quedaba invisible, el Subtotal ya lo absorbía en silencio).
+- [ ] Descargar el PDF de esa misma cotización.
+      **Esperado:** la línea "Descuento" del PDF muestra el monto Y el porcentaje entre
+      paréntesis, ej. "Descuento (10%) -$X".
+
+### Cotizaciones — editar + historial
+
+- [ ] Abrir una cotización en estado Borrador/Enviada/Aprobada/Rechazada → botón "Editar".
+      Cambiar la cantidad de UN solo ítem, dejar los demás igual, guardar.
+- [ ] Abrir "Historial de cambios" en el detalle. **Esperado:** aparece un solo registro para el
+      ítem que se tocó — los demás ítems (sin cambios) NO deberían aparecer como "quitado" ni
+      "agregado" (antes de este fix, cada guardado mostraba TODOS los ítems como tocados, aunque
+      no lo estuvieran).
+- [ ] Intentar editar una cotización en estado **Convertida**. **Esperado:** no ofrece el botón
+      "Editar" (o si se fuerza, la base lo rechaza con un mensaje claro).
+
+### Pedidos — todo lo anterior, replicado
+
+- [ ] Abrir "Nuevo Pedido". El formulario ahora debería verse grande (pantalla completa), con el
+      mismo campo único de búsqueda de producto que Cotizaciones (ya no hay un desplegable del
+      catálogo entero + un campo de texto separado).
+- [ ] Repetir las pruebas de Enter/Tab/foco de más arriba, ahora en Pedidos.
+- [ ] Cargar un pedido con un ítem con IVA distinto de 21% y un "Desc. Global %" — confirmar que
+      el resumen muestra Neto/IVA solo si el cliente es Responsable Inscripto (factura A);
+      Consumidor Final no debería mostrar ese desglose.
+- [ ] Editar un pedido en Borrador (agregar un ítem, sacar otro, modificar un tercero) y revisar
+      su Historial de cambios en el detalle — mismo criterio que Cotizaciones: solo lo que
+      realmente cambió.
+- [ ] Confirmar que un pedido que YA NO está en Borrador (Confirmado, En Preparación, Facturado)
+      **no muestra el botón Editar** ni en la tabla ni en el detalle — es más estricto que
+      Cotizaciones a propósito, porque un pedido confirmado puede tener Entregas generadas.
+
+---
+
 ## ✅ Pedidos: paridad con Cotizaciones — IVA, descuento global, edición con historial (13/08)
 
 Pedido explícito de Luciano: "aplicar lo que tengamos en cotización... todo lo que construimos".
