@@ -1,5 +1,39 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Cotizaciones: edición con historial + IVA por línea + descuento global (12/08)
+
+Pedido de Luciano, investigado contra SAP B1 y el mercado (Salesforce/HubSpot/Zoho/QuickBooks
+Estimates) antes de construir — las tres fuentes convergieron en la misma regla, aplicada acá:
+
+- **Edición**: nueva RPC `actualizar_cotizacion` (SECURITY DEFINER, transacción atómica
+  cabecera+ítems). Editable en Borrador/Enviada/Aprobada/Rechazada; **bloqueada una vez
+  Convertida** (ya generó una venta real — el cambio va en ese documento, no reescribiendo el
+  original). Botón "Editar" en el detalle reusa el mismo modal/form de "Nueva Cotización".
+- **Historial de cambios**: reusa `audit_log`/`fn_audit_trigger()` que YA existía (mig.001) y
+  YA estaba enganchada a `cotizaciones` — solo faltaba engancharla a `cotizacion_items`
+  (mig.318). Vista legible en el detalle con toggle a JSON crudo, mismo patrón que "Ver detalle
+  técnico" del Monitor ARCA.
+- **IVA por línea**: `cotizacion_items.alicuota_iva` nueva (mismo patrón que
+  `comprobante_items`/`devolucion_items`, mig.262), autocompletada desde `productos.alicuota_iva`
+  al elegir un producto. La letra probable (A/B/C) sale de `determinarTipoComprobante()` — la
+  misma función que ya deciden las facturas reales — **no un toggle manual en Configuración**
+  (se descartó esa idea: podría desincronizarse de lo que la ley determina según la condición de
+  IVA del emisor y el receptor). Neto/IVA se muestran solo si da "A", igual que `FacturaPDF.jsx`
+  ya hace — aplicado también al PDF de la cotización.
+- **Descuento global**: `cotizaciones.descuento` ya existía desde la migración original (002,
+  nunca conectado a la UI) — ahora tiene su campo en el formulario, aplicado después de los
+  descuentos por línea (mismo orden que SAP).
+
+Verificado: 153/153 tests, `eslint` 0 errores, `vite build` limpio. La RPC se probó contra un
+comprobante real (COT-00006) dentro de una transacción con `ROLLBACK` — cálculos exactos y el
+guard de "convertida" bloqueando correctamente (probado contra COT-00001), sin persistir nada.
+También se encontró y corrigió al pasar: `anon` podía ejecutar la RPC pese al `REVOKE ALL FROM
+PUBLIC` (Supabase da grants por defecto a `anon` en funciones nuevas, no cubiertos por ese
+revoke genérico — mig.318b).
+
+De paso, mientras se armaba esto: el combo de productos cortaba a 10 resultados incluso con el
+buscador vacío (con Nalux en 17 productos activos, 7 nunca aparecían) — subido a 50.
+
 ## 🔧 Escaneo por cámara — cuelgue real en producción, cambiado a diagnóstico directo (12/08)
 
 Nadia probó el escaneo en tanda en producción y encontró un problema más serio que el anterior:
