@@ -1,5 +1,27 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Barrido general — 2° bug real encontrado y ARREGLADO (13/08)
+
+A pedido de Nadia ("hacé un barrido de todo para ver si no quedó algún bug suelto"), después del
+checklist de Cotizaciones/Pedidos (ver sección de abajo):
+
+**🐛→✅ Bug real, corregido:** el detalle abierto de un Pedido **no se refrescaba al avanzar de
+estado** (Borrador→Confirmado→En Preparación) — la mutación se guardaba bien en la base (la fila
+de la tabla sí cambiaba), pero el modal seguía mostrando el estado viejo hasta cerrarlo y
+reabrirlo. **Es el mismo bug exacto que Luciano ya había encontrado y corregido el 11/08 en
+Cotizaciones/OC/Proveedores** (commit `f137a54`), pero ese fix nunca llegó a Pedidos. Causa
+distinta porque Pedidos no usa react-query para el detalle (era una key mal invalidada en los
+otros 3) sino un estado plano (`detailPedido`) que `handleAvanzar` nunca actualizaba. Corregido:
+sincronizarlo a mano cuando el pedido mutado es el que está abierto. **Verificado en vivo**:
+avancé PED-20260813-001 dos veces seguidas sin cerrar el modal, se actualizó solo cada vez.
+
+**Barrido de consola:** las 10 secciones principales de la app (Cotizaciones, Pedidos, Entregas,
+Facturas, Órdenes de Compra, Inventario, Bancos, Cheques, Plan de Cuentas, Configuración) sin
+errores nuevos — solo el warning preexistente y no relacionado de `TopClientes.jsx`. Descarga de
+PDF de una cotización probada en vivo (no solo por código): abre sin error.
+
+Verificado: `eslint` 0 errores, 156/156 tests, `vite build` limpio.
+
 ## ✅ Checklist Cotizaciones/Pedidos probado en vivo por Claude — 12/13 OK, 1 bug real (13/08)
 
 Nadia pidió correr en su lugar el checklist que había quedado pendiente (ver más abajo, ahora
