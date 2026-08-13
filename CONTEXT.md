@@ -34,6 +34,34 @@ revoke genérico — mig.318b).
 De paso, mientras se armaba esto: el combo de productos cortaba a 10 resultados incluso con el
 buscador vacío (con Nalux en 17 productos activos, 7 nunca aparecían) — subido a 50.
 
+### Fixes posteriores encontrados por Luciano probando en vivo (13/08)
+
+1. **Enter en el combo de productos agregaba fila en vez de seleccionar** — el atajo "Enter
+   agrega ítem" le ganaba al Enter de confirmar el producto resaltado en el desplegable. Ahora
+   Enter prioriza seleccionar el producto si el desplegable está abierto con resultados.
+2. **Tab después de elegir un producto saltaba a Cliente** en vez de seguir en la fila — el
+   `<button>` del desplegable se desmontaba al seleccionar y el navegador perdía el foco
+   (reseteado a `<body>`), así el siguiente Tab arrancaba desde el principio del formulario.
+   Ahora se reenfoca Cantidad explícitamente después de seleccionar (click o Enter).
+3. **Los totales no mostraban el descuento por línea** — "Subtotal" ya venía con los descuentos
+   de línea aplicados en silencio, así un ítem con % Desc. propio y 0% global no dejaba ningún
+   rastro visible en el resumen. Ahora "Subtotal" es precio de lista sin descuentos y
+   "Descuento" suma línea + global — mismo criterio que ya usaba `CotizacionPDF.jsx` (que nunca
+   tuvo este bug). Aplicado también en `ModalDetalleCotizacion.jsx`.
+4. **Historial de cambios con ruido inentendible** — cada guardado de una edición borraba y
+   reinsertaba TODOS los ítems (mig.318 original), así el historial mostraba cada ítem como
+   "quitado"+"agregado" en cada save, se hubiera tocado o no. Corregido en mig.319: la RPC ahora
+   recibe el `id` de cada ítem existente y diffea — `UPDATE` solo si algo cambió de verdad
+   (`IS DISTINCT FROM` campo a campo), `INSERT` solo lo nuevo, `DELETE` solo lo sacado. Un ítem
+   intacto no genera ninguna fila de auditoría. **Patrón a replicar tal cual en Pedidos/OC** — no
+   repetir el delete-all+insert-all original.
+
+Verificado: 156/156 tests, `eslint` 0 errores, `vite build` limpio. La RPC v2 se probó contra
+COT-00025 (real, con descuento de línea) dentro de transacciones con `ROLLBACK`: edición con un
+solo campo cambiado → 1 fila de auditoría (no 3); ítem nuevo agregado → 1 INSERT; ítem quitado →
+1 DELETE; ítems intactos → 0 filas; guard de "convertida" (COT-00001) sigue bloqueando. `anon`
+sigue sin poder ejecutar la RPC (`has_function_privilege` en false). Sin persistir nada.
+
 ## 🔧 Escaneo por cámara — cuelgue real en producción, cambiado a diagnóstico directo (12/08)
 
 Nadia probó el escaneo en tanda en producción y encontró un problema más serio que el anterior:
