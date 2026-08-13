@@ -403,6 +403,12 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
     else {
       toast({ title: `Pedido ${pedido.numero} → ${getEstado(e.next).label}` });
       fetchAll();
+      // Mismo bug encontrado y corregido por Luciano en Cotizaciones/OC/Proveedores
+      // (mig. f137a54): la mutación guarda bien, pero si el detalle sigue abierto
+      // se queda mostrando el estado viejo — acá el "detalle" es un objeto plano
+      // (`detailPedido`), no una query de react-query, así que la forma de
+      // corregirlo es sincronizarlo a mano en vez de invalidar una key.
+      setDetailPedido(prev => (prev?.id === pedido.id ? { ...prev, estado: e.next } : prev));
     }
   };
 
