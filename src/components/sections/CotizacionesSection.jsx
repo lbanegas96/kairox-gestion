@@ -296,6 +296,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
       descuento: full.descuento ? String(full.descuento) : '',
     });
     setItems((full.cotizacion_items ?? []).map(i => ({
+      id: i.id,
       descripcion: i.descripcion,
       cantidad: i.cantidad,
       precio_unitario: i.precio_unitario,
@@ -353,23 +354,34 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
     const cant = parseInt(i.cantidad) || 0;
     const precio = parseNumberLocale(i.precio_unitario) || 0;
     const descPct = parseNumberLocale(i.descuento_item) || 0;
-    const bruto = cant * precio * (1 - descPct / 100);
+    // "subtotal" es precio de lista sin ningún descuento (cant × precio) —
+    // mismo criterio que ya usa CotizacionPDF.jsx para poder mostrar una línea
+    // de "Descuento" que sume línea + global. Antes acá "subtotal" ya venía
+    // con el descuento por línea aplicado en silencio, así que un ítem con
+    // % Desc. > 0 no dejaba ningún rastro visible en los totales (bug real
+    // reportado por Luciano 13/08).
+    const brutoLista = cant * precio;
+    const brutoConDescLinea = brutoLista * (1 - descPct / 100);
     const factor = FACTOR_IVA[i.alicuota_iva] ?? 1;
-    const neto = bruto / factor;
-    acc.subtotal += bruto;
+    const neto = brutoConDescLinea / factor;
+    acc.subtotal += brutoLista;
+    acc.subtotalConDescLinea += brutoConDescLinea;
     acc.subtotalNeto += neto;
-    acc.subtotalIva += bruto - neto;
+    acc.subtotalIva += brutoConDescLinea - neto;
     return acc;
-  }, { subtotal: 0, subtotalNeto: 0, subtotalIva: 0 });
+  }, { subtotal: 0, subtotalConDescLinea: 0, subtotalNeto: 0, subtotalIva: 0 });
   // Descuento global se aplica DESPUÉS de los descuentos por línea (mismo orden
   // que SAP), y se escala proporcionalmente sobre neto/IVA ya calculados — así
   // neto + iva sigue dando exacto el total, sin importar cuántas alícuotas
   // distintas se mezclen en los ítems.
   const descuentoGlobalPct = parseNumberLocale(form.descuento) || 0;
   const factorDescGlobal = 1 - descuentoGlobalPct / 100;
-  totales.total = totales.subtotal * factorDescGlobal;
+  totales.total = totales.subtotalConDescLinea * factorDescGlobal;
   totales.neto = totales.subtotalNeto * factorDescGlobal;
   totales.iva = totales.subtotalIva * factorDescGlobal;
+  // Descuento mostrado = TODO lo que se restó del precio de lista (línea + global
+  // combinados), no solo el % global — así una línea con descuento propio y
+  // 0% global ya no queda invisible en el resumen.
   totales.descuento = totales.subtotal - totales.total;
 
   const handleSubmit = (e) => {

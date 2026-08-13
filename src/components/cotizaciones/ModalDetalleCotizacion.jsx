@@ -121,7 +121,14 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, o
               const monedaDisp = esExtranjera ? detalle.moneda : 'ARS';
               const simbolo = esExtranjera ? `${detalle.moneda} ` : '$';
               const items = detalle.cotizacion_items ?? [];
+              // Precio de lista SIN ningún descuento (ni línea ni global) — mismo
+              // criterio que ya usa CotizacionPDF.jsx. Antes acá se sumaba
+              // directo item.subtotal (que ya venía con el descuento por línea
+              // aplicado), así una línea con % Desc. propio y 0% global no dejaba
+              // ningún rastro visible en el detalle (bug real, 13/08).
+              const subtotalListaSinDescuentos = items.reduce((s, i) => s + Number(i.cantidad) * Number(i.precio_unitario), 0);
               const subtotalBruto = items.reduce((s, i) => s + Number(i.subtotal), 0);
+              const descuentoTotal = subtotalListaSinDescuentos - Number(detalle.total);
               // Mismo criterio que FormNuevaCotizacion/FacturaPDF: precio_unitario ya
               // incluye IVA, se separa dividiendo por el factor de la alícuota.
               const FACTOR_IVA = { '21': 1.21, '10.5': 1.105 };
@@ -150,11 +157,17 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, o
                     ))}
                   </tbody>
                   <tfoot>
-                    {detalle.descuento > 0 && (
-                      <tr>
-                        <td colSpan={4} className="pt-3 text-right text-xs text-kx-red">Descuento global ({detalle.descuento}%)</td>
-                        <td className="pt-3 text-right text-xs text-kx-red">-{simbolo}{fmt(subtotalBruto - detalle.total)}</td>
-                      </tr>
+                    {descuentoTotal > 0.005 && (
+                      <>
+                        <tr>
+                          <td colSpan={4} className="pt-3 text-right text-xs text-kx-text-3">Subtotal</td>
+                          <td className="pt-3 text-right text-xs text-kx-text-3">{simbolo}{fmt(subtotalListaSinDescuentos)}</td>
+                        </tr>
+                        <tr>
+                          <td colSpan={4} className="text-right text-xs text-kx-red">Descuento{detalle.descuento > 0 ? ` (incl. ${detalle.descuento}% global)` : ''}</td>
+                          <td className="text-right text-xs text-kx-red">-{simbolo}{fmt(descuentoTotal)}</td>
+                        </tr>
+                      </>
                     )}
                     {discrimina && (
                       <>

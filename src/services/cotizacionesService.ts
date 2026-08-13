@@ -131,13 +131,16 @@ export const cotizacionesService = {
   },
 
   // Solo editable mientras la cotización no esté "convertida" — la RPC lo revalida server-side
-  // (no confiar solo en que el frontend oculte el botón). Reemplaza TODOS los ítems (delete +
-  // insert atómico dentro de la RPC), no intenta diffear fila por fila.
+  // (no confiar solo en que el frontend oculte el botón). Manda el `id` de cada ítem existente
+  // (mig.319) para que la RPC pueda diffear fila por fila en vez de borrar y recrear todo en
+  // cada guardado — eso generaba un historial de auditoría ilegible (todos los ítems como
+  // "quitado"+"agregado" en cada edición, aunque no hubieran cambiado).
   async update(
     cotizacionId: string,
     { cliente, items, notas, condicionesPago, fechaVencimiento, moneda = 'ARS', tipoCambioTasa = 1, descuentoGlobal = 0 }: UpdateCotizacionPayload
   ): Promise<Cotizacion> {
     const itemsPayload = items.map((item) => ({
+      id: item.id ?? null,
       producto_id: item.producto_id ?? null,
       descripcion: item.descripcion ?? '',
       cantidad: parseFloat(String(item.cantidad)) || 0,

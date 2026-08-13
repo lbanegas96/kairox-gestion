@@ -48,6 +48,7 @@ function FormNuevaCotizacion({
   // dentro de un <form> dispara el submit (guardar la cotización a medio
   // cargar) en vez de nada — efecto secundario que esto corrige de paso.
   const descRefs = useRef([]);
+  const cantRefs = useRef([]);
   const prevItemsLength = useRef(items.length);
   useEffect(() => {
     if (items.length > prevItemsLength.current) {
@@ -63,6 +64,19 @@ function FormNuevaCotizacion({
     }
   };
 
+  // Elegir un producto del desplegable (click o Enter) hacía perder el foco:
+  // el <button> clickeado se desmonta apenas selectProducto cierra el
+  // desplegable, y como el elemento enfocado desaparece del DOM el navegador
+  // resetea el foco a <body> — el siguiente Tab arrancaba de cero desde el
+  // primer campo del formulario (Cliente) en vez de seguir en la fila.
+  // Reenfocar Cantidad a mano después de seleccionar evita ese salto y de
+  // paso deja el cursor donde el usuario sigue completando el ítem.
+  const selectProductoYAvanzar = (idx, prod) => {
+    selectProducto(idx, prod);
+    cantRefs.current[idx]?.focus();
+    cantRefs.current[idx]?.select?.();
+  };
+
   // Descripción/Producto necesita su propio handler: si el desplegable de
   // autocompletar está abierto con resultados, Enter debe elegir ese producto
   // (como en cualquier combo) en vez de agregar una fila nueva — si no, el
@@ -73,7 +87,7 @@ function FormNuevaCotizacion({
       e.preventDefault();
       const results = prodOpen[idx] ? (prodResults[idx] ?? []) : [];
       if (results.length > 0) {
-        selectProducto(idx, results[0]);
+        selectProductoYAvanzar(idx, results[0]);
         return;
       }
       addItem();
@@ -252,7 +266,7 @@ function FormNuevaCotizacion({
                   {prodOpen[idx] && (prodResults[idx] ?? []).length > 0 && (
                     <div className="absolute top-full left-0 right-0 z-30 bg-kx-surface dark:bg-kx-surface border border-kx-border dark:border-kx-border rounded-lg shadow-xl mt-1 max-h-56 overflow-y-auto">
                       {prodResults[idx].map(p => (
-                        <button key={p.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-kx-surface-2 dark:hover:bg-slate-800 dark:text-kx-text flex justify-between items-center" onClick={() => selectProducto(idx, p)}>
+                        <button key={p.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-kx-surface-2 dark:hover:bg-slate-800 dark:text-kx-text flex justify-between items-center" onClick={() => selectProductoYAvanzar(idx, p)}>
                           <span className="truncate">{p.nombre}</span>
                           <span className="text-kx-text-3 text-xs ml-2 flex-shrink-0">${Number(p.precio_venta ?? 0).toLocaleString('es-AR')}</span>
                         </button>
@@ -262,7 +276,13 @@ function FormNuevaCotizacion({
                 </div>
                 <div className="col-span-1 space-y-1">
                   <Label className="text-xs dark:text-kx-text-2">Cant.</Label>
-                  <Input type="number" min="1" step="1" value={item.cantidad} onChange={e => updateItem(idx, 'cantidad', e.target.value.replace(/[^\d]/g, ''))} onKeyDown={handleItemRowKeyDown} className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm" />
+                  <Input
+                    ref={el => { cantRefs.current[idx] = el; }}
+                    type="number" min="1" step="1" value={item.cantidad}
+                    onChange={e => updateItem(idx, 'cantidad', e.target.value.replace(/[^\d]/g, ''))}
+                    onKeyDown={handleItemRowKeyDown}
+                    className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm"
+                  />
                 </div>
                 <div className="col-span-2 space-y-1">
                   <Label className="text-xs dark:text-kx-text-2">Unidad</Label>
