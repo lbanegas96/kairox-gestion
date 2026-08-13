@@ -1,5 +1,47 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Pedidos: paridad con Cotizaciones — IVA, descuento global, edición con historial (13/08)
+
+Pedido explícito de Luciano: "aplicar lo que tengamos en cotización... todo lo que construimos".
+Mismo patrón replicado, con las reglas propias de Pedido respetadas:
+
+- **Formulario denso a pantalla completa** (`ModalPedidoForm.jsx`, 96vw/92vh) — reemplaza el
+  `<select>` del catálogo entero + campo de descripción libre separado por un único campo con
+  autocomplete (mismo patrón que `FormNuevaCotizacion.jsx`), atajo Enter para agregar fila, con
+  el fix de foco ya aplicado en Cotizaciones (reenfoca Cantidad después de elegir producto).
+- **IVA por línea**: `pedido_items.alicuota_iva` (mig.320). **Descuento global %**:
+  `pedidos.descuento_global_pct` — columna NUEVA, separada de la `descuento` ya existente (que
+  sigue guardando el monto $ ya calculado, mismo significado que siempre tuvo desde mig.252; no
+  se reutilizó para no romper esa semántica).
+- **Edición atómica con diffing por id DESDE EL INICIO**: RPC `actualizar_pedido` (mig.320) —
+  UPDATE solo lo que cambió, INSERT lo nuevo, DELETE lo sacado. A diferencia de la primera
+  versión de Cotizaciones (que arrancó con delete-all+insert-all y tuvo que corregirse en
+  mig.319 tras el bug de historial con ruido), acá se aplicó el patrón correcto directo — ver
+  `feedback_patron_edicion_historial_documentos.md`.
+- **Guard de edición**: se mantiene la regla YA existente (`estado === 'borrador'`) — más
+  estricta que Cotizaciones a propósito, un pedido confirmado/en preparación puede ya tener
+  Entregas generadas y no hay guard de negocio pensado para permitir editar cantidades después.
+- **Historial de cambios**: reusa `audit_log` — `pedidos` ya estaba enganchada (mig.017);
+  `pedido_items` enganchada ahora (mig.320).
+- **Modal de detalle** agrandado a `max-w-3xl` con columna IVA, desglose Neto/IVA condicional
+  (`discrimina` vía `determinarTipoComprobante`, igual que Cotizaciones), descuento combinado
+  línea+global, botón "Editar Pedido" y la misma sección colapsable de Historial.
+
+**Fuera de alcance a propósito**: no se tocó Entregas ni Facturación (la alícuota de
+`pedido_items` no se propaga automáticamente a esos documentos) — el pedido era aplicar el
+patrón al documento Pedido en sí, no rediseñar el flujo aguas abajo.
+
+De paso: `CotizacionPDF.jsx` ahora también muestra el % de descuento aplicado junto al monto en
+la línea "Descuento" del PDF (antes solo mostraba el monto en pesos).
+
+Verificado en vivo contra producción (PED-20260812-001, real) dentro de transacciones con
+`ROLLBACK`: edición con 1 ítem modificado + 1 agregado + 1 quitado → exactamente 3 filas de
+auditoría (no 6, el ítem sin tocar no generó ninguna), cálculo de subtotal/descuento/total
+exacto, guard de estado no-borrador bloqueando correctamente, `anon` sin poder ejecutar la RPC.
+Sin persistir nada. 156/156 tests, `eslint` 0 errores, `vite build` limpio.
+
+---
+
 ## ✅ Cotizaciones: edición con historial + IVA por línea + descuento global (12/08)
 
 Pedido de Luciano, investigado contra SAP B1 y el mercado (Salesforce/HubSpot/Zoho/QuickBooks
