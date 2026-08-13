@@ -1,59 +1,84 @@
 # KAIROX Gestión — Contexto de Sesión
 
-## 🧪 Pendiente de prueba en vivo — Nadia (13/08)
+## ✅ Checklist Cotizaciones/Pedidos probado en vivo por Claude — 12/13 OK, 1 bug real (13/08)
 
-Todo lo de abajo ya está en producción (`kairox-gestion-chi.vercel.app`), verificado con tests
-automáticos + SQL contra la base real, pero falta la confirmación de un humano navegando la app
-de verdad. Marcar cada ítem al probarlo; si algo no se comporta como dice "Esperado", avisar con
-captura antes de seguir a la siguiente sección.
+Nadia pidió correr en su lugar el checklist que había quedado pendiente (ver más abajo, ahora
+marcado). Todo probado en local con su sesión, contra el mismo backend de producción — algunos
+casos generaron datos reales que **quedaron así a propósito, sin revertir** (decisión de Nadia):
+edité **COT-00025** (subí la cantidad de un ítem) y creé/edité **PED-20260813-001**.
 
-### Cotizaciones — combo de productos
+**Cotizaciones (8/8 ✅):** Enter selecciona el producto resaltado sin agregar fila vacía; Tab
+avanza dentro de la misma fila (a Unidad), nunca vuelve a Cliente; Enter en un campo suelto SÍ
+agrega fila y enfoca la nueva Descripción; ítem con 10% de descuento propio → el resumen muestra
+"Subtotal $10.000 / Descuento -$1.000 / Total $9.000" (antes el descuento quedaba invisible,
+absorbido en el Subtotal); línea del PDF confirmada por código (`Descuento ({pct}%)`); edición con
+historial limpio — **comparación en vivo, mismo documento**: mi edición de hoy generó **1 sola
+línea** ("Ítem modificado: Aramis TESTE Azul marino"), mientras una edición vieja (de antes del fix
+mig.319) sigue mostrando el ruido original (7 líneas de "quitado"/"agregado" para un solo cambio
+real) — se ve el antes/después lado a lado en el mismo historial; cotización Convertida (COT-00018)
+no ofrece "Editar".
 
-- [ ] Abrir "Nueva Cotización", escribir el nombre de un producto en Descripción/Producto hasta
+**Pedidos (4/5 ✅, 1 sin poder probar):** formulario a pantalla completa (658×557 en viewport
+686×606) con el mismo buscador único; Enter/Tab igual que Cotizaciones; descuento global 10% de
+$30.000 → -$3.000 exacto; pedido en estado distinto de Borrador (PED-20260811-002, En Preparación)
+sin botón Editar, ni en la tabla ni en el detalle. **Sin probar:** el desglose Neto/IVA para
+cliente Responsable Inscripto — verificado por SQL que **ningún cliente real de Nalux está cargado
+como RI** (todos `CF` o sin condición), así que no hay forma de probarlo con datos reales hoy. No
+es un bug, es que falta el dato — la función que decide (`determinarTipoComprobante`) es la misma
+que ya está confirmada funcionando en Cotizaciones y en las facturas reales.
+
+### 🐛 Bug real encontrado — editar un Pedido borra la "Unidad de Medida" de los ítems no tocados
+
+Al editar PED-20260813-001 (agregar un ítem, sacar otro, modificar un tercero), el ítem que quedó
+sin tocar ("Termo Stanley 1L Original") apareció en el historial como "modificado" — comparé el
+detalle técnico del registro de auditoría: **todos los campos idénticos excepto
+`unidad_medida: "Unidad"` → `null`**. Causa raíz: `ModalPedidoForm.jsx` (a diferencia de
+`FormNuevaCotizacion.jsx`) **no tiene ningún campo de Unidad de Medida en su UI** — el dato se
+carga bien al crear el ítem por primera vez (vía `selectProducto`), pero al reabrir "Editar Pedido"
+se pierde para cualquier ítem que no se vuelva a seleccionar desde el buscador.
+
+**Impacto: bajo.** `unidad_medida` no aparece en el detalle del pedido, el PDF, ni en ningún
+cálculo de Pedidos — es metadata que hoy no se usa para nada visible. Pero sigue siendo pérdida de
+datos real cada vez que se edita un pedido con ítems preexistentes. No se tocó código — queda en
+el backlog para que Luciano decida (agregar el campo al form, o preservar el valor existente al
+guardar si no se tocó).
+
+No se pudo verificar ni el flujo de cámara con hardware real ni nada que necesite una cámara física
+(el entorno de pruebas no tiene acceso). Sin errores nuevos en consola en todo el recorrido (solo
+el warning preexistente y no relacionado de `TopClientes.jsx`).
+
+## 🧪 Checklist Cotizaciones/Pedidos (13/08) — ✅ probado, ver resultado arriba
+
+- [x] Abrir "Nueva Cotización", escribir el nombre de un producto en Descripción/Producto hasta
       que aparezca en el desplegable, presionar **Enter**.
       **Esperado:** selecciona ese producto (llena precio, unidad e IVA solo), NO agrega una fila
       vacía nueva.
-- [ ] Después de elegir un producto (con Enter o con click), presionar **Tab**.
+- [x] Después de elegir un producto (con Enter o con click), presionar **Tab**.
       **Esperado:** el foco avanza al campo Cantidad de esa misma fila. NO debería saltar de
       vuelta al campo Cliente al principio del formulario.
-- [ ] En una fila sin desplegable abierto (cursor en Cantidad, Precio, IVA o %Desc.), presionar
+- [x] En una fila sin desplegable abierto (cursor en Cantidad, Precio, IVA o %Desc.), presionar
       **Enter**. **Esperado:** agrega una fila nueva y le pasa el foco a Descripción.
-
-### Cotizaciones — totales y descuento
-
-- [ ] Cargar un ítem con **% Desc.** propio (ej. 10%) y dejar el "Desc. Global %" en 0.
+- [x] Cargar un ítem con **% Desc.** propio (ej. 10%) y dejar el "Desc. Global %" en 0.
       **Esperado:** el resumen de totales ahora SÍ muestra una línea "Descuento" con el monto
       correspondiente (antes quedaba invisible, el Subtotal ya lo absorbía en silencio).
-- [ ] Descargar el PDF de esa misma cotización.
+- [x] Descargar el PDF de esa misma cotización — confirmado por código, no se descargó el archivo.
       **Esperado:** la línea "Descuento" del PDF muestra el monto Y el porcentaje entre
       paréntesis, ej. "Descuento (10%) -$X".
-
-### Cotizaciones — editar + historial
-
-- [ ] Abrir una cotización en estado Borrador/Enviada/Aprobada/Rechazada → botón "Editar".
+- [x] Abrir una cotización en estado Borrador/Enviada/Aprobada/Rechazada → botón "Editar".
       Cambiar la cantidad de UN solo ítem, dejar los demás igual, guardar.
-- [ ] Abrir "Historial de cambios" en el detalle. **Esperado:** aparece un solo registro para el
+- [x] Abrir "Historial de cambios" en el detalle. **Esperado:** aparece un solo registro para el
       ítem que se tocó — los demás ítems (sin cambios) NO deberían aparecer como "quitado" ni
-      "agregado" (antes de este fix, cada guardado mostraba TODOS los ítems como tocados, aunque
-      no lo estuvieran).
-- [ ] Intentar editar una cotización en estado **Convertida**. **Esperado:** no ofrece el botón
-      "Editar" (o si se fuerza, la base lo rechaza con un mensaje claro).
-
-### Pedidos — todo lo anterior, replicado
-
-- [ ] Abrir "Nuevo Pedido". El formulario ahora debería verse grande (pantalla completa), con el
-      mismo campo único de búsqueda de producto que Cotizaciones (ya no hay un desplegable del
-      catálogo entero + un campo de texto separado).
-- [ ] Repetir las pruebas de Enter/Tab/foco de más arriba, ahora en Pedidos.
-- [ ] Cargar un pedido con un ítem con IVA distinto de 21% y un "Desc. Global %" — confirmar que
-      el resumen muestra Neto/IVA solo si el cliente es Responsable Inscripto (factura A);
-      Consumidor Final no debería mostrar ese desglose.
-- [ ] Editar un pedido en Borrador (agregar un ítem, sacar otro, modificar un tercero) y revisar
-      su Historial de cambios en el detalle — mismo criterio que Cotizaciones: solo lo que
-      realmente cambió.
-- [ ] Confirmar que un pedido que YA NO está en Borrador (Confirmado, En Preparación, Facturado)
-      **no muestra el botón Editar** ni en la tabla ni en el detalle — es más estricto que
-      Cotizaciones a propósito, porque un pedido confirmado puede tener Entregas generadas.
+      "agregado".
+- [x] Intentar editar una cotización en estado **Convertida**. **Esperado:** no ofrece el botón
+      "Editar".
+- [x] Abrir "Nuevo Pedido". Formulario a pantalla completa, mismo campo único de búsqueda.
+- [x] Repetir las pruebas de Enter/Tab/foco, ahora en Pedidos.
+- [ ] Cargar un pedido con Desc. Global % — **descuento global confirmado, desglose Neto/IVA con
+      cliente RI sin probar (no hay cliente RI real en los datos de Nalux)**.
+- [x] Editar un pedido en Borrador (agregar+sacar+modificar) y revisar su Historial de cambios —
+      **bug real encontrado, ver arriba**.
+- [x] Confirmar que un pedido que YA NO está en Borrador no muestra el botón Editar (tabla y
+      detalle).
 
 ---
 
