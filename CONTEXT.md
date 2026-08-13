@@ -1,5 +1,28 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 📋 Plan en curso: extender el estándar Cotizaciones al resto de comprobantes (13/08)
+
+Ver `PLAN_COMPROBANTES_ESTANDAR.md` en la raíz del repo para el mapeo completo (10 documentos
+auditados contra 8 puntos del estándar) y las 4 fases de ejecución. Progreso:
+
+- **Fase 0 (bugs reales en Factura de Venta) — ✅ ARREGLADA (13/08):**
+  1. El % de descuento por línea se cargaba en la UI pero nunca se guardaba en
+     `comprobante_items` (columna `descuento_pct`, existía sin usar) — quedaba invisible para
+     siempre. Ahora se persiste y se muestra en el resumen de totales y en `FacturaPDF.jsx`
+     ("Descuento (X%) -$Y", mismo formato que `CotizacionPDF.jsx`). El flujo "Copiar a Factura"
+     también copia el descuento del origen.
+  2. `ALICUOTAS` incluía 27%, que viola el CHECK real de la columna — sacado.
+  3. **Nota de Débito emitida no tenía ninguna forma de cancelarse** (a diferencia de Factura y
+     NC) — nueva RPC `cancelar_nota_debito` (mig.321, mismo patrón que `cancelar_nota_credito`
+     mig.267, especular: HABER revierte el DEBE original). `SaleDetailModal.jsx` generalizado
+     para Factura/NC/ND en vez del booleano `esNC` que solo contemplaba 2 casos.
+  Verificado en vivo: ND real creada+cancelada dentro de una transacción con `ROLLBACK` —
+  saldo de cuenta corriente vuelve exacto, guard de doble cancelación funciona, `anon` sin
+  poder ejecutar la RPC. 156/156 tests, `eslint` 0 errores, build limpio.
+- **Fase 1 (Órdenes de Compra, paridad completa)** — siguiente, en curso.
+- Fase 2 (Factura Venta/Compra, consistencia sin edición), Fase 3 (NC/ND), Fase 4 (Devoluciones)
+  — pendientes.
+
 ## ✅ Pedidos: 3° bug del checklist, ARREGLADO — unidad_medida se perdía al editar (13/08)
 
 Luciano se fue a entrenar y pidió seguir sin su presencia con lo que se pudiera. Se tomó el bug
