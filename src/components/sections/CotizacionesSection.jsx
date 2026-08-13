@@ -21,6 +21,11 @@ import { determinarTipoComprobante } from '@/hooks/useAfipConfig';
 // el precio que se muestra es el precio final). Para separar neto/IVA hay que
 // DIVIDIR por el factor de la alícuota, nunca sumarlo — sumarlo duplica el IVA.
 const FACTOR_IVA = { '21': 1.21, '10.5': 1.105 }; // resto (exento/0/no_gravado) → factor 1
+// Bug real encontrado por revisión automática (13/08): sin esto, un typo como "150" en vez
+// de "15" en un % de descuento producía un total negativo en el resumen (y persistido, si
+// no fuera por el clamp del lado del servidor en actualizar_cotizacion/create()). Recibe
+// un número ya parseado (usar junto con parseNumberLocale).
+const clampPct = (n) => Math.min(100, Math.max(0, n || 0));
 
 function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, onVerEntrega, navigateCotizacionId, onNavigated } = {}) {
   const { user } = useAuth();
@@ -276,6 +281,9 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
       moneda: 'ARS', tipoCambioTasa: 1, descuento: '',
     });
     setItems([{ ...EMPTY_ITEM }]);
+    setProdSearch({});
+    setProdResults({});
+    setProdOpen({});
     setTcMissing(false);
     setEditingId(null);
   };
@@ -285,6 +293,9 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
   // Cotización" en vez de duplicar toda esa UI.
   const handleEditarClick = async (cot) => {
     const full = await cotizacionesService.getById(cot.id);
+    setProdSearch({});
+    setProdResults({});
+    setProdOpen({});
     setForm({
       cliente_id: full.cliente_id ?? '',
       cliente_nombre: full.cliente_nombre ?? full.clientes?.nombre ?? '',
@@ -353,7 +364,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
   const totales = items.reduce((acc, i) => {
     const cant = parseInt(i.cantidad) || 0;
     const precio = parseNumberLocale(i.precio_unitario) || 0;
-    const descPct = parseNumberLocale(i.descuento_item) || 0;
+    const descPct = clampPct(parseNumberLocale(i.descuento_item) || 0);
     // "subtotal" es precio de lista sin ningún descuento (cant × precio) —
     // mismo criterio que ya usa CotizacionPDF.jsx para poder mostrar una línea
     // de "Descuento" que sume línea + global. Antes acá "subtotal" ya venía
@@ -374,7 +385,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
   // que SAP), y se escala proporcionalmente sobre neto/IVA ya calculados — así
   // neto + iva sigue dando exacto el total, sin importar cuántas alícuotas
   // distintas se mezclen en los ítems.
-  const descuentoGlobalPct = parseNumberLocale(form.descuento) || 0;
+  const descuentoGlobalPct = clampPct(parseNumberLocale(form.descuento) || 0);
   const factorDescGlobal = 1 - descuentoGlobalPct / 100;
   totales.total = totales.subtotalConDescLinea * factorDescGlobal;
   totales.neto = totales.subtotalNeto * factorDescGlobal;
@@ -407,6 +418,19 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
       .filter(i => i.descripcion && i.cantidad > 0 && i.precio_unitario > 0);
     if (validItems.length === 0) {
       return toast({ title: 'Ítems inválidos', description: 'Revisá cantidades y precios (usar coma para decimales).', variant: 'destructive' });
+    }
+    // Bug real encontrado por revisión automática (13/08): un ítem con descripción pero
+    // cantidad/precio inválido (ej. el usuario borró el precio sin querer al editar) se
+    // sacaba en silencio de validItems — y al EDITAR, el diffing de la RPC lo interpreta
+    // como "se sacó" y lo BORRA de la cotización real, sin ningún aviso. Ahora bloquea el
+    // guardado entero con un error claro en vez de perder la línea calladamente.
+    const conDescripcionSinValidar = items.filter(i => i.descripcion?.trim()).length - validItems.length;
+    if (conDescripcionSinValidar > 0) {
+      return toast({
+        title: 'Hay ítems con datos incompletos',
+        description: `${conDescripcionSinValidar === 1 ? 'Un ítem tiene' : `${conDescripcionSinValidar} ítems tienen`} cantidad o precio vacío/en cero — completalo o quitalo con la papelera antes de guardar.`,
+        variant: 'destructive',
+      });
     }
     const payload = {
       cliente: form.cliente_nombre ? { id: form.cliente_id || null, nombre: form.cliente_nombre } : null,

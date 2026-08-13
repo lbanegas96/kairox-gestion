@@ -19,7 +19,16 @@ auditados contra 8 puntos del estándar) y las 4 fases de ejecución. Progreso:
   Verificado en vivo: ND real creada+cancelada dentro de una transacción con `ROLLBACK` —
   saldo de cuenta corriente vuelve exacto, guard de doble cancelación funciona, `anon` sin
   poder ejecutar la RPC. 156/156 tests, `eslint` 0 errores, build limpio.
-- **Fase 1 (Órdenes de Compra, paridad completa)** — siguiente, en curso.
+- **Fase 1 (Órdenes de Compra, paridad completa) — ✅ ARREGLADA (13/08):** OC no tenía NINGUNA
+  forma de editarse (solo cambiar estado o cancelar) — agregado desde cero, con diffing por id
+  desde el arranque (mig.322: `alicuota_iva`, `descuento_item`, `descuento_global_pct`, RPC
+  `actualizar_orden_compra`, `trg_audit_ordenes_compra_items`). Formulario full-screen con
+  autocomplete robusto (antes mezclaba búsqueda y descripción libre en un campo sin desplegable
+  controlado), atajo Enter con el fix de foco ya probado en Cotizaciones/Pedidos, Neto/IVA
+  SIEMPRE visible en el detalle (a diferencia de Ventas, en Compras no se condiciona a ninguna
+  letra). Editable mientras estado IN ('borrador','enviada') — antes de que haya Recepción
+  generada. Verificado en vivo (OC-00010, ROLLBACK): 1 modificado + 1 agregado → 2 filas de
+  auditoría exactas, guard de estado bloqueando, `anon` sin poder ejecutar la RPC.
 - Fase 2 (Factura Venta/Compra, consistencia sin edición), Fase 3 (NC/ND), Fase 4 (Devoluciones)
   — pendientes.
 

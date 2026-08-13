@@ -1,6 +1,12 @@
 import { supabase } from '@/lib/customSupabaseClient';
 import type { Cotizacion, CotizacionEstado, CotizacionItem, PaginatedResult } from '@/types';
 
+// Bug real encontrado por revisión automática (13/08): sin esto, un typo como "150" en
+// vez de "15" en un % de descuento producía un total negativo persistido en un documento
+// real, sin ningún error. La RPC de edición (actualizar_cotizacion, mig.323) ya clampea
+// del lado del servidor — esto cubre el mismo caso en create(), que no pasa por RPC.
+const clampPct = (n: unknown): number => Math.min(100, Math.max(0, Number(n) || 0));
+
 interface GetAllFilters {
   estado?: CotizacionEstado;
   clienteId?: string | null;
@@ -77,12 +83,13 @@ export const cotizacionesService = {
 
     const subtotal = items.reduce((s, i) => {
       const bruto = (Number(i.cantidad) || 0) * (Number(i.precio_unitario) || 0);
-      const descPct = Number(i.descuento_item) || 0;
+      const descPct = clampPct(i.descuento_item);
       return s + bruto * (1 - descPct / 100);
     }, 0);
     // El descuento global se aplica DESPUÉS de los descuentos por línea — mismo orden que
     // SAP: primero línea, después documento. Nunca al revés (duplicaría el descuento).
-    const total = subtotal * (1 - (Number(descuentoGlobal) || 0) / 100);
+    const descuentoGlobalClamp = clampPct(descuentoGlobal);
+    const total = subtotal * (1 - descuentoGlobalClamp / 100);
 
     const { data: cot, error: cotError } = await supabase
       .from('cotizaciones')
@@ -93,7 +100,7 @@ export const cotizacionesService = {
         cliente_id: cliente?.id ?? null,
         cliente_nombre: cliente?.nombre ?? null,
         subtotal,
-        descuento: Number(descuentoGlobal) || 0,
+        descuento: descuentoGlobalClamp,
         total,
         notas: notas ?? null,
         condiciones_pago: condicionesPago ?? null,
@@ -109,7 +116,7 @@ export const cotizacionesService = {
     const detalles = items.map((item) => {
       const cantidad = parseFloat(String(item.cantidad));
       const precioUnitario = parseFloat(String(item.precio_unitario));
-      const descuentoItem = parseFloat(String(item.descuento_item ?? 0));
+      const descuentoItem = clampPct(item.descuento_item);
       return {
         cotizacion_id: (cot as Cotizacion).id,
         empresa_id: empresaId,

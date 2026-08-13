@@ -1,6 +1,12 @@
 import { supabase } from '@/lib/customSupabaseClient';
 import type { OrdenCompra, OrdenCompraEstado, PaginatedResult, EstadoPago, FacturaProveedor } from '@/types';
 
+// Bug real encontrado por revisión automática (13/08): sin esto, un typo como "150" en vez
+// de "15" en un % de descuento producía un total negativo persistido en un documento real.
+// actualizar_orden_compra (mig.323) ya clampea del lado del servidor para editar — esto
+// cubre create(), que no pasa por RPC.
+const clampPct = (n: unknown): number => Math.min(100, Math.max(0, Number(n) || 0));
+
 interface GetAllFilters {
   estado?: OrdenCompraEstado;
   proveedorId?: string | null;
@@ -78,10 +84,10 @@ export const ordenesCompraService = {
     // Subtotal neto de descuentos por línea, antes del descuento global — mismo orden
     // que Cotizaciones/Pedidos (línea primero, documento después).
     const subtotalConDescLinea = payload.items.reduce(
-      (s, i) => s + i.cantidad_pedida * i.costo_unitario * (1 - (Number(i.descuento_item) || 0) / 100),
+      (s, i) => s + i.cantidad_pedida * i.costo_unitario * (1 - clampPct(i.descuento_item) / 100),
       0
     );
-    const descuentoGlobalPct = Number(payload.descuentoGlobalPct) || 0;
+    const descuentoGlobalPct = clampPct(payload.descuentoGlobalPct);
     const total = subtotalConDescLinea * (1 - descuentoGlobalPct / 100);
 
     const { data: oc, error: ocError } = await supabase
@@ -115,10 +121,10 @@ export const ordenesCompraService = {
       cantidad_pedida: item.cantidad_pedida,
       cantidad_recibida: 0,
       costo_unitario: item.costo_unitario,
-      subtotal: item.cantidad_pedida * item.costo_unitario * (1 - (Number(item.descuento_item) || 0) / 100),
+      subtotal: item.cantidad_pedida * item.costo_unitario * (1 - clampPct(item.descuento_item) / 100),
       unidad_medida: item.unidad_medida ?? null,
       alicuota_iva: item.alicuota_iva ?? '21',
-      descuento_item: Number(item.descuento_item) || 0,
+      descuento_item: clampPct(item.descuento_item),
     }));
 
     const { error: itemsError } = await supabase.from('ordenes_compra_items').insert(items);

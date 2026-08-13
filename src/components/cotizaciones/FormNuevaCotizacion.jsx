@@ -369,7 +369,13 @@ function FormNuevaCotizacion({
           {onCancel && (
             <Button type="button" variant="outline" onClick={onCancel} className="dark:border-kx-border dark:text-slate-300">Cancelar</Button>
           )}
-          <Button type="button" variant="outline" onClick={resetForm} className="dark:border-kx-border dark:text-slate-300">Limpiar</Button>
+          {/* Oculto durante edición (bug real encontrado 13/08): resetForm() también
+              limpia editingId, así que "Limpiar" mid-edición dejaba el modal abierto
+              pero silenciosamente pasado a modo creación — guardar después creaba una
+              cotización duplicada en vez de actualizar la original. */}
+          {!isEditing && (
+            <Button type="button" variant="outline" onClick={resetForm} className="dark:border-kx-border dark:text-slate-300">Limpiar</Button>
+          )}
           <Button
             type="submit"
             disabled={createMutation.isPending || (form.moneda !== 'ARS' && tcMissing)}

@@ -22,6 +22,11 @@ import ModalRegistrarFactura from '@/components/ordenes-compra/ModalRegistrarFac
 // mismo criterio que Cotizaciones/Pedidos/Ventas. Para separar neto/IVA hay que
 // DIVIDIR por el factor de la alícuota, nunca sumarlo.
 const FACTOR_IVA = { '21': 1.21, '10.5': 1.105 };
+// Bug real encontrado por revisión automática (13/08): sin esto, un typo como "150" en vez
+// de "15" en un % de descuento producía un total negativo en el resumen (y persistido, si
+// no fuera por el clamp del lado del servidor en actualizar_orden_compra/create()). Recibe
+// un número ya parseado (usar junto con parseNumberLocale).
+const clampPct = (n) => Math.min(100, Math.max(0, n || 0));
 
 function OrdenesCompraSection() {
   const { user } = useAuth();
@@ -213,6 +218,9 @@ function OrdenesCompraSection() {
     setItems([{ ...EMPTY_ITEM }]);
     setSelectedProv(null);
     setProvSearch('');
+    setProvResults([]);
+    setProdResults({});
+    setProdOpen({});
     setTcMissingOC(false);
     setEditingId(null);
   };
@@ -221,6 +229,8 @@ function OrdenesCompraSection() {
   // ver ModalDetalleOC. Reusa el mismo form/items/modal de "Nueva OC".
   const openEdit = async (oc) => {
     const full = await ordenesCompraService.getById(oc.id);
+    setProdResults({});
+    setProdOpen({});
     setForm({
       proveedor_nombre: full.proveedor_nombre ?? full.proveedores?.nombre ?? '',
       fecha_entrega_esperada: full.fecha_entrega_esperada ?? '',
@@ -296,7 +306,7 @@ function OrdenesCompraSection() {
   const totales = items.reduce((acc, i) => {
     const cant = parseFloat(i.cantidad_pedida) || 0;
     const costo = parseNumberLocale(i.costo_unitario) || 0;
-    const descPct = parseNumberLocale(i.descuento_item) || 0;
+    const descPct = clampPct(parseNumberLocale(i.descuento_item) || 0);
     const brutoLista = cant * costo;
     const brutoConDescLinea = brutoLista * (1 - descPct / 100);
     const factor = FACTOR_IVA[i.alicuota_iva] ?? 1;
@@ -307,7 +317,7 @@ function OrdenesCompraSection() {
     acc.subtotalIva += brutoConDescLinea - neto;
     return acc;
   }, { subtotal: 0, subtotalConDescLinea: 0, subtotalNeto: 0, subtotalIva: 0 });
-  const descuentoGlobalPct = parseNumberLocale(form.descuentoGlobalPct) || 0;
+  const descuentoGlobalPct = clampPct(parseNumberLocale(form.descuentoGlobalPct) || 0);
   const factorDescGlobal = 1 - descuentoGlobalPct / 100;
   totales.total = totales.subtotalConDescLinea * factorDescGlobal;
   totales.neto = totales.subtotalNeto * factorDescGlobal;
@@ -318,6 +328,20 @@ function OrdenesCompraSection() {
     e.preventDefault();
     const validItems = items.filter(i => i.descripcion && i.cantidad_pedida > 0 && (parseNumberLocale(i.costo_unitario) || 0) > 0);
     if (!validItems.length) { toast({ title: 'Agrega al menos un ítem válido', variant: 'destructive' }); return; }
+    // Bug real encontrado por revisión automática (13/08): antes, un ítem con descripción
+    // pero cantidad/costo inválido (ej. el usuario borró el precio sin querer al editar)
+    // se sacaba en silencio de validItems — y al EDITAR, el diffing de la RPC lo interpreta
+    // como "se sacó" y lo BORRA de la orden real, sin ningún aviso. Ahora bloquea el guardado
+    // entero con un error claro en vez de perder la línea calladamente.
+    const conDescripcionSinValidar = items.filter(i => i.descripcion?.trim()).length - validItems.length;
+    if (conDescripcionSinValidar > 0) {
+      toast({
+        title: 'Hay ítems con datos incompletos',
+        description: `${conDescripcionSinValidar === 1 ? 'Un ítem tiene' : `${conDescripcionSinValidar} ítems tienen`} cantidad o costo unitario vacío/en cero — completalo o quitalo con la papelera antes de guardar.`,
+        variant: 'destructive',
+      });
+      return;
+    }
     const payload = {
       proveedor_id: selectedProv?.id ?? null,
       proveedor_nombre: form.proveedor_nombre || null,

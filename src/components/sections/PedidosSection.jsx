@@ -23,6 +23,12 @@ import { determinarTipoComprobante } from '@/hooks/useAfipConfig';
 // mismo criterio que en Cotizaciones/Ventas. Para separar neto/IVA hay que
 // DIVIDIR por el factor de la alícuota, nunca sumarlo.
 const FACTOR_IVA = { '21': 1.21, '10.5': 1.105 };
+// Bug real encontrado por revisión automática (13/08): sin esto, un typo como "150" en
+// vez de "15" en un % de descuento producía un total negativo. actualizar_pedido (mig.323)
+// ya clampea del lado del servidor para editar; esto cubre además la vista previa en
+// pantalla y el alta directa (que no pasa por RPC). Recibe un número ya parseado (usar
+// junto con parseNumberLocale, que entiende "12,5" estilo AR).
+const clampPct = (n) => Math.min(100, Math.max(0, n || 0));
 
 // ── Componente principal ───────────────────────────────────────────────────────
 function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navigatePedidoId, onNavigated } = {}) {
@@ -240,7 +246,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
   const totales = form.items.reduce((acc, it) => {
     const cant = parseFloat(it.cantidad) || 0;
     const precio = parseFloat(it.precio_unitario) || 0;
-    const descPct = parseNumberLocale(it.descuento_item) || 0;
+    const descPct = clampPct(parseNumberLocale(it.descuento_item) || 0);
     // "subtotal" es precio de lista sin ningún descuento — mismo criterio que
     // CotizacionesSection.jsx (bug real corregido 13/08: si no, un ítem con %
     // Desc. propio no dejaba rastro visible en los totales).
@@ -254,16 +260,30 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
     acc.subtotalIva += brutoConDescLinea - neto;
     return acc;
   }, { subtotal: 0, subtotalConDescLinea: 0, subtotalNeto: 0, subtotalIva: 0 });
-  const descuentoGlobalPct = parseNumberLocale(form.descuentoGlobalPct) || 0;
+  const descuentoGlobalPct = clampPct(parseNumberLocale(form.descuentoGlobalPct) || 0);
   const factorDescGlobal = 1 - descuentoGlobalPct / 100;
   totales.total = totales.subtotalConDescLinea * factorDescGlobal;
   totales.neto = totales.subtotalNeto * factorDescGlobal;
   totales.iva = totales.subtotalIva * factorDescGlobal;
   totales.descuento = totales.subtotal - totales.total;
 
-  const openNew = () => { setEditingPedido(null); setForm(emptyForm()); setOrigenCotizacionId(null); setIsModalOpen(true); };
+  const openNew = () => {
+    setEditingPedido(null);
+    setForm(emptyForm());
+    setOrigenCotizacionId(null);
+    // Limpia búsquedas de producto que hayan quedado abiertas de una edición
+    // anterior — si no, el desplegable podía aparecer solo en una fila en
+    // blanco recién abierta (mismo hallazgo que en Cotizaciones/OC, 13/08).
+    setProdSearch({});
+    setProdResults({});
+    setProdOpen({});
+    setIsModalOpen(true);
+  };
   const openEdit = (p) => {
     setEditingPedido(p);
+    setProdSearch({});
+    setProdResults({});
+    setProdOpen({});
     setForm({
       cliente_id: p.cliente_id || '',
       notas: p.notas || '',
@@ -309,7 +329,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
     setSaving(true);
     try {
       const clienteObj = clientes.find(c => c.id === form.cliente_id);
-      const descGlobal = parseNumberLocale(form.descuentoGlobalPct) || 0;
+      const descGlobal = clampPct(parseNumberLocale(form.descuentoGlobalPct) || 0);
 
       if (editingPedido) {
         const itemsPayload = validItems.map(it => ({
@@ -318,7 +338,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
           descripcion: it.descripcion,
           cantidad: parseFloat(it.cantidad) || 1,
           precio_unitario: parseFloat(it.precio_unitario) || 0,
-          descuento_item: parseNumberLocale(it.descuento_item) || 0,
+          descuento_item: clampPct(parseNumberLocale(it.descuento_item) || 0),
           unidad_medida: it.unidad_medida || null,
           alicuota_iva: it.alicuota_iva ?? '21',
         }));
@@ -341,7 +361,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
         const itemsCalc = validItems.map(it => {
           const cantidad = parseFloat(it.cantidad) || 1;
           const precioUnitario = parseFloat(it.precio_unitario) || 0;
-          const descuentoItem = parseNumberLocale(it.descuento_item) || 0;
+          const descuentoItem = clampPct(parseNumberLocale(it.descuento_item) || 0);
           return { ...it, cantidad, precioUnitario, descuentoItem, subtotal: cantidad * precioUnitario * (1 - descuentoItem / 100) };
         });
         const subtotalConDescLinea = itemsCalc.reduce((s, it) => s + it.subtotal, 0);
