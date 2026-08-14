@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Truck, Package, Download, Loader2, Send, FileOutput, Ban, Network } from 'lucide-react';
+import { Truck, Package, Download, Loader2, Send, FileOutput, Ban, Network, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { formatDateAR } from '@/lib/dateUtils';
@@ -18,18 +18,35 @@ const ESTADO_LABELS = {
   anulado:   { label: 'Anulado',   className: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' },
 };
 
+// Campo etiquetado de la cabecera — mismo formato que el detalle de Cotización.
+function Campo({ label, children }) {
+  return (
+    <div>
+      <span className="text-kx-text-3 dark:text-kx-text-3 text-xs uppercase tracking-wide">{label}</span>
+      <p className="mt-0.5 truncate" title={typeof children === 'string' ? children : undefined}>{children}</p>
+    </div>
+  );
+}
+
 function ModalDetalleEntrega({
   entrega, onClose, onNavigate,
   onEmitirRemito, emitiendo,
   onDescargarRemito, generandoPdf,
   onCompartirWhatsApp,
   onAnular,
+  onFacturar,
 }) {
   const [mapaOpen, setMapaOpen] = useState(false);
 
   if (!entrega) return null;
 
   const items = entrega.entrega_items ?? [];
+  const totalUnidades = items.reduce((s, i) => s + (Number(i.cantidad) || 0), 0);
+  // Facturable mientras no tenga factura propia y no esté anulada. Se factura a
+  // través del pedido de origen (es el documento que tiene los precios — la
+  // entrega solo mueve mercadería), así que sin pedido no hay nada que facturar:
+  // esas son las entregas implícitas del POS, que ya nacen con su comprobante.
+  const puedeFacturar = !entrega.comprobante_id && entrega.estado !== 'anulado' && !!entrega.pedido_id;
   const estadoCfg = ESTADO_LABELS[entrega.estado] || ESTADO_LABELS.pendiente;
   const origenCfg = ORIGEN_LABELS[entrega.origen] || ORIGEN_LABELS.manual;
 
@@ -55,25 +72,59 @@ function ModalDetalleEntrega({
         </DialogHeader>
 
         <div className="flex-1 min-h-0 overflow-y-auto space-y-4 py-2">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-kx-text-2">Estado</span>
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${estadoCfg.className}`}>
-              {estadoCfg.label}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-kx-text-2">Origen</span>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${origenCfg.className}`}>
-              {origenCfg.label}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-kx-text-2">Cliente</span>
-            <span className="font-medium dark:text-kx-text">{entrega.clientes?.nombre || '—'}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-kx-text-2">Fecha</span>
-            <span className="text-sm dark:text-slate-300">{formatDateAR(entrega.fecha)}</span>
+          {/* Cabecera en grilla — antes eran filas sueltas a lo alto y en pantalla
+              completa quedaba medio modal vacío. Mismo criterio que el detalle de
+              Cotización. Todo esto es info que ya traíamos y no se mostraba
+              (documento y domicilio del cliente, CAI del remito, unidades). */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <Campo label="Estado">
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${estadoCfg.className}`}>
+                {estadoCfg.label}
+              </span>
+            </Campo>
+            <Campo label="Origen">
+              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${origenCfg.className}`}>
+                {origenCfg.label}
+              </span>
+            </Campo>
+            <Campo label="Fecha">
+              <span className="dark:text-slate-300">{formatDateAR(entrega.fecha)}</span>
+            </Campo>
+            <Campo label="Unidades entregadas">
+              <span className="font-mono font-semibold dark:text-kx-text">
+                {totalUnidades.toLocaleString('es-AR')}
+              </span>
+            </Campo>
+
+            <Campo label="Cliente">
+              <span className="font-medium dark:text-kx-text">{entrega.clientes?.nombre || 'Consumidor Final'}</span>
+            </Campo>
+            <Campo label="CUIT / DNI">
+              <span className="font-mono dark:text-slate-300">{entrega.clientes?.documento || '—'}</span>
+            </Campo>
+            <Campo label="Domicilio">
+              <span className="dark:text-slate-300">{entrega.clientes?.direccion || '—'}</span>
+            </Campo>
+            <Campo label="Pedido de origen">
+              <span className="font-mono dark:text-slate-300">{entrega.pedidos?.numero || '—'}</span>
+            </Campo>
+
+            <Campo label="Remito">
+              <span className="font-mono dark:text-slate-300">{entrega.numero_remito || 'Sin emitir'}</span>
+            </Campo>
+            <Campo label="CAI">
+              <span className="font-mono dark:text-slate-300">{entrega.cai_remito_usado || '—'}</span>
+            </Campo>
+            <Campo label="Vto. CAI">
+              <span className="dark:text-slate-300">
+                {entrega.cai_remito_vencimiento_usado ? formatDateAR(entrega.cai_remito_vencimiento_usado) : '—'}
+              </span>
+            </Campo>
+            <Campo label="Factura">
+              <span className="font-mono dark:text-slate-300">
+                {entrega.comprobantes?.numero_venta || 'Sin facturar'}
+              </span>
+            </Campo>
           </div>
 
           {entrega.observaciones && (
@@ -135,13 +186,11 @@ function ModalDetalleEntrega({
             </tbody>
           </table>
 
-          <div className="flex justify-between items-center pt-1">
-            <span className="text-sm text-kx-text-2">Remito</span>
-            {entrega.numero_remito ? (
-              <span className="font-mono text-sm text-kx-text" title={`CAI ${entrega.cai_remito_usado || '—'}`}>
-                {entrega.numero_remito}
-              </span>
-            ) : (
+          {/* El número de remito ya se muestra arriba en la grilla — acá queda
+              solo la acción, cuando todavía no se emitió. */}
+          {!entrega.numero_remito && (
+            <div className="flex justify-between items-center pt-1">
+              <span className="text-sm text-kx-text-2">Remito</span>
               <Button
                 size="sm" variant="outline"
                 disabled={emitiendo}
@@ -151,8 +200,8 @@ function ModalDetalleEntrega({
                 {emitiendo ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <FileOutput className="w-3 h-3 mr-1" />}
                 Emitir remito
               </Button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter className="shrink-0 flex-wrap gap-2 sm:justify-between border-t border-kx-border dark:border-kx-border pt-3">
@@ -168,8 +217,17 @@ function ModalDetalleEntrega({
               </Button>
             )}
           </div>
-          {entrega.numero_remito && (
-            <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap">
+            {puedeFacturar && (
+              <Button
+                onClick={() => onFacturar?.(entrega)}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                <Receipt className="w-4 h-4 mr-2" /> Facturar Entrega
+              </Button>
+            )}
+            {entrega.numero_remito && (
+              <>
               <Button variant="outline" onClick={() => onCompartirWhatsApp?.(entrega)} className="dark:border-kx-border dark:text-slate-300">
                 <Send className="w-4 h-4 mr-2" /> WhatsApp
               </Button>
@@ -179,8 +237,9 @@ function ModalDetalleEntrega({
                   : <><Download className="w-4 h-4 mr-2" /> Descargar PDF</>
                 }
               </Button>
-            </div>
-          )}
+              </>
+            )}
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

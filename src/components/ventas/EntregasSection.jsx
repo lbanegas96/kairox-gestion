@@ -14,6 +14,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { getEmpresaParaPDF } from '@/lib/empresaUtils';
 import ModalDetalleEntrega from '@/components/ventas/ModalDetalleEntrega';
 import ModalNuevaEntrega from '@/components/ventas/ModalNuevaEntrega';
+import NuevaVentaModal from '@/components/ventas/NuevaVentaModal';
 
 const ORIGEN_LABELS = {
   implicita: { label: 'POS',    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
@@ -55,6 +56,11 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
   const [isNuevaOpen, setIsNuevaOpen] = useState(false);
   const [nuevaForm, setNuevaForm] = useState({ cliente_id: '', observaciones: '', items: [{ producto_id: '', cantidad: 1 }] });
   const [savingNueva, setSavingNueva] = useState(false);
+  // Facturar desde la entrega: se factura el pedido de origen (es el que tiene
+  // los precios). NuevaVentaModal ya detecta que el pedido tuvo una entrega
+  // confirmada y no vuelve a descontar stock.
+  const [pedidoAFacturar, setPedidoAFacturar] = useState(null);
+  const [entregaFacturando, setEntregaFacturando] = useState(null);
 
   const viewEntrega = entregas.find(e => e.id === viewEntregaId) ?? null;
 
@@ -166,6 +172,43 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
     } finally {
       setEmitiendoId(null);
     }
+  };
+
+  const handleFacturarEntrega = async (entrega) => {
+    if (!entrega?.pedido_id) return;
+    const { data, error } = await supabase
+      .from('pedidos')
+      .select('*, pedido_items(*)')
+      .eq('id', entrega.pedido_id)
+      .eq('empresa_id', user.empresa_id)
+      .maybeSingle();
+    if (error || !data) {
+      toast({ title: 'No se pudo abrir la facturación', description: error?.message ?? 'No se encontró el pedido de origen.', variant: 'destructive' });
+      return;
+    }
+    setEntregaFacturando(entrega);
+    setViewEntregaId(null);
+    setPedidoAFacturar(data);
+  };
+
+  // Facturado el pedido, el pedido pasa a 'facturado' (mismo criterio que
+  // PedidosSection) y la entrega queda vinculada al comprobante para que el
+  // Flujo del Documento y el Mapa la muestren como facturada.
+  const handleSaleSuccessDesdeEntrega = async (venta) => {
+    const pedidoId = pedidoAFacturar?.id;
+    const entregaId = entregaFacturando?.id;
+    const comprobanteId = venta?.id ?? venta?.comprobante_id ?? null;
+    setPedidoAFacturar(null);
+    setEntregaFacturando(null);
+
+    if (pedidoId) {
+      await supabase.from('pedidos').update({ estado: 'facturado' }).eq('id', pedidoId).eq('empresa_id', user.empresa_id);
+    }
+    if (entregaId && comprobanteId) {
+      await supabase.from('entregas').update({ comprobante_id: comprobanteId }).eq('id', entregaId).eq('empresa_id', user.empresa_id);
+    }
+    toast({ title: 'Entrega facturada' });
+    await fetchEntregas();
   };
 
   const handleAnularEntrega = async () => {
@@ -372,6 +415,15 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
         generandoPdf={generandoPdfId === viewEntregaId}
         onCompartirWhatsApp={handleShareWhatsApp}
         onAnular={setAnularTarget}
+        onFacturar={handleFacturarEntrega}
+      />
+
+      {/* ── Facturar la entrega (abre el POS con el pedido de origen cargado) ── */}
+      <NuevaVentaModal
+        isOpen={!!pedidoAFacturar}
+        onOpenChange={v => !v && setPedidoAFacturar(null)}
+        pedido={pedidoAFacturar}
+        onSaleSuccess={handleSaleSuccessDesdeEntrega}
       />
 
       {/* ── Confirm anular ───────────────────────────────────────────────── */}
