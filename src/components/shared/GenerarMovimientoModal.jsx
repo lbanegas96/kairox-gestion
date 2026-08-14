@@ -25,6 +25,7 @@ const CONFIG = {
     rpcIdParam: 'p_pedido_id',
     itemIdParam: 'pedido_item_id',
     numeroResultKey: 'numero_entrega',
+    idResultKey: 'entrega_id',
     numeroFallback: 'ENT-???',
     fetchEntidad: async (id, empresaId) => {
       const { data, error } = await supabase
@@ -57,6 +58,7 @@ const CONFIG = {
     rpcIdParam: 'p_orden_compra_id',
     itemIdParam: 'orden_compra_item_id',
     numeroResultKey: 'numero_recepcion',
+    idResultKey: 'recepcion_id',
     numeroFallback: 'REC-???',
     fetchEntidad: async (id, empresaId) => {
       const { data, error } = await supabase
@@ -183,7 +185,10 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
         title: `${cfg.tituloEntidad} ${numero} generada`,
         description: `${totalUnidades} unidad(es) en ${itemsAProcesar.length} ítem(s)`,
       });
-      onSuccess(numero);
+      // El id va junto con el número para que quien lo llame pueda abrir el
+      // documento recién generado (seguir la cadena, como en SAP B1) en vez de
+      // dejar al usuario en el documento de origen.
+      onSuccess(numero, resultado?.[cfg.idResultKey] ?? null);
       onClose();
     } catch (err) {
       toast({ title: `Error al generar ${cfg.tituloEntidad.toLowerCase()}`, description: err.message, variant: 'destructive' });

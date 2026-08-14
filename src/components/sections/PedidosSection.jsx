@@ -483,12 +483,22 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
     setEntregaPedidoId(pedido.id);
   };
 
-  const handleEntregaSuccess = async () => {
+  const handleEntregaSuccess = async (_numero, entregaId) => {
     await fetchAll();
     setEntregasRefreshKey(k => k + 1); // refresca el DocumentFlow del modal de detalle
-    // El detalle queda abierto durante la entrega, así que hay que resincronizarlo
-    // a mano (es un objeto plano, no una query): si no, sigue mostrando
-    // cantidad_entregada = 0 y ofrece "Generar Entrega" de nuevo.
+
+    // Seguir la cadena: la entrega recién generada se abre en su propia pestaña,
+    // igual que en SAP B1 (el documento agregado queda en pantalla). Antes se
+    // volvía al pedido y había que ir a buscarla a mano.
+    if (entregaId && onNavigate) {
+      setIsDetailOpen(false);
+      setDetailPedido(null);
+      onNavigate('entrega', entregaId);
+      return;
+    }
+
+    // Sin navegación disponible, al menos resincronizar el detalle abierto (es un
+    // objeto plano, no una query): si no, sigue mostrando cantidad_entregada = 0.
     if (detailPedido?.id) {
       const { data } = await supabase
         .from('pedidos')
