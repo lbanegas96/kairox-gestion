@@ -3,6 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { cotizacionesService, COTIZACIONES_KEYS } from '@/services/cotizacionesService';
@@ -70,6 +74,12 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
   // Conversión a venta
   const [convertirCot, setConvertirCot] = useState(null);  // cotización completa para convertir
   const [showVentaModal, setShowVentaModal] = useState(false);
+
+  // Copiar a Pedido cuando la cotización YA generó uno — SAP B1 permite copiar
+  // varias veces (una cotización puede entregarse en tandas), pero siempre avisa
+  // antes; sin el aviso se generaban pedidos duplicados sin que nadie se entere
+  // (bug real reportado por Luciano, 13/08).
+  const [copiarDuplicado, setCopiarDuplicado] = useState(null);
 
   // Bloqueo por tipo de cambio faltante
   const [tcMissing, setTcMissing] = useState(false);
@@ -534,13 +544,56 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
       {/* MODAL DETALLE */}
       <ModalDetalleCotizacion
         viewId={viewId} setViewId={setViewId} detalle={detalle}
-        onCopiarAPedido={onCopiarAPedido ? (cot) => { setViewId(null); onCopiarAPedido(cot); } : undefined}
+        onCopiarAPedido={onCopiarAPedido ? async (cot) => {
+          // Se relee de la base en vez de confiar en cot.pedidos: el pedido puede
+          // haberse creado en esta misma sesión desde la pestaña Pedidos, que no
+          // invalida la query de la cotización.
+          const { data: yaCopiada } = await supabase
+            .from('pedidos')
+            .select('id, numero')
+            .eq('cotizacion_id', cot.id)
+            .eq('empresa_id', empresaId)
+            .neq('estado', 'cancelado');
+          if ((yaCopiada ?? []).length > 0) { setCopiarDuplicado({ ...cot, pedidos: yaCopiada }); return; }
+          setViewId(null);
+          onCopiarAPedido(cot);
+        } : undefined}
         onCancelar={(id) => { estadoMutation.mutate({ id, estado: 'cancelada' }); setViewId(null); }}
         onVerPedido={onVerPedido ? (id) => { setViewId(null); onVerPedido(id); } : undefined}
         onCambiarEstado={(id, estado) => estadoMutation.mutate({ id, estado })}
         onEditar={handleEditarClick}
         discrimina={detalle ? determinarTipoComprobante(empresaCondicionIva, detalle.clientes?.condicion_iva ?? 'CF') === 'A' : false}
       />
+
+      {/* Aviso de copia duplicada — no bloquea (SAP B1 permite copiar en tandas),
+          pero obliga a que sea una decisión consciente. */}
+      <AlertDialog open={!!copiarDuplicado} onOpenChange={v => !v && setCopiarDuplicado(null)}>
+        <AlertDialogContent className="dark:bg-kx-bg dark:border-kx-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="dark:text-kx-text">Esta cotización ya generó un pedido</AlertDialogTitle>
+            <AlertDialogDescription className="dark:text-kx-text-2">
+              {(copiarDuplicado?.pedidos ?? []).length === 1
+                ? <>La cotización <strong>{copiarDuplicado?.numero}</strong> ya fue copiada al pedido <strong>{copiarDuplicado?.pedidos?.[0]?.numero}</strong>.</>
+                : <>La cotización <strong>{copiarDuplicado?.numero}</strong> ya fue copiada a <strong>{(copiarDuplicado?.pedidos ?? []).length} pedidos</strong>.</>}
+              {' '}Si continuás se creará un pedido nuevo y adicional, no se modificará el existente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="dark:text-kx-text dark:border-kx-border">Volver</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const cot = copiarDuplicado;
+                setCopiarDuplicado(null);
+                setViewId(null);
+                onCopiarAPedido?.(cot);
+              }}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Crear otro pedido igual
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

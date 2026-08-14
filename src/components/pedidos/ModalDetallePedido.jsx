@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FileText, Check, Truck, ArrowRight, Receipt, Network, Pencil, History, ChevronDown, ChevronRight, Code2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { formatDateAR } from '@/lib/dateUtils';
 import { formatCurrency } from '@/lib/currencyUtils';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -66,7 +66,7 @@ function ModalDetallePedido({
       {/* Mismo formato grande que Cotizaciones — consistencia pedida por
           Luciano (13/08): "aplicar lo que tengamos en cotización... los
           tamaños". */}
-      <DialogContent className="max-w-3xl dark:bg-kx-bg dark:border-kx-border max-h-[92vh] overflow-y-auto">
+      <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] flex flex-col dark:bg-kx-bg dark:border-kx-border">
         {detailPedido && (() => {
           const e          = getEstado(detailPedido.estado);
           const items      = detailPedido.pedido_items || [];
@@ -101,7 +101,7 @@ function ModalDetallePedido({
 
           return (
             <>
-              <DialogHeader>
+              <DialogHeader className="shrink-0">
                 <DialogTitle className="flex items-center gap-2 dark:text-kx-text">
                   <FileText className="h-5 w-5 text-kx-blue" />
                   Pedido {detailPedido.numero}
@@ -110,7 +110,7 @@ function ModalDetallePedido({
                   Detalle completo del pedido
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 py-2">
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-4 py-2">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-kx-text-2">Estado</span>
                   <div className="flex items-center gap-2">
@@ -300,11 +300,21 @@ function ModalDetallePedido({
                   )}
                 </div>
 
-                <div className="flex flex-col gap-2">
+              </div>
+
+              {/* Acciones fijas al pie — el documento recién creado queda abierto
+                  y el paso siguiente de la cadena (confirmar → entregar → facturar)
+                  tiene que estar siempre a la vista, sin scrollear por debajo del
+                  historial. Cerrar es decisión del usuario. */}
+              <DialogFooter className="shrink-0 flex-wrap gap-2 sm:justify-between border-t border-kx-border dark:border-kx-border pt-3">
+                <Button variant="outline" onClick={() => setIsDetailOpen(false)} className="dark:border-kx-border dark:text-slate-300">
+                  Cerrar
+                </Button>
+                <div className="flex gap-2 flex-wrap">
                   {onEditar && ESTADOS_EDITABLES.includes(detailPedido.estado) && (
                     <Button
                       variant="outline"
-                      className="w-full dark:border-kx-border dark:text-slate-300"
+                      className="dark:border-kx-border dark:text-slate-300"
                       onClick={() => onEditar(detailPedido)}
                     >
                       <Pencil className="h-4 w-4 mr-2" />
@@ -315,7 +325,7 @@ function ModalDetallePedido({
                   {puedeEntrega && (
                     <Button
                       variant="outline"
-                      className="w-full border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300"
+                      className="border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300"
                       onClick={() => handleAbrirGenerarEntrega(detailPedido)}
                     >
                       <Truck className="h-4 w-4 mr-2" />
@@ -326,7 +336,7 @@ function ModalDetallePedido({
                   {e.next && (
                     e.next === 'facturado' ? (
                       <Button
-                        className="w-full bg-green-600 hover:bg-green-700 text-white"
+                        className="bg-green-600 hover:bg-green-700 text-white"
                         onClick={() => handleFacturarPedido(detailPedido)}
                       >
                         <Receipt className="h-4 w-4 mr-2" />
@@ -334,8 +344,8 @@ function ModalDetallePedido({
                       </Button>
                     ) : (
                       <Button
-                        className="w-full bg-green-600 hover:bg-green-700 text-white"
-                        onClick={() => { handleAvanzar(detailPedido); setIsDetailOpen(false); }}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                        onClick={() => handleAvanzar(detailPedido)}
                       >
                         <ArrowRight className="h-4 w-4 mr-2" />
                         Avanzar a {getEstado(e.next).label}
@@ -343,7 +353,7 @@ function ModalDetallePedido({
                     )
                   )}
                 </div>
-              </div>
+              </DialogFooter>
             </>
           );
         })()}

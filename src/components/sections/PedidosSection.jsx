@@ -327,6 +327,11 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       return;
     }
     setSaving(true);
+    // Pedido recién creado — al terminar se abre su detalle en vez de dejar al
+    // usuario en la lista: en SAP B1 el documento agregado queda en pantalla para
+    // poder seguir la cadena (confirmar → entregar) sin volver a buscarlo.
+    // Cerrar es decisión del usuario (Escape / botón Cerrar).
+    let pedidoCreadoId = null;
     try {
       const clienteObj = clientes.find(c => c.id === form.cliente_id);
       const descGlobal = clampPct(parseNumberLocale(form.descuentoGlobalPct) || 0);
@@ -405,11 +410,24 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
           }))
         );
         if (itemsError) throw itemsError;
+        pedidoCreadoId = pedido.id;
         toast({ title: `Pedido ${numero} creado` });
       }
       setIsModalOpen(false);
       setOrigenCotizacionId(null);
-      fetchAll();
+      await fetchAll();
+
+      if (pedidoCreadoId) {
+        const { data: nuevo } = await supabase
+          .from('pedidos')
+          .select('*, pedido_items(*), cotizaciones(numero), clientes(condicion_iva)')
+          .eq('id', pedidoCreadoId)
+          .single();
+        if (nuevo) {
+          setDetailPedido(nuevo);
+          setIsDetailOpen(true);
+        }
+      }
     } catch (err) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
@@ -465,9 +483,20 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
     setEntregaPedidoId(pedido.id);
   };
 
-  const handleEntregaSuccess = () => {
-    fetchAll();
+  const handleEntregaSuccess = async () => {
+    await fetchAll();
     setEntregasRefreshKey(k => k + 1); // refresca el DocumentFlow del modal de detalle
+    // El detalle queda abierto durante la entrega, así que hay que resincronizarlo
+    // a mano (es un objeto plano, no una query): si no, sigue mostrando
+    // cantidad_entregada = 0 y ofrece "Generar Entrega" de nuevo.
+    if (detailPedido?.id) {
+      const { data } = await supabase
+        .from('pedidos')
+        .select('*, pedido_items(*), cotizaciones(numero), clientes(condicion_iva)')
+        .eq('id', detailPedido.id)
+        .single();
+      if (data) setDetailPedido(data);
+    }
   };
 
   const handleCancelar = async () => {
