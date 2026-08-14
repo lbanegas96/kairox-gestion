@@ -281,6 +281,61 @@ function MapaRelaciones({
     if (!open) { setMapa(null); setFullscreen(false); setPreviewNodo(null); setPreviewItems(null); setActivoId(null); setSinFacturar(null); }
   }, [open]);
 
+  // ── Cadena pre-facturación (Ventas) ─────────────────────────────────────────
+  // Bug real (14/08, Luciano): todo el mapa se armaba anclado en la factura, así
+  // que una Cotización → Pedido → Entrega que todavía no se facturó mostraba un
+  // único nodo suelto, justo el tramo del circuito que más se mira mientras el
+  // negocio está en curso. Acá se arma esa cadena caminando los FK que ya existen
+  // (pedidos.cotizacion_id, entregas.pedido_id) sin depender de comprobante_id.
+  const fetchCadenaPreFactura = async ({ cotizacion = null, pedido = null, entrega = null }) => {
+    const emp = user.empresa_id;
+    let cot = cotizacion;
+    let ped = pedido;
+    let entregas = entrega ? [entrega] : [];
+
+    // Entrega → Pedido
+    if (!ped && entrega?.pedido_id) {
+      const { data } = await supabase.from('pedidos')
+        .select('id, numero, fecha, total, estado, cotizacion_id')
+        .eq('id', entrega.pedido_id).eq('empresa_id', emp).maybeSingle();
+      ped = data;
+    }
+    // Pedido → Cotización
+    if (!cot && ped?.cotizacion_id) {
+      const { data } = await supabase.from('cotizaciones')
+        .select('id, numero, fecha, total, estado')
+        .eq('id', ped.cotizacion_id).eq('empresa_id', emp).maybeSingle();
+      cot = data;
+    }
+    // Cotización → Pedido(s). Una cotización puede haberse copiado a varios
+    // pedidos (SAP permite entregar en tandas), así que se listan todos.
+    let pedidosExtra = [];
+    if (cot) {
+      const { data } = await supabase.from('pedidos')
+        .select('id, numero, fecha, total, estado')
+        .eq('cotizacion_id', cot.id).eq('empresa_id', emp)
+        .order('created_at', { ascending: true });
+      pedidosExtra = (data ?? []).filter(p => p.id !== ped?.id);
+      if (!ped && pedidosExtra.length > 0) { ped = pedidosExtra.shift(); }
+    }
+    // Pedido → Entregas
+    if (ped && entregas.length === 0) {
+      const { data } = await supabase.from('entregas')
+        .select('id, numero_entrega, fecha, estado, origen')
+        .eq('pedido_id', ped.id).eq('empresa_id', emp)
+        .order('created_at', { ascending: true });
+      entregas = data ?? [];
+    }
+
+    const nodos = [
+      ...(cot ? [{ id: cot.id, tipo: 'cotizacion', numero: cot.numero, fecha: cot.fecha, total: cot.total, estado: cot.estado }] : []),
+      ...(ped ? [{ id: ped.id, tipo: 'pedido', numero: ped.numero, fecha: ped.fecha, total: ped.total, estado: ped.estado }] : []),
+      ...pedidosExtra.map(p => ({ id: p.id, tipo: 'pedido', numero: p.numero, fecha: p.fecha, total: p.total, estado: p.estado })),
+      ...entregas.map(e => ({ id: e.id, tipo: 'entrega', numero: e.numero_entrega, fecha: e.fecha, estado: e.estado })),
+    ];
+    return nodos;
+  };
+
   // ── Resolución del punto de entrada ──────────────────────────────────────────
   const resolveAndFetch = async () => {
     setSinFacturar(null);
@@ -295,15 +350,17 @@ function MapaRelaciones({
           .eq('id', cotizacionId).eq('empresa_id', user.empresa_id).maybeSingle();
         if (!data) return setMapa(null);
         if (data.comprobante_id) { setActivoId(cotizacionId); return fetchMapaVenta(data.comprobante_id); }
-        return setSinFacturar({ label: 'Cotización', nodo: { id: data.id, tipo: 'cotizacion', numero: data.numero, fecha: data.fecha, total: data.total, estado: data.estado } });
+        setActivoId(cotizacionId);
+        return setSinFacturar({ label: 'Cotización', nodos: await fetchCadenaPreFactura({ cotizacion: data }) });
       }
       if (pedidoId) {
         const { data } = await supabase.from('pedidos')
-          .select('id, numero, fecha, total, estado, comprobante_id')
+          .select('id, numero, fecha, total, estado, comprobante_id, cotizacion_id')
           .eq('id', pedidoId).eq('empresa_id', user.empresa_id).maybeSingle();
         if (!data) return setMapa(null);
         if (data.comprobante_id) { setActivoId(pedidoId); return fetchMapaVenta(data.comprobante_id); }
-        return setSinFacturar({ label: 'Pedido', nodo: { id: data.id, tipo: 'pedido', numero: data.numero, fecha: data.fecha, total: data.total, estado: data.estado } });
+        setActivoId(pedidoId);
+        return setSinFacturar({ label: 'Pedido', nodos: await fetchCadenaPreFactura({ pedido: data }) });
       }
       if (entregaId) {
         const { data } = await supabase.from('entregas')
@@ -316,7 +373,8 @@ function MapaRelaciones({
           compId = ped?.comprobante_id;
         }
         if (compId) { setActivoId(entregaId); return fetchMapaVenta(compId); }
-        return setSinFacturar({ label: 'Entrega', nodo: { id: data.id, tipo: 'entrega', numero: data.numero_entrega, fecha: data.fecha, estado: data.estado } });
+        setActivoId(entregaId);
+        return setSinFacturar({ label: 'Entrega', nodos: await fetchCadenaPreFactura({ entrega: data }) });
       }
       if (recepcionId) {
         const { data } = await supabase.from('recepciones')
@@ -324,7 +382,8 @@ function MapaRelaciones({
           .eq('id', recepcionId).eq('empresa_id', user.empresa_id).maybeSingle();
         if (!data) return setMapa(null);
         if (data.compra_id) { setActivoId(recepcionId); return fetchMapaCompra(data.compra_id); }
-        return setSinFacturar({ label: 'Recepción', nodo: { id: data.id, tipo: 'recepcion', numero: data.numero_recepcion, fecha: data.fecha, estado: data.estado } });
+        setActivoId(recepcionId);
+        return setSinFacturar({ label: 'Recepción', nodos: [{ id: data.id, tipo: 'recepcion', numero: data.numero_recepcion, fecha: data.fecha, estado: data.estado }] });
       }
       if (devolucionId) {
         const { data } = await supabase.from('devoluciones')
@@ -333,7 +392,8 @@ function MapaRelaciones({
         if (!data) return setMapa(null);
         if (data.tipo === 'cliente' && data.comprobante_id) { setActivoId(devolucionId); return fetchMapaVenta(data.comprobante_id); }
         if (data.tipo === 'proveedor' && data.compra_id)    { setActivoId(devolucionId); return fetchMapaCompra(data.compra_id); }
-        return setSinFacturar({ label: 'Devolución', nodo: { id: data.id, tipo: data.tipo === 'cliente' ? 'devolucion' : 'devolucion_prov', numero: data.numero_devolucion, fecha: data.fecha, estado: data.compensacion } });
+        setActivoId(devolucionId);
+        return setSinFacturar({ label: 'Devolución', nodos: [{ id: data.id, tipo: data.tipo === 'cliente' ? 'devolucion' : 'devolucion_prov', numero: data.numero_devolucion, fecha: data.fecha, estado: data.compensacion }] });
       }
       setMapa(null);
     } catch (err) {
@@ -721,7 +781,14 @@ function MapaRelaciones({
               — no hay cadena para armar, pero tampoco es un error. ── */}
           {!loading && sinFacturar && (
             <div className="flex flex-col items-center gap-3 py-8">
-              <NodoMapa nodo={sinFacturar.nodo} activo onClick={() => openPreview(sinFacturar.nodo)} />
+              <div className="flex items-center gap-2 flex-wrap justify-center">
+                {sinFacturar.nodos.map((n, i) => (
+                  <React.Fragment key={`${n.tipo}-${n.id}`}>
+                    {i > 0 && <ChevronRight className="w-4 h-4 text-kx-text-3 shrink-0" />}
+                    <NodoMapa nodo={n} activo={n.id === activoId} onClick={() => openPreview(n)} />
+                  </React.Fragment>
+                ))}
+              </div>
               <p className="text-xs text-kx-text-3 text-center max-w-xs">
                 {sinFacturar.label} todavía sin facturar — cuando se convierta en factura vas a
                 poder ver la cadena completa acá.

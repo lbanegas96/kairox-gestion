@@ -43,8 +43,10 @@ function ModalDetalleEntrega({
 
   return (
     <Dialog open={!!entrega} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-lg dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      {/* Mismo formato grande que Cotizaciones/Pedidos — consistencia pedida por
+          Luciano (14/08): todos los detalles de documento se ven igual. */}
+      <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] flex flex-col dark:bg-kx-bg dark:border-kx-border">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2 dark:text-kx-text">
             <Truck className="h-5 w-5 text-[rgb(var(--kx-violet))]" />
             Entrega {entrega.numero_entrega}
@@ -52,7 +54,7 @@ function ModalDetalleEntrega({
           <DialogDescription className="dark:text-kx-text-2">Detalle completo de la entrega.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="flex-1 min-h-0 overflow-y-auto space-y-4 py-2">
           <div className="flex justify-between items-center">
             <span className="text-sm text-kx-text-2">Estado</span>
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${estadoCfg.className}`}>
@@ -153,7 +155,7 @@ function ModalDetalleEntrega({
           </div>
         </div>
 
-        <DialogFooter className="flex-wrap gap-2 sm:justify-between">
+        <DialogFooter className="shrink-0 flex-wrap gap-2 sm:justify-between border-t border-kx-border dark:border-kx-border pt-3">
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose} className="dark:border-kx-border dark:text-slate-300">Cerrar</Button>
             {puedeAnular && (
