@@ -1,5 +1,103 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🔴 PENDIENTE #1 para el 15/08 — "Facturar Entrega" abre el POS, no el ERP
+
+Detectado por Luciano probando en vivo la noche del 14/08, **ya en producción, sin arreglar**.
+
+El botón nuevo "Facturar Entrega" (`ModalDetalleEntrega.jsx` → `EntregasSection.jsx`) abre
+`NuevaVentaModal`, que es **el carrito del Punto de Venta**: buscador de productos con stock y
+precio, grilla de métodos de pago (Efectivo / QR MercadoPago / Tarjeta / Transferencia / CC),
+selector de moneda con TC. Nada de eso corresponde a una sección del ERP.
+
+**Por qué está mal (principio SAP):** KAIROX es un ERP con un POS incluido, no un POS con un ERP
+alrededor. El POS es una terminal de mostrador (venta rápida, cobro inmediato); el ERP factura
+documentos (ítems con IVA discriminado por línea, descuentos, condiciones de pago, cuenta
+corriente). Facturar una Entrega es un paso del circuito Order-to-Cash, no una venta de mostrador.
+
+**Qué habría que usar:** `NuevaFacturaModal.jsx` — el formulario de Factura de Venta del ERP, que
+ya tiene ítems con alícuota por línea, descuentos y el desglose Neto/IVA. Habría que poder
+precargarlo desde un pedido/entrega igual que hoy se precarga `NuevaVentaModal`.
+
+**Ojo, es más grande que cambiar un import:** `NuevaFacturaModal` hoy no recibe un pedido/entrega
+como origen (solo `NuevaVentaModal` sabe hacer esa precarga), y el mismo problema afecta a
+"Facturar Pedido" en `PedidosSection.jsx`, que también abre el POS. O sea: es un cambio de
+criterio que toca los dos puntos de entrada a facturación desde el ERP, no solo el de Entregas.
+Luciano lo dejó explícitamente para el 15/08 ("quizás el cambio sea grande").
+
+**Regla que queda escrita:** ninguna sección del ERP (Cotizaciones, Pedidos, Entregas, Facturas,
+Compras) debe abrir `NuevaVentaModal`. Ese modal es exclusivo del Modo Caja / POS.
+
+---
+
+## Sesión del 14/08 (madrugada) — flujo Cotización → Pedido → Entrega
+
+Luciano probó el circuito completo en vivo y salieron 6 hallazgos. Todos arreglados, verificados
+en el navegador contra datos reales y deployados.
+
+**Bugs de flujo (commit `a4c8baf`)**
+1. **Copiar Cotización a Pedido sin ningún aviso** — COT-00027 tenía **3 pedidos** generados sin
+   que nadie se enterara. Ahora confirma antes, mostrando los pedidos que ya existen. No se
+   bloquea (SAP B1 permite copiar en tandas), pero deja de ser silencioso. La verificación relee
+   la base, no la caché de react-query, así que también detecta un pedido creado hace un minuto.
+2. **Al crear un Pedido el modal se cerraba** y dejaba al usuario en la lista, sin camino a la
+   entrega. Ahora el documento recién creado queda abierto con sus acciones de continuación
+   fijas al pie (Confirmar → Generar Entrega → Facturar), igual que en SAP B1: cerrar es decisión
+   del usuario. "Avanzar" ya no cierra el detalle y la entrega lo resincroniza.
+3. **`ModalDetallePedido.jsx` era `max-w-3xl`** mientras Cotizaciones ya estaba a pantalla
+   completa — el comentario del código *ya decía* "mismo formato grande que Cotizaciones", pero
+   el tamaño nunca se había actualizado.
+
+**Bug real de producción en la base (mig.324, commit `aa0ee58`)**
+4. **No se podía generar una Entrega de un pedido sin cliente.** `crear_entrega` usaba
+   `cliente_id IS NULL` como prueba de que el pedido no existe:
+   ```sql
+   SELECT cliente_id INTO v_cliente_id FROM pedidos WHERE id = ...;
+   IF v_cliente_id IS NULL THEN RAISE EXCEPTION 'Pedido no encontrado...';
+   ```
+   Pero KAIROX permite el socio de negocio en texto libre, así que un pedido "Sin cliente" es
+   válido y tiene `cliente_id` NULL → **nunca** se le podía entregar, y el error mentía diciendo
+   que el pedido no existía o era de otra empresa. **`crear_recepcion` tenía el mismo bug con
+   `proveedor_id`**: una OC con el proveedor escrito a mano no se podía recibir jamás.
+   Había 2 pedidos de Nalux bloqueados por esto. Fix: preguntar existencia con `FOUND`.
+5. **La entrega generada no se abría** — había que ir a buscarla a mano a la pestaña Entregas.
+   `crear_entrega`/`crear_recepcion` ya devolvían el id; `GenerarMovimientoModal` solo pasaba el
+   número hacia arriba y tiraba el id. Ahora salta a Entregas con el documento abierto.
+
+**Mapa de Relaciones (commit `a07246d`)**
+6. **El Mapa estaba anclado en la factura.** Si la cadena todavía no se había facturado, mostraba
+   un único nodo suelto con el cartel "todavía sin facturar" — o sea que **todo el tramo
+   Cotización → Pedido → Entrega era invisible**, justo el que más se mira mientras el negocio
+   está en curso. Los vínculos ya existían en la base (`pedidos.cotizacion_id`,
+   `entregas.pedido_id`); nadie los caminaba si no había factura. Verificado en vivo:
+   COT-00029 → PED-20260814-004 → ENT-2026-0137. Si una cotización se copió a varios pedidos,
+   ahora los lista a todos (y el problema del punto 1 se ve de un vistazo).
+
+**Detalle de Entrega (commit `bb30cd3`)**
+7. Modal a pantalla completa + cabecera en grilla con datos que **ya se traían y no se mostraban**:
+   CUIT/DNI y domicilio del cliente, pedido de origen, CAI del remito y su vencimiento, unidades
+   entregadas y número de factura. Botón "Facturar Entrega" (ver PENDIENTE #1: está mal
+   implementado, abre el POS).
+   **`RemitoPDF.jsx` no se tocó a propósito**: ya imprime solo lo obligatorio de ARCA (emisor con
+   CUIT y condición IVA, número, fecha, CAI + vencimiento, receptor, detalle **sin precios**,
+   firma). Criterio de Luciano: el modal puede mostrar todo, el documento legal solo lo obligatorio.
+
+**Decidido y NO construido todavía — Duplicar documentos estilo SAP (para el 15/08)**
+Luciano lo pidió como atajo para acortar pasos, en la misma línea que las teclas rápidas.
+Definiciones que ya dio:
+- Aplica a **todos** los documentos.
+- **Mensaje de advertencia** antes de duplicar, para evitar errores.
+- Al duplicar, **preguntar si vincular el duplicado con el original** en el Mapa de Relaciones
+  (como SAP): si sí, se crea la relación; si no, nace un documento totalmente independiente.
+- Copia **todos los datos menos la fecha** — la fecha se controla, no debe heredar una fecha pasada.
+- Respeta la numeración: correlativo nuevo vía `obtener_proximo_numero`.
+Falta resolver dos casos de riesgo antes de construir: duplicar una **Factura** (no puede nacer
+con CAE) y duplicar una **Entrega** (vuelve a descontar stock).
+
+**Datos de prueba que quedaron en la base** (Nalux, base de test): PED-20260814-001/002/003/004,
+ENT-2026-0136/0137, COT-00029. Movieron stock real de Batidora Eléctrica y Camiseta Argentina.
+
+---
+
 ## ✅ Revisión automática de las Fases 0+1 — 5 bugs reales encontrados y ARREGLADOS (13/08)
 
 A pedido explícito ("desplegá pruebas exhaustivas... si encontrás errores repáralos"), se corrió
