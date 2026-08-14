@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MonedaSelector } from '@/components/ui/MonedaSelector';
 import { formatCurrency } from '@/lib/currencyUtils';
 import { FORMAS_PAGO, EMPTY_ITEM } from './shared';
+import ProductoAutocomplete from '@/components/shared/ProductoAutocomplete';
 
 // Mismo set que el CHECK de ordenes_compra_items.alicuota_iva (mig.322) — igual
 // criterio que ALICUOTAS_COT/ALICUOTAS_PED en Cotizaciones/Pedidos.
@@ -157,29 +158,19 @@ function FormNuevaOC({
           <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
             {items.map((item, idx) => (
               <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-4 space-y-1 relative" data-prod-row>
+                <div className="col-span-4 space-y-1" data-prod-row>
                   <Label className="text-xs dark:text-kx-text-2">Producto / Descripción</Label>
-                  <Input
-                    ref={el => { descRefs.current[idx] = el; }}
+                  <ProductoAutocomplete
+                    inputRef={el => { descRefs.current[idx] = el; }}
                     value={item._prodSearch ?? item.descripcion}
                     onChange={e => { searchProducto(idx, e.target.value); setProdOpen(prev => ({ ...prev, [idx]: true })); }}
                     onFocus={() => setProdOpen(prev => ({ ...prev, [idx]: true }))}
                     onKeyDown={handleDescripcionKeyDown(idx)}
                     placeholder="Buscar producto o describir"
-                    className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm"
-                    autoComplete="off"
+                    open={prodOpen[idx]}
+                    results={prodResults[idx] ?? []}
+                    onSelect={p => selectProductoYAvanzar(idx, p)}
                   />
-                  {prodOpen[idx] && (prodResults[idx] ?? []).length > 0 && (
-                    <div className="absolute top-full left-0 right-0 z-30 bg-kx-surface dark:bg-kx-surface border border-kx-border dark:border-kx-border rounded-lg shadow-xl mt-1 max-h-40 overflow-y-auto">
-                      {prodResults[idx].map(p => (
-                        <button key={p.id} type="button" onClick={() => selectProductoYAvanzar(idx, p)}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-kx-surface-2 dark:hover:bg-slate-800 dark:text-kx-text flex justify-between">
-                          <span>{p.nombre}</span>
-                          <span className="text-kx-text-3 text-xs">Costo: ${p.costo_compra ?? '—'}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
                 <div className="col-span-1 space-y-1">
                   <Label className="text-xs dark:text-kx-text-2">Cant.</Label>

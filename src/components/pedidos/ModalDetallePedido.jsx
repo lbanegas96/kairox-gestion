@@ -209,8 +209,6 @@ function ModalDetallePedido({
                     {items.map(it => {
                       const ent = Number(it.cantidad_entregada || 0);
                       const ped = Number(it.cantidad || 0);
-                      const precio = Number(it.precio_unitario || 0);
-                      const subEntregado = ent * precio;
                       const completo = ent >= ped && ped > 0;
                       return (
                         <tr key={it.id} className="border-b border-slate-100 dark:border-slate-800/50">
@@ -221,7 +219,13 @@ function ModalDetallePedido({
                           </td>
                           <td className="py-2 text-right text-kx-text-3 text-xs">{ALICUOTA_LABEL[it.alicuota_iva] ?? '21%'}</td>
                           <td className="py-2 text-right font-mono dark:text-kx-text">
-                            {formatCurrency(subEntregado, detailPedido.moneda ?? 'ARS')}
+                            {/* Bug real encontrado 14/08 probando el Plan de Nadia: esta columna
+                                usaba cantidad_entregada × precio (el monto YA entregado, que ya
+                                tiene su propio renglón "Total entregado" más abajo) en vez del
+                                subtotal real de la línea — un pedido recién creado, sin nada
+                                entregado, mostraba $0,00 en TODAS las filas. Mismo criterio que
+                                ModalDetalleOC.jsx (Compras), que sí usa item.subtotal directo. */}
+                            {formatCurrency(Number(it.subtotal || 0), detailPedido.moneda ?? 'ARS')}
                           </td>
                         </tr>
                       );

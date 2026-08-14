@@ -57,7 +57,17 @@ const calcNetoIva = (item) => {
   return { neto, iva: bruto - neto };
 };
 
-function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess }) {
+// pedido: cuando viene seteado, este modal factura un Pedido/Entrega del ERP
+// en vez de operar en modo standalone. En ese modo, handleConfirmar llama a
+// la RPC crear_venta (la misma que usa el POS) en lugar del INSERT manual —
+// es la única forma de heredar, sin duplicarla, toda la lógica de Document
+// Flow que esa función ya tiene probada: saltear el descuento de stock si el
+// pedido ya tuvo una Entrega manual, tope de sobre-facturación contra
+// pedido_items, vínculo pedidos.comprobante_id/entregas.comprobante_id y COGS.
+// Ver PENDIENTE #1 (14/08) en CONTEXT.md — antes esto abría NuevaVentaModal
+// (el carrito del POS), que no tiene forma de elegir tipo de comprobante,
+// punto de venta ni referencia del cliente.
+function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedido = null, onSuccess }) {
   const { user }                     = useAuth();
   const { currentSession, isSessionOpen } = useCaja();
   const { toast }                    = useToast();
@@ -120,8 +130,26 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
           });
       });
 
-    // Pre-carga desde comprobante origen (flujo "Copiar a Factura")
-    if (comprobanteOrigen?.id) {
+    // Pre-carga desde Pedido (flujo "Facturar Pedido/Entrega" del ERP).
+    // pedido_items.precio_unitario es SIN descontar (mismo criterio que
+    // ordenes_compra_items/cotizacion_items) y descuento_item es el % —
+    // exactamente el shape que espera item.precio_unit/descuento_pct acá.
+    if (pedido?.id) {
+      setClienteId(pedido.cliente_id || '');
+      setReferenciaCliente(pedido.referencia_cliente || '');
+      if (pedido.pedido_items?.length > 0) {
+        setItems(pedido.pedido_items.map(i => ({
+          _id:           Math.random().toString(36).slice(2),
+          producto_id:   i.producto_id,
+          descripcion:   i.descripcion || '',
+          cantidad:      Number(i.cantidad),
+          precio_unit:   Number(i.precio_unitario),
+          descuento_pct: Number(i.descuento_item) || 0,
+          alicuota_iva:  Number(i.alicuota_iva ?? 21),
+        })));
+      }
+    } else if (comprobanteOrigen?.id) {
+      // Pre-carga desde comprobante origen (flujo "Copiar a Factura")
       setClienteId(comprobanteOrigen.cliente_id || '');
       setReferenciaCliente(comprobanteOrigen.referencia_cliente || '');
       supabase.from('comprobante_items')
@@ -142,7 +170,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
           }
         });
     }
-  }, [open, user?.empresa_id, comprobanteOrigen?.id]);
+  }, [open, user?.empresa_id, comprobanteOrigen?.id, pedido?.id]);
 
   // ── Reset al cerrar ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -254,111 +282,181 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
       // en el historial aunque la factura sea no electrónica.
       const tipoAfipInsert = tipoDoc === 'Ticket' ? null : tipoDoc.replace('Factura ', '');
 
-      // 1. INSERT comprobante — sin user_id (no existe en comprobantes)
-      const { data: comp, error: compErr } = await supabase.from('comprobantes').insert([{
-        empresa_id:            user.empresa_id,
-        tenant_id:             user.empresa_id,
-        numero_venta:          numero,
-        fecha:                 now,
-        cliente_id:            clienteId || null,
-        cliente_nombre:        clienteObj?.nombre ?? 'Consumidor Final',
-        total,
-        neto_gravado:          subtotalNeto,
-        iva_discriminado:      totalIva,
-        forma_pago:            formaPago,
-        estado_pago:           isCC ? 'pendiente' : 'pagada',
-        moneda:                'ARS',
-        tipo_cambio_tasa:      1,
-        tipo:                  'venta',
-        tipo_comprobante_afip: tipoAfipInsert,
-        fecha_vencimiento:     fechaVencimiento,
-        relevante_fiscal:      true, // la relevancia la define el PdV, no un flag por documento
-        punto_venta_id:        puntoVentaId || null, // se registra siempre, aunque sea PdV interno
-        centro_costo_id:       centroCostoId || null,
-        referencia_cliente:    referenciaCliente.trim() || null,
-      }]).select('id').single();
-      if (compErr) throw compErr;
+      let comprobanteId;
+      let costoMercaderiaVendida = 0;
 
-      // 2. INSERT comprobante_items — columnas en ESPAÑOL: producto_id, cantidad.
-      // producto_id es nullable (mig.256): un ítem de servicio no tiene producto
-      // de catálogo, y su descripcion se guarda tal cual la escribió el usuario.
-      const { error: itemsErr } = await supabase.from('comprobante_items').insert(
-        itemsValidos.map(i => ({
-          comprobante_id:  comp.id,
-          empresa_id:      user.empresa_id,
+      if (pedido?.id) {
+        // ── Facturar Pedido/Entrega: una sola llamada transaccional a la RPC
+        // crear_venta (misma que usa el POS) — hereda sin duplicar toda la
+        // lógica de Document Flow (stock-skip si ya hubo Entrega manual, tope
+        // de sobre-facturación, vínculo pedidos/entregas.comprobante_id, COGS).
+        // Ver PENDIENTE #1 (14/08) en CONTEXT.md.
+        const itemsPayload = itemsValidos.map(i => ({
           producto_id:     i.producto_id || null,
-          descripcion:     i.descripcion.trim(),
           cantidad:        Number(i.cantidad),
           precio_unitario: parseNumberLocale(i.precio_unit) || 0,
           subtotal:        calcBruto(i),
           alicuota_iva:    String(i.alicuota_iva),
-          // Bug real encontrado 13/08: el % de descuento se cargaba en la UI y se
-          // usaba para calcular calcBruto()/subtotal, pero nunca se guardaba en la
-          // columna — quedaba invisible para siempre después de crear la factura.
           descuento_pct:   Number(i.descuento_pct) || 0,
-        }))
-      );
-      if (itemsErr) throw itemsErr;
+        }));
+        // Sin CC: un solo pago por el total, mismo forma_pago que eligió el
+        // usuario (este modal no tiene multi-pago, a diferencia del POS).
+        const pagosPayload = isCC ? [] : [{
+          metodo: formaPago, monto: total, monto_paralelo: '', tc_paralelo: '', forma_pago_id: null,
+        }];
 
-      // 3. CC → DEBE en cuenta corriente (Open Item)
-      if (isCC && clienteId) {
-        await supabase.from('cuenta_corriente_movimientos').insert([{
-          empresa_id:     user.empresa_id,
-          user_id:        user.id,
-          cliente_id:     clienteId,
-          comprobante_id: comp.id,
-          tipo:           'DEBE',
-          monto:          total,
-          descripcion:    `Factura ${numero}`,
-          fecha:          now,
-        }]);
+        const { data: rpcResult, error: rpcError } = await supabase.rpc('crear_venta', {
+          p_empresa_id:       user.empresa_id,
+          p_user_id:          user.id,
+          p_numero_venta:     numero,
+          p_fecha:            now,
+          p_cliente_id:       clienteId || null,
+          p_cliente_nombre:   clienteObj?.nombre ?? 'Consumidor Final',
+          p_total:            total,
+          p_forma_pago:       formaPago,
+          p_estado_pago:      isCC ? 'pendiente' : 'pagada',
+          p_moneda:           'ARS',
+          p_tipo_cambio_tasa: 1,
+          p_monto_paralelo:   null,
+          p_tc_paralelo:      null,
+          p_items:            itemsPayload,
+          p_pagos:            pagosPayload,
+          p_es_cc:            isCC,
+          p_caja_sesion_id:   currentSession?.id ?? null,
+          p_pedido_id:        pedido.id,
+          p_monto_moneda_original: null,
+          p_centro_costo_id:  centroCostoId || null,
+          p_client_uuid:      crypto.randomUUID(),
+          p_puntos_canjeados: 0,
+          p_tipo_comprobante_afip: tipoAfipInsert,
+          p_punto_venta_id:   puntoVentaId || null,
+          p_referencia_cliente: referenciaCliente.trim() || null,
+        });
+        if (rpcError) throw rpcError;
+
+        comprobanteId = rpcResult.comprobante_id;
+        costoMercaderiaVendida = rpcResult.costo_mercaderia_vendida || 0;
+
+        // AFIP — crear_venta ya guardó tipo_comprobante_afip/punto_venta_id/
+        // referencia_cliente en el INSERT; acá solo se dispara la cola (mismo
+        // criterio que el resto del modal: PdV que envía a ARCA y no Ticket).
+        const pvElegido = puntosVenta.find(p => p.id === puntoVentaId) ?? null;
+        const afipActivo = afipConfig?.usa_factura_electronica && pvElegido?.envia_arca !== false;
+        if (afipActivo && pvElegido && tipoDoc !== 'Ticket') {
+          const { error: afipQueueErr } = await supabase.from('comprobantes')
+            .update({ cae_estado: 'pendiente' })
+            .eq('id', comprobanteId);
+          if (afipQueueErr) console.warn('[AFIP queue]', afipQueueErr.message);
+        }
+      } else {
+        // 1. INSERT comprobante — sin user_id (no existe en comprobantes)
+        const { data: comp, error: compErr } = await supabase.from('comprobantes').insert([{
+          empresa_id:            user.empresa_id,
+          tenant_id:             user.empresa_id,
+          numero_venta:          numero,
+          fecha:                 now,
+          cliente_id:            clienteId || null,
+          cliente_nombre:        clienteObj?.nombre ?? 'Consumidor Final',
+          total,
+          neto_gravado:          subtotalNeto,
+          iva_discriminado:      totalIva,
+          forma_pago:            formaPago,
+          estado_pago:           isCC ? 'pendiente' : 'pagada',
+          moneda:                'ARS',
+          tipo_cambio_tasa:      1,
+          tipo:                  'venta',
+          tipo_comprobante_afip: tipoAfipInsert,
+          fecha_vencimiento:     fechaVencimiento,
+          relevante_fiscal:      true, // la relevancia la define el PdV, no un flag por documento
+          punto_venta_id:        puntoVentaId || null, // se registra siempre, aunque sea PdV interno
+          centro_costo_id:       centroCostoId || null,
+          referencia_cliente:    referenciaCliente.trim() || null,
+        }]).select('id').single();
+        if (compErr) throw compErr;
+        comprobanteId = comp.id;
+
+        // 2. INSERT comprobante_items — columnas en ESPAÑOL: producto_id, cantidad.
+        // producto_id es nullable (mig.256): un ítem de servicio no tiene producto
+        // de catálogo, y su descripcion se guarda tal cual la escribió el usuario.
+        const { error: itemsErr } = await supabase.from('comprobante_items').insert(
+          itemsValidos.map(i => ({
+            comprobante_id:  comp.id,
+            empresa_id:      user.empresa_id,
+            producto_id:     i.producto_id || null,
+            descripcion:     i.descripcion.trim(),
+            cantidad:        Number(i.cantidad),
+            precio_unitario: parseNumberLocale(i.precio_unit) || 0,
+            subtotal:        calcBruto(i),
+            alicuota_iva:    String(i.alicuota_iva),
+            // Bug real encontrado 13/08: el % de descuento se cargaba en la UI y se
+            // usaba para calcular calcBruto()/subtotal, pero nunca se guardaba en la
+            // columna — quedaba invisible para siempre después de crear la factura.
+            descuento_pct:   Number(i.descuento_pct) || 0,
+          }))
+        );
+        if (itemsErr) throw itemsErr;
+
+        // 3. CC → DEBE en cuenta corriente (Open Item)
+        if (isCC && clienteId) {
+          await supabase.from('cuenta_corriente_movimientos').insert([{
+            empresa_id:     user.empresa_id,
+            user_id:        user.id,
+            cliente_id:     clienteId,
+            comprobante_id: comp.id,
+            tipo:           'DEBE',
+            monto:          total,
+            descripcion:    `Factura ${numero}`,
+            fecha:          now,
+          }]);
+        }
+
+        // 4. Cualquier medio no-CC → movimientos_caja (mismo criterio que crear_venta:
+        // Efectivo, Tarjeta y Transferencia dejan rastro en caja; caja_sesion_id es
+        // nullable a propósito para poder registrar Tarjeta/Transferencia aunque no
+        // haya una caja de efectivo abierta — antes solo Efectivo generaba el
+        // movimiento, y una factura por Tarjeta/Transferencia quedaba "pagada" sin
+        // ningún rastro en movimientos_caja).
+        if (!isCC) {
+          await supabase.from('movimientos_caja').insert([{
+            empresa_id:     user.empresa_id,
+            user_id:        user.id,
+            caja_sesion_id: currentSession?.id ?? null,
+            tipo:           'ingreso',
+            categoria:      'Venta',
+            concepto:       `Factura ${numero}`,
+            monto:          total,
+            metodo_pago:    formaPago,
+            is_automatic:   true,
+            fecha:          now,
+            comprobante_id: comp.id,
+          }]);
+        }
+
+        // 5. AFIP — encolar en facturas_pendientes_arca vía trigger (SAP async posting).
+        // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca, que inserta
+        // en la cola. El arca-worker (cron */5 * * * *) es la única fuente de verdad
+        // para llamar a ARCA — nunca desde el frontend. Si el documento se marcó
+        // "no relevante", ni siquiera se intenta (el trigger igual lo bloquearía,
+        // pero evitamos el UPDATE innecesario).
+        // El PdV elegido decide: si no envía a ARCA, es comprobante interno y no se
+        // encola (criterio unificado, mig.294 — ya no hay checkbox aparte).
+        const pvElegido = puntosVenta.find(p => p.id === puntoVentaId) ?? null;
+        const afipActivo = afipConfig?.usa_factura_electronica && pvElegido?.envia_arca !== false;
+        if (afipActivo && pvElegido && tipoDoc !== 'Ticket') {
+          const tipoAfip = tipoDoc.replace('Factura ', '');
+          const { error: afipQueueErr } = await supabase.from('comprobantes').update({
+            tipo_comprobante_afip: tipoAfip,
+            punto_venta_id:        pvElegido.id,
+            cae_estado:            'pendiente',
+          }).eq('id', comp.id);
+          if (afipQueueErr) console.warn('[AFIP queue]', afipQueueErr.message);
+        }
       }
 
-      // 4. Cualquier medio no-CC → movimientos_caja (mismo criterio que crear_venta:
-      // Efectivo, Tarjeta y Transferencia dejan rastro en caja; caja_sesion_id es
-      // nullable a propósito para poder registrar Tarjeta/Transferencia aunque no
-      // haya una caja de efectivo abierta — antes solo Efectivo generaba el
-      // movimiento, y una factura por Tarjeta/Transferencia quedaba "pagada" sin
-      // ningún rastro en movimientos_caja).
-      if (!isCC) {
-        await supabase.from('movimientos_caja').insert([{
-          empresa_id:     user.empresa_id,
-          user_id:        user.id,
-          caja_sesion_id: currentSession?.id ?? null,
-          tipo:           'ingreso',
-          categoria:      'Venta',
-          concepto:       `Factura ${numero}`,
-          monto:          total,
-          metodo_pago:    formaPago,
-          is_automatic:   true,
-          fecha:          now,
-          comprobante_id: comp.id,
-        }]);
-      }
-
-      // 5. AFIP — encolar en facturas_pendientes_arca vía trigger (SAP async posting).
-      // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca, que inserta
-      // en la cola. El arca-worker (cron */5 * * * *) es la única fuente de verdad
-      // para llamar a ARCA — nunca desde el frontend. Si el documento se marcó
-      // "no relevante", ni siquiera se intenta (el trigger igual lo bloquearía,
-      // pero evitamos el UPDATE innecesario).
-      // El PdV elegido decide: si no envía a ARCA, es comprobante interno y no se
-      // encola (criterio unificado, mig.294 — ya no hay checkbox aparte).
-      const pvElegido = puntosVenta.find(p => p.id === puntoVentaId) ?? null;
-      const afipActivo = afipConfig?.usa_factura_electronica && pvElegido?.envia_arca !== false;
-      if (afipActivo && pvElegido && tipoDoc !== 'Ticket') {
-        const tipoAfip = tipoDoc.replace('Factura ', '');
-        const { error: afipQueueErr } = await supabase.from('comprobantes').update({
-          tipo_comprobante_afip: tipoAfip,
-          punto_venta_id:        pvElegido.id,
-          cae_estado:            'pendiente',
-        }).eq('id', comp.id);
-        if (afipQueueErr) console.warn('[AFIP queue]', afipQueueErr.message);
-      }
-
-      // 6. Asiento contable (fire & forget)
+      // 6. Asiento contable (fire & forget) — incluye COGS cuando la RPC movió
+      // stock (siempre 0 en el path standalone, que nunca toca inventario).
       asientosAutoService.crearAsientoVenta(user.empresa_id, user.id, {
-        ventaId:     comp.id,
+        ventaId:     comprobanteId,
         total,
         neto:        subtotalNeto,
         iva:         totalIva,
@@ -366,6 +464,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
         descripcion: `Factura ${numero}`,
         esCredito:   isCC,
         centroCostoId: centroCostoId || null,
+        costoMercaderiaVendida,
       }).catch(e => {
         if (e.message?.startsWith('Período cerrado:')) {
           toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
@@ -375,7 +474,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
       });
 
       toast({ title: `Factura ${numero} creada correctamente` });
-      onSuccess?.({ id: comp.id, numero_venta: numero, total });
+      onSuccess?.({ id: comprobanteId, numero_venta: numero, total });
       onOpenChange(false);
     } catch (err) {
       console.error('[NuevaFactura]', err);
@@ -393,14 +492,18 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
         <DialogHeader className="px-6 py-4 border-b border-kx-border shrink-0">
           <DialogTitle className="flex items-center gap-2 text-lg font-bold">
             <FileText className="w-5 h-5 text-kx-violet" />
-            {comprobanteOrigen
-              ? `Copiar a Factura — ${comprobanteOrigen.numero_venta}`
-              : 'Nueva Factura de Venta'}
+            {pedido
+              ? `Facturar Pedido — ${pedido.numero}`
+              : comprobanteOrigen
+                ? `Copiar a Factura — ${comprobanteOrigen.numero_venta}`
+                : 'Nueva Factura de Venta'}
           </DialogTitle>
           <DialogDescription className="text-kx-text-2 text-xs">
-            {comprobanteOrigen
-              ? 'Ítems pre-cargados desde el comprobante origen. Revisá antes de confirmar.'
-              : 'Factura financiera — no afecta stock. Para descontar stock usá el flujo Pedido → Entrega.'}
+            {pedido
+              ? 'Ítems pre-cargados desde el pedido. Revisá antes de confirmar.'
+              : comprobanteOrigen
+                ? 'Ítems pre-cargados desde el comprobante origen. Revisá antes de confirmar.'
+                : 'Factura financiera — no afecta stock. Para descontar stock usá el flujo Pedido → Entrega.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -409,8 +512,9 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, onSuc
           <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-xs text-blue-700 dark:text-blue-300">
             <Info className="w-4 h-4 shrink-0 mt-0.5" />
             <span>
-              Esta factura <strong>no afecta el inventario</strong>. Para descontar stock, usá el flujo{' '}
-              Pedido → Entrega → Facturar lo entregado.
+              {pedido
+                ? <>Vinculada al Pedido <strong>{pedido.numero}</strong>. Si el pedido ya tuvo una Entrega, el stock no se vuelve a descontar; si es la primera vez que se factura, esta factura genera la entrega y descuenta el stock ahora.</>
+                : <>Esta factura <strong>no afecta el inventario</strong>. Para descontar stock, usá el flujo Pedido → Entrega → Facturar lo entregado.</>}
             </span>
           </div>
 

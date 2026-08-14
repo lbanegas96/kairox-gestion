@@ -14,7 +14,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { getEmpresaParaPDF } from '@/lib/empresaUtils';
 import ModalDetalleEntrega from '@/components/ventas/ModalDetalleEntrega';
 import ModalNuevaEntrega from '@/components/ventas/ModalNuevaEntrega';
-import NuevaVentaModal from '@/components/ventas/NuevaVentaModal';
+import NuevaFacturaModal from '@/components/ventas/NuevaFacturaModal';
 
 const ORIGEN_LABELS = {
   implicita: { label: 'POS',    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
@@ -57,7 +57,8 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
   const [nuevaForm, setNuevaForm] = useState({ cliente_id: '', observaciones: '', items: [{ producto_id: '', cantidad: 1 }] });
   const [savingNueva, setSavingNueva] = useState(false);
   // Facturar desde la entrega: se factura el pedido de origen (es el que tiene
-  // los precios). NuevaVentaModal ya detecta que el pedido tuvo una entrega
+  // los precios), en el formulario de Factura de Venta del ERP (no el POS —
+  // PENDIENTE #1, 14/08). crear_venta detecta que el pedido tuvo una entrega
   // confirmada y no vuelve a descontar stock.
   const [pedidoAFacturar, setPedidoAFacturar] = useState(null);
   const [entregaFacturando, setEntregaFacturando] = useState(null);
@@ -418,12 +419,12 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
         onFacturar={handleFacturarEntrega}
       />
 
-      {/* ── Facturar la entrega (abre el POS con el pedido de origen cargado) ── */}
-      <NuevaVentaModal
-        isOpen={!!pedidoAFacturar}
+      {/* ── Facturar la entrega (Factura de Venta del ERP, con el pedido de origen cargado) ── */}
+      <NuevaFacturaModal
+        open={!!pedidoAFacturar}
         onOpenChange={v => !v && setPedidoAFacturar(null)}
         pedido={pedidoAFacturar}
-        onSaleSuccess={handleSaleSuccessDesdeEntrega}
+        onSuccess={handleSaleSuccessDesdeEntrega}
       />
 
       {/* ── Confirm anular ───────────────────────────────────────────────── */}

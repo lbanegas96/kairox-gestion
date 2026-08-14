@@ -1,31 +1,85 @@
 # KAIROX Gestión — Contexto de Sesión
 
-## 🔴 PENDIENTE #1 para el 15/08 — "Facturar Entrega" abre el POS, no el ERP
+## ✅ Resuelto (14/08 tarde) — "Facturar Entrega/Pedido" ya no abre el POS
 
-Detectado por Luciano probando en vivo la noche del 14/08, **ya en producción, sin arreglar**.
+Era el PENDIENTE #1 que Luciano dejó anotado la noche del 14/08 (ver historial abajo para el
+diagnóstico original). Resumen del fix:
 
-El botón nuevo "Facturar Entrega" (`ModalDetalleEntrega.jsx` → `EntregasSection.jsx`) abre
-`NuevaVentaModal`, que es **el carrito del Punto de Venta**: buscador de productos con stock y
-precio, grilla de métodos de pago (Efectivo / QR MercadoPago / Tarjeta / Transferencia / CC),
-selector de moneda con TC. Nada de eso corresponde a una sección del ERP.
+**Qué se hizo:** en vez de escribir una RPC nueva que duplicara la lógica de Document Flow de
+`crear_venta` (skip de stock si el pedido ya tuvo Entrega manual, tope de sobre-facturación contra
+`pedido_items`, vínculo `pedidos.comprobante_id` / `entregas.comprobante_id`, COGS), se **extendió
+`crear_venta`** (mig. 325) con 3 parámetros opcionales al final de la firma —
+`p_tipo_comprobante_afip`, `p_punto_venta_id`, `p_referencia_cliente` (`DEFAULT NULL`, las 3
+columnas ya existían en `comprobantes`) — así los llamadores existentes (POS, "Copiar
+cotización→venta") no cambian ni una línea. `NuevaFacturaModal.jsx` ganó un prop `pedido`: cuando
+viene seteado, precarga ítems/cliente desde el pedido (mismo criterio que ya usaba
+`NuevaVentaModal`: `precio_unitario`/`descuento_item` de `pedido_items` sin descontar) y
+`handleConfirmar` llama a la RPC extendida en vez del INSERT manual standalone (que sigue 100%
+igual para facturas sin pedido — nunca mueve stock). `EntregasSection.jsx` y `PedidosSection.jsx`
+ahora abren `NuevaFacturaModal` con ese prop en vez de `NuevaVentaModal`.
 
-**Por qué está mal (principio SAP):** KAIROX es un ERP con un POS incluido, no un POS con un ERP
-alrededor. El POS es una terminal de mostrador (venta rápida, cobro inmediato); el ERP factura
-documentos (ítems con IVA discriminado por línea, descuentos, condiciones de pago, cuenta
-corriente). Facturar una Entrega es un paso del circuito Order-to-Cash, no una venta de mostrador.
+**Bug real encontrado probando la migration antes de tocar el frontend:** `CREATE OR REPLACE
+FUNCTION` en Postgres sólo reemplaza si la lista de TIPOS de parámetros es idéntica. Al agregarle
+3 parámetros nuevos a `crear_venta`, Postgres no la reemplazó — creó una **sobrecarga nueva**, y
+quedaron dos versiones de `crear_venta` conviviendo (22 y 25 parámetros). Cualquier llamada normal
+del POS/ERP hubiera fallado con `function ... is not unique` (ambigüedad, PostgREST no puede
+elegir). Se detectó probando la migration contra datos reales (pedido con Entrega manual previa,
+dentro de una transacción con `ROLLBACK`) antes de tocar una sola línea de frontend — se arregló
+con `DROP FUNCTION` explícito de la sobrecarga vieja (mig. 325b) antes de seguir. **Lección para
+cualquier migration futura que le agregue parámetros a una función existente:** verificar después
+con `SELECT pg_get_function_identity_arguments(oid) FROM pg_proc WHERE proname = '...'` que quedó
+una sola versión — `CREATE OR REPLACE` no es suficiente por sí solo.
 
-**Qué habría que usar:** `NuevaFacturaModal.jsx` — el formulario de Factura de Venta del ERP, que
-ya tiene ítems con alícuota por línea, descuentos y el desglose Neto/IVA. Habría que poder
-precargarlo desde un pedido/entrega igual que hoy se precarga `NuevaVentaModal`.
+**Verificado antes de aplicar:** dos llamadas reales contra la base (pedido `PED-20260814-001`,
+que ya tenía una Entrega manual confirmada) dentro de transacciones con `ROLLBACK` — (1) llamada
+"vieja" sin los 3 parámetros nuevos → sin ambigüedad, stock se descontó normal (caso sin pedido
+vinculado); (2) llamada nueva con `p_pedido_id` + los 3 campos de factura → stock NO se volvió a
+descontar (ya había Entrega), `comprobantes.tipo_comprobante_afip/punto_venta_id/referencia_cliente`
+quedaron guardados, `pedido_items.cantidad_facturada` se actualizó. `npx eslint` sin errores nuevos,
+`npx vitest run` 156/156, `npx vite build` OK.
 
-**Ojo, es más grande que cambiar un import:** `NuevaFacturaModal` hoy no recibe un pedido/entrega
-como origen (solo `NuevaVentaModal` sabe hacer esa precarga), y el mismo problema afecta a
-"Facturar Pedido" en `PedidosSection.jsx`, que también abre el POS. O sea: es un cambio de
-criterio que toca los dos puntos de entrada a facturación desde el ERP, no solo el de Entregas.
-Luciano lo dejó explícitamente para el 15/08 ("quizás el cambio sea grande").
+**Verificado en vivo por Nadia (14/08 tarde), local:** Facturar Pedido abrió `NuevaFacturaModal`
+(no el POS), generó `FAC-20260814-001` correctamente vinculada a `PED-20260814-004`, y quedó
+encadenada en el Flujo del Documento Pedido → Entrega → Factura. Confirmado también contra la base:
+un solo movimiento de stock (el de la Entrega original, no uno nuevo de la factura) y
+`costo_mercaderia_vendida = 0` en el comprobante (correcto — el costo ya se había contabilizado).
 
-**Regla que queda escrita:** ninguna sección del ERP (Cotizaciones, Pedidos, Entregas, Facturas,
-Compras) debe abrir `NuevaVentaModal`. Ese modal es exclusivo del Modo Caja / POS.
+---
+
+## ✅ Resuelto (14/08 tarde) — barrido con el plan de pruebas de Nadia
+
+Nadia corrió los 6 bloques de `PLAN_PRUEBAS_NADIA_2026-08-15.md` en local (no en producción, ya
+que el fix de arriba todavía no estaba deployado). Bloques 1, 2, 4, 5 y 6 pasaron limpios. De paso
+aparecieron 3 bugs reales más, los 3 arreglados y verificados:
+
+1. **`ModalDetallePedido.jsx` — columna Subtotal mostraba $0,00.** La columna calculaba
+   `cantidad_entregada × precio` (el monto ya entregado — que ya tenía su propio renglón "Total
+   entregado" aparte) en vez del subtotal real de la línea. Un pedido recién creado, sin nada
+   entregado todavía, mostraba $0,00 en todas las filas. Dato en la base siempre estuvo bien — era
+   puramente visual. Fix: usar `item.subtotal` directo, mismo criterio que ya usaba
+   `ModalDetalleOC.jsx` (Compras) correctamente.
+2. **Desplegable de producto cortado en Cotizaciones/Pedidos/OC.** La lista de ítems tiene su
+   propio scroll interno, y el desplegable de autocompletar (`position: absolute` dentro de la
+   fila) quedaba recortado por ese contenedor — apenas se veía la primera sugerencia, cortada al
+   medio. Nuevo componente compartido `src/components/shared/ProductoAutocomplete.jsx`: el
+   desplegable se renderiza en un portal a `<body>` con `position: fixed`, así ningún scroll lo
+   puede recortar (se reposiciona solo, y abre hacia arriba si no entra abajo). Reemplazado en los
+   3 formularios. Verificado en vivo en los tres: desplegable completo y selección funcionando.
+3. **`PedidosSection.jsx` — editar un pedido volvía a la lista en vez de reabrir el detalle.** Al
+   crear un pedido nuevo, el detalle se reabría solo (bloque 2 del plan, arreglo de Luciano
+   anoche) — pero al EDITAR uno existente y guardar, el código nunca hacía lo mismo, así que
+   volvía a la lista y había que re-entrar a mano para ver el pedido actualizado. Fix: la misma
+   variable que reabre el detalle tras crear ahora también se setea tras editar. Verificado en
+   vivo con `PED-20260814-005`.
+
+`npx eslint` sin errores nuevos, `npx vitest run` 156/156, `npx vite build` OK — verificado después
+de cada uno de los 3 fixes.
+
+**Dos falsos positivos descartados, documentados para no repetir la duda:** en un momento tanto
+Nadia como yo vimos filas de ítems "vacías" pese a tener datos correctos (confirmado contra el
+HTML/DOM directo). Causa: cuando el panel del navegador pierde el foco un instante, Chrome no
+repinta y el último frame capturado queda con contenido viejo/en blanco — no es un bug de la app.
+Se resuelve solo con un clic o scroll que fuerce un repintado.
 
 ---
 

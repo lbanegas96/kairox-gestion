@@ -12,7 +12,7 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { getNowAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import GenerarMovimientoModal from '@/components/shared/GenerarMovimientoModal';
-import NuevaVentaModal from '@/components/ventas/NuevaVentaModal';
+import NuevaFacturaModal from '@/components/ventas/NuevaFacturaModal';
 import { ESTADOS, getEstado } from '@/components/pedidos/shared';
 import TablaPedidos from '@/components/pedidos/TablaPedidos';
 import ModalPedidoForm from '@/components/pedidos/ModalPedidoForm';
@@ -327,10 +327,12 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       return;
     }
     setSaving(true);
-    // Pedido recién creado — al terminar se abre su detalle en vez de dejar al
-    // usuario en la lista: en SAP B1 el documento agregado queda en pantalla para
-    // poder seguir la cadena (confirmar → entregar) sin volver a buscarlo.
-    // Cerrar es decisión del usuario (Escape / botón Cerrar).
+    // Al terminar (crear O editar) se abre/reabre el detalle en vez de dejar al
+    // usuario en la lista: en SAP B1 el documento queda en pantalla para poder
+    // seguir la cadena (confirmar → entregar) sin volver a buscarlo. Cerrar es
+    // decisión del usuario (Escape / botón Cerrar). Bug real encontrado 14/08
+    // probando el plan de Nadia: editar SÍ volvía a la lista — sólo crear
+    // reabría el detalle, esta variable ahora cubre los dos casos.
     let pedidoCreadoId = null;
     try {
       const clienteObj = clientes.find(c => c.id === form.cliente_id);
@@ -361,6 +363,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
         });
         if (error) throw error;
         toast({ title: 'Pedido actualizado' });
+        pedidoCreadoId = editingPedido.id;
       } else {
         const now = getNowAR().toISOString();
         const itemsCalc = validItems.map(it => {
@@ -455,7 +458,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
     }
   };
 
-  // ── Facturar desde pedido (abre NuevaVentaModal pre-cargado) ─────────────
+  // ── Facturar desde pedido (Factura de Venta del ERP, no el POS — PENDIENTE #1, 14/08) ──
   const handleFacturarPedido = (pedido) => {
     setPedidoToFacturar(pedido);
     setIsDetailOpen(false);
@@ -671,11 +674,11 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
         onSuccess={handleEntregaSuccess}
       />
 
-      {/* ── Facturar desde Pedido (abre POS pre-cargado) ────────────────────── */}
-      <NuevaVentaModal
-        isOpen={isFacturarOpen}
+      {/* ── Facturar desde Pedido (Factura de Venta del ERP pre-cargada) ────── */}
+      <NuevaFacturaModal
+        open={isFacturarOpen}
         onOpenChange={v => !v && setIsFacturarOpen(false)}
-        onSaleSuccess={handleSaleSuccessForPedido}
+        onSuccess={handleSaleSuccessForPedido}
         pedido={pedidoToFacturar}
       />
     </div>
