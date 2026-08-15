@@ -445,8 +445,34 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
                       );
                     })}
                   </tbody>
-                  <tfoot className="bg-kx-surface-2 dark:bg-slate-900/50 border-t kairox-border font-bold">
-                    <tr>
+                  <tfoot className="bg-kx-surface-2 dark:bg-slate-900/50 border-t kairox-border">
+                    {(() => {
+                      // Fase 2 (15/08): antes el desglose Neto/IVA solo existía en el
+                      // PDF — hoy no hacía falta descargarlo para ver el total, pero
+                      // sí para ver cuánto era IVA Débito Fiscal. Se calcula desde los
+                      // ítems (mismo criterio que Cotización/Pedido/OC) en vez de
+                      // confiar en comprobantes.neto_gravado/iva_discriminado: esas
+                      // columnas están en NULL en 35 de 158 facturas reales de Nalux
+                      // (comprobantes viejos o creados antes de que se empezaran a
+                      // completar), así que el dato siempre correcto es recalcularlo.
+                      const factorIva = { '21': 1.21, '10.5': 1.105 };
+                      const neto = items.reduce((s, i) => s + Number(i.subtotal) / (factorIva[String(i.alicuota_iva)] ?? 1), 0);
+                      const iva = Number(sale.total) - neto;
+                      const fmt = (n) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                      return iva > 0.005 ? (
+                        <>
+                          <tr className="text-xs text-kx-text-2 dark:text-kx-text-2">
+                            <td colSpan="3" className="px-4 pt-3 text-right uppercase tracking-wider">Neto gravado</td>
+                            <td className="px-4 pt-3 text-right tabular-nums">${fmt(neto)}</td>
+                          </tr>
+                          <tr className="text-xs text-kx-text-2 dark:text-kx-text-2">
+                            <td colSpan="3" className="px-4 pb-3 text-right uppercase tracking-wider">IVA</td>
+                            <td className="px-4 pb-3 text-right tabular-nums">${fmt(iva)}</td>
+                          </tr>
+                        </>
+                      ) : null;
+                    })()}
+                    <tr className="font-bold">
                       <td colSpan="3" className="px-4 py-4 text-right text-kx-text-2 dark:text-kx-text-2 uppercase text-xs tracking-wider">Total Final</td>
                       <td className="px-4 py-4 text-right text-xl text-blue-600 dark:text-blue-400">${Number(sale.total).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     </tr>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
@@ -213,6 +213,11 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
         : i
     ));
     setSearchFocusId(null);
+    // Después de elegir producto (click o Enter) pasa el foco a Cantidad —
+    // mismo patrón que Cotización/Pedido/OC: sin esto, Tab volvía a arrancar
+    // desde el primer campo del formulario en vez de seguir en la fila.
+    cantRefs.current[rowId]?.focus();
+    cantRefs.current[rowId]?.select?.();
   };
 
   const updateItem = (id, field, value) => {
@@ -220,6 +225,35 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
   };
   const removeItem = (id) => setItems(prev => prev.filter(i => i._id !== id));
   const addItem    = ()   => setItems(prev => [...prev, newItem()]);
+
+  // ── Atajo Enter (14/08, Fase 2 — mismo patrón que Cotización/Pedido/OC) ────
+  // Enter en cualquier campo de una fila agrega la siguiente y le pasa el foco
+  // a su Descripción. En Descripción, si el desplegable de búsqueda está
+  // abierto con resultados, Enter elige el primero en vez de agregar fila —
+  // si no, el atajo "Enter agrega fila" le gana al gesto natural de confirmar
+  // la sugerencia y el ítem queda como texto libre sin producto vinculado.
+  const descRefs = useRef({});
+  const cantRefs = useRef({});
+  const prevItemsLength = useRef(items.length);
+  useEffect(() => {
+    if (items.length > prevItemsLength.current) {
+      const ultimoId = items[items.length - 1]._id;
+      descRefs.current[ultimoId]?.focus();
+    }
+    prevItemsLength.current = items.length;
+  }, [items.length, items]);
+
+  const handleItemRowKeyDown = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addItem(); }
+  };
+
+  const handleDescripcionKeyDown = (item) => (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const filtrados = searchFocusId === item._id ? getProductosFiltrados(item.descripcion) : [];
+    if (filtrados.length > 0) { selectProducto(item._id, filtrados[0]); return; }
+    addItem();
+  };
 
   // ── Cálculos ────────────────────────────────────────────────────────────────
   // total = suma de calcBruto (lo que realmente paga el cliente) — subtotalNeto
@@ -626,6 +660,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
                         <td className="px-2 py-1.5">
                           <div className="relative">
                             <Input
+                              ref={el => { descRefs.current[item._id] = el; }}
                               placeholder="Descripción o buscar producto..."
                               value={item.descripcion}
                               onChange={e => {
@@ -634,6 +669,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
                               }}
                               onFocus={() => { setSearchFocusId(item._id); loadProductos(); }}
                               onBlur={() => setTimeout(() => setSearchFocusId(null), 200)}
+                              onKeyDown={handleDescripcionKeyDown(item)}
                               className="h-8 text-xs bg-transparent border-kx-border text-kx-text pr-14"
                             />
                             <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold px-1.5 py-0.5 rounded ${
@@ -666,8 +702,10 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
                         </td>
                         <td className="px-2 py-1.5">
                           <Input
+                            ref={el => { cantRefs.current[item._id] = el; }}
                             type="number" min="1" step="1" value={item.cantidad}
                             onChange={e => updateItem(item._id, 'cantidad', e.target.value.replace(/[^\d]/g, ''))}
+                            onKeyDown={handleItemRowKeyDown}
                             className="h-8 text-xs text-center bg-transparent border-kx-border text-kx-text w-full"
                           />
                         </td>
@@ -675,6 +713,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
                           <Input
                             type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unit}
                             onChange={e => updateItem(item._id, 'precio_unit', e.target.value)}
+                            onKeyDown={handleItemRowKeyDown}
                             className="h-8 text-xs text-right bg-transparent border-kx-border text-kx-text w-full"
                           />
                         </td>
@@ -682,6 +721,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
                           <Input
                             type="number" min="0" max="100" step="0.01" value={item.descuento_pct}
                             onChange={e => updateItem(item._id, 'descuento_pct', e.target.value)}
+                            onKeyDown={handleItemRowKeyDown}
                             className="h-8 text-xs text-center bg-transparent border-kx-border text-kx-text w-full"
                           />
                         </td>
@@ -689,6 +729,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
                           <select
                             value={item.alicuota_iva}
                             onChange={e => updateItem(item._id, 'alicuota_iva', Number(e.target.value))}
+                            onKeyDown={handleItemRowKeyDown}
                             className="w-full h-8 rounded-md border border-kx-border bg-kx-surface px-1.5 text-xs text-kx-text"
                           >
                             {ALICUOTAS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
