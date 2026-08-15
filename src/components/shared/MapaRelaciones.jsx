@@ -260,6 +260,7 @@ function MapaRelaciones({
   open, onOpenChange, onNavigate,
   comprobanteId, compraId,
   cotizacionId, pedidoId, entregaId, recepcionId, devolucionId,
+  ordenCompraId,
 }) {
   const { user }  = useAuth();
   const [loading, setLoading] = useState(false);
@@ -275,7 +276,7 @@ function MapaRelaciones({
   useEffect(() => {
     if (!open || !user?.empresa_id) return;
     resolveAndFetch();
-  }, [open, comprobanteId, compraId, cotizacionId, pedidoId, entregaId, recepcionId, devolucionId, user?.empresa_id]);
+  }, [open, comprobanteId, compraId, cotizacionId, pedidoId, entregaId, recepcionId, devolucionId, ordenCompraId, user?.empresa_id]);
 
   useEffect(() => {
     if (!open) { setMapa(null); setFullscreen(false); setPreviewNodo(null); setPreviewItems(null); setActivoId(null); setSinFacturar(null); }
@@ -384,6 +385,30 @@ function MapaRelaciones({
         if (data.compra_id) { setActivoId(recepcionId); return fetchMapaCompra(data.compra_id); }
         setActivoId(recepcionId);
         return setSinFacturar({ label: 'Recepción', nodos: [{ id: data.id, tipo: 'recepcion', numero: data.numero_recepcion, fecha: data.fecha, estado: data.estado }] });
+      }
+      if (ordenCompraId) {
+        const { data } = await supabase.from('ordenes_compra')
+          .select('id, numero, fecha, total, estado')
+          .eq('id', ordenCompraId).eq('empresa_id', user.empresa_id).maybeSingle();
+        if (!data) return setMapa(null);
+        const { data: compra } = await supabase.from('compras')
+          .select('id').eq('orden_compra_id', ordenCompraId).eq('empresa_id', user.empresa_id).maybeSingle();
+        if (compra) { setActivoId(ordenCompraId); return fetchMapaCompra(compra.id); }
+        // Sin factura todavía: la cadena es Orden de Compra → Recepciones (puede
+        // haber más de una si se recibió en tandas), mismo espíritu que la
+        // cadena Cotización → Pedido → Entrega del lado Ventas.
+        const { data: recepciones } = await supabase.from('recepciones')
+          .select('id, numero_recepcion, fecha, estado')
+          .eq('orden_compra_id', ordenCompraId).eq('empresa_id', user.empresa_id)
+          .order('created_at', { ascending: true });
+        setActivoId(ordenCompraId);
+        return setSinFacturar({
+          label: 'Orden de Compra',
+          nodos: [
+            { id: data.id, tipo: 'orden_compra', numero: data.numero, fecha: data.fecha, total: data.total, estado: data.estado },
+            ...(recepciones ?? []).map(r => ({ id: r.id, tipo: 'recepcion', numero: r.numero_recepcion, fecha: r.fecha, estado: r.estado })),
+          ],
+        });
       }
       if (devolucionId) {
         const { data } = await supabase.from('devoluciones')
@@ -643,6 +668,11 @@ function MapaRelaciones({
           .select('descripcion, cantidad, subtotal')
           .eq('cotizacion_id', id).eq('empresa_id', user.empresa_id);
         rows = (data ?? []).map(i => ({ nombre: i.descripcion, cantidad: i.cantidad, subtotal: i.subtotal }));
+      } else if (tipo === 'orden_compra') {
+        const { data } = await supabase.from('ordenes_compra_items')
+          .select('descripcion, cantidad_pedida, subtotal')
+          .eq('orden_id', id).eq('empresa_id', user.empresa_id);
+        rows = (data ?? []).map(i => ({ nombre: i.descripcion, cantidad: i.cantidad_pedida, subtotal: i.subtotal }));
       } else if (tipo === 'pedido') {
         const { data } = await supabase.from('pedido_items')
           .select('descripcion, cantidad, subtotal')

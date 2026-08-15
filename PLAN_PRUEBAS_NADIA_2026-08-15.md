@@ -45,10 +45,16 @@ COT-00027 tenía 3 pedidos colgando y nadie se había enterado.
 
 ---
 
-## 3. Entrega de un pedido SIN cliente (bug real de la base)
+## 3. Entrega de un pedido SIN cliente (bug real de la base) — ✅ validado 14/08 noche
 
 **Por qué:** no se podía entregar un pedido sin cliente. El error decía *"Pedido no encontrado o
 no pertenece a la empresa"*, que era mentira.
+
+Este bloque quedó fuera del barrido de Nadia (probó 1, 2, 4, 5 y 6). Se validó aparte, directo
+contra la base, dentro de transacciones con `ROLLBACK` (sin dejar datos): `crear_entrega` sobre un
+pedido "Sin cliente" generó `ENT-2026-0140` sin error; `crear_recepcion` sobre una OC con
+proveedor escrito a mano generó `REC-2026-0018` sin error. Igual conviene que lo repitas una vez
+desde la UI cuando llegues acá, para confirmar también el mensaje en pantalla.
 
 | # | Paso | Qué tiene que pasar |
 |---|---|---|

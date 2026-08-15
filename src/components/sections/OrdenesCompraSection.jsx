@@ -9,6 +9,7 @@ import { ordenesCompraService, OC_KEYS } from '@/services/ordenesCompraService';
 import { supabase } from '@/lib/customSupabaseClient';
 import GenerarMovimientoModal from '@/components/shared/GenerarMovimientoModal';
 import NuevaDevolucionModal from '@/components/shared/NuevaDevolucionModal';
+import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
 import { getTodayAR } from '@/lib/dateUtils';
@@ -43,6 +44,8 @@ function OrdenesCompraSection() {
   const [genRecepId, setGenRecepId] = useState(null);
   const [devolverOC, setDevolverOC] = useState(null);
   const [facturaModal, setFacturaModal] = useState(false);
+  const [mapaOcId, setMapaOcId] = useState(null);
+  const [isMapaOpen, setIsMapaOpen] = useState(false);
   const [facturaForm, setFacturaForm] = useState({ numero_factura: '', fecha_factura: '', items: [] });
 
   // form nueva OC / edición (editingId != null = editando una OC existente)
@@ -461,6 +464,18 @@ function OrdenesCompraSection() {
         setDevolverOC={setDevolverOC} setGenRecepId={setGenRecepId}
         abrirModalFactura={abrirModalFactura}
         onEditar={openEdit}
+        onOpenMapa={(id) => { setMapaOcId(id); setIsMapaOpen(true); }}
+      />
+
+      {/* OrdenesCompraSection no recibe onNavigate (Compras todavía no tiene
+          navegación cross-tab, a diferencia de Ventas) — clickear un nodo del
+          Mapa abre su preview inline, pero no navega a la pestaña Recepciones.
+          Mismo criterio que RecepcionesSection/FacturasCompraSection, que
+          tampoco lo pasan. */}
+      <MapaRelaciones
+        open={isMapaOpen}
+        onOpenChange={setIsMapaOpen}
+        ordenCompraId={mapaOcId}
       />
 
       {/* ── MODAL: Registrar Factura del Proveedor ── */}

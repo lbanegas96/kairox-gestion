@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ShoppingBag, Truck, Receipt, AlertTriangle, BadgeCheck, Banknote, RotateCcw, Pencil, History, ChevronDown, ChevronRight, Code2 } from 'lucide-react';
+import { ShoppingBag, Truck, Receipt, AlertTriangle, BadgeCheck, Banknote, RotateCcw, Pencil, History, ChevronDown, ChevronRight, Code2, Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/currencyUtils';
@@ -27,6 +27,7 @@ function ModalDetalleOC({
   setDevolverOC, setGenRecepId,
   abrirModalFactura,
   onEditar,
+  onOpenMapa,
 }) {
   const [showHistorial, setShowHistorial] = useState(false);
   const [verCrudoId, setVerCrudoId] = useState(null);
@@ -69,6 +70,23 @@ function ModalDetalleOC({
                 <p className="dark:text-slate-300">{detalle.fecha_entrega_esperada ? formatDateAR(detalle.fecha_entrega_esperada) : '—'}</p>
               </div>
             </div>
+
+            {/* Bug real (14/08, reportado por Luciano): igual que Cotización, este
+                detalle no tenía acceso al Mapa de Relaciones. Ni siquiera había un
+                MapaRelaciones montado en OrdenesCompraSection — se agrega acá.
+                Reusa el mismo componente que ya usan Recepciones/Facturas de Compra. */}
+            {onOpenMapa && (
+              <div className="flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => onOpenMapa(detalle.id)}
+                  className="text-2xs text-kx-violet hover:opacity-80 font-medium flex items-center gap-1"
+                  title="Ver mapa de relaciones completo"
+                >
+                  <Network className="w-3 h-3" /> Mapa de relaciones
+                </button>
+              </div>
+            )}
 
             <table className="w-full text-sm border-collapse">
               <thead>

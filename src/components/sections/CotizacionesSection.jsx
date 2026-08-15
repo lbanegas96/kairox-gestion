@@ -167,13 +167,23 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
     if (cf) setForm(f => (f.cliente_id || f.cliente_nombre) ? f : { ...f, cliente_id: cf.id, cliente_nombre: cf.nombre });
   }, [allClientes]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cerrar dropdowns al hacer click afuera
+  // Cerrar dropdowns al hacer click afuera.
+  //
+  // Bug real (14/08, reportado por Luciano): desde que ProductoAutocomplete
+  // (14/08, Nadia) renderiza el desplegable en un portal a <body> — para que
+  // el scroll interno de la lista de ítems no lo recorte —, el desplegable ya
+  // no es descendiente de la fila `[data-prod-row]`. Este listener corría en
+  // 'mousedown' (antes que 'click') y cerraba el desplegable creyendo que el
+  // click fue "afuera", desmontando el botón de la sugerencia antes de que
+  // llegara a dispararse su 'click' — se veía la sugerencia, pero clickearla
+  // no hacía nada. Pedidos/OC no tienen este listener (por eso no les pasaba).
+  // Fix: excluir también el portal, marcado con `data-prod-dropdown`.
   useEffect(() => {
     const onClick = (e) => {
       if (clienteWrapperRef.current && !clienteWrapperRef.current.contains(e.target)) {
         setShowClienteDropdown(false);
       }
-      if (!e.target.closest('[data-prod-row]')) {
+      if (!e.target.closest('[data-prod-row]') && !e.target.closest('[data-prod-dropdown]')) {
         setProdOpen({});
       }
     };
@@ -563,6 +573,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
         onCambiarEstado={(id, estado) => estadoMutation.mutate({ id, estado })}
         onEditar={handleEditarClick}
         discrimina={detalle ? determinarTipoComprobante(empresaCondicionIva, detalle.clientes?.condicion_iva ?? 'CF') === 'A' : false}
+        onOpenMapa={(id) => { setMapaCotId(id); setIsMapaOpen(true); }}
       />
 
       {/* Aviso de copia duplicada — no bloquea (SAP B1 permite copiar en tandas),

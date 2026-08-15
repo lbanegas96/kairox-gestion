@@ -96,6 +96,7 @@ function ProductoAutocomplete({
       />
       {visible && pos && createPortal(
         <div
+          data-prod-dropdown
           style={{
             position: 'fixed',
             left: pos.left,

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, CheckCircle, Download, Loader2, Send, PackageCheck, Ban, AlertTriangle, XCircle, Pencil, History, ChevronDown, ChevronRight, Code2 } from 'lucide-react';
+import { FileText, CheckCircle, Download, Loader2, Send, PackageCheck, Ban, AlertTriangle, XCircle, Pencil, History, ChevronDown, ChevronRight, Code2, Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -28,7 +28,7 @@ const CAMPOS_HISTORIAL = {
   total: 'Total', notas: 'Notas',
 };
 
-function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, onCancelar, onVerPedido, onCambiarEstado, onEditar, discrimina }) {
+function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, onCancelar, onVerPedido, onCambiarEstado, onEditar, discrimina, onOpenMapa }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [generatingPDF, setGeneratingPDF] = useState(false);
@@ -114,6 +114,25 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, o
                 <p className="dark:text-slate-300">{detalle.fecha_vencimiento ? formatDateAR(detalle.fecha_vencimiento) : '—'}</p>
               </div>
             </div>
+
+            {/* Bug real (14/08, reportado por Luciano): este modal era el único de
+                los 4 (Cotización/Pedido/OC/Entrega) sin acceso al Mapa de
+                Relaciones — solo se podía abrir desde el ícono de la fila en la
+                tabla, no desde el propio detalle. Reusa el mismo <MapaRelaciones>
+                que ya monta CotizacionesSection para la tabla (vía onOpenMapa),
+                no una instancia nueva. */}
+            {onOpenMapa && (
+              <div className="flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => onOpenMapa(detalle.id)}
+                  className="text-2xs text-kx-violet hover:opacity-80 font-medium flex items-center gap-1"
+                  title="Ver mapa de relaciones completo"
+                >
+                  <Network className="w-3 h-3" /> Mapa de relaciones
+                </button>
+              </div>
+            )}
 
             {(() => {
               const esExtranjera = detalle.moneda && detalle.moneda !== 'ARS';
