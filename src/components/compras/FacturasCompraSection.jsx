@@ -21,6 +21,7 @@ import NuevaNotaDebitoModal from '@/components/shared/NuevaNotaDebitoModal';
 import NuevaFacturaProveedorModal from './NuevaFacturaProveedorModal';
 import ModalDetalleFacturaCompra from './ModalDetalleFacturaCompra';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
+import ConfirmDuplicarDialog from '@/components/shared/ConfirmDuplicarDialog';
 
 const ESTADO_LABELS = {
   pagada:    { label: 'Pagada',    className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
@@ -60,6 +61,12 @@ function FacturasCompraSection() {
   const [isNdOpen, setIsNdOpen]                   = useState(false);
   const [mapaCompraId, setMapaCompraId]           = useState(null);
   const [isMapaOpen, setIsMapaOpen]               = useState(false);
+  // Duplicar (15/08, definido por Luciano) — reusa el pre-fill de compraOrigen
+  // que NuevaFacturaProveedorModal.jsx ya tenía (nunca disparado en vivo hasta hoy).
+  const [duplicarTarget, setDuplicarTarget]       = useState(null);
+  const [duplicarOrigen, setDuplicarOrigen]       = useState(null);
+  const [duplicarDeId, setDuplicarDeId]           = useState(null);
+  const [isDuplicarOpen, setIsDuplicarOpen]       = useState(false);
 
   // ── Fetch ───────────────────────────────────────────────────────────────────
   const fetchCompras = async () => {
@@ -333,12 +340,34 @@ function FacturasCompraSection() {
         onCopiarNc={(c) => { setDetalleCompra(null); abrirNc(c); }}
         onCopiarNd={(c) => { setDetalleCompra(null); abrirNd(c); }}
         onDevolver={(c) => { setDetalleCompra(null); abrirDevolucion(c); }}
+        onDuplicar={(c) => { setDetalleCompra(null); setDuplicarTarget(c); }}
       />
 
       <NuevaFacturaProveedorModal
         open={showNuevaFactura}
         onOpenChange={setShowNuevaFactura}
         onSuccess={() => { setShowNuevaFactura(false); fetchCompras(); }}
+      />
+
+      <ConfirmDuplicarDialog
+        open={!!duplicarTarget}
+        onOpenChange={(v) => !v && setDuplicarTarget(null)}
+        tipoLabel="Factura de Proveedor"
+        numero={duplicarTarget?.numero_factura || 'S/N'}
+        onConfirm={(vincular) => {
+          setDuplicarOrigen(duplicarTarget);
+          setDuplicarDeId(vincular ? duplicarTarget.id : null);
+          setDuplicarTarget(null);
+          setIsDuplicarOpen(true);
+        }}
+      />
+
+      <NuevaFacturaProveedorModal
+        open={isDuplicarOpen}
+        onOpenChange={v => { setIsDuplicarOpen(v); if (!v) { setDuplicarOrigen(null); setDuplicarDeId(null); } }}
+        compraOrigen={duplicarOrigen}
+        duplicadoDeId={duplicarDeId}
+        onSuccess={() => { setIsDuplicarOpen(false); setDuplicarOrigen(null); setDuplicarDeId(null); fetchCompras(); }}
       />
 
       <NuevaDevolucionModal

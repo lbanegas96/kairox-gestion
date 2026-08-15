@@ -67,7 +67,7 @@ const calcNetoIva = (item) => {
 // (que re-lee TODOS los ítems de la factura), acá se listan los ítems de la
 // propia Devolución — puede ser una devolución parcial con cantidades/alícuotas
 // ya copiadas correctamente desde el origen.
-function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucionOrigen = null, onSuccess }) {
+function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucionOrigen = null, duplicarOrigen = null, duplicadoDeId = null, onSuccess }) {
   const { user }  = useAuth();
   const { toast } = useToast();
 
@@ -169,8 +169,36 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
             })));
           }
         });
+      return;
     }
-  }, [open, user?.empresa_id, comprobanteOrigen?.id, devolucionOrigen?.id]);
+
+    // Pre-cargar ítems desde otra NC (flujo "Duplicar", 15/08) — a diferencia de
+    // comprobanteOrigen/devolucionOrigen, NO deja `origenLocked` en true (el
+    // cliente queda editable) y NUNCA pasa a p_comprobante_origen_id en el
+    // submit: una NC duplicada nace standalone, sin atarse a la factura que
+    // corregía la NC original (decisión explícita — evitar sugerir una doble
+    // corrección sobre el mismo comprobante).
+    if (duplicarOrigen?.id) {
+      setClienteId(duplicarOrigen.cliente_id || '');
+      setReferenciaCliente(duplicarOrigen.referencia_cliente || '');
+      supabase.from('comprobante_items')
+        .select('id, producto_id, descripcion, cantidad, precio_unitario, alicuota_iva, productos(nombre)')
+        .eq('comprobante_id', duplicarOrigen.id)
+        .eq('empresa_id', user.empresa_id)
+        .then(({ data }) => {
+          if (data?.length > 0) {
+            setItems(data.map(i => ({
+              _id:          Math.random().toString(36).slice(2),
+              producto_id:  i.producto_id,
+              descripcion:  i.descripcion || i.productos?.nombre || '',
+              cantidad:     Number(i.cantidad),
+              precio_unit:  Number(i.precio_unitario),
+              alicuota_iva: Number(i.alicuota_iva ?? 21),
+            })));
+          }
+        });
+    }
+  }, [open, user?.empresa_id, comprobanteOrigen?.id, devolucionOrigen?.id, duplicarOrigen?.id]);
 
   // ── Reset al cerrar ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -258,7 +286,8 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
         p_empresa_id:            user.empresa_id,
         p_user_id:               user.id,
         p_cliente_id:            clienteId || null,
-        p_cliente_nombre:        comprobanteOrigen?.cliente_nombre ?? devolucionOrigen?.cliente_nombre ?? 'Consumidor Final',
+        p_cliente_nombre:        comprobanteOrigen?.cliente_nombre ?? devolucionOrigen?.cliente_nombre
+                                   ?? clientes.find(c => c.id === clienteId)?.nombre ?? 'Consumidor Final',
         p_motivo_nc:             motivo,
         p_items:                 itemsValidos.map(i => ({
           producto_id:     i.producto_id || null,
@@ -272,6 +301,14 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
         p_punto_venta_id:        afipConfig?.punto_venta?.id ?? null,
       });
       if (error) throw error;
+
+      // mig.327 — Duplicar documentos: vínculo opcional de trazabilidad hacia la
+      // NC original (nunca hacia comprobante_origen_id, ver comentario arriba).
+      if (duplicadoDeId) {
+        await supabase.from('comprobantes')
+          .update({ duplicado_de_id: duplicadoDeId })
+          .eq('id', data.comprobante_id);
+      }
 
       // AFIP — encolar NC en facturas_pendientes_arca vía trigger (SAP async posting).
       // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca.

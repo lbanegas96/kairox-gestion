@@ -3409,3 +3409,64 @@ redondeo.
 156/156 tests, build limpio.
 
 **Plan `PLAN_COMPROBANTES_ESTANDAR.md` — 5 fases (0 a 4), todas cerradas.**
+
+---
+
+## Duplicar documentos (estilo SAP) — 15/08
+
+Último punto pendiente de la tanda de comprobantes acordada con Luciano el 14/08.
+Definiciones: aplica a todos los documentos con precio propio, advertencia + pregunta
+de vínculo en Mapa de Relaciones antes de duplicar, copia todo menos la fecha,
+numeración nueva vía `obtener_proximo_numero`.
+
+Decisiones cerradas en esta sesión:
+- **NC/ND duplicada nace standalone** — nunca hereda `comprobante_origen_id`/`compra_id`.
+- **Devoluciones quedan fuera de esta tanda** (siempre atadas 1:1 a un origen, mueven stock).
+- **Factura duplicada nunca hereda campos de CAE** (corrección de Luciano sobre el diseño
+  inicial): nace como comprobante nuevo normal, mismo tipo/PdV del original como default
+  editable, y se encola a ARCA como cualquier factura nueva si el PdV lo requiere — sin
+  bloqueo ni fallback forzado a Ticket.
+- **Entregas y Recepciones excluidas** — sin precio propio, duplicar movería stock.
+
+### Migración 327 — `duplicado_de_id`
+Columna nullable self-FK (`ON DELETE SET NULL`, sin trigger de auditoría — mismo patrón
+que `comprobantes.comprobante_origen_id`) en 7 tablas: `cotizaciones`, `pedidos`,
+`ordenes_compra`, `comprobantes` (cubre Factura/NC/ND emitidas), `compras`, `notas_debito`,
+`notas_credito_proveedor`. Índices parciales `WHERE duplicado_de_id IS NOT NULL` en las 7.
+Aplicada y verificada con SQL en `BEGIN...ROLLBACK` contra datos reales de Nalux: insert
+con `duplicado_de_id` + query inversa (`WHERE duplicado_de_id = origen_id`) en las 7 tablas.
+
+### `MapaRelaciones.jsx` — nueva rama "Duplicado de X" / "N duplicados"
+`fetchDuplicadoInfo(tipoVisual, id)` resuelve el vínculo para el documento concreto que
+abrió el mapa (cotización/pedido/OC/venta/factura_compra — NC/ND recibidas no son entry
+point propio del mapa hoy, limitación aceptada). Se muestra como strip debajo del header,
+con links clickeables cuando el tipo tiene navegación soportada.
+
+### `ConfirmDuplicarDialog.jsx` (nuevo, compartido)
+`AlertDialog` genérico: confirma duplicar + checkbox "Vincular en el Mapa de Relaciones"
+(default sí). Reutilizado por los 9 flujos de abajo.
+
+### Los 9 flujos wireados
+- **Cotización / Pedido / OC**: botón "Duplicar" en el detalle → confirma → INSERT directo
+  (mismo cálculo que "Nueva", sin pasar por el form) → abre el detalle del nuevo documento.
+  Cotización usa `createMutation` existente (react-query); Pedido y OC replican el insert
+  manual con `duplicado_de_id`.
+- **Factura de Venta**: el pre-fill de `comprobanteOrigen` en `NuevaFacturaModal.jsx` YA
+  existía (comentario "flujo Copiar a Factura", nunca disparado) — solo faltaba el botón.
+  Extendido para también copiar `tipo_comprobante_afip`/`punto_venta_id` como default
+  editable (antes solo copiaba cliente/ítems). Botón en `HistorialVentas.jsx` (dropdown de
+  fila, disponible para venta/NC/ND ya que la tabla lista los 3 tipos juntos).
+- **Factura de Compra**: mismo patrón con `compraOrigen` en `NuevaFacturaProveedorModal.jsx`
+  (tampoco tenía botón disparador hasta hoy). Botón en `ModalDetalleFacturaCompra.jsx`.
+- **NC/ND emitidas y recibidas (4 modales)**: nuevo prop `duplicarOrigen` (distinto de
+  `comprobanteOrigen`/`compraOrigen`/`origen`) — pre-carga ítems + cliente/proveedor editable,
+  pero **nunca** setea `p_comprobante_origen_id`/`p_compra_id` (a diferencia de esos props,
+  que sí lo hacen — por eso no se podían reusar para duplicar sin romper la decisión de
+  standalone). `duplicadoDeId` nuevo prop: UPDATE post-RPC si el usuario eligió vincular.
+  Botones en `HistorialVentas.jsx` (NC/ND emitidas) y `DevolucionesProveedorSection.jsx`
+  (NC/ND recibidas, ambas tablas planas).
+
+Verificado con SQL en `BEGIN...ROLLBACK` (las 7 tablas + query inversa). **No se pudo
+verificar en vivo en el navegador esta sesión** — el panel del Browser no componía frames
+(falla técnica de la herramienta, no del código). 156/156 tests, build limpio, 0 errores de
+lint (solo warnings preexistentes del mismo patrón que el resto del código).

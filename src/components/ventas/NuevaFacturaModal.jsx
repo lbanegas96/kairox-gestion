@@ -67,7 +67,7 @@ const calcNetoIva = (item) => {
 // Ver PENDIENTE #1 (14/08) en CONTEXT.md — antes esto abría NuevaVentaModal
 // (el carrito del POS), que no tiene forma de elegir tipo de comprobante,
 // punto de venta ni referencia del cliente.
-function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedido = null, onSuccess }) {
+function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedido = null, duplicadoDeId = null, onSuccess }) {
   const { user }                     = useAuth();
   const { currentSession, isSessionOpen } = useCaja();
   const { toast }                    = useToast();
@@ -149,9 +149,20 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
         })));
       }
     } else if (comprobanteOrigen?.id) {
-      // Pre-carga desde comprobante origen (flujo "Copiar a Factura")
+      // Pre-carga desde comprobante origen (flujo "Duplicar" — Fase 5, 15/08:
+      // única llamadora real hoy). tipoDoc/puntoVentaId se copian como DEFAULT
+      // editable — el duplicado nunca hereda cae/cae_estado/numero_afip (nunca
+      // se insertan acá, se computan de cero al confirmar), pero si el usuario
+      // no toca nada sale con el mismo tipo de comprobante y PdV que el
+      // original, y arranca su propio trámite de CAE si el PdV lo requiere.
       setClienteId(comprobanteOrigen.cliente_id || '');
       setReferenciaCliente(comprobanteOrigen.referencia_cliente || '');
+      if (comprobanteOrigen.tipo_comprobante_afip) {
+        setTipoDoc(`Factura ${comprobanteOrigen.tipo_comprobante_afip}`);
+      }
+      if (comprobanteOrigen.punto_venta_id) {
+        setPuntoVentaId(comprobanteOrigen.punto_venta_id);
+      }
       supabase.from('comprobante_items')
         .select('id, producto_id, descripcion, cantidad, precio_unitario, alicuota_iva, descuento_pct, productos(nombre)')
         .eq('comprobante_id', comprobanteOrigen.id)
@@ -405,6 +416,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
           punto_venta_id:        puntoVentaId || null, // se registra siempre, aunque sea PdV interno
           centro_costo_id:       centroCostoId || null,
           referencia_cliente:    referenciaCliente.trim() || null,
+          duplicado_de_id:       duplicadoDeId,
         }]).select('id').single();
         if (compErr) throw compErr;
         comprobanteId = comp.id;

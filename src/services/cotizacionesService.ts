@@ -23,6 +23,10 @@ interface CreateCotizacionPayload {
   moneda?: string;
   tipoCambioTasa?: number;
   descuentoGlobal?: number;
+  // mig.327 — Duplicar documentos: id de la cotización original cuando el usuario
+  // eligió "vincular en el Mapa de Relaciones" al duplicar. null en el resto de
+  // los casos (creación normal, o duplicado sin vincular).
+  duplicadoDeId?: string | null;
 }
 
 // Igual forma que CreateCotizacionPayload — updateEstado()/actualizar_cotizacion() comparten
@@ -75,7 +79,7 @@ export const cotizacionesService = {
   async create(
     empresaId: string,
     userId: string,
-    { cliente, items, notas, condicionesPago, fechaVencimiento, moneda = 'ARS', tipoCambioTasa = 1, descuentoGlobal = 0 }: CreateCotizacionPayload
+    { cliente, items, notas, condicionesPago, fechaVencimiento, moneda = 'ARS', tipoCambioTasa = 1, descuentoGlobal = 0, duplicadoDeId = null }: CreateCotizacionPayload
   ): Promise<Cotizacion> {
     const { data: numData, error: numError } = await supabase
       .rpc('obtener_proximo_numero', { p_empresa_id: empresaId, p_tipo_documento: 'cotizacion' });
@@ -108,6 +112,7 @@ export const cotizacionesService = {
         moneda,
         tipo_cambio_tasa: tipoCambioTasa,
         estado: 'borrador' as CotizacionEstado,
+        duplicado_de_id: duplicadoDeId,
       }])
       .select()
       .single();

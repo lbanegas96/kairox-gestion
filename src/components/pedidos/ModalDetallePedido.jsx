@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, Check, Truck, ArrowRight, Receipt, Network, Pencil, History, ChevronDown, ChevronRight, Code2 } from 'lucide-react';
+import { FileText, Check, Truck, ArrowRight, Receipt, Network, Pencil, History, ChevronDown, ChevronRight, Code2, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { formatDateAR } from '@/lib/dateUtils';
@@ -49,6 +49,7 @@ function ModalDetallePedido({
   handleFacturarPedido,
   handleAvanzar,
   onEditar,
+  onDuplicar,
   discrimina,
 }) {
   const [mapaOpen, setMapaOpen] = useState(false);
@@ -323,6 +324,17 @@ function ModalDetallePedido({
                     >
                       <Pencil className="h-4 w-4 mr-2" />
                       Editar Pedido
+                    </Button>
+                  )}
+
+                  {onDuplicar && (
+                    <Button
+                      variant="outline"
+                      className="dark:border-kx-border dark:text-slate-300"
+                      onClick={() => onDuplicar(detailPedido)}
+                    >
+                      <Copy className="h-4 w-4 mr-2" />
+                      Duplicar
                     </Button>
                   )}
 

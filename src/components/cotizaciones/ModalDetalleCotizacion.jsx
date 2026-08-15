@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, CheckCircle, Download, Loader2, Send, PackageCheck, Ban, AlertTriangle, XCircle, Pencil, History, ChevronDown, ChevronRight, Code2, Network } from 'lucide-react';
+import { FileText, CheckCircle, Download, Loader2, Send, PackageCheck, Ban, AlertTriangle, XCircle, Pencil, History, ChevronDown, ChevronRight, Code2, Network, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -28,7 +28,7 @@ const CAMPOS_HISTORIAL = {
   total: 'Total', notas: 'Notas',
 };
 
-function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, onCancelar, onVerPedido, onCambiarEstado, onEditar, discrimina, onOpenMapa }) {
+function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, onCancelar, onVerPedido, onCambiarEstado, onEditar, onDuplicar, discrimina, onOpenMapa }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [generatingPDF, setGeneratingPDF] = useState(false);
@@ -281,6 +281,15 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, o
                 className="dark:border-kx-border dark:text-slate-300"
               >
                 <Pencil className="w-4 h-4 mr-2" /> Editar
+              </Button>
+            )}
+            {onDuplicar && detalle && (
+              <Button
+                variant="outline"
+                onClick={() => onDuplicar(detalle)}
+                className="dark:border-kx-border dark:text-slate-300"
+              >
+                <Copy className="w-4 h-4 mr-2" /> Duplicar
               </Button>
             )}
             {onCancelar && detalle && ESTADOS_CANCELABLES.includes(detalle.estado) && (

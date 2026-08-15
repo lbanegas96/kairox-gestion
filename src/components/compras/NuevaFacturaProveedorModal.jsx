@@ -49,7 +49,7 @@ const calcNeto = (item) => {
   return isNaN(neto) ? 0 : neto;
 };
 
-function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, onSuccess }) {
+function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, duplicadoDeId = null, onSuccess }) {
   const { user }                          = useAuth();
   const { currentSession, isSessionOpen } = useCaja();
   const { toast }                         = useToast();
@@ -262,6 +262,7 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
         descuento_global_pct: descGlobal,
         centro_costo_id:  centroCostoId || null,
         observaciones:    serviciosDesc || null,
+        duplicado_de_id:  duplicadoDeId,
         ...(montoParaleloValue !== null ? {
           monto_paralelo: montoParaleloValue,
           tc_paralelo:    tcParalelo.tcHoy,

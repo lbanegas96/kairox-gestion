@@ -33,6 +33,9 @@ interface CreateOCPayload {
     alicuota_iva?: string;
     unidad_medida?: string | null;
   }[];
+  // mig.327 — Duplicar documentos: id de la OC original cuando el usuario eligió
+  // "vincular en el Mapa de Relaciones" al duplicar. null en el resto de los casos.
+  duplicadoDeId?: string | null;
 }
 
 // Igual forma que CreateOCPayload — actualizar_orden_compra() usa el mismo shape de
@@ -108,6 +111,7 @@ export const ordenesCompraService = {
         total,
         estado: 'borrador' as OrdenCompraEstado,
         estado_pago: 'pendiente' as EstadoPago,
+        duplicado_de_id: payload.duplicadoDeId ?? null,
       }])
       .select()
       .single();

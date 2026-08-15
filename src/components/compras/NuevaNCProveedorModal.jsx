@@ -63,7 +63,7 @@ const calcNetoIva = (item) => {
   return { neto, iva: bruto - neto };
 };
 
-function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, onSuccess }) {
+function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, duplicarOrigen = null, duplicadoDeId = null, onSuccess }) {
   const { user }                          = useAuth();
   const { currentSession, isSessionOpen } = useCaja();
   const { toast }                         = useToast();
@@ -93,7 +93,30 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, onSucc
     if (compraOrigen) {
       setProveedorId(compraOrigen.proveedor_id || '');
     }
-  }, [open, user?.empresa_id, compraOrigen?.id]);
+
+    // Pre-cargar ítems desde otra NC de proveedor (flujo "Duplicar", 15/08) —
+    // proveedor queda editable (no entra en origenLocked) y NUNCA se pasa a
+    // p_compra_id (standalone, misma decisión que Ventas).
+    if (duplicarOrigen?.id) {
+      setProveedorId(duplicarOrigen.proveedor_id || '');
+      supabase.from('notas_credito_proveedor_items')
+        .select('id, producto_id, descripcion, cantidad, precio_unitario, alicuota_iva')
+        .eq('nota_credito_proveedor_id', duplicarOrigen.id)
+        .eq('empresa_id', user.empresa_id)
+        .then(({ data }) => {
+          if (data?.length > 0) {
+            setItems(data.map(i => ({
+              _id:          Math.random().toString(36).slice(2),
+              producto_id:  i.producto_id,
+              descripcion:  i.descripcion || '',
+              cantidad:     Number(i.cantidad),
+              precio_unit:  Number(i.precio_unitario),
+              alicuota_iva: Number(i.alicuota_iva ?? 21),
+            })));
+          }
+        });
+    }
+  }, [open, user?.empresa_id, compraOrigen?.id, duplicarOrigen?.id]);
 
   // ── Reset al cerrar ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -190,6 +213,13 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, onSucc
         p_caja_sesion_id:     reembolsoEfectivo ? currentSession?.id ?? null : null,
       });
       if (error) throw error;
+
+      // mig.327 — Duplicar documentos: vínculo opcional hacia la NC original.
+      if (duplicadoDeId) {
+        await supabase.from('notas_credito_proveedor')
+          .update({ duplicado_de_id: duplicadoDeId })
+          .eq('id', data.nota_credito_proveedor_id);
+      }
 
       asientosAutoService.crearAsientoNotaProveedor(user.empresa_id, user.id, {
         documentoId: data.nota_credito_proveedor_id,

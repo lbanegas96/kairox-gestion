@@ -62,7 +62,7 @@ const calcNetoIva = (item) => {
 // (HistorialVentas.jsx). Sin comprobanteOrigen: ND standalone — se elige
 // cliente y, opcionalmente, una factura relacionada (solo trazabilidad, no
 // afecta ningún saldo).
-function NuevaNDModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess }) {
+function NuevaNDModal({ open, onOpenChange, comprobanteOrigen = null, duplicarOrigen = null, duplicadoDeId = null, onSuccess }) {
   const { user }  = useAuth();
   const { toast } = useToast();
 
@@ -131,7 +131,32 @@ function NuevaNDModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
       setReferenciaCliente(comprobanteOrigen.referencia_cliente || '');
       setFacturaId(comprobanteOrigen.id || '');
     }
-  }, [open, user?.empresa_id, comprobanteOrigen?.id]);
+
+    // Pre-cargar ítems desde otra ND (flujo "Duplicar", 15/08) — mismo criterio
+    // que NuevaNCModal.jsx: cliente queda editable (no entra en origenLocked) y
+    // NUNCA se pasa a facturaId/comprobante_origen (standalone, decisión ya
+    // tomada — evitar sugerir un segundo cargo sobre la misma factura).
+    if (duplicarOrigen?.id) {
+      setClienteId(duplicarOrigen.cliente_id || '');
+      setReferenciaCliente(duplicarOrigen.referencia_cliente || '');
+      supabase.from('comprobante_items')
+        .select('id, producto_id, descripcion, cantidad, precio_unitario, alicuota_iva, productos(nombre)')
+        .eq('comprobante_id', duplicarOrigen.id)
+        .eq('empresa_id', user.empresa_id)
+        .then(({ data }) => {
+          if (data?.length > 0) {
+            setItems(data.map(i => ({
+              _id:          Math.random().toString(36).slice(2),
+              producto_id:  i.producto_id,
+              descripcion:  i.descripcion || i.productos?.nombre || '',
+              cantidad:     Number(i.cantidad),
+              precio_unit:  Number(i.precio_unitario),
+              alicuota_iva: Number(i.alicuota_iva ?? 21),
+            })));
+          }
+        });
+    }
+  }, [open, user?.empresa_id, comprobanteOrigen?.id, duplicarOrigen?.id]);
 
   // ── Standalone: cargar facturas del cliente elegido (solo trazabilidad) ─────
   useEffect(() => {
@@ -236,6 +261,13 @@ function NuevaNDModal({ open, onOpenChange, comprobanteOrigen = null, onSuccess 
         p_punto_venta_id:        afipConfig?.punto_venta?.id ?? null,
       });
       if (error) throw error;
+
+      // mig.327 — Duplicar documentos: vínculo opcional hacia la ND original.
+      if (duplicadoDeId) {
+        await supabase.from('comprobantes')
+          .update({ duplicado_de_id: duplicadoDeId })
+          .eq('id', data.comprobante_id);
+      }
 
       // punto_venta_id ya quedó grabado por la RPC (mig.296). La relevancia la
       // define el PdV heredado (criterio unificado, mig.294) — acá sólo se

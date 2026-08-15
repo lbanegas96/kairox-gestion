@@ -1,4 +1,4 @@
-import { Receipt, Network, FileMinus, FilePlus, Undo2 } from 'lucide-react';
+import { Receipt, Network, FileMinus, FilePlus, Undo2, Copy } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { formatDateAR } from '@/lib/dateUtils';
@@ -21,7 +21,7 @@ const ESTADO_LABELS = {
 
 function ModalDetalleFacturaCompra({
   compra, onClose, onOpenMapa,
-  onCopiarNc, onCopiarNd, onDevolver,
+  onCopiarNc, onCopiarNd, onDevolver, onDuplicar,
 }) {
   if (!compra) return null;
 
@@ -160,6 +160,11 @@ function ModalDetalleFacturaCompra({
           <Button variant="outline" onClick={onClose} className="dark:border-kx-border dark:text-slate-300">
             Cerrar
           </Button>
+          {onDuplicar && (
+            <Button variant="outline" onClick={() => onDuplicar(compra)} className="gap-2 dark:border-kx-border dark:text-slate-300">
+              <Copy className="w-4 h-4" /> Duplicar
+            </Button>
+          )}
           {onCopiarNc && (
             <Button variant="outline" onClick={() => onCopiarNc(compra)} className="gap-2 dark:border-kx-border dark:text-slate-300">
               <FileMinus className="w-4 h-4 text-kx-amber" /> Copiar a NC

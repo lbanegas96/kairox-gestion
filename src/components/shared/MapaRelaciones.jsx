@@ -15,6 +15,20 @@ import { formatDateAR } from '@/lib/dateUtils';
 const fmt = (n) =>
   Number(n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// mig.327 — Duplicar documentos: qué tabla/columna de número consultar por tipo
+// visual para resolver duplicado_de_id (self-FK, opcional). Solo cubre los tipos
+// que de verdad ganaron la columna — NC/ND recibidas (notas_debito,
+// notas_credito_proveedor) también la tienen, pero hoy no son un entry point
+// propio de este mapa (solo aparecen como nodos derivados de una compra), así
+// que sus duplicados no se resuelven acá — limitación aceptada, no un bug.
+const DUPLICADO_TABLAS = {
+  cotizacion:     { tabla: 'cotizaciones',   numeroCol: 'numero' },
+  pedido:         { tabla: 'pedidos',        numeroCol: 'numero' },
+  orden_compra:   { tabla: 'ordenes_compra', numeroCol: 'numero' },
+  venta:          { tabla: 'comprobantes',   numeroCol: 'numero_venta' },
+  factura_compra: { tabla: 'compras',        numeroCol: 'numero_factura' },
+};
+
 // mig.315 — Fase 1 del rediseño (PLAN_MAPA_RELACIONES.md): un ícono por tipo de
 // documento, mismo espíritu que los íconos circulares por etapa del Relationship
 // Map de SAP B1 — de un vistazo se distingue el tipo de paso, no solo el color.
@@ -278,6 +292,7 @@ function MapaRelaciones({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [activoId, setActivoId] = useState(null);        // id del nodo que se abrió — el que se marca "actual"
   const [sinFacturar, setSinFacturar] = useState(null);  // { label, nodo } cuando el entry point no tiene comprobante/compra todavía
+  const [duplicadoInfo, setDuplicadoInfo] = useState(null); // { origen: {tipo,id,numero}|null, duplicados: [{tipo,id,numero}] }
   const isCompra = mapa?.modo === 'compra' || (!!compraId && !comprobanteId);
 
   useEffect(() => {
@@ -286,8 +301,45 @@ function MapaRelaciones({
   }, [open, comprobanteId, compraId, cotizacionId, pedidoId, entregaId, recepcionId, devolucionId, ordenCompraId, user?.empresa_id]);
 
   useEffect(() => {
-    if (!open) { setMapa(null); setFullscreen(false); setPreviewNodo(null); setPreviewItems(null); setActivoId(null); setSinFacturar(null); }
+    if (!open) {
+      setMapa(null); setFullscreen(false); setPreviewNodo(null); setPreviewItems(null);
+      setActivoId(null); setSinFacturar(null); setDuplicadoInfo(null);
+    }
   }, [open]);
+
+  // mig.327 — Duplicar documentos: resuelve "duplicado de X" / "N duplicados de
+  // este" para el documento concreto (no bloquea el resto del mapa — fire and
+  // forget, mismo criterio que el resto de fetches secundarios de este archivo).
+  const fetchDuplicadoInfo = async (tipoVisual, id) => {
+    const cfg = DUPLICADO_TABLAS[tipoVisual];
+    if (!cfg || !id) { setDuplicadoInfo(null); return; }
+    try {
+      const { data: self } = await supabase.from(cfg.tabla)
+        .select(`id, duplicado_de_id, ${cfg.numeroCol}`)
+        .eq('id', id).eq('empresa_id', user.empresa_id).maybeSingle();
+      if (!self) { setDuplicadoInfo(null); return; }
+
+      let origen = null;
+      if (self.duplicado_de_id) {
+        const { data: o } = await supabase.from(cfg.tabla)
+          .select(`id, ${cfg.numeroCol}`)
+          .eq('id', self.duplicado_de_id).eq('empresa_id', user.empresa_id).maybeSingle();
+        if (o) origen = { tipo: tipoVisual, id: o.id, numero: o[cfg.numeroCol] };
+      }
+
+      const { data: dups } = await supabase.from(cfg.tabla)
+        .select(`id, ${cfg.numeroCol}`)
+        .eq('duplicado_de_id', id).eq('empresa_id', user.empresa_id);
+
+      setDuplicadoInfo({
+        origen,
+        duplicados: (dups ?? []).map(d => ({ tipo: tipoVisual, id: d.id, numero: d[cfg.numeroCol] })),
+      });
+    } catch (err) {
+      console.error('[MapaRelaciones/duplicado]', err);
+      setDuplicadoInfo(null);
+    }
+  };
 
   // ── Cadena pre-facturación (Ventas) ─────────────────────────────────────────
   // Bug real (14/08, Luciano): todo el mapa se armaba anclado en la factura, así
@@ -347,6 +399,7 @@ function MapaRelaciones({
   // ── Resolución del punto de entrada ──────────────────────────────────────────
   const resolveAndFetch = async () => {
     setSinFacturar(null);
+    setDuplicadoInfo(null);
     if (comprobanteId) { setActivoId(comprobanteId); return fetchMapaVenta(comprobanteId); }
     if (compraId)       { setActivoId(compraId);      return fetchMapaCompra(compraId); }
 
@@ -357,6 +410,7 @@ function MapaRelaciones({
           .select('id, numero, fecha, total, estado, comprobante_id')
           .eq('id', cotizacionId).eq('empresa_id', user.empresa_id).maybeSingle();
         if (!data) return setMapa(null);
+        fetchDuplicadoInfo('cotizacion', cotizacionId);
         if (data.comprobante_id) { setActivoId(cotizacionId); return fetchMapaVenta(data.comprobante_id); }
         setActivoId(cotizacionId);
         return setSinFacturar({ label: 'Cotización', nodos: await fetchCadenaPreFactura({ cotizacion: data }) });
@@ -366,6 +420,7 @@ function MapaRelaciones({
           .select('id, numero, fecha, total, estado, comprobante_id, cotizacion_id')
           .eq('id', pedidoId).eq('empresa_id', user.empresa_id).maybeSingle();
         if (!data) return setMapa(null);
+        fetchDuplicadoInfo('pedido', pedidoId);
         if (data.comprobante_id) { setActivoId(pedidoId); return fetchMapaVenta(data.comprobante_id); }
         setActivoId(pedidoId);
         return setSinFacturar({ label: 'Pedido', nodos: await fetchCadenaPreFactura({ pedido: data }) });
@@ -398,6 +453,7 @@ function MapaRelaciones({
           .select('id, numero, fecha, total, estado')
           .eq('id', ordenCompraId).eq('empresa_id', user.empresa_id).maybeSingle();
         if (!data) return setMapa(null);
+        fetchDuplicadoInfo('orden_compra', ordenCompraId);
         const { data: compra } = await supabase.from('compras')
           .select('id').eq('orden_compra_id', ordenCompraId).eq('empresa_id', user.empresa_id).maybeSingle();
         if (compra) { setActivoId(ordenCompraId); return fetchMapaCompra(compra.id); }
@@ -441,6 +497,7 @@ function MapaRelaciones({
   // resolveAndFetch encontró a partir de una cotización/pedido/entrega/devolución).
   const fetchMapaVenta = async (idComprobante) => {
     setLoading(true);
+    fetchDuplicadoInfo('venta', idComprobante);
     try {
       const { data: comp } = await supabase.from('comprobantes')
         .select('id, numero_venta, numero_afip, tipo, total, fecha, cliente_nombre, comprobante_origen_id, pedido_id, cotizacion_id')
@@ -567,6 +624,7 @@ function MapaRelaciones({
   // encontró a partir de una recepción/devolución de proveedor).
   const fetchMapaCompra = async (idCompra) => {
     setLoading(true);
+    fetchDuplicadoInfo('factura_compra', idCompra);
     try {
       const { data: compra } = await supabase.from('compras')
         .select('id, numero_factura, total, fecha, proveedor_id, proveedores(nombre)')
@@ -797,6 +855,43 @@ function MapaRelaciones({
           <DialogDescription className="text-kx-text-2 text-xs">
             Árbol de documentos vinculados
           </DialogDescription>
+          {/* mig.327 — Duplicar documentos: trazabilidad opcional entre un documento
+              y el que lo originó/los que se duplicaron a partir de él. */}
+          {(duplicadoInfo?.origen || duplicadoInfo?.duplicados?.length > 0) && (
+            <div className="flex flex-col gap-1 pt-1">
+              {duplicadoInfo.origen && (
+                <div className="flex items-center gap-1.5 text-2xs text-kx-text-3">
+                  <Layers className="w-3 h-3 shrink-0" />
+                  Duplicado de{' '}
+                  <button
+                    type="button"
+                    onClick={() => navigate(navTipoFor(duplicadoInfo.origen.tipo), duplicadoInfo.origen.id)}
+                    className="text-kx-violet hover:underline font-medium"
+                  >
+                    {duplicadoInfo.origen.numero}
+                  </button>
+                </div>
+              )}
+              {duplicadoInfo.duplicados.length > 0 && (
+                <div className="flex items-center gap-1.5 text-2xs text-kx-text-3 flex-wrap">
+                  <Layers className="w-3 h-3 shrink-0" />
+                  {duplicadoInfo.duplicados.length === 1 ? 'Duplicado en' : `${duplicadoInfo.duplicados.length} duplicados:`}
+                  {duplicadoInfo.duplicados.map((d, i) => (
+                    <span key={d.id}>
+                      <button
+                        type="button"
+                        onClick={() => navigate(navTipoFor(d.tipo), d.id)}
+                        className="text-kx-violet hover:underline font-medium"
+                      >
+                        {d.numero}
+                      </button>
+                      {i < duplicadoInfo.duplicados.length - 1 ? ',' : ''}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </DialogHeader>
 
         <div className={`flex gap-0 ${fullscreen ? 'flex-1 overflow-hidden' : 'min-h-[180px]'}`}>

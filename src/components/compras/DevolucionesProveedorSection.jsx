@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RotateCcw, FileWarning, FileMinus, ChevronDown, ChevronRight, Package, Ban, Loader2 } from 'lucide-react';
+import { RotateCcw, FileWarning, FileMinus, ChevronDown, ChevronRight, Package, Ban, Loader2, Copy } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,9 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { formatDateAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
+import ConfirmDuplicarDialog from '@/components/shared/ConfirmDuplicarDialog';
+import NuevaNCProveedorModal from './NuevaNCProveedorModal';
+import NuevaNotaDebitoModal from '@/components/shared/NuevaNotaDebitoModal';
 
 // Fase 4 (15/08): desglose Neto/IVA en el panel expandido de Devoluciones a
 // Proveedor — mismo criterio que el resto de Compras (siempre visible, sin
@@ -206,13 +209,16 @@ function NotasDebitoRecibidas() {
   const [cancelTarget, setCancelTarget] = useState(null); // { id, numero_nd }
   const [motivo, setMotivo]       = useState('');
   const [cancelando, setCancelando] = useState(false);
+  const [duplicarTarget, setDuplicarTarget] = useState(null);
+  const [duplicarVincular, setDuplicarVincular] = useState(false);
+  const [isDuplicarOpen, setIsDuplicarOpen] = useState(false);
 
   const fetchNotas = () => {
     if (!user?.empresa_id) return;
     setLoading(true);
     supabase
       .from('notas_debito')
-      .select('id, numero_nd, fecha, concepto, monto, neto_gravado, iva_discriminado, tipo, estado, proveedores(nombre)')
+      .select('id, numero_nd, fecha, concepto, monto, neto_gravado, iva_discriminado, tipo, estado, proveedor_id, proveedores(nombre)')
       .eq('empresa_id', user.empresa_id)
       .eq('tipo', 'recibida')
       .order('created_at', { ascending: false })
@@ -303,15 +309,24 @@ function NotasDebitoRecibidas() {
                     ${Number(nd.monto).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="p-3 text-right">
-                    {nd.estado !== 'cancelada' && (
+                    <div className="flex items-center justify-end gap-1">
                       <Button
                         size="sm" variant="ghost"
-                        className="h-6 text-2xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 gap-1"
-                        onClick={() => setCancelTarget({ id: nd.id, numero_nd: nd.numero_nd })}
+                        className="h-6 text-2xs text-kx-violet hover:bg-violet-50 dark:hover:bg-violet-900/20 gap-1"
+                        onClick={() => setDuplicarTarget(nd)}
                       >
-                        <Ban className="h-3 w-3" /> Cancelar
+                        <Copy className="h-3 w-3" /> Duplicar
                       </Button>
-                    )}
+                      {nd.estado !== 'cancelada' && (
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-6 text-2xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 gap-1"
+                          onClick={() => setCancelTarget({ id: nd.id, numero_nd: nd.numero_nd })}
+                        >
+                          <Ban className="h-3 w-3" /> Cancelar
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -344,6 +359,21 @@ function NotasDebitoRecibidas() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ConfirmDuplicarDialog
+        open={!!duplicarTarget}
+        onOpenChange={(v) => !v && setDuplicarTarget(null)}
+        tipoLabel="Nota de Débito"
+        numero={duplicarTarget?.numero_nd}
+        onConfirm={(vincular) => { setDuplicarVincular(vincular); setIsDuplicarOpen(true); }}
+      />
+      <NuevaNotaDebitoModal
+        open={isDuplicarOpen}
+        onOpenChange={v => { setIsDuplicarOpen(v); if (!v) setDuplicarTarget(null); }}
+        duplicarOrigen={duplicarTarget ? { id: duplicarTarget.id, entidadId: duplicarTarget.proveedor_id } : null}
+        duplicadoDeId={duplicarVincular ? (duplicarTarget?.id ?? null) : null}
+        onSuccess={() => { setIsDuplicarOpen(false); setDuplicarTarget(null); fetchNotas(); }}
+      />
     </Card>
   );
 }
@@ -356,13 +386,16 @@ function NotasCreditoRecibidas() {
   const [cancelTarget, setCancelTarget] = useState(null); // { id, numero_ncp, reembolso_efectivo }
   const [motivo, setMotivo]       = useState('');
   const [cancelando, setCancelando] = useState(false);
+  const [duplicarTarget, setDuplicarTarget] = useState(null);
+  const [duplicarVincular, setDuplicarVincular] = useState(false);
+  const [isDuplicarOpen, setIsDuplicarOpen] = useState(false);
 
   const fetchNotas = () => {
     if (!user?.empresa_id) return;
     setLoading(true);
     supabase
       .from('notas_credito_proveedor')
-      .select('id, numero_ncp, fecha, motivo, monto, neto_gravado, iva_discriminado, reembolso_efectivo, estado, proveedores(nombre)')
+      .select('id, numero_ncp, fecha, motivo, monto, neto_gravado, iva_discriminado, reembolso_efectivo, estado, proveedor_id, proveedores(nombre)')
       .eq('empresa_id', user.empresa_id)
       .order('fecha', { ascending: false })
       .then(({ data, error }) => {
@@ -454,18 +487,27 @@ function NotasCreditoRecibidas() {
                     ${Number(nc.monto).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="p-3 text-right">
-                    {nc.estado !== 'cancelada' && !nc.reembolso_efectivo && (
+                    <div className="flex items-center justify-end gap-1">
                       <Button
                         size="sm" variant="ghost"
-                        className="h-6 text-2xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 gap-1"
-                        onClick={() => setCancelTarget({ id: nc.id, numero_ncp: nc.numero_ncp })}
+                        className="h-6 text-2xs text-kx-violet hover:bg-violet-50 dark:hover:bg-violet-900/20 gap-1"
+                        onClick={() => setDuplicarTarget(nc)}
                       >
-                        <Ban className="h-3 w-3" /> Cancelar
+                        <Copy className="h-3 w-3" /> Duplicar
                       </Button>
-                    )}
-                    {nc.estado !== 'cancelada' && nc.reembolso_efectivo && (
-                      <span className="text-2xs text-kx-text-3 italic">Cobrada en efectivo</span>
-                    )}
+                      {nc.estado !== 'cancelada' && !nc.reembolso_efectivo && (
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-6 text-2xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 gap-1"
+                          onClick={() => setCancelTarget({ id: nc.id, numero_ncp: nc.numero_ncp })}
+                        >
+                          <Ban className="h-3 w-3" /> Cancelar
+                        </Button>
+                      )}
+                      {nc.estado !== 'cancelada' && nc.reembolso_efectivo && (
+                        <span className="text-2xs text-kx-text-3 italic">Cobrada en efectivo</span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -498,6 +540,21 @@ function NotasCreditoRecibidas() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ConfirmDuplicarDialog
+        open={!!duplicarTarget}
+        onOpenChange={(v) => !v && setDuplicarTarget(null)}
+        tipoLabel="Nota de Crédito"
+        numero={duplicarTarget?.numero_ncp}
+        onConfirm={(vincular) => { setDuplicarVincular(vincular); setIsDuplicarOpen(true); }}
+      />
+      <NuevaNCProveedorModal
+        open={isDuplicarOpen}
+        onOpenChange={v => { setIsDuplicarOpen(v); if (!v) setDuplicarTarget(null); }}
+        duplicarOrigen={duplicarTarget ? { id: duplicarTarget.id, proveedor_id: duplicarTarget.proveedor_id } : null}
+        duplicadoDeId={duplicarVincular ? (duplicarTarget?.id ?? null) : null}
+        onSuccess={() => { setIsDuplicarOpen(false); setDuplicarTarget(null); fetchNotas(); }}
+      />
     </Card>
   );
 }

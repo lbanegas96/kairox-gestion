@@ -59,7 +59,7 @@ const calcNetoIva = (item) => {
  *   origen:  null | { entidadId, entidadNombre, docId, docNumero, docTotal, lockEntidad }
  *   onSuccess
  */
-function NuevaNotaDebitoModal({ open, onOpenChange, origen = null, onSuccess }) {
+function NuevaNotaDebitoModal({ open, onOpenChange, origen = null, duplicarOrigen = null, duplicadoDeId = null, onSuccess }) {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -88,6 +88,30 @@ function NuevaNotaDebitoModal({ open, onOpenChange, origen = null, onSuccess }) 
     if (origen?.entidadId) setEntidadId(origen.entidadId);
     if (origen?.docId)     setComprobanteId(origen.docId);
   }, [open, origen?.entidadId, origen?.docId]);
+
+  // Pre-cargar ítems desde otra ND recibida (flujo "Duplicar", 15/08) —
+  // proveedor queda editable y NUNCA se pasa a comprobanteId/p_compra_id
+  // (standalone, misma decisión que el resto de NC/ND).
+  useEffect(() => {
+    if (!open || !duplicarOrigen?.id || !user?.empresa_id) return;
+    if (duplicarOrigen.entidadId) setEntidadId(duplicarOrigen.entidadId);
+    supabase.from('notas_debito_items')
+      .select('id, producto_id, descripcion, cantidad, precio_unitario, alicuota_iva')
+      .eq('nota_debito_id', duplicarOrigen.id)
+      .eq('empresa_id', user.empresa_id)
+      .then(({ data }) => {
+        if (data?.length > 0) {
+          setItems(data.map(i => ({
+            _id:          Math.random().toString(36).slice(2),
+            producto_id:  i.producto_id,
+            descripcion:  i.descripcion || '',
+            cantidad:     Number(i.cantidad),
+            precio_unit:  Number(i.precio_unitario),
+            alicuota_iva: Number(i.alicuota_iva ?? 21),
+          })));
+        }
+      });
+  }, [open, user?.empresa_id, duplicarOrigen?.id]);
 
   // ── Reset al cerrar ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -169,6 +193,13 @@ function NuevaNotaDebitoModal({ open, onOpenChange, origen = null, onSuccess }) 
         p_compra_id: comprobanteId || null,
       });
       if (error) throw error;
+
+      // mig.327 — Duplicar documentos: vínculo opcional hacia la ND original.
+      if (duplicadoDeId) {
+        await supabase.from('notas_debito')
+          .update({ duplicado_de_id: duplicadoDeId })
+          .eq('id', data.nota_debito_id);
+      }
 
       const numeroNd = data?.numero_nd || 'ND';
 

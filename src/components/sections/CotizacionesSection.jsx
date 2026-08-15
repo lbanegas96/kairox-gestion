@@ -18,6 +18,7 @@ import TablaCotizaciones from '@/components/cotizaciones/TablaCotizaciones';
 import FormNuevaCotizacion from '@/components/cotizaciones/FormNuevaCotizacion';
 import ModalDetalleCotizacion from '@/components/cotizaciones/ModalDetalleCotizacion';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
+import ConfirmDuplicarDialog from '@/components/shared/ConfirmDuplicarDialog';
 import { determinarTipoComprobante } from '@/hooks/useAfipConfig';
 
 // precio_unitario es SIEMPRE el precio final que paga el cliente (IVA incluido) —
@@ -83,6 +84,11 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
 
   // Bloqueo por tipo de cambio faltante
   const [tcMissing, setTcMissing] = useState(false);
+
+  // Duplicar documento (14/08, definido por Luciano): mismo mecanismo de
+  // creación normal, pre-cargando desde el original. duplicarTarget = la
+  // cotización elegida para duplicar (solo necesita id/numero para el diálogo).
+  const [duplicarTarget, setDuplicarTarget] = useState(null);
 
   const empresaId = user?.empresa_id;
 
@@ -341,6 +347,36 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
     setIsModalOpen(true);
   };
 
+  // "Duplicar" (14/08, definición de Luciano): crea una cotización NUEVA con los
+  // mismos ítems/cliente/condiciones que la original — nunca edita, siempre pasa
+  // por createMutation. Fecha de vencimiento se resetea (no tiene sentido heredar
+  // una fecha vieja); la fecha de cabecera ya la pone create() automáticamente
+  // (hoy). "Vincular" arma duplicado_de_id → el Mapa de Relaciones lo muestra.
+  const handleConfirmarDuplicar = async (vincular) => {
+    if (!duplicarTarget) return;
+    const full = await cotizacionesService.getById(duplicarTarget.id);
+    createMutation.mutate({
+      cliente: full.cliente_nombre ? { id: full.cliente_id, nombre: full.cliente_nombre } : null,
+      items: (full.cotizacion_items ?? []).map(i => ({
+        descripcion: i.descripcion,
+        cantidad: i.cantidad,
+        precio_unitario: i.precio_unitario,
+        descuento_item: i.descuento_item || 0,
+        producto_id: i.producto_id,
+        unidad_medida: i.unidad_medida ?? '',
+        alicuota_iva: i.alicuota_iva ?? '21',
+      })),
+      notas: full.notas,
+      condicionesPago: full.condiciones_pago,
+      fechaVencimiento: null,
+      moneda: full.moneda,
+      tipoCambioTasa: full.tipo_cambio_tasa,
+      descuentoGlobal: full.descuento,
+      duplicadoDeId: vincular ? full.id : null,
+    });
+    setDuplicarTarget(null);
+  };
+
   // Bug real encontrado por Luciano (12/08): el combo cortaba a 10 resultados
   // incluso con el buscador vacío — con Nalux teniendo 17 productos activos,
   // 7 nunca aparecían al abrir el campo sin tipear nada. Subido a 50 (cubre
@@ -572,8 +608,18 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
         onVerPedido={onVerPedido ? (id) => { setViewId(null); onVerPedido(id); } : undefined}
         onCambiarEstado={(id, estado) => estadoMutation.mutate({ id, estado })}
         onEditar={handleEditarClick}
+        onDuplicar={(cot) => { setViewId(null); setDuplicarTarget(cot); }}
         discrimina={detalle ? determinarTipoComprobante(empresaCondicionIva, detalle.clientes?.condicion_iva ?? 'CF') === 'A' : false}
         onOpenMapa={(id) => { setMapaCotId(id); setIsMapaOpen(true); }}
+      />
+
+      <ConfirmDuplicarDialog
+        open={!!duplicarTarget}
+        onOpenChange={(v) => !v && setDuplicarTarget(null)}
+        tipoLabel="Cotización"
+        numero={duplicarTarget?.numero}
+        onConfirm={handleConfirmarDuplicar}
+        loading={createMutation.isPending}
       />
 
       {/* Aviso de copia duplicada — no bloquea (SAP B1 permite copiar en tandas),

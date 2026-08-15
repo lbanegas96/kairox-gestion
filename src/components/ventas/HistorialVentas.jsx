@@ -16,6 +16,8 @@ import SaleDetailModal from './SaleDetailModal';
 import NuevaDevolucionModal from '@/components/shared/NuevaDevolucionModal';
 import NuevaNCModal from './NuevaNCModal';
 import NuevaNDModal from './NuevaNDModal';
+import NuevaFacturaModal from './NuevaFacturaModal';
+import ConfirmDuplicarDialog from '@/components/shared/ConfirmDuplicarDialog';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import { formatDateAR, formatTimeAR } from '@/lib/dateUtils';
@@ -48,6 +50,15 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate, onRegistrarC
   const [isNdOpen, setIsNdOpen]               = useState(false);
   const [mapaCompId, setMapaCompId]           = useState(null);
   const [isMapaOpen, setIsMapaOpen]           = useState(false);
+  // Duplicar (15/08, definido por Luciano) — el diálogo de confirmación guarda
+  // solo id/numero; al confirmar recién se resuelve tipoDoc/PdV origen y se
+  // abre NuevaFacturaModal pre-cargado.
+  const [duplicarTarget, setDuplicarTarget]   = useState(null);
+  const [duplicarOrigen, setDuplicarOrigen]   = useState(null); // shape para comprobanteOrigen/duplicarOrigen
+  const [duplicarDeId, setDuplicarDeId]       = useState(null);
+  const [isDuplicarFacturaOpen, setIsDuplicarFacturaOpen] = useState(false);
+  const [isDuplicarNcOpen, setIsDuplicarNcOpen] = useState(false);
+  const [isDuplicarNdOpen, setIsDuplicarNdOpen] = useState(false);
   const [reintentandoCaeId, setReintentandoCaeId] = useState(null);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
@@ -445,6 +456,15 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate, onRegistrarC
                           >
                             <Network className="h-3.5 w-3.5 text-kx-violet" /> Mapa de relaciones
                           </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={(e) => {
+                              e.preventDefault();
+                              setTimeout(() => setDuplicarTarget(sale), 0);
+                            }}
+                            className="gap-2 cursor-pointer"
+                          >
+                            <Copy className="h-3.5 w-3.5 text-kx-violet" /> Duplicar
+                          </DropdownMenuItem>
                           {(sale.cae_estado === 'error' || sale.cae_estado === 'error_definitivo') && (
                             <>
                               <DropdownMenuSeparator className="bg-kx-border" />
@@ -594,10 +614,55 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate, onRegistrarC
         onSuccess={() => fetchData()}
       />
 
+      <ConfirmDuplicarDialog
+        open={!!duplicarTarget}
+        onOpenChange={(v) => !v && setDuplicarTarget(null)}
+        tipoLabel={duplicarTarget?.tipo === 'nota_credito' ? 'Nota de Crédito' : duplicarTarget?.tipo === 'nota_debito' ? 'Nota de Débito' : 'Factura'}
+        numero={duplicarTarget?.numero_afip ?? duplicarTarget?.numero_venta}
+        onConfirm={(vincular) => {
+          setDuplicarOrigen({
+            id:                    duplicarTarget.id,
+            cliente_id:            duplicarTarget.cliente_id,
+            referencia_cliente:    duplicarTarget.referencia_cliente,
+            tipo_comprobante_afip: duplicarTarget.tipo_comprobante_afip,
+            punto_venta_id:        duplicarTarget.punto_venta_id,
+          });
+          setDuplicarDeId(vincular ? duplicarTarget.id : null);
+          if (duplicarTarget.tipo === 'nota_credito') setIsDuplicarNcOpen(true);
+          else if (duplicarTarget.tipo === 'nota_debito') setIsDuplicarNdOpen(true);
+          else setIsDuplicarFacturaOpen(true);
+          setDuplicarTarget(null);
+        }}
+      />
+
+      <NuevaFacturaModal
+        open={isDuplicarFacturaOpen}
+        onOpenChange={v => { setIsDuplicarFacturaOpen(v); if (!v) { setDuplicarOrigen(null); setDuplicarDeId(null); } }}
+        comprobanteOrigen={duplicarOrigen}
+        duplicadoDeId={duplicarDeId}
+        onSuccess={() => fetchData()}
+      />
+
+      <NuevaNCModal
+        open={isDuplicarNcOpen}
+        onOpenChange={v => { setIsDuplicarNcOpen(v); if (!v) { setDuplicarOrigen(null); setDuplicarDeId(null); } }}
+        duplicarOrigen={duplicarOrigen}
+        duplicadoDeId={duplicarDeId}
+        onSuccess={() => fetchData()}
+      />
+
       <NuevaNDModal
         open={isNdOpen}
         onOpenChange={v => { setIsNdOpen(v); if (!v) setNdOrigen(null); }}
         comprobanteOrigen={ndOrigen}
+        onSuccess={() => fetchData()}
+      />
+
+      <NuevaNDModal
+        open={isDuplicarNdOpen}
+        onOpenChange={v => { setIsDuplicarNdOpen(v); if (!v) { setDuplicarOrigen(null); setDuplicarDeId(null); } }}
+        duplicarOrigen={duplicarOrigen}
+        duplicadoDeId={duplicarDeId}
         onSuccess={() => fetchData()}
       />
 

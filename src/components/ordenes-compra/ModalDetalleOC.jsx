@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ShoppingBag, Truck, Receipt, AlertTriangle, BadgeCheck, Banknote, RotateCcw, Pencil, History, ChevronDown, ChevronRight, Code2, Network } from 'lucide-react';
+import { ShoppingBag, Truck, Receipt, AlertTriangle, BadgeCheck, Banknote, RotateCcw, Pencil, History, ChevronDown, ChevronRight, Code2, Network, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { formatCurrency } from '@/lib/currencyUtils';
@@ -27,6 +27,7 @@ function ModalDetalleOC({
   setDevolverOC, setGenRecepId,
   abrirModalFactura,
   onEditar,
+  onDuplicar,
   onOpenMapa,
 }) {
   const [showHistorial, setShowHistorial] = useState(false);
@@ -276,6 +277,12 @@ function ModalDetalleOC({
             <Button variant="outline" className="gap-2 dark:border-kx-border dark:text-slate-300"
               onClick={() => onEditar(detalle)}>
               <Pencil className="w-4 h-4" /> Editar
+            </Button>
+          )}
+          {onDuplicar && detalle && (
+            <Button variant="outline" className="gap-2 dark:border-kx-border dark:text-slate-300"
+              onClick={() => onDuplicar(detalle)}>
+              <Copy className="w-4 h-4" /> Duplicar
             </Button>
           )}
           {detalle && ['recibida', 'recibida_parcial'].includes(detalle.estado) && (

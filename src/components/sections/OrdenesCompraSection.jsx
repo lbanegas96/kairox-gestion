@@ -18,6 +18,7 @@ import TablaOrdenesCompra from '@/components/ordenes-compra/TablaOrdenesCompra';
 import FormNuevaOC from '@/components/ordenes-compra/FormNuevaOC';
 import ModalDetalleOC from '@/components/ordenes-compra/ModalDetalleOC';
 import ModalRegistrarFactura from '@/components/ordenes-compra/ModalRegistrarFactura';
+import ConfirmDuplicarDialog from '@/components/shared/ConfirmDuplicarDialog';
 
 // costo_unitario es SIEMPRE el precio final que paga la empresa (IVA incluido) —
 // mismo criterio que Cotizaciones/Pedidos/Ventas. Para separar neto/IVA hay que
@@ -46,6 +47,7 @@ function OrdenesCompraSection() {
   const [facturaModal, setFacturaModal] = useState(false);
   const [mapaOcId, setMapaOcId] = useState(null);
   const [isMapaOpen, setIsMapaOpen] = useState(false);
+  const [duplicarTarget, setDuplicarTarget] = useState(null);
   const [facturaForm, setFacturaForm] = useState({ numero_factura: '', fecha_factura: '', items: [] });
 
   // form nueva OC / edición (editingId != null = editando una OC existente)
@@ -191,6 +193,36 @@ function OrdenesCompraSection() {
     },
     onError: (e) => toast({ title: 'Error al guardar los cambios', description: e.message, variant: 'destructive' }),
   });
+
+  // "Duplicar" (14/08, definido por Luciano): crea una OC NUEVA con los mismos
+  // ítems/proveedor/condiciones que la original — reusa createMutation directo
+  // (no pasa por el form). fecha_entrega_esperada se resetea; la fecha de
+  // cabecera ya la pone create() automáticamente (hoy).
+  const handleConfirmarDuplicar = async (vincular) => {
+    if (!duplicarTarget) return;
+    const full = await ordenesCompraService.getById(duplicarTarget.id);
+    createMutation.mutate({
+      proveedor_id: full.proveedor_id ?? null,
+      proveedor_nombre: full.proveedor_nombre ?? full.proveedores?.nombre ?? null,
+      fecha_entrega_esperada: null,
+      forma_pago: full.forma_pago,
+      notas: full.notas,
+      moneda: full.moneda,
+      tipoCambioTasa: full.tipo_cambio_tasa,
+      descuentoGlobalPct: full.descuento_global_pct,
+      items: (full.ordenes_compra_items ?? []).map(i => ({
+        producto_id: i.producto_id,
+        descripcion: i.descripcion,
+        cantidad_pedida: i.cantidad_pedida,
+        costo_unitario: i.costo_unitario,
+        descuento_item: i.descuento_item || 0,
+        unidad_medida: i.unidad_medida ?? '',
+        alicuota_iva: i.alicuota_iva ?? '21',
+      })),
+      duplicadoDeId: vincular ? full.id : null,
+    }, { onSuccess: (oc) => setDetalleId(oc.id) });
+    setDuplicarTarget(null);
+  };
 
   // Helper: invalidar también el cache de notificaciones cuando cambia el estado/stock
   const invalidateOCAndNotifs = () => {
@@ -464,7 +496,17 @@ function OrdenesCompraSection() {
         setDevolverOC={setDevolverOC} setGenRecepId={setGenRecepId}
         abrirModalFactura={abrirModalFactura}
         onEditar={openEdit}
+        onDuplicar={(oc) => { setDetalleId(null); setDuplicarTarget(oc); }}
         onOpenMapa={(id) => { setMapaOcId(id); setIsMapaOpen(true); }}
+      />
+
+      <ConfirmDuplicarDialog
+        open={!!duplicarTarget}
+        onOpenChange={(v) => !v && setDuplicarTarget(null)}
+        tipoLabel="Orden de Compra"
+        numero={duplicarTarget?.numero}
+        onConfirm={handleConfirmarDuplicar}
+        loading={createMutation.isPending}
       />
 
       {/* OrdenesCompraSection no recibe onNavigate (Compras todavía no tiene
