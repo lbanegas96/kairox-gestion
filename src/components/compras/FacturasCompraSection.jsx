@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Receipt, Search, ChevronDown, ChevronRight,
+  Receipt, Search, ChevronRight,
   Undo2, MoreHorizontal, Eye, Network, FileMinus, FilePlus, Plus,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,7 @@ import NuevaDevolucionModal from '@/components/shared/NuevaDevolucionModal';
 import NuevaNCProveedorModal from './NuevaNCProveedorModal';
 import NuevaNotaDebitoModal from '@/components/shared/NuevaNotaDebitoModal';
 import NuevaFacturaProveedorModal from './NuevaFacturaProveedorModal';
+import ModalDetalleFacturaCompra from './ModalDetalleFacturaCompra';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 
 const ESTADO_LABELS = {
@@ -45,7 +46,10 @@ function FacturasCompraSection() {
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState('');
   const [filtroEstado, setFiltroEstado] = useState('todos');
-  const [expanded, setExpanded]   = useState({});
+  // Fase 2 (15/08): la fila expandible inline se reemplaza por un modal de
+  // detalle dedicado (ModalDetalleFacturaCompra) — antes era el único documento
+  // con precio real sin uno propio.
+  const [detalleCompra, setDetalleCompra] = useState(null);
 
   // ── Estados de modales ──────────────────────────────────────────────────────
   const [showNuevaFactura, setShowNuevaFactura]   = useState(false);
@@ -66,9 +70,10 @@ function FacturasCompraSection() {
         .from('compras')
         .select(`
           id, fecha, numero_factura, total, forma_pago, estado_pago, moneda, tipo_cambio_tasa,
-          monto_paralelo, tc_paralelo, created_at, proveedor_id,
+          monto_paralelo, tc_paralelo, created_at, proveedor_id, observaciones,
+          neto_gravado, iva_discriminado, descuento_global_pct,
           proveedores(nombre),
-          detalle_compras(id, cantidad, costo_unitario, subtotal, productos(nombre))
+          detalle_compras(id, cantidad, costo_unitario, subtotal, descuento_item, alicuota_iva, productos(nombre))
         `)
         .eq('empresa_id', user.empresa_id)
         .order('created_at', { ascending: false });
@@ -95,8 +100,6 @@ function FacturasCompraSection() {
     }
     return r;
   }, [compras, filtroEstado, search]);
-
-  const toggleExpand = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
 
   const abrirNc = (compra) => {
     setNcOrigen({
@@ -222,18 +225,14 @@ function FacturasCompraSection() {
                 </tr>
               ) : (
                 filtered.map(compra => {
-                  const items  = compra.detalle_compras || [];
-                  const isOpen = !!expanded[compra.id];
                   return (
                     <React.Fragment key={compra.id}>
                       <tr
                         className="hover:bg-kx-surface-2 cursor-pointer transition-colors"
-                        onClick={() => toggleExpand(compra.id)}
+                        onClick={() => setDetalleCompra(compra)}
                       >
                         <td className="p-3 text-kx-text-3">
-                          {isOpen
-                            ? <ChevronDown className="h-3.5 w-3.5" />
-                            : <ChevronRight className="h-3.5 w-3.5" />}
+                          <ChevronRight className="h-3.5 w-3.5" />
                         </td>
                         <td className="p-3 text-kx-text-2 text-xs">{formatDateAR(compra.fecha)}</td>
                         <td className="p-3 text-kx-text">{compra.proveedores?.nombre || '—'}</td>
@@ -275,11 +274,11 @@ function FacturasCompraSection() {
                               className="bg-kx-surface border-kx-border text-kx-text min-w-[210px]"
                             >
                               <DropdownMenuItem
-                                onClick={() => toggleExpand(compra.id)}
+                                onClick={() => setDetalleCompra(compra)}
                                 className="gap-2 cursor-pointer"
                               >
                                 <Eye className="w-4 h-4" />
-                                {isOpen ? 'Ocultar detalle' : 'Ver detalle'}
+                                Ver detalle
                               </DropdownMenuItem>
                               <DropdownMenuSeparator className="bg-kx-border" />
                               <DropdownMenuItem
@@ -317,30 +316,6 @@ function FacturasCompraSection() {
                           </DropdownMenu>
                         </td>
                       </tr>
-
-                      {isOpen && items.length > 0 && (
-                        <tr>
-                          <td />
-                          <td colSpan={tcParalelo.enabled ? 8 : 7} className="pb-3 pr-3">
-                            <div className="bg-kx-surface-2 rounded-lg border border-kx-border p-3">
-                              <p className="text-xs font-semibold text-kx-text-3 uppercase mb-2">
-                                Detalle de ítems
-                              </p>
-                              <div className="space-y-1">
-                                {items.map(item => (
-                                  <div key={item.id} className="flex items-center justify-between text-sm">
-                                    <span className="text-kx-text">{item.productos?.nombre || '—'}</span>
-                                    <span className="text-kx-text-2 text-xs font-mono">
-                                      {Number(item.cantidad).toLocaleString('es-AR')} u.
-                                      × ${Number(item.costo_unitario).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
                     </React.Fragment>
                   );
                 })
@@ -351,6 +326,15 @@ function FacturasCompraSection() {
       </Card>
 
       {/* ── Modales ─────────────────────────────────────────────────────────── */}
+      <ModalDetalleFacturaCompra
+        compra={detalleCompra}
+        onClose={() => setDetalleCompra(null)}
+        onOpenMapa={(id) => { setDetalleCompra(null); abrirMapa({ id }); }}
+        onCopiarNc={(c) => { setDetalleCompra(null); abrirNc(c); }}
+        onCopiarNd={(c) => { setDetalleCompra(null); abrirNd(c); }}
+        onDevolver={(c) => { setDetalleCompra(null); abrirDevolucion(c); }}
+      />
+
       <NuevaFacturaProveedorModal
         open={showNuevaFactura}
         onOpenChange={setShowNuevaFactura}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
@@ -17,27 +17,36 @@ import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 import ProveedorSelector from '@/components/shared/ProveedorSelector';
 import { asientosAutoService } from '@/services/planCuentasService';
 
+// Bug real (Fase 0.3, 13/08 — mismo hallazgo se repite acá): 27% viola el CHECK
+// real de detalle_compras.alicuota_iva (confirmado contra la base: solo admite
+// 21/10.5/0/exento/no_gravado). Sacado de la lista.
 const ALICUOTAS = [
   { value: 0,    label: 'Exento 0%' },
   { value: 10.5, label: '10.5%'     },
   { value: 21,   label: '21%'       },
-  { value: 27,   label: '27%'       },
 ];
 
 const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'CC Proveedor'];
 
 const newItem = () => ({
-  _id:          Math.random().toString(36).slice(2),
-  producto_id:  null,
-  descripcion:  '',
-  cantidad:     1,
-  precio_unit:  0,
-  alicuota_iva: 21,
+  _id:            Math.random().toString(36).slice(2),
+  producto_id:    null,
+  descripcion:    '',
+  cantidad:       1,
+  precio_unit:    0,
+  descuento_item: 0,
+  alicuota_iva:   21,
 });
 
+// Bug real (Fase 2, 15/08): Factura de Compra era el único documento con precio
+// real sin descuento — ni por línea ni global. Mismo criterio que Cotización/
+// Pedido/OC: precio_unit acá es NETO (sin IVA, a diferencia de Ventas donde el
+// precio incluye IVA), así que el descuento se aplica directo sobre el neto.
+const clampPct = (n) => Math.min(100, Math.max(0, Number(n) || 0));
 const calcNeto = (item) => {
-  const n = Number(item.cantidad) * (parseNumberLocale(item.precio_unit) || 0);
-  return isNaN(n) ? 0 : n;
+  const bruto = Number(item.cantidad) * (parseNumberLocale(item.precio_unit) || 0);
+  const neto  = bruto * (1 - clampPct(item.descuento_item) / 100);
+  return isNaN(neto) ? 0 : neto;
 };
 
 function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, onSuccess }) {
@@ -51,7 +60,8 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
   const [fecha, setFecha]                 = useState(getTodayAR());
   const [formaPago, setFormaPago]         = useState('CC Proveedor');
   const [items, setItems]                 = useState([newItem()]);
-  const [productosCache, setProductosCache] = useState([]);
+  const [descuentoGlobalPct, setDescuentoGlobalPct] = useState(0);
+  const [prodResults, setProdResults]     = useState({});
   const [searchFocusId, setSearchFocusId] = useState(null);
   const [loading, setLoading]             = useState(false);
   const tcParalelo                        = useTCParalelo();
@@ -85,12 +95,13 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
         .then(({ data }) => {
           if (data?.length > 0) {
             setItems(data.map(i => ({
-              _id:          Math.random().toString(36).slice(2),
-              producto_id:  i.producto_id,
-              descripcion:  i.productos?.nombre || '',
-              cantidad:     Number(i.cantidad),
-              precio_unit:  Number(i.costo_unitario),
-              alicuota_iva: Number(i.alicuota_iva ?? 21),
+              _id:            Math.random().toString(36).slice(2),
+              producto_id:    i.producto_id,
+              descripcion:    i.productos?.nombre || '',
+              cantidad:       Number(i.cantidad),
+              precio_unit:    Number(i.costo_unitario),
+              descuento_item: clampPct(i.descuento_item),
+              alicuota_iva:   Number(i.alicuota_iva ?? 21),
             })));
           }
         });
@@ -105,23 +116,24 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
       setFecha(getTodayAR());
       setFormaPago('CC Proveedor');
       setItems([newItem()]);
+      setDescuentoGlobalPct(0);
+      setProdResults({});
       setSearchFocusId(null);
       setCentroCostoId('');
     }
   }, [open]);
 
-  // ── Búsqueda de productos ───────────────────────────────────────────────────
-  const loadProductos = async () => {
-    if (productosCache.length > 0) return;
+  // ── Búsqueda de productos server-side (Fase 2, 15/08) ───────────────────────
+  // Antes precargaba hasta 500 productos enteros al enfocar cualquier fila —
+  // mismo patrón que ya se había corregido en Cotización/Pedido/OC. Ahora busca
+  // por texto contra la base, tope de 8 resultados por consulta.
+  const searchProducto = async (rowId, query) => {
+    if (!query || query.length < 2) { setProdResults(prev => ({ ...prev, [rowId]: [] })); return; }
     const { data } = await supabase.from('productos')
       .select('id, nombre, costo_compra, alicuota_iva')
-      .eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre').limit(500);
-    setProductosCache(data || []);
-  };
-
-  const getProductosFiltrados = (query) => {
-    if (!query || query.length < 2) return [];
-    return productosCache.filter(p => p.nombre.toLowerCase().includes(query.toLowerCase())).slice(0, 8);
+      .eq('empresa_id', user.empresa_id).eq('activo', true)
+      .ilike('nombre', `%${query}%`).order('nombre').limit(8);
+    setProdResults(prev => ({ ...prev, [rowId]: data || [] }));
   };
 
   const selectProducto = (rowId, producto) => {
@@ -133,6 +145,11 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
         : i
     ));
     setSearchFocusId(null);
+    setProdResults(prev => ({ ...prev, [rowId]: [] }));
+    // Después de elegir producto (click o Enter) pasa el foco a Cantidad —
+    // mismo patrón que Cotización/Pedido/OC/Factura de Venta.
+    cantRefs.current[rowId]?.focus();
+    cantRefs.current[rowId]?.select?.();
   };
 
   const updateItem = (id, field, value) =>
@@ -140,11 +157,45 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
   const removeItem = (id) => setItems(prev => prev.filter(i => i._id !== id));
   const addItem    = ()   => setItems(prev => [...prev, newItem()]);
 
+  // ── Atajo Enter (Fase 2, 15/08 — mismo patrón que Cotización/Pedido/OC/
+  // Factura de Venta) ─────────────────────────────────────────────────────────
+  const descRefs = useRef({});
+  const cantRefs = useRef({});
+  const prevItemsLength = useRef(items.length);
+  useEffect(() => {
+    if (items.length > prevItemsLength.current) {
+      const ultimoId = items[items.length - 1]._id;
+      descRefs.current[ultimoId]?.focus();
+    }
+    prevItemsLength.current = items.length;
+  }, [items.length, items]);
+
+  const handleItemRowKeyDown = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); addItem(); }
+  };
+
+  const handleDescripcionKeyDown = (item) => (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const filtrados = searchFocusId === item._id ? (prodResults[item._id] ?? []) : [];
+    if (filtrados.length > 0) { selectProducto(item._id, filtrados[0]); return; }
+    addItem();
+  };
+
   // ── Cálculos ────────────────────────────────────────────────────────────────
-  const subtotalNeto = useMemo(() => items.reduce((s, i) => s + calcNeto(i), 0), [items]);
-  const totalIva     = useMemo(() =>
-    items.reduce((s, i) => s + calcNeto(i) * Number(i.alicuota_iva) / 100, 0), [items]);
+  // subtotalConDescLinea: neto ya con el descuento de línea aplicado (calcNeto).
+  // El descuento global se aplica encima, mismo orden que Cotización/Pedido/OC.
+  const descGlobal   = clampPct(descuentoGlobalPct);
+  const factorGlobal = 1 - descGlobal / 100;
+  const subtotalConDescLinea = useMemo(() => items.reduce((s, i) => s + calcNeto(i), 0), [items]);
+  const subtotalNeto = subtotalConDescLinea * factorGlobal;
+  const totalIva      = useMemo(() =>
+    items.reduce((s, i) => s + calcNeto(i) * factorGlobal * Number(i.alicuota_iva) / 100, 0), [items, factorGlobal]);
   const total        = subtotalNeto + totalIva;
+  // Precio de lista sin ningún descuento — mismo criterio que el resto de los
+  // documentos, para poder mostrar "Descuento" como línea propia del resumen.
+  const subtotalLista = useMemo(() => items.reduce((s, i) => s + Number(i.cantidad) * (parseNumberLocale(i.precio_unit) || 0), 0), [items]);
+  const descuentoMonto = Math.max(0, subtotalLista - subtotalNeto);
   const isCC         = formaPago === 'CC Proveedor';
 
   // ── Confirmar ───────────────────────────────────────────────────────────────
@@ -208,6 +259,7 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
         iva_discriminado: totalIva,
         moneda:           'ARS',
         tipo_cambio_tasa: 1,
+        descuento_global_pct: descGlobal,
         centro_costo_id:  centroCostoId || null,
         observaciones:    serviciosDesc || null,
         ...(montoParaleloValue !== null ? {
@@ -229,6 +281,7 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
             costo_unitario: parseNumberLocale(i.precio_unit) || 0,
             subtotal:       calcNeto(i),
             alicuota_iva:   String(i.alicuota_iva),
+            descuento_item: clampPct(i.descuento_item),
           }))
         );
         if (itemsErr) throw itemsErr;
@@ -405,40 +458,52 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
           <div>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold text-kx-text">Ítems</h3>
-              <Button size="sm" variant="outline" onClick={addItem}
-                className="h-7 gap-1 text-xs border-kx-border text-kx-text-2 hover:bg-kx-surface-2">
-                <Plus className="w-3.5 h-3.5" /> Agregar ítem
-              </Button>
+              <div className="flex items-center gap-3">
+                <Label className="text-xs font-medium text-kx-text-2">Desc. Global %</Label>
+                <Input
+                  type="number" min="0" max="100" step="0.01" value={descuentoGlobalPct}
+                  onChange={e => setDescuentoGlobalPct(e.target.value)}
+                  className="h-7 w-20 text-xs text-center bg-kx-surface border-kx-border text-kx-text"
+                />
+                <Button size="sm" variant="outline" onClick={addItem}
+                  className="h-7 gap-1 text-xs border-kx-border text-kx-text-2 hover:bg-kx-surface-2">
+                  <Plus className="w-3.5 h-3.5" /> Agregar ítem
+                </Button>
+              </div>
             </div>
 
             <div className="border border-kx-border rounded-xl overflow-visible">
               <table className="w-full text-sm">
                 <thead className="bg-kx-surface-2 border-b border-kx-border">
                   <tr className="text-2xs text-kx-text-2 font-semibold uppercase tracking-wide">
-                    <th className="text-left px-3 py-2.5 w-[38%]">Descripción</th>
-                    <th className="text-center px-3 py-2.5 w-16">Cant.</th>
-                    <th className="text-right px-3 py-2.5 w-32">Costo Unit.</th>
-                    <th className="text-center px-3 py-2.5 w-24">IVA</th>
+                    <th className="text-left px-3 py-2.5 w-[32%]">Descripción</th>
+                    <th className="text-center px-3 py-2.5 w-14">Cant.</th>
+                    <th className="text-right px-3 py-2.5 w-28">Costo Unit.</th>
+                    <th className="text-center px-3 py-2.5 w-14">Desc%</th>
+                    <th className="text-center px-3 py-2.5 w-20">IVA</th>
                     <th className="text-right px-3 py-2.5 w-28">Subtotal</th>
                     <th className="px-3 py-2.5 w-8" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-kx-border">
                   {items.map(item => {
-                    const filtrados = getProductosFiltrados(item.descripcion);
+                    const filtrados = prodResults[item._id] ?? [];
                     return (
                       <tr key={item._id} className="hover:bg-kx-surface-2/50 transition-colors">
                         <td className="px-2 py-1.5">
                           <div className="relative">
                             <Input
+                              ref={el => { descRefs.current[item._id] = el; }}
                               placeholder="Descripción o buscar producto..."
                               value={item.descripcion}
                               onChange={e => {
                                 updateItem(item._id, 'descripcion', e.target.value);
                                 if (item.producto_id) updateItem(item._id, 'producto_id', null);
+                                searchProducto(item._id, e.target.value);
                               }}
-                              onFocus={() => { setSearchFocusId(item._id); loadProductos(); }}
+                              onFocus={() => { setSearchFocusId(item._id); searchProducto(item._id, item.descripcion); }}
                               onBlur={() => setTimeout(() => setSearchFocusId(null), 200)}
+                              onKeyDown={handleDescripcionKeyDown(item)}
                               className="h-8 text-xs bg-transparent border-kx-border text-kx-text pr-14"
                             />
                             <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold px-1.5 py-0.5 rounded ${
@@ -457,7 +522,7 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
                                     onMouseDown={() => selectProducto(item._id, p)}
                                   >
                                     <div className="font-medium">{p.nombre}</div>
-                                    <div className="text-kx-text-3">Costo: ${fmt(p.precio_costo || 0)}</div>
+                                    <div className="text-kx-text-3">Costo: ${fmt(p.costo_compra || 0)}</div>
                                   </button>
                                 ))}
                               </div>
@@ -466,8 +531,10 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
                         </td>
                         <td className="px-2 py-1.5">
                           <Input
+                            ref={el => { cantRefs.current[item._id] = el; }}
                             type="number" min="1" step="1" value={item.cantidad}
                             onChange={e => updateItem(item._id, 'cantidad', e.target.value.replace(/[^\d]/g, ''))}
+                            onKeyDown={handleItemRowKeyDown}
                             className="h-8 text-xs text-center bg-transparent border-kx-border text-kx-text w-full"
                           />
                         </td>
@@ -475,13 +542,23 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
                           <Input
                             type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unit}
                             onChange={e => updateItem(item._id, 'precio_unit', e.target.value)}
+                            onKeyDown={handleItemRowKeyDown}
                             className="h-8 text-xs text-right bg-transparent border-kx-border text-kx-text w-full"
+                          />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <Input
+                            type="number" min="0" max="100" step="0.01" value={item.descuento_item}
+                            onChange={e => updateItem(item._id, 'descuento_item', e.target.value)}
+                            onKeyDown={handleItemRowKeyDown}
+                            className="h-8 text-xs text-center bg-transparent border-kx-border text-kx-text w-full"
                           />
                         </td>
                         <td className="px-2 py-1.5">
                           <select
                             value={item.alicuota_iva}
                             onChange={e => updateItem(item._id, 'alicuota_iva', Number(e.target.value))}
+                            onKeyDown={handleItemRowKeyDown}
                             className="w-full h-8 rounded-md border border-kx-border bg-kx-surface px-1.5 text-xs text-kx-text"
                           >
                             {ALICUOTAS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
@@ -514,6 +591,18 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, o
           {/* Totales + Pago */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-kx-surface-2 rounded-xl border border-kx-border p-4 space-y-2 text-sm">
+              {descuentoMonto > 0.005 && (
+                <>
+                  <div className="flex justify-between text-kx-text-2">
+                    <span>Subtotal</span>
+                    <span className="tabular-nums">${fmt(subtotalLista)}</span>
+                  </div>
+                  <div className="flex justify-between text-kx-red">
+                    <span>Descuento{descGlobal > 0 ? ` (incl. ${descGlobal}% global)` : ''}</span>
+                    <span className="tabular-nums">-${fmt(descuentoMonto)}</span>
+                  </div>
+                </>
+              )}
               <div className="flex justify-between text-kx-text-2">
                 <span>Subtotal neto</span>
                 <span className="tabular-nums">${fmt(subtotalNeto)}</span>
