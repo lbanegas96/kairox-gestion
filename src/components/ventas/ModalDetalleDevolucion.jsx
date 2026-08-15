@@ -7,6 +7,9 @@ import DocumentFlow from '@/components/shared/DocumentFlow';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 
 const ALICUOTA_LABEL = { '21': '21%', '10.5': '10,5%', '0': '0%', exento: 'Exento', no_gravado: 'No gravado' };
+// Fase 4 (15/08): desglose Neto/IVA — mismo criterio que SaleDetailModal.jsx
+// (calculado desde los ítems, siempre visible cuando hay IVA, sin gating por letra).
+const FACTOR_IVA = { '21': 1.21, '10.5': 1.105 };
 
 const COMPENSACION_CFG = {
   nota_credito: { label: 'Nota de Crédito', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
@@ -28,6 +31,11 @@ function ModalDetalleDevolucion({ devolucion, onClose, onNavigate, onGenerarNC, 
   const esCliente = devolucion.tipo === 'cliente';
   const items = devolucion.devolucion_items ?? [];
   const total = items.reduce((s, i) => s + Number(i.subtotal || 0), 0);
+  const neto  = items.reduce((s, i) => {
+    const factor = FACTOR_IVA[String(i.alicuota_iva)] ?? 1;
+    return s + Number(i.subtotal || 0) / factor;
+  }, 0);
+  const iva = total - neto;
   const entidadNombre = esCliente ? devolucion.clientes?.nombre : devolucion.proveedores?.nombre;
   const compCfg = COMPENSACION_CFG[devolucion.compensacion] || COMPENSACION_CFG.pendiente;
 
@@ -48,7 +56,7 @@ function ModalDetalleDevolucion({ devolucion, onClose, onNavigate, onGenerarNC, 
 
   return (
     <Dialog open={!!devolucion} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-lg dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 dark:text-kx-text">
             {esCliente ? <Undo2 className="h-5 w-5 text-kx-amber" /> : <RotateCcw className="h-5 w-5 text-kx-amber" />}
@@ -137,16 +145,32 @@ function ModalDetalleDevolucion({ devolucion, onClose, onNavigate, onGenerarNC, 
                     {ALICUOTA_LABEL[item.alicuota_iva] || item.alicuota_iva || '—'}
                   </td>
                   <td className="py-2 text-right font-mono dark:text-kx-text">
-                    ${Number(item.subtotal).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    ${Number(item.subtotal).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
+              {iva > 0.005 && (
+                <>
+                  <tr>
+                    <td colSpan={3} className="pt-2 text-right text-xs text-kx-text-2">Neto gravado</td>
+                    <td className="pt-2 text-right text-xs text-kx-text-2 tabular-nums">
+                      ${neto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colSpan={3} className="text-right text-xs text-kx-text-2">IVA</td>
+                    <td className="text-right text-xs text-kx-text-2 tabular-nums">
+                      ${iva.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                </>
+              )}
               <tr>
                 <td colSpan={3} className="pt-2 text-right text-sm font-semibold text-kx-text-2">Total</td>
                 <td className="pt-2 text-right font-mono font-bold dark:text-kx-text">
-                  ${total.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                  ${total.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
               </tr>
             </tfoot>

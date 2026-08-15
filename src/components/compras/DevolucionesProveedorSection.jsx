@@ -13,6 +13,12 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { formatDateAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
 
+// Fase 4 (15/08): desglose Neto/IVA en el panel expandido de Devoluciones a
+// Proveedor — mismo criterio que el resto de Compras (siempre visible, sin
+// gating por letra). alicuota_iva es snapshot por ítem (mig.262).
+const FACTOR_IVA = { '21': 1.21, '10.5': 1.105 };
+const ALICUOTA_LABEL = { '21': '21%', '10.5': '10,5%', '0': '0%', exento: 'Exento', no_gravado: 'No gravado' };
+
 function EstadoDocBadge({ estado }) {
   if (estado === 'cancelada') {
     return (
@@ -52,7 +58,7 @@ function DevolucionesTab({ onNavigate }) {
         compra_id,
         proveedores(nombre),
         factura_compra:compras!compra_id(numero_factura),
-        devolucion_items(id, cantidad, precio_unitario, subtotal, productos(nombre))
+        devolucion_items(id, cantidad, precio_unitario, subtotal, alicuota_iva, productos(nombre))
       `)
       .eq('empresa_id', user.empresa_id)
       .eq('tipo', 'proveedor')
@@ -104,6 +110,12 @@ function DevolucionesTab({ onNavigate }) {
               devoluciones.map(dev => {
                 const items  = dev.devolucion_items || [];
                 const isOpen = !!expanded[dev.id];
+                const total  = items.reduce((s, i) => s + Number(i.subtotal || 0), 0);
+                const neto   = items.reduce((s, i) => {
+                  const factor = FACTOR_IVA[String(i.alicuota_iva)] ?? 1;
+                  return s + Number(i.subtotal || 0) / factor;
+                }, 0);
+                const iva = total - neto;
                 return (
                   <React.Fragment key={dev.id}>
                     <tr
@@ -149,13 +161,23 @@ function DevolucionesTab({ onNavigate }) {
                                   <div className="flex items-center gap-2 text-kx-text">
                                     <Package className="h-3.5 w-3.5 text-kx-text-3 shrink-0" />
                                     {item.productos?.nombre || '—'}
+                                    <span className="text-2xs text-kx-text-3">
+                                      ({ALICUOTA_LABEL[item.alicuota_iva] || item.alicuota_iva || '21%'})
+                                    </span>
                                   </div>
                                   <span className="font-mono text-kx-text-2 text-xs">
-                                    × {Number(item.cantidad).toLocaleString('es-AR')}
+                                    × {Number(item.cantidad).toLocaleString('es-AR')} · ${Number(item.subtotal).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                   </span>
                                 </div>
                               ))}
                             </div>
+                            {iva > 0.005 && (
+                              <div className="flex justify-end gap-4 text-xs text-kx-text-2 mt-2 pt-2 border-t border-kx-border">
+                                <span>Neto: ${neto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                <span>IVA: ${iva.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                <span className="font-semibold text-kx-text">Total: ${total.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              </div>
+                            )}
                             {dev.motivo && (
                               <p className="text-xs text-kx-text-3 mt-2 pt-2 border-t border-kx-border">
                                 Motivo: {dev.motivo}
@@ -272,13 +294,13 @@ function NotasDebitoRecibidas() {
                   <td className="p-3 text-kx-text">{nd.proveedores?.nombre || '—'}</td>
                   <td className="p-3 text-kx-text-2 max-w-xs truncate">{nd.concepto}</td>
                   <td className="p-3 text-right text-xs text-kx-text-2 tabular-nums">
-                    {nd.neto_gravado != null ? `$${Number(nd.neto_gravado).toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—'}
+                    {nd.neto_gravado != null ? `$${Number(nd.neto_gravado).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
                   </td>
                   <td className="p-3 text-right text-xs text-kx-text-2 tabular-nums">
-                    {nd.iva_discriminado != null ? `$${Number(nd.iva_discriminado).toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—'}
+                    {nd.iva_discriminado != null ? `$${Number(nd.iva_discriminado).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
                   </td>
                   <td className="p-3 text-right font-mono font-bold text-kx-text">
-                    ${Number(nd.monto).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    ${Number(nd.monto).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="p-3 text-right">
                     {nd.estado !== 'cancelada' && (
@@ -423,13 +445,13 @@ function NotasCreditoRecibidas() {
                   <td className="p-3 text-kx-text-2 max-w-xs truncate">{nc.motivo}</td>
                   <td className="p-3 text-xs text-kx-text-2">{nc.reembolso_efectivo ? 'Efectivo' : 'Cta. Cte.'}</td>
                   <td className="p-3 text-right text-xs text-kx-text-2 tabular-nums">
-                    {nc.neto_gravado != null ? `$${Number(nc.neto_gravado).toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—'}
+                    {nc.neto_gravado != null ? `$${Number(nc.neto_gravado).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
                   </td>
                   <td className="p-3 text-right text-xs text-kx-text-2 tabular-nums">
-                    {nc.iva_discriminado != null ? `$${Number(nc.iva_discriminado).toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—'}
+                    {nc.iva_discriminado != null ? `$${Number(nc.iva_discriminado).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
                   </td>
                   <td className="p-3 text-right font-mono font-bold text-kx-text">
-                    ${Number(nc.monto).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    ${Number(nc.monto).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="p-3 text-right">
                     {nc.estado !== 'cancelada' && !nc.reembolso_efectivo && (

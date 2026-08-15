@@ -3383,3 +3383,29 @@ columnas Neto/IVA correctamente (una ND real preexistente sin el dato guardado
 muestra "—", sin crash).
 
 156/156 tests, build limpio.
+
+### Fase 4 del plan — Devoluciones (cliente y proveedor): modal más grande + Neto/IVA
+Cierra el plan `PLAN_COMPROBANTES_ESTANDAR.md` completo (Fase 0 a Fase 4, todas
+hechas el mismo día 15/08).
+- `ModalDetalleDevolucion.jsx` (Ventas, compartido cliente/proveedor):
+  `max-w-lg` → `max-w-2xl`; agregado desglose Neto/IVA en el `<tfoot>` (mismo
+  criterio que `SaleDetailModal.jsx`: calculado desde los ítems, visible cuando
+  hay IVA > 0, sin gating por letra ni por tipo cliente/proveedor).
+- `DevolucionesProveedorSection.jsx` → `DevolucionesTab` (panel expandible de
+  Devoluciones a Proveedor): agregado `alicuota_iva` a la query de
+  `devolucion_items` (faltaba, aunque la columna existe desde mig.262) + Neto/IVA/
+  Total en el panel expandido, subtotal por línea visible.
+- **Bug real encontrado en vivo durante la verificación de este mismo cambio**:
+  el `toLocaleString('es-AR', { minimumFractionDigits: 2 })` sin
+  `maximumFractionDigits` mostraba hasta 3 decimales (`$1.295,868` en vez de
+  `$1.295,87`) — `Intl.NumberFormat` por defecto permite hasta 3 si no se fija el
+  máximo. Afectaba también las columnas Neto/IVA de NC/ND recibidas agregadas en
+  Fase 3 (ya en producción). Corregido en los 14 usos nuevos de ambos archivos.
+
+Verificado en vivo: expandiendo DEV-2026-0013 (Batidora Eléctrica 21%, $1.568,00)
+se ve Neto $1.295,87 / IVA $272,13 / Total $1.568,00 — exacto, tras el fix del
+redondeo.
+
+156/156 tests, build limpio.
+
+**Plan `PLAN_COMPROBANTES_ESTANDAR.md` — 5 fases (0 a 4), todas cerradas.**
