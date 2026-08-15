@@ -3347,3 +3347,39 @@ puede sub/sobreestimar el COGS. Anotado, no filed como tarea aparte todavía.
 **Siguen pendientes del plan:** Fase 3 (NC/ND emitidas y recibidas — autocomplete
 + IVA visible) y Fase 4 (Devoluciones — modal más grande + Neto/IVA). Se encaran
 de a una, con push/deploy al cierre de cada una.
+
+### Fase 3 del plan — NC/ND (emitidas y recibidas): autocomplete + IVA visible
+Mismo día (15/08), inmediatamente después de Fase 2. Los 4 formularios standalone
+de NC/ND (`NuevaNCModal.jsx`, `NuevaNDModal.jsx` en Ventas; `NuevaNCProveedorModal.jsx`,
+`NuevaNotaDebitoModal.jsx` en Compras) tenían el campo `alicuota_iva` en el estado
+pero sin ningún `<select>` en la UI para cambiarlo — siempre quedaba en 21% fijo — y
+la búsqueda de producto (cuando no hay comprobante/compra origen) era texto libre
+sin autocomplete.
+- Los 4 modales: agregado `ProductoAutocomplete` (búsqueda server-side
+  `.ilike().limit(8)`, mismo patrón que Factura de Compra en Fase 2) + columna IVA
+  con `<select>` `[0, 10.5, 21]` en la tabla de ítems. En NC/ND emitidas (Ventas) el
+  autocomplete solo se muestra cuando el documento es standalone (`!origenLocked`):
+  con comprobante origen los ítems vienen precargados y no tiene sentido buscar otro
+  producto. `NuevaNotaDebitoModal.jsx` (Compras) siempre lo muestra — a diferencia de
+  NC/ND de Ventas, el origen ahí solo fija el proveedor/referencia, nunca precarga
+  ítems.
+- Neto/IVA en el detalle de NC/ND **emitidas**: ya venía resuelto gratis por el fix
+  de Fase 2 en `SaleDetailModal.jsx` — es el mismo modal genérico para toda la tabla
+  `comprobantes` (venta/nota_credito/nota_debito), así que el desglose calculado
+  desde ítems ya cubre NC/ND sin tocar nada más.
+- Neto/IVA en las tablas planas de NC/ND **recibidas** (`DevolucionesProveedorSection.jsx`):
+  agregadas 2 columnas (Neto/IVA) a `NotasDebitoRecibidas` y `NotasCreditoRecibidas`.
+  No hizo falta re-arquitecturar nada — `notas_debito.neto_gravado`/`iva_discriminado`
+  y `notas_credito_proveedor.neto_gravado`/`iva_discriminado` ya existían como
+  columnas de cabecera y ya las llenan las RPCs `crear_nota_debito_proveedor`
+  (mig.276) / `crear_nota_credito_proveedor` (mig.277) desde 2026-08-05 — solo
+  faltaba seleccionarlas y pintarlas. Fallback `—` para filas viejas con la columna
+  en NULL.
+
+Verificado en vivo: "Copiar a NC" sobre una Factura C real ($3.000,00) muestra la
+columna IVA (21% pre-cargado) y el desglose Neto $2.479,34 / IVA $520,66 sin
+romperse; las tablas de NC/ND recibidas en Compras → Devoluciones muestran las
+columnas Neto/IVA correctamente (una ND real preexistente sin el dato guardado
+muestra "—", sin crash).
+
+156/156 tests, build limpio.

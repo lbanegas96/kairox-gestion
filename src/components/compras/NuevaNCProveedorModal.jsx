@@ -13,6 +13,7 @@ import { useCaja } from '@/contexts/CajaContext';
 import { useToast } from '@/components/ui/use-toast';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import ProveedorSelector from '@/components/shared/ProveedorSelector';
+import ProductoAutocomplete from '@/components/shared/ProductoAutocomplete';
 import { getTodayAR } from '@/lib/dateUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
 
@@ -20,6 +21,15 @@ import { asientosAutoService } from '@/services/planCuentasService';
 // Este modal es para NC financiera (el proveedor nos acredita sin devolución de mercadería).
 // Ítems + IVA en notas_credito_proveedor_items (mig.277) — espejo de
 // NuevaNCModal.jsx (Ventas). Sin AFIP: la declara el proveedor, no nosotros.
+
+// notas_credito_proveedor_items.alicuota_iva es TEXT libre, sin CHECK — se
+// mantiene igual set que el resto de Compras (NuevaFacturaProveedorModal.jsx)
+// por consistencia, no porque la tabla lo exija.
+const ALICUOTAS = [
+  { value: 0,    label: 'Exento 0%' },
+  { value: 10.5, label: '10.5%'     },
+  { value: 21,   label: '21%'       },
+];
 
 const MOTIVOS_NC = [
   'Descuento comercial',
@@ -65,6 +75,8 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, onSucc
   const [items, setItems]                 = useState([newItem()]);
   const [reembolsoEfectivo, setReembolsoEfectivo] = useState(false);
   const [loading, setLoading]             = useState(false);
+  const [prodResults, setProdResults]     = useState({});
+  const [prodOpen, setProdOpen]           = useState({});
 
   const origenLocked = !!compraOrigen;
 
@@ -91,6 +103,8 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, onSucc
       setMotivoCustom('');
       setItems([newItem()]);
       setReembolsoEfectivo(false);
+      setProdResults({});
+      setProdOpen({});
     }
   }, [open]);
 
@@ -105,6 +119,27 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, onSucc
     }));
   const removeItem = (id) => setItems(prev => prev.filter(i => i._id !== id));
   const addItem    = ()   => setItems(prev => [...prev, newItem()]);
+
+  // ── Búsqueda de productos (standalone) — server-side, mismo patrón que
+  // NuevaFacturaProveedorModal.jsx (Fase 2, 15/08).
+  const searchProducto = async (rowId, query) => {
+    updateItem(rowId, 'descripcion', query);
+    if (!query || query.length < 2) { setProdResults(prev => ({ ...prev, [rowId]: [] })); return; }
+    const { data } = await supabase.from('productos')
+      .select('id, nombre, costo_compra, alicuota_iva')
+      .eq('empresa_id', user.empresa_id).eq('activo', true)
+      .ilike('nombre', `%${query}%`).order('nombre').limit(8);
+    setProdResults(prev => ({ ...prev, [rowId]: data || [] }));
+  };
+
+  const selectProducto = (rowId, prod) => {
+    setItems(prev => prev.map(i => i._id === rowId
+      ? { ...i, producto_id: prod.id, descripcion: prod.nombre,
+          precio_unit: Number(prod.costo_compra || 0), alicuota_iva: Number(prod.alicuota_iva ?? 21) }
+      : i));
+    setProdResults(prev => ({ ...prev, [rowId]: [] }));
+    setProdOpen(prev => ({ ...prev, [rowId]: false }));
+  };
 
   const subtotalNeto = useMemo(() => items.reduce((s, i) => s + calcNetoIva(i).neto, 0), [items]);
   const totalIva     = useMemo(() => items.reduce((s, i) => s + calcNetoIva(i).iva, 0), [items]);
@@ -269,13 +304,14 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, onSucc
               </Button>
             </div>
 
-            <div className="border border-kx-border rounded-xl overflow-hidden">
+            <div className="border border-kx-border rounded-xl overflow-visible">
               <table className="w-full text-sm">
                 <thead className="bg-kx-surface-2 border-b border-kx-border">
                   <tr className="text-2xs text-kx-text-2 font-semibold uppercase tracking-wide">
                     <th className="text-left px-3 py-2.5">Descripción</th>
-                    <th className="text-center px-3 py-2.5 w-20">Cant.</th>
-                    <th className="text-right px-3 py-2.5 w-32">Precio Unit.</th>
+                    <th className="text-center px-3 py-2.5 w-16">Cant.</th>
+                    <th className="text-right px-3 py-2.5 w-28">Precio Unit.</th>
+                    <th className="text-center px-3 py-2.5 w-24">IVA</th>
                     <th className="text-right px-3 py-2.5 w-28">Subtotal</th>
                     <th className="px-3 py-2.5 w-8" />
                   </tr>
@@ -284,12 +320,25 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, onSucc
                   {items.map(item => (
                     <tr key={item._id} className="hover:bg-kx-surface-2/50 transition-colors">
                       <td className="px-2 py-1.5">
-                        <Input
-                          value={item.descripcion}
-                          onChange={e => updateItem(item._id, 'descripcion', e.target.value)}
-                          placeholder="Descripción del ítem"
-                          className="h-8 text-xs bg-transparent border-kx-border text-kx-text"
-                        />
+                        {origenLocked ? (
+                          <Input
+                            value={item.descripcion}
+                            onChange={e => updateItem(item._id, 'descripcion', e.target.value)}
+                            placeholder="Descripción del ítem"
+                            className="h-8 text-xs bg-transparent border-kx-border text-kx-text"
+                          />
+                        ) : (
+                          <ProductoAutocomplete
+                            value={item.descripcion}
+                            onChange={e => searchProducto(item._id, e.target.value)}
+                            onFocus={() => setProdOpen(prev => ({ ...prev, [item._id]: true }))}
+                            placeholder="Descripción o buscar producto..."
+                            className="h-8 text-xs bg-transparent border-kx-border text-kx-text"
+                            open={!!prodOpen[item._id]}
+                            results={prodResults[item._id] ?? []}
+                            onSelect={p => selectProducto(item._id, p)}
+                          />
+                        )}
                       </td>
                       <td className="px-2 py-1.5">
                         <Input
@@ -304,6 +353,15 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, onSucc
                           onChange={e => updateItem(item._id, 'precio_unit', e.target.value)}
                           className="h-8 text-xs text-right bg-transparent border-kx-border text-kx-text"
                         />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <select
+                          value={item.alicuota_iva}
+                          onChange={e => updateItem(item._id, 'alicuota_iva', Number(e.target.value))}
+                          className="w-full h-8 rounded-md border border-kx-border bg-kx-surface px-1.5 text-xs text-kx-text"
+                        >
+                          {ALICUOTAS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                        </select>
                       </td>
                       <td className="px-2 py-1.5 text-right text-xs font-semibold text-kx-text tabular-nums">
                         ${fmt(calcBruto(item))}

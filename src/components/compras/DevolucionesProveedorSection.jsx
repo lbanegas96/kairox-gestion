@@ -190,7 +190,7 @@ function NotasDebitoRecibidas() {
     setLoading(true);
     supabase
       .from('notas_debito')
-      .select('id, numero_nd, fecha, concepto, monto, tipo, estado, proveedores(nombre)')
+      .select('id, numero_nd, fecha, concepto, monto, neto_gravado, iva_discriminado, tipo, estado, proveedores(nombre)')
       .eq('empresa_id', user.empresa_id)
       .eq('tipo', 'recibida')
       .order('created_at', { ascending: false })
@@ -235,6 +235,8 @@ function NotasDebitoRecibidas() {
               <th className="text-left p-3 font-semibold text-kx-text-2">Fecha</th>
               <th className="text-left p-3 font-semibold text-kx-text-2">Proveedor</th>
               <th className="text-left p-3 font-semibold text-kx-text-2">Concepto</th>
+              <th className="text-right p-3 font-semibold text-kx-text-2">Neto</th>
+              <th className="text-right p-3 font-semibold text-kx-text-2">IVA</th>
               <th className="text-right p-3 font-semibold text-kx-text-2">Monto</th>
               <th className="text-right p-3 font-semibold text-kx-text-2">Acc.</th>
             </tr>
@@ -243,7 +245,7 @@ function NotasDebitoRecibidas() {
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <tr key={i}>
-                  {Array.from({ length: 6 }).map((_, j) => (
+                  {Array.from({ length: 8 }).map((_, j) => (
                     <td key={j} className="p-3">
                       <div className="h-4 bg-kx-surface-2 rounded animate-pulse w-20" />
                     </td>
@@ -252,7 +254,7 @@ function NotasDebitoRecibidas() {
               ))
             ) : notas.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-12 text-center text-kx-text-3">
+                <td colSpan={8} className="p-12 text-center text-kx-text-3">
                   <FileWarning className="w-10 h-10 mx-auto mb-3 opacity-20" />
                   <p className="font-medium text-kx-text-2">Sin notas de débito recibidas</p>
                 </td>
@@ -269,6 +271,12 @@ function NotasDebitoRecibidas() {
                   <td className="p-3 text-kx-text-2 text-xs">{formatDateAR(nd.fecha)}</td>
                   <td className="p-3 text-kx-text">{nd.proveedores?.nombre || '—'}</td>
                   <td className="p-3 text-kx-text-2 max-w-xs truncate">{nd.concepto}</td>
+                  <td className="p-3 text-right text-xs text-kx-text-2 tabular-nums">
+                    {nd.neto_gravado != null ? `$${Number(nd.neto_gravado).toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—'}
+                  </td>
+                  <td className="p-3 text-right text-xs text-kx-text-2 tabular-nums">
+                    {nd.iva_discriminado != null ? `$${Number(nd.iva_discriminado).toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—'}
+                  </td>
                   <td className="p-3 text-right font-mono font-bold text-kx-text">
                     ${Number(nd.monto).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                   </td>
@@ -332,7 +340,7 @@ function NotasCreditoRecibidas() {
     setLoading(true);
     supabase
       .from('notas_credito_proveedor')
-      .select('id, numero_ncp, fecha, motivo, monto, reembolso_efectivo, estado, proveedores(nombre)')
+      .select('id, numero_ncp, fecha, motivo, monto, neto_gravado, iva_discriminado, reembolso_efectivo, estado, proveedores(nombre)')
       .eq('empresa_id', user.empresa_id)
       .order('fecha', { ascending: false })
       .then(({ data, error }) => {
@@ -377,6 +385,8 @@ function NotasCreditoRecibidas() {
               <th className="text-left p-3 font-semibold text-kx-text-2">Proveedor</th>
               <th className="text-left p-3 font-semibold text-kx-text-2">Motivo</th>
               <th className="text-left p-3 font-semibold text-kx-text-2">Cobro</th>
+              <th className="text-right p-3 font-semibold text-kx-text-2">Neto</th>
+              <th className="text-right p-3 font-semibold text-kx-text-2">IVA</th>
               <th className="text-right p-3 font-semibold text-kx-text-2">Monto</th>
               <th className="text-right p-3 font-semibold text-kx-text-2">Acc.</th>
             </tr>
@@ -385,7 +395,7 @@ function NotasCreditoRecibidas() {
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <tr key={i}>
-                  {Array.from({ length: 7 }).map((_, j) => (
+                  {Array.from({ length: 9 }).map((_, j) => (
                     <td key={j} className="p-3">
                       <div className="h-4 bg-kx-surface-2 rounded animate-pulse w-20" />
                     </td>
@@ -394,7 +404,7 @@ function NotasCreditoRecibidas() {
               ))
             ) : notas.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-12 text-center text-kx-text-3">
+                <td colSpan={9} className="p-12 text-center text-kx-text-3">
                   <FileMinus className="w-10 h-10 mx-auto mb-3 opacity-20" />
                   <p className="font-medium text-kx-text-2">Sin notas de crédito recibidas</p>
                 </td>
@@ -412,6 +422,12 @@ function NotasCreditoRecibidas() {
                   <td className="p-3 text-kx-text">{nc.proveedores?.nombre || '—'}</td>
                   <td className="p-3 text-kx-text-2 max-w-xs truncate">{nc.motivo}</td>
                   <td className="p-3 text-xs text-kx-text-2">{nc.reembolso_efectivo ? 'Efectivo' : 'Cta. Cte.'}</td>
+                  <td className="p-3 text-right text-xs text-kx-text-2 tabular-nums">
+                    {nc.neto_gravado != null ? `$${Number(nc.neto_gravado).toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—'}
+                  </td>
+                  <td className="p-3 text-right text-xs text-kx-text-2 tabular-nums">
+                    {nc.iva_discriminado != null ? `$${Number(nc.iva_discriminado).toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—'}
+                  </td>
                   <td className="p-3 text-right font-mono font-bold text-kx-text">
                     ${Number(nc.monto).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
                   </td>
