@@ -89,6 +89,9 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
   // creación normal, pre-cargando desde el original. duplicarTarget = la
   // cotización elegida para duplicar (solo necesita id/numero para el diálogo).
   const [duplicarTarget, setDuplicarTarget] = useState(null);
+  // Pendiente hasta que el usuario confirma el alta desde el form (ver
+  // handleConfirmarDuplicar/handleSubmit) — null si no viene de "Duplicar".
+  const [duplicadoDeId, setDuplicadoDeId] = useState(null);
 
   const empresaId = user?.empresa_id;
 
@@ -312,6 +315,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
     setProdOpen({});
     setTcMissing(false);
     setEditingId(null);
+    setDuplicadoDeId(null);
   };
 
   // "Editar" desde el detalle (solo se ofrece si estado !== 'convertida', ver
@@ -347,34 +351,43 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
     setIsModalOpen(true);
   };
 
-  // "Duplicar" (14/08, definición de Luciano): crea una cotización NUEVA con los
-  // mismos ítems/cliente/condiciones que la original — nunca edita, siempre pasa
-  // por createMutation. Fecha de vencimiento se resetea (no tiene sentido heredar
-  // una fecha vieja); la fecha de cabecera ya la pone create() automáticamente
-  // (hoy). "Vincular" arma duplicado_de_id → el Mapa de Relaciones lo muestra.
+  // "Duplicar" (15/08, corregido por Luciano tras probarlo en vivo): NO crea en
+  // silencio — abre el mismo form de "Nueva Cotización" pre-cargado con los
+  // datos del original (igual que "Editar"), pero en modo creación
+  // (`editingId = null`) para que el usuario pueda revisar/tocar fecha, ítems,
+  // cliente, etc. antes de guardar — mismo comportamiento que "Copiar Desde" en
+  // SAP. `duplicadoDeId` queda pendiente en estado y se manda recién en
+  // `handleSubmit()`, cuando el usuario efectivamente confirma el alta.
   const handleConfirmarDuplicar = async (vincular) => {
     if (!duplicarTarget) return;
     const full = await cotizacionesService.getById(duplicarTarget.id);
-    createMutation.mutate({
-      cliente: full.cliente_nombre ? { id: full.cliente_id, nombre: full.cliente_nombre } : null,
-      items: (full.cotizacion_items ?? []).map(i => ({
-        descripcion: i.descripcion,
-        cantidad: i.cantidad,
-        precio_unitario: i.precio_unitario,
-        descuento_item: i.descuento_item || 0,
-        producto_id: i.producto_id,
-        unidad_medida: i.unidad_medida ?? '',
-        alicuota_iva: i.alicuota_iva ?? '21',
-      })),
-      notas: full.notas,
-      condicionesPago: full.condiciones_pago,
-      fechaVencimiento: null,
-      moneda: full.moneda,
-      tipoCambioTasa: full.tipo_cambio_tasa,
-      descuentoGlobal: full.descuento,
-      duplicadoDeId: vincular ? full.id : null,
+    setProdSearch({});
+    setProdResults({});
+    setProdOpen({});
+    setForm({
+      cliente_id: full.cliente_id ?? '',
+      cliente_nombre: full.cliente_nombre ?? full.clientes?.nombre ?? '',
+      notas: full.notas ?? '',
+      condiciones_pago: full.condiciones_pago ?? '',
+      fecha_vencimiento: '', // se resetea — el usuario elige la propia
+      moneda: full.moneda ?? 'ARS',
+      tipoCambioTasa: full.tipo_cambio_tasa ?? 1,
+      descuento: full.descuento ? String(full.descuento) : '',
     });
+    setItems((full.cotizacion_items ?? []).map(i => ({
+      // Sin `id` — son ítems nuevos, no los de la cotización original.
+      descripcion: i.descripcion,
+      cantidad: i.cantidad,
+      precio_unitario: i.precio_unitario,
+      descuento_item: i.descuento_item || '',
+      producto_id: i.producto_id,
+      unidad_medida: i.unidad_medida ?? '',
+      alicuota_iva: i.alicuota_iva ?? '21',
+    })));
+    setEditingId(null);
+    setDuplicadoDeId(vincular ? full.id : null);
     setDuplicarTarget(null);
+    setIsModalOpen(true);
   };
 
   // Bug real encontrado por Luciano (12/08): el combo cortaba a 10 resultados
@@ -497,6 +510,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
       moneda: form.moneda,
       tipoCambioTasa: form.tipoCambioTasa,
       descuentoGlobal: descuentoGlobalPct,
+      duplicadoDeId: editingId ? null : duplicadoDeId,
     };
     if (editingId) {
       updateMutation.mutate({ id: editingId, payload });

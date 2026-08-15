@@ -95,7 +95,9 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
   // fecha de hoy y numeración propia — no pasa por el form/modal de edición,
   // inserta directo con el mismo cálculo que ya usa handleSave() para "Nuevo".
   const [duplicarTarget, setDuplicarTarget] = useState(null);
-  const [duplicando, setDuplicando] = useState(false);
+  // Pendiente hasta que el usuario confirma el alta desde el form (ver
+  // handleConfirmarDuplicar/handleSave) — null si no viene de "Duplicar".
+  const [duplicadoDeIdPendiente, setDuplicadoDeIdPendiente] = useState(null);
 
   useEffect(() => {
     if (user?.empresa_id) fetchAll();
@@ -278,6 +280,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
     setEditingPedido(null);
     setForm(emptyForm());
     setOrigenCotizacionId(null);
+    setDuplicadoDeIdPendiente(null);
     // Limpia búsquedas de producto que hayan quedado abiertas de una edición
     // anterior — si no, el desplegable podía aparecer solo en una fila en
     // blanco recién abierta (mismo hallazgo que en Cotizaciones/OC, 13/08).
@@ -402,6 +405,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
           total,
           fecha: now,
           cotizacion_id: origenCotizacionId,
+          duplicado_de_id: duplicadoDeIdPendiente,
         }]).select().single();
         if (error) throw error;
 
@@ -425,6 +429,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       }
       setIsModalOpen(false);
       setOrigenCotizacionId(null);
+      setDuplicadoDeIdPendiente(null);
       await fetchAll();
 
       if (pedidoCreadoId) {
@@ -445,86 +450,44 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
     }
   };
 
-  // "Duplicar" — mismo cálculo de subtotal/total que el alta normal (else de
-  // handleSave), pero sin pasar por el form: se lee directo de la fila ya
-  // cargada en `pedidos` (trae pedido_items completos). fecha_entrega se
-  // resetea (no tiene sentido heredar una fecha vieja); la fecha de cabecera
-  // ya la pone el insert (hoy). cotizacion_id NUNCA se copia — un duplicado no
-  // es una copia de cotización, es una copia de otro pedido.
-  const handleConfirmarDuplicar = async (vincular) => {
+  // "Duplicar" (15/08, corregido por Luciano tras probarlo en vivo): NO crea en
+  // silencio — abre el mismo form de "Nuevo Pedido" pre-cargado con los datos
+  // del original, en modo creación (`editingPedido = null`), para que el
+  // usuario pueda revisar/tocar fecha, ítems, cliente, etc. antes de guardar
+  // (mismo comportamiento que "Copiar Desde" en SAP). `duplicado_de_id` queda
+  // pendiente en estado y se manda recién en `handleSave()`, cuando el usuario
+  // efectivamente confirma el alta. `cotizacion_id` NUNCA se copia — un
+  // duplicado no es una copia de cotización, es una copia de otro pedido.
+  const handleConfirmarDuplicar = (vincular) => {
     if (!duplicarTarget) return;
-    setDuplicando(true);
-    try {
-      const itemsCalc = (duplicarTarget.pedido_items ?? []).map(it => {
-        const cantidad = parseFloat(it.cantidad) || 1;
-        const precioUnitario = parseFloat(it.precio_unitario) || 0;
-        const descuentoItem = clampPct(it.descuento_item || 0);
-        return {
-          producto_id: it.producto_id || null,
-          descripcion: it.descripcion,
-          cantidad, precioUnitario, descuentoItem,
-          unidad_medida: it.unidad_medida || null,
-          alicuota_iva: it.alicuota_iva ?? '21',
-          subtotal: cantidad * precioUnitario * (1 - descuentoItem / 100),
-        };
-      });
-      const descGlobal = clampPct(duplicarTarget.descuento_global_pct || 0);
-      const subtotalConDescLinea = itemsCalc.reduce((s, it) => s + it.subtotal, 0);
-      const total = subtotalConDescLinea * (1 - descGlobal / 100);
-      const descuento = subtotalConDescLinea - total;
-
-      const numero = await generateNumero();
-      const { data: pedido, error } = await supabase.from('pedidos').insert([{
-        empresa_id: user.empresa_id,
-        user_id: user.id,
-        numero,
-        cliente_id: duplicarTarget.cliente_id || null,
-        cliente_nombre: duplicarTarget.cliente_nombre || 'Sin cliente',
-        estado: 'borrador',
-        notas: duplicarTarget.notas,
-        fecha_entrega: null,
-        referencia_cliente: duplicarTarget.referencia_cliente || null,
-        moneda: duplicarTarget.moneda || 'ARS',
-        tipo_cambio_tasa: duplicarTarget.tipo_cambio_tasa || 1,
-        subtotal: subtotalConDescLinea,
-        descuento,
-        descuento_global_pct: descGlobal,
-        total,
-        fecha: getNowAR().toISOString(),
-        cotizacion_id: null,
-        duplicado_de_id: vincular ? duplicarTarget.id : null,
-      }]).select().single();
-      if (error) throw error;
-
-      const { error: itemsError } = await supabase.from('pedido_items').insert(
-        itemsCalc.map(it => ({
-          pedido_id: pedido.id,
-          empresa_id: user.empresa_id,
-          producto_id: it.producto_id,
-          descripcion: it.descripcion,
-          cantidad: it.cantidad,
-          precio_unitario: it.precioUnitario,
-          descuento_item: it.descuentoItem,
-          subtotal: it.subtotal,
-          unidad_medida: it.unidad_medida,
-          alicuota_iva: it.alicuota_iva,
-        }))
-      );
-      if (itemsError) throw itemsError;
-
-      toast({ title: `Pedido ${numero} creado`, description: `Duplicado de ${duplicarTarget.numero}` });
-      setDuplicarTarget(null);
-      await fetchAll();
-      const { data: nuevo } = await supabase
-        .from('pedidos')
-        .select('*, pedido_items(*), cotizaciones(numero), clientes(condicion_iva)')
-        .eq('id', pedido.id).single();
-      if (nuevo) { setDetailPedido(nuevo); setIsDetailOpen(true); }
-    } catch (err) {
-      toast({ title: 'Error al duplicar', description: err.message, variant: 'destructive' });
-    } finally {
-      setDuplicando(false);
-    }
+    setEditingPedido(null);
+    setOrigenCotizacionId(null);
+    setProdSearch({});
+    setProdResults({});
+    setProdOpen({});
+    setForm({
+      cliente_id: duplicarTarget.cliente_id || '',
+      notas: duplicarTarget.notas || '',
+      fecha_entrega: '',
+      referencia_cliente: duplicarTarget.referencia_cliente || '',
+      moneda: duplicarTarget.moneda || 'ARS',
+      tipoCambioTasa: Number(duplicarTarget.tipo_cambio_tasa) || 1,
+      descuentoGlobalPct: duplicarTarget.descuento_global_pct ? String(duplicarTarget.descuento_global_pct) : '',
+      items: duplicarTarget.pedido_items?.length
+        ? duplicarTarget.pedido_items.map(it => ({
+            producto_id: it.producto_id || '',
+            descripcion: it.descripcion,
+            cantidad: it.cantidad,
+            precio_unitario: it.precio_unitario,
+            descuento_item: it.descuento_item || '',
+            alicuota_iva: it.alicuota_iva ?? '21',
+            unidad_medida: it.unidad_medida ?? '',
+          }))
+        : emptyForm().items,
+    });
+    setDuplicadoDeIdPendiente(vincular ? duplicarTarget.id : null);
+    setDuplicarTarget(null);
+    setIsModalOpen(true);
   };
 
   // ── Avanzar estado (para borrador→confirmado y confirmado→en_preparacion) ─
@@ -744,7 +707,6 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
         tipoLabel="Pedido"
         numero={duplicarTarget?.numero}
         onConfirm={handleConfirmarDuplicar}
-        loading={duplicando}
       />
 
       {/* ── Confirm cancelar ─────────────────────────────────────────────────── */}

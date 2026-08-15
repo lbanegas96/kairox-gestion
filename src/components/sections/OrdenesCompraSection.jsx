@@ -48,6 +48,9 @@ function OrdenesCompraSection() {
   const [mapaOcId, setMapaOcId] = useState(null);
   const [isMapaOpen, setIsMapaOpen] = useState(false);
   const [duplicarTarget, setDuplicarTarget] = useState(null);
+  // Pendiente hasta que el usuario confirma el alta desde el form (ver
+  // handleConfirmarDuplicar/handleSubmit) — null si no viene de "Duplicar".
+  const [duplicadoDeId, setDuplicadoDeId] = useState(null);
   const [facturaForm, setFacturaForm] = useState({ numero_factura: '', fecha_factura: '', items: [] });
 
   // form nueva OC / edición (editingId != null = editando una OC existente)
@@ -194,34 +197,43 @@ function OrdenesCompraSection() {
     onError: (e) => toast({ title: 'Error al guardar los cambios', description: e.message, variant: 'destructive' }),
   });
 
-  // "Duplicar" (14/08, definido por Luciano): crea una OC NUEVA con los mismos
-  // ítems/proveedor/condiciones que la original — reusa createMutation directo
-  // (no pasa por el form). fecha_entrega_esperada se resetea; la fecha de
-  // cabecera ya la pone create() automáticamente (hoy).
+  // "Duplicar" (15/08, corregido por Luciano tras probarlo en vivo): NO crea en
+  // silencio — abre el mismo form de "Nueva OC" pre-cargado con los datos del
+  // original (igual que "Editar"), en modo creación (`editingId = null`), para
+  // que el usuario pueda revisar/tocar fecha, ítems, proveedor, etc. antes de
+  // guardar (mismo comportamiento que "Copiar Desde" en SAP). `duplicadoDeId`
+  // queda pendiente en estado y se manda recién en `handleSubmit()`.
   const handleConfirmarDuplicar = async (vincular) => {
     if (!duplicarTarget) return;
     const full = await ordenesCompraService.getById(duplicarTarget.id);
-    createMutation.mutate({
-      proveedor_id: full.proveedor_id ?? null,
-      proveedor_nombre: full.proveedor_nombre ?? full.proveedores?.nombre ?? null,
-      fecha_entrega_esperada: null,
-      forma_pago: full.forma_pago,
-      notas: full.notas,
-      moneda: full.moneda,
-      tipoCambioTasa: full.tipo_cambio_tasa,
-      descuentoGlobalPct: full.descuento_global_pct,
-      items: (full.ordenes_compra_items ?? []).map(i => ({
-        producto_id: i.producto_id,
-        descripcion: i.descripcion,
-        cantidad_pedida: i.cantidad_pedida,
-        costo_unitario: i.costo_unitario,
-        descuento_item: i.descuento_item || 0,
-        unidad_medida: i.unidad_medida ?? '',
-        alicuota_iva: i.alicuota_iva ?? '21',
-      })),
-      duplicadoDeId: vincular ? full.id : null,
-    }, { onSuccess: (oc) => setDetalleId(oc.id) });
+    setProdResults({});
+    setProdOpen({});
+    setForm({
+      proveedor_nombre: full.proveedor_nombre ?? full.proveedores?.nombre ?? '',
+      fecha_entrega_esperada: '', // se resetea — el usuario elige la propia
+      forma_pago: full.forma_pago ?? 'Efectivo',
+      notas: full.notas ?? '',
+      moneda: full.moneda ?? 'ARS',
+      tipoCambioTasa: Number(full.tipo_cambio_tasa) || 1,
+      descuentoGlobalPct: full.descuento_global_pct ? String(full.descuento_global_pct) : '',
+    });
+    setSelectedProv(full.proveedor_id ? { id: full.proveedor_id, nombre: full.proveedor_nombre ?? full.proveedores?.nombre } : null);
+    setProvSearch(full.proveedor_nombre ?? full.proveedores?.nombre ?? '');
+    setItems((full.ordenes_compra_items ?? []).map(i => ({
+      // Sin `id` — son ítems nuevos, no los de la OC original.
+      descripcion: i.descripcion,
+      cantidad_pedida: i.cantidad_pedida,
+      costo_unitario: i.costo_unitario,
+      descuento_item: i.descuento_item || '',
+      producto_id: i.producto_id,
+      unidad_medida: i.unidad_medida ?? '',
+      alicuota_iva: i.alicuota_iva ?? '21',
+      _prodSearch: i.descripcion,
+    })));
+    setEditingId(null);
+    setDuplicadoDeId(vincular ? full.id : null);
     setDuplicarTarget(null);
+    setIsModalOpen(true);
   };
 
   // Helper: invalidar también el cache de notificaciones cuando cambia el estado/stock
@@ -258,6 +270,7 @@ function OrdenesCompraSection() {
     setProdOpen({});
     setTcMissingOC(false);
     setEditingId(null);
+    setDuplicadoDeId(null);
   };
 
   // "Editar" desde el detalle — solo se ofrece si estado IN ('borrador','enviada'),
@@ -396,11 +409,12 @@ function OrdenesCompraSection() {
         alicuota_iva: i.alicuota_iva ?? '21',
         unidad_medida: i.unidad_medida || null,
       })),
+      duplicadoDeId: editingId ? null : duplicadoDeId,
     };
     if (editingId) {
       updateMutation.mutate({ id: editingId, payload });
     } else {
-      createMutation.mutate(payload);
+      createMutation.mutate(payload, { onSuccess: (oc) => setDetalleId(oc.id) });
     }
   };
 
