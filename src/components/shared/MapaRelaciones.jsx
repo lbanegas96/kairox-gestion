@@ -73,8 +73,15 @@ function NodoMapa({ nodo, activo = false, onClick }) {
       onClick={clickable ? onClick : undefined}
       role={clickable ? 'button' : undefined}
       className={[
+        // Bug real (14/08, reportado por Luciano): el ancho ya era fijo, pero
+        // la altura no — cada tarjeta muestra un subconjunto distinto de campos
+        // opcionales (fecha/total/estado/"ver detalle"), así que una Recepción
+        // sin total quedaba visiblemente más baja que una Cotización con total.
+        // h-[176px] fija el tamaño de la tarjeta entera; flex-col + mt-auto en
+        // "ver detalle" ancla ese link siempre al mismo lugar abajo, sea cual
+        // sea el contenido de arriba.
         'bg-kx-surface border border-kx-border rounded-xl p-3',
-        'w-[150px] flex-shrink-0 select-none',
+        'w-[150px] h-[176px] flex-shrink-0 flex flex-col select-none',
         'border-t-2',
         activo
           ? 'border-t-[rgb(var(--kx-violet))] ring-2 ring-[rgb(var(--kx-violet)/0.18)]'
@@ -126,7 +133,7 @@ function NodoMapa({ nodo, activo = false, onClick }) {
       )}
 
       {clickable && (
-        <div className="mt-1.5 text-[9px] text-kx-text-3 flex items-center gap-0.5">
+        <div className="mt-auto pt-1.5 text-[9px] text-kx-text-3 flex items-center gap-0.5">
           <ExternalLink className="w-2.5 h-2.5" /> ver detalle
         </div>
       )}
