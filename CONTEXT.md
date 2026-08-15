@@ -3267,3 +3267,83 @@ Funciones de usuario (JWT requerido):
 ## Proyecto remoto Supabase
 - **Project ID:** `wuznppxeonmhfcvnqfbf`
 - **Empresa piloto:** Nalux (`condicion_iva = 'Exento'`, emite letra C)
+
+---
+
+## Sesión 2026-08-15 — Fase 2 del plan de comprobantes + bugs reales de Cotización/OC
+
+Continuación del plan `PLAN_COMPROBANTES_ESTANDAR.md` (Fase 0 y Fase 1 ya cerradas
+en sesiones previas). Nadia había dejado overnight `50277ed` (Facturar
+Pedido/Entrega abre el ERP en vez del POS + 3 fixes más), verificado contra
+el plan de pruebas antes de seguir.
+
+### Bug real — autocomplete de productos roto al editar una Cotización (`6a28a7c`)
+Reportado en vivo por Luciano: al editar una Cotización y agregar un producto,
+el combo desplegaba pero clickear una sugerencia no hacía nada.
+
+**Causa:** el listener `mousedown` de "cerrar dropdown al clickear afuera" en
+`CotizacionesSection.jsx` solo reconocía `[data-prod-row]` como "adentro". El
+refactor de `ProductoAutocomplete.jsx` de una sesión anterior movió el dropdown
+a un `createPortal(..., document.body)`, fuera de ese ancestro — cada click en
+una sugerencia se clasificaba como "afuera" y cerraba el dropdown en `mousedown`,
+antes de que el `click`/`onSelect` pudiera dispararse.
+
+**Fix:** se etiquetó el portal con `data-prod-dropdown` y se excluyó del check
+de "afuera". Confirmado con clicks reales de mouse (no sintéticos) antes/después.
+
+### Gap real — Mapa de Relaciones inaccesible desde Cotización y Orden de Compra
+Ninguna de las dos tenía botón "Mapa de relaciones" en su detalle. En OC el gap
+era más profundo: `MapaRelaciones.jsx` no tenía ninguna rama de resolución para
+un id de OC (solo compra/comprobante/cotización/pedido/entrega/recepción/devolución).
+
+**Fix (`6a28a7c`, con aprobación explícita de Luciano para tocar OC):**
+- `ModalDetalleCotizacion.jsx` / `ModalDetalleOC.jsx`: botón "Mapa de relaciones".
+- `MapaRelaciones.jsx`: nueva rama `ordenCompraId` — resuelve a compra si ya
+  existe, si no a la cadena `sinFacturar` (OC → recepciones), más el caso
+  `orden_compra` en `fetchPreviewItems`.
+- Verificado en vivo: COT-00029 → PED-004(Facturado) → PED-005(Borrador) →
+  ENT-2026-0137; OC-00010 → REC-2026-0005 → REC-2026-0006.
+
+### Fix visual — tarjetas del Mapa de Relaciones sin tamaño homogéneo (`c9ed9e6`)
+Cada `NodoMapa` mostraba un subconjunto distinto de campos opcionales
+(fecha/total/estado), variando la altura. Fix: `h-[176px]` + `flex flex-col` +
+`mt-auto` en el bloque "ver detalle" para anclarlo siempre al mismo Y.
+
+### Fase 2 del plan — Factura de Venta (`04eb4bd`)
+- Atajo Enter + fix de foco (mismo patrón `descRefs`/`cantRefs` que Cotizaciones/OC).
+- `SaleDetailModal.jsx`: el `<tfoot>` ahora calcula Neto/IVA desde `items` en vez
+  de confiar en `comprobantes.neto_gravado`/`iva_discriminado` (35/158 facturas
+  reales de Nalux los tienen NULL). Verificado contra una Factura C real con CAE:
+  Neto $2.479,34 + IVA $520,66 = Total $3.000,00 exacto.
+
+### Fase 2 del plan — Factura de Compra (`bc98365`)
+Era el único documento con precio real sin descuento (ni por línea ni global).
+- Migración 326: `detalle_compras.descuento_item` + `compras.descuento_global_pct`
+  (NUMERIC 0-100, sin trigger de auditoría — Factura de Compra sigue sin edición
+  con historial en esta fase, decisión ya tomada).
+- `NuevaFacturaProveedorModal.jsx`: descuento línea+global, atajo Enter, búsqueda
+  de productos pasó de precargar 500 productos a `.ilike().limit(8)` server-side.
+  Bug colateral encontrado y arreglado: 27% de IVA violaba el CHECK real de
+  `detalle_compras.alicuota_iva` (mismo bug que ya se había arreglado del lado
+  de Ventas en Fase 0) — sacado de `ALICUOTAS`.
+- `ModalDetalleFacturaCompra.jsx` (nuevo): antes Factura de Compra era el único
+  documento sin modal de detalle propio (fila expandible inline). Ahora tiene
+  Neto/IVA siempre visible (criterio Compras: sin gating por letra, a diferencia
+  de Ventas), botón Mapa de Relaciones, Copiar a NC/ND, Devolver a proveedor.
+- Verificado en vivo con datos reales: búsqueda "Batidora" trajo `costo_compra`
+  real; Enter selecciona y salta foco a Cantidad; 10% desc. línea + 5% global →
+  $1.340,64 neto (matemática correcta). Se abortó el registro de una factura de
+  prueba real al toparse con el gate de TC del día (moneda paralela) — no se
+  inventó un tipo de cambio; se verificó el modal nuevo contra un registro
+  real existente en su lugar (Kiosko Achaval, S/N, $4.068,00).
+
+156/156 tests, build limpio en cada commit de esta sesión.
+
+**Pendiente, no arreglado (fuera de alcance de esta fase):** `aplicar_compra_producto`
+en `NuevaFacturaProveedorModal.jsx` sigue usando el `precio_unit` sin descontar
+como base de costo para la valuación de stock — con líneas descontadas esto
+puede sub/sobreestimar el COGS. Anotado, no filed como tarea aparte todavía.
+
+**Siguen pendientes del plan:** Fase 3 (NC/ND emitidas y recibidas — autocomplete
++ IVA visible) y Fase 4 (Devoluciones — modal más grande + Neto/IVA). Se encaran
+de a una, con push/deploy al cierre de cada una.
