@@ -3470,3 +3470,53 @@ Verificado con SQL en `BEGIN...ROLLBACK` (las 7 tablas + query inversa). **No se
 verificar en vivo en el navegador esta sesión** — el panel del Browser no componía frames
 (falla técnica de la herramienta, no del código). 156/156 tests, build limpio, 0 errores de
 lint (solo warnings preexistentes del mismo patrón que el resto del código).
+
+---
+
+## Sesión 2026-08-15 (noche) — Duplicar documentos + fix crítico + Facturar Pedido (5 frentes, sin construir)
+
+### Duplicar documentos — completo y corregido en dos pasadas
+Primera pasada (commit `ac41123`): 9 flujos wireados (Cotización, Pedido, OC,
+Factura de Venta, Factura de Compra, NC/ND emitidas y recibidas), migración
+327 (`duplicado_de_id`, self-FK en 7 tablas), `ConfirmDuplicarDialog`
+compartido, `MapaRelaciones.jsx` con la rama "Duplicado de X"/"N duplicados".
+
+**Bug real encontrado por Luciano probándolo en vivo (commit `fca38e7`):**
+Cotización/Pedido/OC duplicaban en silencio (INSERT directo al confirmar) sin
+dejar editar nada antes de crear — quedaba el borrador ya creado. El
+comportamiento esperado, estilo SAP "Copiar Desde", es abrir el mismo form de
+"Nueva X" pre-cargado pero completamente editable (fecha, ítems, cliente),
+y recién crear cuando el usuario confirma "Guardar". Factura de Venta/Compra
+y los 4 modales de NC/ND ya lo hacían bien desde el principio (usan
+`comprobanteOrigen`/`compraOrigen`/`duplicarOrigen` para pre-fill, nunca
+insert directo) — no necesitaron cambios. Verificado en vivo (browser real)
+en los 3 flujos corregidos.
+
+### Facturar Pedido — 5 problemas reportados por Luciano, 0 construidos
+Ver `PLAN_FACTURAR_PEDIDO_5_FRENTES.md` (raíz del repo) para el detalle
+completo — quedó investigado y diseñado (sobre todo el Frente 2), pero
+**nada se construyó todavía**, queda para que Nadia (u otra sesión) lo tome:
+
+1. Visual/diseño del modal no respeta la línea del resto de la app.
+2. **Facturar lo entregado, no lo pedido** — diseño cerrado al detalle: el
+   backend (`crear_venta`, mig.156) YA calcula bien el tope
+   entregado-vs-facturado: el bug es 100% de precarga en
+   `NuevaFacturaModal.jsx` (usa `pedido_items[].cantidad` en vez de
+   `cantidad_entregada - cantidad_facturada`).
+3. Sin acceso a Mapa de Relaciones desde ese modal.
+4. **Factura de Reserva** (nueva) — facturar el pedido completo sin entregar,
+   entregar después. No existe hoy ningún concepto así; requiere RPC nueva y
+   revisar si se puede generar una Entrega para un Pedido ya `facturado`.
+5. **Desacoplar cobro de emisión** — el ERP no debe cobrar en el momento como
+   el POS; la Factura debe emitirse (con CAE) y quedar siempre como Open Item
+   en Cuenta Corriente, cobrándose después. Hallazgo importante: el sistema
+   de Cobro con Open Item **ya existe y funciona**
+   (`CuentaCorrienteSection.jsx` + `ModalCobro.jsx` + RPC
+   `registrar_cobro_cliente`, imputación FIFO, mig.169) — este frente es
+   sobre todo sacar el selector "Forma de pago" de `NuevaFacturaModal.jsx`,
+   no construir el cobro de cero. Confirmado con Luciano: aplica igual a
+   Facturar Pedido, Facturar Entrega y Nueva Factura standalone; el POS
+   (Modo Caja) no se toca.
+
+Todo pusheado y deployado (`fca38e7`, más `PLAN_FACTURAR_PEDIDO_5_FRENTES.md`
+sin migraciones ni código nuevo asociado).
