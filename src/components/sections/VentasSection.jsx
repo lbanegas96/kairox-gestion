@@ -44,8 +44,8 @@ function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
   // "Registrar Cobro" desde el detalle de una factura impaga — sale del módulo
   // Ventas hacia Cuenta Corriente (sección de nivel superior en Dashboard.jsx),
   // con el cliente y el diálogo de cobro ya abiertos.
-  const handleRegistrarCobro = (clienteId) => {
-    onNavigateGlobal?.('cuentacorriente', { clienteId, autoAbrirCobro: true });
+  const handleRegistrarCobro = (clienteId, facturaId) => {
+    onNavigateGlobal?.('cuentacorriente', { clienteId, autoAbrirCobro: true, facturaId });
   };
 
   return (
@@ -152,6 +152,7 @@ function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
         open={showNuevaFactura}
         onOpenChange={setShowNuevaFactura}
         onSuccess={handleSaleSuccess}
+        onRegistrarCobro={handleRegistrarCobro}
       />
     </div>
   );

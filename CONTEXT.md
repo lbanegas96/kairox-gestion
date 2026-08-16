@@ -4040,3 +4040,48 @@ conector y el Personal Access Token son de la cuenta nueva:
    de esos servicios, así que no son irrecuperables — pero es mucho más rápido copiarlos de ahí.
 2. **Configuración de Auth** (Dashboard viejo → Authentication → Providers / URL Configuration):
    qué proveedores de login están habilitados y qué URLs de redirect están permitidas.
+
+## Sesión 2026-08-16 — Verificación de la migración de Supabase + ajustes UX de Facturar/Cobrar
+
+Retomando la migración de Nadia (16/08 madrugada, ver sección anterior): se verificó que el
+conector MCP de esta sesión y `.env.local` (dev local) seguían apuntando al proyecto **viejo**
+(`wuznppxeonmhfcvnqfbf`) — corregidos ambos hacia `isvkelrdxwvkfmrfqxxk`. Se detectó además que
+**Vercel (producción) seguía escribiendo contra el proyecto viejo** (un cobro real de Luciano por
+$38.800 no aparecía en la base nueva) — causa: Vercel no recarga env vars solo, hace falta
+actualizarlas a mano en Settings → Environment Variables y disparar un **Redeploy** explícito.
+Luciano lo hizo; verificado después con una factura+cobro reales de prueba
+(`FAC-20260816-001`, $49.400, Luciano Rosa) que el circuito completo Facturar → Cobrar ya
+escribe en la base nueva.
+
+Probando ese circuito en vivo, Luciano encontró 7 ajustes de UX sobre `NuevaFacturaModal.jsx` y
+el flujo de Cobro (`ModalCobro.jsx`/`CuentaCorrienteSection.jsx`) — resueltos en esta misma
+sesión (sin migraciones, todo frontend):
+
+1. **Combo de productos vacío al hacer foco**: `getProductosFiltrados()` exigía 2+ caracteres
+   tipeados; ahora con foco vacío muestra los primeros 20 del catálogo (como un combo normal).
+2. **Subtotal por línea "no hacía nada"**: investigado — no era un bug, `calcBruto(item)` ya se
+   recalculaba en cada render; era un campo de solo lectura (no un input), confirmado en vivo
+   editando cantidad/precio/descuento con Luciano mirando.
+3. **Desc% (y Cant./Precio Unit.) arrancaban en "0"** obligando a borrar antes de tipear —
+   `onFocus={e => e.target.select()}` en los tres inputs.
+4. **La factura se cerraba sola al crearse**: ahora `handleConfirmar` deja el modal abierto en
+   una vista de confirmación (`facturaCreada` state) con "Registrar Cobro" o "Cerrar (Esc)", en
+   vez de `onOpenChange(false)` directo — mismo patrón que ya se había corregido para
+   Cotización/Pedido/OC en la sesión de Duplicar (15/08).
+5-6. **"Registrar Cobro" desde una factura abría siempre en $0, sin factura marcada, y con el
+   estilo viejo de `ModalCobro.jsx`**: se hizo el wiring de un `facturaId` de punta a punta
+   (`SaleDetailModal` → `VentasSection.handleRegistrarCobro` → `Dashboard.navigateTo` →
+   `CuentaCorrienteSection.initialFacturaId` → `openPaymentDialog`/`fetchFacturasAbiertas`) que
+   preselecciona esa factura puntual y precarga el Monto a Cobrar con su saldo. `ModalCobro.jsx`
+   se rediseñó con el lenguaje visual denso (`kx-*`, `h-8`) que ya tiene el resto de la app.
+7. **Rediseño de "Imputar a factura(s)" estilo SAP**: cada factura abierta ahora tiene un
+   checkbox (tildarla precarga su saldo completo, editable para pago parcial) en vez de un input
+   suelto sin contexto; debajo de una imputación parcial aparece "Queda pendiente: $X (Y%)". Sin
+   cambios de RPC — `registrar_cobro_cliente` ya soportaba imputación parcial (mig.169), solo
+   faltaba comunicarlo bien en la UI.
+
+Verificado en vivo end-to-end contra Nalux real: se creó `FAC-20260816-002` ($19.000, Luciano
+Rosa, con 5% de descuento cargado con un solo tipeo) y se cobró completa desde el flujo nuevo —
+el checkbox se tildó solo, el monto se precargó en $19.000, "Imputado: $19.000,00 / $19.000,00",
+y la deuda total de Nalux bajó de $703.982 a $684.982. Tests (156/156), lint (0 errores) y build
+limpios antes del deploy.

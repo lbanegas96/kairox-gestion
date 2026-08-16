@@ -100,7 +100,7 @@ function Dashboard({ user, onLogout, onEnterPOS }) {
       case 'compras':                return <ComprasSection initialTab="rapida" />;
       case 'caja':          return <CajaSection />;
       case 'clientes':      return <ClientesSection />;
-      case 'cuentacorriente':return <CuentaCorrienteSection initialClienteId={sectionParams.clienteId} autoAbrirCobro={sectionParams.autoAbrirCobro} />;
+      case 'cuentacorriente':return <CuentaCorrienteSection initialClienteId={sectionParams.clienteId} autoAbrirCobro={sectionParams.autoAbrirCobro} initialFacturaId={sectionParams.facturaId} />;
       case 'reportes':      return <ReportesSection initialView={sectionParams.initialView ?? null} onNavigate={navigateTo} />;
       case 'usuarios':      return <ConfiguracionSection initialTab="usuarios" />;
       case 'configuracion': return <ConfiguracionSection initialTab={sectionParams.initialTab} />;

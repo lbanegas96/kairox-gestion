@@ -292,7 +292,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
                         <Button
                           size="sm"
                           className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
-                          onClick={() => onRegistrarCobro?.(sale.cliente_id)}
+                          onClick={() => onRegistrarCobro?.(sale.cliente_id, sale.id)}
                         >
                           <Banknote className="h-3.5 w-3.5" /> Registrar Cobro
                         </Button>

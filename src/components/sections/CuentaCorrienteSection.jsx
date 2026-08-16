@@ -17,7 +17,7 @@ import TablaClientes from '@/components/cuenta-corriente/TablaClientes';
 import TabAntiguedad from '@/components/cuenta-corriente/TabAntiguedad';
 import ModalCobro from '@/components/cuenta-corriente/ModalCobro';
 
-function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro } = {}) {
+function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro, initialFacturaId } = {}) {
   const { user } = useAuth();
   const { isSessionOpen, currentSession } = useCaja();
   const { toast } = useToast();
@@ -101,9 +101,9 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro } = {}) {
     const cliente = clients.find(c => c.id === initialClienteId);
     if (cliente) {
       autoAbrioRef.current = initialClienteId;
-      openPaymentDialog(cliente);
+      openPaymentDialog(cliente, null, initialFacturaId || null);
     }
-  }, [autoAbrirCobro, initialClienteId, clients]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoAbrirCobro, initialClienteId, initialFacturaId, clients]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (activeTab === 'antigüedad' && user?.empresa_id) {
@@ -269,7 +269,7 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro } = {}) {
     setDetailModalOpen(true);
   };
 
-  const openPaymentDialog = (client, e) => {
+  const openPaymentDialog = (client, e, facturaId = null) => {
     e?.stopPropagation();
     setSelectedClient(client);
     const efectivo = formasPago.find(f => f.tipo_instrumento === 'efectivo');
@@ -278,10 +278,10 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro } = {}) {
     setImputacionesFX({});
     setFacturasAbiertas([]);
     setIsPaymentDialogOpen(true);
-    fetchFacturasAbiertas(client.id);
+    fetchFacturasAbiertas(client.id, facturaId);
   };
 
-  const fetchFacturasAbiertas = async (clienteId) => {
+  const fetchFacturasAbiertas = async (clienteId, preseleccionarFacturaId = null) => {
     const { data, error } = await supabase
       .from('facturas_saldo_pendiente')
       .select('comprobante_id, numero_venta, fecha, saldo_pendiente, moneda, tipo_cambio_tasa')
@@ -311,6 +311,25 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro } = {}) {
     }
 
     setFacturasAbiertas(facturas);
+
+    // Deep-link "Registrar Cobro" desde una factura puntual (Nueva Factura tras
+    // crear, o el detalle de una factura existente): la marca tildada y precarga
+    // el Monto a Cobrar con su saldo completo, como haría SAP al abrir el cobro
+    // ya apuntado a un documento.
+    if (preseleccionarFacturaId) {
+      const match = facturas.find(f => f.comprobante_id === preseleccionarFacturaId);
+      if (match) {
+        const saldoStr = String(match.saldo_pendiente);
+        if (match.moneda && match.moneda !== 'ARS') {
+          const tc = match.tc_hoy || match.tipo_cambio_tasa || 0;
+          setImputacionesFX({ [match.comprobante_id]: saldoStr });
+          setPaymentData(prev => ({ ...prev, monto: tc > 0 ? String(match.saldo_pendiente * tc) : '' }));
+        } else {
+          setImputaciones({ [match.comprobante_id]: saldoStr });
+          setPaymentData(prev => ({ ...prev, monto: saldoStr }));
+        }
+      }
+    }
   };
 
   // Reparte `monto` entre las facturas abiertas más viejas primero (FIFO),

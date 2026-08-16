@@ -81,7 +81,7 @@ const calcNetoIva = (item) => {
 // toca movimientos_caja. Aplica igual a Facturar Pedido, Facturar Entrega y
 // Nueva Factura standalone — el POS (NuevaVentaModal.jsx, Modo Caja) sigue
 // cobrando en el momento, es un circuito distinto a propósito, no se tocó.
-function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedido = null, duplicadoDeId = null, onSuccess }) {
+function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedido = null, duplicadoDeId = null, onSuccess, onRegistrarCobro }) {
   const { user }   = useAuth();
   const { toast }  = useToast();
 
@@ -126,6 +126,13 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
   // para Frente 2 (precargar sólo lo entregado cuando sí hay Entrega — ver el
   // useEffect de pre-carga).
   const [pedidoTieneEntrega, setPedidoTieneEntrega] = useState(null);
+  // Punto 4 del ajuste de UX (16/08): antes handleConfirmar cerraba el modal
+  // de una (onOpenChange(false)) apenas se creaba la factura — igual que el
+  // patrón viejo de Cotización/Pedido/OC que ya se había corregido para
+  // Duplicar. Ahora, al confirmar, el modal queda abierto mostrando esta
+  // vista de éxito en vez de cerrarse solo; el usuario sale con Cancelar/Esc
+  // o sigue directo a "Registrar Cobro".
+  const [facturaCreada, setFacturaCreada] = useState(null); // { id, numero, total, clienteId }
 
   // ── Carga de datos al abrir ─────────────────────────────────────────────────
   useEffect(() => {
@@ -266,6 +273,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
       setCentroCostoId('');
       setFacturaReserva(false);
       setPedidoTieneEntrega(null);
+      setFacturaCreada(null);
     }
   }, [open]);
 
@@ -279,7 +287,9 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
   };
 
   const getProductosFiltrados = (query) => {
-    if (!query || query.length < 2) return [];
+    // Foco sin tipear todavía → mostrar el catálogo (como un combo normal),
+    // no una lista vacía que obliga a escribir para ver algo.
+    if (!query) return productosCache.slice(0, 20);
     return productosCache
       .filter(p => p.nombre.toLowerCase().includes(query.toLowerCase()))
       .slice(0, 8);
@@ -577,7 +587,9 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
 
       toast({ title: `Factura ${numero} creada correctamente` });
       onSuccess?.({ id: comprobanteId, numero_venta: numero, total });
-      onOpenChange(false);
+      // No se cierra el modal solo (Punto 4, 16/08) — queda abierto en la
+      // vista de confirmación, con la opción de encadenar el cobro sin salir.
+      setFacturaCreada({ id: comprobanteId, numero, total, clienteId });
     } catch (err) {
       console.error('[NuevaFactura]', err);
       toast({ title: 'Error al crear factura', description: err.message, variant: 'destructive' });
@@ -622,6 +634,39 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
           </DialogDescription>
         </DialogHeader>
 
+        {facturaCreada ? (
+          <>
+            <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+              <div className="w-14 h-14 rounded-full bg-kx-green/10 flex items-center justify-center">
+                <FileText className="w-7 h-7 text-kx-green" />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-kx-text">Factura {facturaCreada.numero} creada</p>
+                <p className="text-sm text-kx-text-2 mt-1">
+                  Total ${fmt(facturaCreada.total)} — queda pendiente en la Cuenta Corriente del cliente.
+                </p>
+              </div>
+            </div>
+            <DialogFooter className="px-4 py-3 border-t border-kx-border shrink-0">
+              <div className="flex gap-3 w-full justify-between">
+                <Button variant="outline" onClick={() => onOpenChange(false)}
+                  className="border-kx-border text-kx-text-2 hover:bg-kx-surface-2">
+                  Cerrar (Esc)
+                </Button>
+                <Button
+                  onClick={() => {
+                    onRegistrarCobro?.(facturaCreada.clienteId, facturaCreada.id);
+                    onOpenChange(false);
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                >
+                  Registrar Cobro
+                </Button>
+              </div>
+            </DialogFooter>
+          </>
+        ) : (
+        <>
         {/* overflow-y-auto (no -hidden) a propósito: es la red de seguridad para
             pantallas bajas. En el caso normal la lista de Ítems (más abajo)
             scrollea sola y esto no se nota — pero como esa lista tiene
@@ -814,6 +859,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
                         ref={el => { cantRefs.current[item._id] = el; }}
                         type="number" min="1" step="1" value={item.cantidad}
                         onChange={e => updateItem(item._id, 'cantidad', e.target.value.replace(/[^\d]/g, ''))}
+                        onFocus={e => e.target.select()}
                         onKeyDown={handleItemRowKeyDown}
                         className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm text-center"
                       />
@@ -823,6 +869,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
                       <Input
                         type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unit}
                         onChange={e => updateItem(item._id, 'precio_unit', e.target.value)}
+                        onFocus={e => e.target.select()}
                         onKeyDown={handleItemRowKeyDown}
                         className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm text-right"
                       />
@@ -832,6 +879,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
                       <Input
                         type="number" min="0" max="100" step="0.01" value={item.descuento_pct}
                         onChange={e => updateItem(item._id, 'descuento_pct', e.target.value)}
+                        onFocus={e => e.target.select()}
                         onKeyDown={handleItemRowKeyDown}
                         className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm text-center"
                       />
@@ -928,6 +976,8 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
             </Button>
           </div>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );
