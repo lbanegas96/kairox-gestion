@@ -3758,3 +3758,64 @@ todos esta noche). Sigue pendiente el **Frente 2** ("Facturar lo entregado, no l
 diseñado en detalle en el plan (con línea exacta de `NuevaFacturaModal.jsx` a tocar) pero **no se
 construyó** en esta sesión porque no fue pedido; el diseño sigue vigente en
 `PLAN_FACTURAR_PEDIDO_5_FRENTES.md` para cuando se retome.
+
+---
+
+## Sesión 2026-08-15 (noche) — Facturar Pedido: Frente 2, facturar lo entregado (no lo pedido)
+
+Último frente del plan, cerrando los 5. El diseño ya estaba resuelto al detalle en
+`PLAN_FACTURAR_PEDIDO_5_FRENTES.md` desde la investigación previa — implementado tal cual estaba
+documentado, sin sorpresas.
+
+### Qué cambia
+Bug real reportado por Luciano: si un Pedido tuvo una Entrega (total o parcial), "Facturar
+Pedido" seguía ofreciendo facturar la cantidad PEDIDA de cada ítem, no la ENTREGADA — un pedido
+con 2 de 4 ítems entregados mostraba los 4 con su cantidad completa, dejando que el usuario
+facturara de más sin darse cuenta (la RPC lo hubiera rechazado recién al confirmar, con una
+excepción poco clara ahí).
+
+**El backend (`crear_venta`, mig. 156/325/328) ya estaba bien** — no se tocó. Ya calculaba el
+tope correcto por ítem (`cantidad_entregada - cantidad_facturada` si hubo Entrega manual,
+`cantidad - cantidad_facturada` si no) y ya rechazaba con excepción si se facturaba de más. El
+bug era 100% de precarga en el frontend.
+
+### Cambio en `NuevaFacturaModal.jsx`
+El mismo query que ya se agregó para el Frente 4 (¿el pedido tiene una Entrega manual
+`entregado`?) ahora también decide el tope de precarga por ítem — un solo fetch cubre los dos
+frentes, mismo criterio exacto que usa la RPC para no poder divergir de ella:
+- Con Entrega manual → `cantidad: cantidad_entregada - cantidad_facturada` por ítem.
+- Sin Entrega manual → `cantidad: cantidad - cantidad_facturada` (comportamiento histórico, sin
+  cambios — un pedido nunca entregado sigue ofreciendo facturar el total).
+- Ítems con tope `<= 0` (nada pendiente para ese ítem puntual) se excluyen de la lista, no se
+  precargan en cero.
+- Si NINGÚN ítem queda facturable, toast claro ("Nada pendiente de facturar — este pedido ya está
+  totalmente facturado según lo entregado") y la lista de ítems queda vacía, en vez de abrir un
+  formulario con datos incorrectos o dejar que el usuario choque con la excepción del RPC recién
+  al confirmar.
+- Banner informativo actualizado: cuando el pedido ya tuvo una Entrega, ahora aclara "los ítems
+  de abajo vienen ajustados a lo pendiente de facturar (no lo pedido)".
+- El usuario sigue pudiendo editar la cantidad a mano si hace falta — el default ya viene
+  correcto, no es un límite duro en el input (el límite duro sigue siendo la RPC).
+
+### Verificación
+`npx eslint` sin errores nuevos, `npx vitest run` 156/156, `npx vite build` OK.
+
+Contra datos reales de Nalux, sin fabricar nada:
+- `PED-20260725-002` (Luciano, 4 ítems: 2 entregados, 2 sin entregar) — réplica exacta del
+  algoritmo de precarga contra sus datos reales confirmó que sólo quedan facturables "Camiseta
+  Argentina" y "Aramis TESTE Azul marino" (cantidad 1 cada uno), excluyendo "Termo Stanley" y
+  "Tartas" (0 entregado). No se probó con click real porque el pedido está en estado `confirmado`
+  (el botón "Facturar pedido" sólo aparece en `en_preparacion`) y avanzarlo de estado sin motivo
+  real hubiera sido tocar un pedido activo de Luciano sin necesidad.
+- `PED-20260811-002` (en `en_preparacion`, 2 ítems, ambos 100% entregados) — probado con click
+  real en el modal: banner cambia correctamente a "este pedido ya tuvo una Entrega...", ambos
+  ítems precargan con cantidad `1` (coincide con lo entregado). Cerrado con "Cancelar" sin crear
+  ningún comprobante — esta verificación era de precarga (sólo lectura), no hacía falta facturar
+  de verdad para confirmarla.
+- No se tocó ningún pedido nunca entregado para confirmar que sigue precargando la cantidad
+  pedida completa (sin regresión) — la rama de código es la misma de siempre, sin cambios, y ya
+  se había ejercitado sin querer en las pruebas del Frente 4 (`PED-20260813-001`, sin Entrega,
+  precargó su cantidad pedida completa correctamente).
+
+**Con este frente, los 5 de `PLAN_FACTURAR_PEDIDO_5_FRENTES.md` quedan construidos, probados y
+desplegados.**

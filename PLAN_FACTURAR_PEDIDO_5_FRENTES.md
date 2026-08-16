@@ -1,12 +1,9 @@
 # Facturar Pedido — 5 frentes (para Nadia)
 
 Luciano revisó "Facturar Pedido" en vivo el 15/08 y encontró 5 problemas.
-**Estado al cierre de la noche del 15/08: Frentes 3, 1, 5 y 4 construidos,
-probados y desplegados. Sólo queda pendiente el Frente 2** (diseño cerrado
-al detalle de implementación más abajo, no construido porque no fue pedido
-todavía). Ver `CONTEXT.md`, sección "Sesión 2026-08-15 (noche)" (hay una por
-cada frente construido) para el detalle de qué se hizo y cómo se verificó
-cada uno.
+**Los 5 frentes quedaron construidos, probados y desplegados la noche del
+15/08.** Ver `CONTEXT.md`, sección "Sesión 2026-08-15 (noche)" (hay una por
+cada frente) para el detalle de qué se hizo y cómo se verificó cada uno.
 
 Screenshots de referencia (modal "Facturar Pedido" y el detalle de la venta
 resultante) están en la conversación original con Luciano — pedirle si hacen
@@ -23,7 +20,7 @@ denso estilo SAP). Sin investigar todavía qué puntualmente está desalineado �
 Luciano solo marcó "la visual no respeta la línea", habría que sentarse con
 él a repasar qué específicamente cambiar.
 
-## Frente 2 — Facturar lo entregado, no lo pedido (PENDIENTE — diseño ya cerrado)
+## Frente 2 — Facturar lo entregado, no lo pedido (✅ CONSTRUIDO 15/08, ver CONTEXT.md)
 
 Si un Pedido tuvo una Entrega (total o parcial), la Factura debe facturar
 **solo lo efectivamente entregado** — nunca lo pedido. Si se entregó todo, se
@@ -195,7 +192,6 @@ Item YA EXISTE y funciona** — no es que haya que construirlo de cero:
 
 ---
 
-**Orden usado (15/08):** Frente 3 → Frente 1 → Frente 5 → Frente 4. Los 4 quedaron
-construidos, probados (`eslint`/`vitest`/`vite build` + verificación en vivo contra
-datos reales de Nalux) y desplegados la misma noche. Sólo queda el Frente 2, con el
-diseño de implementación ya cerrado arriba.
+**Orden usado (15/08):** Frente 3 → Frente 1 → Frente 5 → Frente 4 → Frente 2. Los 5
+quedaron construidos, probados (`eslint`/`vitest`/`vite build` + verificación en vivo
+contra datos reales de Nalux) y desplegados la misma noche.

@@ -119,9 +119,12 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
   // todavía ninguna Entrega, dejando el movimiento de stock (la Entrega real)
   // para después, por separado. Sólo tiene sentido si el pedido no tuvo
   // ninguna Entrega manual todavía (si ya la tuvo, no hay nada que "reservar"
-  // — facturar normal). `null` = todavía no se sabe (fetch en curso), así el
-  // checkbox no aparece de golpe y desaparece si resulta que sí hay Entrega.
+  // — facturar normal).
   const [facturaReserva, setFacturaReserva] = useState(false);
+  // `pedidoTieneEntrega`: `null` = todavía no se sabe (fetch en curso, así el
+  // checkbox de Reserva no aparece de golpe). Se usa para Frente 4 (arriba) Y
+  // para Frente 2 (precargar sólo lo entregado cuando sí hay Entrega — ver el
+  // useEffect de pre-carga).
   const [pedidoTieneEntrega, setPedidoTieneEntrega] = useState(null);
 
   // ── Carga de datos al abrir ─────────────────────────────────────────────────
@@ -165,25 +168,55 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
     if (pedido?.id) {
       setClienteId(pedido.cliente_id || '');
       setReferenciaCliente(pedido.referencia_cliente || '');
-      // Frente 4: la Factura de Reserva sólo tiene sentido si el pedido no
-      // tuvo ninguna Entrega manual todavía — mismo criterio exacto que usa
-      // crear_venta (mig.328) para decidir si mueve stock.
+      // Un solo query cubre dos frentes del plan:
+      // - Frente 4: la Factura de Reserva sólo tiene sentido si el pedido no
+      //   tuvo ninguna Entrega manual todavía.
+      // - Frente 2: si SÍ tuvo una Entrega manual, hay que facturar sólo lo
+      //   entregado (no lo pedido) — mismo criterio EXACTO que usa crear_venta
+      //   (mig.156/328) para decidir el tope de sobre-facturación y si mueve
+      //   stock, evita que este modal y la RPC puedan divergir.
       supabase.from('entregas').select('id')
         .eq('empresa_id', user.empresa_id).eq('pedido_id', pedido.id)
         .eq('origen', 'manual').eq('estado', 'entregado')
         .limit(1).maybeSingle()
-        .then(({ data }) => setPedidoTieneEntrega(!!data));
-      if (pedido.pedido_items?.length > 0) {
-        setItems(pedido.pedido_items.map(i => ({
-          _id:           Math.random().toString(36).slice(2),
-          producto_id:   i.producto_id,
-          descripcion:   i.descripcion || '',
-          cantidad:      Number(i.cantidad),
-          precio_unit:   Number(i.precio_unitario),
-          descuento_pct: Number(i.descuento_item) || 0,
-          alicuota_iva:  Number(i.alicuota_iva ?? 21),
-        })));
-      }
+        .then(({ data }) => {
+          const tieneEntregaManual = !!data;
+          setPedidoTieneEntrega(tieneEntregaManual);
+
+          if (!pedido.pedido_items?.length) return;
+          // Frente 2 — Bug real reportado por Luciano (15/08): antes se
+          // precargaba siempre `i.cantidad` (lo PEDIDO), así que un pedido con
+          // Entrega parcial ofrecía facturar el total igual — el usuario
+          // podía facturar de más sin darse cuenta (la RPC lo hubiera
+          // rechazado recién al confirmar, con una excepción poco clara acá).
+          const itemsFacturables = pedido.pedido_items
+            .map(i => {
+              const facturada = Number(i.cantidad_facturada) || 0;
+              const maxFacturable = tieneEntregaManual
+                ? (Number(i.cantidad_entregada) || 0) - facturada
+                : Number(i.cantidad) - facturada;
+              return { i, maxFacturable };
+            })
+            .filter(({ maxFacturable }) => maxFacturable > 0);
+
+          if (itemsFacturables.length === 0) {
+            toast({
+              title: 'Nada pendiente de facturar',
+              description: 'Este pedido ya está totalmente facturado según lo entregado.',
+            });
+            setItems([]);
+            return;
+          }
+          setItems(itemsFacturables.map(({ i, maxFacturable }) => ({
+            _id:           Math.random().toString(36).slice(2),
+            producto_id:   i.producto_id,
+            descripcion:   i.descripcion || '',
+            cantidad:      maxFacturable,
+            precio_unit:   Number(i.precio_unitario),
+            descuento_pct: Number(i.descuento_item) || 0,
+            alicuota_iva:  Number(i.alicuota_iva ?? 21),
+          })));
+        });
     } else if (comprobanteOrigen?.id) {
       // Pre-carga desde comprobante origen (flujo "Duplicar" — Fase 5, 15/08:
       // única llamadora real hoy). tipoDoc/puntoVentaId se copian como DEFAULT
@@ -608,7 +641,9 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
                 {pedido
                   ? (facturaReserva
                       ? <>Vinculada al Pedido <strong>{pedido.numero}</strong>. <strong>Factura de Reserva</strong>: se emite sin descontar stock y sin generar ninguna Entrega — la Entrega real se genera después, aparte, con "Generar Entrega".</>
-                      : <>Vinculada al Pedido <strong>{pedido.numero}</strong>. Si el pedido ya tuvo una Entrega, el stock no se vuelve a descontar; si es la primera vez que se factura, esta factura genera la entrega y descuenta el stock ahora.</>)
+                      : pedidoTieneEntrega
+                        ? <>Vinculada al Pedido <strong>{pedido.numero}</strong>. Este pedido ya tuvo una Entrega — los ítems de abajo vienen ajustados a <strong>lo pendiente de facturar</strong> (no lo pedido), y el stock no se vuelve a descontar.</>
+                        : <>Vinculada al Pedido <strong>{pedido.numero}</strong>. Si el pedido ya tuvo una Entrega, el stock no se vuelve a descontar; si es la primera vez que se factura, esta factura genera la entrega y descuenta el stock ahora.</>)
                   : <>Esta factura <strong>no afecta el inventario</strong>. Para descontar stock, usá el flujo Pedido → Entrega → Facturar lo entregado.</>}
               </span>
             </div>
