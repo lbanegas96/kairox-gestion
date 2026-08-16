@@ -3975,3 +3975,68 @@ recarga env vars solo, necesita un redeploy explícito).
 4. Reconfigurar el webhook de MercadoPago a la nueva URL del proyecto.
 5. Una vez confirmado que todo funciona end-to-end: dejar el proyecto viejo sin borrar unas
    semanas como respaldo (Fase 9 del plan original).
+
+### Vault copiado (los 8 secrets de integraciones) — 16/08
+Descubrimiento que cambia el plan de la Fase 4b: **los secrets del Vault SÍ se pueden copiar**.
+La CLI de Supabase no los deja leer entre cuentas distintas (`secrets list` contra el proyecto
+viejo devuelve 403, el Personal Access Token es de la cuenta nueva y no tiene ningún permiso
+sobre la vieja), pero el Vault no es un secret de plataforma sino una tabla de la base:
+`vault.decrypted_secrets` se lee por conexión directa de Postgres con el rol `postgres`, que es
+justamente la vía que ya veníamos usando para todo lo demás.
+
+Copiados los 8 con `vault.create_secret(valor, nombre, descripcion)` en la base nueva, **con el
+mismo nombre exacto** para que el código de la app (`vault_secret_read('mp_access_token_' ||
+empresa_id)`, `afip_cert_<empresa_id>`, etc.) los encuentre sin tocar una línea:
+
+| Secret | Empresa |
+|---|---|
+| `afip_cert_*` + `afip_key_*` | las 2 empresas que tienen AFIP configurado |
+| `mp_access_token_*` | Nalux |
+| `mercadolibre_access_token_*` + `_refresh_token_*` | Nalux |
+| `tiendanube_access_token_*` | Nalux |
+
+Verificado comparando el **md5 del valor desencriptado** en las dos bases: los 8 idénticos (nunca
+se imprimió ni se guardó en disco el contenido, viajaron sólo en memoria del script). Probado
+además que `public.vault_secret_read()` los lee desde la base nueva, y que los permisos siguen
+como los dejó la migration 113: `vault_secret_read`/`_upsert`/`_delete` sólo `service_role`,
+`afip_cert_status` (el booleano sin fuga) para `authenticated`.
+
+**Consecuencia práctica: no hace falta volver a cargar a mano el token de MercadoPago ni el
+certificado de AFIP.** Ya están en el proyecto nuevo.
+
+### BUG REAL encontrado después del corte: los cron jobs apuntaban al proyecto viejo
+El más serio de toda la migración. Las 12 migraciones que crean cron jobs (102, 107, 109, 233,
+235, 238, 239, 240, 261, 272, 307, 316) tienen **la URL del proyecto y la anon key hardcodeadas**.
+Al replicar el schema, los 8 jobs que llaman Edge Functions quedaron apuntando a
+`https://wuznppxeonmhfcvnqfbf.supabase.co/functions/v1/...` — o sea, con la app ya cortada a la
+base nueva, `arca-worker` (facturación AFIP automática), `mp-sync`, `mp-qr-poller` y los workers
+de Tiendanube/MercadoLibre estaban corriendo contra la base **vieja**. Y desde el 17/08, con el
+proyecto viejo restringido, iban a fallar del todo.
+
+No alcanzó a romper nada: al detectarlo no había ningún registro en estado pendiente en las tres
+colas (`facturas_pendientes_arca`, `integraciones_stock_pendiente`, `qr_pagos_mp`) — verificado
+antes de tocar nada.
+
+Corregido con la **migration 329**, generada transformando los comandos reales que había en la
+base (reemplazo de ref y de anon key, sin retipear nada a mano) y verificando por decodificación
+que los 8 tokens embebidos eran `role: anon` y no `service_role` — la anon key es publishable, no
+es una filtración, mismo criterio que ya documentaba la migration 102. `cron.schedule()` con el
+mismo `jobname` reemplaza el job, no duplica: siguen siendo 10 jobs, 8 al proyecto nuevo y 2 que
+son SQL puro sin URL. Verificado además que las llamadas responden de verdad: 99 respuestas HTTP
+en la última media hora, **todas 200**.
+
+**Deuda técnica que queda anotada:** que la URL y la anon key salgan de un solo lugar en vez de
+estar hardcodeadas en 12 migraciones, para que una próxima mudanza de proyecto no vuelva a dejar
+los crons apuntando al lugar viejo en silencio.
+
+### Lo que queda SÓLO en el proyecto viejo (sacarlo antes del 17/08)
+Todo lo que es base de datos, storage, funciones y Vault ya está copiado y verificado. Lo único
+que no se puede leer desde acá es la configuración de plataforma del proyecto viejo, porque el
+conector y el Personal Access Token son de la cuenta nueva:
+1. **Secrets de Edge Functions** (Dashboard viejo → Edge Functions → Secrets): `SITE_URL`,
+   `AFIP_ENVIRONMENT`, `TIENDANUBE_APP_ID`, `TIENDANUBE_CLIENT_SECRET`, `MELI_APP_ID`,
+   `MELI_CLIENT_SECRET`. Los `SUPABASE_*` no hace falta copiarlos, los inyecta Supabase solo.
+   Los de Tiendanube/MercadoLibre también se pueden volver a sacar de los paneles de desarrollador
+   de esos servicios, así que no son irrecuperables — pero es mucho más rápido copiarlos de ahí.
+2. **Configuración de Auth** (Dashboard viejo → Authentication → Providers / URL Configuration):
+   qué proveedores de login están habilitados y qué URLs de redirect están permitidas.

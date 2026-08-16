@@ -48,14 +48,12 @@ No son datos — son configuración del proyecto en sí, así que ningún volcad
    de MercadoPago** y el **certificado + clave privada de AFIP** de cada empresa se guardan en el
    **Vault** de Supabase (`vault_secret_read`, `mp_access_token_${empresa_id}` en
    `mp-save-config`/`arca-worker`/etc.), que está encriptado con una clave única de cada proyecto.
-   **Esto no viaja con ningún volcado de base ni se puede "copiar"** — hay que volver a cargarlos a
-   mano desde la propia pantalla de Configuración de KAIROX en el proyecto nuevo, igual que se
-   cargaron la primera vez:
-   - MercadoPago: se vuelve a copiar el token desde el panel de desarrolladores de MercadoPago (la
-     cuenta de MP no se toca, sigue estando ahí).
-   - AFIP: se vuelve a subir el certificado/clave si todavía tienen los archivos `.crt`/`.key`
-     guardados fuera de Supabase. Si se perdieron, ahí sí hay que generar un certificado nuevo desde
-     el portal de ARCA — es el único caso realista de "empezar de cero".
+   **CORRECCIÓN (16/08): esto resultó estar equivocado y sí se pudo copiar.** El Vault no es un
+   secret de plataforma sino una tabla de la base (`vault.decrypted_secrets`), legible por
+   conexión directa de Postgres. Los 8 secrets (certificados y claves AFIP de las 2 empresas,
+   token de MercadoPago, tokens de MercadoLibre, token de Tiendanube) se copiaron con el mismo
+   nombre exacto y se verificaron por md5. **No hay que recargar nada a mano ni regenerar el
+   certificado de ARCA.** Ver `CONTEXT.md`.
 4. **Los cron jobs de `pg_cron`** (el poller de QR de MercadoPago, el reintento de facturación AFIP,
    etc.) — se recrean corriendo de nuevo las migraciones que los crean (vienen incluidas si se
    corren todas las migraciones del repo, ver Fase 1).
@@ -119,10 +117,15 @@ No son datos — son configuración del proyecto en sí, así que ningún volcad
       `verify_jwt` exacto que la vieja (`list_edge_functions`, no `config.toml` — mismo patrón
       de drift). 2 funciones de debug en la vieja (`mp-debug-confirm`/`mp-debug-list-stores`) no
       están en el repo, quedaron afuera a propósito.
-- [ ] Cargar los secrets chicos (`AFIP_ENVIRONMENT`, `SITE_URL`, y los de Tiendanube/MercadoLibre
-      si se usan). **Pendiente a propósito** (Nadia pidió dejar integraciones para el final).
-- [ ] Entrar a Configuración de KAIROX (ya apuntando al proyecto nuevo) y volver a cargar el token
-      de MercadoPago y el certificado de AFIP de cada empresa. **Pendiente a propósito.**
+- [ ] Cargar los secrets chicos (`SITE_URL`, `AFIP_ENVIRONMENT`, `TIENDANUBE_APP_ID`/
+      `CLIENT_SECRET`, `MELI_APP_ID`/`CLIENT_SECRET`). Hay que copiarlos del dashboard del
+      proyecto **viejo** (Edge Functions → Secrets) antes del 17/08 — no se pueden leer desde
+      acá, el conector y el token son de la cuenta nueva.
+- [x] ~~Volver a cargar el token de MercadoPago y el certificado de AFIP a mano~~ **Ya no hace
+      falta:** los 8 secrets del Vault se copiaron directo entre las dos bases, con el mismo
+      nombre, y verificados por md5. Detalle en `CONTEXT.md`.
+- [x] **Cron jobs reapuntados al proyecto nuevo** (migration 329). Bug real: habían quedado
+      llamando a las Edge Functions del proyecto viejo. Detalle en `CONTEXT.md`.
 - [ ] Probar cada función con una llamada de prueba — pendiente hasta que estén los secrets.
 
 ### Fase 5 — Auth y seguridad
