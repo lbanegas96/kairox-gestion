@@ -3819,3 +3819,159 @@ Contra datos reales de Nalux, sin fabricar nada:
 
 **Con este frente, los 5 de `PLAN_FACTURAR_PEDIDO_5_FRENTES.md` quedan construidos, probados y
 desplegados.**
+
+---
+
+## Sesión 2026-08-16 (madrugada) — Migración a la cuenta nueva de Supabase (`PLAN_MIGRACION_SUPABASE.md`)
+
+Con la organización NALUX restringida desde el 17/08 por cuota excedida (plan free), se migró
+todo Kairox Gestión a una cuenta nueva (`kairoxiainfo@gmail.com`), proyecto **"Kairox-gestión
+(nuevo)"** (`ref: isvkelrdxwvkfmrfqxxk`, región `sa-east-1`). Ver `PLAN_MIGRACION_SUPABASE.md`
+para el plan original.
+
+### Hallazgo de entrada: el MCP de Supabase no puede ver dos cuentas a la vez
+El conector de Supabase queda autorizado a UNA cuenta. Cambiarlo a la cuenta nueva significa
+perder el acceso a la vieja por ese camino. Solución: todo el trabajo contra ambas bases se hizo
+por **conexión directa a Postgres** (librería `pg` de Node, sin necesitar `pg_dump`/`psql`, que no
+están instalados en este entorno) — el pooler de sesión de Supabase (`aws-N-sa-east-1.pooler.
+supabase.com:5432`, usuario `postgres.<ref>`) es alcanzable desde acá; el host directo
+(`db.<ref>.supabase.co`) no resuelve (requiere IPv6 o el add-on de IPv4 pago). Cada proyecto tiene
+su propio número de pooler (la vieja: `aws-1`; la nueva: `aws-0` — no asumir que es el mismo).
+
+### Fase 1 — Schema (323 migraciones)
+El historial de migraciones aplicadas en Supabase (`list_migrations`) no coincide 1:1 con los
+323 archivos del repo:
+- **17 migraciones fundacionales (000-017)** no aparecen en el historial rastreado — se aplicaron
+  antes de que existiera el tracking, pero sus tablas obviamente existen y se usan (cotizaciones,
+  órdenes de compra, cajas, etc.). Se incluyeron igual en el replay, ordenadas primero por número.
+- **~35 nombres aplicados sin archivo correspondiente** (ej. `037_devoluciones_nd_rpcs`,
+  `282b_grant_cheques_asiento_errores`, `test_probe`, `299_webhook_debug_temporal` +
+  `300_drop_webhook_debug_temp`) — verificado caso por caso: son hotfixes que después se
+  consolidaron en su migración numerada actual, o pares crear+revertir (debug temporal) que ya no
+  están en el repo. Ninguno bloqueaba nada real.
+- Orden final de ejecución: número de prefijo (con las variantes `b` justo después de su base),
+  usando el `version` real de `list_migrations` como desempate para los pocos casos sin prefijo
+  numérico. Las 323 corrieron **sin errores**, salvo una: `297_qr_mercadopago_pos.sql` mezclaba
+  schema con una fila semilla hardcodeada para el `empresa_id` de Nalux (`INSERT INTO
+  formas_pago`) — falla de FK en la base vacía (sin datos todavía). Se parcheó al vuelo (se
+  saltea esa sentencia puntual, la trae el dump de datos de la Fase 2 igual).
+
+**3 diferencias reales de schema encontradas comparando objeto por objeto contra la base vieja**
+(no capturadas en ningún archivo — drift manual de producción, mismo patrón que ya se vio esta
+noche con el `297`):
+1. `pedidos` le faltaban los triggers `trg_audit_pedidos`/`trg_pedidos_updated_at` — ningún
+   archivo del repo actual los crea con ese nombre exacto (`017` sólo crea los viejos
+   `audit_pedidos`/`set_pedidos_updated_at`, que `056` elimina a propósito). Recreados a mano con
+   la definición exacta traída de la base vieja (`pg_get_triggerdef`).
+2. `periodos_contables` tenía 2 políticas RLS de más (`pc_select`/`pc_admin_write`, de la
+   migración `016`) que en la vieja fueron reemplazadas por 3 más granulares (`periodos_select`/
+   `insert`/`update`, de la `027`+`136`) sin que ninguna migración las borrara. Eliminadas a mano
+   para que coincida.
+3. 5 índices de performance faltantes (`idx_comprobantes_tipo`, `idx_comprobantes_origen`,
+   `idx_configuracion_empresa`, `idx_comprobante_pagos_comprobante`, `idx_integraciones_empresa`)
+   — recreados con la definición exacta de la vieja.
+4. `cuenta_corriente_movimientos.cliente_id` es `NOT NULL` en el schema del repo pero la base
+   vieja tiene 4 filas reales con `cliente_id NULL` (la restricción se sacó en algún momento sin
+   migración) — se sacó la restricción en la nueva para que coincida. De paso se encontró que
+   `created_at` de esa misma tabla era al revés (`NOT NULL` en la vieja, nullable en la nueva) —
+   corregido también.
+
+Verificación final: tablas, funciones, políticas, índices y triggers **coinciden exactamente**
+entre las dos bases (la única función de más en la nueva, `rls_auto_enable()`, es de la propia
+plataforma de Supabase por el toggle "RLS automático" activado al crear el proyecto, no es del
+repo).
+
+### Fase 2 — Datos (85 tablas, `public` + `auth.users`/`auth.identities`)
+Extracción con un script Node (`SELECT jsonb_agg(t) FROM tabla t` por tabla, sin necesitar
+`pg_dump`) y carga con `INSERT ... SELECT * FROM jsonb_populate_recordset(...)` (Postgres castea
+cada campo al tipo real de la columna — evita armar INSERTs a mano). Carga hecha con
+`SET session_replication_role = replica` para no depender de calcular el orden de dependencias
+entre 85 tablas.
+
+Dos problemas puntuales, ambos resueltos:
+- `arca_worker_run` (tabla de lock del cron de ARCA, no dato de negocio): su propia migración ya
+  sembró la fila inicial al crear la tabla — chocaba en PK con la misma fila del dump. Se excluyó
+  del dump/carga, el estado "en reposo" que deja el schema es el correcto para un deploy nuevo.
+- `auth.users.confirmed_at` y `auth.identities.email` son columnas `GENERATED ALWAYS` — un
+  `INSERT ... SELECT *` las nombra igual (aunque el JSON no las traiga, salen NULL) y Postgres
+  rechaza cualquier INSERT que las nombre. Se armó la lista explícita de columnas sin ellas para
+  esas dos tablas específicamente.
+
+`auth.users`/`auth.identities` migradas para que nadie tenga que resetear su contraseña.
+Secuencias (`audit_log_id_seq`, `rate_limit_attempts_id_seq`) reseteadas a su `MAX(id)` real
+después de cada carga.
+
+**Re-sync final antes del corte**: como pasó tiempo real entre el primer volcado y el momento de
+conectar la app de verdad, se repitió la extracción completa y se truncó+recargó la nueva (TRUNCATE
+de las 83 tablas de `public` — `auth.*` se dejó afuera del truncate a propósito: `CASCADE` sobre
+`auth.users` arrastraría tablas internas de Supabase como sesiones/refresh tokens que no están en
+el dump, y nadie se logueó de nuevo en esa ventana). Verificación final: **las 85 tablas coinciden
+exacto** entre vieja y nueva.
+
+### Fase 3 — Storage (15 archivos, `logos-empresa` + `productos-imagenes`)
+Ambos buckets son públicos para lectura — se descargaron por URL directa de la vieja y se subieron
+a la nueva por la API de Storage (`POST .../storage/v1/object/<bucket>/<path>` con la
+`service_role key` del proyecto nuevo, que bypasea las políticas RLS de storage). Los buckets ya
+existían en la nueva (los crea la migración `223_bucket_storage_logos_empresa.sql`, ya corrida en
+la Fase 1). 15/15 copiados, verificado byte a byte (mismo `content-length` en ambos lados).
+
+### Fase 4a — Edge Functions (30 funciones)
+El MCP de Supabase no puede desplegar funciones en un proyecto de otra cuenta (mismo problema de
+"una cuenta a la vez"). Se instaló la CLI de Supabase por `npx` (no hace falta Docker para un
+deploy simple, sólo tira un warning) y se desplegó cada función con `SUPABASE_ACCESS_TOKEN` (un
+**Personal Access Token** de la cuenta, generado en supabase.com/dashboard/account/tokens —
+distinto de la contraseña de base de datos y del `service_role key`, es el tercer tipo de
+credencial de esta migración).
+
+`supabase/config.toml` sólo tiene `verify_jwt` explícito para 2 de las 30 funciones — para el
+resto, la fuente de verdad real es `list_edge_functions` contra la base vieja (mismo patrón de
+"el archivo no refleja lo que hay en producción" de toda la noche). Desplegadas las 30 con el
+`verify_jwt` exacto de la vieja. 2 funciones que existen en la vieja pero no en el repo
+(`mp-debug-confirm`, `mp-debug-list-stores` — debug descartable) se dejaron afuera a propósito.
+
+Un solo error real: la primera prueba manual de `mp-verify-token` se desplegó por accidente con
+`--no-verify-jwt` (debía ser `true`). La CLI **no tiene un flag para forzar `verify_jwt=true`**
+(sólo `--no-verify-jwt` para desactivarlo) y, una vez en `false` remoto, volver a desplegar sin
+pasar ningún flag NO lo reactiva solo — hay que usar la API de administración de Supabase
+(`PATCH https://api.supabase.com/v1/projects/{ref}/functions/{slug}` con `{"verify_jwt": true}`
+y el Personal Access Token). Corregido y verificado.
+
+### Fase 4b — Integraciones (MercadoPago, AFIP, Tiendanube, MercadoLibre)
+**Pendiente a propósito** — Nadia pidió dejar todas las integraciones/secrets para el final. El
+token de MercadoPago y el certificado de AFIP están en el Vault de Supabase (encriptados con la
+clave del proyecto viejo) y **no viajan con ningún volcado** — hay que volver a cargarlos a mano
+desde la pantalla de Configuración de KAIROX, apuntando ya al proyecto nuevo. Mismo criterio para
+los secrets chicos de las Edge Functions (`AFIP_ENVIRONMENT`, `TIENDANUBE_APP_ID`/`CLIENT_SECRET`,
+`MELI_APP_ID`/`CLIENT_SECRET`, etc.).
+
+### Corte real — decisión de Nadia
+Nadia confirmó explícitamente: "hoy no tenemos clientes reales trabajando, no hay problema en
+conectar la app" — autorizó el corte real sin esperar a que las integraciones estén cargadas
+(los pagos con MercadoPago y la facturación AFIP van a quedar rotos hasta que se complete la
+Fase 4b, ella lo tiene claro).
+
+**Conector de Claude Code**: reautorizado por Nadia a la cuenta nueva — confirmado viendo el
+proyecto "Kairox-gestión(nuevo)" vía `list_projects` y una consulta real (`empresas`, 6 filas,
+coincide). Ya no hace falta la conexión directa por `pg` para trabajar contra la base nueva
+(aunque las credenciales siguen guardadas en los scripts de esta sesión por si hace falta
+comparar algo más contra la vieja).
+
+**Vercel**: Nadia decidió dejarlo como tarea para Luciano (tiene él la cuenta). Variables a
+actualizar en Vercel → proyecto → Settings → Environment Variables (sólo estas 2, las de Ualá
+son de otro proyecto y no se tocan):
+```
+VITE_SUPABASE_URL=https://isvkelrdxwvkfmrfqxxk.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon key del proyecto nuevo, ver Settings → API>
+```
+Después de guardarlas, hace falta un **Redeploy** del último deploy de Production (Vercel no
+recarga env vars solo, necesita un redeploy explícito).
+
+### Pendiente para cerrar la migración
+1. Luciano: actualizar las 2 variables en Vercel + Redeploy.
+2. Fase 4b: recargar token de MercadoPago + certificado AFIP + secrets de integraciones, ya
+   apuntando al proyecto nuevo (desde Configuración de KAIROX).
+3. Confirmar proveedores de login / URLs de redirect en Auth del proyecto nuevo (Fase 5 del plan
+   original, no verificada todavía).
+4. Reconfigurar el webhook de MercadoPago a la nueva URL del proyecto.
+5. Una vez confirmado que todo funciona end-to-end: dejar el proyecto viejo sin borrar unas
+   semanas como respaldo (Fase 9 del plan original).

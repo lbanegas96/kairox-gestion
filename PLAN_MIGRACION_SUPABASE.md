@@ -1,5 +1,14 @@
 # Plan de Migración a una cuenta nueva de Supabase
 
+**Estado (madrugada 16/08): Fases 0-4a y el corte real de la app ya hechos.** Proyecto nuevo
+"Kairox-gestión(nuevo)" (`ref: isvkelrdxwvkfmrfqxxk`). Ver `CONTEXT.md`, sección "Sesión
+2026-08-16 (madrugada)" para el detalle completo de qué se hizo y los hallazgos reales
+(varios casos de drift entre las migraciones del repo y lo que había en producción, no
+capturados en ningún archivo — corregidos a mano y documentados ahí). Pendiente: Fase 4b
+(integraciones/secrets, a propósito), Fase 5 (Auth) sin verificar todavía, y Vercel queda
+como tarea de Luciano (variables abajo en la Fase 8, ya resueltas, sólo falta que él las
+pegue y haga Redeploy).
+
 **Por qué:** la organización NALUX está en plan `free` y Supabase avisó que el proyecto queda
 restringido desde el 17/08/2026 por cuota excedida del ciclo anterior. El producto todavía no está
 en condiciones de justificar pagar un plan pago, y hoy no hay presupuesto para eso — la salida es
@@ -82,69 +91,72 @@ No son datos — son configuración del proyecto en sí, así que ningún volcad
 ## Plan de ejecución, paso a paso
 
 ### Fase 0 — Preparación (Nadia/Luciano)
-- [ ] Crear la organización y el proyecto nuevo en supabase.com (plan free, región `sa-east-1`).
+- [x] Crear la organización y el proyecto nuevo en supabase.com (plan free, región `sa-east-1`).
 - [ ] Tener a mano el token de acceso de MercadoPago (panel de desarrolladores de MP) y, si los
       guardaron, los archivos `.crt`/`.key` del certificado de AFIP — ver el detalle de por qué
       estos dos no se pueden copiar automáticamente en la sección de arriba.
-- [ ] Avisar la fecha/hora en la que se puede hacer la ventana de corte (ideal: horario de bajo
-      tráfico, con la caja cerrada).
+- [x] Avisar la fecha/hora en la que se puede hacer la ventana de corte — confirmado 16/08
+      madrugada, sin clientes reales trabajando.
 
-### Fase 1 — Schema completo
-- [ ] Correr las ~320 migraciones del repo, en orden, contra la base nueva (`supabase db push` o
-      aplicándolas una por una vía MCP). Verificar al final: mismo número de tablas, funciones y
-      políticas RLS que la base vieja.
+### Fase 1 — Schema completo ✅
+- [x] Correr las 323 migraciones del repo, en orden real (no alfabético — ver `CONTEXT.md` para
+      cómo se reconstruyó el orden), contra la base nueva. Tablas, funciones, políticas RLS,
+      índices y triggers coinciden EXACTO contra la vieja (4 diferencias reales encontradas y
+      corregidas — drift de producción no capturado en ningún archivo, detalle en `CONTEXT.md`).
 
-### Fase 2 — Datos reales
-- [ ] `pg_dump --data-only` de la base vieja (schemas `public` + `auth`, en ese orden de
-      dependencia).
-- [ ] Restaurar ese volcado en la base nueva.
-- [ ] Verificar: contar filas de las tablas principales (`comprobantes`, `productos`, `clientes`,
-      `auth.users`, etc.) en ambas bases y confirmar que coinciden exactamente.
+### Fase 2 — Datos reales ✅
+- [x] Sin `pg_dump` (no disponible en el entorno) — extracción/carga por conexión directa a
+      Postgres con Node (`pg` + `jsonb_populate_recordset`). 85 tablas (`public` + `auth.users`/
+      `auth.identities`).
+- [x] Verificado: **las 85 tablas coinciden exacto** entre vieja y nueva (incluye el re-sync
+      final antes del corte real).
 
-### Fase 3 — Storage
-- [ ] Script que lista todos los archivos de `logos-empresa` y `productos-imagenes` en el proyecto
-      viejo, los descarga, y los vuelve a subir al proyecto nuevo con la misma ruta
-      (`<empresa_id>/archivo.ext`) para que las políticas RLS por carpeta sigan funcionando igual.
-- [ ] Verificar: mismo número de archivos en ambos buckets.
+### Fase 3 — Storage ✅
+- [x] 15 archivos (`logos-empresa` + `productos-imagenes`) copiados y verificados byte a byte.
 
 ### Fase 4 — Edge Functions + Secrets
-- [ ] Desplegar cada función de `supabase/functions/` al proyecto nuevo.
+- [x] Las 30 funciones desplegadas (CLI de Supabase vía `npx`, sin Docker) con el mismo
+      `verify_jwt` exacto que la vieja (`list_edge_functions`, no `config.toml` — mismo patrón
+      de drift). 2 funciones de debug en la vieja (`mp-debug-confirm`/`mp-debug-list-stores`) no
+      están en el repo, quedaron afuera a propósito.
 - [ ] Cargar los secrets chicos (`AFIP_ENVIRONMENT`, `SITE_URL`, y los de Tiendanube/MercadoLibre
-      si se usan).
+      si se usan). **Pendiente a propósito** (Nadia pidió dejar integraciones para el final).
 - [ ] Entrar a Configuración de KAIROX (ya apuntando al proyecto nuevo) y volver a cargar el token
-      de MercadoPago y el certificado de AFIP de cada empresa — no se pueden copiar, se re-cargan
-      desde la misma pantalla que se usó la primera vez.
-- [ ] Probar cada función con una llamada de prueba antes de seguir (sin afectar producción todavía,
-      apuntando sólo a la base nueva).
+      de MercadoPago y el certificado de AFIP de cada empresa. **Pendiente a propósito.**
+- [ ] Probar cada función con una llamada de prueba — pendiente hasta que estén los secrets.
 
 ### Fase 5 — Auth y seguridad
-- [ ] Configurar proveedores de login y URLs de redirect igual que en el proyecto viejo.
-- [ ] Activar "Leaked password protection" (pendiente de antes, aprovechamos).
+- [ ] Configurar proveedores de login y URLs de redirect igual que en el proyecto viejo. **Sin
+      verificar todavía** — el login con contraseña ya migrada funciona (usuarios copiados), pero
+      no se revisó configuración de proveedores/redirects.
+- [ ] Activar "Leaked password protection".
 
-### Fase 6 — Reapuntar la app (sin cortar producción todavía)
-- [ ] Crear un ambiente de prueba en Vercel (preview deploy) con las variables de entorno apuntando
-      al proyecto nuevo, para probar todo el flujo (login, una venta, una factura) sin tocar la app
-      real que sigue usando el proyecto viejo.
+### Fase 6/7 — Reapuntar la app / Verificación
+Nadia decidió saltear el ambiente de prueba y hacer el corte directo, dado que hoy no hay
+clientes reales trabajando (ver Fase 8).
 
-### Fase 7 — Verificación final antes del corte
-- [ ] Probar en el ambiente de prueba: login, crear una venta, que facture y consiga CAE, que el
-      QR de MercadoPago funcione, que el asiento contable se genere bien.
-- [ ] Confirmar que no hay errores nuevos en los logs de las Edge Functions del proyecto nuevo.
-
-### Fase 8 — Corte real (ventana corta, con Nadia/Luciano presentes)
-- [ ] Avisar a los usuarios que el sistema va a estar breve unos minutos fuera de servicio.
-- [ ] Repetir la Fase 2 (datos) una última vez, para traer todo lo que se vendió entre el volcado de
-      prueba y este momento — así no se pierde ni una venta del medio.
-- [ ] Cambiar las variables de entorno de producción en Vercel al proyecto nuevo y redesplegar.
-- [ ] Reconfigurar el webhook de MercadoPago a la URL nueva.
-- [ ] Probar una venta real chica de punta a punta en producción.
+### Fase 8 — Corte real
+- [x] Conector de Claude Code reautorizado por Nadia a la cuenta nueva — verificado viendo el
+      proyecto y consultando datos reales.
+- [x] Re-sync final de datos hecho (ver Fase 2) antes de este paso.
+- [ ] **Vercel — queda como tarea de Luciano** (tiene él la cuenta). Actualizar en Settings →
+      Environment Variables (las de Ualá son de otro proyecto, no se tocan):
+      ```
+      VITE_SUPABASE_URL=https://isvkelrdxwvkfmrfqxxk.supabase.co
+      VITE_SUPABASE_ANON_KEY=<ver Settings → API del proyecto nuevo>
+      ```
+      Después de guardar, hace falta un **Redeploy** explícito del último deploy de Production
+      (Vercel no recarga env vars solo).
+- [ ] Reconfigurar el webhook de MercadoPago a la URL nueva — depende de la Fase 4b.
+- [ ] Probar una venta real chica de punta a punta en producción — depende de Vercel + Fase 4b.
 - [ ] Avisar a los usuarios que ya está todo funcionando de nuevo.
 
 ### Fase 9 — Después del corte
 - [ ] Dejar el proyecto viejo **sin borrar** un tiempo (unas semanas) como respaldo de emergencia,
       por si aparece algo que no se copió bien — no cuesta nada mientras no se lo use activamente,
       y da tranquilidad.
-- [ ] Actualizar `CONTEXT.md` con la nueva URL/ref del proyecto para que quede documentado.
+- [x] Actualizar `CONTEXT.md` con la nueva URL/ref del proyecto — hecho, sección "Sesión
+      2026-08-16 (madrugada)".
 
 ---
 
