@@ -3520,3 +3520,71 @@ completo — quedó investigado y diseñado (sobre todo el Frente 2), pero
 
 Todo pusheado y deployado (`fca38e7`, más `PLAN_FACTURAR_PEDIDO_5_FRENTES.md`
 sin migraciones ni código nuevo asociado).
+
+---
+
+## Sesión 2026-08-15 (noche) — Facturar Pedido: Frente 3 y Frente 1 (de `PLAN_FACTURAR_PEDIDO_5_FRENTES.md`)
+
+Nadia retomó `PLAN_FACTURAR_PEDIDO_5_FRENTES.md` que Luciano dejó armado. Orden sugerido:
+Frente 3 → Frente 1 → Frente 5 → Frente 4. Se hicieron los dos primeros.
+
+### Frente 3 — Mapa de Relaciones en el modal de Facturar Pedido
+`NuevaFacturaModal.jsx` no tenía botón "Mapa de relaciones", a diferencia de casi todos los
+demás documentos del sistema. Agregado el mismo patrón que `ModalDetallePedido.jsx`: botón
+que abre `<MapaRelaciones pedidoId={pedido.id} .../>` (o `comprobanteId={comprobanteOrigen.id}`
+en el flujo "Copiar/Duplicar a Factura") — solo se muestra cuando hay algo que mapear; una
+factura nueva en blanco todavía no tiene cadena de documentos. Verificado en vivo: abre la
+cadena Cotización → Pedido (ACTUAL) → Entrega sin cerrar el modal de facturación de fondo, y
+al cerrar el mapa el modal sigue intacto con todos sus datos.
+
+### Frente 1 — Visual/diseño: alinear con la línea densa estilo SAP
+Comparado el código directo contra `FormNuevaCotizacion.jsx`/`FormNuevaOC.jsx` (ya rediseñados)
+para diagnosticar qué puntualmente estaba desalineado, en vez de adivinar:
+
+1. Modal angosto y centrado (`max-w-5xl`) → pantalla casi completa (`max-w-[96vw] w-[96vw] h-[92vh]`).
+2. Cabecera aireada (inputs h-10, grid-4) → grilla densa de 12 columnas con inputs h-8, dentro
+   de un `Card`, mismo criterio que Cotización/OC/Pedido.
+3. **Hallazgo más importante**: el buscador de producto todavía usaba el patrón viejo
+   (`position: absolute` sin portal, dentro de una `<table>`) — el mismo que tenía el bug del
+   desplegable cortado arreglado el 14/08 en los otros 3 formularios, nunca migrado acá.
+   Reemplazado por el componente compartido `ProductoAutocomplete.jsx`. La tabla de ítems pasó
+   a la misma grilla de 12 columnas con filas `<div>` que usan Cotización/OC/Pedido.
+4. Scroll: antes todo el modal scrolleaba junto (banner + cabecera + ítems + totales en un solo
+   contenedor); ahora solo la lista de Ítems tiene su propio scroll interno, dejando cabecera y
+   totales siempre a la vista — mismo criterio que Cotización/OC/Pedido.
+
+**`ProductoAutocomplete.jsx` ganó un prop `onBlur`** (antes no lo tenía — ningún otro llamador
+lo necesitaba, `NuevaFacturaModal` sí para cerrar el desplegable al perder foco, mismo
+comportamiento que ya tenía).
+
+**Dos bugs reales encontrados y corregidos verificando el rediseño en vivo, antes de darlo por
+terminado:**
+
+1. **El foco saltaba solo al último ítem y le abría el desplegable de autocompletar**, sin que
+   el usuario tocara nada, cada vez que se abría "Facturar Pedido". Causa: el efecto que enfoca
+   "el último ítem agregado" (pensado para cuando el usuario aprieta "Agregar ítem" de a uno)
+   usaba `items.length > prevItemsLength.current` — eso también se disparaba al precargar de
+   golpe los 3 ítems de un pedido (1 → 3). Fix: solo dispara cuando la lista creció de a UNO
+   (`=== prevItemsLength.current + 1`), nunca en una carga masiva. (De paso se agregó también
+   `onOpenAutoFocus={(e) => e.preventDefault()}` al `DialogContent`, mismo guard que ya usa
+   Cotizaciones, como defensa adicional — no era la causa real, pero es el patrón correcto.)
+2. **En pantallas bajas, la tarjeta de Ítems completa podía desaparecer** (con su botón
+   "Agregar ítem" y todas las filas) hasta 0px de alto, sin scroll posible — pasaba incluso con
+   un solo ítem vacío en el flujo standalone. Causa: `flex-1 min-h-0` permite que un hijo
+   flexbox se encoja hasta cero cuando no alcanza el espacio, y el contenedor padre tenía
+   `overflow-hidden` (nada se podía scrollear para compensar). El botón "Crear Factura" nunca
+   corrió riesgo (vive en el `DialogFooter`, fuera de esta zona), pero los ítems sí quedaban
+   inalcanzables. Fix: `min-h-[220px]` en la tarjeta de Ítems (nunca se encoge por debajo de
+   eso) + el contenedor del cuerpo pasó de `overflow-hidden` a `overflow-y-auto` como red de
+   seguridad — en el caso normal no se nota (los Ítems scrollean solos como siempre), en el caso
+   extremo el modal entero scrollea en vez de perder contenido.
+
+Verificado en vivo (browser real) en los dos flujos: "Facturar Pedido" (PED-20260814-002, 3
+ítems reales) y "Nueva Factura" standalone — desplegable de producto completo y funcionando,
+selección con foco saltando a Cantidad, sin el salto de foco fantasma, tarjeta de Ítems siempre
+visible y alcanzable. `npx eslint` sin errores nuevos (solo warnings preexistentes del mismo
+patrón que el resto del código), `npx vitest run` 156/156, `npx vite build` OK — verificado
+después de cada fix.
+
+**Siguen pendientes del plan**: Frente 5 (desacoplar el cobro de la emisión) y Frente 4
+(Factura de Reserva) — ver detalle completo en `PLAN_FACTURAR_PEDIDO_5_FRENTES.md`.

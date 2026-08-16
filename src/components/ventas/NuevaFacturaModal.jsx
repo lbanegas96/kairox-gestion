@@ -5,7 +5,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Plus, Trash2, FileText, Info, AlertTriangle } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Loader2, Plus, Trash2, FileText, Info, AlertTriangle, Network } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
@@ -14,6 +15,8 @@ import { getTodayAR, getNowAR, addDaysAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
 import ClienteSelector from '@/components/shared/ClienteSelector';
+import MapaRelaciones from '@/components/shared/MapaRelaciones';
+import ProductoAutocomplete from '@/components/shared/ProductoAutocomplete';
 
 // Sin 27% a propósito — viola el CHECK real de comprobante_items.alicuota_iva
 // (mismo set que cotizacion_items/pedido_items: 21/10.5/0/exento/no_gravado).
@@ -95,6 +98,13 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
   // reportar por sucursal/línea de negocio. null = sin asignar, igual que hoy.
   const [centrosCosto, setCentrosCosto]   = useState([]);
   const [centroCostoId, setCentroCostoId] = useState('');
+  // Frente 3 del plan "Facturar Pedido" (PLAN_FACTURAR_PEDIDO_5_FRENTES.md,
+  // 15/08): este modal no tenía botón "Mapa de relaciones", a diferencia de
+  // casi todos los demás documentos. Solo tiene sentido cuando ya existe algo
+  // que mapear (viene de un pedido, o es "Copiar a Factura"/"Duplicar" de un
+  // comprobante existente) — una Factura nueva en blanco todavía no tiene
+  // cadena de documentos.
+  const [mapaOpen, setMapaOpen] = useState(false);
 
   // ── Carga de datos al abrir ─────────────────────────────────────────────────
   useEffect(() => {
@@ -247,7 +257,13 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
   const cantRefs = useRef({});
   const prevItemsLength = useRef(items.length);
   useEffect(() => {
-    if (items.length > prevItemsLength.current) {
+    // Bug real encontrado 15/08 (Frente 1): con `> prevItemsLength.current`
+    // esto también se disparaba al precargar de golpe los ítems de un pedido
+    // (1 → 3, por ejemplo) — el foco saltaba solo al ÚLTIMO ítem y le abría
+    // el desplegable de autocompletar sin que el usuario tocara nada. Ahora
+    // solo enfoca cuando la lista creció de a UNO (el caso real: clic en
+    // "Agregar ítem"), nunca en una carga masiva.
+    if (items.length === prevItemsLength.current + 1) {
       const ultimoId = items[items.length - 1]._id;
       descRefs.current[ultimoId]?.focus();
     }
@@ -532,11 +548,24 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
 
   const fmt = (n) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  // Frente 1 del plan "Facturar Pedido" (PLAN_FACTURAR_PEDIDO_5_FRENTES.md,
+  // 15/08): este modal no respetaba la línea de diseño densa estilo SAP que
+  // ya tienen FormNuevaCotizacion.jsx/FormNuevaOC.jsx — modal angosto en vez
+  // de pantalla casi completa, cabecera aireada en vez de la grilla de 12
+  // columnas compacta, buscador de producto con el patrón viejo (`position:
+  // absolute` sin portal — el mismo que tenía el bug del desplegable cortado
+  // arreglado el 14/08 en los otros 3 formularios, nunca migrado acá), y todo
+  // el modal scrolleando junto en vez de que solo la lista de ítems lo haga
+  // (con pedidos largos, había que bajar para ver el total y el botón
+  // Confirmar). Alineado a los 5 puntos sin tocar handleConfirmar/estado.
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl bg-kx-surface border-kx-border text-kx-text max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
-        <DialogHeader className="px-6 py-4 border-b border-kx-border shrink-0">
-          <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+      <DialogContent
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="max-w-[96vw] w-[96vw] h-[92vh] bg-kx-surface border-kx-border text-kx-text flex flex-col p-0 gap-0 overflow-hidden"
+      >
+        <DialogHeader className="px-4 py-3 border-b border-kx-border shrink-0">
+          <DialogTitle className="flex items-center gap-2 text-base font-bold">
             <FileText className="w-5 h-5 text-kx-violet" />
             {pedido
               ? `Facturar Pedido — ${pedido.numero}`
@@ -553,223 +582,229 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {/* Banner informativo */}
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-xs text-blue-700 dark:text-blue-300">
-            <Info className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>
-              {pedido
-                ? <>Vinculada al Pedido <strong>{pedido.numero}</strong>. Si el pedido ya tuvo una Entrega, el stock no se vuelve a descontar; si es la primera vez que se factura, esta factura genera la entrega y descuenta el stock ahora.</>
-                : <>Esta factura <strong>no afecta el inventario</strong>. Para descontar stock, usá el flujo Pedido → Entrega → Facturar lo entregado.</>}
-            </span>
-          </div>
+        {/* overflow-y-auto (no -hidden) a propósito: es la red de seguridad para
+            pantallas bajas. En el caso normal la lista de Ítems (más abajo)
+            scrollea sola y esto no se nota — pero como esa lista tiene
+            min-h-0 + flex-1, en una ventana muy baja el navegador la puede
+            encoger hasta 0px (bug real encontrado 15/08 probando Frente 1: la
+            tarjeta de Ítems —con su botón "Agregar ítem" y todas las filas—
+            desaparecía por completo, sin scroll posible, incluso con un solo
+            ítem vacío). Con el body scrolleable entero como respaldo y un
+            min-height en la tarjeta de Ítems, en el peor caso hay que
+            scrollear el modal, pero los ítems nunca quedan inalcanzables. */}
+        <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto p-3">
+          {/* Banner informativo + Mapa de relaciones — shrink-0 */}
+          <div className="shrink-0 space-y-1.5">
+            <div className="flex items-start gap-2 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-xs text-blue-700 dark:text-blue-300">
+              <Info className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                {pedido
+                  ? <>Vinculada al Pedido <strong>{pedido.numero}</strong>. Si el pedido ya tuvo una Entrega, el stock no se vuelve a descontar; si es la primera vez que se factura, esta factura genera la entrega y descuenta el stock ahora.</>
+                  : <>Esta factura <strong>no afecta el inventario</strong>. Para descontar stock, usá el flujo Pedido → Entrega → Facturar lo entregado.</>}
+              </span>
+            </div>
 
-          {/* Sección 1: Datos básicos */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div className="sm:col-span-2 space-y-1.5">
-              <Label className="text-xs font-medium text-kx-text-2">Cliente</Label>
-              <ClienteSelector
-                clientes={clientes}
-                value={clienteId}
-                onChange={setClienteId}
-                onClienteCreado={c => { setClientes(p => [...p, c]); setClienteId(c.id); }}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-kx-text-2">Tipo de documento</Label>
-              <select
-                value={tipoDoc}
-                onChange={e => setTipoDoc(e.target.value)}
-                className="w-full h-10 rounded-md border border-kx-border bg-kx-surface px-3 text-sm text-kx-text focus:outline-none focus:ring-1 focus:ring-[rgb(var(--kx-violet))]"
-              >
-                {TIPOS_DOC.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-kx-text-2">Fecha</Label>
-              <Input
-                type="date" value={fecha}
-                onChange={e => setFecha(e.target.value)}
-                className="h-10 bg-kx-surface border-kx-border text-kx-text"
-              />
-            </div>
-            <div className="sm:col-span-2 space-y-1.5">
-              <Label className="text-xs font-medium text-kx-text-2">N° Referencia del Cliente (PO)</Label>
-              <Input
-                value={referenciaCliente}
-                onChange={e => setReferenciaCliente(e.target.value)}
-                placeholder="Ej. orden de compra del cliente"
-                className="h-10 bg-kx-surface border-kx-border text-kx-text"
-              />
-            </div>
-            {centrosCosto.length > 0 && (
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-kx-text-2">Centro de costo (opcional)</Label>
-                <select
-                  value={centroCostoId}
-                  onChange={e => setCentroCostoId(e.target.value)}
-                  className="w-full h-10 rounded-md border border-kx-border bg-kx-surface px-3 text-sm text-kx-text focus:outline-none focus:ring-1 focus:ring-[rgb(var(--kx-violet))]"
+            {(pedido?.id || comprobanteOrigen?.id) && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setMapaOpen(true)}
+                  className="text-2xs text-kx-violet hover:opacity-80 font-medium flex items-center gap-1"
+                  title="Ver mapa de relaciones completo"
                 >
-                  <option value="">Sin asignar</option>
-                  {centrosCosto.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                </select>
+                  <Network className="w-3.5 h-3.5" /> Mapa de relaciones
+                </button>
               </div>
             )}
           </div>
 
-          {/* Punto de venta — el único selector fiscal (mig.294). Su envia_arca
-              define si el comprobante se factura ante ARCA o queda interno. */}
-          {puntosVenta.length > 0 && tipoDoc !== 'Ticket' && (
-            <div className="space-y-1.5">
-              <Label className="text-kx-text">Punto de venta</Label>
-              <select
-                value={puntoVentaId}
-                onChange={e => setPuntoVentaId(e.target.value)}
-                className="w-full h-10 rounded-md border border-kx-border bg-kx-surface text-kx-text px-3 text-sm"
-              >
-                {puntosVenta.map(pv => (
-                  <option key={pv.id} value={pv.id}>
-                    {pv.numero} · {pv.nombre}{pv.envia_arca === false ? ' (interno)' : ''}
-                  </option>
-                ))}
-              </select>
-              {puntosVenta.find(pv => pv.id === puntoVentaId)?.envia_arca === false && (
-                <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
-                  Comprobante <strong>interno</strong>: no se emite CAE ni se informa a ARCA.
-                </p>
+          <MapaRelaciones
+            open={mapaOpen}
+            onOpenChange={setMapaOpen}
+            pedidoId={pedido?.id}
+            comprobanteId={!pedido ? comprobanteOrigen?.id : undefined}
+          />
+
+          {/* Cabecera — misma densidad (grilla de 12, inputs h-8) que
+              FormNuevaCotizacion.jsx/FormNuevaOC.jsx. */}
+          <Card className="dark:bg-kx-bg dark:border-kx-border shrink-0">
+            <CardContent className="p-3 space-y-2">
+              <div className="grid grid-cols-12 gap-3 items-start">
+                <div className="col-span-3 space-y-1">
+                  <Label className="text-xs dark:text-kx-text">Cliente</Label>
+                  <ClienteSelector
+                    clientes={clientes}
+                    value={clienteId}
+                    onChange={setClienteId}
+                    onClienteCreado={c => { setClientes(p => [...p, c]); setClienteId(c.id); }}
+                  />
+                </div>
+                <div className="col-span-2 space-y-1">
+                  <Label className="text-xs dark:text-kx-text">Tipo de documento</Label>
+                  <select
+                    value={tipoDoc}
+                    onChange={e => setTipoDoc(e.target.value)}
+                    className="w-full h-8 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {TIPOS_DOC.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-2 space-y-1">
+                  <Label className="text-xs dark:text-kx-text">Fecha</Label>
+                  <Input
+                    type="date" value={fecha}
+                    onChange={e => setFecha(e.target.value)}
+                    className="h-8 text-sm dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                  />
+                </div>
+                <div className="col-span-3 space-y-1">
+                  <Label className="text-xs dark:text-kx-text">N° Referencia del Cliente (PO)</Label>
+                  <Input
+                    value={referenciaCliente}
+                    onChange={e => setReferenciaCliente(e.target.value)}
+                    placeholder="Ej. orden de compra del cliente"
+                    className="h-8 text-sm dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                  />
+                </div>
+                {centrosCosto.length > 0 && (
+                  <div className="col-span-2 space-y-1">
+                    <Label className="text-xs dark:text-kx-text">Centro de costo</Label>
+                    <select
+                      value={centroCostoId}
+                      onChange={e => setCentroCostoId(e.target.value)}
+                      className="w-full h-8 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Sin asignar</option>
+                      {centrosCosto.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Punto de venta — el único selector fiscal (mig.294). Su
+                  envia_arca define si el comprobante se factura ante ARCA o
+                  queda interno. */}
+              {puntosVenta.length > 0 && tipoDoc !== 'Ticket' && (
+                <div className="pt-1 space-y-1.5">
+                  <div className="grid grid-cols-12 gap-3 items-start">
+                    <div className="col-span-4 space-y-1">
+                      <Label className="text-xs dark:text-kx-text">Punto de venta</Label>
+                      <select
+                        value={puntoVentaId}
+                        onChange={e => setPuntoVentaId(e.target.value)}
+                        className="w-full h-8 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {puntosVenta.map(pv => (
+                          <option key={pv.id} value={pv.id}>
+                            {pv.numero} · {pv.nombre}{pv.envia_arca === false ? ' (interno)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  {puntosVenta.find(pv => pv.id === puntoVentaId)?.envia_arca === false && (
+                    <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                      Comprobante <strong>interno</strong>: no se emite CAE ni se informa a ARCA.
+                    </p>
+                  )}
+                </div>
               )}
-            </div>
-          )}
+            </CardContent>
+          </Card>
 
-          {/* Sección 2: Tabla de ítems */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-kx-text">Ítems</h3>
-              <Button size="sm" variant="outline" onClick={addItem}
-                className="h-7 gap-1 text-xs border-kx-border text-kx-text-2 hover:bg-kx-surface-2">
-                <Plus className="w-3.5 h-3.5" /> Agregar ítem
+          {/* Ítems — solo esta lista scrollea (mismo criterio que Cotización/
+              OC/Pedido): cabecera, totales y el botón de confirmar quedan
+              siempre a la vista sin tener que bajar todo el modal. */}
+          <Card className="dark:bg-kx-bg dark:border-kx-border flex-1 min-h-[220px] flex flex-col overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between shrink-0 p-3">
+              <CardTitle className="text-sm dark:text-kx-text">Ítems</CardTitle>
+              <Button type="button" size="sm" variant="outline" onClick={addItem}
+                className="h-7 text-xs dark:border-kx-border dark:text-slate-300 dark:hover:bg-slate-800">
+                <Plus className="w-3.5 h-3.5 mr-1" /> Agregar ítem
               </Button>
-            </div>
+            </CardHeader>
+            <CardContent className="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden p-3 pt-0">
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
+                {items.map(item => (
+                  <div key={item._id} className="grid grid-cols-12 gap-2 items-end">
+                    <div className="col-span-4 space-y-1" data-prod-row>
+                      <Label className="text-xs dark:text-kx-text-2">Descripción / Producto</Label>
+                      <ProductoAutocomplete
+                        inputRef={el => { descRefs.current[item._id] = el; }}
+                        value={item.descripcion}
+                        onChange={e => updateItem(item._id, 'descripcion', e.target.value)}
+                        onFocus={() => { setSearchFocusId(item._id); loadProductos(); }}
+                        onBlur={() => setTimeout(() => setSearchFocusId(null), 200)}
+                        onKeyDown={handleDescripcionKeyDown(item)}
+                        placeholder="Descripción o buscar producto..."
+                        open={searchFocusId === item._id}
+                        results={getProductosFiltrados(item.descripcion)}
+                        onSelect={p => selectProducto(item._id, p)}
+                        className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm"
+                      />
+                    </div>
+                    <div className="col-span-1 space-y-1">
+                      <Label className="text-xs dark:text-kx-text-2">Cant.</Label>
+                      <Input
+                        ref={el => { cantRefs.current[item._id] = el; }}
+                        type="number" min="1" step="1" value={item.cantidad}
+                        onChange={e => updateItem(item._id, 'cantidad', e.target.value.replace(/[^\d]/g, ''))}
+                        onKeyDown={handleItemRowKeyDown}
+                        className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm text-center"
+                      />
+                    </div>
+                    <div className="col-span-2 space-y-1">
+                      <Label className="text-xs dark:text-kx-text-2">Precio Unit.</Label>
+                      <Input
+                        type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unit}
+                        onChange={e => updateItem(item._id, 'precio_unit', e.target.value)}
+                        onKeyDown={handleItemRowKeyDown}
+                        className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm text-right"
+                      />
+                    </div>
+                    <div className="col-span-1 space-y-1">
+                      <Label className="text-xs dark:text-kx-text-2">Desc%</Label>
+                      <Input
+                        type="number" min="0" max="100" step="0.01" value={item.descuento_pct}
+                        onChange={e => updateItem(item._id, 'descuento_pct', e.target.value)}
+                        onKeyDown={handleItemRowKeyDown}
+                        className="h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm text-center"
+                      />
+                    </div>
+                    <div className="col-span-1 space-y-1">
+                      <Label className="text-xs dark:text-kx-text-2">IVA</Label>
+                      <select
+                        value={item.alicuota_iva}
+                        onChange={e => updateItem(item._id, 'alicuota_iva', Number(e.target.value))}
+                        onKeyDown={handleItemRowKeyDown}
+                        className="w-full h-8 px-1.5 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {ALICUOTAS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-span-2 space-y-1">
+                      <Label className="text-xs dark:text-kx-text-2">Subtotal</Label>
+                      <div className="h-8 flex items-center justify-end px-2 text-xs font-semibold text-kx-text tabular-nums">
+                        ${fmt(calcBruto(item))}
+                      </div>
+                    </div>
+                    <div className="col-span-1 flex justify-end pb-0.5">
+                      {items.length > 1 && (
+                        <Button type="button" size="icon" variant="ghost" onClick={() => removeItem(item._id)}
+                          className="h-7 w-7 text-kx-text-3 hover:text-kx-red">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
 
-            <div className="border border-kx-border rounded-xl overflow-visible">
-              <table className="w-full text-sm">
-                <thead className="bg-kx-surface-2 border-b border-kx-border">
-                  <tr className="text-2xs text-kx-text-2 font-semibold uppercase tracking-wide">
-                    <th className="text-left px-3 py-2.5 w-[35%]">Descripción</th>
-                    <th className="text-center px-3 py-2.5 w-14">Cant.</th>
-                    <th className="text-right px-3 py-2.5 w-28">Precio Unit.</th>
-                    <th className="text-center px-3 py-2.5 w-14">Desc%</th>
-                    <th className="text-center px-3 py-2.5 w-24">IVA</th>
-                    <th className="text-right px-3 py-2.5 w-28">Subtotal</th>
-                    <th className="px-3 py-2.5 w-8" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-kx-border">
-                  {items.map(item => {
-                    const filtrados = getProductosFiltrados(item.descripcion);
-                    return (
-                      <tr key={item._id} className="hover:bg-kx-surface-2/50 transition-colors">
-                        <td className="px-2 py-1.5">
-                          <div className="relative">
-                            <Input
-                              ref={el => { descRefs.current[item._id] = el; }}
-                              placeholder="Descripción o buscar producto..."
-                              value={item.descripcion}
-                              onChange={e => {
-                                updateItem(item._id, 'descripcion', e.target.value);
-                                if (!item.producto_id) {/* clear producto badge */}
-                              }}
-                              onFocus={() => { setSearchFocusId(item._id); loadProductos(); }}
-                              onBlur={() => setTimeout(() => setSearchFocusId(null), 200)}
-                              onKeyDown={handleDescripcionKeyDown(item)}
-                              className="h-8 text-xs bg-transparent border-kx-border text-kx-text pr-14"
-                            />
-                            <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                              item.producto_id
-                                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                                : 'bg-kx-surface-2 text-kx-text-3'
-                            }`}>
-                              {item.producto_id ? 'PROD' : 'SERV'}
-                            </span>
-                            {searchFocusId === item._id && item.descripcion.length >= 2 && filtrados.length > 0 && (
-                              <div className="absolute top-full left-0 z-50 w-72 bg-kx-surface border border-kx-border rounded-xl shadow-2xl mt-1 max-h-48 overflow-y-auto">
-                                {filtrados.map(p => (
-                                  <button
-                                    key={p.id}
-                                    className="w-full text-left px-3 py-2 text-xs text-kx-text hover:bg-kx-surface-2 transition-colors first:rounded-t-xl last:rounded-b-xl"
-                                    onMouseDown={() => selectProducto(item._id, p)}
-                                  >
-                                    <div className="font-medium">{p.nombre}</div>
-                                    <div className="text-kx-text-3">
-                                      ${fmt(p.precio_venta)}
-                                      {p.stock_actual !== undefined && (
-                                        <span className="ml-2 text-kx-text-3">Stock: {p.stock_actual}</span>
-                                      )}
-                                    </div>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <Input
-                            ref={el => { cantRefs.current[item._id] = el; }}
-                            type="number" min="1" step="1" value={item.cantidad}
-                            onChange={e => updateItem(item._id, 'cantidad', e.target.value.replace(/[^\d]/g, ''))}
-                            onKeyDown={handleItemRowKeyDown}
-                            className="h-8 text-xs text-center bg-transparent border-kx-border text-kx-text w-full"
-                          />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <Input
-                            type="text" inputMode="decimal" placeholder="0,00" value={item.precio_unit}
-                            onChange={e => updateItem(item._id, 'precio_unit', e.target.value)}
-                            onKeyDown={handleItemRowKeyDown}
-                            className="h-8 text-xs text-right bg-transparent border-kx-border text-kx-text w-full"
-                          />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <Input
-                            type="number" min="0" max="100" step="0.01" value={item.descuento_pct}
-                            onChange={e => updateItem(item._id, 'descuento_pct', e.target.value)}
-                            onKeyDown={handleItemRowKeyDown}
-                            className="h-8 text-xs text-center bg-transparent border-kx-border text-kx-text w-full"
-                          />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <select
-                            value={item.alicuota_iva}
-                            onChange={e => updateItem(item._id, 'alicuota_iva', Number(e.target.value))}
-                            onKeyDown={handleItemRowKeyDown}
-                            className="w-full h-8 rounded-md border border-kx-border bg-kx-surface px-1.5 text-xs text-kx-text"
-                          >
-                            {ALICUOTAS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
-                          </select>
-                        </td>
-                        <td className="px-2 py-1.5 text-right text-xs font-semibold text-kx-text tabular-nums">
-                          ${fmt(calcBruto(item))}
-                        </td>
-                        <td className="px-2 py-1.5 text-center">
-                          {items.length > 1 && (
-                            <Button size="icon" variant="ghost" onClick={() => removeItem(item._id)}
-                              className="h-7 w-7 text-kx-text-3 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Sección 3 & 4: Totales + Pago */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Totales */}
-            <div className="bg-kx-surface-2 rounded-xl border border-kx-border p-4 space-y-2 text-sm">
+          {/* Totales + Pago — shrink-0, siempre visibles junto al botón Confirmar. */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 shrink-0">
+            <div className="bg-kx-surface-2 rounded-xl border border-kx-border p-3 space-y-1.5 text-sm">
               {descuento > 0.005 && (
                 <>
                   <div className="flex justify-between text-kx-text-2">
@@ -798,8 +833,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
               </div>
             </div>
 
-            {/* Pago */}
-            <div className="bg-kx-surface-2 rounded-xl border border-kx-border p-4 space-y-3">
+            <div className="bg-kx-surface-2 rounded-xl border border-kx-border p-3 space-y-2">
               <Label className="text-xs font-medium text-kx-text-2 block">Forma de pago</Label>
               <div className="grid grid-cols-2 gap-2">
                 {FORMAS_PAGO.map(fp => (
@@ -807,7 +841,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
                     key={fp}
                     type="button"
                     onClick={() => setFormaPago(fp)}
-                    className={`p-2.5 rounded-lg border text-xs font-medium transition-all ${
+                    className={`p-2 rounded-lg border text-xs font-medium transition-all ${
                       formaPago === fp
                         ? 'border-[rgb(var(--kx-violet))] bg-[rgb(var(--kx-violet)/0.08)] text-[rgb(var(--kx-violet))]'
                         : 'border-kx-border text-kx-text-2 hover:bg-kx-surface hover:border-kx-text-3'
@@ -827,7 +861,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
           </div>
         </div>
 
-        <DialogFooter className="px-6 py-4 border-t border-kx-border shrink-0">
+        <DialogFooter className="px-4 py-3 border-t border-kx-border shrink-0">
           <div className="flex gap-3 w-full justify-between">
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}
               className="border-kx-border text-kx-text-2 hover:bg-kx-surface-2">

@@ -36,6 +36,7 @@ function ProductoAutocomplete({
   value,
   onChange,
   onFocus,
+  onBlur,
   onKeyDown,
   placeholder = 'Buscar producto o escribir descripción',
   className = 'h-8 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm',
@@ -89,6 +90,7 @@ function ProductoAutocomplete({
         value={value}
         onChange={onChange}
         onFocus={onFocus}
+        onBlur={onBlur}
         onKeyDown={onKeyDown}
         placeholder={placeholder}
         className={className}
