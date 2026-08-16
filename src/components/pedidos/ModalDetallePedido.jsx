@@ -75,7 +75,9 @@ function ModalDetallePedido({
           const totalEnt   = items.reduce((s, i) => s + Number(i.cantidad_entregada || 0), 0);
           const estaCompleto = totalPed > 0 && totalEnt >= totalPed;
           const estaParcial  = totalEnt > 0 && totalEnt < totalPed;
-          const puedeEntrega = ['confirmado', 'en_preparacion'].includes(detailPedido.estado) && totalEnt < totalPed;
+          // 'facturado' incluido a propósito (Frente 4, Factura de Reserva) —
+          // mismo criterio que TablaPedidos.jsx, ver comentario ahí.
+          const puedeEntrega = ['confirmado', 'en_preparacion', 'facturado'].includes(detailPedido.estado) && totalEnt < totalPed;
 
           const entregaConFactura = entregasDetalle.find(ent => ent.comprobante_id);
           const flowChips = [

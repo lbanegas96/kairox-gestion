@@ -3653,3 +3653,102 @@ en Nalux) en las dos rutas de código:
 `PLAN_FACTURAR_PEDIDO_5_FRENTES.md`. El punto 4 del propio Frente 5 (si el botón "Cobrar" debería
 vivir en Bancos en vez de en Cuenta Corriente) quedó explícitamente "a definir con Luciano", sin
 tocar.
+
+---
+
+## Sesión 2026-08-15 (noche) — Facturar Pedido: Frente 4, Factura de Reserva
+
+Último frente del plan. Con Frente 3 → 1 → 5 cerrados, se retomó directo con Frente 4 (el más
+grande: requería RPC nueva, no solo frontend). Antes de tocar código se investigaron a fondo los
+3 puntos que el plan dejaba explícitamente abiertos ("hay que diseñar antes de construir"):
+
+1. **Estado de Pedido**: `facturado` ya era terminal (`next: null` en `shared.jsx`) — no hacía
+   falta un estado nuevo.
+2. **¿Se podía generar una Entrega para un Pedido ya `facturado`?** Confirmado que **no**: el
+   gate `puedeEntrega` en `TablaPedidos.jsx`/`ModalDetallePedido.jsx` excluía explícitamente el
+   estado `facturado` (`['confirmado', 'en_preparacion'].includes(...)`), aunque la RPC
+   `crear_entrega` en sí nunca tuvo ningún check de estado — el único bloqueo era ese gate de
+   frontend.
+3. **Mapa de Relaciones**: revisado `fetchMapaVenta` — busca la Entrega por `pedido_id` sin
+   asumir ningún orden cronológico respecto a la Factura, así que no se rompía si la Entrega
+   llegaba después. Confirmado también en vivo (ver Verificación).
+
+Quedaba una decisión de producto real que el plan marcaba "a confirmar con Luciano" (no
+investigable desde el código) — se le consultó a Nadia directamente: **checkbox en el mismo
+modal de Facturar Pedido** (no un botón separado), y **alcance solo Facturar Pedido** (no
+"Nueva Factura" standalone, que no tiene nada que "reservar" sin un pedido de por medio).
+
+### Cambios
+
+**`crear_venta`** (mig. `328`/`328b`) — parámetro nuevo `p_factura_reserva boolean DEFAULT false`
+al final de la firma (ningún llamador existente cambia de comportamiento). Cuando es `true`:
+guard (requiere `p_pedido_id`, y que el pedido NO tenga ya una Entrega manual — sería
+contradictorio "reservar" algo ya entregado), fuerza a no mover stock sin importar el ítem, y no
+genera ninguna Entrega (ni implícita, la que hoy se crea siempre que no hay una manual previa).
+El resto del cuerpo es idéntico al de la mig. 325.
+
+**Hallazgo real de seguridad, no relacionado con este frente** (verificado contra
+`pg_proc.proacl` en producción): la migration 325 de esta misma noche había creado su sobrecarga
+de `crear_venta` **sin repetir el bloque `REVOKE ALL FROM PUBLIC, anon` / `GRANT TO
+authenticated`** que tienen todas las migraciones anteriores de esta función — quedó con EXECUTE
+abierto a `anon` y `PUBLIC` por privilegio default de Postgres. Corregido en la mig. `328b`, que
+de todos modos reemplazaba esa sobrecarga (mismo bug de "CREATE OR REPLACE con parámetro nuevo
+crea sobrecarga, no reemplaza" ya documentado en la 325b — acá se repitió y se corrigió con el
+mismo patrón).
+
+**`TablaPedidos.jsx` / `ModalDetallePedido.jsx`**: `puedeEntrega` ahora incluye `facturado` en la
+lista de estados válidos (además de `confirmado`/`en_preparacion`), sin tocar la condición de
+`hayPendiente` — un pedido facturado normal (sin nada pendiente) sigue sin mostrar el botón, pero
+uno facturado como Reserva (con todo pendiente de entregar) ahora sí.
+
+**`NuevaFacturaModal.jsx`**: checkbox "Factura de Reserva — no entregar todavía", visible solo
+cuando `pedido?.id` y el pedido todavía no tiene ninguna Entrega manual (mismo query exacto que
+usa `crear_venta` para decidir si mueve stock). Tildado, pasa `p_factura_reserva: true` a la RPC
+y cambia el texto del banner informativo para explicar que no se descuenta stock ni se genera
+Entrega.
+
+### Verificación
+
+`npx eslint` sin errores nuevos, `npx vitest run` 156/156, `npx vite build` OK (4m 17s, exit 0).
+
+Antes de tocar el frontend, la RPC se probó **dentro de transacciones con ROLLBACK** contra la
+base real (mismo criterio que usó Luciano para probar la 325), simulando la sesión autenticada
+con `SET LOCAL ROLE authenticated` + `request.jwt.claim.sub`: reserva sin mover stock/sin
+Entrega/con el DEBE correcto en Cuenta Corriente, los dos guards (reserva sin pedido, reserva
+sobre un pedido ya entregado) rechazando con el mensaje esperado, y el camino normal (sin pasar
+el parámetro nuevo) sin ningún cambio de comportamiento.
+
+Después, ciclo completo en vivo (browser real, datos reales de Nalux, no rollback) sobre
+`PED-20260813-001` (3 ítems, sin Entrega previa):
+1. "Facturar Pedido" con el checkbox tildado → `FAC-20260815-004` ($125.002) creada:
+   `forma_pago='Cuenta Corriente'`, `estado_pago='pendiente'`, stock de los 3 productos sin
+   tocar, 0 Entregas generadas, 0 `movimientos_caja`, 1 movimiento DEBE en Cuenta Corriente por
+   el total, pedido pasado a `facturado`, `pedido_items.cantidad_facturada` = cantidad total en
+   los 3 (0 `cantidad_entregada`).
+2. El pedido ya `facturado` mostró el botón "Generar Entrega" (ya no "Facturar pedido", que
+   desaparece solo porque `getEstado('facturado').next` es `null`) — confirma el fix del gate.
+3. "Generar Entrega" → `ENT-2026-0141` creada (`origen='manual'`, `estado='entregado'`), stock
+   ahora sí descontado en los 3 productos exactamente en las cantidades correctas,
+   `pedido_items.cantidad_entregada` igualado a `cantidad_facturada`.
+4. Mapa de Relaciones sobre esa cadena: `Pedido PED-20260813-001 → Entrega ENT-2026-0141 →
+   Factura FAC-20260815-004`, total $125.002,00 correcto — confirma que no importa que la
+   Entrega haya llegado cronológicamente después de la Factura.
+
+### Hallazgo cosmético, sin resolver (no bloqueante)
+El detalle de la Entrega (modal `ModalDetalleEntrega` o similar) muestra el campo "Factura: Sin
+facturar" para una Entrega generada después de una Factura de Reserva — porque ese campo lee
+`entregas.comprobante_id` directamente, que en este flujo queda `NULL` (el vínculo real es
+`pedido_id` compartido, no un `comprobante_id` directo en la Entrega). El dato real es correcto
+—el Mapa de Relaciones sí resuelve bien la cadena completa por `pedido_id`— es solo esa etiqueta
+puntual la que no contempla este caso nuevo. No se tocó (fuera del alcance pedido).
+
+### Datos de prueba reales, no revertidos
+`FAC-20260815-004` ($125.002, Consumidor Final), `ENT-2026-0141` y `PED-20260813-001` (ahora
+`facturado` y 100% entregado) son datos reales en el tenant de Nalux — mismo criterio que el
+resto de la sesión: se documentan, no se revierten sin pedir confirmación.
+
+**4 de los 5 frentes de `PLAN_FACTURAR_PEDIDO_5_FRENTES.md` quedan construidos** (3, 1, 5 y 4,
+todos esta noche). Sigue pendiente el **Frente 2** ("Facturar lo entregado, no lo pedido") — quedó
+diseñado en detalle en el plan (con línea exacta de `NuevaFacturaModal.jsx` a tocar) pero **no se
+construyó** en esta sesión porque no fue pedido; el diseño sigue vigente en
+`PLAN_FACTURAR_PEDIDO_5_FRENTES.md` para cuando se retome.

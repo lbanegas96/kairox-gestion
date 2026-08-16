@@ -62,7 +62,14 @@ function TablaPedidos({
                 const totalPed   = items.reduce((s, i) => s + Number(i.cantidad || 0), 0);
                 const totalEnt   = items.reduce((s, i) => s + Number(i.cantidad_entregada || 0), 0);
                 const hayPendiente = totalEnt < totalPed;
-                const puedeEntrega = ['confirmado', 'en_preparacion'].includes(pedido.estado) && hayPendiente;
+                // 'facturado' incluido a propósito (Frente 4, Factura de Reserva):
+                // un pedido facturado como Reserva queda en estado 'facturado' con
+                // 0 entregado — antes este gate lo excluía y el botón desaparecía
+                // justo cuando más hacía falta (nada para generar la Entrega real
+                // después). Si el pedido facturado ya no tiene pendiente
+                // (hayPendiente=false, caso normal de siempre), el botón sigue sin
+                // aparecer — no cambia nada para el flujo no-reserva.
+                const puedeEntrega = ['confirmado', 'en_preparacion', 'facturado'].includes(pedido.estado) && hayPendiente;
                 const esParaFacturar = e.next === 'facturado';
 
                 return (

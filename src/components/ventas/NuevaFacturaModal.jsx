@@ -114,6 +114,15 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
   // comprobante existente) — una Factura nueva en blanco todavía no tiene
   // cadena de documentos.
   const [mapaOpen, setMapaOpen] = useState(false);
+  // Frente 4 del plan "Facturar Pedido" (PLAN_FACTURAR_PEDIDO_5_FRENTES.md,
+  // 15/08) — Factura de Reserva: facturar el pedido COMPLETO sin que exista
+  // todavía ninguna Entrega, dejando el movimiento de stock (la Entrega real)
+  // para después, por separado. Sólo tiene sentido si el pedido no tuvo
+  // ninguna Entrega manual todavía (si ya la tuvo, no hay nada que "reservar"
+  // — facturar normal). `null` = todavía no se sabe (fetch en curso), así el
+  // checkbox no aparece de golpe y desaparece si resulta que sí hay Entrega.
+  const [facturaReserva, setFacturaReserva] = useState(false);
+  const [pedidoTieneEntrega, setPedidoTieneEntrega] = useState(null);
 
   // ── Carga de datos al abrir ─────────────────────────────────────────────────
   useEffect(() => {
@@ -156,6 +165,14 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
     if (pedido?.id) {
       setClienteId(pedido.cliente_id || '');
       setReferenciaCliente(pedido.referencia_cliente || '');
+      // Frente 4: la Factura de Reserva sólo tiene sentido si el pedido no
+      // tuvo ninguna Entrega manual todavía — mismo criterio exacto que usa
+      // crear_venta (mig.328) para decidir si mueve stock.
+      supabase.from('entregas').select('id')
+        .eq('empresa_id', user.empresa_id).eq('pedido_id', pedido.id)
+        .eq('origen', 'manual').eq('estado', 'entregado')
+        .limit(1).maybeSingle()
+        .then(({ data }) => setPedidoTieneEntrega(!!data));
       if (pedido.pedido_items?.length > 0) {
         setItems(pedido.pedido_items.map(i => ({
           _id:           Math.random().toString(36).slice(2),
@@ -214,6 +231,8 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
       setAfipConfig(null);
       setPuntoVentaId(''); // vuelve a resolver el PdV por defecto al reabrir
       setCentroCostoId('');
+      setFacturaReserva(false);
+      setPedidoTieneEntrega(null);
     }
   }, [open]);
 
@@ -396,6 +415,10 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
           p_tipo_comprobante_afip: tipoAfipInsert,
           p_punto_venta_id:   puntoVentaId || null,
           p_referencia_cliente: referenciaCliente.trim() || null,
+          // Frente 4: Factura de Reserva — sólo true si el checkbox está
+          // tildado Y el pedido sigue sin ninguna Entrega (el checkbox ni
+          // siquiera se muestra si no se cumple lo segundo).
+          p_factura_reserva: facturaReserva && pedidoTieneEntrega === false,
         });
         if (rpcError) throw rpcError;
 
@@ -583,10 +606,33 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
               <Info className="w-4 h-4 shrink-0 mt-0.5" />
               <span>
                 {pedido
-                  ? <>Vinculada al Pedido <strong>{pedido.numero}</strong>. Si el pedido ya tuvo una Entrega, el stock no se vuelve a descontar; si es la primera vez que se factura, esta factura genera la entrega y descuenta el stock ahora.</>
+                  ? (facturaReserva
+                      ? <>Vinculada al Pedido <strong>{pedido.numero}</strong>. <strong>Factura de Reserva</strong>: se emite sin descontar stock y sin generar ninguna Entrega — la Entrega real se genera después, aparte, con "Generar Entrega".</>
+                      : <>Vinculada al Pedido <strong>{pedido.numero}</strong>. Si el pedido ya tuvo una Entrega, el stock no se vuelve a descontar; si es la primera vez que se factura, esta factura genera la entrega y descuenta el stock ahora.</>)
                   : <>Esta factura <strong>no afecta el inventario</strong>. Para descontar stock, usá el flujo Pedido → Entrega → Facturar lo entregado.</>}
               </span>
             </div>
+
+            {/* Frente 4: Factura de Reserva — sólo aparece si el pedido
+                todavía no tuvo ninguna Entrega (si ya la tuvo, no hay nada
+                para "reservar", se factura normal). */}
+            {pedido?.id && pedidoTieneEntrega === false && (
+              <label className="flex items-start gap-2 p-2.5 rounded-lg bg-kx-surface-2 border border-kx-border text-xs cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={facturaReserva}
+                  onChange={e => setFacturaReserva(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span className="text-kx-text">
+                  <strong>Factura de Reserva</strong> — no entregar todavía.
+                  <span className="block text-kx-text-2 mt-0.5">
+                    Se factura el pedido completo sin descontar stock. La Entrega
+                    real se genera después, por separado, con "Generar Entrega".
+                  </span>
+                </span>
+              </label>
+            )}
 
             {(pedido?.id || comprobanteOrigen?.id) && (
               <div className="flex justify-end">

@@ -1,11 +1,12 @@
-# Facturar Pedido — 5 frentes pendientes (para Nadia)
+# Facturar Pedido — 5 frentes (para Nadia)
 
-Luciano revisó "Facturar Pedido" en vivo el 15/08 y encontró 5 problemas. Se
-investigó a fondo el código para los 5 (ver detalle de cada uno abajo) y se
-diseñó el Frente 2 al detalle de implementación — pero **no se construyó
-nada todavía, los 5 frentes están pendientes**. Esto queda documentado para
-que la próxima persona/sesión los tome directamente, sin tener que
-re-investigar desde cero.
+Luciano revisó "Facturar Pedido" en vivo el 15/08 y encontró 5 problemas.
+**Estado al cierre de la noche del 15/08: Frentes 3, 1, 5 y 4 construidos,
+probados y desplegados. Sólo queda pendiente el Frente 2** (diseño cerrado
+al detalle de implementación más abajo, no construido porque no fue pedido
+todavía). Ver `CONTEXT.md`, sección "Sesión 2026-08-15 (noche)" (hay una por
+cada frente construido) para el detalle de qué se hizo y cómo se verificó
+cada uno.
 
 Screenshots de referencia (modal "Facturar Pedido" y el detalle de la venta
 resultante) están en la conversación original con Luciano — pedirle si hacen
@@ -13,7 +14,7 @@ falta de nuevo.
 
 ---
 
-## Frente 1 — Visual/diseño (PENDIENTE)
+## Frente 1 — Visual/diseño (✅ CONSTRUIDO 15/08, ver CONTEXT.md)
 
 El modal "Facturar Pedido — PED-..." (`NuevaFacturaModal.jsx`) no respeta la
 línea de diseño que se viene construyendo en el resto de la app (comparar con
@@ -93,7 +94,7 @@ ajustados a lo pendiente de facturar.
   entregado y confirmar que sigue precargando lo pedido completo (sin
   regresión); probar "Facturar Entrega" desde `EntregasSection.jsx` también.
 
-## Frente 3 — Mapa de Relaciones faltante en "Facturar Pedido" (PENDIENTE)
+## Frente 3 — Mapa de Relaciones faltante en "Facturar Pedido" (✅ CONSTRUIDO 15/08, ver CONTEXT.md)
 
 El modal `NuevaFacturaModal.jsx` no tiene ningún botón de "Mapa de
 relaciones" — a diferencia de casi todos los demás documentos del sistema
@@ -102,11 +103,19 @@ Fases 0-4 de `PLAN_COMPROBANTES_ESTANDAR.md`). Agregar el mismo patrón: botón
 que abre `<MapaRelaciones pedidoId={pedido.id} .../>` (o `comprobanteId` si ya
 existe uno). Chico, mecánico, bajo riesgo.
 
-## Frente 4 — Factura de Reserva (PENDIENTE, funcionalidad nueva de verdad)
+## Frente 4 — Factura de Reserva (✅ CONSTRUIDO 15/08, ver CONTEXT.md)
 
 Pedido de Luciano: poder facturar el pedido COMPLETO sin que haya habido
 ninguna Entrega todavía, y que el movimiento de stock (la Entrega real)
 ocurra recién DESPUÉS, por separado.
+
+*(Diseño original abajo, tal cual quedó investigado antes de construir —
+la implementación real terminó usando el mismo enfoque: flag nuevo
+`p_factura_reserva` en `crear_venta` mig. 328/328b, checkbox en el modal,
+y sí hacía falta destrabar el gate de `puedeEntrega` en
+`TablaPedidos.jsx`/`ModalDetallePedido.jsx` — confirmado el punto 2 de
+abajo. Decisión de UX del punto 3 confirmada con Nadia: checkbox en el
+mismo modal, alcance sólo Facturar Pedido.)*
 
 **Estado actual confirmado por investigación (15/08):** no existe hoy ningún
 concepto de "facturar sin entregar" — grep de `requiere_entrega`/
@@ -132,7 +141,7 @@ implícitamente en el mismo paso (siempre mueve stock — ver
    confirmar que sigue funcionando si la Entrega llega DESPUÉS del
    comprobante.
 
-## Frente 5 — Desacoplar el cobro de la emisión (PENDIENTE, cambio de comportamiento)
+## Frente 5 — Desacoplar el cobro de la emisión (✅ CONSTRUIDO 15/08, ver CONTEXT.md)
 
 Pedido de Luciano, textual: "aquí no debe comportarse como venta POS, aquí se
 debe comportar como un ERP y como lo hace SAP". Hoy `NuevaFacturaModal.jsx`
@@ -186,7 +195,7 @@ Item YA EXISTE y funciona** — no es que haya que construirlo de cero:
 
 ---
 
-**Orden sugerido para retomar:** Frente 3 (chico, rápido) → Frente 1 (visual,
-después de confirmar con Luciano qué cambiar puntualmente) → Frente 5 (grande
-pero mayormente "sacar código", el sistema de Cobro ya existe) → Frente 4
-(el más grande, requiere RPC nueva y repensar el flujo de estados de Pedido).
+**Orden usado (15/08):** Frente 3 → Frente 1 → Frente 5 → Frente 4. Los 4 quedaron
+construidos, probados (`eslint`/`vitest`/`vite build` + verificación en vivo contra
+datos reales de Nalux) y desplegados la misma noche. Sólo queda el Frente 2, con el
+diseño de implementación ya cerrado arriba.
