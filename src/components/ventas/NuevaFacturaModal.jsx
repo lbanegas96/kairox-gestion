@@ -6,10 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Plus, Trash2, FileText, Info, AlertTriangle, Network } from 'lucide-react';
+import { Loader2, Plus, Trash2, FileText, Info, Network } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { useCaja } from '@/contexts/CajaContext';
 import { useToast } from '@/components/ui/use-toast';
 import { getTodayAR, getNowAR, addDaysAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
@@ -27,8 +26,7 @@ const ALICUOTAS = [
   { value: 21,   label: '21%'       },
 ];
 
-const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'Tarjeta', 'Cuenta Corriente'];
-const TIPOS_DOC   = ['Ticket', 'Factura A', 'Factura B', 'Factura C'];
+const TIPOS_DOC = ['Ticket', 'Factura A', 'Factura B', 'Factura C'];
 
 const newItem = () => ({
   _id:           Math.random().toString(36).slice(2),
@@ -70,17 +68,28 @@ const calcNetoIva = (item) => {
 // Ver PENDIENTE #1 (14/08) en CONTEXT.md — antes esto abría NuevaVentaModal
 // (el carrito del POS), que no tiene forma de elegir tipo de comprobante,
 // punto de venta ni referencia del cliente.
+//
+// Frente 5 del plan "Facturar Pedido" (PLAN_FACTURAR_PEDIDO_5_FRENTES.md,
+// 15/08 — pedido textual de Luciano: "aquí no debe comportarse como venta
+// POS, aquí se debe comportar como un ERP y como lo hace SAP"): esta factura
+// ya NO cobra en el momento. Se emite (con CAE si corresponde) y queda
+// SIEMPRE como deuda Open Item en Cuenta Corriente del cliente — el cobro se
+// registra después, aparte, desde Cuenta Corriente → Cobrar (RPC
+// registrar_cobro_cliente, ya existe y funciona, no se tocó acá). Por eso ya
+// no hay selector de "Forma de pago" ni conexión con la Caja: la factura
+// SIEMPRE necesita un cliente real (no puede haber deuda sin dueño), nunca
+// toca movimientos_caja. Aplica igual a Facturar Pedido, Facturar Entrega y
+// Nueva Factura standalone — el POS (NuevaVentaModal.jsx, Modo Caja) sigue
+// cobrando en el momento, es un circuito distinto a propósito, no se tocó.
 function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedido = null, duplicadoDeId = null, onSuccess }) {
-  const { user }                     = useAuth();
-  const { currentSession, isSessionOpen } = useCaja();
-  const { toast }                    = useToast();
+  const { user }   = useAuth();
+  const { toast }  = useToast();
 
   const [clientes, setClientes]           = useState([]);
   const [clienteId, setClienteId]         = useState('');
   const [fecha, setFecha]                 = useState(getTodayAR());
   const [referenciaCliente, setReferenciaCliente] = useState('');
   const [tipoDoc, setTipoDoc]             = useState('Ticket');
-  const [formaPago, setFormaPago]         = useState('Efectivo');
   const [items, setItems]                 = useState([newItem()]);
   const [loading, setLoading]             = useState(false);
   const [productosCache, setProductosCache] = useState([]);
@@ -200,7 +209,6 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
       setFecha(getTodayAR());
       setReferenciaCliente('');
       setTipoDoc('Ticket');
-      setFormaPago('Efectivo');
       setItems([newItem()]);
       setSearchFocusId(null);
       setAfipConfig(null);
@@ -294,7 +302,6 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
   const subtotalBruto = useMemo(() => items.reduce((s, i) => s + Number(i.cantidad) * (parseNumberLocale(i.precio_unit) || 0), 0), [items]);
   const descuento     = Math.max(0, subtotalBruto - total);
   const descuentoPct  = subtotalBruto > 0 ? (descuento / subtotalBruto) * 100 : 0;
-  const isCC         = formaPago === 'Cuenta Corriente';
 
   // ── Generación de número correlativo ────────────────────────────────────────
   const generateNumero = async () => {
@@ -310,8 +317,12 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
 
   // ── Confirmar ───────────────────────────────────────────────────────────────
   const handleConfirmar = async () => {
-    if (!clienteId && isCC) {
-      toast({ title: 'Cliente requerido para Cuenta Corriente', variant: 'destructive' });
+    // Frente 5: la factura del ERP siempre queda como deuda Open Item en
+    // Cuenta Corriente — no puede haber deuda sin dueño, así que el cliente
+    // ya no es opcional (antes solo se pedía si se elegía "Cuenta Corriente"
+    // como forma de pago; esa forma de pago ya no existe acá).
+    if (!clienteId) {
+      toast({ title: 'Seleccioná un cliente', description: 'La factura del ERP siempre queda pendiente en su Cuenta Corriente.', variant: 'destructive' });
       return;
     }
     const itemsValidos = items.filter(i => i.descripcion.trim());
@@ -321,11 +332,6 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
     }
     if (total <= 0) {
       toast({ title: 'El total debe ser mayor a cero', variant: 'destructive' });
-      return;
-    }
-    // Regla: solo cobros en Efectivo requieren caja abierta. Transferencia/Tarjeta/CC no.
-    if (formaPago === 'Efectivo' && !isSessionOpen) {
-      toast({ title: 'Abrí la caja para registrar el cobro en Efectivo', variant: 'destructive' });
       return;
     }
 
@@ -360,30 +366,28 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
           alicuota_iva:    String(i.alicuota_iva),
           descuento_pct:   Number(i.descuento_pct) || 0,
         }));
-        // Sin CC: un solo pago por el total, mismo forma_pago que eligió el
-        // usuario (este modal no tiene multi-pago, a diferencia del POS).
-        const pagosPayload = isCC ? [] : [{
-          metodo: formaPago, monto: total, monto_paralelo: '', tc_paralelo: '', forma_pago_id: null,
-        }];
 
         const { data: rpcResult, error: rpcError } = await supabase.rpc('crear_venta', {
           p_empresa_id:       user.empresa_id,
           p_user_id:          user.id,
           p_numero_venta:     numero,
           p_fecha:            now,
-          p_cliente_id:       clienteId || null,
+          p_cliente_id:       clienteId,
           p_cliente_nombre:   clienteObj?.nombre ?? 'Consumidor Final',
           p_total:            total,
-          p_forma_pago:       formaPago,
-          p_estado_pago:      isCC ? 'pendiente' : 'pagada',
+          p_forma_pago:       'Cuenta Corriente',
+          p_estado_pago:      'pendiente',
           p_moneda:           'ARS',
           p_tipo_cambio_tasa: 1,
           p_monto_paralelo:   null,
           p_tc_paralelo:      null,
           p_items:            itemsPayload,
-          p_pagos:            pagosPayload,
-          p_es_cc:            isCC,
-          p_caja_sesion_id:   currentSession?.id ?? null,
+          // Sin pagos: la factura del ERP no cobra en el momento (Frente 5).
+          // p_es_cc=true hace que crear_venta genere el DEBE en Cuenta
+          // Corriente ella misma — no hace falta tocar movimientos_caja acá.
+          p_pagos:            [],
+          p_es_cc:            true,
+          p_caja_sesion_id:   null,
           p_pedido_id:        pedido.id,
           p_monto_moneda_original: null,
           p_centro_costo_id:  centroCostoId || null,
@@ -416,13 +420,13 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
           tenant_id:             user.empresa_id,
           numero_venta:          numero,
           fecha:                 now,
-          cliente_id:            clienteId || null,
+          cliente_id:            clienteId,
           cliente_nombre:        clienteObj?.nombre ?? 'Consumidor Final',
           total,
           neto_gravado:          subtotalNeto,
           iva_discriminado:      totalIva,
-          forma_pago:            formaPago,
-          estado_pago:           isCC ? 'pendiente' : 'pagada',
+          forma_pago:            'Cuenta Corriente',
+          estado_pago:           'pendiente',
           moneda:                'ARS',
           tipo_cambio_tasa:      1,
           tipo:                  'venta',
@@ -458,43 +462,21 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
         );
         if (itemsErr) throw itemsErr;
 
-        // 3. CC → DEBE en cuenta corriente (Open Item)
-        if (isCC && clienteId) {
-          await supabase.from('cuenta_corriente_movimientos').insert([{
-            empresa_id:     user.empresa_id,
-            user_id:        user.id,
-            cliente_id:     clienteId,
-            comprobante_id: comp.id,
-            tipo:           'DEBE',
-            monto:          total,
-            descripcion:    `Factura ${numero}`,
-            fecha:          now,
-          }]);
-        }
+        // 3. DEBE en cuenta corriente (Open Item) — Frente 5: la factura del
+        // ERP nunca cobra en el momento, siempre queda pendiente acá. Ya no
+        // hay camino a movimientos_caja (eso es del POS, NuevaVentaModal.jsx).
+        await supabase.from('cuenta_corriente_movimientos').insert([{
+          empresa_id:     user.empresa_id,
+          user_id:        user.id,
+          cliente_id:     clienteId,
+          comprobante_id: comp.id,
+          tipo:           'DEBE',
+          monto:          total,
+          descripcion:    `Factura ${numero}`,
+          fecha:          now,
+        }]);
 
-        // 4. Cualquier medio no-CC → movimientos_caja (mismo criterio que crear_venta:
-        // Efectivo, Tarjeta y Transferencia dejan rastro en caja; caja_sesion_id es
-        // nullable a propósito para poder registrar Tarjeta/Transferencia aunque no
-        // haya una caja de efectivo abierta — antes solo Efectivo generaba el
-        // movimiento, y una factura por Tarjeta/Transferencia quedaba "pagada" sin
-        // ningún rastro en movimientos_caja).
-        if (!isCC) {
-          await supabase.from('movimientos_caja').insert([{
-            empresa_id:     user.empresa_id,
-            user_id:        user.id,
-            caja_sesion_id: currentSession?.id ?? null,
-            tipo:           'ingreso',
-            categoria:      'Venta',
-            concepto:       `Factura ${numero}`,
-            monto:          total,
-            metodo_pago:    formaPago,
-            is_automatic:   true,
-            fecha:          now,
-            comprobante_id: comp.id,
-          }]);
-        }
-
-        // 5. AFIP — encolar en facturas_pendientes_arca vía trigger (SAP async posting).
+        // 4. AFIP — encolar en facturas_pendientes_arca vía trigger (SAP async posting).
         // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca, que inserta
         // en la cola. El arca-worker (cron */5 * * * *) es la única fuente de verdad
         // para llamar a ARCA — nunca desde el frontend. Si el documento se marcó
@@ -515,8 +497,10 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
         }
       }
 
-      // 6. Asiento contable (fire & forget) — incluye COGS cuando la RPC movió
+      // 5. Asiento contable (fire & forget) — incluye COGS cuando la RPC movió
       // stock (siempre 0 en el path standalone, que nunca toca inventario).
+      // esCredito siempre true: Frente 5, la factura del ERP nunca cobra en
+      // el momento.
       asientosAutoService.crearAsientoVenta(user.empresa_id, user.id, {
         ventaId:     comprobanteId,
         total,
@@ -524,7 +508,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
         iva:         totalIva,
         fecha:       getTodayAR(),
         descripcion: `Factura ${numero}`,
-        esCredito:   isCC,
+        esCredito:   true,
         centroCostoId: centroCostoId || null,
         costoMercaderiaVendida,
       }).catch(e => {
@@ -631,7 +615,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
             <CardContent className="p-3 space-y-2">
               <div className="grid grid-cols-12 gap-3 items-start">
                 <div className="col-span-3 space-y-1">
-                  <Label className="text-xs dark:text-kx-text">Cliente</Label>
+                  <Label className="text-xs dark:text-kx-text">Cliente <span className="text-kx-red">*</span></Label>
                   <ClienteSelector
                     clientes={clientes}
                     value={clienteId}
@@ -802,7 +786,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
             </CardContent>
           </Card>
 
-          {/* Totales + Pago — shrink-0, siempre visibles junto al botón Confirmar. */}
+          {/* Totales + Cobro — shrink-0, siempre visibles junto al botón Confirmar. */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 shrink-0">
             <div className="bg-kx-surface-2 rounded-xl border border-kx-border p-3 space-y-1.5 text-sm">
               {descuento > 0.005 && (
@@ -833,30 +817,18 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
               </div>
             </div>
 
-            <div className="bg-kx-surface-2 rounded-xl border border-kx-border p-3 space-y-2">
-              <Label className="text-xs font-medium text-kx-text-2 block">Forma de pago</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {FORMAS_PAGO.map(fp => (
-                  <button
-                    key={fp}
-                    type="button"
-                    onClick={() => setFormaPago(fp)}
-                    className={`p-2 rounded-lg border text-xs font-medium transition-all ${
-                      formaPago === fp
-                        ? 'border-[rgb(var(--kx-violet))] bg-[rgb(var(--kx-violet)/0.08)] text-[rgb(var(--kx-violet))]'
-                        : 'border-kx-border text-kx-text-2 hover:bg-kx-surface hover:border-kx-text-3'
-                    }`}
-                  >
-                    {fp}
-                  </button>
-                ))}
+            {/* Frente 5: ya no se cobra acá — la factura del ERP siempre
+                queda como deuda Open Item en Cuenta Corriente, nunca se
+                comporta como el POS. El cobro se hace después, aparte. */}
+            <div className="bg-kx-surface-2 rounded-xl border border-kx-border p-3 space-y-1.5">
+              <Label className="text-xs font-medium text-kx-text-2 block">Cobro</Label>
+              <div className="flex items-start gap-2 text-xs text-kx-text-2">
+                <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-kx-violet" />
+                <span>
+                  Esta factura queda pendiente en la <strong>Cuenta Corriente</strong> del
+                  cliente. El cobro se registra después, desde Cuenta Corriente.
+                </span>
               </div>
-              {isCC && (
-                <div className="flex items-center gap-1.5 text-xs text-kx-amber">
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                  Genera deuda en cuenta corriente del cliente
-                </div>
-              )}
             </div>
           </div>
         </div>

@@ -3588,3 +3588,68 @@ después de cada fix.
 
 **Siguen pendientes del plan**: Frente 5 (desacoplar el cobro de la emisión) y Frente 4
 (Factura de Reserva) — ver detalle completo en `PLAN_FACTURAR_PEDIDO_5_FRENTES.md`.
+
+---
+
+## Sesión 2026-08-15 (noche) — Facturar Pedido: Frente 5, desacoplar el cobro de la emisión
+
+Siguiendo el orden sugerido del plan (3 → 1 → 5 → 4), tercer frente de la noche.
+
+### Qué cambia
+Palabras textuales de Luciano en el plan: *"aquí no debe comportarse como venta POS, aquí se
+debe comportar como un ERP y como lo hace SAP"*. Hasta ahora `NuevaFacturaModal.jsx` tenía un
+selector "Forma de pago" (Efectivo/Transferencia/Tarjeta/etc.) y, si no era Cuenta Corriente,
+cobraba en el momento (insertaba en `movimientos_caja`) — mezclando la emisión fiscal de la
+factura con el cobro, cosa que un ERP con lógica de Open Item no hace: la factura se emite con
+su CAE y queda como deuda; el cobro es un evento aparte, posterior, que puede llegar
+parcial, en otra fecha, con otro medio de pago, etc.
+
+**Hallazgo clave (ya estaba, no se construyó de cero):** el sistema de cobro Open Item —
+`CuentaCorrienteSection.jsx` + `ModalCobro.jsx` + RPC `registrar_cobro_cliente` (imputación
+FIFO automática, vista `facturas_saldo_pendiente`, mig.169) — ya funciona en producción. Este
+frente fue sacar el cobro de `NuevaFacturaModal.jsx`, no construir el cobro.
+
+### Cambios en `NuevaFacturaModal.jsx`
+- Eliminado el selector "Forma de pago" (constante `FORMAS_PAGO`, estado `formaPago`, `isCC`) y
+  todo el bloque de UI correspondiente (botones de medio de pago + aviso ámbar de CC).
+- Eliminada la dependencia de `useCaja` (`currentSession`/`isSessionOpen`) — ya no aplica el
+  requisito "caja abierta para cobrar en efectivo", porque acá ya no se cobra nunca.
+- Reemplazado por una tarjeta informativa fija: *"Esta factura queda pendiente en la Cuenta
+  Corriente del cliente. El cobro se registra después, desde Cuenta Corriente."*
+- **Las dos rutas de creación** (RPC `crear_venta` cuando viene de un Pedido, e INSERT manual
+  cuando es standalone/duplicado) ahora siempre fuerzan `forma_pago='Cuenta Corriente'`,
+  `estado_pago='pendiente'`, `p_pagos: []`, `p_es_cc: true` — nunca insertan en
+  `movimientos_caja`, siempre generan su movimiento en `cuenta_corriente_movimientos` (DEBE).
+- **Cambio de comportamiento deliberado**: como toda factura ahora genera deuda en Cuenta
+  Corriente, el cliente pasa a ser **obligatorio siempre** (antes solo era obligatorio si elegías
+  Cuenta Corriente como forma de pago). No hay deuda sin dueño — se marcó con asterisco rojo en
+  el label y un toast explícito si falta.
+- Aplica a los 3 flujos que comparten este modal: Facturar Pedido, Facturar Entrega y Nueva
+  Factura standalone. El POS (`NuevaVentaModal.jsx`, Modo Caja) **no se tocó** — sigue cobrando
+  en el momento como corresponde a un punto de venta.
+
+### Verificación
+`npx eslint` sin errores nuevos, `npx vitest run` 156/156, `npx vite build` OK (4m 16s, exit 0).
+Además, verificado en vivo contra la base real (no rollback, son comprobantes reales de prueba
+en Nalux) en las dos rutas de código:
+
+- Standalone: `FAC-20260815-002` — `forma_pago='Cuenta Corriente'`, `estado_pago='pendiente'`,
+  1 movimiento DEBE en `cuenta_corriente_movimientos`, 0 filas en `movimientos_caja`.
+- Desde Pedido (RPC `crear_venta`): `FAC-20260815-003`, generada facturando `PED-20260814-002`
+  — mismo resultado: CC pendiente, sin caja.
+
+### Notas sueltas, sin resolver
+- **"Cheque" no existe como forma de pago** en `formas_pago` de Nalux (solo hay Efectivo, QR
+  MercadoPago, Tarjeta Crédito, Tarjeta Débito, Transferencia) — no bloquea nada de este frente
+  (ya no se usa el selector acá), pero es dato de catálogo que puede faltar en otro lado.
+- **Comprobante `FAC-20260815-001` sin explicación** (Carlos Perez, $24.950, Efectivo, pagada,
+  13:19 de hoy) — apareció al consultar la base para verificar este frente, no lo generó este
+  trabajo. Quedó sin confirmar con Nadia si es una prueba propia o algo a revisar.
+- `PED-20260814-002` y los dos comprobantes de prueba (`FAC-20260815-002`/`003`) son datos reales
+  en el tenant de Nalux, no se revirtieron — mismo criterio que el resto de la sesión (se
+  documentan en vez de tocarlos sin pedir confirmación).
+
+**Sigue pendiente del plan**: Frente 4 (Factura de Reserva) — ver
+`PLAN_FACTURAR_PEDIDO_5_FRENTES.md`. El punto 4 del propio Frente 5 (si el botón "Cobrar" debería
+vivir en Bancos en vez de en Cuenta Corriente) quedó explícitamente "a definir con Luciano", sin
+tocar.
