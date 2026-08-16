@@ -3642,9 +3642,15 @@ en Nalux) en las dos rutas de código:
 - **"Cheque" no existe como forma de pago** en `formas_pago` de Nalux (solo hay Efectivo, QR
   MercadoPago, Tarjeta Crédito, Tarjeta Débito, Transferencia) — no bloquea nada de este frente
   (ya no se usa el selector acá), pero es dato de catálogo que puede faltar en otro lado.
-- **Comprobante `FAC-20260815-001` sin explicación** (Carlos Perez, $24.950, Efectivo, pagada,
-  13:19 de hoy) — apareció al consultar la base para verificar este frente, no lo generó este
-  trabajo. Quedó sin confirmar con Nadia si es una prueba propia o algo a revisar.
+- ~~**Comprobante `FAC-20260815-001` sin explicación**~~ **RESUELTO** — investigado: es un flujo
+  real y completo (Cotización `COT-00032` → Pedido `PED-20260815-001` → Entrega `ENT-2026-0140` →
+  Factura, los 4 pasos a las 10:17-10:19 hs de hoy, con su movimiento de caja y asiento contable
+  bien generados, sin datos huérfanos). El `user_id` en `movimientos_caja` es el de Nadia, pero
+  el horario (mañana, mucho antes de esta sesión) coincide con el test en vivo que hizo Luciano
+  probando "Facturar Pedido" — el mismo que originó los 5 problemas de
+  `PLAN_FACTURAR_PEDIDO_5_FRENTES.md`. Se ve con el comportamiento viejo (cobra Efectivo en el
+  momento) porque es de ANTES de que se desplegara el Frente 5 esa misma noche. Confirmado con
+  Nadia: es válido, se deja como está, no se toca.
 - `PED-20260814-002` y los dos comprobantes de prueba (`FAC-20260815-002`/`003`) son datos reales
   en el tenant de Nalux, no se revirtieron — mismo criterio que el resto de la sesión (se
   documentan en vez de tocarlos sin pedir confirmación).
