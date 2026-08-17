@@ -4085,3 +4085,33 @@ Rosa, con 5% de descuento cargado con un solo tipeo) y se cobró completa desde 
 el checkbox se tildó solo, el monto se precargó en $19.000, "Imputado: $19.000,00 / $19.000,00",
 y la deuda total de Nalux bajó de $703.982 a $684.982. Tests (156/156), lint (0 errores) y build
 limpios antes del deploy.
+
+### Verificación de integraciones post-migración + bug real de permisos (AFIP)
+
+Repaso de las 4 integraciones del proyecto nuevo (`isvkelrdxwvkfmrfqxxk`): 30 Edge Functions
+`ACTIVE`, 10 cron jobs `active` y corriendo `succeeded` en las últimas horas, los 8 secrets del
+Vault presentes, `integraciones_canales` (MercadoLibre/Tiendanube) preservados y activos, Auth
+sin proveedores OAuth que reconfigurar (el proyecto solo usa login por email). Sin gaps ahí.
+
+AFIP/ARCA y MercadoPago QR no tenían ningún movimiento real desde el corte (última emisión CAE
+14/08, último QR pagado 10/08) — se armó una Factura C real de prueba ($100, Luciano Rosa,
+FAC-20260816-003) para confirmar el circuito completo.
+
+**Bug real encontrado**: ARCA emitió el CAE de verdad, pero `arca-worker` no pudo persistirlo —
+`permission denied for function fn_persistir_cae_emitido`. Causa raíz: la migración 315 crea esa
+función (worker-only, guardada con `auth.role()='service_role'`) y hace `REVOKE EXECUTE ... FROM
+PUBLIC, anon, authenticated`, pero nunca vuelve a otorgar el EXECUTE a `service_role` — en el
+proyecto viejo funcionaba porque alguien lo había otorgado a mano en producción, sin migración
+(mismo patrón de drift ya encontrado esa madrugada en triggers/RLS/índices, ahora en la categoría
+GRANTs). Mismo gap preventivo corregido en `reintentar_caes_lote` (botón "Reintentar" de
+Facturación AFIP, sin GRANT a `authenticated` en ningún migration del repo).
+
+Corregido con **migración 330** (`GRANT EXECUTE ... TO service_role` / `TO authenticated`).
+Verificado: el siguiente ciclo del worker (18:35 UTC) persistió el CAE real que ARCA ya había
+emitido — `FAC-20260816-003` quedó `cae_estado='emitido'`, CAE `86330766483733`, comprobante AFIP
+`0001-00000043`. **AFIP/ARCA queda verificado end-to-end contra el proyecto nuevo.**
+
+**Pendiente para mañana**: MercadoPago QR — Luciano va a reapuntar el webhook de MP a la URL
+nueva (`.../functions/v1/mp-webhook`) y probar un cobro QR real chico desde el POS. El poller
+`mp-qr-poller` (cada 1 min) confirma el pago aunque el webhook falle, así que no debería depender
+de que el webhook responda bien. Con eso se cierra el 100% de la migración de cuenta de Supabase.
