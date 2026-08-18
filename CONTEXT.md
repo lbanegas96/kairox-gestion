@@ -4115,3 +4115,11 @@ emitido — `FAC-20260816-003` quedó `cae_estado='emitido'`, CAE `8633076648373
 nueva (`.../functions/v1/mp-webhook`) y probar un cobro QR real chico desde el POS. El poller
 `mp-qr-poller` (cada 1 min) confirma el pago aunque el webhook falle, así que no debería depender
 de que el webhook responda bien. Con eso se cierra el 100% de la migración de cuenta de Supabase.
+
+---
+
+## 🎉 Migración salió con Éxito!
+
+Cierre confirmado por Nadia el 18/08/2026. Base, datos, storage, Edge Functions, Vault (AFIP/MP/
+MercadoLibre/Tiendanube) y cron jobs, todo funcionando en el proyecto nuevo
+(`isvkelrdxwvkfmrfqxxk`). Único pendiente: webhook de MercadoPago QR, a cargo de Luciano.
