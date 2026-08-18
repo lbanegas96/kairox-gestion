@@ -4123,3 +4123,45 @@ de que el webhook responda bien. Con eso se cierra el 100% de la migración de c
 Cierre confirmado por Nadia el 18/08/2026. Base, datos, storage, Edge Functions, Vault (AFIP/MP/
 MercadoLibre/Tiendanube) y cron jobs, todo funcionando en el proyecto nuevo
 (`isvkelrdxwvkfmrfqxxk`). Único pendiente: webhook de MercadoPago QR, a cargo de Luciano.
+
+## Sesión 2026-08-18 — Pruebas en vivo de "Facturar Pedido" (5 frentes) + bug real de estado
+
+Con la migración ya cerrada, Nadia pidió probar en vivo lo que quedó sin clickear con ojos
+humanos: los 5 frentes de `PLAN_FACTURAR_PEDIDO_5_FRENTES.md` (15/08). Se armó
+`PLAN_PRUEBAS_NADIA_2026-08-18.md` y se recorrió junto a ella contra Nalux real.
+
+### Puntos 1 a 4 — todos ✅, sin hallazgos
+Rediseño denso, botón Mapa de relaciones, cobro desacoplado (factura queda pendiente en Cuenta
+Corriente, cliente obligatorio, cero movimientos de caja) y Factura de Reserva — los cuatro
+verificados con clicks reales y comprobantes de prueba (`FAC-20260818-001` a `003`).
+
+### 🐛 BUG REAL encontrado armando el caso del Punto 5.5
+Probando el caso "nada pendiente de facturar" se armó un pedido de prueba con 2 ítems, se entregó
+y facturó sólo uno (dejando el otro para más adelante — exactamente el caso de uso que el Frente 2
+del 15/08 vino a habilitar). El pedido pasó a estado **"Facturado" de golpe**, aunque el segundo
+ítem seguía sin entregar ni facturar — y el botón "Facturar Pedido" desapareció, sin dejar ningún
+camino para facturar el resto más adelante.
+
+**Causa:** `handleSaleSuccessForPedido` (`PedidosSection.jsx`) y `handleSaleSuccessDesdeEntrega`
+(`EntregasSection.jsx`) marcaban `estado: 'facturado'` en el pedido **después de cualquier venta**
+vinculada, sin chequear si esa venta cubrió todo el pedido o sólo una parte. Es una limitación
+documentada desde julio (migración 156: "no se modela facturación parcial de un mismo pedido en
+múltiples comprobantes") que el Frente 2 puso en evidencia al habilitar justo ese caso de uso.
+
+**Fix:** ambas funciones ahora releen `pedido_items` después de la venta y sólo marcan
+`'facturado'` si **todos** los ítems quedaron con `cantidad_facturada >= cantidad` — si queda algo
+pendiente, el pedido se deja como estaba (`en_preparacion`), y como el botón "Facturar Pedido" ya
+dependía de `estado === 'en_preparacion'` (vía `ESTADOS.next` en `shared.jsx`), sigue apareciendo
+solo, sin tocar ningún componente de UI.
+
+**Verificado en vivo, de punta a punta**, contra un servidor local con el fix aplicado: se entregó
+y facturó el ítem que faltaba del mismo pedido de prueba — quedó correctamente en "En Preparación"
+con "Facturar Pedido" disponible mientras faltaba algo, y recién pasó a "Facturado" cuando los 2
+ítems quedaron 100% facturados. `npx eslint` sin errores nuevos, `npx vitest run` 156/156.
+
+### Hallazgo aparte: `.env` local apuntaba al proyecto viejo de Supabase
+Al armar el pedido de prueba para el punto anterior, la lista de Pedidos del servidor local no
+coincidía con la de producción — `.env` (no `.env.local`, que no existe en este checkout) seguía
+con la URL/anon key del proyecto viejo (`wuznppxeonmhfcvnqfbf`), pese a que la sesión de la
+madrugada del 16/08 documentó haberlo corregido. Corregido apuntando a `isvkelrdxwvkfmrfqxxk` —
+`.env` está en `.gitignore`, así que esto no afecta ningún commit ni a otras máquinas.

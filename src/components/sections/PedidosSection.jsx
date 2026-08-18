@@ -519,13 +519,38 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
 
   const handleSaleSuccessForPedido = async () => {
     if (!pedidoToFacturar) return;
-    const { error } = await supabase.from('pedidos')
-      .update({ estado: 'facturado', updated_at: getNowAR().toISOString() })
-      .eq('id', pedidoToFacturar.id);
-    if (error) {
-      toast({ title: 'La venta se registró, pero no se pudo marcar el pedido como Facturado', description: error.message, variant: 'destructive' });
+
+    // BUG REAL encontrado probando en vivo (18/08): esto marcaba 'facturado'
+    // sin importar si la venta cubrió TODO el pedido o sólo una parte — el
+    // Frente 2 (facturar lo entregado, no lo pedido) habilita justo facturar
+    // en varias tandas a medida que se entrega, y con el criterio viejo el
+    // pedido quedaba "cerrado" (sin botón "Facturar Pedido") con ítems que
+    // todavía ni se entregaron ni se facturaron. Ahora se relee pedido_items
+    // después de la venta y sólo pasa a 'facturado' si TODOS los ítems están
+    // 100% facturados — si queda algo pendiente, el pedido se deja como
+    // estaba (en_preparacion) para que "Facturar Pedido" siga disponible.
+    const { data: itemsPedido, error: itemsError } = await supabase
+      .from('pedido_items')
+      .select('cantidad, cantidad_facturada')
+      .eq('pedido_id', pedidoToFacturar.id);
+
+    const totalmenteFacturado = !itemsError && itemsPedido?.length > 0 &&
+      itemsPedido.every(i => (Number(i.cantidad_facturada) || 0) >= Number(i.cantidad));
+
+    if (totalmenteFacturado) {
+      const { error } = await supabase.from('pedidos')
+        .update({ estado: 'facturado', updated_at: getNowAR().toISOString() })
+        .eq('id', pedidoToFacturar.id);
+      if (error) {
+        toast({ title: 'La venta se registró, pero no se pudo marcar el pedido como Facturado', description: error.message, variant: 'destructive' });
+      } else {
+        toast({ title: `Pedido ${pedidoToFacturar.numero} marcado como Facturado` });
+      }
     } else {
-      toast({ title: `Pedido ${pedidoToFacturar.numero} marcado como Facturado` });
+      toast({
+        title: 'Factura registrada',
+        description: `Quedan ítems pendientes de facturar en ${pedidoToFacturar.numero} — el pedido sigue En Preparación.`,
+      });
     }
     setPedidoToFacturar(null);
     setIsFacturarOpen(false);

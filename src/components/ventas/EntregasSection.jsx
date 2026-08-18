@@ -192,9 +192,14 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
     setPedidoAFacturar(data);
   };
 
-  // Facturado el pedido, el pedido pasa a 'facturado' (mismo criterio que
-  // PedidosSection) y la entrega queda vinculada al comprobante para que el
-  // Flujo del Documento y el Mapa la muestren como facturada.
+  // El pedido sólo pasa a 'facturado' cuando TODOS sus ítems quedan 100%
+  // facturados (mismo criterio que PedidosSection.handleSaleSuccessForPedido
+  // — BUG REAL encontrado probando en vivo el 18/08: con el criterio viejo,
+  // facturar sólo lo entregado de un pedido con ítems todavía sin entregar
+  // cerraba el pedido igual, sacando el botón "Facturar Pedido" y sin dejar
+  // forma de facturar el resto más adelante). La entrega queda vinculada al
+  // comprobante para que el Flujo del Documento y el Mapa la muestren como
+  // facturada, se haya cerrado el pedido entero o no.
   const handleSaleSuccessDesdeEntrega = async (venta) => {
     const pedidoId = pedidoAFacturar?.id;
     const entregaId = entregaFacturando?.id;
@@ -203,7 +208,15 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
     setEntregaFacturando(null);
 
     if (pedidoId) {
-      await supabase.from('pedidos').update({ estado: 'facturado' }).eq('id', pedidoId).eq('empresa_id', user.empresa_id);
+      const { data: itemsPedido } = await supabase
+        .from('pedido_items')
+        .select('cantidad, cantidad_facturada')
+        .eq('pedido_id', pedidoId);
+      const totalmenteFacturado = itemsPedido?.length > 0 &&
+        itemsPedido.every(i => (Number(i.cantidad_facturada) || 0) >= Number(i.cantidad));
+      if (totalmenteFacturado) {
+        await supabase.from('pedidos').update({ estado: 'facturado' }).eq('id', pedidoId).eq('empresa_id', user.empresa_id);
+      }
     }
     if (entregaId && comprobanteId) {
       await supabase.from('entregas').update({ comprobante_id: comprobanteId }).eq('id', entregaId).eq('empresa_id', user.empresa_id);
