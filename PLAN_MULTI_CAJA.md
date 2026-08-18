@@ -1,9 +1,8 @@
 # Multi-caja simultánea — Plan de implementación
 
-**Estado: ✅ Implementado y verificado en vivo contra producción (Nalux), 2026-08-06.** Las 5
-fases del plan están hechas, deployadas (`kairox-gestion-chi.vercel.app`) y probadas de punta a
-punta — ver "Verificación" al final de este archivo para el detalle de lo que se probó y
-revirtió. La Fase 6 (reporting por caja) sigue siendo backlog opcional, no bloqueante.
+**Estado: ✅ Las 6 fases completas.** Fases 1-5 implementadas y verificadas en vivo contra
+producción (Nalux) el 2026-08-06 — ver "Verificación" más abajo. Fase 6 (reporting por caja)
+sumada el 18/08, ver detalle al final de este archivo.
 
 ## Contexto
 
@@ -126,11 +125,35 @@ sesión `abierta`** y bloquea la desactivación con un toast explicativo si la t
 un admin apague por error la caja de un cajero que está trabajando en ese momento. RLS de
 `cajas` ya permite este INSERT/UPDATE sin cambios (`cajas_all`, scopeada por `empresa_id`).
 
-### Fase 6 (fuera de alcance de este trabajo, backlog aparte)
+### Fase 6 — Reporting por caja física — ✅ EJECUTADA (18/08)
 
-Reporting por caja física en `cajaService.ts`/`CajaSection.jsx` (filtrar movimientos/resumen
-financiero por `caja_id`, hoy `movimientos_caja` sólo tiene `caja_sesion_id` indirecto). No
-bloquea que el feature funcione — se aborda después si se pide.
+`movimientos_caja` sigue sin `caja_id` directo (sólo `caja_sesion_id`) — filtrar por caja física
+implica resolver primero qué `caja_sesiones.id` pertenecen a esa caja (`getSesionIdsParaCaja` en
+`CajaSection.jsx`, no se tocó `cajaService.ts`, que este componente no usa). Selector nuevo en
+`TabMovimientos.jsx` y `TabResumenHistorico.jsx`, sólo visible con 2+ cajas dadas de alta (con
+1 sola, cero cambio visible — mismo criterio que el resto de la feature). Trae **todas** las
+cajas (activas + inactivas), a diferencia de `availableCajas` del Context (sólo activas, pensado
+para elegir dónde trabajar hoy) — acá interesa poder ver el histórico de una caja aunque ya se
+haya dado de baja.
+
+En Movimientos, el filtro de caja se ignora mientras hay un turno abierto (esa vista ya se
+restringe a la sesión actual, mismo criterio que ya regía los filtros de fecha) — aplica de lleno
+en Reporte Histórico.
+
+Se decidió con Nadia (18/08) construirlo aunque hoy en Nalux sólo haya una caja realmente en uso
+— por si abren una segunda caja/sucursal más adelante. Nalux resultó tener, sin que hiciera falta
+crear nada de prueba, exactamente el caso real necesario para verificar: "Caja Principal" (activa,
+con historial real) y "Caja Prueba Nadia" (inactiva, remanente de la verificación original del
+06/08, con 1 sesión sin movimientos). Verificado en vivo contra esos datos reales, sin tocar nada:
+- Filtrando por "Caja Prueba Nadia": Ingresos/Egresos/Balance en $0, "No hay datos históricos" —
+  correcto, esa caja nunca tuvo movimientos.
+- Filtrando por "Caja Principal": $452.754 reales, con el detalle histórico completo.
+- "Todas las cajas": $452.856 — **$102 más** que "Caja Principal" sola. No es un bug: hay
+  movimientos sin `caja_sesion_id` (pagos no efectivo, que no requieren turno abierto) que
+  "Todas" sí incluye pero que no pertenecen a ninguna caja puntual.
+
+`npx vitest run` 159/159, `npx eslint` 0 errores (warnings preexistentes del mismo estilo de
+siempre), `npx vite build` OK.
 
 ## Verificación
 

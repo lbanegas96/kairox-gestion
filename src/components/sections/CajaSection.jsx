@@ -72,6 +72,16 @@ function CajaSection() {
     search: ''
   });
 
+  // Fase 6 de PLAN_MULTI_CAJA.md — reporting por caja física. `movimientos_caja`
+  // no tiene `caja_id` directo (sólo `caja_sesion_id`), así que filtrar por caja
+  // implica resolver primero qué sesiones pertenecen a esa caja. Se trae la
+  // lista COMPLETA (activas + inactivas) — a diferencia de `availableCajas` del
+  // Context (sólo activas, pensado para elegir dónde trabajar hoy), acá interesa
+  // poder ver el histórico de una caja aunque ya se haya dado de baja. El
+  // selector sólo se muestra con 2+ cajas — con 1 sola, cero cambio visible.
+  const [cajas, setCajas] = useState([]);
+  const [cajaFilter, setCajaFilter] = useState('todas');
+
   // Report Period State
   const [reportPeriod, setReportPeriod] = useState('thisMonth');
   const [customDateRange, setCustomDateRange] = useState({
@@ -96,12 +106,16 @@ function CajaSection() {
   }, [user]);
 
   useEffect(() => {
+    if (user?.empresa_id) fetchCajas();
+  }, [user?.empresa_id]);
+
+  useEffect(() => {
     if (!user || !user.empresa_id || sessionLoading) return;
     if (activeTab === 'movimientos') {
       loadMovimientos();
     }
     loadFinancialSummary();
-  }, [user, filters, activeTab, reportPeriod, customDateRange, currentSession, isSessionOpen, sessionLoading]);
+  }, [user, filters, activeTab, reportPeriod, customDateRange, currentSession, isSessionOpen, sessionLoading, cajaFilter]);
 
   // Auto-close modals when session state changes successfully
   useEffect(() => {
@@ -118,6 +132,29 @@ function CajaSection() {
     if (!user?.id) return;
     const { data } = await supabase.from('profiles').select('first_name, last_name').eq('id', user.id).single();
     setUserProfile(data);
+  };
+
+  const fetchCajas = async () => {
+    const { data, error } = await supabase
+      .from('cajas')
+      .select('id, nombre, activo')
+      .eq('empresa_id', user.empresa_id)
+      .order('created_at', { ascending: true });
+    if (error) { console.error('Error fetching cajas:', error); return; }
+    setCajas(data ?? []);
+  };
+
+  // Resuelve qué `caja_sesiones.id` pertenecen a una caja física — es el único
+  // camino para filtrar `movimientos_caja` por caja, ya que esa tabla sólo
+  // guarda `caja_sesion_id` (Fase 6 de PLAN_MULTI_CAJA.md).
+  const getSesionIdsParaCaja = async (cajaId) => {
+    const { data, error } = await supabase
+      .from('caja_sesiones')
+      .select('id')
+      .eq('empresa_id', user.empresa_id)
+      .eq('caja_id', cajaId);
+    if (error) throw error;
+    return (data ?? []).map(s => s.id);
   };
 
   // --- Handlers using Context ---
@@ -147,6 +184,15 @@ function CajaSection() {
 
     setLoading(true);
     try {
+      // Con turno abierto, la vista ya se restringe a la sesión actual (una
+      // sola caja, la de este dispositivo) — el filtro de caja no aplica acá,
+      // mismo criterio que ya rige los filtros de fecha unas líneas abajo.
+      let sesionIdsCajaFiltro = null;
+      if (cajaFilter !== 'todas' && !(isSessionOpen && currentSession?.id)) {
+        sesionIdsCajaFiltro = await getSesionIdsParaCaja(cajaFilter);
+        if (sesionIdsCajaFiltro.length === 0) { setMovimientos([]); return; }
+      }
+
       let query = supabase
         .from('movimientos_caja')
         .select('*')
@@ -159,6 +205,7 @@ function CajaSection() {
         // Fallback to date filters if no session or if specifically looking at history
         if (filters.dateStart) query = query.gte('fecha', `${filters.dateStart}T00:00:00`);
         if (filters.dateEnd) query = query.lte('fecha', `${filters.dateEnd}T23:59:59`);
+        if (sesionIdsCajaFiltro) query = query.in('caja_sesion_id', sesionIdsCajaFiltro);
       }
 
       if (filters.type !== 'Todos') query = query.eq('tipo', filters.type.toLowerCase());
@@ -183,13 +230,29 @@ function CajaSection() {
      try {
         const dates = getPeriodDates();
 
-        const { data: currentData, error: currentError } = await supabase
+        // Fase 6 de PLAN_MULTI_CAJA.md — mismo criterio que loadMovimientos:
+        // si hay filtro de caja, resolver primero sus sesiones. Si la caja
+        // elegida no tuvo nunca un turno, no hay nada que buscar.
+        let sesionIdsCajaFiltro = null;
+        if (cajaFilter !== 'todas') {
+          sesionIdsCajaFiltro = await getSesionIdsParaCaja(cajaFilter);
+          if (sesionIdsCajaFiltro.length === 0) {
+            setSummaryData({ ingresosPeriodo: 0, egresosPeriodo: 0, balancePeriodo: 0, ventasDia: 0, detailedMovements: [] });
+            setLastUpdate(new Date());
+            return;
+          }
+        }
+
+        let currentQuery = supabase
             .from('movimientos_caja')
             .select('*')
             .eq('empresa_id', user.empresa_id)
             .gte('fecha', dates.start)
             .lte('fecha', dates.end)
             .order('fecha', { ascending: false });
+        if (sesionIdsCajaFiltro) currentQuery = currentQuery.in('caja_sesion_id', sesionIdsCajaFiltro);
+
+        const { data: currentData, error: currentError } = await currentQuery;
 
         if(currentError) throw currentError;
 
@@ -201,7 +264,7 @@ function CajaSection() {
         const todayStartISO = getStartOfDayAR(nowAR);
         const todayEndISO = getEndOfDayAR(nowAR);
 
-        const { data: todaySalesData } = await supabase
+        let todaySalesQuery = supabase
            .from('movimientos_caja')
            .select('monto')
            .eq('empresa_id', user.empresa_id)
@@ -209,7 +272,10 @@ function CajaSection() {
            .eq('categoria', 'Venta')
            .gte('fecha', todayStartISO)
            .lte('fecha', todayEndISO);
-           
+        if (sesionIdsCajaFiltro) todaySalesQuery = todaySalesQuery.in('caja_sesion_id', sesionIdsCajaFiltro);
+
+        const { data: todaySalesData } = await todaySalesQuery;
+
         const ventasDiaTotal = todaySalesData ? todaySalesData.reduce((sum, m) => sum + Number(m.monto), 0) : 0;
 
         setSummaryData({
@@ -522,6 +588,7 @@ function CajaSection() {
             sortConfig={sortConfig}
             handleSort={handleSort}
             handleRequestDelete={handleRequestDelete}
+            cajas={cajas} cajaFilter={cajaFilter} setCajaFilter={setCajaFilter}
           />
         </TabsContent>
 
@@ -544,6 +611,7 @@ function CajaSection() {
             customDateRange={customDateRange} setCustomDateRange={setCustomDateRange}
             lastUpdate={lastUpdate}
             summaryData={summaryData}
+            cajas={cajas} cajaFilter={cajaFilter} setCajaFilter={setCajaFilter}
           />
         </TabsContent>
       </Tabs>

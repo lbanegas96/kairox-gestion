@@ -9,7 +9,12 @@ function TabResumenHistorico({
   customDateRange, setCustomDateRange,
   lastUpdate,
   summaryData,
+  cajas = [], cajaFilter = 'todas', setCajaFilter,
 }) {
+  // Multi-caja Fase 6 (PLAN_MULTI_CAJA.md) — mismo criterio que en Movimientos:
+  // invisible con 1 sola caja, aparece recién con 2+.
+  const mostrarFiltroCaja = cajas.length > 1;
+
   return (
     <div className="space-y-6">
       <div className="kairox-bg-card p-4 rounded-xl border kairox-border text-center mb-4 dark:bg-kx-bg dark:border-kx-border">
@@ -18,12 +23,23 @@ function TabResumenHistorico({
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 kairox-bg-card p-4 rounded-xl border kairox-border dark:bg-kx-bg dark:border-kx-border">
         <div className="flex flex-col gap-2 w-full md:w-auto">
-           <div className="flex flex-wrap gap-2">
+           <div className="flex flex-wrap gap-2 items-center">
              {['today', 'thisWeek', 'thisMonth', 'last30', 'custom'].map((period) => (
                <Button key={period} variant={reportPeriod === period ? "default" : "outline"} size="sm" onClick={() => setReportPeriod(period)} className={reportPeriod === period ? 'bg-blue-600 text-white' : 'dark:text-slate-300 dark:border-kx-border dark:hover:bg-slate-800'}>
                  {getPeriodLabel(period)}
                </Button>
              ))}
+             {mostrarFiltroCaja && (
+               <select
+                 className="h-8 rounded-md kairox-input pl-2 pr-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-kx-violet dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                 value={cajaFilter} onChange={e => setCajaFilter(e.target.value)}
+               >
+                 <option value="todas">Todas las cajas</option>
+                 {cajas.map(c => (
+                   <option key={c.id} value={c.id}>{c.nombre}{!c.activo ? ' (inactiva)' : ''}</option>
+                 ))}
+               </select>
+             )}
            </div>
            {reportPeriod === 'custom' && (
              <div className="flex items-center gap-2 pt-2">

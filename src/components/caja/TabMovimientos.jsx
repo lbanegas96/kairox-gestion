@@ -20,10 +20,16 @@ function TabMovimientos({
   sortConfig,
   handleSort,
   handleRequestDelete,
+  cajas = [], cajaFilter = 'todas', setCajaFilter,
 }) {
+  // Multi-caja Fase 6 (PLAN_MULTI_CAJA.md) — el selector sólo aparece con 2+
+  // cajas dadas de alta; con 1 sola (la inmensa mayoría de clientes hoy) esta
+  // fila sigue exactamente igual a como estaba.
+  const mostrarFiltroCaja = cajas.length > 1;
+
   return (
     <div className="space-y-4">
-      <div className="kairox-bg-card border kairox-border p-4 rounded-xl grid grid-cols-1 md:grid-cols-4 gap-4 items-end shadow-sm">
+      <div className={`kairox-bg-card border kairox-border p-4 rounded-xl grid grid-cols-1 gap-4 items-end shadow-sm ${mostrarFiltroCaja ? 'md:grid-cols-5' : 'md:grid-cols-4'}`}>
         <div className="space-y-2">
           <Label className="dark:text-kx-text">Desde</Label>
           <Input type="date" value={filters.dateStart} onChange={e => setFilters({...filters, dateStart: e.target.value})} className="kairox-input dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"/>
@@ -40,6 +46,17 @@ function TabMovimientos({
             <option value="Egreso">Egresos</option>
           </select>
         </div>
+        {mostrarFiltroCaja && (
+          <div className="space-y-2">
+            <Label className="dark:text-kx-text">Caja</Label>
+            <select className="w-full h-10 rounded-md kairox-input pl-3 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-kx-violet dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" value={cajaFilter} onChange={e => setCajaFilter(e.target.value)}>
+              <option value="todas">Todas las cajas</option>
+              {cajas.map(c => (
+                <option key={c.id} value={c.id}>{c.nombre}{!c.activo ? ' (inactiva)' : ''}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="space-y-2">
           <Label className="dark:text-kx-text">Buscar Concepto</Label>
           <div className="relative">
