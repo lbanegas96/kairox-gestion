@@ -54,7 +54,8 @@ function TablaOrdenesCompra({
               const cfg = ESTADOS[oc.estado] ?? ESTADOS.borrador;
               const Icon = cfg.icon;
               return (
-                <tr key={oc.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/40 transition-colors">
+                <tr key={oc.id} onClick={() => setDetalleId(oc.id)}
+                  className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/40 transition-colors cursor-pointer">
                   <td className="p-4 font-mono font-bold text-indigo-600 dark:text-indigo-400">{oc.numero}</td>
                   <td className="p-4 font-medium text-slate-700 dark:text-kx-text">{oc.proveedor_nombre ?? oc.proveedores?.nombre ?? '—'}</td>
                   <td className="p-4 text-slate-500 dark:text-kx-text-2">{formatDateAR(oc.created_at)}</td>
@@ -69,7 +70,7 @@ function TablaOrdenesCompra({
                   <td className="p-4 text-right font-mono font-bold text-kx-text dark:text-kx-text">
                     {formatCurrency(oc.total, oc.moneda ?? 'ARS')}
                   </td>
-                  <td className="p-4">
+                  <td className="p-4" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-center gap-1">
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-indigo-600 dark:hover:text-indigo-500"
                         onClick={() => setDetalleId(oc.id)} title="Ver detalle">

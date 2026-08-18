@@ -86,6 +86,7 @@ function FormNuevaOC({
             <div className="col-span-3 space-y-1 relative">
               <Label className="text-xs dark:text-kx-text">Proveedor</Label>
               <Input value={provSearch} onChange={e => searchProveedor(e.target.value)}
+                onFocus={() => searchProveedor(provSearch)}
                 placeholder="Buscar proveedor..." className="h-8 text-sm dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
               {provResults.length > 0 && (
                 <div className="absolute top-full left-0 right-0 z-30 bg-kx-surface dark:bg-kx-surface border border-kx-border dark:border-kx-border rounded-lg shadow-xl mt-1">
@@ -109,9 +110,13 @@ function FormNuevaOC({
 
             <div className="col-span-2 space-y-1">
               <Label className="text-xs dark:text-kx-text">Entrega esperada</Label>
+              {/* dark:[color-scheme:dark] — sin esto el ícono del calendario nativo
+                  se renderiza negro sobre fondo oscuro (invisible), así que en la
+                  práctica solo se podía tipear la fecha. Mismo fix ya aplicado en
+                  ModalRegistrarFactura.jsx (misma carpeta). */}
               <Input type="date" value={form.fecha_entrega_esperada}
                 onChange={e => setForm(f => ({ ...f, fecha_entrega_esperada: e.target.value }))}
-                className="h-8 text-sm dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+                className="h-8 text-sm dark:bg-kx-surface dark:border-kx-border dark:text-kx-text dark:[color-scheme:dark]" />
             </div>
 
             <div className="col-span-2">
@@ -164,7 +169,7 @@ function FormNuevaOC({
                     inputRef={el => { descRefs.current[idx] = el; }}
                     value={item._prodSearch ?? item.descripcion}
                     onChange={e => { searchProducto(idx, e.target.value); setProdOpen(prev => ({ ...prev, [idx]: true })); }}
-                    onFocus={() => setProdOpen(prev => ({ ...prev, [idx]: true }))}
+                    onFocus={() => { setProdOpen(prev => ({ ...prev, [idx]: true })); searchProducto(idx, item._prodSearch ?? item.descripcion ?? ''); }}
                     onKeyDown={handleDescripcionKeyDown(idx)}
                     placeholder="Buscar producto o describir"
                     open={prodOpen[idx]}

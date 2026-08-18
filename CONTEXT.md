@@ -4271,3 +4271,25 @@ Verificado en vivo end-to-end contra Nalux real (OC-00003, Alibaba, 2 ítems): f
 badge violeta, botón desaparece) → NC sobre la 2da factura → diálogo "¿Reabrir la OC?" → "Reabrir
 OC" → OC vuelve a "Recibida", `cantidad_facturada` del ítem acreditado vuelve a 0, el otro ítem
 queda intacto. 159/159 tests, lint y build limpios.
+
+## 4 ajustes chicos de UX en Órdenes de Compra (18/08, noche)
+
+Luciano pidió parejar Compras con patrones ya establecidos en el resto de la app:
+
+1. **Click en la fila de la tabla abre la OC** (`TablaOrdenesCompra.jsx`) — antes solo el ícono del
+   ojo abría el detalle; ahora toda la fila es clickeable (`stopPropagation` en la celda de
+   acciones para que los botones de estado/devolver no disparen también la apertura).
+2. **Combo de Proveedor** (`FormNuevaOC.jsx`/`OrdenesCompraSection.jsx`) — `searchProveedor` exigía
+   tipear para traer resultados; ahora el foco vacío trae el listado completo (máx. 20), igual que
+   ya se corrigió para productos en Ventas (16/08).
+3. **Combo de Producto** en los ítems de la OC — mismo fix, `searchProducto` ya no exige 2+
+   caracteres para mostrar algo al hacer foco.
+4. **Fecha de entrega esperada visible en modo oscuro** — el input nativo `type="date"` no tenía
+   `dark:[color-scheme:dark]` (sí lo tenía `ModalRegistrarFactura.jsx`, misma carpeta), así que el
+   ícono del calendario se pintaba negro sobre fondo oscuro — invisible, parecía que solo se podía
+   tipear la fecha. Corregido, mismo patrón ya usado en el resto de la app.
+
+Se revisó también si el modal "Nueva OC" necesitaba un rediseño de layout — no: ya usa el mismo
+wrapper full-screen denso (`max-w-[96vw] w-[96vw] h-[92vh]`) que Cotización/Pedido desde la Fase 1
+(13/08), así que no se tocó la estructura. 159/159 tests, lint y build limpios, verificado en vivo
+contra Nalux real (click en fila, ambos combos, `color-scheme` confirmado por consola).

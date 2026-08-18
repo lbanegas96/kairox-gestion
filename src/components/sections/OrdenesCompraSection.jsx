@@ -325,11 +325,15 @@ function OrdenesCompraSection() {
     setIsModalOpen(true);
   };
 
+  // Foco sin tipear todavía → mostrar el catálogo (como un combo normal), no
+  // exigir que se escriba para ver algo — mismo criterio que ya se corrigió
+  // en Nueva Factura (Ventas, Frente de ajustes UX 16/08).
   const searchProveedor = async (q) => {
     setProvSearch(q);
     setForm(f => ({ ...f, proveedor_nombre: q }));
-    if (!q || q.length < 1) { setProvResults([]); return; }
-    const { data } = await supabase.from('proveedores').select('id, nombre').eq('empresa_id', empresaId).ilike('nombre', `%${q}%`).limit(6);
+    const { data } = await supabase.from('proveedores').select('id, nombre')
+      .eq('empresa_id', empresaId).ilike('nombre', `%${q || ''}%`)
+      .order('nombre').limit(q ? 8 : 20);
     setProvResults(data ?? []);
   };
 
@@ -344,8 +348,9 @@ function OrdenesCompraSection() {
     const updated = [...items];
     updated[idx] = { ...updated[idx], _prodSearch: q, descripcion: q };
     setItems(updated);
-    if (!q || q.length < 2) { setProdResults(p => ({ ...p, [idx]: [] })); return; }
-    const { data } = await supabase.from('productos').select('id, nombre, costo_compra, unidad_medida, alicuota_iva').eq('empresa_id', empresaId).ilike('nombre', `%${q}%`).limit(6);
+    const { data } = await supabase.from('productos').select('id, nombre, costo_compra, unidad_medida, alicuota_iva')
+      .eq('empresa_id', empresaId).eq('activo', true).ilike('nombre', `%${q || ''}%`)
+      .order('nombre').limit(q && q.length >= 2 ? 8 : 20);
     setProdResults(p => ({ ...p, [idx]: data ?? [] }));
   };
 
