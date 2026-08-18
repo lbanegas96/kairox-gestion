@@ -156,9 +156,19 @@ Fuentes: [Relationship Map in SAP Business One Web Client](https://www.sap-busin
   si hay algo para ver — resuelve el problema de descubribilidad sin cambiar dónde vive el botón.
 
 ### Fase 4 — Pulido y casos límite
-- Colapsar ramas de derivados con muchos documentos (si un cliente tiene 10 NC sobre la misma
-  factura, no debería ser una fila infinita).
-- Exportar/imprimir el mapa (menor prioridad, evaluar si hay pedido real).
+
+**Colapsar ramas de derivados — ✅ EJECUTADA (18/08).** "Documentos derivados" no tenía tope —
+un cliente con muchas NC/ND/cobros/devoluciones sobre la misma factura las mostraba todas de una,
+ocupando varias filas. Ahora se muestran las primeras 6 y el resto queda atrás de un botón
+"Ver N más" / "Ver menos", que se resetea cada vez que se abre un mapa distinto. No hay hoy en
+Nalux ningún comprobante real con más de 2 derivados, así que se verificó con un test unitario que
+arma el caso sintético de 9 (el mismo "10 NC" que motivaba este ítem) — 3 tests nuevos en
+`MapaRelaciones.test.jsx`, cubriendo el colapso, el toggle, y que el caso real de hoy (pocos
+derivados) sigue sin mostrar el botón.
+
+**Exportar/imprimir el mapa — sin construir, a propósito.** Seguía marcado "menor prioridad,
+evaluar si hay pedido real" y nadie lo pidió todavía — se decidió con Nadia (18/08) dejarlo así en
+vez de construirlo sin un caso de uso concreto.
 
 ---
 

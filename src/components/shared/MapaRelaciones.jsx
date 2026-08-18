@@ -293,6 +293,12 @@ function MapaRelaciones({
   const [activoId, setActivoId] = useState(null);        // id del nodo que se abrió — el que se marca "actual"
   const [sinFacturar, setSinFacturar] = useState(null);  // { label, nodo } cuando el entry point no tiene comprobante/compra todavía
   const [duplicadoInfo, setDuplicadoInfo] = useState(null); // { origen: {tipo,id,numero}|null, duplicados: [{tipo,id,numero}] }
+  // Fase 4 (PLAN_MAPA_RELACIONES.md): "Documentos derivados" no tiene tope hoy —
+  // un cliente con 10 NC sobre la misma factura se ve entera, ocupando varias
+  // filas de una. Se muestran las primeras LIMITE_DERIVADOS_VISIBLES y el resto
+  // queda atrás de un "Ver N más". Se resetea cada vez que se resuelve un mapa
+  // nuevo (abrir otro documento no debería heredar el expandido del anterior).
+  const [derivadosExpandido, setDerivadosExpandido] = useState(false);
   const isCompra = mapa?.modo === 'compra' || (!!compraId && !comprobanteId);
 
   useEffect(() => {
@@ -303,7 +309,7 @@ function MapaRelaciones({
   useEffect(() => {
     if (!open) {
       setMapa(null); setFullscreen(false); setPreviewNodo(null); setPreviewItems(null);
-      setActivoId(null); setSinFacturar(null); setDuplicadoInfo(null);
+      setActivoId(null); setSinFacturar(null); setDuplicadoInfo(null); setDerivadosExpandido(false);
     }
   }, [open]);
 
@@ -400,6 +406,7 @@ function MapaRelaciones({
   const resolveAndFetch = async () => {
     setSinFacturar(null);
     setDuplicadoInfo(null);
+    setDerivadosExpandido(false);
     if (comprobanteId) { setActivoId(comprobanteId); return fetchMapaVenta(comprobanteId); }
     if (compraId)       { setActivoId(compraId);      return fetchMapaCompra(compraId); }
 
@@ -807,6 +814,56 @@ function MapaRelaciones({
     mapa.pagos.length > 0 || mapa.ncsFinancieras.length > 0
   );
 
+  // Fase 4 — colapsar ramas largas: mismo orden en el que ya se renderizaban
+  // (NC, ND, cobros, devoluciones / devoluciones, NC financieras, ND), ahora
+  // como array plano para poder recortarlo con .slice() en vez de 4 .map()
+  // sueltos que no sabían nada del total combinado.
+  const LIMITE_DERIVADOS_VISIBLES = 6;
+  const derivadosVentaItems = mapa?.modo === 'venta' ? [
+    ...mapa.ncs.map(nc => {
+      const n = { id: nc.id, tipo: 'nota_credito', numero: nc.numero_afip ?? nc.numero_venta, fecha: nc.fecha, total: nc.total, estado: nc.estado_pago };
+      return <NodoMapa key={nc.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
+    }),
+    ...mapa.nds.map(nd => (
+      <NodoMapa
+        key={nd.id}
+        nodo={{ id: nd.id, tipo: 'nota_debito', numero: nd.numero_nd, fecha: nd.fecha, monto: nd.monto, estado: nd.concepto }}
+        activo={isActivo(nd.id)}
+      />
+    )),
+    ...mapa.cobros.map(c => (
+      <NodoMapa
+        key={c.id}
+        nodo={{ id: c.id, tipo: 'cobro_cc', numero: c.descripcion || 'Cobro CC', fecha: c.fecha, monto: c.monto }}
+        activo={isActivo(c.id)}
+      />
+    )),
+    ...mapa.devoluciones.map(d => {
+      const n = { id: d.id, tipo: 'devolucion', numero: d.numero_devolucion, fecha: d.fecha, estado: d.compensacion };
+      return <NodoMapa key={d.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
+    }),
+  ] : [];
+  const derivadosCompraItems = mapa?.modo === 'compra' ? [
+    ...mapa.devoluciones.map(d => {
+      const n = { id: d.id, tipo: 'devolucion_prov', numero: d.numero_devolucion, fecha: d.fecha, estado: d.compensacion };
+      return <NodoMapa key={d.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
+    }),
+    ...mapa.ncsFinancieras.map(nc => (
+      <NodoMapa
+        key={nc.id}
+        nodo={{ id: nc.id, tipo: 'nc_proveedor', numero: nc.numero_ncp, fecha: nc.fecha, monto: nc.monto, estado: nc.motivo }}
+        activo={isActivo(nc.id)}
+      />
+    )),
+    ...mapa.nds.map(nd => (
+      <NodoMapa
+        key={nd.id}
+        nodo={{ id: nd.id, tipo: 'nd_proveedor', numero: nd.numero_nd, fecha: nd.fecha, monto: nd.monto, estado: nd.concepto }}
+        activo={isActivo(nd.id)}
+      />
+    )),
+  ] : [];
+
   // ── Resumen del circuito ─────────────────────────────────────────────────────
   const pasosVenta = mapa?.modo === 'venta'
     ? 1 + (mapa.origen ? 1 : 0) + (mapa.cotizacion ? 1 : 0) + (mapa.pedido ? 1 : 0) + mapa.entregas.length
@@ -1014,29 +1071,19 @@ function MapaRelaciones({
                     Documentos derivados
                   </p>
                   <div className="flex flex-wrap gap-3">
-                    {mapa.ncs.map(nc => {
-                      const n = { id: nc.id, tipo: 'nota_credito', numero: nc.numero_afip ?? nc.numero_venta, fecha: nc.fecha, total: nc.total, estado: nc.estado_pago };
-                      return <NodoMapa key={nc.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
-                    })}
-                    {mapa.nds.map(nd => (
-                      <NodoMapa
-                        key={nd.id}
-                        nodo={{ id: nd.id, tipo: 'nota_debito', numero: nd.numero_nd, fecha: nd.fecha, monto: nd.monto, estado: nd.concepto }}
-                        activo={isActivo(nd.id)}
-                      />
-                    ))}
-                    {mapa.cobros.map(c => (
-                      <NodoMapa
-                        key={c.id}
-                        nodo={{ id: c.id, tipo: 'cobro_cc', numero: c.descripcion || 'Cobro CC', fecha: c.fecha, monto: c.monto }}
-                        activo={isActivo(c.id)}
-                      />
-                    ))}
-                    {mapa.devoluciones.map(d => {
-                      const n = { id: d.id, tipo: 'devolucion', numero: d.numero_devolucion, fecha: d.fecha, estado: d.compensacion };
-                      return <NodoMapa key={d.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
-                    })}
+                    {derivadosExpandido ? derivadosVentaItems : derivadosVentaItems.slice(0, LIMITE_DERIVADOS_VISIBLES)}
                   </div>
+                  {derivadosVentaItems.length > LIMITE_DERIVADOS_VISIBLES && (
+                    <button
+                      type="button"
+                      onClick={() => setDerivadosExpandido(e => !e)}
+                      className="mt-3 text-2xs font-medium text-kx-violet hover:underline"
+                    >
+                      {derivadosExpandido
+                        ? 'Ver menos'
+                        : `Ver ${derivadosVentaItems.length - LIMITE_DERIVADOS_VISIBLES} más`}
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -1102,28 +1149,19 @@ function MapaRelaciones({
                     Documentos derivados
                   </p>
                   <div className="flex flex-wrap gap-3">
-                    {/* Devoluciones físicas */}
-                    {mapa.devoluciones.map(d => {
-                      const n = { id: d.id, tipo: 'devolucion_prov', numero: d.numero_devolucion, fecha: d.fecha, estado: d.compensacion };
-                      return <NodoMapa key={d.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
-                    })}
-                    {/* NC financieras recibidas (mig.277 — notas_credito_proveedor) */}
-                    {mapa.ncsFinancieras.map(nc => (
-                      <NodoMapa
-                        key={nc.id}
-                        nodo={{ id: nc.id, tipo: 'nc_proveedor', numero: nc.numero_ncp, fecha: nc.fecha, monto: nc.monto, estado: nc.motivo }}
-                        activo={isActivo(nc.id)}
-                      />
-                    ))}
-                    {/* ND recibidas */}
-                    {mapa.nds.map(nd => (
-                      <NodoMapa
-                        key={nd.id}
-                        nodo={{ id: nd.id, tipo: 'nd_proveedor', numero: nd.numero_nd, fecha: nd.fecha, monto: nd.monto, estado: nd.concepto }}
-                        activo={isActivo(nd.id)}
-                      />
-                    ))}
+                    {derivadosExpandido ? derivadosCompraItems : derivadosCompraItems.slice(0, LIMITE_DERIVADOS_VISIBLES)}
                   </div>
+                  {derivadosCompraItems.length > LIMITE_DERIVADOS_VISIBLES && (
+                    <button
+                      type="button"
+                      onClick={() => setDerivadosExpandido(e => !e)}
+                      className="mt-3 text-2xs font-medium text-kx-violet hover:underline"
+                    >
+                      {derivadosExpandido
+                        ? 'Ver menos'
+                        : `Ver ${derivadosCompraItems.length - LIMITE_DERIVADOS_VISIBLES} más`}
+                    </button>
+                  )}
                 </div>
               )}
 
