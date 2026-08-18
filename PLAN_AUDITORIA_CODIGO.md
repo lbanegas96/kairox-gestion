@@ -1,6 +1,9 @@
 # Plan de Auditoría de Código — Estilo / Performance / Mantenibilidad
 
-**Estado:** 📋 PLANIFICADO, no ejecutado. Documento vivo (mismo formato que `PLAN_AUDITORIA.md`).
+**Estado: ✅ COMPLETA.** Las 6 fases (A a F) se ejecutaron en julio 2026, cada una con su commit y
+verificación en vivo — ver el detalle de cada una más abajo. Este encabezado quedó desactualizado
+varias semanas (seguía diciendo "no ejecutado" con las 6 fases ya cerradas) — corregido el 18/08
+al notar la inconsistencia repasando el backlog general con Nadia.
 **Fecha de creación:** 2026-07-04
 **Alcance:** Distinto de `PLAN_AUDITORIA.md` (seguridad/permisos/RLS — CERRADO). Esta auditoría cubre
 calidad de código: legibilidad, mantenibilidad, performance de build/runtime, consistencia.
@@ -193,8 +196,7 @@ todos los flujos probados con datos reales en el tenant Nalux.
   auditoría); agregarlos es una decisión de proceso distinta a "auditar el código existente".
 
 ## Cómo retomar
-Este documento no tiene ningún ítem ejecutado todavía. Al retomar: confirmar con el usuario el
-orden de fases (se puede reordenar — por ejemplo, si el dolor real percibido es "la app carga
-lento", arrancar directo por Fase B en vez de Fase A). Cada fase debe cerrar con: build verificado
-+ smoke test manual de las pantallas tocadas + commit separado por fase (no mezclar Fase B con Fase C
-en el mismo commit).
+Las 6 fases (A-F) ya están cerradas — no queda nada pendiente de este plan. Si en el futuro se
+detecta un hallazgo nuevo de calidad de código (archivo que volvió a crecer, patrón que se volvió a
+mezclar, etc.), se agrega como una fase nueva con la misma disciplina: build verificado + smoke test
+manual de las pantallas tocadas + commit separado por fase.
