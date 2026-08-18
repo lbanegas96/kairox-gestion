@@ -4165,3 +4165,31 @@ coincidía con la de producción — `.env` (no `.env.local`, que no existe en e
 con la URL/anon key del proyecto viejo (`wuznppxeonmhfcvnqfbf`), pese a que la sesión de la
 madrugada del 16/08 documentó haberlo corregido. Corregido apuntando a `isvkelrdxwvkfmrfqxxk` —
 `.env` está en `.gitignore`, así que esto no afecta ningún commit ni a otras máquinas.
+
+---
+
+## Cierre de sesión 18/08 — para Luciano
+
+Resumen de todo lo que se tocó hoy, en orden:
+
+1. **Migración de Supabase — confirmada 100% cerrada** por Nadia (ver "🎉 Migración salió con
+   Éxito!" más arriba). Único pendiente de esa etapa: el webhook de MercadoPago QR, que quedó
+   como tarea tuya (reapuntarlo a la URL nueva + probar un cobro real desde el POS).
+2. **5 frentes de Facturar Pedido, probados en vivo con Nadia** (ver sección arriba) — todos ✅.
+   En el camino se armó un caso de prueba para el punto 5.5 y **apareció un bug real**: un pedido
+   facturado en partes pasaba a "Facturado" antes de tiempo, perdiendo el botón para facturar el
+   resto. Corregido (`PedidosSection.jsx`/`EntregasSection.jsx`) y verificado en vivo.
+3. **Mapa de Relaciones — Fase 4** (`PLAN_MAPA_RELACIONES.md`): "Documentos derivados" ahora
+   colapsa a 6 con un "Ver N más" cuando hay muchos (NC/ND/cobros/devoluciones sobre la misma
+   factura). Lo de exportar/imprimir el mapa quedó afuera a propósito, sin pedido real todavía.
+4. **Multi-caja — Fase 6** (`PLAN_MULTI_CAJA.md`): reporting por caja física en el módulo de Caja
+   (Movimientos y Reporte Histórico), invisible con 1 sola caja. Las 6 fases del plan quedan
+   completas.
+
+**Pendiente, sin decidir todavía — MELI Factura A**: Nadia empezó a retomarlo hoy pero frenó antes
+de definir el alcance (hay más de una interpretación posible: elegir Factura A al facturar un
+pedido de MercadoLibre vs. ofrecerlo como atributo de la publicación). Sigue en el mismo estado de
+antes — **no construir nada sin que Nadia confirme el alcance primero**.
+
+Todo lo de hoy: `npx vitest run` en verde en cada paso (159/159 al final), `npx eslint` sin
+errores nuevos, `npx vite build` limpio en cada commit.
