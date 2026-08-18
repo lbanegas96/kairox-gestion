@@ -1349,8 +1349,11 @@ funcionan sin ningún error de consola.
 2. ✅ **Historial de git**: decisión tomada (2026-07-11) — se deja como está. Son totales agregados
    mensuales, no datos personales ni secretos; reescribir el historial (force-push) es más riesgoso
    que el beneficio.
-3. 🟡 Activar "Leaked Password Protection" en Supabase Auth — sigue pendiente. Requiere plan pago de
-   Supabase (decisión del usuario 2026-07-11: posponer por ahora).
+3. 🟡 Activar "Leaked Password Protection" en Supabase Auth — sigue pendiente. Requiere plan Pro de
+   Supabase (US$25/mes) — confirmado en la documentación oficial, sin cambios. Re-chequeado el
+   18/08 tras la migración a la cuenta nueva por si el plan hubiera cambiado: la organización nueva
+   ("Kairox IA INFO") también está en plan free, así que sigue aplicando. Nadia decidió otra vez
+   posponerlo (mismo criterio que el 2026-07-11) — no hay presupuesto para el plan pago ahora mismo.
 4. ✅ **Recorrido punto por punto completo**: Compras (mig.199 + fix stock Nueva Factura Proveedor),
    Inventario (fix editar producto), Bancos/Caja, Cuenta Corriente, Impuestos, Configuración — todos
    revisados, ver detalle arriba.
