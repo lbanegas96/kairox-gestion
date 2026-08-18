@@ -95,9 +95,10 @@ function OrdenesCompraSection() {
     enabled: !!empresaId,
   });
 
-  const { data: factura } = useQuery({
+  // mig.332 — una OC puede tener varias Facturas de Proveedor parciales.
+  const { data: facturas = [] } = useQuery({
     queryKey: OC_KEYS.factura(detalleId),
-    queryFn: () => ordenesCompraService.getFactura(detalleId),
+    queryFn: () => ordenesCompraService.getFacturas(detalleId),
     enabled: !!detalleId,
   });
 
@@ -107,6 +108,12 @@ function OrdenesCompraSection() {
     mutationFn: (payload) => ordenesCompraService.registrarFactura(payload),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: OC_KEYS.factura(detalleId) });
+      // mig.332 — bug real encontrado probando en vivo: sin esto, `detalle`
+      // (y su `cantidad_facturada` por ítem) quedaba con la caché vieja tras
+      // registrar una factura parcial, y `abrirModalFactura` volvía a
+      // precargar ítems ya facturados en la siguiente factura de la misma OC.
+      qc.invalidateQueries({ queryKey: OC_KEYS.detail(detalleId) });
+      qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] });
       toast({ title: 'Factura registrada — deuda cargada a Cuenta Corriente del proveedor ✓', className: 'bg-green-600 text-white' });
       setFacturaModal(false);
 
@@ -137,16 +144,28 @@ function OrdenesCompraSection() {
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
+  // mig.332 — la OC ahora admite varias facturas parciales: precarga solo lo
+  // que sigue pendiente de facturar (recibido - ya facturado en facturas
+  // anteriores), no todo lo recibido de nuevo. Mismo patrón que el Frente 2
+  // de "Facturar Pedido" en Ventas (NuevaFacturaModal.jsx, 15/08).
   const abrirModalFactura = () => {
     if (!detalle) return;
-    const itemsRecibidos = (detalle.ordenes_compra_items ?? []).filter(i => Number(i.cantidad_recibida) > 0);
+    const itemsPendientes = (detalle.ordenes_compra_items ?? [])
+      .map(i => ({ i, maxFacturable: Number(i.cantidad_recibida) - (Number(i.cantidad_facturada) || 0) }))
+      .filter(({ maxFacturable }) => maxFacturable > 0);
+
+    if (itemsPendientes.length === 0) {
+      toast({ title: 'Nada pendiente de facturar', description: 'Esta OC ya está totalmente facturada según lo recibido.' });
+      return;
+    }
+
     setFacturaForm({
       numero_factura: '',
       fecha_factura: '',
-      items: itemsRecibidos.map(i => ({
+      items: itemsPendientes.map(({ i, maxFacturable }) => ({
         producto_id: i.producto_id ?? null,
         descripcion: i.descripcion,
-        cantidad: i.cantidad_recibida,
+        cantidad: maxFacturable,
         costo_unitario_neto: i.costo_unitario,
         alicuota_iva: 21,
       })),
@@ -506,7 +525,7 @@ function OrdenesCompraSection() {
       {/* ── MODAL: Detalle OC ── */}
       <ModalDetalleOC
         detalleId={detalleId} setDetalleId={setDetalleId}
-        detalle={detalle} factura={factura}
+        detalle={detalle} facturas={facturas}
         setDevolverOC={setDevolverOC} setGenRecepId={setGenRecepId}
         abrirModalFactura={abrirModalFactura}
         onEditar={openEdit}

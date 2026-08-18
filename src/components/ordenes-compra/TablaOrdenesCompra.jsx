@@ -97,7 +97,7 @@ function TablaOrdenesCompra({
                         </Button>
                       )}
 
-                      {['recibida', 'recibida_parcial'].includes(oc.estado) && (
+                      {['recibida', 'recibida_parcial', 'facturada'].includes(oc.estado) && (
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-amber"
                           onClick={() => setDevolverOC(oc)} title="Devolver al proveedor">
                           <RotateCcw className="w-3.5 h-3.5" />

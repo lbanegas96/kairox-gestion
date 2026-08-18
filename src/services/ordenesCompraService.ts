@@ -217,22 +217,23 @@ export const ordenesCompraService = {
   // `compras`/`detalle_compras` (vía RPC atómica `registrar_factura_compra_oc`),
   // el mismo lugar que ya usan Compra Rápida y NC/ND de Proveedor.
 
-  async getFactura(ordenId: string): Promise<FacturaProveedor | null> {
+  // mig.332 — una OC ahora puede tener varias Facturas de Proveedor parciales
+  // (antes .maybeSingle(), 1:1 forzado por un índice único ya eliminado).
+  async getFacturas(ordenId: string): Promise<FacturaProveedor[]> {
     const { data, error } = await supabase
       .from('compras')
       .select('*, detalle_compras(*)')
       .eq('orden_compra_id', ordenId)
-      .maybeSingle();
+      .order('fecha', { ascending: true });
     if (error) throw new Error(error.message);
-    if (!data) return null;
-    return {
-      id: data.id,
-      numero_factura: data.numero_factura,
-      fecha_factura: data.fecha,
-      monto_total: data.total,
-      estado: data.estado_pago === 'pagada' ? 'pagada' : 'pendiente',
-      detalle_compras: data.detalle_compras,
-    } as unknown as FacturaProveedor;
+    return (data ?? []).map(d => ({
+      id: d.id,
+      numero_factura: d.numero_factura,
+      fecha_factura: d.fecha,
+      monto_total: d.total,
+      estado: d.estado_pago === 'pagada' ? 'pagada' : 'pendiente',
+      detalle_compras: d.detalle_compras,
+    })) as unknown as FacturaProveedor[];
   },
 
   async registrarFactura(payload: {

@@ -23,7 +23,7 @@ const CAMPOS_HISTORIAL = {
 
 function ModalDetalleOC({
   detalleId, setDetalleId,
-  detalle, factura,
+  detalle, facturas = [],
   setDevolverOC, setGenRecepId,
   abrirModalFactura,
   onEditar,
@@ -177,7 +177,11 @@ function ModalDetalleOC({
               const totalOC = Number(detalle.total);
               const totalRecibido = (detalle.ordenes_compra_items ?? [])
                 .reduce((s, i) => s + Number(i.cantidad_recibida) * Number(i.costo_unitario), 0);
-              const totalFactura = factura ? Number(factura.monto_total) : null;
+              // mig.332 — puede haber varias facturas parciales: el total a
+              // comparar es la suma de todas, no una sola.
+              const totalFactura = facturas.length > 0
+                ? facturas.reduce((s, f) => s + Number(f.monto_total), 0)
+                : null;
               const diff = totalFactura !== null ? Math.abs(totalFactura - totalRecibido) : null;
               const matchOk = diff !== null && diff < 0.01;
               const matchWarn = diff !== null && !matchOk && diff / (totalRecibido || 1) < 0.05;
@@ -219,27 +223,34 @@ function ModalDetalleOC({
                     </div>
                   )}
 
-                  {factura ? (
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-kx-text-2">
-                        <span className={`px-2 py-0.5 rounded font-medium ${FACTURA_ESTADO_COLORS[factura.estado]}`}>
-                          {factura.estado.charAt(0).toUpperCase() + factura.estado.slice(1)}
-                        </span>
-                        <span>N° {factura.numero_factura}</span>
-                      </div>
-                      {factura.estado === 'pendiente' && (
-                        <span className="flex items-center gap-1 text-xs text-kx-text-3">
-                          <Banknote className="w-3.5 h-3.5" /> Pagala desde Proveedores → Cuenta Corriente
-                        </span>
-                      )}
+                  {/* mig.332 — lista todas las facturas parciales registradas (antes, una
+                      sola factura ocultaba el botón para siempre; ahora sigue disponible
+                      mientras quede algo pendiente de facturar). */}
+                  {facturas.length > 0 && (
+                    <div className="space-y-1.5">
+                      {facturas.map(f => (
+                        <div key={f.id} className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-kx-text-2">
+                            <span className={`px-2 py-0.5 rounded font-medium ${FACTURA_ESTADO_COLORS[f.estado]}`}>
+                              {f.estado.charAt(0).toUpperCase() + f.estado.slice(1)}
+                            </span>
+                            <span>N° {f.numero_factura}</span>
+                            <span className="tabular-nums">{formatCurrency(Number(f.monto_total), detalle.moneda ?? 'ARS')}</span>
+                          </div>
+                          {f.estado === 'pendiente' && (
+                            <span className="flex items-center gap-1 text-xs text-kx-text-3">
+                              <Banknote className="w-3.5 h-3.5" /> Pagala desde Proveedores → Cuenta Corriente
+                            </span>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  ) : (
-                    ['recibida_parcial', 'recibida'].includes(detalle.estado) && (
-                      <Button size="sm" variant="outline" className="w-full gap-2 text-xs"
-                        onClick={abrirModalFactura}>
-                        <Receipt className="w-3.5 h-3.5" /> Registrar Factura del Proveedor
-                      </Button>
-                    )
+                  )}
+                  {['recibida_parcial', 'recibida'].includes(detalle.estado) && (
+                    <Button size="sm" variant="outline" className="w-full gap-2 text-xs"
+                      onClick={abrirModalFactura}>
+                      <Receipt className="w-3.5 h-3.5" /> Registrar Factura del Proveedor
+                    </Button>
                   )}
                 </div>
               );
@@ -285,7 +296,9 @@ function ModalDetalleOC({
               <Copy className="w-4 h-4" /> Duplicar
             </Button>
           )}
-          {detalle && ['recibida', 'recibida_parcial'].includes(detalle.estado) && (
+          {/* mig.332 — 'facturada' incluido a propósito: devolver mercadería
+              sigue siendo válido aunque ya esté 100% facturada. */}
+          {detalle && ['recibida', 'recibida_parcial', 'facturada'].includes(detalle.estado) && (
             <Button variant="outline" className="gap-2 text-orange-600 border-orange-200 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-900/20"
               onClick={() => { setDetalleId(null); setDevolverOC(detalle); }}>
               <RotateCcw className="w-4 h-4" /> Devolver

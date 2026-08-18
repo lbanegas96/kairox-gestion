@@ -2,6 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -77,6 +81,11 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, duplic
   const [loading, setLoading]             = useState(false);
   const [prodResults, setProdResults]     = useState({});
   const [prodOpen, setProdOpen]           = useState({});
+  // mig.332 — auditoría 18/08, mismo criterio que Ventas (mig.331): si esta NC
+  // deja a la OC de origen con saldo sin facturar mientras seguía marcada
+  // 'facturada', la RPC lo informa (oc_reabrible) pero nunca la reabre sola —
+  // se le pregunta al usuario (Close/Reopen manual, estilo SAP B1).
+  const [reabrirOC, setReabrirOC] = useState(null); // { id, numero } | null
 
   const origenLocked = !!compraOrigen;
 
@@ -90,8 +99,36 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, duplic
         .then(({ data }) => setProveedores(data || []));
     }
 
-    if (compraOrigen) {
+    if (compraOrigen?.id) {
       setProveedorId(compraOrigen.proveedor_id || '');
+      // mig.332 — bug real encontrado probando en vivo: sin esto, la fila de
+      // ítem quedaba en texto libre sin producto_id, así que la reversión de
+      // cantidad_facturada (y el diálogo de reabrir la OC) nunca se disparaba
+      // para el caso real (NC sobre una factura vinculada a una OC). Mismo
+      // patrón que ya usa NuevaNCModal.jsx (Ventas) para comprobanteOrigen.
+      supabase.from('detalle_compras')
+        .select('id, producto_id, cantidad, costo_unitario, alicuota_iva, productos(nombre)')
+        .eq('compra_id', compraOrigen.id)
+        .eq('empresa_id', user.empresa_id)
+        .then(({ data }) => {
+          if (data?.length > 0) {
+            setItems(data.map(i => {
+              // detalle_compras.costo_unitario es NETO (mig.279); esta NC
+              // trabaja en precio bruto (IVA incluido, mig.277) — convertir,
+              // no copiar directo, o la NC saldría subvaluada.
+              const alicuota = Number(i.alicuota_iva ?? 21);
+              const factor = FACTOR_IVA[String(alicuota)] ?? 1;
+              return {
+                _id:          Math.random().toString(36).slice(2),
+                producto_id:  i.producto_id,
+                descripcion:  i.productos?.nombre || '',
+                cantidad:     Number(i.cantidad),
+                precio_unit:  Number(i.costo_unitario) * factor,
+                alicuota_iva: alicuota,
+              };
+            }));
+          }
+        });
     }
 
     // Pre-cargar ítems desde otra NC de proveedor (flujo "Duplicar", 15/08) —
@@ -240,6 +277,14 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, duplic
       toast({ title: `NC ${data.numero_ncp} de proveedor registrada — $${Number(data.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}` });
       onSuccess?.(data);
       onOpenChange(false);
+
+      // mig.332 — la OC de origen quedó con saldo sin facturar mientras
+      // seguía marcada 'facturada'. No se reabre sola: se pregunta.
+      if (data.oc_reabrible && data.orden_compra_id) {
+        const { data: ocRow } = await supabase.from('ordenes_compra')
+          .select('numero').eq('id', data.orden_compra_id).single();
+        setReabrirOC({ id: data.orden_compra_id, numero: ocRow?.numero ?? '' });
+      }
     } catch (err) {
       console.error('[NuevaNCProveedor]', err);
       toast({ title: 'Error al registrar la NC', description: err.message, variant: 'destructive' });
@@ -248,9 +293,23 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, duplic
     }
   };
 
+  const handleReabrirOC = async () => {
+    if (!reabrirOC) return;
+    const { error } = await supabase.from('ordenes_compra')
+      .update({ estado: 'recibida' })
+      .eq('id', reabrirOC.id);
+    if (error) {
+      toast({ title: 'No se pudo reabrir la Orden de Compra', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: `Orden de Compra ${reabrirOC.numero} reabierta`, description: 'Vuelve a estar disponible para registrar el saldo de la factura.' });
+    setReabrirOC(null);
+  };
+
   const fmt = (n) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl bg-kx-surface border-kx-border text-kx-text max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-6 py-4 border-b border-kx-border shrink-0">
@@ -469,6 +528,34 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, duplic
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* mig.332 — fuera del <Dialog> principal a propósito: tiene que seguir
+        vivo aunque el formulario de la NC ya se haya cerrado. */}
+    <AlertDialog open={!!reabrirOC} onOpenChange={(v) => { if (!v) setReabrirOC(null); }}>
+      <AlertDialogContent className="dark:bg-kx-bg dark:border-kx-border">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="dark:text-kx-text">
+            ¿Reabrir la Orden de Compra {reabrirOC?.numero}?
+          </AlertDialogTitle>
+          <AlertDialogDescription className="dark:text-kx-text-2">
+            Esta Nota de Crédito dejó cantidad sin facturar en la OC{' '}
+            <strong>{reabrirOC?.numero}</strong>, que estaba marcada como "Facturada".
+            Reabrirla vuelve a mostrar el botón "Registrar Factura del Proveedor" para
+            completar el saldo. Si el remanente no se va a facturar, podés dejarla cerrada
+            tal cual está.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => setReabrirOC(null)}>
+            Dejar cerrada
+          </AlertDialogCancel>
+          <AlertDialogAction onClick={handleReabrirOC} className="bg-kx-amber hover:opacity-90">
+            Reabrir OC
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 

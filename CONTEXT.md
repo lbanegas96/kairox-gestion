@@ -4226,6 +4226,48 @@ pedido" → el pedido volvió a `en_preparacion`, el ítem de la NC volvió a `c
 el otro ítem quedó intacto en `1.000`. Sin cambios de RPC fuera de `crear_nota_credito` (mismo
 signature de 10 argumentos, sin riesgo de overload huérfano). 159/159 tests, lint y build limpios.
 
-**Fuera de alcance a propósito**: el mismo gap existe en Compras (`NuevaNCProveedorModal.jsx` /
-`ordenes_compra`) — no se tocó, sin pedido explícito de Luciano todavía. Tampoco se construyó un
-botón para reabrir un pedido "a mano" después de elegir "Dejar cerrado".
+**Fuera de alcance a propósito**: el mismo gap existía en Compras — no se tocó en esa sesión, sin
+pedido explícito de Luciano. Tampoco se construyó un botón para reabrir un pedido "a mano" después
+de elegir "Dejar cerrado".
+
+## Facturación parcial de OC + NC de Proveedor reabre (o no) la OC (18/08, noche)
+
+Luciano pidió el mismo criterio para Compras. Investigado: **no era el mismo bug** — hasta hoy una
+OC solo admitía **una única Factura de Proveedor para siempre**
+(`idx_compras_orden_compra_id_unico`, índice único), no existía ningún estado `'facturada'` en
+`ordenes_compra.estado`, y `ordenes_compra_items.cantidad_facturada` era una columna muerta desde
+julio (nadie la escribía). Confirmado cómo lo hace SAP B1: trata la OC simétrica a la Orden de
+Venta — admite facturación parcial en varias facturas, cierra el documento solo cuando se completa,
+y una NC de proveedor que reduce lo facturado no lo reabre sola (Close/Reopen manual). Se construyó
+completo, estilo SAP, no solo el fix puntual.
+
+**Migración `332_ordenes_compra_facturacion_parcial.sql`**:
+- Se elimina el índice único → una OC ahora admite varias Facturas de Proveedor parciales.
+- Nuevo estado `'facturada'` en `ordenes_compra.estado` — solo cuando **todos** los
+  `ordenes_compra_items` quedan con `cantidad_facturada >= cantidad_pedida` (mismo criterio binario
+  que el fix de Pedidos de hoy más temprano).
+- `registrar_factura_compra_oc` topea cada ítem contra `cantidad_recibida - cantidad_facturada` (ya
+  no contra "esta OC no tiene factura todavía").
+- `crear_nota_credito_proveedor` revierte `cantidad_facturada` por producto (mismo patrón que
+  `crear_nota_credito` del lado Ventas) y devuelve `oc_reabrible` — nunca reabre sola.
+
+**Frontend**: `abrirModalFactura` (OrdenesCompraSection.jsx) ahora precarga solo lo pendiente de
+facturar, con toast si no queda nada; `ModalDetalleOC.jsx` lista todas las facturas parciales en
+vez de una sola y el botón "Registrar Factura" queda disponible mientras falte algo;
+`NuevaNCProveedorModal.jsx` gana el mismo diálogo "¿Reabrir la OC?" que `NuevaNCModal.jsx`.
+
+**2 bugs reales encontrados y corregidos probando en vivo** (no en el diseño original):
+1. El `onSuccess` de `registrarFacturaMutation` no invalidaba la query del detalle de la OC — la
+   segunda factura parcial volvía a precargar ítems ya facturados (caché vieja de
+   `cantidad_facturada`). Corregido invalidando `OC_KEYS.detail`/`['ordenes_compra', empresaId]`.
+2. `NuevaNCProveedorModal.jsx` nunca precargaba ítems desde la factura de origen cuando
+   `compraOrigen` estaba seteado (a diferencia del lado Ventas) — el campo quedaba en texto libre
+   sin `producto_id`, así que la reversión de `cantidad_facturada` nunca se disparaba en el caso
+   real. Corregido precargando desde `detalle_compras` (con la conversión neto→bruto correcta,
+   `costo_unitario` ahí es neto pero la NC trabaja en precio con IVA incluido).
+
+Verificado en vivo end-to-end contra Nalux real (OC-00003, Alibaba, 2 ítems): factura parcial de 1
+ítem (OC sigue "Recibida", botón sigue disponible) → factura del 2do ítem (OC pasa a "Facturada",
+badge violeta, botón desaparece) → NC sobre la 2da factura → diálogo "¿Reabrir la OC?" → "Reabrir
+OC" → OC vuelve a "Recibida", `cantidad_facturada` del ítem acreditado vuelve a 0, el otro ítem
+queda intacto. 159/159 tests, lint y build limpios.
