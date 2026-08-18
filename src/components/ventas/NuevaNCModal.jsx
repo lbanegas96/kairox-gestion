@@ -2,6 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -81,6 +85,13 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
   const [afipConfig, setAfipConfig]   = useState(null);
   const [prodResults, setProdResults] = useState({});
   const [prodOpen, setProdOpen]       = useState({});
+  // mig.331 — auditoría 18/08: si esta NC deja al pedido de origen con saldo
+  // sin facturar mientras seguía marcado 'facturado', la RPC lo informa
+  // (pedido_reabrible) pero nunca lo reabre sola — se le pregunta al usuario,
+  // mismo criterio que el Close/Reopen manual de SAP B1. Vive como diálogo
+  // separado (no dentro del <Dialog> principal) para sobrevivir al cierre del
+  // formulario de la NC.
+  const [reabrirPedido, setReabrirPedido] = useState(null); // { id, numero } | null
 
   const origenLocked = !!comprobanteOrigen || !!devolucionOrigen;
 
@@ -358,6 +369,14 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
       toast({ title: `Nota de Crédito ${data.numero_venta} creada` });
       onSuccess?.({ id: data.comprobante_id, numero_venta: data.numero_venta, total: data.total });
       onOpenChange(false);
+
+      // mig.331 — el pedido de origen quedó con saldo sin facturar mientras
+      // seguía marcado 'facturado'. No se reabre solo: se pregunta.
+      if (data.pedido_reabrible && data.pedido_id) {
+        const { data: pedidoRow } = await supabase.from('pedidos')
+          .select('numero').eq('id', data.pedido_id).single();
+        setReabrirPedido({ id: data.pedido_id, numero: pedidoRow?.numero ?? '' });
+      }
     } catch (err) {
       console.error('[NuevaNC]', err);
       toast({ title: 'Error al crear NC', description: err.message, variant: 'destructive' });
@@ -366,9 +385,23 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
     }
   };
 
+  const handleReabrirPedido = async () => {
+    if (!reabrirPedido) return;
+    const { error } = await supabase.from('pedidos')
+      .update({ estado: 'en_preparacion' })
+      .eq('id', reabrirPedido.id);
+    if (error) {
+      toast({ title: 'No se pudo reabrir el pedido', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: `Pedido ${reabrirPedido.numero} reabierto`, description: 'Vuelve a estar disponible para facturar el saldo pendiente.' });
+    setReabrirPedido(null);
+  };
+
   const fmt = (n) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl bg-kx-surface border-kx-border text-kx-text max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-6 py-4 border-b border-kx-border shrink-0">
@@ -586,6 +619,33 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* mig.331 — fuera del <Dialog> principal a propósito: tiene que seguir
+        vivo aunque el formulario de la NC ya se haya cerrado. */}
+    <AlertDialog open={!!reabrirPedido} onOpenChange={(v) => { if (!v) setReabrirPedido(null); }}>
+      <AlertDialogContent className="dark:bg-kx-bg dark:border-kx-border">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="dark:text-kx-text">
+            ¿Reabrir el pedido {reabrirPedido?.numero}?
+          </AlertDialogTitle>
+          <AlertDialogDescription className="dark:text-kx-text-2">
+            Esta Nota de Crédito dejó cantidad sin facturar en el pedido{' '}
+            <strong>{reabrirPedido?.numero}</strong>, que estaba marcado como "Facturado".
+            Reabrirlo vuelve a mostrar el botón "Facturar Pedido" para completar el saldo.
+            Si el remanente no se va a facturar, podés dejarlo cerrado tal cual está.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => setReabrirPedido(null)}>
+            Dejar cerrado
+          </AlertDialogCancel>
+          <AlertDialogAction onClick={handleReabrirPedido} className="bg-kx-violet hover:opacity-90">
+            Reabrir pedido
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
 

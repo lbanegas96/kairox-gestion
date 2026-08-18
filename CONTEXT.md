@@ -4193,3 +4193,39 @@ antes — **no construir nada sin que Nadia confirme el alcance primero**.
 
 Todo lo de hoy: `npx vitest run` en verde en cada paso (159/159 al final), `npx eslint` sin
 errores nuevos, `npx vite build` limpio en cada commit.
+
+## Auditoría contable del circuito de Ventas (18/08, noche) + fix NC↔Pedido
+
+Con la migración de Supabase y los 5 frentes de Facturar Pedido ya cerrados, se corrió una
+auditoría contable formal (skill `auditor-contable`) sobre todo el circuito de Ventas — 3 agentes
+en paralelo leyeron a fondo `crear_venta` (328/328b, incluida Factura de Reserva),
+`registrar_cobro_cliente`/`asientosAutoService`, y el fix de estado de Pedidos de hoy.
+
+**Confirmado sólido, sin regresiones**: partida doble intacta en venta/COGS/cobro, Factura de
+Reserva omite correctamente las líneas de COGS cuando no mueve stock, Cuenta Corriente sin ningún
+camino que la salte, imputación parcial (Open Item) correctamente implementada. Dos riesgos de
+diseño preexistentes confirmados (no introducidos por esta tanda, ya con mitigación parcial): el
+asiento contable de venta/cobro es "best effort" (no bloqueante, con regeneración manual si
+falla) y la diferencia de cambio se degrada a $0 en silencio si faltan las cuentas 4.4/5.9.
+
+**Hallazgo real nuevo**: `crear_nota_credito` nunca revertía `pedido_items.cantidad_facturada` ni
+reabría `pedidos.estado`. Si se facturaba un pedido completo (quedaba "Facturado") y después se
+hacía una NC sobre esa factura, el pedido se quedaba "Facturado" para siempre — sin ningún camino
+para volver a facturar el saldo real.
+
+**Fix (decisión de Luciano — mismo criterio que el Close/Reopen manual de SAP B1: el sistema
+nunca reabre un documento solo)**: migración `331_crear_nota_credito_revertir_pedido.sql` — la
+NC revierte `cantidad_facturada` por producto (mismo patrón que ya usaba `cancelar_factura`,
+migración 259, pero parcial en vez de total) y devuelve `pedido_reabrible: true` si el pedido
+quedó con saldo sin facturar mientras seguía marcado "Facturado". `NuevaNCModal.jsx` muestra
+entonces un diálogo — "Reabrir pedido" o "Dejar cerrado" — nunca reabre solo.
+
+Verificado en vivo de punta a punta contra Nalux real: NC sobre `FAC-20260818-004` (ítem del
+pedido `PED-20260818-001`, que estaba "Facturado" con 2 ítems) → apareció el diálogo → "Reabrir
+pedido" → el pedido volvió a `en_preparacion`, el ítem de la NC volvió a `cantidad_facturada: 0`,
+el otro ítem quedó intacto en `1.000`. Sin cambios de RPC fuera de `crear_nota_credito` (mismo
+signature de 10 argumentos, sin riesgo de overload huérfano). 159/159 tests, lint y build limpios.
+
+**Fuera de alcance a propósito**: el mismo gap existe en Compras (`NuevaNCProveedorModal.jsx` /
+`ordenes_compra`) — no se tocó, sin pedido explícito de Luciano todavía. Tampoco se construyó un
+botón para reabrir un pedido "a mano" después de elegir "Dejar cerrado".
