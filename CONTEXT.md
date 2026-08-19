@@ -4383,3 +4383,34 @@ esperada" tiene `color-scheme: dark` activo (confirmado por JS), calendario visi
 modo oscuro.
 
 **Con esto, todo `PLAN_PRUEBAS_NADIA_2026-08-19.md` (Puntos 1 a 6) queda probado y cerrado.**
+
+### Verificación final post-pruebas — nada roto
+
+Con todo lo tocado hoy (3 NC de Ventas, 2 facturas + 2 NC de Compras, reaperturas en ambos
+sentidos), se hizo una pasada de auditoría antes de cerrar:
+- **AFIP**: sin errores nuevos en la cola desde el fix.
+- **Cuenta corriente** (Nadia Tecera, Carlos Perez, Consumidor Final, Alibaba): cada movimiento
+  de hoy coincide exacto con lo esperado — las 2 facturas y las 2 NC de Alibaba se cancelan
+  netamente entre sí ($0 de impacto real en su saldo).
+- **Stock**: cero movimientos de inventario — facturar/hacer NC no mueve stock, correcto.
+- **Asientos contables**: los 7 generados hoy, todos balanceados (débito = crédito).
+- **El modal de "Nueva OC" cancelado** (prueba del Punto 6): no dejó ningún borrador en la base.
+
+**Nota importante para no confundir a futuro**: `PED-20260814-004` y `OC-00003` (ítem Mouse
+Vertical) quedaron con su documento en estado **"Facturado"/"Facturada"** pero con
+`cantidad_facturada = 0` en ese ítem puntual. No es un dato inconsistente — es el comportamiento
+correcto de "Dejar cerrada": la NC sí revierte el monto facturado (ajuste financiero real), pero
+el estado del documento no cambia porque se decidió no reabrirlo. Si en algún reporte futuro
+aparece un documento "Facturado" con $0 facturado en un ítem, este es el motivo — no investigar
+como si fuera un bug nuevo.
+
+## Cierre de sesión 19/08 — para Luciano
+
+Sesión de hoy: recorrido completo de `PLAN_PRUEBAS_NADIA_2026-08-19.md` con Nadia, los 6 puntos
+✅. En el camino se encontró y corrigió un bug real (NC sobre un Ticket se encolaba mal a AFIP,
+commit `13110d1`) y se probó de punta a punta la facturación parcial de OC + reapertura en ambos
+lados (Ventas y Compras), incluidas las dos ramas del diálogo en cada uno. Verificación final
+post-pruebas sin hallazgos — ver sección de arriba.
+
+**Pendiente, sin cambios**: MP QR webhook (a tu cargo) y MELI Factura A (sin alcance definido,
+no tocar sin que Nadia lo confirme).
