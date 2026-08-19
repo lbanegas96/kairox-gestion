@@ -4360,3 +4360,26 @@ base: `tipo_comprobante_afip=NULL`, `cae_estado='no_aplica'`, sin fila en
 `facturas_pendientes_arca` — mismo estado que cualquier Ticket normal.
 
 `npx eslint` sin errores nuevos, `npx vitest run` 159/159, `npx vite build` OK.
+
+### Cierre — Puntos 5 y 6 (Compras) confirmados
+
+**Punto 5 (facturación parcial de OC + NC reabre)**: probado end-to-end sobre `OC-00003`
+(ya tenía un ítem facturado de la sesión de Luciano, el otro — Mouse Vertical — pendiente).
+Facturar el ítem que faltaba pasó la OC a **"Facturada"** (badge violeta). "Copiar a NC" sobre
+esa factura disparó el diálogo de reapertura — probadas **las dos ramas**: "Reabrir OC" (volvió a
+"Recibida", `cantidad_facturada` revertida) y, repitiendo el ciclo con una factura nueva,
+"Dejar cerrada" (se quedó "Facturada"). El ítem de la NC vino precargado con el producto
+correcto en los dos casos.
+
+Hallazgo menor (no bloqueante): el panel "3-WAY MATCH" suma el total bruto de todas las facturas
+de la OC sin restar las NC hechas sobre ellas — después de una NC muestra una diferencia grande
+entre "Recibido" y "Factura" que puede confundir a simple vista. La cifra que manda de verdad
+(`cantidad_facturada` por ítem) es correcta; esto es sólo de visualización. Queda anotado para
+una futura pasada de pulido, no se tocó hoy.
+
+**Punto 6 (4 ajustes UX de OC)**: los 4 confirmados — click en cualquier parte de la fila abre el
+detalle, Proveedor y Producto listan todo al hacer foco (sin tipear), y el campo "Entrega
+esperada" tiene `color-scheme: dark` activo (confirmado por JS), calendario visible y usable en
+modo oscuro.
+
+**Con esto, todo `PLAN_PRUEBAS_NADIA_2026-08-19.md` (Puntos 1 a 6) queda probado y cerrado.**

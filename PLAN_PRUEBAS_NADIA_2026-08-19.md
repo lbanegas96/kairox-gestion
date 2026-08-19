@@ -1,5 +1,8 @@
 # Plan de pruebas para Nadia — 19/08
 
+**Estado: probado en vivo con Nadia el 19/08, todo ✅ (Puntos 1 a 6).** Se encontró y corrigió un
+bug real en el camino — ver "Sesión 2026-08-19" en `CONTEXT.md` para el detalle completo.
+
 Todo lo de abajo se hizo el 18/08 (noche), ya está commiteado, pusheado a `master` y deployado en
 Vercel producción. Nadie lo probó todavía con ojos humanos — la idea es que lo recorras mañana
 contra Nalux real y me digas qué encontrás para seguir reparando.
