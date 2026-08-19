@@ -4293,3 +4293,40 @@ Se revisó también si el modal "Nueva OC" necesitaba un rediseño de layout —
 wrapper full-screen denso (`max-w-[96vw] w-[96vw] h-[92vh]`) que Cotización/Pedido desde la Fase 1
 (13/08), así que no se tocó la estructura. 159/159 tests, lint y build limpios, verificado en vivo
 contra Nalux real (click en fila, ambos combos, `color-scheme` confirmado por consola).
+
+---
+
+## Cierre de sesión 18/08 (noche) — para Nadia
+
+Sesión larga, arrancó verificando la migración de cuenta de Supabase del 16/08 y terminó tocando
+Ventas y Compras a fondo. Todo commiteado, pusheado a `master` y deployado. **Nada de esto lo
+probó nadie con ojos humanos todavía** — quedó armado `PLAN_PRUEBAS_NADIA_2026-08-19.md` con el
+detalle punto por punto para que lo recorras mañana.
+
+Resumen de lo que se tocó, en orden:
+
+1. **Migración de Supabase** — confirmado 100% funcionando, incluido un bug real de permisos en
+   AFIP (`fn_persistir_cae_emitido` sin grant a `service_role`) encontrado y corregido con una
+   Factura C real de prueba.
+2. **7 ajustes UX en Nueva Factura de Venta + Registrar Cobro** (combo de productos, selects que
+   no exigían tipear, la factura ya no se cierra sola al crearse, el cobro llega con la factura
+   preseleccionada, checkbox + pago parcial estilo SAP en el diálogo de cobro).
+3. **Auditoría contable del circuito de Ventas** (skill `auditor-contable`) sobre todo lo tocado
+   estos días — confirmó que la partida doble, COGS y Cuenta Corriente siguen sólidos, y encontró
+   un hallazgo real: la Nota de Crédito no revertía `pedido_items.cantidad_facturada` ni reabría
+   el pedido.
+4. **Fix del hallazgo #3** — la NC ahora revierte y pregunta si conviene reabrir el pedido (nunca
+   lo hace sola, mismo criterio Close/Reopen manual de SAP B1).
+5. **El mismo problema portado a Compras** — pero ahí no era el mismo bug: una OC solo admitía una
+   factura de proveedor para siempre. Se construyó completo, estilo SAP: OC ahora admite
+   facturación parcial en varias facturas, nuevo estado "Facturada", y NC de proveedor con el
+   mismo diálogo de reapertura.
+6. **4 ajustes chicos de UX en Órdenes de Compra** — click en la fila abre el detalle, combos de
+   Proveedor/Producto sin exigir tipear, fecha de entrega visible en modo oscuro.
+
+**Pendiente, sin decidir todavía — no construir nada ahí**:
+- Webhook de MercadoPago QR — a cargo de Luciano.
+- MELI Factura A — alcance sin definir, Nadia lo frenó el 18/08 antes de arrancar.
+
+Todo el día: tests en verde en cada paso, lint sin errores nuevos, build limpio en cada commit,
+verificado en vivo contra Nalux real donde se pudo entrar con browser real.
