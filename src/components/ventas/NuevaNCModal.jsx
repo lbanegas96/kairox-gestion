@@ -327,20 +327,28 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
       // comprobante origen salió por un PdV interno, su NC tampoco se factura.
       // punto_venta_id ya quedó grabado por la RPC (mig.296) — acá sólo se
       // encola a ARCA cuando corresponde, no se vuelve a escribir el PdV.
-      if (afipConfig?.usa_factura_electronica && afipConfig?.punto_venta && afipConfig.punto_venta.envia_arca !== false) {
-        // Letra del comprobante. Con origen se hereda (una NC corrige un
-        // documento concreto y debe compartir su letra). Sin origen se deriva
-        // de la condición fiscal, igual que las ventas — acá había un 'B'
-        // hardcodeado, y para un emisor Monotributo o Exento 'B' es una letra
-        // que NO puede emitir (solo el RI emite A/B): una NC standalone de
-        // Nalux (Exento) salía como NC-B en vez de NC-C.
-        const letraAfip =
-          comprobanteOrigen?.tipo_comprobante_afip
-          ?? devolucionOrigen?.tipo_comprobante_afip
-          ?? determinarTipoComprobante(
-               afipConfig.condicion_iva,
-               clientes.find(c => c.id === clienteId)?.condicion_iva ?? 'CF',
-             );
+      // Bug real (19/08, encontrado probando el diálogo de reapertura del pedido):
+      // con origen, comprobanteOrigen?.tipo_comprobante_afip ?? devolucionOrigen?...
+      // ?? determinarTipoComprobante(...) — si el origen es un Ticket (nunca se
+      // mandó a AFIP, tipo_comprobante_afip es NULL en la base), el `??` lo trataba
+      // como "no hay origen" y calculaba una letra NUEVA desde cero, mandando a la
+      // cola de ARCA una NC que "corrige" un comprobante que jamás existió ante
+      // AFIP — rechazada siempre con "el comprobante de origen no tiene numero_afip"
+      // (reproducido 2 veces con datos reales, NC-20260818-001 y NC-20260819-001).
+      // Con origen, la letra SÓLO se hereda — si el origen no tiene, la NC tampoco
+      // se manda a AFIP (se queda como Ticket, igual que el documento que corrige).
+      const hayOrigen = !!(comprobanteOrigen || devolucionOrigen);
+      const letraAfip = hayOrigen
+        ? (comprobanteOrigen?.tipo_comprobante_afip ?? devolucionOrigen?.tipo_comprobante_afip ?? null)
+        // Sin origen se deriva de la condición fiscal, igual que las ventas — acá
+        // había un 'B' hardcodeado, y para un emisor Monotributo o Exento 'B' es
+        // una letra que NO puede emitir (solo el RI emite A/B): una NC standalone
+        // de Nalux (Exento) salía como NC-B en vez de NC-C.
+        : determinarTipoComprobante(
+            afipConfig.condicion_iva,
+            clientes.find(c => c.id === clienteId)?.condicion_iva ?? 'CF',
+          );
+      if (letraAfip && afipConfig?.usa_factura_electronica && afipConfig?.punto_venta && afipConfig.punto_venta.envia_arca !== false) {
         const { error: afipQueueErr } = await supabase.from('comprobantes').update({
           tipo_comprobante_afip: letraAfip,
           cae_estado:            'pendiente',

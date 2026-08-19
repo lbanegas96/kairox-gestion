@@ -4330,3 +4330,33 @@ Resumen de lo que se tocó, en orden:
 
 Todo el día: tests en verde en cada paso, lint sin errores nuevos, build limpio en cada commit,
 verificado en vivo contra Nalux real donde se pudo entrar con browser real.
+
+## Sesión 2026-08-19 — Pruebas del plan del 18/08 + bug real en letra AFIP de NC
+
+Retomando `PLAN_PRUEBAS_NADIA_2026-08-19.md` con Nadia. Puntos 1-3 confirmados sin clic real
+(ya se habían visto pasar el 18/08). Punto 4 (NC de Ventas reabre el pedido): rama "Reabrir
+pedido" probada con `PED-20260608-003` → `FAC-20260818-001` → `NC-20260819-001`, confirmado en
+la base que el pedido volvió a `en_preparacion` con `cantidad_facturada=0`.
+
+### 🐛 Bug real encontrado: NC sobre un Ticket se encolaba igual a ARCA
+`NuevaNCModal.jsx` decidía la letra AFIP de la NC con
+`comprobanteOrigen?.tipo_comprobante_afip ?? devolucionOrigen?.tipo_comprobante_afip ??
+determinarTipoComprobante(...)` — si el comprobante de origen era un **Ticket** (nunca se mandó
+a AFIP, `tipo_comprobante_afip` es `NULL` en la base), el `??` lo trataba como "no hay origen" y
+calculaba una letra **nueva** desde la condición fiscal del cliente, encolando a ARCA una NC que
+"corrige" un comprobante que jamás existió ante AFIP. Rechazada siempre por el worker:
+*"el comprobante de origen no tiene numero_afip"*. Reproducido 2 veces con datos reales
+(`NC-20260818-001` la noche del 18/08, sin diagnosticar en su momento; `NC-20260819-001` hoy,
+mismo patrón exacto) — no era una casualidad de datos, es sistemático.
+
+**Fix:** con origen, la letra AFIP sólo se **hereda** — si el origen no tiene letra (Ticket), la
+NC tampoco se manda a ARCA (queda como Ticket también, igual que el documento que corrige). Sin
+origen (NC standalone), sigue calculándose como antes. Revisado que el mismo patrón no existe en
+`NuevaNCProveedorModal.jsx` (Compras no toca AFIP) ni en `NuevaNotaDebitoModal.jsx` — el bug
+estaba aislado a este único archivo.
+
+Los 2 registros ya afectados (`NC-20260818-001`, `NC-20260819-001`) se corrigieron a mano en la
+base: `tipo_comprobante_afip=NULL`, `cae_estado='no_aplica'`, sin fila en
+`facturas_pendientes_arca` — mismo estado que cualquier Ticket normal.
+
+`npx eslint` sin errores nuevos, `npx vitest run` 159/159, `npx vite build` OK.
