@@ -4414,3 +4414,16 @@ post-pruebas sin hallazgos — ver sección de arriba.
 
 **Pendiente, sin cambios**: MP QR webhook (a tu cargo) y MELI Factura A (sin alcance definido,
 no tocar sin que Nadia lo confirme).
+
+## 2026-08-19 — Plan propuesto para Luciano: catálogo maestro de productos
+
+🟡 **Para revisar, no construir todavía.** Investigación de fuentes de códigos de barra en
+Argentina (GS1, Open Food Facts, alternativas pagas) para bajar la fricción de carga de
+catálogo en el onboarding. Hallazgo central: no existe una fuente única gratuita y completa
+— la propuesta es un catálogo maestro compartido entre tenants que se autoalimenta con el
+uso real, más Open Food Facts como fuente externa para el vertical almacén. Detalle
+completo (arquitectura, SQL, RPCs, Edge Function) en `PLAN_CATALOGO_PRODUCTOS.md`.
+
+**Toca un principio del proyecto:** la tabla nueva no lleva `empresa_id` a propósito
+(catálogo público de referencia, sin dato de negocio del tenant) — ver sección 3 del plan
+antes de que se construya nada.
