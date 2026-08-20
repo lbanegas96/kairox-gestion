@@ -4427,3 +4427,91 @@ completo (arquitectura, SQL, RPCs, Edge Function) en `PLAN_CATALOGO_PRODUCTOS.md
 **Toca un principio del proyecto:** la tabla nueva no lleva `empresa_id` a propósito
 (catálogo público de referencia, sin dato de negocio del tenant) — ver sección 3 del plan
 antes de que se construya nada.
+
+## 2026-08-19 (noche) — Corrección del plan de catálogo + import puntual para el kiosco + fix de egress
+
+**El plan de catálogo compartido de arriba quedó DESCARTADO por Luciano** — el pedido real
+era mucho más chico: una carga masiva puntual para el primer cliente en producción (un
+kiosco), no un catálogo cross-tenant. Rompía a propósito el principio de tenant duro/estricto
+que se viene sosteniendo en todo el proyecto — correcto haberlo frenado antes de construir
+nada. `PLAN_CATALOGO_PRODUCTOS.md` queda como referencia histórica, no como algo a construir.
+
+### Import de catálogo kiosco/almacén (Open Food Facts Argentina)
+
+- Se armó un script puntual (`transformar_catalogo.js`, vive solo en el scratchpad de la
+  sesión, no en el repo — es de un solo uso) que baja el export completo de Open Food Facts
+  filtrado por Argentina (gratis, `world.openfoodfacts.org/cgi/search.pl?...&download=on`,
+  requiere un User-Agent identificable o bloquea como robot) y lo transforma al formato exacto
+  del importador CSV de KAIROX.
+- Clasificación automática en 9 grupos (Bebidas, Lácteos, Golosinas y Chocolates, Snacks y
+  Galletitas, Infusiones, Panadería, Fiambres y Conservas, Congelados y Helados, Almacén) por
+  palabras clave contra la columna `categories` de OFF. 3 bugs de clasificación encontrados y
+  corregidos en el camino, dejar documentado por si se retoca el script más adelante:
+  1. Matching por substring simple hacía que `'cola'` matcheara adentro de "cho**cola**te" y
+     "agrí**cola**s" (huevos y avena con chocolate caían mal en Bebidas) — pasado a regex con
+     límite de palabra al inicio (`\bcola`, sin `\b` de cierre para no perder plurales).
+  2. Tags en español con tilde (`néctares`, `azúcar`) no calzaban contra keywords sin tilde —
+     se normaliza con `.normalize('NFD')` antes de comparar.
+  3. `'bebida'` como keyword genérico capturaba el tag ancestro de OFF "Alimentos y bebidas de
+     origen vegetal", que cubre pastas/aceites/café/yogures — no solo bebidas reales. Sacado.
+  4. Límite conocido, no corregido a propósito (bajo impacto, no vale la pena perseguirlo en
+     un script de una sola vez): algún producto rebozado/empanado puede caer en Panadería
+     porque el tag de OFF es literalmente "pan rallado".
+- `codigo_sku` incremental por grupo (`BEB-00001`, `LAC-00001`, ...) — no existe un generador
+  de códigos incrementales en el sistema hoy (a diferencia de la numeración de comprobantes),
+  se resolvió puntualmente en el script para este import.
+- Resultado entregado a Luciano: `catalogo_kiosco_kairox.csv`, **3.430 productos**, precio/costo/
+  stock en 0 a propósito (se completa después con el ajuste masivo de precios ya existente).
+- **Antigüedad real del dato, chequeada contra la web de OFF:** no es un feed en vivo — es
+  crowd-sourced desde 2017 hasta hoy, sin fecha uniforme por producto (verificado con 4
+  productos reales: creados entre 2017-2021, algunos re-editados hace apenas 6 meses, otros
+  sin tocar desde 2021/2023). Nombre y código de barra son estables igual; lo que puede estar
+  viejo es la existencia real del producto en el mercado — normal para un catálogo de
+  referencia, no para un feed de precios/stock (que nunca trajo, por diseño).
+- **Import NO ejecutado todavía** — el CSV está listo y entregado, pero Luciano todavía no lo
+  subió por la UI de "Importar CSV" de Productos. Pendiente para la próxima sesión o cuando
+  él decida.
+
+### Importador CSV — 2 mejoras nuevas (`CSVImportModal.jsx`)
+
+- Columna `codigo_barras` agregada al template de Productos — antes la tabla tenía la columna
+  (mig. 105) pero el importador nunca la escribía.
+- Columna `grupo` nueva: viaja como texto libre en el CSV, y `handleImport` la resuelve/crea
+  contra `categorias` de la empresa ANTES de insertar (busca por nombre case-insensitive, crea
+  las que falten, arma un mapa `nombre → id`, completa `productos.categoria_id`). Es la primera
+  vez que el import masivo deja el "Grupo de Artículo" (concepto SAP, `categoria_id` ya existía
+  como FK pero nadie lo completaba desde CSV) realmente utilizable para filtrar/reportar.
+
+### Riesgo de egress encontrado ANTES de importar (mismo patrón que el incidente del logo)
+
+Luciano preguntó explícitamente por el riesgo de Supabase antes de tocar nada — buena señal,
+se encontró algo real. El tamaño de la tabla en sí es trivial (unos MB), pero 3 pantallas
+traían **todos** los productos activos sin límite y filtraban/usaban del lado del cliente —
+con ~300 productos era barato, con miles multiplica el egress por pantalla, y una de ellas
+(Dashboard) se ve en cada login:
+
+1. `dashboardService.getKPIs` + `productosService.getLowStock` — traían TODO el catálogo activo
+   y filtraban "stock bajo" en JS. **Fix:** RPC nuevo `productos_stock_bajo(empresa_id)`
+   (mig. `333_productos_stock_bajo_rpc.sql`, aplicada) que filtra `stock_actual <= stock_minimo`
+   en SQL server-side. Verificado en vivo: el widget "Alertas de Stock" del Dashboard sigue
+   mostrando bien (Batidora Eléctrica, Camiseta Argentina) tras el fix.
+2. `EntregasSection.jsx` y `PedidosSection.jsx` (combo de productos) — mismo patrón, sin
+   límite. **Fix:** `.limit(200)`, mismo criterio ya usado en `CotizacionesSection`. Trade-off
+   conocido: con un catálogo de miles, estos dos pickers solo muestran los primeros 200
+   alfabéticos — si en la práctica hace falta buscar más allá, el próximo paso sería un
+   autocomplete server-side ahí también (mismo patrón que ya tiene Órdenes de Compra), no
+   construido ahora por no ser lo que se pidió.
+
+### Camino de rollback preparado para el import (a pedido explícito de Luciano)
+
+`ROLLBACK_IMPORT_CATALOGO_KIOSCO.md` en la raíz del repo — SQL listo para copiar/pegar en el
+SQL Editor de Supabase si el import sale mal. Huella para identificar las filas sin ambigüedad:
+patrón `codigo_sku ~ '^(BEB|LAC|SNK|GOL|INF|PAN|FIA|CON|ALM)-\d{5}$'` (nadie más en el sistema
+genera SKUs con ese patrón). Incluye: query de conteo por grupo antes de tocar nada, chequeo de
+que ningún producto importado ya se usó en una venta/compra/movimiento real (si se usó, NO
+borrar esa fila puntual), rollback suave recomendado (`activo=false`, reversible) y rollback
+duro (`DELETE`, solo si el chequeo anterior dio 0 filas) + limpieza opcional de las categorías
+que quedaron vacías.
+
+Eslint sin errores nuevos, vitest 159/159, vite build OK. Todo commiteado y deployado a
+producción — el RPC `productos_stock_bajo` ya está aplicado en la base real de Nalux.

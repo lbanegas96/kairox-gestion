@@ -26,7 +26,12 @@ const CONFIG = {
       { key: 'stock_minimo',   label: 'Stock Mínimo',       required: false },
       { key: 'descripcion',    label: 'Descripción',        required: false },
       { key: 'unidad_medida',  label: 'Unidad de Medida',   required: false },
+      { key: 'codigo_barras',  label: 'Código de Barras',   required: false },
+      { key: 'grupo',          label: 'Grupo/Categoría',    required: false },
     ],
+    // 'grupo' viaja como nombre de texto (no como categoria_id) porque acá
+    // todavía no sabemos qué categorías existen para esta empresa — se
+    // resuelve/crea en handleImport antes de insertar (ver resolverGrupos).
     buildRow: (mapped, user) => ({
       empresa_id:    user.empresa_id,
       user_id:       user.id,
@@ -38,6 +43,8 @@ const CONFIG = {
       stock_minimo:  parseFloat(mapped.stock_minimo) || 5,
       descripcion:   String(mapped.descripcion || '').trim(),
       unidad_medida: String(mapped.unidad_medida || 'unidad').trim(),
+      codigo_barras: String(mapped.codigo_barras || '').trim() || null,
+      grupo:         String(mapped.grupo || '').trim(),
       activo:        true,
     }),
     validate: (row) => {
@@ -47,7 +54,7 @@ const CONFIG = {
       if (isNaN(row.precio_venta) || row.precio_venta < 0) errors.push('Precio inválido');
       return errors;
     },
-    sampleCSV: 'nombre,codigo_sku,precio_venta,precio_costo,stock_actual,stock_minimo,unidad_medida\nMartillo 500g,MART-500,3500,1800,20,5,unidad\nClavo 3 pulgadas,CL-3P,850,400,100,20,caja',
+    sampleCSV: 'nombre,codigo_sku,precio_venta,precio_costo,stock_actual,stock_minimo,unidad_medida,codigo_barras,grupo\nMartillo 500g,MART-500,3500,1800,20,5,unidad,7791234567890,Herramientas\nClavo 3 pulgadas,CL-3P,850,400,100,20,caja,,Ferretería',
   },
   clientes: {
     title: 'Importar Clientes',
@@ -179,25 +186,64 @@ export default function CSVImportModal({ open, onOpenChange, tipo, onSuccess }) 
     return cfg.buildRow(mapped, user);
   });
 
+  // 'grupo' llega como texto libre (columna del CSV) — lo resolvemos contra
+  // categorias de esta empresa una sola vez antes de importar: si el nombre
+  // ya existe (case-insensitive) usa esa fila, si no la crea. Así el import
+  // masivo deja productos.categoria_id ya armado, no solo un texto suelto.
+  const resolverGrupos = async (nombresGrupo) => {
+    const distintos = [...new Set(nombresGrupo.map(g => g.trim()).filter(Boolean))];
+    const mapa = new Map(); // nombre en minúscula -> categoria_id
+    if (!distintos.length) return mapa;
+
+    const { data: existentes } = await supabase
+      .from('categorias')
+      .select('id, nombre')
+      .eq('empresa_id', user.empresa_id);
+    (existentes || []).forEach(c => mapa.set(c.nombre.trim().toLowerCase(), c.id));
+
+    const faltantes = distintos.filter(g => !mapa.has(g.toLowerCase()));
+    if (faltantes.length) {
+      const { data: creadas, error } = await supabase
+        .from('categorias')
+        .insert(faltantes.map(nombre => ({ empresa_id: user.empresa_id, nombre })))
+        .select('id, nombre');
+      if (!error) (creadas || []).forEach(c => mapa.set(c.nombre.trim().toLowerCase(), c.id));
+    }
+    return mapa;
+  };
+
   // ── Paso 4: importar ──────────────────────────────────────────────────────
   const handleImport = async () => {
     setImporting(true);
     let ok = 0, errores = 0;
     const errorList = [];
 
+    const todasLasFilasMapeadas = csvRows.map(row => {
+      const mapped = {};
+      Object.entries(mapping).forEach(([fieldKey, csvHeader]) => {
+        mapped[fieldKey] = row[csvHeader] ?? '';
+      });
+      return cfg.buildRow(mapped, user);
+    });
+
+    const grupoMap = tipo === 'productos'
+      ? await resolverGrupos(todasLasFilasMapeadas.map(r => r.grupo || ''))
+      : new Map();
+
     const batches = [];
     const BATCH = 50;
-    for (let i = 0; i < csvRows.length; i += BATCH) {
-      batches.push(csvRows.slice(i, i + BATCH));
+    for (let i = 0; i < todasLasFilasMapeadas.length; i += BATCH) {
+      batches.push(todasLasFilasMapeadas.slice(i, i + BATCH));
     }
 
     for (const batch of batches) {
       const payload = batch.map(row => {
-        const mapped = {};
-        Object.entries(mapping).forEach(([fieldKey, csvHeader]) => {
-          mapped[fieldKey] = row[csvHeader] ?? '';
-        });
-        return cfg.buildRow(mapped, user);
+        if (tipo === 'productos') {
+          const { grupo, ...resto } = row;
+          resto.categoria_id = grupo ? (grupoMap.get(grupo.toLowerCase()) ?? null) : null;
+          return resto;
+        }
+        return row;
       }).filter(row => {
         const errs = cfg.validate(row);
         if (errs.length) { errores++; errorList.push(`"${row.nombre || '?'}": ${errs.join(', ')}`); return false; }

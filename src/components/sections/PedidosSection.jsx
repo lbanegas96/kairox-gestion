@@ -179,7 +179,10 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
           .eq('empresa_id', user.empresa_id)
           .order('created_at', { ascending: false }),
         supabase.from('clientes').select('id, nombre, condicion_iva').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre'),
-        supabase.from('productos').select('id, nombre, precio_venta, codigo_sku, unidad_medida, alicuota_iva').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre'),
+        // .limit(200) -- mismo criterio que CotizacionesSection: sin esto, un catálogo
+        // grande (import masivo) trae TODOS los productos activos en cada carga de la
+        // sección, aunque el autocomplete de abajo solo muestre 50 a la vez.
+        supabase.from('productos').select('id, nombre, precio_venta, codigo_sku, unidad_medida, alicuota_iva').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre').limit(200),
         supabase.from('empresas').select('condicion_iva').eq('id', user.empresa_id).single(),
       ]);
       setPedidos(p || []);

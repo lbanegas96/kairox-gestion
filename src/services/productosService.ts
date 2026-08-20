@@ -49,15 +49,12 @@ export const productosService = {
   },
 
   async getLowStock(empresaId: string): Promise<Producto[]> {
-    const { data, error } = await supabase
-      .from('productos')
-      .select('id, nombre, stock_actual, stock_minimo, unidad_medida')
-      .eq('empresa_id', empresaId)
-      .eq('activo', true);
+    // RPC (mig.333): filtra stock_actual <= stock_minimo en el servidor en vez
+    // de traer TODO el catálogo activo y filtrar acá -- con catálogos grandes
+    // (import masivo) esto evita traer miles de filas para descartar casi todas.
+    const { data, error } = await supabase.rpc('productos_stock_bajo', { p_empresa_id: empresaId });
     if (error) throw new Error(error.message);
-    return ((data ?? []) as Producto[]).filter(
-      (p) => (p.stock_actual ?? 0) <= (p.stock_minimo ?? 0)
-    );
+    return (data ?? []) as Producto[];
   },
 
   async create(empresaId: string, payload: Partial<Producto>): Promise<Producto> {

@@ -95,7 +95,10 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
     if (!user?.empresa_id) return;
     supabase.from('clientes').select('id, nombre').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre')
       .then(({ data }) => setClientes(data || []));
-    supabase.from('productos').select('id, nombre, stock_actual').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre')
+    // .limit(200) -- mismo criterio que CotizacionesSection: sin esto, un catálogo
+    // grande (import masivo) trae TODOS los productos activos cada vez que se abre
+    // Entregas, aunque el <select> de abajo ya es difícil de usar con miles de opciones.
+    supabase.from('productos').select('id, nombre, stock_actual').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre').limit(200)
       .then(({ data }) => setProductos(data || []));
   }, [user?.empresa_id]);
 

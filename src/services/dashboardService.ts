@@ -29,7 +29,11 @@ export const dashboardService = {
       supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'ingreso').eq('categoria', 'Venta').gte('fecha', mesAntStart).lt('fecha', mesAntFin),
       supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'egreso').neq('categoria', 'Apertura').gte('fecha', mesStart).lte('fecha', todayEnd),
       supabase.from('clientes').select('saldo_actual').eq('empresa_id', empresaId).gt('saldo_actual', 0),
-      supabase.from('productos').select('id, nombre, stock_actual, stock_minimo, unidad_medida').eq('empresa_id', empresaId).eq('activo', true),
+      // RPC (mig.333) en vez de traer TODOS los productos activos y filtrar acá --
+      // con catálogos de miles de productos (ej. import masivo de kiosco), traer
+      // todo en cada carga del Dashboard multiplicaba el egress varias veces por
+      // nada, ya que casi todos los productos NO están en stock bajo.
+      supabase.rpc('productos_stock_bajo', { p_empresa_id: empresaId }),
       // Comprobantes del mes (accrual basis para DSO y ticket promedio). tipo='venta'
       // explícito: `comprobantes` también guarda Notas de Crédito (tipo='nota_credito')
       // — sin este filtro las NC se contaban como si sumaran a lo facturado, inflando
@@ -55,8 +59,7 @@ export const dashboardService = {
       (s: number, c: { saldo_actual: number }) => s + Number(c.saldo_actual), 0
     );
 
-    const todosProductos = (stockRaw.data ?? []) as Pick<Producto, 'id' | 'nombre' | 'stock_actual' | 'stock_minimo' | 'unidad_medida'>[];
-    const productosStockBajo = todosProductos.filter((p) => (p.stock_actual ?? 0) <= (p.stock_minimo ?? 5));
+    const productosStockBajo = (stockRaw.data ?? []) as Pick<Producto, 'id' | 'nombre' | 'stock_actual' | 'stock_minimo' | 'unidad_medida'>[];
 
     const variacionVentas =
       ventasAyerTotal > 0
