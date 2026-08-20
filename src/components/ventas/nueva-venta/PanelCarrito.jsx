@@ -27,7 +27,11 @@ function PanelCarrito({
                 <div className="col-span-3 text-xs text-kx-text-2 font-mono truncate">{p.codigo_sku}</div>
                 <div className="col-span-5 font-medium truncate text-sm text-slate-800 dark:text-slate-200">{p.nombre}</div>
                 <div className="col-span-2 text-right text-xs font-bold dark:text-slate-300">{p.stock_actual}</div>
-                <div className="col-span-2 text-right font-bold text-emerald-600 dark:text-emerald-400 text-sm">${p.precio_venta}</div>
+                <div className="col-span-2 text-right font-bold text-emerald-600 dark:text-emerald-400 text-sm">
+                  {p.tipo_venta && p.tipo_venta !== 'unidad'
+                    ? <>${p.precio_por_kg_litro} <span className="font-normal text-xs">/{p.tipo_venta === 'volumen' ? 'lt' : 'kg'}</span></>
+                    : <>${p.precio_venta}</>}
+                </div>
               </div>
             ))}
           </div>
@@ -47,6 +51,7 @@ function PanelCarrito({
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-kx-text-2">
                         ${Number(item.precio_venta).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {item.tipo_venta && item.tipo_venta !== 'unidad' ? `/${item.tipo_venta === 'volumen' ? 'lt' : 'kg'}` : ''}
                         {item._packMode && item.unidad_venta && (
                           <span className="text-kx-text-2"> /u · ${Number(item._precioUnidadVenta).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/{item.unidad_venta.codigo}</span>
                         )}
@@ -78,6 +83,11 @@ function PanelCarrito({
                         <Input type="number" min="1" value={item._packs} onChange={(e) => updatePacks(item.id, e.target.value)} className="h-8 w-16 text-center mx-auto dark:bg-slate-800 dark:border-slate-700" />
                         <span className="text-2xs text-kx-text-2">= {item.cantidad} {item.unidad_medida || 'u'}</span>
                       </div>
+                    ) : item.tipo_venta && item.tipo_venta !== 'unidad' ? (
+                      // Venta por peso/volumen (mig.338/339) — cantidad admite decimales (kg/lt).
+                      // Se muestra con coma (formato AR, igual que parseNumberLocale la exige) en
+                      // vez del punto que pondría un simple String(numero).
+                      <Input type="text" inputMode="decimal" value={String(item.cantidad).replace('.', ',')} onChange={(e) => updateQuantity(item.id, e.target.value)} className="h-8 w-16 text-center mx-auto dark:bg-slate-800 dark:border-slate-700" />
                     ) : (
                       <Input type="number" value={item.cantidad} onChange={(e) => updateQuantity(item.id, e.target.value)} className="h-8 w-16 text-center mx-auto dark:bg-slate-800 dark:border-slate-700" />
                     )}

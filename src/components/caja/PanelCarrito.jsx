@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { guardarSnapshot, leerSnapshot, medioPagoDisponibleOffline } from '@/lib/offlineDb';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 
 // Nombre exacto de la forma de pago que dispara el circuito de QR Dinámico
 // (la siembra mig.297). Si el cajero elige ésta, la venta NO va por crear_venta:
@@ -46,6 +47,24 @@ function CarritoItem({ item, onModificar, onEliminar, oferta, descuentoManual, o
   const tieneDescuento = oferta || descuentoManual > 0;
   const subtotal = precioFinal * item.cantidad;
   const packMode = !!item._packMode;
+  // Venta por peso/volumen (mig.338/339) — cantidad admite decimales (kg/lt)
+  // en vez del stepper de unidades enteras.
+  const esPesable = item.tipo_venta && item.tipo_venta !== 'unidad';
+  const sufijoUnidad = item.tipo_venta === 'volumen' ? 'lt' : 'kg';
+
+  // Buffer de texto en edición para no pisar lo que el usuario está tipeando
+  // (ej "0," a mitad de camino) con el valor numérico ya confirmado — mismo
+  // patrón que ModalDetalleRecuento.jsx (Inventario) para conteos decimales.
+  const [qtyText, setQtyText] = useState(() => String(item.cantidad).replace('.', ','));
+  useEffect(() => {
+    setQtyText(String(item.cantidad).replace('.', ','));
+  }, [item.cantidad]);
+
+  const handleQtyChange = (raw) => {
+    setQtyText(raw);
+    const parsed = parseNumberLocale(raw);
+    if (Number.isFinite(parsed) && parsed > 0) onModificar(item.id, parsed);
+  };
 
   return (
     <div className="bg-kx-surface-2 rounded-xl px-3 py-2 space-y-1">
@@ -55,10 +74,10 @@ function CarritoItem({ item, onModificar, onEliminar, oferta, descuentoManual, o
           {tieneDescuento ? (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-kx-text-3 line-through tabular-nums">${fmt(item.precio_venta)}</span>
-              <span className="text-xs font-semibold text-kx-green tabular-nums">${fmt(precioFinal)} c/u</span>
+              <span className="text-xs font-semibold text-kx-green tabular-nums">${fmt(precioFinal)} {esPesable ? `/${sufijoUnidad}` : 'c/u'}</span>
             </div>
           ) : (
-            <p className="text-xs text-kx-text-3 tabular-nums">${fmt(item.precio_venta)} c/u</p>
+            <p className="text-xs text-kx-text-3 tabular-nums">${fmt(item.precio_venta)} {esPesable ? `/${sufijoUnidad}` : 'c/u'}</p>
           )}
           {packMode && (
             <p className="text-2xs text-kx-amber tabular-nums">${fmt(item._precioUnidadVenta)} / {item.unidad_venta?.codigo || 'pack'}</p>
@@ -80,6 +99,16 @@ function CarritoItem({ item, onModificar, onEliminar, oferta, descuentoManual, o
                 className="w-14 h-7 text-center text-sm bg-kx-surface border-kx-border text-kx-text p-0"
               />
               <span className="text-[9px] text-kx-text-3">= {item.cantidad} u</span>
+            </div>
+          ) : esPesable ? (
+            <div className="flex flex-col items-center">
+              <Input
+                type="text" inputMode="decimal"
+                value={qtyText}
+                onChange={e => handleQtyChange(e.target.value)}
+                className="w-16 h-7 text-center text-sm bg-kx-surface border-kx-border text-kx-text p-0"
+              />
+              <span className="text-[9px] text-kx-text-3">{sufijoUnidad}</span>
             </div>
           ) : (
             <>
@@ -299,7 +328,11 @@ function PanelCarrito({
   }, [medioParaOfertas]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const modificarItem = (id, nuevaCantidad) => {
-    if (nuevaCantidad < 1) {
+    // <= 0 en vez de < 1: para unidades enteras es exactamente lo mismo (no hay
+    // valor entre 0 y 1), pero para productos pesables (mig.338/339) "< 1"
+    // sacaba el ítem del carrito apenas se tipeaba algo como 0,350 kg — bug
+    // real encontrado armando este bloque, antes de que llegara a probarse.
+    if (nuevaCantidad <= 0) {
       onModificarCarrito(prev => prev.filter(i => i.id !== id));
       return;
     }

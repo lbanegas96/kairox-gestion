@@ -10,8 +10,10 @@ import { guardarSnapshot, leerSnapshot } from '@/lib/offlineDb';
 // A propósito es sólo lectura: no descuenta stock ni permite cobrar desde acá.
 // El stock que se ve offline puede estar desactualizado (foto del último
 // refresco online) — se avisa en la UI, no se oculta el riesgo.
+// tipo_venta/precio_por_kg_litro (mig.338) — sin esto en el select, el POS
+// nunca sabe que un producto es pesable y lo trata como venta por unidad.
 const SELECT_PRODUCTOS =
-  'id, empresa_id, nombre, codigo_sku, codigo_barras, precio_venta, stock_actual, stock_minimo, alicuota_iva, unidad_venta_id, factor_conversion_venta, precio_venta_pack, descuento_pack_pct, unidad_venta:unidades_medida!unidad_venta_id(codigo, descripcion)';
+  'id, empresa_id, nombre, codigo_sku, codigo_barras, precio_venta, tipo_venta, precio_por_kg_litro, stock_actual, stock_minimo, alicuota_iva, unidad_venta_id, factor_conversion_venta, precio_venta_pack, descuento_pack_pct, unidad_venta:unidades_medida!unidad_venta_id(codigo, descripcion)';
 
 export function useProductosSnapshot(empresaId, isOnline) {
   const [snapshotListo, setSnapshotListo] = useState(false);

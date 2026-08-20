@@ -9,6 +9,7 @@ import { useCaja } from '@/contexts/CajaContext';
 import { getNowAR, getTodayAR } from '@/lib/dateUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
 import { precioPackFinal } from '@/lib/unidadesMedida';
+import { parseNumberLocale } from '@/lib/currencyUtils';
 import ComprobantePrintModal from './ComprobantePrintModal';
 import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
@@ -217,7 +218,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     searchDebounceRef.current = setTimeout(async () => {
       let query = supabase
         .from('productos')
-        .select('id, nombre, codigo_sku, precio_venta, stock_actual, activo, unidad_medida, alicuota_iva, unidad_venta_id, factor_conversion_venta, precio_venta_pack, descuento_pack_pct, unidad_venta:unidades_medida!unidad_venta_id(codigo, descripcion)')
+        .select('id, nombre, codigo_sku, precio_venta, tipo_venta, precio_por_kg_litro, stock_actual, activo, unidad_medida, alicuota_iva, unidad_venta_id, factor_conversion_venta, precio_venta_pack, descuento_pack_pct, unidad_venta:unidades_medida!unidad_venta_id(codigo, descripcion)')
         .eq('empresa_id', user.empresa_id)
         .eq('activo', true)
         .order('nombre')
@@ -381,8 +382,14 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
       toast({ title: "Stock insuficiente", description: `Solo hay ${product.stock_actual} disponibles.`, variant: "destructive" });
       return;
     }
+    // Venta por peso/volumen (mig.338): precio_venta vive en 0 para estos
+    // productos, el precio real es precio_por_kg_litro — se normaliza acá para
+    // que el resto de la lógica (precio de lista, pack, subtotal) siga
+    // tratando "precio_venta" como "precio por la unidad de cantidad que sea".
+    const esPesable = product.tipo_venta && product.tipo_venta !== 'unidad';
+    const precioBaseProducto = esPesable ? (Number(product.precio_por_kg_litro) || 0) : product.precio_venta;
     // Aplicar precio de lista si existe
-    const precioFinal = precioMap[product.id] !== undefined ? precioMap[product.id] : product.precio_venta;
+    const precioFinal = precioMap[product.id] !== undefined ? precioMap[product.id] : precioBaseProducto;
     const esPrecioLista = precioMap[product.id] !== undefined;
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
@@ -446,10 +453,13 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   };
 
   const updateQuantity = (productId, newQty) => {
-    const qty = parseInt(newQty);
-    if (isNaN(qty) || qty < 1) return;
     const product = products.find(p => p.id === productId);
     if (!product) return;
+    // Venta por peso/volumen (mig.338/339): cantidad admite decimales en vez
+    // de forzar entero — mismo criterio que crear_venta (numeric(12,3)).
+    const esPesable = product.tipo_venta && product.tipo_venta !== 'unidad';
+    const qty = esPesable ? parseNumberLocale(newQty) : parseInt(newQty);
+    if (!Number.isFinite(qty) || qty <= 0) return;
     if (product.stock_actual < qty) {
       toast({
         title: 'Stock insuficiente',

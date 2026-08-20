@@ -54,7 +54,9 @@ function ProductoCard({ producto, onAgregar }) {
         <p className="text-2xs text-kx-text-3 font-mono">{producto.codigo_sku}</p>
       )}
       <p className="text-lg font-bold text-kx-text tabular-nums mt-auto">
-        ${fmt(producto.precio_venta)}
+        {producto.tipo_venta && producto.tipo_venta !== 'unidad'
+          ? <>${fmt(producto.precio_por_kg_litro)} <span className="text-xs font-normal text-kx-text-3">/{producto.tipo_venta === 'volumen' ? 'lt' : 'kg'}</span></>
+          : <>${fmt(producto.precio_venta)}</>}
       </p>
       <span className={`text-xs font-medium px-2 py-0.5 rounded-full inline-block w-fit ${config.bg} ${config.color}`}>
         {level === 'bajo' ? `⚠ ${label}` : label}
@@ -88,7 +90,7 @@ function PanelProductos({ onAgregarAlCarrito, apiRef }) {
       }
       let query = supabase
         .from('productos')
-        .select('id, nombre, codigo_sku, precio_venta, stock_actual, stock_minimo, alicuota_iva, unidad_venta_id, factor_conversion_venta, precio_venta_pack, descuento_pack_pct, unidad_venta:unidades_medida!unidad_venta_id(codigo, descripcion)')
+        .select('id, nombre, codigo_sku, precio_venta, tipo_venta, precio_por_kg_litro, stock_actual, stock_minimo, alicuota_iva, unidad_venta_id, factor_conversion_venta, precio_venta_pack, descuento_pack_pct, unidad_venta:unidades_medida!unidad_venta_id(codigo, descripcion)')
         .eq('empresa_id', user.empresa_id)
         .eq('activo', true)
         .order('nombre')

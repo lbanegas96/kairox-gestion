@@ -245,6 +245,14 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
   };
 
   const handleAgregarAlCarrito = (producto) => {
+    // Venta por peso/volumen (mig.338): para estos productos precio_venta
+    // vive en 0 (el precio real es precio_por_kg_litro, ver Bloque 2) — se
+    // normaliza acá, una sola vez al entrar al carrito, para que el resto de
+    // la lógica de precio/descuento/subtotal (getPrecioConDescuento, ofertas,
+    // useConfirmarVenta) siga tratando "precio_venta" como "precio por la
+    // unidad de cantidad que sea", sin tener que tocar cada cálculo.
+    const esPesable = producto.tipo_venta && producto.tipo_venta !== 'unidad';
+    const precioBase = esPesable ? (Number(producto.precio_por_kg_litro) || 0) : producto.precio_venta;
     setCarrito(prev => {
       const existente = prev.find(i => i.id === producto.id);
       if (existente) {
@@ -258,7 +266,7 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
         }
         return prev.map(i => i.id === producto.id ? { ...i, cantidad: i.cantidad + 1 } : i);
       }
-      return [...prev, { ...producto, cantidad: 1, _precioUnitOriginal: producto.precio_venta }];
+      return [...prev, { ...producto, cantidad: 1, precio_venta: precioBase, _precioUnitOriginal: precioBase }];
     });
   };
 
