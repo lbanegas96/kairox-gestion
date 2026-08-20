@@ -4515,3 +4515,37 @@ que quedaron vacías.
 
 Eslint sin errores nuevos, vitest 159/159, vite build OK. Todo commiteado y deployado a
 producción — el RPC `productos_stock_bajo` ya está aplicado en la base real de Nalux.
+
+### Fix real encontrado al probar el import (commit `46c8876`)
+
+Luciano pidió particionar el CSV en un lote de prueba de 50 (repartidos entre los 9 grupos,
+script `particionar_lote.js`, también solo en el scratchpad) + el resto sin esos 50, para no
+tocar los límites del plan free de Supabase de una sola vez. Al probar el lote de 50 por la
+UI real: **0 importados, 50 con error** — `Could not find the 'precio_costo' column of
+'productos' in the schema cache`.
+
+Bug preexistente, no algo roto en esta sesión: `productos` nunca tuvo columna `precio_costo`
+(siempre fue `costo_compra`, `000_schema_base.sql:133`) — `CSVImportModal.jsx` arma el
+`payload` del insert con la key `precio_costo` (el nombre del campo en el mapeo/preview, más
+claro para quien importa) pero nunca la traducía al nombre real de columna. Como los 50
+fallaron completos, no quedó nada en la base para limpiar. Fix: renombrar `precio_costo` →
+`costo_compra` recién al armar el `payload` final (mismo punto donde ya se resolvía `grupo` →
+`categoria_id`), sin tocar el campo visible del mapeo. Deployado, pendiente que Luciano
+reintente el mismo lote de 50 y confirme.
+
+**Límites reales del plan free de Supabase, chequeados (no de memoria) para tener presente
+antes de seguir con el resto del import:** 500 MB de DB, 10 GB/mes de egress (5+5 sin/con
+caché), 1 GB de storage, 50k MAU, 500k invocaciones de Edge Functions. El dato que más importa
+acá no es tamaño (3.430 productos son unos pocos MB) sino que **el proyecto se pausa solo tras
+7 días de inactividad** en el plan free — no apto para producción 24/7 tal cual está.
+
+### Backlog nuevo (19/08, noche) — Recuento y Revalorización de Inventario estilo SAP
+
+Pedido explícito de Luciano tras confirmar que el lote de 50 entró bien: desarrollar
+**Recuento de Inventario** (conteo físico completo contra el sistema, ajuste de diferencias
+de una sola vez -- no producto por producto) y **Revalorización de Inventario** (actualizar
+costo unitario en stock + asiento contable por la diferencia de valor), sumado a entrada y
+salida de mercaderías, inspirado en el módulo Inventario de SAP B1. Hoy `ajustar_stock_manual`
+solo ajusta un producto a la vez y solo mueve cantidad, no revaloriza costo. **NO iniciado —
+solo anotado como backlog**, no construir sin que Luciano lo pida explícitamente para arrancar
+(ver memoria `project_backlog_recuento_revalorizacion_inventario.md`).
