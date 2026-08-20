@@ -4546,6 +4546,47 @@ Pedido explícito de Luciano tras confirmar que el lote de 50 entró bien: desar
 de una sola vez -- no producto por producto) y **Revalorización de Inventario** (actualizar
 costo unitario en stock + asiento contable por la diferencia de valor), sumado a entrada y
 salida de mercaderías, inspirado en el módulo Inventario de SAP B1. Hoy `ajustar_stock_manual`
-solo ajusta un producto a la vez y solo mueve cantidad, no revaloriza costo. **NO iniciado —
-solo anotado como backlog**, no construir sin que Luciano lo pida explícitamente para arrancar
-(ver memoria `project_backlog_recuento_revalorizacion_inventario.md`).
+solo ajusta un producto a la vez y solo mueve cantidad, no revaloriza costo.
+
+## 2026-08-20 (madrugada) — Recuento + Revalorización de Inventario CONSTRUIDO, pendiente aplicar
+
+Se retomó el backlog de arriba en la misma sesión (Luciano pausó el import del resto del
+catálogo para priorizar esto). Plan de arquitectura vía `EnterPlanMode` (3 decisiones
+confirmadas: cuentas contables dedicadas, recuento acotable por categoría, carga manual
+alcanza por ahora) — plan completo en `C:\Users\lbanegas\.claude\plans\humble-floating-wilkinson.md`.
+
+**Construido, testeado por simulación SQL, NO aplicado a producción todavía** (ver
+`PLAN_RECUENTO_REVALORIZACION_INVENTARIO_NADIA.md` para el handoff completo):
+
+- Migraciones `334/335/336` — 4 cuentas contables nuevas (`4.5`/`4.6`/`5.10`/`5.11`, no
+  `5.9`/`4.4` como decía el plan original -- esos códigos ya estaban tomados por Diferencia de
+  Cambio, mig.170/209, detectado ANTES de aplicar nada releyendo `seed_plan_cuentas` vigente),
+  2 tipos de documento nuevos en `series_numeracion` (con su propio `CHECK` a ampliar,
+  encontrado simulando en vivo), tablas + RPCs de Recuento y Revalorización.
+- Frontend completo: 2 tabs nuevas en Productos, 6 componentes nuevos, 2 services, 2 métodos
+  nuevos en `asientosAutoService`. Eslint/vitest/build en verde.
+- **Verificado con `BEGIN...ROLLBACK` contra Nalux real** (simulando `auth.uid()` con
+  `SET LOCAL request.jwt.claim.sub`): Recuento con 1 faltante + 1 sobrante aplicó bien el stock
+  y logueó `movimientos_inventario`; Revalorización actualizó `costo_compra` y **confirmó que
+  NO toca `movimientos_inventario`** (0 filas). Gap real encontrado y corregido en el camino:
+  faltaba la guarda contra `cantidad_contada`/`costo_nuevo` negativos (agregado `CHECK`).
+- **No se aplicó nada a producción** -- queda para la próxima sesión, con Nadia o con Luciano,
+  aplicar las 3 migraciones + `NOTIFY pgrst 'reload schema'` + probar en vivo por browser.
+
+**Hallazgo de datos, sin tocar**: un producto del lote de 50 (`"Danica, soft ligth"`, con una
+coma dentro del nombre) quedó corrupto en la base real -- `nombre='Danica'`,
+`codigo_sku='soft ligth'`, `codigo_barras='Unidad'`, `descripcion='5'`, y una categoría
+huérfana literalmente llamada `'7791620009858'` (el código de barra real de ese producto). El
+parser del importador se probó línea por línea contra el CSV real y es correcto (los otros
+49/50 productos entraron perfectos) -- la sospecha es que el archivo se reabrió/regrabó en
+Excel entre que se generó y se subió, rompiendo el quoting de esa única celda con coma. No se
+borró nada sin confirmar con Luciano primero.
+
+**Pendiente sin decidir, recordatorio explícito de Luciano**: revisar cómo se vende hoy un
+fiambre u otro artículo SIN código de barras (se corta/pesa, no viene con EAN de fábrica) --
+auditar `NuevaVentaModal.jsx` para confirmar que existe un camino de venta por
+búsqueda/nombre cuando no hay barcode, y si hace falta soporte de venta por peso. Nada
+investigado todavía, no tocar código sin juntar el caso de uso real con Luciano primero.
+
+**Import del resto del catálogo (3.380 productos) sigue pausado** -- no retomar sin pedido
+explícito.

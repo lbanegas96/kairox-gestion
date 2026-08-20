@@ -17,6 +17,8 @@ import ProductForm from '@/components/productos/ProductForm';
 import TablaInventario from '@/components/productos/TablaInventario';
 import TabHistorialMovimientos from '@/components/productos/TabHistorialMovimientos';
 import ModalMovimiento from '@/components/productos/ModalMovimiento';
+import TabRecuentoInventario from '@/components/productos/TabRecuentoInventario';
+import TabRevalorizacionInventario from '@/components/productos/TabRevalorizacionInventario';
 
 const ProductosSection = () => {
   const { user } = useAuth();
@@ -476,6 +478,8 @@ const ProductosSection = () => {
           <TabsList className="bg-slate-100 dark:bg-kx-surface-2 p-1">
             <TabsTrigger value="inventory" className="data-[state=active]:bg-kx-surface dark:data-[state=active]:bg-slate-700">Inventario</TabsTrigger>
             <TabsTrigger value="history" className="data-[state=active]:bg-kx-surface dark:data-[state=active]:bg-slate-700">Historial de Movimientos</TabsTrigger>
+            <TabsTrigger value="recuento" className="data-[state=active]:bg-kx-surface dark:data-[state=active]:bg-slate-700">Recuento</TabsTrigger>
+            <TabsTrigger value="revalorizacion" className="data-[state=active]:bg-kx-surface dark:data-[state=active]:bg-slate-700">Revalorización</TabsTrigger>
           </TabsList>
 
           <TabsContent value="inventory" className="space-y-4">
@@ -499,6 +503,14 @@ const ProductosSection = () => {
                products={products}
                movements={movements}
              />
+          </TabsContent>
+
+          <TabsContent value="recuento" className="space-y-4">
+             <TabRecuentoInventario categories={categories} />
+          </TabsContent>
+
+          <TabsContent value="revalorizacion" className="space-y-4">
+             <TabRevalorizacionInventario categories={categories} />
           </TabsContent>
        </Tabs>
 

@@ -649,6 +649,105 @@ export const asientosAutoService = {
   },
 
   /**
+   * Crea y confirma el asiento único de un Recuento de Inventario (mig.335,
+   * confirmar_recuento_inventario) — reemplaza N asientos por producto por UNO
+   * solo para todo el recuento, con cuentas dedicadas (no 5.8/4.3 genéricas):
+   *   Faltante: DEBE 5.10 Diferencias de Inventario (Faltantes) / HABER 1.1.3 Mercaderías-Inventario
+   *   Sobrante: DEBE 1.1.3 Mercaderías-Inventario / HABER 4.5 Diferencias de Inventario (Sobrantes)
+   * Ambas líneas pueden coexistir en el mismo asiento si el recuento tuvo faltantes Y sobrantes.
+   */
+  async crearAsientoRecuentoInventario(
+    empresaId: string,
+    userId: string,
+    params: { recuentoId: string; numero: string; totalFaltante: number; totalSobrante: number; fecha: string }
+  ): Promise<void> {
+    if (params.totalFaltante <= 0 && params.totalSobrante <= 0) return;
+
+    const { data: cerrado } = await supabase.rpc('fecha_en_periodo_cerrado', {
+      p_empresa_id: empresaId, p_fecha: params.fecha,
+    });
+    if (cerrado) throw new Error(`Período cerrado: la fecha ${params.fecha} pertenece a un período contable cerrado.`);
+
+    const [cuentaInventario, cuentaFaltantes, cuentaSobrantes] = await Promise.all([
+      findCuentaByCodigo(empresaId, '1.1.3'),
+      findCuentaByCodigo(empresaId, '5.10'),
+      findCuentaByCodigo(empresaId, '4.5'),
+    ]);
+    if (!cuentaInventario) return;
+
+    const items: Omit<AsientoItem, 'id' | 'asiento_id' | 'empresa_id' | 'created_at'>[] = [];
+    if (params.totalFaltante > 0 && cuentaFaltantes) {
+      items.push(
+        { cuenta_id: cuentaFaltantes,  debe: params.totalFaltante, haber: 0, descripcion: `Faltante de inventario (${params.numero})` },
+        { cuenta_id: cuentaInventario, debe: 0, haber: params.totalFaltante, descripcion: `Salida de mercadería por recuento (${params.numero})` },
+      );
+    }
+    if (params.totalSobrante > 0 && cuentaSobrantes) {
+      items.push(
+        { cuenta_id: cuentaInventario, debe: params.totalSobrante, haber: 0, descripcion: `Ingreso de mercadería por recuento (${params.numero})` },
+        { cuenta_id: cuentaSobrantes,  debe: 0, haber: params.totalSobrante, descripcion: `Sobrante de inventario (${params.numero})` },
+      );
+    }
+    if (!items.length) return;
+
+    const asiento = await asientosService.createAsientoAutomatico(
+      empresaId, userId,
+      { fecha: params.fecha, descripcion: `Recuento de Inventario ${params.numero}`, origen: 'recuento_inventario', origen_id: params.recuentoId },
+      items
+    );
+    await supabase.rpc('set_asiento_recuento_inventario', { p_recuento_id: params.recuentoId, p_asiento_id: asiento.id });
+  },
+
+  /**
+   * Crea y confirma el asiento único de una Revalorización de Inventario
+   * (mig.336, confirmar_revalorizacion_inventario) — corrige el VALOR del
+   * inventario (costo unitario), no la cantidad:
+   *   Pérdida:  DEBE 5.11 Revalorización de Inventario (Pérdida) / HABER 1.1.3 Mercaderías-Inventario
+   *   Ganancia: DEBE 1.1.3 Mercaderías-Inventario / HABER 4.6 Revalorización de Inventario (Ganancia)
+   */
+  async crearAsientoRevalorizacionInventario(
+    empresaId: string,
+    userId: string,
+    params: { revalorizacionId: string; numero: string; totalPerdida: number; totalGanancia: number; fecha: string }
+  ): Promise<void> {
+    if (params.totalPerdida <= 0 && params.totalGanancia <= 0) return;
+
+    const { data: cerrado } = await supabase.rpc('fecha_en_periodo_cerrado', {
+      p_empresa_id: empresaId, p_fecha: params.fecha,
+    });
+    if (cerrado) throw new Error(`Período cerrado: la fecha ${params.fecha} pertenece a un período contable cerrado.`);
+
+    const [cuentaInventario, cuentaPerdida, cuentaGanancia] = await Promise.all([
+      findCuentaByCodigo(empresaId, '1.1.3'),
+      findCuentaByCodigo(empresaId, '5.11'),
+      findCuentaByCodigo(empresaId, '4.6'),
+    ]);
+    if (!cuentaInventario) return;
+
+    const items: Omit<AsientoItem, 'id' | 'asiento_id' | 'empresa_id' | 'created_at'>[] = [];
+    if (params.totalPerdida > 0 && cuentaPerdida) {
+      items.push(
+        { cuenta_id: cuentaPerdida,    debe: params.totalPerdida, haber: 0, descripcion: `Pérdida por revalorización de inventario (${params.numero})` },
+        { cuenta_id: cuentaInventario, debe: 0, haber: params.totalPerdida, descripcion: `Baja de valor de mercadería (${params.numero})` },
+      );
+    }
+    if (params.totalGanancia > 0 && cuentaGanancia) {
+      items.push(
+        { cuenta_id: cuentaInventario, debe: params.totalGanancia, haber: 0, descripcion: `Alza de valor de mercadería (${params.numero})` },
+        { cuenta_id: cuentaGanancia,   debe: 0, haber: params.totalGanancia, descripcion: `Ganancia por revalorización de inventario (${params.numero})` },
+      );
+    }
+    if (!items.length) return;
+
+    const asiento = await asientosService.createAsientoAutomatico(
+      empresaId, userId,
+      { fecha: params.fecha, descripcion: `Revalorización de Inventario ${params.numero}`, origen: 'revalorizacion_inventario', origen_id: params.revalorizacionId },
+      items
+    );
+    await supabase.rpc('set_asiento_revalorizacion_inventario', { p_revalorizacion_id: params.revalorizacionId, p_asiento_id: asiento.id });
+  },
+
+  /**
    * Crea y confirma el asiento de una Nota de Crédito o Débito de PROVEEDOR.
    * Ambas SIEMPRE mueven `cuenta_corriente_proveedores` (el reembolso en
    * efectivo de una NC es un movimiento de Caja aparte, con su propio
