@@ -239,8 +239,13 @@ export default function CSVImportModal({ open, onOpenChange, tipo, onSuccess }) 
     for (const batch of batches) {
       const payload = batch.map(row => {
         if (tipo === 'productos') {
-          const { grupo, ...resto } = row;
+          // 'precio_costo' es el nombre del campo en el mapeo/preview (más claro para
+          // quien importa), pero la columna real en productos es 'costo_compra' -- sin
+          // este rename el insert fallaba siempre con "Could not find the 'precio_costo'
+          // column" (bug preexistente, no algo que rompimos ahora).
+          const { grupo, precio_costo, ...resto } = row;
           resto.categoria_id = grupo ? (grupoMap.get(grupo.toLowerCase()) ?? null) : null;
+          resto.costo_compra = precio_costo;
           return resto;
         }
         return row;
