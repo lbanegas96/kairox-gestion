@@ -15,6 +15,12 @@ function AlertasStockBanner({ productos }) {
 
   if (!productos?.length) return null;
 
+  // Venta por peso/volumen (mig.338) — mismo criterio que PanelProductos.jsx.
+  const unidadCorta = (p) => p.tipo_venta === 'volumen' ? 'lt' : (p.tipo_venta && p.tipo_venta !== 'unidad') ? 'kg' : 'u.';
+  const stockFmt = (p) => (p.tipo_venta && p.tipo_venta !== 'unidad')
+    ? Number(p.stock_actual).toLocaleString('es-AR', { maximumFractionDigits: 3 })
+    : p.stock_actual;
+
   const avisarEncargado = async (producto) => {
     try {
       // No existe tabla notificaciones — se registra en audit_log con tipo especial.
@@ -30,7 +36,7 @@ function AlertasStockBanner({ productos }) {
           stock_actual:    producto.stock_actual,
           stock_minimo:    producto.stock_minimo,
           cajero_nombre:   `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim() || user.email,
-          mensaje:         `Stock bajo: quedan ${producto.stock_actual} u. (mín: ${producto.stock_minimo})`,
+          mensaje:         `Stock bajo: quedan ${stockFmt(producto)} ${unidadCorta(producto)} (mín: ${producto.stock_minimo})`,
         },
         created_at:  new Date().toISOString(),
       }]);
@@ -75,7 +81,7 @@ function AlertasStockBanner({ productos }) {
                 <span className="ml-2 text-xs font-normal opacity-70">
                   {p.stock_actual <= 0
                     ? '— SIN STOCK'
-                    : `— ${p.stock_actual} u. (mín. ${p.stock_minimo ?? 0})`}
+                    : `— ${stockFmt(p)} ${unidadCorta(p)} (mín. ${p.stock_minimo ?? 0})`}
                 </span>
               </span>
               <Button

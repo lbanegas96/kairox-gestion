@@ -461,9 +461,10 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     const qty = esPesable ? parseNumberLocale(newQty) : parseInt(newQty);
     if (!Number.isFinite(qty) || qty <= 0) return;
     if (product.stock_actual < qty) {
+      const unidadLarga = product.tipo_venta === 'volumen' ? 'litros' : esPesable ? 'kg' : 'unidades';
       toast({
         title: 'Stock insuficiente',
-        description: `Solo hay ${product.stock_actual} unidades disponibles de ${product.nombre}.`,
+        description: `Solo hay ${product.stock_actual} ${unidadLarga} disponibles de ${product.nombre}.`,
         variant: 'destructive',
       });
       return;

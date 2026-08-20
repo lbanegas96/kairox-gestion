@@ -257,9 +257,10 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
       const existente = prev.find(i => i.id === producto.id);
       if (existente) {
         if (producto.stock_actual < existente.cantidad + 1) {
+          const unidadCorta = producto.tipo_venta === 'volumen' ? 'lt' : esPesable ? 'kg' : 'u.';
           toast({
             title: 'Stock insuficiente',
-            description: `Solo hay ${producto.stock_actual} u. de "${producto.nombre}"`,
+            description: `Solo hay ${producto.stock_actual} ${unidadCorta} de "${producto.nombre}"`,
             variant: 'destructive',
           });
           return prev;

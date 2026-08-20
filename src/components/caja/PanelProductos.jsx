@@ -29,10 +29,19 @@ function ProductoCard({ producto, onAgregar }) {
   const config = STOCK_CONFIG[level];
   const disabled = level === 'sin_stock';
 
+  // Venta por peso/volumen (mig.338): el badge de stock mostraba siempre "u."
+  // hardcodeado, aunque el producto sea pesable — corregido para mostrar
+  // kg/lt, con el número formateado (antes salía el punto de JS crudo, ej.
+  // "9.65", en vez del formato AR).
+  const esPesable = producto.tipo_venta && producto.tipo_venta !== 'unidad';
+  const unidadCorta = producto.tipo_venta === 'volumen' ? 'lt' : esPesable ? 'kg' : 'u.';
+  const stockFmt = esPesable
+    ? Number(producto.stock_actual).toLocaleString('es-AR', { maximumFractionDigits: 3 })
+    : producto.stock_actual;
+
   const label =
     level === 'sin_stock' ? 'Sin stock'
-    : level === 'bajo'    ? `${producto.stock_actual} u.`
-    :                       `${producto.stock_actual} u.`;
+    :                       `${stockFmt} ${unidadCorta}`;
 
   return (
     <div
