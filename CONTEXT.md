@@ -2503,9 +2503,11 @@ amplia que permite **listar** todos los archivos, no sólo acceder por URL; prot
 filtradas desactivada en Auth (es un toggle del dashboard); `extension_in_public`; y 2 tablas con RLS
 activo pero sin políticas (`afip_tickets`, `arca_worker_run` — cerradas de hecho, sin acceso).
 
-**⚠️ Aparte, con fecha límite:** la organización **NALUX está en plan `free`** y el dashboard avisaba
-que los proyectos se restringen desde el **17/08/2026**. Verificado el 2026-08-03: sigue en `free`.
-Es tema de Luciano (billing) — faltan 2 semanas.
+**Actualización 2026-08-20 — decisión consciente, no reabrir como urgente:** la fecha límite
+(17/08/2026) ya pasó, verificado ese día que la organización seguía en `free` y nada se rompió.
+Le pregunté a Nadia directo: **"queda free por ahora, dejalo así"** — es una decisión tomada, no
+un olvido de Luciano. No volver a marcar esto como pendiente urgente en futuras sesiones a menos
+que Nadia lo pida ella misma.
 
 ---
 
