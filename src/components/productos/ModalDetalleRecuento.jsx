@@ -31,6 +31,10 @@ function ModalDetalleRecuento({ recuentoId, onOpenChange, onConfirmado }) {
   // exactamente {"p_recuento_id":null}) mientras la misma llamada con el id real
   // funcionaba perfecto. Ver también el guard onPointerDownOutside más abajo.
   const [confirmandoId, setConfirmandoId] = useState(null);
+  // Mismo patrón de freeze para "Anular" — comparte el AlertDialog exterior
+  // (portal separado del Dialog principal), mismo riesgo de perder el id.
+  const [anulando, setAnulando] = useState(false);
+  const [anulandoId, setAnulandoId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data, isLoading } = useQuery({
@@ -100,13 +104,33 @@ function ModalDetalleRecuento({ recuentoId, onOpenChange, onConfirmado }) {
     }
   };
 
+  const handleAnular = async () => {
+    if (!anulandoId) {
+      toast({ title: 'Error al anular', description: 'No se encontró el recuento a anular — cerrá y volvé a abrirlo.', variant: 'destructive' });
+      setAnulando(false);
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await recuentoInventarioService.anular(anulandoId);
+      toast({ title: 'Recuento anulado', description: 'No se aplicó ningún cambio de stock — el recuento queda descartado.' });
+      invalidarDetalle();
+      onConfirmado?.(); // callback genérico del padre: refresca el listado (no es exclusivo de "confirmar")
+    } catch (error) {
+      toast({ title: 'Error al anular', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsSubmitting(false);
+      setAnulando(false);
+    }
+  };
+
   return (
     <>
       <Dialog open={!!recuentoId} onOpenChange={onOpenChange}>
         <DialogContent
           className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border"
-          onPointerDownOutside={(e) => { if (confirmando) e.preventDefault(); }}
-          onInteractOutside={(e) => { if (confirmando) e.preventDefault(); }}
+          onPointerDownOutside={(e) => { if (confirmando || anulando) e.preventDefault(); }}
+          onInteractOutside={(e) => { if (confirmando || anulando) e.preventDefault(); }}
         >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -173,9 +197,18 @@ function ModalDetalleRecuento({ recuentoId, onOpenChange, onConfirmado }) {
               {esBorrador && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-kx-text-2">{totalDiferencias} línea(s) con diferencia</span>
-                  <Button onClick={() => { setConfirmandoId(recuentoId); setConfirmando(true); }} disabled={totalDiferencias === 0} className="bg-blue-600 hover:bg-blue-700 text-white">
-                    Confirmar Recuento
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => { setAnulandoId(recuentoId); setAnulando(true); }}
+                      className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20"
+                    >
+                      Anular
+                    </Button>
+                    <Button onClick={() => { setConfirmandoId(recuentoId); setConfirmando(true); }} disabled={totalDiferencias === 0} className="bg-blue-600 hover:bg-blue-700 text-white">
+                      Confirmar Recuento
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -197,6 +230,29 @@ function ModalDetalleRecuento({ recuentoId, onOpenChange, onConfirmado }) {
             <AlertDialogAction onClick={handleConfirmar} disabled={isSubmitting}>
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={anulando} onOpenChange={setAnulando}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Anular el recuento {header?.numero}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              El recuento queda descartado y no se aplica ningún cambio de stock — como si nunca
+              se hubiera hecho. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSubmitting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleAnular}
+              disabled={isSubmitting}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Anular
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

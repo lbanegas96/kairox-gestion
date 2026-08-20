@@ -4658,17 +4658,32 @@ ajeno) pero se corrige igual, mismo criterio que la mig.330. **Migración `337` 
   de PRUEBA (ficticios) sobre productos con costo real -- nunca llegó a confirmarse (el bug lo
   bloqueaba), quedó **anulado a mano por SQL** antes del fix para no dejar un recuento de
   mentira colgado en la base real. No tocó stock ni contabilidad real en ningún momento.
-- Fix commiteado y pusheado, deployado. **Pendiente para la próxima sesión**: volver a probar
-  "Confirmar" en vivo post-deploy con un recuento nuevo, y construir el botón "Anular" en la
-  pantalla (existe el RPC `anular_recuento_inventario`/`anular_revalorizacion_inventario` hace
-  rato, pero nunca se conectó a ningún botón visible -- se usó SQL directo para el cleanup de
-  hoy porque no hay otra forma desde la UI todavía).
+- Fix commiteado, pusheado, deployado y **reverificado en vivo post-deploy contra
+  `kairox-gestion-chi.vercel.app` real**: `RC-20260820-003` (Congelados y Helados) y
+  `RV-20260820-001` (Infusiones) se confirmaron sin error, con efecto real correcto en la base
+  (stock/costo actualizados, `asiento_id=null` en ambos por ser diferencia de $0 -- mismo
+  criterio de no crear datos ficticios reales, ver detalle debajo).
 
-### Nota importante: dos URLs de Vercel distintas
+### Botón "Anular" — construido (20/08, mismo día)
+
+El RPC `anular_recuento_inventario`/`anular_revalorizacion_inventario` existía desde la
+mig.335/336 pero nunca se había conectado a ningún botón visible -- el cleanup de `RC-002` de
+más arriba se hizo por SQL directo porque no había otra forma. Agregado en
+`ModalDetalleRecuento.jsx`/`ModalDetalleRevalorizacion.jsx`: botón "Anular" (outline, rojo)
+junto a "Confirmar", visible mientras el documento está en borrador, con su propio
+`AlertDialog` de confirmación ("no se puede deshacer"). Mismo patrón de freeze de id que el fix
+de arriba (`anulandoId` congelado al abrir el diálogo, en vez del prop en vivo) y mismo guard
+`onPointerDownOutside`/`onInteractOutside` extendido a cubrir también este segundo AlertDialog
+-- comparten el mismo riesgo estructural, se corrigen juntos. Eslint 0 errores, vitest 159/159
+(un fallo de `MapaRelaciones.test.jsx` por timeout en la corrida completa, no relacionado --
+confirmado pasando 3/3 al correrlo solo, típico flake de máquina bajo carga), vite build OK.
+
+### Nota importante: dos URLs de Vercel distintas -- la vieja queda PROHIBIDA
 
 `https://kairox-gestion.vercel.app` (sin "-chi") es un deploy VIEJO -- durante esta sesión
 mostró código de hace varios commits atrás (sin `stock_bajo`, sin Recuento) a pesar de que
 `master` ya tenía todo pusheado. La URL de producción real y actualizada es
-**`https://kairox-gestion-chi.vercel.app`**. Confirmar con Luciano/Nadia si el dominio viejo
-hay que borrarlo o redirigirlo, para no perder tiempo de nuevo probando contra el lugar
-equivocado.
+**`https://kairox-gestion-chi.vercel.app`**. Nadia pidió explícitamente que la URL vieja quede
+descartada por completo -- no volver a abrirla, mencionarla ni considerarla parte del proyecto
+(guardado también en memoria persistente de Claude, `feedback_url_produccion_correcta.md`).
+Confirmar con Luciano si además hay que borrar/redirigir el dominio del lado de Vercel.

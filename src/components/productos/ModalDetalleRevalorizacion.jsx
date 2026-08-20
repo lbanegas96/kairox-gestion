@@ -28,6 +28,10 @@ function ModalDetalleRevalorizacion({ revalorizacionId, onOpenChange, onConfirma
   // cerrarse y nulear revalorizacionId por un pointerdown que Radix interpreta
   // como "afuera" al tocar el AlertDialog superpuesto (portals separados).
   const [confirmandoId, setConfirmandoId] = useState(null);
+  // Mismo patrón de freeze para "Anular" — comparte el AlertDialog exterior
+  // (portal separado del Dialog principal), mismo riesgo de perder el id.
+  const [anulando, setAnulando] = useState(false);
+  const [anulandoId, setAnulandoId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data, isLoading } = useQuery({
@@ -97,13 +101,33 @@ function ModalDetalleRevalorizacion({ revalorizacionId, onOpenChange, onConfirma
     }
   };
 
+  const handleAnular = async () => {
+    if (!anulandoId) {
+      toast({ title: 'Error al anular', description: 'No se encontró la revalorización a anular — cerrá y volvé a abrirla.', variant: 'destructive' });
+      setAnulando(false);
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await revalorizacionInventarioService.anular(anulandoId);
+      toast({ title: 'Revalorización anulada', description: 'No se aplicó ningún cambio de costo — la revalorización queda descartada.' });
+      invalidarDetalle();
+      onConfirmado?.(); // callback genérico del padre: refresca el listado (no es exclusivo de "confirmar")
+    } catch (error) {
+      toast({ title: 'Error al anular', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsSubmitting(false);
+      setAnulando(false);
+    }
+  };
+
   return (
     <>
       <Dialog open={!!revalorizacionId} onOpenChange={onOpenChange}>
         <DialogContent
           className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border"
-          onPointerDownOutside={(e) => { if (confirmando) e.preventDefault(); }}
-          onInteractOutside={(e) => { if (confirmando) e.preventDefault(); }}
+          onPointerDownOutside={(e) => { if (confirmando || anulando) e.preventDefault(); }}
+          onInteractOutside={(e) => { if (confirmando || anulando) e.preventDefault(); }}
         >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -166,9 +190,18 @@ function ModalDetalleRevalorizacion({ revalorizacionId, onOpenChange, onConfirma
               {esBorrador && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-kx-text-2">{totalDiferencias} línea(s) con cambio de costo</span>
-                  <Button onClick={() => { setConfirmandoId(revalorizacionId); setConfirmando(true); }} disabled={totalDiferencias === 0} className="bg-blue-600 hover:bg-blue-700 text-white">
-                    Confirmar Revalorización
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => { setAnulandoId(revalorizacionId); setAnulando(true); }}
+                      className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20"
+                    >
+                      Anular
+                    </Button>
+                    <Button onClick={() => { setConfirmandoId(revalorizacionId); setConfirmando(true); }} disabled={totalDiferencias === 0} className="bg-blue-600 hover:bg-blue-700 text-white">
+                      Confirmar Revalorización
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -190,6 +223,29 @@ function ModalDetalleRevalorizacion({ revalorizacionId, onOpenChange, onConfirma
             <AlertDialogAction onClick={handleConfirmar} disabled={isSubmitting}>
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={anulando} onOpenChange={setAnulando}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Anular la revalorización {header?.numero}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              La revalorización queda descartada y no se aplica ningún cambio de costo — como si
+              nunca se hubiera hecho. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSubmitting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleAnular}
+              disabled={isSubmitting}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Anular
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
