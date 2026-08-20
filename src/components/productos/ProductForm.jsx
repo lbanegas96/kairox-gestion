@@ -193,29 +193,67 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
       />
     </div>
 
+    {/* Tipo de venta (venta por peso/volumen) — condiciona el campo de precio de abajo */}
     <div className="space-y-2">
-      <Label htmlFor="precio">Precio Venta ($) *</Label>
-      <Input
-        id="precio"
-        type="text"
-        inputMode="decimal"
-        placeholder="0,00"
-        value={data.precio_venta}
-        onChange={e => setData({...data, precio_venta: e.target.value})}
-        required
-        className="bg-kx-surface dark:bg-kx-bg"
-      />
+      <Label htmlFor="tipo_venta">Tipo de venta</Label>
+      <select
+        id="tipo_venta"
+        value={data.tipo_venta || 'unidad'}
+        onChange={e => setData({ ...data, tipo_venta: e.target.value })}
+        className="w-full h-10 px-3 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-bg dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="unidad">Unidad — se vende entero</option>
+        <option value="peso">Peso — se vende por kg/g (fiambre, verdura, carnicería...)</option>
+        <option value="volumen">Volumen — se vende por litro/ml</option>
+      </select>
+      {(data.tipo_venta === 'peso' || data.tipo_venta === 'volumen') && (
+        <p className="text-xs text-kx-text-3">
+          La cantidad en el carrito va a admitir decimales (ej: 0,350 kg) en vez del stepper de unidades enteras.
+        </p>
+      )}
     </div>
 
+    {(data.tipo_venta || 'unidad') === 'unidad' ? (
+      <div className="space-y-2">
+        <Label htmlFor="precio">Precio Venta ($) *</Label>
+        <Input
+          id="precio"
+          type="text"
+          inputMode="decimal"
+          placeholder="0,00"
+          value={data.precio_venta}
+          onChange={e => setData({...data, precio_venta: e.target.value})}
+          required
+          className="bg-kx-surface dark:bg-kx-bg"
+        />
+      </div>
+    ) : (
+      <div className="space-y-2">
+        <Label htmlFor="precio_por_kg_litro">
+          Precio por {data.tipo_venta === 'volumen' ? 'litro' : 'kg'} ($) *
+        </Label>
+        <Input
+          id="precio_por_kg_litro"
+          type="text"
+          inputMode="decimal"
+          placeholder="0,00"
+          value={data.precio_por_kg_litro ?? ''}
+          onChange={e => setData({...data, precio_por_kg_litro: e.target.value})}
+          required
+          className="bg-kx-surface dark:bg-kx-bg"
+        />
+      </div>
+    )}
+
     <div className="space-y-2">
-      <Label htmlFor="stock">Stock Actual</Label>
+      <Label htmlFor="stock">Stock Actual{data.tipo_venta && data.tipo_venta !== 'unidad' ? ` (${data.tipo_venta === 'volumen' ? 'litros' : 'kg'})` : ''}</Label>
       <Input
         id="stock"
-        type="number"
-        min="0"
-        step="1"
+        type="text"
+        inputMode="decimal"
+        placeholder={data.tipo_venta && data.tipo_venta !== 'unidad' ? '0,000' : '0'}
         value={data.stock_actual}
-        onChange={e => setData({...data, stock_actual: e.target.value.replace(/[^\d]/g, '')})}
+        onChange={e => setData({...data, stock_actual: e.target.value})}
         disabled={isEdit}
         className="bg-kx-surface dark:bg-kx-bg disabled:opacity-60"
       />
@@ -228,14 +266,14 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
     </div>
 
     <div className="space-y-2">
-      <Label htmlFor="min_stock">Stock Mínimo</Label>
+      <Label htmlFor="min_stock">Stock Mínimo{data.tipo_venta && data.tipo_venta !== 'unidad' ? ` (${data.tipo_venta === 'volumen' ? 'litros' : 'kg'})` : ''}</Label>
       <Input
         id="min_stock"
-        type="number"
-        min="0"
-        step="1"
+        type="text"
+        inputMode="decimal"
+        placeholder={data.tipo_venta && data.tipo_venta !== 'unidad' ? '0,000' : '0'}
         value={data.stock_minimo}
-        onChange={e => setData({...data, stock_minimo: e.target.value.replace(/[^\d]/g, '')})}
+        onChange={e => setData({...data, stock_minimo: e.target.value})}
         className="bg-kx-surface dark:bg-kx-bg"
       />
     </div>

@@ -70,7 +70,10 @@ function TablaInventario({
                          </td>
                          <td className="p-4 text-right">
                            <div className={`font-mono font-bold ${isLowStock ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-300'}`}>
-                             {p.stock_actual}
+                             {Number(p.stock_actual).toLocaleString('es-AR', { maximumFractionDigits: 3 })}
+                             {p.tipo_venta && p.tipo_venta !== 'unidad' && (
+                               <span className="text-2xs font-normal text-kx-text-3 ml-1">{p.tipo_venta === 'volumen' ? 'lt' : 'kg'}</span>
+                             )}
                            </div>
                            {isLowStock && <div className="text-2xs text-red-600 dark:text-red-400 flex items-center justify-end gap-1"><AlertTriangle className="h-3 w-3" /> Bajo stock</div>}
                          </td>
@@ -78,7 +81,11 @@ function TablaInventario({
                            ${p.costo_compra?.toLocaleString('es-AR')}
                          </td>
                          <td className="p-4 text-right font-medium text-slate-900 dark:text-kx-text">
-                           ${p.precio_venta?.toLocaleString('es-AR')}
+                           {p.tipo_venta && p.tipo_venta !== 'unidad' ? (
+                             <>${p.precio_por_kg_litro?.toLocaleString('es-AR')} <span className="text-2xs font-normal text-kx-text-3">/{p.tipo_venta === 'volumen' ? 'lt' : 'kg'}</span></>
+                           ) : (
+                             <>${p.precio_venta?.toLocaleString('es-AR')}</>
+                           )}
                          </td>
                          <td className="p-4 text-right">
                            <div className="flex items-center justify-end gap-2">

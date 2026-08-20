@@ -130,6 +130,10 @@ const ProductosSection = () => {
     nombre: '', codigo_sku: '', codigo_barras: '', categoria_nombre: '', proveedor_id: '',
     unidad_medida: 'Unidad', unidad_medida_id: '', costo_compra: '', precio_venta: '',
     stock_actual: '', stock_minimo: 5, descripcion: '',
+    // Venta por peso/volumen (mig.338) — default 'unidad' = comportamiento actual sin
+    // cambios (ferreterías/distribuidoras siguen igual). precio_por_kg_litro solo se usa
+    // cuando tipo_venta ≠ 'unidad', ver ProductForm.jsx.
+    tipo_venta: 'unidad', precio_por_kg_litro: '',
     // Factor de conversión de unidad de compra (roadmap SAP) — opcional, default sin cambio
     // de comportamiento: unidad_compra_id vacío = se compra en la misma unidad del stock.
     unidad_compra_id: '', factor_conversion_compra: '1',
@@ -199,9 +203,14 @@ const ProductosSection = () => {
         user_id: user.id,
         empresa_id: user.empresa_id,
         costo_compra: parseNumberLocale(newProduct.costo_compra) || 0,
-        precio_venta: parseNumberLocale(newProduct.precio_venta) || 0,
-        stock_actual: parseInt(newProduct.stock_actual) || 0,
-        stock_minimo: parseInt(newProduct.stock_minimo) || 0,
+        // Producto pesable: precio_venta queda en 0 (no se cobra), el precio real vive en
+        // precio_por_kg_litro. Producto por unidad: al revés, precio_por_kg_litro null.
+        precio_venta: newProduct.tipo_venta === 'unidad' ? (parseNumberLocale(newProduct.precio_venta) || 0) : 0,
+        precio_por_kg_litro: newProduct.tipo_venta !== 'unidad'
+          ? (parseNumberLocale(newProduct.precio_por_kg_litro) || 0) : null,
+        tipo_venta: newProduct.tipo_venta || 'unidad',
+        stock_actual: parseNumberLocale(newProduct.stock_actual) || 0,
+        stock_minimo: parseNumberLocale(newProduct.stock_minimo) || 0,
         categoria_id: categoryId,
         proveedor_id: newProduct.proveedor_id || null,
         unidad_medida: newProduct.unidad_medida,
@@ -270,13 +279,16 @@ const ProductosSection = () => {
         precio_venta_pack: (editProduct.precio_venta_pack ?? '') !== '' ? parseNumberLocale(editProduct.precio_venta_pack) : null,
         descuento_pack_pct: parseNumberLocale(editProduct.descuento_pack_pct) || 0,
         costo_compra: parseNumberLocale(editProduct.costo_compra) || 0,
-        precio_venta: parseNumberLocale(editProduct.precio_venta) || 0,
+        precio_venta: editProduct.tipo_venta === 'unidad' ? (parseNumberLocale(editProduct.precio_venta) || 0) : 0,
+        precio_por_kg_litro: editProduct.tipo_venta !== 'unidad'
+          ? (parseNumberLocale(editProduct.precio_por_kg_litro) || 0) : null,
+        tipo_venta: editProduct.tipo_venta || 'unidad',
         // stock_actual NO se toca acá — se ajusta solo vía "Ajustar Stock"
         // (productosService.adjustStock → ajustar_stock_manual), que tiene lock +
         // guard de negativo + trazabilidad en movimientos_inventario. Escribirlo
         // directo acá permitía revertir en silencio ventas/compras concurrentes al
         // guardar el form con el valor stale que tenía al abrirlo.
-        stock_minimo: parseInt(editProduct.stock_minimo) || 0,
+        stock_minimo: parseNumberLocale(editProduct.stock_minimo) || 0,
         // Tipo de artículo SAP (mig.234) — mismo criterio que el alta.
         es_inventariable: editProduct.es_servicio ? false : !!editProduct.es_inventariable,
         es_articulo_venta: !!editProduct.es_articulo_venta,
