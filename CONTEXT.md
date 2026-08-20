@@ -4590,3 +4590,85 @@ investigado todavía, no tocar código sin juntar el caso de uso real con Lucian
 
 **Import del resto del catálogo (3.380 productos) sigue pausado** -- no retomar sin pedido
 explícito.
+
+## 2026-08-20 — Recuento/Revalorización aplicado a producción + bug real de "Confirmar" encontrado y corregido
+
+Sesión con Nadia: se aplicaron las migraciones `334/335/336` a producción (Nalux,
+`isvkelrdxwvkfmrfqxxk`) + `NOTIFY pgrst, 'reload schema'`, y se probó en vivo por browser real
+contra `https://kairox-gestion-chi.vercel.app` (¡ojo! -- `https://kairox-gestion.vercel.app` es
+un deploy VIEJO/distinto, no confundir, ver nota abajo).
+
+### Bug real encontrado: "Confirmar Recuento"/"Confirmar Revalorización" fallaba siempre
+
+Al probar en vivo, el botón "Confirmar Recuento" fallaba el 100% de las veces con
+"Recuento no encontrado" -- reproducido 3 veces seguidas en 2 recuentos distintos recién
+creados. La función SQL en sí estaba perfecta (confirmado llamándola directo por API REST con
+el token real de la sesión: aplicó bien el stock, logueó el movimiento, saltó el asiento
+correctamente cuando la diferencia de valor es $0).
+
+**Causa raíz encontrada con los logs reales de Supabase** (`query_logs`, tabla `edge_logs`,
+`log_attributes`): el request que fallaba tenía `content-length: 22`, exactamente
+`{"p_recuento_id":null}` -- el id viajaba en `null`, no el id real. El JWT/rol/usuario del
+request eran correctos (`role: authenticated`, `subject` = el user id real) -- el problema
+nunca fue de autenticación ni de RLS, fue que el frontend mandaba `null` como id.
+
+**Mecanismo**: `ModalDetalleRecuento.jsx`/`ModalDetalleRevalorizacion.jsx` usan el prop
+`recuentoId`/`revalorizacionId` directo (en vivo, no congelado) tanto para controlar el
+`<Dialog open={!!recuentoId}>` exterior como dentro de `handleConfirmar()`. El botón
+"Confirmar" vive en un `<AlertDialog>` HERMANO (no anidado en el DOM del Dialog, por los
+portals de Radix). Al tocar el `AlertDialogAction`, el `Dialog` exterior interpreta el
+pointerdown como "click afuera" (su contenido y el del AlertDialog están en portals
+distintos) y dispara `onOpenChange(false)` → `setDetalleId(null)` -- lo que ocurre ANTES de
+que corra el `onClick` real del botón "Confirmar", que termina usando el prop ya en `null`.
+El título del AlertDialog seguía mostrando bien el número (viene del cache de React Query,
+que no se limpia solo) -- por eso visualmente todo se veía normal justo antes de fallar.
+
+**Fix aplicado** (`ModalDetalleRecuento.jsx`, `ModalDetalleRevalorizacion.jsx`):
+1. Se agrega un estado `confirmandoId` que congela el id real en el momento exacto de abrir
+   el diálogo de confirmación (click en "Confirmar Recuento"/"Confirmar Revalorización"), y
+   `handleConfirmar` usa ese valor congelado en vez del prop en vivo -- inmune a que el
+   Dialog exterior se cierre de fondo.
+2. Guarda adicional (defensa en profundidad): `onPointerDownOutside`/`onInteractOutside` en
+   el `DialogContent` exterior ignoran el dismiss mientras `confirmando` (el AlertDialog) está
+   abierto -- ataca la causa raíz, no solo el síntoma.
+3. Guard extra en `handleConfirmar`: si por lo que sea `confirmandoId` es null, error claro al
+   usuario en vez de mandar el RPC con `null`.
+
+### Hallazgo de seguridad separado, encontrado en el camino: grants de más a `anon`
+
+Investigando el bug de arriba se encontró que las 8 funciones nuevas de Recuento/Revalorización
+(`crear_recuento_inventario`, `confirmar_recuento_inventario`, `anular_recuento_inventario`,
+`set_asiento_recuento_inventario` y sus 4 equivalentes de Revalorización) tenían
+`GRANT EXECUTE ... TO authenticated` pero nunca se les revocó el EXECUTE implícito que Postgres
+da a PUBLIC al crearlas -- `anon` podía ejecutarlas (confirmado con `has_function_privilege`).
+Comparado contra el resto del proyecto (`crear_nota_credito`, `crear_venta`,
+`registrar_factura_compra_oc`, `ajustar_stock_manual`): esas ya tienen `anon` correctamente
+bloqueado -- es un gap puntual de esta feature, no un patrón del proyecto. Impacto real
+acotado (las funciones ya verifican `get_my_empresa_id() IS NULL → RAISE EXCEPTION`
+internamente, así que un anónimo real solo chocaba con "No autorizado", no leía/escribía nada
+ajeno) pero se corrige igual, mismo criterio que la mig.330. **Migración `337` aplicada** —
+`REVOKE ... FROM PUBLIC, anon, authenticated` + `GRANT ... TO authenticated` en las 8.
+
+### Estado final, verificado
+
+- `RC-20260820-001` (Congelados y Helados): confirmado de verdad con datos reales (2 unidades
+  de diferencia, $0 de impacto porque el costo de esos productos importados del catálogo
+  kiosco es $0) -- queda así, es correcto, no tocar.
+- `RC-20260820-002` (Belleza y Cuidado Personal): se usó para reproducir el bug con conteos
+  de PRUEBA (ficticios) sobre productos con costo real -- nunca llegó a confirmarse (el bug lo
+  bloqueaba), quedó **anulado a mano por SQL** antes del fix para no dejar un recuento de
+  mentira colgado en la base real. No tocó stock ni contabilidad real en ningún momento.
+- Fix commiteado y pusheado, deployado. **Pendiente para la próxima sesión**: volver a probar
+  "Confirmar" en vivo post-deploy con un recuento nuevo, y construir el botón "Anular" en la
+  pantalla (existe el RPC `anular_recuento_inventario`/`anular_revalorizacion_inventario` hace
+  rato, pero nunca se conectó a ningún botón visible -- se usó SQL directo para el cleanup de
+  hoy porque no hay otra forma desde la UI todavía).
+
+### Nota importante: dos URLs de Vercel distintas
+
+`https://kairox-gestion.vercel.app` (sin "-chi") es un deploy VIEJO -- durante esta sesión
+mostró código de hace varios commits atrás (sin `stock_bajo`, sin Recuento) a pesar de que
+`master` ya tenía todo pusheado. La URL de producción real y actualizada es
+**`https://kairox-gestion-chi.vercel.app`**. Confirmar con Luciano/Nadia si el dominio viejo
+hay que borrarlo o redirigirlo, para no perder tiempo de nuevo probando contra el lugar
+equivocado.

@@ -23,6 +23,11 @@ function ModalDetalleRevalorizacion({ revalorizacionId, onOpenChange, onConfirma
   const [search, setSearch] = useState('');
   const [valores, setValores] = useState({}); // itemId -> string en edición
   const [confirmando, setConfirmando] = useState(false);
+  // Congela el id al abrir el diálogo de confirmación — mismo bug real que en
+  // ModalDetalleRecuento.jsx (ver comentario ahí): el Dialog exterior puede
+  // cerrarse y nulear revalorizacionId por un pointerdown que Radix interpreta
+  // como "afuera" al tocar el AlertDialog superpuesto (portals separados).
+  const [confirmandoId, setConfirmandoId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data, isLoading } = useQuery({
@@ -61,13 +66,18 @@ function ModalDetalleRevalorizacion({ revalorizacionId, onOpenChange, onConfirma
   const totalDiferencias = items.filter(i => i.costo_nuevo != null && Number(i.costo_nuevo) !== Number(i.costo_anterior)).length;
 
   const handleConfirmar = async () => {
+    if (!confirmandoId) {
+      toast({ title: 'Error al confirmar', description: 'No se encontró la revalorización a confirmar — cerrá y volvé a abrirla.', variant: 'destructive' });
+      setConfirmando(false);
+      return;
+    }
     setIsSubmitting(true);
     try {
-      const { total_perdida, total_ganancia } = await revalorizacionInventarioService.confirmar(revalorizacionId);
+      const { total_perdida, total_ganancia } = await revalorizacionInventarioService.confirmar(confirmandoId);
       toast({ title: 'Revalorización confirmada', description: 'El costo del sistema ya refleja los nuevos valores.' });
 
       asientosAutoService.crearAsientoRevalorizacionInventario(user.empresa_id, user.id, {
-        revalorizacionId, numero: header.numero, totalPerdida: total_perdida, totalGanancia: total_ganancia,
+        revalorizacionId: confirmandoId, numero: header.numero, totalPerdida: total_perdida, totalGanancia: total_ganancia,
         fecha: getTodayAR(),
       }).catch(e => {
         if (e.message?.startsWith('Período cerrado:')) {
@@ -90,7 +100,11 @@ function ModalDetalleRevalorizacion({ revalorizacionId, onOpenChange, onConfirma
   return (
     <>
       <Dialog open={!!revalorizacionId} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border">
+        <DialogContent
+          className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border"
+          onPointerDownOutside={(e) => { if (confirmando) e.preventDefault(); }}
+          onInteractOutside={(e) => { if (confirmando) e.preventDefault(); }}
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               Revalorización {header?.numero}
@@ -152,7 +166,7 @@ function ModalDetalleRevalorizacion({ revalorizacionId, onOpenChange, onConfirma
               {esBorrador && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-kx-text-2">{totalDiferencias} línea(s) con cambio de costo</span>
-                  <Button onClick={() => setConfirmando(true)} disabled={totalDiferencias === 0} className="bg-blue-600 hover:bg-blue-700 text-white">
+                  <Button onClick={() => { setConfirmandoId(revalorizacionId); setConfirmando(true); }} disabled={totalDiferencias === 0} className="bg-blue-600 hover:bg-blue-700 text-white">
                     Confirmar Revalorización
                   </Button>
                 </div>

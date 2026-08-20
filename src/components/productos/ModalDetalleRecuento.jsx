@@ -22,6 +22,15 @@ function ModalDetalleRecuento({ recuentoId, onOpenChange, onConfirmado }) {
   const [search, setSearch] = useState('');
   const [valores, setValores] = useState({}); // itemId -> string en edición
   const [confirmando, setConfirmando] = useState(false);
+  // Congela el id al abrir el diálogo de confirmación — el Dialog exterior puede
+  // cerrarse (y nulear recuentoId vía onOpenChange) por un pointerdown que Radix
+  // interpreta como "afuera" al interactuar con el AlertDialog superpuesto (portals
+  // separados). Bug real encontrado en producción 20/08: sin este freeze, el RPC
+  // se llamaba con p_recuento_id=null y fallaba con "Recuento no encontrado" —
+  // confirmado viendo el body real del request en los logs de Supabase (22 bytes,
+  // exactamente {"p_recuento_id":null}) mientras la misma llamada con el id real
+  // funcionaba perfecto. Ver también el guard onPointerDownOutside más abajo.
+  const [confirmandoId, setConfirmandoId] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { data, isLoading } = useQuery({
@@ -60,13 +69,18 @@ function ModalDetalleRecuento({ recuentoId, onOpenChange, onConfirmado }) {
   const totalDiferencias = items.filter(i => i.cantidad_contada != null && i.cantidad_contada !== i.stock_sistema).length;
 
   const handleConfirmar = async () => {
+    if (!confirmandoId) {
+      toast({ title: 'Error al confirmar', description: 'No se encontró el recuento a confirmar — cerrá y volvé a abrirlo.', variant: 'destructive' });
+      setConfirmando(false);
+      return;
+    }
     setIsSubmitting(true);
     try {
-      const { total_faltante, total_sobrante } = await recuentoInventarioService.confirmar(recuentoId);
+      const { total_faltante, total_sobrante } = await recuentoInventarioService.confirmar(confirmandoId);
       toast({ title: 'Recuento confirmado', description: 'El stock del sistema ya refleja el conteo físico.' });
 
       asientosAutoService.crearAsientoRecuentoInventario(user.empresa_id, user.id, {
-        recuentoId, numero: header.numero, totalFaltante: total_faltante, totalSobrante: total_sobrante,
+        recuentoId: confirmandoId, numero: header.numero, totalFaltante: total_faltante, totalSobrante: total_sobrante,
         fecha: getTodayAR(),
       }).catch(e => {
         if (e.message?.startsWith('Período cerrado:')) {
@@ -89,7 +103,11 @@ function ModalDetalleRecuento({ recuentoId, onOpenChange, onConfirmado }) {
   return (
     <>
       <Dialog open={!!recuentoId} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border">
+        <DialogContent
+          className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border"
+          onPointerDownOutside={(e) => { if (confirmando) e.preventDefault(); }}
+          onInteractOutside={(e) => { if (confirmando) e.preventDefault(); }}
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               Recuento {header?.numero}
@@ -155,7 +173,7 @@ function ModalDetalleRecuento({ recuentoId, onOpenChange, onConfirmado }) {
               {esBorrador && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-kx-text-2">{totalDiferencias} línea(s) con diferencia</span>
-                  <Button onClick={() => setConfirmando(true)} disabled={totalDiferencias === 0} className="bg-blue-600 hover:bg-blue-700 text-white">
+                  <Button onClick={() => { setConfirmandoId(recuentoId); setConfirmando(true); }} disabled={totalDiferencias === 0} className="bg-blue-600 hover:bg-blue-700 text-white">
                     Confirmar Recuento
                   </Button>
                 </div>
