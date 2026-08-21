@@ -2526,12 +2526,10 @@ la usa `MonitorFacturacionAFIP.jsx`), `rls_auto_enable` (es un event trigger, no
 directo, revocar el EXECUTE no afecta que siga disparándose solo al crear tablas).
 
 **Estado actual del reporte de advisors, verificado después de aplicar:** 0 ERROR, 0 `anon`
-ejecutable, 0 `search_path` mutable. Quedan: 79 funciones ejecutables por `authenticated` (la tanda
+ejecutable, 0 `search_path` mutable. Quedaban: 79 funciones ejecutables por `authenticated` (la tanda
 grande — **auditada por SQL directo, ver abajo, resultó no-issue**), 2 tablas
 RLS-sin-política (INFO, confirmado no-issue, `afip_tickets`/`arca_worker_run` cerradas de hecho),
-`extension_in_public` (`pg_net` — usado por un montón de crons críticos de ARCA/MercadoPago/
-Tiendanube, mover el schema necesita su propia tanda con pruebas dedicadas, no se apura, requiere
-que Nadia esté presente por el riesgo),
+`extension_in_public` (`pg_net` — **cerrado 2026-08-21, mig.342, ver abajo**),
 protección de contraseñas filtradas (**confirmado en vivo que NO se puede activar en plan free** —
 ver nota de la sección del plan free más arriba, `402 Payment Required` al guardar).
 
@@ -2557,6 +2555,24 @@ WHERE bucket_id='productos-imagenes'` devuelve `0` filas. Conclusión: `anon` pu
 si ya conoce la URL pública exacta (es el propósito del bucket público), pero **no puede listar ni
 enumerar** el contenido de la carpeta de otra empresa. No es el problema que se había anotado —
 cerrado como no-issue, no hace falta ningún cambio de política.
+
+**`pg_net` movido a `extensions` — cerrado 2026-08-21 (mig.342), con Nadia mirando los logs en
+vivo:** resultó menos riesgoso de lo que parecía al principio. Las funciones reales de pg_net
+(`http_get`, `http_post`, etc.) YA vivían en su propio schema `net`, no en `public` — lo único mal
+ubicado era el registro de la extensión en sí. Los 8 cron jobs del proyecto llaman todos
+`net.http_post(...)`, ninguno usa `public.*`, así que no había ninguna llamada que cambiar.
+Encontrado en el camino: pg_net **no admite** `ALTER EXTENSION ... SET SCHEMA` (control file
+`relocatable=false`) — hace falta `DROP EXTENSION` + `CREATE EXTENSION ... SCHEMA extensions` en la
+misma transacción (así ningún cron ve un estado intermedio sin `net.http_post`; si alguno intenta
+llamarlo justo en ese instante, Postgres lo hace esperar el lock, no falla). Probado con
+`BEGIN...ROLLBACK` antes de aplicar, y aplicado mirando en vivo `cron.job_run_details` y los logs de
+Edge Functions: los 6 cron jobs que corren cada 1-5 min (`mp-qr-poller`, `tiendanube-catalogo-worker`,
+`tiendanube-stock-worker`, `mercadolibre-catalogo-worker`, `mercadolibre-stock-worker`,
+`arca-worker`) siguieron en `succeeded` en la ventana exacta de la migración, y sus Edge Functions
+correspondientes se siguieron invocando normal segundos después. `pg_extension` confirmado sin
+ninguna extensión en `public` después del fix. Con esto se cierra el último pendiente de la tanda de
+seguridad del 20/08 — advisors en estado limpio salvo el toggle de leaked-password (bloqueado por
+plan free, ver más abajo) y la auditoría de código de las 79 funciones (no urgente, ver arriba).
 
 **Actualización 2026-08-20 — decisión consciente, no reabrir como urgente:** la fecha límite
 (17/08/2026) ya pasó, verificado ese día que la organización seguía en `free` y nada se rompió.
