@@ -2503,11 +2503,51 @@ amplia que permite **listar** todos los archivos, no sólo acceder por URL; prot
 filtradas desactivada en Auth (es un toggle del dashboard); `extension_in_public`; y 2 tablas con RLS
 activo pero sin políticas (`afip_tickets`, `arca_worker_run` — cerradas de hecho, sin acceso).
 
+## Retomado 2026-08-20 — Nadia pidió seguir con seguridad
+
+Se volvió a pedir el reporte de advisors EN VIVO (no confiar en la nota vieja, ya desactualizada
+por el trabajo del propio día): 89 hallazgos totales, no 82+10+resto como decía arriba — bajó solo
+porque hoy mismo, antes de esto, ya se habían corregido 8 de los 10 `anon` (mig.337, Recuento/
+Revalorización).
+
+**Hallazgo nuevo, nivel ERROR, no estaba en la nota vieja — corregido (mig.340):**
+`v_saldo_proveedores` había perdido `security_invoker` -- mismo bug que `facturas_saldo_pendiente`
+(mig.299) pero **más grave**: `anon`, SIN LOGIN, tenía SELECT y podía leer nombre/CUIT/saldo de
+deuda de los proveedores de TODAS las empresas. La propia mig.299 decía en su comentario que
+`v_saldo_proveedores` YA tenía el flag en ese momento (03/08) -- se había seteado a mano, sin
+migración, y se perdió en la migración de cuenta del 16/08 (mismo patrón de drift de siempre).
+Probado con `BEGIN...ROLLBACK` simulando los 3 roles antes de aplicar: empresa real ve sus 12
+filas, otra empresa ve 0, `anon` bloqueado con error de permiso.
+
+**3 funciones más corregidas (mig.341):** `productos_stock_bajo` (¡la que yo mismo apliqué ayer,
+mig.333 — le faltaba el mismo REVOKE que le puse a todo lo demás ese día, y le faltaba
+`search_path`!), `marcar_cae_resuelto_manual` (se saca `anon`, se mantiene `authenticated` porque
+la usa `MonitorFacturacionAFIP.jsx`), `rls_auto_enable` (es un event trigger, no se llama nunca
+directo, revocar el EXECUTE no afecta que siga disparándose solo al crear tablas).
+
+**Estado actual del reporte de advisors, verificado después de aplicar:** 0 ERROR, 0 `anon`
+ejecutable, 0 `search_path` mutable. Quedan: 79 funciones ejecutables por `authenticated` (la tanda
+grande, sin arrancar — la mayoría probablemente están bien así a propósito, hay que separar
+"correcto" de "descuido" función por función, no se puede revocar en bloque sin auditar), 2 tablas
+RLS-sin-política (INFO, confirmado no-issue, `afip_tickets`/`arca_worker_run` cerradas de hecho),
+`extension_in_public` (`pg_net` — usado por un montón de crons críticos de ARCA/MercadoPago/
+Tiendanube, mover el schema necesita su propia tanda con pruebas dedicadas, no se apura),
+protección de contraseñas filtradas (**confirmado en vivo que NO se puede activar en plan free** —
+ver nota de la sección del plan free más arriba, `402 Payment Required` al guardar). Los 2 buckets
+públicos con política de listado amplio tampoco se tocaron todavía.
+
 **Actualización 2026-08-20 — decisión consciente, no reabrir como urgente:** la fecha límite
 (17/08/2026) ya pasó, verificado ese día que la organización seguía en `free` y nada se rompió.
 Le pregunté a Nadia directo: **"queda free por ahora, dejalo así"** — es una decisión tomada, no
 un olvido de Luciano. No volver a marcar esto como pendiente urgente en futuras sesiones a menos
 que Nadia lo pida ella misma.
+
+**Consecuencia real y concreta de quedarse en `free`, encontrada el mismo día:** el toggle
+"Prevent use of leaked passwords" (Auth → Providers → Email) de este pendiente de seguridad
+**no se puede activar** en plan free — el dashboard lo deja tildar visualmente, pero al guardar
+devuelve `402 Payment Required` y vuelve a quedar apagado al recargar. Confirmado en vivo con
+Nadia mirando la pantalla. Si en algún momento se sube a Pro, este es un toggle suelto para
+activar (no depende de ninguna migración del repo).
 
 ---
 
