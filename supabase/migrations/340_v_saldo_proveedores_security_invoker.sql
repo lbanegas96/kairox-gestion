@@ -1,0 +1,44 @@
+-- mig.340 — Cerrar blindspot multi-tenant: v_saldo_proveedores había perdido
+-- security_invoker (regresión silenciosa, drift de la migración de cuenta).
+--
+-- HALLAZGO (auditoría de advisors de Supabase, 2026-08-20 — nivel ERROR):
+-- v_saldo_proveedores es la ÚNICA de las 5 vistas de saldo del esquema public
+-- sin security_invoker. La propia mig.299 (03/08) dice explícitamente en su
+-- comentario que en ese momento v_saldo_proveedores YA lo tenía ("Su hermana
+-- gemela... ya tenía security_invoker=true, igual que v_saldo_proveedores").
+-- Confirmado con pg_class.reloptions: las otras 4 vistas (compras_saldo_pendiente,
+-- facturas_saldo_pendiente, retenciones_acumulado_mensual, v_facturas_arca_monitor)
+-- siguen con el flag puesto — v_saldo_proveedores es la única con reloptions = null.
+--
+-- CAUSA: el fix de security_invoker en esta vista se hizo a mano en algún
+-- momento antes del 03/08, SIN quedar en ninguna migración del repo (grep
+-- confirma que ninguna migración posterior a la 042 vuelve a tocar esta
+-- vista). Se perdió en la migración de cuenta de Supabase del 16/08 —mismo
+-- patrón de drift ya encontrado antes con grants y triggers (ver mig.330 y
+-- PLAN_MIGRACION_SUPABASE.md)— porque no había ningún archivo que lo
+-- volviera a aplicar. Esta migración lo deja permanente y versionado.
+--
+-- IMPACTO (más grave que el caso de mig.299): `anon` — sin login, ni
+-- siquiera autenticado — tenía SELECT sobre la vista. Cualquiera podía
+-- pegarle al endpoint REST /v_saldo_proveedores sin ningún filtro y leer
+-- nombre, CUIT y saldo de deuda de los proveedores de TODAS las empresas.
+-- CUIT es un dato personal/identificatorio alcanzado por la Ley 25.326, y es
+-- exactamente lo que CLAUDE.md prohíbe ("un usuario de Empresa A ve datos de
+-- Empresa B").
+--
+-- POR QUÉ ES SEGURO: proveedores (política proveedores_select, exige
+-- empresa_id = get_my_empresa_id() + permiso de módulo 'compras') y
+-- cuenta_corriente_proveedores (política ccp_select, mismo filtro de
+-- empresa_id) ya tienen RLS activo y funcionando — es de lo que depende el
+-- resto de la app. El único call-site del frontend
+-- (TabPosicionActual.jsx:94) ya manda .eq('empresa_id', user.empresa_id) —
+-- no hace falta tocar nada ahí, defensa en profundidad ya estaba bien.
+--
+-- PROBADO en vivo contra producción (Nalux real), simulando cada rol con
+-- SET LOCAL role + request.jwt.claim.sub, mismo método que mig.299:
+--   A · usuario de Nalux           → ve sus 12 filas reales ✓
+--   B · usuario de otra empresa    → ve 0 filas ✓ (antes veía las 12 de Nalux)
+--   C · anon sin login             → permission denied for function
+--                                     get_my_empresa_id ✓ (bloqueo duro)
+
+ALTER VIEW public.v_saldo_proveedores SET (security_invoker = true);
