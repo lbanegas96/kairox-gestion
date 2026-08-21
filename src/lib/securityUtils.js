@@ -81,6 +81,31 @@ export function validatePasswordStrength(password) {
   return { valid: errors.length === 0, errors, strength };
 }
 
+// ─── Validación de contraseña básica (login/registro/reset) ──────────────────
+// Regla más liviana que validatePasswordStrength(): 8 caracteres, mayúscula,
+// minúscula y número — la misma política configurada del lado servidor en
+// Supabase Auth (Providers → Email → Password requirements), para que el
+// mensaje de error del formulario coincida con lo que el backend va a exigir.
+
+const PASSWORD_MIN_LENGTH = 8;
+
+export function validatePasswordBasic(password) {
+  if (!password) return { valid: false, message: 'La contraseña es requerida.' };
+  if (password.length < PASSWORD_MIN_LENGTH) {
+    return { valid: false, message: `Debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.` };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, message: 'Debe incluir al menos una mayúscula.' };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, message: 'Debe incluir al menos una minúscula.' };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, message: 'Debe incluir al menos un número.' };
+  }
+  return { valid: true, message: '' };
+}
+
 // ─── Mensajes de error seguros ────────────────────────────────────────────────
 
 /**

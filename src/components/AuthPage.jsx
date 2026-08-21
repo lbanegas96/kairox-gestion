@@ -3,11 +3,13 @@ import { useState } from 'react';
 import { Lock, Mail, User, UserCircle, ArrowRight, Loader2, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useConfig } from '@/contexts/ConfigContext';
 import { supabase } from '@/lib/customSupabaseClient';
+import { validatePasswordBasic } from '@/lib/securityUtils';
 import PasswordRecoveryModal from '@/components/PasswordRecoveryModal';
 
 function AuthPage() {
@@ -31,11 +33,19 @@ function AuthPage() {
       toast({ title: "Email inválido", description: "Por favor ingresa un correo electrónico válido.", variant: "destructive" });
       return false;
     }
-    if (!formData.password || formData.password.length < 6) {
-      toast({ title: "Contraseña débil", description: "La contraseña debe tener al menos 6 caracteres.", variant: "destructive" });
+    if (!formData.password) {
+      toast({ title: "Contraseña requerida", description: "Ingresá tu contraseña.", variant: "destructive" });
       return false;
     }
+    // La política de 8 caracteres + mayúscula/minúscula/número sólo aplica al crear
+    // cuenta: exigírsela también en el login rompería a usuarios con contraseñas
+    // viejas que no cumplen la regla nueva (Supabase ya la valida server-side igual).
     if (!isLogin) {
+      const { valid, message } = validatePasswordBasic(formData.password);
+      if (!valid) {
+        toast({ title: "Contraseña débil", description: message, variant: "destructive" });
+        return false;
+      }
       if (!formData.name.trim()) {
         toast({ title: "Nombre requerido", description: "Por favor ingresa tu nombre.", variant: "destructive" });
         return false;
@@ -226,10 +236,9 @@ function AuthPage() {
                 <Label htmlFor="password" className="text-kx-text-2 text-xs uppercase font-bold tracking-wider">Contraseña</Label>
                 <div className="relative group">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-kx-text-3 group-focus-within:text-kx-violet transition-colors" />
-                  <Input
+                  <PasswordInput
                     id="password"
                     name="password"
-                    type="password"
                     value={formData.password}
                     onChange={handleChange}
                     className="pl-10 bg-kx-surface-2 border-kx-border text-kx-text focus:border-kx-violet transition-all"

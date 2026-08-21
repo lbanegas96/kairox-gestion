@@ -2527,14 +2527,36 @@ directo, revocar el EXECUTE no afecta que siga disparándose solo al crear tabla
 
 **Estado actual del reporte de advisors, verificado después de aplicar:** 0 ERROR, 0 `anon`
 ejecutable, 0 `search_path` mutable. Quedan: 79 funciones ejecutables por `authenticated` (la tanda
-grande, sin arrancar — la mayoría probablemente están bien así a propósito, hay que separar
-"correcto" de "descuido" función por función, no se puede revocar en bloque sin auditar), 2 tablas
+grande — **auditada por SQL directo, ver abajo, resultó no-issue**), 2 tablas
 RLS-sin-política (INFO, confirmado no-issue, `afip_tickets`/`arca_worker_run` cerradas de hecho),
 `extension_in_public` (`pg_net` — usado por un montón de crons críticos de ARCA/MercadoPago/
-Tiendanube, mover el schema necesita su propia tanda con pruebas dedicadas, no se apura),
+Tiendanube, mover el schema necesita su propia tanda con pruebas dedicadas, no se apura, requiere
+que Nadia esté presente por el riesgo),
 protección de contraseñas filtradas (**confirmado en vivo que NO se puede activar en plan free** —
-ver nota de la sección del plan free más arriba, `402 Payment Required` al guardar). Los 2 buckets
-públicos con política de listado amplio tampoco se tocaron todavía.
+ver nota de la sección del plan free más arriba, `402 Payment Required` al guardar).
+
+**Auditoría de las 79 funciones `authenticated_security_definer_function_executable` (misma tarde,
+Nadia dijo "seguí con las otras cosas, ya vengo"):** el nombre del lint es engañoso — no dice que
+haya algo mal, sólo que existen funciones `SECURITY DEFINER` invocables por `authenticated` (que es
+exactamente cómo está diseñada toda la capa de RPCs del sistema — `crear_venta`, `crear_nota_credito`,
+etc. — a propósito, para poder validar `empresa_id` del lado servidor en vez de confiar en el
+cliente). Auditado con una query SQL directa sobre `pg_proc`/`has_function_privilege`: de las 79,
+**ninguna tiene `anon_exec = true` y todas tienen `search_path` explícito seteado** (`search_path=public`,
+una con `search_path=public, vault`) — los dos problemas reales que si existieran ameritarían un
+fix ya están cerrados. No hace falta revocar nada en bloque; quedaría pendiente sólo una revisión de
+código (lógica interna de cada función), que es una tarea de code-review distinta a esta auditoría
+de configuración, no algo que haya que apurar hoy.
+
+**Los 2 buckets públicos de Storage (`logos-empresa`, `productos-imagenes`), mismo momento:**
+`public = true` a nivel bucket (correcto y necesario — así se ven los logos/fotos de producto sin
+login, ej. en tickets o catálogos compartidos). Revisadas las políticas de `storage.objects`: las 8
+políticas (`SELECT`/`INSERT`/`UPDATE`/`DELETE` × 2 buckets) están **todas** restringidas a
+`{authenticated}` + `foldername = empresa_id` propio — no hay ninguna política que le dé a `anon`
+acceso de listado. Probado en vivo con `SET LOCAL role anon`: `SELECT count(*) FROM storage.objects
+WHERE bucket_id='productos-imagenes'` devuelve `0` filas. Conclusión: `anon` puede bajar un archivo
+si ya conoce la URL pública exacta (es el propósito del bucket público), pero **no puede listar ni
+enumerar** el contenido de la carpeta de otra empresa. No es el problema que se había anotado —
+cerrado como no-issue, no hace falta ningún cambio de política.
 
 **Actualización 2026-08-20 — decisión consciente, no reabrir como urgente:** la fecha límite
 (17/08/2026) ya pasó, verificado ese día que la organización seguía en `free` y nada se rompió.
@@ -2580,6 +2602,35 @@ funcionando. Confirmado por Nadia en vivo ("anda perfecto").
 triggers, agregar a la checklist manual: `Auth → URL Configuration` (Site URL + Redirect URLs) y
 `Auth → Emails → SMTP Settings` — ninguno de los dos se exporta con los dumps de schema/datos, se
 pierden en silencio y sólo se notan cuando alguien intenta recuperar la contraseña.
+
+### Política de contraseña (8 caracteres + mayúscula/minúscula/número) + ojito para verla
+
+A pedido de Nadia, mismo criterio que "otras apps": mínimo 8 caracteres con mayúscula, minúscula y
+número. Dos partes:
+
+1. **Servidor (Supabase Auth → Providers → Email):** `Minimum password length` 6→8, `Password
+   requirements` de "No required characters" a "Lowercase, uppercase letters and digits". Supabase
+   ahora rechaza de por sí cualquier alta/cambio de contraseña que no cumpla — no depende de que el
+   frontend valide bien.
+2. **Frontend:** nueva función `validatePasswordBasic()` en `src/lib/securityUtils.js` (8 caracteres
+   + regex de mayúscula/minúscula/número, mensaje de error específico por regla) — mismo criterio
+   que el servidor, para que el mensaje de error coincida con lo que Supabase va a exigir igual.
+   Se aplica en `ResetPasswordPage.jsx` (siempre — es la pantalla de "elegí tu nueva contraseña") y
+   en `AuthPage.jsx` **sólo al registrarse** (`!isLogin`), nunca al iniciar sesión — exigirle la
+   regla nueva a un login con una contraseña vieja más corta rompería a usuarios existentes.
+   (Nota: ya existía en el repo un `validatePasswordStrength()` más estricto — 12 caracteres +
+   símbolo — en el mismo archivo, pero huérfano, ningún componente lo importaba. No se tocó ni se
+   usó acá porque pide más de lo que Nadia pidió; queda como validador alternativo disponible si en
+   algún momento se quiere una política más dura.)
+
+**Ojito para mostrar/ocultar contraseña:** nuevo componente `src/components/ui/password-input.jsx`
+(`PasswordInput`, envuelve el `<Input>` de siempre + botón con ícono `Eye`/`EyeOff` de lucide-react,
+`tabIndex={-1}` para no interrumpir el tab entre campos). Reemplaza los `<Input type="password">` en
+`ResetPasswordPage.jsx` (nueva contraseña + confirmar) y `AuthPage.jsx` (login/registro). No se tocó
+`ConfigMercadoPagoModal.jsx` (tiene 2 campos `type="password"` pero son credenciales de MP, no
+contraseñas de usuario — fuera del pedido de hoy).
+
+`npx eslint`/`npx vitest run` (159/159) sin errores nuevos. `npx vite build` corrido en paralelo.
 
 ---
 

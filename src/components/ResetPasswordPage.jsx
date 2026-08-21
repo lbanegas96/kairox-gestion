@@ -2,10 +2,11 @@ import { useState } from 'react';
 
 import { Lock, Loader2, CheckCircle2, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
+import { validatePasswordBasic } from '@/lib/securityUtils';
 
 function ResetPasswordPage({ onDone }) {
   const [password, setPassword] = useState('');
@@ -16,8 +17,9 @@ function ResetPasswordPage({ onDone }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (password.length < 6) {
-      toast({ title: 'Contraseña muy corta', description: 'Debe tener al menos 6 caracteres.', variant: 'destructive' });
+    const { valid, message } = validatePasswordBasic(password);
+    if (!valid) {
+      toast({ title: 'Contraseña débil', description: message, variant: 'destructive' });
       return;
     }
     if (password !== confirm) {
@@ -74,13 +76,12 @@ function ResetPasswordPage({ onDone }) {
                   </Label>
                   <div className="relative group">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-kx-violet transition-colors" />
-                    <Input
+                    <PasswordInput
                       id="new-password"
-                      type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="pl-10 bg-slate-950/50 border-slate-800 text-white focus:border-kx-violet transition-all"
-                      placeholder="Mínimo 6 caracteres"
+                      placeholder="Mínimo 8 caracteres, con mayúscula y número"
                       disabled={loading}
                       autoFocus
                     />
@@ -93,9 +94,8 @@ function ResetPasswordPage({ onDone }) {
                   </Label>
                   <div className="relative group">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-kx-violet transition-colors" />
-                    <Input
+                    <PasswordInput
                       id="confirm-password"
-                      type="password"
                       value={confirm}
                       onChange={(e) => setConfirm(e.target.value)}
                       className="pl-10 bg-slate-950/50 border-slate-800 text-white focus:border-kx-violet transition-all"
