@@ -2549,6 +2549,38 @@ devuelve `402 Payment Required` y vuelve a quedar apagado al recargar. Confirmad
 Nadia mirando la pantalla. Si en algún momento se sube a Pro, este es un toggle suelto para
 activar (no depende de ninguna migración del repo).
 
+### Recupero de contraseña roto otra vez — no por el SMTP, por config de URL perdida (mismo drift)
+
+Nadia probó el flujo real de "Olvidé mi contraseña" para confirmar el fix de SMTP (ver arriba) y
+encontró dos problemas nuevos, **ninguno relacionado con Gmail SMTP en sí** — SMTP entregaba bien,
+el problema estaba en otro panel de Auth que también quedó sin migrar:
+
+**1) `Authentication → URL Configuration` — perdido en la migración del 16/08, igual que el SMTP:**
+- `Site URL` estaba en `http://localhost:3000` (el default de desarrollo de Supabase).
+- `Redirect URLs` estaba **vacío**, ninguna URL en la lista blanca.
+
+El código (`AuthPage.jsx:99`, `UsuariosSection.jsx:182`) manda `redirectTo: window.location.origin`
+— o sea, al pedir el reset desde `kairox-gestion-chi.vercel.app`, le pide a Supabase volver ahí.
+Como esa URL no estaba en la lista blanca, Supabase caía al *fallback* (`Site URL` = localhost) y
+el link del mail llevaba a una página rota. Corregido a mano en el dashboard (no es una migración
+de SQL, es config de proyecto — mismo tipo de config que ya se había perdido con el SMTP):
+- `Site URL` → `https://kairox-gestion-chi.vercel.app`
+- `Redirect URLs` → `https://kairox-gestion-chi.vercel.app` y `https://kairox-gestion-chi.vercel.app/**`
+
+**2) Ruido esperado, no es un bug:** en los logs de `auth_logs` aparecen intentos de `/verify` con
+`"Email link is invalid or has expired" / "One-time token not found"` justo al mismo segundo que un
+`/verify` exitoso (`303`) — es el escaneo automático de links de Gmail (u otro filtro de seguridad
+de correo) abriendo el link para revisarlo antes de que el usuario lo toque, lo que "quema" el
+token de un solo uso. Confundió a Nadia al principio (parecía "mail vacío" porque estaba mirando un
+mail más viejo en la bandeja, no el último). **Probado de punta a punta después del fix:** mail con
+contenido completo → click → `kairox-gestion-chi.vercel.app` → formulario "Nueva Contraseña"
+funcionando. Confirmado por Nadia en vivo ("anda perfecto").
+
+**Nota para la próxima migración de cuenta de Supabase (si vuelve a pasar):** además de RLS/grants/
+triggers, agregar a la checklist manual: `Auth → URL Configuration` (Site URL + Redirect URLs) y
+`Auth → Emails → SMTP Settings` — ninguno de los dos se exporta con los dumps de schema/datos, se
+pierden en silencio y sólo se notan cuando alguien intenta recuperar la contraseña.
+
 ---
 
 ## ⚠️ QR MercadoPago en el POS — Fase 1 (backend) lista, con un bug real pendiente — mig.297/298
