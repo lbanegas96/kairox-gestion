@@ -2253,16 +2253,28 @@ Verificado hoy: la organización **NALUX sigue en plan `free`**, y el dashboard 
 proyectos quedan restringidos desde el **17 de agosto**. Quedan **2 semanas**. Es tema de billing, va
 por tu cuenta. Si el proyecto se restringe, se cae la producción de todos los clientes.
 
-### 3. 🔒 Activar "Leaked password protection" (1 clic, gratis)
+### 3. 🔒 Activar "Leaked password protection" — ~~1 clic, gratis~~ ⚠️ requiere plan Pro
 
 **Supabase → Authentication → Policies → "Leaked password protection".** No se puede activar por
 migración ni por MCP, es un toggle del dashboard. Hace que Supabase rechace contraseñas que
 aparecen en filtraciones conocidas (HaveIBeenPwned). Dado que el sistema maneja datos contables de
 varias empresas, conviene. Lo puede hacer cualquiera de los dos.
 
+**Actualización 20/08:** no es gratis como decía esta nota — probado en vivo, el dashboard deja
+tildar el toggle pero al guardar devuelve `402 Payment Required`. Sólo disponible en plan Pro o
+superior. Como partial mitigation, el 21/08 se subió la política de contraseña del lado servidor a
+8 caracteres + mayúscula/minúscula/número (Auth → Providers → Email → Password requirements, sin
+costo) — no es lo mismo que bloquear contraseñas filtradas, pero reduce el riesgo de las más
+débiles mientras se sigue en free.
+
 ---
 
 # 🗂️ Estado de pendientes al 2026-08-03
+
+> ⚠️ **Desactualizada** — esta tabla es una foto histórica del 03/08, no se mantiene al día.
+> Varios ítems que acá figuran "abiertos" ya se cerraron después (el secreto de firma de MP, el
+> plan free, el toggle de leaked passwords). Ver **"🗂️ Estado de pendientes al 2026-08-21"**
+> (al final del archivo) para la lista real y vigente.
 
 **Cerrados hoy** (4 migraciones, todas probadas en vivo contra producción y pusheadas):
 - ✅ mig.299 — `facturas_saldo_pendiente` ignoraba el RLS (fuga multi-tenant, era el único ERROR)
@@ -2283,9 +2295,9 @@ la que quedó abierta desde el 29/05). No queda ninguna sesión abierta en el si
 
 | Qué | De quién | Nota |
 |---|---|---|
-| Secreto de firma de MP | **Luciano** | Bloquea el QR por completo |
-| Plan free vence 17/08 | **Luciano** | 2 semanas |
-| Toggle leaked passwords | Cualquiera | 1 clic |
+| ~~Secreto de firma de MP~~ | — | ✅ Resuelto — el QR de MP funciona de punta a punta desde el 04/08 (fila de abajo), no podría si esto siguiera bloqueado. |
+| ~~Plan free vence 17/08~~ | — | Resuelto el 20/08 como **decisión consciente**, no como upgrade: Nadia confirmó "queda free por ahora, dejalo así". La fecha límite ya pasó y no se rompió nada. |
+| ~~Toggle leaked passwords~~ | — | Intentado el 20/08: **no se puede activar en plan free** (`402 Payment Required` al guardar, confirmado en vivo). No es "1 clic" como decía acá — requiere plan Pro. |
 | ~~QR MercadoPago Fase 2~~ | — | ✅ **HECHO** el 04/08 (mig.306/307): modal, polling, cancelar, cron de expiración y AFIP funcionando de punta a punta — probado con un pago real. |
 | ~~Revocar `GRANT` de `anon`~~ | — | ✅ **HECHO** el 03/08 (mig.304/305): `anon` pasó de 10 funciones ejecutables a **0**. |
 | Dominio propio en Resend | Nadia | Deferido a propósito. Gmail SMTP ya resuelve el bloqueo total. |
@@ -4864,3 +4876,38 @@ mostró código de hace varios commits atrás (sin `stock_bajo`, sin Recuento) a
 descartada por completo -- no volver a abrirla, mencionarla ni considerarla parte del proyecto
 (guardado también en memoria persistente de Claude, `feedback_url_produccion_correcta.md`).
 Confirmar con Luciano si además hay que borrar/redirigir el dominio del lado de Vercel.
+
+---
+
+# 🗂️ Estado de pendientes al 2026-08-21
+
+Reemplaza a la tabla del 03/08 de más arriba (marcada como desactualizada). Esta es la lista real
+al cierre de la sesión del 20-21/08 con Nadia.
+
+**Cerrado en esta tanda (20-21/08):**
+- ✅ `v_saldo_proveedores` sin `security_invoker` — fuga cross-tenant real (mig.340)
+- ✅ Grants de más en 3 funciones + `search_path` de `productos_stock_bajo` (mig.341)
+- ✅ `pg_net` movido de `public` a `extensions` (mig.342), probado en vivo sin perder ningún cron
+- ✅ Auditoría de código de las 79 funciones `SECURITY DEFINER` — sin hallazgos reales
+- ✅ 2 buckets públicos de Storage — auditados, `anon` no puede listar, no-issue
+- ✅ Recupero de contraseña — SMTP (Gmail) y URL Configuration reconstruidos tras perderse en la
+  migración de cuenta del 16/08, probado de punta a punta
+- ✅ Política de contraseña 8+mayús/minús/número (servidor + frontend) + ojito para verla
+- ✅ Producto "Danica" corrupto — borrado (sin movimientos reales)
+- ✅ 3-Way Match de Órdenes de Compra — ya neteaba mal las NC de proveedor, corregido
+
+**Abiertos, con dueño:**
+
+| Qué | De quién | Nota |
+|---|---|---|
+| Import del resto del catálogo de kiosco (3.380 productos) | — | Pausado. El CSV no se conserva (vivía en el scratchpad de una sesión vieja) — habría que regenerarlo si se retoma |
+| Bloque 5 — lectura de balanza por código de barras | — | Deferido a futuro a pedido de Nadia (21/08). Necesita un ejemplo real de etiqueta de balanza antes de diseñar el parser — no hay un estándar único |
+| 4 NC históricas mal declaradas ante ARCA | Contador de Nalux | No corregible por código |
+| Dominio propio en Resend | Nadia | Deferido a propósito — Gmail SMTP ya resuelve el bloqueo total |
+| CbteAsoc en `informar-caea` (circuito CAEA) | Equipo | Sin urgencia — nadie usa CAEA en producción todavía |
+| MELI Factura A | — | Deferido. **No construir sin pedido explícito** |
+| MP QR — reapuntar webhook | Luciano | No es nuestro |
+| `pg_net` schema en `public` | — | Ya no aplica, cerrado arriba |
+| Leaked password protection | — | Bloqueado por plan free (`402`), requiere Pro |
+| Plan free de Supabase | — | **No es un pendiente** — decisión consciente de Nadia, no re-marcar como urgente sin que ella lo pida |
+| Auditoría de código de las 36 funciones restantes (no muestreadas) | — | Opcional, sólo si se quiere garantía del 100% — el patrón en la muestra de mayor riesgo da confianza razonable |
