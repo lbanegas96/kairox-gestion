@@ -4714,14 +4714,22 @@ alcanza por ahora) — plan completo en `C:\Users\lbanegas\.claude\plans\humble-
 - **No se aplicó nada a producción** -- queda para la próxima sesión, con Nadia o con Luciano,
   aplicar las 3 migraciones + `NOTIFY pgrst 'reload schema'` + probar en vivo por browser.
 
-**Hallazgo de datos, sin tocar**: un producto del lote de 50 (`"Danica, soft ligth"`, con una
-coma dentro del nombre) quedó corrupto en la base real -- `nombre='Danica'`,
-`codigo_sku='soft ligth'`, `codigo_barras='Unidad'`, `descripcion='5'`, y una categoría
-huérfana literalmente llamada `'7791620009858'` (el código de barra real de ese producto). El
-parser del importador se probó línea por línea contra el CSV real y es correcto (los otros
-49/50 productos entraron perfectos) -- la sospecha es que el archivo se reabrió/regrabó en
-Excel entre que se generó y se subió, rompiendo el quoting de esa única celda con coma. No se
-borró nada sin confirmar con Luciano primero.
+**Hallazgo de datos -- resuelto 2026-08-21, a pedido de Nadia**: un producto del lote de 50
+(`"Danica, soft ligth"`, con una coma dentro del nombre) quedó corrupto en la base real --
+`nombre='Danica'`, `codigo_sku='soft ligth'`, `codigo_barras='Unidad'`, `descripcion='5'`, y una
+categoría huérfana literalmente llamada `'7791620009858'` (el código de barra real de ese
+producto). El parser del importador se probó línea por línea contra el CSV real y es correcto
+(los otros 49/50 productos entraron perfectos) -- la sospecha es que el archivo se reabrió/regrabó
+en Excel entre que se generó y se subió, rompiendo el quoting de esa única celda con coma.
+
+Antes de borrar se confirmó que no tenía ningún movimiento real (`comprobante_items`,
+`movimientos_inventario`, `detalle_compras`: 0 filas cada uno -- stock y precio en 0, nunca se
+vendió ni se compró). Sí apareció una referencia no obvia: un ítem sin contar
+(`cantidad_contada` null) del recuento `RC-20260820-004`, que ya estaba `anulado` y sin asiento
+contable (leftover de las pruebas en vivo del Bloque 4 de recuento/revalorización del 20/08). Se
+borraron los 3 registros en orden (`recuento_inventario_items` → `productos` → `categorias`),
+verificado en 0 en los tres después. Nadia va a recargar el producto bien desde la pantalla de
+Productos cuando tenga los datos reales a mano (no era urgente reponerlo).
 
 **Pendiente sin decidir, recordatorio explícito de Luciano**: revisar cómo se vende hoy un
 fiambre u otro artículo SIN código de barras (se corta/pesa, no viene con EAN de fábrica) --
