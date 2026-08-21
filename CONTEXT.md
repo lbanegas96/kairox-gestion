@@ -2541,9 +2541,26 @@ etc. — a propósito, para poder validar `empresa_id` del lado servidor en vez 
 cliente). Auditado con una query SQL directa sobre `pg_proc`/`has_function_privilege`: de las 79,
 **ninguna tiene `anon_exec = true` y todas tienen `search_path` explícito seteado** (`search_path=public`,
 una con `search_path=public, vault`) — los dos problemas reales que si existieran ameritarían un
-fix ya están cerrados. No hace falta revocar nada en bloque; quedaría pendiente sólo una revisión de
-código (lógica interna de cada función), que es una tarea de code-review distinta a esta auditoría
-de configuración, no algo que haya que apurar hoy.
+fix ya están cerrados.
+
+**Segunda pasada, 21/08 — revisión de lógica interna, a pedido de Nadia ("vamos con el 3"):** de
+las 79, 37 reciben `p_empresa_id` como parámetro explícito — las 37 validan ese valor contra
+`get_my_empresa_id()` en el cuerpo, son `SECURITY INVOKER` (protegidas por RLS de la tabla, ej.
+`productos_stock_bajo`, `next_numero_asiento`), o delegan a una versión que sí valida (el overload
+de 2 args de `obtener_proximo_numero` llama directo al de 3 args, que valida). De las 42 restantes
+que NO reciben `p_empresa_id`: 4 son funciones de "identidad propia" que no lo necesitan
+(`is_admin`, `get_my_role`, `has_module_permission`, `create_tenant` — todo derivado de `auth.uid()`),
+2 son `SECURITY INVOKER`, y las 36 que quedan sí usan `get_my_empresa_id()` en el cuerpo. De esas 36,
+se leyeron línea por línea las 7 de mayor riesgo real (mueven plata/contabilidad):
+`anular_asiento`, `confirmar_asiento`, `cambiar_estado_cheque`, `contabilizar_movimiento_bancario`,
+`revertir_contabilizacion_movimiento`, `ajustar_stock_manual`, `acreditar_movimiento_caja`. Las 7
+siguen el mismo patrón defensivo sin excepción: traen el registro por el ID recibido, comparan su
+`empresa_id` real contra `get_my_empresa_id()` y `RAISE EXCEPTION` si no coincide (antes de tocar
+nada), varias chequean además `has_module_permission()`, y las que también corren desde cron tienen
+guard de `auth.role() = 'service_role'` para no bloquearse a sí mismas. No se encontró ningún caso
+real de cross-tenant. Las ~29 funciones restantes no se leyeron línea por línea (quedan
+disponibles para una pasada exhaustiva si se quiere garantía del 100%, pero la consistencia del
+patrón en la muestra de mayor riesgo da confianza razonable de que no es código ad-hoc).
 
 **Los 2 buckets públicos de Storage (`logos-empresa`, `productos-imagenes`), mismo momento:**
 `public = true` a nivel bucket (correcto y necesario — así se ven los logos/fotos de producto sin
