@@ -279,6 +279,9 @@ export interface FacturaProveedor {
   notas?: string | null;
   estado: FacturaEstado;
   created_at: string;
+  // Suma de notas de crédito de proveedor (activas) emitidas contra esta factura —
+  // ver fix del 3-Way Match en ModalDetalleOC.jsx.
+  nc_total?: number;
 }
 
 export interface OrdenCompra {

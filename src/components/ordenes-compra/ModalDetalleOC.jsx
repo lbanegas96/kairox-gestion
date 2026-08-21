@@ -179,8 +179,11 @@ function ModalDetalleOC({
                 .reduce((s, i) => s + Number(i.cantidad_recibida) * Number(i.costo_unitario), 0);
               // mig.332 — puede haber varias facturas parciales: el total a
               // comparar es la suma de todas, no una sola.
+              // Bug real (21/08): no neteaba las Notas de Crédito de Proveedor
+              // emitidas contra esas facturas — ver getFacturas() en
+              // ordenesCompraService.ts, que ahora trae nc_total por factura.
               const totalFactura = facturas.length > 0
-                ? facturas.reduce((s, f) => s + Number(f.monto_total), 0)
+                ? facturas.reduce((s, f) => s + Number(f.monto_total) - Number(f.nc_total || 0), 0)
                 : null;
               const diff = totalFactura !== null ? Math.abs(totalFactura - totalRecibido) : null;
               const matchOk = diff !== null && diff < 0.01;
@@ -236,6 +239,11 @@ function ModalDetalleOC({
                             </span>
                             <span>N° {f.numero_factura}</span>
                             <span className="tabular-nums">{formatCurrency(Number(f.monto_total), detalle.moneda ?? 'ARS')}</span>
+                            {Number(f.nc_total) > 0 && (
+                              <span className="tabular-nums text-kx-red" title="Notas de crédito de proveedor activas contra esta factura">
+                                NC -{formatCurrency(Number(f.nc_total), detalle.moneda ?? 'ARS')}
+                              </span>
+                            )}
                           </div>
                           {f.estado === 'pendiente' && (
                             <span className="flex items-center gap-1 text-xs text-kx-text-3">

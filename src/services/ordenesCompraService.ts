@@ -219,10 +219,18 @@ export const ordenesCompraService = {
 
   // mig.332 — una OC ahora puede tener varias Facturas de Proveedor parciales
   // (antes .maybeSingle(), 1:1 forzado por un índice único ya eliminado).
+  //
+  // Bug real (reportado por Nadia, 21/08): el 3-Way Match de ModalDetalleOC.jsx
+  // comparaba "Recibido" contra el total BRUTO de las facturas, sin netear las
+  // Notas de Crédito de Proveedor emitidas contra ellas — mostraba una
+  // diferencia que no era real cuando el proveedor había hecho una NC (ej. por
+  // una devolución o un ajuste de precio). Se trae acá `notas_credito_proveedor`
+  // anidada por `compra_id` (única FK existente, sin ambigüedad para PostgREST)
+  // y se suma sólo las que siguen `activa` (una `anulada` no debe descontar).
   async getFacturas(ordenId: string): Promise<FacturaProveedor[]> {
     const { data, error } = await supabase
       .from('compras')
-      .select('*, detalle_compras(*)')
+      .select('*, detalle_compras(*), notas_credito_proveedor(monto, estado)')
       .eq('orden_compra_id', ordenId)
       .order('fecha', { ascending: true });
     if (error) throw new Error(error.message);
@@ -233,6 +241,9 @@ export const ordenesCompraService = {
       monto_total: d.total,
       estado: d.estado_pago === 'pagada' ? 'pagada' : 'pendiente',
       detalle_compras: d.detalle_compras,
+      nc_total: (d.notas_credito_proveedor ?? [])
+        .filter((nc: { estado: string }) => nc.estado === 'activa')
+        .reduce((s: number, nc: { monto: number }) => s + Number(nc.monto), 0),
     })) as unknown as FacturaProveedor[];
   },
 

@@ -4518,6 +4518,17 @@ entre "Recibido" y "Factura" que puede confundir a simple vista. La cifra que ma
 (`cantidad_facturada` por ítem) es correcta; esto es sólo de visualización. Queda anotado para
 una futura pasada de pulido, no se tocó hoy.
 
+**Resuelto 2026-08-21, a pedido de Nadia:** `ordenesCompraService.getFacturas()` ahora trae
+`notas_credito_proveedor(monto, estado)` anidada por `compra_id` (única FK, sin ambigüedad para
+PostgREST) y calcula `nc_total` por factura (sólo NC `estado='activa'`, una `anulada` no debe
+descontar). En `ModalDetalleOC.jsx`, `totalFactura` del 3-Way Match ahora resta ese `nc_total` de
+cada factura antes de sumar, y cada línea de factura en la lista muestra "NC -$X" en rojo cuando
+corresponde, para que se vea de dónde sale el neto. Probado en vivo contra el caso real de
+`OC-00003` (localhost, sesión de Nadia): panel mostraba antes ~$181.500 de "Factura" (bruto de 3
+facturas de $60.500 cada una, todas neteadas 100% por su propia NC) más la factura real de
+$18.972,80 sin NC — ahora muestra exactamente **$18.972,80**, y la diferencia contra "Recibido"
+($46.707,20) ya es real (falta facturar el resto), no ruido de NC sin restar.
+
 **Punto 6 (4 ajustes UX de OC)**: los 4 confirmados — click en cualquier parte de la fila abre el
 detalle, Proveedor y Producto listan todo al hacer foco (sin tipear), y el campo "Entrega
 esperada" tiene `color-scheme: dark` activo (confirmado por JS), calendario visible y usable en
