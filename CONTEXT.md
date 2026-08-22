@@ -4909,6 +4909,7 @@ al cierre de la sesión del 20-21/08 con Nadia.
 | `pg_net` schema en `public` | — | Ya no aplica, cerrado arriba |
 | Leaked password protection | — | Bloqueado por plan free (`402`), requiere Pro |
 | Plan free de Supabase | — | **No es un pendiente** — decisión consciente de Nadia, no re-marcar como urgente sin que ella lo pida |
+| `VerAsientoButton` en el resto de los documentos | — | Solo está en Ventas. Falta en OC, Recepciones, Facturas de Compra, Recuento/Revalorización, ajustes de stock — mecánico, ver sección 22/08 |
 
 ## 2026-08-21 — Fallback de SITE_URL corregido + 4 NC históricas corregidas ante ARCA (homologación)
 
@@ -4972,3 +4973,57 @@ real habría que confirmar con el contador real de Nalux si además hace falta u
 rectificativa de IVA/IIBB para el período histórico, ya que la corrección solo neteó el
 efecto hacia adelante (período actual), no reescribe lo ya declarado en el período viejo.
 | Auditoría de código de las 36 funciones restantes (no muestreadas) | — | Opcional, sólo si se quiere garantía del 100% — el patrón en la muestra de mayor riesgo da confianza razonable |
+
+## 2026-08-22 — Luciano probando en producción: 3 hallazgos sobre Facturas, 1 corregido de fondo
+
+Sesión de Luciano conectado a producción real, facturando desde una Entrega
+(PED-20260822-001 → ENT-2026-0148 → FAC-20260822-001) y abriendo el resultado
+desde la sección Facturas. Reportó 4 cosas — 1 resultó ser comportamiento
+correcto, 3 eran reales y se corrigieron.
+
+**1. "La factura no se cierra al crear desde la Entrega" — FALSO POSITIVO.**
+Es a propósito: ajuste de UX del 16/08 (`NuevaFacturaModal.jsx`) — el modal
+queda abierto mostrando una pantalla de éxito ("Factura X creada — Total $Y")
+con botones **Cerrar (Esc)** y **Registrar Cobro**, mismo patrón que Duplicar.
+No se tocó nada acá — solo se le explicó a Luciano por qué es así.
+
+**2 y 3. Popup de Facturas (`SaleDetailModal.jsx`) con diseño anterior al
+rediseño — corregido.** Era el único documento del ERP que no tenía el botón
+**Mapa de Relaciones** (usaba su propio `DocumentFlowPanel` simplificado en
+vez del componente compartido `MapaRelaciones`), y el modal era angosto
+(`max-w-2xl`) en vez del shell ancho (`96vw`/`92vh`) que ya usan Entrega, OC,
+Pedido, Cotización, Recepciones, Facturas de Compra. Se alineó a ese patrón.
+
+De paso se encontró que `VentasSection.jsx` tenía un handler de navegación
+(`handleDocFlowNavigate`) que solo entendía "sección" (cambiar de tab), no
+"tipo+id" de documento — clickear "ver detalle" en un nodo de Mapa de
+Relaciones desde Facturas no habría abierto el documento puntual, solo
+cambiado de tab. Se unificó en `handleVentasNavigate`, que resuelve ambas
+formas (compatibilidad con `DocumentFlowPanel` Y con `MapaRelaciones`).
+Verificado en vivo: click en el chip "Pedido" del mapa de FAC-20260822-001
+abrió `ModalDetallePedido` con `PED-20260822-001` real, no solo cambió de tab.
+
+**4. Ningún documento del ERP linkeaba al asiento contable generado — gap
+real y grande, corregido para Ventas (resto queda para después).** El dato
+siempre existió (`asientos_contables.origen`/`origen_id`, y
+`comprobantes.asiento_id` directo) — nadie había construido el link. Nuevo:
+
+- `src/components/shared/ModalDetalleAsiento.jsx` — extraído del modal
+  "Ver detalle" que ya tenía `TabAsientos.jsx` (Contabilidad → Plan de
+  Cuentas → Asientos), ahora única fuente de verdad — `TabAsientos.jsx` lo
+  reusa en vez de tener su propia copia duplicada.
+- `src/components/shared/VerAsientoButton.jsx` — botón genérico, reusable en
+  cualquier documento: acepta `asientoId` directo (Ventas, y en el futuro
+  Recuento/Revalorización que también lo guardan) o `empresaId`+`origen`+
+  `origenId` para los documentos que no lo guardan directo (OC, Recepciones,
+  ajustes de stock, CC) — en ese caso resuelve con el método nuevo
+  `asientosService.getAsientoPorOrigen`.
+- Cableado en `SaleDetailModal.jsx` (Ventas) por ahora. **Pendiente
+  replicarlo** en Órdenes de Compra, Recepciones, Facturas de Compra,
+  Recuento/Revalorización de Inventario, ajustes de stock — mecánico, mismo
+  componente, solo hay que agregar el botón en cada `ModalDetalle*`.
+
+Verificado en vivo contra `FAC-20260822-001` real: "Ver asiento" muestra
+`AS-000248` balanceado (Cuentas a Cobrar / Ventas de Productos / IVA Débito
+Fiscal). Eslint 0 errores nuevos, vitest 159/159, vite build OK. Commit
+`09876bf`.
