@@ -1,5 +1,44 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Auditoría (22/08 noche) — motor contable + seguridad + regresión, antes del deploy final del día
+
+Antes de cerrar la sesión más larga del 22/08 (items 5, 6, 7 + los 3 hallazgos de arriba), Luciano
+pidió una revisión explícita de que nada se hubiera roto. Se corrió `npx eslint src` completo (0
+errores en todo el repo), `npx vitest run` (159/159) y `npx vite build` en limpio, y se
+desplegaron 3 agentes especializados en paralelo sobre el diff completo del día
+(`c6d6d7c..HEAD`, 8 commits):
+
+- **`sap-motor-contable-auditor`** — comparó carácter por carácter los cuerpos de
+  `registrar_cobro_cliente`/`registrar_pago_proveedor` (mig.343) contra sus versiones previas: el
+  único diff real es el parámetro `p_referencia_pago` nuevo y la columna que agrega al INSERT —
+  toda la lógica de débito/haber, cuentas del plan (1.1.1/1.1.2/1.1.8/2.1.1/4.4/5.9), diferencia
+  de cambio y el guard `total_debe=total_haber` quedaron intactos. Confirmó que mig.345 no toca
+  ninguna tabla contable, y que `TabContabilidad.jsx`/`documentFlowService.ts` son 100% lectura.
+- **`appsec-secure-coding`** — sin hallazgos críticos ni altos. Los checks de autorización
+  (`get_my_empresa_id()`, `has_module_permission`) siguen intactos en las 2 RPCs tocadas; el
+  trigger de mig.345 queda acotado por RLS aunque es `SECURITY DEFINER`; sin secretos ni datos
+  reales commiteados; sin `dangerouslySetInnerHTML`/`innerHTML` en el nuevo recibo imprimible.
+  Único ítem informativo (no introducido hoy, preexistente): 2 queries de solo lectura sin filtro
+  `empresa_id` explícito además de RLS — no es una fuga, es higiene para el futuro.
+- **`frontend-architect`** — revisión línea por línea de `SaleDetailModal.jsx` (el archivo editado
+  con un script de Node por rango de líneas, el método más propenso a error de la sesión): JSX
+  balanceado, sin fragmentos huérfanos del panel viejo de CAE, las 4 funciones críticas
+  (`handleReintentarCae`, `handleCancelarFactura`, `handleRegenerarAsiento`, `handleUpdateStatus`)
+  siguen conectadas correctamente tras mover las acciones al footer. Sin imports rotos tras borrar
+  `DocumentFlowPanel.jsx`.
+
+**Cerrado el único punto que los agentes dejaron "a confirmar"** (no tenían acceso al proyecto
+Supabase desde su sandbox): se corrió en vivo contra `isvkelrdxwvkfmrfqxxk` —
+`select proname, count(*) from pg_proc where proname in (...) group by proname` da **1 versión**
+de cada RPC (no quedó el overload viejo), y un chequeo de integridad real sobre TODA la tabla
+`asientos_contables` (no solo el diff de hoy) — **0 asientos con `total_debe ≠ total_haber`** en
+toda la base de Nalux.
+
+**Veredicto: motor contable íntegro, sin hallazgos de seguridad bloqueantes, sin regresiones de
+frontend.** Deploy autorizado.
+
+---
+
 ## ✅ Resuelto (22/08 noche) — 3 hallazgos probando el item 7 en producción
 
 Luciano probó el item 7 recién deployado y encontró 3 problemas reales, con capturas comparando
