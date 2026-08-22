@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Printer, X, Save, Edit2, Loader2, RefreshCw, ShieldCheck, ShieldAlert, Clock, AlertTriangle, Banknote, Ban, Code2 } from 'lucide-react';
+import { Printer, X, Save, Edit2, Loader2, RefreshCw, ShieldCheck, ShieldAlert, Clock, AlertTriangle, Banknote, Ban, Code2, Network } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
@@ -16,6 +16,8 @@ import ComprobantePrintModal from './ComprobantePrintModal';
 import { formatDateTimeAR, formatDateAR, getTodayAR } from '@/lib/dateUtils';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import { DocumentFlowPanel } from '@/components/ui/DocumentFlowPanel';
+import MapaRelaciones from '@/components/shared/MapaRelaciones';
+import VerAsientoButton from '@/components/shared/VerAsientoButton';
 import { asientosAutoService } from '@/services/planCuentasService';
 
 // CAE emitido o en trámite ante AFIP/ARCA — el documento ya es (o puede
@@ -42,6 +44,11 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
   const [showCancelarConfirm, setShowCancelarConfirm] = useState(false);
   const [motivoCancelacion, setMotivoCancelacion] = useState('');
   const [cancelando, setCancelando] = useState(false);
+
+  // Punto 2/3 del hallazgo de Luciano (22/08): este modal era anterior al
+  // rediseño — usaba su propio DocumentFlowPanel sin link a Mapa de
+  // Relaciones (el resto de los documentos ya lo tiene, ej. ModalDetalleEntrega).
+  const [mapaOpen, setMapaOpen] = useState(false);
 
   useEffect(() => {
     if (open && saleId) {
@@ -213,8 +220,8 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl kairox-bg-card kairox-text-primary overflow-hidden flex flex-col max-h-[90vh] dark:bg-kx-bg dark:border-kx-border">
-          <DialogHeader className="border-b border-slate-100 dark:border-kx-border pb-4">
+        <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] kairox-bg-card kairox-text-primary overflow-hidden flex flex-col dark:bg-kx-bg dark:border-kx-border">
+          <DialogHeader className="border-b border-slate-100 dark:border-kx-border pb-4 shrink-0">
             <DialogTitle className="flex justify-between items-center pr-8 dark:text-kx-text">
               <span className="flex items-center gap-2">
                 Venta #{sale?.numero_venta || '...'}
@@ -232,6 +239,10 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
              </div>
           ) : sale ? (
             <div className="flex-1 overflow-y-auto p-1">
+            {/* Contenido centrado con ancho máximo — el modal ocupa toda la
+                pantalla (mismo shell que Entrega/OC/Pedido) pero esta grilla de
+                2 columnas se ve estirada de más a lo ancho completo. */}
+            <div className="max-w-5xl mx-auto">
               {/* STATUS & ACTIONS CARD */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 mt-2">
                 <div className="bg-kx-surface-2 dark:bg-slate-900/50 p-4 rounded-lg border kairox-border space-y-2">
@@ -482,8 +493,30 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
 
               {/* Document Flow */}
               <div className="border border-slate-100 dark:border-kx-border rounded-lg p-4 mb-2">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex-1" />
+                  <div className="flex items-center gap-3">
+                    <VerAsientoButton asientoId={sale.asiento_id} />
+                    <button
+                      type="button"
+                      onClick={() => setMapaOpen(true)}
+                      className="text-2xs text-kx-violet hover:opacity-80 font-medium flex items-center gap-1"
+                      title="Ver mapa de relaciones completo"
+                    >
+                      <Network className="w-3 h-3" /> Mapa de relaciones
+                    </button>
+                  </div>
+                </div>
                 <DocumentFlowPanel comprobanteId={saleId} onNavigate={onNavigate} />
               </div>
+
+              <MapaRelaciones
+                open={mapaOpen}
+                onOpenChange={setMapaOpen}
+                comprobanteId={saleId}
+                onNavigate={(tipo, id) => { setMapaOpen(false); onOpenChange(false); onNavigate?.(tipo, id); }}
+              />
+            </div>
             </div>
           ) : (
             <div className="p-8 text-center text-kx-text-2">No se encontraron datos.</div>

@@ -119,6 +119,30 @@ export const asientosService = {
     return data as AsientoContable;
   },
 
+  /**
+   * Busca el asiento generado para un documento por (origen, origen_id) —
+   * para documentos que no guardan `asiento_id` directo en su propia tabla
+   * (OC, Recepciones, ajustes de stock, etc.). Null si nunca se generó uno
+   * (ej. período cerrado en el momento, o diferencia $0 que no amerita asiento).
+   */
+  async getAsientoPorOrigen(
+    empresaId: string,
+    origen: string,
+    origenId: string
+  ): Promise<AsientoContable | null> {
+    const { data, error } = await supabase
+      .from('asientos_contables')
+      .select('*, asientos_items(*, plan_cuentas(codigo, nombre, tipo))')
+      .eq('empresa_id', empresaId)
+      .eq('origen', origen)
+      .eq('origen_id', origenId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return (data as AsientoContable) ?? null;
+  },
+
   // mig.314: asientos_contables/asientos_items son de escritura EXCLUSIVA vía RPC
   // (auditoría contable 2026-08-07, hallazgo crítico: RLS permitía INSERT/UPDATE/
   // DELETE directo sobre asientos ya confirmados, sin validar partida doble en
@@ -269,6 +293,8 @@ export const PLAN_CUENTAS_KEYS = {
     ['estado_resultados', empresaId, desde, hasta, centroCostoId] as const,
   balanceGeneral: (empresaId: string, fechaCorte?: string) =>
     ['balance_general', empresaId, fechaCorte] as const,
+  asiento: (id: string) => ['asiento', id] as const,
+  asientoPorOrigen: (origen: string, origenId: string) => ['asiento_por_origen', origen, origenId] as const,
 };
 
 // ─── Asientos automáticos ────────────────────────────────────────────────────

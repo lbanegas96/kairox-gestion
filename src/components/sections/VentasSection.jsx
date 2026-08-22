@@ -35,10 +35,28 @@ function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
     }
   };
 
-  // Called from DocumentFlowPanel chip clicks (section string)
-  const handleDocFlowNavigate = (seccion) => {
-    const map = { cotizaciones: 'cotizaciones', pedidos: 'pedidos', ventas: 'historial', historial: 'historial', devoluciones: 'devoluciones' };
-    if (map[seccion]) setActiveTab(map[seccion]);
+  // Handler único para HistorialVentas → SaleDetailModal, que a su vez lo pasa
+  // a DOS orígenes distintos con formas distintas de llamarlo:
+  //   - DocumentFlowPanel (chips propios de SaleDetailModal): onNavigate(seccion)
+  //     — solo cambia de tab, sin abrir el documento puntual.
+  //   - MapaRelaciones (22/08, antes SaleDetailModal no lo tenía): onNavigate(tipo, id)
+  //     — mismo patrón que ya usan Pedidos/Entregas más abajo, deep-linkea al
+  //     documento real, no solo cambia de tab.
+  const handleVentasNavigate = (tipoOSeccion, id) => {
+    const TIPO_A_SECCION = {
+      cotizacion: 'cotizaciones', pedido: 'pedidos', entrega: 'entregas',
+      venta: 'historial', nota_credito: 'historial', nota_debito: 'historial',
+      devolucion: 'devoluciones',
+    };
+    const SECCION_DIRECTA = { cotizaciones: 'cotizaciones', pedidos: 'pedidos', ventas: 'historial', historial: 'historial', devoluciones: 'devoluciones' };
+    const seccion = TIPO_A_SECCION[tipoOSeccion] ?? SECCION_DIRECTA[tipoOSeccion];
+    if (!seccion) return;
+    setActiveTab(seccion);
+    if (!id) return;
+    if (seccion === 'cotizaciones') setNavigateCotizacionId(id);
+    else if (seccion === 'pedidos') setNavigatePedidoId(id);
+    else if (seccion === 'entregas') setNavigateEntregaId(id);
+    else if (seccion === 'historial') setNavigateSaleId(id);
   };
 
   // "Registrar Cobro" desde el detalle de una factura impaga — sale del módulo
@@ -132,7 +150,7 @@ function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
             key={refreshKey}
             navigateSaleId={navigateSaleId}
             onNavigated={() => setNavigateSaleId(null)}
-            onNavigate={handleDocFlowNavigate}
+            onNavigate={handleVentasNavigate}
             onRegistrarCobro={handleRegistrarCobro}
           />
         </TabsContent>
