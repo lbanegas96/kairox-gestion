@@ -14,15 +14,17 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import ComprobantePrintModal from './ComprobantePrintModal';
-import { formatDateTimeAR, getTodayAR } from '@/lib/dateUtils';
+import { formatDateTimeAR, formatDateAR, getTodayAR } from '@/lib/dateUtils';
 import EstadoBadge from '@/components/ui/EstadoBadge';
-import { DocumentFlowPanel } from '@/components/ui/DocumentFlowPanel';
+import DocumentFlow from '@/components/shared/DocumentFlow';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
-import { DocumentoTabsList, DocumentoTab } from '@/components/shared/documento/DocumentoTabs';
+import { DocumentoTabsList, DocumentoTab, GrillaCampos, CampoDato } from '@/components/shared/documento/DocumentoTabs';
 import TabComunicacionElectronica from '@/components/shared/documento/TabComunicacionElectronica';
 import TabContabilidad from '@/components/shared/documento/TabContabilidad';
 import TabLogistica from '@/components/shared/documento/TabLogistica';
 import { asientosAutoService } from '@/services/planCuentasService';
+import { documentFlowService } from '@/services/documentFlowService';
+import { formatNumeroComprobante } from '@/lib/numeroComprobante';
 
 // CAE emitido o en trámite ante AFIP/ARCA — el documento ya es (o puede
 // llegar a ser) fiscalmente válido, no se puede "deshacer": solo Nota de
@@ -35,6 +37,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
   const [loading, setLoading] = useState(true);
   const [sale, setSale] = useState(null);
   const [items, setItems] = useState([]);
+  const [flow, setFlow] = useState(null);
   const [showPrintModal, setShowPrintModal] = useState(false);
 
   // Edit State
@@ -60,6 +63,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
     } else {
       setSale(null);
       setItems([]);
+      setFlow(null);
       setIsEditing(false);
       setNewStatus('');
     }
@@ -68,26 +72,31 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
   const fetchSaleDetails = async () => {
     setLoading(true);
     try {
-      // Fetch Sale — el embed de cliente trae el domicilio completo (mig.345)
-      // para la solapa Logística, y punto_venta/centro_costo alimentan las
-      // solapas de Comunicación Electrónica y Contabilidad (item 7).
+      // Fetch Sale — el embed de cliente trae el documento (CUIT/DNI) y el
+      // domicilio completo (mig.345) para el header y la solapa Logística;
+      // punto_venta/centro_costo alimentan Comunicación Electrónica y
+      // Contabilidad (item 7).
       const { data: saleData, error: saleError } = await supabase
         .from('comprobantes')
         .select(`
           *,
-          clientes(nombre, direccion, localidad, provincia, codigo_postal),
+          clientes(nombre, documento, direccion, localidad, provincia, codigo_postal),
           punto_venta:puntos_venta(numero, nombre),
           centro_costo:centros_costo(nombre)
         `)
         .eq('id', saleId)
         .single();
-      
+
       if (saleError) throw saleError;
 
       // Ensure estado_pago exists (for legacy records)
       if (!saleData.estado_pago) saleData.estado_pago = 'pagada';
       setSale(saleData);
       setNewStatus(saleData.estado_pago);
+
+      // Flujo del documento — mismo shape de chips que Entrega (item 7,
+      // hallazgo Luciano 22/08: antes era un componente visualmente distinto).
+      documentFlowService.getFlowForComprobante(saleId).then(setFlow);
 
       // Fetch Items
       const { data: itemsData, error: itemsError } = await supabase
@@ -229,6 +238,21 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
     fetchSaleDetails();
   };
 
+  // Chips del flujo del documento — mismo componente y forma (tipo, id,
+  // numero, active) que usa Entrega (item 7, hallazgo Luciano 22/08: antes
+  // Factura tenía su propio DocumentFlowPanel con tarjetas, visualmente
+  // distinto). El orden sigue la cadena física: origen → entrega(s) → actual
+  // → NC / cobros / devoluciones emitidos contra este comprobante.
+  const flowChips = flow ? [
+    ...(flow.origen ? [{ tipo: flow.origen.tipo, id: flow.origen.id, numero: flow.origen.numero }] : []),
+    ...(flow.fuente_nc ? [{ tipo: flow.fuente_nc.tipo, id: flow.fuente_nc.id, numero: flow.fuente_nc.numero }] : []),
+    ...flow.entregas.map(e => ({ tipo: e.tipo, id: e.id, numero: e.numero })),
+    { tipo: flow.actual.tipo, id: flow.actual.id, numero: flow.actual.numero, active: true },
+    ...flow.notas_credito.map(nc => ({ tipo: nc.tipo, id: nc.id, numero: nc.numero })),
+    ...flow.cobros_cc.map(c => ({ tipo: c.tipo, id: c.id, numero: c.numero })),
+    ...flow.devoluciones.map(d => ({ tipo: d.tipo, id: d.id, numero: d.numero })),
+  ] : [];
+
   if (!open) return null;
 
   return (
@@ -240,7 +264,10 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
           <DialogHeader className="border-b border-slate-100 dark:border-kx-border px-6 pt-6 pb-4 shrink-0">
             <DialogTitle className="flex justify-between items-center pr-8 dark:text-kx-text">
               <span className="flex items-center gap-2">
-                Venta #{sale?.numero_venta || '...'}
+                {/* Número fiscal (letra + folio) cuando ya tiene CAE — antes
+                    siempre mostraba el correlativo interno, que ni el cliente
+                    ni ARCA reconocen (hallazgo Luciano 22/08, item 7). */}
+                {sale ? formatNumeroComprobante(sale) : 'Venta #...'}
                 {loading && <Loader2 className="h-4 w-4 animate-spin text-kx-text-3" />}
               </span>
             </DialogTitle>
@@ -279,95 +306,60 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
               <div className="max-w-5xl mx-auto">
 
               <TabsContent value="contenido" className="mt-0 focus-visible:outline-none">
-              {/* STATUS & ACTIONS CARD */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 mt-2">
-                <div className="bg-kx-surface-2 dark:bg-slate-900/50 p-4 rounded-lg border kairox-border space-y-2">
-                  <div className="text-xs text-slate-500 font-bold uppercase tracking-wider dark:text-kx-text-2">Cliente</div>
-                  <div className="font-medium text-lg text-kx-text dark:text-kx-text">
-                    {sale.cliente_nombre || 'Consumidor Final'}
-                  </div>
-                  <div className="text-xs text-slate-500 dark:text-kx-text-2">
-                    Pago: {sale.forma_pago}
-                  </div>
-                </div>
-
-                <div className="bg-kx-surface-2 dark:bg-slate-900/50 p-4 rounded-lg border kairox-border space-y-3">
-                  <div className="flex justify-between items-start">
-                    <div className="text-xs text-slate-500 font-bold uppercase tracking-wider dark:text-kx-text-2">Estado de Pago</div>
-                    {/* Una factura cancelada es un estado terminal — no se reedita a mano
-                        (eso reabriría el estado sin restaurar lo que cancelar_factura revirtió). */}
-                    {!isEditing && sale.estado_pago !== 'cancelada' && (
-                      <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)} className="h-6 w-6 p-0 text-kx-text-3 hover:text-kx-blue">
-                        <Edit2 className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
-                  
-                  {isEditing ? (
-                    <div className="flex flex-col gap-2">
-                      <div className="flex gap-2">
-                         <select 
-                           className="flex-1 h-9 rounded border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-bg text-sm px-2 focus:ring-2 focus:ring-blue-500 outline-none dark:text-kx-text"
-                           value={newStatus}
-                           onChange={(e) => setNewStatus(e.target.value)}
-                         >
-                           <option value="pagada">Pagada</option>
-                           <option value="pendiente">Pendiente</option>
-                           <option value="parcial">Parcial</option>
-                         </select>
-                         <Button size="icon" variant="ghost" onClick={() => { setIsEditing(false); setNewStatus(sale.estado_pago); }} className="h-9 w-9 text-slate-500 hover:bg-slate-200 dark:text-kx-text-2 dark:hover:bg-slate-800">
-                            <X className="h-4 w-4" />
-                         </Button>
-                      </div>
-                      
-                      {hasChanges && (
-                        <Button 
-                           size="sm" 
-                           className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2" 
-                           onClick={handleUpdateStatus} 
-                           disabled={saving}
-                        >
-                           {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                           Guardar Cambios
+              {/* Header en grilla — mismo patrón que Entrega/OC/Pedido (item 7,
+                  hallazgo Luciano 22/08: antes eran dos tarjetas sueltas con un
+                  diseño propio). Las acciones (Registrar Cobro, Cancelar,
+                  editar estado) se mudaron al footer, como en Entrega. */}
+              <GrillaCampos cols={4} className="mb-6 mt-2">
+                <CampoDato
+                  label="Estado de pago"
+                  valor={isEditing ? (
+                    <div className="flex items-center gap-1.5 -mt-0.5">
+                      <select
+                        className="h-7 rounded border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-bg text-xs px-1.5 focus:ring-2 focus:ring-blue-500 outline-none dark:text-kx-text"
+                        value={newStatus}
+                        onChange={(e) => setNewStatus(e.target.value)}
+                      >
+                        <option value="pagada">Pagada</option>
+                        <option value="pendiente">Pendiente</option>
+                        <option value="parcial">Parcial</option>
+                      </select>
+                      {hasChanges ? (
+                        <Button size="icon" variant="ghost" onClick={handleUpdateStatus} disabled={saving} className="h-7 w-7 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20">
+                          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                         </Button>
-                      )}
+                      ) : null}
+                      <Button size="icon" variant="ghost" onClick={() => { setIsEditing(false); setNewStatus(sale.estado_pago); }} className="h-7 w-7 text-slate-500 hover:bg-slate-200 dark:text-kx-text-2 dark:hover:bg-slate-800">
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1.5">
                       <EstadoBadge estado={sale.estado_pago} />
-                      {['pendiente', 'parcial'].includes(sale.estado_pago) && sale.cliente_id && (
-                        <Button
-                          size="sm"
-                          className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
-                          onClick={() => onRegistrarCobro?.(sale.cliente_id, sale.id)}
-                        >
-                          <Banknote className="h-3.5 w-3.5" /> Registrar Cobro
-                        </Button>
+                      {/* Una factura cancelada es un estado terminal — no se
+                          reedita a mano (eso reabriría el estado sin restaurar
+                          lo que cancelar_factura revirtió). */}
+                      {sale.estado_pago !== 'cancelada' && (
+                        <button type="button" onClick={() => setIsEditing(true)} className="text-kx-text-3 hover:text-kx-blue">
+                          <Edit2 className="h-3 w-3" />
+                        </button>
                       )}
-                      {puedeCancelar && !caeBloqueaCancelacion && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20 gap-1.5"
-                          onClick={() => setShowCancelarConfirm(true)}
-                        >
-                          <Ban className="h-3.5 w-3.5" /> {`Cancelar ${nombreTipo}`}
-                        </Button>
-                      )}
-                      {puedeCancelar && caeBloqueaCancelacion && (
-                        <span className="text-xs text-kx-text-3 italic">
-                          {esNC || esND ? 'Tiene CAE — no se puede anular directamente' : 'Tiene CAE — para anularla generá una Nota de Crédito'}
-                        </span>
-                      )}
-                      {/* "Regenerar asiento" se mudó a la solapa Contabilidad
-                          (item 7) — es donde el usuario lo va a buscar, y ahí
-                          además se le explica por qué faltaba. La solapa se
-                          marca con un punto ámbar para que no haya que abrirla
-                          para enterarse. */}
-                    </div>
+                    </span>
                   )}
-                </div>
-              </div>
+                />
+                <CampoDato label="Forma de pago" valor={sale.forma_pago} />
+                <CampoDato label="Fecha" valor={formatDateAR(sale.fecha)} />
+                <CampoDato label="Cliente" valor={sale.cliente_nombre || 'Consumidor Final'} />
+                <CampoDato label="CUIT / DNI" valor={sale.clientes?.documento} mono />
+                {flow?.origen && (
+                  <CampoDato
+                    label={flow.origen.tipo === 'cotizacion' ? 'Cotización de origen' : 'Pedido de origen'}
+                    valor={flow.origen.numero}
+                    mono
+                  />
+                )}
+                {flow?.entregas?.[0] && <CampoDato label="Entrega" valor={flow.entregas[0].numero} mono />}
+              </GrillaCampos>
 
               {/* PRODUCTS TABLE */}
               <div className="border kairox-border rounded-lg overflow-hidden mb-6">
@@ -432,11 +424,15 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
                 </table>
               </div>
 
-              {/* Document Flow — el asiento se fue a la solapa Contabilidad;
-                  acá queda solo lo que es cadena de documentos. */}
-              <div className="border border-slate-100 dark:border-kx-border rounded-lg p-4 mb-2">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex-1" />
+              {/* Flujo del documento — mismo bloque que Entrega/OC/Pedido
+                  (item 7): título + link a Mapa de Relaciones arriba,
+                  pastillas con flechas abajo. El asiento se fue a la solapa
+                  Contabilidad. */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-2xs font-semibold text-kx-text-3 dark:text-kx-text-3 uppercase tracking-wider">
+                    Flujo del documento
+                  </p>
                   <button
                     type="button"
                     onClick={() => setMapaOpen(true)}
@@ -446,7 +442,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
                     <Network className="w-3 h-3" /> Mapa de relaciones
                   </button>
                 </div>
-                <DocumentFlowPanel comprobanteId={saleId} onNavigate={onNavigate} />
+                <DocumentFlow chips={flowChips} onNavigate={onNavigate} />
               </div>
               </TabsContent>
 
@@ -494,17 +490,47 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
             <div className="p-8 text-center text-kx-text-2">No se encontraron datos.</div>
           )}
 
-          <DialogFooter className="border-t border-slate-100 dark:border-kx-border px-6 py-4 flex gap-2 justify-end shrink-0">
-            <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:text-kx-text dark:border-kx-border dark:hover:bg-slate-800">
-              Cerrar
-            </Button>
-            <Button 
-              className="bg-blue-600 hover:bg-blue-700 text-white" 
-              onClick={() => setShowPrintModal(true)}
-              disabled={!sale}
-            >
-              <Printer className="w-4 h-4 mr-2" /> Imprimir Comprobante
-            </Button>
+          {/* Footer — mismo layout que Entrega (item 7): Cerrar + acción
+              destructiva a la izquierda, acciones positivas a la derecha.
+              Antes Registrar Cobro / Cancelar Factura vivían en la tarjeta de
+              header; ahora son acciones de documento, no datos. */}
+          <DialogFooter className="border-t border-slate-100 dark:border-kx-border px-6 py-4 flex-wrap gap-2 sm:justify-between shrink-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:text-kx-text dark:border-kx-border dark:hover:bg-slate-800">
+                Cerrar
+              </Button>
+              {puedeCancelar && !caeBloqueaCancelacion && (
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCancelarConfirm(true)}
+                  className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20"
+                >
+                  <Ban className="w-4 h-4 mr-2" /> {`Cancelar ${nombreTipo}`}
+                </Button>
+              )}
+              {puedeCancelar && caeBloqueaCancelacion && (
+                <span className="text-xs text-kx-text-3 italic">
+                  {esNC || esND ? 'Tiene CAE — no se puede anular directamente' : 'Tiene CAE — para anularla generá una Nota de Crédito'}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {['pendiente', 'parcial'].includes(sale?.estado_pago) && sale?.cliente_id && (
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={() => onRegistrarCobro?.(sale.cliente_id, sale.id)}
+                >
+                  <Banknote className="w-4 h-4 mr-2" /> Registrar Cobro
+                </Button>
+              )}
+              <Button
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={() => setShowPrintModal(true)}
+                disabled={!sale}
+              >
+                <Printer className="w-4 h-4 mr-2" /> Imprimir Comprobante
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -881,11 +881,16 @@ function MapaRelaciones({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* size="wide" en modo fullscreen — hallazgo Luciano 22/08: el 96vw
+          manual no descontaba el ancho del sidebar (z-60), que le tapaba y
+          bloqueaba la franja izquierda. twMerge dedupea max-w-5xl contra el
+          max-w-lg de size="default" en el modo no-fullscreen. */}
       <DialogContent
+        size={fullscreen ? 'wide' : 'default'}
         className={[
           'bg-kx-surface border-kx-border text-kx-text transition-all duration-200',
-          fullscreen ? 'max-w-[96vw] w-[96vw] h-[92vh] flex flex-col' : 'max-w-5xl',
-        ].join(' ')}
+          !fullscreen && 'max-w-5xl',
+        ].filter(Boolean).join(' ')}
       >
         <DialogHeader className={fullscreen ? 'flex-shrink-0' : ''}>
           <div className="flex items-center justify-between pr-8">

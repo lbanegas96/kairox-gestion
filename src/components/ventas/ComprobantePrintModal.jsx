@@ -6,6 +6,7 @@ import { formatDateTimeAR } from '@/lib/dateUtils';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { getEmpresaParaPDF } from '@/lib/empresaUtils';
+import { formatNumeroComprobante } from '@/lib/numeroComprobante';
 
 const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos = [] }) => {
   const { user } = useAuth();
@@ -198,7 +199,10 @@ const ComprobantePrintModal = ({ open, onOpenChange, comprobante, items, pagos =
           <div className="space-y-1 text-sm mb-4">
             <div className="flex justify-between">
               <span className="text-kx-text-2">Nro:</span>
-              <span className="font-bold">{comprobante.numero_venta}</span>
+              {/* Ya mostraba el folio real arriba en el encabezado cuando hay
+                  CAE ("Factura X — 0001-...") — acá abajo mostraba el interno
+                  igual, redundante e inconsistente (hallazgo Luciano 22/08). */}
+              <span className="font-bold">{formatNumeroComprobante(comprobante)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-kx-text-2">Fecha:</span>

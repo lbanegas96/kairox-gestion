@@ -499,9 +499,10 @@ function OrdenesCompraSection() {
         estadoMutation={estadoMutation} cancelarMutation={cancelarMutation}
       />
 
-      {/* ── MODAL: Nueva / Editar OC ── */}
+      {/* ── MODAL: Nueva / Editar OC — size="wide" (hallazgo Luciano 22/08:
+          este modal de alta se salteó del rollout del item 5). ── */}
       <Dialog open={isModalOpen} onOpenChange={v => { if (!v) { setIsModalOpen(false); resetForm(); } }}>
-        <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] flex flex-col dark:bg-kx-bg dark:border-kx-border">
+        <DialogContent size="wide" className="dark:bg-kx-bg dark:border-kx-border">
           <DialogHeader className="shrink-0">
             <DialogTitle className="dark:text-kx-text">{editingId ? 'Editar Orden de Compra' : 'Nueva Orden de Compra'}</DialogTitle>
             <DialogDescription className="dark:text-kx-text-2">

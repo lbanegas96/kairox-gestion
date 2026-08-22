@@ -612,9 +612,13 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
   // Confirmar). Alineado a los 5 puntos sin tocar handleConfirmar/estado.
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* size="wide" — hallazgo Luciano 22/08: este modal de alta traía su
+          propio max-w y se salteó el rollout del item 5, así que el sidebar
+          (z-60) le tapaba y bloqueaba la franja izquierda. */}
       <DialogContent
+        size="wide"
         onOpenAutoFocus={(e) => e.preventDefault()}
-        className="max-w-[96vw] w-[96vw] h-[92vh] bg-kx-surface border-kx-border text-kx-text flex flex-col p-0 gap-0 overflow-hidden"
+        className="bg-kx-surface border-kx-border text-kx-text gap-0"
       >
         <DialogHeader className="px-4 py-3 border-b border-kx-border shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base font-bold">
@@ -793,8 +797,13 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
 
               {/* Punto de venta — el único selector fiscal (mig.294). Su
                   envia_arca define si el comprobante se factura ante ARCA o
-                  queda interno. */}
-              {puntosVenta.length > 0 && tipoDoc !== 'Ticket' && (
+                  queda interno. Antes se ocultaba entero si tipoDoc==='Ticket'
+                  (el valor por defecto al abrir el modal) — el campo existía
+                  pero nadie lo veía sin cambiar primero el tipo de documento
+                  (hallazgo Luciano 22/08). El PdV se guarda siempre, sea cual
+                  sea el tipo de documento (línea ~500 más abajo), así que
+                  mostrarlo siempre es correcto, no solo cosmético. */}
+              {puntosVenta.length > 0 && (
                 <div className="pt-1 space-y-1.5">
                   <div className="grid grid-cols-12 gap-3 items-start">
                     <div className="col-span-4 space-y-1">
@@ -812,7 +821,11 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
                       </select>
                     </div>
                   </div>
-                  {puntosVenta.find(pv => pv.id === puntoVentaId)?.envia_arca === false && (
+                  {tipoDoc === 'Ticket' ? (
+                    <p className="text-xs text-kx-text-3 bg-kx-surface-2 dark:bg-slate-900/50 border border-kx-border rounded-lg px-3 py-2">
+                      Con <strong>Ticket</strong> no se emite CAE — cambiá el tipo de documento a Factura A/B/C para facturar ante ARCA.
+                    </p>
+                  ) : puntosVenta.find(pv => pv.id === puntoVentaId)?.envia_arca === false && (
                     <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
                       Comprobante <strong>interno</strong>: no se emite CAE ni se informa a ARCA.
                     </p>

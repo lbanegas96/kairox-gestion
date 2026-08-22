@@ -1,5 +1,67 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Resuelto (22/08 noche) — 3 hallazgos probando el item 7 en producción
+
+Luciano probó el item 7 recién deployado y encontró 3 problemas reales, con capturas comparando
+Factura vs Entrega. Los 3 se rastrearon a causas concretas y se corrigieron:
+
+**1. El sidebar tapaba modales de alta ("Nueva Cotización" clippeada, texto cortado).**
+El rollout de `size="wide"` (item 5) migró los modales de *detalle* pero se salteó los de
+**alta**: `FormNuevaCotizacion` (vía `CotizacionesSection.jsx`), `ModalPedidoForm.jsx`,
+`OrdenesCompraSection.jsx` (Nueva OC) y `NuevaFacturaModal.jsx` seguían con su propio
+`max-w-[96vw]` manual, que no descuenta el ancho del sidebar (z-60). Los 4 pasaron a
+`size="wide"`. De paso se corrigió `MapaRelaciones.jsx` en modo `fullscreen` (mismo patrón,
+usaba `size={fullscreen ? 'wide' : 'default'}` con `twMerge` dedupeando `max-w-5xl` contra el
+`max-w-lg` de `size="default"` en el modo no-fullscreen).
+
+**2. El diseño de Factura seguía sin ser igual al de Entrega.** Dos causas:
+- El header eran dos tarjetas sueltas ("Cliente" + "Estado de Pago") en vez de la
+  `GrillaCampos`/`CampoDato` unificada que ya usa Entrega — con las acciones (Registrar Cobro,
+  Cancelar Factura, editar estado) embebidas ahí en vez de vivir en el footer.
+- El flujo del documento usaba `DocumentFlowPanel.jsx` (tarjetas con monto/fecha/estado,
+  fetch propio vía `documentFlowService`), un componente visualmente distinto al `DocumentFlow.jsx`
+  de pastillas-con-flechas que usa Entrega/OC/Compra.
+- Se rediseñó `SaleDetailModal.jsx`: header en grilla (Estado de pago editable inline / Forma de
+  pago / Fecha / Cliente / CUIT-DNI / Pedido u Cotización de origen / Entrega), acciones movidas
+  al footer (mismo layout que Entrega: Cerrar+Cancelar a la izquierda, Registrar Cobro+Imprimir a
+  la derecha), y el flujo pasó a usar `DocumentFlow` con chips construidos desde
+  `documentFlowService`. Se agregaron los tipos `venta`/`cobro_cc` al `CHIP_CONFIG` compartido.
+  **`DocumentFlowPanel.jsx` quedó sin uso — se borró** (era dead code después del cambio).
+- Bonus real (no cosmético): `documentFlowService.ts` no traía la Entrega vinculada al
+  comprobante, así que el flujo de Factura mostraba "PEDIDO → VENTA" sin el eslabón físico
+  intermedio que Entrega sí mostraba ("PED → ENT → FAC"). Se agregó el fetch de `entregas` por
+  `comprobante_id` — ahora la cadena es idéntica en ambos documentos.
+
+**3. No se podía "cargar" el punto de venta, y el número mostrado no era el folio real.**
+Investigando encontramos que `numero_afip` (formato `"0001-00000047"`, PdV+folio) **ya vivía en
+la base** desde que existe facturación electrónica — pero casi ninguna pantalla lo usaba como
+número principal, mostraban `numero_venta` (el correlativo interno, `"FAC-20260822-001"`), que
+ni el cliente ni ARCA reconocen. `FacturaPDF.jsx` y `ReporteLibroIVA.jsx` ya hacían el fallback
+correcto (`numero_afip ?? numero_venta`); el resto no. Se creó
+[`src/lib/numeroComprobante.js`](src/lib/numeroComprobante.js) — `formatNumeroComprobante()`
+devuelve `"{letra} {numero_afip}"` cuando hay CAE, si no cae a `numero_venta` — y se aplicó en:
+título de `SaleDetailModal`, columna principal de `HistorialVentas`, línea "Nro:" de
+`ComprobantePrintModal` (bug real: mostraba el interno aunque arriba ya mostrara el folio),
+y los nodos `venta`/`nota_credito` de `documentFlowService`. **Quedan sin tocar a propósito**
+(mismo patrón, extensible si se pide): ticket del POS, Cheques, y otras referencias cruzadas de
+solo lectura (ej. `ModalDetallePedido` mostrando el número de la factura vinculada).
+
+Además, el selector de Punto de Venta en `NuevaFacturaModal.jsx` **existía pero estaba oculto**:
+solo se mostraba si `tipoDoc !== 'Ticket'`, y el modal abre con `tipoDoc='Ticket'` por defecto —
+el usuario nunca lo veía sin cambiar antes el tipo de documento. El PdV se guarda siempre
+independientemente del tipo (`punto_venta_id` en el insert, línea ~500), así que ocultarlo no
+tenía sustento funcional. Ahora es siempre visible, con un mensaje que explica que con Ticket no
+se emite CAE (antes esa explicación tampoco existía).
+
+**Verificado en vivo contra producción real (Nalux):** modal de Nueva Cotización con
+`left: 252px` (ya no tapado), sidebar clickeable con el modal abierto; Nueva Factura con el
+selector de PdV visible desde el arranque; Factura `FAC-20260822-001` (sin CAE, PdV no fiscal)
+con el header/flujo idénticos a Entrega, mostrando `ENT-2026-0148` en la cadena; Factura con CAE
+real mostrando `"C 0001-00000047"` como título Y en el listado. `npx eslint` 0 errores (solo
+warnings pre-existentes), `npx vitest run` 159/159, `npx vite build` OK.
+
+---
+
 ## ✅ Resuelto (22/08) — Item 7: shell tabulado estilo SAP + direcciones de socios de negocio
 
 Último ítem del plan de rediseño del 22/08, y el único que Luciano quiso conversar antes de

@@ -560,13 +560,14 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
         }}
       />
 
-      {/* MODAL NUEVA COTIZACIÓN — pantalla completa (mismo criterio de tamaño que
-          el fullscreen de MapaRelaciones) para que el cuerpo de ítems tenga lugar
-          real y los botones de abajo no dependan de escrollear todo el diálogo. */}
+      {/* MODAL NUEVA COTIZACIÓN — size="wide" (hallazgo Luciano 22/08: este
+          modal de alta traía su propio max-w y se salteó el rollout del item
+          5, así que el sidebar le tapaba/bloqueaba la franja izquierda). */}
       <Dialog open={isModalOpen} onOpenChange={v => { if (!v) { setIsModalOpen(false); setEditingId(null); } }}>
         <DialogContent
+          size="wide"
           onOpenAutoFocus={(e) => e.preventDefault()}
-          className="max-w-[96vw] w-[96vw] h-[92vh] flex flex-col dark:bg-kx-bg dark:border-kx-border"
+          className="dark:bg-kx-bg dark:border-kx-border"
         >
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="dark:text-kx-text">{editingId ? 'Editar Cotización' : 'Nueva Cotización'}</DialogTitle>

@@ -22,6 +22,7 @@ import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import { formatDateAR, formatTimeAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
+import { formatNumeroComprobante } from '@/lib/numeroComprobante';
 
 const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate, onRegistrarCobro }) => {
   const { user } = useAuth();
@@ -364,8 +365,13 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate, onRegistrarC
                     className="group hover:bg-blue-50/50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
                     onClick={() => { setSelectedSaleId(sale.id); setShowDetailModal(true); }}
                   >
+                    {/* Número fiscal (letra + folio) cuando ya tiene CAE —
+                        antes mostraba siempre el correlativo interno, que ni
+                        el cliente ni ARCA reconocen (hallazgo Luciano 22/08,
+                        item 7). Sin CAE (pendiente/interno) cae a ese mismo
+                        interno como único identificador estable. */}
                     <td className="p-4 font-mono font-medium text-slate-700 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400">
-                      {sale.numero_venta}
+                      {formatNumeroComprobante(sale)}
                     </td>
                     <td className="p-4 text-slate-500 text-xs dark:text-kx-text-2">
                       {formatDateAR(sale.fecha)} <span className="text-kx-text-3 ml-1">{formatTimeAR(sale.fecha)}</span>

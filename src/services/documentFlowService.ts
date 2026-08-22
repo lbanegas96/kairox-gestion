@@ -1,8 +1,10 @@
 import { supabase } from '@/lib/customSupabaseClient';
+import { formatNumeroComprobante } from '@/lib/numeroComprobante';
 
 export type DocFlowTipo =
   | 'cotizacion'
   | 'pedido'
+  | 'entrega'
   | 'venta'
   | 'nota_credito'
   | 'cobro_cc'
@@ -22,6 +24,7 @@ export interface DocFlowNode {
 
 export interface DocumentFlow {
   origen: DocFlowNode | null;     // cotizacion o pedido que dio origen a la venta
+  entregas: DocFlowNode[];        // entregas vinculadas a este comprobante (evento físico, Regla 8)
   actual: DocFlowNode;             // el comprobante actual
   notas_credito: DocFlowNode[];    // NC emitidas contra este comprobante
   cobros_cc: DocFlowNode[];        // cobros CC que refieren este comprobante
@@ -34,7 +37,7 @@ export const documentFlowService = {
     // 1. Obtener el comprobante actual con sus links
     const { data: comp, error } = await supabase
       .from('comprobantes')
-      .select('id, numero_venta, fecha, total, forma_pago, tipo, estado_pago, cotizacion_id, pedido_id, comprobante_origen_id')
+      .select('id, numero_venta, numero_afip, tipo_comprobante_afip, fecha, total, forma_pago, tipo, estado_pago, cotizacion_id, pedido_id, comprobante_origen_id')
       .eq('id', comprobanteId)
       .single();
     if (error || !comp) return null;
@@ -42,7 +45,9 @@ export const documentFlowService = {
     const actual: DocFlowNode = {
       id: comp.id,
       tipo: comp.tipo === 'nota_credito' ? 'nota_credito' : 'venta',
-      numero: comp.numero_venta,
+      // Número fiscal (letra + folio) cuando ya tiene CAE — mismo criterio
+      // que FacturaPDF/ReporteLibroIVA (item 7, hallazgo Luciano 22/08).
+      numero: formatNumeroComprobante(comp),
       fecha: comp.fecha,
       monto: Number(comp.total),
       estado: comp.estado_pago,
@@ -94,14 +99,14 @@ export const documentFlowService = {
     if (comp.tipo === 'nota_credito' && comp.comprobante_origen_id) {
       const { data: orig } = await supabase
         .from('comprobantes')
-        .select('id, numero_venta, fecha, total, estado_pago')
+        .select('id, numero_venta, numero_afip, tipo_comprobante_afip, fecha, total, estado_pago')
         .eq('id', comp.comprobante_origen_id)
         .single();
       if (orig) {
         fuente_nc = {
           id: orig.id,
           tipo: 'venta',
-          numero: orig.numero_venta,
+          numero: formatNumeroComprobante(orig),
           fecha: orig.fecha,
           monto: Number(orig.total),
           estado: orig.estado_pago,
@@ -113,13 +118,13 @@ export const documentFlowService = {
     // 4. NC emitidas contra este comprobante
     const { data: ncs } = await supabase
       .from('comprobantes')
-      .select('id, numero_venta, fecha, total, estado_pago')
+      .select('id, numero_venta, numero_afip, tipo_comprobante_afip, fecha, total, estado_pago')
       .eq('comprobante_origen_id', comprobanteId)
       .eq('tipo', 'nota_credito');
     const notas_credito: DocFlowNode[] = (ncs ?? []).map((nc: any) => ({
       id: nc.id,
       tipo: 'nota_credito' as DocFlowTipo,
-      numero: nc.numero_venta,
+      numero: formatNumeroComprobante(nc),
       fecha: nc.fecha,
       monto: Number(nc.total),
       estado: nc.estado_pago,
@@ -142,7 +147,23 @@ export const documentFlowService = {
       seccion: 'cuentacorriente',
     }));
 
-    // 6. Devoluciones de cliente emitidas contra este comprobante
+    // 6. Entrega(s) vinculada(s) a este comprobante (item 7, hallazgo Luciano
+    // 22/08: la cadena de Factura no mostraba el eslabón físico intermedio,
+    // que sí aparece del lado de la Entrega — mismo dato, `entregas.comprobante_id`).
+    const { data: ents } = await supabase
+      .from('entregas')
+      .select('id, numero_entrega, fecha')
+      .eq('comprobante_id', comprobanteId);
+    const entregas: DocFlowNode[] = (ents ?? []).map((e: any) => ({
+      id: e.id,
+      tipo: 'entrega' as DocFlowTipo,
+      numero: e.numero_entrega,
+      fecha: e.fecha,
+      monto: 0,
+      seccion: 'entregas',
+    }));
+
+    // 7. Devoluciones de cliente emitidas contra este comprobante
     const { data: devs } = await supabase
       .from('devoluciones')
       .select('id, numero_devolucion, fecha, compensacion, devolucion_items(subtotal)')
@@ -158,6 +179,6 @@ export const documentFlowService = {
       seccion: 'devoluciones',
     }));
 
-    return { origen, actual, notas_credito, cobros_cc, fuente_nc, devoluciones };
+    return { origen, entregas, actual, notas_credito, cobros_cc, fuente_nc, devoluciones };
   },
 };

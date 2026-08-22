@@ -36,12 +36,16 @@ function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
   };
 
   // Handler único para HistorialVentas → SaleDetailModal, que a su vez lo pasa
-  // a DOS orígenes distintos con formas distintas de llamarlo:
-  //   - DocumentFlowPanel (chips propios de SaleDetailModal): onNavigate(seccion)
-  //     — solo cambia de tab, sin abrir el documento puntual.
-  //   - MapaRelaciones (22/08, antes SaleDetailModal no lo tenía): onNavigate(tipo, id)
-  //     — mismo patrón que ya usan Pedidos/Entregas más abajo, deep-linkea al
-  //     documento real, no solo cambia de tab.
+  // a DOS orígenes que llaman distinto:
+  //   - DocumentFlow (pastillas del flujo del documento, item 7 — antes
+  //     SaleDetailModal usaba un DocumentFlowPanel propio con onNavigate
+  //     (seccion); unificado a chips con onNavigate(tipo, id), igual que
+  //     Entrega/OC/Pedido): deep-linkea al documento real.
+  //   - MapaRelaciones (22/08): onNavigate(tipo, id) — mismo patrón.
+  // 'cobro_cc' no está mapeado a propósito: el cobro vive en Cuenta Corriente,
+  // una sección de nivel superior fuera de este módulo (ver handleRegistrarCobro
+  // más abajo, que sí usa onNavigateGlobal) — el chip queda visible pero sin
+  // navegación hasta que se justifique cablear ese salto cross-módulo.
   const handleVentasNavigate = (tipoOSeccion, id) => {
     const TIPO_A_SECCION = {
       cotizacion: 'cotizaciones', pedido: 'pedidos', entrega: 'entregas',

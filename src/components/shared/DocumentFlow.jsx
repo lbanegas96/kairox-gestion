@@ -1,11 +1,18 @@
 import React from 'react';
-import { ArrowRight, FileText, ClipboardList, Truck, Receipt, RotateCcw, ShoppingBag, Package, MinusCircle, FileWarning } from 'lucide-react';
+import { ArrowRight, FileText, ClipboardList, Truck, Receipt, RotateCcw, ShoppingBag, Package, MinusCircle, FileWarning, Banknote } from 'lucide-react';
 
 const CHIP_CONFIG = {
   cotizacion:    { label: 'Cotización',      Icon: ClipboardList, color: 'bg-slate-100 text-kx-text-2 dark:bg-kx-surface-2 dark:text-slate-300' },
   pedido:        { label: 'Pedido',          Icon: FileText,      color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'   },
   entrega:       { label: 'Entrega',         Icon: Truck,         color: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' },
   factura:       { label: 'Factura',         Icon: Receipt,       color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
+  // 'venta' es el mismo concepto real que 'factura' (comprobantes.tipo='venta')
+  // — queda como alias separado porque documentFlowService (Factura, item 7)
+  // y ModalDetalleEntrega ya usaban nombres distintos para lo mismo antes de
+  // esta unificación, y forzar uno solo hubiera tocado más archivos de los
+  // necesarios para un cambio puramente visual.
+  venta:         { label: 'Factura',         Icon: Receipt,       color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
+  cobro_cc:      { label: 'Cobro',           Icon: Banknote,      color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' },
   devolucion:    { label: 'Devolución',      Icon: RotateCcw,     color: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'       },
   nota_credito:  { label: 'Nota de Crédito', Icon: MinusCircle,   color: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'   },
   nota_debito:   { label: 'Nota de Débito',  Icon: FileWarning,   color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
