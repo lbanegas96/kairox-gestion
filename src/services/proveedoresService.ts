@@ -139,6 +139,7 @@ export async function registrarPago(
   cajaSesionId: string | null = null,
   imputaciones: ImputacionPago[] | null = null,
   formaPagoId: string | null = null,
+  referenciaPago: string | null = null,
 ) {
   // Pago ATÓMICO: cuenta corriente proveedor ('pago') + caja (egreso) en un solo RPC (migration 131).
   // Antes solo reducía la deuda sin registrar la salida de plata de Caja/Bancos → tesorería inflada.
@@ -157,6 +158,7 @@ export async function registrarPago(
     p_imputaciones:     imputaciones,
     p_fecha:            getNowAR().toISOString(),
     p_forma_pago_id:    formaPagoId,
+    p_referencia_pago:  referenciaPago,
   });
   if (error) throw new Error(error.message);
   return data as { ok: boolean; ccp_id: string; caja_id: string; asiento_generado: boolean; diferencia_cambio: number };

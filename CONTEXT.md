@@ -1,5 +1,51 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Resuelto (22/08) — Rediseño de Cobro/Pago, item 6 del plan (referencia por método + comprobante imprimible)
+
+Sexto ítem del plan de rediseño de documentos iniciado el 22/08 (magnitud "🔴 Grande" original;
+items 1-5 — nav bug, formato unificado, Mapa de Relaciones, Ver Asiento, ancho de modales — ya
+cerrados antes de este). Alcance acordado: **solo** lo pedido explícitamente ("revisar el
+comprobante de pago" + embeber medio de pago). El rediseño tabulado tipo SAP con solapa de
+"Comunicación Electrónica" (item 7) sigue pendiente de la charla de scope explícita que Luciano
+pidió antes de tocarlo.
+
+**Qué se hizo (simétrico en Cuenta Corriente de clientes y de proveedores):**
+
+1. **Campo de referencia condicional por método de pago** — `ModalCobro.jsx` (clientes) y el
+   diálogo de pago de `ProveedoresSection.jsx` (proveedores) ahora muestran un campo extra según
+   `formas_pago.tipo_instrumento` de la forma seleccionada: "N° de operación / referencia" en
+   transferencia/billetera, "N° de cupón / autorización" en tarjeta débito/crédito. Efectivo no
+   muestra nada. Antes solo existía "Nota" (texto libre sin campo dedicado).
+2. **Columna `referencia_pago`** nueva en `cuenta_corriente_movimientos` y
+   `cuenta_corriente_proveedores` (mig. 343) — el valor viaja por un parámetro nuevo
+   `p_referencia_pago` en `registrar_cobro_cliente` y `registrar_pago_proveedor`.
+3. **Comprobante de Pago imprimible** — `src/components/shared/ReciboPago.jsx`, mismo patrón que
+   `TicketPrint.jsx` del POS (nodo oculto siempre en el DOM + `@media print` inyectado por
+   `src/lib/printRecibo.js` + `window.print()`). Se arma en memoria al confirmar el cobro/pago
+   (sin ida y vuelta al servidor) con contraparte, monto, método, referencia, facturas imputadas y
+   saldo anterior/nuevo. Botón "Imprimir" aparece como acción del toast de éxito. No es un
+   comprobante fiscal — usa un N° interno (primeros 8 caracteres del id del movimiento), no
+   numeración ARCA.
+
+**Bug real encontrado aplicando la migration — mismo patrón que el de `crear_venta` del 14/08:**
+`CREATE OR REPLACE FUNCTION` con un parámetro nuevo (`p_referencia_pago`) no reemplazó las
+funciones existentes — creó una sobrecarga nueva, quedaron 2 versiones de cada RPC (13 y 14 args)
+conviviendo en prod. Se detectó reconsultando `pg_get_function_arguments` después de aplicar la
+migration (ya es costumbre verificar esto tras cualquier `CREATE OR REPLACE` que agregue params) y
+se corrigió con `DROP FUNCTION` explícito de las firmas viejas (mig. 344) antes de dar por cerrado
+el item.
+
+**Verificado:** `npx eslint` sin errores nuevos (solo warnings pre-existentes de prop-types),
+`npx vitest run` 159/159, `npx vite build` OK. En vivo contra producción real (Nalux): el campo de
+referencia aparece/desaparece correctamente al cambiar método de pago, tanto en el cobro a
+"Jhon V." (clientes) como en el pago a "Alibaba" (proveedores) — verificado sin someter ningún
+cobro/pago real (dev preview comparte la base con producción, no se mutan datos de prueba).
+
+**Migración aplicada a prod** (`isvkelrdxwvkfmrfqxxk`) con confirmación explícita de Luciano antes
+de ejecutar — mig. 343 + 344 (fix del overload), ambas ya en `supabase/migrations/`.
+
+---
+
 ## ✅ Resuelto (14/08 tarde) — "Facturar Entrega/Pedido" ya no abre el POS
 
 Era el PENDIENTE #1 que Luciano dejó anotado la noche del 14/08 (ver historial abajo para el

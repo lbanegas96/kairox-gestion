@@ -16,6 +16,8 @@ import ClientDetailModal from './ClientDetailModal';
 import TablaClientes from '@/components/cuenta-corriente/TablaClientes';
 import TabAntiguedad from '@/components/cuenta-corriente/TabAntiguedad';
 import ModalCobro from '@/components/cuenta-corriente/ModalCobro';
+import ReciboPago from '@/components/shared/ReciboPago';
+import { printElementById } from '@/lib/printRecibo';
 
 function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro, initialFacturaId } = {}) {
   const { user } = useAuth();
@@ -46,7 +48,27 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro, initialFactu
     monto: '',
     metodo: 'Efectivo',
     forma_pago_id: '',
-    nota: ''
+    nota: '',
+    referencia_pago: '',
+  });
+
+  // Comprobante de Pago imprimible (item 6 del plan de rediseño, 22/08) — se
+  // completa tras un cobro exitoso y queda disponible para reimprimir hasta
+  // el próximo cobro (mismo criterio que TicketPrint del POS: un solo nodo
+  // oculto en el DOM, no un historial).
+  const [lastRecibo, setLastRecibo] = useState(null);
+  const { data: empresaData = {} } = useQuery({
+    queryKey: ['empresa_datos_recibo', user?.empresa_id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('empresas')
+        .select('nombre, afip_cuit, direccion')
+        .eq('id', user.empresa_id)
+        .maybeSingle();
+      if (error) throw error;
+      return data ?? {};
+    },
+    enabled: !!user?.empresa_id,
   });
 
   // Formas de pago (maestro configurable en ConfiguracionSection → Finanzas) — reemplaza
@@ -273,7 +295,7 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro, initialFactu
     e?.stopPropagation();
     setSelectedClient(client);
     const efectivo = formasPago.find(f => f.tipo_instrumento === 'efectivo');
-    setPaymentData({ monto: '', metodo: efectivo?.nombre ?? 'Efectivo', forma_pago_id: efectivo?.id ?? '', nota: '' });
+    setPaymentData({ monto: '', metodo: efectivo?.nombre ?? 'Efectivo', forma_pago_id: efectivo?.id ?? '', nota: '', referencia_pago: '' });
     setImputaciones({});
     setImputacionesFX({});
     setFacturasAbiertas([]);
@@ -443,14 +465,42 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro, initialFactu
         p_tc_paralelo:    pagoParalelo !== null ? tcParalelo.tcHoy : null,
         p_imputaciones:   imputacionesArray.length > 0 ? imputacionesArray : null,
         p_forma_pago_id:  paymentData.forma_pago_id || null,
+        p_referencia_pago: paymentData.referencia_pago || null,
       });
 
       if (cobroError) throw cobroError;
 
+      // Arma el comprobante imprimible con lo que ya tenemos en memoria — sin
+      // otra vuelta al servidor (mismo criterio que el ticket del POS).
+      const saldoAnterior = Number(selectedClient.saldo_actual || 0);
+      setLastRecibo({
+        tipo: 'cobro',
+        movimientoId: cobroData?.cc_id,
+        fecha: date,
+        contraparteNombre: selectedClient.nombre,
+        monto: amount,
+        metodo: paymentData.metodo,
+        referenciaPago: paymentData.referencia_pago || null,
+        nota: paymentData.nota || null,
+        imputaciones: imputacionesArray.map(imp => {
+          const f = facturasAbiertas.find(x => x.comprobante_id === imp.comprobante_id);
+          const montoImp = imp.monto ?? (imp.monto_moneda_extranjera != null ? imp.monto_moneda_extranjera * (f?.tc_hoy || f?.tipo_cambio_tasa || 1) : 0);
+          return { numero: f?.numero_venta || '—', monto: montoImp };
+        }),
+        saldoAnteriorTotal: saldoAnterior,
+        saldoNuevoTotal: saldoAnterior - amount,
+        empresa: empresaData,
+      });
+
       toast({
         title: "Pago Registrado",
         description: `Se registró el cobro de $${amount.toLocaleString('es-AR')}.`,
-        className: "bg-emerald-600 text-white border-none"
+        className: "bg-emerald-600 text-white border-none",
+        action: (
+          <ToastAction altText="Imprimir comprobante" onClick={() => printElementById('kx-recibo-print')}>
+            Imprimir
+          </ToastAction>
+        ),
       });
 
       // El RPC genera el asiento contable en la misma transacción, pero de forma
@@ -601,6 +651,10 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro, initialFactu
         imputacionesFX={imputacionesFX} setImputacionesFX={setImputacionesFX}
         autoDistribuirFIFO={autoDistribuirFIFO}
       />
+
+      {/* Comprobante de Pago imprimible — item 6 del plan de rediseño (22/08).
+          Vive siempre oculto en el DOM, igual que TicketPrint del POS. */}
+      <ReciboPago recibo={lastRecibo} />
 
       {/* Carga del TC de paridad cuando falta — el gate de handleRegisterPayment lo abre */}
       <TipoCambioModal

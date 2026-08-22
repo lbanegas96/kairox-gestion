@@ -21,6 +21,8 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { formatDateAR, getNowAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import TabAntiguedad from '@/components/cuenta-corriente/TabAntiguedad';
+import ReciboPago from '@/components/shared/ReciboPago';
+import { printElementById } from '@/lib/printRecibo';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const CONDICIONES_IVA = ['RI', 'Monotributo', 'Exento', 'CF', 'No Categorizado'];
@@ -56,7 +58,10 @@ function ProveedoresSection() {
   const [detalleId, setDetalleId]   = useState(null);
   const [runOpen, setRunOpen]       = useState(false);
   const [pagoOpen, setPagoOpen]     = useState(false);
-  const [pagoForm, setPagoForm]     = useState({ monto: '', descripcion: '', metodo: 'Efectivo', forma_pago_id: '' });
+  const [pagoForm, setPagoForm]     = useState({ monto: '', descripcion: '', metodo: 'Efectivo', forma_pago_id: '', referencia_pago: '' });
+  // Comprobante de Pago imprimible (item 6, 22/08) — mismo criterio que en
+  // Cuenta Corriente de clientes: un solo nodo oculto, no un historial.
+  const [lastRecibo, setLastRecibo] = useState(null);
   // Imputación por factura (Open Item clearing, migration 169/170) — opcional.
   // Si no se imputa nada, el pago se comporta igual que siempre (reduce el
   // saldo corrido, sin marcar ninguna compra puntual como cancelada).
@@ -92,6 +97,20 @@ function ProveedoresSection() {
         .order('nombre');
       if (error) throw error;
       return data ?? [];
+    },
+    enabled: !!empresaId,
+  });
+
+  const { data: empresaData = {} } = useQuery({
+    queryKey: ['empresa_datos_recibo', empresaId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('empresas')
+        .select('nombre, afip_cuit, direccion')
+        .eq('id', empresaId)
+        .maybeSingle();
+      if (error) throw error;
+      return data ?? {};
     },
     enabled: !!empresaId,
   });
@@ -180,12 +199,34 @@ function ProveedoresSection() {
   };
 
   const pagoMutation = useMutation({
-    mutationFn: ({ monto, descripcion, metodo, imputaciones: imp, formaPagoId }) =>
-      proveedoresService.registrarPago(empresaId, detalleId, detalle?.nombre, monto, metodo, descripcion, user.id, currentSession?.id ?? null, imp, formaPagoId),
-    onSuccess: (data) => {
+    mutationFn: ({ monto, descripcion, metodo, imputaciones: imp, formaPagoId, referenciaPago }) =>
+      proveedoresService.registrarPago(empresaId, detalleId, detalle?.nombre, monto, metodo, descripcion, user.id, currentSession?.id ?? null, imp, formaPagoId, referenciaPago),
+    onSuccess: (data, variables) => {
       qc.invalidateQueries({ queryKey: PROV_KEYS.cuentaCorriente(detalleId) });
       invalidate();
-      toast({ title: 'Pago registrado ✓', className: 'bg-green-600 text-white' });
+      toast({
+        title: 'Pago registrado ✓',
+        className: 'bg-green-600 text-white',
+        action: (
+          <ToastAction altText="Imprimir comprobante" onClick={() => printElementById('kx-recibo-print')}>
+            Imprimir
+          </ToastAction>
+        ),
+      });
+      setLastRecibo({
+        tipo: 'pago',
+        movimientoId: data?.ccp_id,
+        fecha: new Date().toISOString(),
+        contraparteNombre: detalle?.nombre,
+        monto: variables.monto,
+        metodo: variables.metodo,
+        referenciaPago: variables.referenciaPago || null,
+        nota: variables.descripcion || null,
+        imputaciones: variables.imputacionesDetalle || [],
+        saldoAnteriorTotal: saldo,
+        saldoNuevoTotal: saldo - variables.monto,
+        empresa: empresaData,
+      });
       // El RPC genera el asiento en la misma transacción, no bloqueante: si falla
       // (período cerrado o cuenta faltante), el pago igual se registra sin avisar.
       if (data?.asiento_generado === false) {
@@ -202,7 +243,7 @@ function ProveedoresSection() {
       }
       setPagoOpen(false);
       const efectivo = formasPago.find(f => f.tipo_instrumento === 'efectivo');
-      setPagoForm({ monto: '', descripcion: '', metodo: efectivo?.nombre ?? 'Efectivo', forma_pago_id: efectivo?.id ?? '' });
+      setPagoForm({ monto: '', descripcion: '', metodo: efectivo?.nombre ?? 'Efectivo', forma_pago_id: efectivo?.id ?? '', referencia_pago: '' });
       setImputaciones({});
       setImputacionesFX({});
     },
@@ -254,7 +295,7 @@ function ProveedoresSection() {
 
   const openPagoDialog = () => {
     const efectivo = formasPago.find(f => f.tipo_instrumento === 'efectivo');
-    setPagoForm({ monto: '', descripcion: '', metodo: efectivo?.nombre ?? 'Efectivo', forma_pago_id: efectivo?.id ?? '' });
+    setPagoForm({ monto: '', descripcion: '', metodo: efectivo?.nombre ?? 'Efectivo', forma_pago_id: efectivo?.id ?? '', referencia_pago: '' });
     setImputaciones({});
     setImputacionesFX({});
     setFacturasAbiertas([]);
@@ -303,6 +344,12 @@ function ProveedoresSection() {
       metodo: pagoForm.metodo,
       imputaciones: imputacionesArray.length > 0 ? imputacionesArray : null,
       formaPagoId: pagoForm.forma_pago_id || null,
+      referenciaPago: pagoForm.referencia_pago || null,
+      imputacionesDetalle: imputacionesArray.map(imp => {
+        const f = facturasAbiertas.find(x => x.compra_id === imp.compra_id);
+        const montoImp = imp.monto ?? (imp.monto_moneda_extranjera != null ? imp.monto_moneda_extranjera * (f?.tipo_cambio_tasa || 1) : 0);
+        return { numero: f?.numero_factura || '—', monto: montoImp };
+      }),
     });
   };
 
@@ -844,6 +891,25 @@ function ProveedoresSection() {
               </select>
               <p className="text-2xs text-kx-text-3">Efectivo descuenta de la Caja; los demás, de la cuenta bancaria mapeada.</p>
             </div>
+            {(() => {
+              const forma = formasPago.find(f => f.id === pagoForm.forma_pago_id);
+              const REFERENCIA_LABEL = {
+                transferencia: 'N° de operación / referencia',
+                tarjeta_debito: 'N° de cupón / autorización',
+                tarjeta_credito: 'N° de cupón / autorización',
+                billetera: 'N° de operación',
+              };
+              const label = REFERENCIA_LABEL[forma?.tipo_instrumento];
+              if (!label) return null;
+              return (
+                <div className="space-y-1">
+                  <Label className="dark:text-kx-text">{label}</Label>
+                  <Input value={pagoForm.referencia_pago}
+                    onChange={e => setPagoForm(p => ({ ...p, referencia_pago: e.target.value }))}
+                    placeholder={label} className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+                </div>
+              );
+            })()}
             <div className="space-y-1">
               <Label className="dark:text-kx-text">Descripción</Label>
               <Input value={pagoForm.descripcion}
@@ -912,6 +978,9 @@ function ProveedoresSection() {
       </Dialog>
 
       <PaymentRunModal empresaId={empresaId} formasPago={formasPago} open={runOpen} onOpenChange={setRunOpen} />
+
+      {/* Comprobante de Pago imprimible — item 6 del plan de rediseño (22/08). */}
+      <ReciboPago recibo={lastRecibo} />
     </div>
   );
 }

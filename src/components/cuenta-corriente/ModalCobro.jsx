@@ -31,6 +31,18 @@ function ModalCobro({
   imputacionesFX = {}, setImputacionesFX,
   autoDistribuirFIFO,
 }) {
+  const formaSeleccionada = formasPago.find(f => f.id === paymentData.forma_pago_id);
+  const tipoInstrumento = formaSeleccionada?.tipo_instrumento;
+  // Referencia por método (SAP-style: transferencia pide N° de operación,
+  // tarjeta pide N° de cupón/autorización) — Efectivo no necesita nada.
+  const REFERENCIA_LABEL = {
+    transferencia: 'N° de operación / referencia',
+    tarjeta_debito: 'N° de cupón / autorización',
+    tarjeta_credito: 'N° de cupón / autorización',
+    billetera: 'N° de operación',
+  };
+  const referenciaLabel = REFERENCIA_LABEL[tipoInstrumento];
+
   const montoCobro = parseNumberLocale(paymentData.monto) || 0;
   // El total imputado en pesos: filas ARS suman el monto tal cual; filas en
   // moneda extranjera se valorizan al TC de hoy (lo que realmente sale de la
@@ -143,6 +155,19 @@ function ModalCobro({
               />
             </div>
           </div>
+
+          {referenciaLabel && (
+            <div className="space-y-1">
+              <Label htmlFor="referencia-list" className="text-xs dark:text-kx-text">{referenciaLabel}</Label>
+              <Input
+                id="referencia-list"
+                value={paymentData.referencia_pago || ''}
+                onChange={(e) => setPaymentData({ ...paymentData, referencia_pago: e.target.value })}
+                placeholder={referenciaLabel}
+                className="h-8 text-sm dark:bg-kx-bg dark:border-kx-border dark:text-kx-text"
+              />
+            </div>
+          )}
 
           {facturasAbiertas.length > 0 && (
             <div className="space-y-1.5 border-t border-kx-border pt-3">
