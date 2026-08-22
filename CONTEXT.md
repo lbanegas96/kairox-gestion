@@ -4902,7 +4902,6 @@ al cierre de la sesión del 20-21/08 con Nadia.
 |---|---|---|
 | Import del resto del catálogo de kiosco (3.380 productos) | — | Pausado. El CSV no se conserva (vivía en el scratchpad de una sesión vieja) — habría que regenerarlo si se retoma |
 | Bloque 5 — lectura de balanza por código de barras | — | Deferido a futuro a pedido de Nadia (21/08). Necesita un ejemplo real de etiqueta de balanza antes de diseñar el parser — no hay un estándar único |
-| 4 NC históricas mal declaradas ante ARCA | Contador de Nalux | No corregible por código |
 | Dominio propio en Resend | Nadia | Deferido a propósito — Gmail SMTP ya resuelve el bloqueo total |
 | CbteAsoc en `informar-caea` (circuito CAEA) | Equipo | Sin urgencia — nadie usa CAEA en producción todavía |
 | MELI Factura A | — | Deferido. **No construir sin pedido explícito** |
@@ -4910,4 +4909,66 @@ al cierre de la sesión del 20-21/08 con Nadia.
 | `pg_net` schema en `public` | — | Ya no aplica, cerrado arriba |
 | Leaked password protection | — | Bloqueado por plan free (`402`), requiere Pro |
 | Plan free de Supabase | — | **No es un pendiente** — decisión consciente de Nadia, no re-marcar como urgente sin que ella lo pida |
+
+## 2026-08-21 — Fallback de SITE_URL corregido + 4 NC históricas corregidas ante ARCA (homologación)
+
+### Fallback de SITE_URL apuntaba al dominio Vercel viejo
+
+Confirmado con Luciano (captura del dashboard de Supabase, sección Edge Functions →
+Secrets): no existe un secreto `SITE_URL` configurado — nunca existió. Eso significaba que
+4 lugares (`_shared/auth.ts`, `mp-qr-crear`, `integraciones-oauth-callback`, `invite-user`)
+estaban usando en la práctica su fallback hardcodeado a `kairox-gestion.vercel.app` (el
+dominio viejo, ver [[feedback_url_produccion_correcta]]) para invitaciones de usuarios,
+redirect de OAuth de integraciones, y CORS. **Fix (commit `be5e7d7`):** los 4 fallbacks
+ahora apuntan a `kairox-gestion-chi.vercel.app`. Deployado en producción.
+
+### 4 NC históricas mal declaradas ante ARCA — CORREGIDO
+
+Retomando el pendiente documentado más arriba (`NC-20260706-003`, `NC-20260707-001`,
+`NC-20260707-002`, `NC-20260728-002`, declaradas como Factura código 6 en vez de NC código
+8 por el bug de `voucherTypeAfip` ya corregido). Antes de tocar nada se confirmó con
+Luciano que ARCA sigue en **homologación** (no producción real) — bajó la urgencia y el
+riesgo a cero, permitiendo tratarlo como ejercicio de validación del sistema.
+
+**Hallazgo clave antes de construir nada:** `arca-worker` deriva `CbteAsoc.tipo` a partir
+del campo interno `comprobantes.tipo` (`origen.tipo`) — si se hubiera reusado tal cual para
+emitir una NC correctiva referenciando a estos 4 como origen, habría mandado `CbteAsoc.tipo=8`
+(NC) en vez de `6` (Factura), que es lo que ARCA realmente tiene registrado para esos CAE.
+Habría repetido el mismo bug que se está corrigiendo. Por eso se construyó una herramienta
+aparte, de un solo uso.
+
+**Herramienta:** `arca-corregir-nc-historica` (edge function temporal, ya borrada del repo y
+del proyecto tras usarla). Llama a `callArcaEmit` (mismo helper que usa `arca-worker` en
+producción) con `CbteAsoc` armado a mano (`{tipo: 6, ptoVta, nro}` = el CAE real de la
+"Factura" fantasma). **Deliberadamente no escribe nada en la base** — ni `comprobantes`, ni
+`cuenta_corriente_movimientos`, ni asientos — porque esos efectos ya estaban bien reflejados
+desde el comprobante original (que en KAIROX siempre fue `tipo='nota_credito'`, el bug era
+solo en lo que se le mandaba a ARCA). Deployada y ejecutada por Luciano mismo desde su
+propia terminal (`npx supabase functions deploy` + `Invoke-RestMethod`, con guía paso a
+paso) — el deploy vía MCP y el commit vía Bash quedaron bloqueados por el clasificador de
+seguridad de Claude Code al tratarse de una acción que toca AFIP con certificados reales,
+incluso en homologación.
+
+**Resultado — las 4 corregidas:**
+
+| NC original | CAE correctivo (NC B) | Comprobante | Vencimiento |
+|---|---|---|---|
+| NC-20260706-003 (Luciano, $87.120) | `86340781062529` | PdV 0001 #2 | 2026-09-01 |
+| NC-20260707-001 (Consumidor Final, $14,52) | `86340781076209` | PdV 0001 #3 | 2026-09-01 |
+| NC-20260707-002 (Katy, $9.680) | `86340781080523` | PdV 0001 #4 | 2026-09-01 |
+| NC-20260728-002 (Nadia Tecera, $1.000) | `86340781080549` | PdV 0002 #1 | 2026-09-01 |
+
+Nota-20260728-002 confirmó numeración independiente por punto de venta (arrancó en #1 en
+PdV 0002, no siguió la serie de PdV 0001) — señal más de que el sistema se comportó
+correctamente. Se observó también el desincronismo conocido de `FECompUltimoAutorizado` en
+homologación (documentado en `_shared/afip.ts`, error `[10016]`): la primera llamada
+(Luciano) se ejecutó dos veces por reintento manual y ARCA devolvió el mismo CAE la segunda
+vez en vez de duplicar — comportamiento idempotente esperado, no un bug.
+
+**Estado:** cerrado. Edge function borrada (dashboard, a cargo de Luciano) y archivo
+eliminado del repo (commit `7f23b1e`). Si algún día se repite un caso similar en
+producción real, la vía correcta ya quedó validada — pero antes de aplicarla en producción
+real habría que confirmar con el contador real de Nalux si además hace falta una
+rectificativa de IVA/IIBB para el período histórico, ya que la corrección solo neteó el
+efecto hacia adelante (período actual), no reescribe lo ya declarado en el período viejo.
 | Auditoría de código de las 36 funciones restantes (no muestreadas) | — | Opcional, sólo si se quiere garantía del 100% — el patrón en la muestra de mayor riesgo da confianza razonable |
