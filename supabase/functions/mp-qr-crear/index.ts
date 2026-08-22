@@ -55,7 +55,7 @@ const VERCEL_DEPLOY_ORIGIN_RE = /^https:\/\/kairox-gestion(-[a-z0-9]+)?-k-gestio
 function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('Origin') || '';
   const isAllowed = ALLOWED_ORIGINS.has(origin) || VERCEL_DEPLOY_ORIGIN_RE.test(origin);
-  const allowOrigin = isAllowed ? origin : (Deno.env.get('SITE_URL') || 'https://kairox-gestion.vercel.app');
+  const allowOrigin = isAllowed ? origin : (Deno.env.get('SITE_URL') || 'https://kairox-gestion-chi.vercel.app');
   return {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',

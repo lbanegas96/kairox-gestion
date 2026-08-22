@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { resolverState, guardarTokenCanal, type Canal } from '../_shared/integraciones.ts';
 
-const SITE_URL = Deno.env.get('SITE_URL') || 'https://kairox-gestion.vercel.app';
+const SITE_URL = Deno.env.get('SITE_URL') || 'https://kairox-gestion-chi.vercel.app';
 
 interface ResultadoExchange {
   accessToken: string;

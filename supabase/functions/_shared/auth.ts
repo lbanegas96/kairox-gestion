@@ -52,14 +52,14 @@ const BASE_CORS_HEADERS = {
  */
 export function buildCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('Origin') || '';
-  const allowOrigin = isOriginAllowed(origin) ? origin : (Deno.env.get('SITE_URL') || 'https://kairox-gestion.vercel.app');
+  const allowOrigin = isOriginAllowed(origin) ? origin : (Deno.env.get('SITE_URL') || 'https://kairox-gestion-chi.vercel.app');
   return { ...BASE_CORS_HEADERS, 'Access-Control-Allow-Origin': allowOrigin };
 }
 
 /** Headers CORS estáticos (backward compat). Para nuevos handlers, preferí buildCorsHeaders(req). */
 export const corsHeaders = {
   ...BASE_CORS_HEADERS,
-  'Access-Control-Allow-Origin': Deno.env.get('SITE_URL') || 'https://kairox-gestion.vercel.app',
+  'Access-Control-Allow-Origin': Deno.env.get('SITE_URL') || 'https://kairox-gestion-chi.vercel.app',
 };
 
 export interface AuthResult {

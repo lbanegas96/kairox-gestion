@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
   if (!lastName  || lastName.length  < 2) return errorResponse('Apellido inválido', 400, req);
 
   // redirectTo: usamos el Origin del request si está disponible, sino el SITE_URL configurado
-  const origin = req.headers.get('Origin') || Deno.env.get('SITE_URL') || 'https://kairox-gestion.vercel.app';
+  const origin = req.headers.get('Origin') || Deno.env.get('SITE_URL') || 'https://kairox-gestion-chi.vercel.app';
 
   // Invitar vía Supabase (envía email con magic link)
   const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
