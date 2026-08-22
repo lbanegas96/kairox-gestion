@@ -64,10 +64,9 @@ function ModalDetallePedido({
 
   return (
     <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-      {/* Mismo formato grande que Cotizaciones — consistencia pedida por
-          Luciano (13/08): "aplicar lo que tengamos en cotización... los
-          tamaños". */}
-      <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] flex flex-col dark:bg-kx-bg dark:border-kx-border">
+      {/* size="wide" — mismo shell que el resto de los documentos (hallazgo
+          Luciano 22/08: antes cada uno traía su propio max-w). */}
+      <DialogContent size="wide" className="dark:bg-kx-bg dark:border-kx-border">
         {detailPedido && (() => {
           const e          = getEstado(detailPedido.estado);
           const items      = detailPedido.pedido_items || [];
@@ -104,7 +103,7 @@ function ModalDetallePedido({
 
           return (
             <>
-              <DialogHeader className="shrink-0">
+              <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b border-kx-border dark:border-kx-border">
                 <DialogTitle className="flex items-center gap-2 dark:text-kx-text">
                   <FileText className="h-5 w-5 text-kx-blue" />
                   Pedido {detailPedido.numero}
@@ -113,7 +112,7 @@ function ModalDetallePedido({
                   Detalle completo del pedido
                 </DialogDescription>
               </DialogHeader>
-              <div className="flex-1 min-h-0 overflow-y-auto space-y-4 py-2">
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-4 px-6 py-4">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-kx-text-2">Estado</span>
                   <div className="flex items-center gap-2">
@@ -313,7 +312,7 @@ function ModalDetallePedido({
                   y el paso siguiente de la cadena (confirmar → entregar → facturar)
                   tiene que estar siempre a la vista, sin scrollear por debajo del
                   historial. Cerrar es decisión del usuario. */}
-              <DialogFooter className="shrink-0 flex-wrap gap-2 sm:justify-between border-t border-kx-border dark:border-kx-border pt-3">
+              <DialogFooter className="shrink-0 flex-wrap gap-2 sm:justify-between border-t border-kx-border dark:border-kx-border px-6 py-4">
                 <Button variant="outline" onClick={() => setIsDetailOpen(false)} className="dark:border-kx-border dark:text-slate-300">
                   Cerrar
                 </Button>

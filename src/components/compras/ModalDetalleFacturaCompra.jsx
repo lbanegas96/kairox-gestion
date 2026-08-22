@@ -44,8 +44,9 @@ function ModalDetalleFacturaCompra({
 
   return (
     <Dialog open={!!compra} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-4xl dark:bg-kx-bg dark:border-kx-border max-h-[92vh] overflow-y-auto">
-        <DialogHeader>
+      {/* size="wide" — mismo shell que el resto (hallazgo Luciano 22/08, antes max-w-4xl propio). */}
+      <DialogContent size="wide" className="dark:bg-kx-bg dark:border-kx-border">
+        <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-kx-border dark:border-kx-border">
           <DialogTitle className="dark:text-kx-text flex items-center gap-2">
             <Receipt className="w-5 h-5 text-kx-blue" />
             Factura de Proveedor {compra.numero_factura || 'S/N'}
@@ -53,7 +54,7 @@ function ModalDetalleFacturaCompra({
           <DialogDescription className="dark:text-kx-text-2">Detalle completo de la factura.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
               <p className="text-xs text-kx-text-3 uppercase mb-1">Proveedor</p>
@@ -160,7 +161,7 @@ function ModalDetalleFacturaCompra({
           )}
         </div>
 
-        <DialogFooter className="gap-2 flex-wrap">
+        <DialogFooter className="gap-2 flex-wrap px-6 py-4 shrink-0 border-t border-kx-border dark:border-kx-border">
           <Button variant="outline" onClick={onClose} className="dark:border-kx-border dark:text-slate-300">
             Cerrar
           </Button>

@@ -118,8 +118,10 @@ const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra, onNav
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl kairox-bg-card kairox-text-primary overflow-hidden flex flex-col max-h-[90vh] dark:bg-kx-bg dark:border-kx-border">
-        <DialogHeader className="border-b border-slate-100 dark:border-kx-border pb-4">
+      {/* size="wide" — mismo shell que el resto de los documentos (hallazgo
+          Luciano 22/08: antes cada uno traía su propio max-w). */}
+      <DialogContent size="wide" className="kairox-bg-card kairox-text-primary dark:bg-kx-bg dark:border-kx-border">
+        <DialogHeader className="border-b border-slate-100 dark:border-kx-border px-6 pt-6 pb-4 shrink-0">
           <DialogTitle className="flex justify-between items-center pr-8 dark:text-kx-text">
             <span className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-blue-600 dark:text-kx-violet" />
@@ -137,7 +139,7 @@ const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra, onNav
              <Loader2 className="h-8 w-8 animate-spin text-kx-blue" />
            </div>
         ) : compra ? (
-          <div className="flex-1 overflow-y-auto p-1">
+          <div className="flex-1 overflow-y-auto px-6 py-4">
             {/* INFO CARDS */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 mt-2">
               <div className="bg-kx-surface-2 dark:bg-slate-900/50 p-4 rounded-lg border kairox-border space-y-3 dark:border-kx-border">
@@ -268,7 +270,7 @@ const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra, onNav
           <div className="p-8 text-center text-kx-text-2">No se encontraron datos.</div>
         )}
 
-        <DialogFooter className="border-t border-slate-100 dark:border-kx-border pt-4 flex gap-2 justify-end">
+        <DialogFooter className="border-t border-slate-100 dark:border-kx-border px-6 py-4 flex gap-2 justify-end shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:text-kx-text dark:border-kx-border dark:hover:bg-slate-800">
             Cerrar
           </Button>

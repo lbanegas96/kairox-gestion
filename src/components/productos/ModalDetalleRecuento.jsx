@@ -128,12 +128,14 @@ function ModalDetalleRecuento({ recuentoId, onOpenChange, onConfirmado }) {
   return (
     <>
       <Dialog open={!!recuentoId} onOpenChange={onOpenChange}>
+        {/* size="wide" — mismo shell que el resto (hallazgo Luciano 22/08, antes 800px propio). */}
         <DialogContent
-          className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border"
+          size="wide"
+          className="bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border"
           onPointerDownOutside={(e) => { if (confirmando || anulando) e.preventDefault(); }}
           onInteractOutside={(e) => { if (confirmando || anulando) e.preventDefault(); }}
         >
-          <DialogHeader>
+          <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-kx-border dark:border-kx-border">
             <DialogTitle className="flex items-center gap-2">
               Recuento {header?.numero}
               {cfg && (
@@ -151,7 +153,7 @@ function ModalDetalleRecuento({ recuentoId, onOpenChange, onConfirmado }) {
           {isLoading ? (
             <div className="p-10 text-center text-kx-text-3">Cargando...</div>
           ) : (
-            <div className="space-y-4">
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
               <div className="flex items-center gap-3">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-2.5 w-4 h-4 text-kx-text-3" />

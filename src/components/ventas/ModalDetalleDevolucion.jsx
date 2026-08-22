@@ -56,8 +56,9 @@ function ModalDetalleDevolucion({ devolucion, onClose, onNavigate, onGenerarNC, 
 
   return (
     <Dialog open={!!devolucion} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      {/* size="wide" — mismo shell que el resto (hallazgo Luciano 22/08, antes max-w-2xl propio). */}
+      <DialogContent size="wide" className="dark:bg-kx-bg dark:border-kx-border">
+        <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-kx-border dark:border-kx-border">
           <DialogTitle className="flex items-center gap-2 dark:text-kx-text">
             {esCliente ? <Undo2 className="h-5 w-5 text-kx-amber" /> : <RotateCcw className="h-5 w-5 text-kx-amber" />}
             Devolución {devolucion.numero_devolucion}
@@ -67,24 +68,26 @@ function ModalDetalleDevolucion({ devolucion, onClose, onNavigate, onGenerarNC, 
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-kx-text-2">{esCliente ? 'Cliente' : 'Proveedor'}</span>
-            <span className="font-medium dark:text-kx-text">{entidadNombre || '—'}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-kx-text-2">Fecha</span>
-            <span className="text-sm dark:text-slate-300">{formatDateAR(devolucion.fecha + 'T00:00:00Z')}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-kx-text-2">{esCliente ? 'Reingresó a stock' : 'Descontado de stock'}</span>
-            <span className="text-sm dark:text-slate-300">{devolucion.reingresa_stock ? 'Sí' : 'No'}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-kx-text-2">Compensación</span>
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${compCfg.className}`}>
-              {compCfg.label}
-            </span>
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <p className="text-xs text-kx-text-3 uppercase mb-1">{esCliente ? 'Cliente' : 'Proveedor'}</p>
+              <p className="font-medium dark:text-kx-text">{entidadNombre || '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-kx-text-3 uppercase mb-1">Fecha</p>
+              <p className="dark:text-slate-300">{formatDateAR(devolucion.fecha + 'T00:00:00Z')}</p>
+            </div>
+            <div>
+              <p className="text-xs text-kx-text-3 uppercase mb-1">{esCliente ? 'Reingresó a stock' : 'Descontado de stock'}</p>
+              <p className="dark:text-slate-300">{devolucion.reingresa_stock ? 'Sí' : 'No'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-kx-text-3 uppercase mb-1">Compensación</p>
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${compCfg.className}`}>
+                {compCfg.label}
+              </span>
+            </div>
           </div>
 
           {devolucion.motivo && (
@@ -177,7 +180,7 @@ function ModalDetalleDevolucion({ devolucion, onClose, onNavigate, onGenerarNC, 
           </table>
         </div>
 
-        <DialogFooter className="flex-wrap gap-2 sm:justify-between">
+        <DialogFooter className="flex-wrap gap-2 sm:justify-between px-6 py-4 shrink-0 border-t border-kx-border dark:border-kx-border">
           <Button variant="outline" onClick={onClose} className="dark:border-kx-border dark:text-slate-300">Cerrar</Button>
           <div className="flex gap-2 flex-wrap">
             {puedeMarcarReemplazo && (

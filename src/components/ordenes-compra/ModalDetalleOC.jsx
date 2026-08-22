@@ -41,17 +41,18 @@ function ModalDetalleOC({
 
   return (
     <Dialog open={!!detalleId} onOpenChange={() => setDetalleId(null)}>
-      {/* Mismo formato grande que Cotizaciones/Pedidos — consistencia (13/08). */}
-      <DialogContent className="max-w-4xl dark:bg-kx-bg dark:border-kx-border max-h-[92vh] overflow-y-auto">
-        <DialogHeader>
+      {/* size="wide" — mismo shell que el resto de los documentos con grilla de
+          ítems (hallazgo Luciano 22/08, antes max-w-4xl propio). */}
+      <DialogContent size="wide" className="dark:bg-kx-bg dark:border-kx-border">
+        <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-kx-border dark:border-kx-border">
           <DialogTitle className="dark:text-kx-text flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-indigo-600 dark:text-indigo-500" />
             Orden de Compra {detalle?.numero}
           </DialogTitle>
         </DialogHeader>
         {detalle && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>
                 <p className="text-xs text-kx-text-3 uppercase mb-1">Proveedor</p>
                 <p className="font-medium dark:text-kx-text">{detalle.proveedor_nombre ?? detalle.proveedores?.nombre ?? '—'}</p>
@@ -291,7 +292,7 @@ function ModalDetalleOC({
             </div>
           </div>
         )}
-        <DialogFooter className="gap-2 flex-wrap">
+        <DialogFooter className="gap-2 flex-wrap px-6 py-4 shrink-0 border-t border-kx-border dark:border-kx-border">
           {onEditar && detalle && ESTADOS_EDITABLES.includes(detalle.estado) && (
             <Button variant="outline" className="gap-2 dark:border-kx-border dark:text-slate-300"
               onClick={() => onEditar(detalle)}>
