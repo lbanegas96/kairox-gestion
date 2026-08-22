@@ -118,7 +118,15 @@ function Dashboard({ user, onLogout, onEnterPOS }) {
       {/* Aurora fixed background — renderizado una sola vez */}
       <AuroraBackground />
 
-      <div className="flex h-full relative z-10">
+      {/* Sin z-10 acá a propósito (hallazgo Luciano 22/08): un z-index con
+          position:relative crea un stacking context propio, y eso ATRAPA el
+          z-[60] del <Sidebar> adentro de él -- sin importar cuán alto sea ese
+          z-index, nunca puede ganarle a un <Dialog> (z-50) que vive en un
+          portal aparte pegado a document.body, porque se comparan a nivel
+          raíz como grupos, no individualmente. AuroraBackground ya usa -z-10
+          + pointer-events-none, así que esta capa no necesita z-index propio
+          para quedar arriba de ella. */}
+      <div className="flex h-full relative">
         <Sidebar
           activeSection={activeSection}
           setActiveSection={navigateTo}

@@ -128,7 +128,16 @@ function Sidebar({ activeSection, setActiveSection, isOpen, setIsOpen }) {
       <aside
         className={[
           // Positioning: fixed overlay on mobile, inline on desktop
-          'fixed md:relative inset-y-0 left-0 z-50 md:z-auto',
+          // z-[60] > z-50 de <Dialog> (ui/dialog.jsx) a propósito (hallazgo
+          // Luciano 22/08): con `md:z-auto` acá, cualquier modal ancho
+          // (96vw, el shell que ya usan Entrega/OC/Pedido/Factura/etc) tapaba
+          // FÍSICAMENTE el sidebar en desktop -- un click en "Entregas"
+          // mientras había un modal abierto no llegaba al botón, caía sobre
+          // contenido inerte del modal (confirmado con elementFromPoint: el
+          // DialogContent arrancaba en left:15px, dejando el sidebar entero
+          // debajo). El sidebar debe quedar SIEMPRE clickeable, tenga o no un
+          // modal abierto encima.
+          'fixed md:relative inset-y-0 left-0 z-[60]',
           // Size
           'w-[236px] flex-shrink-0 flex flex-col',
           // Visual
