@@ -1,16 +1,21 @@
 import { useState, useEffect } from 'react';
-import { 
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter 
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, X, Save, Edit2, Loader2, FileText, User, Clock, RefreshCw } from 'lucide-react';
+import { Printer, X, Save, Edit2, Loader2, FileText, User, Clock, RefreshCw, Network } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import { formatDateAR } from '@/lib/dateUtils';
+import MapaRelaciones from '@/components/shared/MapaRelaciones';
+import VerAsientoButton from '@/components/shared/VerAsientoButton';
 
-const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra }) => {
+// Compra Rápida no tenía Mapa de Relaciones ni Ver Asiento (hallazgo Luciano
+// 22/08, mismo gap que ya se cerró en Ventas) — `compra.asiento_id` y el modo
+// `compraId` de MapaRelaciones ya existían, solo faltaba cablearlos acá.
+const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra, onNavigate }) => {
   const { toast } = useToast();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -19,6 +24,7 @@ const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra }) => 
   const [isEditing, setIsEditing] = useState(false);
   const [newStatus, setNewStatus] = useState('');
   const [saving, setSaving] = useState(false);
+  const [mapaOpen, setMapaOpen] = useState(false);
 
   useEffect(() => {
     if (open && compraId) {
@@ -205,6 +211,25 @@ const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra }) => 
                 )}
               </div>
             </div>
+
+            <div className="flex items-center justify-end gap-3 mb-2">
+              <VerAsientoButton asientoId={compra.asiento_id} />
+              <button
+                type="button"
+                onClick={() => setMapaOpen(true)}
+                className="text-2xs text-kx-violet hover:opacity-80 font-medium flex items-center gap-1"
+                title="Ver mapa de relaciones completo"
+              >
+                <Network className="w-3 h-3" /> Mapa de relaciones
+              </button>
+            </div>
+
+            <MapaRelaciones
+              open={mapaOpen}
+              onOpenChange={setMapaOpen}
+              compraId={compraId}
+              onNavigate={(tipo, id) => { setMapaOpen(false); onOpenChange(false); onNavigate?.(tipo, id); }}
+            />
 
             {/* PRODUCTS TABLE */}
             <div className="border kairox-border rounded-lg overflow-hidden mb-6 dark:border-kx-border">

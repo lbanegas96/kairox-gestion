@@ -438,8 +438,10 @@ export interface AsientoContable {
   origen: AsientoOrigen | null;
   origen_id: string | null;
   created_at: string;
+  centro_costo_id?: string | null;
   // join
   asientos_items?: AsientoItem[];
+  centro_costo?: { nombre: string } | null;
 }
 
 export interface AsientoItem {

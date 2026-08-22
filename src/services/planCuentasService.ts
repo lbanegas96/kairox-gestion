@@ -90,7 +90,7 @@ export const asientosService = {
     const from = (page - 1) * pageSize;
     let q = supabase
       .from('asientos_contables')
-      .select('*, asientos_items(*, plan_cuentas(codigo, nombre, tipo))', { count: 'exact' })
+      .select('*, asientos_items(*, plan_cuentas(codigo, nombre, tipo)), centro_costo:centros_costo(nombre)', { count: 'exact' })
       .eq('empresa_id', empresaId)
       .order('fecha', { ascending: false })
       .order('numero', { ascending: false })
@@ -112,7 +112,7 @@ export const asientosService = {
   async getAsiento(id: string): Promise<AsientoContable> {
     const { data, error } = await supabase
       .from('asientos_contables')
-      .select('*, asientos_items(*, plan_cuentas(codigo, nombre, tipo))')
+      .select('*, asientos_items(*, plan_cuentas(codigo, nombre, tipo)), centro_costo:centros_costo(nombre)')
       .eq('id', id)
       .single();
     if (error) throw new Error(error.message);
@@ -132,7 +132,7 @@ export const asientosService = {
   ): Promise<AsientoContable | null> {
     const { data, error } = await supabase
       .from('asientos_contables')
-      .select('*, asientos_items(*, plan_cuentas(codigo, nombre, tipo))')
+      .select('*, asientos_items(*, plan_cuentas(codigo, nombre, tipo)), centro_costo:centros_costo(nombre)')
       .eq('empresa_id', empresaId)
       .eq('origen', origen)
       .eq('origen_id', origenId)

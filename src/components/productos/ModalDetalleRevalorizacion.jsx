@@ -14,6 +14,7 @@ import { getTodayAR } from '@/lib/dateUtils';
 import { formatCurrency } from '@/lib/currencyUtils';
 import { revalorizacionInventarioService, REVALORIZACION_INVENTARIO_KEYS } from '@/services/revalorizacionInventarioService';
 import { asientosAutoService } from '@/services/planCuentasService';
+import VerAsientoButton from '@/components/shared/VerAsientoButton';
 import { ESTADOS_AJUSTE_INVENTARIO } from './shared';
 
 function ModalDetalleRevalorizacion({ revalorizacionId, onOpenChange, onConfirmado }) {
@@ -148,9 +149,12 @@ function ModalDetalleRevalorizacion({ revalorizacionId, onOpenChange, onConfirma
             <div className="p-10 text-center text-kx-text-3">Cargando...</div>
           ) : (
             <div className="space-y-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-kx-text-3" />
-                <Input placeholder="Buscar producto..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-kx-text-3" />
+                  <Input placeholder="Buscar producto..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+                </div>
+                <VerAsientoButton asientoId={header?.asiento_id} />
               </div>
 
               <div className="rounded-lg border border-kx-border dark:border-kx-border overflow-x-auto max-h-[400px]">

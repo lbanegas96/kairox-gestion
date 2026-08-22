@@ -77,7 +77,7 @@ function FacturasCompraSection() {
         .from('compras')
         .select(`
           id, fecha, numero_factura, total, forma_pago, estado_pago, moneda, tipo_cambio_tasa,
-          monto_paralelo, tc_paralelo, created_at, proveedor_id, observaciones,
+          monto_paralelo, tc_paralelo, created_at, proveedor_id, observaciones, asiento_id,
           neto_gravado, iva_discriminado, descuento_global_pct,
           proveedores(nombre),
           detalle_compras(id, cantidad, costo_unitario, subtotal, descuento_item, alicuota_iva, productos(nombre))

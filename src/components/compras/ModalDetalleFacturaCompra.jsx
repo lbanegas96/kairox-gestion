@@ -2,6 +2,7 @@ import { Receipt, Network, FileMinus, FilePlus, Undo2, Copy } from 'lucide-react
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { formatDateAR } from '@/lib/dateUtils';
+import VerAsientoButton from '@/components/shared/VerAsientoButton';
 
 // Fase 2 (15/08): antes Factura de Compra era el único documento sin un modal
 // de detalle propio — una fila que se expandía inline en la tabla, sin totales
@@ -76,16 +77,19 @@ function ModalDetalleFacturaCompra({
 
           {/* Mismo gap que tenían Cotización/OC hasta ayer: sin acceso al Mapa de
               Relaciones desde el propio detalle. Se agrega directo acá. */}
-          {onOpenMapa && (
-            <div className="flex items-center justify-end">
-              <button
-                type="button"
-                onClick={() => onOpenMapa(compra.id)}
-                className="text-2xs text-kx-violet hover:opacity-80 font-medium flex items-center gap-1"
-                title="Ver mapa de relaciones completo"
-              >
-                <Network className="w-3 h-3" /> Mapa de relaciones
-              </button>
+          {(onOpenMapa || compra.asiento_id) && (
+            <div className="flex items-center justify-end gap-3">
+              <VerAsientoButton asientoId={compra.asiento_id} />
+              {onOpenMapa && (
+                <button
+                  type="button"
+                  onClick={() => onOpenMapa(compra.id)}
+                  className="text-2xs text-kx-violet hover:opacity-80 font-medium flex items-center gap-1"
+                  title="Ver mapa de relaciones completo"
+                >
+                  <Network className="w-3 h-3" /> Mapa de relaciones
+                </button>
+              )}
             </div>
           )}
 

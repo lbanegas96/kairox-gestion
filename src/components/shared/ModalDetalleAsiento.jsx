@@ -1,8 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
 import { FileText, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { supabase } from '@/lib/customSupabaseClient';
 import { asientosService, PLAN_CUENTAS_KEYS } from '@/services/planCuentasService';
 import { ESTADO_COLOR, fmt } from '@/components/plan-cuentas/shared';
+
+/**
+ * Documentos origen resolubles a un número legible (chico #1 del hallazgo
+ * de Luciano 22/08: "Origen: venta" no dice CUÁL venta). Solo cubre los
+ * orígenes que van a `comprobantes` — compra/recuento/revalorización/ajuste
+ * de stock quedan afuera a propósito (menos frecuentes, otra tabla cada
+ * uno) — se puede sumar cuando haga falta.
+ */
+const ORIGEN_A_COMPROBANTE = new Set(['venta', 'nota_credito', 'nota_debito', 'cancelacion_venta']);
 
 /**
  * ModalDetalleAsiento — visor de un asiento contable puntual, reusado desde
@@ -24,6 +34,20 @@ function ModalDetalleAsiento({ asiento: asientoProp = null, asientoId = null, op
   });
 
   const detalle = asientoProp ?? asientoFetched;
+
+  const origenEsComprobante = !!detalle && ORIGEN_A_COMPROBANTE.has(detalle.origen) && !!detalle.origen_id;
+  const { data: origenNumero } = useQuery({
+    queryKey: ['asiento_origen_comprobante', detalle?.origen_id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('comprobantes')
+        .select('numero_venta')
+        .eq('id', detalle.origen_id)
+        .maybeSingle();
+      return data?.numero_venta ?? null;
+    },
+    enabled: open && origenEsComprobante,
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -57,7 +81,16 @@ function ModalDetalleAsiento({ asiento: asientoProp = null, asientoId = null, op
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div><span className="text-kx-text-2">Fecha:</span> <span className="text-kx-text">{new Date(detalle.fecha + 'T12:00:00').toLocaleDateString('es-AR')}</span></div>
-              <div><span className="text-kx-text-2">Origen:</span> <span className="text-kx-text">{detalle.origen || 'manual'}</span></div>
+              <div>
+                <span className="text-kx-text-2">Origen:</span>{' '}
+                <span className="text-kx-text">
+                  {detalle.origen || 'manual'}
+                  {origenNumero && <span className="text-kx-text-2"> — {origenNumero}</span>}
+                </span>
+              </div>
+              {detalle.centro_costo?.nombre && (
+                <div><span className="text-kx-text-2">Centro de costo:</span> <span className="text-kx-text">{detalle.centro_costo.nombre}</span></div>
+              )}
               {detalle.descripcion && <div className="col-span-2"><span className="text-kx-text-2">Descripción:</span> <span className="text-kx-text">{detalle.descripcion}</span></div>}
             </div>
             <div className="rounded-lg border border-kx-border overflow-hidden">
