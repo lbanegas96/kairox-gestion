@@ -1,5 +1,77 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Resuelto (22/08) — Item 7: shell tabulado estilo SAP + direcciones de socios de negocio
+
+Último ítem del plan de rediseño del 22/08, y el único que Luciano quiso conversar antes de
+construir ("cuando lleguemos al 7, hagamos un stop y veamos qué es lo que realmente vamos a
+poner"). El alcance se acordó en esa charla; se descartó "Anexos/Adjuntos".
+
+**El aporte de Luciano que cambió el diseño:** planteó que si copiábamos la solapa de Entregas de
+SAP, había que tocar también la carga de clientes y proveedores para que la entrega pudiera
+seguir los datos de dirección. Al mapearlo apareció que tenía razón, y algo peor:
+
+- `clientes` tenía SOLO `direccion` (texto libre) — sin localidad, provincia ni CP.
+- `proveedores` estaba **más** completo (tenía localidad y provincia), al revés de lo necesario.
+- `entregas` no tenía ninguna columna de destino.
+- Y `RemitoPDF.jsx` imprimía `cliente.direccion` a secas: **el remito salía sin localidad ni CP,
+  inservible para que un transportista entregara.** Un documento operativo roto, no cosmética.
+
+**Solapas construidas** (3 de 4 fueron puro frontend, sin migración — los datos ya existían):
+
+| Solapa | Contenido | Backend |
+|---|---|---|
+| Contenido | Ítems, totales, flujo del documento | — |
+| Comunicación Electrónica | CAE, vto., estado, tipo comprobante, N° ARCA, PdV, CAE vs CAEA, error legible | ya existía |
+| Contabilidad | Asiento (reusa `VerAsientoButton` del item 4), centro de costo, vencimiento, moneda/TC, COGS | ya existía |
+| Logística | Domicilio de destino, transportista, observaciones | **mig.345** |
+
+**Decisiones de diseño que conviene no revertir:**
+
+1. **Primitivas compartidas en `src/components/shared/documento/`** (`DocumentoTabs.jsx` con
+   `DocumentoTabsList` / `DocumentoTab` / `PanelSeccion` / `CampoDato` / `GrillaCampos` /
+   `SolapaVacia`). La consistencia que pidió Luciano ("es mandatorio que todos los comprobantes
+   tengan el mismo diseño") no puede depender de que cada modal copie clases a mano — el estilo
+   vive en un solo lugar y los documentos componen.
+2. **Solapas con subrayado, no pastillas.** Las pastillas ya significan "navegación de sección"
+   (ej. `CuentaCorrienteSection`); el subrayado significa "estás dentro de un documento". Son dos
+   niveles de jerarquía distintos, igual que en SAP.
+3. **Punto ámbar en la solapa** cuando tiene algo accionable (CAE con error, asiento faltante).
+   El usuario ve el problema sin abrir las 4 solapas. Usarlo solo para cosas accionables — no
+   para "este documento no tiene X y está bien".
+4. **La Entrega CONGELA el domicilio** (Regla 7). Si el cliente se muda, el remito viejo tiene que
+   seguir diciendo dónde se entregó. Las columnas `destino_*` son texto plano e independientes de
+   dónde salió la dirección: el día que exista una tabla `direcciones` multi-dirección, se agrega
+   `destino_direccion_id` al lado y estas siguen funcionando sin romperse.
+5. **El congelado se hace con un TRIGGER**, no modificando `crear_entrega` / `crear_entrega_manual`.
+   Son dos RPCs distintas y agregarles parámetros nos volvía a exponer al bug de sobrecarga de
+   `CREATE OR REPLACE` que ya mordió dos veces (`crear_venta` el 14/08, `registrar_cobro_cliente`
+   el 22/08). El trigger cubre ambos caminos sin tocar ninguna firma.
+6. **Sin backfill, a propósito.** Las entregas viejas quedan con `destino_*` en NULL; el frontend
+   cae al maestro y **avisa en ámbar** que ese domicilio puede no ser el de aquel momento.
+   Rellenarlas afirmaría algo que no podemos verificar.
+7. **`transportista` es texto libre** en el documento (como `observaciones`), no un maestro creado
+   al vuelo — eso violaría la Regla 2. Si hace falta un maestro, se agrega `transportista_id` al
+   lado y este campo queda como snapshot del nombre.
+8. **La Entrega no lleva solapa Contabilidad** (no genera asiento propio: el costo se contabiliza
+   en la Factura, mig.287) y **la Factura no congela domicilio** (eso es del evento físico,
+   Regla 8). Sus solapas son Contenido · Logística · Remito. Que un documento tenga 3 solapas y
+   otro 4 es correcto: el diseño es idéntico, la cantidad de información varía.
+
+**Verificado en vivo contra producción real (Nalux):** las 4 solapas de Factura
+(`FAC-20260822-001`) y las 3 de Entrega (`ENT-2026-0148`); el trigger probado con
+`BEGIN...ROLLBACK` en dos casos — sin destino explícito copia los 4 campos del maestro, con
+destino explícito ese valor gana y se completa el resto (0 filas persistidas, confirmado). La
+solapa Comunicación Electrónica muestra correctamente el estado `no_aplica` nombrando el PdV
+("Punto de Venta Principal" está como no fiscal). `npx eslint` 0 errores, `npx vitest run`
+159/159, `npx vite build` OK.
+
+**Pendiente natural (no urgente):** extender el shell tabulado al resto de los modales de
+documento (OC, Factura de Compra, Cotización, Pedido, Devoluciones, Recuento, Revalorización) —
+las primitivas ya están, es composición. Y cargar los domicilios reales de los clientes de Nalux:
+hoy varios tienen dirección pero sin localidad ni CP (ej. Carlos Perez, "Av. Puerto madeo").
+
+---
+
 ## ✅ Resuelto (22/08) — Rediseño de Cobro/Pago, item 6 del plan (referencia por método + comprobante imprimible)
 
 Sexto ítem del plan de rediseño de documentos iniciado el 22/08 (magnitud "🔴 Grande" original;

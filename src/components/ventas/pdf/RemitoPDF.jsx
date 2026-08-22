@@ -207,6 +207,32 @@ export function RemitoPDF({ entrega, empresa }) {
   const cliente = entrega.clientes ?? null;
   const clienteNombre = cliente?.nombre ?? 'Consumidor Final';
 
+  // Domicilio de destino (mig.345, item 7). Antes esto imprimía
+  // `cliente.direccion` a secas — sin localidad, provincia ni CP, un remito que
+  // un transportista no podía usar para entregar. Ahora:
+  //  1º el snapshot congelado en la entrega (dónde se entregó DE VERDAD),
+  //  2º si no hay (entregas anteriores a mig.345), el domicilio actual del
+  //     cliente como mejor aproximación disponible.
+  const destino = entrega.destino_direccion || entrega.destino_localidad
+    ? {
+        direccion: entrega.destino_direccion,
+        localidad: entrega.destino_localidad,
+        provincia: entrega.destino_provincia,
+        codigo_postal: entrega.destino_codigo_postal,
+      }
+    : {
+        direccion: cliente?.direccion,
+        localidad: cliente?.localidad,
+        provincia: cliente?.provincia,
+        codigo_postal: cliente?.codigo_postal,
+      };
+
+  // "Quilmes, Buenos Aires (B1878)" — sin comas colgando si falta una parte.
+  const destinoCiudad = [
+    [destino.localidad, destino.provincia].filter(Boolean).join(', '),
+    destino.codigo_postal ? `(${destino.codigo_postal})` : '',
+  ].filter(Boolean).join(' ');
+
   return (
     <Document title={`Remito ${entrega.numero_remito ?? entrega.numero_entrega}`}>
       <Page size="A4" style={styles.page}>
@@ -252,7 +278,8 @@ export function RemitoPDF({ entrega, empresa }) {
           <View style={styles.receptorRow}>
             <View style={styles.receptorCol}>
               <Text style={styles.receptorNombre}>{clienteNombre}</Text>
-              {cliente?.direccion ? <Text style={styles.compValue}>{cliente.direccion}</Text> : null}
+              {destino.direccion ? <Text style={styles.compValue}>{destino.direccion}</Text> : null}
+              {destinoCiudad ? <Text style={styles.compValue}>{destinoCiudad}</Text> : null}
             </View>
             {cliente?.documento ? (
               <View style={[styles.receptorCol, { alignItems: 'flex-end' }]}>
@@ -261,6 +288,12 @@ export function RemitoPDF({ entrega, empresa }) {
               </View>
             ) : null}
           </View>
+          {entrega.transportista ? (
+            <View style={{ marginTop: 4 }}>
+              <Text style={styles.compLabel}>Transportista</Text>
+              <Text style={styles.compValue}>{entrega.transportista}</Text>
+            </View>
+          ) : null}
         </View>
 
         {/* ── TABLA DE ITEMS (sin precios: el remito no es un comprobante

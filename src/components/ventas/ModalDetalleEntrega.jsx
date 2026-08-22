@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { Truck, Package, Download, Loader2, Send, FileOutput, Ban, Network, Receipt } from 'lucide-react';
+import { Truck, Package, Download, Loader2, Send, FileOutput, Ban, Network, Receipt, FileText, MapPin, ScrollText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { formatDateAR } from '@/lib/dateUtils';
 import DocumentFlow from '@/components/shared/DocumentFlow';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
+import { DocumentoTabsList, DocumentoTab, PanelSeccion, CampoDato, GrillaCampos } from '@/components/shared/documento/DocumentoTabs';
+import TabLogistica from '@/components/shared/documento/TabLogistica';
 
 const ORIGEN_LABELS = {
   implicita: { label: 'POS',    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
@@ -71,11 +74,29 @@ function ModalDetalleEntrega({
           <DialogDescription className="dark:text-kx-text-2">Detalle completo de la entrega.</DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-y-auto space-y-4 px-6 py-4">
+        {/* Shell tabulado (item 7, 22/08) — mismo lenguaje que Factura. La
+            Entrega no lleva Contabilidad porque no genera asiento propio: el
+            costo se contabiliza en la Factura (mig.287), y el stock se mueve
+            acá sin contrapartida contable hasta ese momento (Regla 8). En
+            cambio SÍ tiene Logística con datos propios: es el único documento
+            que congela el domicilio de destino. */}
+        <Tabs defaultValue="contenido" className="flex flex-1 min-h-0 flex-col overflow-hidden">
+          <div className="shrink-0 px-6">
+            <DocumentoTabsList>
+              <DocumentoTab value="contenido" icon={FileText}>Contenido</DocumentoTab>
+              <DocumentoTab value="logistica" icon={MapPin}>Logística</DocumentoTab>
+              <DocumentoTab value="remito" icon={ScrollText} alerta={!entrega.numero_remito && entrega.estado !== 'anulado'}>
+                Remito
+              </DocumentoTab>
+            </DocumentoTabsList>
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-4 px-6 py-4">
+          <TabsContent value="contenido" className="mt-0 space-y-4 focus-visible:outline-none">
           {/* Cabecera en grilla — antes eran filas sueltas a lo alto y en pantalla
               completa quedaba medio modal vacío. Mismo criterio que el detalle de
-              Cotización. Todo esto es info que ya traíamos y no se mostraba
-              (documento y domicilio del cliente, CAI del remito, unidades). */}
+              Cotización. El domicilio y los datos del remito se mudaron a sus
+              propias solapas (item 7). */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <Campo label="Estado">
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${estadoCfg.className}`}>
@@ -102,23 +123,8 @@ function ModalDetalleEntrega({
             <Campo label="CUIT / DNI">
               <span className="font-mono dark:text-slate-300">{entrega.clientes?.documento || '—'}</span>
             </Campo>
-            <Campo label="Domicilio">
-              <span className="dark:text-slate-300">{entrega.clientes?.direccion || '—'}</span>
-            </Campo>
             <Campo label="Pedido de origen">
               <span className="font-mono dark:text-slate-300">{entrega.pedidos?.numero || '—'}</span>
-            </Campo>
-
-            <Campo label="Remito">
-              <span className="font-mono dark:text-slate-300">{entrega.numero_remito || 'Sin emitir'}</span>
-            </Campo>
-            <Campo label="CAI">
-              <span className="font-mono dark:text-slate-300">{entrega.cai_remito_usado || '—'}</span>
-            </Campo>
-            <Campo label="Vto. CAI">
-              <span className="dark:text-slate-300">
-                {entrega.cai_remito_vencimiento_usado ? formatDateAR(entrega.cai_remito_vencimiento_usado) : '—'}
-              </span>
             </Campo>
             <Campo label="Factura">
               <span className="font-mono dark:text-slate-300">
@@ -126,12 +132,6 @@ function ModalDetalleEntrega({
               </span>
             </Campo>
           </div>
-
-          {entrega.observaciones && (
-            <div className="bg-kx-surface-2 dark:bg-kx-surface rounded-lg p-3 text-sm text-kx-text-2 dark:text-kx-text-2">
-              {entrega.observaciones}
-            </div>
-          )}
 
           <div className="space-y-1.5 pt-1">
             <div className="flex items-center justify-between">
@@ -186,23 +186,60 @@ function ModalDetalleEntrega({
             </tbody>
           </table>
 
-          {/* El número de remito ya se muestra arriba en la grilla — acá queda
-              solo la acción, cuando todavía no se emitió. */}
-          {!entrega.numero_remito && (
-            <div className="flex justify-between items-center pt-1">
-              <span className="text-sm text-kx-text-2">Remito</span>
-              <Button
-                size="sm" variant="outline"
-                disabled={emitiendo}
-                onClick={() => onEmitirRemito?.(entrega.id)}
-                className="h-7 text-xs"
-              >
-                {emitiendo ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <FileOutput className="w-3 h-3 mr-1" />}
-                Emitir remito
-              </Button>
-            </div>
-          )}
-        </div>
+          </TabsContent>
+
+          <TabsContent value="logistica" className="mt-0 focus-visible:outline-none">
+            {/* Único documento con destino CONGELADO (mig.345): la Entrega es
+                el evento físico, así que guarda dónde se entregó de verdad. Si
+                el cliente se muda, este remito sigue diciendo la verdad. */}
+            <TabLogistica
+              congelado
+              destino={{
+                direccion: entrega.destino_direccion,
+                localidad: entrega.destino_localidad,
+                provincia: entrega.destino_provincia,
+                codigo_postal: entrega.destino_codigo_postal,
+              }}
+              fallback={entrega.clientes}
+              nombreDestinatario={entrega.clientes?.nombre || 'Consumidor Final'}
+              transportista={entrega.transportista}
+              observaciones={entrega.observaciones}
+            />
+          </TabsContent>
+
+          <TabsContent value="remito" className="mt-0 focus-visible:outline-none">
+            <PanelSeccion
+              titulo="Remito"
+              accion={!entrega.numero_remito && (
+                <Button
+                  size="sm" variant="outline"
+                  disabled={emitiendo}
+                  onClick={() => onEmitirRemito?.(entrega.id)}
+                  className="h-7 text-xs"
+                >
+                  {emitiendo ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <FileOutput className="w-3 h-3 mr-1" />}
+                  Emitir remito
+                </Button>
+              )}
+            >
+              <GrillaCampos cols={3}>
+                <CampoDato label="Número de remito" valor={entrega.numero_remito} mono />
+                <CampoDato label="CAI" valor={entrega.cai_remito_usado} mono />
+                <CampoDato
+                  label="Vencimiento del CAI"
+                  valor={entrega.cai_remito_vencimiento_usado ? formatDateAR(entrega.cai_remito_vencimiento_usado) : null}
+                />
+              </GrillaCampos>
+              {!entrega.numero_remito && (
+                <p className="mt-3 text-xs text-slate-500 dark:text-kx-text-2">
+                  Todavía no se emitió el remito de esta entrega. El CAI y la numeración salen
+                  del punto de venta configurado.
+                </p>
+              )}
+            </PanelSeccion>
+          </TabsContent>
+          </div>
+        </Tabs>
 
         <DialogFooter className="shrink-0 flex-wrap gap-2 sm:justify-between border-t border-kx-border dark:border-kx-border px-6 py-4">
           <div className="flex gap-2">

@@ -73,7 +73,7 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
         .from('entregas')
         .select(`
           *,
-          clientes(nombre, documento, direccion),
+          clientes(nombre, documento, direccion, localidad, provincia, codigo_postal),
           pedidos(numero),
           comprobantes(numero_venta),
           entrega_items(id, cantidad, producto_id, productos(nombre, unidad_medida))

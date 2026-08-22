@@ -19,8 +19,13 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import ClientDetailModal from './ClientDetailModal';
 import CSVImportModal from '@/components/ui/CSVImportModal';
 
+// localidad/provincia/codigo_postal (mig.345, item 7): antes el cliente solo
+// tenía `direccion` como texto libre, así que el remito salía sin localidad ni
+// CP — inservible para que un transportista entregue. Proveedores ya tenía
+// localidad y provincia; esto empareja los dos maestros.
 const emptyForm = () => ({
   nombre: '', documento: '', telefono: '', email: '', direccion: '',
+  localidad: '', provincia: '', codigo_postal: '',
   limite_credito: '', dias_credito: '',
   bloquear_en_limite: false, lista_precio_id: '', condicion_pago_id: '',
 });
@@ -94,6 +99,9 @@ function ClientesSection() {
       telefono:           client.telefono || '',
       email:              client.email || '',
       direccion:          client.direccion || '',
+      localidad:          client.localidad || '',
+      provincia:          client.provincia || '',
+      codigo_postal:      client.codigo_postal || '',
       limite_credito:     client.limite_credito != null ? String(client.limite_credito) : '',
       dias_credito:       client.dias_credito != null ? String(client.dias_credito) : '',
       bloquear_en_limite: client.bloquear_en_limite || false,
@@ -113,6 +121,9 @@ function ClientesSection() {
         telefono:           formData.telefono.trim(),
         email:              formData.email.trim(),
         direccion:          formData.direccion.trim(),
+        localidad:          formData.localidad.trim() || null,
+        provincia:          formData.provincia.trim() || null,
+        codigo_postal:      formData.codigo_postal.trim() || null,
         limite_credito:     formData.limite_credito !== '' ? parseFloat(formData.limite_credito) : 0,
         dias_credito:       formData.dias_credito !== '' ? parseInt(formData.dias_credito) : 0,
         bloquear_en_limite: formData.bloquear_en_limite,
@@ -180,11 +191,42 @@ function ClientesSection() {
         <Input type="email" value={formData.email} onChange={e => setFormData(f => ({ ...f, email: e.target.value }))}
           className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
       </div>
-      {/* Dirección */}
-      <div className="space-y-1.5">
-        <Label className="dark:text-kx-text flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> Dirección</Label>
+      {/* Domicilio — mig.345 (item 7): la dirección sola no alcanzaba para
+          emitir un remito usable. Ocupa el ancho completo porque son 4 campos
+          que se leen como una unidad. */}
+      <div className="md:col-span-2 border-t border-kx-border dark:border-kx-border pt-3">
+        <p className="text-xs font-semibold text-slate-500 dark:text-kx-text-2 uppercase tracking-wider flex items-center gap-1">
+          <MapPin className="h-3.5 w-3.5" /> Domicilio
+        </p>
+        <p className="text-2xs text-slate-400 dark:text-kx-text-3 mt-0.5">
+          Se usa en los remitos y en la solapa Logística de los documentos.
+        </p>
+      </div>
+      <div className="space-y-1.5 md:col-span-2">
+        <Label className="dark:text-kx-text">Dirección</Label>
         <Input value={formData.direccion} onChange={e => setFormData(f => ({ ...f, direccion: e.target.value }))}
+          placeholder="Calle y número, piso/depto"
           className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="dark:text-kx-text">Localidad</Label>
+        <Input value={formData.localidad} onChange={e => setFormData(f => ({ ...f, localidad: e.target.value }))}
+          placeholder="Ej: Quilmes"
+          className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label className="dark:text-kx-text">Provincia</Label>
+          <Input value={formData.provincia} onChange={e => setFormData(f => ({ ...f, provincia: e.target.value }))}
+            placeholder="Ej: Buenos Aires"
+            className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="dark:text-kx-text">Cód. postal</Label>
+          <Input value={formData.codigo_postal} onChange={e => setFormData(f => ({ ...f, codigo_postal: e.target.value }))}
+            placeholder="B1878"
+            className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+        </div>
       </div>
 
       {/* Separador Crédito */}

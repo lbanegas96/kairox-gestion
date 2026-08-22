@@ -36,7 +36,7 @@ const TIPOS_MOV = {
 };
 const EMPTY_FORM = {
   nombre: '', razon_social: '', cuit: '', condicion_iva: 'RI',
-  telefono: '', email: '', direccion: '', localidad: '', provincia: 'Buenos Aires',
+  telefono: '', email: '', direccion: '', localidad: '', provincia: 'Buenos Aires', codigo_postal: '',
   condicion_pago: 'contado', plazo_pago_dias: 0, notas: '', activo: true,
 };
 
@@ -668,6 +668,13 @@ function ProveedoresSection() {
                 <Label className="dark:text-kx-text">Provincia</Label>
                 <Input value={form.provincia} onChange={e => setForm(f => ({ ...f, provincia: e.target.value }))}
                   className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+              </div>
+              {/* CP — mig.345 (item 7): empareja el domicilio de proveedores con
+                  el de clientes, que ahora también tiene los 4 campos. */}
+              <div className="space-y-1">
+                <Label className="dark:text-kx-text">Código Postal</Label>
+                <Input value={form.codigo_postal} onChange={e => setForm(f => ({ ...f, codigo_postal: e.target.value }))}
+                  placeholder="B1878" className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
               </div>
               <div className="space-y-1">
                 <Label className="dark:text-kx-text">Condición de Pago</Label>

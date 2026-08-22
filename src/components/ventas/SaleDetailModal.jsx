@@ -8,16 +8,20 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Printer, X, Save, Edit2, Loader2, RefreshCw, ShieldCheck, ShieldAlert, Clock, AlertTriangle, Banknote, Ban, Code2, Network } from 'lucide-react';
+import { Printer, X, Save, Edit2, Loader2, Banknote, Ban, Network, FileText, Zap, Calculator, MapPin } from 'lucide-react';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import ComprobantePrintModal from './ComprobantePrintModal';
-import { formatDateTimeAR, formatDateAR, getTodayAR } from '@/lib/dateUtils';
+import { formatDateTimeAR, getTodayAR } from '@/lib/dateUtils';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import { DocumentFlowPanel } from '@/components/ui/DocumentFlowPanel';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
-import VerAsientoButton from '@/components/shared/VerAsientoButton';
+import { DocumentoTabsList, DocumentoTab } from '@/components/shared/documento/DocumentoTabs';
+import TabComunicacionElectronica from '@/components/shared/documento/TabComunicacionElectronica';
+import TabContabilidad from '@/components/shared/documento/TabContabilidad';
+import TabLogistica from '@/components/shared/documento/TabLogistica';
 import { asientosAutoService } from '@/services/planCuentasService';
 
 // CAE emitido o en trámite ante AFIP/ARCA — el documento ya es (o puede
@@ -38,7 +42,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
   const [newStatus, setNewStatus] = useState('');
   const [saving, setSaving] = useState(false);
   const [reintentandoCae, setReintentandoCae] = useState(false);
-  const [verTecnicoAfip, setVerTecnicoAfip] = useState(false);
+  // (verTecnicoAfip vive ahora dentro de TabComunicacionElectronica — item 7)
 
   // Cancelación (RPC cancelar_factura — reversión total, solo sin CAE)
   const [showCancelarConfirm, setShowCancelarConfirm] = useState(false);
@@ -64,10 +68,17 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
   const fetchSaleDetails = async () => {
     setLoading(true);
     try {
-      // Fetch Sale
+      // Fetch Sale — el embed de cliente trae el domicilio completo (mig.345)
+      // para la solapa Logística, y punto_venta/centro_costo alimentan las
+      // solapas de Comunicación Electrónica y Contabilidad (item 7).
       const { data: saleData, error: saleError } = await supabase
         .from('comprobantes')
-        .select('*, clientes(nombre)')
+        .select(`
+          *,
+          clientes(nombre, direccion, localidad, provincia, codigo_postal),
+          punto_venta:puntos_venta(numero, nombre),
+          centro_costo:centros_costo(nombre)
+        `)
         .eq('id', saleId)
         .single();
       
@@ -199,6 +210,9 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
 
   const hasChanges = sale && newStatus !== sale.estado_pago;
   const caeBloqueaCancelacion = sale && CAE_BLOQUEA_CANCELACION.includes(sale.cae_estado);
+  // Marca el punto ámbar en la solapa Comunicación Electrónica (item 7): el
+  // usuario ve que el CAE falló sin tener que entrar a la solapa.
+  const caeConError = !!sale && ['error', 'error_definitivo'].includes(sale.cae_estado);
   const puedeCancelar = sale && ['venta', 'nota_credito', 'nota_debito'].includes(sale.tipo) && sale.estado_pago !== 'cancelada';
   const puedeRegenerarAsiento = sale && sale.tipo === 'venta' && !sale.asiento_id && sale.estado_pago !== 'cancelada';
 
@@ -240,11 +254,31 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
                <Loader2 className="h-8 w-8 animate-spin text-kx-blue" />
              </div>
           ) : sale ? (
-            <div className="flex-1 overflow-y-auto px-6 py-4">
-            {/* Contenido centrado con ancho máximo — el modal ocupa toda la
-                pantalla (mismo shell que Entrega/OC/Pedido) pero esta grilla de
-                2 columnas se ve estirada de más a lo ancho completo. */}
-            <div className="max-w-5xl mx-auto">
+            /* Shell tabulado (item 7, 22/08) — mismo esquema de solapas que SAP
+               usa en sus documentos de marketing, adaptado a lo que realmente
+               necesitamos. La barra de solapas queda fija; scrollea solo el
+               contenido. */
+            <Tabs defaultValue="contenido" className="flex flex-1 flex-col overflow-hidden">
+              <div className="shrink-0 px-6">
+                <DocumentoTabsList>
+                  <DocumentoTab value="contenido" icon={FileText}>Contenido</DocumentoTab>
+                  <DocumentoTab value="electronica" icon={Zap} alerta={caeConError}>
+                    Comunicación Electrónica
+                  </DocumentoTab>
+                  <DocumentoTab value="contabilidad" icon={Calculator} alerta={puedeRegenerarAsiento}>
+                    Contabilidad
+                  </DocumentoTab>
+                  <DocumentoTab value="logistica" icon={MapPin}>Logística</DocumentoTab>
+                </DocumentoTabsList>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-6 py-4">
+              {/* Contenido centrado con ancho máximo — el modal ocupa toda la
+                  pantalla (mismo shell que Entrega/OC/Pedido) pero esta grilla de
+                  2 columnas se ve estirada de más a lo ancho completo. */}
+              <div className="max-w-5xl mx-auto">
+
+              <TabsContent value="contenido" className="mt-0 focus-visible:outline-none">
               {/* STATUS & ACTIONS CARD */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 mt-2">
                 <div className="bg-kx-surface-2 dark:bg-slate-900/50 p-4 rounded-lg border kairox-border space-y-2">
@@ -325,110 +359,15 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
                           {esNC || esND ? 'Tiene CAE — no se puede anular directamente' : 'Tiene CAE — para anularla generá una Nota de Crédito'}
                         </span>
                       )}
-                      {puedeRegenerarAsiento && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-900 dark:text-amber-400 dark:hover:bg-amber-900/20 gap-1.5"
-                          onClick={handleRegenerarAsiento}
-                          title="Esta venta no tiene asiento contable — puede pasar si la conexión se cortó justo después de confirmarla"
-                        >
-                          <RefreshCw className="h-3.5 w-3.5" /> Regenerar asiento
-                        </Button>
-                      )}
+                      {/* "Regenerar asiento" se mudó a la solapa Contabilidad
+                          (item 7) — es donde el usuario lo va a buscar, y ahí
+                          además se le explica por qué faltaba. La solapa se
+                          marca con un punto ámbar para que no haya que abrirla
+                          para enterarse. */}
                     </div>
                   )}
                 </div>
               </div>
-
-              {/* CAE / AFIP PANEL — solo si la empresa usa facturación electrónica */}
-              {sale.cae_estado && sale.cae_estado !== 'no_aplica' && (
-                <div className="bg-kx-surface-2 dark:bg-slate-900/50 p-4 rounded-lg border kairox-border mb-6">
-                  <div className="flex justify-between items-center mb-3">
-                    <div className="text-xs text-slate-500 font-bold uppercase tracking-wider dark:text-kx-text-2">
-                      Facturación Electrónica AFIP
-                    </div>
-                    {sale.cae_estado === 'emitido' && (
-                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                        <ShieldCheck className="w-3 h-3" /> CAE emitido
-                      </span>
-                    )}
-                    {sale.cae_estado === 'pendiente' && (
-                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                        <Clock className="w-3 h-3" /> CAE pendiente
-                      </span>
-                    )}
-                    {(sale.cae_estado === 'error' || sale.cae_estado === 'error_definitivo') && (
-                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                        <ShieldAlert className="w-3 h-3" />
-                        {sale.cae_estado === 'error_definitivo' ? 'Error definitivo' : 'Error CAE'}
-                      </span>
-                    )}
-                  </div>
-
-                  {sale.cae_estado === 'emitido' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                      {sale.cae && (
-                        <div>
-                          <span className="text-xs text-slate-500 dark:text-kx-text-2 block mb-0.5">Número CAE</span>
-                          <span className="font-mono font-semibold text-kx-text dark:text-kx-text">{sale.cae}</span>
-                        </div>
-                      )}
-                      {sale.cae_vencimiento && (
-                        <div>
-                          <span className="text-xs text-slate-500 dark:text-kx-text-2 block mb-0.5">Vencimiento</span>
-                          <span className="text-kx-text dark:text-kx-text">{formatDateAR(sale.cae_vencimiento)}</span>
-                        </div>
-                      )}
-                      {sale.tipo_comprobante_afip && (
-                        <div>
-                          <span className="text-xs text-slate-500 dark:text-kx-text-2 block mb-0.5">Tipo comprobante</span>
-                          <span className="text-kx-text dark:text-kx-text">Factura {sale.tipo_comprobante_afip} · Nro {sale.numero_afip ?? '—'}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {sale.cae_estado === 'pendiente' && (
-                    <p className="text-sm text-amber-600 dark:text-amber-400">
-                      El CAE será procesado automáticamente en los próximos minutos. Podés recargar la página para ver el estado actualizado.
-                    </p>
-                  )}
-
-                  {(sale.cae_estado === 'error' || sale.cae_estado === 'error_definitivo') && (
-                    <div className="space-y-3">
-                      {sale.error_afip && (
-                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-3 text-xs text-red-700 dark:text-red-400 leading-relaxed">
-                          <div className="flex items-start gap-2">
-                            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                            <span className={verTecnicoAfip || !sale.error_afip_usuario ? 'font-mono' : ''}>
-                              {verTecnicoAfip || !sale.error_afip_usuario ? sale.error_afip : sale.error_afip_usuario}
-                            </span>
-                          </div>
-                          {sale.error_afip_usuario && (
-                            <button
-                              onClick={() => setVerTecnicoAfip((v) => !v)}
-                              className="mt-2 inline-flex items-center gap-1 text-xs text-red-700 dark:text-red-400 hover:underline"
-                            >
-                              <Code2 className="w-3 h-3" /> {verTecnicoAfip ? 'Ocultar detalle técnico' : 'Ver detalle técnico'}
-                            </button>
-                          )}
-                        </div>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-2 text-blue-600 border-blue-300 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-700 dark:hover:bg-blue-900/20"
-                        onClick={handleReintentarCae}
-                        disabled={reintentandoCae}
-                      >
-                        <RefreshCw className={`h-3.5 w-3.5 ${reintentandoCae ? 'animate-spin' : ''}`} />
-                        {reintentandoCae ? 'Reencolando...' : 'Reintentar CAE'}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* PRODUCTS TABLE */}
               <div className="border kairox-border rounded-lg overflow-hidden mb-6">
@@ -493,24 +432,54 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
                 </table>
               </div>
 
-              {/* Document Flow */}
+              {/* Document Flow — el asiento se fue a la solapa Contabilidad;
+                  acá queda solo lo que es cadena de documentos. */}
               <div className="border border-slate-100 dark:border-kx-border rounded-lg p-4 mb-2">
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex-1" />
-                  <div className="flex items-center gap-3">
-                    <VerAsientoButton asientoId={sale.asiento_id} />
-                    <button
-                      type="button"
-                      onClick={() => setMapaOpen(true)}
-                      className="text-2xs text-kx-violet hover:opacity-80 font-medium flex items-center gap-1"
-                      title="Ver mapa de relaciones completo"
-                    >
-                      <Network className="w-3 h-3" /> Mapa de relaciones
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMapaOpen(true)}
+                    className="text-2xs text-kx-violet hover:opacity-80 font-medium flex items-center gap-1"
+                    title="Ver mapa de relaciones completo"
+                  >
+                    <Network className="w-3 h-3" /> Mapa de relaciones
+                  </button>
                 </div>
                 <DocumentFlowPanel comprobanteId={saleId} onNavigate={onNavigate} />
               </div>
+              </TabsContent>
+
+              <TabsContent value="electronica" className="mt-0 focus-visible:outline-none">
+                <TabComunicacionElectronica
+                  comprobante={sale}
+                  puntoVenta={sale.punto_venta}
+                  onReintentarCae={handleReintentarCae}
+                  reintentando={reintentandoCae}
+                />
+              </TabsContent>
+
+              <TabsContent value="contabilidad" className="mt-0 focus-visible:outline-none">
+                <TabContabilidad
+                  documento={sale}
+                  asientoId={sale.asiento_id}
+                  empresaId={user?.empresa_id}
+                  origen="venta"
+                  origenId={sale.id}
+                  onRegenerarAsiento={handleRegenerarAsiento}
+                  puedeRegenerarAsiento={puedeRegenerarAsiento}
+                />
+              </TabsContent>
+
+              <TabsContent value="logistica" className="mt-0 focus-visible:outline-none">
+                {/* Una Factura no congela domicilio (eso lo hace la Entrega,
+                    que es el evento físico — Regla 8). Acá se muestra el
+                    domicilio ACTUAL del cliente, y el componente lo aclara. */}
+                <TabLogistica
+                  fallback={sale.clientes}
+                  nombreDestinatario={sale.cliente_nombre || sale.clientes?.nombre || 'Consumidor Final'}
+                />
+              </TabsContent>
 
               <MapaRelaciones
                 open={mapaOpen}
@@ -518,8 +487,9 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
                 comprobanteId={saleId}
                 onNavigate={(tipo, id) => { setMapaOpen(false); onOpenChange(false); onNavigate?.(tipo, id); }}
               />
-            </div>
-            </div>
+              </div>
+              </div>
+            </Tabs>
           ) : (
             <div className="p-8 text-center text-kx-text-2">No se encontraron datos.</div>
           )}
