@@ -84,6 +84,17 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
       setFlow(null);
       setIsEditing(false);
       setNewStatus('');
+      // Bug real (23/08, Luciano): este componente no se desmonta al cerrar
+      // (el Dialog padre sigue vivo, solo `open` cambia — ver `if (!open)
+      // return null` más abajo), así que sin este reset el AlertDialog de
+      // cancelación quedaba con `showCancelarConfirm=true` pegado entre
+      // aperturas. Resultado: se cerraba el detalle sin haber tocado nada
+      // (el RPC nunca llegó a dispararse, `sale` ya era null en ese momento)
+      // y al reabrir la MISMA factura, el cartel de "¿Cancelar Factura?"
+      // reaparecía solo, sin que el usuario lo pidiera.
+      setShowCancelarConfirm(false);
+      setMotivoCancelacion('');
+      setCancelando(false);
     }
   }, [open, saleId]);
 

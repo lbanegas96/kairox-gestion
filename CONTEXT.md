@@ -1,5 +1,33 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Resuelto (23/08) — Cancelar Factura: el cartel de confirmación quedaba pegado entre aperturas
+
+Cuarta tanda del mismo día. Luciano probó "Cancelar Factura" sobre FAC-20260823-001 (letra A, sin
+CAE — `cae_estado='error'` — el caso exacto que el RPC `cancelar_factura` (mig.259) permite
+revertir directo, sin pasar por Nota de Crédito). Al confirmar, el modal se cerró; al reabrir la
+misma factura, el cartel "¿Cancelar Factura...?" volvía a aparecer solo. Se verificó contra la DB
+real (`isvkelrdxwvkfmrfqxxk`) que la factura **seguía `estado_pago='pendiente'`** — la cancelación
+nunca se aplicó — y que no hay ningún log (`postgres_logs`/`edge_logs`) de que el RPC se haya
+llegado a invocar. El RPC en sí no tenía ningún guard que la bloqueara (sin CAE, sin imputaciones
+de CC, sin movimientos de caja) — el problema era 100% de frontend.
+
+**Causa real:** `SaleDetailModal.jsx` no se desmonta al cerrarse — el padre solo cambia `open` y el
+componente devuelve `null`, la instancia sigue viva. El `useEffect` que resetea el estado al cerrar
+(`open === false`) limpiaba `sale`/`items`/`flow`/`isEditing`, pero **no** `showCancelarConfirm`,
+`motivoCancelacion` ni `cancelando`. Si el `AlertDialog` de confirmación quedaba abierto (ej. el
+usuario cierra el modal completo con Escape o clickeando afuera, en vez de "Volver") sin haber
+confirmado, `showCancelarConfirm` quedaba en `true` para siempre — al reabrir esa misma factura,
+el cartel reaparecía solo, sin que nadie lo pidiera, y encima con `sale` recién refetcheado (por
+eso el fondo mostraba los datos reales y el cartel a la vez). Fix: el `useEffect` de cierre ahora
+también resetea esos 3 estados.
+
+Reproducido y verificado en vivo, sin mutar datos reales: abrir la factura → Cancelar Factura →
+Escape (cierra todo con el cartel abierto) → reabrir la misma factura → antes reaparecía el
+cartel, ahora muestra el detalle normal. `eslint` 0 errores, 159/159 tests, build OK. **Sin
+pushear ni deployar todavía.**
+
+---
+
 ## ✅ Resuelto (23/08) — Factura: no dejaba el documento nuevo a la vista + diseño distinto al de Entrega
 
 Tercera tanda del mismo día. Luciano abrió FAC-20260823-001 (la factura real generada desde
