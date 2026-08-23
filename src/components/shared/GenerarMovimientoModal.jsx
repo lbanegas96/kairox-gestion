@@ -27,10 +27,18 @@ const CONFIG = {
     numeroResultKey: 'numero_entrega',
     idResultKey: 'entrega_id',
     numeroFallback: 'ENT-???',
+    // Entrega SACA stock — a diferencia de Recepción, acá sí importa cuánto hay
+    // disponible de verdad. Antes el modal precargaba "A entregar" con todo lo
+    // pendiente del pedido sin mirar stock_actual, así que un ítem con pedido
+    // pendiente pero 0 en stock aparecía con cantidad 1 lista para confirmar —
+    // el RPC lo rechazaba recién al guardar (toast rojo "Stock insuficiente",
+    // hallazgo Luciano 23/08, se sentía como un crash porque pasaba después de
+    // cargar todo el resto del formulario).
+    necesitaStock: true,
     fetchEntidad: async (id, empresaId) => {
       const { data, error } = await supabase
         .from('pedidos')
-        .select('id, numero, pedido_items(id, producto_id, descripcion, cantidad, cantidad_entregada)')
+        .select('id, numero, pedido_items(id, producto_id, descripcion, cantidad, cantidad_entregada, productos(stock_actual))')
         .eq('id', id)
         .eq('empresa_id', empresaId)
         .single();
@@ -43,6 +51,7 @@ const CONFIG = {
           nombre: it.descripcion,
           pedida: Number(it.cantidad) || 0,
           hecha: Number(it.cantidad_entregada) || 0,
+          stockDisponible: Number(it.productos?.stock_actual) || 0,
         })),
       };
     },
@@ -120,7 +129,14 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
       .then(data => {
         setEntidad(data);
         const init = {};
-        data.items.forEach(it => { init[it.id] = Math.max(0, it.pedida - it.hecha); });
+        data.items.forEach(it => {
+          const pendiente = Math.max(0, it.pedida - it.hecha);
+          // Precarga con lo pendiente, pero nunca más de lo que hay disponible
+          // de verdad — si no, un ítem sin stock aparece listo para confirmar
+          // y el error recién sale al guardar (mensajeStock arriba lo explica).
+          const tope = cfg.necesitaStock ? Math.min(pendiente, it.stockDisponible ?? Infinity) : pendiente;
+          init[it.id] = Math.max(0, tope);
+        });
         setCantidades(init);
         setPackQtys({});
       })
@@ -131,14 +147,18 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
     if (!entidad?.items) return [];
     return entidad.items
       .filter(it => it.producto_id)
-      .map(it => ({ ...it, pendiente: Math.max(0, it.pedida - it.hecha) }))
+      .map(it => {
+        const pendiente = Math.max(0, it.pedida - it.hecha);
+        const maxEntregable = cfg.necesitaStock ? Math.min(pendiente, it.stockDisponible ?? Infinity) : pendiente;
+        return { ...it, pendiente, maxEntregable };
+      })
       .filter(it => it.pendiente > 0);
   }, [entidad]);
 
   const totalUnidades = Object.values(cantidades).reduce((s, v) => s + Number(v), 0);
 
-  const setCantidad = (itemId, val, pendiente) => {
-    const num = Math.max(0, Math.min(pendiente, Number(val) || 0));
+  const setCantidad = (itemId, val, maxEntregable) => {
+    const num = Math.max(0, Math.min(maxEntregable, Number(val) || 0));
     setCantidades(prev => ({ ...prev, [itemId]: num }));
   };
 
@@ -152,7 +172,7 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
     const factor = Number(item.factor_conversion_compra) || 1;
     const packQty = parseNumberLocale(packQtys[item.id]);
     if (!packQty || packQty <= 0) return;
-    setCantidad(item.id, packQty * factor, item.pendiente);
+    setCantidad(item.id, packQty * factor, item.maxEntregable);
   };
 
   const handleConfirm = async () => {
@@ -237,6 +257,15 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
                     <Package className="h-3.5 w-3.5 text-kx-text-3 shrink-0" />
                     <span className="truncate">{it.nombre}</span>
                   </div>
+                  {/* Solo Entrega mira stock (necesitaStock) — Recepción no
+                      tiene tope de disponibilidad, siempre suma. */}
+                  {cfg.necesitaStock && it.stockDisponible < it.pendiente && (
+                    <span className={`pl-5 text-2xs ${it.stockDisponible === 0 ? 'text-kx-red font-medium' : 'text-amber-600 dark:text-amber-400'}`}>
+                      {it.stockDisponible === 0
+                        ? 'Sin stock disponible'
+                        : `Stock disponible: ${it.stockDisponible} (menos que lo pedido)`}
+                    </span>
+                  )}
                   {it.unidad_compra_id && (
                     <div className="flex items-center gap-1 text-2xs text-kx-text-3 pl-5">
                       <span>o en {it.unidad_compra_descripcion || 'unidad de compra'} (x{it.factor_conversion_compra}):</span>
@@ -267,11 +296,12 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
                   <Input
                     type="number"
                     min={0}
-                    max={it.pendiente}
+                    max={it.maxEntregable}
                     step={1}
-                    value={cantidades[it.id] ?? it.pendiente}
-                    onChange={e => setCantidad(it.id, e.target.value, it.pendiente)}
-                    className="h-8 text-sm text-center dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+                    value={cantidades[it.id] ?? it.maxEntregable}
+                    onChange={e => setCantidad(it.id, e.target.value, it.maxEntregable)}
+                    disabled={cfg.necesitaStock && it.maxEntregable === 0}
+                    className="h-8 text-sm text-center dark:bg-kx-surface dark:border-kx-border dark:text-kx-text disabled:opacity-50"
                   />
                 </div>
               </div>
