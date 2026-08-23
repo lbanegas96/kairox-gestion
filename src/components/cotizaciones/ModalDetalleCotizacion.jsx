@@ -9,6 +9,7 @@ import { getEmpresaParaPDF } from '@/lib/empresaUtils';
 import { formatDateAR } from '@/lib/dateUtils';
 import { cotizacionesService } from '@/services/cotizacionesService';
 import { ESTADOS } from './shared';
+import MenuAccionesDocumento from '@/components/shared/documento/MenuAccionesDocumento';
 
 // Mismos estados desde los que hoy se permite "Convertir en Venta" (TablaCotizaciones.jsx)
 const ESTADOS_COPIABLES = ['aprobada', 'enviada'];
@@ -271,26 +272,23 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, o
           </div>
         )}
         <DialogFooter className="flex-wrap gap-2 sm:justify-between shrink-0 px-6 py-4 border-t border-kx-border dark:border-kx-border">
-          <Button variant="outline" onClick={() => setViewId(null)} className="dark:border-kx-border dark:text-slate-300">Cerrar</Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setViewId(null)} className="dark:border-kx-border dark:text-slate-300">Cerrar</Button>
+            {/* Editar/Duplicar — pedido de Luciano (23/08): disponibles pero
+                no a mano del resto de las acciones, para no tocarlas por
+                error. Mismo criterio en OC/Pedido/Factura de Compra. */}
+            <MenuAccionesDocumento
+              acciones={[
+                onEditar && detalle && ESTADOS_EDITABLES.includes(detalle.estado) && {
+                  label: 'Editar', icon: Pencil, onClick: () => onEditar(detalle),
+                },
+                onDuplicar && detalle && {
+                  label: 'Duplicar', icon: Copy, onClick: () => onDuplicar(detalle),
+                },
+              ]}
+            />
+          </div>
           <div className="flex gap-2 flex-wrap">
-            {onEditar && detalle && ESTADOS_EDITABLES.includes(detalle.estado) && (
-              <Button
-                variant="outline"
-                onClick={() => onEditar(detalle)}
-                className="dark:border-kx-border dark:text-slate-300"
-              >
-                <Pencil className="w-4 h-4 mr-2" /> Editar
-              </Button>
-            )}
-            {onDuplicar && detalle && (
-              <Button
-                variant="outline"
-                onClick={() => onDuplicar(detalle)}
-                className="dark:border-kx-border dark:text-slate-300"
-              >
-                <Copy className="w-4 h-4 mr-2" /> Duplicar
-              </Button>
-            )}
             {onCancelar && detalle && ESTADOS_CANCELABLES.includes(detalle.estado) && (
               <Button
                 variant="outline"

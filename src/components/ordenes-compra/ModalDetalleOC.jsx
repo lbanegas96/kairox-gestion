@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ShoppingBag, Truck, Receipt, AlertTriangle, BadgeCheck, Banknote, RotateCcw, Pencil, History, ChevronDown, ChevronRight, Code2, Network, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import MenuAccionesDocumento from '@/components/shared/documento/MenuAccionesDocumento';
 import { formatCurrency } from '@/lib/currencyUtils';
 import { formatDateAR } from '@/lib/dateUtils';
 import { ordenesCompraService } from '@/services/ordenesCompraService';
@@ -293,18 +294,18 @@ function ModalDetalleOC({
           </div>
         )}
         <DialogFooter className="gap-2 flex-wrap px-6 py-4 shrink-0 border-t border-kx-border dark:border-kx-border">
-          {onEditar && detalle && ESTADOS_EDITABLES.includes(detalle.estado) && (
-            <Button variant="outline" className="gap-2 dark:border-kx-border dark:text-slate-300"
-              onClick={() => onEditar(detalle)}>
-              <Pencil className="w-4 h-4" /> Editar
-            </Button>
-          )}
-          {onDuplicar && detalle && (
-            <Button variant="outline" className="gap-2 dark:border-kx-border dark:text-slate-300"
-              onClick={() => onDuplicar(detalle)}>
-              <Copy className="w-4 h-4" /> Duplicar
-            </Button>
-          )}
+          {/* Editar/Duplicar — pedido de Luciano (23/08): disponibles pero
+              no a mano del resto de las acciones. */}
+          <MenuAccionesDocumento
+            acciones={[
+              onEditar && detalle && ESTADOS_EDITABLES.includes(detalle.estado) && {
+                label: 'Editar', icon: Pencil, onClick: () => onEditar(detalle),
+              },
+              onDuplicar && detalle && {
+                label: 'Duplicar', icon: Copy, onClick: () => onDuplicar(detalle),
+              },
+            ]}
+          />
           {/* mig.332 — 'facturada' incluido a propósito: devolver mercadería
               sigue siendo válido aunque ya esté 100% facturada. */}
           {detalle && ['recibida', 'recibida_parcial', 'facturada'].includes(detalle.estado) && (

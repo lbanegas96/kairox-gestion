@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from '@/components/ui/button';
 import { formatDateAR } from '@/lib/dateUtils';
 import VerAsientoButton from '@/components/shared/VerAsientoButton';
+import MenuAccionesDocumento from '@/components/shared/documento/MenuAccionesDocumento';
 
 // Fase 2 (15/08): antes Factura de Compra era el único documento sin un modal
 // de detalle propio — una fila que se expandía inline en la tabla, sin totales
@@ -165,11 +166,13 @@ function ModalDetalleFacturaCompra({
           <Button variant="outline" onClick={onClose} className="dark:border-kx-border dark:text-slate-300">
             Cerrar
           </Button>
-          {onDuplicar && (
-            <Button variant="outline" onClick={() => onDuplicar(compra)} className="gap-2 dark:border-kx-border dark:text-slate-300">
-              <Copy className="w-4 h-4" /> Duplicar
-            </Button>
-          )}
+          {/* Duplicar — pedido de Luciano (23/08): disponible pero no a mano
+              del resto de las acciones. Mismo criterio en Cotización/OC/Pedido. */}
+          <MenuAccionesDocumento
+            acciones={[
+              onDuplicar && { label: 'Duplicar', icon: Copy, onClick: () => onDuplicar(compra) },
+            ]}
+          />
           {onCopiarNc && (
             <Button variant="outline" onClick={() => onCopiarNc(compra)} className="gap-2 dark:border-kx-border dark:text-slate-300">
               <FileMinus className="w-4 h-4 text-kx-amber" /> Copiar a NC

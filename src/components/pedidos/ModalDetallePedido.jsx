@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { FileText, Check, Truck, ArrowRight, Receipt, Network, Pencil, History, ChevronDown, ChevronRight, Code2, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import MenuAccionesDocumento from '@/components/shared/documento/MenuAccionesDocumento';
 import { formatDateAR } from '@/lib/dateUtils';
 import { formatCurrency } from '@/lib/currencyUtils';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -313,32 +314,24 @@ function ModalDetallePedido({
                   tiene que estar siempre a la vista, sin scrollear por debajo del
                   historial. Cerrar es decisión del usuario. */}
               <DialogFooter className="shrink-0 flex-wrap gap-2 sm:justify-between border-t border-kx-border dark:border-kx-border px-6 py-4">
-                <Button variant="outline" onClick={() => setIsDetailOpen(false)} className="dark:border-kx-border dark:text-slate-300">
-                  Cerrar
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" onClick={() => setIsDetailOpen(false)} className="dark:border-kx-border dark:text-slate-300">
+                    Cerrar
+                  </Button>
+                  {/* Editar/Duplicar — pedido de Luciano (23/08): disponibles
+                      pero no a mano del resto de las acciones. */}
+                  <MenuAccionesDocumento
+                    acciones={[
+                      onEditar && ESTADOS_EDITABLES.includes(detailPedido.estado) && {
+                        label: 'Editar Pedido', icon: Pencil, onClick: () => onEditar(detailPedido),
+                      },
+                      onDuplicar && {
+                        label: 'Duplicar', icon: Copy, onClick: () => onDuplicar(detailPedido),
+                      },
+                    ]}
+                  />
+                </div>
                 <div className="flex gap-2 flex-wrap">
-                  {onEditar && ESTADOS_EDITABLES.includes(detailPedido.estado) && (
-                    <Button
-                      variant="outline"
-                      className="dark:border-kx-border dark:text-slate-300"
-                      onClick={() => onEditar(detailPedido)}
-                    >
-                      <Pencil className="h-4 w-4 mr-2" />
-                      Editar Pedido
-                    </Button>
-                  )}
-
-                  {onDuplicar && (
-                    <Button
-                      variant="outline"
-                      className="dark:border-kx-border dark:text-slate-300"
-                      onClick={() => onDuplicar(detailPedido)}
-                    >
-                      <Copy className="h-4 w-4 mr-2" />
-                      Duplicar
-                    </Button>
-                  )}
-
                   {puedeEntrega && (
                     <Button
                       variant="outline"
