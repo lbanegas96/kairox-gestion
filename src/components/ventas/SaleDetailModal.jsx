@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Printer, X, Save, Edit2, Loader2, Banknote, Ban, Network, FileText, Zap, Calculator, MapPin } from 'lucide-react';
+import { Printer, X, Save, Edit2, Loader2, Banknote, Ban, Network, FileText, Zap, Calculator, MapPin, Receipt } from 'lucide-react';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -18,7 +18,7 @@ import { formatDateTimeAR, formatDateAR, getTodayAR } from '@/lib/dateUtils';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import DocumentFlow from '@/components/shared/DocumentFlow';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
-import { DocumentoTabsList, DocumentoTab, GrillaCampos, CampoDato } from '@/components/shared/documento/DocumentoTabs';
+import { DocumentoTabsList, DocumentoTab } from '@/components/shared/documento/DocumentoTabs';
 import TabComunicacionElectronica from '@/components/shared/documento/TabComunicacionElectronica';
 import TabContabilidad from '@/components/shared/documento/TabContabilidad';
 import TabLogistica from '@/components/shared/documento/TabLogistica';
@@ -30,6 +30,24 @@ import { formatNumeroComprobante } from '@/lib/numeroComprobante';
 // llegar a ser) fiscalmente válido, no se puede "deshacer": solo Nota de
 // Crédito. Ver RPC cancelar_factura (mig.259).
 const CAE_BLOQUEA_CANCELACION = ['emitido', 'pendiente', 'pendiente_caea'];
+
+// Campo etiquetado de la cabecera — mismo componente/estilo que usan
+// Entrega y OC (hallazgo Luciano 23/08: esta cabecera seguía usando el
+// GrillaCampos/CampoDato genérico, sentence-case, mientras el resto de los
+// documentos ya había convergido en mayúsculas+tracking-wide. Se deja
+// local en vez de tocar CampoDato porque ese sigue siendo el correcto para
+// las solapas secundarias — Contabilidad, Comunicación Electrónica, Remito).
+function Campo({ label, children }) {
+  return (
+    <div>
+      <span className="text-kx-text-3 dark:text-kx-text-3 text-xs uppercase tracking-wide">{label}</span>
+      {/* div, no <p> — a diferencia del Campo de Entrega, acá "Estado de pago"
+          mete un <EstadoBadge> (Badge de shadcn, que renderiza un <div>)
+          adentro, y <div> dentro de <p> es HTML inválido (bug real 23/08). */}
+      <div className="mt-0.5 truncate" title={typeof children === 'string' ? children : undefined}>{children}</div>
+    </div>
+  );
+}
 
 const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate, onRegistrarCobro }) => {
   const { user } = useAuth();
@@ -264,6 +282,9 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
           <DialogHeader className="border-b border-slate-100 dark:border-kx-border px-6 pt-6 pb-4 shrink-0">
             <DialogTitle className="flex justify-between items-center pr-8 dark:text-kx-text">
               <span className="flex items-center gap-2">
+                {/* Ícono antes del título — mismo criterio que Entrega/OC
+                    (hallazgo Luciano 23/08: a la Factura le faltaba). */}
+                <Receipt className="h-5 w-5 text-green-600 dark:text-green-500" />
                 {/* Número fiscal (letra + folio) cuando ya tiene CAE — antes
                     siempre mostraba el correlativo interno, que ni el cliente
                     ni ARCA reconocen (hallazgo Luciano 22/08, item 7). */}
@@ -310,10 +331,9 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
                   hallazgo Luciano 22/08: antes eran dos tarjetas sueltas con un
                   diseño propio). Las acciones (Registrar Cobro, Cancelar,
                   editar estado) se mudaron al footer, como en Entrega. */}
-              <GrillaCampos cols={4} className="mb-6 mt-2">
-                <CampoDato
-                  label="Estado de pago"
-                  valor={isEditing ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-6 mt-2">
+                <Campo label="Estado de pago">
+                  {isEditing ? (
                     <div className="flex items-center gap-1.5 -mt-0.5">
                       <select
                         className="h-7 rounded border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-bg text-xs px-1.5 focus:ring-2 focus:ring-blue-500 outline-none dark:text-kx-text"
@@ -346,83 +366,90 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
                       )}
                     </span>
                   )}
-                />
-                <CampoDato label="Forma de pago" valor={sale.forma_pago} />
-                <CampoDato label="Fecha" valor={formatDateAR(sale.fecha)} />
-                <CampoDato label="Cliente" valor={sale.cliente_nombre || 'Consumidor Final'} />
-                <CampoDato label="CUIT / DNI" valor={sale.clientes?.documento} mono />
+                </Campo>
+                <Campo label="Forma de pago">{sale.forma_pago}</Campo>
+                <Campo label="Fecha"><span className="dark:text-slate-300">{formatDateAR(sale.fecha)}</span></Campo>
+                <Campo label="Cliente">
+                  <span className="font-medium dark:text-kx-text">{sale.cliente_nombre || 'Consumidor Final'}</span>
+                </Campo>
+                <Campo label="CUIT / DNI">
+                  <span className="font-mono dark:text-slate-300">{sale.clientes?.documento || '—'}</span>
+                </Campo>
                 {flow?.origen && (
-                  <CampoDato
-                    label={flow.origen.tipo === 'cotizacion' ? 'Cotización de origen' : 'Pedido de origen'}
-                    valor={flow.origen.numero}
-                    mono
-                  />
+                  <Campo label={flow.origen.tipo === 'cotizacion' ? 'Cotización de origen' : 'Pedido de origen'}>
+                    <span className="font-mono dark:text-slate-300">{flow.origen.numero}</span>
+                  </Campo>
                 )}
-                {flow?.entregas?.[0] && <CampoDato label="Entrega" valor={flow.entregas[0].numero} mono />}
-              </GrillaCampos>
+                {flow?.entregas?.[0] && (
+                  <Campo label="Entrega"><span className="font-mono dark:text-slate-300">{flow.entregas[0].numero}</span></Campo>
+                )}
+              </div>
 
-              {/* PRODUCTS TABLE */}
-              <div className="border kairox-border rounded-lg overflow-hidden mb-6">
-                <table className="w-full text-sm">
-                  <thead className="bg-kx-surface-2 dark:bg-slate-900/50 border-b kairox-border text-xs uppercase text-slate-500 font-semibold">
-                    <tr>
-                      <th className="px-4 py-3 text-left">Producto</th>
-                      <th className="px-4 py-3 text-center">Cant</th>
-                      <th className="px-4 py-3 text-right">Precio Unit</th>
-                      <th className="px-4 py-3 text-right">Subtotal</th>
+              {/* Tabla de productos — mismo estilo plano que Entrega/Pedido/OC
+                  (hallazgo Luciano 23/08: esta era la única con caja, header
+                  con fondo y hover por fila; se saca esa envoltura pero se
+                  mantiene toda la información, incluido el desglose Neto/IVA). */}
+              <table className="w-full text-sm mb-6">
+                <thead>
+                  <tr className="border-b border-kx-border dark:border-kx-border">
+                    <th className="text-left pb-2 text-kx-text-2">Producto</th>
+                    <th className="text-center pb-2 text-kx-text-2 w-20">Cant</th>
+                    <th className="text-right pb-2 text-kx-text-2 w-28">Precio Unit</th>
+                    <th className="text-right pb-2 text-kx-text-2 w-28">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item, i) => {
+                    // Venta por pack (mig.189/190): si el ítem se vendió por pack, mostrar
+                    // la cantidad/precio en la unidad de venta en vez de la unidad base.
+                    const isPack = !!item.unidad_venta_id;
+                    const displayCant = isPack ? `${item.cantidad_venta} ${item.unidad_venta?.codigo || 'pack'}` : item.cantidad;
+                    const displayPunit = isPack ? item.precio_unidad_venta : item.precio_unitario;
+                    return (
+                    <tr key={i} className="border-b border-slate-100 dark:border-slate-800/50">
+                      <td className="py-2 dark:text-kx-text">{item.producto_nombre}</td>
+                      <td className="py-2 text-center text-kx-text-2">{displayCant}</td>
+                      <td className="py-2 text-right text-kx-text-2">${Number(displayPunit).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      <td className="py-2 text-right font-mono dark:text-kx-text">${Number(item.subtotal).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {items.map((item, i) => {
-                      // Venta por pack (mig.189/190): si el ítem se vendió por pack, mostrar
-                      // la cantidad/precio en la unidad de venta en vez de la unidad base.
-                      const isPack = !!item.unidad_venta_id;
-                      const displayCant = isPack ? `${item.cantidad_venta} ${item.unidad_venta?.codigo || 'pack'}` : item.cantidad;
-                      const displayPunit = isPack ? item.precio_unidad_venta : item.precio_unitario;
-                      return (
-                      <tr key={i} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/20">
-                        <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-300">{item.producto_nombre}</td>
-                        <td className="px-4 py-3 text-center text-kx-text-2 dark:text-kx-text-2">{displayCant}</td>
-                        <td className="px-4 py-3 text-right text-kx-text-2 dark:text-kx-text-2">${Number(displayPunit).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                        <td className="px-4 py-3 text-right font-bold text-kx-text dark:text-kx-text">${Number(item.subtotal).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot className="bg-kx-surface-2 dark:bg-slate-900/50 border-t kairox-border">
-                    {(() => {
-                      // Fase 2 (15/08): antes el desglose Neto/IVA solo existía en el
-                      // PDF — hoy no hacía falta descargarlo para ver el total, pero
-                      // sí para ver cuánto era IVA Débito Fiscal. Se calcula desde los
-                      // ítems (mismo criterio que Cotización/Pedido/OC) en vez de
-                      // confiar en comprobantes.neto_gravado/iva_discriminado: esas
-                      // columnas están en NULL en 35 de 158 facturas reales de Nalux
-                      // (comprobantes viejos o creados antes de que se empezaran a
-                      // completar), así que el dato siempre correcto es recalcularlo.
-                      const factorIva = { '21': 1.21, '10.5': 1.105 };
-                      const neto = items.reduce((s, i) => s + Number(i.subtotal) / (factorIva[String(i.alicuota_iva)] ?? 1), 0);
-                      const iva = Number(sale.total) - neto;
-                      const fmt = (n) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                      return iva > 0.005 ? (
+                    );
+                  })}
+                </tbody>
+                {(() => {
+                  // Fase 2 (15/08): antes el desglose Neto/IVA solo existía en el
+                  // PDF — hoy no hacía falta descargarlo para ver el total, pero
+                  // sí para ver cuánto era IVA Débito Fiscal. Se calcula desde los
+                  // ítems (mismo criterio que Cotización/Pedido/OC) en vez de
+                  // confiar en comprobantes.neto_gravado/iva_discriminado: esas
+                  // columnas están en NULL en 35 de 158 facturas reales de Nalux
+                  // (comprobantes viejos o creados antes de que se empezaran a
+                  // completar), así que el dato siempre correcto es recalcularlo.
+                  const factorIva = { '21': 1.21, '10.5': 1.105 };
+                  const neto = items.reduce((s, i) => s + Number(i.subtotal) / (factorIva[String(i.alicuota_iva)] ?? 1), 0);
+                  const iva = Number(sale.total) - neto;
+                  const fmt = (n) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                  return (
+                    <tfoot>
+                      {iva > 0.005 && (
                         <>
-                          <tr className="text-xs text-kx-text-2 dark:text-kx-text-2">
-                            <td colSpan="3" className="px-4 pt-3 text-right uppercase tracking-wider">Neto gravado</td>
-                            <td className="px-4 pt-3 text-right tabular-nums">${fmt(neto)}</td>
+                          <tr>
+                            <td colSpan={3} className="pt-3 text-right text-xs text-kx-text-3">Neto gravado</td>
+                            <td className="pt-3 text-right text-xs text-kx-text-3">${fmt(neto)}</td>
                           </tr>
-                          <tr className="text-xs text-kx-text-2 dark:text-kx-text-2">
-                            <td colSpan="3" className="px-4 pb-3 text-right uppercase tracking-wider">IVA</td>
-                            <td className="px-4 pb-3 text-right tabular-nums">${fmt(iva)}</td>
+                          <tr>
+                            <td colSpan={3} className="text-right text-xs text-kx-text-3">IVA</td>
+                            <td className="text-right text-xs text-kx-text-3">${fmt(iva)}</td>
                           </tr>
                         </>
-                      ) : null;
-                    })()}
-                    <tr className="font-bold">
-                      <td colSpan="3" className="px-4 py-4 text-right text-kx-text-2 dark:text-kx-text-2 uppercase text-xs tracking-wider">Total Final</td>
-                      <td className="px-4 py-4 text-right text-xl text-blue-600 dark:text-blue-400">${Number(sale.total).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+                      )}
+                      <tr className="border-t-2 border-kx-border dark:border-kx-border">
+                        <td colSpan={3} className="py-3 text-right font-bold dark:text-kx-text">TOTAL</td>
+                        <td className="py-3 text-right font-bold text-lg dark:text-kx-text">${fmt(sale.total)}</td>
+                      </tr>
+                    </tfoot>
+                  );
+                })()}
+              </table>
 
               {/* Flujo del documento — mismo bloque que Entrega/OC/Pedido
                   (item 7): título + link a Mapa de Relaciones arriba,

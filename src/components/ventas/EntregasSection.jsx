@@ -226,6 +226,14 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
     }
     toast({ title: 'Entrega facturada' });
     await fetchEntregas();
+
+    // Seguir la cadena: la factura recién generada queda en pantalla, mismo
+    // criterio que Pedido → Entrega (PedidosSection.handleEntregaSuccess).
+    // Antes acá no pasaba nada — el usuario se quedaba en la lista de Entregas
+    // sin ver ni la entrega base ni la factura nueva (hallazgo Luciano 23/08).
+    if (comprobanteId && onNavigate) {
+      onNavigate('factura', comprobanteId);
+    }
   };
 
   const handleAnularEntrega = async () => {

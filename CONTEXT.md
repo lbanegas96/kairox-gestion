@@ -1,5 +1,39 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Resuelto (23/08) — Factura: no dejaba el documento nuevo a la vista + diseño distinto al de Entrega
+
+Tercera tanda del mismo día. Luciano abrió FAC-20260823-001 (la factura real generada desde
+ENT-2026-0149) y encontró dos problemas de UX/consistencia, no de datos:
+
+1. **"Facturar Entrega" no dejaba nada a la vista.** Mismo problema que ya se había resuelto para
+   Pedido → Entrega (`PedidosSection.handleEntregaSuccess`, que navega directo al documento nuevo
+   en vez de volver a la lista) pero nunca se replicó para Entrega → Factura. Al facturar una
+   entrega, el modal de Entrega se cerraba, se creaba la factura, y el usuario quedaba en la lista
+   de Entregas sin ver ni la entrega base ni la factura nueva — había que ir a buscarla a mano.
+   Fix en `EntregasSection.jsx` (`handleSaleSuccessDesdeEntrega`): mismo criterio que Pedidos,
+   llama `onNavigate('factura', comprobanteId)` al terminar, así el documento recién creado queda
+   en pantalla (estilo SAP B1: el documento agregado se muestra, no se vuelve al origen).
+2. **El diseño de Factura no coincidía con el de Entrega.** Comparando ambos modales lado a lado:
+   Entrega/OC ya usaban labels de cabecera en MAYÚSCULAS (`text-kx-text-3 uppercase
+   tracking-wide`) + ícono antes del título + tabla de ítems "plana" (sin caja, sin fondo de
+   header); Factura (`SaleDetailModal.jsx`) era la única que usaba el `CampoDato`/`GrillaCampos`
+   genérico (sentence-case) para la cabecera y una tabla con caja/borde/fondo/hover — la única
+   "distinta" de las cuatro. Se readaptó Factura al patrón mayoritario (Entrega + OC): cabecera
+   con el mismo componente `Campo` local (mayúsculas), ícono `Receipt` verde antes del número de
+   comprobante, tabla de ítems sin caja con el mismo criterio de Neto gravado/IVA/TOTAL que ya usa
+   Pedido — sin sacar ningún dato de los que ya mostraba (CUIT/DNI, Pedido de origen, Entrega,
+   desglose de IVA, tabs de Comunicación Electrónica/Contabilidad/Logística). De paso se encontró
+   y corrigió un bug real de HTML inválido: el campo "Estado de pago" mete un `<EstadoBadge>`
+   (que renderiza un `<div>` vía el `Badge` de shadcn) — el wrapper de `Campo` pasó de `<p>` a
+   `<div>` para no anidar `<div>` dentro de `<p>`.
+
+Verificado en vivo contra Nalux real (FAC-20260823-001 real, con Pedido/Entrega/Factura
+encadenados) — DOM confirmado vía JS (`innerText` del diálogo), sin warnings de nesting ni
+errores de consola nuevos. `eslint` 0 errores, 159/159 tests, build OK. **Sin pushear ni
+deployar todavía** — Luciano pidió seguir reparando antes de subir nada.
+
+---
+
 ## ✅ Resuelto (23/08) — 3 arreglos chicos: crash de stock, menú Editar/Duplicar, Cotización sin cliente
 
 Sesión de "arreglos simples" tras probar en producción. Tres hallazgos reales, no cosméticos:
