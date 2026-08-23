@@ -170,6 +170,11 @@ const ConfiguracionSection = ({ initialTab }) => {
   });
   const [puntosVenta, setPuntosVenta] = useState([]);
   const [loadingAFIP, setLoadingAFIP] = useState(false);
+  // mig.347 — no es un dato fiscal (no depende de usa_factura_electronica),
+  // pero se recarga junto con el resto porque ya hay un fetch de `empresas`
+  // acá mismo (reloadAFIP) y no vale la pena uno aparte para un solo booleano.
+  const [usaEnPreparacion, setUsaEnPreparacion] = useState(true);
+  const [savingEnPreparacion, setSavingEnPreparacion] = useState(false);
 
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
@@ -199,7 +204,7 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [pvForm, setPvForm] = useState({
     numero: '', nombre: 'Punto de Venta Principal', tipo: 'web',
     cai_remito: '', cai_remito_vencimiento: '', proximo_numero_remito: 1,
-    es_default: false, activo: true,
+    es_default: false, activo: true, solo_remito: false,
   });
   const [savingPv, setSavingPv] = useState(false);
   const [selectedPvId, setSelectedPvId] = useState(null);
@@ -273,11 +278,12 @@ const ConfiguracionSection = ({ initialTab }) => {
     try {
       const { data: emp } = await supabase
         .from('empresas')
-        .select('usa_factura_electronica, condicion_iva, afip_cuit, nombre, numero_ingresos_brutos, fecha_inicio_actividades, pos_punto_venta_id')
+        .select('usa_factura_electronica, condicion_iva, afip_cuit, nombre, numero_ingresos_brutos, fecha_inicio_actividades, pos_punto_venta_id, usa_estado_en_preparacion')
         .eq('id', user.empresa_id)
         .single();
       if (emp) {
         setPosPuntoVentaId(emp.pos_punto_venta_id ?? null);
+        setUsaEnPreparacion(emp.usa_estado_en_preparacion ?? true);
         setAfipConfig({
           usa_factura_electronica: emp.usa_factura_electronica ?? false,
           condicion_iva: emp.condicion_iva ?? null,
@@ -1239,6 +1245,34 @@ const ConfiguracionSection = ({ initialTab }) => {
     }
   };
 
+  // mig.347 — pedido 23/08: apagar esto NUNCA toca pedidos que ya estén en
+  // en_preparacion (rige solo hacia adelante). Si queda alguno huérfano,
+  // PedidosSection.jsx muestra un aviso propio para que se les dé tratamiento.
+  const handleToggleEnPreparacion = async (checked) => {
+    if (!user?.empresa_id) return;
+    const anterior = usaEnPreparacion;
+    setUsaEnPreparacion(checked);
+    setSavingEnPreparacion(true);
+    try {
+      const { error } = await supabase.from('empresas')
+        .update({ usa_estado_en_preparacion: checked })
+        .eq('id', user.empresa_id);
+      if (error) throw error;
+      toast({
+        title: checked ? 'Vuelve a pedir "En Preparación"' : '"En Preparación" desactivado',
+        description: checked
+          ? undefined
+          : 'Los pedidos confirmados van directo a poder facturarse/entregarse, sin ese paso intermedio.',
+        className: 'bg-green-600 text-white border-green-700',
+      });
+    } catch (e) {
+      setUsaEnPreparacion(anterior);
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
+    } finally {
+      setSavingEnPreparacion(false);
+    }
+  };
+
   const handleSaveStockMin = async () => {
     if (!user?.empresa_id) return;
     setSavingStockMin(true);
@@ -1449,7 +1483,7 @@ const ConfiguracionSection = ({ initialTab }) => {
 
   const openAddPv = () => {
     setEditingPv(null);
-    setPvForm({ numero: '', nombre: 'Nuevo Punto de Venta', tipo: 'web', envia_arca: true, cai_remito: '', cai_remito_vencimiento: '', proximo_numero_remito: 1, es_default: false, activo: true });
+    setPvForm({ numero: '', nombre: 'Nuevo Punto de Venta', tipo: 'web', envia_arca: true, cai_remito: '', cai_remito_vencimiento: '', proximo_numero_remito: 1, es_default: false, activo: true, solo_remito: false });
     setShowPvModal(true);
   };
 
@@ -1465,6 +1499,7 @@ const ConfiguracionSection = ({ initialTab }) => {
       proximo_numero_remito: pv.proximo_numero_remito ?? 1,
       es_default: pv.es_default ?? false,
       activo: pv.activo ?? true,
+      solo_remito: pv.solo_remito ?? false,
     });
     setShowPvModal(true);
   };
@@ -1492,6 +1527,7 @@ const ConfiguracionSection = ({ initialTab }) => {
           proximo_numero_remito: Number(pvForm.proximo_numero_remito) || 1,
           es_default: pvForm.es_default,
           activo: pvForm.activo,
+          solo_remito: pvForm.solo_remito,
         }, { onConflict: 'empresa_id,numero' });
       if (error) throw error;
       toast({ title: editingPv ? 'Punto de venta actualizado' : 'Punto de venta creado', className: 'bg-green-600 text-white border-green-700' });
@@ -2007,6 +2043,9 @@ const ConfiguracionSection = ({ initialTab }) => {
             loadingCotizacionesActivo={loadingCotizacionesActivo}
             savingCotizacionesActivo={savingCotizacionesActivo}
             onToggleCotizacionesActivo={handleToggleCotizacionesActivo}
+            usaEnPreparacion={usaEnPreparacion}
+            savingEnPreparacion={savingEnPreparacion}
+            onToggleEnPreparacion={handleToggleEnPreparacion}
           />
         </TabsContent>
 
@@ -2218,6 +2257,20 @@ const ConfiguracionSection = ({ initialTab }) => {
                 </p>
               </div>
               <Switch checked={pvForm.envia_arca} onCheckedChange={v => setPvForm(f => ({ ...f, envia_arca: v }))} />
+            </div>
+            {/* Distinto de "Envía a ARCA" (ajuste 23/08, hallazgo Luciano): un
+                PdV interno puede seguir siendo válido para facturar (ej. el
+                del Modo Caja). Este toggle es para el caso puntual de un PdV
+                que EXISTE solo para numerar remitos — nunca debería ofrecerse
+                al elegir tipo de documento en Nueva Factura. */}
+            <div className="flex items-center justify-between rounded-lg border border-kx-border p-3 bg-kx-surface-2">
+              <div>
+                <Label className="text-kx-text text-sm">Solo para remitos</Label>
+                <p className="text-xs text-kx-text-3 mt-0.5">
+                  No se ofrece en el selector de Nueva Factura — existe únicamente para numerar remitos con su propio CAI.
+                </p>
+              </div>
+              <Switch checked={pvForm.solo_remito} onCheckedChange={v => setPvForm(f => ({ ...f, solo_remito: v }))} />
             </div>
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">

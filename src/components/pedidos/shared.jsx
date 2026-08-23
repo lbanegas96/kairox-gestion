@@ -10,6 +10,18 @@ export const ESTADOS = [
 
 export const getEstado = (id) => ESTADOS.find(e => e.id === id) || ESTADOS[0];
 
+// Config "usa_estado_en_preparacion" (mig.347, pedido 23/08): ESTADOS queda
+// intacto — un pedido histórico en en_preparacion sigue mostrando su badge y
+// filtrando normal, esto solo cambia A DÓNDE VA "Avanzar" desde acá en
+// adelante. Con la config apagada, confirmado salta directo a facturado.
+// Centralizado acá (no en cada componente) porque el botón "Avanzar a X" se
+// calcula en 3 lugares (PedidosSection, TablaPedidos, ModalDetallePedido) y
+// los tres tienen que coincidir en cuál es "el siguiente" de verdad.
+export const getSiguienteEstado = (estadoActual, usaEnPreparacion = true) => {
+  if (estadoActual === 'confirmado' && !usaEnPreparacion) return 'facturado';
+  return getEstado(estadoActual).next;
+};
+
 export function EstadoBadge({ estado }) {
   const e = getEstado(estado);
   return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${e.color}`}>{e.label}</span>;

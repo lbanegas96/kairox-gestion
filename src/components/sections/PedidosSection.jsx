@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, ClipboardList } from 'lucide-react';
+import { Plus, Search, ClipboardList, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -13,7 +13,7 @@ import { getNowAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import GenerarMovimientoModal from '@/components/shared/GenerarMovimientoModal';
 import NuevaFacturaModal from '@/components/ventas/NuevaFacturaModal';
-import { ESTADOS, getEstado } from '@/components/pedidos/shared';
+import { ESTADOS, getEstado, getSiguienteEstado } from '@/components/pedidos/shared';
 import TablaPedidos from '@/components/pedidos/TablaPedidos';
 import ModalPedidoForm from '@/components/pedidos/ModalPedidoForm';
 import ModalDetallePedido from '@/components/pedidos/ModalDetallePedido';
@@ -40,6 +40,11 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
   const [empresaCondicionIva, setEmpresaCondicionIva] = useState(null);
+  // mig.347 — si está apagado, "Avanzar" salta confirmado→facturado directo
+  // sin pasar por en_preparacion (pedido 23/08: negocios con proceso acotado
+  // no quieren ese paso de más). No migra pedidos ya existentes en
+  // en_preparacion — esos se resuelven con el aviso de abajo.
+  const [usaEnPreparacion, setUsaEnPreparacion] = useState(true);
   const [loading, setLoading] = useState(true);
 
   // Autocompletar Producto/Descripción — mismo patrón que CotizacionesSection.jsx
@@ -183,12 +188,15 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
         // grande (import masivo) trae TODOS los productos activos en cada carga de la
         // sección, aunque el autocomplete de abajo solo muestre 50 a la vez.
         supabase.from('productos').select('id, nombre, precio_venta, codigo_sku, unidad_medida, alicuota_iva').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre').limit(200),
-        supabase.from('empresas').select('condicion_iva').eq('id', user.empresa_id).single(),
+        supabase.from('empresas').select('condicion_iva, usa_estado_en_preparacion').eq('id', user.empresa_id).single(),
       ]);
       setPedidos(p || []);
       setClientes(c || []);
       setProductos(pr || []);
       setEmpresaCondicionIva(emp?.condicion_iva ?? null);
+      // mig.347 — default true si la columna todavía no llegó a esta empresa
+      // (empresas creadas antes de la migration ya la tienen por el DEFAULT).
+      setUsaEnPreparacion(emp?.usa_estado_en_preparacion ?? true);
     } catch (err) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
@@ -495,21 +503,21 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
 
   // ── Avanzar estado (para borrador→confirmado y confirmado→en_preparacion) ─
   const handleAvanzar = async (pedido) => {
-    const e = getEstado(pedido.estado);
-    if (!e.next) return;
+    const siguiente = getSiguienteEstado(pedido.estado, usaEnPreparacion);
+    if (!siguiente) return;
     const { error } = await supabase.from('pedidos')
-      .update({ estado: e.next, updated_at: getNowAR().toISOString() })
+      .update({ estado: siguiente, updated_at: getNowAR().toISOString() })
       .eq('id', pedido.id);
     if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
     else {
-      toast({ title: `Pedido ${pedido.numero} → ${getEstado(e.next).label}` });
+      toast({ title: `Pedido ${pedido.numero} → ${getEstado(siguiente).label}` });
       fetchAll();
       // Mismo bug encontrado y corregido por Luciano en Cotizaciones/OC/Proveedores
       // (mig. f137a54): la mutación guarda bien, pero si el detalle sigue abierto
       // se queda mostrando el estado viejo — acá el "detalle" es un objeto plano
       // (`detailPedido`), no una query de react-query, así que la forma de
       // corregirlo es sincronizarlo a mano en vez de invalidar una key.
-      setDetailPedido(prev => (prev?.id === pedido.id ? { ...prev, estado: e.next } : prev));
+      setDetailPedido(prev => (prev?.id === pedido.id ? { ...prev, estado: siguiente } : prev));
     }
   };
 
@@ -642,6 +650,24 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
         </Button>
       </div>
 
+      {/* Aviso de pedidos huérfanos — mig.347: apagar "En Preparación" NUNCA
+          migra pedidos ya existentes en ese estado (instrucción explícita de
+          Luciano: la config solo rige de acá en adelante). Si queda alguno
+          de antes del cambio, se los avisa acá en vez de dejarlos sin forma
+          de avanzar — clickear filtra la tabla para "darles tratamiento". */}
+      {!usaEnPreparacion && stats.en_preparacion > 0 && (
+        <button
+          type="button"
+          onClick={() => setFilterEstado('en_preparacion')}
+          className="w-full flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-4 py-2.5 text-left hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+        >
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>
+            {stats.en_preparacion === 1 ? 'Hay 1 pedido' : `Hay ${stats.en_preparacion} pedidos`} en "En Preparación" de antes de desactivar este paso — ya no se llega ahí desde "Avanzar", pero siguen esperando que los factures o entregues. Clickeá para verlos.
+          </span>
+        </button>
+      )}
+
       {/* KPIs estado */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-kx-border border border-kx-border rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
         {[
@@ -695,6 +721,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
         handleFacturarPedido={handleFacturarPedido}
         handleAvanzar={handleAvanzar}
         setCancelTarget={setCancelTarget}
+        usaEnPreparacion={usaEnPreparacion}
       />
 
       {/* ── Modal Nuevo / Editar ──────────────────────────────────────────────── */}
@@ -727,6 +754,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
         onEditar={(p) => { setIsDetailOpen(false); openEdit(p); }}
         onDuplicar={(p) => { setIsDetailOpen(false); setDuplicarTarget(p); }}
         discrimina={detailPedido ? determinarTipoComprobante(empresaCondicionIva, detailPedido.clientes?.condicion_iva ?? 'CF') === 'A' : false}
+        usaEnPreparacion={usaEnPreparacion}
       />
 
       <ConfirmDuplicarDialog

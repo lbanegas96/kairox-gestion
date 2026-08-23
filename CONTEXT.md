@@ -1,5 +1,89 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Resuelto (23/08) — 3 arreglos chicos: crash de stock, menú Editar/Duplicar, Cotización sin cliente
+
+Sesión de "arreglos simples" tras probar en producción. Tres hallazgos reales, no cosméticos:
+
+1. **Cotización perdía el `cliente_id` al reeditarse.** El input de Cliente en
+   `FormNuevaCotizacion.jsx` es texto libre a propósito (permite escribir uno nuevo), pero
+   **cualquier tecla** en ese campo dispara `cliente_id: ''` — no solo cuando el texto final deja
+   de matchear a nadie. Si el campo se tocaba y el texto final terminaba coincidiendo con un
+   cliente real, `cliente_id` se guardaba en NULL igual: la cotización quedaba con
+   `cliente_nombre` correcto (por eso se veía bien en el detalle) pero desvinculada del cliente
+   real, rompiendo "Copiar a Pedido" (`PedidosSection.jsx` solo lee `cliente_id`, sin fallback).
+   Fix en `handleSubmit` (`CotizacionesSection.jsx`): si el nombre final coincide exacto con un
+   cliente real, resuelve el id igual aunque no se haya clickeado la opción del desplegable.
+   **Se encontraron y repararon 14 cotizaciones históricas más** con el mismo patrón (desde el
+   08/06) via UPDATE puntual contra prod — quedó 1 sin resolver (`COT-00001`, "Marta Perez", sin
+   cliente activo con ese nombre).
+2. **Crash real generando Entrega con cantidades parciales.** `GenerarMovimientoModal.jsx`
+   precargaba "A entregar" con todo el pendiente del pedido sin mirar `stock_actual` — un ítem
+   con 0 en stock aparecía igual con cantidad lista para confirmar, y el RPC `crear_entrega` lo
+   rechazaba recién al guardar (se sentía como un crash). Fix acotado a Entrega vía flag
+   `necesitaStock` (Recepción no lo necesita, siempre suma): el tope de cada ítem pasa a ser
+   `min(pendiente, stockDisponible)`, precargado clampeado, input deshabilitado en 0, con aviso
+   "Sin stock disponible" / "Stock disponible: X".
+3. **Editar/Duplicar detrás de un menú "···".** Pedido explícito: esos botones tienen que seguir
+   disponibles pero no tan a mano como el resto — riesgo de click accidental. Nuevo
+   `MenuAccionesDocumento.jsx` (icono + dropdown), reusado en los 4 documentos que ya ofrecían
+   esta posibilidad (Cotización, Pedido, OC, Factura de Compra). El `onSelect` + `setTimeout`
+   del ítem de menú no es cosmético — mismo workaround que ya usa `HistorialVentas.jsx` para que
+   Radix termine su cleanup de foco antes de que Editar/Duplicar abran otro Dialog encima; sin
+   eso la página se congela.
+
+Verificado en vivo contra Nalux real. `eslint` 0 errores, 159/159 tests, build OK.
+
+---
+
+## ✅ Resuelto (23/08) — ajustes de Punto de Venta, remito y flujo de Pedidos
+
+Mismo día, segunda tanda — 3 ajustes más chicos, uno grande solo planificado (no construido, a
+pedido explícito de Luciano).
+
+1. **"En Preparación" pasa a ser opcional** (`empresas.usa_estado_en_preparacion`, mig.347,
+   default `true`). Útil para cadenas de suministro grandes; estorba a procesos más acotados.
+   Instrucción explícita de Luciano al diseñarlo: **"ninguna configuración debería interferir con
+   el histórico, solo de aquí para adelante"** — apagar el toggle NUNCA migra pedidos que ya
+   estén en `en_preparacion`; en cambio, `PedidosSection.jsx` muestra un aviso propio ("Hay N
+   pedidos en 'En Preparación' de antes...") si queda alguno huérfano, para poder tratarlos a
+   mano. Centralizado en `getSiguienteEstado(estadoActual, usaEnPreparacion)` (`pedidos/shared.jsx`)
+   — reemplaza el `getEstado(x).next` estático en los 3 lugares que calculaban "cuál es el
+   siguiente estado" por separado (`PedidosSection`, `TablaPedidos`, `ModalDetallePedido`).
+2. **El PdV de remito ya no aparece en "Nueva Factura".** Investigado: `envia_arca=false` NO
+   alcanza como criterio de exclusión — el propio `TabFacturacion.jsx` ya lo usa a propósito para
+   el PdV interno del Modo Caja (POS que no manda a ARCA pero SÍ factura internamente, caso
+   legítimo). La distinción real es otra: un PdV puede existir ÚNICAMENTE para numerar remitos
+   (CAI de remito) — nueva columna `puntos_venta.solo_remito` (mig.346), con su propio switch en
+   el form de PdV, excluido del select de `NuevaFacturaModal.jsx`. `emitir_remito` prioriza PdV
+   `solo_remito=true` al resolver el PdV interno por defecto (antes tomaba "el primero con
+   `envia_arca=false`" a secas). Bonus: el selector ahora muestra `"PdV {numero} — {nombre}"` en
+   vez de `"{numero} · {nombre}"`, mismo formato que ya usaba el selector del Modo Caja.
+3. **Remito: CAI + vencimiento al pie, destino en el encabezado.** Investigado antes de tocar
+   nada: el vencimiento del CAI **no se puede sacar** — RG AFIP lo exige mostrado en el documento
+   impreso, igual que el vencimiento del CAE en una factura. Se reubicó (CAI + vencimiento pasan
+   al pie de `RemitoPDF.jsx`, mismo bloque que el pie de página existente) y el espacio que dejó
+   libre en el encabezado ahora lo ocupa el destino de la mercadería + datos del comprador
+   ("Entregar a" con nombre, dirección, ciudad y CUIT/DNI, todo junto para no repetirlo después).
+   La caja "RECEPTOR" separada que existía antes se sacó (quedaría duplicando lo del encabezado);
+   sobrevive una caja chica de Transportista, solo si hay transportista cargado. No bloquea la
+   emisión si falta el domicilio — muestra "Sin domicilio de entrega cargado" en su lugar
+   (mismo criterio de aviso honesto que el resto de la sesión, no gate duro).
+4. **[PLAN_MULTI_PDV_LETRA_POS_ERP.md](PLAN_MULTI_PDV_LETRA_POS_ERP.md) — documentado, NO
+   construido**, a pedido explícito de Luciano ("si querés solo planificalo... para encarar más
+   tarde"). Hallazgo clave de la investigación: KAIROX **no necesita** un calco del modelo de 3
+   tablas de SAP (Puntos de emisión / Serie de folio / Relación serie-documento) — esa numeración
+   pre-reservada es del régimen viejo de AFIP; KAIROX ya usa CAE en línea (WSFEV1), donde ARCA
+   devuelve el folio real, no hace falta pre-asignarlo local. El gap real es de config/selección
+   (qué PdV ofrecer según la letra elegida), no de numeración — mucho más chico de lo que parecía
+   por las capturas de SAP. El documento deja 3 preguntas abiertas para retomarlo.
+
+Verificado en vivo contra Nalux real (toggle de En Preparación probado y revertido a `true`,
+selector de PdV sin "Remito", generación de PDF del remito sin errores en consola contra una
+entrega real). `eslint` 0 errores, 159/159 tests, build OK. **Sin pushear ni deployar todavía —
+Luciano pidió seguir reparando antes de subir nada.**
+
+---
+
 ## ✅ Auditoría (22/08 noche) — motor contable + seguridad + regresión, antes del deploy final del día
 
 Antes de cerrar la sesión más larga del 22/08 (items 5, 6, 7 + los 3 hallazgos de arriba), Luciano

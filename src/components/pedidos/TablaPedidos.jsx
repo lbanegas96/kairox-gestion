@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { formatDateAR } from '@/lib/dateUtils';
 import { formatCurrency } from '@/lib/currencyUtils';
-import { getEstado, EstadoBadge, ProgressoBadge } from './shared';
+import { getEstado, getSiguienteEstado, EstadoBadge, ProgressoBadge } from './shared';
 
 function TablaPedidos({
   filtered,
@@ -16,6 +16,7 @@ function TablaPedidos({
   handleFacturarPedido,
   handleAvanzar,
   setCancelTarget,
+  usaEnPreparacion = true,
 }) {
   return (
     <Card className="dark:bg-kx-bg dark:border-kx-border overflow-hidden shadow-sm">
@@ -56,7 +57,6 @@ function TablaPedidos({
               </tr>
             ) : (
               filtered.map(pedido => {
-                const e = getEstado(pedido.estado);
                 const canEdit    = pedido.estado === 'borrador';
                 const items      = pedido.pedido_items || [];
                 const totalPed   = items.reduce((s, i) => s + Number(i.cantidad || 0), 0);
@@ -70,7 +70,10 @@ function TablaPedidos({
                 // (hayPendiente=false, caso normal de siempre), el botón sigue sin
                 // aparecer — no cambia nada para el flujo no-reserva.
                 const puedeEntrega = ['confirmado', 'en_preparacion', 'facturado'].includes(pedido.estado) && hayPendiente;
-                const esParaFacturar = e.next === 'facturado';
+                // mig.347 — "siguiente" real según la config, no el next
+                // estático de ESTADOS (que siempre pasa por en_preparacion).
+                const siguiente = getSiguienteEstado(pedido.estado, usaEnPreparacion);
+                const esParaFacturar = siguiente === 'facturado';
 
                 return (
                   <tr key={pedido.id}
@@ -126,7 +129,7 @@ function TablaPedidos({
                           </Button>
                         )}
 
-                        {e.next && (
+                        {siguiente && (
                           esParaFacturar ? (
                             <Button
                               variant="ghost" size="icon"
@@ -141,7 +144,7 @@ function TablaPedidos({
                               variant="ghost" size="icon"
                               className="h-8 w-8 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
                               onClick={() => handleAvanzar(pedido)}
-                              title={`Avanzar → ${getEstado(e.next).label}`}
+                              title={`Avanzar → ${getEstado(siguiente).label}`}
                             >
                               <ArrowRight className="h-3.5 w-3.5" />
                             </Button>

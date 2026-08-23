@@ -158,8 +158,11 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
         // es el único selector y su `envia_arca` define si el comprobante va a
         // ARCA. Antes acá había un `.limit(1)` sin ORDER BY ni filtro de
         // envia_arca (mismo bug que useAfipConfig tenía, duplicado en este modal).
-        supabase.from('puntos_venta').select('id, numero, nombre, envia_arca, es_default')
-          .eq('empresa_id', user.empresa_id).eq('activo', true).order('numero')
+        // solo_remito=true (mig.346, hallazgo Luciano 23/08) se excluye acá:
+        // ese PdV existe únicamente para numerar remitos, nunca es válido
+        // para facturar aunque esté activo.
+        supabase.from('puntos_venta').select('id, numero, nombre, envia_arca, es_default, solo_remito')
+          .eq('empresa_id', user.empresa_id).eq('activo', true).eq('solo_remito', false).order('numero')
           .then(({ data: pvs }) => {
             setPuntosVenta(pvs ?? []);
             const porDefecto = pvs?.find(p => p.es_default) ?? pvs?.find(p => p.envia_arca) ?? null;
@@ -815,7 +818,12 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
                       >
                         {puntosVenta.map(pv => (
                           <option key={pv.id} value={pv.id}>
-                            {pv.numero} · {pv.nombre}{pv.envia_arca === false ? ' (interno)' : ''}
+                            {/* "PdV {numero} — {nombre}" — mismo formato que ya
+                                usa el selector de PdV del Modo Caja en
+                                TabFacturacion.jsx. Con más de un PdV activo el
+                                número es lo primero que hay que poder leer,
+                                el nombre puede repetirse o ser ambiguo. */}
+                            PdV {pv.numero} — {pv.nombre}{pv.envia_arca === false ? ' (interno)' : ''}
                           </option>
                         ))}
                       </select>

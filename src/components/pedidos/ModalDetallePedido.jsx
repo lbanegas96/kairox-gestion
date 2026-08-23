@@ -9,7 +9,7 @@ import { formatCurrency } from '@/lib/currencyUtils';
 import { supabase } from '@/lib/customSupabaseClient';
 import DocumentFlow from '@/components/shared/DocumentFlow';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
-import { getEstado, EstadoBadge } from './shared';
+import { getEstado, getSiguienteEstado, EstadoBadge } from './shared';
 
 // Mismo criterio que CotizacionesSection.jsx/CotizacionPDF.jsx: precio_unitario
 // ya incluye IVA, se separa dividiendo por el factor de la alícuota.
@@ -52,6 +52,7 @@ function ModalDetallePedido({
   onEditar,
   onDuplicar,
   discrimina,
+  usaEnPreparacion = true,
 }) {
   const [mapaOpen, setMapaOpen] = useState(false);
   const [showHistorial, setShowHistorial] = useState(false);
@@ -69,7 +70,9 @@ function ModalDetallePedido({
           Luciano 22/08: antes cada uno traía su propio max-w). */}
       <DialogContent size="wide" className="dark:bg-kx-bg dark:border-kx-border">
         {detailPedido && (() => {
-          const e          = getEstado(detailPedido.estado);
+          // mig.347 — "siguiente" real según la config, no el next estático
+          // de ESTADOS (que siempre pasa por en_preparacion).
+          const siguiente  = getSiguienteEstado(detailPedido.estado, usaEnPreparacion);
           const items      = detailPedido.pedido_items || [];
           const totalPed   = items.reduce((s, i) => s + Number(i.cantidad || 0), 0);
           const totalEnt   = items.reduce((s, i) => s + Number(i.cantidad_entregada || 0), 0);
@@ -343,8 +346,8 @@ function ModalDetallePedido({
                     </Button>
                   )}
 
-                  {e.next && (
-                    e.next === 'facturado' ? (
+                  {siguiente && (
+                    siguiente === 'facturado' ? (
                       <Button
                         className="bg-green-600 hover:bg-green-700 text-white"
                         onClick={() => handleFacturarPedido(detailPedido)}
@@ -358,7 +361,7 @@ function ModalDetallePedido({
                         onClick={() => handleAvanzar(detailPedido)}
                       >
                         <ArrowRight className="h-4 w-4 mr-2" />
-                        Avanzar a {getEstado(e.next).label}
+                        Avanzar a {getEstado(siguiente).label}
                       </Button>
                     )
                   )}

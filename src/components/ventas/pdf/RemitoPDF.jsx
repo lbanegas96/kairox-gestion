@@ -77,34 +77,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // ── SECCIÓN RECEPTOR ───────────────────────────────────────────────────
+  // ── CAJAS AUXILIARES (Transportista, avisos) ────────────────────────────
   sectionBox: {
     borderRadius: 3,
     border: `0.5pt solid ${C.border}`,
     paddingHorizontal: 10,
     paddingVertical: 7,
     marginBottom: 10,
-  },
-  sectionTitle: {
-    fontSize: 7,
-    fontFamily: 'Helvetica-Bold',
-    color: C.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginBottom: 4,
-  },
-  receptorRow: {
-    flexDirection: 'row',
-    marginBottom: 2,
-  },
-  receptorCol: {
-    flex: 1,
-  },
-  receptorNombre: {
-    fontSize: 10,
-    fontFamily: 'Helvetica-Bold',
-    color: C.navy,
-    marginBottom: 2,
   },
 
   // ── TABLA ──────────────────────────────────────────────────────────────
@@ -176,6 +155,10 @@ const styles = StyleSheet.create({
   },
 
   // ── PIE ────────────────────────────────────────────────────────────────
+  // CAI + vencimiento viven acá abajo (ajuste 23/08, pedido de Luciano) — no
+  // es solo estética: RG AFIP exige mostrarlos en el documento impreso, igual
+  // que el CAE de una factura, así que no se podía sacar del todo, solo
+  // reubicar. Libera el encabezado para el destino de la mercadería.
   footer: {
     position: 'absolute',
     bottom: 16,
@@ -183,12 +166,27 @@ const styles = StyleSheet.create({
     right: 28,
     borderTop: `0.5pt solid ${C.border}`,
     paddingTop: 5,
+  },
+  footerCai: {
+    fontSize: 6.5,
+    fontFamily: 'Helvetica-Bold',
+    color: C.slate,
+    marginBottom: 3,
+  },
+  footerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   footerText: {
     fontSize: 6.5,
     color: C.muted,
+  },
+
+  // ── DESTINO (en el encabezado, en el lugar que dejó libre el CAI) ───────
+  destinoAviso: {
+    fontSize: 6.5,
+    color: '#b45309',
+    marginTop: 2,
   },
 });
 
@@ -257,44 +255,33 @@ export function RemitoPDF({ entrega, empresa }) {
             <Text style={styles.compLabel}>Fecha</Text>
             <Text style={styles.compValue}>{formatFecha(entrega.fecha)}</Text>
 
-            {entrega.cai_remito_usado ? (
-              <>
-                <Text style={styles.compLabel}>CAI</Text>
-                <Text style={styles.compValue}>{entrega.cai_remito_usado}</Text>
-              </>
+            {/* Destino — ocupa el lugar que dejó el CAI (ajuste 23/08). Info
+                de la entrega física (a dónde va la mercadería) Y del
+                comprador (a nombre de quién), ambas en el mismo bloque para
+                no repetirlas después. No bloquea la emisión si falta algo —
+                ver nota de "Falta domicilio" más abajo. */}
+            <Text style={styles.compLabel}>Entregar a</Text>
+            <Text style={[styles.compValue, { fontFamily: 'Helvetica-Bold', marginBottom: 2 }]}>{clienteNombre}</Text>
+            {destino.direccion ? <Text style={styles.compValue}>{destino.direccion}</Text> : null}
+            {destinoCiudad ? <Text style={styles.compValue}>{destinoCiudad}</Text> : null}
+            {cliente?.documento ? (
+              <Text style={styles.compValue}>CUIT/DNI: {cliente.documento}</Text>
             ) : null}
-            {entrega.cai_remito_vencimiento_usado ? (
-              <>
-                <Text style={styles.compLabel}>CAI Vto.</Text>
-                <Text style={styles.compValue}>{formatFecha(entrega.cai_remito_vencimiento_usado)}</Text>
-              </>
-            ) : null}
+            {!destino.direccion && !destinoCiudad && (
+              <Text style={styles.destinoAviso}>Sin domicilio de entrega cargado</Text>
+            )}
           </View>
         </View>
 
-        {/* ── RECEPTOR ───────────────────────────────────────────────── */}
-        <View style={styles.sectionBox}>
-          <Text style={styles.sectionTitle}>Entregar a</Text>
-          <View style={styles.receptorRow}>
-            <View style={styles.receptorCol}>
-              <Text style={styles.receptorNombre}>{clienteNombre}</Text>
-              {destino.direccion ? <Text style={styles.compValue}>{destino.direccion}</Text> : null}
-              {destinoCiudad ? <Text style={styles.compValue}>{destinoCiudad}</Text> : null}
-            </View>
-            {cliente?.documento ? (
-              <View style={[styles.receptorCol, { alignItems: 'flex-end' }]}>
-                <Text style={styles.compLabel}>CUIT / DNI</Text>
-                <Text style={styles.compValue}>{cliente.documento}</Text>
-              </View>
-            ) : null}
+        {/* ── TRANSPORTE / ORIGEN — solo si hay algo que decir; el nombre y
+             domicilio del receptor ya se movieron al encabezado, esta caja
+             quedaría vacía la mayoría de las veces si los repitiéramos. ── */}
+        {entrega.transportista ? (
+          <View style={[styles.sectionBox, { marginBottom: 6 }]}>
+            <Text style={styles.compLabel}>Transportista</Text>
+            <Text style={[styles.compValue, { marginBottom: 0 }]}>{entrega.transportista}</Text>
           </View>
-          {entrega.transportista ? (
-            <View style={{ marginTop: 4 }}>
-              <Text style={styles.compLabel}>Transportista</Text>
-              <Text style={styles.compValue}>{entrega.transportista}</Text>
-            </View>
-          ) : null}
-        </View>
+        ) : null}
 
         {/* ── TABLA DE ITEMS (sin precios: el remito no es un comprobante
              de venta, solo de traslado de mercadería) ─────────────────── */}
@@ -347,10 +334,18 @@ export function RemitoPDF({ entrega, empresa }) {
 
         {/* ── PIE ────────────────────────────────────────────────────── */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>{empresa?.pie_documento ?? ''}</Text>
-          <Text style={styles.footerText}>
-            Generado por KAIROX Gestión · {formatFecha(new Date().toISOString())}
-          </Text>
+          {entrega.cai_remito_usado ? (
+            <Text style={styles.footerCai}>
+              CAI: {entrega.cai_remito_usado}
+              {entrega.cai_remito_vencimiento_usado ? `    ·    Vto. CAI: ${formatFecha(entrega.cai_remito_vencimiento_usado)}` : ''}
+            </Text>
+          ) : null}
+          <View style={styles.footerRow}>
+            <Text style={styles.footerText}>{empresa?.pie_documento ?? ''}</Text>
+            <Text style={styles.footerText}>
+              Generado por KAIROX Gestión · {formatFecha(new Date().toISOString())}
+            </Text>
+          </View>
         </View>
 
       </Page>

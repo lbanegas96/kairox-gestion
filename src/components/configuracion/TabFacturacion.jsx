@@ -1,5 +1,5 @@
 import {
-  FileText, Loader2, Check, AlertCircle, Shield, RefreshCw, Plus, Pencil, Save, ClipboardList,
+  FileText, Loader2, Check, AlertCircle, Shield, RefreshCw, Plus, Pencil, Save, ClipboardList, Truck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -62,6 +62,8 @@ const TabFacturacion = ({
   pieDoc, setPieDoc, savingPieDoc, handleSavePieDoc,
   // Módulo Cotizaciones
   cotizacionesActivo, loadingCotizacionesActivo, savingCotizacionesActivo, onToggleCotizacionesActivo,
+  // Flujo de Pedidos — mig.347
+  usaEnPreparacion, savingEnPreparacion, onToggleEnPreparacion,
 }) => (
   <div className="space-y-6 max-w-2xl">
     {/* Módulo Cotizaciones */}
@@ -81,6 +83,30 @@ const TabFacturacion = ({
         {loadingCotizacionesActivo || savingCotizacionesActivo
           ? <Loader2 className="h-5 w-5 animate-spin text-kx-text-3" />
           : <Switch checked={cotizacionesActivo ?? true} onCheckedChange={onToggleCotizacionesActivo} />
+        }
+      </div>
+    </div>
+
+    {/* Flujo de Pedidos — "En Preparación" (mig.347, pedido 23/08). Apagarlo
+        no toca pedidos ya existentes en ese estado — si queda alguno,
+        PedidosSection.jsx avisa ahí mismo para que se les dé tratamiento. */}
+    <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center">
+            <Truck className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-kx-text dark:text-kx-text">Paso "En Preparación" en Pedidos</h3>
+            <p className="text-sm text-slate-500 dark:text-kx-text-2 max-w-md">
+              Útil si tu cadena de suministro necesita ese paso intermedio. Si tu proceso es más
+              acotado, apagalo: un pedido confirmado pasa directo a poder facturarse o entregarse.
+            </p>
+          </div>
+        </div>
+        {savingEnPreparacion
+          ? <Loader2 className="h-5 w-5 animate-spin text-kx-text-3" />
+          : <Switch checked={usaEnPreparacion ?? true} onCheckedChange={onToggleEnPreparacion} />
         }
       </div>
     </div>
