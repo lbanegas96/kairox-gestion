@@ -501,8 +501,24 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
         variant: 'destructive',
       });
     }
+    // Bug real encontrado por Luciano (23/08): el input de Cliente es texto
+    // libre a propósito (permite "escribir uno nuevo" — ver comentario en
+    // FormNuevaCotizacion.jsx), y CADA tecla dispara `cliente_id: ''`, no solo
+    // cuando el texto final ya no matchea a nadie. Si el usuario retocaba el
+    // campo (a propósito o sin querer) y el texto que quedaba coincidía con un
+    // cliente real, `cliente_id` se guardaba en NULL igual — la cotización
+    // quedaba con `cliente_nombre` correcto pero desvinculada del cliente real
+    // (`clientes.saldo_actual`, historial, "Copiar a Pedido", etc. dejan de
+    // verla). Backstop acá: si el nombre final coincide exacto con un cliente
+    // real, resolver el id aunque el usuario nunca haya clickeado la opción
+    // del desplegable. No cambia el comportamiento para texto libre genuino
+    // (que sigue sin matchear ningún cliente y viaja con id null, como debe).
+    const clienteResuelto = allClientes.find(
+      c => c.nombre?.trim().toLowerCase() === form.cliente_nombre?.trim().toLowerCase()
+    );
+    const clienteIdFinal = form.cliente_id || clienteResuelto?.id || null;
     const payload = {
-      cliente: form.cliente_nombre ? { id: form.cliente_id || null, nombre: form.cliente_nombre } : null,
+      cliente: form.cliente_nombre ? { id: clienteIdFinal, nombre: form.cliente_nombre } : null,
       items: validItems,
       notas: form.notas,
       condicionesPago: form.condiciones_pago,
