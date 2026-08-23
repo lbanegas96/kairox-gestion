@@ -1,5 +1,41 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Resuelto (23/08) — Mapa de Relaciones: factura cancelada no se distinguía + "Cobro CC" mal etiquetado + Asiento rediseñado
+
+Quinta tanda del mismo día, sobre la misma FAC-20260823-001 ya cancelada. Luciano abrió el Mapa de
+Relaciones y el detalle del asiento con las capturas de referencia de SAP B1 al lado y marcó 3 gaps:
+
+1. **La factura cancelada se veía igual que una vigente en el Mapa.** `compNodo` (el nodo "actual"
+   de la cadena) nunca recibía `estado` — y peor, ni siquiera estaba disponible: la query principal
+   de `fetchMapaVenta` (`MapaRelaciones.jsx`) seleccionaba `comprobantes` sin pedir `estado_pago`.
+   Se agregó esa columna al SELECT y se pasa como `estado: mapa.comp.estado_pago` al nodo —
+   `estadoColor()` ya sabía pintar `/cancelad/` en rojo, solo faltaba el dato. Verificado en vivo:
+   el nodo FACTURA ahora muestra la píldora roja "cancelada" (`bg-kx-red/10 text-kx-red`), mismo
+   lenguaje visual que el resto de KAIROX (no se copió el ícono de SAP, se usó el propio).
+2. **"¿Qué es esto?" — la reversa de cancelación aparecía como "Cobro CC".** `cancelar_factura`/
+   `cancelar_nota_credito`/`cancelar_nota_debito` insertan un HABER en
+   `cuenta_corriente_movimientos` para revertir la deuda — mismo tipo de fila que un cobro real
+   (`registrar_cobro_cliente`), y el Mapa las mostraba con el mismo chip verde "Cobro CC", como si
+   hubiera entrado plata. Se agregó un tipo de chip nuevo, `reversa_cc` (ícono `Ban`, gris neutro),
+   distinguido por el prefijo fijo `'Cancelación'` que usan todas esas RPCs — heurística simple y
+   confiable (grep contra 30+ migraciones confirmó que ningún cobro real empieza así).
+3. **`ModalDetalleAsiento.jsx` no coincidía con el diseño del resto de documentos.** Tenía su propio
+   grid "Label: valor" en vez de las mayúsculas+tracking-wide (`Campo`) que ya usan Entrega/OC/
+   Factura. Se migró a ese mismo patrón local (no ameritaba el shell tabulado completo de
+   `DocumentoTabs` — es un modal "peek", no un documento de nivel superior) y se ensanchó un poco
+   (`max-w-lg` → `max-w-2xl`). **Ojo:** se decidió NO copiar los campos específicos de SAP B1 de la
+   captura de referencia (Serie/POI/Código de emplazamiento fiscal/montos en "MS" multi-moneda-
+   sistema/jurisdicción fiscal) — son conceptos de la localización israelí/HANA sin equivalente en
+   el esquema impositivo argentino de KAIROX. Se mantuvo la misma información que ya mostraba
+   (fecha, origen + número de documento, centro de costo, descripción, líneas, totales), solo con
+   el estilo homogeneizado.
+
+Verificado en vivo contra Nalux real (mismo caso FAC-20260823-001/ENT-2026-0149/PED-20260823-001):
+Mapa muestra "FACTURA...cancelada" en rojo y "REVERSA CC / Cancelación Factura..." como chip
+separado. `eslint` 0 errores, 159/159 tests, build OK. **Sin pushear ni deployar todavía.**
+
+---
+
 ## ✅ Resuelto (23/08) — Cancelar Factura: el cartel de confirmación quedaba pegado entre aperturas
 
 Cuarta tanda del mismo día. Luciano probó "Cancelar Factura" sobre FAC-20260823-001 (letra A, sin

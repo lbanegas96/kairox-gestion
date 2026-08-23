@@ -14,6 +14,20 @@ import { ESTADO_COLOR, fmt } from '@/components/plan-cuentas/shared';
  */
 const ORIGEN_A_COMPROBANTE = new Set(['venta', 'nota_credito', 'nota_debito', 'cancelacion_venta']);
 
+// Campo etiquetado — mismo componente/estilo que ya usan Entrega/OC/Factura
+// (hallazgo Luciano 23/08: este modal seguía con su propio grid ad-hoc
+// "Label: valor" en vez de las mayúsculas+tracking-wide del resto de los
+// documentos). Local porque este modal es un "peek" liviano, no un
+// documento completo — no amerita el shell tabulado de DocumentoTabs.
+function Campo({ label, children, className = '' }) {
+  return (
+    <div className={className}>
+      <span className="text-kx-text-3 text-xs uppercase tracking-wide">{label}</span>
+      <div className="mt-0.5 text-sm text-kx-text">{children}</div>
+    </div>
+  );
+}
+
 /**
  * ModalDetalleAsiento — visor de un asiento contable puntual, reusado desde
  * cualquier documento del ERP (via VerAsientoButton) y desde
@@ -51,8 +65,8 @@ function ModalDetalleAsiento({ asiento: asientoProp = null, asientoId = null, op
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-lg">
-        <DialogHeader>
+      <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-2xl">
+        <DialogHeader className="border-b border-kx-border pb-4">
           <DialogTitle className="flex items-center gap-2">
             <FileText size={16} className="text-kx-blue" />
             {detalle ? `Asiento ${detalle.numero}` : 'Asiento contable'}
@@ -78,20 +92,19 @@ function ModalDetalleAsiento({ asiento: asientoProp = null, asientoId = null, op
         )}
 
         {detalle && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div><span className="text-kx-text-2">Fecha:</span> <span className="text-kx-text">{new Date(detalle.fecha + 'T12:00:00').toLocaleDateString('es-AR')}</span></div>
-              <div>
-                <span className="text-kx-text-2">Origen:</span>{' '}
-                <span className="text-kx-text">
-                  {detalle.origen || 'manual'}
-                  {origenNumero && <span className="text-kx-text-2"> — {origenNumero}</span>}
-                </span>
-              </div>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <Campo label="Fecha">{new Date(detalle.fecha + 'T12:00:00').toLocaleDateString('es-AR')}</Campo>
+              <Campo label="Origen">
+                {detalle.origen || 'manual'}
+                {origenNumero && <span className="text-kx-text-2"> — {origenNumero}</span>}
+              </Campo>
               {detalle.centro_costo?.nombre && (
-                <div><span className="text-kx-text-2">Centro de costo:</span> <span className="text-kx-text">{detalle.centro_costo.nombre}</span></div>
+                <Campo label="Centro de costo">{detalle.centro_costo.nombre}</Campo>
               )}
-              {detalle.descripcion && <div className="col-span-2"><span className="text-kx-text-2">Descripción:</span> <span className="text-kx-text">{detalle.descripcion}</span></div>}
+              {detalle.descripcion && (
+                <Campo label="Descripción" className="col-span-2 sm:col-span-3">{detalle.descripcion}</Campo>
+              )}
             </div>
             <div className="rounded-lg border border-kx-border overflow-hidden">
               <table className="w-full text-xs">

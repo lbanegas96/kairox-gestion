@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import {
   Loader2, ChevronRight, Network, ExternalLink, Maximize2, Minimize2,
   FileText, ClipboardList, Truck, Receipt, RotateCcw, PlusCircle, Undo2,
-  Wallet, ShoppingCart, PackageCheck, Layers, X,
+  Wallet, ShoppingCart, PackageCheck, Layers, X, Ban,
 } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -42,6 +42,12 @@ const TIPO_CONFIG = {
   nota_debito:     { label: 'Nota de Débito',  color: 'border-t-kx-red',    accent: 'text-kx-red',    bg: 'bg-kx-red/10',    icon: PlusCircle },
   devolucion:      { label: 'Devolución',      color: 'border-t-kx-amber',  accent: 'text-kx-amber',  bg: 'bg-kx-amber/10',  icon: Undo2 },
   cobro_cc:        { label: 'Cobro CC',        color: 'border-t-kx-green',  accent: 'text-kx-green',  bg: 'bg-kx-green/10',  icon: Wallet },
+  // Reversa de CC generada por cancelar_factura/NC/ND (mig.259/267/321) — un
+  // HABER en cuenta_corriente_movimientos igual que un cobro real, pero NO es
+  // plata que entró: es el efecto contrario a una cancelación. Antes se
+  // mostraba con el mismo chip "Cobro CC" que un cobro de verdad — confuso
+  // (Luciano, 23/08: "¿qué es esto?"), se distingue por prefijo de descripción.
+  reversa_cc:      { label: 'Reversa CC',       color: 'border-t-kx-text-3', accent: 'text-kx-text-3', bg: 'bg-kx-text-3/10', icon: Ban },
   // ── Compras ────────────────────────────────────────────────────────────────
   orden_compra:    { label: 'Orden de Compra', color: 'border-t-kx-blue',   accent: 'text-kx-blue',   bg: 'bg-kx-blue/10',   icon: ShoppingCart },
   recepcion:       { label: 'Recepción',       color: 'border-t-kx-violet', accent: 'text-kx-violet', bg: 'bg-kx-violet/10', icon: PackageCheck },
@@ -507,7 +513,7 @@ function MapaRelaciones({
     fetchDuplicadoInfo('venta', idComprobante);
     try {
       const { data: comp } = await supabase.from('comprobantes')
-        .select('id, numero_venta, numero_afip, tipo, total, fecha, cliente_nombre, comprobante_origen_id, pedido_id, cotizacion_id')
+        .select('id, numero_venta, numero_afip, tipo, total, fecha, cliente_nombre, comprobante_origen_id, pedido_id, cotizacion_id, estado_pago')
         .eq('id', idComprobante).single();
 
       if (!comp) { setMapa(null); return; }
@@ -782,6 +788,11 @@ function MapaRelaciones({
     numero: mapa.comp.numero_afip ?? mapa.comp.numero_venta,
     fecha:  mapa.comp.fecha,
     total:  mapa.comp.total,
+    // Bug real (Luciano, 23/08): mapa.comp ya trae estado_pago (el SELECT lo
+    // pide) pero nunca se lo pasaba al nodo — una factura cancelada se veía
+    // idéntica a una vigente en el Mapa. estadoColor() ya sabe pintar
+    // "cancelad..." en rojo, solo faltaba este campo.
+    estado: mapa.comp.estado_pago,
   } : null;
 
   // ── Nodo para compras ────────────────────────────────────────────────────────
@@ -831,13 +842,26 @@ function MapaRelaciones({
         activo={isActivo(nd.id)}
       />
     )),
-    ...mapa.cobros.map(c => (
-      <NodoMapa
-        key={c.id}
-        nodo={{ id: c.id, tipo: 'cobro_cc', numero: c.descripcion || 'Cobro CC', fecha: c.fecha, monto: c.monto }}
-        activo={isActivo(c.id)}
-      />
-    )),
+    ...mapa.cobros.map(c => {
+      // cancelar_factura/NC/ND (mig.259/267/321/348) insertan un HABER acá
+      // mismo para revertir la deuda — mismo tipo de fila que un cobro real,
+      // pero no es plata cobrada. Se distingue por el prefijo fijo que usan
+      // todas esas RPCs ('Cancelación Factura/NC/ND ...').
+      const esReversa = c.descripcion?.startsWith('Cancelación');
+      return (
+        <NodoMapa
+          key={c.id}
+          nodo={{
+            id: c.id,
+            tipo: esReversa ? 'reversa_cc' : 'cobro_cc',
+            numero: c.descripcion || (esReversa ? 'Reversa CC' : 'Cobro CC'),
+            fecha: c.fecha,
+            monto: c.monto,
+          }}
+          activo={isActivo(c.id)}
+        />
+      );
+    }),
     ...mapa.devoluciones.map(d => {
       const n = { id: d.id, tipo: 'devolucion', numero: d.numero_devolucion, fecha: d.fecha, estado: d.compensacion };
       return <NodoMapa key={d.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
