@@ -34,9 +34,59 @@ Recorrido completo de la app buscando errores sueltos. Hallazgos, en orden de se
    "NC-20260707-003" — queda "NC" + "NC-20260707-003" uno al lado del otro. Es redundante pero no
    confuso (son visualmente distintos, un pill azul vs. texto), no afecta ningún dato ni acción.
 
-Recorrido sin hallazgos: Dashboard (aparte del punto 2), Reportes, Pedidos, Entregas, Facturas.
-Sigue en curso: Clientes, Cta. Corriente, Listas de Precios, Ofertas, Compras completo, Inventario
-(incl. Recuento/Revalorización), Finanzas (Caja/Bancos/Cheques), Contabilidad, Configuración, POS.
+### Verificaciones automáticas (toda la app, 24/08)
+
+- `npx eslint src` → **0 errores** (3170 warnings, casi todos `react/prop-types`, ruido de estilo).
+- `npx vite build` → build de producción limpio, sin errores.
+- `npx vitest run` → **159/159 tests pasan**, 18 archivos, 0 fallas.
+
+### Integridad de datos reales en Nalux — todo verificado en cero
+
+Asientos descuadrados (debe≠haber): 0 · stock físico negativo: 0 · `stock_disponible` negativo: 0 ·
+cheques en estado inválido: 0 · `saldo_pendiente > total` en compras: 0 · `movimientos_caja` con
+monto negativo: 0 · OC con recibido > pedido: 0 · `pedido_items` facturado > cantidad: 0 ·
+`comprobante_items` entregada > cantidad: 0 · entregas huérfanas: 0.
+
+Tres cosas que a primera vista parecían problemas y **no lo son** (verificadas, no descartadas):
+
+- **11 comprobantes con `total` ≠ suma de ítems**: en los 11 la diferencia es *exactamente* el
+  `iva_discriminado`. El subtotal de ítems es neto y el total lleva IVA — correcto.
+- **1 cliente con saldo negativo** (Carlos Perez, −27.300): es saldo *a favor*, y el
+  `saldo_actual` coincide exacto con la suma de sus movimientos de cuenta corriente.
+- **8 ventas viejas sin asiento contable** (junio–06/08): 3 son anteriores a que existiera el plan
+  de cuentas (02/06 22:28). Las 8 ya están contempladas por la app — `SaleDetailModal.jsx` marca
+  un punto ámbar en la solapa Contabilidad y ofrece "Regenerar asiento"
+  (`regenerar_asiento_venta`). Se arreglan con un clic cada una cuando Nadia quiera.
+
+### Seguridad — repasada contra la política del proyecto, sin agujeros
+
+- **RLS activo con políticas en las 24 tablas** que el frontend consulta filtrando sólo por FK.
+- **Las 6 vistas tienen `security_invoker`** (`compras_saldo_pendiente`, `facturas_saldo_pendiente`,
+  `productos_stock_disponible`, `retenciones_acumulado_mensual`, `v_saldo_proveedores`,
+  `v_facturas_arca_monitor`) — la lección de mig.340 quedó aplicada de forma consistente.
+- **3 funciones `SECURITY DEFINER` ejecutables por `anon`** (`registrar_cobro_cliente`,
+  `registrar_pago_proveedor`, `fn_entrega_snapshot_destino`) que marca el advisor de Supabase:
+  se probó el ataque de verdad (`SET LOCAL role anon` + llamada real dentro de una transacción con
+  ROLLBACK) y **las dos que mueven plata cortan con "No autorizado: empresa_id no coincide con el
+  usuario autenticado"**. La tercera es una función de trigger, no se puede invocar con sentido por
+  RPC. Recomendación pendiente, no urgente: hacer `REVOKE EXECUTE ... FROM anon` igual, por
+  defensa en profundidad.
+- `afip_tickets` y `arca_worker_run` con RLS y 0 políticas = deny-all, y ninguna se toca desde el
+  frontend (grep sin resultados): sólo las usa el worker con `service_role`. Correcto por diseño.
+- Sin secretos hardcodeados: las apariciones de `APP_USR-` en `ConfigMercadoPagoModal.jsx` son
+  texto de ayuda y validación de formato, ningún token real.
+
+**Pendiente sugerido (gratis, 1 clic en el panel de Supabase):** activar *Leaked Password
+Protection* (Auth → Passwords), que cruza las contraseñas contra HaveIBeenPwned. Lo marca el
+advisor como WARN y hoy está apagado.
+
+### Límite honesto de este barrido
+
+El recorrido fue por **código y base de datos**, no por click-through visual: la sesión del
+navegador se cerró a mitad del barrido y no se puede volver a entrar sin que Nadia escriba la
+contraseña. Los dos bugs reales de esta lista se encontraron leyendo código y consultando la base,
+no clickeando. Lo que **no** quedó verificado en vivo: que cada modal abra y cada botón responda
+visualmente en pantalla.
 
 ## ✅ Verificado (24/08) — "Ver asiento" en Facturas de Compra y Recuento/Revalorización: ya estaba hecho
 
