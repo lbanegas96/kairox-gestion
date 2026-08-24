@@ -76,9 +76,10 @@ Tres cosas que a primera vista parecían problemas y **no lo son** (verificadas,
 - Sin secretos hardcodeados: las apariciones de `APP_USR-` en `ConfigMercadoPagoModal.jsx` son
   texto de ayuda y validación de formato, ningún token real.
 
-**Pendiente sugerido (gratis, 1 clic en el panel de Supabase):** activar *Leaked Password
-Protection* (Auth → Passwords), que cruza las contraseñas contra HaveIBeenPwned. Lo marca el
-advisor como WARN y hoy está apagado.
+**Corrección del mismo día:** acá había dicho "gratis, 1 clic" para activar *Leaked Password
+Protection* — no es así, ver el hallazgo ya documentado el 20/08 (sección del plan free más abajo)
+y su reconfirmación en vivo hoy: **requiere plan Pro de Supabase**, bloqueado en el free que usa
+Nalux. Es la misma decisión consciente de Nadia sobre el plan free, no un pendiente nuevo.
 
 ### Límite honesto de este barrido
 
@@ -3251,6 +3252,13 @@ que Nadia lo pida ella misma.
 devuelve `402 Payment Required` y vuelve a quedar apagado al recargar. Confirmado en vivo con
 Nadia mirando la pantalla. Si en algún momento se sube a Pro, este es un toggle suelto para
 activar (no depende de ninguna migración del repo).
+
+**Reconfirmado el 24/08**, durante el barrido general de la app: mismo toggle, mismo resultado.
+El panel ahora lo deja marcar como "Powered by the HaveIBeenPwned.org Pwned Passwords API...
+**Only available on Pro plan and above**" — más explícito que el 20/08, pero la misma conclusión.
+Se canceló el cambio sin guardar (no se intentó forzar el `402` de nuevo). Sigue siendo la
+decisión consciente de Nadia sobre el plan free, no un pendiente nuevo — ver
+[[project_supabase_plan_free_decision]] en la memoria de Claude.
 
 ### Recupero de contraseña roto otra vez — no por el SMTP, por config de URL perdida (mismo drift)
 
