@@ -1,5 +1,43 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Resuelto (23/08) — Mapa: trazabilidad se cortaba con múltiples facturas por pedido + Asiento ahora es documento completo
+
+Sexta tanda del mismo día. Con FAC-20260823-001 ya cancelada, Nadia refacturó el mismo pedido y
+quedó FAC-20260823-002 (`0001-00000048` con CAE) vigente — el primer caso real en Nalux de un
+Pedido con más de una Factura. Luciano marcó que el Mapa de Relaciones "se corta, según el
+documento que levante muestra uno o el otro camino, no todos los documentos de ese movimiento", y
+pidió además que el Asiento sea un documento completo, no un popup.
+
+**Bug real encontrado mientras se armaba el fix (no cosmético — daba un dato falso):** la query de
+entregas en `fetchMapaVenta` trae por `pedido_id` (para agarrar la entrega manual del pedido) pero
+nunca filtraba por a qué comprobante está atada — al abrir el Mapa de la factura VIEJA (cancelada),
+mostraba igual la entrega ENT-2026-0149 en su cadena, aunque esa entrega ya había pasado a
+pertenecer a la factura NUEVA tras la cancelación (mig.348 la desvincula, no la anula). Encima el
+primer intento de fix no funcionó: el filtro comparaba `entrega.comprobante_id` pero esa columna
+nunca se pedía en el `.select()` — comparar contra `undefined` siempre daba "sin dueño" y dejaba
+pasar todo. Los dos bugs juntos hacían que la cadena mintiera, no solo que estuviera incompleta.
+
+**Fix (`MapaRelaciones.jsx`):**
+1. `comprobante_id` agregado al `.select()` de entregas — sin esto el filtro de abajo era un no-op.
+2. Entregas ligadas a OTRO comprobante del mismo pedido se descartan de la cadena actual.
+3. Query nueva — todas las demás facturas del mismo `pedido_id` — sección propia "Otras facturas
+   de este pedido" (no mezclada con "Documentos derivados": no son derivados DE esta factura, son
+   hermanas del mismo pedido).
+
+Verificado en los dos sentidos con el caso real: abrir desde FAC-20260823-001 (cancelada) muestra
+Pedido→Factura (sin la entrega, que ya no es suya) + "Otras facturas: 0001-00000048"; abrir desde
+0001-00000048 muestra Pedido→Entrega→Factura (su cadena real) + "Otras facturas: FAC-20260823-001
+(Cancelada)".
+
+**`ModalDetalleAsiento.jsx` — de popup (`max-w-lg`) a documento completo (`size="wide"`)**, mismo
+patrón de header/footer que Entrega/Factura (ícono `BookMarked`, `border-b`/`border-t`, `DialogFooter`
+con Cerrar). Contenido sin cambios de fondo — la restyling de campos ya se había hecho en la tanda
+anterior, esto solo cambia el shell.
+
+`eslint` 0 errores, 159/159 tests, build OK. **Sin pushear ni deployar todavía.**
+
+---
+
 ## ✅ Resuelto (23/08) — Mapa de Relaciones: factura cancelada no se distinguía + "Cobro CC" mal etiquetado + Asiento rediseñado
 
 Quinta tanda del mismo día, sobre la misma FAC-20260823-001 ya cancelada. Luciano abrió el Mapa de

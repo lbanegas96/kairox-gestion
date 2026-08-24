@@ -518,7 +518,7 @@ function MapaRelaciones({
 
       if (!comp) { setMapa(null); return; }
 
-      const [origenRes, cotizacionRes, pedidoRes, entregasRes, ncsRes, ndsRes, devRes, cobrosRes] = await Promise.allSettled([
+      const [origenRes, cotizacionRes, pedidoRes, entregasRes, ncsRes, ndsRes, devRes, cobrosRes, hermanasRes] = await Promise.allSettled([
         comp.comprobante_origen_id
           ? supabase.from('comprobantes')
               .select('id, numero_venta, numero_afip, tipo, total, fecha')
@@ -544,11 +544,11 @@ function MapaRelaciones({
         // Entregas: las que apuntan al comprobante (POS implícita) Y las que apuntan al pedido (manual)
         comp.pedido_id
           ? supabase.from('entregas')
-              .select('id, numero_entrega, fecha, estado, origen, pedido_id')
+              .select('id, numero_entrega, fecha, estado, origen, pedido_id, comprobante_id')
               .or(`comprobante_id.eq.${idComprobante},pedido_id.eq.${comp.pedido_id}`)
               .eq('empresa_id', user.empresa_id)
           : supabase.from('entregas')
-              .select('id, numero_entrega, fecha, estado, origen, pedido_id')
+              .select('id, numero_entrega, fecha, estado, origen, pedido_id, comprobante_id')
               .eq('comprobante_id', idComprobante)
               .eq('empresa_id', user.empresa_id),
 
@@ -573,13 +573,37 @@ function MapaRelaciones({
           .eq('comprobante_id', idComprobante)
           .eq('empresa_id', user.empresa_id)
           .eq('tipo', 'HABER'),
+
+        // Hallazgo real (Luciano, 23/08): un Pedido puede facturarse en más de
+        // un comprobante — parcial a lo largo del tiempo, o por cancelar uno y
+        // volver a facturar (ver mig.348). El mapa mostraba una sola "Cadena de
+        // documentos" colgada del comprobante que abriste, sin ninguna
+        // referencia a las demás facturas del mismo pedido: si abrías la
+        // factura cancelada no veías la nueva, y viceversa. Se resuelven acá
+        // TODAS las facturas del pedido salvo la actual, para mostrarlas en
+        // una sección propia ("Otras facturas de este pedido").
+        comp.pedido_id
+          ? supabase.from('comprobantes')
+              .select('id, numero_venta, numero_afip, tipo, total, fecha, estado_pago')
+              .eq('pedido_id', comp.pedido_id).eq('empresa_id', user.empresa_id)
+              .eq('tipo', 'venta').neq('id', idComprobante)
+          : Promise.resolve({ data: [] }),
       ]);
 
       const safe    = (res) => res.status === 'fulfilled' ? (res.value.data ?? null) : null;
       const safeArr = (res) => res.status === 'fulfilled' ? (res.value.data ?? []) : [];
 
       // Dedupe + priorización
-      const entregasRaw = safeArr(entregasRes);
+      // Bug real (Luciano, 23/08): al traer por pedido_id (para el caso de
+      // entrega manual sin comprobante_id todavía), esto también arrastraba
+      // entregas que YA están vinculadas a OTRA factura del mismo pedido (ej.
+      // se canceló una factura, la entrega quedó libre, se facturó de nuevo —
+      // esa entrega ahora es de la factura NUEVA). Sin este filtro, el mapa de
+      // la factura VIEJA mostraba esa entrega como propia — información falsa,
+      // no solo incompleta. Se descartan acá las que ya pertenecen a otro
+      // comprobante distinto del que se está mirando.
+      const entregasRaw = safeArr(entregasRes)
+        .filter(e => e.comprobante_id === idComprobante || e.comprobante_id == null);
       const seen = new Set();
       const entregasDedup = entregasRaw.filter(e => seen.has(e.id) ? false : (seen.add(e.id), true));
 
@@ -623,6 +647,7 @@ function MapaRelaciones({
         nds:          safeArr(ndsRes),
         devoluciones: safeArr(devRes),
         cobros:       safeArr(cobrosRes),
+        hermanas:     safeArr(hermanasRes),
       });
     } catch (err) {
       console.error('[MapaRelaciones/venta]', err);
@@ -1093,6 +1118,30 @@ function MapaRelaciones({
                   <NodoMapa nodo={compNodo} activo={isActivo(compNodo.id)} onClick={() => openPreview(compNodo)} />
                 </div>
               </div>
+
+              {/* Un Pedido puede tener más de una Factura — parcial a lo largo
+                  del tiempo, o porque se canceló una y se volvió a facturar
+                  (hallazgo real, 23/08: PED-20260823-001 terminó con
+                  FAC-20260823-001 cancelada y FAC-20260823-002 vigente, y
+                  el mapa de cada una no sabía nada de la otra). Sección
+                  aparte de "Documentos derivados" porque no son derivados
+                  DE esta factura — son hermanas, cuelgan del mismo pedido. */}
+              {mapa.hermanas?.length > 0 && (
+                <div className="rounded-xl bg-kx-surface-2/40 border border-kx-border p-4">
+                  <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider mb-3">
+                    Otras facturas de este pedido
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {mapa.hermanas.map(f => {
+                      const n = {
+                        id: f.id, tipo: 'venta', numero: f.numero_afip ?? f.numero_venta,
+                        fecha: f.fecha, total: f.total, estado: f.estado_pago,
+                      };
+                      return <NodoMapa key={f.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
+                    })}
+                  </div>
+                </div>
+              )}
 
               {tieneDerivadosVenta && (
                 <div className="rounded-xl bg-kx-surface-2/40 border border-kx-border p-4">
