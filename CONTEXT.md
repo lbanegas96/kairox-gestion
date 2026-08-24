@@ -1,5 +1,43 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🔧 Barrido general de bugs (24/08) — pedido por Nadia: "toda la app completa"
+
+Recorrido completo de la app buscando errores sueltos. Hallazgos, en orden de severidad:
+
+1. **`cae_estado` no se liberaba al cancelar un comprobante directamente** (real, corregido,
+   mig.351 — `supabase/migrations/351_cancelaciones_liberan_cae_estado.sql`). Las 3 funciones de
+   cancelación directa (`cancelar_factura`, `cancelar_nota_credito`, `cancelar_nota_debito` — sólo
+   aplican cuando el comprobante nunca llegó a tener CAE de verdad) actualizaban
+   `estado_pago='cancelada'` pero nunca tocaban `cae_estado`, que quedaba en `'error'` (o
+   `'error_definitivo'`) para siempre. Encontrado con el caso real `FAC-20260823-001` (cancelada en
+   esta misma sesión durante una prueba en vivo): seguía apareciendo como "Con error" en el Monitor
+   de Facturación AFIP, inflando ese contador y con los botones "Reintentar"/"Usar CAEA" activos
+   sobre un comprobante que ya no representa una venta real. Fix: las 3 ahora setean
+   `cae_estado='no_aplica'` en el UPDATE final (mismo valor que ya usan los Tickets;
+   `MonitorFacturacionAFIP.jsx` ya excluye `'no_aplica'` tanto de `REINTENTABLES` como de
+   `ESTADOS_DEFAULT`, no hizo falta tocar el frontend). Probado con `BEGIN...ROLLBACK` contra
+   producción antes de aplicar, y el único caso ya afectado (`FAC-20260823-001`) se corrigió al
+   mismo tiempo — verificado con SQL directo que quedó en `'no_aplica'`.
+
+2. **`TopClientes.jsx` usaba `c.nombre` como `key` de React** (real, menor, corregido). Dos
+   clientes distintos pueden compartir nombre a propósito — un cliente real llamado "Consumidor
+   Final" y las ventas sin cliente identificado (agrupadas aparte, ver el comentario de
+   `dashboardService.ts` sobre la sesión 59) ambos se muestran como "Consumidor Final" pero son
+   filas distintas — causaba key duplicada en React (warning en consola, no rompía la UI). Cambiado
+   a `key={i}` (la lista no se reordena por interacción del usuario, así que el índice es estable).
+   El agrupamiento del backend (`dashboardService.ts` líneas ~194-201, por `cliente_id ?? nombre:...`)
+   ya era correcto — el bug era sólo el `key` del frontend.
+
+3. **"NC" + "NC-..." duplicado en Devoluciones** (cosmético, no corregido, pendiente de que Nadia
+   decida si vale la pena pulirlo). `CompensacionBadge` en `DevolucionesSection.jsx` muestra una
+   pastilla con el texto "NC" pegada a `dev.nota_credito.numero_venta`, que ya viene formateado como
+   "NC-20260707-003" — queda "NC" + "NC-20260707-003" uno al lado del otro. Es redundante pero no
+   confuso (son visualmente distintos, un pill azul vs. texto), no afecta ningún dato ni acción.
+
+Recorrido sin hallazgos: Dashboard (aparte del punto 2), Reportes, Pedidos, Entregas, Facturas.
+Sigue en curso: Clientes, Cta. Corriente, Listas de Precios, Ofertas, Compras completo, Inventario
+(incl. Recuento/Revalorización), Finanzas (Caja/Bancos/Cheques), Contabilidad, Configuración, POS.
+
 ## ✅ Verificado (24/08) — "Ver asiento" en Facturas de Compra y Recuento/Revalorización: ya estaba hecho
 
 Nadia pidió retomar el pendiente de replicar `VerAsientoButton` en el resto de los documentos
