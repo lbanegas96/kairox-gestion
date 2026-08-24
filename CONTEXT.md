@@ -1,28 +1,61 @@
 # KAIROX Gestión — Contexto de Sesión
 
-## 📋 Pendientes para Nadia — arrancar el 24/08
+## ✅ Resuelto (24/08) — Stock Comprometido, Fase 1 (sólo Factura de Reserva) — construido y aplicado
 
-Cierre de la sesión del 23/08: quedaron 2 arreglos grandes **analizados y documentados, pero sin
-una sola línea de código escrita** — Luciano los va a probar él mismo a medida que se construyan,
-así que conviene ir mostrándole avances parciales, no esperar a tener todo terminado.
+Retomando `PLAN_STOCK_COMPROMETIDO.md` (ver más abajo, sección "para revisar" ya resuelta). Nadia
+habló con Luciano y las 3 preguntas abiertas del plan quedaron respondidas: **bloquea de verdad**
+(no es un simple aviso — "si ya está reservado no tiene por qué venderse a otra persona"), sólo
+cuenta desde que se **factura** (no desde el Pedido confirmado sin facturar), y el alcance queda
+sólo en Factura de Reserva por ahora (Órdenes de Compra queda para una fase 2 futura).
 
-1. **[PLAN_STOCK_COMPROMETIDO.md](PLAN_STOCK_COMPROMETIDO.md)** — estados de inventario Libre/
-   Comprometido/Pedido estilo SAP B1. Hallazgo clave ya hecho: "Factura de Reserva" (mig.328) ya
-   existe y evita el doble descuento de stock, pero no reserva nada de verdad — ese stock sigue
-   apareciendo 100% libre para cualquier otra venta mientras tanto. `stock_actual` se lee/escribe
-   en 31 archivos del frontend — no es chico. Tiene 3 preguntas abiertas para Luciano antes de
-   empezar a codear (¿bloquea la venta o solo avisa? ¿aplica desde el Pedido confirmado o solo
-   desde la Factura? ¿conviene resolver primero solo la reserva sin la capa de compras?).
-2. **[PLAN_MULTI_PDV_LETRA_POS_ERP.md](PLAN_MULTI_PDV_LETRA_POS_ERP.md)** — múltiples Puntos de
-   Venta con letra asignable (A/B/C), POS vs ERP. Hallazgo clave ya hecho: KAIROX NO necesita
-   clonar el modelo de 3 tablas de SAP B1 (Puntos de emisión / Serie de folio / Relación) porque
-   ARCA devuelve el folio real vía CAE — `series_numeracion` ya soporta multi-PdV sin cambios.
-   También tiene 3 preguntas abiertas (¿el POS necesita elegir letra al vender? ¿cuántos PdV reales
-   va a tener una empresa en la práctica, alcanza un campo simple en vez de una tabla nueva?
-   ¿aplica también a Compras?).
+**Hallazgo real antes de construir nada** (ver auditoría en el chat): la base real de Nalux ya
+tenía 85 líneas de `comprobante_items` con `cantidad > cantidad_entregada` sin ser reservas
+reales — ninguna tenía `pedido_id` (una Factura de Reserva real siempre lo requiere). Eran datos
+de prueba de los primeros meses del proyecto (jun-ago/2026, la app todavía no está en el mercado,
+confirmado con Nadia que no hay uso real todavía). Sin limpiarlos, "Batidora Eléctrica" hubiera
+quedado con `stock_disponible = -15` y nadie podría venderla nunca más. Se limpiaron las 85 (se
+marcan como ya entregadas) dejando sólo las 3 reservas reales (Mate, Termo Stanley, Lapicera — las
+2 Facturas de Reserva reales del 15/08 y 18/08, con Pedido real detrás).
 
-Antes de arrancar cualquiera de los dos, Nadia debería sentarse con Luciano a responder esas
-preguntas — ambos planes las dejan explícitas a propósito, para no adivinar y tener que rehacer.
+**mig.349** — vista `productos_stock_disponible` (`security_invoker=true`, mismo motivo que
+mig.340): `stock_disponible = stock_actual - stock_comprometido`, calculado en vivo desde
+`comprobante_items`/`comprobantes` (facturas `tipo='venta'`, no `cancelada`, con
+`cantidad > cantidad_entregada`) — nada se guarda en una columna aparte, evita el riesgo de
+desincronización. Incluye la limpieza de datos de arriba.
+
+**mig.350** — `crear_venta` ahora valida contra `stock_disponible` en vez de `stock_actual` a
+secas, **para los dos casos** (Factura de Reserva y venta física): antes la reserva no validaba
+nada de stock en absoluto. Se agregó lock de fila (`SELECT ... FOR UPDATE` sobre `productos`)
+también en el camino de reserva — antes no lockeaba nada ahí, así que 2 reservas simultáneas del
+mismo producto podían leer el mismo "disponible" antes de que ninguna comitee y sobre-comprometer
+igual. `costo_unitario` del ítem se neutraliza a `NULL` en modo reserva (mismo comportamiento que
+antes, ya que el `SELECT` que lo trae ahora es incondicional por el lock).
+
+Probado con `BEGIN...ROLLBACK` contra Nalux real antes de aplicar, usando un Pedido real de "Mate"
+(subiendo temporalmente su cantidad pedida sólo dentro de la transacción para poder probar el
+límite): pedir 99 unidades (excede disponible=98) fue rechazado con el mensaje de stock
+insuficiente citando el disponible real; pedir 50 (dentro de lo disponible) funcionó y el
+comprometido subió exactamente en 50; el stock físico no se movió en ningún caso (una reserva
+sigue sin tocar `stock_actual`, sólo ahora valida antes de dejar pasar). Aplicado después del test
+en verde — verificado en producción que los 3 productos con reserva real siguen con los números
+correctos (Lapicera 96 disponibles, Mate 98, Termo Stanley 6).
+
+**Lo que queda para más adelante, a propósito no construido hoy:** UI que muestre "Libre: X ·
+Comprometido: Y" en la grilla de Productos y en los selectores del POS (el plan original estimaba
+6-10 de los 31 archivos que leen `stock_actual` como candidatos reales) — el bloqueo ya funciona
+del lado servidor sin esto, es sólo para que se vea reflejado en pantalla. Órdenes de Compra/
+Recepción como capa adicional del estado de inventario (Fase 2, explícitamente fuera de alcance).
+
+---
+
+## 📋 Pendiente — Multi-PdV con letra (POS/ERP)
+
+Sigue sin decisión ni una línea de código, ver `PLAN_MULTI_PDV_LETRA_POS_ERP.md`. Hallazgo clave ya
+hecho: KAIROX NO necesita clonar el modelo de 3 tablas de SAP B1 (Puntos de emisión / Serie de
+folio / Relación) porque ARCA devuelve el folio real vía CAE — `series_numeracion` ya soporta
+multi-PdV sin cambios. 3 preguntas abiertas para retomar con Luciano (¿el POS necesita elegir
+letra al vender? ¿cuántos PdV reales va a tener una empresa en la práctica, alcanza un campo
+simple en vez de una tabla nueva? ¿aplica también a Compras?).
 
 ---
 
