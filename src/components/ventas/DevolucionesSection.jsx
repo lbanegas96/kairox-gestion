@@ -16,15 +16,20 @@ import ModalDetalleDevolucion from '@/components/ventas/ModalDetalleDevolucion';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function CompensacionBadge({ value }) {
+// numero (opcional): cuando ya hay una NC vinculada (ej. "NC-20260707-003"), se
+// muestra ESE texto dentro de la pastilla en vez del genérico "NC" — antes se
+// mostraban los dos pegados ("NC" + "NC-20260707-003"), redundante (hallazgo del
+// barrido general 24/08). Sin `numero` (NC pendiente de vincular), cae al label
+// genérico de siempre.
+function CompensacionBadge({ value, numero }) {
   const cfg = {
-    nota_credito: { cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',   label: 'NC' },
+    nota_credito: { cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',   label: numero || 'NC' },
     reemplazo:    { cls: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400', label: 'Reemplazo' },
     pendiente:    { cls: 'bg-slate-100 text-kx-text-2 dark:bg-kx-surface-2 dark:text-kx-text-2',   label: 'Pendiente' },
   };
   const { cls, label } = cfg[value] ?? cfg.pendiente;
   return (
-    <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full ${cls}`}>
+    <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-full ${cls} ${value === 'nota_credito' && numero ? 'font-mono' : ''}`}>
       {label}
     </span>
   );
@@ -176,12 +181,7 @@ function DevolucionesTab({ onNavigate }) {
                     {dev.reingresa_stock ? 'Sí' : 'No'}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <CompensacionBadge value={dev.compensacion} />
-                    {dev.compensacion === 'nota_credito' && dev.nota_credito?.numero_venta && (
-                      <span className="ml-1 font-mono text-xs text-kx-text-3">
-                        {dev.nota_credito.numero_venta}
-                      </span>
-                    )}
+                    <CompensacionBadge value={dev.compensacion} numero={dev.nota_credito?.numero_venta} />
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-semibold text-kx-text">
                     ${totalDev(dev).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
