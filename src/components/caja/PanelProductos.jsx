@@ -222,7 +222,13 @@ function PanelProductos({ onAgregarAlCarrito, apiRef }) {
     return { ok: true, nombre: producto.nombre };
   }, [buscarPorCodigo, onAgregarAlCarrito]);
 
-  const productosConAlerta = productos.filter(p => getStockLevel(p) !== 'ok');
+  // Stock Comprometido — Fase 1: mismo criterio que ProductoCard, el nivel se calcula
+  // sobre lo disponible (no sobre el físico a secas), así que un producto totalmente
+  // reservado por otra Factura de Reserva también entra en la alerta aunque su
+  // stock_actual todavía se vea "sano".
+  const productosConAlerta = productos
+    .map(p => ({ ...p, stock_comprometido: mapaDisponible.get(p.id)?.stock_comprometido ?? 0 }))
+    .filter(p => getStockLevel(p, p.stock_comprometido) !== 'ok');
 
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">

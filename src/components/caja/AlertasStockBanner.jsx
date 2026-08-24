@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/use-toast';
 
 // Banner colapsable de alertas de stock bajo.
 // Props:
-//   productos: Array<{ id, nombre, stock_actual, stock_minimo }>
+//   productos: Array<{ id, nombre, stock_actual, stock_minimo, stock_comprometido? }>
 function AlertasStockBanner({ productos }) {
   const { user }    = useAuth();
   const { toast }   = useToast();
@@ -74,14 +74,18 @@ function AlertasStockBanner({ productos }) {
 
       {!collapsed && (
         <div className="px-4 pb-3 space-y-1.5">
-          {productos.map(p => (
+          {productos.map(p => {
+            const comprometido = p.stock_comprometido ?? 0;
+            const disponible = (p.stock_actual ?? 0) - comprometido;
+            return (
             <div key={p.id} className="flex items-center justify-between text-sm gap-2">
               <span className="text-amber-800 dark:text-amber-400 font-medium truncate">
                 {p.nombre}
                 <span className="ml-2 text-xs font-normal opacity-70">
-                  {p.stock_actual <= 0
-                    ? '— SIN STOCK'
+                  {disponible <= 0
+                    ? '— SIN STOCK LIBRE'
                     : `— ${stockFmt(p)} ${unidadCorta(p)} (mín. ${p.stock_minimo ?? 0})`}
+                  {comprometido > 0 && ` · Comprometido: ${comprometido}`}
                 </span>
               </span>
               <Button
@@ -93,7 +97,8 @@ function AlertasStockBanner({ productos }) {
                 <Bell className="w-3 h-3 mr-1" /> Avisar
               </Button>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

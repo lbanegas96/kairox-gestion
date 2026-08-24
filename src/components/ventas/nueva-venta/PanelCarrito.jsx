@@ -26,7 +26,12 @@ function PanelCarrito({
               <div key={p.id} className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 grid grid-cols-12 gap-2 items-center cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20" onClick={() => handleAddToCart(p)}>
                 <div className="col-span-3 text-xs text-kx-text-2 font-mono truncate">{p.codigo_sku}</div>
                 <div className="col-span-5 font-medium truncate text-sm text-slate-800 dark:text-slate-200">{p.nombre}</div>
-                <div className="col-span-2 text-right text-xs font-bold dark:text-slate-300">{p.stock_actual}</div>
+                <div className="col-span-2 text-right">
+                  <div className="text-xs font-bold dark:text-slate-300">{p.stock_actual}</div>
+                  {p.stock_comprometido > 0 && (
+                    <div className="text-2xs text-kx-text-3">Libre: {p.stock_actual - p.stock_comprometido}</div>
+                  )}
+                </div>
                 <div className="col-span-2 text-right font-bold text-emerald-600 dark:text-emerald-400 text-sm">
                   {p.tipo_venta && p.tipo_venta !== 'unidad'
                     ? <>${p.precio_por_kg_litro} <span className="font-normal text-xs">/{p.tipo_venta === 'volumen' ? 'lt' : 'kg'}</span></>

@@ -17,6 +17,7 @@ import { useMultipago } from '@/hooks/useMultipago';
 import { useCreditoCliente } from '@/hooks/useCreditoCliente';
 import { listaPreciosService } from '@/services/listaPreciosService';
 import { useAfipConfig } from '@/hooks/useAfipConfig';
+import { useStockDisponible } from '@/hooks/useStockDisponible';
 import PanelCarrito from '@/components/ventas/nueva-venta/PanelCarrito';
 import PanelPago from '@/components/ventas/nueva-venta/PanelPago';
 
@@ -368,18 +369,29 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
   // ── Crédito de cliente (hook) ────────────────────────────────────────────────
   const credito = useCreditoCliente();
 
+  // Stock Comprometido — Fase 1 (mig.349): mapa aparte, no una columna de `productos`.
+  const { mapaDisponible } = useStockDisponible(user?.empresa_id);
+
   const filteredProducts = useMemo(() => {
     let result = products;
     if (productSearch) {
       const lower = productSearch.toLowerCase();
       result = products.filter(p => p.nombre.toLowerCase().includes(lower) || p.codigo_sku.toLowerCase().includes(lower));
     }
-    return result.slice(0, 50);
-  }, [productSearch, products]);
+    return result.slice(0, 50).map(p => ({
+      ...p,
+      stock_comprometido: mapaDisponible.get(p.id)?.stock_comprometido ?? 0,
+    }));
+  }, [productSearch, products, mapaDisponible]);
 
   const handleAddToCart = (product, qty = 1) => {
-    if (product.stock_actual < qty) {
-      toast({ title: "Stock insuficiente", description: `Solo hay ${product.stock_actual} disponibles.`, variant: "destructive" });
+    // Stock Comprometido — Fase 1: aviso temprano contra lo DISPONIBLE (no el físico a
+    // secas) — crear_venta (mig.350) es quien de verdad bloquea del lado servidor, esto
+    // es sólo para no dejar que el vendedor arme un carrito que va a rebotar al cobrar.
+    const comprometido = mapaDisponible.get(product.id)?.stock_comprometido ?? 0;
+    const disponible = product.stock_actual - comprometido;
+    if (disponible < qty) {
+      toast({ title: "Stock insuficiente", description: `Solo hay ${disponible} disponibles${comprometido > 0 ? ` (${comprometido} ya comprometidas)` : ''}.`, variant: "destructive" });
       return;
     }
     // Venta por peso/volumen (mig.338): precio_venta vive en 0 para estos
@@ -394,8 +406,8 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
-        if (product.stock_actual < (existing.cantidad + qty)) {
-            toast({ title: "Stock insuficiente", description: `No puedes agregar más de ${product.stock_actual}.`, variant: "destructive" });
+        if (disponible < (existing.cantidad + qty)) {
+            toast({ title: "Stock insuficiente", description: `No puedes agregar más de ${disponible}.`, variant: "destructive" });
             return prev;
         }
         return prev.map(item => item.id === product.id ? { ...item, cantidad: item.cantidad + qty } : item);
