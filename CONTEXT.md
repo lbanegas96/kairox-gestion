@@ -1,5 +1,35 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Verificado (24/08) — "Ver asiento" en Facturas de Compra y Recuento/Revalorización: ya estaba hecho
+
+Nadia pidió retomar el pendiente de replicar `VerAsientoButton` en el resto de los documentos
+(nota vieja, ver tabla del 21/08 más abajo). Antes de escribir código se chequeó qué documentos
+generan asiento de verdad hoy — consulta directa a `asientos_contables.origen` en Nalux real:
+
+- `venta` (160 filas), `compra` (16), `nota_credito`/`nota_credito_proveedor` (4/3),
+  `cobro_cliente`/`pago_proveedor`/cheques/banco/movimiento_caja — todo lo que se espera.
+- `recepcion_oc`: **1 sola fila, de junio** — ningún camino de código actual la genera (grep de
+  `src/` sin resultados), es un resabio de una versión vieja del sistema, no algo que pase hoy.
+- `orden_compra`: **cero filas, nunca existió** — una OC no genera asiento por diseño (es un
+  pedido a proveedor, el evento contable pasa recién al facturar).
+- `ajuste_stock`: **cero filas** — existe el código en `asientosAutoService.ts` pero
+  `ajustar_stock_manual` (la función que corre de verdad) nunca lo llama. Código muerto.
+
+Con esto, de los 5 documentos que se habían anotado como pendientes, sólo 2 tienen un asiento real
+para mostrar: **Facturas de Compra** y **Recuento/Revalorización de Inventario**. Al revisar el
+código, **los 3 ya tenían el botón correctamente cableado** —
+`ModalDetalleFacturaCompra.jsx`/`ModalDetalleRecuento.jsx`/`ModalDetalleRevalorizacion.jsx`, todos
+con `<VerAsientoButton asientoId={...} />` — Luciano ya lo había hecho el 22/08 (commit `7e06f4c`,
+la misma tanda donde construyó el componente). La nota de "pendiente" había quedado vieja.
+
+Verificado en vivo contra Nalux real: abierta `TEST-PARCIAL-001` (Factura de Compra real) → "Ver
+asiento" → `AS-000234`, balanceado ($18.972,80 debe = haber), origen "compra" correcto.
+
+**No se tocó código — no hacía falta.** OC/Recepciones/Ajustes de stock quedan sin el botón a
+propósito (mostrarían "nada" siempre, ya que no generan asiento hoy) — si en algún momento se
+decide que ajustes de stock con valorización SÍ deberían generar asiento, es una feature nueva
+(conectar `ajustar_stock_manual` a `asientosAutoService`), no un simple cableado de UI.
+
 ## ✅ Resuelto (24/08) — Stock Comprometido, Fase 1 (sólo Factura de Reserva) — construido y aplicado
 
 Retomando `PLAN_STOCK_COMPROMETIDO.md` (ver más abajo, sección "para revisar" ya resuelta). Nadia
@@ -5427,7 +5457,7 @@ al cierre de la sesión del 20-21/08 con Nadia.
 | `pg_net` schema en `public` | — | Ya no aplica, cerrado arriba |
 | Leaked password protection | — | Bloqueado por plan free (`402`), requiere Pro |
 | Plan free de Supabase | — | **No es un pendiente** — decisión consciente de Nadia, no re-marcar como urgente sin que ella lo pida |
-| `VerAsientoButton` en el resto de los documentos | — | Solo está en Ventas. Falta en OC, Recepciones, Facturas de Compra, Recuento/Revalorización, ajustes de stock — mecánico, ver sección 22/08 |
+| ~~`VerAsientoButton` en el resto de los documentos~~ | — | ✅ Ya estaba hecho (Luciano, 22/08, commit `7e06f4c`) — Facturas de Compra y Recuento/Revalorización ya lo tenían. Verificado en vivo 24/08. OC/Recepciones/Ajustes de stock **no generan asiento propio hoy** (por diseño o por código sin usar) — agregar el botón ahí no mostraría nada, ver nota del 24/08 más abajo |
 
 ## 2026-08-21 — Fallback de SITE_URL corregido + 4 NC históricas corregidas ante ARCA (homologación)
 
