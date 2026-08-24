@@ -40,11 +40,31 @@ sigue sin tocar `stock_actual`, sólo ahora valida antes de dejar pasar). Aplica
 en verde — verificado en producción que los 3 productos con reserva real siguen con los números
 correctos (Lapicera 96 disponibles, Mate 98, Termo Stanley 6).
 
-**Lo que queda para más adelante, a propósito no construido hoy:** UI que muestre "Libre: X ·
-Comprometido: Y" en la grilla de Productos y en los selectores del POS (el plan original estimaba
-6-10 de los 31 archivos que leen `stock_actual` como candidatos reales) — el bloqueo ya funciona
-del lado servidor sin esto, es sólo para que se vea reflejado en pantalla. Órdenes de Compra/
-Recepción como capa adicional del estado de inventario (Fase 2, explícitamente fuera de alcance).
+**UI "Libre/Comprometido" — construida el mismo día, 2 bloques:**
+
+- **Bloque 1**: nuevo hook `useStockDisponible(empresaId)` (`src/hooks/useStockDisponible.js`) —
+  trae de `productos_stock_disponible` sólo los productos con algo comprometido (`gt
+  stock_comprometido 0`, mismo criterio de egress que mig.333), devuelve un
+  `Map<producto_id, {...}>`. Sin react-query a propósito, para servir tanto a componentes que ya
+  lo usan (`ProductosSection.jsx`) como al POS con `useState`/`useEffect` simple
+  (`PanelProductos.jsx`). Grilla de Productos (`TablaInventario.jsx`) y tarjetas del POS
+  (`PanelProductos.jsx`) muestran "Libre: X · Comprometido: Y" bajo el stock cuando corresponde.
+  `getStockLevel()` del POS pasa a calcular "bajo"/"sin stock" sobre lo disponible, no el físico a
+  secas, para que el vendedor vea el mismo límite que `crear_venta` va a validar de verdad.
+- **Bloque 2**: `AlertasStockBanner.jsx` (banner de stock bajo del POS) — mismo criterio de
+  disponible, línea "Comprometido: N" cuando corresponde.
+  `NuevaVentaModal.jsx`/`nueva-venta/PanelCarrito.jsx` (selector de producto del ERP, usado desde
+  "Convertir Cotización en Venta") — mismo hook, dropdown muestra "Libre: X", y
+  `handleAddToCart` valida contra disponible en vez de `stock_actual` a secas (aviso temprano,
+  coherente con lo que el servidor valida igual).
+
+Verificado en vivo contra Nalux real en los 3 lugares con el caso real de "Mate": POS, grilla de
+Productos y dropdown del ERP muestran los tres "101 físico / Libre: 98" de forma consistente.
+
+**No se tocó a propósito**: el widget "Alertas de Stock" del Dashboard — es una vista previa de 8
+ítems que ya linkea a "Ver todos" (la grilla de Productos, que ya muestra el detalle correcto).
+Órdenes de Compra/Recepción como capa adicional del estado de inventario sigue siendo Fase 2,
+fuera de alcance.
 
 ---
 
