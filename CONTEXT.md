@@ -1,5 +1,31 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 📋 Pendientes para Nadia — arrancar el 24/08
+
+Cierre de la sesión del 23/08: quedaron 2 arreglos grandes **analizados y documentados, pero sin
+una sola línea de código escrita** — Luciano los va a probar él mismo a medida que se construyan,
+así que conviene ir mostrándole avances parciales, no esperar a tener todo terminado.
+
+1. **[PLAN_STOCK_COMPROMETIDO.md](PLAN_STOCK_COMPROMETIDO.md)** — estados de inventario Libre/
+   Comprometido/Pedido estilo SAP B1. Hallazgo clave ya hecho: "Factura de Reserva" (mig.328) ya
+   existe y evita el doble descuento de stock, pero no reserva nada de verdad — ese stock sigue
+   apareciendo 100% libre para cualquier otra venta mientras tanto. `stock_actual` se lee/escribe
+   en 31 archivos del frontend — no es chico. Tiene 3 preguntas abiertas para Luciano antes de
+   empezar a codear (¿bloquea la venta o solo avisa? ¿aplica desde el Pedido confirmado o solo
+   desde la Factura? ¿conviene resolver primero solo la reserva sin la capa de compras?).
+2. **[PLAN_MULTI_PDV_LETRA_POS_ERP.md](PLAN_MULTI_PDV_LETRA_POS_ERP.md)** — múltiples Puntos de
+   Venta con letra asignable (A/B/C), POS vs ERP. Hallazgo clave ya hecho: KAIROX NO necesita
+   clonar el modelo de 3 tablas de SAP B1 (Puntos de emisión / Serie de folio / Relación) porque
+   ARCA devuelve el folio real vía CAE — `series_numeracion` ya soporta multi-PdV sin cambios.
+   También tiene 3 preguntas abiertas (¿el POS necesita elegir letra al vender? ¿cuántos PdV reales
+   va a tener una empresa en la práctica, alcanza un campo simple en vez de una tabla nueva?
+   ¿aplica también a Compras?).
+
+Antes de arrancar cualquiera de los dos, Nadia debería sentarse con Luciano a responder esas
+preguntas — ambos planes las dejan explícitas a propósito, para no adivinar y tener que rehacer.
+
+---
+
 ## ✅ Resuelto (23/08) — Mapa: trazabilidad se cortaba con múltiples facturas por pedido + Asiento ahora es documento completo
 
 Sexta tanda del mismo día. Con FAC-20260823-001 ya cancelada, Nadia refacturó el mismo pedido y
