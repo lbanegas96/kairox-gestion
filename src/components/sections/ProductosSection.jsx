@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { getNowAR, getTodayAR } from '@/lib/dateUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
 import { parseNumberLocale } from '@/lib/currencyUtils';
+import { useStockDisponible } from '@/hooks/useStockDisponible';
 import CSVImportModal from '@/components/ui/CSVImportModal';
 import ProductForm from '@/components/productos/ProductForm';
 import TablaInventario from '@/components/productos/TablaInventario';
@@ -74,6 +75,9 @@ const ProductosSection = () => {
     },
     enabled: !!empresaId,
   });
+
+  // Stock Comprometido — Fase 1 (mig.349): mapa aparte, no una columna de `productos`.
+  const { mapaDisponible } = useStockDisponible(empresaId);
 
   const { data: categories = [] } = useQuery({
     queryKey: ['inventario_categorias', empresaId],
@@ -500,6 +504,7 @@ const ProductosSection = () => {
                searchQuery={searchQuery} setSearchQuery={setSearchQuery}
                loading={loading}
                filteredProducts={filteredProducts}
+               mapaDisponible={mapaDisponible}
                setEditProduct={setEditProduct}
                setIsEditProductOpen={setIsEditProductOpen}
                setSelectedProductForMov={setSelectedProductForMov}

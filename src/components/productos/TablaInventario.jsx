@@ -7,6 +7,7 @@ function TablaInventario({
   searchQuery, setSearchQuery,
   loading,
   filteredProducts,
+  mapaDisponible,
   setEditProduct,
   setIsEditProductOpen,
   setSelectedProductForMov,
@@ -53,6 +54,9 @@ function TablaInventario({
                ) : (
                  filteredProducts.map(p => {
                     const isLowStock = p.stock_actual <= p.stock_minimo;
+                    // Stock Comprometido — Fase 1 (mig.349): ausente del mapa = nada
+                    // comprometido, mismo criterio que useStockDisponible.js.
+                    const comprometido = mapaDisponible?.get(p.id)?.stock_comprometido;
                     return (
                       <tr key={p.id} className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/30 transition-colors">
                          <td className="p-4">
@@ -76,6 +80,12 @@ function TablaInventario({
                              )}
                            </div>
                            {isLowStock && <div className="text-2xs text-red-600 dark:text-red-400 flex items-center justify-end gap-1"><AlertTriangle className="h-3 w-3" /> Bajo stock</div>}
+                           {comprometido > 0 && (
+                             <div className="text-2xs text-kx-text-3">
+                               Libre: {Number(p.stock_actual - comprometido).toLocaleString('es-AR', { maximumFractionDigits: 3 })}
+                               {' · '}Comprometido: {Number(comprometido).toLocaleString('es-AR', { maximumFractionDigits: 3 })}
+                             </div>
+                           )}
                          </td>
                          <td className="p-4 text-right text-kx-text-2">
                            ${p.costo_compra?.toLocaleString('es-AR')}

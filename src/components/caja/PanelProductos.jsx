@@ -5,16 +5,23 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useProductosSnapshot } from '@/hooks/useProductosSnapshot';
+import { useStockDisponible } from '@/hooks/useStockDisponible';
 import AlertasStockBanner from './AlertasStockBanner';
 import EscanerCamaraModal from './EscanerCamaraModal';
 
 const fmt = (n) =>
   Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// Determina el nivel de stock de un producto
-const getStockLevel = (p) => {
-  if ((p.stock_actual ?? 0) <= 0) return 'sin_stock';
-  if ((p.stock_actual ?? 0) <= (p.stock_minimo ?? 0)) return 'bajo';
+// Determina el nivel de stock de un producto. Stock Comprometido — Fase 1 (mig.349/350):
+// el nivel se calcula sobre lo DISPONIBLE (actual - comprometido por otra Factura de
+// Reserva), no sobre el físico a secas — si no, el vendedor podría agregarlo al carrito
+// creyendo que hay stock y recién enterarse del rechazo al cobrar (crear_venta ya lo
+// bloquea del lado servidor, esto es sólo para que se vea reflejado antes de intentarlo).
+// Para el 99% de los productos, sin nada comprometido, el resultado es idéntico a antes.
+const getStockLevel = (p, comprometido = 0) => {
+  const disponible = (p.stock_actual ?? 0) - comprometido;
+  if (disponible <= 0) return 'sin_stock';
+  if (disponible <= (p.stock_minimo ?? 0)) return 'bajo';
   return 'ok';
 };
 
@@ -24,8 +31,8 @@ const STOCK_CONFIG = {
   sin_stock: { color: 'text-kx-red',   bg: 'bg-red-100 dark:bg-red-900/20'     },
 };
 
-function ProductoCard({ producto, onAgregar }) {
-  const level  = getStockLevel(producto);
+function ProductoCard({ producto, onAgregar, comprometido = 0 }) {
+  const level  = getStockLevel(producto, comprometido);
   const config = STOCK_CONFIG[level];
   const disabled = level === 'sin_stock';
 
@@ -42,6 +49,12 @@ function ProductoCard({ producto, onAgregar }) {
   const label =
     level === 'sin_stock' ? 'Sin stock'
     :                       `${stockFmt} ${unidadCorta}`;
+
+  // Stock Comprometido — Fase 1: sólo se muestra si de verdad hay algo reservado, para no
+  // ensuciar la tarjeta del 99% de los productos que no tienen nada comprometido.
+  const disponibleFmt = comprometido > 0
+    ? Number(producto.stock_actual - comprometido).toLocaleString('es-AR', { maximumFractionDigits: 3 })
+    : null;
 
   return (
     <div
@@ -70,6 +83,9 @@ function ProductoCard({ producto, onAgregar }) {
       <span className={`text-xs font-medium px-2 py-0.5 rounded-full inline-block w-fit ${config.bg} ${config.color}`}>
         {level === 'bajo' ? `⚠ ${label}` : label}
       </span>
+      {disponibleFmt !== null && (
+        <span className="text-2xs text-kx-text-3">Libre: {disponibleFmt} {unidadCorta}</span>
+      )}
     </div>
   );
 }
@@ -88,6 +104,7 @@ function PanelProductos({ onAgregarAlCarrito, apiRef }) {
   // estar desactualizado desde el último refresco online — se avisa abajo.
   const isOnline = useOnlineStatus();
   const { buscarOffline, buscarPorCodigoBarras } = useProductosSnapshot(user?.empresa_id, isOnline);
+  const { mapaDisponible } = useStockDisponible(user?.empresa_id);
 
   const fetchProductos = useCallback(async (q) => {
     if (!user?.empresa_id) return;
@@ -264,7 +281,12 @@ function PanelProductos({ onAgregarAlCarrito, apiRef }) {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
             {productos.map(p => (
-              <ProductoCard key={p.id} producto={p} onAgregar={onAgregarAlCarrito} />
+              <ProductoCard
+                key={p.id}
+                producto={p}
+                onAgregar={onAgregarAlCarrito}
+                comprometido={mapaDisponible.get(p.id)?.stock_comprometido ?? 0}
+              />
             ))}
           </div>
         )}
