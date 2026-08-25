@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -169,6 +170,9 @@ const ConfiguracionSection = ({ initialTab }) => {
     nombre: '',
   });
   const [puntosVenta, setPuntosVenta] = useState([]);
+  // mig.352 — qué letra (A/B/C) puede emitir cada PdV + cuál es el default de
+  // cada letra. Filas planas {id, punto_venta_id, letra, es_default_para_letra}.
+  const [pvLetras, setPvLetras] = useState([]);
   const [loadingAFIP, setLoadingAFIP] = useState(false);
   // mig.347 — no es un dato fiscal (no depende de usa_factura_electronica),
   // pero se recarga junto con el resto porque ya hay un fetch de `empresas`
@@ -205,6 +209,8 @@ const ConfiguracionSection = ({ initialTab }) => {
     numero: '', nombre: 'Punto de Venta Principal', tipo: 'web',
     cai_remito: '', cai_remito_vencimiento: '', proximo_numero_remito: 1,
     es_default: false, activo: true, solo_remito: false,
+    // mig.352 — letras que este PdV puede emitir en Nueva Factura.
+    letras: { A: true, B: true, C: true },
   });
   const [savingPv, setSavingPv] = useState(false);
   const [selectedPvId, setSelectedPvId] = useState(null);
@@ -311,6 +317,12 @@ const ConfiguracionSection = ({ initialTab }) => {
         .eq('empresa_id', user.empresa_id)
         .order('numero');
       setAllPuntosVenta(allPvs ?? []);
+
+      const { data: letras } = await supabase
+        .from('puntos_venta_letras')
+        .select('id, punto_venta_id, letra, es_default_para_letra')
+        .eq('empresa_id', user.empresa_id);
+      setPvLetras(letras ?? []);
       if (allPvs?.length > 0) {
         setSelectedPvId(prev => prev ?? allPvs[0].id);
       }
@@ -1483,12 +1495,18 @@ const ConfiguracionSection = ({ initialTab }) => {
 
   const openAddPv = () => {
     setEditingPv(null);
-    setPvForm({ numero: '', nombre: 'Nuevo Punto de Venta', tipo: 'web', envia_arca: true, cai_remito: '', cai_remito_vencimiento: '', proximo_numero_remito: 1, es_default: false, activo: true, solo_remito: false });
+    setPvForm({
+      numero: '', nombre: 'Nuevo Punto de Venta', tipo: 'web', envia_arca: true,
+      cai_remito: '', cai_remito_vencimiento: '', proximo_numero_remito: 1,
+      es_default: false, activo: true, solo_remito: false,
+      letras: { A: true, B: true, C: true },
+    });
     setShowPvModal(true);
   };
 
   const openEditPv = (pv) => {
     setEditingPv(pv);
+    const letrasDelPv = pvLetras.filter(l => l.punto_venta_id === pv.id).map(l => l.letra);
     setPvForm({
       numero: String(pv.numero),
       nombre: pv.nombre,
@@ -1500,6 +1518,11 @@ const ConfiguracionSection = ({ initialTab }) => {
       es_default: pv.es_default ?? false,
       activo: pv.activo ?? true,
       solo_remito: pv.solo_remito ?? false,
+      letras: {
+        A: letrasDelPv.includes('A'),
+        B: letrasDelPv.includes('B'),
+        C: letrasDelPv.includes('C'),
+      },
     });
     setShowPvModal(true);
   };
@@ -1514,7 +1537,7 @@ const ConfiguracionSection = ({ initialTab }) => {
     }
     setSavingPv(true);
     try {
-      const { error } = await supabase
+      const { data: pvGuardado, error } = await supabase
         .from('puntos_venta')
         .upsert({
           empresa_id: user.empresa_id,
@@ -1528,8 +1551,34 @@ const ConfiguracionSection = ({ initialTab }) => {
           es_default: pvForm.es_default,
           activo: pvForm.activo,
           solo_remito: pvForm.solo_remito,
-        }, { onConflict: 'empresa_id,numero' });
+        }, { onConflict: 'empresa_id,numero' })
+        .select('id')
+        .single();
       if (error) throw error;
+
+      // mig.352 — sincroniza letras habilitadas. No hace delete-then-insert
+      // a lo bruto: eso perdería `es_default_para_letra` en cada guardado de
+      // rutina (ej. cambiar el CAI). Solo inserta las que se tildaron de
+      // nuevo y borra las que se destildaron — la que ya existía queda tal
+      // cual, con su flag de default intacto.
+      if (!pvForm.solo_remito) {
+        const letrasActuales = pvLetras.filter(l => l.punto_venta_id === pvGuardado.id).map(l => l.letra);
+        const aAgregar = ['A', 'B', 'C'].filter(l => pvForm.letras[l] && !letrasActuales.includes(l));
+        const aQuitar = letrasActuales.filter(l => !pvForm.letras[l]);
+        if (aAgregar.length > 0) {
+          await supabase.from('puntos_venta_letras').insert(
+            aAgregar.map(letra => ({ empresa_id: user.empresa_id, punto_venta_id: pvGuardado.id, letra }))
+          );
+        }
+        if (aQuitar.length > 0) {
+          await supabase.from('puntos_venta_letras')
+            .delete()
+            .eq('empresa_id', user.empresa_id)
+            .eq('punto_venta_id', pvGuardado.id)
+            .in('letra', aQuitar);
+        }
+      }
+
       toast({ title: editingPv ? 'Punto de venta actualizado' : 'Punto de venta creado', className: 'bg-green-600 text-white border-green-700' });
       setShowPvModal(false);
       await reloadAFIP();
@@ -1537,6 +1586,30 @@ const ConfiguracionSection = ({ initialTab }) => {
       toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
     } finally {
       setSavingPv(false);
+    }
+  };
+
+  // mig.352 — "PdV por defecto para la letra X". Como solo puede haber un
+  // default por letra (índice único parcial), primero se limpia cualquier
+  // otro default de esa letra y recién después se marca el nuevo — mismo
+  // criterio simple que `handleToggleEnPreparacion` (sin RPC, es un campo de
+  // config de bajo tráfico). `pvId=''` significa "ningún PdV por defecto".
+  const handleSetDefaultPvLetra = async (letra, pvId) => {
+    if (!user?.empresa_id) return;
+    try {
+      const { error: clearErr } = await supabase.from('puntos_venta_letras')
+        .update({ es_default_para_letra: false })
+        .eq('empresa_id', user.empresa_id).eq('letra', letra);
+      if (clearErr) throw clearErr;
+      if (pvId) {
+        const { error: setErr } = await supabase.from('puntos_venta_letras')
+          .update({ es_default_para_letra: true })
+          .eq('empresa_id', user.empresa_id).eq('punto_venta_id', pvId).eq('letra', letra);
+        if (setErr) throw setErr;
+      }
+      await reloadAFIP();
+    } catch (e) {
+      toast({ title: 'Error al guardar', description: e.message, variant: 'destructive' });
     }
   };
 
@@ -2018,6 +2091,8 @@ const ConfiguracionSection = ({ initialTab }) => {
             handleProbarConexion={handleProbarConexion}
             probandoConexion={probandoConexion}
             allPuntosVenta={allPuntosVenta}
+            pvLetras={pvLetras}
+            onSetDefaultPvLetra={handleSetDefaultPvLetra}
             posPuntoVentaId={posPuntoVentaId}
             onChangePosPuntoVenta={handleChangePosPuntoVenta}
             savingPosPv={savingPosPv}
@@ -2272,6 +2347,30 @@ const ConfiguracionSection = ({ initialTab }) => {
               </div>
               <Switch checked={pvForm.solo_remito} onCheckedChange={v => setPvForm(f => ({ ...f, solo_remito: v }))} />
             </div>
+            {/* mig.352 — qué letra puede facturar este PdV en Nueva Factura.
+                Sin sentido si el PdV es solo para remitos (nunca se ofrece
+                ahí de todos modos). Por defecto las 3 tildadas: un PdV nuevo
+                no debería quedar invisible en el selector hasta que alguien
+                se acuerde de venir a configurarlo acá. */}
+            {!pvForm.solo_remito && (
+              <div className="rounded-lg border border-kx-border p-3 bg-kx-surface-2">
+                <Label className="text-kx-text text-sm">Factura los tipos</Label>
+                <p className="text-xs text-kx-text-3 mt-0.5 mb-2">
+                  Qué letra puede emitir este PdV — define qué aparece en el selector de Nueva Factura.
+                </p>
+                <div className="flex items-center gap-4">
+                  {['A', 'B', 'C'].map(letra => (
+                    <label key={letra} className="flex items-center gap-1.5 cursor-pointer">
+                      <Checkbox
+                        checked={pvForm.letras[letra]}
+                        onCheckedChange={v => setPvForm(f => ({ ...f, letras: { ...f.letras, [letra]: !!v } }))}
+                      />
+                      <span className="text-sm text-kx-text">Factura {letra}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">
                 <Switch checked={pvForm.es_default} onCheckedChange={v => setPvForm(f => ({ ...f, es_default: v }))} />

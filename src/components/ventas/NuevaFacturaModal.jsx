@@ -103,6 +103,11 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
   // Un PdV con envia_arca=false emite comprobante interno que no va a ARCA.
   const [puntosVenta, setPuntosVenta] = useState([]);
   const [puntoVentaId, setPuntoVentaId] = useState('');
+  // mig.352 — qué letra puede emitir cada PdV + cuál es el default de cada
+  // letra. El selector de PdV de abajo se filtra según la letra elegida en
+  // "Tipo de documento" (antes eran independientes — hallazgo del plan
+  // multi-PdV, 23/08, retomado 24/08 con las respuestas de Luciano).
+  const [pvLetras, setPvLetras] = useState([]);
   // Centro de costo (Fase 1 del plan de 4 frentes contables) — opcional, para
   // reportar por sucursal/línea de negocio. null = sin asignar, igual que hoy.
   const [centrosCosto, setCentrosCosto]   = useState([]);
@@ -169,6 +174,11 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
             setPuntoVentaId(prev => prev || (porDefecto?.id ?? ''));
             if (porDefecto) setAfipConfig({ ...emp, punto_venta: porDefecto });
           });
+
+        // mig.352
+        supabase.from('puntos_venta_letras').select('punto_venta_id, letra, es_default_para_letra')
+          .eq('empresa_id', user.empresa_id)
+          .then(({ data }) => setPvLetras(data ?? []));
       });
 
     // Pre-carga desde Pedido (flujo "Facturar Pedido/Entrega" del ERP).
@@ -279,6 +289,35 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
       setFacturaCreada(null);
     }
   }, [open]);
+
+  // ── PdV filtrado por letra (mig.352) ────────────────────────────────────────
+  // 'Ticket' no emite CAE, así que no tiene letra — se muestran todos los PdV,
+  // mismo comportamiento que antes de esta migración.
+  const letraActual = tipoDoc !== 'Ticket' ? tipoDoc.replace('Factura ', '') : null;
+  const puntosVentaParaLetra = useMemo(() => {
+    if (!letraActual) return puntosVenta;
+    const filtrados = puntosVenta.filter(pv =>
+      pvLetras.some(l => l.punto_venta_id === pv.id && l.letra === letraActual)
+    );
+    // Si nadie configuró letras todavía (o el backfill no corrió para esta
+    // empresa), no dejar a nadie sin ningún PdV para elegir — se cae al
+    // comportamiento de antes (todos los PdV, sin relación con la letra).
+    return filtrados.length > 0 ? filtrados : puntosVenta;
+  }, [puntosVenta, pvLetras, letraActual]);
+
+  // Si el PdV elegido deja de ser válido para la letra actual (cambiaste de
+  // Ticket a Factura A, o de A a B), saltar al default de esa letra o al
+  // primero de la lista filtrada — nunca dejar seleccionado un PdV que no
+  // puede emitir la letra elegida.
+  useEffect(() => {
+    if (!puntoVentaId || puntosVentaParaLetra.some(pv => pv.id === puntoVentaId)) return;
+    const idDefaultParaLetra = letraActual
+      ? pvLetras.find(l => l.letra === letraActual && l.es_default_para_letra)?.punto_venta_id
+      : null;
+    const candidato = puntosVentaParaLetra.find(pv => pv.id === idDefaultParaLetra) ?? puntosVentaParaLetra[0];
+    setPuntoVentaId(candidato?.id ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [letraActual, puntosVentaParaLetra]);
 
   // ── Búsqueda de productos inline ────────────────────────────────────────────
   const loadProductos = async () => {
@@ -816,7 +855,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
                         onChange={e => setPuntoVentaId(e.target.value)}
                         className="w-full h-8 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
-                        {puntosVenta.map(pv => (
+                        {puntosVentaParaLetra.map(pv => (
                           <option key={pv.id} value={pv.id}>
                             {/* "PdV {numero} — {nombre}" — mismo formato que ya
                                 usa el selector de PdV del Modo Caja en

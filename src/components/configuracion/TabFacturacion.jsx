@@ -51,6 +51,8 @@ const TabFacturacion = ({
   certStatus, onOpenCertModal, handleProbarConexion, probandoConexion,
   // Puntos de venta
   allPuntosVenta, openAddPv, openEditPv,
+  // Letra por PdV + default por letra — mig.352
+  pvLetras, onSetDefaultPvLetra,
   // Punto de venta del POS (Modo Caja) — mig.293
   posPuntoVentaId, onChangePosPuntoVenta, savingPosPv,
   // Tipos de comprobante
@@ -243,6 +245,7 @@ const TabFacturacion = ({
                   <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3 hidden sm:table-cell">Tipo</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3 hidden md:table-cell">CAI Remito</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3 hidden md:table-cell">Venc. CAI</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-kx-text-3 hidden lg:table-cell">Letras</th>
                   <th className="px-3 py-2 text-center text-xs font-medium text-kx-text-3 w-16">Default</th>
                   <th className="px-3 py-2 text-center text-xs font-medium text-kx-text-3 w-16">Activo</th>
                   <th className="px-3 py-2 w-10"></th>
@@ -278,6 +281,15 @@ const TabFacturacion = ({
                             {formatDateAR(pv.cai_remito_vencimiento)}
                           </span>
                         ) : '—'}
+                      </td>
+                      <td className="px-3 py-2 hidden lg:table-cell">
+                        {pv.solo_remito ? (
+                          <span className="text-xs text-kx-text-3">—</span>
+                        ) : (
+                          <span className="text-xs font-mono text-kx-text-2">
+                            {['A', 'B', 'C'].filter(l => pvLetras.some(pl => pl.punto_venta_id === pv.id && pl.letra === l)).join(' ') || '—'}
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-center">
                         {pv.es_default && <Check className="w-4 h-4 text-kx-green mx-auto" />}
@@ -339,6 +351,45 @@ const TabFacturacion = ({
             </div>
           )}
         </div>
+
+        {/* PdV por defecto para cada letra — mig.352. Solo tiene sentido con
+            más de un PdV habilitado para facturar (con 1 solo, es siempre el
+            único candidato, no hace falta elegir). */}
+        {allPuntosVenta.filter(pv => pv.activo && !pv.solo_remito).length > 1 && (
+          <div className="mt-5 pt-5 border-t border-kx-border">
+            <h4 className="font-semibold text-kx-text dark:text-kx-text text-sm">Punto de venta por defecto, según letra</h4>
+            <p className="text-xs text-slate-500 dark:text-kx-text-2 mt-0.5 mb-3 max-w-md">
+              En "Nueva Factura", al elegir Factura A/B/C se propone este PdV primero — solo se
+              puede elegir entre los que tienen esa letra habilitada (columna "Letras" arriba).
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {['A', 'B', 'C'].map(letra => {
+                const candidatos = allPuntosVenta.filter(pv =>
+                  pv.activo && !pv.solo_remito && pvLetras.some(pl => pl.punto_venta_id === pv.id && pl.letra === letra)
+                );
+                const actual = pvLetras.find(pl => pl.letra === letra && pl.es_default_para_letra)?.punto_venta_id ?? '';
+                return (
+                  <div key={letra} className="space-y-1">
+                    <Label className="text-xs dark:text-kx-text">Factura {letra}</Label>
+                    <select
+                      value={actual}
+                      onChange={e => onSetDefaultPvLetra(letra, e.target.value || null)}
+                      disabled={candidatos.length === 0}
+                      className="w-full h-9 rounded-md border border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text px-3 text-sm disabled:opacity-50"
+                    >
+                      <option value="">
+                        {candidatos.length === 0 ? 'Ningún PdV habilitado para esta letra' : 'Ninguno'}
+                      </option>
+                      {candidatos.map(pv => (
+                        <option key={pv.id} value={pv.id}>PdV {pv.numero} — {pv.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     )}
 

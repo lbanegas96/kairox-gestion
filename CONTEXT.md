@@ -1,5 +1,56 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Construido — Multi-PdV con letra (A/B/C), Fase 1
+
+Retoma `PLAN_MULTI_PDV_LETRA_POS_ERP.md`. Luciano respondió las 3 preguntas abiertas:
+1. Sí, debe ser configurable desde Configuración (hoy el POS/ERP usan un único PdV "general" sin
+   relación con la letra elegida) — construir la parametrización.
+2. Puede haber cuantos PdV se quiera — se construyó la tabla relacional (`puntos_venta_letras`),
+   no el atajo de columna array que el plan proponía solo para el caso de 1-2 PdV.
+3. Solo Ventas — Compras queda fuera de alcance, sin tocar.
+
+**mig.352** — tabla `puntos_venta_letras` (`punto_venta_id`, `letra` CHECK A/B/C,
+`es_default_para_letra`), RLS por `empresa_id`, índice único parcial que garantiza un solo default
+por letra por empresa. **Backfill preserva el comportamiento actual**: todo PdV activo no-`solo_remito`
+recibe las 3 letras habilitadas (hoy cualquiera aparece para cualquier letra, sin relación), y el
+PdV `es_default` de la empresa queda además default para las 3 — si nadie toca nada, la resolución
+sigue siendo exactamente la misma que antes de esta migración. Verificado con `BEGIN...ROLLBACK`
+contra Nalux real antes de aplicar, y con una consulta después de aplicar: Nalux queda con
+"Punto de Venta Principal" con las 3 letras (todas default) y "Remito" sin ninguna (correcto,
+`solo_remito=true`).
+
+**Frontend, 3 archivos:**
+- `ConfiguracionSection.jsx` — modal de alta/edición de PdV con 3 checkboxes "Factura A/B/C"
+  (ocultas si el PdV es `solo_remito`, no tiene sentido ahí). El guardado sincroniza
+  `puntos_venta_letras` por diferencia (agrega lo tildado nuevo, borra lo destildado) en vez de
+  delete-then-insert a lo bruto — así no se pierde `es_default_para_letra` en cada guardado de
+  rutina (ej. cambiar el CAI del remito). Nuevo handler `handleSetDefaultPvLetra` para el punto
+  siguiente.
+- `TabFacturacion.jsx` — columna "Letras" en la tabla de PdV; bloque nuevo "Punto de venta por
+  defecto, según letra" (3 selects A/B/C, cada uno solo con los PdV habilitados para esa letra) —
+  solo se muestra si hay más de un PdV facturable (con 1 solo no hay nada que elegir).
+- `NuevaFacturaModal.jsx` — el selector de PdV ahora reacciona a la letra elegida en "Tipo de
+  documento": con Ticket (sin CAE, sin letra) muestra todos igual que antes; con Factura A/B/C se
+  filtra a los PdV habilitados para esa letra, con fallback a la lista completa si por algún motivo
+  ninguno está configurado (nunca deja a alguien sin PdV para elegir). Si el PdV elegido deja de
+  ser válido al cambiar de letra, salta automáticamente al default de la nueva letra.
+
+**Importante — nada visible cambia todavía para Nalux**: hoy solo tiene 1 PdV facturable
+("Punto de Venta Principal"), así que el selector filtrado siempre resuelve a ese mismo PdV sin
+importar la letra — el comportamiento es idéntico al de ayer hasta que se cargue un segundo PdV
+real y se lo configure con letras distintas.
+
+**Sin verificar en vivo en el navegador** — la sesión de prueba estaba deslogueada y no corresponde
+resolver eso escribiendo la contraseña. Verificado en su lugar: migración probada con
+`BEGIN...ROLLBACK` contra Nalux real, aplicada y confirmada con `SELECT` directo, `eslint` 0
+errores, 159/159 tests, `vite build` limpio, y revisión manual línea por línea de la lógica de
+filtrado (sin bugs encontrados, un matiz de UX menor documentado en el código: si volvés de
+Factura B a Factura A y el PdV que quedó seleccionado para B también sirve para A, no vuelve solo
+al default de A — sigue siendo válido, solo no es "el que hubieras esperado"). **Falta la prueba
+real en el navegador antes de dar esto por cerrado.**
+
+---
+
 ## 📋 Cierre de sesión 24/08 — para que Luciano siga
 
 Todo lo de abajo (Stock Comprometido Fase 1, barrido general de bugs, fix de la pastilla NC en
