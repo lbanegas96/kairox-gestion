@@ -1,5 +1,29 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Resuelto — REVOKE EXECUTE de `anon` en 3 funciones, defensa en profundidad
+
+Último ítem del barrido de seguridad del 24/08 (`registrar_cobro_cliente`, `registrar_pago_proveedor`,
+`fn_entrega_snapshot_destino`) — no había agujero real (ya probado con el ataque real, ver más
+abajo), pero quedaba prolijo cerrarlo igual.
+
+**Casi repito el mismo error que ya está documentado en mig.304→305**: el ACL real de estas 3 es
+`{=X/postgres, postgres=X/postgres}` — ese `=X` sin rol a la izquierda es **PUBLIC**, no `anon`.
+Un primer intento con `REVOKE ... FROM anon` fue un no-op silencioso (se verificó con
+`has_function_privilege` después de aplicarlo: `anon_puede` seguía en `true`) — mismo gotcha que
+ya le pasó al proyecto una vez. A diferencia del caso de mig.305, acá tampoco había una entrada
+`authenticated=X/postgres` explícita: `authenticated` también accedía solo por herencia de PUBLIC,
+así que revocar de PUBLIC a secas hubiera roto Cobros y Pagos para usuarios reales.
+
+**mig.353** — el fix correcto: `REVOKE ... FROM PUBLIC` + `GRANT ... TO authenticated` explícito
+en el mismo paso para las 2 funciones de negocio; `fn_entrega_snapshot_destino` (función de
+trigger, ningún código del frontend la llama directo — confirmado con grep) se revoca sin GRANT a
+nadie, porque un trigger se dispara con los privilegios de su dueño, no con los del rol que hizo el
+INSERT/UPDATE que lo activó. Probado con `BEGIN...ROLLBACK` antes de aplicar (verificado
+`anon_puede=false`, `authenticated_puede=true` dentro de la misma transacción) y reconfirmado
+después de aplicar en serio.
+
+---
+
 ## ✅ Construido — Multi-PdV con letra (A/B/C), Fase 1
 
 Retoma `PLAN_MULTI_PDV_LETRA_POS_ERP.md`. Luciano respondió las 3 preguntas abiertas:
