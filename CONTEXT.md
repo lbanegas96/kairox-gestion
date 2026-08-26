@@ -1,5 +1,27 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Resuelto (26/08) — Las 8 ventas viejas sin asiento contable ya tienen asiento
+
+Cerraba el último pendiente real de la tabla "Estado de pendientes al 2026-08-21". Eran 8 ventas
+de junio-agosto (`20260602-001/002/003`, `20260618-001`, `20260619-001`, `20260707-001/002`,
+`20260806-003`) sin `asiento_id`, todas pagadas — no necesitaba código nuevo, la RPC
+`regenerar_asiento_venta` (mig.281/303) ya existe y hace exactamente esto, un clic por venta desde
+el punto ámbar de `SaleDetailModal.jsx`. Se llamó directo por SQL (mismo resultado que clickear,
+más rápido para 8) con `SET LOCAL role authenticated` + JWT simulado.
+
+**Dato que resultaba dudoso y se verificó antes de tocar nada**: 3 de las 8 (las del 02/06) son
+anteriores a que existiera el plan de cuentas de Nalux (creado 02/06 22:28, mismo día). La duda era
+si `regenerar_asiento_venta` iba a rechazarlas por eso. No las rechaza — valida contra el plan de
+cuentas **actual**, no contra el que había en el momento de la venta, así que las 3 entraron sin
+problema.
+
+Probado con `BEGIN...ROLLBACK` primero (las 8 devolvieron `ok:true`), aplicado después en un solo
+`COMMIT`. Verificado post-aplicación: los 8 asientos (`AS-000254` a `AS-000261`) quedaron
+`confirmado` y balanceados (`total_debe = total_haber` en los 8), y una consulta final confirma
+**0 ventas sin asiento** en Nalux.
+
+---
+
 ## ✅ Construido y aplicado (26/08) — Ajuste masivo de precios del catálogo (mig.354)
 
 Nadia pidió un aumento general de precios por inflación. **Hallazgo antes de construir nada**:
@@ -251,10 +273,9 @@ Tres cosas que a primera vista parecían problemas y **no lo son** (verificadas,
   `iva_discriminado`. El subtotal de ítems es neto y el total lleva IVA — correcto.
 - **1 cliente con saldo negativo** (Carlos Perez, −27.300): es saldo *a favor*, y el
   `saldo_actual` coincide exacto con la suma de sus movimientos de cuenta corriente.
-- **8 ventas viejas sin asiento contable** (junio–06/08): 3 son anteriores a que existiera el plan
-  de cuentas (02/06 22:28). Las 8 ya están contempladas por la app — `SaleDetailModal.jsx` marca
-  un punto ámbar en la solapa Contabilidad y ofrece "Regenerar asiento"
-  (`regenerar_asiento_venta`). Se arreglan con un clic cada una cuando Nadia quiera.
+- **8 ventas viejas sin asiento contable** (junio–06/08) — ✅ **resueltas el mismo 26/08**, ver
+  sección al principio de este archivo. Las 3 anteriores al plan de cuentas (02/06 22:28) entraron
+  igual, sin problema.
 
 ### Seguridad — repasada contra la política del proyecto, sin agujeros
 
