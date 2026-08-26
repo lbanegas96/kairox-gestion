@@ -1,5 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Resuelto (26/08) — "Inicializar Plan Estándar" no hacía nada — permiso nunca otorgado (mig.355)
+
+Segundo hallazgo real de la Fase 0, mismo plan de prueba. En Plan de Cuentas → "Inicializar Plan
+Estándar" (empresa recién creada, plan vacío): el botón no hacía absolutamente nada — sin toast de
+error, sin ninguna cuenta nueva, ni con click por `ref` ni por coordenada, ni tras recargar la
+página entera. Antes de dar por descartado un problema de automatización, se probó el RPC directo
+por SQL simulando el rol `authenticated` real: **`permission denied for function
+seed_plan_cuentas`**.
+
+**Causa confirmada**: su ACL real era `{postgres=X/postgres}` — ni `PUBLIC` ni `authenticated`
+tenían `EXECUTE`. A diferencia de sus 3 funciones hermanas del mismo flujo de alta (`create_tenant`,
+`seed_maestros_default`, `seed_series_numeracion` — las 3 con el grant correcto, por eso formas de
+pago y series de numeración sí se auto-sembraron bien), a ésta se le olvidó el `GRANT` de vuelta en
+algún momento (mismo patrón "revoke en lote, grant individual olvidado" ya visto 2 veces antes en
+esta sesión, mig.304/305 y mig.353). **Impacto real: ninguna empresa nueva podía sembrar su Plan de
+Cuentas desde la interfaz** — nadie lo había notado porque Nalux ya lo tenía de antes de que existiera
+este botón.
+
+**Verificado seguro antes de otorgar el permiso**: la función es `SECURITY INVOKER` (no `DEFINER`)
+y no valida `p_empresa_id` por su cuenta, pero el `INSERT` que hace queda sujeto a la política RLS
+real de `plan_cuentas` (`empresa_id = get_my_empresa_id() AND has_module_permission('configuracion')`
+en el `WITH CHECK`) — nadie puede usarlo para sembrarle cuentas a una empresa ajena, RLS lo corta
+solo. **Fix (mig.355)**: `GRANT EXECUTE ON FUNCTION seed_plan_cuentas(uuid) TO authenticated`, sin
+más. Verificado en vivo: 45 cuentas creadas al clickear el botón después del grant.
+
+---
+
 ## ✅ Resuelto (26/08) — Fase 0 de la prueba integral: el Asistente de bienvenida guardaba en el lugar equivocado
 
 Primer hallazgo real de `PLAN_PRUEBA_INTEGRAL_FERRETERIA_2026-08-26.md`, apenas arrancando la Fase
