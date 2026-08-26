@@ -1,5 +1,47 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Resuelto (26/08) — Empresas sin Facturación Electrónica no podían facturar NADA (bug grave)
+
+El hallazgo más importante de la Fase 0-3 del plan de prueba integral. Al intentar crear el primer
+Punto de Venta para "Ferretería NADIA" (empresa de prueba, AFIP apagado a propósito — sin
+certificado real no tiene sentido prenderlo) se encontraron dos problemas encadenados:
+
+**1. No hay forma de crear un Punto de Venta sin subir un certificado AFIP real.** El único lugar
+de la UI para dar de alta un PdV es el wizard de "Activar Facturación Electrónica" (Configuración →
+Facturación), y su paso 2 exige subir un archivo `.crt` real firmado por ARCA — imposible de
+conseguir para una empresa ficticia (ARCA es un sistema real, no hay forma de generar un
+certificado válido para un CUIT inventado). **No es un bug de código, es una limitación de diseño
+real**: hoy no existe un camino para configurar un PdV puramente interno sin pasar por todo el
+flujo de AFIP. Pendiente para Nadia decidir si vale la pena construir un botón separado ("Crear
+Punto de Venta interno, sin AFIP") — no se construyó hoy, fuera del alcance de "arreglar lo
+encontrado". Se insertó el PdV directo por SQL para esta empresa de prueba puntual (única excepción
+al criterio de "todo por la interfaz" del plan, justificada porque la interfaz no ofrece otro
+camino).
+
+**2. Con el PdV ya creado, Nueva Factura seguía sin mostrarlo — bug real, mucho más grave.** El
+selector de "Punto de venta" no aparecía en ningún lado, ni con el PdV ya insertado. Revisando el
+código: **`NuevaFacturaModal.jsx`, `NuevaNCModal.jsx`, `NuevaNDModal.jsx` y el hook `useAfipConfig`
+(compartido por el POS vía `useConfirmarVenta`) tenían un `if (!emp.usa_factura_electronica) return`
+ANTES de resolver el punto de venta** — cortaban toda la lógica de resolución de PdV (heredado del
+origen / default de la empresa / fallback) apenas veían que la empresa no factura electrónicamente.
+
+Esto contradice directamente el propio diseño documentado en los comentarios del código ("el PdV es
+el único selector, `envia_arca` define si va a ARCA — no `usa_factura_electronica`") y el caso de
+uso que la propia app dice soportar ("el local no emite factura electrónica", visible en el
+selector de Modo Caja). **Impacto real: ninguna empresa con AFIP apagado podía facturar absolutamente
+nada — ni un Ticket — ni desde el ERP ni desde el POS.** En el POS específicamente, cada venta se
+hubiera creado con `punto_venta_id: null` (confirmado leyendo `useConfirmarVenta.js`). Nunca se
+notó porque Nalux siempre tuvo AFIP prendido desde el principio — recién se manifestó al crear una
+empresa nueva con la decisión consciente de dejarlo apagado.
+
+**Fix**: se sacó el corte temprano en los 4 lugares — la resolución de PdV corre siempre ahora;
+`usa_factura_electronica` sigue siendo la única variable que decide si se envía a ARCA
+(`afipActivo`/`envia_arca`), nunca si se resuelve el punto de venta. Verificado en vivo contra
+"Ferretería NADIA" tras el deploy: Nueva Factura ahora muestra "PdV 1 — Punto de Venta Principal
+(interno)" con el aviso correcto de que no emite CAE. `eslint` limpio en los 4 archivos.
+
+---
+
 ## ✅ Resuelto (26/08) — "Inicializar Plan Estándar" no hacía nada — permiso nunca otorgado (mig.355)
 
 Segundo hallazgo real de la Fase 0, mismo plan de prueba. En Plan de Cuentas → "Inicializar Plan
