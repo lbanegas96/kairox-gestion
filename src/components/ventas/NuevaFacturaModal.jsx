@@ -158,7 +158,6 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
         } else {
           setCentrosCosto([]);
         }
-        if (!emp?.usa_factura_electronica) return;
         // Puntos de venta activos — criterio fiscal unificado (mig.294): el PdV
         // es el único selector y su `envia_arca` define si el comprobante va a
         // ARCA. Antes acá había un `.limit(1)` sin ORDER BY ni filtro de
@@ -166,6 +165,13 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
         // solo_remito=true (mig.346, hallazgo Luciano 23/08) se excluye acá:
         // ese PdV existe únicamente para numerar remitos, nunca es válido
         // para facturar aunque esté activo.
+        //
+        // Bug real encontrado en vivo (26/08): acá había un `if (!emp?.usa_factura_electronica)
+        // return` ANTES de este bloque, que directamente impedía cargar CUALQUIER
+        // punto de venta cuando la empresa no factura electrónicamente — el caso
+        // de "el local no emite factura electrónica" (contemplado en la nota de
+        // Modo Caja sobre PdV con envia_arca=false) quedaba sin ningún PdV para
+        // elegir, y por lo tanto sin poder facturar nada, ni siquiera un Ticket.
         supabase.from('puntos_venta').select('id, numero, nombre, envia_arca, es_default, solo_remito')
           .eq('empresa_id', user.empresa_id).eq('activo', true).eq('solo_remito', false).order('numero')
           .then(({ data: pvs }) => {

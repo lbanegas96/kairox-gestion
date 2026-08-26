@@ -63,7 +63,14 @@ export function useAfipConfig(contexto = 'erp', puntoVentaId = null) {
         .select('usa_factura_electronica, condicion_iva, afip_cuit, pos_punto_venta_id')
         .eq('id', user.empresa_id)
         .single();
-      if (!empresa?.usa_factura_electronica) return null;
+      // Bug real encontrado en vivo (26/08, primera empresa de prueba con AFIP
+      // apagado a propósito): este `return null` cortaba ANTES de resolver el
+      // punto de venta, dejando `afipConfig.punto_venta` siempre null — el local
+      // que "no emite factura electrónica" (el caso de uso que el docstring de
+      // arriba dice explícitamente que este hook soporta) no podía facturar NI
+      // NADA, ni Ticket, porque nunca se resolvía ningún PdV. `usa_factura_electronica`
+      // no debe cortar la resolución del PdV — sólo importa para `afipActivo`
+      // (ver más abajo), que ya es quien decide si corresponde enviar a ARCA.
 
       const COLS = 'id, numero, nombre, tipo_comprobante_default, envia_arca';
       const porId = async (id) => {

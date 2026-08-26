@@ -119,7 +119,12 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
       .select('usa_factura_electronica, condicion_iva, afip_cuit')
       .eq('id', user.empresa_id).single()
       .then(async ({ data: emp }) => {
-        if (!emp?.usa_factura_electronica) return;
+        // Bug real encontrado en vivo (26/08): un `return` acá antes de resolver
+        // el PdV dejaba sin punto de venta a cualquier empresa con AFIP apagado
+        // (mismo hallazgo que en NuevaFacturaModal/NuevaNDModal/useAfipConfig) —
+        // no se debe cortar la resolución del PdV por esto, sólo importa para
+        // decidir si el comprobante se encola a ARCA (`envia_arca` del PdV ya
+        // resuelto, no `usa_factura_electronica` de la empresa).
         const pvOrigenId = comprobanteOrigen?.punto_venta_id ?? null;
         let pv = null;
         if (pvOrigenId) {

@@ -100,7 +100,12 @@ function NuevaNDModal({ open, onOpenChange, comprobanteOrigen = null, duplicarOr
       .select('usa_factura_electronica, condicion_iva, afip_cuit')
       .eq('id', user.empresa_id).single()
       .then(async ({ data: emp }) => {
-        if (!emp?.usa_factura_electronica) return;
+        // Bug real encontrado en vivo (26/08): un `return` acá antes de resolver
+        // el PdV dejaba sin punto de venta a cualquier empresa con AFIP apagado
+        // (mismo hallazgo que en NuevaFacturaModal/NuevaNCModal/useAfipConfig) —
+        // no se debe cortar la resolución del PdV por esto, sólo importa para
+        // decidir si el comprobante se encola a ARCA.
+        //
         // Punto de venta HEREDADO del comprobante origen (una ND ajusta un
         // documento concreto y sale por su misma serie). Standalone → el PdV por
         // defecto (mig.294). Antes había un `.limit(1)` sin ORDER BY ni filtro
