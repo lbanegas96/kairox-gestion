@@ -1,5 +1,33 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 📋 Cierre de sesión 26/08 — para que Luciano siga
+
+Nadia pidió armar una cuenta completamente nueva ("Ferretería NADIA") y probarla de punta a punta
+como si fuera un negocio real — plan completo en
+**[PLAN_PRUEBA_INTEGRAL_FERRETERIA_2026-08-26.md](PLAN_PRUEBA_INTEGRAL_FERRETERIA_2026-08-26.md)**.
+Se llegó a completar sólo la **Fase 0** (alta y configuración) antes de cortar la sesión — nada de
+Fase 1 en adelante (catálogo, proveedores, ventas, etc.) está hecho todavía.
+
+**Lo bueno**: la Fase 0 por sí sola ya encontró y arregló 4 bugs reales (ver las secciones de abajo,
+todas fechadas 26/08) — vale la pena leerlas, en particular la de "Empresas sin Facturación
+Electrónica no podían facturar NADA", que es grave y afectaba (hasta hoy) a cualquier empresa nueva
+que decidiera no usar AFIP, no sólo a la de prueba.
+
+**Lo que queda pendiente, sin resolver hoy:**
+- **Retomar el plan desde la Fase 1** (cargar el catálogo de 18 productos de la ferretería) en
+  cuanto alguien retome esta prueba — la cuenta `mi.negocio029@gmail.com` / "Ferretería NADIA" ya
+  está lista para seguir (empresa configurada, Plan de Cuentas con 45 cuentas, 1 Punto de Venta
+  interno creado).
+- **Limitación de diseño encontrada, no arreglada**: no existe forma en la UI de crear un Punto de
+  Venta sin subir un certificado AFIP real, ni siquiera para un negocio que nunca va a facturar
+  electrónicamente. Ver detalle en la sección del bug de AFIP-gating más abajo. Es una decisión de
+  producto (¿vale la pena un botón "PdV interno, sin AFIP"?), no algo urgente.
+- **Las 2 cuentas de prueba viejas** (`nadiatecera13@gmail.com` "Creativas",
+  `equipokairox.ia@gmail.com` "Mi Negocio M.T") siguen sin borrar — Nadia dijo que las borra ella
+  cuando pueda (borrado de usuarios de Auth no es algo que se pueda hacer por acá, ver más abajo).
+
+---
+
 ## ✅ Resuelto (26/08) — Empresas sin Facturación Electrónica no podían facturar NADA (bug grave)
 
 El hallazgo más importante de la Fase 0-3 del plan de prueba integral. Al intentar crear el primer
