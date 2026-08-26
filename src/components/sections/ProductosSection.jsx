@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Power, PowerOff, Upload } from 'lucide-react';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import { Plus, Power, PowerOff, Upload, Sparkles, Search, Check, ArrowRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from '@/lib/customSupabaseClient';
 import { productosService } from '@/services/productosService';
@@ -42,6 +45,13 @@ const ProductosSection = () => {
   const [isEditProductOpen, setIsEditProductOpen] = useState(false);
   const [isMovimientoOpen, setIsMovimientoOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+
+  // mig.354 — Ajuste masivo de precios del catálogo (aumento por inflación, pedido de Nadia
+  // 26/08). Mismo patrón que ListasPrecioSection: preview antes de aplicar, nada se graba hasta
+  // confirmar.
+  const [isAjusteOpen, setIsAjusteOpen] = useState(false);
+  const [ajusteForm, setAjusteForm] = useState({ tipoAjuste: 'porcentaje', valor: '', categoriaId: '', redondeo: 'ninguno' });
+  const [ajustePreview, setAjustePreview] = useState(null); // AjusteMasivoCatalogoItem[] | null
 
   // Selection State
   const [selectedProductForMov, setSelectedProductForMov] = useState(null);
@@ -127,6 +137,52 @@ const ProductosSection = () => {
     invalidateProductos();
     qc.invalidateQueries({ queryKey: ['inventario_categorias', empresaId] });
     qc.invalidateQueries({ queryKey: ['inventario_proveedores', empresaId] });
+  };
+
+  // mig.354 — Ajuste masivo de precios del catálogo
+  const previewAjuste = useMutation({
+    mutationFn: async () => {
+      const valor = parseNumberLocale(ajusteForm.valor);
+      if (isNaN(valor) || valor === 0) throw new Error('Ingresá un valor de ajuste válido');
+      return productosService.ajustarPreciosMasivo({
+        tipoAjuste: ajusteForm.tipoAjuste,
+        valor,
+        categoriaId: ajusteForm.categoriaId || null,
+        redondeo: ajusteForm.redondeo,
+      }, false);
+    },
+    onSuccess: (items) => setAjustePreview(items),
+    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const aplicarAjuste = useMutation({
+    mutationFn: async () => {
+      const valor = parseNumberLocale(ajusteForm.valor);
+      return productosService.ajustarPreciosMasivo({
+        tipoAjuste: ajusteForm.tipoAjuste,
+        valor,
+        categoriaId: ajusteForm.categoriaId || null,
+        redondeo: ajusteForm.redondeo,
+      }, true);
+    },
+    onSuccess: (items) => {
+      invalidateProductos();
+      toast({
+        title: 'Precios actualizados ✓',
+        description: `${items.length} producto${items.length !== 1 ? 's' : ''} ajustado${items.length !== 1 ? 's' : ''}`,
+        className: 'bg-green-600 text-white',
+      });
+      setIsAjusteOpen(false);
+      setAjustePreview(null);
+      setAjusteForm({ tipoAjuste: 'porcentaje', valor: '', categoriaId: '', redondeo: 'ninguno' });
+    },
+    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const openAjusteMasivo = () => {
+    setAjustePreview(null);
+    setAjusteForm({ tipoAjuste: 'porcentaje', valor: '', categoriaId: '', redondeo: 'ninguno' });
+    setIsAjusteOpen(true);
   };
 
   // Forms
@@ -444,6 +500,11 @@ const ProductosSection = () => {
              <Upload className="h-4 w-4 mr-2" /> Importar CSV
            </Button>
 
+           {/* Ajuste masivo de precios (mig.354) */}
+           <Button variant="outline" onClick={openAjusteMasivo} className="dark:text-kx-text dark:border-kx-border">
+             <Sparkles className="h-4 w-4 mr-2" /> Ajuste masivo
+           </Button>
+
            {/* Add Product Dialog */}
            <Dialog open={isNewProductOpen} onOpenChange={setIsNewProductOpen}>
             <DialogTrigger asChild>
@@ -547,6 +608,165 @@ const ProductosSection = () => {
          tipo="productos"
          onSuccess={invalidateTodo}
        />
+
+       {/* Ajuste masivo de precios del catálogo (mig.354) */}
+       <Dialog open={isAjusteOpen} onOpenChange={(open) => { setIsAjusteOpen(open); if (!open) setAjustePreview(null); }}>
+         <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border max-h-[85vh] flex flex-col">
+           <DialogHeader>
+             <DialogTitle className="dark:text-kx-text flex items-center gap-2">
+               <Sparkles className="w-5 h-5 text-kx-violet" />
+               Ajuste masivo de precios
+             </DialogTitle>
+             <DialogDescription className="dark:text-kx-text-2">
+               Aplicá un aumento (o baja) por porcentaje o monto fijo al precio de venta del
+               catálogo. Previsualizá el resultado antes de confirmar — no se graba nada hasta que
+               apliques. Los productos con precio en $0 se excluyen automáticamente.
+             </DialogDescription>
+           </DialogHeader>
+
+           <div className="grid grid-cols-2 gap-3">
+             <div className="space-y-1.5">
+               <Label className="dark:text-kx-text text-xs">Tipo de ajuste</Label>
+               <Select
+                 value={ajusteForm.tipoAjuste}
+                 onValueChange={v => { setAjusteForm(f => ({ ...f, tipoAjuste: v })); setAjustePreview(null); }}
+               >
+                 <SelectTrigger className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text">
+                   <SelectValue />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="porcentaje">Porcentaje (%)</SelectItem>
+                   <SelectItem value="monto_fijo">Monto fijo ($)</SelectItem>
+                 </SelectContent>
+               </Select>
+             </div>
+             <div className="space-y-1.5">
+               <Label className="dark:text-kx-text text-xs">
+                 Valor {ajusteForm.tipoAjuste === 'porcentaje' ? '(ej: 10 = +10%, -5 = -5%)' : '(ej: 500 ó -200)'}
+               </Label>
+               <Input
+                 value={ajusteForm.valor}
+                 onChange={e => { setAjusteForm(f => ({ ...f, valor: e.target.value })); setAjustePreview(null); }}
+                 placeholder={ajusteForm.tipoAjuste === 'porcentaje' ? '10' : '500'}
+                 inputMode="decimal"
+                 className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+               />
+             </div>
+             <div className="space-y-1.5">
+               <Label className="dark:text-kx-text text-xs">Categoría <span className="text-kx-text-3 font-normal">(opcional)</span></Label>
+               <Select
+                 value={ajusteForm.categoriaId || 'all'}
+                 onValueChange={v => { setAjusteForm(f => ({ ...f, categoriaId: v === 'all' ? '' : v })); setAjustePreview(null); }}
+               >
+                 <SelectTrigger className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text">
+                   <SelectValue />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="all">Todas las categorías</SelectItem>
+                   {categories.map(c => (
+                     <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>
+                   ))}
+                 </SelectContent>
+               </Select>
+             </div>
+             <div className="space-y-1.5">
+               <Label className="dark:text-kx-text text-xs">Redondeo</Label>
+               <Select
+                 value={ajusteForm.redondeo}
+                 onValueChange={v => { setAjusteForm(f => ({ ...f, redondeo: v })); setAjustePreview(null); }}
+               >
+                 <SelectTrigger className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text">
+                   <SelectValue />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="ninguno">Sin redondeo</SelectItem>
+                   <SelectItem value="decena">Terminar en $X0</SelectItem>
+                   <SelectItem value="centena">Terminar en $X00</SelectItem>
+                   <SelectItem value="terminar_99">Terminar en $X99</SelectItem>
+                 </SelectContent>
+               </Select>
+             </div>
+           </div>
+
+           {!ajustePreview ? (
+             <div className="flex-1 flex items-center justify-center py-8">
+               <Button
+                 onClick={() => previewAjuste.mutate()}
+                 disabled={previewAjuste.isPending || !ajusteForm.valor}
+                 className="bg-violet-600 hover:bg-violet-700 text-white gap-2"
+               >
+                 {previewAjuste.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                 Previsualizar cambios
+               </Button>
+             </div>
+           ) : ajustePreview.length === 0 ? (
+             <p className="text-center text-kx-text-3 py-8 text-sm">
+               No hay productos con precio real que coincidan con los filtros (los que están en $0 se excluyen siempre)
+             </p>
+           ) : (
+             <>
+               <div className="flex-1 overflow-y-auto border border-kx-border dark:border-kx-border rounded-lg">
+                 <table className="w-full text-sm">
+                   <thead className="bg-kx-surface-2 dark:bg-slate-900/50 text-xs uppercase text-slate-500 dark:text-kx-text-2 sticky top-0">
+                     <tr>
+                       <th className="p-2.5 text-left">Producto</th>
+                       <th className="p-2.5 text-right">Actual</th>
+                       <th className="p-2.5 text-center w-8"></th>
+                       <th className="p-2.5 text-right">Nuevo</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                     {ajustePreview.map(item => {
+                       const sube = item.precio_nuevo > item.precio_actual;
+                       const baja = item.precio_nuevo < item.precio_actual;
+                       return (
+                         <tr key={item.producto_id}>
+                           <td className="p-2.5 text-kx-text dark:text-kx-text truncate max-w-[200px]">{item.nombre}</td>
+                           <td className="p-2.5 text-right text-kx-text-3 tabular-nums">
+                             ${Number(item.precio_actual).toLocaleString('es-AR')}
+                           </td>
+                           <td className="p-2.5 text-center">
+                             <ArrowRight className="w-3.5 h-3.5 text-kx-text-3 inline" />
+                           </td>
+                           <td className={`p-2.5 text-right font-semibold tabular-nums ${
+                             sube ? 'text-kx-green' : baja ? 'text-kx-red' : 'text-kx-text dark:text-kx-text'
+                           }`}>
+                             ${Number(item.precio_nuevo).toLocaleString('es-AR')}
+                           </td>
+                         </tr>
+                       );
+                     })}
+                   </tbody>
+                 </table>
+               </div>
+               <div className="flex items-center justify-between pt-1">
+                 <span className="text-xs text-kx-text-3">
+                   {ajustePreview.length} producto{ajustePreview.length !== 1 ? 's' : ''} — nada se guardó todavía
+                 </span>
+                 <div className="flex gap-2">
+                   <Button variant="outline" onClick={() => setAjustePreview(null)} className="dark:border-kx-border dark:text-slate-300">
+                     Volver a editar
+                   </Button>
+                   <Button
+                     onClick={() => aplicarAjuste.mutate()}
+                     disabled={aplicarAjuste.isPending}
+                     className="bg-kx-green hover:bg-green-700 text-white gap-2"
+                   >
+                     {aplicarAjuste.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                     Aplicar a {ajustePreview.length} producto{ajustePreview.length !== 1 ? 's' : ''}
+                   </Button>
+                 </div>
+               </div>
+             </>
+           )}
+
+           <DialogFooter className="pt-2 border-t border-kx-border dark:border-kx-border">
+             <Button variant="outline" onClick={() => setIsAjusteOpen(false)} className="dark:border-kx-border dark:text-slate-300">
+               Cerrar
+             </Button>
+           </DialogFooter>
+         </DialogContent>
+       </Dialog>
     </div>
   );
 };

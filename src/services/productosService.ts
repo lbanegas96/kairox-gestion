@@ -15,6 +15,23 @@ interface AdjustStockOptions {
   motivo: string;
 }
 
+// mig.354 — ajuste masivo sobre el precio base del catálogo (productos.precio_venta), hermano
+// de listaPreciosService.ajustarPreciosMasivo pero sin lista_precio_id — mismo shape de item.
+export interface AjusteMasivoCatalogoItem {
+  producto_id: string;
+  nombre: string;
+  precio_actual: number;
+  precio_nuevo: number;
+}
+
+export interface AjusteMasivoCatalogoParams {
+  tipoAjuste: 'porcentaje' | 'monto_fijo';
+  valor: number;
+  categoriaId?: string | null;
+  busqueda?: string | null;
+  redondeo?: 'ninguno' | 'decena' | 'centena' | 'terminar_99';
+}
+
 export const productosService = {
   async getAll(
     empresaId: string,
@@ -95,6 +112,21 @@ export const productosService = {
     });
     if (error) throw new Error(error.message);
     return data as { delta: number; costo_unitario: number };
+  },
+
+  // mig.354 — aplicar=false → preview (no escribe nada); aplicar=true → graba el resultado.
+  // Excluye productos en $0 del lado del servidor (ver comentario de la migración).
+  async ajustarPreciosMasivo(params: AjusteMasivoCatalogoParams, aplicar: boolean): Promise<AjusteMasivoCatalogoItem[]> {
+    const { data, error } = await supabase.rpc('ajustar_precios_masivo_catalogo', {
+      p_tipo_ajuste: params.tipoAjuste,
+      p_valor: params.valor,
+      p_categoria_id: params.categoriaId ?? null,
+      p_busqueda: params.busqueda ?? null,
+      p_redondeo: params.redondeo ?? 'ninguno',
+      p_aplicar: aplicar,
+    });
+    if (error) throw new Error(error.message);
+    return ((data as any)?.items ?? []) as AjusteMasivoCatalogoItem[];
   },
 };
 
