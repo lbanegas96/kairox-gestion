@@ -26,12 +26,29 @@ ListasPrecioSection, deliberadamente — es la misma tarea en otro lugar).
 de la misma transacción, verificados contra Mate/Termo Stanley), `eslint` limpio, 159/159 tests,
 `vite build` OK (16 min — el proyecto es grande, no es un problema del cambio).
 
-**Aplicado en vivo con Nadia**: +15% con redondeo $X99 → 18 productos ajustados (los que tienen
-precio real), verificado en la base. Los 50 en $0 quedaron intactos.
+**Probado en vivo y luego REVERTIDO** — la herramienta queda lista para usar, pero los precios de
+Nalux quedaron como estaban. Secuencia completa, para que no se malinterprete el audit_log:
 
-⚠️ **Efecto colateral del redondeo, avisado a Nadia**: "Lapicera" pasó de $2 → $99. No es un bug
-del cálculo ($2 + 15% = $2,30, y `terminar_99` lo empuja al siguiente $X99) sino la consecuencia
-lógica de redondear a $X99 un precio de 1 cifra. Si $2 era su precio real, corregir a mano.
+1. Se aplicó +15% con redondeo $X99 → 18 productos ajustados (18:43:11 UTC), verificado en la base.
+2. Efecto colateral del redondeo: "Lapicera" pasó de $2 → $99 (no es un bug del cálculo:
+   $2 + 15% = $2,30, y `terminar_99` lo empuja al siguiente $X99 — es la consecuencia lógica de
+   redondear a $X99 un precio de 1 cifra). Nadia pidió corregirla a $2500 (18:46:52 UTC).
+3. Al preguntarle Nadia **"¿por qué estamos haciendo esto?"**, quedó claro que el aumento no tenía
+   sentido: el catálogo de Nalux es data de prueba (la Lapicera valía $2, el costo $1, 50 de 68
+   productos en $0), no hay clientes reales ni precios desactualizados por inflación. Se le aplicó
+   un aumento por inflación a un catálogo inventado. **La pregunta correcta antes de aplicar
+   hubiera sido "¿lo aplico de verdad o alcanza con dejar la herramienta lista?"** — en su lugar se
+   le ofreció elegir un porcentaje, que es una pregunta que da por sentado el "sí".
+4. Nadia pidió revertir. Se revirtieron los 17 productos a su precio exacto previo.
+
+**Cómo se revirtió (importante si vuelve a pasar): NO se puede deshacer con matemática.** El
+redondeo a $X99 es lossy — $1.150, $1.200 y $1.210 con +15% caen todos en $1.399, así que dividir
+por 1,15 no devuelve el original. Se reconstruyó desde `audit_log` (`old_data->>'precio_venta'` de
+las filas con `created_at = '2026-08-26 18:43:11.869702+00'`), probado con `BEGIN...ROLLBACK`
+antes de aplicar y verificado fila por fila después (17/17 en su valor original).
+
+**La Lapicera quedó en $2500 a propósito** — es un cambio manual posterior pedido explícitamente
+por Nadia, no parte del ajuste masivo, así que se excluyó de la reversión.
 
 ---
 
