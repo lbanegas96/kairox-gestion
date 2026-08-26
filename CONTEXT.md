@@ -1,5 +1,40 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Verificado en vivo (26/08) — Multi-PdV con letra + REVOKE de anon: los dos OK
+
+Luciano dejó los dos ítems de abajo (Multi-PdV Fase 1 y el REVOKE de mig.353) sin probar en el
+navegador — su sesión también estaba deslogueada. Nadia se logueó y se corrió
+`PLAN_PRUEBAS_LUCIANO_2026-08-24.md` completo en vivo contra Nalux real:
+
+- **Multi-PdV con letra**: se creó un tercer PdV real ("Sucursal Once", N° 3) con Factura B y C
+  habilitadas (sin A). La columna "Letras" de la tabla, el bloque "PdV por defecto según letra"
+  (probado además con reload de página para confirmar que persiste) y el filtro de Nueva Factura
+  por tipo de documento — todos funcionaron exactamente como está documentado. Se probó también un
+  caso más exigente que el propio plan: parado en "Sucursal Once" con Factura B, cambiar a Factura A
+  (donde ese PdV no es válido) — salta correctamente al único PdV que sí sirve (Principal).
+  **Único matiz encontrado, de redacción del plan de pruebas, no del código**: el paso 1.3.4 decía
+  que al cambiar de letra "debería aparecer preseleccionado" el default de esa letra — en la
+  práctica eso sólo pasa si el PdV que ya estaba elegido deja de ser válido para la letra nueva. Como
+  "Punto de Venta Principal" sirve para las 3 letras, casi nunca se da ese salto — es el mismo
+  comportamiento que Luciano ya había dejado anotado como "conocido, no bug" en su propio commit.
+- **REVOKE de mig.353**: se registró un Cobro real de $100 a "Luciano" (saldo $107.880 → $107.780)
+  y un Pago real de $100 a "Alibaba" (saldo $8.904,80 → $8.804,80) — las dos funciones
+  (`registrar_cobro_cliente`/`registrar_pago_proveedor`) andan perfecto después del REVOKE.
+
+**Sobre "encontré unas fallas" que Luciano le comentó a Nadia por fuera del chat**: se investigó a
+fondo antes de probar en vivo — `audit_log`, actividad reciente en su propia cuenta de prueba
+(empresa `aa1aa886-...`, separada de Nalux), advisors de seguridad de Supabase — sin encontrar
+ningún rastro de dato roto o escritura fallida. El visor de logs de Supabase (`query_logs`) además
+devolvió error de servidor en el momento de investigar, así que no se pudieron revisar logs crudos
+de esa vía. Con las pruebas en vivo de arriba sin reproducir nada, la conclusión más probable es un
+error visual que nunca llegó a escribir en la base — no se encontró nada que arreglar. Si Luciano
+recuerda algún detalle más (pantalla exacta, mensaje de error), queda abierto para perseguirlo puntual.
+
+**Datos de prueba que quedaron en Nalux a propósito** (confirmado con Nadia — "son datos de prueba,
+no hay nada real"): el PdV "Sucursal Once" (N° 3) y los dos movimientos de $100 de arriba.
+
+---
+
 ## ✅ Resuelto — REVOKE EXECUTE de `anon` en 3 funciones, defensa en profundidad
 
 Último ítem del barrido de seguridad del 24/08 (`registrar_cobro_cliente`, `registrar_pago_proveedor`,
