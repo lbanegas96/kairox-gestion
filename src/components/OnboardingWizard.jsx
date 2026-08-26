@@ -75,11 +75,21 @@ export function OnboardingWizard({ open, onComplete }) {
     }
     setSaving(true);
     try {
+      const cuitDigits = empresaForm.cuit.replace(/\D/g, '');
       const { error } = await supabase
         .from('empresas')
         .update({
           nombre:          empresaForm.nombre,
-          cuit:            empresaForm.cuit.replace(/-/g, ''),
+          cuit:            cuitDigits,
+          // Bug real encontrado probando en vivo (26/08): Configuración → Empresa y
+          // TODOS los tickets/recibos/PDFs (TicketPrint, ReciboPago, ComprobantePDF)
+          // leen el CUIT de `afip_cuit`, no de `cuit` — este wizard sólo escribía
+          // `cuit`, así que el CUIT cargado acá nunca aparecía en ningún lado
+          // (Configuración lo mostraba vacío, los tickets salían sin CUIT impreso).
+          // Sólo se actualiza si son 11 dígitos válidos, mismo criterio que usa
+          // ConfiguracionSection.jsx para este campo — un CUIT a medio tipear no
+          // debe pisar un afip_cuit que ya estuviera bien cargado.
+          ...(cuitDigits.length === 11 ? { afip_cuit: cuitDigits } : {}),
           rubro:           empresaForm.rubro,
           telefono:        empresaForm.telefono,
           direccion:       empresaForm.direccion,
@@ -87,6 +97,22 @@ export function OnboardingWizard({ open, onComplete }) {
         })
         .eq('id', user.empresa_id);
       if (error) throw error;
+
+      // Mismo hallazgo: Configuración → Empresa NO lee rubro/teléfono/dirección de
+      // `empresas` (sesión 78 los movió a la tabla `configuracion`, ver comentario
+      // ahí) — sin esto, estos 3 campos también quedaban invisibles fuera del
+      // wizard, aunque estuvieran guardados. Se escribe en las dos tablas: los
+      // usos existentes de `empresas.rubro/telefono/direccion` (ej. reabrir este
+      // wizard) siguen andando igual.
+      await supabase.from('configuracion').upsert(
+        [
+          { empresa_id: user.empresa_id, clave: 'rubro',     valor: empresaForm.rubro },
+          { empresa_id: user.empresa_id, clave: 'telefono',  valor: empresaForm.telefono },
+          { empresa_id: user.empresa_id, clave: 'direccion', valor: empresaForm.direccion },
+        ],
+        { onConflict: 'empresa_id,clave' }
+      );
+
       setStep(2);
     } catch (err) {
       toast({ title: 'Error al guardar', description: err.message, variant: 'destructive' });

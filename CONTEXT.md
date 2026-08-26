@@ -1,5 +1,39 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Resuelto (26/08) — Fase 0 de la prueba integral: el Asistente de bienvenida guardaba en el lugar equivocado
+
+Primer hallazgo real de `PLAN_PRUEBA_INTEGRAL_FERRETERIA_2026-08-26.md`, apenas arrancando la Fase
+0 (alta y configuración). Completé el `OnboardingWizard` (Nombre, Rubro=Ferretería, CUIT, Teléfono,
+Ciudad) y al ir a Configuración → Empresa a completar Condición IVA, **todo aparecía vacío**
+(Rubro/Dirección/Teléfono/CUIT) — ni siquiera un hard reload de la página lo mostraba, así que no
+era caché.
+
+**Causa real — dos fuentes de datos distintas para lo mismo:**
+- `OnboardingWizard.jsx` escribe `rubro`/`telefono`/`direccion`/`cuit` **directo en columnas de
+  `empresas`**.
+- `ConfiguracionSection.jsx` (desde la sesión 78, comentario propio en el código: "EGRESS-FIX")
+  lee esos mismos 3 campos de contacto de la tabla **`configuracion`** (clave/valor) — un cambio de
+  arquitectura posterior que el wizard nunca se enteró que existía.
+- Peor con el CUIT: Configuración usa `empresas.afip_cuit` (el campo real, el que leen **todos**
+  los PDFs/tickets/recibos — `TicketPrint.jsx`, `ReciboPago.jsx`, `ComprobantePDF.jsx`,
+  `FacturaPDF.jsx`, etc.), mientras el wizard sólo tocaba `empresas.cuit`, una columna que **no lee
+  nada más en toda la app** (confirmado con grep). Impacto real: **cualquier ticket o recibo
+  impreso de una empresa recién creada por el wizard salía sin CUIT**, sin que nadie se enterara
+  hasta imprimir uno.
+
+**Fix** (`OnboardingWizard.jsx`, `handleGuardarEmpresa`): además de la columna vieja, ahora
+también escribe `afip_cuit` (sólo si son 11 dígitos válidos, mismo criterio que Configuración) y
+upsertea `rubro`/`telefono`/`direccion` en `configuracion` con las mismas claves que
+`ConfiguracionSection.jsx` lee. No se tocó nada de lo existente — las columnas viejas de `empresas`
+siguen escribiéndose igual (las sigue leyendo el propio wizard al reabrirse).
+
+Corregido a mano en la base para "Ferretería NADIA" (la empresa ya había pasado por el wizard
+viejo antes del fix) y verificado recargando Configuración → Empresa: Rubro, Dirección, Teléfono y
+CUIT aparecen todos bien ahora. Completada además Condición IVA = Responsable Inscripto, Localidad,
+CP y Provincia (campos que el wizard nunca colecta, se completan una sola vez a mano).
+
+---
+
 ## ✅ Resuelto (26/08) — Registro con email ya existente mentía "cuenta creada"
 
 Encontrado en vivo por Nadia, arrancando el plan de la ferretería de abajo: quiso crear cuentas de
