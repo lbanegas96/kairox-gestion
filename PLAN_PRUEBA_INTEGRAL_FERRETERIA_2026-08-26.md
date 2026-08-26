@@ -37,7 +37,7 @@ forzar nada.
 
 ## 1. El negocio (ficticio, no una empresa real)
 
-- **Nombre:** Ferretería El Tornillo — nombre genérico a propósito, mismo patrón que "El Clavo" o
+- **Nombre:** Ferretería NADIA — nombre genérico a propósito, mismo patrón que "El Clavo" o
   "La Llave" (locales de barrio), para que quede claro que es de prueba y no imite a ningún negocio
   real existente.
 - **Ubicación:** Merlo, Provincia de Buenos Aires (genérica, no una dirección real).
@@ -183,7 +183,7 @@ propósito.
 
 ## 6. Qué necesito de Nadia para arrancar
 
-1. Crear la cuenta y la empresa nueva (razón social "Ferretería El Tornillo" o el nombre que
+1. Crear la cuenta y la empresa nueva (razón social "Ferretería NADIA" o el nombre que
    prefiera, condición IVA Responsable Inscripto).
 2. Avisar cuando esté adentro, con la sesión logueada en el navegador — desde ahí sigo yo,
    fase por fase, narrando cada paso a medida que lo hago.

@@ -204,11 +204,33 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (error) throw error;
+
+      // Bug real encontrado en vivo (26/08): si el email YA tiene una cuenta
+      // confirmada, Supabase no devuelve error acá — por diseño, para que nadie
+      // pueda usar el registro para enumerar qué emails existen (mismo motivo
+      // por el que signIn de abajo muestra "Credenciales inválidas" genérico en
+      // vez de "no existe ese usuario"). El formulario mostraba igual el cartel
+      // verde de éxito, y la contraseña nueva nunca se guardaba en ningún lado —
+      // Nadia lo vivió de primera mano intentando crear una cuenta de prueba.
+      // La señal documentada por Supabase para detectar este caso del lado del
+      // cliente sin romper esa protección: `identities` viene vacío.
+      if (data?.user && data.user.identities?.length === 0) {
+        throw new Error('Ya existe una cuenta con ese email. Iniciá sesión o usá "Olvidé mi contraseña" si no la recordás.');
+      }
+
       return { data, error: null };
     } catch (error) {
+      // Antes: ningún error de signUp mostraba cartel — AuthPage.jsx asumía que
+      // el context ya avisaba, pero no lo hacía. Sin esto, un error real (no sólo
+      // el de email duplicado de arriba) fallaba en silencio total.
+      toast({
+        variant: "destructive",
+        title: "No se pudo crear la cuenta",
+        description: error.message || "Ocurrió un error inesperado. Probá de nuevo.",
+      });
       return { data: null, error };
     }
-  }, []);
+  }, [toast]);
 
   const signIn = useCallback(async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
