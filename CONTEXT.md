@@ -1,5 +1,45 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Resuelto (26/08) — Registro con email ya existente mentía "cuenta creada"
+
+Encontrado en vivo por Nadia, arrancando el plan de la ferretería de abajo: quiso crear cuentas de
+prueba con `nadiatecera13@gmail.com` y `equipokairox.ia@gmail.com` — las dos ya tenían cuenta
+confirmada de antes (24/07 "Creativas" y 10/08 "Mi Negocio M.T", esta última con nombre "Mirta
+Perez", con toda la pinta de ser una prueba vieja del formulario de registro, quizás de Luciano).
+El formulario le mostró igual el cartel verde "Cuenta creada exitosamente" las dos veces, y al
+volver a intentar loguearse con la contraseña que acababa de poner, "Credenciales inválidas" — la
+contraseña nueva nunca se guardó en ningún lado.
+
+**Causa real**: Supabase `auth.signUp()` no devuelve error cuando el email ya tiene una cuenta
+confirmada — es a propósito, misma lógica de seguridad por la que `signIn` ya muestra
+"Credenciales inválidas" genérico en vez de "no existe ese usuario" (para que nadie pueda usar
+estas pantallas para enumerar qué emails están registrados en el sistema). La señal que sí expone
+Supabase, documentada para este caso exacto: `data.user.identities` viene como array vacío.
+
+**Fix** (`SupabaseAuthContext.jsx`, función `signUp`): si `identities.length === 0`, tira un error
+claro ("Ya existe una cuenta con ese email...") en vez de éxito falso. De paso, un segundo bug en
+el mismo lugar: `signUp()` nunca mostraba ningún cartel de error para NADA — ni siquiera errores
+reales de Supabase — porque `AuthPage.jsx` asumía que el context ya avisaba, pero no lo hacía
+nunca. Se agregó el toast destructivo genérico para cualquier error de registro.
+
+**No probado end-to-end** — reproducirlo de verdad requiere escribir una contraseña real en el
+formulario de registro, algo que no corresponde hacer sin ser la persona dueña de esa cuenta.
+Verificado en cambio: `eslint` limpio, el formulario de registro sigue renderizando sin errores de
+consola. Falta que Nadia confirme el mensaje nuevo la próxima vez que alguien intente registrarse
+con un email repetido.
+
+**Las 2 cuentas de prueba viejas siguen sin borrar** — Nadia pidió el borrado pero es un
+`auth.users` DELETE, una de las pocas cosas que quedan estrictamente para que lo haga ella misma
+desde el panel de Supabase (Authentication → Users). Cuando lo haga, falta limpiar también las 2
+filas de `empresas` huérfanas que van a quedar (`profiles` se borra en cascada con el usuario,
+`empresas` no) — son chiquitas (Creativas: 4 productos/2 comprobantes/1 cliente; Mi Negocio M.T: 2
+productos/1 comprobante), esa limpieza de tablas de negocio sí la puedo hacer yo cuando avise.
+
+Nadia terminó registrándose con un tercer email nuevo (`mi.negocio029@gmail.com`, sin cuentas
+previas) — empresa **"Ferretería NADIA"**, arranca el plan de abajo.
+
+---
+
 ## 📋 Plan propuesto (26/08) — Prueba integral de punta a punta con cuenta nueva (ferretería)
 
 Nadia pidió armar una empresa nueva de prueba, "como si fuera real", para ejercitar toda la app de
@@ -14,7 +54,9 @@ queda apagado (empresa ficticia, sin CUIT de homologación real). Techos de volu
 explícitos para no acercarse a ningún límite del plan free. Tiendanube/MercadoPago quedan para el
 final, a propósito, porque requieren que Nadia conecte OAuth manualmente.
 
-**Estado: esperando que Nadia cree la cuenta y avise cuando esté adentro.** Sin ejecutar todavía.
+**Estado: cuenta creada** (`mi.negocio029@gmail.com`, empresa "Ferretería NADIA" — no hizo falta el
+nombre ficticio del plan, quedó con su nombre real elegido por Nadia). Arrancando Fase 0. Ver
+sección de arriba por el bug de registro que hubo que resolver en el camino antes de poder crearla.
 
 ---
 
