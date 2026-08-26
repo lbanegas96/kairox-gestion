@@ -1,5 +1,40 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Construido y aplicado (26/08) — Ajuste masivo de precios del catálogo (mig.354)
+
+Nadia pidió un aumento general de precios por inflación. **Hallazgo antes de construir nada**:
+"Ajuste masivo" ya existía (mig.290) pero sólo toca `lista_precio_items` — y en Nalux real las 3
+listas (Cliente VIP, Mayorista, Precio VIP) cubren 2-4 productos cada una, mientras el catálogo
+tiene 68 productos activos que venden por `productos.precio_venta` directo. O sea: la función que
+ya existía no servía para lo que Nadia necesitaba. Se le presentó la disyuntiva y eligió el
+catálogo base.
+
+**mig.354** — `ajustar_precios_masivo_catalogo(...)`, hermano de mig.290 con el mismo contrato
+(preview con `p_aplicar=false` que no escribe nada + apply con el mismo cálculo, filtro por
+categoría/búsqueda, 4 modos de redondeo).
+
+**Diferencia deliberada vs mig.290: excluye `precio_venta = 0`.** 50 de los 68 productos activos
+están en $0 (import de Open Food Facts del 19/08, precio pendiente de carga manual). Un aumento
+porcentual sobre $0 da $0, pero el redondeo `terminar_99` (`FLOOR(0/100)*100+99`) los hubiera
+convertido en $99 de la nada — un precio inventado, no un aumento. Se filtran server-side.
+
+**Frontend**: botón "Ajuste masivo" en Inventario + modal con preview (misma UX que
+ListasPrecioSection, deliberadamente — es la misma tarea en otro lugar).
+`productosService.ajustarPreciosMasivo()`.
+
+**Probado con `BEGIN...ROLLBACK` contra Nalux real antes de aplicar** (preview y apply real dentro
+de la misma transacción, verificados contra Mate/Termo Stanley), `eslint` limpio, 159/159 tests,
+`vite build` OK (16 min — el proyecto es grande, no es un problema del cambio).
+
+**Aplicado en vivo con Nadia**: +15% con redondeo $X99 → 18 productos ajustados (los que tienen
+precio real), verificado en la base. Los 50 en $0 quedaron intactos.
+
+⚠️ **Efecto colateral del redondeo, avisado a Nadia**: "Lapicera" pasó de $2 → $99. No es un bug
+del cálculo ($2 + 15% = $2,30, y `terminar_99` lo empuja al siguiente $X99) sino la consecuencia
+lógica de redondear a $X99 un precio de 1 cifra. Si $2 era su precio real, corregir a mano.
+
+---
+
 ## 📋 Catálogo de kiosco (3.380 productos) — pausado indefinido, decisión de Nadia (26/08)
 
 Luciano le había dejado 3 opciones explícitas a Nadia en `PLAN_PRUEBAS_LUCIANO_2026-08-24.md`
