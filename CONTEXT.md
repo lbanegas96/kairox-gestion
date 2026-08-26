@@ -1,5 +1,23 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 📋 Plan propuesto (26/08) — Prueba integral de punta a punta con cuenta nueva (ferretería)
+
+Nadia pidió armar una empresa nueva de prueba, "como si fuera real", para ejercitar toda la app de
+punta a punta (ventas, compras, caja, cheques, cuenta corriente, inventario) con datos argentinos
+realistas — y encontrar/arreglar lo que se rompa en el camino. Plan completo, con la investigación
+que llevó a elegir el rubro, en **[PLAN_PRUEBA_INTEGRAL_FERRETERIA_2026-08-26.md](PLAN_PRUEBA_INTEGRAL_FERRETERIA_2026-08-26.md)**.
+
+Resumen: **ferretería Responsable Inscripto** (no kiosco/almacén — esos suelen ser
+monotributistas y sólo facturan C, mucho más simple) para forzar Factura A + B + Ticket, cuenta
+corriente de clientes Y proveedores, y cheques propios/de terceros en un solo negocio. AFIP/ARCA
+queda apagado (empresa ficticia, sin CUIT de homologación real). Techos de volumen de datos
+explícitos para no acercarse a ningún límite del plan free. Tiendanube/MercadoPago quedan para el
+final, a propósito, porque requieren que Nadia conecte OAuth manualmente.
+
+**Estado: esperando que Nadia cree la cuenta y avise cuando esté adentro.** Sin ejecutar todavía.
+
+---
+
 ## ✅ Resuelto (26/08) — Las 8 ventas viejas sin asiento contable ya tienen asiento
 
 Cerraba el último pendiente real de la tabla "Estado de pendientes al 2026-08-21". Eran 8 ventas
