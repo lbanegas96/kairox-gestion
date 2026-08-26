@@ -1,5 +1,14 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 📋 Catálogo de kiosco (3.380 productos) — pausado indefinido, decisión de Nadia (26/08)
+
+Luciano le había dejado 3 opciones explícitas a Nadia en `PLAN_PRUEBAS_LUCIANO_2026-08-24.md`
+(retomar el scraping desde cero / carga manual-parcial / pausar indefinido). Nadia eligió pausar:
+**"pausalo por ahora, seguimos con otra cosa."** No es un pendiente abierto — no volver a preguntar
+qué hacer con esto hasta que ella o Luciano lo traigan de nuevo.
+
+---
+
 ## ✅ Verificado en vivo (26/08) — Multi-PdV con letra + REVOKE de anon: los dos OK
 
 Luciano dejó los dos ítems de abajo (Multi-PdV Fase 1 y el REVOKE de mig.353) sin probar en el
