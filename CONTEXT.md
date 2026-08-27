@@ -1,5 +1,46 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 📋 Cierre de sesión 27/08 — para que Luciano siga
+
+Día largo probando el plan de prueba integral con la empresa ficticia **Ferretería NADIA**, de
+punta a punta por la UI real (no SQL directo salvo excepciones puntuales, documentadas y
+justificadas cada vez). Plan completo en
+[PLAN_PRUEBA_INTEGRAL_FERRETERIA_2026-08-26.md](PLAN_PRUEBA_INTEGRAL_FERRETERIA_2026-08-26.md).
+**Fases 1 a 5 completas hoy** (catálogo → proveedores/compras → clientes/ventas → finanzas →
+devoluciones). Quedan **Fases 6 a 9** (Inventario, Casos límite, Reportes, Tiendanube/MercadoPago —
+esta última explícitamente frenada hasta que Nadia la conecte a mano).
+
+**Todo commiteado y pusheado a GitHub** — nada quedó a mitad de camino, cada fase es su propio commit
+(o el mismo commit que el fix que destapó, cuando el bug se encontró probando esa fase).
+
+### Bugs reales encontrados y corregidos hoy (con migración aplicada + verificada)
+- **mig.356** — `crear_cheque_propio`/`crear_cheque_tercero` sin `GRANT EXECUTE` para `authenticated`:
+  ningún cheque se podía registrar en producción, en silencio (toast de error fuera del viewport).
+- **mig.357** — `seed_series_numeracion()` nunca sembraba el tipo `'devolucion'`: ninguna devolución
+  (proveedor ni cliente) funcionaba en empresas nuevas. Sembrado retroactivo para las que ya
+  existían y les faltaba.
+
+### Bugs reales encontrados y documentados, **sin corregir** (quedan para una sesión de desarrollo)
+- El campo "Fecha" de "Nueva Factura de Venta" (financiera) se ignora — el comprobante siempre se
+  graba con la fecha/hora actual del servidor, sin importar lo que se cargue a mano. Bloquea carga
+  retroactiva legítima (Fase 3).
+- `crear_cheque_propio` no imputa `cuenta_corriente_proveedores_imputaciones` (a diferencia de
+  `crear_cheque_tercero`, que sí lo hace del lado cliente) — asimetría real (Fase 2).
+- Depositar un cheque de tercero no genera ningún movimiento bancario ni toca el saldo de ninguna
+  cuenta — Cheques y Bancos quedan desconectados en ese punto (Fase 4).
+- `crear_nota_credito_proveedor` nunca actualiza `devoluciones.compensacion`/`nota_credito_id`
+  (a diferencia de `crear_nota_credito`, lado cliente, mig.264) y no hay ningún punto de entrada en
+  la UI para generar esa NC vinculada desde la devolución — el listado de Devoluciones a Proveedor
+  va a mostrar "Sin definir" para siempre, aunque la NC exista y ya haya compensado (Fase 5).
+
+Cada uno con su hallazgo completo (causa raíz, evidencia, cómo se verificó) en la sección de la fase
+correspondiente, más abajo en este mismo archivo.
+
+**Siguiente paso:** Fase 6 (Inventario — Recuento con faltante/sobrante, Revalorización, Ajuste
+masivo de precios mig.354).
+
+---
+
 ## ✅ Fase 5 completa — Devoluciones (Ferretería NADIA)
 
 Continuación de la Fase 4 (abajo). Se probaron los dos circuitos de devolución de punta a punta:
