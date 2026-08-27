@@ -499,14 +499,17 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
           <PanelProductos onAgregarAlCarrito={handleAgregarAlCarrito} apiRef={posApiRef} />
         </div>
         {/* RESPONSIVE-MOBILE */}
-        {/* Carrito más ancho a pedido de Luciano (26/08) — referencia: "sacarle
-            un mosaico" a la grilla de productos y dárselo al carrito. En vez de
-            achicar la grilla en código (grid-cols-5 se mantiene, PanelProductos.jsx),
-            se ensancha el carrito por breakpoint: modesto en lg (1024-1279, laptops
-            chicas) para no dejar la grilla sin aire, más grande en xl (≥1280,
-            monitores de escritorio como el de referencia) — ahí la grilla ya achica
-            sus 5 tiles lo suficiente como para sentirse "una columna menos". */}
-        <div className={`${tabMobile === 'carrito' ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-[380px] lg:w-[460px] xl:w-[600px] flex-shrink-0 min-h-0`}>
+        {/* Carrito más ancho a pedido de Luciano (26/08). Primer intento con
+            anchos fijos por breakpoint (420px/600px) — Luciano lo rechazó con
+            razón: en cualquier resolución que no coincida con un breakpoint
+            exacto, sobra una franja negra sin usar en vez de dársela al
+            carrito (esto es web, tiene que ajustarse a CUALQUIER resolución,
+            no a un puñado de anchos fijos). Fix: ancho fluido en % del ancho
+            disponible (no de la pantalla — el panel de productos, hermano
+            flex-1, se acomoda solo con lo que sobra, sin espacio muerto
+            posible), con piso y techo para que nunca quede ni aplastado en
+            una laptop chica ni absurdamente ancho en un monitor ultrawide. */}
+        <div className={`${tabMobile === 'carrito' ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-[38%] md:min-w-[380px] md:max-w-[640px] flex-shrink-0 min-h-0`}>
           <PanelCarrito
             apiRef={posApiRef}
             carrito={carrito}
