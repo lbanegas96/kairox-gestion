@@ -713,6 +713,9 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           // tarda en acreditarse (tarjeta) — crear_venta ya lo resolvió por pago.
           montoPendienteLiquidacion: rpcResult.monto_pendiente_liquidacion,
           costoMercaderiaVendida: rpcResult.costo_mercaderia_vendida,
+          // mig.363: solo si la venta usó UNA sola forma de pago — con multipago
+          // el cobro sigue yendo a 1.1.1 como siempre (ver comentario en el service).
+          formaPagoId: pagosFinales.length === 1 ? (pagosFinales[0].forma_pago_id || null) : null,
         }
       ).catch(e => {
         if (e.message?.startsWith('Período cerrado:')) {

@@ -310,6 +310,22 @@ async function findCuentaByCodigo(empresaId: string, codigo: string): Promise<st
   return (data as any)?.id ?? null;
 }
 
+// mig.363 — Determinación de Cuentas (Fase 4): resuelve la cuenta configurada
+// para una forma de pago (override directo, o vía cuenta bancaria vinculada);
+// cae a codigoFallback si nada de eso está configurado.
+async function findCuentaPorFormaPago(empresaId: string, formaPagoId: string, codigoFallback: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('obtener_cuenta_forma_pago', {
+    p_empresa_id: empresaId,
+    p_forma_pago_id: formaPagoId,
+    p_codigo_fallback: codigoFallback,
+  });
+  if (error) {
+    console.warn('[asientosAutoService] obtener_cuenta_forma_pago falló, uso el código fijo:', error.message);
+    return findCuentaByCodigo(empresaId, codigoFallback);
+  }
+  return (data as string) ?? null;
+}
+
 export const asientosAutoService = {
   /**
    * Crea y confirma el asiento de una venta al contado.
@@ -342,6 +358,7 @@ export const asientosAutoService = {
       centroCostoId?: string | null;
       montoPendienteLiquidacion?: number;
       costoMercaderiaVendida?: number;
+      formaPagoId?: string | null;
     }
   ): Promise<void> {
     // Non-critical period check — RPC errors never block the sale
@@ -367,8 +384,18 @@ export const asientosAutoService = {
       ? Math.min(Math.max(Number(params.montoPendienteLiquidacion) || 0, 0), params.total)
       : 0;
     const costoMercaderia = Math.max(Number(params.costoMercaderiaVendida) || 0, 0);
+    // mig.363 — Determinación de Cuentas (Fase 4): "el cobro al contado" deja
+    // de ser siempre 1.1.1 — si la venta usó UNA sola forma de pago, se resuelve
+    // por esa forma de pago. Una venta con multipago (varias formas mezcladas
+    // en el mismo cobro) sigue yendo a 1.1.1, como hasta ahora — repartir esa
+    // línea entre cuentas distintas por cada forma de pago es un alcance mayor,
+    // no pedido en esta tanda (ver PLAN_MAPA_Y_DETERMINACION_CUENTAS).
+    const resolverCuentaCobro = () =>
+      !params.esCredito && params.formaPagoId
+        ? findCuentaPorFormaPago(empresaId, params.formaPagoId, codigoCobro)
+        : findCuentaByCodigo(empresaId, codigoCobro);
     const [cuentaCobro, cuentaVentas, cuentaIvaDebito, cuentaPuenteTarjetas, cuentaCostoMercaderia, cuentaInventario] = await Promise.all([
-      findCuentaByCodigo(empresaId, codigoCobro),
+      resolverCuentaCobro(),
       findCuentaByCodigo(empresaId, '4.1'),
       findCuentaByCodigo(empresaId, '2.1.3'),
       montoPendiente > 0 ? findCuentaByCodigo(empresaId, '1.1.8') : Promise.resolve(null),

@@ -348,6 +348,9 @@ export function useConfirmarVenta(tcParalelo, formasPago = []) {
         comprobante, rpcResult, total, saleNumber,
         clienteCondicionIva: selectedClient?.condicion_iva ?? 'CF',
         centroCostoId, isCC,
+        // mig.363: solo si la venta usó UNA sola forma de pago — con multipago
+        // el cobro sigue yendo a 1.1.1 como siempre.
+        formaPagoId: pagos.length === 1 ? (pagos[0].forma_pago_id || null) : null,
       });
 
       toast({

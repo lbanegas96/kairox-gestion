@@ -141,10 +141,11 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [showFormaPagoModal, setShowFormaPagoModal] = useState(false);
   const [editingFormaPago, setEditingFormaPago] = useState(null);
   const [formaPagoForm, setFormaPagoForm] = useState({
-    nombre: '', tipo_instrumento: 'efectivo', cuenta_bancaria_id: '',
+    nombre: '', tipo_instrumento: 'efectivo', cuenta_bancaria_id: '', cuenta_contable_id: '',
     dias_acreditacion: '', comision_porcentaje: '',
   });
   const [savingFormaPago, setSavingFormaPago] = useState(false);
+  const [planCuentasLista, setPlanCuentasLista] = useState([]);
 
   // ── Tab 2: Cajas (multi-caja simultánea del Modo Caja) ───────────────────
   const [cajas, setCajas] = useState([]);
@@ -752,6 +753,11 @@ const ConfiguracionSection = ({ initialTab }) => {
     supabase.from('cuentas_bancarias').select('id, nombre, banco')
       .eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre')
       .then(({ data }) => setCuentasBancariasLista(data ?? []));
+    // mig.363 — Determinación de Cuentas (Fase 4): para el select de "Cuenta
+    // contable" de cada forma de pago.
+    supabase.from('plan_cuentas').select('id, codigo, nombre')
+      .eq('empresa_id', user.empresa_id).eq('activa', true).order('codigo')
+      .then(({ data }) => setPlanCuentasLista(data ?? []));
     supabase.from('metodo_pago_cuenta_bancaria').select('metodo_pago, cuenta_bancaria_id')
       .eq('empresa_id', user.empresa_id)
       .then(({ data }) => {
@@ -1801,7 +1807,7 @@ const ConfiguracionSection = ({ initialTab }) => {
   // ─────────────────────────────────────────────────────────────────────────
   const openNuevaFormaPago = () => {
     setEditingFormaPago(null);
-    setFormaPagoForm({ nombre: '', tipo_instrumento: 'efectivo', cuenta_bancaria_id: '', dias_acreditacion: '', comision_porcentaje: '' });
+    setFormaPagoForm({ nombre: '', tipo_instrumento: 'efectivo', cuenta_bancaria_id: '', cuenta_contable_id: '', dias_acreditacion: '', comision_porcentaje: '' });
     setShowFormaPagoModal(true);
   };
 
@@ -1811,6 +1817,7 @@ const ConfiguracionSection = ({ initialTab }) => {
       nombre: f.nombre,
       tipo_instrumento: f.tipo_instrumento,
       cuenta_bancaria_id: f.cuenta_bancaria_id ?? '',
+      cuenta_contable_id: f.cuenta_contable_id ?? '',
       dias_acreditacion: String(f.dias_acreditacion ?? 0),
       comision_porcentaje: String(f.comision_porcentaje ?? 0),
     });
@@ -1838,6 +1845,7 @@ const ConfiguracionSection = ({ initialTab }) => {
         tipo_instrumento: formaPagoForm.tipo_instrumento,
         cuenta_bancaria_id: formaPagoForm.tipo_instrumento === 'efectivo' || !formaPagoForm.cuenta_bancaria_id
           ? null : formaPagoForm.cuenta_bancaria_id,
+        cuenta_contable_id: formaPagoForm.cuenta_contable_id || null,
         dias_acreditacion: formaPagoForm.dias_acreditacion !== '' ? parseInt(formaPagoForm.dias_acreditacion, 10) : 0,
         comision_porcentaje: formaPagoForm.comision_porcentaje !== '' ? parseFloat(formaPagoForm.comision_porcentaje) : 0,
       };
@@ -2527,9 +2535,29 @@ const ConfiguracionSection = ({ initialTab }) => {
                 />
               </div>
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-kx-text">Cuenta contable (opcional)</Label>
+              <Select
+                value={formaPagoForm.cuenta_contable_id || '__none__'}
+                onValueChange={v => setFormaPagoForm(f => ({ ...f, cuenta_contable_id: v === '__none__' ? '' : v }))}
+              >
+                <SelectTrigger className="h-9 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"><SelectValue placeholder="— Usar la cuenta bancaria vinculada / 1.1.1 —" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Usar la cuenta bancaria vinculada / 1.1.1 —</SelectItem>
+                  {planCuentasLista.map(pc => (
+                    <SelectItem key={pc.id} value={pc.id}>{pc.codigo} — {pc.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-2xs text-kx-text-3">
+                A qué cuenta del plan de cuentas va el cobro al contado con esta forma de pago. Si no se
+                elige, usa la cuenta de la cuenta bancaria vinculada (si tiene) o Caja y Bancos (1.1.1).
+              </p>
+            </div>
             <p className="text-2xs text-kx-text-3">
-              Días de acreditación y comisión se guardan para el cálculo automático de una fase próxima —
-              hoy no afectan el asiento contable.
+              Días de acreditación y comisión: si son mayores a 0, el cobro queda pendiente de
+              acreditar (cuenta puente 1.1.8) hasta la fecha estimada, en vez de ir directo a la
+              cuenta de arriba.
             </p>
           </div>
           <div className="flex gap-2 justify-end pt-2 border-t border-kx-border">

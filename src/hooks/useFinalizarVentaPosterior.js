@@ -19,7 +19,7 @@ export function useFinalizarVentaPosterior() {
   const { afipConfig, afipActivo, determinarTipoComprobante } = useAfipConfig('pos');
 
   const finalizarVentaPosterior = useCallback(({
-    comprobante, rpcResult, total, saleNumber, clienteCondicionIva, centroCostoId, isCC,
+    comprobante, rpcResult, total, saleNumber, clienteCondicionIva, centroCostoId, isCC, formaPagoId,
   }) => {
     asientosAutoService.crearAsientoVenta(user.empresa_id, user.id, {
       ventaId:     comprobante.id,
@@ -34,6 +34,8 @@ export function useFinalizarVentaPosterior() {
       // en acreditarse (tarjeta) — crear_venta ya lo resolvió por pago.
       montoPendienteLiquidacion: rpcResult.monto_pendiente_liquidacion,
       costoMercaderiaVendida: rpcResult.costo_mercaderia_vendida,
+      // mig.363: cuenta contable determinada por forma de pago (solo pago único).
+      formaPagoId: formaPagoId || null,
     }).catch(e => {
       if (e.message?.startsWith('Período cerrado:')) {
         toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
