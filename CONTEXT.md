@@ -1,5 +1,50 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Fase 4 completa — Finanzas (Ferretería NADIA)
+
+Continuación de la Fase 3 (abajo). Se probó de punta a punta: cheques de terceros recibidos y
+depositados, movimientos de caja manuales, cuenta bancaria con extracto CSV importado y conciliado,
+y cierre de caja con arqueo (con diferencia real).
+
+### Lo que se cargó
+- **2 cheques de terceros** recibidos como pago: $100.000 de Construcciones Alvarado (imputado
+  contra FAC-20260827-001, bajó su deuda de $275.000 a $175.000 — confirmado) y $30.000 de Almacén
+  Don Rulo (imputado contra su factura vieja). Ambos marcados "Depositado" después.
+- **Movimientos de caja manuales:** retiro de $5.000 (gastos chicos) + ingreso de $50.000 (aporte de
+  capital, categoría Inversión).
+- **Cuenta bancaria nueva:** "Banco Nación Cta. Cte.", vinculada a 1.1.1 — Caja y Bancos del Plan de
+  Cuentas. Se cargaron 3 movimientos manuales (los 2 depósitos de cheques + el pago por transferencia
+  a Bianchi Herrajes de Fase 2, $102.000) — saldo $28.000.
+- **Extracto CSV de 10 líneas** importado por el flujo correcto de Conciliación (no el botón genérico
+  de la pestaña Cuentas — ver hallazgo de UX abajo). Auto-Match encontró las 3 coincidencias reales
+  y dejó 7 líneas pendientes (comisiones, IVA sobre comisión, impuestos, un débito de servicio, una
+  acreditación y una transferencia recibida que el sistema no tenía registradas) — resultado esperado
+  de una conciliación real, sin bugs en el mecanismo de matching.
+- **Cierre de caja con arqueo:** saldo esperado $90.500 (efectivo), contado real $90.300 — diferencia
+  de -$200 (faltante) calculada y mostrada correctamente por el sistema, con observación registrada.
+
+### 🟡 Hallazgo — depositar un cheque de tercero no genera movimiento bancario real
+Cambiar el estado de un cheque de tercero a "Depositado" (acción "Mover" en Cartera de Terceros) no
+inserta nada en `movimientos_bancarios` ni afecta el saldo de ninguna cuenta bancaria — confirmado
+verificando la tabla directamente tras depositar los 2 cheques (vacía). El módulo de Cheques y el de
+Bancos quedan desconectados en este punto: si alguien quiere que el saldo bancario refleje esos
+depósitos, tiene que cargarlos a mano como movimiento manual (que es lo que se hizo acá para poder
+seguir con la conciliación) — no hay ningún aviso de esto en la UI al depositar.
+
+### 🟡 Hallazgo de UX — dos botones "Importar CSV" con comportamiento completamente distinto
+En Bancos hay dos botones con el mismo texto exacto "Importar CSV": el del header superior (visible
+en todas las pestañas) abre `ImportCSVModal`, que agrega los movimientos **directo** a la cuenta
+como si fueran ciertos, sin comparar contra nada. El de dentro de la pestaña **Conciliación** es un
+componente distinto (`ConciliacionTab`) que crea un extracto aparte para compararlo contra lo ya
+cargado (auto-match + match manual) — el flujo real de conciliación. No hay forma de distinguirlos
+por el texto del botón; usarlos al revés (como pasó acá al principio) deja movimientos duplicados en
+la cuenta. Se corrigió a mano (`DELETE` de los 10 duplicados) antes de seguir con el flujo correcto.
+Vale la pena que Nadia/Luciano lo tengan en cuenta — es fácil de repetir con datos reales.
+
+**Siguiente paso:** Fase 5 (Devoluciones) — no arrancada todavía.
+
+---
+
 ## ✅ Fase 3 completa — Clientes y Ventas (Ferretería NADIA)
 
 Continuación de la Fase 2 (abajo). Se probó de punta a punta: 4 clientes con perfiles distintos,
