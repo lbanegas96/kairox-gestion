@@ -1,5 +1,60 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Fase 3 completa — Clientes y Ventas (Ferretería NADIA)
+
+Continuación de la Fase 2 (abajo). Se probó de punta a punta: 4 clientes con perfiles distintos,
+el circuito completo Cotización → Pedido → Entrega → Factura, ventas de mostrador (POS y circuito
+corto), Factura de Reserva (Stock Comprometido), NC/ND a cliente, y un cliente moroso real para el
+reporte de Antigüedad de Deuda.
+
+### Lo que se cargó
+- **4 clientes:** Construcciones Alvarado S.A. (contratista, RI, Cuenta Corriente 30 días, Factura A),
+  Marcos Herrera (particular frecuente, DNI, Factura B, "a veces fía" — 15 días), Julieta Sosa
+  (nueva, siempre contado), Almacén Don Rulo (moroso a propósito, Monotributo, Factura C).
+- **Circuito completo:** COT-00001 (Aprobada) → "Copiar a Pedido" → PED-20260827-001 (Confirmado →
+  Generar Entrega) → ENT-2026-0001 → "Facturar Entrega" (Factura A) → FAC-20260827-001 ($194.500).
+  Verificado en el Mapa de Relaciones: la cadena completa se ve correctamente encadenada — confirma
+  en vivo el fix de Bug 1 de Luciano de hoy mismo.
+- **Ventas de mostrador:** 2 tickets desde el POS (Efectivo $8.100, Tarjeta Crédito $15.500 con
+  2,5 litros de pintura — probó venta por volumen con decimales en el POS) + 1 Factura B a Marcos
+  Herrera vía circuito corto Pedido→Entrega→Facturar ($9.300, queda en Cuenta Corriente).
+- **Factura de Reserva (Stock Comprometido):** Alvarado reserva 5 bolsas de cemento (retira en 3
+  días) — pedido facturado con el checkbox "Factura de Reserva" **sin** generar Entrega. Verificado
+  contra `productos_stock_disponible`: `stock_actual=68, stock_comprometido=5, stock_disponible=63`
+  — mig.349/350 funcionando correctamente con datos frescos.
+- **NC a cliente:** devolución parcial sobre FAC-20260827-002 (solo el rodillo de pintura, no el
+  pincel) — $3.600, vía "Copiar a NC" desde el kebab de la factura.
+- **ND a cliente:** flete cobrado aparte sobre FAC-20260827-001 — $8.000, motivo "Flete adicional"
+  (ya venía como opción predefinida).
+- **Cliente moroso real:** factura a Almacén Don Rulo con antigüedad forzada (ver hallazgo de abajo)
+  — el reporte de Antigüedad de Deuda la muestra correctamente en la banda **61-90 días, $44.500**.
+
+### 🟡 Hallazgo — el campo "Fecha" en "Nueva Factura de Venta" (financiera) se ignora
+Al crear una factura desde ese modal con una fecha manual (ej. 13/06/2026, para simular una venta
+vieja), el comprobante se graba igual con la fecha/hora **actual** del servidor — el valor del campo
+no tiene ningún efecto, ni en `fecha` ni en `fecha_vencimiento`. Esto bloquea cualquier caso de uso
+legítimo de carga retroactiva (una venta de ayer que se olvidaron de cargar, saldos iniciales al
+migrar un cliente, etc.). Para poder probar el reporte de Antigüedad de Deuda con un caso real, se
+corrigió la fecha de esa factura puntual (FAC-20260827-004) con un `UPDATE` directo documentado —
+excepción explícita para generar el dato de prueba, no una corrección del bug en sí, que queda
+pendiente de arreglar en el código (`NuevaFacturaVentaModal` o como se llame el componente real).
+
+### Hallazgos menores de la fase
+- El menú "..." (kebab) de acciones en el listado de Facturas de Venta tiene el mismo comportamiento
+  errático de posicionamiento que ya se vio en Compras — se evitó usando el número de factura
+  ("Ver detalle") o, cuando hacía falta el menú puntualmente, aislando la fila con los filtros antes
+  de abrirlo. Sigue sin confirmarse si es un bug real de producto o un artefacto de esta sesión de
+  automatización.
+- El POS (Caja) **no** tiene selector de tipo de comprobante — siempre emite "Ticket". Para una
+  Factura A/B/C con descuento de stock real no hay atajo directo: hay que pasar por
+  Pedido → Entrega → Facturar (el mismo circuito completo). Documentado como el comportamiento
+  esperado del sistema, no un bug — pero vale la pena que Nadia/Luciano lo tengan en cuenta si
+  esperaban poder emitir una Factura B directa desde el mostrador.
+
+**Siguiente paso:** Fase 4 (Finanzas) — no arrancada todavía.
+
+---
+
 ## ✅ Fase 2 completa — Proveedores y Compras (Ferretería NADIA) + 2 bugs críticos encontrados y arreglados
 
 Continuación de la Fase 1 (abajo). Se probó de punta a punta: 2 proveedores (RI/Factura A y
