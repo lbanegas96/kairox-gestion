@@ -1,5 +1,74 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Fase 5 completa — Devoluciones (Ferretería NADIA)
+
+Continuación de la Fase 4 (abajo). Se probaron los dos circuitos de devolución de punta a punta:
+devolución de cliente con reingreso físico de stock + Nota de Crédito vinculada, y la revisión
+completa (encontrada incompleta) del circuito de devolución a proveedor ya cargado en la Fase 2.
+
+### Lo que se probó
+
+- **Devolución de cliente con reingreso de stock:** sobre FAC-20260827-002 (Marcos Herrera, circuito
+  real Pedido→Entrega→Factura), vía el kebab de la factura → "Devolver mercadería" (la única entrada
+  que carga los ítems reales desde `comprobante_items` — el botón "Nueva Devolución" suelto de la
+  pestaña Devoluciones nunca los carga, ver Hallazgo de diseño abajo). Se devolvió 1 de los 3 Pincel
+  Nº10 (defectuoso, "cerdas sueltas") con **"Reingresar productos al stock" tildado**; el Rodillo se
+  dejó en 0 a propósito porque ya había sido acreditado completo en la NC-20260827-001 de la Fase 3.
+  Verificado en base: `DEV-2026-0002` creada (`reingresa_stock=true`), movimiento de inventario
+  `ingreso` de 1 unidad con motivo "Devolucion cliente DEV-2026-0002", `comprobante_items.cantidad_devuelta`
+  del Pincel pasó de 0 a 1 (Rodillo se mantuvo en 0, sin duplicar el crédito). Al cerrar el modal
+  apareció un diálogo nuevo y correcto — "¿Reabrir el pedido PED-20260827-002?" porque la NC dejó
+  cantidad sin facturar en un pedido ya marcado "Facturado" — se eligió "Dejar cerrado" (no correspondía
+  reabrirlo, es una devolución real, no un reemplazo pendiente de reenvío).
+- **Nota de Crédito de la devolución:** desde el detalle de `DEV-2026-0002` ("Ver mapa de relaciones" →
+  "Generar Nota de Crédito") — a diferencia del "Copiar a NC" de la Fase 3 (que parte de la factura
+  completa), este botón está vinculado a la devolución puntual y vino con el ítem correcto pre-cargado
+  (Pincel Nº10, cantidad 1, $1.900). Resultado: `NC-20260827-002`, correctamente linkeada
+  (`devoluciones.nota_credito_id`) y acreditada en cuenta corriente. Saldo final de Marcos Herrera
+  verificado: DEBE $9.300 (FAC-002) − HABER $3.600 (NC-001, Fase 3) − HABER $1.900 (NC-002) =
+  **$3.800 pendiente**, matemática correcta (quedan 2 Pinceles sin devolver, $3.800).
+- **Devolución a proveedor (revisión end-to-end de DEV-2026-0001, Fase 2):** confirmado el circuito
+  completo — devolución con salida de stock (2 bolsas de cemento, `movimientos_inventario` tipo
+  `salida`), y una Nota de Crédito de proveedor real (`NC-20260827-001` en `notas_credito_proveedor`,
+  $19.000) que sí impactó `cuenta_corriente_proveedores` (HABER $19.000, motivo con referencia textual
+  "ver DEV-2026-0001"). Ver el bug real que esto destapó abajo.
+
+### 🟡 Hallazgo — la devolución a proveedor nunca queda marcada como compensada, aunque la NC exista y aplique
+
+`devoluciones.compensacion` de `DEV-2026-0001` sigue en `'pendiente'` (la UI la muestra como
+"Sin definir") **incluso siete horas después de que `NC-20260827-001` fue creada y acreditó
+correctamente los $19.000 en la cuenta corriente del proveedor**. Causa raíz confirmada leyendo
+código: `crear_nota_credito` (cliente, mig.264) recibe un `p_devolucion_id` opcional y, si viene,
+hace `UPDATE devoluciones SET nota_credito_id=…, compensacion='nota_credito' WHERE … tipo='cliente'`
+— así es como `DEV-2026-0002` de este mismo Fase 5 sí quedó bien reflejada. `crear_nota_credito_proveedor`
+(proveedor, mig.277) **nunca recibió el parámetro equivalente**: su firma no tiene `p_devolucion_id`
+y el body no toca la tabla `devoluciones` en ningún punto — solo inserta en `notas_credito_proveedor`
++ `cuenta_corriente_proveedores`, vinculado a la compra por `compra_id`, no a la devolución. Además,
+a diferencia del lado cliente (que tiene un diálogo de detalle con "Ver mapa de relaciones" +
+"Generar Nota de Crédito" directamente desde la devolución), el listado "Devoluciones a Proveedor"
+no tiene ningún punto de entrada — ninguna fila es clickeable a un detalle — así que hoy es
+estructuralmente imposible generar una NC de proveedor *vinculada* a su devolución: el único puente
+entre ambos registros es el texto libre "(ver DEV-2026-0001)" que se agrega al motivo de la NC, sin
+ningún FK real. Quien mire el listado de Devoluciones a Proveedor para saber cuáles siguen
+pendientes de compensar va a ver TODAS como "Sin definir" para siempre, hayan sido compensadas o no.
+**No se corrigió en esta sesión** — el arreglo real implica cambiar la firma de
+`crear_nota_credito_proveedor` (DROP + CREATE, agregar `p_devolucion_id`) y construir un punto de
+entrada nuevo en el listado de Devoluciones a Proveedor (detalle + botón "Generar NC"), que es
+trabajo de feature, no un patch angosto tipo GRANT — queda documentado para una sesión de desarrollo
+aparte.
+
+### Hallazgo de diseño (ya documentado, reconfirmado) — el modal "Nueva Devolución" suelto nunca muestra ítems
+Reconfirmado al intentar usarlo primero: abrir "Nueva Devolución" desde el botón de la pestaña
+Devoluciones (sin partir del kebab de una factura puntual) nunca carga ítems — por diseño, es una
+devolución financiera pura sin movimiento de stock (`origen` viene `null`, así que
+`NuevaDevolucionModal.jsx` nunca llama a `fetchItems`). Para devolución física con reingreso de
+stock, el único camino es el kebab "..." de la factura específica → "Devolver mercadería".
+
+**Siguiente paso:** Fase 6 (Inventario — Recuento con faltante/sobrante, Revalorización, Ajuste
+masivo de precios mig.354).
+
+---
+
 ## ✅ Fase 4 completa — Finanzas (Ferretería NADIA)
 
 Continuación de la Fase 3 (abajo). Se probó de punta a punta: cheques de terceros recibidos y
