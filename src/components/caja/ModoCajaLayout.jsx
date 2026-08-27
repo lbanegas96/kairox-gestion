@@ -499,7 +499,14 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
           <PanelProductos onAgregarAlCarrito={handleAgregarAlCarrito} apiRef={posApiRef} />
         </div>
         {/* RESPONSIVE-MOBILE */}
-        <div className={`${tabMobile === 'carrito' ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-[360px] lg:w-[420px] flex-shrink-0 min-h-0`}>
+        {/* Carrito más ancho a pedido de Luciano (26/08) — referencia: "sacarle
+            un mosaico" a la grilla de productos y dárselo al carrito. En vez de
+            achicar la grilla en código (grid-cols-5 se mantiene, PanelProductos.jsx),
+            se ensancha el carrito por breakpoint: modesto en lg (1024-1279, laptops
+            chicas) para no dejar la grilla sin aire, más grande en xl (≥1280,
+            monitores de escritorio como el de referencia) — ahí la grilla ya achica
+            sus 5 tiles lo suficiente como para sentirse "una columna menos". */}
+        <div className={`${tabMobile === 'carrito' ? 'flex' : 'hidden'} md:flex flex-col w-full md:w-[380px] lg:w-[460px] xl:w-[600px] flex-shrink-0 min-h-0`}>
           <PanelCarrito
             apiRef={posApiRef}
             carrito={carrito}
