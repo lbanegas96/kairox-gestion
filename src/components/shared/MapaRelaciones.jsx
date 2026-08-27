@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import {
   Loader2, ChevronRight, Network, ExternalLink, Maximize2, Minimize2,
   FileText, ClipboardList, Truck, Receipt, RotateCcw, PlusCircle, Undo2,
-  Wallet, ShoppingCart, PackageCheck, Layers, X, Ban,
+  Wallet, ShoppingCart, PackageCheck, Layers, X, Ban, Banknote,
 } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -48,6 +48,12 @@ const TIPO_CONFIG = {
   // mostraba con el mismo chip "Cobro CC" que un cobro de verdad — confuso
   // (Luciano, 23/08: "¿qué es esto?"), se distingue por prefijo de descripción.
   reversa_cc:      { label: 'Reversa CC',       color: 'border-t-kx-text-3', accent: 'text-kx-text-3', bg: 'bg-kx-text-3/10', icon: Ban },
+  // Pago al contado (27/08) — distinto de "Cobro CC": no cancela una deuda
+  // previa, es el cobro que ya viajó adentro de la propia venta (Efectivo/
+  // Transferencia/Tarjeta al momento de facturar). Fuente: movimientos_caja,
+  // no cuenta_corriente_movimientos — una venta contado nunca generó deuda,
+  // así que ahí no hay nada que mostrar.
+  cobro_caja:      { label: 'Pago al Contado',  color: 'border-t-kx-green',  accent: 'text-kx-green',  bg: 'bg-kx-green/10',  icon: Banknote },
   // ── Compras ────────────────────────────────────────────────────────────────
   orden_compra:    { label: 'Orden de Compra', color: 'border-t-kx-blue',   accent: 'text-kx-blue',   bg: 'bg-kx-blue/10',   icon: ShoppingCart },
   recepcion:       { label: 'Recepción',       color: 'border-t-kx-violet', accent: 'text-kx-violet', bg: 'bg-kx-violet/10', icon: PackageCheck },
@@ -572,7 +578,7 @@ function MapaRelaciones({
 
       if (!comp) { setMapa(null); return; }
 
-      const [origenRes, cotizacionRes, pedidoRes, entregasRes, ncsRes, ndsRes, devRes, cobrosRes, hermanasRes] = await Promise.allSettled([
+      const [origenRes, cotizacionRes, pedidoRes, entregasRes, ncsRes, ndsRes, devRes, cobrosRes, pagosContadoRes, hermanasRes] = await Promise.allSettled([
         comp.comprobante_origen_id
           ? supabase.from('comprobantes')
               .select('id, numero_venta, numero_afip, tipo, total, fecha')
@@ -627,6 +633,22 @@ function MapaRelaciones({
           .eq('comprobante_id', idComprobante)
           .eq('empresa_id', user.empresa_id)
           .eq('tipo', 'HABER'),
+
+        // Bug real (Luciano, 27/08): una factura pagada AL CONTADO (no vía
+        // Cuenta Corriente) mostraba estado_pago='pagada' pero el pago no
+        // aparecía en ningún lado del mapa — `cuenta_corriente_movimientos`
+        // solo registra cancelación de deuda (Open Item), y una venta cobrada
+        // en el momento nunca tuvo deuda que cancelar, así que ahí no queda
+        // ninguna fila (confirmado contra datos reales: 0 filas para una
+        // factura Pagada). El pago sí existe, en `movimientos_caja` (Regla 5
+        // sap-reference: Caja se toca en Factura con pago inmediato). Se trae
+        // acá aparte — es una fuente de datos distinta, no un reemplazo de
+        // "Cobro CC".
+        supabase.from('movimientos_caja')
+          .select('id, monto, metodo_pago, fecha')
+          .eq('comprobante_id', idComprobante)
+          .eq('empresa_id', user.empresa_id)
+          .eq('tipo', 'ingreso'),
 
         // Hallazgo real (Luciano, 23/08): un Pedido puede facturarse en más de
         // un comprobante — parcial a lo largo del tiempo, o por cancelar uno y
@@ -701,6 +723,7 @@ function MapaRelaciones({
         nds:          safeArr(ndsRes),
         devoluciones: safeArr(devRes),
         cobros:       safeArr(cobrosRes),
+        pagosContado: safeArr(pagosContadoRes),
         hermanas:     safeArr(hermanasRes),
       });
     } catch (err) {
@@ -887,7 +910,7 @@ function MapaRelaciones({
   const sinRelacionesVenta = mapa?.modo === 'venta' && !mapa.origen && !mapa.cotizacion && !mapa.pedido
     && mapa.entregas.length === 0 && mapa.ncs.length === 0
     && mapa.nds.length === 0 && mapa.devoluciones.length === 0
-    && mapa.cobros.length === 0;
+    && mapa.cobros.length === 0 && mapa.pagosContado.length === 0;
 
   const sinRelacionesCompra = mapa?.modo === 'compra'
     && mapa.recepciones.length === 0 && mapa.devoluciones.length === 0
@@ -896,7 +919,8 @@ function MapaRelaciones({
 
   const tieneDerivadosVenta = mapa?.modo === 'venta' && (
     mapa.ncs.length > 0 || mapa.nds.length > 0 ||
-    mapa.cobros.length > 0 || mapa.devoluciones.length > 0
+    mapa.cobros.length > 0 || mapa.devoluciones.length > 0 ||
+    mapa.pagosContado.length > 0
   );
 
   const tieneDerivadosCompra = mapa?.modo === 'compra' && (
@@ -945,6 +969,13 @@ function MapaRelaciones({
       const n = { id: d.id, tipo: 'devolucion', numero: d.numero_devolucion, fecha: d.fecha, estado: d.compensacion };
       return <NodoMapa key={d.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
     }),
+    ...mapa.pagosContado.map(p => (
+      <NodoMapa
+        key={p.id}
+        nodo={{ id: p.id, tipo: 'cobro_caja', numero: p.metodo_pago || 'Pago al Contado', fecha: p.fecha, monto: p.monto }}
+        activo={isActivo(p.id)}
+      />
+    )),
   ] : [];
   const derivadosCompraItems = mapa?.modo === 'compra' ? [
     ...mapa.devoluciones.map(d => {
@@ -972,7 +1003,7 @@ function MapaRelaciones({
     ? 1 + (mapa.origen ? 1 : 0) + (mapa.cotizacion ? 1 : 0) + (mapa.pedido ? 1 : 0) + mapa.entregas.length
     : 0;
   const derivadosVenta = mapa?.modo === 'venta'
-    ? mapa.ncs.length + mapa.nds.length + mapa.cobros.length + mapa.devoluciones.length
+    ? mapa.ncs.length + mapa.nds.length + mapa.cobros.length + mapa.devoluciones.length + mapa.pagosContado.length
     : 0;
 
   const pasosCompra = mapa?.modo === 'compra'
@@ -1220,7 +1251,7 @@ function MapaRelaciones({
               )}
 
               <div className="flex flex-wrap gap-3 pt-2 border-t border-kx-border">
-                {['cotizacion', 'venta', 'pedido', 'entrega', 'nota_credito', 'nota_debito', 'cobro_cc', 'devolucion'].map(tipo => (
+                {['cotizacion', 'venta', 'pedido', 'entrega', 'nota_credito', 'nota_debito', 'cobro_cc', 'cobro_caja', 'devolucion'].map(tipo => (
                   <div key={tipo} className="flex items-center gap-1.5 text-2xs text-kx-text-3">
                     <div className={`w-2 h-2 rounded-full ${TIPO_CONFIG[tipo].accent.replace('text-', 'bg-')}`} />
                     {TIPO_CONFIG[tipo].label}
