@@ -1,5 +1,52 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Resueltos — los 6 hallazgos "documentados, sin corregir" de la Fase 2-5 de Nadia
+
+Luciano pidió arrancar por acá al retomar. Los 6 quedaron cerrados — 4 con fix real, 2 confirmados
+como **no ser bugs** tras investigar a fondo (documentado abajo el porqué de cada uno, para no
+volver a levantarlos en falso).
+
+### ✅ Corregidos (con evidencia real de producción antes de aplicar)
+
+1. **Fecha ignorada en Nueva Factura de Venta** — el campo se mostraba editable pero el submit
+   siempre usaba `getNowAR()`. Fix: `getDateFromInputAR(fecha)`, mismo patrón ya usado en
+   `CajaSection`/`CompraRapidaSection`. También corregido en el asiento contable asociado.
+2. **`crear_cheque_propio` no imputaba contra la compra vinculada** (mig.358) — asimetría real
+   contra `crear_cheque_tercero`. Mismo patrón de imputación, probado con `BEGIN...ROLLBACK`.
+3. **`compras_saldo_pendiente` ignoraba `estado_pago='pagada'`** (mig.359) — encontradas **5+
+   compras reales de Nalux** (una de $7.500.000) mostrando el saldo completo pendiente pese a estar
+   pagadas. Riesgo real de pago duplicado vía "Pagar varias facturas". Fix: `saldo_pendiente=0` si
+   `estado_pago='pagada'`. Verificado post-aplicación: 0 casos falsos, sin regresión en pendientes.
+4. **NC de proveedor no vinculaba la devolución de origen** (mig.360 + UI) — a diferencia del lado
+   cliente (`crear_nota_credito`, ya recibe `p_devolucion_id`), `crear_nota_credito_proveedor`
+   nunca tuvo el parámetro equivalente. Se agregó `devoluciones.nota_credito_proveedor_id` (columna
+   propia — `nota_credito_id` es FK a `comprobantes`, tabla de venta, no sirve acá), el parámetro al
+   RPC (con `DROP FUNCTION` explícito para no dejar un overload huérfano, mismo patrón mig.215), y
+   un botón "Generar NC" nuevo en el listado de Devoluciones a Proveedor. De paso, el mapa de badges
+   del frontend nunca tuvo la clave `'nota_credito'` — aunque el backend lo seteara bien, se seguía
+   viendo "Sin definir". Verificado en vivo: el badge ya muestra bien las devoluciones ya
+   compensadas. El click-through completo del botón no se probó en vivo (no hay ninguna devolución
+   real en estado `'pendiente'` ahora mismo para probar sin mutar datos).
+
+### ❌ Investigados a fondo — NO eran bugs reales (importante no repetir el hallazgo)
+
+5. **"IVA duplicado" en Copiar a NC de Proveedor** — el cálculo está BIEN. Verificado
+   matemáticamente contra la compra real (A-0001-00003421): sumando `costo_unitario` de sus 3
+   líneas da $277.000 (neto, matching la OC de origen) y ×1,21 da $335.170 exacto (el total real de
+   la factura). **`NC-20260827-001` ($19.000) en Ferretería NADIA probablemente quedó subvaluada**
+   por la corrección manual que se le hizo — el valor bruto correcto era $22.990. Vale la pena que
+   alguien la revise.
+6. **Cheque de tercero "Depositado" sin movimiento bancario** — es diseño correcto (mig.285,
+   documentado ahí mismo: "no hay hecho económico que contabilizar" en tránsito). El movimiento
+   bancario SÍ se genera correctamente al llegar a **"Cobrado"** — probado en vivo con
+   `BEGIN...ROLLBACK` contra el cheque real de $80.000 (Banco Nación) que sigue en `depositado` en
+   producción: asiento balanceado + fila en `movimientos_bancarios` vinculada a la cuenta elegida,
+   todo correcto. Nadia se quedó en "Depositado" y nunca probó el paso siguiente.
+
+`eslint` limpio y 159/159 tests en cada fix. Todo commiteado — pendiente confirmar push/deploy.
+
+---
+
 ## 📋 Cierre de sesión 27/08 — para que Luciano siga
 
 Día largo probando el plan de prueba integral con la empresa ficticia **Ferretería NADIA**, de
