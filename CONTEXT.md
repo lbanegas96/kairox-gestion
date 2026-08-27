@@ -1,5 +1,43 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Determinación de Cuentas — Fases 3 y 4 (27/08, PLAN_MAPA_Y_DETERMINACION_CUENTAS_2026-08-27.md)
+
+Continuación del plan de Fases 1-4 (Mapa de Relaciones ya cerrado el mismo día). Cierra el pedido
+original: medios de pago con su propia cuenta contable, configurable, estilo SAP.
+
+- **Fase 3 — esquema base (mig.361)**: tabla `determinacion_asientos` (`codigo_cable` estable →
+  `cuenta_contable_id`, por empresa) + RPC `obtener_cuenta_determinada(empresa_id, codigo_cable,
+  codigo_fallback)`, retrocompatible por diseño (cae al código hardcodeado si no hay cable
+  configurado). Motor genérico, reutilizable para los ~20 cables restantes (compras, ajustes,
+  NC/ND) cuando se prioricen — nada los consume todavía, a propósito (no se sembró ningún cable sin
+  dueño). No reemplaza `determinacion_cuentas_mayor` (mig.126), que sigue resolviendo su caso
+  puntual (conciliación de extractos bancarios).
+- **Fase 4 — cablear medios de pago (mig.363)**: `formas_pago` gana `cuenta_contable_id` (override
+  opcional). RPC `obtener_cuenta_forma_pago(empresa_id, forma_pago_id, codigo_fallback)` resuelve:
+  override directo → cuenta de la `cuenta_bancaria_id` vinculada (cadena `cuentas_bancarias.
+  plan_cuenta_id`, ya existía) → código hardcodeado de siempre. `registrar_cobro_cliente` (Cobrar
+  CC) y `crearAsientoVenta` (ventas con UN solo medio de pago) ya lo consultan en vez de hardcodear
+  `1.1.1`. Backfill: Efectivo → 1.1.1 en todas las empresas existentes. Nueva UI en Configuración →
+  Finanzas → Formas de Pago: selector "Cuenta contable (opcional)". Verificado en vivo: el modal de
+  "Efectivo" muestra `1.1.1 — Caja y Bancos` pre-cargado; "Tarjeta Crédito" muestra el fallback a la
+  cuenta bancaria vinculada. **Multipago (más de un medio en la misma venta) queda fuera de
+  alcance** — sigue yendo todo a 1.1.1 como siempre; repartir esa línea entre cuentas por cada medio
+  es un alcance mayor, no pedido en esta tanda.
+
+### 🐛 Regresión real encontrada y corregida de paso (mig.362)
+
+Al tocar `crear_venta` para la Fase 4 apareció algo más grave: la **liquidación de tarjetas del POS
+(mig.286, dada por cerrada el 10/08) estaba rota desde el 14/08**. La migration 325 ("Facturar
+Pedido/Entrega desde el ERP") reescribió `crear_venta` afirmando en su propio comentario que "el
+resto del cuerpo es idéntico al ya desplegado" — pero se basó en una copia anterior a la 286, sin
+darse cuenta. Desde entonces ninguna venta de POS pagada con tarjeta calculaba
+`estado_liquidacion`/comisión/fecha de acreditación, y el asiento siempre debitaba `1.1.1` completo
+en vez de partir a la cuenta puente `1.1.8` — como si el dinero se acreditara el mismo día.
+Restaurado el bloque completo (mismo patrón que `registrar_cobro_cliente`, mig.216), verificado con
+`BEGIN...ROLLBACK` contra una venta real de Nalux con tarjeta al 15% de comisión — `crear_venta`
+volvió a devolver `monto_pendiente_liquidacion` correctamente. `eslint` limpio, 159/159 tests.
+Pendiente confirmar push/deploy.
+
 ## ✅ Resueltos — los 6 hallazgos "documentados, sin corregir" de la Fase 2-5 de Nadia
 
 Luciano pidió arrancar por acá al retomar. Los 6 quedaron cerrados — 4 con fix real, 2 confirmados
