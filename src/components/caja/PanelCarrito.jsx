@@ -511,13 +511,22 @@ function PanelCarrito({
       //
       // SIN flex-shrink-0 acá (a propósito, encontrado en vivo 07/08 con
       // Nadia): este div ya vive DENTRO de un wrapper en ModoCajaLayout.jsx
-      // que es el que fija el ancho (w-full md:w-[360px] lg:w-[420px]) — ese
+      // que es el que fija el ancho (md:w-[38%] con piso/techo) — ese
       // wrapper es flex-col, así que para este div "flex-shrink" ya no
       // controla el ancho (eso lo resuelve el wrapper), controla la ALTURA.
       // Con flex-shrink-0 puesto, este div se negaba a achicarse aunque
       // tuviera min-h-0, y con carritos con descuentos (líneas extra de
       // Subtotal/Ahorro) el contenido de abajo volvía a quedar tapado.
-      className="w-full md:w-[360px] lg:w-[420px] flex flex-col min-h-0"
+      //
+      // BUG REAL (27/08, encontrado por Luciano): este div tenía ADEMÁS su
+      // propio ancho fijo (md:w-[360px] lg:w-[420px]), duplicado e
+      // independiente del wrapper. Al agrandar el wrapper (38%/380-640px) sin
+      // tocar este otro valor, el wrapper crecía pero el contenido real del
+      // carrito quedaba angostado adentro — la "franja negra sin usar" que se
+      // veía no estaba fuera del panel, estaba DENTRO, entre este div y el
+      // borde del wrapper. Fix: este div se limita a llenar el 100% de lo que
+      // el wrapper le dé — el ancho se controla en un solo lugar.
+      className="w-full flex flex-col min-h-0"
       style={{ borderLeft: '1px solid rgb(var(--kx-border))' }}
     >
       {/* Selector de cliente */}
