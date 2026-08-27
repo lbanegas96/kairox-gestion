@@ -11,8 +11,10 @@ import { cotizacionesService } from '@/services/cotizacionesService';
 import { ESTADOS } from './shared';
 import MenuAccionesDocumento from '@/components/shared/documento/MenuAccionesDocumento';
 
-// Mismos estados desde los que hoy se permite "Convertir en Venta" (TablaCotizaciones.jsx)
-const ESTADOS_COPIABLES = ['aprobada', 'enviada'];
+// Mismos estados desde los que hoy se permite "Convertir en Venta" (TablaCotizaciones.jsx) —
+// solo aprobada: una cotización enviada todavía puede rechazarse, copiarla antes generaría
+// un Pedido de algo que el cliente ni confirmó.
+const ESTADOS_COPIABLES = ['aprobada'];
 // Mismos estados desde los que se puede Cancelar (TablaCotizaciones.jsx)
 const ESTADOS_CANCELABLES = ['aprobada', 'enviada'];
 // Editable mientras no esté convertida (patrón confirmado 12/08 — SAP B1 +

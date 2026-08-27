@@ -91,7 +91,7 @@ function TablaCotizaciones({
                         </Button>
                       </>
                     )}
-                    {['aprobada', 'enviada'].includes(cot.estado) && (
+                    {cot.estado === 'aprobada' && (
                       <Button
                         variant="ghost" size="icon"
                         className="h-7 w-7 text-kx-text-3 hover:text-purple-600"
