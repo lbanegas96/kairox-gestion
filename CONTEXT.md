@@ -1,5 +1,44 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Fase 1 completa — Catálogo de "Ferretería NADIA" cargado (18/18 productos)
+
+Continuación del [PLAN_PRUEBA_INTEGRAL_FERRETERIA_2026-08-26.md](PLAN_PRUEBA_INTEGRAL_FERRETERIA_2026-08-26.md).
+Antes de esto se verificó en vivo el fix de Luciano (PdV sin AFIP) — confirmado funcionando: la
+sección "Puntos de Venta" ahora aparece en Configuración → Facturación aunque la empresa tenga
+facturación electrónica apagada, con el PdV rotulado "(interno, no factura)".
+
+**18 productos cargados a mano vía UI real** (no seed/SQL), con costos y precios realistas de
+ferretería argentina, en 3 categorías:
+- **Herramientas (6):** Martillo Carpintero, Destornillador Phillips, Pinza Universal, Taladro
+  Percutor Eléctrico ($85.000, el extremo caro), Cinta Métrica, Sierra Manual.
+- **Materiales de Construcción (7):** Tornillo suelto ($150, el extremo barato) y por caja x100,
+  Clavos, Cemento Portland (bolsa 50kg), Cerradura de Embutir, Candado, Alambre Galvanizado.
+- **Pinturas y Accesorios (5):** Pintura Látex (única con venta por **litro**, no por unidad),
+  Pincel, Rodillo, Guantes de Trabajo, Cinta de Enmascarar.
+
+Verificado 18/18 contra la base real (no solo la UI) — categorías, costos, precios y stock
+coinciden exactamente con lo cargado.
+
+**Hallazgo para investigar en Fase 8 (Reportes), no un bug confirmado todavía:** los productos con
+`tipo_venta != 'unidad'` (acá, la Pintura Látex) guardan su precio en una columna separada
+`precio_por_kg_litro`, y `precio_venta` les queda en `0` — es el diseño de mig.338, no un error de
+carga (confirmado: `TablaInventario.jsx` y `useProductosSnapshot.js` ya saben leer la columna
+correcta según `tipo_venta`, y el listado de Inventario muestra el precio bien). Lo que falta
+confirmar es si **todos** los reportes/pantallas que suman o muestran `precio_venta` (Revalorización
+de Inventario, Listas de Precios, Dashboard) también contemplan este split — si alguno no lo hace,
+va a mostrar $0 para este producto. Ya anotado como punto de prueba específico para cuando se llegue
+a Fase 8, no se investigó más a fondo ahora para no desviarse de Fase 1.
+
+**Nota de proceso:** al crear el 3er producto, el primer click fue sobre el botón de cerrar el modal
+(no sobre "Crear Producto") — el producto no se guardó y recién se detectó al verificar. A partir de
+ahí cada alta se verificó explícitamente contra el DOM (valores + click al botón real, confirmado
+por texto) antes de continuar, y los 18 se re-verificaron por SQL al final.
+
+**Siguiente paso:** Fase 2 (Proveedores y Compras) — no arrancada todavía, a la espera de que Nadia
+confirme si sigue ahora o corta acá.
+
+---
+
 ## 📋 Cierre de sesión 27/08 — para que Luciano siga
 
 Día de construcción variada: se cerró el gating de AFIP en Puntos de Venta (abajo), un pedido de
