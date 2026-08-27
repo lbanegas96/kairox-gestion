@@ -38,6 +38,36 @@ Restaurado el bloque completo (mismo patrón que `registrar_cobro_cliente`, mig.
 volvió a devolver `monto_pendiente_liquidacion` correctamente. `eslint` limpio, 159/159 tests.
 Pusheado a GitHub y desplegado a producción (verificado `HTTP 200` en `kairox-gestion-chi.vercel.app`).
 
+### 🔍 Auditoría post-deploy — skill `sap-reference` + agente `sap-motor-contable-auditor` (27/08)
+
+Pedido explícito de Luciano tras el deploy: "probalo con todo". El agente contable leyó las 3
+migraciones + el código JS línea por línea (no asumió nada) y confirmó partida doble intacta, RPCs
+validan `empresa_id` contra `get_my_empresa_id()`, fallback sin excepción si falta plan de cuentas,
+la rama de cuenta puente 1.1.8 sin tocar, y la restauración de mig.362 completa contra el historial
+real de `crear_venta` (comparó variable por variable contra mig.286). 3 hallazgos 🟡, ninguno 🔴:
+
+1. **Falso positivo, verificado y descartado**: el agente marcó `formas_pago` sin gate de admin
+   para escribir `cuenta_contable_id` (comparando contra el texto de mig.214). Al probar en vivo
+   con un usuario `staff` real, el `UPDATE` afectó 0 filas — la tabla ya tenía policies
+   `formas_pago_cud_*` con `has_module_permission('configuracion')` (más granular que `is_admin()`,
+   admite permisos por usuario) de una migración posterior a la 214, que el agente no había leído.
+   **Lección: verificar contra el estado VIVO de la base (`pg_policy`), no solo contra el texto de
+   las migraciones históricas del repo** — aplicar el fix propuesto a ciegas hubiera sido una
+   regresión real (policy más fina reemplazada por una más gruesa).
+2. **Real, corregido (mig.364)**: `cuenta_contable_id`/`cuenta_bancaria_id` de `formas_pago` solo
+   validaban que la fila referenciada exista (FK), no que fuera de la MISMA empresa — un admin con
+   permiso legítimo podía (por error o bug de frontend futuro) apuntar el cobro de Nalux al plan de
+   cuentas de otro tenant. Cerrado con trigger `trg_formas_pago_cuentas_misma_empresa`, valida las
+   dos columnas. Probado con `BEGIN...ROLLBACK`: update cross-tenant bloqueado, update mismo-tenant
+   sigue funcionando.
+3. **Real, corregido (mig.364)**: los 2 RPC nuevos (`obtener_cuenta_determinada`,
+   `obtener_cuenta_forma_pago`) tenían `GRANT ... TO authenticated` pero les faltaba el `REVOKE ...
+   FROM PUBLIC` — mismo patrón que el proyecto ya se comió 3 veces (mig.063/341/353). Sin
+   explotación real hoy (cortan solas ante `auth.uid()` nulo), cerrado igual por consistencia.
+   Verificado: `pg_proc.proacl` post-fix sin entrada `=X` (PUBLIC), solo `postgres`/`authenticated`.
+
+`eslint` + 159/159 tests sin cambios tras el hardening. Pendiente push/deploy de mig.364.
+
 ## ✅ Resueltos — los 6 hallazgos "documentados, sin corregir" de la Fase 2-5 de Nadia
 
 Luciano pidió arrancar por acá al retomar. Los 6 quedaron cerrados — 4 con fix real, 2 confirmados
