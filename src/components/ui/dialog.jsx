@@ -53,6 +53,20 @@ const wideDialogClass =
   'md:left-[252px] md:translate-x-0 md:w-[calc(100vw_-_268px)] md:max-w-[calc(100vw_-_268px)] ' +
   'flex flex-col overflow-hidden p-0';
 
+// size="medium" — para contenido "de documento" que NO es una grilla ancha
+// (un asiento contable, 3 columnas, típicamente 2-6 líneas). Antes usaba
+// "wide" prestado (mismo shell que Cotización/OC/Factura), pero ese shell
+// mide casi toda la pantalla (calc(100vw-268px) x 92vh) mientras el
+// contenido real se quedaba en max-w-3xl centrado adentro — cuanto más ancha
+// la resolución, más franja vacía a los costados Y abajo (hallazgo Luciano
+// 27/08: "el asiento se ve mal, veo muchos espacios en blanco"). Acá el
+// ancho del modal YA es el ancho del contenido — no hay descalce posible — y
+// el alto se ajusta al contenido real (max-h, no h fijo), así que un asiento
+// de 2 líneas no infla el popup a ocupar el 92% de la pantalla.
+const mediumDialogClass =
+  'left-[50%] top-[50%] w-[92vw] max-w-3xl -translate-x-1/2 -translate-y-1/2 ' +
+  'max-h-[85vh] flex flex-col overflow-hidden p-0';
+
 const DialogContent = React.forwardRef(({ className, children, hideCloseButton, size = 'default', ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
@@ -60,7 +74,7 @@ const DialogContent = React.forwardRef(({ className, children, hideCloseButton, 
       ref={ref}
       className={cn(
         'fixed z-50 grid gap-4 border bg-background shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg dark:bg-slate-950 dark:border-slate-800',
-        size === 'wide' ? wideDialogClass : 'left-[50%] top-[50%] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 p-6',
+        size === 'wide' ? wideDialogClass : size === 'medium' ? mediumDialogClass : 'left-[50%] top-[50%] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 p-6',
         className
       )}
       {...props}

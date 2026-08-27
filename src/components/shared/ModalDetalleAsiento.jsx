@@ -37,10 +37,15 @@ function Campo({ label, children, className = '' }) {
  *  - `asientoId`: se busca acá con react-query (VerAsientoButton, que solo
  *    conoce el id).
  *
- * size="wide" — mismo shell que el resto de los documentos (hallazgo Luciano
- * 23/08: este modal seguía siendo un popup chico, `max-w-lg`, mientras
- * Entrega/OC/Factura ya usan el shell grande — pedido explícito: "que sea un
- * documento completo, no un popup").
+ * size="medium" (27/08) — antes usaba "wide" (el shell casi-pantalla-completa
+ * de Cotización/OC/Factura, pedido original de Luciano el 23/08: "que sea un
+ * documento completo, no un popup chico"). Pero un asiento es una tabla de 3
+ * columnas con pocas líneas — "wide" le daba casi toda la pantalla mientras
+ * el contenido se quedaba centrado en su propio ancho fijo, dejando franjas
+ * vacías cada vez más grandes cuanto más ancha la resolución (hallazgo
+ * Luciano 27/08). "medium" es el punto intermedio: sigue siendo un documento
+ * completo (no `max-w-lg`), pero su ancho YA es el ancho del contenido y su
+ * alto se ajusta a lo que hay, no a un 92vh fijo.
  */
 function ModalDetalleAsiento({ asiento: asientoProp = null, asientoId = null, open, onOpenChange }) {
   const { data: asientoFetched, isLoading } = useQuery({
@@ -67,7 +72,7 @@ function ModalDetalleAsiento({ asiento: asientoProp = null, asientoId = null, op
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="wide" className="bg-kx-surface border-kx-border text-kx-text">
+      <DialogContent size="medium" className="bg-kx-surface border-kx-border text-kx-text">
         <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b border-kx-border">
           <DialogTitle className="flex items-center gap-2">
             <BookMarked className="h-5 w-5 text-kx-blue" />
@@ -82,7 +87,7 @@ function ModalDetalleAsiento({ asiento: asientoProp = null, asientoId = null, op
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          <div className="max-w-3xl mx-auto">
+          <div>
             {isLoading && (
               <div className="flex items-center justify-center py-10 text-kx-text-3">
                 <Loader2 size={22} className="animate-spin" />
