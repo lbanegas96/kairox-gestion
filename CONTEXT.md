@@ -1,5 +1,110 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 📋 Cierre de sesión 27/08 — para que Luciano siga
+
+Día de construcción variada: se cerró el gating de AFIP en Puntos de Venta (abajo), un pedido de
+UI del POS que salió mal al primer intento y se corrigió en el segundo, y las 2 fases "chicas" del
+plan grande de Mapa de Relaciones + Determinación de Cuentas. **Las Fases 3/4 de ese plan (el motor
+de Determinación de Cuentas propiamente dicho) quedan para mañana** — ver
+[PLAN_MAPA_Y_DETERMINACION_CUENTAS_2026-08-27.md](PLAN_MAPA_Y_DETERMINACION_CUENTAS_2026-08-27.md).
+
+**Todo lo de hoy commiteado, pusheado a GitHub y deployado a producción** — nada quedó a mitad de
+camino, cada fix de abajo es su propio commit atómico y se verificó en vivo antes de pasar al
+siguiente.
+
+---
+
+## ✅ Resuelto — Carrito del POS: ancho fluido, no más franja negra
+
+Pedido de Luciano: el carrito del POS (Modo Caja) se sentía chico en pantallas anchas. **Primer
+intento (rechazado en vivo):** anchos fijos en px por breakpoint (`420px` → `600px` en pantallas
+grandes) — Luciano lo probó en su pantalla real y encontró el problema esperable: en cualquier
+resolución que no coincidiera exacto con esos valores fijos, quedaba una franja negra sin usar en
+vez de dársela al carrito. Corrección señalada: *"esto es web, tiene que ajustarse a CUALQUIER
+resolución"*.
+
+**Segundo hallazgo, más profundo:** incluso corrigiendo el wrapper a un ancho fluido (`md:w-[38%]`
+con piso `380px` y techo `640px`), la franja negra seguía apareciendo — resultó que
+`PanelCarrito.jsx` tenía su **propio** ancho fijo hardcodeado en su div raíz
+(`md:w-[360px] lg:w-[420px]`), totalmente independiente y desincronizado del wrapper que se acababa
+de arreglar. El wrapper crecía bien (confirmado con `getBoundingClientRect`, sin espacio muerto a
+ese nivel), pero el contenido de adentro se quedaba angostado en sus 420px de siempre — la franja
+negra estaba *dentro* del panel, no al costado, por eso las mediciones del wrapper daban falso
+positivo de que ya estaba bien.
+
+**Fix final**: `PanelCarrito.jsx` pasa a `w-full` a secas — el ancho se controla en un solo lugar
+(el wrapper de `ModoCajaLayout.jsx`). Verificado con `getBoundingClientRect` en 5 anchos distintos
+(800/1024/1440/1920/2560px): la suma de productos + carrito llena exactamente el 100% del espacio
+disponible en los 5, sin excepción. `eslint` limpio, 159/159 tests (10/10 en `PanelCarrito.test.jsx`).
+
+**Lección para la próxima vez que se toque un ancho de panel**: verificar con `getBoundingClientRect`
+del elemento HIJO real que se está viendo en pantalla, no solo del wrapper — un componente puede
+tener su propio ancho fijo escondido más adentro que el wrapper nunca sabe que existe.
+
+---
+
+## ✅ Resuelto — Mapa de Relaciones: 2 bugs reales encontrados por Luciano (Fases 1 y 2)
+
+Plan completo en
+[PLAN_MAPA_Y_DETERMINACION_CUENTAS_2026-08-27.md](PLAN_MAPA_Y_DETERMINACION_CUENTAS_2026-08-27.md).
+
+**Bug 1 — la cadena desde Cotización se cortaba en Entrega.** Causa: `cotizaciones.comprobante_id`
+solo lo escribe la conversión DIRECTA Cotización→Factura; en el camino real (Cotización→"Copiar a"
+Pedido→Entrega→Factura, el más común) ese campo nunca se toca. El mapa, al abrirse desde la
+cotización, solo miraba ese campo roto — nunca caminaba hacia los pedidos para ver si alguno ya se
+facturó. Confirmado contra datos reales: `COT-00032.comprobante_id = null`, pero su pedido
+`PED-20260815-001.comprobante_id` sí apunta a una factura viva.
+
+Complicación real encontrada en el propio caso de Luciano: una cotización puede tener MÁS de un
+pedido, cada uno facturado por separado (COT-00032 tiene 2, con 2 facturas distintas). **Fix**:
+nueva función `fetchRamasCotizacion()` camina TODOS los pedidos de la cotización y arma una rama
+completa (pedido→entregas→factura) por cada uno — nuevo modo de render `cotizacion_ramas`. Verificado
+en vivo contra Nalux real: las 2 ramas se ven completas, cada una con su propio estado de pago
+(Pagada / Pendiente).
+
+**Bug 2 — una factura pagada al contado no mostraba el pago en ningún lado.** El pago sí existe
+(`movimientos_caja`, ingreso real con fecha/monto/medio) pero el mapa solo consultaba
+`cuenta_corriente_movimientos` — vacía para una venta que nunca tuvo deuda que cancelar (Regla 5
+sap-reference: Caja se toca en Factura con pago inmediato, no en Cuenta Corriente). **Fix**: nueva
+query a `movimientos_caja` en `fetchMapaVenta`, nuevo tipo de nodo "Pago al Contado" (distinto de
+"Cobro CC"). Verificado en vivo: `FAC-20260815-001` ahora muestra "Pago al Contado · Efectivo ·
+$24.950,00" en Documentos Derivados.
+
+`eslint` limpio, 159/159 tests en ambas fases.
+
+---
+
+## ✅ Resuelto — Popup del asiento contable: ya no deja franjas vacías
+
+Bug real (Luciano, 27/08): *"el asiento se ve mal, veo muchos espacios en blanco"* al cambiar la
+resolución. Causa: `ModalDetalleAsiento` usaba `size="wide"` (el shell casi-pantalla-completa
+pensado para documentos con grilla ancha — Cotización, OC, Factura), pero su contenido real es una
+tabla simple de 3 columnas con pocas líneas, encerrada en un ancho fijo centrado adentro de ese
+shell enorme — cuanto más ancha la pantalla, más franja vacía a los costados y abajo.
+
+**Fix**: nuevo `size="medium"` en el `Dialog` compartido (`ui/dialog.jsx`) — ancho fijo (`max-w-3xl`,
+768px) en vez de crecer con el viewport, alto ajustado al contenido (`max-h-[85vh]`) en vez de
+`92vh` fijo. Aditivo: `size="wide"`/`"default"` sin cambios, cero riesgo para el resto de los
+modales. Verificado con `getBoundingClientRect` a 1800px de ancho: el popup mide 768×547, fijo,
+centrado — antes se hubiera estirado a más de 1500px. `eslint` limpio, 159/159 tests.
+
+---
+
+## 📋 Pendiente para mañana — motor de Determinación de Cuentas (Fases 3/4)
+
+Nace de investigar por qué el pago al contado no tenía cuenta contable propia por medio de pago —
+Luciano confirmó que quiere generalizar el patrón que KAIROX ya construyó una vez para conciliación
+bancaria (`determinacion_cuentas_mayor` + `DeterminacionCuentasTab.jsx`, inspirado en el account
+determination de SAP) al resto del motor de asientos, que hoy hardcodea ~25+ cuentas por código
+fijo (`findCuentaByCodigo(empresaId, '1.1.1')`, etc.) en `planCuentasService.ts` y varios RPC SQL.
+Diseño completo, con las decisiones ya tomadas, en
+[PLAN_MAPA_Y_DETERMINACION_CUENTAS_2026-08-27.md](PLAN_MAPA_Y_DETERMINACION_CUENTAS_2026-08-27.md)
+— Fase 3 (esquema base, aditivo) y Fase 4 (cablear medios de pago, el pedido original). Alcance
+mayor, toca el asiento real de cada venta nueva — arrancar con `BEGIN...ROLLBACK` contra Nalux real
+antes de aplicar cualquier migración.
+
+---
+
 ## ✅ Resuelto — Puntos de Venta ya no dependen de completar el wizard de AFIP
 
 Luciano frenó la sesión al leer la limitación de diseño documentada abajo ("no hay forma de crear
