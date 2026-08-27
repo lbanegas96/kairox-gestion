@@ -408,6 +408,45 @@ function MapaRelaciones({
     return nodos;
   };
 
+  // ── Cotización → pedidos → estado real de cada uno ──────────────────────────
+  // Bug real (27/08, Luciano): `cotizaciones.comprobante_id` solo lo escribe la
+  // conversión DIRECTA "Cotización → Factura" (cotizacionesService.convertir).
+  // Cuando el camino real es Cotización → "Copiar a" Pedido → Entrega → Factura
+  // (el más común, Document Flow estilo SAP), ese campo nunca se toca — el mapa
+  // se quedaba mirando solo el campo roto y caía siempre a "sin facturar",
+  // cortando la cadena en Entrega aunque la factura existiera un salto más abajo
+  // (confirmado contra datos reales: COT-00032.comprobante_id=null pero su
+  // pedido PED-20260815-001.comprobante_id sí apunta a una factura viva).
+  //
+  // Una cotización puede tener MÁS de un pedido (SAP permite entregar/facturar
+  // en tandas) y cada uno facturarse por separado — caso real encontrado en la
+  // misma cotización de Luciano (2 pedidos, 2 facturas distintas). Se resuelve
+  // acá "una rama por pedido": la cadena completa (pedido→entregas→factura, o
+  // "sin facturar" si ese pedido puntual todavía no se facturó) para cada uno.
+  const fetchRamasCotizacion = async (cotizacion) => {
+    const emp = user.empresa_id;
+    const { data: pedidos } = await supabase.from('pedidos')
+      .select('id, numero, fecha, total, estado, comprobante_id')
+      .eq('cotizacion_id', cotizacion.id).eq('empresa_id', emp)
+      .order('created_at', { ascending: true });
+
+    const ramas = await Promise.all((pedidos ?? []).map(async (ped) => {
+      const [entregasRes, facturaRes] = await Promise.all([
+        supabase.from('entregas')
+          .select('id, numero_entrega, fecha, estado')
+          .eq('pedido_id', ped.id).eq('empresa_id', emp)
+          .order('created_at', { ascending: true }),
+        ped.comprobante_id
+          ? supabase.from('comprobantes')
+              .select('id, numero_venta, numero_afip, tipo, total, fecha, estado_pago')
+              .eq('id', ped.comprobante_id).eq('empresa_id', emp).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
+      return { pedido: ped, entregas: entregasRes.data ?? [], factura: facturaRes.data ?? null };
+    }));
+    return ramas;
+  };
+
   // ── Resolución del punto de entrada ──────────────────────────────────────────
   const resolveAndFetch = async () => {
     setSinFacturar(null);
@@ -425,8 +464,23 @@ function MapaRelaciones({
         if (!data) return setMapa(null);
         fetchDuplicadoInfo('cotizacion', cotizacionId);
         if (data.comprobante_id) { setActivoId(cotizacionId); return fetchMapaVenta(data.comprobante_id); }
+
         setActivoId(cotizacionId);
-        return setSinFacturar({ label: 'Cotización', nodos: await fetchCadenaPreFactura({ cotizacion: data }) });
+        const ramas = await fetchRamasCotizacion(data);
+        if (ramas.some(r => r.factura)) {
+          return setMapa({ modo: 'cotizacion_ramas', cotizacion: data, ramas });
+        }
+        // Ningún pedido facturado todavía — mismo "sin facturar" de siempre,
+        // pero con las entregas de TODOS los pedidos (antes sólo las del
+        // primero, aunque hubiera más de uno).
+        const nodos = [
+          { id: data.id, tipo: 'cotizacion', numero: data.numero, fecha: data.fecha, total: data.total, estado: data.estado },
+          ...ramas.flatMap(r => [
+            { id: r.pedido.id, tipo: 'pedido', numero: r.pedido.numero, fecha: r.pedido.fecha, total: r.pedido.total, estado: r.pedido.estado },
+            ...r.entregas.map(e => ({ id: e.id, tipo: 'entrega', numero: e.numero_entrega, fecha: e.fecha, estado: e.estado })),
+          ]),
+        ];
+        return setSinFacturar({ label: 'Cotización', nodos });
       }
       if (pedidoId) {
         const { data } = await supabase.from('pedidos')
@@ -1172,6 +1226,77 @@ function MapaRelaciones({
                     {TIPO_CONFIG[tipo].label}
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── VENTAS: cotización con uno o más pedidos facturados (27/08) ──
+              Reemplaza el viejo "sin facturar" cuando algún pedido derivado de
+              esta cotización ya tiene factura — una fila por pedido, cada una
+              con su propia cadena hasta la factura (o "sin facturar" si ese
+              pedido puntual todavía no se facturó). Clic en la factura abre su
+              preview igual que cualquier otro nodo; para ver NC/ND/cobros de
+              esa factura específica hay que entrar a su propio Mapa (botón
+              "ver documento completo" del preview). */}
+          {!loading && mapa?.modo === 'cotizacion_ramas' && (
+            <div className="space-y-5">
+              <ResumenCircuito
+                pasos={1 + mapa.ramas.length}
+                total={mapa.cotizacion.total}
+                derivados={0}
+              />
+
+              <NodoMapa
+                nodo={{
+                  id: mapa.cotizacion.id, tipo: 'cotizacion', numero: mapa.cotizacion.numero,
+                  fecha: mapa.cotizacion.fecha, total: mapa.cotizacion.total, estado: mapa.cotizacion.estado,
+                }}
+                activo={isActivo(mapa.cotizacion.id)}
+                onClick={() => openPreview({ id: mapa.cotizacion.id, tipo: 'cotizacion', numero: mapa.cotizacion.numero, fecha: mapa.cotizacion.fecha, total: mapa.cotizacion.total, estado: mapa.cotizacion.estado })}
+              />
+
+              <div>
+                <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider mb-3">
+                  {mapa.ramas.length} pedido{mapa.ramas.length !== 1 ? 's' : ''} derivado{mapa.ramas.length !== 1 ? 's' : ''} de esta cotización
+                </p>
+                <div className="space-y-3">
+                  {mapa.ramas.map(rama => {
+                    const pedNodo = {
+                      id: rama.pedido.id, tipo: 'pedido', numero: rama.pedido.numero,
+                      fecha: rama.pedido.fecha, total: rama.pedido.total, estado: rama.pedido.estado,
+                    };
+                    const facNodo = rama.factura ? {
+                      id: rama.factura.id,
+                      tipo: rama.factura.tipo === 'nota_credito' ? 'nota_credito' : 'venta',
+                      numero: rama.factura.numero_afip ?? rama.factura.numero_venta,
+                      fecha: rama.factura.fecha, total: rama.factura.total, estado: rama.factura.estado_pago,
+                    } : null;
+                    return (
+                      <div key={rama.pedido.id} className="rounded-xl bg-kx-surface-2/40 border border-kx-border p-3">
+                        <div className="flex items-start gap-0 overflow-x-auto pb-1">
+                          <NodoMapa nodo={pedNodo} activo={isActivo(pedNodo.id)} onClick={() => openPreview(pedNodo)} />
+                          <Conector />
+                          {rama.entregas.map(e => {
+                            const n = { id: e.id, tipo: 'entrega', numero: e.numero_entrega, fecha: e.fecha, estado: e.estado };
+                            return (
+                              <React.Fragment key={e.id}>
+                                <NodoMapa nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />
+                                <Conector />
+                              </React.Fragment>
+                            );
+                          })}
+                          {facNodo ? (
+                            <NodoMapa nodo={facNodo} activo={isActivo(facNodo.id)} onClick={() => openPreview(facNodo)} />
+                          ) : (
+                            <div className="bg-kx-surface border border-dashed border-kx-border rounded-xl p-3 w-[150px] h-[176px] flex-shrink-0 flex flex-col items-center justify-center text-center">
+                              <span className="text-2xs text-kx-text-3">Sin facturar todavía</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
