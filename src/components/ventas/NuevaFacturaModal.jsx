@@ -10,7 +10,7 @@ import { Loader2, Plus, Trash2, FileText, Info, Network } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
-import { getTodayAR, getNowAR, addDaysAR } from '@/lib/dateUtils';
+import { getTodayAR, addDaysAR, getDateFromInputAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
 import ClienteSelector from '@/components/shared/ClienteSelector';
@@ -448,7 +448,15 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
     setLoading(true);
     try {
       const numero     = await generateNumero();
-      const now        = getNowAR().toISOString();
+      // Bug real (Nadia, 27/08): el campo "Fecha" se mostraba editable pero no
+      // tenía ningún efecto — todo el submit usaba getNowAR() a secas, ignorando
+      // lo que el usuario hubiera tipeado. Bloqueaba cualquier carga retroactiva
+      // legítima (venta vieja que se olvidaron de cargar, saldo inicial al migrar
+      // un cliente). getDateFromInputAR ya es el patrón establecido para esto en
+      // el resto de la app (CajaSection, CompraRapidaSection): si "fecha" es hoy,
+      // usa la hora real; si es otro día, fija las 12:00 (mismo criterio que
+      // cualquier otro documento backdateado acá).
+      const now        = getDateFromInputAR(fecha);
       const clienteObj = clientes.find(c => c.id === clienteId);
       // Mismo criterio que la RPC crear_venta: vencimiento = fecha de venta + dias_credito
       // del cliente (0/null → vence el mismo día). Se calcula siempre, no solo en CC.
@@ -620,7 +628,10 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
         total,
         neto:        subtotalNeto,
         iva:         totalIva,
-        fecha:       getTodayAR(),
+        // Mismo fix de arriba — el asiento tiene que llevar la fecha elegida,
+        // no la de hoy, o una factura backdateada quedaría con el comprobante
+        // en una fecha y su asiento contable en otra.
+        fecha:       fecha,
         descripcion: `Factura ${numero}`,
         esCredito:   true,
         centroCostoId: centroCostoId || null,
