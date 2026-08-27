@@ -67,7 +67,7 @@ const calcNetoIva = (item) => {
   return { neto, iva: bruto - neto };
 };
 
-function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, duplicarOrigen = null, duplicadoDeId = null, onSuccess }) {
+function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, devolucionOrigen = null, duplicarOrigen = null, duplicadoDeId = null, onSuccess }) {
   const { user }                          = useAuth();
   const { currentSession, isSessionOpen } = useCaja();
   const { toast }                         = useToast();
@@ -87,7 +87,7 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, duplic
   // se le pregunta al usuario (Close/Reopen manual, estilo SAP B1).
   const [reabrirOC, setReabrirOC] = useState(null); // { id, numero } | null
 
-  const origenLocked = !!compraOrigen;
+  const origenLocked = !!compraOrigen || !!devolucionOrigen;
 
   // ── Carga al abrir ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -97,6 +97,35 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, duplic
       supabase.from('proveedores').select('id, nombre')
         .eq('empresa_id', user.empresa_id).neq('activo', false).order('nombre')
         .then(({ data }) => setProveedores(data || []));
+    }
+
+    // mig.360 — pre-cargar ítems desde una Devolución a Proveedor puntual
+    // ("Generar NC" en Devoluciones a Proveedor). devolucion_items.precio_unitario
+    // es NETO (siempre viene de detalle_compras.costo_unitario, ver
+    // NuevaDevolucionModal.jsx) — misma conversión a bruto que ya hace el
+    // bloque de compraOrigen de acá abajo, para no subvaluar la NC.
+    if (devolucionOrigen?.id) {
+      setProveedorId(devolucionOrigen.proveedor_id || '');
+      supabase.from('devolucion_items')
+        .select('id, producto_id, cantidad, precio_unitario, alicuota_iva, productos(nombre)')
+        .eq('devolucion_id', devolucionOrigen.id)
+        .eq('empresa_id', user.empresa_id)
+        .then(({ data }) => {
+          if (data?.length > 0) {
+            setItems(data.map(i => {
+              const alicuota = Number(i.alicuota_iva ?? 21);
+              const factor = FACTOR_IVA[String(alicuota)] ?? 1;
+              return {
+                _id:          Math.random().toString(36).slice(2),
+                producto_id:  i.producto_id,
+                descripcion:  i.productos?.nombre || '',
+                cantidad:     Number(i.cantidad),
+                precio_unit:  Number(i.precio_unitario) * factor,
+                alicuota_iva: alicuota,
+              };
+            }));
+          }
+        });
     }
 
     if (compraOrigen?.id) {
@@ -153,7 +182,7 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, duplic
           }
         });
     }
-  }, [open, user?.empresa_id, compraOrigen?.id, duplicarOrigen?.id]);
+  }, [open, user?.empresa_id, compraOrigen?.id, devolucionOrigen?.id, duplicarOrigen?.id]);
 
   // ── Reset al cerrar ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -245,9 +274,12 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, duplic
           precio_unitario: parseNumberLocale(i.precio_unit) || 0,
           alicuota_iva:    Number(i.alicuota_iva),
         })),
-        p_compra_id:          compraOrigen?.id || null,
+        p_compra_id:          compraOrigen?.id || devolucionOrigen?.compra_id || null,
         p_reembolso_efectivo: reembolsoEfectivo,
         p_caja_sesion_id:     reembolsoEfectivo ? currentSession?.id ?? null : null,
+        // mig.360 — vincula la devolución de origen (compensacion pasa a
+        // 'nota_credito' del lado servidor, no hace falta tocarlo acá).
+        p_devolucion_id:      devolucionOrigen?.id || null,
       });
       if (error) throw error;
 
@@ -315,7 +347,9 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, duplic
         <DialogHeader className="px-6 py-4 border-b border-kx-border shrink-0">
           <DialogTitle className="flex items-center gap-2 text-lg font-bold">
             <FileMinus className="w-5 h-5 text-kx-amber" />
-            {compraOrigen
+            {devolucionOrigen
+              ? `NC de Proveedor sobre ${devolucionOrigen.numero_devolucion || 'devolución'}`
+              : compraOrigen
               ? `NC de Proveedor sobre ${compraOrigen.numero_factura || 'S/N'}`
               : 'Nueva NC de Proveedor'}
           </DialogTitle>
@@ -325,14 +359,18 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, duplic
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {/* Banner */}
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 text-xs text-amber-700 dark:text-amber-300">
-            <Info className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>
-              Para devoluciones con movimiento de stock usá <strong>Devolver a Proveedor</strong>.
-              Este modal es para ajustes financieros sin mercadería.
-            </span>
-          </div>
+          {/* Banner — no aplica viniendo de una devolución puntual (mig.360):
+              ese es justo el caso con movimiento de stock que el texto de
+              abajo manda a usar "Devolver a Proveedor" — acá ya se vino de ahí. */}
+          {!devolucionOrigen && (
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 text-xs text-amber-700 dark:text-amber-300">
+              <Info className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>
+                Para devoluciones con movimiento de stock usá <strong>Devolver a Proveedor</strong>.
+                Este modal es para ajustes financieros sin mercadería.
+              </span>
+            </div>
+          )}
 
           {/* Proveedor + Motivo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -340,7 +378,7 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, duplic
               <Label className="text-xs font-medium text-kx-text-2">Proveedor *</Label>
               {origenLocked ? (
                 <div className="h-10 flex items-center px-3 rounded-md border border-kx-border bg-kx-surface-2 text-sm text-kx-text">
-                  {compraOrigen?.proveedores?.nombre || compraOrigen?.proveedor_nombre || 'Proveedor'}
+                  {devolucionOrigen?.proveedor_nombre || compraOrigen?.proveedores?.nombre || compraOrigen?.proveedor_nombre || 'Proveedor'}
                 </div>
               ) : (
                 <ProveedorSelector

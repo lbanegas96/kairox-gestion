@@ -34,6 +34,13 @@ function EstadoDocBadge({ estado }) {
 }
 
 const COMPENSACION_LABELS = {
+  // mig.360 — 'nota_credito' faltaba acá aunque compensacion.CHECK ya lo
+  // admite (mig.035) y es el único valor que de verdad se usa: aunque el
+  // backend seteara compensacion='nota_credito' bien, esta pantalla lo caía
+  // igual en "Sin definir" por no reconocer la clave. 'nota_debito' se deja
+  // (no rompe nada) aunque compensacion no admite ese valor — no es un caso
+  // real de esta tabla.
+  nota_credito: { label: 'Nota de Crédito', className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
   nota_debito: { label: 'Nota de Débito', className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
   reemplazo:   { label: 'Reemplazo',      className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
   pendiente:   { label: 'Sin definir',    className: 'bg-slate-100 text-kx-text-2 dark:bg-kx-surface-2 dark:text-kx-text-2' },
@@ -50,15 +57,18 @@ function DevolucionesTab({ onNavigate }) {
   const [devoluciones, setDevoluciones] = useState([]);
   const [loading, setLoading]           = useState(true);
   const [expanded, setExpanded]         = useState({});
+  // mig.360 — "Generar NC" desde una devolución puntual.
+  const [ncOrigen, setNcOrigen]         = useState(null);
+  const [isNcOpen, setIsNcOpen]         = useState(false);
 
-  useEffect(() => {
+  const fetchDevoluciones = () => {
     if (!user?.empresa_id) return;
     setLoading(true);
     supabase
       .from('devoluciones')
       .select(`
         id, numero_devolucion, fecha, tipo, reingresa_stock, compensacion, motivo,
-        compra_id,
+        compra_id, proveedor_id,
         proveedores(nombre),
         factura_compra:compras!compra_id(numero_factura),
         devolucion_items(id, cantidad, precio_unitario, subtotal, alicuota_iva, productos(nombre))
@@ -71,9 +81,22 @@ function DevolucionesTab({ onNavigate }) {
         setDevoluciones(data || []);
         setLoading(false);
       });
-  }, [user?.empresa_id]);
+  };
+
+  useEffect(fetchDevoluciones, [user?.empresa_id]);
 
   const toggleExpand = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+
+  const abrirNc = (dev) => {
+    setNcOrigen({
+      id:               dev.id,
+      numero_devolucion: dev.numero_devolucion,
+      proveedor_id:     dev.proveedor_id,
+      proveedor_nombre: dev.proveedores?.nombre,
+      compra_id:        dev.compra_id,
+    });
+    setIsNcOpen(true);
+  };
 
   return (
     <Card className="overflow-hidden bg-kx-surface border-kx-border">
@@ -186,6 +209,20 @@ function DevolucionesTab({ onNavigate }) {
                                 Motivo: {dev.motivo}
                               </p>
                             )}
+                            {/* mig.360 — antes el único puente a una NC era
+                                texto libre en el motivo, sin FK ni forma de
+                                generarla desde acá. */}
+                            {dev.compensacion === 'pendiente' && (
+                              <div className="flex justify-end mt-2 pt-2 border-t border-kx-border">
+                                <Button
+                                  size="sm" variant="ghost"
+                                  className="h-7 text-2xs text-kx-violet hover:bg-violet-50 dark:hover:bg-violet-900/20 gap-1"
+                                  onClick={e => { e.stopPropagation(); abrirNc(dev); }}
+                                >
+                                  <FileMinus className="h-3 w-3" /> Generar NC
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -197,6 +234,13 @@ function DevolucionesTab({ onNavigate }) {
           </tbody>
         </table>
       </div>
+
+      <NuevaNCProveedorModal
+        open={isNcOpen}
+        onOpenChange={setIsNcOpen}
+        devolucionOrigen={ncOrigen}
+        onSuccess={() => { setIsNcOpen(false); setNcOrigen(null); fetchDevoluciones(); }}
+      />
     </Card>
   );
 }
