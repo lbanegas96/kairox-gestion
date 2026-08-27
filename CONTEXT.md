@@ -1,5 +1,70 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Fase 2 completa — Proveedores y Compras (Ferretería NADIA) + 2 bugs críticos encontrados y arreglados
+
+Continuación de la Fase 1 (abajo). Se probó de punta a punta: 2 proveedores (RI/Factura A y
+Monotributo/Factura C), Orden de Compra → Recepción → Factura de Compra (3-way match completo),
+Compra Rápida, pago con cheque propio a 30 días, pago en efectivo imputado a una factura puntual, y
+Nota de Crédito de proveedor por devolución de mercadería dañada. **En el camino aparecieron 2 bugs
+que bloqueaban funcionalidad real en producción — no solo en la empresa de prueba — ya arreglados y
+verificados en vivo:**
+
+### 🔴 Bug grave #1 — Ningún cheque (propio ni de tercero) se podía registrar en producción
+`crear_cheque_propio()` y `crear_cheque_tercero()` son `SECURITY DEFINER` con sus propias
+validaciones internas (`empresa_id = get_my_empresa_id()` + `has_module_permission('cheques')`),
+pero nunca tuvieron `GRANT EXECUTE` para `authenticated` — mismo patrón exacto que el bug de
+`seed_plan_cuentas` de la sesión anterior (mig.355). El modal mostraba el toast de error (se
+renderiza fuera de `<main>`, fácil de no ver — por eso pareció "no pasó nada" al principio) pero el
+cheque nunca se guardaba. Confirmado con `BEGIN...ROLLBACK` simulando el rol `authenticated`:
+`permission denied for function crear_cheque_propio`. **Fix:** mig.356, `GRANT EXECUTE` en ambas —
+son seguras porque ya validan todo lo necesario internamente.
+
+### 🔴 Bug grave #2 — Ninguna devolución (a proveedor ni de cliente) funcionaba en empresas nuevas
+`obtener_proximo_numero()` ya sabe contar el tipo `'devolucion'` (tiene su propio `WHEN` en el
+`CASE`), pero `seed_series_numeracion()` — la función que siembra las series numéricas de una
+empresa nueva — nunca incluyó `'devolucion'` en su lista. Resultado: `obtener_proximo_numero()` no
+encuentra la fila, intenta sembrarla vía el fallback (que tampoco la crea) y termina lanzando
+`Tipo de documento no reconocido: devolucion` — bloqueando **tanto devoluciones a proveedor como de
+cliente**, porque comparten el mismo tipo de documento. De las 7 empresas existentes, 5 ya tenían la
+fila sembrada a mano en algún momento pasado (incluida Nalux, por eso nunca se notó en producción
+real) — las 2 que no la tenían (incluida Ferretería NADIA, por ser nueva) quedaban bloqueadas.
+**Fix:** mig.357, se agrega `'devolucion'` al seed + se siembra retroactivo para las empresas que ya
+existían y les faltaba. Verificado con `BEGIN...ROLLBACK` antes de aplicar, y en vivo después.
+
+### 📋 Hallazgos documentados, sin arreglar todavía (fuera de alcance de hoy)
+- **`compras_saldo_pendiente` no descuenta compras ya pagadas directo**: la vista solo resta lo que
+  está imputado en `cuenta_corriente_proveedores_imputaciones`, ignorando
+  `compras.estado_pago = 'pagada'`. Una Compra Rápida pagada por Transferencia/Efectivo en el
+  momento sigue apareciendo con el saldo completo pendiente en el modal "Pagar varias facturas" —
+  riesgo real de pago duplicado si alguien lo usa sin revisar. Confirmado con Bianchi Herrajes
+  ($102.000 pagados, seguía figurando con saldo pendiente ahí).
+- **`crear_cheque_propio` no imputa el monto contra la factura vinculada**: aunque el modal permite
+  elegir la "Compra asociada" del cheque, la función solo guarda esa referencia (`compra_id`) — no
+  inserta nada en `cuenta_corriente_proveedores_imputaciones`. El saldo pendiente de la factura no
+  baja aunque el cheque ya esté emitido y vinculado. A diferencia de `crear_cheque_tercero` (para
+  clientes), que sí imputa correctamente contra la factura del comprobante.
+- **"Copiar a NC" desde una Factura de Compra duplica el IVA**: al copiar el precio unitario de la
+  factura original al formulario de NC de Proveedor, lo multiplica por 1,21 antes de copiarlo —
+  pero el campo destino ya espera el precio bruto (con IVA incluido) y vuelve a aplicar el factor.
+  Resultado: una NC "Copiar a NC" sobre una factura real sale ~21% inflada si no se corrige el
+  precio a mano antes de guardar (confirmado matemáticamente: $9.500 costo real → el formulario
+  precargaba $11.495 → total $22.990 en vez de los $19.000 reales).
+- **Menú "..." (kebab) en la lista de Facturas de Compra, comportamiento errático de posicionamiento**:
+  al clickear el kebab de una fila que no es la primera visible, el menú a veces no abre, o abre
+  anclado visualmente a otra fila. No confirmado como bug real de producto (podría ser un artefacto
+  de la automatización de browser de esta sesión) — evitado usando el link del número de factura
+  ("Ver detalle") en su lugar, que sí es confiable.
+
+**Verificación de datos de Fase 2** (Ferretería NADIA): OC-00001 ($277.000, recibida) → Factura
+A-0001-00003421 ($335.170) → cheque propio $200.000 (30 días) + Compra Rápida en efectivo $12.600
+(otra factura) → devolución DEV-2026-0001 (2 bolsas de cemento, reingresa stock) → NC-20260827-001
+($19.000, correctamente calculada a mano tras el hallazgo de arriba). Stock de Cemento verificado
+end-to-end: 60 (inicial) → 80 (+20 recepción OC) → 78 (-2 devolución).
+
+**Siguiente paso:** Fase 3 (Clientes y Ventas) — no arrancada todavía.
+
+---
+
 ## ✅ Fase 1 completa — Catálogo de "Ferretería NADIA" cargado (18/18 productos)
 
 Continuación del [PLAN_PRUEBA_INTEGRAL_FERRETERIA_2026-08-26.md](PLAN_PRUEBA_INTEGRAL_FERRETERIA_2026-08-26.md).
