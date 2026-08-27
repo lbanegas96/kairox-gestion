@@ -36,7 +36,7 @@ en vez de partir a la cuenta puente `1.1.8` — como si el dinero se acreditara 
 Restaurado el bloque completo (mismo patrón que `registrar_cobro_cliente`, mig.216), verificado con
 `BEGIN...ROLLBACK` contra una venta real de Nalux con tarjeta al 15% de comisión — `crear_venta`
 volvió a devolver `monto_pendiente_liquidacion` correctamente. `eslint` limpio, 159/159 tests.
-Pendiente confirmar push/deploy.
+Pusheado a GitHub y desplegado a producción (verificado `HTTP 200` en `kairox-gestion-chi.vercel.app`).
 
 ## ✅ Resueltos — los 6 hallazgos "documentados, sin corregir" de la Fase 2-5 de Nadia
 
