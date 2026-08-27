@@ -215,8 +215,15 @@ const TabFacturacion = ({
     )}
 
     {/* ── Sección 2: Puntos de Venta ────────────────────────────────── */}
-    {afipConfig.usa_factura_electronica && (
-      <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
+    {/* Deliberadamente NO gateada por usa_factura_electronica (bug real
+        encontrado 26/08, corregido acá): un punto de venta es un concepto
+        más general que "PdV dado de alta en ARCA" — estilo SAP, se pueden
+        crear tantos como se quiera y elegir cuál de ellos manda a ARCA
+        (columna "ARCA" abajo / switch "Envía a ARCA" en el modal). Antes de
+        este fix, toda esta sección quedaba oculta hasta completar el wizard
+        de AFIP con un certificado real — no existía forma de crear un PdV
+        puramente interno sin depender de nosotros para insertarlo por SQL. */}
+    <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
@@ -224,7 +231,7 @@ const TabFacturacion = ({
             </div>
             <div>
               <h3 className="text-lg font-bold text-slate-900 dark:text-kx-text">Puntos de Venta</h3>
-              <p className="text-sm text-slate-500 dark:text-kx-text-2">Configurados en ARCA para emitir comprobantes electrónicos.</p>
+              <p className="text-sm text-slate-500 dark:text-kx-text-2">Los que envían a ARCA emiten con CAE; los internos numeran por su cuenta (CAI o control propio).</p>
             </div>
           </div>
           <Button size="sm" onClick={openAddPv} className="bg-blue-600 hover:bg-blue-700 text-white">
@@ -233,7 +240,7 @@ const TabFacturacion = ({
         </div>
 
         {allPuntosVenta.length === 0 ? (
-          <p className="text-sm text-kx-text-3 text-center py-4">No hay puntos de venta configurados. Usá el botón "Completar configuración" o "+  Nuevo PdV".</p>
+          <p className="text-sm text-kx-text-3 text-center py-4">No hay puntos de venta configurados todavía. Creá el primero con "+ Nuevo PdV".</p>
         ) : (
           <div className="rounded-xl border border-kx-border overflow-x-auto">
             <table className="w-full text-sm">
@@ -390,8 +397,7 @@ const TabFacturacion = ({
             </div>
           </div>
         )}
-      </div>
-    )}
+    </div>
 
     {/* ── Sección 3: Tipos de Comprobante ───────────────────────────── */}
     {afipConfig.usa_factura_electronica && allPuntosVenta.length > 0 && (

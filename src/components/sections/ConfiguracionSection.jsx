@@ -272,7 +272,10 @@ const ConfiguracionSection = ({ initialTab }) => {
   // ─────────────────────────────────────────────────────────────────────────
   // Derived
   // ─────────────────────────────────────────────────────────────────────────
-  const puntoVentaActivo = puntosVenta?.[0];
+  // Ahora que se puede crear un PdV interno (envia_arca=false) sin pasar por
+  // el wizard de AFIP, puntosVenta[0] ya no es necesariamente el fiscal —
+  // preferir uno que sí envíe a ARCA para el badge/prefill del wizard.
+  const puntoVentaActivo = puntosVenta?.find(pv => pv.envia_arca !== false) ?? puntosVenta?.[0];
   const afipConfigCompleta = !!(afipConfig.afip_cuit && afipConfig.condicion_iva && puntoVentaActivo);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1450,6 +1453,11 @@ const ConfiguracionSection = ({ initialTab }) => {
           nombre: afipForm.pv_nombre,
           tipo_comprobante_default: afipForm.tipo_comprobante_default,
           activo: true,
+          // Completar este wizard significa "este PdV ya tiene certificado y
+          // manda a ARCA" — explícito para no dejar `envia_arca` como estaba
+          // si el número coincide con un PdV interno preexistente (el upsert
+          // de Supabase sólo pisa las columnas que se pasan).
+          envia_arca: true,
         }, { onConflict: 'empresa_id,numero' });
       if (pvError) throw pvError;
 
@@ -1496,7 +1504,11 @@ const ConfiguracionSection = ({ initialTab }) => {
   const openAddPv = () => {
     setEditingPv(null);
     setPvForm({
-      numero: '', nombre: 'Nuevo Punto de Venta', tipo: 'web', envia_arca: true,
+      numero: '', nombre: 'Nuevo Punto de Venta', tipo: 'web',
+      // Si la empresa todavía no activó AFIP no tiene sentido nacer marcado
+      // "Envía a ARCA" (no hay certificado con qué mandarlo) — el usuario
+      // puede tildarlo igual a mano si está preparando el terreno.
+      envia_arca: !!afipConfig.usa_factura_electronica,
       cai_remito: '', cai_remito_vencimiento: '', proximo_numero_remito: 1,
       es_default: false, activo: true, solo_remito: false,
       letras: { A: true, B: true, C: true },
@@ -2258,7 +2270,10 @@ const ConfiguracionSection = ({ initialTab }) => {
         <DialogContent className="sm:max-w-[480px] bg-kx-surface border-kx-border">
           <DialogHeader>
             <DialogTitle className="text-kx-text">{editingPv ? 'Editar' : 'Nuevo'} Punto de Venta</DialogTitle>
-            <DialogDescription>Registrá el punto de venta tal como está configurado en ARCA.</DialogDescription>
+            <DialogDescription>
+              Podés crear puntos de venta internos aunque no factures electrónicamente. Tildá
+              "Envía a ARCA" sólo si está dado de alta en ARCA con ese mismo número.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
