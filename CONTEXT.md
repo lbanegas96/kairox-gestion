@@ -1,5 +1,40 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Resuelto — Puntos de Venta ya no dependen de completar el wizard de AFIP
+
+Luciano frenó la sesión al leer la limitación de diseño documentada abajo ("no hay forma de crear
+un PdV sin certificado AFIP real") — la señaló como una violación real del principio SAP que él
+mismo pidió en su momento (mig.244: "cuantos PdV se quiera, un flag decide cuál manda a ARCA") y
+pidió revisar todo el circuito antes de tocar código.
+
+**Confirmado con evidencia, no era un problema de diseño de datos — el modelo ya estaba bien
+construido:** `puntos_venta.envia_arca` (mig.244), `useAfipConfig.js` (resuelve el PdV activo
+independiente de si la empresa factura electrónicamente), `series_numeracion` por PdV (mig.295/296,
+sin colisión de numeración entre PdV fiscales e internos), y el modal "Nuevo/Editar PdV" (ya tenía
+el switch "Envía a ARCA") — todo esto ya seguía el principio SAP correctamente. El bug era **puro
+gating de UI**: en `TabFacturacion.jsx` la sección entera "Puntos de Venta" (botón + tabla) estaba
+envuelta en `{afipConfig.usa_factura_electronica && (...)}`, y la única forma de poner ese flag en
+`true` era completar el wizard de 3 pasos, que exige subir un `.crt` real de ARCA. No existía
+ningún camino para crear un PdV puramente interno sin depender de nosotros insertándolo por SQL.
+
+**Fix**:
+- `TabFacturacion.jsx` — sección "Puntos de Venta" ya no depende de `usa_factura_electronica`,
+  siempre visible. Textos corregidos (ya no asumen que todo PdV está dado de alta en ARCA).
+- `ConfiguracionSection.jsx` — un PdV nuevo nace con `envia_arca` = estado actual de AFIP de la
+  empresa (antes: siempre `true`, engañoso si AFIP está apagado). `puntoVentaActivo` ahora prefiere
+  un PdV fiscal si existe, en vez de asumir que el primero de la lista lo es (relevante recién
+  ahora que un PdV interno puede crearse antes que uno fiscal). El upsert del wizard de AFIP fija
+  `envia_arca=true` explícito, para no dejar un PdV interno preexistente con el flag viejo si el
+  número coincide.
+
+Verificado en vivo contra Nalux (AFIP activo, sin mutar datos reales): tabla y modal renderizan
+igual que antes, texto y default nuevos correctos. **No probado en vivo con una empresa con AFIP
+apagado** (la cuenta de prueba "Ferretería NADIA" requiere credenciales que no tengo) — la lógica
+se verificó leyendo el código de punta a punta, pero falta la confirmación visual de que crear un
+PdV interno desde cero funciona con AFIP apagado. `eslint` limpio, 159/159 tests.
+
+---
+
 ## 📋 Cierre de sesión 26/08 — para que Luciano siga
 
 Nadia pidió armar una cuenta completamente nueva ("Ferretería NADIA") y probarla de punta a punta
