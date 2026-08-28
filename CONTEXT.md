@@ -1,5 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ RESUELTO — Sync de MercadoPago roto desde la migración de cuenta de Supabase (16/08, mig.365)
+
+Luciano reportó (27/08) que dos compras personales suyas por MercadoPago ($6.000 y $7.500) no
+impactaban en Bancos, y sospechaba que tenía que ver con la fecha de la migración de cuenta de
+Supabase. Tenía razón. Causa raíz: **exactamente el mismo patrón ya documentado en mig.330**
+(`fn_persistir_cae_emitido`/`reintentar_caes_lote`) — `insertar_movimiento_bancario_externo` había
+sido recreada por `DROP FUNCTION + CREATE FUNCTION` en mig.245 (para agregar `p_external_ref`) sin
+volver a otorgar `GRANT EXECUTE`. En el proyecto viejo funcionaba porque el grant a `service_role`
+se había hecho a mano en producción, sin migración — ese ajuste manual no viaja en un dump/restore
+de esquema, así que se perdió al migrar de cuenta el 16/08. `mp-sync-worker` (cron cada 2 min) y el
+botón "Actualizar MP" seguían corriendo sin error visible — la API de MercadoPago respondía bien,
+`ultimo_sync` avanzaba en cada corrida — pero el INSERT final fallaba con "permission denied" en
+silencio, atrapado por el catch de `mpSync.ts`, para TODOS los pagos (ingresos y egresos por igual).
+
+Fix: `GRANT EXECUTE ... TO service_role` (mig.365, un solo statement, probado con
+`BEGIN...ROLLBACK` antes de aplicar). Backfill: en vez de insertar a mano, se rebobinó
+`ultimo_sync` a antes del hueco y se re-disparó el `mp-sync-worker` real vía `net.http_post` — trajo
+los 30 pagos reales que MercadoPago tenía aprobados entre el 16/08 y hoy (confirmado con una
+llamada directa a la API vía `pg_net` antes de tocar nada), incluidas las dos compras de Luciano,
+pasando por la misma lógica de dirección/subtipo/descripción que un pago nuevo. `ultimo_sync` quedó
+al día solo, sin necesidad de restaurarlo a mano.
+
+**Pendiente de auditar (no se hizo en esta pasada, se encontró de casualidad):** mig.330 ya había
+detectado esta MISMA clase de bug en otras 2 funciones — vale la pena revisar si quedó algún otro
+worker-only RPC creado con DROP+CREATE después de la migración de cuenta sin su GRANT
+correspondiente, antes de que aparezca otro síntoma silencioso como este.
+
 ## ✅ Determinación de Cuentas — Fases 3 y 4 (27/08, PLAN_MAPA_Y_DETERMINACION_CUENTAS_2026-08-27.md)
 
 Continuación del plan de Fases 1-4 (Mapa de Relaciones ya cerrado el mismo día). Cierra el pedido
