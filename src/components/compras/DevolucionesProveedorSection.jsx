@@ -10,8 +10,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { formatDateAR } from '@/lib/dateUtils';
+import { formatDateAR, getTodayAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
+import { asientosAutoService } from '@/services/planCuentasService';
 import ConfirmDuplicarDialog from '@/components/shared/ConfirmDuplicarDialog';
 import NuevaNCProveedorModal from './NuevaNCProveedorModal';
 import NuevaNotaDebitoModal from '@/components/shared/NuevaNotaDebitoModal';
@@ -286,6 +287,15 @@ function NotasDebitoRecibidas() {
         p_motivo: motivo.trim() || null,
       });
       if (error) throw error;
+      // Hallazgo real (auditoría Ferretería NADIA, 28/08): la cancelación
+      // solo reversaba cuenta_corriente_proveedores, el asiento de la ND
+      // original quedaba para siempre en los libros.
+      asientosAutoService.crearAsientoReversaNotaProveedor(user.empresa_id, user.id, {
+        documentoId: cancelTarget.id,
+        tipo: 'nota_debito',
+        numero: cancelTarget.numero_nd,
+        fecha: getTodayAR(),
+      }).catch(e => console.warn('[Contabilidad] Reversa asiento ND proveedor (no crítico):', e.message));
       toast({ title: `ND ${cancelTarget.numero_nd} cancelada`, description: 'Se revirtió la deuda en cuenta corriente.' });
       setCancelTarget(null);
       setMotivo('');
@@ -462,6 +472,16 @@ function NotasCreditoRecibidas() {
         p_motivo: motivo.trim() || null,
       });
       if (error) throw error;
+      // Hallazgo real (auditoría Ferretería NADIA, 28/08): la cancelación
+      // solo reversaba cuenta_corriente_proveedores, el asiento de la NC
+      // original quedaba para siempre en los libros — descuadraba el
+      // Balance de Comprobación en el IVA Crédito Fiscal de la NC.
+      asientosAutoService.crearAsientoReversaNotaProveedor(user.empresa_id, user.id, {
+        documentoId: cancelTarget.id,
+        tipo: 'nota_credito',
+        numero: cancelTarget.numero_ncp,
+        fecha: getTodayAR(),
+      }).catch(e => console.warn('[Contabilidad] Reversa asiento NC proveedor (no crítico):', e.message));
       toast({ title: `NC ${cancelTarget.numero_ncp} cancelada`, description: 'Se revirtió el crédito en cuenta corriente.' });
       setCancelTarget(null);
       setMotivo('');

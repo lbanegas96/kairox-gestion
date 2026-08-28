@@ -858,6 +858,51 @@ export const asientosAutoService = {
   },
 
   /**
+   * Reversa el asiento de una Nota de Crédito/Débito de PROVEEDOR cancelada
+   * (RPC cancelar_nota_credito_proveedor / cancelar_nota_debito_proveedor) —
+   * mismo patrón que crearAsientoReversaVenta: el asiento original queda
+   * 'confirmado' tal cual quedó posteado, se crea uno NUEVO con debe/haber
+   * invertidos que lo neutraliza en el balance. Hallazgo real (auditoría
+   * Ferretería NADIA, 28/08): cancelar_nota_credito_proveedor solo reversaba
+   * cuenta_corriente_proveedores — el asiento de la NC original quedaba para
+   * siempre en los libros, descuadrando el Balance de Comprobación.
+   */
+  async crearAsientoReversaNotaProveedor(
+    empresaId: string,
+    userId: string,
+    params: { documentoId: string; tipo: 'nota_credito' | 'nota_debito'; numero: string; fecha: string }
+  ): Promise<void> {
+    const { data: original, error } = await supabase
+      .from('asientos_contables')
+      .select('id, asientos_items(cuenta_id, debe, haber, descripcion)')
+      .eq('empresa_id', empresaId)
+      .eq('origen', params.tipo + '_proveedor')
+      .eq('origen_id', params.documentoId)
+      .eq('estado', 'confirmado')
+      .maybeSingle();
+    if (error || !original || !(original as any).asientos_items?.length) return;
+
+    const items = ((original as any).asientos_items as any[]).map((i) => ({
+      cuenta_id: i.cuenta_id,
+      debe: Number(i.haber),
+      haber: Number(i.debe),
+      descripcion: `Reversa — ${i.descripcion || ''}`,
+    }));
+
+    const nombreTipo = params.tipo === 'nota_credito' ? 'Nota de Crédito' : 'Nota de Débito';
+    await asientosService.createAsientoAutomatico(
+      empresaId, userId,
+      {
+        fecha: params.fecha,
+        descripcion: `Reversa — Cancelación ${nombreTipo} de Proveedor ${params.numero}`,
+        origen: 'cancelacion_' + params.tipo + '_proveedor',
+        origen_id: params.documentoId,
+      },
+      items
+    );
+  },
+
+  /**
    * Crea y confirma el asiento de un movimiento de caja MANUAL
    * (ingresos/egresos cargados a mano desde CajaSection).
    *
