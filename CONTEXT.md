@@ -1,5 +1,51 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Fase 6 completa — Inventario (Ferretería NADIA)
+
+Los 3 requisitos de la Fase 6 del plan de prueba integral, probados por la UI real y verificados
+contra la base (stock, costo, precio y asientos contables).
+
+### Lo que se cargó
+- **Recuento de Inventario** (`RC-20260828-001`, categoría Herramientas, 6 productos) con 1
+  faltante y 1 sobrante a propósito: Taladro Percutor Eléctrico 5→4 unidades (faltante, $58.000
+  c/u) y Destornillador Phillips Nº2 24→26 unidades (sobrante, $800 c/u). Confirmado: stock
+  actualizado en `productos` (4 y 26), 2 `movimientos_inventario` tipo `ajuste` con el valor
+  absoluto contado (mismo criterio ya usado por `ajustar_stock_manual`, mig.289 — no es un bug),
+  y un único asiento (`AS-000019`) balanceado: Debe 5.10 Diferencias de Inventario (Faltantes)
+  $58.000 + Debe 1.1.3 Mercaderías $1.600 = Haber 1.1.3 Mercaderías $58.000 + Haber 4.5 Diferencias
+  de Inventario (Sobrantes) $1.600.
+- **Revalorización de Inventario** (`RV-20260828-001`, categoría Materiales de Construcción, 7
+  productos, costo nuevo cargado solo en 3): Cemento Portland $9.500→$10.200, Tornillo
+  Autoperforante caja x100 $4.500→$4.800, Clavos de Acero 2.5" $2.800→$3.000 — simulando una suba
+  real de costos del proveedor. Confirmado: `productos.costo_compra` actualizado en los 3, `stock_actual`
+  intacto (no es un evento físico, Regla 8 sap-reference respetada), asiento (`AS-000020`)
+  balanceado en $69.100 (Debe 1.1.3 Mercaderías / Haber 4.6 Revalorización de Inventario -
+  Ganancia), matemática exacta: (700×68)+(300×45)+(200×40)=69.100.
+- **Ajuste masivo de precios** (mig.354, catálogo `productos.precio_venta`, no listas de precio):
+  +5% sobre Pinturas y Accesorios, sin redondeo, prueba técnica declarada (no simula inflación real
+  — narrativa: ferretería con precios recién cargados). Preview y aplicación coincidieron exacto:
+  Cinta de Enmascarar $1.400→$1.470, Guantes $3.200→$3.360, Pincel Nº10 $1.900→$1.995, Rodillo
+  $3.600→$3.780 — **4 de los 5 productos de la categoría**, excluyendo automáticamente Pintura Látex
+  Interior Blanco (`precio_venta=$0`, el caso PIN-001 ya flagueado en Fase 1) tal como documenta la
+  migración — confirmado que la exclusión funciona en un caso real, no solo en el comentario del
+  código.
+
+### 🟡 Hallazgo — el contador "líneas con diferencia/cambio de costo" no se actualiza en vivo, solo al perder foco
+En el detalle de un Recuento (y aparentemente el mismo patrón en Revalorización), la columna
+"Diferencia" de cada fila se recalcula al tipear — pero el contador resumen de abajo ("N línea(s)
+con diferencia") se queda desactualizado hasta que el campo pierde el foco (`blur`). Reproducido en
+vivo: tras cargar Taladro (-1) y Destornillador (+2) sin salir del último campo, el contador seguía
+en "1 línea(s) con diferencia" — recién pasó a "2" al hacer click en otro lado. No es un bug de
+datos (`confirmar_recuento_inventario` lee los valores reales de los inputs, no el contador — la
+línea que se aplicó fue la correcta), pero puede inducir a error a alguien que mira el contador
+mientras sigue tipeando y confía en ese número antes de tabular a otro campo. No se corrigió —
+queda para la próxima pasada de UI de Inventario.
+
+**Siguiente paso:** Fase 7 (Casos límite — cancelar una factura sin CAE, y opcionalmente un segundo
+Punto de Venta con Multi-PdV).
+
+---
+
 ## ✅ Cerrados en vivo (28/08) los 2 pendientes de Ferretería NADIA que dejó el cierre del 27/08
 
 Retomando después de que Luciano cerrara sus 6 hallazgos (abajo): quedaban 2 cosas puntuales en los
