@@ -68,7 +68,22 @@ function ModalDetalleRevalorizacion({ revalorizacionId, onOpenChange, onConfirma
     }
   };
 
-  const totalDiferencias = items.filter(i => i.costo_nuevo != null && Number(i.costo_nuevo) !== Number(i.costo_anterior)).length;
+  // Cuenta sobre lo que el usuario está tipeando (valores), no solo sobre lo
+  // ya guardado (items) — mismo hallazgo que ModalDetalleRecuento.jsx
+  // (auditoría Ferretería NADIA, 28/08): el contador se quedaba atrás hasta
+  // el blur del campo. No es un bug de datos — solo corrige lo que se
+  // muestra en pantalla.
+  const costoEfectivo = (i) => {
+    const raw = valores[i.id];
+    if (raw === undefined) return i.costo_nuevo;
+    if (raw === '') return null;
+    const n = parseFloat(raw);
+    return Number.isNaN(n) ? null : n;
+  };
+  const totalDiferencias = items.filter(i => {
+    const c = costoEfectivo(i);
+    return c != null && Number(c) !== Number(i.costo_anterior);
+  }).length;
 
   const handleConfirmar = async () => {
     if (!confirmandoId) {

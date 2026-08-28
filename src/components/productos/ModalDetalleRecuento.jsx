@@ -71,7 +71,23 @@ function ModalDetalleRecuento({ recuentoId, onOpenChange, onConfirmado }) {
     }
   };
 
-  const totalDiferencias = items.filter(i => i.cantidad_contada != null && i.cantidad_contada !== i.stock_sistema).length;
+  // Cuenta sobre lo que el usuario está tipeando (valores), no solo sobre lo
+  // ya guardado (items) — antes el contador se quedaba atrás hasta el blur
+  // del campo, aunque la columna "Diferencia" de cada fila sí se actualizaba
+  // al tipear (hallazgo auditoría Ferretería NADIA, 28/08). No es un bug de
+  // datos: confirmar_recuento_inventario lee los valores reales guardados,
+  // no este contador — esto solo corrige lo que se muestra en pantalla.
+  const cantidadEfectiva = (i) => {
+    const raw = valores[i.id];
+    if (raw === undefined) return i.cantidad_contada;
+    if (raw === '') return null;
+    const n = parseInt(raw, 10);
+    return Number.isNaN(n) ? null : n;
+  };
+  const totalDiferencias = items.filter(i => {
+    const c = cantidadEfectiva(i);
+    return c != null && c !== i.stock_sistema;
+  }).length;
 
   const handleConfirmar = async () => {
     if (!confirmandoId) {
