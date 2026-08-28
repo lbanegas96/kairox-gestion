@@ -54,6 +54,13 @@ function netoDeComprobante(c) {
 function brutoDeComprobante(c) {
   return signoComprobante(c) * Number(c.total);
 }
+// Cuenta para el Libro IVA: con CAE emitido, o sin AFIP configurado
+// (no_aplica — igual de definitivo que un CAE emitido, la venta ya está
+// cerrada). 'pendiente'/'error' quedan afuera de los totales — son estados
+// transitorios que todavía pueden resolverse o reintentarse.
+function esComprobanteValido(c) {
+  return c.cae_estado === 'emitido' || c.cae_estado === 'no_aplica';
+}
 
 function ReporteLibroIVA({ onBack }) {
   const { user } = useAuth();
@@ -87,7 +94,12 @@ function ReporteLibroIVA({ onBack }) {
           estado_pago, forma_pago, iva_discriminado, neto_gravado
         `)
         .eq('empresa_id', user.empresa_id)
-        .in('cae_estado', ['emitido', 'pendiente', 'error'])
+        // 'no_aplica' incluido: un Libro IVA es una obligación contable propia
+        // incluso sin factura electrónica — antes, cualquier empresa con AFIP
+        // apagado (cae_estado siempre 'no_aplica') veía este reporte vacío sin
+        // importar cuánto facturó de verdad (hallazgo auditoría Ferretería
+        // NADIA, 28/08).
+        .in('cae_estado', ['emitido', 'no_aplica', 'pendiente', 'error'])
         .gte('fecha', `${fechaDesde}T00:00:00`)
         .lte('fecha', `${fechaHasta}T23:59:59`)
         .order('fecha', { ascending: true })
@@ -139,7 +151,7 @@ function ReporteLibroIVA({ onBack }) {
   }, [user?.empresa_id, fechaDesde, fechaHasta, toast]);
 
   const kpis = useMemo(() => {
-    const emitidos  = comprobantes.filter(c => c.cae_estado === 'emitido');
+    const emitidos  = comprobantes.filter(esComprobanteValido);
     const pendientes = comprobantes.filter(c => c.cae_estado === 'pendiente' || c.cae_estado === 'error');
     const totalNeto   = emitidos.reduce((sum, c) => sum + netoDeComprobante(c), 0);
     const totalIVA    = emitidos.reduce((sum, c) => sum + ivaDeComprobante(c), 0);
@@ -164,7 +176,7 @@ function ReporteLibroIVA({ onBack }) {
   // `comprobante_items.subtotal` (neto vs. bruto), porque el reparto es una
   // proporción DENTRO de un mismo comprobante, donde todos los items
   // comparten siempre la misma convención (se cargan juntos, en la misma
-  // operación). Solo comprobantes con CAE emitido, igual criterio que kpis.
+  // operación). Mismo criterio que kpis: CAE emitido, o sin AFIP configurado.
   const alicuotaResumen = useMemo(() => {
     const buckets = {};
     const addTo = (key, neto, iva) => {
@@ -173,7 +185,7 @@ function ReporteLibroIVA({ onBack }) {
       buckets[key].iva += iva;
     };
     comprobantesFiltrados
-      .filter(c => c.cae_estado === 'emitido')
+      .filter(esComprobanteValido)
       .forEach(c => {
         const items = itemsPorComprobante[c.id] || [];
         const netoTotal = netoDeComprobante(c);
@@ -263,7 +275,7 @@ function ReporteLibroIVA({ onBack }) {
     const lineas = [
       `📊 *Libro IVA Ventas*`,
       `Período: ${fechaDesde} al ${fechaHasta}`,
-      `Comprobantes: ${kpis.emitidos} emitidos`,
+      `Comprobantes: ${kpis.emitidos}`,
       `Total Bruto: ${fmtARS(kpis.totalBruto)}`,
       `Neto Gravado: ${fmtARS(kpis.totalNeto)}`,
       `IVA: ${fmtARS(kpis.totalIVA)}`,
@@ -279,6 +291,8 @@ function ReporteLibroIVA({ onBack }) {
       return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"><Clock className="w-3 h-3" />Pendiente</span>;
     if (estado === 'error')
       return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"><AlertTriangle className="w-3 h-3" />Error</span>;
+    if (estado === 'no_aplica')
+      return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-kx-text-2 dark:bg-kx-surface-2 dark:text-kx-text-2">Sin AFIP</span>;
     return <span className="text-xs text-kx-text-3">{estado}</span>;
   };
 
@@ -348,6 +362,7 @@ function ReporteLibroIVA({ onBack }) {
               <SelectContent>
                 <SelectItem value="todos">Todos los estados</SelectItem>
                 <SelectItem value="emitido">Con CAE emitido</SelectItem>
+                <SelectItem value="no_aplica">Sin AFIP</SelectItem>
                 <SelectItem value="pendiente">CAE pendiente</SelectItem>
                 <SelectItem value="error">Con error</SelectItem>
               </SelectContent>
@@ -391,18 +406,18 @@ function ReporteLibroIVA({ onBack }) {
       {generated && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
-            <p className="text-xs text-kx-text-3 uppercase tracking-wide">Emitidos</p>
+            <p className="text-xs text-kx-text-3 uppercase tracking-wide">Comprobantes</p>
             <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
               {kpis.emitidos}
             </p>
-            <p className="text-xs text-kx-text-3 mt-1">comprobantes con CAE</p>
+            <p className="text-xs text-kx-text-3 mt-1">en el período</p>
           </Card>
           <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
             <p className="text-xs text-kx-text-3 uppercase tracking-wide">Total Bruto</p>
             <p className="text-2xl font-black text-kx-text dark:text-kx-text mt-1 font-mono">
               {fmtARS(kpis.totalBruto)}
             </p>
-            <p className="text-xs text-kx-text-3 mt-1">comprobantes emitidos</p>
+            <p className="text-xs text-kx-text-3 mt-1">del período</p>
           </Card>
           <Card className="p-4 dark:bg-kx-surface dark:border-kx-border">
             <p className="text-xs text-kx-text-3 uppercase tracking-wide">Neto Gravado</p>
