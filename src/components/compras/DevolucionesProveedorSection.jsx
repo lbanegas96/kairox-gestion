@@ -137,12 +137,20 @@ function DevolucionesTab({ onNavigate }) {
               devoluciones.map(dev => {
                 const items  = dev.devolucion_items || [];
                 const isOpen = !!expanded[dev.id];
-                const total  = items.reduce((s, i) => s + Number(i.subtotal || 0), 0);
-                const neto   = items.reduce((s, i) => {
+                // devolucion_items.subtotal (tipo='proveedor') ya es NETO — viene de
+                // compras.costo_unitario, sin IVA — no bruto. El cálculo viejo lo
+                // trataba como bruto y lo descomponía al revés (hallazgo auditoría
+                // Ferretería NADIA, 28/08): dividía por el factor en vez de
+                // multiplicar, mostrando "Neto" y "IVA" invertidos/incorrectos. No
+                // afectaba el monto real de la devolución ni el de la NC que genera
+                // (NuevaNCProveedorModal ya hace bien la conversión neto→bruto) — era
+                // puramente un problema de esta vista.
+                const neto = items.reduce((s, i) => s + Number(i.subtotal || 0), 0);
+                const iva  = items.reduce((s, i) => {
                   const factor = FACTOR_IVA[String(i.alicuota_iva)] ?? 1;
-                  return s + Number(i.subtotal || 0) / factor;
+                  return s + Number(i.subtotal || 0) * (factor - 1);
                 }, 0);
-                const iva = total - neto;
+                const total = neto + iva;
                 return (
                   <React.Fragment key={dev.id}>
                     <tr
