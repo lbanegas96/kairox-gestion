@@ -18,16 +18,24 @@ export const dashboardService = {
       ventasHoy, ventasAyer, ventasMes, ventasMesAnterior, gastosMes,
       deudaTotal, stockRaw, comprobantesRes, ocRes,
     ] = await Promise.all([
-      supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'ingreso').eq('categoria', 'Venta').gte('fecha', todayStart).lte('fecha', todayEnd),
-      supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'ingreso').eq('categoria', 'Venta').gte('fecha', getStartOfDayAR(ayer)).lte('fecha', getEndOfDayAR(ayer)),
+      // tipo IN ('ingreso','egreso'): cancelar_factura inserta un egreso especular
+      // categoria='Venta' para reversar el cobro (correcto para Caja) — sin
+      // restarlo acá, una factura cancelada seguía sumando en "Ventas del
+      // día/mes" como si la venta siguiera en pie (hallazgo auditoría Ferretería
+      // NADIA, 28/08). netear() abajo hace ingreso - egreso.
+      supabase.from('movimientos_caja').select('monto, tipo').eq('empresa_id', empresaId).in('tipo', ['ingreso', 'egreso']).eq('categoria', 'Venta').gte('fecha', todayStart).lte('fecha', todayEnd),
+      supabase.from('movimientos_caja').select('monto, tipo').eq('empresa_id', empresaId).in('tipo', ['ingreso', 'egreso']).eq('categoria', 'Venta').gte('fecha', getStartOfDayAR(ayer)).lte('fecha', getEndOfDayAR(ayer)),
       // categoria='Venta' explícito: sin este filtro sumaba CUALQUIER ingreso de
       // caja del mes (cobros de CC, transferencias reconciliadas, etc.), no solo
       // ventas — inconsistente con ventasHoy/ventasAyer arriba, que sí lo filtran
       // (hallazgo auditoría sesión 59).
-      supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'ingreso').eq('categoria', 'Venta').gte('fecha', mesStart).lte('fecha', todayEnd),
+      supabase.from('movimientos_caja').select('monto, tipo').eq('empresa_id', empresaId).in('tipo', ['ingreso', 'egreso']).eq('categoria', 'Venta').gte('fecha', mesStart).lte('fecha', todayEnd),
       // Mismo período del mes anterior (para la variación mes-contra-mes del card).
-      supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'ingreso').eq('categoria', 'Venta').gte('fecha', mesAntStart).lt('fecha', mesAntFin),
-      supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'egreso').neq('categoria', 'Apertura').gte('fecha', mesStart).lte('fecha', todayEnd),
+      supabase.from('movimientos_caja').select('monto, tipo').eq('empresa_id', empresaId).in('tipo', ['ingreso', 'egreso']).eq('categoria', 'Venta').gte('fecha', mesAntStart).lt('fecha', mesAntFin),
+      // categoria='Venta' también excluida acá: el mismo egreso especular de
+      // cancelar_factura no es un gasto real, es la reversa de un cobro — sin
+      // excluirlo, cancelar una factura pagada inflaba "Gastos del mes".
+      supabase.from('movimientos_caja').select('monto').eq('empresa_id', empresaId).eq('tipo', 'egreso').neq('categoria', 'Apertura').neq('categoria', 'Venta').gte('fecha', mesStart).lte('fecha', todayEnd),
       supabase.from('clientes').select('saldo_actual').eq('empresa_id', empresaId).gt('saldo_actual', 0),
       // RPC (mig.333) en vez de traer TODOS los productos activos y filtrar acá --
       // con catálogos de miles de productos (ej. import masivo de kiosco), traer
@@ -49,11 +57,14 @@ export const dashboardService = {
 
     const sum = (rows: { data: { monto: number }[] | null }) =>
       (rows.data ?? []).reduce((s, r) => s + Number(r.monto), 0);
+    // Ventas: ingreso suma, egreso (reversa de una cancelación) resta.
+    const netear = (rows: { data: { monto: number; tipo: string }[] | null }) =>
+      (rows.data ?? []).reduce((s, r) => s + (r.tipo === 'egreso' ? -1 : 1) * Number(r.monto), 0);
 
-    const ventasHoyTotal   = sum(ventasHoy);
-    const ventasAyerTotal  = sum(ventasAyer);
-    const ventasMesTotal   = sum(ventasMes);
-    const ventasMesAntTotal = sum(ventasMesAnterior);
+    const ventasHoyTotal   = netear(ventasHoy);
+    const ventasAyerTotal  = netear(ventasAyer);
+    const ventasMesTotal   = netear(ventasMes);
+    const ventasMesAntTotal = netear(ventasMesAnterior);
     const gastosMesTotal   = sum(gastosMes);
     const deudaClientesTotal = (deudaTotal.data ?? []).reduce(
       (s: number, c: { saldo_actual: number }) => s + Number(c.saldo_actual), 0
@@ -121,9 +132,9 @@ export const dashboardService = {
 
     const { data, error } = await supabase
       .from('movimientos_caja')
-      .select('fecha, monto')
+      .select('fecha, monto, tipo')
       .eq('empresa_id', empresaId)
-      .eq('tipo', 'ingreso')
+      .in('tipo', ['ingreso', 'egreso'])
       .eq('categoria', 'Venta')
       .gte('fecha', desde.toISOString())
       .order('fecha');
@@ -135,9 +146,10 @@ export const dashboardService = {
       const d = new Date(now.getTime() - (dias - 1 - i) * 86400000);
       byDay[d.toISOString().split('T')[0]] = 0;
     }
+    // Mismo criterio que getKPIs: egreso (reversa de cancelar_factura) resta.
     for (const m of data ?? []) {
       const key = (m.fecha as string).split('T')[0];
-      if (key in byDay) byDay[key] += Number(m.monto);
+      if (key in byDay) byDay[key] += (m.tipo === 'egreso' ? -1 : 1) * Number(m.monto);
     }
 
     return Object.entries(byDay).map(([fecha, total]) => ({
