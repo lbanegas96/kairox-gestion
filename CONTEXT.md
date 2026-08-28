@@ -1,5 +1,53 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Fase 7 completa — Casos límite (Ferretería NADIA), incluida la parte opcional
+
+Los 2 puntos del plan (el obligatorio y el opcional, hubo tiempo) probados por la UI real y
+verificados contra la base.
+
+### Cancelar una Factura sin CAE
+Se generó una venta de mostrador real por el POS (Efectivo, $2.500, Cinta Métrica 5m — hubo que
+abrir la caja de Ferretería NADIA por primera vez, saldo inicial $20.000) y se canceló acto seguido
+desde Facturas → Ver detalle → "Cancelar Factura", el caso real que el plan pedía probar (cae_estado
+siempre `'no_aplica'` acá al estar AFIP apagado, confirmado). Verificado en base, todo reversado
+correctamente y de forma especular (nada se borra):
+- `estado_pago` → `cancelada`, `cae_estado` se mantiene `no_aplica` (mig.351 funcionando).
+- Stock repuesto: `movimientos_inventario` `salida 1` (venta) + `entrada 1` (cancelación) = stock
+  neto sin cambios (28→27→28).
+- Caja reversada: `movimientos_caja` `ingreso $2.500` (venta) + `egreso $2.500` (cancelación,
+  concepto "Cancelación Factura...") — ambos registros conservados, ninguno borrado.
+- Entrega implícita (`ENT-2026-0005`) anulada correctamente.
+
+**Nota de automatización (no es bug de la app):** el botón "Sí, cancelar factura" del modal de
+confirmación no respondió a varios intentos con el `computer.left_click` de la herramienta de
+navegador (el diálogo se cerraba sin disparar la llamada al RPC, confirmado comparando contra el
+estado real en base tras cada intento). Se verificó primero con `BEGIN...ROLLBACK` que
+`cancelar_factura` funciona perfecto server-side, y recién then un `.click()` nativo por JS sobre el
+mismo botón sí lo disparó — mismo patrón ya documentado en sesiones anteriores con ciertos menúes
+Radix en este entorno de pruebas, no algo para que Nadia/Luciano corrijan.
+
+### Multi-PdV con letra (mig.352/353), con datos reales de Ferretería NADIA
+Alta de un segundo Punto de Venta real — **PdV 2 "Reparto a domicilio"**, interno (no envía a
+ARCA, consistente con la empresa), habilitado solo para **Factura B y C** (no A — un reparto a
+domicilio factura a consumidores/monotributistas, no a responsables inscriptos con Factura A). PdV 1
+sigue siendo el default para las 3 letras, sin tocar.
+
+Verificado en el selector de "Nueva Factura de Venta":
+- Con **Factura A** seleccionada, el combo de PdV solo ofrece PdV 1 (PdV 2 correctamente excluido).
+- Con **Factura B** seleccionada, ofrece ambos PdV, con PdV 1 pre-seleccionado por defecto
+  (`es_default_para_letra`), tal cual diseñado.
+- Se generó una factura real desde **PdV 2** (Julieta Sosa, Factura B, "Flete reparto a domicilio"
+  $3.000) — quedó numerada **`FAC-2-20260828-001`** (serie propia con el número de PdV inyectado),
+  mientras que PdV 1 sigue con su serie de siempre sin el prefijo (`FAC-20260827-00X`,
+  retrocompatible). Confirma que la numeración es independiente por PdV, tal cual describe mig.296.
+
+**Siguiente paso:** Fase 8 (Reportes y cierre) — Dashboard, Reportes, Libro IVA, Balance de
+Comprobación, Estado de Resultados, Cta. Corriente, Cheques pendientes, todo tiene que reflejar lo
+cargado en las fases anteriores. Ahí conviene revisar puntualmente el caso PIN-001
+(`precio_por_kg_litro`) flagueado desde la Fase 1.
+
+---
+
 ## ✅ Fase 6 completa — Inventario (Ferretería NADIA)
 
 Los 3 requisitos de la Fase 6 del plan de prueba integral, probados por la UI real y verificados
