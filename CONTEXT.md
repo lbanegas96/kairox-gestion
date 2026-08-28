@@ -1,5 +1,23 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🏁 Plan de prueba integral de Ferretería NADIA — Fases 1 a 8 completas, Fase 9 queda pendiente a propósito
+
+Cierre del plan completo (`PLAN_PRUEBA_INTEGRAL_FERRETERIA_2026-08-26.md`). Al arrancar la Fase 9 se
+verificó primero, antes de tocar nada, que Tiendanube y MercadoPago siguieran sin conectar para
+Ferretería NADIA — confirmado en Configuración → Integraciones: switch de Ecommerce apagado (nunca
+llegó a mostrar el botón "Conectar" de Tiendanube) y MercadoPago en "Sin configurar". Conectar
+cualquiera de las dos dispara un flujo OAuth real contra la cuenta de Nadia — no es algo para hacer
+sin ella. Se le preguntó cómo seguir y **decidió dejar la Fase 9 pendiente por ahora**, no conectarlas
+en esta sesión.
+
+**Resultado del plan:** Fases 1 a 8 completas, documentadas y verificadas contra la base real en
+cada paso (catálogo, proveedores/compras, clientes/ventas, finanzas, devoluciones, inventario, casos
+límite, reportes y cierre). Fase 9 (Tiendanube/MercadoPago) sigue abierta, a la espera de que Nadia
+conecte ambas integraciones manualmente desde su propia sesión — cuando eso pase, retomar probando
+publicación de catálogo y sincronización de stock/pedidos, tal como indica el plan.
+
+---
+
 ## ✅ Fase 8 completa — Reportes y cierre (Ferretería NADIA)
 
 Recorrida completa del checklist del plan (Dashboard, Reportes, Libro IVA, Balance de Comprobación,
