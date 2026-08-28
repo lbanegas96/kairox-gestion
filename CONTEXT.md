@@ -1,5 +1,110 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Fase 8 completa — Reportes y cierre (Ferretería NADIA)
+
+Recorrida completa del checklist del plan (Dashboard, Reportes, Libro IVA, Balance de Comprobación,
+Estado de Resultados, Cta. Corriente clientes/proveedores, Cheques), comparando cada pantalla contra
+los totales reales calculados por SQL directo. La mayoría **cierra exacto** — pero salieron **4
+hallazgos reales nuevos** (uno corregido para los datos de prueba, 3 documentados sin tocar código) y
+se resolvió el punto pendiente de PIN-001 desde la Fase 1.
+
+### ✅ Lo que cierra exacto (verificado contra SQL, sin hallazgos)
+- **Cta. Corriente clientes:** $196.300 total, 4 clientes con deuda — coincide al peso con la suma de
+  `cuenta_corriente_movimientos`.
+- **Antigüedad de Deuda:** bandas correctas — $181.800 en 0-30 días (5 comprobantes), $14.500 en
+  61-90 días (Almacén Don Rulo, FAC-20260827-004, 76 días — el caso forzado en Fase 3 sigue
+  reflejándose bien).
+- **Cta. Corriente proveedores:** $312.180 (Distribuidora Ferretera del Sur) — coincide.
+- **Cheques:** "En cartera" $0 (los 2 de terceros ya están Depositados), "Propios pendientes"
+  $200.000 (1 cheque) — coincide.
+- **Libro IVA Compras:** sin el problema de AFIP de más abajo (nunca filtró por `cae_estado`, no
+  aplica a compras) — funciona bien.
+- **Balance de Comprobación / Estado de Resultados:** ✓ Cuadra ($1.205.060 = $1.205.060) — pero solo
+  **después** de la corrección de abajo; antes de corregirla no cuadraba en $3.297,52 aunque nadie lo
+  hubiera notado sin revisar el Balance a mano.
+
+### 🔴 Hallazgo real, corregido en los datos de prueba (código sin tocar) — `cancelar_nota_credito_proveedor` nunca genera asiento de reversa
+Causa raíz confirmada leyendo `278_cancelar_nc_nd_proveedor.sql` y `DevolucionesProveedorSection.jsx`:
+a diferencia de `cancelar_factura` (mig.351, que sí arma un asiento de reversa completo —
+verificado con `AS-000022` de la Fase 7, reversa balanceada de Costo/IVA/Ventas/Caja), la cancelación
+de una NC o ND de proveedor **solo** reversa `cuenta_corriente_proveedores` — nunca toca
+`asientos_contables`. Consecuencia real, confirmada: al cancelar `NC-20260827-001` (Fase 8, más
+arriba en esta sesión), el asiento original (`AS-000004`: Debe Cuentas a Pagar $19.000 / Haber
+Mercaderías $15.702,48 / Haber IVA Crédito Fiscal $3.297,52) quedó **para siempre en los libros**
+aunque la NC ya no existía — el Balance de Comprobación dejó de cuadrar en $3.297,52 y el saldo real
+de IVA Crédito Fiscal quedaba subvaluado en la misma cifra.
+
+**Corrección aplicada** (verificada primero con `BEGIN...ROLLBACK`, después confirmada real): se
+booqueó un asiento de reversa manual (`AS-000024`, vía `crear_asiento_automatico`, el mismo RPC que
+usa el resto del sistema — no un INSERT a mano) espejando exacto al original en sentido contrario.
+Verificado: IVA Crédito Fiscal pasó de $70.771,74 a **$74.069,26** (coincide ahora con
+`compras.iva − NC activa.iva`), Cuentas a Pagar a **-$312.180,00** (coincide con
+`cuenta_corriente_proveedores`), y el Balance de Comprobación volvió a **✓ Cuadra**. **La corrección
+es de los datos de Ferretería NADIA, no del bug** — `cancelar_nota_credito_proveedor` y
+`cancelar_nota_debito_proveedor` siguen sin generar asiento de reversa en el código; cualquier
+cancelación futura de una NC/ND de proveedor real va a volver a desbalancear el Balance de
+Comprobación hasta que se corrija (agregar el mismo patrón de `asientosAutoService` que ya usa el
+lado cliente).
+
+### 🔴 Hallazgo real, sin corregir — Libro IVA Ventas queda vacío para cualquier empresa sin AFIP
+`ReporteLibroIVA.jsx` filtra `cae_estado IN ('emitido', 'pendiente', 'error')` — excluye
+`'no_aplica'` a propósito. Para Ferretería NADIA (AFIP apagado, `cae_estado` siempre `'no_aplica'`),
+esto significa que el reporte **siempre** muestra "No hay comprobantes con CAE en el período" — $0
+en los 4 KPI — sin importar cuánto se facturó de verdad ($349.900 en el período probado). Accesible
+tanto desde Reportes → "Ver Libro IVA Ventas" como desde Impuestos → "Ver Libro IVA Ventas", mismo
+componente, mismo problema. Un Libro IVA es una obligación contable propia incluso sin factura
+electrónica — este reporte hoy es inútil para cualquier empresa que use KAIROX como ERP interno sin
+AFIP, no solo para la empresa de prueba. No se corrigió — el fix real (agregar `'no_aplica'` al
+filtro, o sacarlo directamente y mostrar todos los comprobantes tipo venta/NC/ND del período)
+excede el alcance de esta sesión de pruebas.
+
+### 🔴 Hallazgo real, sin corregir — "Posición IVA del período" (Impuestos) calculado con 2 errores de método
+`TabIVA.jsx` → `fetchPosicion()`:
+- **Crédito Fiscal** = solo `sum(compras.iva_discriminado)`, nunca resta las Notas de Crédito de
+  Proveedor. Confirmado con datos reales: mostraba $78.059,26 en vez de los $74.069,26 correctos —
+  sobrestima el crédito fiscal (y el "saldo a favor") en exactamente el IVA de la NC activa,
+  $3.990,00, siempre.
+- **Débito Fiscal** = solo `sum` de `comprobantes` con `tipo='venta'` — nunca resta Notas de Crédito
+  ni suma Notas de Débito de cliente, y no excluye comprobantes `cancelada`. En el dataset de prueba
+  el número mostrado ($53.003,30 con el filtro de fecha del mes) **coincidía casi exacto** con el
+  valor correcto por una casualidad aritmética verificada a mano (el IVA del ticket cancelado
+  $433,88 casi cancela contra el neto de las 2 NC menos la 1 ND de cliente, $433,89) — no por estar
+  bien calculado. Con otros datos (una NC grande sin una ND que la compense, por ejemplo) el número
+  mostrado divergiría fuerte del real.
+
+No se corrigió — ambos requieren tocar la query de `fetchPosicion` en `TabIVA.jsx` (sumar
+`notas_credito_proveedor`/restarlas del crédito; sumar `tipo IN ('venta','nota_credito','nota_debito')`
+con el signo correcto y excluir `estado_pago='cancelada'` del débito) — alcance de desarrollo, no de
+esta sesión.
+
+### 🔴 Hallazgo real, sin corregir — Dashboard cuenta ventas canceladas como "Ventas del día/mes"
+`dashboardService.ts`: "Ventas del día", "Ventas del mes" y "Contado (mes) %" se calculan sumando
+`movimientos_caja` con `tipo='ingreso' AND categoria='Venta'` — pero **nunca restan el `egreso`
+especular** que genera cancelar una factura pagada en efectivo/tarjeta (ver Fase 7, `cancelar_factura`
+sí inserta ese egreso reversor, correcto — el problema es que estos 3 KPI del Dashboard no lo tienen
+en cuenta). Confirmado en vivo: después de cancelar el ticket de $2.500 de la Fase 7, "Ventas del
+día" siguió mostrando $2.500 (debería ser $0, no hubo ninguna venta real hoy) y "Ventas del mes"
+siguió incluyendo esos $2.500 fantasma. No se corrigió — el fix es filtrar por
+`comprobante_id`/`estado_pago` del comprobante asociado, o simplemente netear ingreso−egreso por
+`categoria='Venta'` en la misma query.
+
+### ✅ Resuelto el pendiente de la Fase 1 — "Listas de Precios" SÍ tiene el bug de `precio_por_kg_litro`
+Se creó una lista de precios de prueba y se abrió "Gestionar precios": para Pintura Látex Interior
+Blanco (PIN-001, `tipo_venta='litro'`) el modal muestra **"Precio estándar: $0"** — lee
+`productos.precio_venta` directo sin la conversión a `precio_por_kg_litro` que sí tienen
+`TablaInventario.jsx`/`useProductosSnapshot.js` (mig.338). Confirma la sospecha dejada abierta en
+Fase 1: alguien fijando un precio especial para este producto vería $0 como referencia, sin ningún
+aviso. Se borró la lista de prueba después de confirmar el hallazgo (no queda basura en los datos de
+Ferretería NADIA). **Revalorización de Inventario, en cambio, no tiene este problema** — opera sobre
+`costo_compra`, que se carga igual sin importar `tipo_venta`, confirmado en la Fase 6 con datos
+reales. No se corrigió el bug de Listas de Precios — mismo criterio que los de arriba.
+
+**Siguiente paso:** con las Fases 1 a 8 del plan completas, queda **Fase 9 (Tiendanube/MercadoPago)**
+— explícitamente diferida hasta que Nadia conecte ambas integraciones manualmente desde su sesión.
+No se debe intentar sin que ella lo pida.
+
+---
+
 ## ✅ Fase 7 completa — Casos límite (Ferretería NADIA), incluida la parte opcional
 
 Los 2 puntos del plan (el obligatorio y el opcional, hubo tiempo) probados por la UI real y
