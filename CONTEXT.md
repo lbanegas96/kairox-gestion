@@ -1,5 +1,40 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Cerrados en código los 7 hallazgos 🔴 de la auditoría con Ferretería NADIA (28/08)
+
+Luciano pidió arrancar con lo que se pudiera hacer sin su presencia. Los 7 hallazgos que Nadia
+había dejado documentados (sección "Cierre de sesión 28/08", más abajo) quedaron corregidos,
+probados y commiteados — ninguno necesitaba una decisión de negocio, todos eran bugs de código
+bien acotados. Pendiente: push a GitHub + deploy a producción (no se hizo sin confirmar).
+
+1. **`cancelar_nota_credito_proveedor`/`cancelar_nota_debito_proveedor` no revertían su asiento**
+   — nueva `crearAsientoReversaNotaProveedor` (mismo patrón que `crearAsientoReversaVenta`), wireada
+   en `DevolucionesProveedorSection.jsx`. Verificado con `BEGIN...ROLLBACK` contra Ferretería NADIA:
+   asiento original y reversa balancean, líneas exactamente invertidas.
+2. **Dashboard contaba ventas canceladas** en "Ventas del día/mes" y el gráfico de 7 días (nunca
+   restaba el egreso especular de `cancelar_factura`); de paso, "Gastos del mes" contaba ese mismo
+   egreso como gasto real. `dashboardService.ts` ahora netea ingreso−egreso por `categoria='Venta'`.
+   Verificado: "Ventas del mes" de Ferretería NADIA pasa de $26.100 a $23.600 (correcto).
+3. **"Posición IVA del período" con 2 errores** — Crédito Fiscal no restaba NC de proveedor,
+   Débito Fiscal ignoraba NC/ND de cliente y no excluía cancelados. `TabIVA.jsx` corregido —
+   verificado: Crédito Fiscal da $74.069,26 exacto (mismo valor ya validado a mano en el hallazgo #1).
+4. **Libro IVA Ventas vacío sin AFIP** — filtraba `cae_estado` excluyendo `'no_aplica'` a propósito.
+   Se agregó al filtro y al criterio de totales (con badge/label nuevos para no decir "emitido"
+   cuando no hay AFIP). Verificado: Ferretería NADIA pasa de 0 a 10 comprobantes, $307.900.
+5. **Listas de Precios mostraba "$0"** para productos por peso/volumen — leía `precio_venta` sin la
+   conversión a `precio_por_kg_litro` (mig.338) que ya usa `TablaInventario.jsx`. Mismo criterio
+   aplicado en `ListasPrecioSection.jsx`.
+6. **Desglose Neto/IVA invertido** en el panel expandido de Devoluciones a Proveedor —
+   `devolucion_items.subtotal` ya es NETO, el cálculo lo trataba como bruto y dividía en vez de
+   multiplicar. Corregido — da $22.990 total, coincide con la NC real ya generada para ese caso.
+7. **Contador "líneas con diferencia" desactualizado hasta el blur** en Recuento y Revalorización
+   de Inventario — contaba sobre `items` (guardado) en vez de `valores` (lo que se está tipeando).
+   Mismo fix en los dos modales.
+
+`eslint` limpio y 159/159 tests en cada fix, commits separados por hallazgo.
+
+
+
 ## 📋 Cierre de sesión 28/08 — para que Luciano siga
 
 Día largo, dos frentes. **Todo commiteado, pusheado a GitHub y en producción** — nada quedó a mitad
