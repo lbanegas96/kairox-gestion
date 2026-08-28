@@ -1,5 +1,43 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ RESUELTO (preventivo) — `usar_caea_para_comprobante` sin GRANT a `service_role` (mig.366, Nalux)
+
+Retomando el pendiente que Luciano dejó anotado al cerrar el fix de MercadoPago: "vale la pena
+revisar si quedó algún otro worker-only RPC creado con DROP+CREATE después de la migración de
+cuenta sin su GRANT correspondiente". Auditoría contra el estado **vivo** de Nalux (no solo el texto
+de las migraciones — misma lección que dejó la auditoría del agente contable del 27/08): se
+listaron todas las funciones de `public` cuyo cuerpo menciona `service_role` y se comparó cada una
+contra `has_function_privilege('service_role', ...)` real.
+
+**Encontrado:** `usar_caea_para_comprobante(uuid)` — el RPC que aplica un CAEA (contingencia AFIP
+cuando ARCA está caído) a un comprobante — nunca tuvo `GRANT ... TO service_role` en ninguna de sus
+4 migraciones (206, 225, 271), solo `GRANT ... TO authenticated`. El propio comentario de mig.225
+dice textual "usar_caea_para_comprobante (invocada por el worker como service_role)" — el gap estuvo
+ahí desde el principio, **no** es un GRANT perdido en la migración de cuenta del 16/08 como los 3
+anteriores (`fn_persistir_cae_emitido`, `reintentar_caes_lote`,
+`insertar_movimiento_bancario_externo`). Confirmado reproducible con `BEGIN...ROLLBACK`:
+`SET LOCAL role service_role; select usar_caea_para_comprobante(...)` → "permission denied for
+function usar_caea_para_comprobante" antes del fix; después, pasa el check de ACL y llega a la
+lógica interna.
+
+**Impacto real en Nalux: ninguno todavía** — `caea_registros` tiene 0 filas, la contingencia CAEA
+nunca se activó (ARCA nunca tuvo una caída real que la disparara). Es un bug dormido, no una falla
+silenciosa ya ocurrida — se corrigió ahora mismo, preventivamente, antes de que haga falta de verdad
+y el worker falle en silencio justo cuando ARCA esté caído (el peor momento posible para descubrirlo).
+`usar_caea_en_venta` (la función interna que la de arriba llama vía `PERFORM`) no necesitaba el mismo
+GRANT — al ser ambas `SECURITY DEFINER`, esa llamada interna corre con los privilegios del dueño de
+la función, no con los del rol que originó la llamada externa.
+
+**Barrido del resto:** se revisaron también `registrar_cobro_cliente`, `registrar_pago_proveedor`,
+`crear_asiento_automatico`/`manual`, `obtener_cuenta_determinada`/`_forma_pago`, `get_tasa_cambio`,
+`contabilizar_movimiento_bancario`, `revertir_contabilizacion_movimiento`,
+`fn_protect_profile_role` — todas mencionan `service_role` en el cuerpo (bypass de
+`empresa_id = get_my_empresa_id()`) pero **no** tienen ningún call-site real desde un worker/edge
+function (confirmado por grep en `src/` — se llaman siempre desde el frontend como `authenticated`),
+así que el bypass ahí es código defensivo sin uso real, no un gap. No hicieron falta más GRANTs.
+
+---
+
 ## 🏁 Plan de prueba integral de Ferretería NADIA — Fases 1 a 8 completas, Fase 9 queda pendiente a propósito
 
 Cierre del plan completo (`PLAN_PRUEBA_INTEGRAL_FERRETERIA_2026-08-26.md`). Al arrancar la Fase 9 se

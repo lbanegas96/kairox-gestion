@@ -1,0 +1,30 @@
+-- migration 366 — GRANT faltante en usar_caea_para_comprobante / usar_caea_en_venta
+--
+-- HALLAZGO (auditoría pedida por Luciano tras mig.365 — "vale la pena revisar si quedó
+-- algún otro worker-only RPC creado con DROP+CREATE después de la migración de cuenta sin
+-- su GRANT correspondiente"): usar_caea_para_comprobante nunca tuvo GRANT a service_role
+-- en NINGUNA de sus 4 migraciones (206, 225, 271) — solo GRANT ... TO authenticated. El
+-- propio comentario de mig.225 dice explícitamente "usar_caea_para_comprobante (invocada
+-- por el worker como service_role)" — así que este no es un caso de GRANT perdido en la
+-- migración de cuenta del 16/08 como los 3 anteriores (fn_persistir_cae_emitido,
+-- reintentar_caes_lote, insertar_movimiento_bancario_externo), sino un GRANT que nunca
+-- existió desde el principio.
+--
+-- Confirmado con BEGIN...ROLLBACK: `SET LOCAL role service_role; select
+-- usar_caea_para_comprobante(...)` -> "permission denied for function
+-- usar_caea_para_comprobante" antes de este fix; después del GRANT, pasa el check de ACL y
+-- llega a la lógica interna (RAISE "comprobante no encontrado" con un UUID dummy, esperable).
+--
+-- IMPACTO REAL en Nalux: NINGUNO todavía — caea_registros tiene 0 filas (la contingencia
+-- CAEA nunca se activó, ARCA nunca tuvo una caída real que lo requiriera). Es un bug
+-- dormido, no una falla silenciosa ya ocurrida como las 3 anteriores — se corrige ahora,
+-- preventivamente, antes de que ARCA tenga una caída real y el worker de CAEA falle en
+-- silencio justo cuando más hace falta.
+--
+-- usar_caea_en_venta (la función interna que usar_caea_para_comprobante llama vía PERFORM)
+-- NO necesita este mismo GRANT: al ser ambas SECURITY DEFINER, la llamada interna corre con
+-- los privilegios del dueño de la función definidora, no con los del rol que originó la
+-- llamada externa — el único punto de entrada real desde afuera es
+-- usar_caea_para_comprobante.
+
+GRANT EXECUTE ON FUNCTION public.usar_caea_para_comprobante(uuid) TO service_role;
