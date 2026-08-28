@@ -84,7 +84,7 @@ function ListasPrecioSection() {
     if (!itemsModal || !empresaId) return;
     supabase
       .from('productos')
-      .select('id, nombre, codigo_sku, precio_venta')
+      .select('id, nombre, codigo_sku, precio_venta, tipo_venta, precio_por_kg_litro')
       .eq('empresa_id', empresaId)
       .eq('activo', true)
       .order('nombre')
@@ -501,7 +501,13 @@ function ListasPrecioSection() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-kx-text dark:text-kx-text truncate">{prod.nombre}</p>
                     <p className="text-xs text-kx-text-3">
-                      {prod.codigo_sku} · Precio estándar: ${Number(prod.precio_venta).toLocaleString('es-AR')}
+                      {/* Producto por peso/volumen (mig.338): el precio real vive en
+                          precio_por_kg_litro, no en precio_venta — mismo criterio que
+                          TablaInventario.jsx. Sin esto mostraba "$0" como referencia,
+                          sin ningún aviso (hallazgo auditoría Ferretería NADIA, 28/08). */}
+                      {prod.codigo_sku} · Precio estándar: {prod.tipo_venta && prod.tipo_venta !== 'unidad'
+                        ? <>${Number(prod.precio_por_kg_litro).toLocaleString('es-AR')}/{prod.tipo_venta === 'volumen' ? 'lt' : 'kg'}</>
+                        : <>${Number(prod.precio_venta).toLocaleString('es-AR')}</>}
                     </p>
                     {existingItem?.precio_programado != null && (
                       <p className="text-xs text-amber-500 dark:text-amber-400 flex items-center gap-1 mt-0.5">
