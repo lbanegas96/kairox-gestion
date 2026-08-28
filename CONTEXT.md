@@ -1,5 +1,38 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Cerrados en vivo (28/08) los 2 pendientes de Ferretería NADIA que dejó el cierre del 27/08
+
+Retomando después de que Luciano cerrara sus 6 hallazgos (abajo): quedaban 2 cosas puntuales en los
+datos de Ferretería NADIA, ambas corregidas ahora y verificadas contra la base real.
+
+- **DEV-2026-0001 vinculada a su NC** — se probó el botón "Generar NC" nuevo de Luciano
+  (mig.360) por primera vez con un caso real, con un detalle: la devolución ya tenía una NC vieja
+  (`NC-20260827-001`, creada a mano en la Fase 2 antes de que existiera el botón), así que primero
+  se **canceló** esa NC vieja (`cancelar_nota_credito_proveedor`, revierte con nota_debito
+  documentada, cuenta corriente vuelve a $0 antes de la nueva) y recién ahí se usó "Generar NC"
+  desde el detalle de la devolución. Resultado: `NC-20260828-001`, badge de Compensación pasó de
+  "Sin definir" a "Nota de Crédito" en la UI, `devoluciones.compensacion='nota_credito'` +
+  `nota_credito_proveedor_id` seteado — el flujo nuevo de Luciano funciona correctamente de punta a
+  punta.
+- **Monto corregido de paso** — la NC vieja estaba subvaluada en $19.000 (el neto del cemento sin
+  sumarle IVA, error mío de carga en la Fase 2); la nueva, generada por el modal ya con la
+  conversión neto→bruto que agregó Luciano (mig.360), salió con el monto correcto: **$22.990**.
+  Verificado en `cuenta_corriente_proveedores`: la vieja ($19.000 HABER) fue neutralizada por su
+  cancelación (nota_debito $19.000) y la nueva NC entró limpia por $22.990 — sin duplicar ni dejar
+  residuo.
+
+### 🟡 Hallazgo cosmético nuevo (sin corregir) — desglose Neto/IVA mal etiquetado en el panel expandido de Devoluciones a Proveedor
+Al expandir la fila de una devolución a proveedor con ítems, el panel muestra "Neto: $15.702,48 /
+IVA: $3.297,52 / Total: $19.000,00" para las 2 bolsas de cemento — tratando el `$19.000` (que en
+realidad es el NETO, viene de `costo_unitario`) como si fuera el bruto y descomponiéndolo al revés.
+Es un problema puramente de esa vista (`DevolucionesProveedorSection.jsx`, el cálculo de `neto`/`iva`
+del panel expandido) — no afecta ni el monto real de la devolución ni el de la NC que genera (ese sí
+convierte bien, confirmado arriba). No se corrigió — queda para la próxima pasada de UI de Compras.
+
+**Siguiente paso:** Fase 6 (Inventario) sigue siendo lo próximo del plan de prueba integral.
+
+---
+
 ## ✅ RESUELTO — Sync de MercadoPago roto desde la migración de cuenta de Supabase (16/08, mig.365)
 
 Luciano reportó (27/08) que dos compras personales suyas por MercadoPago ($6.000 y $7.500) no
