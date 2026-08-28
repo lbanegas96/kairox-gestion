@@ -49,26 +49,51 @@ function TabIVA({ onNavigate }) {
     if (!user?.empresa_id) return;
     setLoadingPos(true);
     try {
-      const { data: ventas } = await supabase
+      // Débito Fiscal: Facturas de venta suman, Notas de Crédito de cliente
+      // restan (emitidas contra una venta ya declarada) — antes solo sumaba
+      // 'venta', ignorando NC/ND de cliente y sin excluir comprobantes
+      // cancelados (hallazgo auditoría Ferretería NADIA, 28/08).
+      const { data: ventasYnc } = await supabase
         .from('comprobantes')
         .select('total, iva_discriminado, tipo')
         .eq('empresa_id', user.empresa_id)
-        .eq('tipo', 'venta')
+        .in('tipo', ['venta', 'nota_credito'])
+        .neq('estado_pago', 'cancelada')
         .gte('fecha', `${fechaDesde}T00:00:00`)
         .lte('fecha', `${fechaHasta}T23:59:59`);
+      const { data: ndCliente } = await supabase
+        .from('notas_debito')
+        .select('monto, iva_discriminado')
+        .eq('empresa_id', user.empresa_id)
+        .eq('tipo', 'emitida')
+        .neq('estado', 'cancelada')
+        .gte('fecha', fechaDesde)
+        .lte('fecha', fechaHasta);
+      // Crédito Fiscal: Facturas de compra suman, Notas de Crédito de
+      // proveedor restan — antes nunca las restaba (mismo hallazgo).
       const { data: compras } = await supabase
         .from('compras')
         .select('total, iva_discriminado')
         .eq('empresa_id', user.empresa_id)
         .gte('fecha', `${fechaDesde}T00:00:00`)
         .lte('fecha', `${fechaHasta}T23:59:59`);
+      const { data: ncProveedor } = await supabase
+        .from('notas_credito_proveedor')
+        .select('monto, iva_discriminado')
+        .eq('empresa_id', user.empresa_id)
+        .neq('estado', 'cancelada')
+        .gte('fecha', fechaDesde)
+        .lte('fecha', fechaHasta);
 
       const ivaDe = (r) => r.iva_discriminado != null
         ? Number(r.iva_discriminado)
-        : (Number(r.total) - Number(r.total) / 1.21);
+        : (Number(r.total ?? r.monto) - Number(r.total ?? r.monto) / 1.21);
 
-      const debito  = (ventas ?? []).reduce((s, v) => s + ivaDe(v), 0);
-      const credito = (compras ?? []).reduce((s, c) => s + ivaDe(c), 0);
+      const debito = (ventasYnc ?? []).reduce(
+        (s, v) => s + (v.tipo === 'nota_credito' ? -ivaDe(v) : ivaDe(v)), 0
+      ) + (ndCliente ?? []).reduce((s, n) => s + ivaDe(n), 0);
+      const credito = (compras ?? []).reduce((s, c) => s + ivaDe(c), 0)
+        - (ncProveedor ?? []).reduce((s, n) => s + ivaDe(n), 0);
       setPosicion({ debito, credito });
     } finally {
       setLoadingPos(false);
