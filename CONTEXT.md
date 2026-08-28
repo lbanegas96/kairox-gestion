@@ -1,5 +1,49 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 📋 Cierre de sesión 28/08 — para que Luciano siga
+
+Día largo, dos frentes. **Todo commiteado, pusheado a GitHub y en producción** — nada quedó a mitad
+de camino.
+
+**Frente 1 — plan de prueba integral con la empresa ficticia Ferretería NADIA:** Fases 1 a 8
+completas (catálogo → proveedores/compras → clientes/ventas → finanzas → devoluciones → inventario
+→ casos límite → reportes y cierre), cada una probada por la UI real y verificada contra la base.
+Detalle completo más abajo, sección por sección. **Fase 9 (Tiendanube/MercadoPago) queda
+deliberadamente sin arrancar** — ninguna de las dos está conectada todavía para Ferretería NADIA
+(confirmado en Configuración → Integraciones antes de tocar nada) y conectarlas requiere un OAuth
+real desde la sesión de Nadia — no se debe intentar sin que ella lo pida explícitamente.
+
+De esa recorrida salieron varios hallazgos reales, marcados 🔴 en sus secciones respectivas —
+**la mayoría documentados, sin corregir en código** (quedan para una sesión de desarrollo):
+- `cancelar_nota_credito_proveedor`/`cancelar_nota_debito_proveedor` nunca generan asiento de
+  reversa (a diferencia de `cancelar_factura`) — desbalanceaba el Balance de Comprobación de
+  Ferretería NADIA en $3.297,52; **se corrigió el dato de prueba** con un asiento de reversa real
+  (`AS-000024`, vía `crear_asiento_automatico`), el bug de código sigue abierto.
+- Libro IVA Ventas queda vacío para cualquier empresa sin AFIP (filtra `cae_estado`, excluye
+  `'no_aplica'`) — afecta a cualquier tenant que use KAIROX como ERP interno, no solo a la de prueba.
+- "Posición IVA del período" (Impuestos) con 2 errores de método — Crédito Fiscal no resta NC de
+  proveedor, Débito Fiscal ignora NC/ND de cliente y no excluye comprobantes cancelados.
+- Dashboard cuenta ventas canceladas como "Ventas del día/mes" (no neta el egreso de reversa).
+- Listas de Precios muestra "$0" para productos con `precio_por_kg_litro` en vez del precio real —
+  resuelve el pendiente que había quedado abierto desde la Fase 1.
+- El contador "líneas con diferencia/cambio de costo" en Recuento/Revalorización de Inventario no
+  se actualiza en vivo, solo al perder foco del campo (cosmético, no afecta los datos aplicados).
+
+**Frente 2 — el pendiente que dejó Luciano, sobre Nalux real:** al cerrar su fix del sync de
+MercadoPago anotó "vale la pena revisar si quedó algún otro worker-only RPC sin su GRANT
+correspondiente". Se auditó contra el estado vivo de la base (no solo el texto de las migraciones) y
+se encontró uno: `usar_caea_para_comprobante` (la contingencia AFIP cuando ARCA está caído) nunca
+tuvo `GRANT ... TO service_role` desde que se creó — corregido preventivamente (mig.366), sin
+impacto real todavía porque la contingencia CAEA nunca se activó en Nalux. Se confirmó además que
+**todo lo demás que Luciano había dejado anotado como "pendiente confirmar push/deploy" ya estaba
+pusheado** (mig.364, y los 5 fixes de los "6 hallazgos" de Nadia) — no había ningún cabo suelto real
+de su lado.
+
+**Siguiente paso:** Fase 9 cuando Nadia conecte Tiendanube/MercadoPago, o cualquiera de los
+hallazgos 🔴 de arriba si se prioriza una sesión de desarrollo sobre Ferretería NADIA/Nalux.
+
+---
+
 ## ✅ RESUELTO (preventivo) — `usar_caea_para_comprobante` sin GRANT a `service_role` (mig.366, Nalux)
 
 Retomando el pendiente que Luciano dejó anotado al cerrar el fix de MercadoPago: "vale la pena
