@@ -7,12 +7,14 @@ import { PanelSeccion } from '@/components/shared/documento/DocumentoTabs';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 
 // Rediseño 29/08 (pedido explícito de Luciano viendo el detalle de Entrega:
-// "no todo amontonado"): mismo shell de documento que ModalDetalleEntrega.jsx
-// / ModalDetalleCotizacion.jsx — size="medium" (se ajusta al contenido, sin la
-// franja vacía que "wide" dejaba en documentos cortos, ver comentario de
-// mediumDialogClass en dialog.jsx) + PanelSeccion para agrupar "Datos del
-// cobro" e "Imputar a factura(s)" en vez del formulario denso de una sola
-// columna que tenía este modal desde el rediseño del 16/08.
+// "no todo amontonado", después "el mismo tamaño que la Entrega"): mismo
+// shell de documento que ModalDetalleEntrega.jsx — size="wide" (96vw x 92vh,
+// mismo shell que Entrega/Cotización/OC) + PanelSeccion para agrupar "Datos
+// del cobro" e "Imputar a factura(s)" en vez del formulario denso de una sola
+// columna que tenía este modal desde el rediseño del 16/08. Con este alto, la
+// grilla de cabecera y el panel "Datos del cobro" entran sin scroll — el
+// único que puede necesitar scroll interno es la tabla de facturas a
+// imputar, que ya tenía su propio scroll acotado (max-h-64) desde antes.
 //
 // Imputación por factura — estilo SAP "Cobro entrante": cada fila tiene un
 // checkbox. Tildarlo precarga "Aplicar" con el saldo completo de la factura
@@ -82,7 +84,7 @@ function ModalCobro({
 
   return (
     <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
-      <DialogContent size="medium" className="dark:bg-kx-bg dark:border-kx-border">
+      <DialogContent size="wide" className="dark:bg-kx-bg dark:border-kx-border">
         <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b border-kx-border dark:border-kx-border">
           <DialogTitle className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-base font-bold">
             <Banknote className="h-5 w-5" /> Registrar Cobro
@@ -201,7 +203,7 @@ function ModalCobro({
                 abierta por la diferencia — igual que en SAP.
               </p>
               <div className="border border-kx-border rounded-lg overflow-hidden">
-                <div className="max-h-64 overflow-y-auto">
+                <div className="max-h-[420px] overflow-y-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50/70 dark:bg-slate-800/50 sticky top-0">
                       <tr>
