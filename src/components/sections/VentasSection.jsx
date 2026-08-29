@@ -11,8 +11,12 @@ import DevolucionesSection from '@/components/ventas/DevolucionesSection';
 import MonitorFacturacionAFIP from '@/components/ventas/MonitorFacturacionAFIP';
 import { useAfipConfig } from '@/hooks/useAfipConfig';
 import { useCotizacionesActivo } from '@/hooks/useCotizacionesActivo';
+import { useRegistrarCobro } from '@/hooks/useRegistrarCobro';
+import ModalCobro from '@/components/cuenta-corriente/ModalCobro';
+import ReciboPago from '@/components/shared/ReciboPago';
+import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 
-function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
+function VentasSection({ initialTab = 'historial' }) {
   const { afipActivo } = useAfipConfig();
   const cotizacionesActivo = useCotizacionesActivo();
   const [activeTab, setActiveTab]           = useState(initialTab);
@@ -25,6 +29,13 @@ function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
   const [prefillPedidoCotizacion, setPrefillPedidoCotizacion] = useState(null);
 
   const handleSaleSuccess = () => setRefreshKey(k => k + 1);
+
+  // "Registrar Cobro" desde la confirmación de NuevaFacturaModal tras crear
+  // una factura (único caller que queda — el de SaleDetailModal ahora se
+  // resuelve solo, adentro de ese mismo modal). Antes esto saltaba a Cuenta
+  // Corriente vía onNavigateGlobal; ahora abre el mismo ModalCobro sin salir
+  // de Ventas (29/08, hallazgo Luciano).
+  const cobroPostFactura = useRegistrarCobro(() => setRefreshKey(k => k + 1));
 
   // Called from DevolucionesSection: (tipo, id) — 'factura'/'nota_credito'/
   // 'nota_debito' son todos filas de comprobantes, mismo destino que 'comprobante'.
@@ -42,10 +53,10 @@ function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
   //     (seccion); unificado a chips con onNavigate(tipo, id), igual que
   //     Entrega/OC/Pedido): deep-linkea al documento real.
   //   - MapaRelaciones (22/08): onNavigate(tipo, id) — mismo patrón.
-  // 'cobro_cc' no está mapeado a propósito: el cobro vive en Cuenta Corriente,
-  // una sección de nivel superior fuera de este módulo (ver handleRegistrarCobro
-  // más abajo, que sí usa onNavigateGlobal) — el chip queda visible pero sin
-  // navegación hasta que se justifique cablear ese salto cross-módulo.
+  // 'cobro_cc' no está mapeado a propósito: el chip queda visible pero sin
+  // navegación — el cobro en sí ya no navega a ningún lado (se resuelve
+  // inline, ver cobroPostFactura más arriba), así que no hay destino al que
+  // saltar desde acá.
   const handleVentasNavigate = (tipoOSeccion, id) => {
     const TIPO_A_SECCION = {
       cotizacion: 'cotizaciones', pedido: 'pedidos', entrega: 'entregas',
@@ -63,11 +74,8 @@ function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
     else if (seccion === 'historial') setNavigateSaleId(id);
   };
 
-  // "Registrar Cobro" desde el detalle de una factura impaga — sale del módulo
-  // Ventas hacia Cuenta Corriente (sección de nivel superior en Dashboard.jsx),
-  // con el cliente y el diálogo de cobro ya abiertos.
   const handleRegistrarCobro = (clienteId, facturaId) => {
-    onNavigateGlobal?.('cuentacorriente', { clienteId, autoAbrirCobro: true, facturaId });
+    cobroPostFactura.abrirCobroPorClienteId(clienteId, facturaId);
   };
 
   return (
@@ -155,7 +163,6 @@ function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
             navigateSaleId={navigateSaleId}
             onNavigated={() => setNavigateSaleId(null)}
             onNavigate={handleVentasNavigate}
-            onRegistrarCobro={handleRegistrarCobro}
           />
         </TabsContent>
 
@@ -175,6 +182,27 @@ function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
         onOpenChange={setShowNuevaFactura}
         onSuccess={handleSaleSuccess}
         onRegistrarCobro={handleRegistrarCobro}
+      />
+
+      <ModalCobro
+        isPaymentDialogOpen={cobroPostFactura.isPaymentDialogOpen} setIsPaymentDialogOpen={cobroPostFactura.setIsPaymentDialogOpen}
+        selectedClient={cobroPostFactura.selectedClient}
+        paymentData={cobroPostFactura.paymentData} setPaymentData={cobroPostFactura.setPaymentData}
+        formasPago={cobroPostFactura.formasPago}
+        tcParalelo={cobroPostFactura.tcParalelo}
+        isProcessingPayment={cobroPostFactura.isProcessingPayment}
+        handleRegisterPayment={cobroPostFactura.handleRegisterPayment}
+        facturasAbiertas={cobroPostFactura.facturasAbiertas}
+        imputaciones={cobroPostFactura.imputaciones} setImputaciones={cobroPostFactura.setImputaciones}
+        imputacionesFX={cobroPostFactura.imputacionesFX} setImputacionesFX={cobroPostFactura.setImputacionesFX}
+        autoDistribuirFIFO={cobroPostFactura.autoDistribuirFIFO}
+      />
+      <ReciboPago recibo={cobroPostFactura.lastRecibo} />
+      <TipoCambioModal
+        open={cobroPostFactura.showParaleloTCModal}
+        onOpenChange={cobroPostFactura.setShowParaleloTCModal}
+        moneda={cobroPostFactura.tcParalelo.monedaParalela}
+        onConfirm={(t) => { cobroPostFactura.tcParalelo.setTC(t); cobroPostFactura.setShowParaleloTCModal(false); }}
       />
     </div>
   );

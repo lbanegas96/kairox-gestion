@@ -1,36 +1,25 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { AlertTriangle, DollarSign, ArrowDownCircle, ArrowUpCircle, Users, Clock } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useToast } from '@/components/ui/use-toast';
-import { ToastAction } from '@/components/ui/toast';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
+import { useToast } from '@/components/ui/use-toast';
 import { getNowAR } from '@/lib/dateUtils';
-import { parseNumberLocale } from '@/lib/currencyUtils';
-import { useTCParalelo } from '@/hooks/useTCParalelo';
-import { tipoCambioService } from '@/services/tipoCambioService';
 import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 import ClientDetailModal from './ClientDetailModal';
 import TablaClientes from '@/components/cuenta-corriente/TablaClientes';
 import TabAntiguedad from '@/components/cuenta-corriente/TabAntiguedad';
 import ModalCobro from '@/components/cuenta-corriente/ModalCobro';
 import ReciboPago from '@/components/shared/ReciboPago';
-import { printElementById } from '@/lib/printRecibo';
+import { useRegistrarCobro } from '@/hooks/useRegistrarCobro';
 
-function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro, initialFacturaId } = {}) {
+function CuentaCorrienteSection() {
   const { user } = useAuth();
-  const { isSessionOpen, currentSession } = useCaja();
+  const { isSessionOpen } = useCaja();
   const { toast } = useToast();
-  const qc = useQueryClient();
-  const tcParalelo = useTCParalelo();
-  // Las notifs de deuda_vencida dependen de cuenta_corriente_movimientos:
-  // tras cada cobro hay que invalidarlas o quedan stale hasta 30s.
-  const invalidateNotifs = () => qc.invalidateQueries({ queryKey: ['notif'] });
 
   // Data State
-  const [showParaleloTCModal, setShowParaleloTCModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,67 +27,31 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro, initialFactu
   // Filters
   const [statusFilter, setStatusFilter] = useState('Todos'); // 'Todos', 'Con Deuda', 'Al Día'
 
-  // Modals
+  // Modals (detalle de cliente — independiente del diálogo de cobro)
   const [selectedClient, setSelectedClient] = useState(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
 
-  // Payment Form
-  const [paymentData, setPaymentData] = useState({
-    monto: '',
-    metodo: 'Efectivo',
-    forma_pago_id: '',
-    nota: '',
-    referencia_pago: '',
-  });
-
-  // Comprobante de Pago imprimible (item 6 del plan de rediseño, 22/08) — se
-  // completa tras un cobro exitoso y queda disponible para reimprimir hasta
-  // el próximo cobro (mismo criterio que TicketPrint del POS: un solo nodo
-  // oculto en el DOM, no un historial).
-  const [lastRecibo, setLastRecibo] = useState(null);
-  const { data: empresaData = {} } = useQuery({
-    queryKey: ['empresa_datos_recibo', user?.empresa_id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('empresas')
-        .select('nombre, afip_cuit, direccion')
-        .eq('id', user.empresa_id)
-        .maybeSingle();
-      if (error) throw error;
-      return data ?? {};
-    },
-    enabled: !!user?.empresa_id,
-  });
-
-  // Formas de pago (maestro configurable en ConfiguracionSection → Finanzas) — reemplaza
-  // la lista hardcodeada que tenía ModalCobro. Efectivo siempre disponible como fallback
-  // por si la empresa todavía no tiene el maestro seedeado.
-  const { data: formasPago = [] } = useQuery({
-    queryKey: ['formas_pago', user?.empresa_id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('formas_pago')
-        .select('*')
-        .eq('empresa_id', user.empresa_id)
-        .eq('activo', true)
-        .order('nombre');
-      if (error) throw error;
-      return data ?? [];
-    },
-    enabled: !!user?.empresa_id,
-  });
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-  // Imputación por factura (Open Item clearing, migration 169) — opcional.
-  // Si el usuario no imputa nada, el cobro se comporta igual que siempre
-  // (reduce el saldo corrido, sin marcar ninguna factura puntual como paga).
-  const [facturasAbiertas, setFacturasAbiertas] = useState([]);
-  const [imputaciones, setImputaciones] = useState({}); // { comprobante_id: "monto string" }
-  // Imputación en moneda extranjera (Fase 3 Multimoneda — diferencia de cambio):
-  // solo aplica a facturas con moneda != 'ARS'. Separado de `imputaciones` (ARS)
-  // porque el RPC necesita saber cuántas unidades de moneda extranjera se están
-  // cancelando para calcular la diferencia de cambio realizada al TC de hoy.
-  const [imputacionesFX, setImputacionesFX] = useState({}); // { comprobante_id: "monto FX string" }
+  // "Registrar Cobro" — lógica compartida con el detalle de Factura (ver
+  // useRegistrarCobro.jsx, 29/08: antes esto vivía acá solo, y esa era la
+  // única forma de cobrar una factura sin saltar de módulo). Acá el
+  // onSuccess refresca la lista de clientes de esta pantalla.
+  const cobro = useRegistrarCobro(() => fetchData());
+  const {
+    selectedClient: clienteCobro,
+    isPaymentDialogOpen, setIsPaymentDialogOpen,
+    paymentData, setPaymentData,
+    formasPago,
+    tcParalelo,
+    isProcessingPayment,
+    facturasAbiertas,
+    imputaciones, setImputaciones,
+    imputacionesFX, setImputacionesFX,
+    autoDistribuirFIFO,
+    handleRegisterPayment,
+    openPaymentDialog,
+    lastRecibo,
+    showParaleloTCModal, setShowParaleloTCModal,
+  } = cobro;
 
   // Aging Report
   const [activeTab, setActiveTab] = useState('clientes');
@@ -110,22 +63,6 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro, initialFactu
       fetchData();
     }
   }, [user]);
-
-  // Deep-link desde "Registrar Cobro" en el detalle de una Factura (VentasSection →
-  // Dashboard.navigateTo('cuentacorriente', {clienteId, autoAbrirCobro})). Espera a
-  // que `clients` esté cargado para tener el objeto completo (saldo_actual, etc.)
-  // que necesita openPaymentDialog/ModalCobro. El ref evita reabrir el diálogo si
-  // el usuario lo cierra y el componente re-renderiza con los mismos props.
-  const autoAbrioRef = useRef(null);
-  useEffect(() => {
-    if (!autoAbrirCobro || !initialClienteId || clients.length === 0) return;
-    if (autoAbrioRef.current === initialClienteId) return;
-    const cliente = clients.find(c => c.id === initialClienteId);
-    if (cliente) {
-      autoAbrioRef.current = initialClienteId;
-      openPaymentDialog(cliente, null, initialFacturaId || null);
-    }
-  }, [autoAbrirCobro, initialClienteId, initialFacturaId, clients]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (activeTab === 'antigüedad' && user?.empresa_id) {
@@ -291,256 +228,6 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro, initialFactu
     setDetailModalOpen(true);
   };
 
-  const openPaymentDialog = (client, e, facturaId = null) => {
-    e?.stopPropagation();
-    setSelectedClient(client);
-    const efectivo = formasPago.find(f => f.tipo_instrumento === 'efectivo');
-    setPaymentData({ monto: '', metodo: efectivo?.nombre ?? 'Efectivo', forma_pago_id: efectivo?.id ?? '', nota: '', referencia_pago: '' });
-    setImputaciones({});
-    setImputacionesFX({});
-    setFacturasAbiertas([]);
-    setIsPaymentDialogOpen(true);
-    fetchFacturasAbiertas(client.id, facturaId);
-  };
-
-  const fetchFacturasAbiertas = async (clienteId, preseleccionarFacturaId = null) => {
-    const { data, error } = await supabase
-      .from('facturas_saldo_pendiente')
-      .select('comprobante_id, numero_venta, fecha, saldo_pendiente, moneda, tipo_cambio_tasa')
-      .eq('empresa_id', user.empresa_id)
-      .eq('cliente_id', clienteId)
-      .gt('saldo_pendiente', 0)
-      .order('fecha', { ascending: true });
-    if (error) {
-      console.error('[facturas_saldo_pendiente]', error.message);
-      return;
-    }
-    let facturas = data || [];
-
-    // Para facturas en moneda extranjera, traer el TC de hoy (una consulta por
-    // moneda distinta) para mostrar el equivalente ARS y validar el clearing.
-    const monedasExtranjeras = [...new Set(facturas.filter(f => f.moneda && f.moneda !== 'ARS').map(f => f.moneda))];
-    if (monedasExtranjeras.length > 0) {
-      const tasas = {};
-      await Promise.all(monedasExtranjeras.map(async (m) => {
-        try {
-          tasas[m] = await tipoCambioService.getToday(user.empresa_id, m);
-        } catch {
-          tasas[m] = null;
-        }
-      }));
-      facturas = facturas.map(f => (f.moneda && f.moneda !== 'ARS') ? { ...f, tc_hoy: tasas[f.moneda] } : f);
-    }
-
-    setFacturasAbiertas(facturas);
-
-    // Deep-link "Registrar Cobro" desde una factura puntual (Nueva Factura tras
-    // crear, o el detalle de una factura existente): la marca tildada y precarga
-    // el Monto a Cobrar con su saldo completo, como haría SAP al abrir el cobro
-    // ya apuntado a un documento.
-    if (preseleccionarFacturaId) {
-      const match = facturas.find(f => f.comprobante_id === preseleccionarFacturaId);
-      if (match) {
-        const saldoStr = String(match.saldo_pendiente);
-        if (match.moneda && match.moneda !== 'ARS') {
-          const tc = match.tc_hoy || match.tipo_cambio_tasa || 0;
-          setImputacionesFX({ [match.comprobante_id]: saldoStr });
-          setPaymentData(prev => ({ ...prev, monto: tc > 0 ? String(match.saldo_pendiente * tc) : '' }));
-        } else {
-          setImputaciones({ [match.comprobante_id]: saldoStr });
-          setPaymentData(prev => ({ ...prev, monto: saldoStr }));
-        }
-      }
-    }
-  };
-
-  // Reparte `monto` entre las facturas abiertas más viejas primero (FIFO),
-  // hasta agotar el monto o las facturas. El usuario puede editar el
-  // resultado a mano después. Solo aplica a facturas en ARS — las facturas en
-  // moneda extranjera se imputan a mano con el input dedicado (necesitan el
-  // monto en esa moneda, no en pesos).
-  const autoDistribuirFIFO = (monto) => {
-    let restante = monto;
-    const nuevo = {};
-    for (const f of facturasAbiertas) {
-      if (f.moneda && f.moneda !== 'ARS') continue;
-      if (restante <= 0) break;
-      const aplicar = Math.min(restante, f.saldo_pendiente);
-      if (aplicar > 0) {
-        nuevo[f.comprobante_id] = String(aplicar);
-        restante -= aplicar;
-      }
-    }
-    setImputaciones(nuevo);
-  };
-
-  // Migration 181: regenera el asiento de un cobro que quedó sin generarlo (período
-  // cerrado en su momento, cuenta faltante, o una colisión de numeración concurrente
-  // ya corregida) — usa la diferencia de cambio ya calculada al momento del cobro,
-  // no la recalcula con la cotización de hoy.
-  const handleRegenerarAsientoCxc = async (movimientoId) => {
-    const { error } = await supabase.rpc('regenerar_asiento_cxc', {
-      p_movimiento_id: movimientoId,
-      p_user_id: user.id,
-    });
-    if (error) {
-      toast({ title: 'No se pudo regenerar el asiento', description: error.message, variant: 'destructive' });
-      return;
-    }
-    toast({ title: 'Asiento regenerado', className: 'bg-emerald-600 text-white border-none' });
-    qc.invalidateQueries();
-  };
-
-  const handleRegisterPayment = async () => {
-    // Solo Efectivo requiere caja abierta — Transferencia/Tarjeta/Cheque no
-    if (paymentData.metodo === 'Efectivo' && !isSessionOpen) {
-      toast({
-        variant: 'destructive',
-        title: 'Caja cerrada',
-        description: 'Abrí la caja antes de registrar cobros en efectivo.',
-      });
-      return;
-    }
-
-    if (!selectedClient) return;
-
-    const amount = parseNumberLocale(paymentData.monto);
-    if (!amount || isNaN(amount) || amount <= 0) {
-      toast({ title: "Error", description: "Ingrese un monto válido mayor a 0", variant: "destructive" });
-      return;
-    }
-
-    // Moneda paralela: mismo gate que NuevaVentaModal. Antes acá se mandaba
-    // p_monto_paralelo=NULL al RPC en silencio cuando faltaba el TC del día.
-    if (tcParalelo.enabled && tcParalelo.tcMissing) {
-      toast({
-        variant: 'destructive',
-        title: `Falta el TC de paridad ${tcParalelo.monedaParalela}`,
-        description: `La empresa usa moneda paralela. Cargá el TC de ${tcParalelo.monedaParalela} para poder registrar el cobro.`,
-      });
-      setShowParaleloTCModal(true); // se abre el modal para que pueda cargarlo acá mismo
-      return;
-    }
-
-    setIsProcessingPayment(true);
-    const date = getNowAR().toISOString();
-
-    // Calcular monto en moneda paralela si la empresa lo usa
-    const pagoParalelo = tcParalelo.enabled && tcParalelo.tcHoy
-      ? tcParalelo.calcParalelo(amount, 'ARS', 1)
-      : null;
-
-    // Imputación por factura (opcional, migration 169): solo se arma el array
-    // si el usuario cargó algún monto — si no, se manda null y el cobro se
-    // comporta exactamente igual que antes (reduce el saldo corrido, sin
-    // marcar ninguna factura puntual como cancelada).
-    // Facturas en moneda extranjera (Fase 3 Multimoneda) usan monto_moneda_extranjera
-    // en vez de monto ARS — el RPC calcula la diferencia de cambio realizada.
-    const imputacionesArray = facturasAbiertas
-      .map(f => {
-        if (f.moneda && f.moneda !== 'ARS') {
-          const fx = parseNumberLocale(imputacionesFX[f.comprobante_id] || '');
-          return fx > 0 ? { comprobante_id: f.comprobante_id, monto_moneda_extranjera: fx } : null;
-        }
-        const monto = parseNumberLocale(imputaciones[f.comprobante_id] || '');
-        return monto > 0 ? { comprobante_id: f.comprobante_id, monto } : null;
-      })
-      .filter(Boolean);
-
-    try {
-      // Cobro ATÓMICO: cuenta corriente (HABER) + caja (ingreso) en un solo RPC (migration 130).
-      // Antes eran 2 inserts sueltos: si el 2º fallaba, la deuda del cliente bajaba SIN registrar
-      // la plata en caja, y un reintento reducía la deuda dos veces. Ahora es todo o nada.
-      const { data: cobroData, error: cobroError } = await supabase.rpc('registrar_cobro_cliente', {
-        p_empresa_id:     user.empresa_id,
-        p_user_id:        user.id,
-        p_cliente_id:     selectedClient.id,
-        p_cliente_nombre: selectedClient.nombre,
-        p_monto:          amount,
-        p_metodo:         paymentData.metodo,
-        p_fecha:          date,
-        p_descripcion:    paymentData.nota ? `Pago: ${paymentData.nota}` : 'Pago de deuda',
-        p_caja_sesion_id: currentSession?.id ?? null,
-        p_monto_paralelo: pagoParalelo,
-        p_tc_paralelo:    pagoParalelo !== null ? tcParalelo.tcHoy : null,
-        p_imputaciones:   imputacionesArray.length > 0 ? imputacionesArray : null,
-        p_forma_pago_id:  paymentData.forma_pago_id || null,
-        p_referencia_pago: paymentData.referencia_pago || null,
-      });
-
-      if (cobroError) throw cobroError;
-
-      // Arma el comprobante imprimible con lo que ya tenemos en memoria — sin
-      // otra vuelta al servidor (mismo criterio que el ticket del POS).
-      const saldoAnterior = Number(selectedClient.saldo_actual || 0);
-      setLastRecibo({
-        tipo: 'cobro',
-        movimientoId: cobroData?.cc_id,
-        fecha: date,
-        contraparteNombre: selectedClient.nombre,
-        monto: amount,
-        metodo: paymentData.metodo,
-        referenciaPago: paymentData.referencia_pago || null,
-        nota: paymentData.nota || null,
-        imputaciones: imputacionesArray.map(imp => {
-          const f = facturasAbiertas.find(x => x.comprobante_id === imp.comprobante_id);
-          const montoImp = imp.monto ?? (imp.monto_moneda_extranjera != null ? imp.monto_moneda_extranjera * (f?.tc_hoy || f?.tipo_cambio_tasa || 1) : 0);
-          return { numero: f?.numero_venta || '—', monto: montoImp };
-        }),
-        saldoAnteriorTotal: saldoAnterior,
-        saldoNuevoTotal: saldoAnterior - amount,
-        empresa: empresaData,
-      });
-
-      toast({
-        title: "Pago Registrado",
-        description: `Se registró el cobro de $${amount.toLocaleString('es-AR')}.`,
-        className: "bg-emerald-600 text-white border-none",
-        action: (
-          <ToastAction altText="Imprimir comprobante" onClick={() => printElementById('kx-recibo-print')}>
-            Imprimir
-          </ToastAction>
-        ),
-      });
-
-      // El RPC genera el asiento contable en la misma transacción, pero de forma
-      // no bloqueante (mismo patrón que asientosAutoService): si falla por período
-      // cerrado o cuenta faltante, el cobro igual se registra. Antes esto era
-      // invisible — data.asiento_generado nunca se leía en el frontend.
-      // Migration 181: una vez corregido el motivo (cuenta creada / período reabierto),
-      // "Regenerar" llama a regenerar_asiento_cxc — no recalcula la diferencia de
-      // cambio, usa la que ya quedó guardada en el cobro al momento original.
-      if (cobroData?.asiento_generado === false) {
-        toast({
-          title: "Cobro registrado sin asiento contable",
-          description: "El cobro se guardó correctamente, pero no se generó el asiento (período cerrado o cuenta contable faltante). Revisar Plan de Cuentas.",
-          variant: "destructive",
-          action: (
-            <ToastAction altText="Regenerar asiento" onClick={() => handleRegenerarAsientoCxc(cobroData.cc_id)}>
-              Regenerar
-            </ToastAction>
-          ),
-        });
-      }
-
-      setIsPaymentDialogOpen(false);
-      fetchData(); // Refresh list
-      invalidateNotifs();
-
-      // Update selected client in modal if open
-      if (selectedClient) {
-        const updatedClient = { ...selectedClient, saldo_actual: (selectedClient.saldo_actual || 0) - amount };
-        setSelectedClient(updatedClient);
-      }
-
-    } catch (error) {
-      console.error("Error registering payment:", error);
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } finally {
-      setIsProcessingPayment(false);
-    }
-  };
-
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -640,7 +327,7 @@ function CuentaCorrienteSection({ initialClienteId, autoAbrirCobro, initialFactu
       {/* QUICK PAYMENT DIALOG (From list view) */}
       <ModalCobro
         isPaymentDialogOpen={isPaymentDialogOpen} setIsPaymentDialogOpen={setIsPaymentDialogOpen}
-        selectedClient={selectedClient}
+        selectedClient={clienteCobro}
         paymentData={paymentData} setPaymentData={setPaymentData}
         formasPago={formasPago}
         tcParalelo={tcParalelo}

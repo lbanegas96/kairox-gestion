@@ -25,6 +25,10 @@ import TabLogistica from '@/components/shared/documento/TabLogistica';
 import { asientosAutoService } from '@/services/planCuentasService';
 import { documentFlowService } from '@/services/documentFlowService';
 import { formatNumeroComprobante } from '@/lib/numeroComprobante';
+import { useRegistrarCobro } from '@/hooks/useRegistrarCobro';
+import ModalCobro from '@/components/cuenta-corriente/ModalCobro';
+import ReciboPago from '@/components/shared/ReciboPago';
+import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 
 // CAE emitido o en trámite ante AFIP/ARCA — el documento ya es (o puede
 // llegar a ser) fiscalmente válido, no se puede "deshacer": solo Nota de
@@ -49,7 +53,7 @@ function Campo({ label, children }) {
   );
 }
 
-const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate, onRegistrarCobro }) => {
+const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate }) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -74,6 +78,14 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
   // rediseño — usaba su propio DocumentFlowPanel sin link a Mapa de
   // Relaciones (el resto de los documentos ya lo tiene, ej. ModalDetalleEntrega).
   const [mapaOpen, setMapaOpen] = useState(false);
+
+  // "Registrar Cobro" desde acá mismo (29/08, hallazgo Luciano) — antes salía
+  // del módulo Ventas hacia Cuenta Corriente y esta ventana se cerraba sola.
+  // Ahora abre el mismo <ModalCobro> apilado arriba de este detalle: al
+  // cobrar con éxito, se refresca este documento (nuevo estado_pago + el
+  // cobro aparece en "Flujo del documento") sin perder el contexto de la
+  // factura; Escape solo cierra el diálogo de cobro, no la factura.
+  const cobro = useRegistrarCobro(() => { fetchSaleDetails(); onUpdateSale?.(); });
 
   useEffect(() => {
     if (open && saleId) {
@@ -556,7 +568,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
               {['pendiente', 'parcial'].includes(sale?.estado_pago) && sale?.cliente_id && (
                 <Button
                   className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                  onClick={() => onRegistrarCobro?.(sale.cliente_id, sale.id)}
+                  onClick={() => cobro.abrirCobroPorClienteId(sale.cliente_id, sale.id)}
                 >
                   <Banknote className="w-4 h-4 mr-2" /> Registrar Cobro
                 </Button>
@@ -612,6 +624,31 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate,
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* "Registrar Cobro" apilado arriba de este detalle — ver cobro más
+          arriba. Radix apila los Dialog por orden de montaje (mismo patrón
+          que MapaRelaciones/AlertDialog acá mismo), así que queda por encima
+          sin tocar el z-index a mano. */}
+      <ModalCobro
+        isPaymentDialogOpen={cobro.isPaymentDialogOpen} setIsPaymentDialogOpen={cobro.setIsPaymentDialogOpen}
+        selectedClient={cobro.selectedClient}
+        paymentData={cobro.paymentData} setPaymentData={cobro.setPaymentData}
+        formasPago={cobro.formasPago}
+        tcParalelo={cobro.tcParalelo}
+        isProcessingPayment={cobro.isProcessingPayment}
+        handleRegisterPayment={cobro.handleRegisterPayment}
+        facturasAbiertas={cobro.facturasAbiertas}
+        imputaciones={cobro.imputaciones} setImputaciones={cobro.setImputaciones}
+        imputacionesFX={cobro.imputacionesFX} setImputacionesFX={cobro.setImputacionesFX}
+        autoDistribuirFIFO={cobro.autoDistribuirFIFO}
+      />
+      <ReciboPago recibo={cobro.lastRecibo} />
+      <TipoCambioModal
+        open={cobro.showParaleloTCModal}
+        onOpenChange={cobro.setShowParaleloTCModal}
+        moneda={cobro.tcParalelo.monedaParalela}
+        onConfirm={(t) => { cobro.tcParalelo.setTC(t); cobro.setShowParaleloTCModal(false); }}
+      />
     </>
   );
 };

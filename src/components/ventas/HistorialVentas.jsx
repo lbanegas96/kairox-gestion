@@ -24,7 +24,7 @@ import { formatDateAR, formatTimeAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
 import { formatNumeroComprobante } from '@/lib/numeroComprobante';
 
-const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate, onRegistrarCobro }) => {
+const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
   const { user } = useAuth();
   const { toast } = useToast();
   
@@ -735,7 +735,6 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate, onRegistrarC
         saleId={selectedSaleId}
         onUpdateSale={handleSaleUpdate}
         onNavigate={onNavigate}
-        onRegistrarCobro={onRegistrarCobro}
       />
     </div>
   );
