@@ -497,6 +497,47 @@ export const asientosAutoService = {
   },
 
   /**
+   * Reversa el asiento de un Cobro cancelado (RPC cancelar_cobro_cliente,
+   * mig.367) — mismo patrón que crearAsientoReversaVenta: el asiento
+   * original del cobro (origen='cobro_cliente') queda 'confirmado' tal cual
+   * quedó posteado, se crea uno NUEVO con debe/haber invertidos que lo
+   * neutraliza en el balance.
+   */
+  async crearAsientoReversaCobro(
+    empresaId: string,
+    userId: string,
+    params: { movimientoId: string; fecha: string }
+  ): Promise<void> {
+    const { data: original, error } = await supabase
+      .from('asientos_contables')
+      .select('id, asientos_items(cuenta_id, debe, haber, descripcion)')
+      .eq('empresa_id', empresaId)
+      .eq('origen', 'cobro_cliente')
+      .eq('origen_id', params.movimientoId)
+      .eq('estado', 'confirmado')
+      .maybeSingle();
+    if (error || !original || !(original as any).asientos_items?.length) return;
+
+    const items = ((original as any).asientos_items as any[]).map((i) => ({
+      cuenta_id: i.cuenta_id,
+      debe: Number(i.haber),
+      haber: Number(i.debe),
+      descripcion: `Reversa — ${i.descripcion || ''}`,
+    }));
+
+    await asientosService.createAsientoAutomatico(
+      empresaId, userId,
+      {
+        fecha: params.fecha,
+        descripcion: `Reversa — Cancelación de Cobro`,
+        origen: 'cancelacion_cobro_cliente',
+        origen_id: params.movimientoId,
+      },
+      items
+    );
+  },
+
+  /**
    * Crea y confirma el asiento de una compra.
    *   DEBE  1.1.3 Mercaderías / Inventario                                 neto
    *   DEBE  1.1.4 IVA Crédito Fiscal                                       iva

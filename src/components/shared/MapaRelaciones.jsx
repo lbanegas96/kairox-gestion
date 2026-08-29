@@ -1263,7 +1263,22 @@ function MapaRelaciones({
                   {cobrosNodos.map(n => (
                     <React.Fragment key={n.id}>
                       <Conector />
-                      <NodoMapa nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />
+                      <NodoMapa
+                        nodo={n}
+                        activo={isActivo(n.id)}
+                        onClick={() => {
+                          // Un cobro real abre su propio "Comprobante de Pago"
+                          // (29/08, hallazgo Luciano: "que vuelva a llamar al
+                          // modal del pago creado") — no tiene página propia,
+                          // así que en vez de navegar a una sección se lo pide
+                          // al caller (onNavigate) para que decida cómo
+                          // mostrarlo. Reversas y pago al contado (sin ese
+                          // circuito de revisión/cancelación) se quedan con el
+                          // preview liviano de siempre.
+                          if (n.tipo === 'cobro_cc' && onNavigate) onNavigate('cobro_cc', n.id);
+                          else openPreview(n);
+                        }}
+                      />
                     </React.Fragment>
                   ))}
                 </div>

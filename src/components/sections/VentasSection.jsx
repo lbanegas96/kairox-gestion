@@ -13,7 +13,7 @@ import { useAfipConfig } from '@/hooks/useAfipConfig';
 import { useCotizacionesActivo } from '@/hooks/useCotizacionesActivo';
 import { useRegistrarCobro } from '@/hooks/useRegistrarCobro';
 import ModalCobro from '@/components/cuenta-corriente/ModalCobro';
-import ReciboPago from '@/components/shared/ReciboPago';
+import ModalDetalleCobro from '@/components/cuenta-corriente/ModalDetalleCobro';
 import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 
 function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
@@ -202,7 +202,14 @@ function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
         imputacionesFX={cobroPostFactura.imputacionesFX} setImputacionesFX={cobroPostFactura.setImputacionesFX}
         autoDistribuirFIFO={cobroPostFactura.autoDistribuirFIFO}
       />
-      <ReciboPago recibo={cobroPostFactura.lastRecibo} />
+      <ModalDetalleCobro
+        movimientoId={cobroPostFactura.detalleCobroId}
+        open={cobroPostFactura.detalleCobroOpen}
+        onOpenChange={cobroPostFactura.setDetalleCobroOpen}
+        onUpdate={() => setRefreshKey(k => k + 1)}
+        onCancelar={cobroPostFactura.handleCancelarCobro}
+        onNavigate={(clienteId) => { cobroPostFactura.setDetalleCobroOpen(false); onNavigateGlobal?.('cuentacorriente', { clienteId }); }}
+      />
       <TipoCambioModal
         open={cobroPostFactura.showParaleloTCModal}
         onOpenChange={cobroPostFactura.setShowParaleloTCModal}

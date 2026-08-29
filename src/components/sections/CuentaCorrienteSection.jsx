@@ -11,7 +11,7 @@ import ClientDetailModal from './ClientDetailModal';
 import TablaClientes from '@/components/cuenta-corriente/TablaClientes';
 import TabAntiguedad from '@/components/cuenta-corriente/TabAntiguedad';
 import ModalCobro from '@/components/cuenta-corriente/ModalCobro';
-import ReciboPago from '@/components/shared/ReciboPago';
+import ModalDetalleCobro from '@/components/cuenta-corriente/ModalDetalleCobro';
 import { useRegistrarCobro } from '@/hooks/useRegistrarCobro';
 
 function CuentaCorrienteSection({ initialClienteId } = {}) {
@@ -49,7 +49,7 @@ function CuentaCorrienteSection({ initialClienteId } = {}) {
     autoDistribuirFIFO,
     handleRegisterPayment,
     openPaymentDialog,
-    lastRecibo,
+    detalleCobroId, detalleCobroOpen, setDetalleCobroOpen, handleCancelarCobro,
     showParaleloTCModal, setShowParaleloTCModal,
   } = cobro;
 
@@ -358,9 +358,22 @@ function CuentaCorrienteSection({ initialClienteId } = {}) {
         autoDistribuirFIFO={autoDistribuirFIFO}
       />
 
-      {/* Comprobante de Pago imprimible — item 6 del plan de rediseño (22/08).
-          Vive siempre oculto en el DOM, igual que TicketPrint del POS. */}
-      <ReciboPago recibo={lastRecibo} />
+      {/* "Comprobante de Pago" — se abre al confirmar un cobro nuevo o al
+          reabrir uno existente. Ya estamos en Cuenta Corriente, así que "Ver
+          Cuenta Corriente del cliente" simplemente abre el detalle acá mismo,
+          sin saltar de sección. */}
+      <ModalDetalleCobro
+        movimientoId={detalleCobroId}
+        open={detalleCobroOpen}
+        onOpenChange={setDetalleCobroOpen}
+        onUpdate={() => fetchData()}
+        onCancelar={handleCancelarCobro}
+        onNavigate={(clienteId) => {
+          setDetalleCobroOpen(false);
+          const cliente = clients.find(c => c.id === clienteId);
+          if (cliente) { setSelectedClient(cliente); setDetailModalOpen(true); }
+        }}
+      />
 
       {/* Carga del TC de paridad cuando falta — el gate de handleRegisterPayment lo abre */}
       <TipoCambioModal

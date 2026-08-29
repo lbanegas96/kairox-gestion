@@ -4,12 +4,11 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useCaja } from '@/contexts/CajaContext';
 import { useToast } from '@/components/ui/use-toast';
-import { ToastAction } from '@/components/ui/toast';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { tipoCambioService } from '@/services/tipoCambioService';
+import { asientosAutoService } from '@/services/planCuentasService';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { getNowAR } from '@/lib/dateUtils';
-import { printElementById } from '@/lib/printRecibo';
 
 // Extraído de CuentaCorrienteSection (29/08) para que "Registrar Cobro" pueda
 // abrirse también desde el detalle de una Factura (SaleDetailModal) sin saltar
@@ -18,8 +17,18 @@ import { printElementById } from '@/lib/printRecibo';
 // "debería mostrarme el pago realizado y salir con escape pero permanecer en
 // la factura"). Toda la lógica de imputación por factura, moneda paralela y
 // generación de asiento vive acá una sola vez; cada pantalla monta su propio
-// <ModalCobro>/<ReciboPago>/<TipoCambioModal> con lo que este hook expone y
-// define su propio `onSuccess` para refrescar lo que le corresponda.
+// <ModalCobro>/<ModalDetalleCobro>/<TipoCambioModal> con lo que este hook
+// expone y define su propio `onSuccess` para refrescar lo que le corresponda.
+//
+// Segunda vuelta (29/08, mismo pedido): "quiero lo mismo con el pago" que
+// con la Factura — al confirmar, ModalCobro se cierra y se abre
+// ModalDetalleCobro (Comprobante de Pago) con el cobro recién creado, mismo
+// criterio que NuevaFacturaModal (form → vista "creada" en el mismo lugar,
+// no se pierde el contexto). Reabrir ese mismo cobro más tarde (Mapa de
+// Relaciones, chip del Flujo del documento) llama a abrirDetalleCobro, que
+// monta el MISMO modal en modo lectura/cancelación — nunca se edita en el
+// lugar, "corregir un error" es cancelar_cobro_cliente (mig.367, documento
+// de reversa) y volver a cargarlo bien, mismo criterio que Factura/NC/ND.
 export function useRegistrarCobro(onSuccess) {
   const { user } = useAuth();
   const { isSessionOpen, currentSession } = useCaja();
@@ -36,8 +45,12 @@ export function useRegistrarCobro(onSuccess) {
   const [facturasAbiertas, setFacturasAbiertas] = useState([]);
   const [imputaciones, setImputaciones] = useState({});
   const [imputacionesFX, setImputacionesFX] = useState({});
-  const [lastRecibo, setLastRecibo] = useState(null);
   const [showParaleloTCModal, setShowParaleloTCModal] = useState(false);
+
+  // "Comprobante de Pago" — el mismo ModalDetalleCobro sirve para la vista
+  // recién-creada y para reabrir un cobro viejo (ver comentario de arriba).
+  const [detalleCobroId, setDetalleCobroId] = useState(null);
+  const [detalleCobroOpen, setDetalleCobroOpen] = useState(false);
 
   const { data: formasPago = [] } = useQuery({
     queryKey: ['formas_pago', user?.empresa_id],
@@ -50,20 +63,6 @@ export function useRegistrarCobro(onSuccess) {
         .order('nombre');
       if (error) throw error;
       return data ?? [];
-    },
-    enabled: !!user?.empresa_id,
-  });
-
-  const { data: empresaData = {} } = useQuery({
-    queryKey: ['empresa_datos_recibo', user?.empresa_id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('empresas')
-        .select('nombre, afip_cuit, direccion')
-        .eq('id', user.empresa_id)
-        .maybeSingle();
-      if (error) throw error;
-      return data ?? {};
     },
     enabled: !!user?.empresa_id,
   });
@@ -142,6 +141,14 @@ export function useRegistrarCobro(onSuccess) {
     }
     openPaymentDialog(cliente, null, facturaId);
   }, [openPaymentDialog, toast]);
+
+  // Reabre un cobro YA existente (Mapa de Relaciones / chip del Flujo del
+  // documento) — el mismo ModalDetalleCobro que se usa recién-creado, ahora
+  // en modo lectura/cancelación.
+  const abrirDetalleCobro = useCallback((movimientoId) => {
+    setDetalleCobroId(movimientoId);
+    setDetalleCobroOpen(true);
+  }, []);
 
   const autoDistribuirFIFO = useCallback((monto) => {
     let restante = monto;
@@ -237,35 +244,10 @@ export function useRegistrarCobro(onSuccess) {
 
       if (cobroError) throw cobroError;
 
-      const saldoAnterior = Number(selectedClient.saldo_actual || 0);
-      setLastRecibo({
-        tipo: 'cobro',
-        movimientoId: cobroData?.cc_id,
-        fecha: date,
-        contraparteNombre: selectedClient.nombre,
-        monto: amount,
-        metodo: paymentData.metodo,
-        referenciaPago: paymentData.referencia_pago || null,
-        nota: paymentData.nota || null,
-        imputaciones: imputacionesArray.map(imp => {
-          const f = facturasAbiertas.find(x => x.comprobante_id === imp.comprobante_id);
-          const montoImp = imp.monto ?? (imp.monto_moneda_extranjera != null ? imp.monto_moneda_extranjera * (f?.tc_hoy || f?.tipo_cambio_tasa || 1) : 0);
-          return { numero: f?.numero_venta || '—', monto: montoImp };
-        }),
-        saldoAnteriorTotal: saldoAnterior,
-        saldoNuevoTotal: saldoAnterior - amount,
-        empresa: empresaData,
-      });
-
       toast({
         title: "Pago Registrado",
         description: `Se registró el cobro de $${amount.toLocaleString('es-AR')}.`,
         className: "bg-emerald-600 text-white border-none",
-        action: (
-          <ToastAction altText="Imprimir comprobante" onClick={() => printElementById('kx-recibo-print')}>
-            Imprimir
-          </ToastAction>
-        ),
       });
 
       if (cobroData?.asiento_generado === false) {
@@ -274,17 +256,26 @@ export function useRegistrarCobro(onSuccess) {
           description: "El cobro se guardó correctamente, pero no se generó el asiento (período cerrado o cuenta contable faltante). Revisar Plan de Cuentas.",
           variant: "destructive",
           action: (
-            <ToastAction altText="Regenerar asiento" onClick={() => handleRegenerarAsientoCxc(cobroData.cc_id)}>
+            <button
+              type="button"
+              onClick={() => handleRegenerarAsientoCxc(cobroData.cc_id)}
+              className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium hover:bg-secondary"
+            >
               Regenerar
-            </ToastAction>
+            </button>
           ),
         });
       }
 
+      // Cierra el form y abre el mismo comprobante recién creado — mismo
+      // criterio que NuevaFacturaModal (form → vista "creada" en el mismo
+      // lugar). Escape lo cierra; reabrirlo desde el Mapa de Relaciones
+      // llama a abrirDetalleCobro con el mismo cc_id.
       setIsPaymentDialogOpen(false);
       invalidateNotifs();
       setSelectedClient(prev => prev ? { ...prev, saldo_actual: (prev.saldo_actual || 0) - amount } : prev);
       onSuccess?.(cobroData);
+      if (cobroData?.cc_id) abrirDetalleCobro(cobroData.cc_id);
 
     } catch (error) {
       console.error("Error registering payment:", error);
@@ -293,6 +284,32 @@ export function useRegistrarCobro(onSuccess) {
       setIsProcessingPayment(false);
     }
   };
+
+  // Cancela un cobro existente (RPC cancelar_cobro_cliente, mig.367) — nunca
+  // se edita en el lugar: si el usuario cometió un error al cargarlo, esto
+  // es la vía para corregirlo (documento de reversa + volver a cargarlo
+  // bien), mismo criterio que cancelar_factura/NC/ND.
+  const handleCancelarCobro = useCallback(async (movimientoId, motivo) => {
+    const { error } = await supabase.rpc('cancelar_cobro_cliente', {
+      p_empresa_id: user.empresa_id,
+      p_user_id: user.id,
+      p_movimiento_id: movimientoId,
+      p_motivo: motivo || null,
+    });
+    if (error) {
+      toast({ title: 'No se pudo cancelar el cobro', description: error.message, variant: 'destructive' });
+      throw error;
+    }
+
+    asientosAutoService.crearAsientoReversaCobro(user.empresa_id, user.id, {
+      movimientoId,
+      fecha: getNowAR().toISOString().slice(0, 10),
+    }).catch(e => console.warn('[Contabilidad] reversa cobro:', e.message));
+
+    toast({ title: 'Cobro cancelado', description: 'Se revirtió el ingreso en caja y la deuda vuelve a estar abierta.', className: 'bg-emerald-600 text-white border-none' });
+    invalidateNotifs();
+    onSuccess?.();
+  }, [user, toast, onSuccess]);
 
   return {
     selectedClient, setSelectedClient,
@@ -308,8 +325,9 @@ export function useRegistrarCobro(onSuccess) {
     handleRegisterPayment,
     openPaymentDialog,
     abrirCobroPorClienteId,
-    lastRecibo,
-    empresaData,
     showParaleloTCModal, setShowParaleloTCModal,
+    detalleCobroId, detalleCobroOpen, setDetalleCobroOpen,
+    abrirDetalleCobro,
+    handleCancelarCobro,
   };
 }

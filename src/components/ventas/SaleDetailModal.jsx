@@ -27,7 +27,7 @@ import { documentFlowService } from '@/services/documentFlowService';
 import { formatNumeroComprobante } from '@/lib/numeroComprobante';
 import { useRegistrarCobro } from '@/hooks/useRegistrarCobro';
 import ModalCobro from '@/components/cuenta-corriente/ModalCobro';
-import ReciboPago from '@/components/shared/ReciboPago';
+import ModalDetalleCobro from '@/components/cuenta-corriente/ModalDetalleCobro';
 import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 
 // CAE emitido o en trámite ante AFIP/ARCA — el documento ya es (o puede
@@ -290,12 +290,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
     ...flow.entregas.map(e => ({ tipo: e.tipo, id: e.id, numero: e.numero })),
     { tipo: flow.actual.tipo, id: flow.actual.id, numero: flow.actual.numero, active: true },
     ...flow.notas_credito.map(nc => ({ tipo: nc.tipo, id: nc.id, numero: nc.numero })),
-    // Un cobro no tiene página propia — "id" acá es el cliente_id de la
-    // factura (no el id del movimiento de cobro), porque el único destino
-    // navegable es "revisarlo" en Cuenta Corriente (29/08, hallazgo Luciano:
-    // "no me linkea al cobro si quisiera revisarlo"). Ver el onNavigate
-    // envuelto más abajo, que traduce el tipo del chip al tipo de navegación.
-    ...flow.cobros_cc.map(c => ({ tipo: c.tipo, id: sale.cliente_id, numero: c.numero })),
+    ...flow.cobros_cc.map(c => ({ tipo: c.tipo, id: c.id, numero: c.numero })),
     ...flow.devoluciones.map(d => ({ tipo: d.tipo, id: d.id, numero: d.numero })),
   ] : [];
 
@@ -499,7 +494,13 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                 </div>
                 <DocumentFlow
                   chips={flowChips}
-                  onNavigate={(tipo, id) => onNavigate?.(tipo === 'cobro_cc' ? 'cliente_cc' : tipo, id)}
+                  onNavigate={(tipo, id) => {
+                    // Un cobro no navega a otro módulo — abre el mismo
+                    // Comprobante de Pago, apilado arriba de esta factura,
+                    // sin perder el contexto (29/08, hallazgo Luciano).
+                    if (tipo === 'cobro_cc') { cobro.abrirDetalleCobro(id); return; }
+                    onNavigate?.(tipo, id);
+                  }}
                 />
               </div>
               </TabsContent>
@@ -539,7 +540,15 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                 open={mapaOpen}
                 onOpenChange={setMapaOpen}
                 comprobanteId={saleId}
-                onNavigate={(tipo, id) => { setMapaOpen(false); onOpenChange(false); onNavigate?.(tipo, id); }}
+                onNavigate={(tipo, id) => {
+                  setMapaOpen(false);
+                  // Un cobro se queda "en contexto" — cierra solo el Mapa y
+                  // abre el Comprobante de Pago apilado, la factura sigue
+                  // abierta atrás (29/08, hallazgo Luciano).
+                  if (tipo === 'cobro_cc') { cobro.abrirDetalleCobro(id); return; }
+                  onOpenChange(false);
+                  onNavigate?.(tipo, id);
+                }}
               />
               </div>
               </div>
@@ -650,7 +659,17 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
         imputacionesFX={cobro.imputacionesFX} setImputacionesFX={cobro.setImputacionesFX}
         autoDistribuirFIFO={cobro.autoDistribuirFIFO}
       />
-      <ReciboPago recibo={cobro.lastRecibo} />
+      {/* "Comprobante de Pago" — se abre solo al confirmar un cobro nuevo
+          (useRegistrarCobro) o al hacer clic en un chip/nodo de cobro
+          existente (arriba). Misma instancia para ambos casos. */}
+      <ModalDetalleCobro
+        movimientoId={cobro.detalleCobroId}
+        open={cobro.detalleCobroOpen}
+        onOpenChange={cobro.setDetalleCobroOpen}
+        onUpdate={() => { fetchSaleDetails(); onUpdateSale?.(); }}
+        onCancelar={cobro.handleCancelarCobro}
+        onNavigate={(clienteId) => { cobro.setDetalleCobroOpen(false); onOpenChange(false); onNavigate?.('cliente_cc', clienteId); }}
+      />
       <TipoCambioModal
         open={cobro.showParaleloTCModal}
         onOpenChange={cobro.setShowParaleloTCModal}
