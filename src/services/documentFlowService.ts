@@ -131,21 +131,53 @@ export const documentFlowService = {
       seccion: 'ventas',
     }));
 
-    // 5. Cobros CC que referencian este comprobante
-    const { data: cobros } = await supabase
-      .from('cuenta_corriente_movimientos')
-      .select('id, descripcion, fecha, monto, metodo_cobro')
-      .eq('comprobante_id', comprobanteId)
-      .eq('tipo', 'HABER');
-    const cobros_cc: DocFlowNode[] = (cobros ?? []).map((c: any) => ({
-      id: c.id,
-      tipo: 'cobro_cc' as DocFlowTipo,
-      numero: c.metodo_cobro ?? 'Cobro CC',
-      fecha: c.fecha,
-      monto: Number(c.monto),
-      descripcion: c.descripcion,
-      seccion: 'cuentacorriente',
-    }));
+    // 5. Cobros CC que referencian este comprobante — DOS fuentes distintas:
+    //   a) Reversas de cancelar_factura/NC/ND (mig.259/267/321): esas SÍ
+    //      escriben comprobante_id directo en la fila HABER de
+    //      cuenta_corriente_movimientos.
+    //   b) Cobros reales via registrar_cobro_cliente (mig.169 en adelante):
+    //      esa fila HABER NUNCA lleva comprobante_id — un cobro puede
+    //      repartirse entre varias facturas, así que el vínculo vive en
+    //      cuenta_corriente_imputaciones (Open Item clearing), no en la
+    //      cabecera del movimiento. Bug real (Luciano, 29/08: "no tengo nada
+    //      desde la factura que me linkee al pago"): sin este segundo fetch,
+    //      NINGUNA factura pagada por Cuenta Corriente mostraba su cobro acá
+    //      — solo se veían las reversas de cancelación.
+    const [{ data: reversas }, { data: imputados }] = await Promise.all([
+      supabase
+        .from('cuenta_corriente_movimientos')
+        .select('id, descripcion, fecha, monto, metodo_cobro')
+        .eq('comprobante_id', comprobanteId)
+        .eq('tipo', 'HABER'),
+      supabase
+        .from('cuenta_corriente_imputaciones')
+        .select('monto, cuenta_corriente_movimientos(id, descripcion, fecha, metodo_cobro)')
+        .eq('factura_comprobante_id', comprobanteId),
+    ]);
+    const cobros_cc: DocFlowNode[] = [
+      ...(reversas ?? []).map((c: any) => ({
+        id: c.id,
+        tipo: 'cobro_cc' as DocFlowTipo,
+        numero: c.metodo_cobro ?? 'Cobro CC',
+        fecha: c.fecha,
+        monto: Number(c.monto),
+        descripcion: c.descripcion,
+        seccion: 'cuentacorriente',
+      })),
+      // El monto mostrado es la PORCIÓN imputada a esta factura, no el total
+      // del cobro — un mismo cobro puede cancelar varias facturas a la vez.
+      ...(imputados ?? [])
+        .filter((i: any) => i.cuenta_corriente_movimientos)
+        .map((i: any) => ({
+          id: i.cuenta_corriente_movimientos.id,
+          tipo: 'cobro_cc' as DocFlowTipo,
+          numero: i.cuenta_corriente_movimientos.metodo_cobro ?? 'Cobro CC',
+          fecha: i.cuenta_corriente_movimientos.fecha,
+          monto: Number(i.monto),
+          descripcion: i.cuenta_corriente_movimientos.descripcion,
+          seccion: 'cuentacorriente',
+        })),
+    ];
 
     // 6. Entrega(s) vinculada(s) a este comprobante (item 7, hallazgo Luciano
     // 22/08: la cadena de Factura no mostraba el eslabón físico intermedio,

@@ -32,37 +32,54 @@ const DUPLICADO_TABLAS = {
 // mig.315 — Fase 1 del rediseño (PLAN_MAPA_RELACIONES.md): un ícono por tipo de
 // documento, mismo espíritu que los íconos circulares por etapa del Relationship
 // Map de SAP B1 — de un vistazo se distingue el tipo de paso, no solo el color.
+// `dot` es a propósito una clase Tailwind LITERAL completa (no derivada con
+// `.replace('text-', 'bg-')` como hacía la leyenda antes) — Tailwind arma su
+// CSS escaneando el texto fuente en busca de nombres de clase completos; una
+// clase construida en tiempo de ejecución que nunca aparece armada como texto
+// en ningún archivo simplemente no se genera. Bug real (Luciano, 29/08): la
+// leyenda de "Pedido"/"Orden de Compra"/"Factura Compra" salía sin color
+// porque `bg-kx-blue` (sin el sufijo /10 de opacidad) no existía como
+// substring literal en ningún archivo — solo `bg-kx-blue/10`, que Tailwind
+// trata como una clase distinta. Cada color findal usado como fondo sólido
+// tiene que aparecer acá tal cual para que el build lo genere.
 const TIPO_CONFIG = {
   // ── Ventas ─────────────────────────────────────────────────────────────────
-  cotizacion:      { label: 'Cotización',      color: 'border-t-kx-text-3', accent: 'text-kx-text-3', bg: 'bg-kx-text-3/10', icon: FileText },
-  pedido:          { label: 'Pedido',          color: 'border-t-kx-blue',   accent: 'text-kx-blue',   bg: 'bg-kx-blue/10',   icon: ClipboardList },
-  entrega:         { label: 'Entrega',         color: 'border-t-kx-violet', accent: 'text-kx-violet', bg: 'bg-kx-violet/10', icon: Truck },
-  venta:           { label: 'Factura',         color: 'border-t-kx-green',  accent: 'text-kx-green',  bg: 'bg-kx-green/10',  icon: Receipt },
-  nota_credito:    { label: 'Nota de Crédito', color: 'border-t-kx-amber',  accent: 'text-kx-amber',  bg: 'bg-kx-amber/10',  icon: RotateCcw },
-  nota_debito:     { label: 'Nota de Débito',  color: 'border-t-kx-red',    accent: 'text-kx-red',    bg: 'bg-kx-red/10',    icon: PlusCircle },
-  devolucion:      { label: 'Devolución',      color: 'border-t-kx-amber',  accent: 'text-kx-amber',  bg: 'bg-kx-amber/10',  icon: Undo2 },
-  cobro_cc:        { label: 'Cobro CC',        color: 'border-t-kx-green',  accent: 'text-kx-green',  bg: 'bg-kx-green/10',  icon: Wallet },
+  cotizacion:      { label: 'Cotización',      color: 'border-t-kx-text-3', accent: 'text-kx-text-3', bg: 'bg-kx-text-3/10', dot: 'bg-kx-text-3', icon: FileText },
+  pedido:          { label: 'Pedido',          color: 'border-t-kx-blue',   accent: 'text-kx-blue',   bg: 'bg-kx-blue/10',   dot: 'bg-kx-blue',   icon: ClipboardList },
+  entrega:         { label: 'Entrega',         color: 'border-t-kx-violet', accent: 'text-kx-violet', bg: 'bg-kx-violet/10', dot: 'bg-kx-violet', icon: Truck },
+  venta:           { label: 'Factura',         color: 'border-t-kx-green',  accent: 'text-kx-green',  bg: 'bg-kx-green/10',  dot: 'bg-kx-green',  icon: Receipt },
+  nota_credito:    { label: 'Nota de Crédito', color: 'border-t-kx-amber',  accent: 'text-kx-amber',  bg: 'bg-kx-amber/10',  dot: 'bg-kx-amber',  icon: RotateCcw },
+  nota_debito:     { label: 'Nota de Débito',  color: 'border-t-kx-red',    accent: 'text-kx-red',    bg: 'bg-kx-red/10',    dot: 'bg-kx-red',    icon: PlusCircle },
+  devolucion:      { label: 'Devolución',      color: 'border-t-kx-amber',  accent: 'text-kx-amber',  bg: 'bg-kx-amber/10',  dot: 'bg-kx-amber',  icon: Undo2 },
+  cobro_cc:        { label: 'Cobro CC',        color: 'border-t-kx-green',  accent: 'text-kx-green',  bg: 'bg-kx-green/10',  dot: 'bg-kx-green',  icon: Wallet },
   // Reversa de CC generada por cancelar_factura/NC/ND (mig.259/267/321) — un
   // HABER en cuenta_corriente_movimientos igual que un cobro real, pero NO es
   // plata que entró: es el efecto contrario a una cancelación. Antes se
   // mostraba con el mismo chip "Cobro CC" que un cobro de verdad — confuso
   // (Luciano, 23/08: "¿qué es esto?"), se distingue por prefijo de descripción.
-  reversa_cc:      { label: 'Reversa CC',       color: 'border-t-kx-text-3', accent: 'text-kx-text-3', bg: 'bg-kx-text-3/10', icon: Ban },
+  reversa_cc:      { label: 'Reversa CC',       color: 'border-t-kx-text-3', accent: 'text-kx-text-3', bg: 'bg-kx-text-3/10', dot: 'bg-kx-text-3', icon: Ban },
   // Pago al contado (27/08) — distinto de "Cobro CC": no cancela una deuda
   // previa, es el cobro que ya viajó adentro de la propia venta (Efectivo/
   // Transferencia/Tarjeta al momento de facturar). Fuente: movimientos_caja,
   // no cuenta_corriente_movimientos — una venta contado nunca generó deuda,
   // así que ahí no hay nada que mostrar.
-  cobro_caja:      { label: 'Pago al Contado',  color: 'border-t-kx-green',  accent: 'text-kx-green',  bg: 'bg-kx-green/10',  icon: Banknote },
+  cobro_caja:      { label: 'Pago al Contado',  color: 'border-t-kx-green',  accent: 'text-kx-green',  bg: 'bg-kx-green/10',  dot: 'bg-kx-green',  icon: Banknote },
   // ── Compras ────────────────────────────────────────────────────────────────
-  orden_compra:    { label: 'Orden de Compra', color: 'border-t-kx-blue',   accent: 'text-kx-blue',   bg: 'bg-kx-blue/10',   icon: ShoppingCart },
-  recepcion:       { label: 'Recepción',       color: 'border-t-kx-violet', accent: 'text-kx-violet', bg: 'bg-kx-violet/10', icon: PackageCheck },
-  factura_compra:  { label: 'Factura Compra',  color: 'border-t-kx-blue',   accent: 'text-kx-blue',   bg: 'bg-kx-blue/10',   icon: Receipt },
-  pago_proveedor:  { label: 'Pago CC',         color: 'border-t-kx-green',  accent: 'text-kx-green',  bg: 'bg-kx-green/10',  icon: Wallet },
-  nc_proveedor:    { label: 'NC Proveedor',    color: 'border-t-kx-amber',  accent: 'text-kx-amber',  bg: 'bg-kx-amber/10',  icon: RotateCcw },
-  nd_proveedor:    { label: 'ND Recibida',     color: 'border-t-kx-red',    accent: 'text-kx-red',    bg: 'bg-kx-red/10',    icon: PlusCircle },
-  devolucion_prov: { label: 'Dev. Proveedor',  color: 'border-t-kx-amber',  accent: 'text-kx-amber',  bg: 'bg-kx-amber/10',  icon: Undo2 },
+  orden_compra:    { label: 'Orden de Compra', color: 'border-t-kx-blue',   accent: 'text-kx-blue',   bg: 'bg-kx-blue/10',   dot: 'bg-kx-blue',   icon: ShoppingCart },
+  recepcion:       { label: 'Recepción',       color: 'border-t-kx-violet', accent: 'text-kx-violet', bg: 'bg-kx-violet/10', dot: 'bg-kx-violet', icon: PackageCheck },
+  factura_compra:  { label: 'Factura Compra',  color: 'border-t-kx-blue',   accent: 'text-kx-blue',   bg: 'bg-kx-blue/10',   dot: 'bg-kx-blue',   icon: Receipt },
+  pago_proveedor:  { label: 'Pago CC',         color: 'border-t-kx-green',  accent: 'text-kx-green',  bg: 'bg-kx-green/10',  dot: 'bg-kx-green',  icon: Wallet },
+  nc_proveedor:    { label: 'NC Proveedor',    color: 'border-t-kx-amber',  accent: 'text-kx-amber',  bg: 'bg-kx-amber/10',  dot: 'bg-kx-amber',  icon: RotateCcw },
+  nd_proveedor:    { label: 'ND Recibida',     color: 'border-t-kx-red',    accent: 'text-kx-red',    bg: 'bg-kx-red/10',    dot: 'bg-kx-red',    icon: PlusCircle },
+  devolucion_prov: { label: 'Dev. Proveedor',  color: 'border-t-kx-amber',  accent: 'text-kx-amber',  bg: 'bg-kx-amber/10',  dot: 'bg-kx-amber',  icon: Undo2 },
 };
+
+// Movimientos financieros puros (cobros/pagos/reversas) — no tienen ítems ni
+// "documento completo" al que navegar (no viven como página propia, son una
+// fila dentro de Cuenta Corriente). El preview para estos tipos muestra la
+// descripción en vez de una grilla de ítems, y no ofrece "Ver documento
+// completo" (antes SÍ lo ofrecía y el click no llevaba a ningún lado).
+const TIPOS_SIN_ITEMS = new Set(['cobro_cc', 'reversa_cc', 'cobro_caja']);
 
 // Heurística de color de estado — unifica el vocabulario heterogéneo que trae
 // cada tabla (pedido.estado, entrega.estado, nc.estado_pago, devolucion.compensacion...)
@@ -245,29 +262,38 @@ function PreviewPanel({ nodo, items, loading, onClose, onVerCompleto }) {
         </div>
       )}
 
-      <div className="border-t border-kx-border pt-3">
-        <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider mb-2">Ítems</p>
-        {loading ? (
-          <div className="flex items-center gap-2 text-xs text-kx-text-3 py-2">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando...
+      {TIPOS_SIN_ITEMS.has(nodo.tipo) ? (
+        nodo.descripcion && (
+          <div className="border-t border-kx-border pt-3">
+            <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider mb-2">Detalle</p>
+            <p className="text-xs text-kx-text-2">{nodo.descripcion}</p>
           </div>
-        ) : items && items.length > 0 ? (
-          <div className="space-y-2">
-            {items.map((it, i) => (
-              <div key={i} className="flex items-start justify-between gap-2 text-xs">
-                <span className="text-kx-text-2">
-                  <span className="text-kx-text font-medium tabular-nums">{it.cantidad}×</span> {it.nombre}
-                </span>
-                {it.subtotal != null && (
-                  <span className="text-kx-text tabular-nums flex-shrink-0">${fmt(it.subtotal)}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-kx-text-3">Sin ítems para mostrar.</p>
-        )}
-      </div>
+        )
+      ) : (
+        <div className="border-t border-kx-border pt-3">
+          <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider mb-2">Ítems</p>
+          {loading ? (
+            <div className="flex items-center gap-2 text-xs text-kx-text-3 py-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando...
+            </div>
+          ) : items && items.length > 0 ? (
+            <div className="space-y-2">
+              {items.map((it, i) => (
+                <div key={i} className="flex items-start justify-between gap-2 text-xs">
+                  <span className="text-kx-text-2">
+                    <span className="text-kx-text font-medium tabular-nums">{it.cantidad}×</span> {it.nombre}
+                  </span>
+                  {it.subtotal != null && (
+                    <span className="text-kx-text tabular-nums flex-shrink-0">${fmt(it.subtotal)}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-kx-text-3">Sin ítems para mostrar.</p>
+          )}
+        </div>
+      )}
 
       {onVerCompleto && (
         <Button
@@ -578,7 +604,7 @@ function MapaRelaciones({
 
       if (!comp) { setMapa(null); return; }
 
-      const [origenRes, cotizacionRes, pedidoRes, entregasRes, ncsRes, ndsRes, devRes, cobrosRes, pagosContadoRes, hermanasRes] = await Promise.allSettled([
+      const [origenRes, cotizacionRes, pedidoRes, entregasRes, ncsRes, ndsRes, devRes, cobrosRes, imputadosRes, pagosContadoRes, hermanasRes] = await Promise.allSettled([
         comp.comprobante_origen_id
           ? supabase.from('comprobantes')
               .select('id, numero_venta, numero_afip, tipo, total, fecha')
@@ -628,11 +654,24 @@ function MapaRelaciones({
           .eq('comprobante_id', idComprobante)
           .eq('empresa_id', user.empresa_id),
 
+        // Reversas de cancelar_factura/NC/ND — esas SÍ escriben comprobante_id
+        // directo en la fila HABER.
         supabase.from('cuenta_corriente_movimientos')
           .select('id, tipo, monto, fecha, descripcion')
           .eq('comprobante_id', idComprobante)
           .eq('empresa_id', user.empresa_id)
           .eq('tipo', 'HABER'),
+
+        // Cobros REALES via registrar_cobro_cliente (mig.169 en adelante): esa
+        // fila HABER nunca lleva comprobante_id (un cobro puede repartirse
+        // entre varias facturas) — el vínculo vive en
+        // cuenta_corriente_imputaciones. Bug real (Luciano, 29/08: "no tengo
+        // nada desde la factura que me linkee al pago"): sin esto, ninguna
+        // factura pagada por Cuenta Corriente mostraba su cobro en el mapa.
+        supabase.from('cuenta_corriente_imputaciones')
+          .select('monto, cuenta_corriente_movimientos(id, monto, fecha, descripcion)')
+          .eq('factura_comprobante_id', idComprobante)
+          .eq('empresa_id', user.empresa_id),
 
         // Bug real (Luciano, 27/08): una factura pagada AL CONTADO (no vía
         // Cuenta Corriente) mostraba estado_pago='pagada' pero el pago no
@@ -712,6 +751,18 @@ function MapaRelaciones({
         }
       }
 
+      // El monto de cada imputación es la PORCIÓN de ese cobro aplicada a
+      // ESTA factura — no el total del cobro (que puede repartirse entre
+      // varias). Se muestra ese monto acotado, no el de la fila HABER.
+      const cobrosImputados = safeArr(imputadosRes)
+        .filter(i => i.cuenta_corriente_movimientos)
+        .map(i => ({
+          id:          i.cuenta_corriente_movimientos.id,
+          monto:       i.monto,
+          fecha:       i.cuenta_corriente_movimientos.fecha,
+          descripcion: i.cuenta_corriente_movimientos.descripcion,
+        }));
+
       setMapa({
         modo:         'venta',
         comp,
@@ -722,7 +773,7 @@ function MapaRelaciones({
         ncs:          safeArr(ncsRes),
         nds:          safeArr(ndsRes),
         devoluciones: safeArr(devRes),
-        cobros:       safeArr(cobrosRes),
+        cobros:       [...safeArr(cobrosRes), ...cobrosImputados],
         pagosContado: safeArr(pagosContadoRes),
         hermanas:     safeArr(hermanasRes),
       });
@@ -830,6 +881,7 @@ function MapaRelaciones({
   // documento (cada uno vive en su propia tabla de detalle).
   const openPreview = (nodo) => {
     setPreviewNodo(nodo);
+    if (TIPOS_SIN_ITEMS.has(nodo.tipo)) { setPreviewItems(null); setPreviewLoading(false); return; }
     fetchPreviewItems(nodo.tipo, nodo.id);
   };
 
@@ -951,31 +1003,27 @@ function MapaRelaciones({
       // pero no es plata cobrada. Se distingue por el prefijo fijo que usan
       // todas esas RPCs ('Cancelación Factura/NC/ND ...').
       const esReversa = c.descripcion?.startsWith('Cancelación');
-      return (
-        <NodoMapa
-          key={c.id}
-          nodo={{
-            id: c.id,
-            tipo: esReversa ? 'reversa_cc' : 'cobro_cc',
-            numero: c.descripcion || (esReversa ? 'Reversa CC' : 'Cobro CC'),
-            fecha: c.fecha,
-            monto: c.monto,
-          }}
-          activo={isActivo(c.id)}
-        />
-      );
+      const n = {
+        id: c.id,
+        tipo: esReversa ? 'reversa_cc' : 'cobro_cc',
+        numero: c.descripcion || (esReversa ? 'Reversa CC' : 'Cobro CC'),
+        fecha: c.fecha,
+        monto: c.monto,
+        descripcion: c.descripcion,
+      };
+      // Clickeable (29/08, hallazgo Luciano: "no puedo abrirlo... ni desde el
+      // mapa de relaciones") — abre el preview con fecha/monto/descripción,
+      // no hay "documento completo" al que navegar (ver TIPOS_SIN_ITEMS).
+      return <NodoMapa key={c.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
     }),
     ...mapa.devoluciones.map(d => {
       const n = { id: d.id, tipo: 'devolucion', numero: d.numero_devolucion, fecha: d.fecha, estado: d.compensacion };
       return <NodoMapa key={d.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
     }),
-    ...mapa.pagosContado.map(p => (
-      <NodoMapa
-        key={p.id}
-        nodo={{ id: p.id, tipo: 'cobro_caja', numero: p.metodo_pago || 'Pago al Contado', fecha: p.fecha, monto: p.monto }}
-        activo={isActivo(p.id)}
-      />
-    )),
+    ...mapa.pagosContado.map(p => {
+      const n = { id: p.id, tipo: 'cobro_caja', numero: p.metodo_pago || 'Pago al Contado', fecha: p.fecha, monto: p.monto };
+      return <NodoMapa key={p.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
+    }),
   ] : [];
   const derivadosCompraItems = mapa?.modo === 'compra' ? [
     ...mapa.devoluciones.map(d => {
@@ -1253,7 +1301,7 @@ function MapaRelaciones({
               <div className="flex flex-wrap gap-3 pt-2 border-t border-kx-border">
                 {['cotizacion', 'venta', 'pedido', 'entrega', 'nota_credito', 'nota_debito', 'cobro_cc', 'cobro_caja', 'devolucion'].map(tipo => (
                   <div key={tipo} className="flex items-center gap-1.5 text-2xs text-kx-text-3">
-                    <div className={`w-2 h-2 rounded-full ${TIPO_CONFIG[tipo].accent.replace('text-', 'bg-')}`} />
+                    <div className={`w-2 h-2 rounded-full ${TIPO_CONFIG[tipo].dot}`} />
                     {TIPO_CONFIG[tipo].label}
                   </div>
                 ))}
@@ -1402,7 +1450,7 @@ function MapaRelaciones({
               <div className="flex flex-wrap gap-3 pt-2 border-t border-kx-border">
                 {['factura_compra', 'recepcion', 'pago_proveedor', 'nc_proveedor', 'nd_proveedor', 'devolucion_prov'].map(tipo => (
                   <div key={tipo} className="flex items-center gap-1.5 text-2xs text-kx-text-3">
-                    <div className={`w-2 h-2 rounded-full ${TIPO_CONFIG[tipo].accent.replace('text-', 'bg-')}`} />
+                    <div className={`w-2 h-2 rounded-full ${TIPO_CONFIG[tipo].dot}`} />
                     {TIPO_CONFIG[tipo].label}
                   </div>
                 ))}
@@ -1417,7 +1465,7 @@ function MapaRelaciones({
             items={previewItems}
             loading={previewLoading}
             onClose={() => { setPreviewNodo(null); setPreviewItems(null); }}
-            onVerCompleto={() => navigate(navTipoFor(previewNodo.tipo), previewNodo.id)}
+            onVerCompleto={TIPOS_SIN_ITEMS.has(previewNodo.tipo) ? undefined : () => navigate(navTipoFor(previewNodo.tipo), previewNodo.id)}
           />
         )}
         </div>
