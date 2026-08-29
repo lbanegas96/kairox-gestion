@@ -33,8 +33,12 @@ function DocumentFlow({ chips = [], onNavigate }) {
       {chips.map((chip, idx) => {
         const cfg = CHIP_CONFIG[chip.tipo] || CHIP_CONFIG.cotizacion;
         const { Icon } = cfg;
+        // Key por índice, no por id: varios cobros de una misma factura
+        // pueden compartir el mismo id de navegación (29/08 — ver
+        // SaleDetailModal, "Ver en Cuenta Corriente" usa cliente_id para
+        // todos), así que chip.id ya no es único dentro de la lista.
         return (
-          <React.Fragment key={`${chip.tipo}-${chip.id ?? idx}`}>
+          <React.Fragment key={`${chip.tipo}-${idx}`}>
             {idx > 0 && (
               <ArrowRight className="h-3 w-3 text-kx-text-3 shrink-0" />
             )}

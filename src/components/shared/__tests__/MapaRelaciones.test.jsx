@@ -60,35 +60,42 @@ function setupMock({ ncs = NCS, nds = NDS, cobros = COBROS, devs = DEVS } = {}) 
 }
 
 // Fase 4 (PLAN_MAPA_RELACIONES.md): "Documentos derivados" no tenía tope — un
-// cliente con muchas NC/ND/cobros sobre la misma factura se veía entero,
-// ocupando varias filas de una. Caso real que motivó esto: no hay hoy en Nalux
-// ningún comprobante con más de 2 derivados, así que se arma sintético (9)
-// para poder probar el "Ver N más" — el mismo caso de "10 NC" que documentaba
-// el plan.
+// cliente con muchas NC/ND sobre la misma factura se veía entero, ocupando
+// varias filas de una. Caso real que motivó esto: no hay hoy en Nalux ningún
+// comprobante con más de 2 derivados, así que se arma sintético (7) para
+// poder probar el "Ver N más" — el mismo caso de "10 NC" que documentaba el
+// plan.
+//
+// Los cobros (29/08, hallazgo Luciano: "podemos ponerlo junto con la
+// factura") ya NO son "documentos derivados" — se muestran como
+// continuación de la Cadena de documentos principal, siempre visibles, sin
+// paginar. Por eso quedan fuera del conteo/paginación de estos tests.
 describe('MapaRelaciones — Fase 4: colapsar ramas largas de derivados', () => {
   beforeEach(() => {
     mockFrom.mockReset();
   });
 
-  it('con 9 documentos derivados, muestra sólo los primeros 6 y un botón "Ver 3 más"', async () => {
+  it('con 7 documentos derivados, muestra sólo los primeros 6 y un botón "Ver 1 más"; los cobros de la cadena principal se ven siempre', async () => {
     setupMock();
     render(<MapaRelaciones open onOpenChange={() => {}} comprobanteId="comp-1" />);
 
     await screen.findByText('NC-1');
 
-    // Orden real: 3 NC + 2 ND + 2 cobros + 2 devoluciones = 9 -> primeros 6 visibles
+    // Orden real de "derivados": 3 NC + 2 ND + 2 devoluciones = 7 -> primeros 6 visibles
     expect(screen.getByText('NC-1')).toBeTruthy();
     expect(screen.getByText('NC-2')).toBeTruthy();
     expect(screen.getByText('NC-3')).toBeTruthy();
     expect(screen.getByText('ND-1')).toBeTruthy();
     expect(screen.getByText('ND-2')).toBeTruthy();
-    expect(screen.getByText('Cobro Test 1')).toBeTruthy();
+    expect(screen.getByText('DEV-1')).toBeTruthy();
 
     // El resto queda oculto detrás del botón
-    expect(screen.queryByText('Cobro Test 2')).toBeNull();
-    expect(screen.queryByText('DEV-1')).toBeNull();
     expect(screen.queryByText('DEV-2')).toBeNull();
-    expect(screen.getByText('Ver 3 más')).toBeTruthy();
+    expect(screen.getByText('Ver 1 más')).toBeTruthy();
+
+    // Los 2 cobros viven en la cadena principal, no en "derivados" — siempre visibles
+    expect(screen.getByText('Cobro Test 1')).toBeTruthy();
+    expect(screen.getByText('Cobro Test 2')).toBeTruthy();
   });
 
   it('clic en "Ver N más" muestra el resto, y "Ver menos" los vuelve a ocultar', async () => {
@@ -96,14 +103,12 @@ describe('MapaRelaciones — Fase 4: colapsar ramas largas de derivados', () => 
     render(<MapaRelaciones open onOpenChange={() => {}} comprobanteId="comp-1" />);
     await screen.findByText('NC-1');
 
-    fireEvent.click(screen.getByText('Ver 3 más'));
-    expect(await screen.findByText('Cobro Test 2')).toBeTruthy();
-    expect(screen.getByText('DEV-1')).toBeTruthy();
-    expect(screen.getByText('DEV-2')).toBeTruthy();
+    fireEvent.click(screen.getByText('Ver 1 más'));
+    expect(await screen.findByText('DEV-2')).toBeTruthy();
     expect(screen.getByText('Ver menos')).toBeTruthy();
 
     fireEvent.click(screen.getByText('Ver menos'));
-    await waitFor(() => expect(screen.queryByText('Cobro Test 2')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('DEV-2')).toBeNull());
   });
 
   it('con pocos documentos derivados (el caso real de hoy en Nalux), no hay regresión: se ven todos, sin botón', async () => {

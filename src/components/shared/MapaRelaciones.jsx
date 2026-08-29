@@ -225,7 +225,7 @@ function ResumenCircuito({ pasos, total, derivados }) {
 // hay que abrirlo aparte, perdiendo el contexto del circuito completo. Acá el
 // clic en un nodo abre esto DENTRO del mismo modal — el header ya lo tenemos
 // (viene del propio nodo, sin fetch extra), solo los ítems se piden aparte.
-function PreviewPanel({ nodo, items, loading, onClose, onVerCompleto }) {
+function PreviewPanel({ nodo, items, loading, onClose, onVerCompleto, verCompletoLabel = 'Ver documento completo' }) {
   const config = TIPO_CONFIG[nodo.tipo] ?? TIPO_CONFIG.venta;
   const Icono  = config.icon;
   const eColor = estadoColor(nodo.estado);
@@ -301,7 +301,7 @@ function PreviewPanel({ nodo, items, loading, onClose, onVerCompleto }) {
           className="w-full mt-4 text-xs border-kx-border text-kx-text-2"
           onClick={onVerCompleto}
         >
-          Ver documento completo <ExternalLink className="w-3 h-3 ml-1.5" />
+          {verCompletoLabel} <ExternalLink className="w-3 h-3 ml-1.5" />
         </Button>
       )}
     </div>
@@ -599,7 +599,7 @@ function MapaRelaciones({
     fetchDuplicadoInfo('venta', idComprobante);
     try {
       const { data: comp } = await supabase.from('comprobantes')
-        .select('id, numero_venta, numero_afip, tipo, total, fecha, cliente_nombre, comprobante_origen_id, pedido_id, cotizacion_id, estado_pago')
+        .select('id, numero_venta, numero_afip, tipo, total, fecha, cliente_id, cliente_nombre, comprobante_origen_id, pedido_id, cotizacion_id, estado_pago')
         .eq('id', idComprobante).single();
 
       if (!comp) { setMapa(null); return; }
@@ -969,10 +969,13 @@ function MapaRelaciones({
     && mapa.nds.length === 0 && mapa.pagos.length === 0
     && mapa.ncsFinancieras.length === 0;
 
+  // Cobros y pago al contado NO cuentan como "derivados" — se muestran como
+  // continuación de la Cadena de documentos (29/08, hallazgo Luciano: "no
+  // hace falta separarlo, podemos ponerlo junto con la factura"). Un
+  // "derivado" real es una rama propia (NC, ND, devolución), no el siguiente
+  // paso lineal del mismo circuito.
   const tieneDerivadosVenta = mapa?.modo === 'venta' && (
-    mapa.ncs.length > 0 || mapa.nds.length > 0 ||
-    mapa.cobros.length > 0 || mapa.devoluciones.length > 0 ||
-    mapa.pagosContado.length > 0
+    mapa.ncs.length > 0 || mapa.nds.length > 0 || mapa.devoluciones.length > 0
   );
 
   const tieneDerivadosCompra = mapa?.modo === 'compra' && (
@@ -980,10 +983,36 @@ function MapaRelaciones({
     mapa.pagos.length > 0 || mapa.ncsFinancieras.length > 0
   );
 
+  // Cobros/reversas/pago al contado como nodos planos (no JSX todavía) — se
+  // usan para extender la Cadena de documentos principal, no como
+  // "derivados" (29/08: "podemos ponerlo junto con la factura"). Se arman
+  // acá, antes de derivadosVentaItems, para reusar el mismo objeto en los
+  // dos lugares que lo necesitan sin duplicar la lógica de esReversa.
+  const cobrosNodos = mapa?.modo === 'venta' ? [
+    ...mapa.cobros.map(c => {
+      // cancelar_factura/NC/ND (mig.259/267/321/348) insertan un HABER acá
+      // mismo para revertir la deuda — mismo tipo de fila que un cobro real,
+      // pero no es plata cobrada. Se distingue por el prefijo fijo que usan
+      // todas esas RPCs ('Cancelación Factura/NC/ND ...').
+      const esReversa = c.descripcion?.startsWith('Cancelación');
+      return {
+        id: c.id,
+        tipo: esReversa ? 'reversa_cc' : 'cobro_cc',
+        numero: c.descripcion || (esReversa ? 'Reversa CC' : 'Cobro CC'),
+        fecha: c.fecha,
+        monto: c.monto,
+        descripcion: c.descripcion,
+      };
+    }),
+    ...mapa.pagosContado.map(p => ({
+      id: p.id, tipo: 'cobro_caja', numero: p.metodo_pago || 'Pago al Contado', fecha: p.fecha, monto: p.monto,
+    })),
+  ] : [];
+
   // Fase 4 — colapsar ramas largas: mismo orden en el que ya se renderizaban
-  // (NC, ND, cobros, devoluciones / devoluciones, NC financieras, ND), ahora
-  // como array plano para poder recortarlo con .slice() en vez de 4 .map()
-  // sueltos que no sabían nada del total combinado.
+  // (NC, ND, devoluciones), ahora como array plano para poder recortarlo con
+  // .slice() en vez de varios .map() sueltos que no sabían nada del total
+  // combinado.
   const LIMITE_DERIVADOS_VISIBLES = 6;
   const derivadosVentaItems = mapa?.modo === 'venta' ? [
     ...mapa.ncs.map(nc => {
@@ -997,32 +1026,9 @@ function MapaRelaciones({
         activo={isActivo(nd.id)}
       />
     )),
-    ...mapa.cobros.map(c => {
-      // cancelar_factura/NC/ND (mig.259/267/321/348) insertan un HABER acá
-      // mismo para revertir la deuda — mismo tipo de fila que un cobro real,
-      // pero no es plata cobrada. Se distingue por el prefijo fijo que usan
-      // todas esas RPCs ('Cancelación Factura/NC/ND ...').
-      const esReversa = c.descripcion?.startsWith('Cancelación');
-      const n = {
-        id: c.id,
-        tipo: esReversa ? 'reversa_cc' : 'cobro_cc',
-        numero: c.descripcion || (esReversa ? 'Reversa CC' : 'Cobro CC'),
-        fecha: c.fecha,
-        monto: c.monto,
-        descripcion: c.descripcion,
-      };
-      // Clickeable (29/08, hallazgo Luciano: "no puedo abrirlo... ni desde el
-      // mapa de relaciones") — abre el preview con fecha/monto/descripción,
-      // no hay "documento completo" al que navegar (ver TIPOS_SIN_ITEMS).
-      return <NodoMapa key={c.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
-    }),
     ...mapa.devoluciones.map(d => {
       const n = { id: d.id, tipo: 'devolucion', numero: d.numero_devolucion, fecha: d.fecha, estado: d.compensacion };
       return <NodoMapa key={d.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
-    }),
-    ...mapa.pagosContado.map(p => {
-      const n = { id: p.id, tipo: 'cobro_caja', numero: p.metodo_pago || 'Pago al Contado', fecha: p.fecha, monto: p.monto };
-      return <NodoMapa key={p.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
     }),
   ] : [];
   const derivadosCompraItems = mapa?.modo === 'compra' ? [
@@ -1048,10 +1054,10 @@ function MapaRelaciones({
 
   // ── Resumen del circuito ─────────────────────────────────────────────────────
   const pasosVenta = mapa?.modo === 'venta'
-    ? 1 + (mapa.origen ? 1 : 0) + (mapa.cotizacion ? 1 : 0) + (mapa.pedido ? 1 : 0) + mapa.entregas.length
+    ? 1 + (mapa.origen ? 1 : 0) + (mapa.cotizacion ? 1 : 0) + (mapa.pedido ? 1 : 0) + mapa.entregas.length + cobrosNodos.length
     : 0;
   const derivadosVenta = mapa?.modo === 'venta'
-    ? mapa.ncs.length + mapa.nds.length + mapa.cobros.length + mapa.devoluciones.length + mapa.pagosContado.length
+    ? mapa.ncs.length + mapa.nds.length + mapa.devoluciones.length
     : 0;
 
   const pasosCompra = mapa?.modo === 'compra'
@@ -1249,6 +1255,17 @@ function MapaRelaciones({
                     );
                   })}
                   <NodoMapa nodo={compNodo} activo={isActivo(compNodo.id)} onClick={() => openPreview(compNodo)} />
+                  {/* Cobros/reversas/pago al contado como continuación de la
+                      cadena, no como "documentos derivados" (29/08, hallazgo
+                      Luciano: "podemos ponerlo junto con la factura") — son
+                      el siguiente paso lineal del mismo circuito, no una
+                      rama propia como una NC o una devolución. */}
+                  {cobrosNodos.map(n => (
+                    <React.Fragment key={n.id}>
+                      <Conector />
+                      <NodoMapa nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />
+                    </React.Fragment>
+                  ))}
                 </div>
               </div>
 
@@ -1465,7 +1482,16 @@ function MapaRelaciones({
             items={previewItems}
             loading={previewLoading}
             onClose={() => { setPreviewNodo(null); setPreviewItems(null); }}
-            onVerCompleto={TIPOS_SIN_ITEMS.has(previewNodo.tipo) ? undefined : () => navigate(navTipoFor(previewNodo.tipo), previewNodo.id)}
+            onVerCompleto={
+              TIPOS_SIN_ITEMS.has(previewNodo.tipo)
+                // Un cobro no tiene página propia — "revisarlo" (29/08,
+                // hallazgo Luciano) es ver los movimientos del cliente en
+                // Cuenta Corriente. El id es el cliente_id de la factura
+                // (mapa.comp), no el id del movimiento en sí.
+                ? (mapa?.comp?.cliente_id ? () => navigate('cliente_cc', mapa.comp.cliente_id) : undefined)
+                : () => navigate(navTipoFor(previewNodo.tipo), previewNodo.id)
+            }
+            verCompletoLabel={TIPOS_SIN_ITEMS.has(previewNodo.tipo) ? 'Ver en Cuenta Corriente' : 'Ver documento completo'}
           />
         )}
         </div>

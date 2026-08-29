@@ -290,7 +290,12 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
     ...flow.entregas.map(e => ({ tipo: e.tipo, id: e.id, numero: e.numero })),
     { tipo: flow.actual.tipo, id: flow.actual.id, numero: flow.actual.numero, active: true },
     ...flow.notas_credito.map(nc => ({ tipo: nc.tipo, id: nc.id, numero: nc.numero })),
-    ...flow.cobros_cc.map(c => ({ tipo: c.tipo, id: c.id, numero: c.numero })),
+    // Un cobro no tiene página propia — "id" acá es el cliente_id de la
+    // factura (no el id del movimiento de cobro), porque el único destino
+    // navegable es "revisarlo" en Cuenta Corriente (29/08, hallazgo Luciano:
+    // "no me linkea al cobro si quisiera revisarlo"). Ver el onNavigate
+    // envuelto más abajo, que traduce el tipo del chip al tipo de navegación.
+    ...flow.cobros_cc.map(c => ({ tipo: c.tipo, id: sale.cliente_id, numero: c.numero })),
     ...flow.devoluciones.map(d => ({ tipo: d.tipo, id: d.id, numero: d.numero })),
   ] : [];
 
@@ -492,7 +497,10 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                     <Network className="w-3 h-3" /> Mapa de relaciones
                   </button>
                 </div>
-                <DocumentFlow chips={flowChips} onNavigate={onNavigate} />
+                <DocumentFlow
+                  chips={flowChips}
+                  onNavigate={(tipo, id) => onNavigate?.(tipo === 'cobro_cc' ? 'cliente_cc' : tipo, id)}
+                />
               </div>
               </TabsContent>
 

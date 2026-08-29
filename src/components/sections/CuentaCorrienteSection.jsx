@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { AlertTriangle, DollarSign, ArrowDownCircle, ArrowUpCircle, Users, Clock } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from '@/lib/customSupabaseClient';
@@ -14,7 +14,7 @@ import ModalCobro from '@/components/cuenta-corriente/ModalCobro';
 import ReciboPago from '@/components/shared/ReciboPago';
 import { useRegistrarCobro } from '@/hooks/useRegistrarCobro';
 
-function CuentaCorrienteSection() {
+function CuentaCorrienteSection({ initialClienteId } = {}) {
   const { user } = useAuth();
   const { isSessionOpen } = useCaja();
   const { toast } = useToast();
@@ -63,6 +63,25 @@ function CuentaCorrienteSection() {
       fetchData();
     }
   }, [user]);
+
+  // Deep-link de solo lectura desde "Ver en Cuenta Corriente" (Mapa de
+  // Relaciones / Flujo del documento de una Factura, 29/08) — abre el
+  // detalle del cliente para revisar sus movimientos, ninguna acción
+  // automática (a diferencia del viejo autoAbrirCobro, que abría el diálogo
+  // de cobro: eso ya no hace falta, "Registrar Cobro" es inline ahora). El
+  // ref evita reabrir si el usuario cierra el modal y el componente
+  // re-renderiza con el mismo prop.
+  const abrioDetalleRef = useRef(null);
+  useEffect(() => {
+    if (!initialClienteId || clients.length === 0) return;
+    if (abrioDetalleRef.current === initialClienteId) return;
+    const cliente = clients.find(c => c.id === initialClienteId);
+    if (cliente) {
+      abrioDetalleRef.current = initialClienteId;
+      setSelectedClient(cliente);
+      setDetailModalOpen(true);
+    }
+  }, [initialClienteId, clients]);
 
   useEffect(() => {
     if (activeTab === 'antigüedad' && user?.empresa_id) {

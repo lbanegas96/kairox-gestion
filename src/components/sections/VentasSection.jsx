@@ -16,7 +16,7 @@ import ModalCobro from '@/components/cuenta-corriente/ModalCobro';
 import ReciboPago from '@/components/shared/ReciboPago';
 import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 
-function VentasSection({ initialTab = 'historial' }) {
+function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
   const { afipActivo } = useAfipConfig();
   const cotizacionesActivo = useCotizacionesActivo();
   const [activeTab, setActiveTab]           = useState(initialTab);
@@ -53,11 +53,16 @@ function VentasSection({ initialTab = 'historial' }) {
   //     (seccion); unificado a chips con onNavigate(tipo, id), igual que
   //     Entrega/OC/Pedido): deep-linkea al documento real.
   //   - MapaRelaciones (22/08): onNavigate(tipo, id) — mismo patrón.
-  // 'cobro_cc' no está mapeado a propósito: el chip queda visible pero sin
-  // navegación — el cobro en sí ya no navega a ningún lado (se resuelve
-  // inline, ver cobroPostFactura más arriba), así que no hay destino al que
-  // saltar desde acá.
+  // 'cliente_cc' es el único caso cross-módulo (29/08, hallazgo Luciano: "no
+  // me linkea al cobro si quisiera revisarlo") — un cobro no tiene página
+  // propia, así que "revisarlo" significa ver los movimientos del cliente en
+  // Cuenta Corriente. El id acá SIEMPRE es el cliente_id de la factura (no el
+  // id del movimiento de cobro en sí, que no tiene destino navegable).
   const handleVentasNavigate = (tipoOSeccion, id) => {
+    if (tipoOSeccion === 'cliente_cc') {
+      if (id) onNavigateGlobal?.('cuentacorriente', { clienteId: id });
+      return;
+    }
     const TIPO_A_SECCION = {
       cotizacion: 'cotizaciones', pedido: 'pedidos', entrega: 'entregas',
       venta: 'historial', nota_credito: 'historial', nota_debito: 'historial',
