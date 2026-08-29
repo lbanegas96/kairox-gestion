@@ -31,13 +31,16 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate, onRegistrarC
   // Data State
   const [comprobantes, setComprobantes] = useState([]);
   const [clients, setClients] = useState([]);
+  const [puntosVenta, setPuntosVenta] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Filter State
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedClient, setSelectedClient] = useState('');
   const [selectedPayment, setSelectedPayment] = useState('');
+  const [selectedLetra, setSelectedLetra] = useState('');
+  const [selectedPuntoVenta, setSelectedPuntoVenta] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
 
   // UI State
@@ -122,6 +125,15 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate, onRegistrarC
         .select('id, nombre')
         .order('nombre');
 
+      // Puntos de venta para el filtro — sin filtrar por activo/solo_remito:
+      // un PdV dado de baja o remito-only puede seguir apareciendo en facturas
+      // históricas y tiene que seguir siendo elegible para filtrar por él.
+      const { data: pvData } = await supabase
+        .from('puntos_venta')
+        .select('id, numero, nombre')
+        .order('numero');
+      setPuntosVenta(pvData || []);
+
       const clienteNombrePorId = Object.fromEntries((clientsData || []).map(c => [c.id, c.nombre]));
 
       const processedSales = merged.map(s => ({
@@ -174,11 +186,13 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate, onRegistrarC
     setDateTo('');
     setSelectedClient('');
     setSelectedPayment('');
+    setSelectedLetra('');
+    setSelectedPuntoVenta('');
     setSelectedStatus('');
   };
 
   // Reset page when filters change
-  useEffect(() => { setPage(1); }, [dateFrom, dateTo, selectedClient, selectedPayment, selectedStatus]);
+  useEffect(() => { setPage(1); }, [dateFrom, dateTo, selectedClient, selectedPayment, selectedLetra, selectedPuntoVenta, selectedStatus]);
 
   // Memoized Filter Logic
   const filteredSales = useMemo(() => {
@@ -198,6 +212,13 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate, onRegistrarC
       // Payment Method
       if (selectedPayment && sale.forma_pago !== selectedPayment) return false;
 
+      // Letra (A/B/C) — comprobantes sin letra (Ticket, ND) quedan afuera si
+      // el filtro está activo, igual criterio que Medio de Pago con las ND.
+      if (selectedLetra && sale.tipo_comprobante_afip !== selectedLetra) return false;
+
+      // Punto de Venta
+      if (selectedPuntoVenta && sale.punto_venta_id !== selectedPuntoVenta) return false;
+
       // Status (incluye filtros especiales de CAE)
       if (selectedStatus === 'cae_error') {
         if (!['error', 'error_definitivo'].includes(sale.cae_estado)) return false;
@@ -209,14 +230,14 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate, onRegistrarC
 
       return true;
     });
-  }, [comprobantes, dateFrom, dateTo, selectedClient, selectedPayment, selectedStatus]);
+  }, [comprobantes, dateFrom, dateTo, selectedClient, selectedPayment, selectedLetra, selectedPuntoVenta, selectedStatus]);
 
   // Calculate Total
   const totalPeriodo = useMemo(() => {
     return filteredSales.reduce((acc, curr) => acc + (Number(curr.total) || 0), 0);
   }, [filteredSales]);
 
-  const activeFiltersCount = [dateFrom, dateTo, selectedClient, selectedPayment, selectedStatus].filter(Boolean).length;
+  const activeFiltersCount = [dateFrom, dateTo, selectedClient, selectedPayment, selectedLetra, selectedPuntoVenta, selectedStatus].filter(Boolean).length;
 
   const totalPages = Math.max(1, Math.ceil(filteredSales.length / PAGE_SIZE));
   const paginatedSales = filteredSales.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -238,7 +259,7 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate, onRegistrarC
            )}
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
           <div className="space-y-1">
              <Label className="text-xs text-slate-500 font-medium dark:text-kx-text-2">Desde</Label>
              <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-9 kairox-input text-sm" />
@@ -270,6 +291,32 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate, onRegistrarC
                <option value="Transferencia">Transferencia</option>
                <option value="Tarjeta">Tarjeta</option>
                <option value="Cuenta Corriente">Cuenta Corriente</option>
+             </select>
+          </div>
+          <div className="space-y-1">
+             <Label className="text-xs text-slate-500 font-medium dark:text-kx-text-2">Letra</Label>
+             <select
+               className="w-full h-9 rounded-md border border-slate-300 dark:border-kx-border bg-transparent px-3 text-sm dark:bg-kx-surface dark:text-kx-text"
+               value={selectedLetra}
+               onChange={e => setSelectedLetra(e.target.value)}
+             >
+               <option value="">Todas</option>
+               <option value="A">A</option>
+               <option value="B">B</option>
+               <option value="C">C</option>
+             </select>
+          </div>
+          <div className="space-y-1">
+             <Label className="text-xs text-slate-500 font-medium dark:text-kx-text-2">Punto de Venta</Label>
+             <select
+               className="w-full h-9 rounded-md border border-slate-300 dark:border-kx-border bg-transparent px-3 text-sm dark:bg-kx-surface dark:text-kx-text"
+               value={selectedPuntoVenta}
+               onChange={e => setSelectedPuntoVenta(e.target.value)}
+             >
+               <option value="">Todos</option>
+               {puntosVenta.map(pv => (
+                 <option key={pv.id} value={pv.id}>PdV {pv.numero} — {pv.nombre}</option>
+               ))}
              </select>
           </div>
           <div className="space-y-1">
