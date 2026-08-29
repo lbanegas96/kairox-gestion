@@ -94,10 +94,14 @@ function ModalCobro({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-y-auto space-y-4 px-6 py-4">
+        {/* flex-col SIN overflow-y-auto acá — a diferencia de ModalDetalleEntrega,
+            este panel principal no debe scrollear (pedido de Luciano 29/08): solo
+            la tabla de "Imputar a factura(s)" (flex-1 más abajo) tiene su propio
+            scroll interno. Cabecera y "Datos del cobro" quedan fijas (shrink-0). */}
+        <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden px-6 py-4">
           {/* Cabecera en grilla — mismo criterio que ModalDetalleEntrega/
               ModalDetalleCotizacion en vez de un solo renglón "Deuda Actual". */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+          <div className="shrink-0 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
             <div>
               <span className="text-xs text-slate-500 dark:text-kx-text-2 uppercase tracking-wide">Cliente</span>
               <p className="mt-0.5 font-medium text-kx-text truncate">{selectedClient?.nombre || '—'}</p>
@@ -116,7 +120,7 @@ function ModalCobro({
             )}
           </div>
 
-          <PanelSeccion titulo="Datos del cobro">
+          <PanelSeccion titulo="Datos del cobro" className="shrink-0">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-1">
                 <Label htmlFor="amount-list" className="text-xs dark:text-kx-text">Monto a Cobrar ($)</Label>
@@ -197,13 +201,14 @@ function ModalCobro({
                   Auto (más vieja primero)
                 </Button>
               )}
+              className="flex-1 min-h-0 flex flex-col overflow-hidden"
             >
-              <p className="text-xs text-kx-text-3 mb-3">
+              <p className="shrink-0 text-xs text-kx-text-3 mb-3">
                 Tildá una factura para aplicarle el cobro. Si aplicás menos que su saldo, queda
                 abierta por la diferencia — igual que en SAP.
               </p>
-              <div className="border border-kx-border rounded-lg overflow-hidden">
-                <div className="max-h-[420px] overflow-y-auto">
+              <div className="flex-1 min-h-0 border border-kx-border rounded-lg overflow-hidden">
+                <div className="h-full overflow-y-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50/70 dark:bg-slate-800/50 sticky top-0">
                       <tr>
@@ -286,7 +291,7 @@ function ModalCobro({
                   </table>
                 </div>
               </div>
-              <div className={`mt-2 text-xs text-right tabular-nums ${totalImputado > montoCobro ? 'text-kx-red font-semibold' : 'text-kx-text-3'}`}>
+              <div className={`shrink-0 mt-2 text-xs text-right tabular-nums ${totalImputado > montoCobro ? 'text-kx-red font-semibold' : 'text-kx-text-3'}`}>
                 Imputado: ${fmt(totalImputado)} / ${fmt(montoCobro)}
               </div>
             </PanelSeccion>

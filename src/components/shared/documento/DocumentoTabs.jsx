@@ -56,7 +56,7 @@ export function PanelSeccion({ titulo, accion, children, className = '' }) {
   return (
     <div className={`rounded-lg border kairox-border bg-kx-surface-2 dark:bg-slate-900/50 p-4 ${className}`}>
       {(titulo || accion) && (
-        <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="shrink-0 mb-3 flex items-center justify-between gap-2">
           {titulo && (
             <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-kx-text-2">
               {titulo}
