@@ -418,7 +418,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                   Único bloque que escrolea acá adentro (30/08, ver hallazgo
                   arriba). */}
               <div className="flex-1 min-h-0 overflow-y-auto">
-              <table className="w-full text-sm mb-6">
+              <table className="w-full text-sm mb-2">
                 <thead>
                   <tr className="border-b border-kx-border dark:border-kx-border">
                     <th className="text-left pb-2 text-kx-text-2">Producto</th>
@@ -444,40 +444,6 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                     );
                   })}
                 </tbody>
-                {(() => {
-                  // Fase 2 (15/08): antes el desglose Neto/IVA solo existía en el
-                  // PDF — hoy no hacía falta descargarlo para ver el total, pero
-                  // sí para ver cuánto era IVA Débito Fiscal. Se calcula desde los
-                  // ítems (mismo criterio que Cotización/Pedido/OC) en vez de
-                  // confiar en comprobantes.neto_gravado/iva_discriminado: esas
-                  // columnas están en NULL en 35 de 158 facturas reales de Nalux
-                  // (comprobantes viejos o creados antes de que se empezaran a
-                  // completar), así que el dato siempre correcto es recalcularlo.
-                  const factorIva = { '21': 1.21, '10.5': 1.105 };
-                  const neto = items.reduce((s, i) => s + Number(i.subtotal) / (factorIva[String(i.alicuota_iva)] ?? 1), 0);
-                  const iva = Number(sale.total) - neto;
-                  const fmt = (n) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                  return (
-                    <tfoot>
-                      {iva > 0.005 && (
-                        <>
-                          <tr>
-                            <td colSpan={3} className="pt-3 text-right text-xs text-kx-text-3">Neto gravado</td>
-                            <td className="pt-3 text-right text-xs text-kx-text-3">${fmt(neto)}</td>
-                          </tr>
-                          <tr>
-                            <td colSpan={3} className="text-right text-xs text-kx-text-3">IVA</td>
-                            <td className="text-right text-xs text-kx-text-3">${fmt(iva)}</td>
-                          </tr>
-                        </>
-                      )}
-                      <tr className="border-t-2 border-kx-border dark:border-kx-border">
-                        <td colSpan={3} className="py-3 text-right font-bold dark:text-kx-text">TOTAL</td>
-                        <td className="py-3 text-right font-bold text-lg dark:text-kx-text">${fmt(sale.total)}</td>
-                      </tr>
-                    </tfoot>
-                  );
-                })()}
               </table>
               </div>
 
@@ -574,42 +540,96 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
               destructiva a la izquierda, acciones positivas a la derecha.
               Antes Registrar Cobro / Cancelar Factura vivían en la tarjeta de
               header; ahora son acciones de documento, no datos. */}
-          <DialogFooter className="border-t border-slate-100 dark:border-kx-border px-6 py-4 flex-wrap gap-2 sm:justify-between shrink-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:text-kx-text dark:border-kx-border dark:hover:bg-slate-800">
-                Cerrar
-              </Button>
-              {puedeCancelar && !caeBloqueaCancelacion && (
-                <Button
-                  variant="outline"
-                  onClick={() => setShowCancelarConfirm(true)}
-                  className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20"
-                >
-                  <Ban className="w-4 h-4 mr-2" /> {`Cancelar ${nombreTipo}`}
-                </Button>
-              )}
-              {puedeCancelar && caeBloqueaCancelacion && (
-                <span className="text-xs text-kx-text-3 italic">
-                  {esNC || esND ? 'Tiene CAE — no se puede anular directamente' : 'Tiene CAE — para anularla generá una Nota de Crédito'}
-                </span>
-              )}
+          <DialogFooter className="border-t border-slate-100 dark:border-kx-border px-6 py-4 flex-col gap-3 shrink-0 sm:flex-col sm:space-x-0">
+            {/* Totales — dato de cabecera (30/08, hallazgo Luciano: "los
+                totales son datos de cabecera, por lo tanto debe fijarse al
+                final"), mismo criterio SAP ya aplicado en Pedido/OC/
+                Cotización: fijos en el footer, visibles siempre sin importar
+                la solapa activa ni cuánto se scrollee el cuerpo. Bruto/
+                Descuento/Neto/IVA se muestran SIEMPRE — tenga o no
+                descuento, discrimine o no IVA (ej. Factura C) — para que la
+                estructura de cabecera sea idéntica en todos los comprobantes,
+                no condicional al contenido. */}
+            {sale && (() => {
+              const factorIva = { '21': 1.21, '10.5': 1.105 };
+              const subtotalListaSinDescuentos = items.reduce((s, i) => {
+                const isPack = !!i.unidad_venta_id;
+                const cant = isPack ? Number(i.cantidad_venta || 0) : Number(i.cantidad || 0);
+                const punit = isPack ? Number(i.precio_unidad_venta || 0) : Number(i.precio_unitario || 0);
+                return s + cant * punit;
+              }, 0);
+              const subtotalBruto = items.reduce((s, i) => s + Number(i.subtotal), 0);
+              const descuentoTotal = Math.max(subtotalListaSinDescuentos - Number(sale.total), 0);
+              const neto = items.reduce((s, i) => s + Number(i.subtotal) / (factorIva[String(i.alicuota_iva)] ?? 1), 0);
+              const iva = subtotalBruto - neto;
+              const factorDesc = subtotalBruto > 0 ? Number(sale.total) / subtotalBruto : 1;
+              const fmt = (n) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+              return (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 text-sm pb-1 border-b border-slate-100 dark:border-kx-border">
+                  <div>
+                    <span className="text-kx-text-3 text-xs uppercase tracking-wide">Total Bruto</span>
+                    <p className="font-medium tabular-nums dark:text-kx-text mt-0.5">${fmt(subtotalListaSinDescuentos)}</p>
+                  </div>
+                  <div>
+                    <span className="text-kx-text-3 text-xs uppercase tracking-wide">Descuento</span>
+                    <p className={`font-medium tabular-nums mt-0.5 ${descuentoTotal > 0.005 ? 'text-red-600 dark:text-red-400' : 'dark:text-kx-text'}`}>
+                      {descuentoTotal > 0.005 ? `-$${fmt(descuentoTotal)}` : '$0,00'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-kx-text-3 text-xs uppercase tracking-wide">Neto Gravado</span>
+                    <p className="font-medium tabular-nums dark:text-kx-text mt-0.5">${fmt(neto * factorDesc)}</p>
+                  </div>
+                  <div>
+                    <span className="text-kx-text-3 text-xs uppercase tracking-wide">IVA</span>
+                    <p className="font-medium tabular-nums dark:text-kx-text mt-0.5">${fmt(iva * factorDesc)}</p>
+                  </div>
+                </div>
+              );
+            })()}
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-kx-text-2 dark:text-kx-text-2">TOTAL</span>
+              <span className="font-mono font-bold text-lg dark:text-kx-text tabular-nums">
+                ${sale ? Number(sale.total).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'}
+              </span>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {['pendiente', 'parcial'].includes(sale?.estado_pago) && sale?.cliente_id && (
-                <Button
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                  onClick={() => cobro.abrirCobroPorClienteId(sale.cliente_id, sale.id)}
-                >
-                  <Banknote className="w-4 h-4 mr-2" /> Registrar Cobro
+            <div className="flex flex-wrap gap-2 sm:justify-between">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:text-kx-text dark:border-kx-border dark:hover:bg-slate-800">
+                  Cerrar
                 </Button>
-              )}
-              <Button
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-                onClick={() => setShowPrintModal(true)}
-                disabled={!sale}
-              >
-                <Printer className="w-4 h-4 mr-2" /> Imprimir Comprobante
-              </Button>
+                {puedeCancelar && !caeBloqueaCancelacion && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowCancelarConfirm(true)}
+                    className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20"
+                  >
+                    <Ban className="w-4 h-4 mr-2" /> {`Cancelar ${nombreTipo}`}
+                  </Button>
+                )}
+                {puedeCancelar && caeBloqueaCancelacion && (
+                  <span className="text-xs text-kx-text-3 italic">
+                    {esNC || esND ? 'Tiene CAE — no se puede anular directamente' : 'Tiene CAE — para anularla generá una Nota de Crédito'}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {['pendiente', 'parcial'].includes(sale?.estado_pago) && sale?.cliente_id && (
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => cobro.abrirCobroPorClienteId(sale.cliente_id, sale.id)}
+                  >
+                    <Banknote className="w-4 h-4 mr-2" /> Registrar Cobro
+                  </Button>
+                )}
+                <Button
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={() => setShowPrintModal(true)}
+                  disabled={!sale}
+                >
+                  <Printer className="w-4 h-4 mr-2" /> Imprimir Comprobante
+                </Button>
+              </div>
             </div>
           </DialogFooter>
         </DialogContent>

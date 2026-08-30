@@ -208,13 +208,17 @@ function ClientesSection() {
           placeholder="Calle y número, piso/depto"
           className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
       </div>
-      <div className="space-y-1.5">
-        <Label className="dark:text-kx-text">Localidad</Label>
-        <Input value={formData.localidad} onChange={e => setFormData(f => ({ ...f, localidad: e.target.value }))}
-          placeholder="Ej: Quilmes"
-          className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
+      {/* Localidad/Provincia/CP en una sola fila de 3 — antes Provincia+CP
+          quedaban anidados en un grid-cols-2 propio adentro de la celda de al
+          lado de Localidad, una asimetría rara con el resto del formulario
+          (30/08, hallazgo Luciano: "organicemos los campos de información"). */}
+      <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="space-y-1.5">
+          <Label className="dark:text-kx-text">Localidad</Label>
+          <Input value={formData.localidad} onChange={e => setFormData(f => ({ ...f, localidad: e.target.value }))}
+            placeholder="Ej: Quilmes"
+            className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+        </div>
         <div className="space-y-1.5">
           <Label className="dark:text-kx-text">Provincia</Label>
           <Input value={formData.provincia} onChange={e => setFormData(f => ({ ...f, provincia: e.target.value }))}
@@ -451,13 +455,23 @@ function ClientesSection() {
         setIsAddDialogOpen(open);
         if (!open) document.activeElement?.blur();
       }}>
-        <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        {/* size="medium" (30/08, hallazgo Luciano: "me obliga a escrolear...
+            apliquemos el mismo diseño de factura, agrandemos el modal") —
+            antes el overflow-y-auto vivía en el DialogContent entero, así
+            que título y botones Cancelar/Crear se iban con el scroll. Mismo
+            shell flex-col que ya usan Factura/Pedido: cabecera y footer
+            fijos, solo el cuerpo del formulario escrolea. Reemplaza el
+            max-w-2xl (672px) por el ancho estándar de "medium" (max-w-3xl,
+            768px) — más lugar para Localidad/Provincia/CP en una sola fila. */}
+        <DialogContent size="medium" className="dark:bg-kx-bg dark:border-kx-border">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b border-kx-border dark:border-kx-border">
             <DialogTitle className="dark:text-kx-text">Nuevo Cliente</DialogTitle>
             <DialogDescription className="dark:text-kx-text-2">Completá los datos del nuevo cliente.</DialogDescription>
           </DialogHeader>
-          {renderClientForm({ isEdit: false })}
-          <DialogFooter>
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+            {renderClientForm({ isEdit: false })}
+          </div>
+          <DialogFooter className="shrink-0 px-6 py-4 border-t border-kx-border dark:border-kx-border">
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="dark:text-kx-text dark:border-kx-border">Cancelar</Button>
             <Button onClick={() => handleSave(false)} disabled={saving} className="bg-blue-600 text-white hover:bg-blue-700">
               {saving ? 'Guardando...' : 'Crear Cliente'}
@@ -471,13 +485,15 @@ function ClientesSection() {
         setIsEditDialogOpen(open);
         if (!open) document.activeElement?.blur();
       }}>
-        <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent size="medium" className="dark:bg-kx-bg dark:border-kx-border">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b border-kx-border dark:border-kx-border">
             <DialogTitle className="dark:text-kx-text">Editar: {selectedClient?.nombre}</DialogTitle>
             <DialogDescription className="dark:text-kx-text-2">Modificá los datos del cliente.</DialogDescription>
           </DialogHeader>
-          {renderClientForm({ isEdit: true })}
-          <DialogFooter>
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+            {renderClientForm({ isEdit: true })}
+          </div>
+          <DialogFooter className="shrink-0 px-6 py-4 border-t border-kx-border dark:border-kx-border">
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="dark:text-kx-text dark:border-kx-border">Cancelar</Button>
             <Button onClick={() => handleSave(true)} disabled={saving} className="bg-blue-600 text-white hover:bg-blue-700">
               {saving ? 'Guardando...' : 'Guardar Cambios'}

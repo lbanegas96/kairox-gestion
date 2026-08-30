@@ -1144,7 +1144,15 @@ function MapaRelaciones({
           )}
         </DialogHeader>
 
-        <div className={`flex gap-0 ${fullscreen ? 'flex-1 overflow-hidden' : 'min-h-[180px]'}`}>
+        {/* Bug real (30/08, Luciano: "el modal de mapa de relaciones continúa
+            viéndose mal"): esta fila no tenía tope de ancho propio en modo NO
+            pantalla-completa — un flex container sin `min-w-0`/`w-full` se
+            infla al ancho intrínseco de sus hijos (acá, la fila de cards de
+            "Cadena de documentos") en vez de respetar el ancho del propio
+            Dialog, y esos ~46px de más se salían del modal en vez de activar
+            el scroll horizontal interno que ya tiene esa fila. `w-full
+            min-w-0` la ata al ancho real del Dialog en los dos modos. */}
+        <div className={`flex gap-0 w-full min-w-0 ${fullscreen ? 'flex-1 overflow-hidden' : 'min-h-[180px]'}`}>
         {/* Bug real (30/08, Luciano: "se rompe cuando tiene varios pagos"):
             este wrapper tenía SU PROPIO overflow-x-auto, redundante con el de
             la fila "Cadena de documentos" de más abajo — con 5-6 tarjetas de

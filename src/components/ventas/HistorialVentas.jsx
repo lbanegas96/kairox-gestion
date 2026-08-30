@@ -369,21 +369,27 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
           total de la tabla más allá del contenedor. Ahora esa columna sola
           puede envolver texto y crecer en altura de fila; el resto de las
           columnas (números, fechas, montos) mantiene su propio nowrap
-          puntual para no verse afectado. */}
+          puntual para no verse afectado.
+          Anchos en % (no px fijo) — hallazgo Luciano 30/08: con "Cliente" sin
+          ancho propio, en una pantalla ancha absorbía TODO el espacio libre
+          y dejaba un vacío enorme antes de "Medio Pago" (que además, al
+          quedar angosto en px, envolvía en 4-5 líneas). Repartiendo el 100%
+          entre las 8 columnas, el ancho de cada una escala proporcional al
+          viewport en vez de que una sola se lleve el sobrante. */}
       <div className="kairox-bg-card border kairox-border rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           {/* RESPONSIVE-TABLE */}
           <table className="w-full text-sm text-left table-fixed">
             <thead className="bg-kx-surface-2 dark:bg-slate-900/50 border-b kairox-border text-xs uppercase font-semibold text-slate-500">
               <tr>
-                <th className="p-4 w-32">Nro Venta</th>
-                <th className="p-4 w-32">Fecha</th>
-                <th className="p-4">Cliente</th>
-                <th className="p-4 w-36">Medio Pago</th>
-                <th className="p-4 w-24 text-center">Estado</th>
-                <th className="p-4 w-32 text-center">Factura</th>
-                <th className="p-4 w-28 text-right">Total</th>
-                <th className="p-4 w-20 text-center">Acciones</th>
+                <th className="p-4 w-[12%]">Nro Venta</th>
+                <th className="p-4 w-[10%]">Fecha</th>
+                <th className="p-4 w-[18%]">Cliente</th>
+                <th className="p-4 w-[24%]">Medio Pago</th>
+                <th className="p-4 w-[9%] text-center">Estado</th>
+                <th className="p-4 w-[12%] text-center">Factura</th>
+                <th className="p-4 w-[10%] text-right">Total</th>
+                <th className="p-4 w-[5%] text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">

@@ -1,5 +1,33 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Ronda 2 de pulido de UI post-CC combinable: Mapa de Relaciones, totales de Factura, modal de Cliente (30/08)
+
+Seguimiento directo de la sesión anterior (sección siguiente) — Luciano siguió probando en vivo y
+encontró 3 cosas más para ajustar, todas ya en producción:
+
+1. **Mapa de Relaciones seguía viéndose mal** después del primer intento de arreglo. Causa real
+   (encontrada con `getBoundingClientRect` en vivo, no a ojo): la fila contenedora del cuerpo
+   (`flex gap-0 min-h-[180px]`) no tenía `min-w-0`/`w-full` en modo no-pantalla-completa — un flex
+   container sin eso se infla al ancho intrínseco de sus hijos (la fila de tarjetas de pago) en vez
+   de respetar el ancho del propio Dialog, y ese sobrante (46px en el caso probado) se salía del
+   modal en lugar de activar el scroll horizontal interno que la fila ya tenía. Confirmado con
+   overflow=0 después del fix.
+2. **Totales de Factura ahora son dato de cabecera, fijo en el footer** (`SaleDetailModal.jsx`) —
+   mismo criterio SAP ya usado en Pedido: Total Bruto / Descuento / Neto Gravado / IVA / TOTAL,
+   **siempre visibles** (aunque sean $0 o la factura no discrimine IVA), en vez de vivir en el
+   `<tfoot>` de una tabla que hay que scrollear para ver. Cálculo con soporte para ítems vendidos
+   por pack (mig.189/190).
+3. **Modal de editar/crear Cliente obligaba a scrollear todo el diálogo** (título y botones incluidos)
+   — usaba `overflow-y-auto` en el `DialogContent` entero. Pasa a `size="medium"` (el shell
+   `flex-col` que ya usan Factura/Pedido/OC): cabecera y footer fijos, solo el formulario escrolea;
+   de paso el modal creció de `max-w-2xl` a `max-w-3xl` y Localidad/Provincia/Cód. Postal pasan de
+   una asimetría rara (grid anidado) a una fila prolija de 3 columnas.
+
+Los 3 verificados en vivo en el navegador contra datos reales de Nalux. 160/160 tests, `eslint` y
+`vite build` limpios antes de commitear.
+
+---
+
 ## ✅ Cuenta Corriente combinable en el POS + Open Item corregido + pulido de UI (29-30/08)
 
 Arrancó de un hallazgo real de Luciano probando el POS: "al pagar en la venta, no me deja
