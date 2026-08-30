@@ -7,10 +7,15 @@ import { offlineDb, leerSnapshot, guardarSnapshot } from '@/lib/offlineDb';
 // entero, mismo patrón que el resto de los tests de hooks de este proyecto.
 const mockRpc = vi.fn();
 const mockFrom = vi.fn();
+// dispararArcaWorker (src/lib/afipQueue.js, 29/08) llama supabase.functions.invoke
+// tras encolar a ARCA — mock resuelto para que el fire-and-forget no quede
+// como promesa rechazada sin manejar en la salida de los tests.
+const mockInvoke = vi.fn().mockResolvedValue({});
 vi.mock('@/lib/customSupabaseClient', () => ({
   supabase: {
     rpc: (...args) => mockRpc(...args),
     from: (...args) => mockFrom(...args),
+    functions: { invoke: (...args) => mockInvoke(...args) },
   },
 }));
 

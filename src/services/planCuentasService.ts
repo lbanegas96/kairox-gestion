@@ -328,21 +328,34 @@ async function findCuentaPorFormaPago(empresaId: string, formaPagoId: string, co
 
 export const asientosAutoService = {
   /**
-   * Crea y confirma el asiento de una venta al contado.
-   *   DEBE  1.1.1 Caja y Bancos  (o 1.1.2 Cuentas a Cobrar si es crédito)  total
+   * Crea y confirma el asiento de una venta.
+   *   DEBE  1.1.1 Caja y Bancos    (porción pagada ahora)
+   *   DEBE  1.1.2 Cuentas a Cobrar (porción a Cuenta Corriente, si hay)
    *   HABER 4.1   Ventas de Productos                                      neto
    *   HABER 2.1.3 IVA Débito Fiscal                                        iva
    * Si `neto`/`iva` no vienen (o no existe la cuenta 2.1.3), cae al asiento
    * viejo de 2 líneas con el total entero a Ventas — nunca bloquea la venta
    * por esto. Si la empresa no tiene plan de cuentas, sale silenciosamente.
    *
-   * mig.286: si `montoPendienteLiquidacion` viene (venta pagada con tarjeta,
-   * `crear_venta` ya resolvió cuánto tiene `dias_acreditacion > 0`) y existe la
-   * cuenta puente 1.1.8, la línea de cobro se parte en dos: la porción
-   * inmediata sigue yendo a 1.1.1/1.1.2 como siempre, la porción pendiente va a
-   * 1.1.8 — mismo criterio que ya usa `registrar_cobro_cliente` (mig.216). Si
-   * no existe 1.1.8, cae al comportamiento de siempre (todo a Caja) — no
-   * bloquea la venta por faltar esa cuenta.
+   * Cuenta Corriente combinada (29/08, hallazgo Luciano: "pagar con
+   * diferentes medios y al restante dejarlo en cuenta, no me deja") — antes
+   * `esCredito` era un booleano de todo-o-nada (100% Caja o 100% CxC).
+   * `montoCC` reemplaza esa decisión: es el monto EXACTO que
+   * `cuenta_corriente_movimientos` recibió como deuda (puede ser parcial, si
+   * el resto de la venta se cobró en el momento). `esCredito=true` sin
+   * `montoCC` (llamadores viejos, ej. Facturar Pedido — siempre 100% CC) sigue
+   * significando "todo el total a CxC", para no tener que tocar esos
+   * callers. La porción pagada (`total - montoCC`) sigue el criterio de
+   * siempre para resolver la cuenta de cobro (mig.363/286 — ver abajo).
+   *
+   * mig.286: si `montoPendienteLiquidacion` viene (parte de la porción
+   * pagada fue con tarjeta, `crear_venta` ya resolvió cuánto tiene
+   * `dias_acreditacion > 0`) y existe la cuenta puente 1.1.8, la línea de
+   * cobro se parte en dos: la porción inmediata sigue yendo a 1.1.1 como
+   * siempre, la porción pendiente va a 1.1.8 — mismo criterio que ya usa
+   * `registrar_cobro_cliente` (mig.216). Si no existe 1.1.8, cae al
+   * comportamiento de siempre (todo a Caja) — no bloquea la venta por faltar
+   * esa cuenta.
    */
   async crearAsientoVenta(
     empresaId: string,
@@ -355,6 +368,7 @@ export const asientosAutoService = {
       fecha: string;       // YYYY-MM-DD
       descripcion: string;
       esCredito?: boolean;
+      montoCC?: number;
       centroCostoId?: string | null;
       montoPendienteLiquidacion?: number;
       costoMercaderiaVendida?: number;
@@ -377,45 +391,54 @@ export const asientosAutoService = {
       console.warn('[asientosAutoService] período check error:', e);
     }
 
-    const codigoCobro = params.esCredito ? '1.1.2' : '1.1.1';
-    // mig.286: solo tiene sentido partir a la cuenta puente en ventas al contado
-    // (una venta a Cuenta Corriente no tiene "cobro" propiamente dicho todavía).
-    const montoPendiente = !params.esCredito
-      ? Math.min(Math.max(Number(params.montoPendienteLiquidacion) || 0, 0), params.total)
+    // montoCC manda cuando viene; esCredito=true sin montoCC es el atajo de
+    // compatibilidad "100% a CxC" (ver doc arriba).
+    const montoCC = Math.min(
+      Math.max(Number(params.montoCC ?? (params.esCredito ? params.total : 0)) || 0, 0),
+      params.total
+    );
+    const montoPagado = params.total - montoCC;
+
+    // mig.286: solo tiene sentido partir a la cuenta puente sobre la porción
+    // que sí se cobra ahora — la porción a CC no tiene "cobro" todavía.
+    const montoPendiente = montoPagado > 0
+      ? Math.min(Math.max(Number(params.montoPendienteLiquidacion) || 0, 0), montoPagado)
       : 0;
     const costoMercaderia = Math.max(Number(params.costoMercaderiaVendida) || 0, 0);
     // mig.363 — Determinación de Cuentas (Fase 4): "el cobro al contado" deja
-    // de ser siempre 1.1.1 — si la venta usó UNA sola forma de pago, se resuelve
-    // por esa forma de pago. Una venta con multipago (varias formas mezcladas
-    // en el mismo cobro) sigue yendo a 1.1.1, como hasta ahora — repartir esa
-    // línea entre cuentas distintas por cada forma de pago es un alcance mayor,
-    // no pedido en esta tanda (ver PLAN_MAPA_Y_DETERMINACION_CUENTAS).
-    const resolverCuentaCobro = () =>
-      !params.esCredito && params.formaPagoId
-        ? findCuentaPorFormaPago(empresaId, params.formaPagoId, codigoCobro)
-        : findCuentaByCodigo(empresaId, codigoCobro);
-    const [cuentaCobro, cuentaVentas, cuentaIvaDebito, cuentaPuenteTarjetas, cuentaCostoMercaderia, cuentaInventario] = await Promise.all([
-      resolverCuentaCobro(),
+    // de ser siempre 1.1.1 — si la venta usó UNA sola forma de pago (además de,
+    // quizás, una porción a CC), se resuelve por esa forma de pago. Con
+    // multipago entre 2+ formas de pago sin contar CC, sigue yendo a 1.1.1
+    // como hasta ahora — repartir esa línea entre cuentas distintas por cada
+    // forma de pago es un alcance mayor, no pedido en esta tanda.
+    const resolverCuentaCobroPagado = () =>
+      params.formaPagoId
+        ? findCuentaPorFormaPago(empresaId, params.formaPagoId, '1.1.1')
+        : findCuentaByCodigo(empresaId, '1.1.1');
+    const [cuentaCobroPagado, cuentaCxC, cuentaVentas, cuentaIvaDebito, cuentaPuenteTarjetas, cuentaCostoMercaderia, cuentaInventario] = await Promise.all([
+      montoPagado > 0 ? resolverCuentaCobroPagado() : Promise.resolve(null),
+      montoCC > 0 ? findCuentaByCodigo(empresaId, '1.1.2') : Promise.resolve(null),
       findCuentaByCodigo(empresaId, '4.1'),
       findCuentaByCodigo(empresaId, '2.1.3'),
       montoPendiente > 0 ? findCuentaByCodigo(empresaId, '1.1.8') : Promise.resolve(null),
       costoMercaderia > 0 ? findCuentaByCodigo(empresaId, '5.1') : Promise.resolve(null),
       costoMercaderia > 0 ? findCuentaByCodigo(empresaId, '1.1.3') : Promise.resolve(null),
     ]);
-    if (!cuentaCobro || !cuentaVentas) return; // empresa sin plan de cuentas
+    if (!cuentaVentas) return; // empresa sin plan de cuentas
+    if (montoPagado > 0 && !cuentaCobroPagado) return;
+    if (montoCC > 0 && !cuentaCxC) return;
 
     const iva = Number(params.iva) || 0;
     const neto = params.neto != null ? Number(params.neto) : params.total;
     const discriminar = cuentaIvaDebito && iva > 0 && neto + iva > 0;
 
     const usaPuente = montoPendiente > 0 && !!cuentaPuenteTarjetas;
-    const montoInmediato = params.total - (usaPuente ? montoPendiente : 0);
-    const lineasCobro = usaPuente
-      ? [
-          ...(montoInmediato > 0 ? [{ cuenta_id: cuentaCobro, debe: montoInmediato, haber: 0, descripcion: 'Cobro por venta' }] : []),
-          { cuenta_id: cuentaPuenteTarjetas!, debe: montoPendiente, haber: 0, descripcion: 'Cobro por venta (pendiente de acreditar)' },
-        ]
-      : [{ cuenta_id: cuentaCobro, debe: params.total, haber: 0, descripcion: 'Cobro por venta' }];
+    const montoInmediato = montoPagado - (usaPuente ? montoPendiente : 0);
+    const lineasCobro = [
+      ...(montoCC > 0 ? [{ cuenta_id: cuentaCxC!, debe: montoCC, haber: 0, descripcion: 'Venta a cuenta corriente' }] : []),
+      ...(montoInmediato > 0 ? [{ cuenta_id: cuentaCobroPagado!, debe: montoInmediato, haber: 0, descripcion: 'Cobro por venta' }] : []),
+      ...(usaPuente ? [{ cuenta_id: cuentaPuenteTarjetas!, debe: montoPendiente, haber: 0, descripcion: 'Cobro por venta (pendiente de acreditar)' }] : []),
+    ];
 
     const items = discriminar
       ? [

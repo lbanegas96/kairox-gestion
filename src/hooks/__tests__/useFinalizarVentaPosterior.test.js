@@ -3,8 +3,11 @@ import { renderHook, act } from '@testing-library/react';
 import { useFinalizarVentaPosterior } from '@/hooks/useFinalizarVentaPosterior';
 
 const mockFrom = vi.fn();
+// dispararArcaWorker (src/lib/afipQueue.js, 29/08) llama supabase.functions.invoke
+// tras encolar — mock resuelto para que el fire-and-forget no explote acá.
+const mockInvoke = vi.fn().mockResolvedValue({});
 vi.mock('@/lib/customSupabaseClient', () => ({
-  supabase: { from: (...args) => mockFrom(...args) },
+  supabase: { from: (...args) => mockFrom(...args), functions: { invoke: (...args) => mockInvoke(...args) } },
 }));
 
 const mockUser = { id: 'user-1', empresa_id: 'empresa-1' };
@@ -30,6 +33,7 @@ describe('useFinalizarVentaPosterior', () => {
   beforeEach(() => {
     mockFrom.mockReset();
     mockCrearAsiento.mockClear();
+    mockInvoke.mockClear();
     mockAfipState = { afipConfig: null, afipActivo: false, determinarTipoComprobante: () => 'B' };
   });
 
@@ -80,6 +84,9 @@ describe('useFinalizarVentaPosterior', () => {
     expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({
       tipo_comprobante_afip: 'A', punto_venta_id: 'pdv-1', cae_estado: 'pendiente',
     }));
+    // 29/08 — apenas se encola, dispara arca-worker ahora mismo en vez de
+    // esperar al próximo tick del cron (dispararArcaWorker, afipQueue.js).
+    expect(mockInvoke).toHaveBeenCalledWith('arca-worker');
   });
 
   it('sin cliente (Consumidor Final): usa CF por defecto para el tipo de comprobante', () => {

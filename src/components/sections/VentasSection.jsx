@@ -85,10 +85,25 @@ function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-kx-text">Ventas</h2>
-        <p className="text-sm text-kx-text-2">Cotizaciones, Pedidos, Entregas y Facturas</p>
+      {/* Header — "Nueva Factura" vive acá arriba, junto al título, en vez de
+          en su propia fila entera arriba del listado (30/08, hallazgo
+          Luciano: "el botón de nueva factura roba un espacio entero").
+          Solo se muestra en la solapa donde tiene sentido. */}
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-kx-text">Ventas</h2>
+          <p className="text-sm text-kx-text-2">Cotizaciones, Pedidos, Entregas y Facturas</p>
+        </div>
+        {activeTab === 'historial' && (
+          <Button
+            onClick={() => setShowNuevaFactura(true)}
+            size="sm"
+            className="bg-[rgb(var(--kx-green))] hover:opacity-90 text-white gap-2 h-8 px-3 text-xs font-medium shrink-0"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            Nueva Factura
+          </Button>
+        )}
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -153,16 +168,6 @@ function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
         </TabsContent>
 
         <TabsContent value="historial" className="mt-4">
-          <div className="flex justify-end mb-4">
-            <Button
-              onClick={() => setShowNuevaFactura(true)}
-              size="sm"
-              className="bg-[rgb(var(--kx-green))] hover:opacity-90 text-white gap-2 h-8 px-3 text-xs font-medium"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              Nueva Factura
-            </Button>
-          </div>
           <HistorialVentas
             key={refreshKey}
             navigateSaleId={navigateSaleId}

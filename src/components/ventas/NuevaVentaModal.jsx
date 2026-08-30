@@ -17,6 +17,7 @@ import { useMultipago } from '@/hooks/useMultipago';
 import { useCreditoCliente } from '@/hooks/useCreditoCliente';
 import { listaPreciosService } from '@/services/listaPreciosService';
 import { useAfipConfig } from '@/hooks/useAfipConfig';
+import { dispararArcaWorker } from '@/lib/afipQueue';
 import { useStockDisponible } from '@/hooks/useStockDisponible';
 import PanelCarrito from '@/components/ventas/nueva-venta/PanelCarrito';
 import PanelPago from '@/components/ventas/nueva-venta/PanelPago';
@@ -549,6 +550,12 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     if (pagoError) {
       return toast({ ...pagoError, variant: 'destructive' });
     }
+    // Cuenta Corriente combinada con otros métodos (29/08, hallazgo Luciano) —
+    // `isCC` del hook ya significa "incluye CC" (sola o mixta); acá se agrega
+    // el monto exacto que va a CxC y si es el ÚNICO método (100% CC, atajo de
+    // siempre) para p_estado_pago/p_es_cc/el asiento contable.
+    const montoCC = pagosFinales.filter(p => p.metodo === 'Cuenta Corriente').reduce((s, p) => s + (Number(p.monto) || 0), 0);
+    const esPuraCC = pagosFinales.length === 1 && pagosFinales[0].metodo === 'Cuenta Corriente';
 
     // ── Bloquear venta si incluye Efectivo y la caja está cerrada ───────────
     // Solo Efectivo requiere caja abierta. Transferencia/Tarjeta/CC operan sin caja.
@@ -658,14 +665,14 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         p_cliente_nombre:   selectedClient?.nombre ?? 'Consumidor Final',
         p_total:            total,
         p_forma_pago:       formaPago,
-        p_estado_pago:      isCC ? 'pendiente' : 'pagada',
+        p_estado_pago:      esPuraCC ? 'pendiente' : (isCC ? 'parcial' : 'pagada'),
         p_moneda:           moneda,
         p_tipo_cambio_tasa: tipoCambioTasa,
         p_monto_paralelo:   montoParalelo ?? null,
         p_tc_paralelo:      tcParaleloFinalValue ?? null,
         p_items:            itemsPayload,
         p_pagos:            pagosPayload,
-        p_es_cc:            isCC,
+        p_es_cc:            esPuraCC,
         p_caja_sesion_id:   currentSession?.id ?? null,
         p_pedido_id:        pedido?.id ?? null,
         // Valor nominal fijo en moneda extranjera (Fase 3 Multimoneda — diferencia
@@ -707,7 +714,8 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           iva:         rpcResult.iva_discriminado,
           fecha:       getTodayAR(),
           descripcion: `Venta #${saleNumber}`,
-          esCredito:   isCC,
+          esCredito:   esPuraCC,
+          montoCC,
           centroCostoId: centroCostoId || null,
           // mig.286: cuánto de esta venta se pagó con una forma de pago que
           // tarda en acreditarse (tarjeta) — crear_venta ya lo resolvió por pago.
@@ -731,8 +739,11 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
       // `afipActivo` ya contempla `envia_arca` (mig.293), así que no hace falta
       // ninguna decisión extra del usuario — ese es el criterio unificado.
       // El UPDATE a cae_estado='pendiente' dispara fn_queue_factura_arca, que
-      // inserta en facturas_pendientes_arca. El arca-worker (cron */5) es la única
-      // fuente de verdad para llamar a ARCA — nunca desde el frontend.
+      // inserta en facturas_pendientes_arca. El arca-worker (cron */1 min,
+      // mig.373) sigue siendo la única fuente de verdad para llamar a ARCA —
+      // nunca desde el frontend — pero se dispara ahora mismo (29/08, hallazgo
+      // Luciano: "el envío a ARCA debe ser más rápido") para no esperar al
+      // próximo tick.
       const pvElegido = puntosVenta.find(p => p.id === puntoVentaId) ?? null;
       if (comprobante?.id && pvElegido) {
         const patch = { punto_venta_id: pvElegido.id };
@@ -746,6 +757,7 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         const { error: pvErr } = await supabase.from('comprobantes')
           .update(patch).eq('id', comprobante.id);
         if (pvErr) console.warn('[PdV/AFIP queue]', pvErr.message);
+        else if (afipActivo) dispararArcaWorker();
       }
 
       toast({

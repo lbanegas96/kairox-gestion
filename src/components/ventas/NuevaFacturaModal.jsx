@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { getTodayAR, addDaysAR, getDateFromInputAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
+import { dispararArcaWorker } from '@/lib/afipQueue';
 import ClienteSelector from '@/components/shared/ClienteSelector';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import ProductoAutocomplete from '@/components/shared/ProductoAutocomplete';
@@ -234,8 +235,15 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
             return;
           }
           setItems(itemsFacturables.map(({ i, maxFacturable }) => ({
-            _id:           Math.random().toString(36).slice(2),
-            producto_id:   i.producto_id,
+            _id:            Math.random().toString(36).slice(2),
+            producto_id:    i.producto_id,
+            // Bug real (29/08, Luciano): sin esto, crear_venta solo podía
+            // matchear la línea de pedido por producto_id — un pedido con el
+            // MISMO producto en 2 líneas separadas (ej. agregado dos veces a
+            // precio distinto) rompía el cupo de la 2da línea contra el de la
+            // 1ra ya consumido. Mismo criterio que ya usa crear_entrega
+            // (mig.083/139) vía entrega_items.pedido_item_id.
+            pedido_item_id: i.id,
             descripcion:   i.descripcion || '',
             cantidad:      maxFacturable,
             precio_unit:   Number(i.precio_unitario),
@@ -478,6 +486,10 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
         // Ver PENDIENTE #1 (14/08) en CONTEXT.md.
         const itemsPayload = itemsValidos.map(i => ({
           producto_id:     i.producto_id || null,
+          // mig.369 — matchea la línea de pedido exacta en crear_venta;
+          // null en ítems agregados a mano durante la facturación (sin línea
+          // de pedido asociada), que la RPC sigue aceptando.
+          pedido_item_id:  i.pedido_item_id || null,
           cantidad:        Number(i.cantidad),
           precio_unitario: parseNumberLocale(i.precio_unit) || 0,
           subtotal:        calcBruto(i),
@@ -534,6 +546,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
             .update({ cae_estado: 'pendiente' })
             .eq('id', comprobanteId);
           if (afipQueueErr) console.warn('[AFIP queue]', afipQueueErr.message);
+          else dispararArcaWorker();
         }
       } else {
         // 1. INSERT comprobante — sin user_id (no existe en comprobantes)
@@ -616,6 +629,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
             cae_estado:            'pendiente',
           }).eq('id', comp.id);
           if (afipQueueErr) console.warn('[AFIP queue]', afipQueueErr.message);
+          else dispararArcaWorker();
         }
       }
 

@@ -1,5 +1,63 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Cuenta Corriente combinable en el POS + Open Item corregido + pulido de UI (29-30/08)
+
+Arrancó de un hallazgo real de Luciano probando el POS: "al pagar en la venta, no me deja
+combinar Cuenta Corriente con otros medios — es toda la deuda o nada". Terminó en una cadena de
+3 fixes de fondo (frontend → RPC → motor contable → un bug de Open Item que el primer fix dejó
+latente) más una tanda de pulido visual pedida sobre la marcha. Todo commiteado, testeado
+(160/160, `eslint`/`vite build` limpios) y verificado en vivo contra datos reales de Nalux con
+`BEGIN...ROLLBACK` antes de aplicar cualquier migración.
+
+**1. Cuenta Corriente ya no es excluyente (mig.369-372):**
+- `useMultipago.js` — se sacaron las 2 ramas especiales que forzaban "solo CC" o "solo el otro
+  método" al tocar Cuenta Corriente; ahora se combina como cualquier otro método. Único atajo que
+  se mantuvo: CC sola sigue autocompletando el 100% del total sin pedir montos a mano.
+- `crear_venta` (mig.372) — el DEBE que va a `cuenta_corriente_movimientos` ahora es la PORCIÓN
+  real de CC dentro de `p_pagos`, no siempre `v_total`. Compatibilidad hacia atrás intacta para el
+  único caller que manda `p_es_cc=true` sin línea de pago CC (Facturar Pedido en `NuevaFacturaModal`).
+- `crearAsientoVenta` (`planCuentasService.ts`) — soporta DEBE partido en un mismo asiento: CC a
+  1.1.2, el resto a 1.1.1/cuenta de la forma de pago (con split a 1.1.8 Puente Tarjetas si hay
+  liquidación diferida).
+- `estado_pago` de una venta mixta ahora es `'parcial'` (antes `'pendiente'` a secas) — correcto:
+  parte se cobró ya, parte queda como Open Item genuino. Mismo criterio que ya usaba `crear_nota_credito`.
+- `arca-worker` pasó de cron cada 5 min a cada 1 min (mig.373) + disparo inmediato
+  (`dispararArcaWorker`, `src/lib/afipQueue.js`) en los 3 puntos que encolan una factura — el cron
+  sigue siendo la red de seguridad real, esto solo achica la ventana de "CAE pendiente".
+
+**2. Bug real descubierto por el propio fix — Open Item con CC parcial (mig.374):** una vez que
+una factura puede tener un DEBE en cuenta corriente MENOR a su total, 3 lugares que asumían
+"DEBE = total siempre" (cierto por coincidencia hasta mig.372) quedaron mal:
+`facturas_saldo_pendiente` (alimenta "Registrar Cobro"), `registrar_cobro_cliente` (tope al
+imputar un cobro) y `crear_nota_credito` (tope al imputar una NC contra la factura origen). Los 3
+usaban `comprobantes.total` como "cuánto se debe" en vez de lo realmente cargado a CC. Nueva
+función `monto_cc_original_comprobante()` centraliza el cálculo correcto (SUM de DEBE confirmado
+en `cuenta_corriente_movimientos` para ese comprobante). Caso real: venta de $117.200 con solo
+$17.200 en CC — antes el sistema pensaba que se debían los $117.200 completos; ahora sabe que son
+$17.200. Cero regresión en Notas de Débito (siempre cargan el 100% de su propio total, sin
+concepto de parcial).
+
+**3. Pulido de UI pedido sobre la marcha:**
+- Modal "¡Venta confirmada!" — "Forma de pago" pasa a envolver en vez de recortar/desbordar con
+  varios métodos combinados.
+- `TicketPrint.jsx` — el 80mm queda igual; el A4 se rediseñó con la misma paleta SAP-style
+  (navy/blue/slate) que Remito/Recibo de Pago. Se confirmó (código + AFIP): el Ticket SÍ lleva CAE
+  real como Factura B/C — no existe "ticket sin AFIP" en el diseño actual; si una empresa no usa
+  factura electrónica, no sale ninguna leyenda de CAE.
+- `SaleDetailModal.jsx` (detalle de Factura) — cabecera y "Flujo del documento" quedan fijos,
+  solo la tabla de productos escrolea (mismo criterio que Pedido/Cobro).
+- `MapaRelaciones.jsx` — bug real: con 5-6 tarjetas de pago (venta mixta), el contenedor entero
+  se desplazaba horizontalmente arrastrando el resumen/leyenda con él. El scroll horizontal quedó
+  acotado solo a la fila "Cadena de documentos" que de verdad lo necesita.
+- `HistorialVentas.jsx` (listado de Facturas) — la tabla ya no escrolea hacia la derecha; "Medio
+  Pago" envuelve en varias líneas en vez de forzar el ancho de toda la tabla.
+- `VentasSection.jsx` — "Nueva Factura" se movió de su propia fila (arriba del listado) al header
+  de la sección, junto al título "Ventas".
+
+**Pendiente confirmar con el usuario:** push a GitHub + deploy a Vercel de esta sesión.
+
+---
+
 ## ✅ Cerrados en código los 7 hallazgos 🔴 de la auditoría con Ferretería NADIA (28/08)
 
 Luciano pidió arrancar con lo que se pudiera hacer sin su presencia. Los 7 hallazgos que Nadia

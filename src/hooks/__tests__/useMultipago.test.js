@@ -11,23 +11,41 @@ describe('useMultipago', () => {
     expect(result.current.isCC).toBe(false);
   });
 
-  it('seleccionar Cuenta Corriente reemplaza cualquier otra selección (exclusiva)', () => {
+  // Cuenta Corriente combinable (29/08, hallazgo Luciano: "quise pagar con
+  // diferentes medios y al restante dejarlo en cuenta, no me deja, es toda
+  // la deuda o nada") — ya no es exclusiva, se combina como cualquier otro
+  // método dentro del pago mixto.
+  it('seleccionar Cuenta Corriente se combina con lo ya seleccionado (no reemplaza)', () => {
     const { result } = renderHook(() => useMultipago(1000));
     act(() => result.current.toggleMethod('Tarjeta'));
     act(() => result.current.toggleMethod('Cuenta Corriente'));
+    expect(result.current.selectedMethods.has('Tarjeta')).toBe(true);
     expect(result.current.selectedMethods.has('Cuenta Corriente')).toBe(true);
-    expect(result.current.selectedMethods.size).toBe(1);
+    expect(result.current.selectedMethods.size).toBe(3); // Efectivo (inicial) + Tarjeta + CC
     expect(result.current.isCC).toBe(true);
-    expect(result.current.isMultiPago).toBe(false);
+    expect(result.current.isMultiPago).toBe(true);
   });
 
-  it('salir de Cuenta Corriente hacia otro método resetea la selección a ese método solo', () => {
+  it('agregar otro método mientras CC está seleccionada los combina, no la saca', () => {
     const { result } = renderHook(() => useMultipago(1000));
     act(() => result.current.toggleMethod('Cuenta Corriente'));
     act(() => result.current.toggleMethod('Tarjeta'));
+    expect(result.current.selectedMethods.has('Cuenta Corriente')).toBe(true);
     expect(result.current.selectedMethods.has('Tarjeta')).toBe(true);
-    expect(result.current.selectedMethods.size).toBe(1);
-    expect(result.current.isCC).toBe(false);
+    expect(result.current.selectedMethods.size).toBe(3); // Efectivo (inicial) + CC + Tarjeta
+    expect(result.current.isCC).toBe(true);
+  });
+
+  it('pago mixto Efectivo + Cuenta Corriente: el resto de la venta queda como deuda', () => {
+    const { result } = renderHook(() => useMultipago(1000));
+    act(() => result.current.toggleMethod('Cuenta Corriente'));
+    act(() => result.current.setMethodAmounts({ Efectivo: '600', 'Cuenta Corriente': '400' }));
+    const { pagos, error } = result.current.construirPagosFinales();
+    expect(error).toBeNull();
+    expect(pagos.sort((a, b) => a.metodo.localeCompare(b.metodo))).toEqual([
+      { metodo: 'Cuenta Corriente', monto: 400, forma_pago_id: null },
+      { metodo: 'Efectivo', monto: 600, forma_pago_id: null },
+    ]);
   });
 
   it('no permite deseleccionar el último método activo', () => {
@@ -44,9 +62,11 @@ describe('useMultipago', () => {
     expect(result.current.selectedMethods.size).toBe(2);
   });
 
-  it('Cuenta Corriente: construirPagosFinales asigna el total completo sin pedir montos', () => {
+  it('Cuenta Corriente como único método: construirPagosFinales asigna el total completo sin pedir montos', () => {
     const { result } = renderHook(() => useMultipago(1500));
-    act(() => result.current.toggleMethod('Cuenta Corriente'));
+    act(() => result.current.toggleMethod('Cuenta Corriente')); // ahora {Efectivo, CC}
+    act(() => result.current.toggleMethod('Efectivo'));         // saca Efectivo -> {CC} solo
+    expect(result.current.selectedMethods.size).toBe(1);
     const { pagos, error } = result.current.construirPagosFinales();
     expect(error).toBeNull();
     expect(pagos).toEqual([{ metodo: 'Cuenta Corriente', monto: 1500, forma_pago_id: null }]);

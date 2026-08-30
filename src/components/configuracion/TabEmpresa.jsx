@@ -1,6 +1,6 @@
 import {
   Building, Mail, MapPin, Hash, Upload, Loader2, Trash2, AlertCircle,
-  Image as ImageIcon, Save, Phone, Landmark, CalendarDays,
+  Image as ImageIcon, Save, Phone, Landmark, CalendarDays, PenTool,
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -14,8 +14,9 @@ import { formatCuit } from '@/lib/cuitUtils';
  * saving, uploading), handlers y fileInputRef vienen por props desde el padre.
  */
 const TabEmpresa = ({
-  formData, setFormData, saving, uploading, fileInputRef,
+  formData, setFormData, saving, uploading, uploadingFirma, fileInputRef, fileInputRefFirma,
   handleSave, handleChange, handleFileSelect, handleRemoveLogo,
+  handleFileSelectFirma, handleRemoveFirma,
   usaFacturaElectronica,
 }) => (
   <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -163,6 +164,35 @@ const TabEmpresa = ({
           <div className="flex items-start gap-2 text-xs text-slate-500 bg-kx-surface-2 dark:bg-slate-900/50 p-3 rounded border kairox-border">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <div>Formatos: PNG, JPG, SVG, WEBP.<br />Tamaño máximo: 2MB.<br />El logo se sube a almacenamiento en la nube.</div>
+          </div>
+        </div>
+
+        {/* Firma digitalizada — hallazgo Luciano (29/08): "el sistema no me deja
+            por ningún lado tocar los PDF de las impresiones" — este es el punto
+            que faltaba. Una vez cargada, se imprime automáticamente arriba de
+            la línea de "Firma" en el Recibo de Cobro/Pago (y se puede sumar a
+            los demás comprobantes). No reemplaza al CAE de una factura
+            electrónica — es solo la imagen de la firma manuscrita/sello. */}
+        <div className="space-y-2">
+          <Label className="text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+            <PenTool className="w-3.5 h-3.5" /> Firma digitalizada
+          </Label>
+          <input type="file" ref={fileInputRefFirma} onChange={handleFileSelectFirma} accept=".png,.jpg,.jpeg,.svg,.webp" className="hidden" />
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={() => fileInputRefFirma.current?.click()} disabled={uploadingFirma}
+              className="w-full border-dashed border-2 border-slate-300 dark:border-kx-border hover:border-blue-500 dark:hover:border-kx-violet hover:bg-kx-surface-2">
+              {uploadingFirma ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Subiendo...</> : <><Upload className="w-4 h-4 mr-2" /> Subir Firma</>}
+            </Button>
+            {formData.company_firma && (
+              <Button type="button" variant="destructive" onClick={handleRemoveFirma} disabled={uploadingFirma}
+                className="bg-red-100 text-red-600 hover:bg-red-200 border border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900/50">
+                <Trash2 className="w-4 h-4 mr-2" /> Eliminar
+              </Button>
+            )}
+          </div>
+          <div className="flex items-start gap-2 text-xs text-slate-500 bg-kx-surface-2 dark:bg-slate-900/50 p-3 rounded border kairox-border">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <div>Sacale una foto o escaneá tu firma sobre fondo blanco/transparente. Se imprime arriba de la línea de "Firma" en el Recibo de Cobro/Pago.</div>
           </div>
         </div>
 

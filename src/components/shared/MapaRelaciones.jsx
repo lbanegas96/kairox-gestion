@@ -1145,7 +1145,15 @@ function MapaRelaciones({
         </DialogHeader>
 
         <div className={`flex gap-0 ${fullscreen ? 'flex-1 overflow-hidden' : 'min-h-[180px]'}`}>
-        <div className={`flex-1 min-w-0 overflow-x-auto py-2 ${fullscreen ? 'overflow-y-auto' : ''}`}>
+        {/* Bug real (30/08, Luciano: "se rompe cuando tiene varios pagos"):
+            este wrapper tenía SU PROPIO overflow-x-auto, redundante con el de
+            la fila "Cadena de documentos" de más abajo — con 5-6 tarjetas de
+            pago (una venta mixta real), la fila no entraba y este contenedor
+            entero se desplazaba horizontalmente, arrastrando consigo el
+            resumen del circuito, "Documentos derivados" y la leyenda (que no
+            necesitan scroll propio). El scroll horizontal queda acotado solo
+            a la fila que de verdad lo necesita. */}
+        <div className={`flex-1 min-w-0 py-2 ${fullscreen ? 'overflow-y-auto' : ''}`}>
           {loading && (
             <div className="flex items-center justify-center h-36">
               <Loader2 className="w-6 h-6 animate-spin text-kx-text-3" />

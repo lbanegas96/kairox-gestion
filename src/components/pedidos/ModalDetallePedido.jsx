@@ -1,15 +1,23 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, Check, Truck, ArrowRight, Receipt, Network, Pencil, History, ChevronDown, ChevronRight, Code2, Copy } from 'lucide-react';
+import { FileText, Check, Truck, ArrowRight, Receipt, Network, Pencil, History, Code2, Copy, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import MenuAccionesDocumento from '@/components/shared/documento/MenuAccionesDocumento';
+import HistorialCambiosDialog from '@/components/shared/documento/HistorialCambiosDialog';
 import { formatDateAR } from '@/lib/dateUtils';
 import { formatCurrency } from '@/lib/currencyUtils';
 import { supabase } from '@/lib/customSupabaseClient';
 import DocumentFlow from '@/components/shared/DocumentFlow';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import { getEstado, getSiguienteEstado, EstadoBadge } from './shared';
+
+// Estados desde los que se puede cancelar (cancelar_pedido, mig.368 — la
+// misma RPC bloquea además si ya tiene entregas o está facturado; este
+// filtro es solo para no ofrecer el botón donde el RPC lo va a rechazar
+// seguro). La confirmación en sí vive en PedidosSection (mismo AlertDialog
+// que ya usa TablaPedidos) — acá solo se dispara con onCancelar(detailPedido).
+const ESTADOS_CANCELABLES = ['borrador', 'confirmado', 'en_preparacion'];
 
 // Mismo criterio que CotizacionesSection.jsx/CotizacionPDF.jsx: precio_unitario
 // ya incluye IVA, se separa dividiendo por el factor de la alícuota.
@@ -51,6 +59,7 @@ function ModalDetallePedido({
   handleAvanzar,
   onEditar,
   onDuplicar,
+  onCancelar,
   discrimina,
   usaEnPreparacion = true,
 }) {
@@ -81,6 +90,11 @@ function ModalDetallePedido({
           // 'facturado' incluido a propósito (Frente 4, Factura de Reserva) —
           // mismo criterio que TablaPedidos.jsx, ver comentario ahí.
           const puedeEntrega = ['confirmado', 'en_preparacion', 'facturado'].includes(detailPedido.estado) && totalEnt < totalPed;
+          // Hoisted para el footer fijo (29/08, hallazgo Luciano: "todo lo que
+          // es total tiene que quedar fijo en el footer, ya que es un dato de
+          // tipo cabecera") — antes solo vivían dentro del IIFE del tfoot.
+          const simbolo = detailPedido.moneda && detailPedido.moneda !== 'ARS' ? `${detailPedido.moneda} ` : '$';
+          const fmt = (n) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
           const entregaConFactura = entregasDetalle.find(ent => ent.comprobante_id);
           const flowChips = [
@@ -116,60 +130,73 @@ function ModalDetallePedido({
                   Detalle completo del pedido
                 </DialogDescription>
               </DialogHeader>
-              <div className="flex-1 min-h-0 overflow-y-auto space-y-4 px-6 py-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-kx-text-2">Estado</span>
-                  <div className="flex items-center gap-2">
-                    <EstadoBadge estado={detailPedido.estado} />
+
+              {/* flex-col SIN overflow-y-auto en este nivel (29/08, hallazgo
+                  Luciano: "el pedido no me gusta, repliquemos el formato de
+                  cabecera de la COT" + "quiero lo mismo que hicimos en
+                  pagos" — cabecera y botones fijos, solo el cuerpo escrolea).
+                  Cabecera en grilla igual que ModalDetalleCotizacion.jsx, en
+                  vez de la lista de renglones sueltos que tenía esto antes. */}
+              <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden px-6 py-4">
+                <div className="shrink-0 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <span className="text-kx-text-3 dark:text-kx-text-3 text-xs uppercase">Cliente</span>
+                    <p className="font-medium dark:text-kx-text">{detailPedido.cliente_nombre}</p>
+                  </div>
+                  <div>
+                    <span className="text-kx-text-3 dark:text-kx-text-3 text-xs uppercase">Estado</span>
+                    <p><EstadoBadge estado={detailPedido.estado} /></p>
+                  </div>
+                  <div>
+                    <span className="text-kx-text-3 dark:text-kx-text-3 text-xs uppercase">Fecha</span>
+                    <p className="dark:text-slate-300">{formatDateAR(detailPedido.fecha)}</p>
+                  </div>
+                  <div>
+                    <span className="text-kx-text-3 dark:text-kx-text-3 text-xs uppercase">Fecha entrega</span>
+                    <p className="dark:text-slate-300">{detailPedido.fecha_entrega ? formatDateAR(detailPedido.fecha_entrega) : '—'}</p>
                   </div>
                 </div>
 
-                {totalPed > 0 && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-kx-text-2">Entrega</span>
-                    {estaCompleto ? (
-                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-semibold">
-                        <Check className="h-3 w-3" /> Completo ({totalEnt}/{totalPed} u.)
-                      </span>
-                    ) : estaParcial ? (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-semibold">
-                        Parcial {totalEnt}/{totalPed} u.
-                      </span>
-                    ) : (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 dark:bg-kx-surface-2 dark:text-kx-text-2">
-                        Sin entregar
-                      </span>
+                {/* Progreso de entrega + referencia del cliente — no tienen
+                    equivalente en la grilla de 4 campos de la Cotización,
+                    quedan como línea aparte debajo (mismo criterio que los
+                    banners condicionales de ModalDetalleCotizacion.jsx). */}
+                {(totalPed > 0 || detailPedido.referencia_cliente) && (
+                  <div className="shrink-0 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+                    {totalPed > 0 && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-kx-text-2">Entrega:</span>
+                        {estaCompleto ? (
+                          <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-semibold">
+                            <Check className="h-3 w-3" /> Completo ({totalEnt}/{totalPed} u.)
+                          </span>
+                        ) : estaParcial ? (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 font-semibold">
+                            Parcial {totalEnt}/{totalPed} u.
+                          </span>
+                        ) : (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 dark:bg-kx-surface-2 dark:text-kx-text-2">
+                            Sin entregar
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {detailPedido.referencia_cliente && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-kx-text-2">N° Referencia del Cliente:</span>
+                        <span className="dark:text-slate-300">{detailPedido.referencia_cliente}</span>
+                      </div>
                     )}
                   </div>
                 )}
 
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-kx-text-2">Cliente</span>
-                  <span className="font-medium dark:text-kx-text">{detailPedido.cliente_nombre}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-kx-text-2">Fecha</span>
-                  <span className="text-sm dark:text-slate-300">{formatDateAR(detailPedido.fecha)}</span>
-                </div>
-                {detailPedido.fecha_entrega && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-kx-text-2">Fecha entrega</span>
-                    <span className="text-sm dark:text-slate-300">{formatDateAR(detailPedido.fecha_entrega)}</span>
-                  </div>
-                )}
-                {detailPedido.referencia_cliente && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-kx-text-2">N° Referencia del Cliente</span>
-                    <span className="text-sm dark:text-slate-300">{detailPedido.referencia_cliente}</span>
-                  </div>
-                )}
                 {detailPedido.notas && (
-                  <div className="bg-kx-surface-2 dark:bg-kx-surface rounded-lg p-3 text-sm text-kx-text-2 dark:text-kx-text-2">
+                  <div className="shrink-0 bg-kx-surface-2 dark:bg-kx-surface rounded-lg p-3 text-sm text-kx-text-2 dark:text-kx-text-2">
                     {detailPedido.notas}
                   </div>
                 )}
 
-                <div className="space-y-1.5 pt-1">
+                <div className="shrink-0 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <p className="text-2xs font-semibold text-kx-text-3 dark:text-kx-text-3 uppercase tracking-wider">
                       Flujo del documento
@@ -201,6 +228,10 @@ function ModalDetallePedido({
                   onNavigate={(tipo, id) => { setMapaOpen(false); setDetailPedido(null); onNavigate?.(tipo, id); }}
                 />
 
+                {/* Cuerpo que puede crecer — ítems + total entregado + historial.
+                    Es lo único que escrolea acá adentro; cabecera y pie quedan
+                    siempre fijos (mismo criterio que ModalDetalleCobro). */}
+                <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-kx-border dark:border-kx-border">
@@ -244,8 +275,6 @@ function ModalDetallePedido({
                     const neto = items.reduce((s, i) => s + Number(i.subtotal) / (FACTOR_IVA[i.alicuota_iva] ?? 1), 0);
                     const iva = subtotalBruto - neto;
                     const factorDesc = subtotalBruto > 0 ? Number(detailPedido.total) / subtotalBruto : 1;
-                    const simbolo = detailPedido.moneda && detailPedido.moneda !== 'ARS' ? `${detailPedido.moneda} ` : '$';
-                    const fmt = (n) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     return (
                       <tfoot>
                         {descuentoTotal > 0.005 && (
@@ -272,10 +301,6 @@ function ModalDetallePedido({
                             </tr>
                           </>
                         )}
-                        <tr className="border-t-2 border-kx-border dark:border-kx-border">
-                          <td colSpan={4} className="py-3 text-right font-bold dark:text-kx-text">TOTAL</td>
-                          <td className="py-3 text-right font-bold text-lg dark:text-kx-text">{simbolo}{fmt(detailPedido.total)}</td>
-                        </tr>
                       </tfoot>
                     );
                   })()}
@@ -283,46 +308,30 @@ function ModalDetallePedido({
                 <div className="text-right text-sm text-kx-text-2">
                   Total entregado: <span className="font-mono font-semibold dark:text-kx-text">{formatCurrency(items.reduce((s, it) => s + (Number(it.cantidad_entregada || 0) * Number(it.precio_unitario || 0)), 0), detailPedido.moneda ?? 'ARS')}</span>
                 </div>
-
-                {/* Historial de cambios — mismo patrón que ModalDetalleCotizacion.jsx,
-                    colapsado por defecto. */}
-                <div className="border border-kx-border dark:border-kx-border rounded-lg">
-                  <button
-                    type="button"
-                    onClick={() => setShowHistorial(v => !v)}
-                    className="w-full flex items-center justify-between p-3 text-sm font-medium text-kx-text-2 dark:text-kx-text-2 hover:bg-kx-surface-2 dark:hover:bg-slate-800/50 rounded-lg"
-                  >
-                    <span className="flex items-center gap-2"><History className="w-4 h-4" /> Historial de cambios</span>
-                    {showHistorial ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                  </button>
-                  {showHistorial && (
-                    <div className="p-3 pt-0 space-y-2 text-xs">
-                      {historial.length === 0 && (
-                        <p className="text-kx-text-3 py-2">Sin cambios registrados todavía.</p>
-                      )}
-                      {historial.map(entry => (
-                        <HistorialItem key={`${entry.tabla}-${entry.id}`} entry={entry}
-                          verCrudo={verCrudoId === `${entry.tabla}-${entry.id}`}
-                          onToggleCrudo={() => setVerCrudoId(v => v === `${entry.tabla}-${entry.id}` ? null : `${entry.tabla}-${entry.id}`)}
-                        />
-                      ))}
-                    </div>
-                  )}
                 </div>
-
               </div>
 
               {/* Acciones fijas al pie — el documento recién creado queda abierto
                   y el paso siguiente de la cadena (confirmar → entregar → facturar)
                   tiene que estar siempre a la vista, sin scrollear por debajo del
-                  historial. Cerrar es decisión del usuario. */}
-              <DialogFooter className="shrink-0 flex-wrap gap-2 sm:justify-between border-t border-kx-border dark:border-kx-border px-6 py-4">
+                  historial. Cerrar es decisión del usuario.
+                  TOTAL clavado acá arriba (29/08, hallazgo Luciano: "todo lo
+                  que es total tiene que quedar fijo en el footer, ya que es un
+                  dato de tipo cabecera") — deja de estar en el tfoot de la
+                  grilla, que ahora solo se ve al scrollear. */}
+              <DialogFooter className="shrink-0 flex-col gap-3 border-t border-kx-border dark:border-kx-border px-6 py-4 sm:flex-col sm:space-x-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-kx-text-2 dark:text-kx-text-2">TOTAL</span>
+                  <span className="font-mono font-bold text-lg dark:text-kx-text">{simbolo}{fmt(detailPedido.total)}</span>
+                </div>
+                <div className="flex flex-wrap gap-2 sm:justify-between">
                 <div className="flex items-center gap-2">
                   <Button variant="outline" onClick={() => setIsDetailOpen(false)} className="dark:border-kx-border dark:text-slate-300">
                     Cerrar
                   </Button>
-                  {/* Editar/Duplicar — pedido de Luciano (23/08): disponibles
-                      pero no a mano del resto de las acciones. */}
+                  {/* Editar/Duplicar/Historial — pedido de Luciano (23/08 y
+                      29/08): disponibles pero no a mano del resto de las
+                      acciones. */}
                   <MenuAccionesDocumento
                     acciones={[
                       onEditar && ESTADOS_EDITABLES.includes(detailPedido.estado) && {
@@ -331,8 +340,24 @@ function ModalDetallePedido({
                       onDuplicar && {
                         label: 'Duplicar', icon: Copy, onClick: () => onDuplicar(detailPedido),
                       },
+                      { label: 'Historial de cambios', icon: History, onClick: () => setShowHistorial(true) },
                     ]}
                   />
+                  {/* Cancelar Pedido — hallazgo Luciano (29/08, circuito de
+                      ventas): no había forma de cancelar desde el propio
+                      detalle. La guarda real (bloquea facturado/con entregas)
+                      vive en el RPC cancelar_pedido (mig.368); esto solo evita
+                      mostrar el botón donde seguro lo va a rechazar. */}
+                  {onCancelar && ESTADOS_CANCELABLES.includes(detailPedido.estado) && (
+                    <Button
+                      variant="outline"
+                      className="border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
+                      onClick={() => onCancelar(detailPedido)}
+                    >
+                      <Ban className="h-4 w-4 mr-2" />
+                      Cancelar Pedido
+                    </Button>
+                  )}
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   {puedeEntrega && (
@@ -366,7 +391,20 @@ function ModalDetallePedido({
                     )
                   )}
                 </div>
+                </div>
               </DialogFooter>
+
+              <HistorialCambiosDialog open={showHistorial} onOpenChange={setShowHistorial}>
+                {historial.length === 0 && (
+                  <p className="text-kx-text-3 py-2">Sin cambios registrados todavía.</p>
+                )}
+                {historial.map(entry => (
+                  <HistorialItem key={`${entry.tabla}-${entry.id}`} entry={entry}
+                    verCrudo={verCrudoId === `${entry.tabla}-${entry.id}`}
+                    onToggleCrudo={() => setVerCrudoId(v => v === `${entry.tabla}-${entry.id}` ? null : `${entry.tabla}-${entry.id}`)}
+                  />
+                ))}
+              </HistorialCambiosDialog>
             </>
           );
         })()}

@@ -54,6 +54,7 @@ const ConfiguracionSection = ({ initialTab }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef(null);
+  const fileInputRefFirma = useRef(null);
 
   const [activeTab, setActiveTab] = useState(
     initialTab && TAB_IDS.includes(initialTab) ? initialTab : 'empresa'
@@ -67,6 +68,7 @@ const ConfiguracionSection = ({ initialTab }) => {
   const [formData, setFormData] = useState({
     nombre_empresa: '',
     company_logo: '',
+    company_firma: '',
     email_empresa: '',
     direccion: '',
     telefono: '',
@@ -81,6 +83,7 @@ const ConfiguracionSection = ({ initialTab }) => {
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadingFirma, setUploadingFirma] = useState(false);
   const [empresaDatos, setEmpresaDatos] = useState({
     afip_cuit: null, condicion_iva: null, numero_ingresos_brutos: null, fecha_inicio_actividades: null,
   });
@@ -461,6 +464,23 @@ const ConfiguracionSection = ({ initialTab }) => {
           if (logo) localStorage.setItem(LOGO_CACHE_KEY, logo);
           else localStorage.removeItem(LOGO_CACHE_KEY);
         } catch { /* no crítico */ }
+      });
+  }, [user?.empresa_id]);
+
+  // Firma digitalizada — mismo criterio que el logo (clave propia en
+  // `configuracion`, fetch aparte para no pesar el contexto global). Hallazgo
+  // Luciano (29/08): "no dejaba tocar los PDF por ningún lado" — este era el
+  // gap real, no había ningún punto de la UI para subir una firma.
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    supabase
+      .from('configuracion')
+      .select('valor')
+      .eq('empresa_id', user.empresa_id)
+      .eq('clave', 'company_firma')
+      .maybeSingle()
+      .then(({ data }) => {
+        setFormData(prev => ({ ...prev, company_firma: data?.valor || '' }));
       });
   }, [user?.empresa_id]);
 
@@ -993,6 +1013,64 @@ const ConfiguracionSection = ({ initialTab }) => {
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
     toast({ title: 'Logo eliminado', description: 'El logo se ha eliminado de la vista previa.' });
+  };
+
+  // Firma digitalizada — mismo mecanismo que el logo (bucket `logos-empresa`,
+  // reescalado a blob, URL pública), solo cambia el nombre de archivo dentro
+  // de la carpeta de la empresa (`firma.<ext>` en vez de `logo.<ext>`). Las
+  // políticas de Storage solo filtran por el primer segmento de la ruta
+  // (empresa_id), así que no hace falta ninguna migración nueva.
+  const handleFileSelectFirma = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !user?.empresa_id) return;
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      toast({ title: 'Formato no soportado', description: 'Sube una imagen PNG, JPG, SVG o WEBP.', variant: 'destructive' });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: 'Archivo muy grande', description: 'La firma debe pesar menos de 5MB. Comprime la imagen e intentá de nuevo.', variant: 'destructive' });
+      return;
+    }
+    try {
+      setUploadingFirma(true);
+      const { blob, ext, contentType } = file.type === 'image/svg+xml'
+        ? { blob: file, ext: 'svg', contentType: file.type }
+        : await resizeImageToBlob(file, { maxSide: 400 });
+
+      const path = `${user.empresa_id}/firma.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('logos-empresa')
+        .upload(path, blob, { upsert: true, contentType, cacheControl: '3600' });
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage.from('logos-empresa').getPublicUrl(path);
+      const urlConCacheBust = `${publicUrl}?v=${Date.now()}`;
+
+      setFormData(prev => ({ ...prev, company_firma: urlConCacheBust }));
+      const kb = Math.round(blob.size / 1024);
+      toast({
+        title: 'Firma cargada',
+        description: `Subida a Storage (${kb}KB). Hacé clic en Guardar para aplicar.`,
+        className: 'bg-blue-600 text-white border-blue-500',
+      });
+    } catch (error) {
+      toast({ title: 'Error al cargar la firma', description: error.message, variant: 'destructive' });
+    } finally {
+      setUploadingFirma(false);
+      if (fileInputRefFirma.current) fileInputRefFirma.current.value = '';
+    }
+  };
+
+  const handleRemoveFirma = async () => {
+    setFormData(prev => ({ ...prev, company_firma: '' }));
+    if (user?.empresa_id) {
+      await supabase.storage.from('logos-empresa').remove(
+        ['png', 'jpg', 'svg'].map(ext => `${user.empresa_id}/firma.${ext}`)
+      );
+    }
+    if (fileInputRefFirma.current) fileInputRefFirma.current.value = '';
+    toast({ title: 'Firma eliminada', description: 'La firma se ha eliminado de la vista previa.' });
   };
 
   const handleSave = async (e) => {
@@ -2032,11 +2110,15 @@ const ConfiguracionSection = ({ initialTab }) => {
             setFormData={setFormData}
             saving={saving}
             uploading={uploading}
+            uploadingFirma={uploadingFirma}
             fileInputRef={fileInputRef}
+            fileInputRefFirma={fileInputRefFirma}
             handleSave={handleSave}
             handleChange={handleChange}
             handleFileSelect={handleFileSelect}
             handleRemoveLogo={handleRemoveLogo}
+            handleFileSelectFirma={handleFileSelectFirma}
+            handleRemoveFirma={handleRemoveFirma}
             usaFacturaElectronica={afipConfig.usa_factura_electronica}
           />
         </TabsContent>

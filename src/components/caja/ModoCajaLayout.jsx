@@ -698,7 +698,7 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
 
       {/* TICKET-PRINT — Modal de éxito post-venta ──────────────────────────── */}
       <Dialog open={!!ventaExitosa} onOpenChange={(open) => !open && setVentaExitosa(null)}>
-        <DialogContent className="max-w-md bg-kx-surface border-kx-border text-kx-text">
+        <DialogContent className="max-w-lg bg-kx-surface border-kx-border text-kx-text">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-kx-green">
               <CheckCircle className="w-5 h-5" />
@@ -718,16 +718,22 @@ function ModoCajaLayout({ onLogout, onBack = null }) {
 
           {ventaExitosa && (
             <div className="space-y-3 py-2">
-              <div className="bg-kx-surface-2 rounded-xl p-4 space-y-1.5">
-                <div className="flex justify-between text-sm">
+              <div className="bg-kx-surface-2 rounded-xl p-4 space-y-2.5">
+                <div className="flex justify-between items-center text-sm">
                   <span className="text-kx-text-2">Cliente</span>
-                  <span className="text-kx-text font-medium">
+                  <span className="text-kx-text font-medium text-right">
                     {ventaExitosa.comprobante.cliente_nombre || 'Consumidor Final'}
                   </span>
                 </div>
-                <div className="flex justify-between text-sm">
+                {/* Forma de pago — hallazgo Luciano (29/08): con pago mixto (Cuenta
+                    Corriente combinada, ver mig.372) esto puede listar 4-5 métodos
+                    ("Efectivo + Tarjeta Crédito + Transferencia + Cuenta Corriente +
+                    Tarjeta Débito") — en una sola fila lado a lado se amontonaba
+                    contra el label. Va apilado (label arriba, valor abajo) para que
+                    tenga todo el ancho del modal para envolver. */}
+                <div className="text-sm">
                   <span className="text-kx-text-2">Forma de pago</span>
-                  <span className="text-kx-text font-medium">{ventaExitosa.comprobante.forma_pago}</span>
+                  <p className="text-kx-text font-medium mt-0.5">{ventaExitosa.comprobante.forma_pago}</p>
                 </div>
                 {/* Fidelización por puntos (Fase 3) — canje aplicado en esta venta */}
                 {ventaExitosa.comprobante.descuento_puntos_pesos > 0 && (

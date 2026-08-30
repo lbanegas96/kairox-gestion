@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { formatDateTimeAR } from '@/lib/dateUtils';
 import { printElementById } from '@/lib/printRecibo';
+import { getEmpresaParaPDF } from '@/lib/empresaUtils';
 import ReciboPago from '@/components/shared/ReciboPago';
 
 // "Comprobante de Pago" — detalle de un Cobro como documento propio, mismo
@@ -65,11 +66,7 @@ function ModalDetalleCobro({ movimientoId, open, onOpenChange, onUpdate, onNavig
       setImputaciones(imps ?? []);
 
       if (user?.empresa_id) {
-        const { data: emp } = await supabase
-          .from('empresas')
-          .select('nombre, afip_cuit, direccion')
-          .eq('id', user.empresa_id)
-          .maybeSingle();
+        const emp = await getEmpresaParaPDF(user.empresa_id);
         setEmpresaData(emp ?? {});
       }
     } catch (error) {

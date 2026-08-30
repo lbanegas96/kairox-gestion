@@ -96,8 +96,15 @@ export function useConfirmarVenta(tcParalelo, formasPago = []) {
       return null;
     }
 
+    // Cuenta Corriente ya no es exclusiva (29/08, hallazgo Luciano: "quise
+    // pagar con diferentes medios y al restante dejarlo en cuenta y no me
+    // deja") — puede venir combinada con otros métodos dentro de `pagos`.
+    // `isCC` (100% CC) sigue existiendo para el atajo de "no cobra nada
+    // ahora"; `incluyeCC`/`montoCC` cubren el caso mixto.
     const isCC = pagos.length === 1 && pagos[0].metodo === 'Cuenta Corriente';
-    if (isCC && !selectedClient) {
+    const montoCC = pagos.filter(p => p.metodo === 'Cuenta Corriente').reduce((s, p) => s + (Number(p.monto) || 0), 0);
+    const incluyeCC = montoCC > 0;
+    if (incluyeCC && !selectedClient) {
       toast({ title: 'Cliente requerido para Cuenta Corriente', variant: 'destructive' });
       return null;
     }
@@ -302,7 +309,7 @@ export function useConfirmarVenta(tcParalelo, formasPago = []) {
         p_cliente_nombre:   selectedClient?.nombre ?? 'Consumidor Final',
         p_total:            total,
         p_forma_pago:       formaPago,
-        p_estado_pago:      isCC ? 'pendiente' : 'pagada',
+        p_estado_pago:      isCC ? 'pendiente' : (incluyeCC ? 'parcial' : 'pagada'),
         p_moneda:           'ARS',
         p_tipo_cambio_tasa: 1,
         p_monto_paralelo:   montoParaleloTotal ?? null,
@@ -347,7 +354,7 @@ export function useConfirmarVenta(tcParalelo, formasPago = []) {
       finalizarVentaPosterior({
         comprobante, rpcResult, total, saleNumber,
         clienteCondicionIva: selectedClient?.condicion_iva ?? 'CF',
-        centroCostoId, isCC,
+        centroCostoId, isCC, montoCC,
         // mig.363: solo si la venta usó UNA sola forma de pago — con multipago
         // el cobro sigue yendo a 1.1.1 como siempre.
         formaPagoId: pagos.length === 1 ? (pagos[0].forma_pago_id || null) : null,

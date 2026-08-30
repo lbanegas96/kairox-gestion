@@ -360,21 +360,30 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
          </div>
       </Card>
 
-      {/* TABLE */}
+      {/* TABLE — sin scroll horizontal (30/08, hallazgo Luciano: "no quiero
+          que se deba escrolear para la derecha... un solo bloque sin
+          dispersión visual"). Antes el `whitespace-nowrap` de la tabla
+          entera forzaba a "Medio Pago" (que en una venta mixta puede ser
+          "Efectivo + Tarjeta Crédito + Transferencia + Cuenta Corriente +
+          Tarjeta Débito") a quedar en una sola línea, empujando el ancho
+          total de la tabla más allá del contenedor. Ahora esa columna sola
+          puede envolver texto y crecer en altura de fila; el resto de las
+          columnas (números, fechas, montos) mantiene su propio nowrap
+          puntual para no verse afectado. */}
       <div className="kairox-bg-card border kairox-border rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           {/* RESPONSIVE-TABLE */}
-          <table className="w-full text-sm text-left whitespace-nowrap">
+          <table className="w-full text-sm text-left table-fixed">
             <thead className="bg-kx-surface-2 dark:bg-slate-900/50 border-b kairox-border text-xs uppercase font-semibold text-slate-500">
               <tr>
                 <th className="p-4 w-32">Nro Venta</th>
-                <th className="p-4 w-40">Fecha</th>
+                <th className="p-4 w-32">Fecha</th>
                 <th className="p-4">Cliente</th>
-                <th className="p-4 w-32">Medio Pago</th>
-                <th className="p-4 w-28 text-center">Estado</th>
+                <th className="p-4 w-36">Medio Pago</th>
+                <th className="p-4 w-24 text-center">Estado</th>
                 <th className="p-4 w-32 text-center">Factura</th>
-                <th className="p-4 w-32 text-right">Total</th>
-                <th className="p-4 w-36 text-center">Acciones</th>
+                <th className="p-4 w-28 text-right">Total</th>
+                <th className="p-4 w-20 text-center">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -417,16 +426,20 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                         el cliente ni ARCA reconocen (hallazgo Luciano 22/08,
                         item 7). Sin CAE (pendiente/interno) cae a ese mismo
                         interno como único identificador estable. */}
-                    <td className="p-4 font-mono font-medium text-slate-700 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                    <td className="p-4 font-mono font-medium text-slate-700 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 whitespace-nowrap truncate">
                       {formatNumeroComprobante(sale)}
                     </td>
-                    <td className="p-4 text-slate-500 text-xs dark:text-kx-text-2">
+                    <td className="p-4 text-slate-500 text-xs dark:text-kx-text-2 whitespace-nowrap">
                       {formatDateAR(sale.fecha)} <span className="text-kx-text-3 ml-1">{formatTimeAR(sale.fecha)}</span>
                     </td>
-                    <td className="p-4 font-medium text-kx-text dark:text-kx-text">
+                    <td className="p-4 font-medium text-kx-text dark:text-kx-text truncate">
                       {sale.cliente_nombre || <span className="text-kx-text-3 italic">Consumidor Final</span>}
                     </td>
-                    <td className="p-4 text-kx-text-2 dark:text-kx-text-2 text-xs font-medium uppercase tracking-wide">
+                    {/* Envuelve en vez de forzar una sola línea — el ancho de
+                        columna fijo (w-36) hace que un medio de pago
+                        combinado crezca en altura, no que empuje la tabla
+                        entera hacia la derecha. */}
+                    <td className="p-4 text-kx-text-2 dark:text-kx-text-2 text-2xs font-medium uppercase tracking-wide leading-snug break-words">
                       {sale.forma_pago}
                     </td>
                     <td className="p-4 text-center">
@@ -464,7 +477,7 @@ const HistorialVentas = ({ navigateSaleId, onNavigated, onNavigate }) => {
                         </span>
                       )}
                     </td>
-                    <td className="p-4 text-right font-bold text-slate-700 dark:text-kx-text group-hover:text-emerald-600 transition-colors">
+                    <td className="p-4 text-right font-bold text-slate-700 dark:text-kx-text group-hover:text-emerald-600 transition-colors whitespace-nowrap">
                       ${Number(sale.total).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       {sale.moneda && sale.moneda !== 'ARS' && Number(sale.tipo_cambio_tasa) > 0 && (
                         <div className="text-2xs font-normal text-slate-500 dark:text-kx-text-2 mt-0.5">

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Plus, Search, ClipboardList, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
@@ -65,6 +66,8 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
 
   // Confirm cancelar
   const [cancelTarget, setCancelTarget] = useState(null);
+  const [motivoCancelacion, setMotivoCancelacion] = useState('');
+  const [cancelando, setCancelando] = useState(false);
 
   // Generar Entrega
   const [entregaPedidoId, setEntregaPedidoId] = useState(null);
@@ -600,18 +603,33 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
     }
   };
 
+  // RPC cancelar_pedido (mig.368) — reemplaza el UPDATE directo que tenía esto
+  // antes: sin guardas, dejaba cancelar un pedido con entregas ya generadas
+  // (mercadería que ya salió — Regla 8) sin avisar ni revertir nada. El
+  // detalle, si sigue abierto, se resincroniza a mano en vez de cerrarse
+  // (mismo criterio que handleAvanzar — es un objeto plano, no una query).
   const handleCancelar = async () => {
     if (!cancelTarget) return;
-    const { error } = await supabase.from('pedidos')
-      .update({ estado: 'cancelado', updated_at: getNowAR().toISOString() })
-      .eq('id', cancelTarget.id);
-    if (error) {
-      toast({ title: 'Error al cancelar el pedido', description: error.message, variant: 'destructive' });
-    } else {
+    setCancelando(true);
+    try {
+      const { error } = await supabase.rpc('cancelar_pedido', {
+        p_empresa_id: user.empresa_id,
+        p_user_id: user.id,
+        p_pedido_id: cancelTarget.id,
+        p_motivo: motivoCancelacion.trim() || null,
+      });
+      if (error) throw error;
+
       toast({ title: `Pedido ${cancelTarget.numero} cancelado` });
+      setCancelTarget(null);
+      setMotivoCancelacion('');
+      await fetchAll();
+      setDetailPedido(prev => (prev?.id === cancelTarget.id ? { ...prev, estado: 'cancelado' } : prev));
+    } catch (err) {
+      toast({ title: 'No se pudo cancelar el pedido', description: err.message, variant: 'destructive' });
+    } finally {
+      setCancelando(false);
     }
-    setCancelTarget(null);
-    fetchAll();
   };
 
   // ── Filtros ─────────────────────────────────────────────────────────────────
@@ -753,6 +771,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
         handleAvanzar={handleAvanzar}
         onEditar={(p) => { setIsDetailOpen(false); openEdit(p); }}
         onDuplicar={(p) => { setIsDetailOpen(false); setDuplicarTarget(p); }}
+        onCancelar={(p) => setCancelTarget(p)}
         discrimina={detailPedido ? determinarTipoComprobante(empresaCondicionIva, detailPedido.clientes?.condicion_iva ?? 'CF') === 'A' : false}
         usaEnPreparacion={usaEnPreparacion}
       />
@@ -766,17 +785,29 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       />
 
       {/* ── Confirm cancelar ─────────────────────────────────────────────────── */}
-      <AlertDialog open={!!cancelTarget} onOpenChange={v => !v && setCancelTarget(null)}>
+      <AlertDialog open={!!cancelTarget} onOpenChange={v => { if (!cancelando) { !v && setCancelTarget(null); if (!v) setMotivoCancelacion(''); } }}>
         <AlertDialogContent className="dark:bg-kx-bg dark:border-kx-border">
           <AlertDialogHeader>
             <AlertDialogTitle className="dark:text-kx-text">¿Cancelar pedido?</AlertDialogTitle>
             <AlertDialogDescription className="dark:text-kx-text-2">
               El pedido <strong>{cancelTarget?.numero}</strong> se marcará como cancelado. Esta acción no puede deshacerse.
+              {cancelTarget?.pedido_items?.some(i => Number(i.cantidad_entregada) > 0) && (
+                <span className="block mt-1 text-amber-600 dark:text-amber-400">
+                  Este pedido tiene entregas — el RPC va a rechazar la cancelación hasta que las anules.
+                </span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <Textarea
+            value={motivoCancelacion}
+            onChange={e => setMotivoCancelacion(e.target.value)}
+            placeholder="Motivo (opcional) — ej. cliente desistió, error de carga..."
+            className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+            rows={2}
+          />
           <AlertDialogFooter>
-            <AlertDialogCancel className="dark:text-kx-text dark:border-kx-border">Volver</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancelar} className="bg-red-600 hover:bg-red-700 text-white">
+            <AlertDialogCancel disabled={cancelando} className="dark:text-kx-text dark:border-kx-border">Volver</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancelar} disabled={cancelando} className="bg-red-600 hover:bg-red-700 text-white">
               Sí, cancelar
             </AlertDialogAction>
           </AlertDialogFooter>

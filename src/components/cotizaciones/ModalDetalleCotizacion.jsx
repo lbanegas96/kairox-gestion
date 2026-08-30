@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileText, CheckCircle, Download, Loader2, Send, PackageCheck, Ban, AlertTriangle, XCircle, Pencil, History, ChevronDown, ChevronRight, Code2, Network, Copy } from 'lucide-react';
+import { FileText, CheckCircle, Download, Loader2, Send, PackageCheck, Ban, AlertTriangle, XCircle, Pencil, History, Code2, Network, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -10,6 +10,7 @@ import { formatDateAR } from '@/lib/dateUtils';
 import { cotizacionesService } from '@/services/cotizacionesService';
 import { ESTADOS } from './shared';
 import MenuAccionesDocumento from '@/components/shared/documento/MenuAccionesDocumento';
+import HistorialCambiosDialog from '@/components/shared/documento/HistorialCambiosDialog';
 
 // Mismos estados desde los que hoy se permite "Convertir en Venta" (TablaCotizaciones.jsx) —
 // solo aprobada: una cotización enviada todavía puede rechazarse, copiarla antes generaría
@@ -84,6 +85,12 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, o
     window.open(`https://wa.me/?text=${encodeURIComponent(lineas.join('\n'))}`, '_blank');
   };
 
+  // Hoisted para el footer fijo (29/08, hallazgo Luciano: "todo lo que es
+  // total tiene que quedar fijo en el footer, ya que es un dato de tipo
+  // cabecera") — antes solo vivían dentro del IIFE de la tabla de ítems.
+  const fmt = (n) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const simbolo = detalle?.moneda && detalle.moneda !== 'ARS' ? `${detalle.moneda} ` : '$';
+
   return (
     <Dialog open={!!viewId} onOpenChange={() => setViewId(null)}>
       {/* size="wide" — mismo shell que el resto de los documentos (hallazgo
@@ -138,9 +145,7 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, o
 
             {(() => {
               const esExtranjera = detalle.moneda && detalle.moneda !== 'ARS';
-              const fmt = (n) => Number(n).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
               const monedaDisp = esExtranjera ? detalle.moneda : 'ARS';
-              const simbolo = esExtranjera ? `${detalle.moneda} ` : '$';
               const items = detalle.cotizacion_items ?? [];
               // Precio de lista SIN ningún descuento (ni línea ni global) — mismo
               // criterio que ya usa CotizacionPDF.jsx. Antes acá se sumaba
@@ -202,10 +207,6 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, o
                         </tr>
                       </>
                     )}
-                    <tr className="border-t-2 border-kx-border dark:border-kx-border">
-                      <td colSpan={4} className="py-3 text-right font-bold dark:text-kx-text">TOTAL</td>
-                      <td className="py-3 text-right font-bold text-lg dark:text-kx-text">{simbolo}{fmt(detalle.total)}</td>
-                    </tr>
                   </tfoot>
                 </table>
               );
@@ -243,42 +244,25 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, o
                 </span>
               </div>
             )}
-
-            {/* Historial de cambios — reusa audit_log (fn_audit_trigger genérica, ya
-                enganchada a cotizaciones/cotizacion_items) en vez de un sistema de
-                auditoría propio. Colapsado por defecto: la mayoría de las cotizaciones
-                no tienen ediciones, y no vale la pena consultarlo si nadie lo abre. */}
-            <div className="border border-kx-border dark:border-kx-border rounded-lg">
-              <button
-                type="button"
-                onClick={() => setShowHistorial(v => !v)}
-                className="w-full flex items-center justify-between p-3 text-sm font-medium text-kx-text-2 dark:text-kx-text-2 hover:bg-kx-surface-2 dark:hover:bg-slate-800/50 rounded-lg"
-              >
-                <span className="flex items-center gap-2"><History className="w-4 h-4" /> Historial de cambios</span>
-                {showHistorial ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-              </button>
-              {showHistorial && (
-                <div className="p-3 pt-0 space-y-2 text-xs">
-                  {historial.length === 0 && (
-                    <p className="text-kx-text-3 py-2">Sin cambios registrados todavía.</p>
-                  )}
-                  {historial.map(entry => (
-                    <HistorialItem key={`${entry.tabla}-${entry.id}`} entry={entry}
-                      verCrudo={verCrudoId === `${entry.tabla}-${entry.id}`}
-                      onToggleCrudo={() => setVerCrudoId(v => v === `${entry.tabla}-${entry.id}` ? null : `${entry.tabla}-${entry.id}`)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         )}
-        <DialogFooter className="flex-wrap gap-2 sm:justify-between shrink-0 px-6 py-4 border-t border-kx-border dark:border-kx-border">
+        {/* TOTAL clavado acá arriba (29/08, hallazgo Luciano: "todo lo que es
+            total tiene que quedar fijo en el footer, ya que es un dato de
+            tipo cabecera") — deja de estar en el tfoot de la grilla, que
+            ahora solo se ve al scrollear. */}
+        {detalle && (
+          <div className="shrink-0 flex items-center justify-between px-6 pt-3 border-t border-kx-border dark:border-kx-border">
+            <span className="text-sm font-semibold text-kx-text-2 dark:text-kx-text-2">TOTAL</span>
+            <span className="font-mono font-bold text-lg dark:text-kx-text">{simbolo}{fmt(detalle.total)}</span>
+          </div>
+        )}
+        <DialogFooter className="flex-wrap gap-2 sm:justify-between shrink-0 px-6 py-4 border-t-0">
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setViewId(null)} className="dark:border-kx-border dark:text-slate-300">Cerrar</Button>
-            {/* Editar/Duplicar — pedido de Luciano (23/08): disponibles pero
-                no a mano del resto de las acciones, para no tocarlas por
-                error. Mismo criterio en OC/Pedido/Factura de Compra. */}
+            {/* Editar/Duplicar/Historial — pedido de Luciano (23/08 y 29/08):
+                disponibles pero no a mano del resto de las acciones, para no
+                tocarlas por error. Mismo criterio en OC/Pedido/Factura de
+                Compra. */}
             <MenuAccionesDocumento
               acciones={[
                 onEditar && detalle && ESTADOS_EDITABLES.includes(detalle.estado) && {
@@ -287,6 +271,7 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, o
                 onDuplicar && detalle && {
                   label: 'Duplicar', icon: Copy, onClick: () => onDuplicar(detalle),
                 },
+                { label: 'Historial de cambios', icon: History, onClick: () => setShowHistorial(true) },
               ]}
             />
           </div>
@@ -344,6 +329,18 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, o
             </Button>
           </div>
         </DialogFooter>
+
+        <HistorialCambiosDialog open={showHistorial} onOpenChange={setShowHistorial}>
+          {historial.length === 0 && (
+            <p className="text-kx-text-3 py-2">Sin cambios registrados todavía.</p>
+          )}
+          {historial.map(entry => (
+            <HistorialItem key={`${entry.tabla}-${entry.id}`} entry={entry}
+              verCrudo={verCrudoId === `${entry.tabla}-${entry.id}`}
+              onToggleCrudo={() => setVerCrudoId(v => v === `${entry.tabla}-${entry.id}` ? null : `${entry.tabla}-${entry.id}`)}
+            />
+          ))}
+        </HistorialCambiosDialog>
       </DialogContent>
     </Dialog>
   );

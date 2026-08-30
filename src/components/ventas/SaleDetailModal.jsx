@@ -343,18 +343,21 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                 </DocumentoTabsList>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-6 py-4">
-              {/* Contenido centrado con ancho máximo — el modal ocupa toda la
-                  pantalla (mismo shell que Entrega/OC/Pedido) pero esta grilla de
-                  2 columnas se ve estirada de más a lo ancho completo. */}
-              <div className="max-w-5xl mx-auto">
-
-              <TabsContent value="contenido" className="mt-0 focus-visible:outline-none">
+              {/* Cabecera y "Flujo del documento" fijos, solo la tabla de
+                  productos escrolea (30/08, hallazgo Luciano: "quisiera que
+                  solo el cuerpo de productos sea el que deba escrolear y no
+                  todo el comprobante") — mismo criterio que ModalDetallePedido/
+                  ModalDetalleCobro. Las otras 3 solapas no tienen ese problema
+                  (no son cabecera+tabla) así que conservan un scroll simple
+                  propio, independiente por solapa gracias a que Radix solo
+                  monta la TabsContent activa. */}
+              <TabsContent value="contenido" className="flex-1 min-h-0 flex flex-col overflow-hidden mt-0 focus-visible:outline-none">
+              <div className="flex-1 min-h-0 flex flex-col gap-4 px-6 py-4 w-full max-w-5xl mx-auto">
               {/* Header en grilla — mismo patrón que Entrega/OC/Pedido (item 7,
                   hallazgo Luciano 22/08: antes eran dos tarjetas sueltas con un
                   diseño propio). Las acciones (Registrar Cobro, Cancelar,
                   editar estado) se mudaron al footer, como en Entrega. */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-6 mt-2">
+              <div className="shrink-0 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-2">
                 <Campo label="Estado de pago">
                   {isEditing ? (
                     <div className="flex items-center gap-1.5 -mt-0.5">
@@ -411,7 +414,10 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
               {/* Tabla de productos — mismo estilo plano que Entrega/Pedido/OC
                   (hallazgo Luciano 23/08: esta era la única con caja, header
                   con fondo y hover por fila; se saca esa envoltura pero se
-                  mantiene toda la información, incluido el desglose Neto/IVA). */}
+                  mantiene toda la información, incluido el desglose Neto/IVA).
+                  Único bloque que escrolea acá adentro (30/08, ver hallazgo
+                  arriba). */}
+              <div className="flex-1 min-h-0 overflow-y-auto">
               <table className="w-full text-sm mb-6">
                 <thead>
                   <tr className="border-b border-kx-border dark:border-kx-border">
@@ -473,12 +479,14 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                   );
                 })()}
               </table>
+              </div>
 
               {/* Flujo del documento — mismo bloque que Entrega/OC/Pedido
                   (item 7): título + link a Mapa de Relaciones arriba,
                   pastillas con flechas abajo. El asiento se fue a la solapa
-                  Contabilidad. */}
-              <div className="space-y-1.5 pt-1">
+                  Contabilidad. Fijo debajo de la tabla que escrolea (30/08),
+                  siempre visible sin tener que bajar hasta el final. */}
+              <div className="shrink-0 space-y-1.5 pt-1">
                 <div className="flex items-center justify-between">
                   <p className="text-2xs font-semibold text-kx-text-3 dark:text-kx-text-3 uppercase tracking-wider">
                     Flujo del documento
@@ -503,18 +511,22 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                   }}
                 />
               </div>
+              </div>
               </TabsContent>
 
-              <TabsContent value="electronica" className="mt-0 focus-visible:outline-none">
+              <TabsContent value="electronica" className="flex-1 overflow-y-auto mt-0 focus-visible:outline-none">
+                <div className="max-w-5xl mx-auto px-6 py-4">
                 <TabComunicacionElectronica
                   comprobante={sale}
                   puntoVenta={sale.punto_venta}
                   onReintentarCae={handleReintentarCae}
                   reintentando={reintentandoCae}
                 />
+                </div>
               </TabsContent>
 
-              <TabsContent value="contabilidad" className="mt-0 focus-visible:outline-none">
+              <TabsContent value="contabilidad" className="flex-1 overflow-y-auto mt-0 focus-visible:outline-none">
+                <div className="max-w-5xl mx-auto px-6 py-4">
                 <TabContabilidad
                   documento={sale}
                   asientoId={sale.asiento_id}
@@ -524,9 +536,11 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                   onRegenerarAsiento={handleRegenerarAsiento}
                   puedeRegenerarAsiento={puedeRegenerarAsiento}
                 />
+                </div>
               </TabsContent>
 
-              <TabsContent value="logistica" className="mt-0 focus-visible:outline-none">
+              <TabsContent value="logistica" className="flex-1 overflow-y-auto mt-0 focus-visible:outline-none">
+                <div className="max-w-5xl mx-auto px-6 py-4">
                 {/* Una Factura no congela domicilio (eso lo hace la Entrega,
                     que es el evento físico — Regla 8). Acá se muestra el
                     domicilio ACTUAL del cliente, y el componente lo aclara. */}
@@ -534,6 +548,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                   fallback={sale.clientes}
                   nombreDestinatario={sale.cliente_nombre || sale.clientes?.nombre || 'Consumidor Final'}
                 />
+                </div>
               </TabsContent>
 
               <MapaRelaciones
@@ -550,8 +565,6 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                   onNavigate?.(tipo, id);
                 }}
               />
-              </div>
-              </div>
             </Tabs>
           ) : (
             <div className="p-8 text-center text-kx-text-2">No se encontraron datos.</div>

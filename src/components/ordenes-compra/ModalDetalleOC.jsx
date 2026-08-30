@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ShoppingBag, Truck, Receipt, AlertTriangle, BadgeCheck, Banknote, RotateCcw, Pencil, History, ChevronDown, ChevronRight, Code2, Network, Copy } from 'lucide-react';
+import { ShoppingBag, Truck, Receipt, AlertTriangle, BadgeCheck, Banknote, RotateCcw, Pencil, History, Code2, Network, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import MenuAccionesDocumento from '@/components/shared/documento/MenuAccionesDocumento';
+import HistorialCambiosDialog from '@/components/shared/documento/HistorialCambiosDialog';
 import { formatCurrency } from '@/lib/currencyUtils';
 import { formatDateAR } from '@/lib/dateUtils';
 import { ordenesCompraService } from '@/services/ordenesCompraService';
@@ -159,10 +160,6 @@ function ModalDetalleOC({
                       <td colSpan={5} className="text-right text-xs text-kx-text-3">IVA</td>
                       <td className="text-right text-xs text-kx-text-3">{simbolo}{fmt(iva * factorDesc)}</td>
                     </tr>
-                    <tr className="border-t-2 border-kx-border dark:border-kx-border">
-                      <td colSpan={5} className="py-3 text-right font-bold dark:text-kx-text">TOTAL {detalle.moneda && detalle.moneda !== 'ARS' && <span className="text-xs font-normal text-kx-text-3 ml-1">({detalle.moneda} — tasa {detalle.tipo_cambio_tasa})</span>}</td>
-                      <td className="py-3 text-right font-bold text-lg dark:text-kx-text">{formatCurrency(detalle.total, detalle.moneda ?? 'ARS')}</td>
-                    </tr>
                   </tfoot>
                 );
               })()}
@@ -265,37 +262,23 @@ function ModalDetalleOC({
                 </div>
               );
             })()}
-
-            {/* Historial de cambios — mismo patrón que Cotizaciones/Pedidos, colapsado
-                por defecto. */}
-            <div className="border border-kx-border dark:border-kx-border rounded-lg">
-              <button
-                type="button"
-                onClick={() => setShowHistorial(v => !v)}
-                className="w-full flex items-center justify-between p-3 text-sm font-medium text-kx-text-2 dark:text-kx-text-2 hover:bg-kx-surface-2 dark:hover:bg-slate-800/50 rounded-lg"
-              >
-                <span className="flex items-center gap-2"><History className="w-4 h-4" /> Historial de cambios</span>
-                {showHistorial ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-              </button>
-              {showHistorial && (
-                <div className="p-3 pt-0 space-y-2 text-xs">
-                  {historial.length === 0 && (
-                    <p className="text-kx-text-3 py-2">Sin cambios registrados todavía.</p>
-                  )}
-                  {historial.map(entry => (
-                    <HistorialItem key={`${entry.tabla}-${entry.id}`} entry={entry}
-                      verCrudo={verCrudoId === `${entry.tabla}-${entry.id}`}
-                      onToggleCrudo={() => setVerCrudoId(v => v === `${entry.tabla}-${entry.id}` ? null : `${entry.tabla}-${entry.id}`)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         )}
-        <DialogFooter className="gap-2 flex-wrap px-6 py-4 shrink-0 border-t border-kx-border dark:border-kx-border">
-          {/* Editar/Duplicar — pedido de Luciano (23/08): disponibles pero
-              no a mano del resto de las acciones. */}
+        {/* TOTAL clavado acá arriba (29/08, hallazgo Luciano: "todo lo que es
+            total tiene que quedar fijo en el footer, ya que es un dato de
+            tipo cabecera") — deja de estar en el tfoot de la grilla, que
+            ahora solo se ve al scrollear. */}
+        {detalle && (
+          <div className="shrink-0 flex items-center justify-between px-6 pt-3 border-t border-kx-border dark:border-kx-border">
+            <span className="text-sm font-semibold text-kx-text-2 dark:text-kx-text-2">
+              TOTAL {detalle.moneda && detalle.moneda !== 'ARS' && <span className="text-xs font-normal text-kx-text-3 ml-1">({detalle.moneda} — tasa {detalle.tipo_cambio_tasa})</span>}
+            </span>
+            <span className="font-mono font-bold text-lg dark:text-kx-text">{formatCurrency(detalle.total, detalle.moneda ?? 'ARS')}</span>
+          </div>
+        )}
+        <DialogFooter className="gap-2 flex-wrap px-6 py-4 shrink-0 border-t-0">
+          {/* Editar/Duplicar/Historial — pedido de Luciano (23/08 y 29/08):
+              disponibles pero no a mano del resto de las acciones. */}
           <MenuAccionesDocumento
             acciones={[
               onEditar && detalle && ESTADOS_EDITABLES.includes(detalle.estado) && {
@@ -304,6 +287,7 @@ function ModalDetalleOC({
               onDuplicar && detalle && {
                 label: 'Duplicar', icon: Copy, onClick: () => onDuplicar(detalle),
               },
+              { label: 'Historial de cambios', icon: History, onClick: () => setShowHistorial(true) },
             ]}
           />
           {/* mig.332 — 'facturada' incluido a propósito: devolver mercadería
@@ -322,6 +306,18 @@ function ModalDetalleOC({
           )}
           <Button variant="outline" onClick={() => setDetalleId(null)} className="dark:border-kx-border dark:text-slate-300">Cerrar</Button>
         </DialogFooter>
+
+        <HistorialCambiosDialog open={showHistorial} onOpenChange={setShowHistorial}>
+          {historial.length === 0 && (
+            <p className="text-kx-text-3 py-2">Sin cambios registrados todavía.</p>
+          )}
+          {historial.map(entry => (
+            <HistorialItem key={`${entry.tabla}-${entry.id}`} entry={entry}
+              verCrudo={verCrudoId === `${entry.tabla}-${entry.id}`}
+              onToggleCrudo={() => setVerCrudoId(v => v === `${entry.tabla}-${entry.id}` ? null : `${entry.tabla}-${entry.id}`)}
+            />
+          ))}
+        </HistorialCambiosDialog>
       </DialogContent>
     </Dialog>
   );

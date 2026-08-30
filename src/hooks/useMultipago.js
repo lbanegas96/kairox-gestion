@@ -4,23 +4,34 @@ import { parseNumberLocale } from '@/lib/currencyUtils';
 /**
  * Hook para gestionar la selección de métodos de pago de una venta (NuevaVentaModal).
  * Extraído 1:1 de la lógica que vivía inline en NuevaVentaModal — mismo modelo de
- * estado (Set de métodos activos + montos por método), misma exclusividad de
- * Cuenta Corriente, mismas validaciones y mensajes al confirmar.
+ * estado (Set de métodos activos + montos por método), mismas validaciones y
+ * mensajes al confirmar.
+ *
+ * Cuenta Corriente — hallazgo Luciano (29/08, probando el POS): "quise probar
+ * pagar con diferentes medios de pago y al restante dejarlo en cuenta y no me
+ * deja, es toda la deuda o nada". Antes CC era mutuamente excluyente con
+ * cualquier otro método (elegirla vaciaba la selección, y viceversa). Ahora es
+ * un método más dentro del pago mixto — se puede combinar Efectivo/Tarjeta/etc.
+ * y dejar el resto como deuda en Cuenta Corriente, con su propio monto en
+ * `methodAmounts`. Solo se mantiene un atajo: si CC queda como el ÚNICO método
+ * seleccionado, `construirPagosFinales` sigue completando el monto solo (no
+ * hace falta tipearlo) — mismo comportamiento de siempre para el caso 100% CC.
  *
  * `total` es el total de la venta en ARS (cart), recalculado por el caller en cada
  * render — el hook no fetchea ni posee el carrito.
  *
  * `formasPago` (maestro de ConfiguracionSection → Finanzas, mig.214): lista de
  * formas de pago activas de la empresa. Se usa solo para resolver forma_pago_id
- * por nombre al construir los pagos finales — el resto de la lógica sigue
- * operando sobre nombres de método (Set/objeto), sin tocar la exclusividad de CC.
+ * por nombre al construir los pagos finales.
  */
 export function useMultipago(total, formasPago = []) {
   const [selectedMethods, setSelectedMethods] = useState(new Set(['Efectivo']));
   const [methodAmounts, setMethodAmounts] = useState({});
 
+  // isCC = "la venta incluye Cuenta Corriente" (sola o combinada) — se usa para
+  // gatear "cliente requerido" y el aviso de deuda, no implica exclusividad.
   const isCC = selectedMethods.has('Cuenta Corriente');
-  const isMultiPago = !isCC && selectedMethods.size > 1;
+  const isMultiPago = selectedMethods.size > 1;
 
   const totalPagado = useMemo(() => {
     if (!isMultiPago) return 0;
@@ -32,17 +43,6 @@ export function useMultipago(total, formasPago = []) {
   const restante = total - totalPagado;
 
   const toggleMethod = (method) => {
-    if (method === 'Cuenta Corriente') {
-      setSelectedMethods(new Set(['Cuenta Corriente']));
-      setMethodAmounts({});
-      return;
-    }
-    // Salir de CC
-    if (selectedMethods.has('Cuenta Corriente')) {
-      setSelectedMethods(new Set([method]));
-      setMethodAmounts({});
-      return;
-    }
     if (selectedMethods.has(method)) {
       if (selectedMethods.size === 1) return; // No deseleccionar el último
       const next = new Set(selectedMethods);
@@ -72,7 +72,9 @@ export function useMultipago(total, formasPago = []) {
   const formaPagoIdPorNombre = (nombre) => formasPago.find(f => f.nombre === nombre)?.id ?? null;
 
   const construirPagosFinales = () => {
-    if (isCC) {
+    // 100% Cuenta Corriente (único método seleccionado) — atajo de siempre,
+    // no hace falta tipear el monto.
+    if (isCC && selectedMethods.size === 1) {
       return { pagos: [{ metodo: 'Cuenta Corriente', monto: total, forma_pago_id: null }], error: null };
     }
     if (isMultiPago) {

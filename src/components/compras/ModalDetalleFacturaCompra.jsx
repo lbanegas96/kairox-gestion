@@ -148,10 +148,6 @@ function ModalDetalleFacturaCompra({
                 <td colSpan={5} className="text-right text-xs text-kx-text-3">IVA</td>
                 <td className="text-right text-xs text-kx-text-3">{simbolo}{fmt(iva)}</td>
               </tr>
-              <tr className="border-t-2 border-kx-border dark:border-kx-border">
-                <td colSpan={5} className="py-3 text-right font-bold dark:text-kx-text">TOTAL</td>
-                <td className="py-3 text-right font-bold text-lg dark:text-kx-text">{simbolo}{fmt(compra.total)}</td>
-              </tr>
             </tfoot>
           </table>
 
@@ -162,7 +158,16 @@ function ModalDetalleFacturaCompra({
           )}
         </div>
 
-        <DialogFooter className="gap-2 flex-wrap px-6 py-4 shrink-0 border-t border-kx-border dark:border-kx-border">
+        {/* TOTAL clavado acá arriba (29/08, hallazgo Luciano: "todo lo que es
+            total tiene que quedar fijo en el footer, ya que es un dato de
+            tipo cabecera") — deja de estar en el tfoot de la grilla, que
+            ahora solo se ve al scrollear. */}
+        <div className="shrink-0 flex items-center justify-between px-6 pt-3 border-t border-kx-border dark:border-kx-border">
+          <span className="text-sm font-semibold text-kx-text-2 dark:text-kx-text-2">TOTAL</span>
+          <span className="font-mono font-bold text-lg dark:text-kx-text">{simbolo}{fmt(compra.total)}</span>
+        </div>
+
+        <DialogFooter className="gap-2 flex-wrap px-6 py-4 shrink-0 border-t-0">
           <Button variant="outline" onClick={onClose} className="dark:border-kx-border dark:text-slate-300">
             Cerrar
           </Button>

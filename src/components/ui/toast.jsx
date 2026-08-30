@@ -6,11 +6,19 @@ import React from 'react';
 
 const ToastProvider = ToastPrimitives.Provider;
 
+// Anclado arriba a la derecha (29/08, hallazgo Luciano: "los mensajes del
+// sistema... están mal ubicados... no tapen nada, ni información ni
+// botones") — antes vivía abajo a la derecha, exactamente donde este mismo
+// rediseño de sesión fue apilando los botones de acción fijos de los
+// modales de documento (DialogFooter shrink-0: Cerrar/Cancelar/Avanzar…) y
+// los FAB de esquina inferior — un toast ahí tapaba justo lo que el usuario
+// necesitaba clickear después de la acción que lo disparó. Arriba a la
+// derecha no choca con ningún footer fijo del sistema.
 const ToastViewport = React.forwardRef(({ className, ...props }, ref) => (
 	<ToastPrimitives.Viewport
 		ref={ref}
 		className={cn(
-			'fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px]',
+			'fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:right-0 sm:flex-col md:max-w-[420px]',
 			className,
 		)}
 		{...props}

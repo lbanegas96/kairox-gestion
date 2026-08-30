@@ -1,12 +1,21 @@
 import { supabase } from '@/lib/customSupabaseClient';
 
 export async function getEmpresaParaPDF(empresaId) {
-  const [{ data: logoRow }, { data: empresa }, { data: configRows }] = await Promise.all([
+  const [{ data: logoRow }, { data: firmaRow }, { data: empresa }, { data: configRows }] = await Promise.all([
     supabase
       .from('configuracion')
       .select('valor')
       .eq('empresa_id', empresaId)
       .eq('clave', 'logo_base64')
+      .maybeSingle(),
+    // Firma digitalizada (29/08) — mismo criterio que el logo: URL de Storage,
+    // clave propia en `configuracion`, se pide siempre (aunque no todos los
+    // documentos la usen) para no tener que tocar cada caller por separado.
+    supabase
+      .from('configuracion')
+      .select('valor')
+      .eq('empresa_id', empresaId)
+      .eq('clave', 'company_firma')
       .maybeSingle(),
     supabase
       .from('empresas')
@@ -51,6 +60,7 @@ export async function getEmpresaParaPDF(empresaId) {
 
   return {
     logo,
+    firma: firmaRow?.valor || null,
     nombre: empresa?.nombre ?? 'Mi Empresa',
     cuit: empresa?.afip_cuit ?? empresa?.cuit ?? null,
     afip_cuit: empresa?.afip_cuit ?? empresa?.cuit ?? null,

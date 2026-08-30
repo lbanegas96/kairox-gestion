@@ -20,6 +20,7 @@ import { proveedoresService, PROV_KEYS } from '@/services/proveedoresService';
 import { supabase } from '@/lib/customSupabaseClient';
 import { formatDateAR, getNowAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
+import { getEmpresaParaPDF } from '@/lib/empresaUtils';
 import TabAntiguedad from '@/components/cuenta-corriente/TabAntiguedad';
 import ReciboPago from '@/components/shared/ReciboPago';
 import { printElementById } from '@/lib/printRecibo';
@@ -103,15 +104,7 @@ function ProveedoresSection() {
 
   const { data: empresaData = {} } = useQuery({
     queryKey: ['empresa_datos_recibo', empresaId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('empresas')
-        .select('nombre, afip_cuit, direccion')
-        .eq('id', empresaId)
-        .maybeSingle();
-      if (error) throw error;
-      return data ?? {};
-    },
+    queryFn: () => getEmpresaParaPDF(empresaId),
     enabled: !!empresaId,
   });
 
