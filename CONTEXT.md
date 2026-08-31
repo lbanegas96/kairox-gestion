@@ -1,5 +1,61 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Verificados en vivo (31/08) los 7 hallazgos de Luciano contra Ferretería NADIA — 2 encontrados a medio corregir, arreglados
+
+Retomando el plan de prueba integral: en vez de confiar en los mensajes de commit de Luciano, se
+probó cada uno de los 7 hallazgos ("Cerrados en código los 7 hallazgos 🔴", sección más abajo) por
+la UI real de Ferretería NADIA, comparando contra la base. 5 cerraron exactos a la primera. 2
+resultaron fixes **incompletos** — se encontraron, corrigieron y verificaron en el momento.
+
+### ✅ Confirmados exactos, sin nuevos hallazgos
+- **#2 Dashboard sin ventas canceladas**: "Ventas del mes" = $23.600 (antes $26.100) — exacto.
+- **#4 Libro IVA Ventas ya no vacío**: 10 comprobantes, $307.900 — exacto (ver más abajo el matiz
+  encontrado en los totales).
+- **#5 Listas de Precios sin "$0"**: PIN-001 muestra "Precio estándar: $6.200/lt" — exacto.
+- **#6 Desglose Neto/IVA de Devoluciones a Proveedor**: DEV-2026-0001 muestra Neto $19.000,00 / IVA
+  $3.990,00 / Total $22.990,00 — exacto.
+- **#7 Contador de líneas en Recuento**: se creó un Recuento de prueba (Pinturas y Accesorios,
+  anulado después, sin tocar stock), se tipeó un valor distinto y el contador pasó a "1 línea(s)
+  con diferencia" **sin blur** — exacto.
+- **#1 `cancelar_nota_credito_proveedor` genera asiento de reversa**: se creó una NC de proveedor
+  descartable ($500, Bianchi Herrajes, vía "Duplicar" desde una NC real) y se canceló. `AS-000026`
+  ("Reversa — Cancelación Nota de Crédito de Proveedor...") espejo exacto y balanceado de
+  `AS-000025` — exacto.
+
+### 🔴 #3 encontrado incompleto — "Posición IVA del período" corregía Crédito Fiscal pero no Débito Fiscal (arreglado)
+Crédito Fiscal daba $74.069,26 exacto (correcto). Pero Débito Fiscal daba **$51.614,88** cuando el
+cálculo correcto para ese período es **$53.003,31** — faltaban exactos $1.388,43, el IVA de
+`ND-20260827-001`. Causa raíz: el primer intento de este fix sumaba la ND de cliente consultando
+`notas_debito` (`tipo='emitida'`) — esa rama quedó **deprecada** por el rediseño de ND de Cliente
+(mig.268/269, documentado en el propio comentario de mig.278): las ND de cliente reales viven en
+`comprobantes` con `tipo='nota_debito'`, igual que la Factura y la NC. `notas_debito` (tipo=
+`'emitida'`) tiene 0 filas para Ferretería NADIA — y, por el mismo motivo, para cualquier empresa —
+así que la ND nunca se sumaba. **Corregido en `TabIVA.jsx`**: se sacó la query separada a
+`notas_debito` y se agregó `'nota_debito'` al `.in('tipo', [...])` que ya traía venta/NC, sumando
+igual que una venta (solo la NC resta). Verificado: Débito Fiscal pasa a $53.003,31 exacto.
+
+### 🔴 Hallazgo nuevo, relacionado — Libro IVA Ventas contaba una venta cancelada en sus totales (arreglado)
+Al revisar el detalle del hallazgo #4 se notó que el total ($307.900 / $53.437,19 de IVA) incluía
+el ticket `20260828-001` — **cancelado** en la Fase 7 — con sus $2.500/$433,88 de IVA de todos
+modos. Causa raíz: `esComprobanteValido()` en `ReporteLibroIVA.jsx` solo mira `cae_estado`
+(`'emitido'` o `'no_aplica'`) para decidir si un comprobante cuenta — pero `cancelar_factura`
+(mig.351) también deja `cae_estado='no_aplica'` en una venta cancelada, así que pasaba el filtro
+igual. Un Libro IVA es un registro fiscal: una venta anulada no debería sumar débito fiscal.
+**Corregido**: se agregó `.neq('estado_pago', 'cancelada')` a la query base (mismo criterio que ya
+usa `TabIVA.jsx`). Verificado a mano contra la base: el nuevo total sin el cancelado da
+$305.400 / $53.003,31 — coincide exacto con el Débito Fiscal ya corregido arriba.
+
+`eslint` limpio en ambos archivos (solo warnings preexistentes de `prop-types`, no nuevos), 160/160
+tests sin regresiones. Ningún dato de prueba quedó a medio camino: el Recuento de prueba se anuló
+(nunca tocó stock), la NC de proveedor de prueba se canceló (asiento de reversa real, verificado) —
+Balance de Comprobación de Ferretería NADIA sigue en **✓ Cuadra** ($1.206.060 = $1.206.060) después
+de todo esto.
+
+**Siguiente paso:** los 2 fixes nuevos (`TabIVA.jsx`, `ReporteLibroIVA.jsx`) van en el mismo commit
+que esta nota.
+
+---
+
 ## ✅ Ronda 2 de pulido de UI post-CC combinable: Mapa de Relaciones, totales de Factura, modal de Cliente (30/08)
 
 Seguimiento directo de la sesión anterior (sección siguiente) — Luciano siguió probando en vivo y

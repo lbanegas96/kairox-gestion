@@ -49,26 +49,30 @@ function TabIVA({ onNavigate }) {
     if (!user?.empresa_id) return;
     setLoadingPos(true);
     try {
-      // Débito Fiscal: Facturas de venta suman, Notas de Crédito de cliente
-      // restan (emitidas contra una venta ya declarada) — antes solo sumaba
-      // 'venta', ignorando NC/ND de cliente y sin excluir comprobantes
-      // cancelados (hallazgo auditoría Ferretería NADIA, 28/08).
+      // Débito Fiscal: Facturas de venta y Notas de Débito de cliente suman,
+      // Notas de Crédito de cliente restan — antes solo sumaba 'venta',
+      // ignorando NC/ND de cliente y sin excluir comprobantes cancelados
+      // (hallazgo auditoría Ferretería NADIA, 28/08).
+      //
+      // FIX (31/08, verificado en vivo contra Ferretería NADIA): el primer
+      // intento de este fix sumaba la ND de cliente desde `notas_debito`
+      // (tipo='emitida') — esa rama quedó DEPRECADA por el rediseño de ND de
+      // Cliente (mig.268/269, ver comentario de mig.278): las ND de cliente
+      // reales viven en `comprobantes` con tipo='nota_debito', igual que la
+      // Factura y la NC. `notas_debito` (tipo='emitida') siempre devuelve 0
+      // filas para cualquier empresa, así que la ND nunca se sumaba —
+      // Débito Fiscal quedaba subvaluado (y "Saldo a favor" sobrevaluado) en
+      // exactamente el IVA de cada ND de cliente cargada. Confirmado con
+      // ND-20260827-001 ($1.388,43 IVA): Débito Fiscal pasó de $51.614,88 a
+      // los $53.003,31 correctos.
       const { data: ventasYnc } = await supabase
         .from('comprobantes')
         .select('total, iva_discriminado, tipo')
         .eq('empresa_id', user.empresa_id)
-        .in('tipo', ['venta', 'nota_credito'])
+        .in('tipo', ['venta', 'nota_credito', 'nota_debito'])
         .neq('estado_pago', 'cancelada')
         .gte('fecha', `${fechaDesde}T00:00:00`)
         .lte('fecha', `${fechaHasta}T23:59:59`);
-      const { data: ndCliente } = await supabase
-        .from('notas_debito')
-        .select('monto, iva_discriminado')
-        .eq('empresa_id', user.empresa_id)
-        .eq('tipo', 'emitida')
-        .neq('estado', 'cancelada')
-        .gte('fecha', fechaDesde)
-        .lte('fecha', fechaHasta);
       // Crédito Fiscal: Facturas de compra suman, Notas de Crédito de
       // proveedor restan — antes nunca las restaba (mismo hallazgo).
       const { data: compras } = await supabase
@@ -91,7 +95,7 @@ function TabIVA({ onNavigate }) {
 
       const debito = (ventasYnc ?? []).reduce(
         (s, v) => s + (v.tipo === 'nota_credito' ? -ivaDe(v) : ivaDe(v)), 0
-      ) + (ndCliente ?? []).reduce((s, n) => s + ivaDe(n), 0);
+      );
       const credito = (compras ?? []).reduce((s, c) => s + ivaDe(c), 0)
         - (ncProveedor ?? []).reduce((s, n) => s + ivaDe(n), 0);
       setPosicion({ debito, credito });
