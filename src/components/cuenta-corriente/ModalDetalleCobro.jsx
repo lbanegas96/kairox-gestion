@@ -94,8 +94,13 @@ function ModalDetalleCobro({ movimientoId, open, onOpenChange, onUpdate, onNavig
     referenciaPago: cobro.referencia_pago,
     nota: cobro.descripcion,
     imputaciones: imputaciones.map(imp => ({
-      numero: imp.comprobantes?.tipo_comprobante_afip
-        ? `${imp.comprobantes.tipo_comprobante_afip} ${imp.comprobantes.numero_afip}`
+      // Condicionar en numero_afip, no en tipo_comprobante_afip: una empresa
+      // sin AFIP (cae_estado siempre 'no_aplica') igual tiene letra asignada
+      // (tipo_comprobante_afip='B', por ej.) pero numero_afip queda NULL para
+      // siempre — con la condición vieja mostraba literal "B null" en vez de
+      // caer al numero_venta interno (hallazgo 31/08, Ferretería NADIA).
+      numero: imp.comprobantes?.numero_afip
+        ? `${imp.comprobantes.tipo_comprobante_afip || ''} ${imp.comprobantes.numero_afip}`.trim()
         : imp.comprobantes?.numero_venta || '—',
       monto: imp.monto,
     })),
@@ -169,8 +174,8 @@ function ModalDetalleCobro({ movimientoId, open, onOpenChange, onUpdate, onNavig
                   {imputaciones.map((imp, i) => (
                     <div key={i} className="flex items-center justify-between px-3 py-2 text-sm">
                       <span className="font-mono text-kx-text">
-                        {imp.comprobantes?.tipo_comprobante_afip
-                          ? `${imp.comprobantes.tipo_comprobante_afip} ${imp.comprobantes.numero_afip}`
+                        {imp.comprobantes?.numero_afip
+                          ? `${imp.comprobantes.tipo_comprobante_afip || ''} ${imp.comprobantes.numero_afip}`.trim()
                           : imp.comprobantes?.numero_venta || '—'}
                       </span>
                       <span className="font-mono tabular-nums text-kx-text-2">${fmt(imp.monto)}</span>

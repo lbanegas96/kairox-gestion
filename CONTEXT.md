@@ -1,5 +1,40 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Repaso completo del plan sobre Ferretería NADIA (31/08) — Comprobante de Pago mostraba "B null"
+
+A pedido de Nadia, segunda pasada completa sobre Ferretería NADIA: ground-truth por SQL de Balance
+de Comprobación / Cta. Corriente clientes / Cta. Corriente proveedores (los 3 siguen exactos,
+$1.206.060 cuadrado, $196.300/$312.180 sin cambios) + prueba en vivo de las funciones que Luciano
+armó hoy y que solo se habían probado contra Nalux.
+
+**Filtros de Letra/Punto de Venta en Facturas**: presentes y funcionando para Ferretería NADIA
+(PdV 1, PdV 2 — Reparto a domicilio).
+
+**Comprobante de Pago (ciclo completo, cliente):** se probó crear→ver→cancelar un cobro real sobre
+`FAC-2-20260828-001` (Julieta Sosa, $3.000) — mismo resultado que contra Nalux: la factura pasa a
+"pagada" sin cerrar el modal, se abre el Comprobante de Pago, "Cancelar Cobro" revierte todo
+(factura vuelve a "pendiente", verificado). Pero al mirar el detalle se encontró un bug real:
+
+### 🔴 Hallazgo real, corregido — "Facturas imputadas" del Comprobante de Pago mostraba "B null"
+`ModalDetalleCobro.jsx` decidía qué mostrar mirando si `tipo_comprobante_afip` existía (ej. `'B'`,
+la letra asignada al cliente) y, si sí, concatenaba `numero_afip` — pero una empresa sin AFIP
+(`cae_estado` siempre `'no_aplica'`) tiene la letra asignada igual sin nunca tener un `numero_afip`
+real, así que renderizaba literal **"B null"** en vez de caer al número interno de KAIROX
+(`FAC-2-20260828-001`). Confirmado en base: `tipo_comprobante_afip='B'`, `numero_afip=null`. No
+aparece en Nalux (ahí las facturas sí tienen `numero_afip` real) — por eso pasó desapercibido en
+la prueba de ayer contra esa cuenta. Se revisaron los otros 5 lugares del código con el mismo
+patrón tipo+número (`HistorialVentas.jsx`, `ReportesSection.jsx`, `MonitorFacturacionAFIP.jsx`,
+`TabComunicacionElectronica.jsx`) — todos ya condicionan bien en `numero_afip`, el bug estaba
+aislado a `ModalDetalleCobro.jsx` (2 lugares: la vista y los datos que arma para imprimir el
+recibo). **Corregido**: ahora condiciona en `numero_afip` (no en `tipo_comprobante_afip`), con
+fallback `|| ''` para que si algún día hay letra sin número no rompa el `.trim()`. `eslint` limpio,
+160/160 tests sin regresiones.
+
+**Siguiente paso:** falta probar en vivo la Cuenta Corriente combinable (mig.369-372) con una venta
+real de Ferretería NADIA por el POS — arrancado, sin terminar en el momento de escribir esta nota.
+
+---
+
 ## ✅ Verificados en vivo (31/08) los 7 hallazgos de Luciano contra Ferretería NADIA — 2 encontrados a medio corregir, arreglados
 
 Retomando el plan de prueba integral: en vez de confiar en los mensajes de commit de Luciano, se
