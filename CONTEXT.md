@@ -1,5 +1,51 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 📋 Cierre de sesión 31/08 — para que Luciano siga
+
+Día de revisión y repaso, sin código nuevo de features — todo lo de abajo salió de **probar en vivo
+lo que vos armaste ayer/anteayer** (CC combinable, Comprobante de Pago, Mapa de Relaciones, Ronda 2
+de UI) contra datos reales, en vez de confiar en los mensajes de commit. **Todo commiteado, pusheado
+a GitHub y en producción** — nada quedó a mitad de camino.
+
+**Fase 9 (Tiendanube/MercadoPago) — se retomó y se volvió a diferir a propósito.** Nadia pidió
+arrancarla; se confirmó de nuevo que ninguna de las dos integraciones está conectada para Ferretería
+NADIA, y conectarlas requiere un OAuth real desde SU sesión — no se debe intentar sin que ella lo
+haga en persona. Sigue pendiente, sin tocar.
+
+**Nalux real:**
+- Se probó en vivo el ciclo completo de "Comprobante de Pago" (crear→ver→cancelar un cobro real) —
+  lo único que habías dejado explícitamente sin probar. Funciona igual que después se confirmó
+  contra Ferretería NADIA: la factura pasa a "pagada", el comprobante se abre sin cerrar el modal, y
+  "Cancelar Cobro" revierte todo (factura vuelve al estado anterior).
+- Revisión general de salud sobre Nalux además de eso: sin hallazgos nuevos más allá del GRANT
+  faltante de `usar_caea_para_comprobante` (mig.366, detalle más abajo) — ya corregido.
+
+**Ferretería NADIA — dos pasadas:**
+1. Los 7 hallazgos que vos habías marcado como cerrados en código: 5 cerraron exactos, **2 fixes
+   quedaron incompletos** y se corrigieron en el momento (Posición IVA sin ND de cliente, Libro IVA
+   Ventas contando una venta cancelada). Detalle en la sección de más abajo.
+2. A pedido de Nadia, repaso completo de todo el plan de nuevo (dado el volumen de cambios tuyos de
+   ayer) — de ahí salió el hallazgo más importante del día:
+
+### 🔴→✅ `cancelar_factura` reversaba el TOTAL del comprobante a Cuenta Corriente, no la porción real de CC (mig.375)
+Al cancelar una venta de prueba con CC combinable (Efectivo + CC, mig.369-372) para no dejar rastro,
+la reversa a Cuenta Corriente usó `comprobantes.total` en vez de lo que de verdad estaba en CC —
+mismo bug que ya habías corregido en mig.374 en otros 3 lugares (`facturas_saldo_pendiente`,
+`registrar_cobro_cliente`, `crear_nota_credito`), pero `cancelar_factura` (mig.351, anterior a esos)
+había quedado afuera. Con datos reales esto le da a un cliente crédito de más al cancelar una
+factura con CC parcial — plata, no solo UI. Corregido con `monto_cc_original_comprobante()` (la
+misma función centralizada de mig.374), dato de la prueba ya corregido, Balance de Comprobación
+verificado después ($1.219.460 = $1.219.460, cuadra). Detalle completo en la sección del repaso, más
+abajo.
+
+Resto del repaso (Mapa de Relaciones con pagos múltiples, Ronda 2 de UI, Catálogo/Proveedores/
+Compras) sin hallazgos — todo funcionando como se documentó cuando lo armaste.
+
+**Siguiente paso:** ningún cabo suelto de esta sesión. Fase 9 sigue esperando a que Nadia conecte
+Tiendanube/MercadoPago en persona.
+
+---
+
 ## 🏁 Cierre del repaso completo sobre Ferretería NADIA (31/08)
 
 Cierre de la sesión de "repasar todo el plan de nuevo" (secciones de más abajo). Resumen de lo
