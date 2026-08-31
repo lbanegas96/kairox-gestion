@@ -1,5 +1,34 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🏁 Cierre del repaso completo sobre Ferretería NADIA (31/08)
+
+Cierre de la sesión de "repasar todo el plan de nuevo" (secciones de más abajo). Resumen de lo
+cubierto, de más a menos reciente:
+- **Comprobante de Pago cliente** (crear→ver→cancelar): correcto, con el bug de "B null" encontrado
+  y corregido en el camino (`ModalDetalleCobro.jsx`).
+- **7 hallazgos de Luciano**: 5 exactos, 2 fixes incompletos encontrados y corregidos (Posición IVA
+  sin ND de cliente, Libro IVA Ventas contando una cancelada).
+- **Cuenta Corriente combinable en el POS** (mig.369-372): probada con una venta real mixta
+  Efectivo+CC — correcta en los 3 niveles (comprobante, caja, CC, asiento).
+- **Cancelación de esa venta de prueba**: reveló un bug real (`cancelar_factura` reversaba el TOTAL
+  a CC en vez de la porción real) — corregido con mig.375, dato puntual arreglado, Balance de
+  Comprobación verificado después ($1.219.460 = $1.219.460).
+- **Mapa de Relaciones, factura pagada por CC parcial en 2 cuotas** (`FAC-20260827-002`): los 2
+  nodos "Cobro CC" ($3.600 + $1.900 = $5.500, exacto contra `facturas_saldo_pendiente`) se ven bien
+  en modo pantalla completa — el fix de scroll horizontal de Luciano (commit `2fced9a`) funciona.
+- **"Ronda 2" de UI** (mismo commit `2fced9a`): Totales de Factura fijos en el footer — verificado
+  visualmente. Modal de Cliente con shell flex-col (título/botones fijos, scroll solo en el cuerpo)
+  y Localidad/Provincia/Cód. Postal en 3 columnas — verificado creando (sin guardar) un cliente
+  nuevo.
+- **Catálogo / Proveedores / Compras (Fases 1-2)**: no fueron tocados por ningún cambio de hoy —
+  chequeo liviano por SQL (18 productos activos, 2 proveedores, 3 compras, 0 stock negativo) en vez
+  de repetir el walkthrough completo de UI ya hecho en sesiones previas.
+
+**Estado:** repaso completo, sin hallazgos pendientes. Ferretería NADIA queda en el mismo estado de
+datos que antes de esta sesión (toda prueba fue creada y revertida/cancelada por la propia app).
+
+---
+
 ## ✅ Repaso completo del plan sobre Ferretería NADIA (31/08) — Comprobante de Pago mostraba "B null"
 
 A pedido de Nadia, segunda pasada completa sobre Ferretería NADIA: ground-truth por SQL de Balance
