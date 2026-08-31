@@ -30,8 +30,29 @@ recibo). **Corregido**: ahora condiciona en `numero_afip` (no en `tipo_comproban
 fallback `|| ''` para que si algún día hay letra sin número no rompa el `.trim()`. `eslint` limpio,
 160/160 tests sin regresiones.
 
-**Siguiente paso:** falta probar en vivo la Cuenta Corriente combinable (mig.369-372) con una venta
-real de Ferretería NADIA por el POS — arrancado, sin terminar en el momento de escribir esta nota.
+**Cuenta Corriente combinable en el POS (mig.369-372), probada en vivo contra Ferretería NADIA:**
+venta real $2.500 (Cinta Métrica, Marcos Herrera) dividida $1.500 Efectivo + $1.000 Cuenta
+Corriente. Verificado por SQL: `estado_pago='parcial'`, `forma_pago='Efectivo + Cuenta Corriente'`;
+`movimientos_caja` ingreso $1.500 (solo la porción Efectivo); `cuenta_corriente_movimientos` DEBE
+$1.000 (solo la porción real de CC, no el total); asiento `AS-000029` balanceado con el split
+correcto (Debe 1.1.1 Caja $1.500 / Debe 1.1.2 Cuentas a Cobrar $1.000 / Debe 5.1 Costo $1.200 =
+Haber 4.1 Ventas $2.066,12 + Haber 2.1.3 IVA $433,88 + Haber 1.1.3 Mercaderías $1.200). **Todo
+correcto.**
+
+### 🔴 Hallazgo real, corregido (mig.375) — `cancelar_factura` reversaba el TOTAL a Cuenta Corriente, no la porción real de CC
+Al cancelar la venta de prueba de arriba (para no dejar rastro) apareció un bug real: la reversa
+HABER que genera `cancelar_factura` (mig.351) usaba `comprobantes.total` ($2.500, el total
+completo) en vez del monto que realmente estaba en Cuenta Corriente ($1.000) — un crédito de
+$1.500 de más para el cliente, sin respaldo real. Es la misma clase de bug que mig.374 ya había
+corregido en otros 3 lugares (`facturas_saldo_pendiente`, `registrar_cobro_cliente`,
+`crear_nota_credito`) tras introducirse la CC parcial en mig.372 — `cancelar_factura` quedó afuera
+de esa corrección porque es anterior (mig.351) y el bug recién se detectó al probar el ciclo
+completo de cancelación. `cancelar_nota_credito`/`cancelar_nota_debito` NO tenían este problema: su
+HABER/DEBE propio siempre es el 100% de su propio total, sin concepto de "parcial".
+**Corregido (mig.375)**: la reversa ahora usa `monto_cc_original_comprobante()` (mig.374) en vez de
+`comprobantes.total`. Se corrigió también puntualmente la fila ya afectada por el bug (la del test
+de arriba, ahora en $1.000, neto $0 con el DEBE original). Balance de Comprobación de Ferretería
+NADIA verificado después del fix: $1.219.460 = $1.219.460, cuadra.
 
 ---
 
