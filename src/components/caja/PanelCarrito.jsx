@@ -533,7 +533,21 @@ function PanelCarrito({
       // veía no estaba fuera del panel, estaba DENTRO, entre este div y el
       // borde del wrapper. Fix: este div se limita a llenar el 100% de lo que
       // el wrapper le dé — el ancho se controla en un solo lugar.
-      className="w-full flex flex-col min-h-0"
+      //
+      // BUG REAL (01/09, encontrado por Nadia): el ancho ya llenaba el 100%
+      // del wrapper, pero el ALTO no — a este div le faltaba `flex-1`. El
+      // wrapper (ModoCajaLayout, fila flex) sí le daba toda la altura
+      // disponible (stretch), pero DENTRO de un contenedor flex-col un hijo
+      // sin flex-grow no hereda esa altura: se achica a lo que mide su propio
+      // contenido. Con pocos ítems en el carrito, eso dejaba una franja negra
+      // vacía abajo del botón "Confirmar Venta" — el alto real del panel
+      // quedaba más chico de lo que había disponible, así que se veían menos
+      // productos cargados de los que entrarían, obligando a scrollear antes
+      // de lo necesario. `flex-1` hace que este div ocupe toda la altura que
+      // el wrapper ya le estaba dando, empujando el footer (medio de pago +
+      // totales + confirmar) al fondo real y dejándole a la lista de ítems
+      // (flex-1 interno, más abajo) todo el espacio vertical que sobra.
+      className="w-full flex-1 flex flex-col min-h-0"
       style={{ borderLeft: '1px solid rgb(var(--kx-border))' }}
     >
       {/* Selector de cliente */}
