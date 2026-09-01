@@ -1,5 +1,22 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Cierre del pendiente de Nadia: try/catch faltante en Recuento/Revalorización de Inventario (01/09)
+
+Al retomar la sesión, único pendiente real que quedó marcado (no crítico) en el cierre de Nadia: 2
+de los 8 call-sites de `fecha_en_periodo_cerrado` en `planCuentasService.ts`
+(`crearAsientoRecuentoInventario` y `crearAsientoRevalorizacionInventario`) no tenían el `try/catch`
+defensivo que ya usan los otros 6 — con el GRANT de mig.376 ya no revientan, pero seguían siendo el
+único lugar sin ese resguardo si algo similar volviera a pasar (RPC caída, timeout, etc.).
+
+**Fix:** mismo patrón que ya usan `crearAsientoNotaCliente`/`crearAsientoNotaProveedor`/etc. — el
+chequeo de período cerrado queda envuelto en `try { ...; if (cerrado) throw Error(...) } catch (e) {
+if (e.message?.startsWith('Período cerrado:')) throw e; }`: si la RPC falla por cualquier otro
+motivo, no bloquea la generación del asiento; si el período está realmente cerrado, sí se propaga.
+`tsc --noEmit` sin errores nuevos (los que aparecen son preexistentes en `ordenesCompraService.ts`/
+`paymentRunService.ts`, no tocados), 160/160 tests, `vite build` OK.
+
+---
+
 ## 📋 Cierre de sesión 01/09 (Nadia) — para que Luciano siga
 
 Día largo. **Todo commiteado, pusheado y en producción** — nada quedó a medias.
