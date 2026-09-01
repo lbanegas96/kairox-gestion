@@ -1,5 +1,25 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Ronda 4: Mapa de Relaciones usa todo el alto del popup (01/09)
+
+Luciano, sobre la Ronda 3 (nido plegable): "se sigue cortando arriba, usa todo el popup, pegá al
+footer los comprobantes así liberás espacio... así no solo se despliegan a la derecha generando un
+scroll sino que con más espacio se pueden ajustar y quedar visibles en toda la superficie". El
+diagnóstico real: con el popup ya grande (`size="wide"`, Ronda 3), el contenido interno seguía
+siendo un `space-y-5` de bloques planos — cada sección ocupaba solo su alto natural y quedaba
+apretado arriba, con todo el resto del popup vacío entre la leyenda y el botón Cerrar.
+
+Fix (venta y compra, `MapaRelaciones.jsx`): el wrapper pasa de `space-y-5` a `flex flex-col
+min-h-full`, y la sección "Cadena de documentos" es la que crece (`flex-1`) para ocupar TODO ese
+espacio libre — Resumen/Hermanas/Derivados/Leyenda se quedan con su alto natural (`shrink-0`). La
+fila de tarjetas en sí pasa de `overflow-x-auto` (una sola fila, scroll horizontal) a `flex-wrap
+content-start overflow-y-auto` — con más alto real disponible, las tarjetas se acomodan en varias
+filas. Verificado en vivo: el nido desplegado (7 pasos: Entrega→Factura→Cobro CC→4 Pagos al
+Contado) ahora se ve completo en 2 filas sin ningún scroll, antes necesitaba scrollear a la derecha
+para ver los últimos pagos.
+
+---
+
 ## ✅ Ronda 3: nido interactivo en Mapa de Relaciones, Recibo de Pago ajustado, modal de Cliente ×2 (31/08)
 
 Tercera vuelta de pulido sobre lo mismo que las dos rondas anteriores — Luciano siguió probando en

@@ -1290,14 +1290,27 @@ function MapaRelaciones({
 
           {/* ── VENTAS: con relaciones ─────────────────────────────────────── */}
           {!loading && mapa?.modo === 'venta' && !sinRelacionesVenta && (
-            <div className="space-y-5">
+            // flex-col + min-h-full (31/08, hallazgo Luciano: "se sigue
+            // cortando arriba, usa todo el popup... pegá al footer los
+            // comprobantes así liberás espacio") — antes esto era un simple
+            // `space-y-5` de bloques: cada sección ocupaba solo su alto
+            // natural y el resto del popup (que ahora es grande, size="wide")
+            // quedaba vacío entre la leyenda y el botón Cerrar. Acá la
+            // sección "Cadena de documentos" es la que crece (`flex-1`) para
+            // ocupar TODO ese espacio libre — Resumen/Hermanas/Derivados/
+            // Leyenda se quedan con su alto natural (`shrink-0`).
+            <div className="flex flex-col gap-5 min-h-full">
               <ResumenCircuito pasos={pasosVenta} total={mapa.comp.total} derivados={derivadosVenta} />
 
-              <div>
-                <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider mb-3">
+              <div className="flex-1 min-h-0 flex flex-col">
+                <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider mb-3 shrink-0">
                   Cadena de documentos
                 </p>
-                <div className="flex items-start gap-0 overflow-x-auto pb-1">
+                {/* flex-wrap en vez de una sola fila con scroll horizontal —
+                    con más alto disponible (ver arriba), las tarjetas se
+                    acomodan en varias filas y quedan visibles de una sin
+                    tener que desplazarse a la derecha. */}
+                <div className="flex-1 min-h-0 flex flex-wrap content-start items-start gap-y-3 gap-x-0 overflow-y-auto pr-1">
                   {mapa.origen && (() => {
                     const n = {
                       id:     mapa.origen.id,
@@ -1517,14 +1530,15 @@ function MapaRelaciones({
 
           {/* ── COMPRAS: con relaciones ────────────────────────────────────── */}
           {!loading && mapa?.modo === 'compra' && !sinRelacionesCompra && (
-            <div className="space-y-5">
+            // Mismo criterio que el bloque de Ventas de arriba (31/08).
+            <div className="flex flex-col gap-5 min-h-full">
               <ResumenCircuito pasos={pasosCompra} total={mapa.compra.total} derivados={derivadosCompra} />
 
-              <div>
-                <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider mb-3">
+              <div className="flex-1 min-h-0 flex flex-col">
+                <p className="text-2xs font-semibold text-kx-text-3 uppercase tracking-wider mb-3 shrink-0">
                   Cadena de documentos
                 </p>
-                <div className="flex items-start gap-0 overflow-x-auto pb-1">
+                <div className="flex-1 min-h-0 flex flex-wrap content-start items-start gap-y-3 gap-x-0 overflow-y-auto pr-1">
                   {/* Recepciones previas */}
                   {mapa.recepciones.map((r) => {
                     const n = { id: r.id, tipo: 'recepcion', numero: r.numero_recepcion, fecha: r.fecha, estado: r.estado };
