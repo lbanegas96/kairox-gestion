@@ -7,16 +7,21 @@ export function printElementById(elementId) {
   style.id = 'kx-print-style';
   style.textContent = `
     @media print {
-      /* 210mm x 210mm en vez de A4 completo (297mm) — 30/08, hallazgo
-         Luciano: "que se ajuste más a la hoja". El Recibo de Pago es un
-         comprobante corto (cabecera + un monto + tabla chica + firma); a
-         página A4 completa le sobraba casi un tercio en blanco abajo. Se
-         recorta con margen (si algún recibo con muchas imputaciones no
-         entra, el navegador lo pagina a una segunda hoja en vez de cortar
-         contenido — nunca hay pérdida de datos). Esta función solo la usa
-         ReciboPago.jsx (ver grep de callers) — no comparte @page con
-         Ticket/Factura, así que este cambio no los afecta. */
-      @page { size: 210mm 210mm; margin: 15mm; }
+      /* A4 estándar, igual que FacturaPDF.jsx (react-pdf usa <Page
+         size="A4">) — 01/09, hallazgo Luciano comparando el PDF real de una
+         Factura contra el de un Comprobante de Pago: el tamaño custom
+         "210mm 210mm" que se probó el 30/08 para evitar el espacio en
+         blanco NO es un tamaño de papel estándar, y el driver de impresión
+         (probado con "Microsoft Print to PDF") no lo reconoce — cae a su
+         tamaño por defecto (Carta/Letter, 612x792pt) en vez de A4, dando un
+         PDF con proporciones distintas a las de la Factura (595x842pt,
+         confirmado leyendo el /MediaBox de ambos PDF). Volver a A4
+         garantiza el mismo tamaño de página en cualquier impresora/driver,
+         al costo de que un recibo corto vuelva a dejar espacio en blanco
+         abajo — mismo trade-off que ya acepta la Factura real. Esta función
+         solo la usa ReciboPago.jsx (ver grep de callers) — no comparte
+         @page con Ticket/Factura, así que este cambio no los afecta. */
+      @page { size: A4; margin: 15mm; }
       body * { visibility: hidden !important; }
       #${elementId}, #${elementId} * { visibility: visible !important; }
       #${elementId} {

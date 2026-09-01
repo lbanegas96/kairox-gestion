@@ -1,5 +1,22 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Ronda 5: Comprobante de Pago vuelve a A4 — el tamaño custom rompía con el driver de impresión (01/09)
+
+Luciano mandó dos PDF reales para comparar: la Factura descargada (formato correcto) y el
+Comprobante de Pago impreso a PDF (formato roto), pidiendo "tomá de ejemplo los tamaños de
+impresión de la factura y aplicalos en los pagos". Se leyó el `/MediaBox` de ambos PDF: la Factura
+salió exactamente A4 (595×842pt, generada con `@react-pdf/renderer`, `<Page size="A4">`); el
+Comprobante de Pago salió en **Carta/US Letter** (612×792pt) — el tamaño custom "210mm×210mm" que
+se le puso en la Ronda 3 (31/08) para evitar el espacio en blanco no es un tamaño de papel estándar,
+y el driver de impresión probado ("Microsoft Print to PDF") no lo reconoció, cayendo a su tamaño
+por defecto (Carta) en vez de A4. Fix en `printRecibo.js`: `@page` vuelve a `size: A4; margin:
+15mm;` — mismo formato de página que la Factura real, garantizado en cualquier impresora/driver, al
+costo de que un recibo corto vuelva a dejar algo de espacio en blanco abajo (mismo trade-off que ya
+acepta la Factura). Sin cambios en `ReciboPago.jsx` — su ancho interno (180mm) ya estaba calculado
+para el margen de 15mm de una hoja de 210mm de ancho, así que sigue siendo válido en A4.
+
+---
+
 ## ✅ Ronda 4: Mapa de Relaciones usa todo el alto del popup (01/09)
 
 Luciano, sobre la Ronda 3 (nido plegable): "se sigue cortando arriba, usa todo el popup, pegá al
