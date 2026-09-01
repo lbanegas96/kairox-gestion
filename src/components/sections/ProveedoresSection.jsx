@@ -22,8 +22,7 @@ import { formatDateAR, getNowAR } from '@/lib/dateUtils';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { getEmpresaParaPDF } from '@/lib/empresaUtils';
 import TabAntiguedad from '@/components/cuenta-corriente/TabAntiguedad';
-import ReciboPago from '@/components/shared/ReciboPago';
-import { printElementById } from '@/lib/printRecibo';
+import { imprimirReciboPago } from '@/lib/imprimirRecibo';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const CONDICIONES_IVA = ['RI', 'Monotributo', 'Exento', 'CF', 'No Categorizado'];
@@ -60,9 +59,6 @@ function ProveedoresSection() {
   const [runOpen, setRunOpen]       = useState(false);
   const [pagoOpen, setPagoOpen]     = useState(false);
   const [pagoForm, setPagoForm]     = useState({ monto: '', descripcion: '', metodo: 'Efectivo', forma_pago_id: '', referencia_pago: '' });
-  // Comprobante de Pago imprimible (item 6, 22/08) — mismo criterio que en
-  // Cuenta Corriente de clientes: un solo nodo oculto, no un historial.
-  const [lastRecibo, setLastRecibo] = useState(null);
   // Imputación por factura (Open Item clearing, migration 169/170) — opcional.
   // Si no se imputa nada, el pago se comporta igual que siempre (reduce el
   // saldo corrido, sin marcar ninguna compra puntual como cancelada).
@@ -197,16 +193,7 @@ function ProveedoresSection() {
     onSuccess: (data, variables) => {
       qc.invalidateQueries({ queryKey: PROV_KEYS.cuentaCorriente(detalleId) });
       invalidate();
-      toast({
-        title: 'Pago registrado ✓',
-        className: 'bg-green-600 text-white',
-        action: (
-          <ToastAction altText="Imprimir comprobante" onClick={() => printElementById('kx-recibo-print')}>
-            Imprimir
-          </ToastAction>
-        ),
-      });
-      setLastRecibo({
+      const reciboData = {
         tipo: 'pago',
         movimientoId: data?.ccp_id,
         fecha: new Date().toISOString(),
@@ -219,6 +206,21 @@ function ProveedoresSection() {
         saldoAnteriorTotal: saldo,
         saldoNuevoTotal: saldo - variables.monto,
         empresa: empresaData,
+      };
+      toast({
+        title: 'Pago registrado ✓',
+        className: 'bg-green-600 text-white',
+        action: (
+          <ToastAction
+            altText="Descargar comprobante en PDF"
+            onClick={() => imprimirReciboPago(reciboData).catch(error => {
+              console.error('[ProveedoresSection] Error al generar PDF:', error);
+              toast({ title: 'Error al generar el comprobante', description: error.message, variant: 'destructive' });
+            })}
+          >
+            Descargar PDF
+          </ToastAction>
+        ),
       });
       // El RPC genera el asiento en la misma transacción, no bloqueante: si falla
       // (período cerrado o cuenta faltante), el pago igual se registra sin avisar.
@@ -978,9 +980,6 @@ function ProveedoresSection() {
       </Dialog>
 
       <PaymentRunModal empresaId={empresaId} formasPago={formasPago} open={runOpen} onOpenChange={setRunOpen} />
-
-      {/* Comprobante de Pago imprimible — item 6 del plan de rediseño (22/08). */}
-      <ReciboPago recibo={lastRecibo} />
     </div>
   );
 }

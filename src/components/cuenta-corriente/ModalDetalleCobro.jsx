@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Banknote, Loader2, Ban, Printer, ExternalLink } from 'lucide-react';
+import { Banknote, Loader2, Ban, Download, ExternalLink } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
@@ -13,9 +13,8 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { formatDateTimeAR } from '@/lib/dateUtils';
-import { printElementById } from '@/lib/printRecibo';
+import { imprimirReciboPago } from '@/lib/imprimirRecibo';
 import { getEmpresaParaPDF } from '@/lib/empresaUtils';
-import ReciboPago from '@/components/shared/ReciboPago';
 
 // "Comprobante de Pago" — detalle de un Cobro como documento propio, mismo
 // nivel que SaleDetailModal/ModalDetalleEntrega (29/08, pedido de Luciano:
@@ -35,6 +34,7 @@ function ModalDetalleCobro({ movimientoId, open, onOpenChange, onUpdate, onNavig
   const [showCancelarConfirm, setShowCancelarConfirm] = useState(false);
   const [motivoCancelacion, setMotivoCancelacion] = useState('');
   const [cancelando, setCancelando] = useState(false);
+  const [imprimiendo, setImprimiendo] = useState(false);
 
   useEffect(() => {
     if (open && movimientoId) {
@@ -214,8 +214,24 @@ function ModalDetalleCobro({ movimientoId, open, onOpenChange, onUpdate, onNavig
               className="dark:text-kx-text dark:border-kx-border dark:hover:bg-slate-800">
               Cerrar (Esc)
             </Button>
-            <Button onClick={() => printElementById('kx-recibo-print')} className="bg-blue-600 hover:bg-blue-700 text-white">
-              <Printer className="w-4 h-4 mr-2" /> Imprimir
+            <Button
+              onClick={async () => {
+                setImprimiendo(true);
+                try {
+                  await imprimirReciboPago(recibo);
+                } catch (error) {
+                  console.error('[ModalDetalleCobro] Error al generar PDF:', error);
+                  toast({ title: 'Error al generar el comprobante', description: error.message, variant: 'destructive' });
+                } finally {
+                  setImprimiendo(false);
+                }
+              }}
+              disabled={imprimiendo || !recibo}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {imprimiendo
+                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generando...</>
+                : <><Download className="w-4 h-4 mr-2" /> Descargar PDF</>}
             </Button>
           </div>
         </DialogFooter>
@@ -262,8 +278,6 @@ function ModalDetalleCobro({ movimientoId, open, onOpenChange, onUpdate, onNavig
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <ReciboPago recibo={recibo} />
     </Dialog>
   );
 }

@@ -1,6 +1,37 @@
 # KAIROX Gestión — Contexto de Sesión
 
-## ✅ Ronda 5: Comprobante de Pago vuelve a A4 — el tamaño custom rompía con el driver de impresión (01/09)
+## ✅ Ronda 6: Comprobante de Pago — PDF real (react-pdf), no más window.print() (01/09)
+
+La Ronda 5 (`@page: size: A4`) NO alcanzó: Luciano mandó un tercer PDF ("Pago Recibido3.pdf") y
+seguía saliendo Carta/Letter (612×792pt) pese al fix. Diagnóstico correcto esta vez: el problema
+nunca fue el valor del `@page` — es que `window.print()` contra el destino "Microsoft Print to PDF"
+(un PRINTER de Windows, no el "Guardar como PDF" nativo de Chrome) simplemente no respeta el CSS de
+tamaño de página, sea cual sea el valor. La Factura nunca tuvo este problema porque no pasa por el
+diálogo de impresión del navegador: se genera como PDF real con `@react-pdf/renderer`
+(`FacturaPDF.jsx`) y se descarga directo, con su A4 ya fijo en el archivo.
+
+**Fix real:** se migró el Comprobante de Pago/Cobro al mismo mecanismo.
+- `src/components/shared/pdf/ReciboPagoPDF.jsx` (nuevo) — mismo componente que antes vivía en
+  `ReciboPago.jsx` (HTML/Tailwind), reescrito como PDF real con `@react-pdf/renderer`, mismos
+  colores/proporciones que `FacturaPDF.jsx` (navy/blue/slate), `<Page size="A4">`.
+- `src/lib/imprimirRecibo.jsx` (nuevo, reemplaza `printRecibo.js`) — genera el blob con
+  `pdf(<ReciboPagoPDF/>).toBlob()` y lo descarga con `<a download>` + `.click()`, **igual patrón
+  que `handleDownloadPDF` de la Factura** (no `window.open`: se probó y un popup queda bloqueado
+  incluso disparado desde un click real del usuario — la descarga programática no pasa por ese
+  bloqueo).
+- `ModalDetalleCobro.jsx` / `ProveedoresSection.jsx` — el botón "Imprimir" pasa a "Descargar PDF"
+  (ícono `Download`), llama a `imprimirReciboPago(recibo)` en vez de `printElementById()`.
+- Se eliminaron `src/components/shared/ReciboPago.jsx` y `src/lib/printRecibo.js` (sin más
+  callers — confirmado por grep).
+
+Verificado en vivo: Mapa de Relaciones → nodo "Cobro CC" → Comprobante de Pago → "Descargar PDF"
+genera el blob sin errores (probado también por consola, `imprimirReciboPago` corre limpio). Un PDF
+generado así trae su tamaño A4 fijo en el archivo — no depende de ningún driver de impresora, mismo
+nivel de confiabilidad que ya tiene la Factura.
+
+---
+
+## ✅ Ronda 5: Comprobante de Pago vuelve a A4 — el tamaño custom rompía con el driver de impresión (01/09, INSUFICIENTE — ver Ronda 6)
 
 Luciano mandó dos PDF reales para comparar: la Factura descargada (formato correcto) y el
 Comprobante de Pago impreso a PDF (formato roto), pidiendo "tomá de ejemplo los tamaños de
