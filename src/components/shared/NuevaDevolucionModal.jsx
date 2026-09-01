@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Undo2, RotateCcw, Loader2, AlertCircle } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import ClienteSelector from '@/components/shared/ClienteSelector';
+import { formatDateAR } from '@/lib/dateUtils';
 
 // Config por tipo — la diferencia de negocio real: cliente permite modo standalone
 // (sin origen, elige Cliente + reembolso en efectivo hacia afuera) y fetch-ea siempre
@@ -103,6 +104,18 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
 
   const [clientes, setClientes]                   = useState([]);
   const [clienteId, setClienteId]                 = useState('');
+  // Factura de origen elegida a mano — sólo aplica al modo standalone de
+  // cliente (botón "Nueva Devolución" en Devoluciones, sin factura
+  // preseleccionada). Bug real (01/09, Nadia): ese modo dejaba elegir un
+  // cliente pero nunca daba forma de agregar ítems — "Registrar Devolución"
+  // siempre rebotaba con "Ingresá al menos un ítem", sin ninguna manera de
+  // cumplirlo. Fix: una vez elegido el cliente, se resuelve acá mismo un
+  // segundo selector con SUS facturas, igual que ya hacía "Devolver
+  // mercadería" desde Facturas (que sí funcionaba, porque llega con `origen`
+  // ya resuelto por el caller).
+  const [facturaId, setFacturaId]                 = useState('');
+  const [facturasCliente, setFacturasCliente]     = useState([]);
+  const [loadingFacturas, setLoadingFacturas]     = useState(false);
   const [items, setItems]                         = useState([]);
   const [cantidades, setCantidades]               = useState({});
   const [reingresaStock, setReingresaStock]       = useState(cfg.reingresaDefault);
@@ -110,6 +123,22 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
   const [motivo, setMotivo]                       = useState('');
   const [loadingItems, setLoadingItems]           = useState(false);
   const [saving, setSaving]                       = useState(false);
+
+  // "Origen efectivo": el `origen` que llega por prop (modo "Devolver
+  // mercadería", ya resuelto por el caller) o, en modo standalone de
+  // cliente, el que se resuelve acá con la factura elegida a mano. El resto
+  // del componente (fetch de ítems, título, RPC) usa siempre este valor en
+  // vez del prop crudo para no distinguir los dos caminos en cada lugar.
+  const facturaSeleccionada = facturasCliente.find(f => f.id === facturaId) ?? null;
+  const clienteSeleccionado = clientes.find(c => c.id === clienteId) ?? null;
+  const origenEfectivo = origen ?? (facturaSeleccionada
+    ? {
+        id:            facturaSeleccionada.id,
+        numero:        facturaSeleccionada.numero_afip ?? facturaSeleccionada.numero_venta,
+        entidadId:     clienteId,
+        entidadNombre: clienteSeleccionado?.nombre,
+      }
+    : null);
 
   // Cliente: cargar maestro de clientes (solo modo standalone)
   useEffect(() => {
@@ -119,31 +148,56 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
       .then(({ data }) => setClientes(data || []));
   }, [tipo, isOpen, user?.empresa_id]);
 
-  // Cargar ítems disponibles a devolver
+  // Sincronizar clienteId cuando el origen viene resuelto por el caller
+  // ("Devolver mercadería" desde Facturas) — en modo standalone `origen` es
+  // siempre null acá, así que esto no pisa la selección manual del usuario.
+  useEffect(() => {
+    if (tipo === 'cliente' && origen) setClienteId(origen.entidadId || '');
+  }, [tipo, origen]);
+
+  // Modo standalone: una vez elegido el cliente, traer SUS facturas para el
+  // segundo selector. Se salta con `origen` presente (ya viene resuelto).
+  useEffect(() => {
+    if (tipo !== 'cliente' || !isOpen || origen) { setFacturasCliente([]); setFacturaId(''); return; }
+    if (!clienteId || !user?.empresa_id) { setFacturasCliente([]); setFacturaId(''); return; }
+    setLoadingFacturas(true);
+    setFacturaId('');
+    supabase.from('comprobantes')
+      .select('id, numero_venta, numero_afip, fecha, total')
+      .eq('empresa_id', user.empresa_id)
+      .eq('cliente_id', clienteId)
+      .eq('tipo', 'venta')
+      .neq('estado_pago', 'cancelada')
+      .order('fecha', { ascending: false })
+      .then(({ data }) => {
+        setFacturasCliente(data || []);
+        setLoadingFacturas(false);
+      });
+  }, [tipo, isOpen, origen, clienteId, user?.empresa_id]);
+
+  // Cargar ítems disponibles a devolver, una vez que hay un origen efectivo
+  // (prop, o factura elegida a mano en modo standalone).
   useEffect(() => {
     if (!isOpen || !user?.empresa_id) return;
-    if (tipo === 'cliente') {
-      setClienteId(origen?.entidadId || '');
-      if (!origen?.id) { setItems([]); setCantidades({}); return; }
-    } else if (!origen?.id) {
-      setItems([]); setCantidades({});
-      return;
-    }
+    if (tipo === 'proveedor' && !origen?.id) { setItems([]); setCantidades({}); return; }
+    if (tipo === 'cliente' && !origenEfectivo?.id) { setItems([]); setCantidades({}); return; }
 
     setLoadingItems(true);
-    fetchItems(tipo, origen, user.empresa_id).then(disponibles => {
+    fetchItems(tipo, tipo === 'cliente' ? origenEfectivo : origen, user.empresa_id).then(disponibles => {
       setItems(disponibles);
       const initCants = {};
       disponibles.forEach(i => { initCants[i.id] = i.hecha - Number(i.cantidad_devuelta || 0); });
       setCantidades(initCants);
       setLoadingItems(false);
     });
-  }, [tipo, isOpen, origen?.id, origen?.fuente, user?.empresa_id]);
+  }, [tipo, isOpen, origen?.id, origen?.fuente, origenEfectivo?.id, user?.empresa_id]);
 
   // Reset al cerrar
   useEffect(() => {
     if (!isOpen) {
       setClienteId('');
+      setFacturaId('');
+      setFacturasCliente([]);
       setItems([]);
       setCantidades({});
       setReingresaStock(cfg.reingresaDefault);
@@ -160,6 +214,10 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
 
     if (tipo === 'cliente' && !origen && !efectivoEntidadId) {
       toast({ title: 'Seleccioná un cliente', variant: 'destructive' });
+      return;
+    }
+    if (tipo === 'cliente' && !origen && !facturaId) {
+      toast({ title: 'Seleccioná la factura de origen', variant: 'destructive' });
       return;
     }
     if (tipo === 'proveedor' && !origen?.id) {
@@ -191,7 +249,11 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
         p_tipo:               cfg.rpcTipo,
         p_items:              itemsToReturn,
         [cfg.rpcEntidadParam]: efectivoEntidadId || null,
-        [cfg.rpcDocParam]:     tipo === 'proveedor' && origen.fuente === 'compra' ? origen.id : (tipo === 'cliente' ? origen?.id || null : null),
+        // Bug real (01/09): acá usaba `origen?.id` crudo — en modo standalone
+        // (factura elegida a mano, sin `origen` prop) esto siempre mandaba
+        // null aunque hubiera una factura real seleccionada. `origenEfectivo`
+        // cubre los dos caminos.
+        [cfg.rpcDocParam]:     tipo === 'proveedor' && origen.fuente === 'compra' ? origen.id : (tipo === 'cliente' ? origenEfectivo?.id || null : null),
         p_reingresa_stock:    reingresaStock,
         p_reembolso_efectivo: reembolsoEfectivo,
         p_motivo:             motivo.trim() || null,
@@ -232,17 +294,24 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
     }
   };
 
-  const esModoComp   = tipo === 'proveedor' ? true : !!origen;
+  // esModoComp: true cuando ya hay un origen resuelto (prop, o factura
+  // elegida a mano) — ahí recién tiene sentido mostrar la tabla de ítems.
+  const esModoComp   = tipo === 'proveedor' ? true : !!origenEfectivo;
   const tieneItems   = items.length > 0;
-  const puedeGuardar = !saving && (tipo === 'cliente' && !esModoComp ? true : tieneItems && total > 0);
+  // Antes tenía una rama "true" para cliente sin origen — pero
+  // `crear_devolucion` siempre exigió al menos un ítem (ver el guard de
+  // `itemsToReturn.length === 0` de arriba), así que esa rama nunca guardaba
+  // de verdad: dejaba el botón habilitado sobre un formulario que iba a
+  // rebotar sí o sí. Ahora exige ítems reales siempre, en los dos modos.
+  const puedeGuardar = !saving && tieneItems && total > 0;
   const Icon = cfg.icon;
 
   const tituloOrigen = tipo === 'cliente'
-    ? (origen ? `Nueva Devolución — ${origen.numero}` : 'Nueva Devolución')
+    ? (origenEfectivo ? `Nueva Devolución — ${origenEfectivo.numero}` : 'Nueva Devolución')
     : `Devolución a Proveedor${origen?.numero ? ` — ${origen.fuente === 'oc' ? `OC ${origen.numero}` : origen.numero}` : ''}`;
 
   const descripcion = tipo === 'cliente'
-    ? (origen ? `Devolución de ${origen.entidadNombre || 'Cliente'}` : 'Registrar devolución de cliente')
+    ? (origenEfectivo ? `Devolución de ${origenEfectivo.entidadNombre || 'Cliente'}` : 'Registrar devolución de cliente')
     : (origen?.entidadNombre ? `Proveedor: ${origen.entidadNombre}` : 'Registrar devolución');
 
   return (
@@ -266,9 +335,41 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
               <ClienteSelector
                 clientes={clientes}
                 value={clienteId}
-                onChange={setClienteId}
+                onChange={c => { setClienteId(c); setFacturaId(''); }}
                 onClienteCreado={c => { setClientes(p => [...p, c]); setClienteId(c.id); }}
               />
+            </div>
+          )}
+
+          {/* Factura de origen (modo standalone) — recién aparece con un
+              cliente elegido; es la que resuelve `origenEfectivo` y habilita
+              la tabla de ítems de más abajo. */}
+          {tipo === 'cliente' && !origen && clienteId && (
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium dark:text-slate-300">Factura de origen</Label>
+              {loadingFacturas ? (
+                <div className="flex items-center gap-2 text-sm text-kx-text-3 py-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Cargando facturas...
+                </div>
+              ) : facturasCliente.length === 0 ? (
+                <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-amber-700 dark:text-amber-400 text-sm">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  Este cliente no tiene facturas registradas.
+                </div>
+              ) : (
+                <select
+                  value={facturaId}
+                  onChange={e => setFacturaId(e.target.value)}
+                  className="w-full h-10 rounded-lg border border-kx-border bg-kx-surface text-sm dark:text-kx-text px-3 focus:ring-1 focus:ring-[rgb(var(--kx-violet))] focus:outline-none"
+                >
+                  <option value="">Elegí la factura...</option>
+                  {facturasCliente.map(f => (
+                    <option key={f.id} value={f.id}>
+                      {f.numero_afip ?? f.numero_venta} — {formatDateAR(f.fecha)} — ${Number(f.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           )}
 

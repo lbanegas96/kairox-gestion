@@ -1,5 +1,46 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ RESUELTO (01/09, Nadia) — "Nueva Devolución" era un callejón sin salida, nunca tuvo forma de agregar ítems
+
+Nadia: "en devolución cuando clickeo en nueva devolución no me sale para agregar items, es asi? o
+como funciona?" — no era una duda, era un bug real, confirmado en vivo contra Nalux antes de tocar
+nada.
+
+**Diagnóstico:** `NuevaDevolucionModal.jsx` (compartido por venta/compra) tiene dos caminos para
+devoluciones de cliente:
+- **"Devolver mercadería"** (menú ⋮ de una factura, en Facturas) — abre el modal con `origen` ya
+  resuelto por el caller (la factura clickeada). Ahí sí carga los ítems. Siempre funcionó.
+- **"Nueva Devolución"** (botón en la pestaña Devoluciones) — abre el modal SIN `origen` (modo
+  standalone). Sólo mostraba el selector de Cliente — **nunca hubo ninguna UI para elegir ítems** en
+  este camino. Tocar "Registrar Devolución" siempre rebotaba con "Ingresá al menos un ítem con
+  cantidad mayor a 0", sin ninguna forma de cumplirlo. Confirmado en vivo: se reproduce el error
+  tal cual. Nunca funcionó desde que existe — no es una regresión de esta semana.
+
+**Decisión con Nadia:** agregar un paso intermedio (elegir la factura del cliente, no sacar el
+botón).
+
+**Fix (`NuevaDevolucionModal.jsx`):** una vez elegido el Cliente en modo standalone, aparece un
+segundo selector "Factura de origen" con las facturas de ESE cliente (`comprobantes`, `tipo='venta'`,
+no canceladas). Al elegir una, se arma un `origenEfectivo` (mismo shape que ya usa el modo
+"Devolver mercadería") que dispara el mismo fetch de ítems y el mismo flujo de siempre — no se
+duplicó lógica, se unificaron los dos caminos para que usen el mismo dato resuelto.
+
+De paso, se corrigió un bug de datos silencioso en el mismo archivo: el parámetro que la RPC manda
+como `p_comprobante_id` usaba `origen?.id` crudo — en modo standalone eso iba a mandar `null`
+aunque hubiera factura elegida (la variable nunca se actualizaba). Y `puedeGuardar` tenía una rama
+`true` para cliente-sin-origen que dejaba el botón habilitado sobre un formulario que iba a rebotar
+sí o sí (la RPC siempre exigió al menos un ítem) — se sacó, ahora exige ítems reales siempre.
+
+**Verificado en vivo (dev local, Nalux real):** con Katy — Cliente → aparece "Factura de origen" →
+elegí `FAC-20260829-005 ($121.000)` → cargó los mismos 4 ítems que "Devolver mercadería" carga para
+esa misma factura (Batidora Eléctrica, Camiseta Argentina, aromaza, Batidora Eléctrica). Cambiar de
+cliente resetea la factura y los ítems sin arrastrar nada. El camino "Devolver mercadería" (ya
+andaba) se volvió a probar después del cambio — sin regresión, idéntico a antes. `eslint` limpio (0
+errores, mismos warnings preexistentes del archivo). No se confirmó ninguna devolución real — sólo
+se verificó que el botón queda habilitado con el flujo completo armado.
+
+---
+
 ## ✅ RESUELTOS (01/09, Nalux) — 2 modificaciones de POS + 3 gaps de permisos encontrados al investigar "pantalla en negro"
 
 **Pedido de Nadia — Medio de pago colapsable en el POS:** la grilla de medios de pago
