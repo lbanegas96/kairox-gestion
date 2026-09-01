@@ -36,6 +36,193 @@ provincia/condición del cliente al facturar), es una feature nueva, no algo que
 
 ---
 
+## 📋 Cierre de sesión 31/08 (Nadia) — para que Luciano siga
+
+Día de revisión y repaso, sin código nuevo de features — todo lo de abajo salió de **probar en vivo
+lo que vos armaste ayer/anteayer** (CC combinable, Comprobante de Pago, Mapa de Relaciones, Ronda 2
+de UI) contra datos reales, en vez de confiar en los mensajes de commit. **Todo commiteado, pusheado
+a GitHub y en producción** — nada quedó a mitad de camino.
+
+**Fase 9 (Tiendanube/MercadoPago) — se retomó y se volvió a diferir a propósito.** Nadia pidió
+arrancarla; se confirmó de nuevo que ninguna de las dos integraciones está conectada para Ferretería
+NADIA, y conectarlas requiere un OAuth real desde SU sesión — no se debe intentar sin que ella lo
+haga en persona. Sigue pendiente, sin tocar.
+
+**Nalux real:**
+- Se probó en vivo el ciclo completo de "Comprobante de Pago" (crear→ver→cancelar un cobro real) —
+  lo único que habías dejado explícitamente sin probar. Funciona igual que después se confirmó
+  contra Ferretería NADIA: la factura pasa a "pagada", el comprobante se abre sin cerrar el modal, y
+  "Cancelar Cobro" revierte todo (factura vuelve al estado anterior).
+- Revisión general de salud sobre Nalux además de eso: sin hallazgos nuevos más allá del GRANT
+  faltante de `usar_caea_para_comprobante` (mig.366, detalle más abajo) — ya corregido.
+
+**Ferretería NADIA — dos pasadas:**
+1. Los 7 hallazgos que vos habías marcado como cerrados en código: 5 cerraron exactos, **2 fixes
+   quedaron incompletos** y se corrigieron en el momento (Posición IVA sin ND de cliente, Libro IVA
+   Ventas contando una venta cancelada). Detalle en la sección de más abajo.
+2. A pedido de Nadia, repaso completo de todo el plan de nuevo (dado el volumen de cambios tuyos de
+   ayer) — de ahí salió el hallazgo más importante del día:
+
+### 🔴→✅ `cancelar_factura` reversaba el TOTAL del comprobante a Cuenta Corriente, no la porción real de CC (mig.375)
+Al cancelar una venta de prueba con CC combinable (Efectivo + CC, mig.369-372) para no dejar rastro,
+la reversa a Cuenta Corriente usó `comprobantes.total` en vez de lo que de verdad estaba en CC —
+mismo bug que ya habías corregido en mig.374 en otros 3 lugares (`facturas_saldo_pendiente`,
+`registrar_cobro_cliente`, `crear_nota_credito`), pero `cancelar_factura` (mig.351, anterior a esos)
+había quedado afuera. Con datos reales esto le da a un cliente crédito de más al cancelar una
+factura con CC parcial — plata, no solo UI. Corregido con `monto_cc_original_comprobante()` (la
+misma función centralizada de mig.374), dato de la prueba ya corregido, Balance de Comprobación
+verificado después ($1.219.460 = $1.219.460, cuadra). Detalle completo en la sección del repaso, más
+abajo.
+
+Resto del repaso (Mapa de Relaciones con pagos múltiples, Ronda 2 de UI, Catálogo/Proveedores/
+Compras) sin hallazgos — todo funcionando como se documentó cuando lo armaste.
+
+**Siguiente paso:** ningún cabo suelto de esta sesión. Fase 9 sigue esperando a que Nadia conecte
+Tiendanube/MercadoPago en persona.
+
+---
+
+## 🏁 Cierre del repaso completo sobre Ferretería NADIA (31/08)
+
+Cierre de la sesión de "repasar todo el plan de nuevo" (secciones de más abajo). Resumen de lo
+cubierto, de más a menos reciente:
+- **Comprobante de Pago cliente** (crear→ver→cancelar): correcto, con el bug de "B null" encontrado
+  y corregido en el camino (`ModalDetalleCobro.jsx`).
+- **7 hallazgos de Luciano**: 5 exactos, 2 fixes incompletos encontrados y corregidos (Posición IVA
+  sin ND de cliente, Libro IVA Ventas contando una cancelada).
+- **Cuenta Corriente combinable en el POS** (mig.369-372): probada con una venta real mixta
+  Efectivo+CC — correcta en los 3 niveles (comprobante, caja, CC, asiento).
+- **Cancelación de esa venta de prueba**: reveló un bug real (`cancelar_factura` reversaba el TOTAL
+  a CC en vez de la porción real) — corregido con mig.375, dato puntual arreglado, Balance de
+  Comprobación verificado después ($1.219.460 = $1.219.460).
+- **Mapa de Relaciones, factura pagada por CC parcial en 2 cuotas** (`FAC-20260827-002`): los 2
+  nodos "Cobro CC" ($3.600 + $1.900 = $5.500, exacto contra `facturas_saldo_pendiente`) se ven bien
+  en modo pantalla completa — el fix de scroll horizontal de Luciano (commit `2fced9a`) funciona.
+- **"Ronda 2" de UI** (mismo commit `2fced9a`): Totales de Factura fijos en el footer — verificado
+  visualmente. Modal de Cliente con shell flex-col (título/botones fijos, scroll solo en el cuerpo)
+  y Localidad/Provincia/Cód. Postal en 3 columnas — verificado creando (sin guardar) un cliente
+  nuevo.
+- **Catálogo / Proveedores / Compras (Fases 1-2)**: no fueron tocados por ningún cambio de hoy —
+  chequeo liviano por SQL (18 productos activos, 2 proveedores, 3 compras, 0 stock negativo) en vez
+  de repetir el walkthrough completo de UI ya hecho en sesiones previas.
+
+**Estado:** repaso completo, sin hallazgos pendientes. Ferretería NADIA queda en el mismo estado de
+datos que antes de esta sesión (toda prueba fue creada y revertida/cancelada por la propia app).
+
+---
+
+## ✅ Repaso completo del plan sobre Ferretería NADIA (31/08) — Comprobante de Pago mostraba "B null"
+
+A pedido de Nadia, segunda pasada completa sobre Ferretería NADIA: ground-truth por SQL de Balance
+de Comprobación / Cta. Corriente clientes / Cta. Corriente proveedores (los 3 siguen exactos,
+$1.206.060 cuadrado, $196.300/$312.180 sin cambios) + prueba en vivo de las funciones que Luciano
+armó hoy y que solo se habían probado contra Nalux.
+
+**Filtros de Letra/Punto de Venta en Facturas**: presentes y funcionando para Ferretería NADIA
+(PdV 1, PdV 2 — Reparto a domicilio).
+
+**Comprobante de Pago (ciclo completo, cliente):** se probó crear→ver→cancelar un cobro real sobre
+`FAC-2-20260828-001` (Julieta Sosa, $3.000) — mismo resultado que contra Nalux: la factura pasa a
+"pagada" sin cerrar el modal, se abre el Comprobante de Pago, "Cancelar Cobro" revierte todo
+(factura vuelve a "pendiente", verificado). Pero al mirar el detalle se encontró un bug real:
+
+### 🔴 Hallazgo real, corregido — "Facturas imputadas" del Comprobante de Pago mostraba "B null"
+`ModalDetalleCobro.jsx` decidía qué mostrar mirando si `tipo_comprobante_afip` existía (ej. `'B'`,
+la letra asignada al cliente) y, si sí, concatenaba `numero_afip` — pero una empresa sin AFIP
+(`cae_estado` siempre `'no_aplica'`) tiene la letra asignada igual sin nunca tener un `numero_afip`
+real, así que renderizaba literal **"B null"** en vez de caer al número interno de KAIROX
+(`FAC-2-20260828-001`). Confirmado en base: `tipo_comprobante_afip='B'`, `numero_afip=null`. No
+aparece en Nalux (ahí las facturas sí tienen `numero_afip` real) — por eso pasó desapercibido en
+la prueba de ayer contra esa cuenta. Se revisaron los otros 5 lugares del código con el mismo
+patrón tipo+número (`HistorialVentas.jsx`, `ReportesSection.jsx`, `MonitorFacturacionAFIP.jsx`,
+`TabComunicacionElectronica.jsx`) — todos ya condicionan bien en `numero_afip`, el bug estaba
+aislado a `ModalDetalleCobro.jsx` (2 lugares: la vista y los datos que arma para imprimir el
+recibo). **Corregido**: ahora condiciona en `numero_afip` (no en `tipo_comprobante_afip`), con
+fallback `|| ''` para que si algún día hay letra sin número no rompa el `.trim()`. `eslint` limpio,
+160/160 tests sin regresiones.
+
+**Cuenta Corriente combinable en el POS (mig.369-372), probada en vivo contra Ferretería NADIA:**
+venta real $2.500 (Cinta Métrica, Marcos Herrera) dividida $1.500 Efectivo + $1.000 Cuenta
+Corriente. Verificado por SQL: `estado_pago='parcial'`, `forma_pago='Efectivo + Cuenta Corriente'`;
+`movimientos_caja` ingreso $1.500 (solo la porción Efectivo); `cuenta_corriente_movimientos` DEBE
+$1.000 (solo la porción real de CC, no el total); asiento `AS-000029` balanceado con el split
+correcto (Debe 1.1.1 Caja $1.500 / Debe 1.1.2 Cuentas a Cobrar $1.000 / Debe 5.1 Costo $1.200 =
+Haber 4.1 Ventas $2.066,12 + Haber 2.1.3 IVA $433,88 + Haber 1.1.3 Mercaderías $1.200). **Todo
+correcto.**
+
+### 🔴 Hallazgo real, corregido (mig.375) — `cancelar_factura` reversaba el TOTAL a Cuenta Corriente, no la porción real de CC
+Al cancelar la venta de prueba de arriba (para no dejar rastro) apareció un bug real: la reversa
+HABER que genera `cancelar_factura` (mig.351) usaba `comprobantes.total` ($2.500, el total
+completo) en vez del monto que realmente estaba en Cuenta Corriente ($1.000) — un crédito de
+$1.500 de más para el cliente, sin respaldo real. Es la misma clase de bug que mig.374 ya había
+corregido en otros 3 lugares (`facturas_saldo_pendiente`, `registrar_cobro_cliente`,
+`crear_nota_credito`) tras introducirse la CC parcial en mig.372 — `cancelar_factura` quedó afuera
+de esa corrección porque es anterior (mig.351) y el bug recién se detectó al probar el ciclo
+completo de cancelación. `cancelar_nota_credito`/`cancelar_nota_debito` NO tenían este problema: su
+HABER/DEBE propio siempre es el 100% de su propio total, sin concepto de "parcial".
+**Corregido (mig.375)**: la reversa ahora usa `monto_cc_original_comprobante()` (mig.374) en vez de
+`comprobantes.total`. Se corrigió también puntualmente la fila ya afectada por el bug (la del test
+de arriba, ahora en $1.000, neto $0 con el DEBE original). Balance de Comprobación de Ferretería
+NADIA verificado después del fix: $1.219.460 = $1.219.460, cuadra.
+
+---
+
+## ✅ Verificados en vivo (31/08) los 7 hallazgos de Luciano contra Ferretería NADIA — 2 encontrados a medio corregir, arreglados
+
+Retomando el plan de prueba integral: en vez de confiar en los mensajes de commit de Luciano, se
+probó cada uno de los 7 hallazgos ("Cerrados en código los 7 hallazgos 🔴", sección más abajo) por
+la UI real de Ferretería NADIA, comparando contra la base. 5 cerraron exactos a la primera. 2
+resultaron fixes **incompletos** — se encontraron, corrigieron y verificaron en el momento.
+
+### ✅ Confirmados exactos, sin nuevos hallazgos
+- **#2 Dashboard sin ventas canceladas**: "Ventas del mes" = $23.600 (antes $26.100) — exacto.
+- **#4 Libro IVA Ventas ya no vacío**: 10 comprobantes, $307.900 — exacto (ver más abajo el matiz
+  encontrado en los totales).
+- **#5 Listas de Precios sin "$0"**: PIN-001 muestra "Precio estándar: $6.200/lt" — exacto.
+- **#6 Desglose Neto/IVA de Devoluciones a Proveedor**: DEV-2026-0001 muestra Neto $19.000,00 / IVA
+  $3.990,00 / Total $22.990,00 — exacto.
+- **#7 Contador de líneas en Recuento**: se creó un Recuento de prueba (Pinturas y Accesorios,
+  anulado después, sin tocar stock), se tipeó un valor distinto y el contador pasó a "1 línea(s)
+  con diferencia" **sin blur** — exacto.
+- **#1 `cancelar_nota_credito_proveedor` genera asiento de reversa**: se creó una NC de proveedor
+  descartable ($500, Bianchi Herrajes, vía "Duplicar" desde una NC real) y se canceló. `AS-000026`
+  ("Reversa — Cancelación Nota de Crédito de Proveedor...") espejo exacto y balanceado de
+  `AS-000025` — exacto.
+
+### 🔴 #3 encontrado incompleto — "Posición IVA del período" corregía Crédito Fiscal pero no Débito Fiscal (arreglado)
+Crédito Fiscal daba $74.069,26 exacto (correcto). Pero Débito Fiscal daba **$51.614,88** cuando el
+cálculo correcto para ese período es **$53.003,31** — faltaban exactos $1.388,43, el IVA de
+`ND-20260827-001`. Causa raíz: el primer intento de este fix sumaba la ND de cliente consultando
+`notas_debito` (`tipo='emitida'`) — esa rama quedó **deprecada** por el rediseño de ND de Cliente
+(mig.268/269, documentado en el propio comentario de mig.278): las ND de cliente reales viven en
+`comprobantes` con `tipo='nota_debito'`, igual que la Factura y la NC. `notas_debito` (tipo=
+`'emitida'`) tiene 0 filas para Ferretería NADIA — y, por el mismo motivo, para cualquier empresa —
+así que la ND nunca se sumaba. **Corregido en `TabIVA.jsx`**: se sacó la query separada a
+`notas_debito` y se agregó `'nota_debito'` al `.in('tipo', [...])` que ya traía venta/NC, sumando
+igual que una venta (solo la NC resta). Verificado: Débito Fiscal pasa a $53.003,31 exacto.
+
+### 🔴 Hallazgo nuevo, relacionado — Libro IVA Ventas contaba una venta cancelada en sus totales (arreglado)
+Al revisar el detalle del hallazgo #4 se notó que el total ($307.900 / $53.437,19 de IVA) incluía
+el ticket `20260828-001` — **cancelado** en la Fase 7 — con sus $2.500/$433,88 de IVA de todos
+modos. Causa raíz: `esComprobanteValido()` en `ReporteLibroIVA.jsx` solo mira `cae_estado`
+(`'emitido'` o `'no_aplica'`) para decidir si un comprobante cuenta — pero `cancelar_factura`
+(mig.351) también deja `cae_estado='no_aplica'` en una venta cancelada, así que pasaba el filtro
+igual. Un Libro IVA es un registro fiscal: una venta anulada no debería sumar débito fiscal.
+**Corregido**: se agregó `.neq('estado_pago', 'cancelada')` a la query base (mismo criterio que ya
+usa `TabIVA.jsx`). Verificado a mano contra la base: el nuevo total sin el cancelado da
+$305.400 / $53.003,31 — coincide exacto con el Débito Fiscal ya corregido arriba.
+
+`eslint` limpio en ambos archivos (solo warnings preexistentes de `prop-types`, no nuevos), 160/160
+tests sin regresiones. Ningún dato de prueba quedó a medio camino: el Recuento de prueba se anuló
+(nunca tocó stock), la NC de proveedor de prueba se canceló (asiento de reversa real, verificado) —
+Balance de Comprobación de Ferretería NADIA sigue en **✓ Cuadra** ($1.206.060 = $1.206.060) después
+de todo esto.
+
+**Siguiente paso:** los 2 fixes nuevos (`TabIVA.jsx`, `ReporteLibroIVA.jsx`) van en el mismo commit
+que esta nota.
+
+---
+
 ## ✅ Ronda 2 de pulido de UI post-CC combinable: Mapa de Relaciones, totales de Factura, modal de Cliente (30/08)
 
 Seguimiento directo de la sesión anterior (sección siguiente) — Luciano siguió probando en vivo y

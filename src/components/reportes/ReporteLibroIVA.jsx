@@ -99,7 +99,13 @@ function ReporteLibroIVA({ onBack }) {
         // apagado (cae_estado siempre 'no_aplica') veía este reporte vacío sin
         // importar cuánto facturó de verdad (hallazgo auditoría Ferretería
         // NADIA, 28/08).
+        // Cancelada excluida: una venta anulada (cancelar_factura, mig.351)
+        // también queda cae_estado='no_aplica' — sin este filtro contaba como
+        // débito fiscal real (hallazgo 31/08, verificado en vivo contra
+        // Ferretería NADIA: el ticket cancelado 20260828-001 seguía sumando
+        // $433,88 de IVA al total del período).
         .in('cae_estado', ['emitido', 'no_aplica', 'pendiente', 'error'])
+        .neq('estado_pago', 'cancelada')
         .gte('fecha', `${fechaDesde}T00:00:00`)
         .lte('fecha', `${fechaHasta}T23:59:59`)
         .order('fecha', { ascending: true })
