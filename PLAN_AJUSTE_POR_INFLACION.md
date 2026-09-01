@@ -1,6 +1,6 @@
 # Plan — Ajuste por Inflación en KAIROX Gestión
 
-**Estado (01/09): Fase 1 construida (`supabase/migrations/378_ajuste_inflacion_fase1.sql`), probada contra datos reales de Nalux, pero NO aplicada a producción — pendiente de `apply_migration` con confirmación explícita. Sin contador matriculado disponible: las decisiones donde la norma deja margen se tomaron con evidencia pública, documentadas en el artifact ["Circuito de Ajuste por Inflación"](https://claude.ai/code/artifact/be8ba7a2-255c-4848-af5b-e8921c59535c) para corregir por comentario si alguien las revisa. Fase 2 (reporte en moneda homogénea) es el próximo paso después de aplicar la migración.**
+**Estado (01/09): Fase 1 EN PRODUCCIÓN** (`supabase/migrations/378_ajuste_inflacion_fase1.sql` + fix de seguridad `379_fix_grants_ajuste_inflacion.sql`), probada contra datos reales de Nalux y aplicada con Luciano confirmando. Sin contador matriculado disponible: las decisiones donde la norma deja margen se tomaron con evidencia pública, documentadas en el artifact ["Circuito de Ajuste por Inflación"](https://claude.ai/code/artifact/be8ba7a2-255c-4848-af5b-e8921c59535c) para corregir por comentario si alguien las revisa. Falta cargar el primer índice IPC (Configuración → Finanzas) antes de poder generar un ajuste real. **Fase 2** (reporte en moneda homogénea) es el próximo paso.
 
 ---
 

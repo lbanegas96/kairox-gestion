@@ -1,6 +1,6 @@
 # KAIROX Gestión — Contexto de Sesión
 
-## 🟡 Ajuste por Inflación — Fase 1 construida, FALTA aplicar la migración a producción (01/09)
+## ✅ Ajuste por Inflación — Fase 1 EN PRODUCCIÓN (mig.378 + fix de seguridad mig.379) (01/09)
 
 Luciano: sin contador matriculado disponible ("no tengo contador y no puedo pagar uno"), pidió
 avanzar igual con la mejor evidencia de la web, dejando las decisiones de diseño documentadas para
@@ -34,15 +34,29 @@ revisa. **Este documento sigue vivo — pedirle a Luciano el link cuando retome,
   `cerrar_ejercicio_contable` lo arrastre solo al barrer ingreso/egreso). `tsc`/`eslint`/`vite
   build` limpios, 160/160 tests.
 
-**🔴 BLOQUEADO — la migración 378 NO está aplicada a producción.** El clasificador de auto-mode
-denegó el `apply_migration` (acción de alto riesgo sin Luciano presente para confirmar en vivo) —
-coincide con la política del proyecto de nunca aplicar migraciones a prod sin confirmación
-explícita. El archivo `supabase/migrations/378_ajuste_inflacion_fase1.sql` está commiteado y
-pusheado al repo, y el frontend que lo consume ya está deployado — pero hasta que alguien corra la
-migración contra Supabase, Plan de Cuentas → Editar Cuenta (selector de naturaleza) y Configuración
-→ Finanzas (índices) van a fallar al guardar/cargar (columna/tabla inexistentes), sin romper el
-resto de la app. **Próximo paso al retomar: aplicar mig.378 (ya validada), después seguir con Fase 2
-(toggle "Ver en moneda homogénea" en Balance/EERR de Reportes).**
+**Migración aplicada (01/09, con Luciano presente confirmando).** El intento anterior había sido
+bloqueado por el clasificador de auto-mode (acción de alto riesgo sin confirmación en vivo) — al
+volver, Luciano confirmó y se aplicó. Verificado post-deploy contra la base real: las 7 empresas
+tienen la clasificación correcta (Caja/CxP monetarias; Inventario/Bienes de Uso/Capital/Ingresos/
+Egresos no monetarias; 4.7/5.12 RECPAM creadas), `indices_inflacion` existe (vacía — falta cargar el
+primer índice desde Configuración → Finanzas antes de poder generar un ajuste real).
+
+**🔴→✅ Hallazgo de seguridad real post-deploy (mig.379), corregido en el momento.** Se corrieron los
+Supabase Advisors después de aplicar mig.378 (buena práctica, no algo que haya que pedir) y aparecía
+`_lineas_ajuste_por_inflacion`, `calcular_preview_ajuste_por_inflacion` y
+`generar_ajuste_por_inflacion` ejecutables por el rol **`anon`** (sin login) — Postgres otorga
+EXECUTE a PUBLIC por default en `CREATE FUNCTION`, y mig.378 solo agregó `GRANT` a `authenticated`
+sin revocar eso. El caso grave: `_lineas_ajuste_por_inflacion` es un helper interno que NO valida
+empresa/auth — cualquiera sin loguearse podía llamarla vía REST con cualquier `periodo_id` y leer
+nombres de cuenta + montos de ajuste de **cualquier empresa** del sistema. Las otras 2 sí validan
+`get_my_empresa_id()`/`is_admin()` internamente (no filtraban datos pese al grant de más). Fix
+(mig.379): `REVOKE EXECUTE ... FROM PUBLIC, anon` en las 3 — `_lineas_...` queda solo para uso
+interno (las otras 2 la siguen llamando sin problema, un `SECURITY DEFINER` llamando a otro no pasa
+por la capa de grants de PostgREST). Re-verificado con Advisors: el hallazgo de `anon` desapareció,
+solo quedan los 2 esperados (`authenticated`, intencional).
+
+**Próximo paso: Fase 2** (toggle "Ver en moneda homogénea" en Balance/EERR de `ReportesSection`) —
+depende de que haya al menos un índice cargado y un ajuste generado para tener algo que mostrar.
 
 ---
 
