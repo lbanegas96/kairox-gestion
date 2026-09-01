@@ -1,5 +1,79 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🎨 Rediseño del login + 🔴→✅ las Devoluciones nunca generaron asiento contable (01/09, Nadia)
+
+### 🔴→✅ Hallazgo grande: `crear_devolucion` mueve caja pero NUNCA generó asiento contable
+Auditoría de movimientos de Nalux a pedido de Nadia después de usar el módulo de Ventas. El Balance
+de Comprobación cuadraba ($20.934.554,10 = $20.934.554,10) y las 3 ventas del día tenían su asiento
+correcto — pero la devolución del día no tenía ninguno. Al revisar el histórico: **ninguna de las 14
+devoluciones de Nalux (8 de cliente + 6 de proveedor) tiene un solo asiento vinculado.**
+
+Causa raíz confirmada en el código: `crear_devolucion` (mig.263) hace un INSERT directo en
+`movimientos_caja` cuando `p_reembolso_efectivo` es true, pero nunca hubo ninguna línea que genere
+el asiento — y tampoco existe en el frontend (grep de `crearAsientoDevolucion`/`asiento.*devolucion`
+→ cero resultados). **No es que alguien se olvidó de llamar una función: esa función nunca se
+construyó.**
+
+**Impacto real en Nalux:** 5 devoluciones de cliente ($246.200 que salieron de caja) + 2 de
+proveedor ($510.000 que entraron) = **$756.200 en movimientos de caja reales completamente ausentes
+de los libros**. El Balance no lo delataba porque están AUSENTES, no desbalanceados — la Caja real
+queda por encima de lo que dice la Contabilidad.
+
+**Fix (decisión de Nadia: arreglar hacia adelante, sin tocar el historial).** Nuevo
+`asientosAutoService.crearAsientoDevolucion` (`planCuentasService.ts`), espejando el patrón que ya
+usan `crearAsientoNotaCliente`/`crearAsientoNotaProveedor`:
+- Cliente (reembolso = egreso): DEBE 4.1 Ventas + DEBE 2.1.3 IVA Débito = HABER 1.1.1 Caja
+- Proveedor (reembolso = ingreso): DEBE 1.1.1 Caja = HABER 1.1.3 Mercaderías + HABER 1.1.4 IVA Crédito
+
+Acotado a propósito al caso `reembolso_efectivo=true` (el único con movimiento de caja real y sin
+otro documento que genere su propio asiento después). NO incluye reversa de Costo de Mercadería
+Vendida — eso queda para la NC, si se genera. Conectado en `NuevaDevolucionModal.jsx`, no
+bloqueante, con el mismo `calcNetoIva` de las NC (divide por el factor, nunca suma IVA encima).
+`eslint` limpio, `tsc` sin errores nuevos, `vite build` OK, 320/320 tests.
+
+**Pendiente (no crítico, sin decidir):** las 14 devoluciones históricas siguen sin asiento. Es un
+cambio a libros ya cerrados — Nadia decidió no tocarlo por ahora; conviene consultarlo con su
+contador antes.
+
+### 🎨 Rediseño del login (`AuthPage.jsx`) — pedido de Nadia
+"Sacá la imagen del logo, dejá solo el nombre, hacelo más profesional, parece muy junior."
+Investigado antes de diseñar (patrones de login SaaS 2026: Linear, Notion, Vercel, Stripe).
+- **Lockup tipográfico en vez de la imagen**: "Kairox IA" en gradiente violeta→azul + "Gestión"
+  como línea de producto, separada por reglas finas laterales. Se sacó también el `<h1>` que
+  mostraba `config.nombre_empresa` — repetía "KAIROX Gestión" en blanco justo debajo del wordmark.
+  Queda UNA sola marca.
+- **Interactivo** (pedido explícito "que se difumina igual que el fondo"): al pasar el cursor, el
+  gradiente del wordmark se desplaza (200% background-size) y aparece un halo difuso detrás
+  (`blur-3xl`, escala 90→100%), haciendo eco de los blobs desenfocados del fondo.
+- **Fondo**: textura de grilla fina al 4% + 3 blobs con blur (patrón Linear/Vercel).
+- **Tarjeta**: borde con gradiente (truco del padding de 1px), más ancha (max-w-md → max-w-lg,
+  448→512px).
+- **Crédito de marca**: "Hecho por Kairox IA" con el logo a 20×20px, debajo de la tarjeta.
+  Primero se probó `fixed bottom-4` — **quedaba pisado** por el propio formulario en modo "Crear
+  Cuenta" (más alto que el viewport) y por el widget flotante de chat que ya vive en esa esquina.
+  Se pasó a flujo normal dentro de un `flex-col`, que nunca compite con nada.
+- Verificado en vivo en los dos temas (oscuro y claro), en login y en registro, y centrado
+  confirmado por medición real (cardCenter 720 = windowCenter 720 en 1440px).
+
+### 🔒 Login con Google — código listo, APAGADO a propósito
+Nadia preguntó cómo permitir login con cuenta de Google. El botón está programado y probado
+(`handleGoogleLogin` + `signInWithOAuth`, con el logo oficial de 4 colores), pero **el proveedor
+Google todavía NO está habilitado en el proyecto de Supabase** — verificado en vivo:
+`/auth/v1/authorize?provider=google` responde 400 en vez de redirigir. Con el botón visible,
+cualquiera que lo tocara vería un error.
+
+Decisión de Nadia: dejarlo listo pero oculto, detrás de la constante `GOOGLE_LOGIN_HABILITADO`
+(`AuthPage.jsx`, hoy en `false`). Los 3 pasos para activarlo están documentados en el comentario de
+esa constante (credenciales en Google Cloud Console → pegarlas en Supabase → cambiar la constante).
+
+**Alcance a propósito — el botón se muestra SOLO en login, nunca en el registro:**
+`handle_new_user` (mig.000) crea el profile con `empresa_id=NULL`, y el self-heal que llama a
+`create_tenant` (`SupabaseAuthContext`) necesita `nombre_empresa` en `user_metadata` — dato que un
+alta por Google no tiene forma de aportar. Un usuario nuevo por esa vía quedaría logueado pero sin
+empresa, sin poder hacer nada. Para entrar a una cuenta que YA existe funciona perfecto.
+
+---
+
 ## ✅ RESUELTO (01/09, Nadia) — "Nueva Devolución" era un callejón sin salida, nunca tuvo forma de agregar ítems
 
 Nadia: "en devolución cuando clickeo en nueva devolución no me sale para agregar items, es asi? o

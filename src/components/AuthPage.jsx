@@ -12,6 +12,28 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { validatePasswordBasic } from '@/lib/securityUtils';
 import PasswordRecoveryModal from '@/components/PasswordRecoveryModal';
 
+// ── Login con Google ─────────────────────────────────────────────────────────
+// El código del botón está completo y probado, pero el proveedor Google
+// TODAVÍA NO está habilitado en el proyecto de Supabase — verificado en vivo
+// (01/09): /auth/v1/authorize?provider=google responde 400 en vez de redirigir
+// a Google. Con el botón visible, cualquiera que lo tocara vería un error.
+//
+// PARA ACTIVARLO (decisión de Nadia, 01/09 — dejarlo listo pero oculto):
+//   1. Google Cloud Console → crear credenciales OAuth 2.0 (tipo "Aplicación
+//      web"), con este URI de redirección autorizado:
+//      https://isvkelrdxwvkfmrfqxxk.supabase.co/auth/v1/callback
+//   2. Supabase → Authentication → Providers → Google: pegar Client ID y
+//      Client Secret, y habilitarlo.
+//   3. Cambiar esta constante a `true` y desplegar.
+//
+// OJO — alcance a propósito: el botón se muestra SOLO en modo login, nunca en
+// el registro. `handle_new_user` (mig.000) crea el profile con empresa_id=NULL
+// y el self-heal que llama a create_tenant (SupabaseAuthContext) necesita
+// `nombre_empresa` en user_metadata, dato que un alta por Google no aporta —
+// un usuario nuevo por esa vía quedaría logueado pero sin empresa, sin poder
+// hacer nada. Para entrar a una cuenta que YA existe funciona perfecto.
+const GOOGLE_LOGIN_HABILITADO = false;
+
 function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -104,6 +126,25 @@ function AuthPage() {
     }
   };
 
+  // Login con Google (OAuth) — ver GOOGLE_LOGIN_HABILITADO arriba.
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) {
+      setIsLoading(false);
+      toast({
+        title: 'No se pudo iniciar sesión con Google',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+    // Si sale bien, el navegador redirige a Google — no hace falta apagar el
+    // loading (la página se va a desmontar).
+  };
+
   const handlePasswordRecovery = async (email) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: window.location.origin,
@@ -136,31 +177,118 @@ function AuthPage() {
         onRecover={handlePasswordRecovery}
       />
       <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-kx-bg">
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-kx-violet/10 rounded-full blur-[100px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-kx-blue/10 rounded-full blur-[100px]" />
+        {/* Textura de grilla fina — mismo recurso que usan los dashboards SaaS
+            premium (Linear, Vercel, Stripe) para dar profundidad sin ruido
+            visual. Opacidad muy baja a propósito, es textura, no un patrón
+            que compita con el contenido. */}
+        <div
+          className="absolute inset-0 opacity-[0.04] pointer-events-none"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgb(var(--kx-text)) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--kx-text)) 1px, transparent 1px)',
+            backgroundSize: '56px 56px',
+          }}
+        />
+        <div className="absolute top-[-12%] left-[-8%] w-[520px] h-[520px] bg-kx-violet/10 rounded-full blur-[110px]" />
+        <div className="absolute bottom-[-12%] right-[-8%] w-[520px] h-[520px] bg-kx-blue/10 rounded-full blur-[110px]" />
+        <div className="absolute top-[45%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[380px] h-[380px] bg-kx-violet/5 rounded-full blur-[130px]" />
 
-        <div className="w-full max-w-md relative z-10 animate-in fade-in zoom-in-95 duration-500">
-          <div className="bg-kx-surface backdrop-blur-xl rounded-2xl border border-kx-border shadow-2xl p-8">
-            <div className="text-center mb-8">
-              <div className="inline-block mb-4">
+        {/* flex-col agrupa tarjeta + crédito como una sola columna centrada —
+            el crédito vive en el flujo normal (no `fixed`) a propósito:
+            hallazgo real probándolo (01/09) — `fixed bottom-4` quedaba pisado
+            por el propio formulario en pantallas bajas (el modo "Crear
+            Cuenta" es más alto que el viewport) y por el widget flotante de
+            chat que ya vive fijo en esa misma esquina. En flujo normal nunca
+            compite con nada: si la tarjeta no entra, se scrollea junto con
+            todo lo demás. */}
+        <div className="w-full max-w-lg relative z-10 flex flex-col items-center gap-5">
+        <div className="w-full animate-in fade-in zoom-in-95 duration-500">
+          {/* Borde con gradiente sutil (truco de 1px de padding) — el detalle
+              que separa una tarjeta "de plantilla" de una que se ve diseñada
+              a propósito. */}
+          <div className="rounded-[28px] p-px bg-gradient-to-br from-kx-violet/40 via-kx-border to-kx-blue/40 shadow-2xl shadow-black/20">
+            <div className="bg-kx-surface/95 backdrop-blur-xl rounded-[27px] p-8 sm:p-10">
+              <div className="text-center mb-8">
                 {config?.logo_base64 ? (
-                  <div className="h-24 w-full flex items-center justify-center mb-2 overflow-hidden">
+                  <div className="h-20 w-full flex items-center justify-center mb-6 overflow-hidden">
                     <img src={config.logo_base64} alt="Logo" className="max-h-full max-w-[200px] object-contain drop-shadow-lg" />
                   </div>
                 ) : (
-                  <div className="h-24 w-full flex items-center justify-center mb-2 rounded-2xl bg-[#0A0A0D] border border-kx-border shadow-lg shadow-kx-violet/20 px-6">
-                    <img src="/kairox-logo.png" alt="KAIROX" className="max-h-full max-w-[220px] object-contain" />
+                  // Lockup de marca tratado como logo (01/09, pedido de Nadia):
+                  // se sacó la imagen del logo de acá (quedaba grande y con
+                  // aspecto de placeholder) y también el <h1> con el nombre de
+                  // la empresa, que repetía "KAIROX Gestión" justo debajo del
+                  // wordmark. Queda UNA sola marca, con jerarquía interna:
+                  // "Kairox IA" (marca) + "Gestión" (línea de producto),
+                  // separados por una regla fina — mismo recurso que usan los
+                  // lockups de Linear/Vercel. `group` + hover: el gradiente se
+                  // desplaza y el glow de atrás se intensifica, haciendo eco
+                  // del blur del fondo (pedido explícito: "que se difumina o
+                  // algo igual que el fondo").
+                  <div className="mb-7 select-none flex justify-center">
+                    <div className="group relative inline-flex flex-col items-center cursor-default">
+                      {/* Glow detrás del wordmark — invisible en reposo,
+                          aparece y se expande al hover. Opacidad alta a
+                          propósito: pasa por un blur-3xl, así que lo que se
+                          ve es un halo difuso, no un bloque de color. */}
+                      <div
+                        aria-hidden="true"
+                        className="absolute -inset-x-10 -inset-y-6 rounded-full bg-gradient-to-r from-kx-violet/60 via-kx-blue/50 to-kx-violet/60 blur-3xl opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100 transition-all duration-500 pointer-events-none"
+                      />
+                      <span
+                        className="relative text-4xl sm:text-[2.75rem] font-extrabold tracking-tight leading-none bg-gradient-to-r from-kx-violet via-kx-blue to-kx-violet bg-clip-text text-transparent transition-all duration-500"
+                        style={{ backgroundSize: '200% auto', backgroundPosition: '0% center' }}
+                        onMouseEnter={e => { e.currentTarget.style.backgroundPosition = '100% center'; }}
+                        onMouseLeave={e => { e.currentTarget.style.backgroundPosition = '0% center'; }}
+                      >
+                        Kairox IA
+                      </span>
+                      <div className="relative mt-2.5 flex items-center gap-2.5">
+                        <span className="h-px w-6 bg-gradient-to-r from-transparent to-kx-border group-hover:to-kx-violet/60 transition-colors duration-500" />
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.4em] text-kx-text-3 group-hover:text-kx-text-2 transition-colors duration-500">
+                          Gestión
+                        </span>
+                        <span className="h-px w-6 bg-gradient-to-l from-transparent to-kx-border group-hover:to-kx-blue/60 transition-colors duration-500" />
+                      </div>
+                    </div>
                   </div>
                 )}
+
+                <p className="text-kx-text-2 text-[15px]">
+                  {isLogin ? 'Ingresá a tu panel de control' : 'Registrá tu empresa y comenzá a gestionar'}
+                </p>
               </div>
 
-              <h1 className="text-3xl font-bold mb-2 text-kx-text">
-                {config?.nombre_empresa || (isLogin ? 'Bienvenido' : 'Crear Cuenta')}
-              </h1>
-              <p className="text-kx-text-3">
-                {isLogin ? 'Ingresa a tu panel de control' : 'Registra tu empresa y comienza a gestionar'}
-              </p>
-            </div>
+            {/* Login con Google — arriba del formulario, patrón estándar en
+                SaaS (Linear, Notion, Vercel): la vía más rápida primero, el
+                formulario de email como alternativa. Sólo en modo login (ver
+                el comentario de GOOGLE_LOGIN_HABILITADO arriba, que explica
+                también por qué está apagado por ahora). */}
+            {GOOGLE_LOGIN_HABILITADO && isLogin && (
+              <div className="mb-6">
+                <button
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  disabled={isLoading}
+                  className="w-full h-12 rounded-xl border border-kx-border bg-kx-surface-2 hover:bg-kx-border/40 text-kx-text font-medium flex items-center justify-center gap-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {/* Logo oficial de Google (4 colores) */}
+                  <svg className="h-[18px] w-[18px] flex-shrink-0" viewBox="0 0 18 18" aria-hidden="true">
+                    <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z" />
+                    <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18Z" />
+                    <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33Z" />
+                    <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.9 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58Z" />
+                  </svg>
+                  Continuar con Google
+                </button>
+
+                <div className="flex items-center gap-3 mt-6">
+                  <span className="h-px flex-1 bg-kx-border" />
+                  <span className="text-[11px] uppercase tracking-widest text-kx-text-3">o con tu email</span>
+                  <span className="h-px flex-1 bg-kx-border" />
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               {!isLogin && (
@@ -269,7 +397,21 @@ function AuthPage() {
                 {isLogin ? 'Registrarse ahora' : 'Volver al inicio de sesión'}
               </Button>
             </div>
+            </div>
           </div>
+        </div>
+
+        {/* Crédito de marca — pedido de Nadia (01/09): chico, debajo de la
+            tarjeta, en flujo normal (ver comentario más arriba de por qué no
+            es `fixed`). */}
+        <div className="flex items-center justify-center gap-2">
+          <div className="h-5 w-5 rounded-md overflow-hidden ring-1 ring-kx-border/60 flex-shrink-0">
+            <img src="/kairox-logo.png" alt="" className="h-full w-full object-cover" />
+          </div>
+          <span className="text-[11px] text-kx-text-3 tracking-wide">
+            Hecho por <span className="font-semibold text-kx-text-2">Kairox IA</span>
+          </span>
+        </div>
         </div>
       </div>
     </>

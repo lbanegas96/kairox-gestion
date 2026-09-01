@@ -9,7 +9,19 @@ import { Textarea } from '@/components/ui/textarea';
 import { Undo2, RotateCcw, Loader2, AlertCircle } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import ClienteSelector from '@/components/shared/ClienteSelector';
-import { formatDateAR } from '@/lib/dateUtils';
+import { formatDateAR, getTodayAR } from '@/lib/dateUtils';
+import { asientosAutoService } from '@/services/planCuentasService';
+
+// Mismo criterio que NuevaNCModal.jsx (calcNetoIva): precio_unit es SIEMPRE
+// el precio final con IVA incluido — el neto se separa DIVIDIENDO por el
+// factor, nunca sumando el IVA encima.
+const FACTOR_IVA = { '21': 1.21, '10.5': 1.105 };
+const calcNetoIvaItem = (item) => {
+  const bruto  = Number(item.cantidad) * Number(item.precio_unitario);
+  const factor = FACTOR_IVA[String(item.alicuota_iva)] ?? 1;
+  const neto   = bruto / factor;
+  return { neto, iva: bruto - neto };
+};
 
 // Config por tipo — la diferencia de negocio real: cliente permite modo standalone
 // (sin origen, elige Cliente + reembolso en efectivo hacia afuera) y fetch-ea siempre
@@ -270,6 +282,33 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
               .eq('id', ocItem.id).eq('empresa_id', user.empresa_id);
           }
         }
+      }
+
+      // Asiento contable (no bloqueante) — Bug real (01/09, Nadia): crear_devolucion
+      // mueve caja de verdad con reembolso en efectivo pero nunca generó ningún
+      // asiento, desde que la función existe. Ver el comentario de
+      // crearAsientoDevolucion (planCuentasService.ts) para el detalle completo
+      // del hallazgo. Acotado a propósito al caso con movimiento de caja real —
+      // sin reembolso en efectivo, la devolución queda 'pendiente' de compensarse
+      // (NC/reemplazo), que ya genera su propio asiento cuando corresponde.
+      if (reembolsoEfectivo) {
+        const neto = itemsToReturn.reduce((s, i) => s + calcNetoIvaItem(i).neto, 0);
+        const iva  = itemsToReturn.reduce((s, i) => s + calcNetoIvaItem(i).iva, 0);
+        asientosAutoService.crearAsientoDevolucion(user.empresa_id, user.id, {
+          devolucionId:     data.devolucion_id,
+          numeroDevolucion: data.numero_devolucion,
+          tipoDevolucion:   tipo,
+          total:            data.total,
+          neto,
+          iva,
+          fecha:            getTodayAR(),
+        }).catch(e => {
+          if (e.message?.startsWith('Período cerrado:')) {
+            toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
+          } else {
+            console.warn('[Contabilidad] Asiento Devolución (no crítico):', e.message);
+          }
+        });
       }
 
       const msg = reembolsoEfectivo

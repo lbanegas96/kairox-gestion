@@ -711,6 +711,90 @@ export const asientosAutoService = {
   },
 
   /**
+   * Crea y confirma el asiento de una Devolución con reembolso en efectivo
+   * (crear_devolucion, NuevaDevolucionModal.jsx) — HALLAZGO REAL (01/09,
+   * Nadia): crear_devolucion mueve caja de verdad cuando `p_reembolso_efectivo`
+   * es true (INSERT directo en movimientos_caja) pero nunca generó ningún
+   * asiento contable — ni de cliente ni de proveedor, desde que la función
+   * existe (mig.263). Confirmado contra Nalux real: 5 devoluciones de cliente
+   * ($246.200) + 2 de proveedor ($510.000) con reembolso en efectivo, cero
+   * asientos vinculados en cualquiera de las 7. El Balance de Comprobación no
+   * lo mostraba porque el movimiento está AUSENTE de los libros, no
+   * desbalanceado — la Caja real queda por encima de lo que dice la
+   * Contabilidad.
+   *
+   * Alcance a propósito acotado (decisión con Nadia: arreglar hacia adelante,
+   * sin tocar el historial ya ausente de los libros): sólo cubre el caso
+   * `reembolso_efectivo=true`, que es el único con movimiento de caja real y
+   * sin ningún otro documento (NC/ND) que vaya a generar su propio asiento
+   * después. NO incluye reversa de Costo de Mercadería Vendida (a diferencia
+   * de crearAsientoNotaCliente) — cuando `reingresa_stock` también es true,
+   * esa reversa de costo queda para cuando/si se genera una Nota de Crédito
+   * desde el detalle de la devolución (mismo camino que ya existe hoy).
+   *
+   * Cliente (reembolso = egreso de caja, mismo criterio que crearAsientoNotaCliente):
+   *   DEBE 4.1 Ventas (neto) + DEBE 2.1.3 IVA Débito Fiscal (iva) = HABER 1.1.1 Caja (total)
+   * Proveedor (reembolso = ingreso de caja, mismo criterio que crearAsientoNotaProveedor):
+   *   DEBE 1.1.1 Caja (total) = HABER 1.1.3 Mercaderías (neto) + HABER 1.1.4 IVA Crédito Fiscal (iva)
+   */
+  async crearAsientoDevolucion(
+    empresaId: string,
+    userId: string,
+    params: {
+      devolucionId: string;
+      numeroDevolucion: string;
+      tipoDevolucion: 'cliente' | 'proveedor';
+      total: number;
+      neto: number;
+      iva: number;
+      fecha: string; // YYYY-MM-DD
+      centroCostoId?: string | null;
+    }
+  ): Promise<void> {
+    try {
+      const { data: cerrado } = await supabase.rpc('fecha_en_periodo_cerrado', {
+        p_empresa_id: empresaId, p_fecha: params.fecha,
+      });
+      if (cerrado) throw new Error(`Período cerrado: la fecha ${params.fecha} pertenece a un período contable cerrado.`);
+    } catch (e: any) {
+      if (e.message?.startsWith('Período cerrado:')) throw e;
+    }
+    if (!(params.neto + params.iva > 0)) return;
+
+    const esCliente = params.tipoDevolucion === 'cliente';
+    const [cuentaCaja, cuentaContrapartida, cuentaIva] = await Promise.all([
+      findCuentaByCodigo(empresaId, '1.1.1'),
+      findCuentaByCodigo(empresaId, esCliente ? '4.1' : '1.1.3'),
+      findCuentaByCodigo(empresaId, esCliente ? '2.1.3' : '1.1.4'),
+    ]);
+    if (!cuentaCaja || !cuentaContrapartida || !cuentaIva) return;
+
+    const items = esCliente
+      ? [
+          { cuenta_id: cuentaContrapartida, debe: params.neto,  haber: 0,           descripcion: 'Reversa de venta (neto)' },
+          { cuenta_id: cuentaIva,           debe: params.iva,   haber: 0,           descripcion: 'Reversa IVA Débito Fiscal' },
+          { cuenta_id: cuentaCaja,          debe: 0,            haber: params.total, descripcion: 'Reembolso al cliente en efectivo' },
+        ]
+      : [
+          { cuenta_id: cuentaCaja,          debe: params.total, haber: 0,           descripcion: 'Reembolso recibido del proveedor en efectivo' },
+          { cuenta_id: cuentaContrapartida, debe: 0,             haber: params.neto,  descripcion: 'Reversa de compra (neto)' },
+          { cuenta_id: cuentaIva,           debe: 0,             haber: params.iva,   descripcion: 'Reversa IVA Crédito Fiscal' },
+        ];
+
+    await asientosService.createAsientoAutomatico(
+      empresaId, userId,
+      {
+        fecha: params.fecha,
+        descripcion: `Devolución ${params.numeroDevolucion} — reembolso en efectivo`,
+        origen: `devolucion_${params.tipoDevolucion}`,
+        origen_id: params.devolucionId,
+        centro_costo_id: params.centroCostoId ?? null,
+      },
+      items
+    );
+  },
+
+  /**
    * Crea y confirma el asiento de un ajuste manual de stock (rotura, faltante,
    * corrección de inventario físico — ProductosSection.jsx → ajustar_stock_manual,
    * mig.289). Decisión de negocio: siempre generar asiento, sin distinguir motivo.
