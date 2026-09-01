@@ -1,5 +1,53 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 📋 Cierre de sesión 01/09 (Nadia) — para que Luciano siga
+
+Día largo. **Todo commiteado, pusheado y en producción** — nada quedó a medias.
+Resumen de lo que salió hoy, de más a menos importante:
+
+1. **🔴 Hallazgo grande — las Devoluciones nunca generaron asiento contable** (detalle
+   completo en la sección de abajo). `crear_devolucion` movía caja de verdad pero jamás
+   escribió en los libros, ni de cliente ni de proveedor, desde que existe la función.
+   $756.200 en movimientos reales de Nalux ausentes de la Contabilidad. **Corregido hacia
+   adelante**; las 14 devoluciones históricas se dejaron intactas a propósito.
+2. **"Nueva Devolución" era un callejón sin salida** — sólo dejaba elegir cliente, sin
+   forma de agregar ítems. Ahora pide la factura de origen y carga los ítems.
+3. **Tres gaps de permisos** encontrados mirando la consola (`fecha_en_periodo_cerrado`,
+   secuencia de `audit_log`, RLS+constraint de `audit_log`) — mig.376 y mig.377.
+4. **Dos ajustes de POS** pedidos por Nadia: medio de pago colapsable, y el panel del
+   carrito que no usaba toda la altura disponible.
+5. **Rediseño del login** (ver abajo).
+
+### 🎨 Rediseño del login — segunda pasada: el wordmark no se veía en producción
+Nadia avisó que en `kairox-gestion-chi.vercel.app` "no se ven los cambios todavía", con un
+screenshot donde el login seguía mostrando una imagen arriba. **No era un problema de
+deploy** — se verificó que el commit estaba en `origin/master` y que el bundle servido en
+producción ya contenía los strings nuevos ("Hecho por", "Kairox IA", "Ingresá a tu panel").
+
+**Causa real:** el bloque era `config?.logo_base64 ? <img/> : <wordmark/>`. Nalux tiene
+`logo_base64` cargado en `configuracion` (una URL a Supabase Storage), así que caía
+SIEMPRE en la rama de la imagen y nunca mostraba el wordmark. Cualquier empresa que haya
+subido su logo veía lo mismo: el login sin cambios.
+
+**Fix:** en el login va **siempre** el wordmark de KAIROX, sin condicional — es la cara del
+PRODUCTO, no la del inquilino. El logo de la empresa se sigue usando dentro de la app
+(sidebar, ticket, PDFs), que es donde corresponde. De paso se sacaron `useConfig`/`config`
+del archivo, que quedaron sin uso.
+
+**Ojo para el futuro:** si algún día se quiere login "white-label" por inquilino (logo del
+cliente en su propio login), es una decisión de producto distinta y hay que resolver antes
+cómo se sabe QUÉ inquilino es antes de que alguien se loguee — hoy `ConfigContext` sirve
+una config sola, así que en la práctica se mostraba el logo de un inquilino a todos.
+
+### ⏸️ Pendiente, frenado por presupuesto (decisión de Nadia, 01/09)
+Nadia lo dejó para más adelante porque **hay que pagar las credenciales**. Quedó sin
+aclarar a cuál de los dos pendientes externos se refería — **Fase 9 (Tiendanube/
+MercadoPago)** o las **credenciales de AFIP/ARCA** para facturación electrónica; son los
+dos que dependen de habilitar algo por fuera del código. Preguntarle antes de retomar
+cualquiera de los dos. No es falta de prioridad técnica, es plata.
+
+# KAIROX Gestión — Contexto de Sesión
+
 ## 🎨 Rediseño del login + 🔴→✅ las Devoluciones nunca generaron asiento contable (01/09, Nadia)
 
 ### 🔴→✅ Hallazgo grande: `crear_devolucion` mueve caja pero NUNCA generó asiento contable

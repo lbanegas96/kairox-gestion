@@ -7,7 +7,6 @@ import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { useConfig } from '@/contexts/ConfigContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { validatePasswordBasic } from '@/lib/securityUtils';
 import PasswordRecoveryModal from '@/components/PasswordRecoveryModal';
@@ -48,7 +47,6 @@ function AuthPage() {
 
   const { toast } = useToast();
   const { signIn, signUp } = useAuth();
-  const { config } = useConfig();
 
   const validateForm = () => {
     if (!formData.email || !formData.email.includes('@')) {
@@ -209,22 +207,19 @@ function AuthPage() {
           <div className="rounded-[28px] p-px bg-gradient-to-br from-kx-violet/40 via-kx-border to-kx-blue/40 shadow-2xl shadow-black/20">
             <div className="bg-kx-surface/95 backdrop-blur-xl rounded-[27px] p-8 sm:p-10">
               <div className="text-center mb-8">
-                {config?.logo_base64 ? (
-                  <div className="h-20 w-full flex items-center justify-center mb-6 overflow-hidden">
-                    <img src={config.logo_base64} alt="Logo" className="max-h-full max-w-[200px] object-contain drop-shadow-lg" />
-                  </div>
-                ) : (
-                  // Lockup de marca tratado como logo (01/09, pedido de Nadia):
-                  // se sacó la imagen del logo de acá (quedaba grande y con
-                  // aspecto de placeholder) y también el <h1> con el nombre de
-                  // la empresa, que repetía "KAIROX Gestión" justo debajo del
-                  // wordmark. Queda UNA sola marca, con jerarquía interna:
-                  // "Kairox IA" (marca) + "Gestión" (línea de producto),
-                  // separados por una regla fina — mismo recurso que usan los
-                  // lockups de Linear/Vercel. `group` + hover: el gradiente se
-                  // desplaza y el glow de atrás se intensifica, haciendo eco
-                  // del blur del fondo (pedido explícito: "que se difumina o
-                  // algo igual que el fondo").
+                {/* Lockup de marca — pedido de Nadia (01/09): en el login va
+                    SIEMPRE el wordmark de KAIROX, nunca el logo del inquilino.
+                    Antes esto era `config?.logo_base64 ? <img/> : <wordmark/>`
+                    y, como Nalux (y cualquier empresa que ya cargó su logo)
+                    tiene ese campo seteado, seguía viendo su propia imagen —
+                    por eso Nadia no veía ningún cambio en producción. El login
+                    es la cara del PRODUCTO, no la del inquilino: el logo de la
+                    empresa sigue apareciendo dentro de la app (sidebar, ticket,
+                    PDFs). Jerarquía interna: "Kairox IA" (marca) + "Gestión"
+                    (línea de producto), separados por una regla fina — mismo
+                    recurso que los lockups de Linear/Vercel. `group` + hover:
+                    el gradiente se desplaza y el glow de atrás se intensifica,
+                    haciendo eco del blur del fondo. */}
                   <div className="mb-7 select-none flex justify-center">
                     <div className="group relative inline-flex flex-col items-center cursor-default">
                       {/* Glow detrás del wordmark — invisible en reposo,
@@ -252,7 +247,6 @@ function AuthPage() {
                       </div>
                     </div>
                   </div>
-                )}
 
                 <p className="text-kx-text-2 text-[15px]">
                   {isLogin ? 'Ingresá a tu panel de control' : 'Registrá tu empresa y comenzá a gestionar'}
