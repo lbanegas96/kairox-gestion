@@ -1,6 +1,6 @@
 # Plan — Ajuste por Inflación en KAIROX Gestión
 
-**Estado: solo investigación y diseño. Nada de esto está construido todavía — este documento es la base para decidir si y cómo se construye.**
+**Estado (01/09): Fase 1 construida (`supabase/migrations/378_ajuste_inflacion_fase1.sql`), probada contra datos reales de Nalux, pero NO aplicada a producción — pendiente de `apply_migration` con confirmación explícita. Sin contador matriculado disponible: las decisiones donde la norma deja margen se tomaron con evidencia pública, documentadas en el artifact ["Circuito de Ajuste por Inflación"](https://claude.ai/code/artifact/be8ba7a2-255c-4848-af5b-e8921c59535c) para corregir por comentario si alguien las revisa. Fase 2 (reporte en moneda homogénea) es el próximo paso después de aplicar la migración.**
 
 ---
 

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Plus, Check, AlertTriangle, Loader2, Lock, Unlock, BookLock, ArrowRightLeft } from 'lucide-react';
+import { Plus, Check, AlertTriangle, Loader2, Lock, Unlock, BookLock, ArrowRightLeft, Calculator } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
+import { ajusteInflacionService } from '@/services/ajusteInflacionService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,6 +23,11 @@ function TabPeriodos({ empresaId, userId, userRole }) {
   const [showTraslado, setShowTraslado]       = useState(false);
   const [periodoATrasladar, setPeriodoATrasladar] = useState(null);
   const [procesandoTraslado, setProcesandoT]  = useState(false);
+  const [showAjusteInflacion, setShowAjusteInflacion] = useState(false);
+  const [periodoAjustar, setPeriodoAjustar]   = useState(null);
+  const [previewAjuste, setPreviewAjuste]     = useState(null);
+  const [cargandoPreview, setCargandoPreview] = useState(false);
+  const [procesandoAjuste, setProcesandoAjuste] = useState(false);
   const [nuevoForm, setNuevoForm]             = useState({ nombre: '', fecha_inicio: '', fecha_cierre: '', observaciones: '' });
   const { toast } = useToast();
   const isAdmin = userRole === 'admin';
@@ -193,6 +199,45 @@ function TabPeriodos({ empresaId, userId, userRole }) {
     }
   };
 
+  const handleAbrirAjusteInflacion = async (p) => {
+    setPeriodoAjustar(p);
+    setShowAjusteInflacion(true);
+    setPreviewAjuste(null);
+    setCargandoPreview(true);
+    try {
+      const data = await ajusteInflacionService.calcularPreview(p.id);
+      setPreviewAjuste(data);
+    } catch (e) {
+      toast({ title: 'No se pudo calcular el ajuste', description: e.message, variant: 'destructive' });
+      setShowAjusteInflacion(false);
+    } finally {
+      setCargandoPreview(false);
+    }
+  };
+
+  const handleConfirmarAjusteInflacion = async () => {
+    if (!periodoAjustar) return;
+    setProcesandoAjuste(true);
+    try {
+      const data = await ajusteInflacionService.generar(periodoAjustar.id, userId);
+      toast({
+        title: data.asiento_id ? 'Ajuste por inflación generado' : 'Sin partidas para ajustar',
+        description: data.asiento_id
+          ? `RECPAM neto: ${fmt(previewAjuste?.recpam_neto)}`
+          : data.mensaje,
+        className: 'bg-green-900 border-green-700 text-white',
+      });
+      setShowAjusteInflacion(false);
+      setPeriodoAjustar(null);
+      setPreviewAjuste(null);
+      fetchPeriodos();
+    } catch (e) {
+      toast({ title: 'Error al generar el ajuste', description: e.message, variant: 'destructive' });
+    } finally {
+      setProcesandoAjuste(false);
+    }
+  };
+
   const fmt = (n) => `$ ${Number(n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const fmtFecha = (d) => new Date(d + 'T12:00:00').toLocaleDateString('es-AR');
@@ -269,6 +314,20 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                         >
                           <Unlock size={12} /> Reabrir
                         </button>
+                      )}
+                      {p.estado === 'cerrado' && !p.asiento_ajuste_inflacion_id && !p.asiento_cierre_id && (
+                        <button
+                          onClick={() => handleAbrirAjusteInflacion(p)}
+                          title="RT 6 — reexpresa rubros no monetarios y genera el RECPAM (opcional, antes de cerrar el ejercicio)"
+                          className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-cyan-600 dark:text-cyan-400 hover:opacity-80 hover:bg-cyan-500/10 border border-cyan-500/30 transition-colors"
+                        >
+                          <Calculator size={12} /> Ajuste por Inflación
+                        </button>
+                      )}
+                      {p.asiento_ajuste_inflacion_id && (
+                        <span className="text-2xs px-2 py-1 rounded-full border border-cyan-500/30 text-cyan-600 dark:text-cyan-400 bg-cyan-500/10">
+                          Ajustado por inflación
+                        </span>
                       )}
                       {p.estado === 'cerrado' && !p.asiento_cierre_id && (
                         <button
@@ -525,6 +584,93 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                 ? <Loader2 size={14} className="animate-spin mr-2" />
                 : <ArrowRightLeft size={14} className="mr-2" />}
               Confirmar traslado
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Preview + confirmar Ajuste por Inflación */}
+      <Dialog
+        open={showAjusteInflacion}
+        onOpenChange={v => { if (!procesandoAjuste) { setShowAjusteInflacion(v); if (!v) { setPeriodoAjustar(null); setPreviewAjuste(null); } } }}
+      >
+        <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-cyan-500">
+              <Calculator size={18} /> Ajuste por Inflación (RT 6)
+            </DialogTitle>
+            <DialogDescription>
+              Reexpresa Bienes de Uso, Inventario, Patrimonio, Ingresos y Egresos por el índice IPC del período
+              y genera el asiento único con el RECPAM.
+            </DialogDescription>
+          </DialogHeader>
+
+          {periodoAjustar && (
+            <div className="space-y-3 py-2">
+              <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-3">
+                <p className="text-sm font-semibold text-cyan-500 mb-1">{periodoAjustar.nombre}</p>
+                <p className="text-xs text-cyan-500">
+                  {fmtFecha(periodoAjustar.fecha_inicio)} — {fmtFecha(periodoAjustar.fecha_cierre)}
+                </p>
+              </div>
+
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Circuito construido con evidencia pública (RT 6, FACPCE), sin validación de un contador
+                  matriculado — ver PLAN_AJUSTE_POR_INFLACION.md. No se puede repetir sobre el mismo período.
+                </p>
+              </div>
+
+              {cargandoPreview ? (
+                <div className="flex items-center gap-2 text-kx-text-3 py-6 justify-center">
+                  <Loader2 size={16} className="animate-spin" /> Calculando...
+                </div>
+              ) : previewAjuste && previewAjuste.lineas.length === 0 ? (
+                <p className="text-sm text-kx-text-3 py-4 text-center">
+                  Sin partidas no monetarias con saldo en este período — no hay nada para ajustar.
+                </p>
+              ) : previewAjuste ? (
+                <>
+                  <div className="border border-kx-border rounded-lg overflow-hidden max-h-56 overflow-y-auto">
+                    {previewAjuste.lineas.map(l => (
+                      <div key={l.cuenta_id} className="flex items-center justify-between px-3 py-2 border-b border-kx-border last:border-0 text-sm">
+                        <span className="text-kx-text-2">{l.codigo} — {l.nombre}</span>
+                        <span className="font-mono tabular-nums text-kx-text">{fmt(l.monto_ajuste)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-2 text-center">
+                      <p className="text-emerald-600 dark:text-emerald-400">RECPAM Ganancia</p>
+                      <p className="font-mono tabular-nums text-kx-text font-semibold">{fmt(previewAjuste.recpam_ganancia)}</p>
+                    </div>
+                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-2 text-center">
+                      <p className="text-kx-red">RECPAM Pérdida</p>
+                      <p className="font-mono tabular-nums text-kx-text font-semibold">{fmt(previewAjuste.recpam_perdida)}</p>
+                    </div>
+                  </div>
+                  <div className="text-center text-sm">
+                    <span className="text-kx-text-3">RECPAM neto: </span>
+                    <span className="font-mono tabular-nums font-bold text-kx-text">{fmt(previewAjuste.recpam_neto)}</span>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" disabled={procesandoAjuste}
+              onClick={() => { setShowAjusteInflacion(false); setPeriodoAjustar(null); setPreviewAjuste(null); }}
+              className="text-kx-text-3">
+              Cancelar
+            </Button>
+            <Button onClick={handleConfirmarAjusteInflacion}
+              disabled={procesandoAjuste || cargandoPreview || !previewAjuste?.lineas?.length}
+              className="bg-cyan-600 hover:bg-cyan-700 text-white">
+              {procesandoAjuste
+                ? <Loader2 size={14} className="animate-spin mr-2" />
+                : <Calculator size={14} className="mr-2" />}
+              Confirmar y generar asiento
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,5 +1,51 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🟡 Ajuste por Inflación — Fase 1 construida, FALTA aplicar la migración a producción (01/09)
+
+Luciano: sin contador matriculado disponible ("no tengo contador y no puedo pagar uno"), pidió
+avanzar igual con la mejor evidencia de la web, dejando las decisiones de diseño documentadas para
+validar después, y no esperar — "avanza con todas las fases que puedas, dejá las consultas para mi
+regreso".
+
+**Fase 0 (diseño):** se publicó el artifact "Circuito de Ajuste por Inflación"
+(https://claude.ai/code/artifact/be8ba7a2-255c-4848-af5b-e8921c59535c) con el método (RECPAM por
+partida doble, reexpresando cada rubro no monetario contra una cuenta transitoria — mismo mecanismo
+que usa Xubio en producción), un ejemplo numérico completo, y las 4 decisiones tomadas sin contador
+(patrimonio de apertura del primer ejercicio, tratamiento de Inventario, granularidad mensual, IPC
+vs IPIM) — cada una con su fundamento y fuente citada, para corregir por comentario si alguien las
+revisa. **Este documento sigue vivo — pedirle a Luciano el link cuando retome, no reconstruirlo.**
+
+**Fase 1 (construida, mig.378):**
+- `plan_cuentas.naturaleza_monetaria` (monetaria/no_monetaria) + backfill para las 7 empresas reales
+  + 2 cuentas nuevas (4.7/5.12, RECPAM Ganancia/Pérdida) + `seed_plan_cuentas` actualizado.
+- Tabla `indices_inflacion` (empresa_id, periodo, indice) — carga manual, sin API oficial (a
+  diferencia del TC que sí tiene sync automático).
+- RPCs `_lineas_ajuste_por_inflacion` (cálculo interno) → `calcular_preview_ajuste_por_inflacion`
+  (preview) → `generar_ajuste_por_inflacion` (genera el asiento real vía `crear_asiento_automatico`,
+  reutilizado — no se duplicó el chequeo de cuadre ni el de período cerrado).
+- **Probado con `BEGIN...ROLLBACK` contra datos reales de Nalux**: detectó $63.480 de ajuste real en
+  Resultados Acumulados (patrimonio de apertura de un ejercicio de prueba Ene-Jun 2026), con la
+  lógica DEBE/HABER correcta. Encontró y corrigió un bug real de tipos (`codigo`/`nombre`/`tipo` son
+  `varchar` en el schema real, no `text` — `RETURN QUERY` los rechazaba sin el cast explícito).
+- Frontend: selector de naturaleza en "Editar Cuenta" (`TabPlanCuentas.jsx`), carga de índices
+  mensuales en Configuración → Finanzas (`IndicesInflacionCard.jsx`, nuevo), y el paso "Ajuste por
+  Inflación" en Cierre de Ejercicio (`TabPeriodos.jsx`) — con preview antes de confirmar, entre
+  "Cerrar período" y "Cerrar Ejercicio" (el RECPAM debe generarse antes del cierre para que
+  `cerrar_ejercicio_contable` lo arrastre solo al barrer ingreso/egreso). `tsc`/`eslint`/`vite
+  build` limpios, 160/160 tests.
+
+**🔴 BLOQUEADO — la migración 378 NO está aplicada a producción.** El clasificador de auto-mode
+denegó el `apply_migration` (acción de alto riesgo sin Luciano presente para confirmar en vivo) —
+coincide con la política del proyecto de nunca aplicar migraciones a prod sin confirmación
+explícita. El archivo `supabase/migrations/378_ajuste_inflacion_fase1.sql` está commiteado y
+pusheado al repo, y el frontend que lo consume ya está deployado — pero hasta que alguien corra la
+migración contra Supabase, Plan de Cuentas → Editar Cuenta (selector de naturaleza) y Configuración
+→ Finanzas (índices) van a fallar al guardar/cargar (columna/tabla inexistentes), sin romper el
+resto de la app. **Próximo paso al retomar: aplicar mig.378 (ya validada), después seguir con Fase 2
+(toggle "Ver en moneda homogénea" en Balance/EERR de Reportes).**
+
+---
+
 ## ✅ Cierre del pendiente de Nadia: try/catch faltante en Recuento/Revalorización de Inventario (01/09)
 
 Al retomar la sesión, único pendiente real que quedó marcado (no crítico) en el cierre de Nadia: 2

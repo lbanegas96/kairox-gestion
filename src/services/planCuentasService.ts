@@ -41,7 +41,7 @@ export const planCuentasService = {
 
   async updateCuenta(
     id: string,
-    payload: Partial<Pick<PlanCuenta, 'nombre' | 'activa' | 'permite_movimientos'>>
+    payload: Partial<Pick<PlanCuenta, 'nombre' | 'activa' | 'permite_movimientos' | 'naturaleza_monetaria'>>
   ): Promise<PlanCuenta> {
     const { data, error } = await supabase
       .from('plan_cuentas')
