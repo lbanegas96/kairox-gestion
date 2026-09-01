@@ -1,5 +1,70 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ RESUELTOS (01/09, Nalux) — 2 modificaciones de POS + 3 gaps de permisos encontrados al investigar "pantalla en negro"
+
+**Pedido de Nadia — Medio de pago colapsable en el POS:** la grilla de medios de pago
+(`PanelCarrito.jsx`) vivía siempre desplegada, ocupando lugar mientras se cargaban productos.
+Ahora arranca colapsada (un renglón con el método elegido + flecha), se despliega con un click, y
+se vuelve a colapsar sola después de confirmar cada venta. Tests adaptados (`abrirMedioPago()`
+antes de tocar los botones individuales).
+
+**Bug real encontrado en el mismo pedido — el panel del carrito no usaba toda la altura
+disponible:** con pocos productos quedaba una franja negra vacía abajo del botón "Confirmar
+Venta" en vez de dársela a la lista de ítems. Causa: al div raíz de `PanelCarrito.jsx` le faltaba
+`flex-1` — dentro de un contenedor `flex-col`, un hijo sin `flex-grow` se achica a su propio
+contenido en vez de heredar la altura que el wrapper ya le estaba dando (confirmado con
+`getBoundingClientRect`: 460px de 852px disponibles, antes del fix). Con `flex-1`, el panel pasa a
+usar el 100% del alto real, la lista de ítems se expande y el footer queda pegado abajo de verdad.
+
+**"Se puso la pantalla en negro" al abrir Cotizaciones:** no era un bug de la app — yo había
+parado el servidor de desarrollo local (`localhost:3000`) después de la prueba anterior, y la
+pestaña de Nadia seguía apuntando ahí. `ERR_CONNECTION_REFUSED` al intentar cargar el chunk lazy
+de Cotizaciones. Se resolvió reiniciando el servidor (la sesión persistió, sin volver a loguearse).
+
+### 🔴→✅ 3 gaps reales de permisos encontrados al revisar la consola durante el incidente (mig.376, mig.377)
+Aparecieron 2 errores 403 en consola que NO eran del servidor caído — reales contra Supabase, en
+cualquier entorno (dev o producción, mismo backend):
+
+1. **`fecha_en_periodo_cerrado` sin GRANT a `authenticated`** — mig.155 (28/06) decidió a propósito
+   no otorgarlo porque en ese momento sólo se llamaba desde OTRAS funciones `SECURITY DEFINER`. Pero
+   `planCuentasService.ts` la llama DIRECTO desde el cliente en 8 lugares, camino que no existía
+   entonces. Impacto real:
+   - 6 de 8 call-sites (asiento de venta/compra/NC/ND/movimiento de caja) tienen try/catch
+     "non-critical" — el chequeo de "período contable cerrado" queda SIEMPRE inactivo y silencioso
+     (fail-open) en TODOS los tenants, no sólo Nalux.
+   - Los otros 2 (`crearAsientoRecuentoInventario`, `crearAsientoRevalorizacionInventario` —
+     Inventario → Recuento/Revalorización) **no tienen try/catch: revientan con excepción sin
+     capturar** apenas hay un faltante/sobrante real que asentar. Estos 2 flujos estaban rotos en
+     producción para cualquier empresa.
+2. **`audit_log_id_seq` sin GRANT a `authenticated`** — la tabla sí tenía INSERT (así escriben la
+   mayoría de las auditorías, vía triggers que corren como el owner) pero nunca tuvo USAGE sobre su
+   secuencia. Rompía el único insert directo desde el cliente: el botón "Avisar" del banner de stock
+   bajo (`AlertasStockBanner.jsx`).
+3. **Encontrado al seguir verificando el punto 2** — aunque se arreglara la secuencia, el insert
+   SEGUÍA fallando: `audit_log` nunca tuvo política RLS de INSERT (sólo SELECT), y su constraint
+   `audit_log_operacion_check` sólo permitía `'INSERT'/'UPDATE'/'DELETE'` — el propio código usa
+   `operacion: 'aviso_cajero_stock'` (comentario del componente: "no existe tabla notificaciones, se
+   registra en audit_log con tipo especial"), nunca permitido. **El botón "Avisar" nunca funcionó
+   desde que se creó** — el cajero veía "Encargado notificado" (el catch tiene un fallback amigable
+   que oculta el error) pero la fila jamás se grababa.
+
+**Fix (mig.376 + mig.377), verificado con `BEGIN...ROLLBACK` en cada capa antes de aplicar en
+firme, y con un insert/RPC real de prueba desde el navegador después de aplicar (fila de prueba
+borrada):**
+- `GRANT EXECUTE` en `fecha_en_periodo_cerrado` a `authenticated`.
+- `GRANT USAGE, SELECT` en `audit_log_id_seq` a `authenticated`.
+- Política RLS `audit_log_insert_propio` (INSERT acotado a `empresa_id`/`user_id` propios — no abre
+  nada más).
+- `audit_log_operacion_check` ampliado para aceptar `'aviso_cajero_stock'` además de los 3 valores
+  de trigger.
+
+**Pendiente, no crítico (no se tocó):** los 2 call-sites sin try/catch en `planCuentasService.ts`
+(Recuento/Revalorización) quedarían más robustos con el mismo patrón defensivo que ya usan los
+otros 6 — ya no revientan hoy porque el GRANT está resuelto, pero seguiría siendo el único lugar sin
+ese resguardo si algo similar volviera a pasar.
+
+---
+
 ## ✅ Verificado en vivo (01/09, Nadia) el día de Luciano contra Nalux real — sin hallazgos
 
 Antes de seguir, se verificó lo que Luciano dejó (Rondas 3-6 + `PLAN_AJUSTE_POR_INFLACION.md`) en

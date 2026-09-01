@@ -1,0 +1,47 @@
+-- migration 376 — dos GRANTs faltantes a `authenticated`, mismo patrón que los
+-- gaps encontrados antes (mig.366): una función/secuencia que asumía un
+-- camino de llamada distinto al que terminó teniendo en producción.
+--
+-- HALLAZGO real (01/09, Nadia, contra Nalux): al usar la app aparecieron 2
+-- errores 403 en consola:
+--   - "permission denied for function fecha_en_periodo_cerrado" (42501)
+--   - "permission denied for sequence audit_log_id_seq" (42501)
+--
+-- 1) fecha_en_periodo_cerrado
+-- Causa raíz: mig.155 (comentario línea 16) decidió A PROPÓSITO no otorgar
+-- GRANT a esta función porque en ese momento sólo se llamaba DESDE OTRAS
+-- funciones SECURITY DEFINER (registrar_cobro_cliente, etc.) — ahí corre con
+-- los privilegios del owner, sin necesitar su propio GRANT. Pero
+-- `planCuentasService.ts` (asientosAutoService) la llama DIRECTO desde el
+-- cliente vía `supabase.rpc('fecha_en_periodo_cerrado', ...)` en 8 lugares —
+-- un camino de llamada que no existía cuando se tomó esa decisión, y que sí
+-- necesita el GRANT.
+--
+-- Impacto real, confirmado por código (src/services/planCuentasService.ts):
+--   - En 6 de los 8 call-sites (asiento de venta/compra/NC/ND/movimiento de
+--     caja) la llamada está en try/catch "non-critical, RPC errors never
+--     block the sale" — el error se traga y el chequeo de "período cerrado"
+--     queda SIEMPRE inactivo (fail-open), silencioso. La operación nunca se
+--     bloquea, ni siquiera cuando el período SÍ está cerrado.
+--   - En los otros 2 (`crearAsientoRecuentoInventario`,
+--     `crearAsientoRevalorizacionInventario` — Inventario → Recuento /
+--     Revalorización) la llamada NO tiene try/catch: un Recuento o
+--     Revalorización con faltante/sobrante real revienta con una excepción
+--     sin capturar apenas intenta generar su asiento. Estos 2 flujos están
+--     rotos en producción para CUALQUIER tenant, no sólo Nalux.
+--
+-- 2) audit_log_id_seq
+-- `authenticated` ya tenía INSERT sobre la tabla `audit_log` (así logea la
+-- mayoría de las auditorías, vía triggers) pero nunca tuvo USAGE sobre la
+-- secuencia que arma su columna `id` — así que el ÚNICO insert directo desde
+-- el cliente (`AlertasStockBanner.jsx`, botón "Avisar" sobre stock bajo)
+-- siempre falla. Tiene try/catch con un toast de fallback ("Alerta
+-- registrada (modo offline)"), así que no rompe nada visible — pero el
+-- cajero cree que avisó al encargado y la fila nunca se graba de verdad.
+--
+-- Verificado con BEGIN...ROLLBACK antes de aplicar en firme: los dos GRANTs
+-- resuelven exactamente lo que reportaba el error 403 (has_function_privilege
+-- / has_sequence_privilege pasan a true).
+
+GRANT EXECUTE ON FUNCTION public.fecha_en_periodo_cerrado(uuid, date) TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE public.audit_log_id_seq TO authenticated;
