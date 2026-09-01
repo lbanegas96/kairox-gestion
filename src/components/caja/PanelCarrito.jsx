@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { ShoppingCart, Trash2, Plus, Minus, CheckCircle, Loader2, AlertTriangle, Tag, Boxes, Gift } from 'lucide-react';
+import { ShoppingCart, Trash2, Plus, Minus, CheckCircle, Loader2, AlertTriangle, Tag, Boxes, Gift, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import ClienteSelector from '@/components/shared/ClienteSelector';
@@ -200,6 +200,11 @@ function PanelCarrito({
   const [centrosCosto, setCentrosCosto]     = useState([]);
   const [centroCostoId, setCentroCostoId]   = useState('');
   const [showParaleloTCModal, setShowParaleloTCModal] = useState(false);
+  // UI (01/09, pedido de Nadia): la grilla de medios de pago ocupaba lugar fijo
+  // abajo del carrito y tapaba la vista de los productos mientras se van
+  // cargando. Arranca colapsada — se despliega con la flecha recién cuando el
+  // cajero terminó de cargar y quiere elegir el medio de pago.
+  const [pagoExpandido, setPagoExpandido] = useState(false);
   const clienteWrapperRef = useRef(null);
   const tcParalelo = useTCParalelo();
   const { confirmar, loading }      = useConfirmarVenta(tcParalelo, formasPago);
@@ -363,6 +368,7 @@ function PanelCarrito({
       setClienteId('');
       setCentroCostoId('');
       multipago.reset();
+      setPagoExpandido(false);
       onVentaExitosa?.({
         comprobante: {
           id: d.comprobante_id,
@@ -471,6 +477,7 @@ function PanelCarrito({
       setCentroCostoId('');
       setPuntosCanjeados('');
       multipago.reset();
+      setPagoExpandido(false);
       onVentaExitosa?.({ comprobante: result, items: itemsSnapshot });
     }
   };
@@ -589,13 +596,31 @@ function PanelCarrito({
 
       {/* Totales + método de pago + confirmar */}
       <div className="p-3 border-t border-kx-border space-y-3 flex-shrink-0 bg-kx-surface">
-        {/* Método de pago — tocá varios para dividir el cobro */}
-        <div className="flex items-center justify-between">
+        {/* Método de pago — colapsado por defecto (01/09): la grilla completa
+            tapaba la vista de los productos mientras se van cargando. Se
+            despliega con la flecha cuando el cajero terminó de cargar. */}
+        <button
+          type="button"
+          onClick={() => setPagoExpandido(v => !v)}
+          className="w-full flex items-center justify-between"
+        >
           <span className="text-2xs uppercase tracking-wide text-kx-text-3">Medio de pago</span>
-          {isMultiPago && (
-            <span className="text-2xs text-kx-text-3">{selectedMethods.size} medios · asigná los montos</span>
-          )}
-        </div>
+          <span className="flex items-center gap-1.5 min-w-0">
+            {!pagoExpandido && selectedMethods.size > 0 && (
+              <span className="text-2xs font-semibold text-kx-text-2 truncate max-w-[160px]">
+                {Array.from(selectedMethods).join(' + ')}
+              </span>
+            )}
+            {!pagoExpandido && selectedMethods.size === 0 && (
+              <span className="text-2xs text-kx-text-3">Elegir</span>
+            )}
+            {pagoExpandido && isMultiPago && (
+              <span className="text-2xs text-kx-text-3">{selectedMethods.size} medios · asigná los montos</span>
+            )}
+            <ChevronDown className={`w-3.5 h-3.5 text-kx-text-3 transition-transform flex-shrink-0 ${pagoExpandido ? 'rotate-180' : ''}`} />
+          </span>
+        </button>
+        {pagoExpandido && (
         <div className="grid grid-cols-2 gap-1.5">
           {METODOS.map((m, idx) => {
             const activo = selectedMethods.has(m);
@@ -650,6 +675,7 @@ function PanelCarrito({
             );
           })}
         </div>
+        )}
 
         {/* Restante a asignar */}
         {isMultiPago && (

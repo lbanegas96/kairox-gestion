@@ -77,6 +77,12 @@ async function renderPanel(props = {}) {
   return utils;
 }
 
+// UI (01/09): la grilla de medios de pago arranca colapsada — hay que abrirla
+// con la flecha antes de poder ver/clickear los botones individuales.
+function abrirMedioPago() {
+  fireEvent.click(screen.getByText('Medio de pago').closest('button'));
+}
+
 // Modo Offline del POS — Fase 3. Tarjeta/QR/Cuenta Corriente tienen que
 // quedar deshabilitados (con tooltip) apenas se corta la red — Efectivo y
 // Transferencia siguen disponibles.
@@ -89,6 +95,7 @@ describe('PanelCarrito — medios de pago offline', () => {
 
   it('online: ningún botón de medio de pago está deshabilitado', async () => {
     await renderPanel();
+    abrirMedioPago();
     ['Efectivo', 'Transferencia', 'Tarjeta Débito', 'QR MercadoPago', 'Cuenta Corriente'].forEach(nombre => {
       expect(screen.getByText(nombre).closest('button').disabled).toBe(false);
     });
@@ -97,6 +104,7 @@ describe('PanelCarrito — medios de pago offline', () => {
   it('offline: Efectivo y Transferencia siguen habilitados', async () => {
     mockIsOnline = false;
     await renderPanel();
+    abrirMedioPago();
     expect(screen.getByText('Efectivo').closest('button').disabled).toBe(false);
     expect(screen.getByText('Transferencia').closest('button').disabled).toBe(false);
   });
@@ -104,6 +112,7 @@ describe('PanelCarrito — medios de pago offline', () => {
   it('offline: Tarjeta, QR MercadoPago y Cuenta Corriente quedan deshabilitados con tooltip', async () => {
     mockIsOnline = false;
     await renderPanel();
+    abrirMedioPago();
     for (const nombre of ['Tarjeta Débito', 'QR MercadoPago', 'Cuenta Corriente']) {
       const boton = screen.getByText(nombre).closest('button');
       expect(boton.disabled).toBe(true);
@@ -114,6 +123,7 @@ describe('PanelCarrito — medios de pago offline', () => {
   it('offline: clickear un medio deshabilitado no lo selecciona', async () => {
     mockIsOnline = false;
     await renderPanel();
+    abrirMedioPago();
     const boton = screen.getByText('Tarjeta Débito').closest('button');
     fireEvent.click(boton);
     // Si se hubiera seleccionado, aparecería el ícono de check (vía la clase/props del ícono).
@@ -125,6 +135,7 @@ describe('PanelCarrito — medios de pago offline', () => {
   it('vuelve a habilitar todo si la conexión vuelve (re-render con isOnline=true)', async () => {
     mockIsOnline = false;
     const { rerender } = await renderPanel();
+    abrirMedioPago();
     expect(screen.getByText('Tarjeta Débito').closest('button').disabled).toBe(true);
 
     mockIsOnline = true;
