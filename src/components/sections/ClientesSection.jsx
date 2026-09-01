@@ -165,10 +165,16 @@ function ClientesSection() {
   // OJO: NO usar como <ClientForm /> (eso lo trata como componente y React lo
   // remonta en cada render del padre, perdiendo focus de los inputs en cada
   // tecla). Llamar siempre como función: {renderClientForm({ isEdit: false })}
+  // Rediseño 30/08 (hallazgo Luciano: "agrandemos el popup, ajustemos los
+  // campos de información para que queden bien") — grilla de 3 columnas en
+  // vez de 2 para aprovechar el ancho extra del modal (ver size del
+  // DialogContent más abajo): Documento/Teléfono/Email y Límite/Condición de
+  // Pago/Días de Crédito pasan a una sola fila cada uno, mismo criterio ya
+  // aplicado a Localidad/Provincia/CP.
   const renderClientForm = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-2">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-2">
       {/* Nombre */}
-      <div className="space-y-1.5 md:col-span-2">
+      <div className="space-y-1.5 md:col-span-3">
         <Label className="dark:text-kx-text">Nombre / Razón Social *</Label>
         <Input value={formData.nombre} onChange={e => setFormData(f => ({ ...f, nombre: e.target.value }))}
           className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" required />
@@ -194,7 +200,7 @@ function ClientesSection() {
       {/* Domicilio — mig.345 (item 7): la dirección sola no alcanzaba para
           emitir un remito usable. Ocupa el ancho completo porque son 4 campos
           que se leen como una unidad. */}
-      <div className="md:col-span-2 border-t border-kx-border dark:border-kx-border pt-3">
+      <div className="md:col-span-3 border-t border-kx-border dark:border-kx-border pt-3">
         <p className="text-xs font-semibold text-slate-500 dark:text-kx-text-2 uppercase tracking-wider flex items-center gap-1">
           <MapPin className="h-3.5 w-3.5" /> Domicilio
         </p>
@@ -202,39 +208,33 @@ function ClientesSection() {
           Se usa en los remitos y en la solapa Logística de los documentos.
         </p>
       </div>
-      <div className="space-y-1.5 md:col-span-2">
+      <div className="space-y-1.5 md:col-span-3">
         <Label className="dark:text-kx-text">Dirección</Label>
         <Input value={formData.direccion} onChange={e => setFormData(f => ({ ...f, direccion: e.target.value }))}
           placeholder="Calle y número, piso/depto"
           className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
       </div>
-      {/* Localidad/Provincia/CP en una sola fila de 3 — antes Provincia+CP
-          quedaban anidados en un grid-cols-2 propio adentro de la celda de al
-          lado de Localidad, una asimetría rara con el resto del formulario
-          (30/08, hallazgo Luciano: "organicemos los campos de información"). */}
-      <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="space-y-1.5">
-          <Label className="dark:text-kx-text">Localidad</Label>
-          <Input value={formData.localidad} onChange={e => setFormData(f => ({ ...f, localidad: e.target.value }))}
-            placeholder="Ej: Quilmes"
-            className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
-        </div>
-        <div className="space-y-1.5">
-          <Label className="dark:text-kx-text">Provincia</Label>
-          <Input value={formData.provincia} onChange={e => setFormData(f => ({ ...f, provincia: e.target.value }))}
-            placeholder="Ej: Buenos Aires"
-            className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
-        </div>
-        <div className="space-y-1.5">
-          <Label className="dark:text-kx-text">Cód. postal</Label>
-          <Input value={formData.codigo_postal} onChange={e => setFormData(f => ({ ...f, codigo_postal: e.target.value }))}
-            placeholder="B1878"
-            className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
-        </div>
+      <div className="space-y-1.5">
+        <Label className="dark:text-kx-text">Localidad</Label>
+        <Input value={formData.localidad} onChange={e => setFormData(f => ({ ...f, localidad: e.target.value }))}
+          placeholder="Ej: Quilmes"
+          className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="dark:text-kx-text">Provincia</Label>
+        <Input value={formData.provincia} onChange={e => setFormData(f => ({ ...f, provincia: e.target.value }))}
+          placeholder="Ej: Buenos Aires"
+          className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+      </div>
+      <div className="space-y-1.5">
+        <Label className="dark:text-kx-text">Cód. postal</Label>
+        <Input value={formData.codigo_postal} onChange={e => setFormData(f => ({ ...f, codigo_postal: e.target.value }))}
+          placeholder="B1878"
+          className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
       </div>
 
       {/* Separador Crédito */}
-      <div className="md:col-span-2 border-t border-kx-border dark:border-kx-border pt-3">
+      <div className="md:col-span-3 border-t border-kx-border dark:border-kx-border pt-3">
         <p className="text-xs font-semibold text-slate-500 dark:text-kx-text-2 uppercase tracking-wider flex items-center gap-1">
           <CreditCard className="h-3.5 w-3.5" /> Condiciones de Crédito
         </p>
@@ -294,7 +294,7 @@ function ClientesSection() {
       </div>
       {/* Lista de precios */}
       {listasPrecios.filter(l => l.activo).length > 0 && (
-        <div className="md:col-span-2 space-y-1.5">
+        <div className="md:col-span-3 space-y-1.5">
           <Label className="dark:text-kx-text flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-violet-500" /> Lista de Precios</Label>
           <select
             value={formData.lista_precio_id}
@@ -312,7 +312,7 @@ function ClientesSection() {
 
       {/* Bloquear */}
       {(parseFloat(formData.limite_credito) || 0) > 0 && (
-        <div className="md:col-span-2 flex items-center gap-3 bg-amber-50 dark:bg-amber-900/10 p-3 rounded-lg border border-amber-200 dark:border-amber-800">
+        <div className="md:col-span-3 flex items-center gap-3 bg-amber-50 dark:bg-amber-900/10 p-3 rounded-lg border border-amber-200 dark:border-amber-800">
           <Shield className="h-5 w-5 text-amber-600 shrink-0" />
           <div className="flex-1">
             <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Bloquear ventas al superar el límite</p>
@@ -463,7 +463,10 @@ function ClientesSection() {
             fijos, solo el cuerpo del formulario escrolea. Reemplaza el
             max-w-2xl (672px) por el ancho estándar de "medium" (max-w-3xl,
             768px) — más lugar para Localidad/Provincia/CP en una sola fila. */}
-        <DialogContent size="medium" className="dark:bg-kx-bg dark:border-kx-border">
+        {/* max-w-4xl — segunda vuelta de "agrandemos" (30/08): medium (max-w-3xl)
+            se quedaba corto para 3 columnas cómodas; twMerge en cn() pisa el
+            max-w-3xl de mediumDialogClass con este. */}
+        <DialogContent size="medium" className="max-w-4xl dark:bg-kx-bg dark:border-kx-border">
           <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b border-kx-border dark:border-kx-border">
             <DialogTitle className="dark:text-kx-text">Nuevo Cliente</DialogTitle>
             <DialogDescription className="dark:text-kx-text-2">Completá los datos del nuevo cliente.</DialogDescription>
@@ -485,7 +488,10 @@ function ClientesSection() {
         setIsEditDialogOpen(open);
         if (!open) document.activeElement?.blur();
       }}>
-        <DialogContent size="medium" className="dark:bg-kx-bg dark:border-kx-border">
+        {/* max-w-4xl — segunda vuelta de "agrandemos" (30/08): medium (max-w-3xl)
+            se quedaba corto para 3 columnas cómodas; twMerge en cn() pisa el
+            max-w-3xl de mediumDialogClass con este. */}
+        <DialogContent size="medium" className="max-w-4xl dark:bg-kx-bg dark:border-kx-border">
           <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b border-kx-border dark:border-kx-border">
             <DialogTitle className="dark:text-kx-text">Editar: {selectedClient?.nombre}</DialogTitle>
             <DialogDescription className="dark:text-kx-text-2">Modificá los datos del cliente.</DialogDescription>

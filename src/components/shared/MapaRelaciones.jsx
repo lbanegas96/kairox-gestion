@@ -4,7 +4,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import {
-  Loader2, ChevronRight, Network, ExternalLink, Maximize2, Minimize2,
+  Loader2, ChevronRight, ChevronDown, Network, ExternalLink,
   FileText, ClipboardList, Truck, Receipt, RotateCcw, PlusCircle, Undo2,
   Wallet, ShoppingCart, PackageCheck, Layers, X, Ban, Banknote,
 } from 'lucide-react';
@@ -126,6 +126,10 @@ function NodoMapa({ nodo, activo = false, onClick }) {
         'bg-kx-surface border border-kx-border rounded-xl p-3',
         'w-[150px] h-[176px] flex-shrink-0 flex flex-col select-none',
         'border-t-2',
+        // Animación de entrada (30/08, pedido de Luciano: "le demos algo de
+        // animación al mapa de relaciones") — cada tarjeta aparece con un
+        // fade + leve subida en vez de aparecer de golpe.
+        'animate-in fade-in slide-in-from-bottom-1 duration-300',
         activo
           ? 'border-t-[rgb(var(--kx-violet))] ring-2 ring-[rgb(var(--kx-violet)/0.18)]'
           : config.color,
@@ -180,6 +184,73 @@ function NodoMapa({ nodo, activo = false, onClick }) {
           <ExternalLink className="w-2.5 h-2.5" /> ver detalle
         </div>
       )}
+    </div>
+  );
+}
+
+// Nido de tarjetas (30/08, pedido de Luciano: "en SAP los mismos comprobantes
+// se anidan... que sean interactivos, al hacer clic que se desplieguen").
+// Colapsa una corrida de N nodos del MISMO tipo (hoy solo "Pago al Contado" —
+// una venta con Efectivo+Tarjeta+Transferencia+Débito ya no ocupa 4 tarjetas
+// sueltas en la cadena) en UNA tarjeta con efecto "mazo apilado". Al hacer
+// clic se despliega inline, en el mismo lugar de la cadena — no es un panel
+// aparte, para no perder el contexto del resto del circuito.
+function NidoMapa({ grupo, isActivo, onNodoClick }) {
+  const [abierto, setAbierto] = useState(false);
+  const config = TIPO_CONFIG[grupo[0].tipo] ?? TIPO_CONFIG.venta;
+  const Icono  = config.icon;
+  const total  = grupo.reduce((s, n) => s + Number(n.total ?? n.monto ?? 0), 0);
+
+  if (abierto) {
+    return (
+      <div className="flex items-start gap-0 animate-in fade-in slide-in-from-left-2 duration-200">
+        {grupo.map((n, i) => (
+          <React.Fragment key={n.id}>
+            <NodoMapa nodo={n} activo={isActivo(n.id)} onClick={() => onNodoClick(n)} />
+            {i < grupo.length - 1 && <Conector />}
+          </React.Fragment>
+        ))}
+        <button
+          type="button"
+          onClick={() => setAbierto(false)}
+          title="Volver a agrupar"
+          className="self-center ml-1.5 flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-kx-text-3 hover:text-kx-text hover:bg-kx-surface-2 transition-colors mt-[70px]"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      role="button"
+      onClick={() => setAbierto(true)}
+      className="relative w-[150px] h-[176px] flex-shrink-0 cursor-pointer group animate-in fade-in zoom-in-95 duration-300 select-none"
+      title={`Ver los ${grupo.length} pagos`}
+    >
+      {/* Capas apiladas detrás — efecto "mazo de cartas", da la pista visual
+          de que hay más de una tarjeta ahí adentro antes de leer el número. */}
+      <div className="absolute inset-0 translate-x-2 translate-y-2 rounded-xl border border-kx-border bg-kx-surface opacity-40" />
+      <div className="absolute inset-0 translate-x-1 translate-y-1 rounded-xl border border-kx-border bg-kx-surface opacity-70" />
+      <div className={`relative bg-kx-surface border border-kx-border rounded-xl p-3 w-full h-full flex flex-col border-t-2 ${config.color} group-hover:shadow-lg group-hover:-translate-y-0.5 transition-all duration-150`}>
+        <div className="flex items-center justify-between mb-2">
+          <span className={`w-7 h-7 rounded-full flex items-center justify-center ${config.bg}`}>
+            <Icono className={`w-3.5 h-3.5 ${config.accent}`} />
+          </span>
+          <span className="text-[9px] font-bold bg-kx-surface-2 text-kx-text-2 px-1.5 py-0.5 rounded-full">
+            ×{grupo.length}
+          </span>
+        </div>
+        <div className={`text-2xs font-bold uppercase tracking-wider mb-0.5 ${config.accent}`}>
+          {config.label}
+        </div>
+        <div className="text-xs font-bold text-kx-text">{grupo.length} pagos</div>
+        <div className="text-xs font-semibold text-kx-text mt-1 tabular-nums">${fmt(total)}</div>
+        <div className="mt-auto pt-1.5 text-[9px] text-kx-text-3 flex items-center gap-0.5">
+          <ChevronDown className="w-2.5 h-2.5" /> desplegar
+        </div>
+      </div>
     </div>
   );
 }
@@ -324,7 +395,6 @@ function MapaRelaciones({
   const { user }  = useAuth();
   const [loading, setLoading] = useState(false);
   const [mapa, setMapa]       = useState(null);
-  const [fullscreen, setFullscreen] = useState(false);
   const [previewNodo, setPreviewNodo]   = useState(null); // { tipo, id, numero, fecha, total|monto, estado }
   const [previewItems, setPreviewItems] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -346,7 +416,7 @@ function MapaRelaciones({
 
   useEffect(() => {
     if (!open) {
-      setMapa(null); setFullscreen(false); setPreviewNodo(null); setPreviewItems(null);
+      setMapa(null); setPreviewNodo(null); setPreviewItems(null);
       setActivoId(null); setSinFacturar(null); setDuplicadoInfo(null); setDerivadosExpandido(false);
     }
   }, [open]);
@@ -1009,6 +1079,38 @@ function MapaRelaciones({
     })),
   ] : [];
 
+  // Agrupa corridas consecutivas de "Pago al Contado" en un nido plegable
+  // (30/08, pedido de Luciano: "en SAP los mismos comprobantes se anidan") —
+  // una venta con 4-5 medios de pago combinados ya no ocupa 4-5 tarjetas
+  // sueltas en la cadena. Solo agrupa 'cobro_caja' (el caso real que se
+  // repite); un Cobro CC real o una Reversa siguen mostrándose sueltos,
+  // cada uno es su propio hecho, no una corrida de líneas del mismo pago.
+  const cobrosAgrupados = [];
+  for (let i = 0; i < cobrosNodos.length; i++) {
+    const n = cobrosNodos[i];
+    if (n.tipo === 'cobro_caja') {
+      const grupo = [n];
+      while (i + 1 < cobrosNodos.length && cobrosNodos[i + 1].tipo === 'cobro_caja') {
+        grupo.push(cobrosNodos[++i]);
+      }
+      cobrosAgrupados.push(grupo.length > 1 ? { esNido: true, id: `nido-${grupo[0].id}`, grupo } : grupo[0]);
+    } else {
+      cobrosAgrupados.push(n);
+    }
+  }
+
+  // Un cobro real abre su propio "Comprobante de Pago" (29/08, hallazgo
+  // Luciano: "que vuelva a llamar al modal del pago creado") — no tiene
+  // página propia, así que en vez de navegar a una sección se lo pide al
+  // caller (onNavigate) para que decida cómo mostrarlo. Reversas y pago al
+  // contado (sin ese circuito de revisión/cancelación) se quedan con el
+  // preview liviano de siempre. Compartida entre nodos sueltos y los que
+  // salen de adentro de un nido desplegado (NidoMapa).
+  const onNodoClickCobro = (n) => {
+    if (n.tipo === 'cobro_cc' && onNavigate) onNavigate('cobro_cc', n.id);
+    else openPreview(n);
+  };
+
   // Fase 4 — colapsar ramas largas: mismo orden en el que ya se renderizaban
   // (NC, ND, devoluciones), ahora como array plano para poder recortarlo con
   // .slice() en vez de varios .map() sueltos que no sabían nada del total
@@ -1069,18 +1171,14 @@ function MapaRelaciones({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* size="wide" en modo fullscreen — hallazgo Luciano 22/08: el 96vw
-          manual no descontaba el ancho del sidebar (z-60), que le tapaba y
-          bloqueaba la franja izquierda. twMerge dedupea max-w-5xl contra el
-          max-w-lg de size="default" en el modo no-fullscreen. */}
-      <DialogContent
-        size={fullscreen ? 'wide' : 'default'}
-        className={[
-          'bg-kx-surface border-kx-border text-kx-text transition-all duration-200',
-          !fullscreen && 'max-w-5xl',
-        ].filter(Boolean).join(' ')}
-      >
-        <DialogHeader className={fullscreen ? 'flex-shrink-0' : ''}>
+      {/* Un solo tamaño, siempre grande — 30/08, hallazgo Luciano: "dejemos
+          un solo tamaño para el popup que levanta, usemos todo el tamaño
+          para que los comprobantes se vean". Antes alternaba entre
+          size="default" (max-w-lg, donde una venta con varios medios de
+          pago no entraba) y size="wide" a pedido del usuario — ahora es
+          siempre size="wide", el mismo shell que ya usan Factura/Pedido/OC. */}
+      <DialogContent size="wide" className="bg-kx-surface border-kx-border text-kx-text">
+        <DialogHeader className="flex-shrink-0">
           <div className="flex items-center justify-between pr-8">
             <DialogTitle className="flex items-center gap-2">
               <Network className="w-5 h-5 text-kx-violet" />
@@ -1091,16 +1189,6 @@ function MapaRelaciones({
                 </span>
               )}
             </DialogTitle>
-            {mapa && (
-              <Button
-                variant="ghost" size="icon"
-                className="h-7 w-7 text-kx-text-3 hover:text-kx-text"
-                onClick={() => setFullscreen(f => !f)}
-                title={fullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
-              >
-                {fullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-              </Button>
-            )}
           </div>
           <DialogDescription className="text-kx-text-2 text-xs">
             Árbol de documentos vinculados
@@ -1144,15 +1232,11 @@ function MapaRelaciones({
           )}
         </DialogHeader>
 
-        {/* Bug real (30/08, Luciano: "el modal de mapa de relaciones continúa
-            viéndose mal"): esta fila no tenía tope de ancho propio en modo NO
-            pantalla-completa — un flex container sin `min-w-0`/`w-full` se
-            infla al ancho intrínseco de sus hijos (acá, la fila de cards de
-            "Cadena de documentos") en vez de respetar el ancho del propio
-            Dialog, y esos ~46px de más se salían del modal en vez de activar
-            el scroll horizontal interno que ya tiene esa fila. `w-full
-            min-w-0` la ata al ancho real del Dialog en los dos modos. */}
-        <div className={`flex gap-0 w-full min-w-0 ${fullscreen ? 'flex-1 overflow-hidden' : 'min-h-[180px]'}`}>
+        {/* Bug real (30/08, Luciano): esta fila no tenía tope de ancho propio
+            — un flex container sin `min-w-0`/`w-full` se infla al ancho
+            intrínseco de sus hijos (acá, la fila de cards de "Cadena de
+            documentos") en vez de respetar el ancho del propio Dialog. */}
+        <div className="flex gap-0 w-full min-w-0 flex-1 overflow-hidden">
         {/* Bug real (30/08, Luciano: "se rompe cuando tiene varios pagos"):
             este wrapper tenía SU PROPIO overflow-x-auto, redundante con el de
             la fila "Cadena de documentos" de más abajo — con 5-6 tarjetas de
@@ -1161,7 +1245,7 @@ function MapaRelaciones({
             resumen del circuito, "Documentos derivados" y la leyenda (que no
             necesitan scroll propio). El scroll horizontal queda acotado solo
             a la fila que de verdad lo necesita. */}
-        <div className={`flex-1 min-w-0 py-2 ${fullscreen ? 'overflow-y-auto' : ''}`}>
+        <div className="flex-1 min-w-0 py-2 overflow-y-auto">
           {loading && (
             <div className="flex items-center justify-center h-36">
               <Loader2 className="w-6 h-6 animate-spin text-kx-text-3" />
@@ -1276,25 +1360,18 @@ function MapaRelaciones({
                       Luciano: "podemos ponerlo junto con la factura") — son
                       el siguiente paso lineal del mismo circuito, no una
                       rama propia como una NC o una devolución. */}
-                  {cobrosNodos.map(n => (
-                    <React.Fragment key={n.id}>
+                  {cobrosAgrupados.map(item => (
+                    <React.Fragment key={item.id}>
                       <Conector />
-                      <NodoMapa
-                        nodo={n}
-                        activo={isActivo(n.id)}
-                        onClick={() => {
-                          // Un cobro real abre su propio "Comprobante de Pago"
-                          // (29/08, hallazgo Luciano: "que vuelva a llamar al
-                          // modal del pago creado") — no tiene página propia,
-                          // así que en vez de navegar a una sección se lo pide
-                          // al caller (onNavigate) para que decida cómo
-                          // mostrarlo. Reversas y pago al contado (sin ese
-                          // circuito de revisión/cancelación) se quedan con el
-                          // preview liviano de siempre.
-                          if (n.tipo === 'cobro_cc' && onNavigate) onNavigate('cobro_cc', n.id);
-                          else openPreview(n);
-                        }}
-                      />
+                      {item.esNido ? (
+                        <NidoMapa grupo={item.grupo} isActivo={isActivo} onNodoClick={onNodoClickCobro} />
+                      ) : (
+                        <NodoMapa
+                          nodo={item}
+                          activo={isActivo(item.id)}
+                          onClick={() => onNodoClickCobro(item)}
+                        />
+                      )}
                     </React.Fragment>
                   ))}
                 </div>
@@ -1527,7 +1604,7 @@ function MapaRelaciones({
         )}
         </div>
 
-        <div className={`flex justify-end pt-3 border-t border-kx-border ${fullscreen ? 'flex-shrink-0' : ''}`}>
+        <div className="flex justify-end pt-3 border-t border-kx-border flex-shrink-0">
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}
             className="border-kx-border text-kx-text-2 text-xs">
             Cerrar

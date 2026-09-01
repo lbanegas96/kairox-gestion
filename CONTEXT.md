@@ -1,5 +1,41 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Ronda 3: nido interactivo en Mapa de Relaciones, Recibo de Pago ajustado, modal de Cliente ×2 (31/08)
+
+Tercera vuelta de pulido sobre lo mismo que las dos rondas anteriores — Luciano siguió probando en
+vivo. Todo en producción, 160/160 tests, `eslint`/`vite build` limpios.
+
+1. **Mapa de Relaciones — un solo tamaño + nido plegable + animación.** Se sacó el toggle
+   pantalla-completa/chico (`fullscreen` state) — ahora siempre abre en `size="wide"` (mismo shell
+   que Factura/Pedido). Nuevo componente `NidoMapa`: agrupa corridas consecutivas del mismo tipo en
+   `cobrosNodos` (hoy solo aplica a "Pago al Contado" — una venta con Efectivo+Tarjeta+Transferencia+
+   Débito) en UNA tarjeta con efecto "mazo apilado" (`×4 · 4 pagos · $100.000`), clickeable para
+   desplegar inline en el mismo lugar de la cadena (no un panel aparte) y volver a colapsar con una
+   X. Toda tarjeta (`NodoMapa`) ahora tiene una animación de entrada sutil (`animate-in fade-in
+   slide-in-from-bottom-1`) vía `tailwindcss-animate` (ya en el proyecto, no se agregó dependencia
+   nueva). Ojo con un falso positivo al verificar: la primera captura de pantalla justo al abrir el
+   modal puede pescar el fade-in a mitad de camino (se ve "vacío" con solo las flechas) — es
+   transitorio, no un bug; recapturar medio segundo después lo confirma.
+2. **Recibo de Pago (`ReciboPago.jsx` / `printRecibo.js`) — ajustado a la hoja.** El `@page` de
+   impresión (usado SOLO por este comprobante, no por Ticket/Factura) pasa de A4 completo (297mm)
+   a 210mm×210mm — es un comprobante corto y quedaba con casi un tercio de la hoja en blanco abajo.
+   Firma/Aclaración ya estaban simétricas en el código (mismo `flex-1`, mismo gap) — no había bug
+   ahí, la percepción de desalineación venía de la página sobredimensionada.
+3. **Modal de Cliente (alta/edición) — segunda vuelta de "agrandemos".** De `size="medium"`
+   (max-w-3xl) pasa a `max-w-4xl` con override de className (twMerge). Grilla interna de 2→3
+   columnas: CUIT/DNI+Teléfono+Email y Límite+Condición de Pago+Días de Crédito ahora entran cada
+   uno en una sola fila (antes se apilaban en 2 filas dispares).
+
+**Aclaración dada a Luciano sobre retenciones/percepciones** (no hubo cambio de código, solo
+investigación): hoy en KAIROX es un **registro manual**, no un cálculo automático atado al cliente.
+Tablas `retenciones` (tipo `'sufrida'` o `'practicada'`) + `retenciones_acumulado_mensual`, UI en
+`ImpuestosSection.jsx → TabRetenciones.jsx`. La tabla `clientes` NO tiene ninguna columna de
+agente de retención/percepción — por eso no aparece nada para configurar en la ficha del cliente,
+no es que esté escondido. Si se quisiera automatizar (ej. aplicar percepción de IIBB según
+provincia/condición del cliente al facturar), es una feature nueva, no algo que ya exista oculto.
+
+---
+
 ## ✅ Ronda 2 de pulido de UI post-CC combinable: Mapa de Relaciones, totales de Factura, modal de Cliente (30/08)
 
 Seguimiento directo de la sesión anterior (sección siguiente) — Luciano siguió probando en vivo y

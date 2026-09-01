@@ -7,7 +7,16 @@ export function printElementById(elementId) {
   style.id = 'kx-print-style';
   style.textContent = `
     @media print {
-      @page { size: A4; margin: 15mm; }
+      /* 210mm x 210mm en vez de A4 completo (297mm) — 30/08, hallazgo
+         Luciano: "que se ajuste más a la hoja". El Recibo de Pago es un
+         comprobante corto (cabecera + un monto + tabla chica + firma); a
+         página A4 completa le sobraba casi un tercio en blanco abajo. Se
+         recorta con margen (si algún recibo con muchas imputaciones no
+         entra, el navegador lo pagina a una segunda hoja en vez de cortar
+         contenido — nunca hay pérdida de datos). Esta función solo la usa
+         ReciboPago.jsx (ver grep de callers) — no comparte @page con
+         Ticket/Factura, así que este cambio no los afecta. */
+      @page { size: 210mm 210mm; margin: 15mm; }
       body * { visibility: hidden !important; }
       #${elementId}, #${elementId} * { visibility: visible !important; }
       #${elementId} {
