@@ -1,5 +1,28 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Verificado en vivo (01/09, Nadia) el día de Luciano contra Nalux real — sin hallazgos
+
+Antes de seguir, se verificó lo que Luciano dejó (Rondas 3-6 + `PLAN_AJUSTE_POR_INFLACION.md`) en
+vez de confiar en los mensajes de commit — mismo criterio que el resto de esta bitácora. `eslint`
+limpio en los 6 archivos tocados, **160/160 tests sin regresiones**. Contra Nalux real (no
+Ferretería NADIA):
+- **Nido plegable del Mapa de Relaciones** (Ronda 3/4): probado con el caso real que motivó el
+  fix (`C 0001-00000049`, Banegas, 5 medios de pago) — colapsado muestra "×4 · 4 pagos ·
+  $100.000,00"; desplegado muestra los 4 pagos individuales (Efectivo $20.000 + Tarjeta Crédito
+  $20.000 + Transferencia $50.000 + Tarjeta Débito $10.000 = $100.000 exacto) en 2 filas sin scroll
+  horizontal, más el Cobro CC $17.200 = $117.200, el total exacto de la factura.
+- **PDF real del Comprobante de Pago** (Ronda 6): se descargó el comprobante de ese mismo cobro —
+  sin errores de consola, chunks `ReciboPagoPDF-*.js`/`imprimirRecibo-*.js` cargados con 200, botón
+  vuelve a su estado normal (no queda colgado).
+- **Modal de Cliente** (Ronda 3): confirmado `max-w-4xl` en el DOM real.
+
+**Sin hallazgos.** El día de Luciano queda cerrado, sin correcciones pendientes de nuestro lado.
+`PLAN_AJUSTE_POR_INFLACION.md` es investigación (sin código) — la propia nota final del documento ya
+dice que el paso siguiente es una decisión de negocio (validar el circuito de cálculo con un
+contador real), no algo para arrancar solos.
+
+---
+
 ## ✅ Ronda 6: Comprobante de Pago — PDF real (react-pdf), no más window.print() (01/09)
 
 La Ronda 5 (`@page: size: A4`) NO alcanzó: Luciano mandó un tercer PDF ("Pago Recibido3.pdf") y
