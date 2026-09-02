@@ -39,12 +39,22 @@ cliente en su propio login), es una decisión de producto distinta y hay que res
 cómo se sabe QUÉ inquilino es antes de que alguien se loguee — hoy `ConfigContext` sirve
 una config sola, así que en la práctica se mostraba el logo de un inquilino a todos.
 
-### ⏸️ Pendiente, frenado por presupuesto (decisión de Nadia, 01/09)
-Nadia lo dejó para más adelante porque **hay que pagar las credenciales**. Quedó sin
-aclarar a cuál de los dos pendientes externos se refería — **Fase 9 (Tiendanube/
-MercadoPago)** o las **credenciales de AFIP/ARCA** para facturación electrónica; son los
-dos que dependen de habilitar algo por fuera del código. Preguntarle antes de retomar
-cualquiera de los dos. No es falta de prioridad técnica, es plata.
+### ⏸️ Login con Google — código listo, frenado por las credenciales (decisión de Nadia, 01/09)
+Confirmado con Nadia: es el **login con Google (OAuth)** de `AuthPage.jsx`. El botón está
+construido y probado, pero queda detrás de `GOOGLE_LOGIN_HABILITADO = false` — Nadia decidió
+frenarlo ahí porque hay que dar de alta las credenciales en Google Cloud Console (y lo que
+eso implique pagar/gestionar) antes de activarlo. **No tocar sin que ella lo pida.**
+
+Para activarlo cuando corresponda (ya documentado en el propio archivo, líneas ~14-33 de
+`AuthPage.jsx`):
+1. Google Cloud Console → credenciales OAuth 2.0 ("Aplicación web"), con el redirect URI
+   `https://isvkelrdxwvkfmrfqxxk.supabase.co/auth/v1/callback`.
+2. Supabase → Authentication → Providers → Google: pegar Client ID y Client Secret, habilitar.
+3. Cambiar `GOOGLE_LOGIN_HABILITADO` a `true` y desplegar.
+
+El botón se muestra sólo en modo login (nunca en registro) a propósito — un alta nueva por
+Google no trae `nombre_empresa` en `user_metadata`, y el self-heal de `create_tenant`
+necesita ese dato; un usuario nuevo por esa vía quedaría logueado sin empresa.
 
 # KAIROX Gestión — Contexto de Sesión
 
