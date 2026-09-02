@@ -1,15 +1,20 @@
 import { useState, useMemo } from 'react';
-import { AlertTriangle, Loader2, CheckCircle2, RefreshCw, Scale, Download } from 'lucide-react';
+import { AlertTriangle, Loader2, CheckCircle2, RefreshCw, Scale, Download, Calculator } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { asientosService, PLAN_CUENTAS_KEYS } from '@/services/planCuentasService';
+import { ajusteInflacionService } from '@/services/ajusteInflacionService';
+import { useAjusteInflacionHabilitado } from '@/hooks/useAjusteInflacionHabilitado';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { fmt, csvDownload } from './shared';
 
 function TabBalanceGeneral({ empresaId }) {
   const todayStr = new Date().toISOString().slice(0, 10);
   const [fechaCorte, setFechaCorte] = useState(todayStr);
+  const [monedaHomogenea, setMonedaHomogenea] = useState(false);
+  const { habilitado: ajusteInflacionHabilitado } = useAjusteInflacionHabilitado();
 
   const { data: rows = [], isLoading, refetch } = useQuery({
     queryKey: PLAN_CUENTAS_KEYS.balanceGeneral(empresaId, fechaCorte),
@@ -17,13 +22,28 @@ function TabBalanceGeneral({ empresaId }) {
     enabled: !!empresaId,
   });
 
+  // Fase 2 (Ajuste por Inflación) — reexpresión de solo lectura, no genera
+  // asiento. Solo se pide cuando el toggle está activo, para no gastar la
+  // llamada si nadie la usa.
+  const { data: reexpresion, isFetching: cargandoReexpresion } = useQuery({
+    queryKey: ['reexpresion_moneda_homogenea', empresaId, fechaCorte],
+    queryFn: () => ajusteInflacionService.calcularReexpresion(empresaId, null, fechaCorte),
+    enabled: !!empresaId && !!fechaCorte && monedaHomogenea && ajusteInflacionHabilitado,
+  });
+
   const calc = useMemo(() => {
+    // Mapa cuenta_id -> monto reexpresado (solo trae las no monetarias con
+    // movimiento — las que no aparecen acá no cambian, ya están en pesos de hoy).
+    const homogMap = new Map((reexpresion?.montos ?? []).map(m => [m.cuenta_id, m.monto_homogeneo]));
+    const aplicarHomog = monedaHomogenea && reexpresion && !reexpresion.indice_hasta_faltante;
+    const montoDe = (r, historico) => (aplicarHomog && homogMap.has(r.cuenta_id)) ? homogMap.get(r.cuenta_id) : historico;
+
     const activos = rows.filter(r => r.tipo === 'activo')
-      .map(r => ({ ...r, monto: r.total_debe - r.total_haber }))
+      .map(r => ({ ...r, monto: montoDe(r, r.total_debe - r.total_haber) }))
       .sort((a, b) => a.codigo.localeCompare(b.codigo));
 
     const pasivos = rows.filter(r => r.tipo === 'pasivo')
-      .map(r => ({ ...r, monto: r.total_haber - r.total_debe }))
+      .map(r => ({ ...r, monto: montoDe(r, r.total_haber - r.total_debe) }))
       .sort((a, b) => a.codigo.localeCompare(b.codigo));
 
     // "Resultado del Ejercicio" se excluye del listado genérico de patrimonio:
@@ -35,24 +55,33 @@ function TabBalanceGeneral({ empresaId }) {
     const resultadoCuenta = patrimonioRows.find(r => r.nombre.trim().toLowerCase() === 'resultado del ejercicio');
     const patrimonios = patrimonioRows
       .filter(r => r !== resultadoCuenta)
-      .map(r => ({ ...r, monto: r.total_haber - r.total_debe }))
+      .map(r => ({ ...r, monto: montoDe(r, r.total_haber - r.total_debe) }))
       .sort((a, b) => a.codigo.localeCompare(b.codigo));
 
-    const totalIngresos = rows.filter(r => r.tipo === 'ingreso').reduce((s, r) => s + (r.total_haber - r.total_debe), 0);
-    const totalEgresos = rows.filter(r => r.tipo === 'egreso').reduce((s, r) => s + (r.total_debe - r.total_haber), 0);
-    const resultadoManual = resultadoCuenta ? (resultadoCuenta.total_haber - resultadoCuenta.total_debe) : 0;
+    const totalIngresos = rows.filter(r => r.tipo === 'ingreso').reduce((s, r) => s + montoDe(r, r.total_haber - r.total_debe), 0);
+    const totalEgresos = rows.filter(r => r.tipo === 'egreso').reduce((s, r) => s + montoDe(r, r.total_debe - r.total_haber), 0);
+    const resultadoManual = resultadoCuenta ? montoDe(resultadoCuenta, resultadoCuenta.total_haber - resultadoCuenta.total_debe) : 0;
     const resultadoEjercicio = resultadoManual + (totalIngresos - totalEgresos);
 
     const totalActivo = activos.reduce((s, r) => s + r.monto, 0);
     const totalPasivo = pasivos.reduce((s, r) => s + r.monto, 0);
     const totalPatrimonioOtros = patrimonios.reduce((s, r) => s + r.monto, 0);
-    const totalPatrimonio = totalPatrimonioOtros + resultadoEjercicio;
+
+    // En moneda homogénea, reexpresar cada cuenta por separado (a su propio
+    // coeficiente) deja un residuo — es exactamente el RECPAM que Fase 1
+    // asentaría si se generara el ajuste real para este rango. Se muestra
+    // como línea informativa para que el Balance siga cerrando a la vista,
+    // dejando claro que es una vista previa, no un asiento contabilizado.
+    const recpamImplicito = aplicarHomog
+      ? totalActivo - totalPasivo - totalPatrimonioOtros - resultadoEjercicio
+      : 0;
+    const totalPatrimonio = totalPatrimonioOtros + resultadoEjercicio + recpamImplicito;
 
     const diferencia = totalActivo - (totalPasivo + totalPatrimonio);
     const cierra = Math.abs(diferencia) < 0.01;
 
-    return { activos, pasivos, patrimonios, resultadoEjercicio, totalActivo, totalPasivo, totalPatrimonio, diferencia, cierra };
-  }, [rows]);
+    return { activos, pasivos, patrimonios, resultadoEjercicio, recpamImplicito, aplicarHomog, totalActivo, totalPasivo, totalPatrimonio, diferencia, cierra };
+  }, [rows, reexpresion, monedaHomogenea]);
 
   const handleExportCSV = () => {
     const lineas = [
@@ -89,6 +118,16 @@ function TabBalanceGeneral({ empresaId }) {
           </Button>
         )}
 
+        {!sinDatos && ajusteInflacionHabilitado && (
+          <label className="flex items-center gap-2 text-xs text-kx-text-3 cursor-pointer">
+            <Switch checked={monedaHomogenea} onCheckedChange={setMonedaHomogenea} />
+            <span className="flex items-center gap-1">
+              <Calculator size={13} /> Ver en moneda homogénea
+              {cargandoReexpresion && <Loader2 size={12} className="animate-spin" />}
+            </span>
+          </label>
+        )}
+
         <div className="flex-1" />
 
         {!sinDatos && (
@@ -99,6 +138,18 @@ function TabBalanceGeneral({ empresaId }) {
           </span>
         )}
       </div>
+
+      {monedaHomogenea && reexpresion?.indice_hasta_faltante && (
+        <div className="text-xs px-3 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+          Falta cargar el índice de inflación del mes de {fechaCorte?.slice(0, 7)} en Configuración → Finanzas —
+          se muestra el Balance histórico.
+        </div>
+      )}
+      {monedaHomogenea && reexpresion?.meses_sin_indice?.length > 0 && !reexpresion.indice_hasta_faltante && (
+        <div className="text-xs px-3 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+          Faltan índices de {reexpresion.meses_sin_indice.join(', ')} — esas cuentas quedan sin reexpresar en esos meses (ajuste parcial).
+        </div>
+      )}
 
       {isLoading && (
         <div className="flex items-center justify-center py-20">
@@ -194,6 +245,18 @@ function TabBalanceGeneral({ empresaId }) {
                       {fmt(calc.resultadoEjercicio)}
                     </td>
                   </tr>
+                  {calc.aplicarHomog && (
+                    <tr className="border-t border-kx-border hover:bg-kx-surface-2/30">
+                      <td className="px-4 py-2.5 font-mono text-xs text-cyan-500 w-20">—</td>
+                      <td className="px-4 py-2.5 text-kx-text-3 italic">
+                        RECPAM (implícito)
+                        <span className="ml-2 text-2xs text-kx-text-3 not-italic">no contabilizado — vista previa</span>
+                      </td>
+                      <td className={`px-4 py-2.5 text-right font-mono w-36 ${calc.recpamImplicito >= 0 ? 'text-kx-green' : 'text-kx-red'}`}>
+                        {fmt(calc.recpamImplicito)}
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
                 <tfoot className="bg-kx-surface-2/50">
                   <tr>

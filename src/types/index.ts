@@ -405,6 +405,7 @@ export interface FlujoCajaMensual {
 // ---------------------------------------------------------------------------
 
 export type CuentaTipo = 'activo' | 'pasivo' | 'patrimonio' | 'ingreso' | 'egreso';
+export type NaturalezaMonetaria = 'monetaria' | 'no_monetaria';
 
 export interface PlanCuenta {
   id: string;
@@ -418,6 +419,10 @@ export interface PlanCuenta {
   saldo_actual: number;
   activa: boolean;
   created_at: string;
+  // Ajuste por Inflación (RT 6, mig.378) -- monetaria: ya en pesos de hoy, no
+  // se reexpresa. no_monetaria: arrastra el poder adquisitivo de su fecha de
+  // origen -- se reexpresa y genera RECPAM.
+  naturaleza_monetaria: NaturalezaMonetaria;
   // join virtual para árbol
   hijos?: PlanCuenta[];
 }

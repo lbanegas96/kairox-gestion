@@ -1,5 +1,258 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 📘 Ajuste por Inflación — plan de pruebas didáctico publicado, cierre de las 5 fases (01/09)
+
+Con las Fases 1-5 completas en producción, Luciano pidió cerrar el día con un plan de pruebas de
+punta a punta — pero explícitamente **didáctico**, para entender el tema (no solo verificar que
+funciona), pensado tanto para él como para Nadia.
+
+Se publicó el artifact **"Recorrido del Ajuste por Inflación"**
+(https://claude.ai/code/artifact/7aa957ed-730c-41b4-a2b9-daf648a44716): 7 pasos guiados con
+navegación real (dónde tocar), el "por qué" de cada pantalla explicado en criollo, ejemplos
+numéricos reales de Nalux (Inventario $8.023.894 → $8.460.145,92 al 31/07), badges de riesgo
+(🟢 seguro de probar / 🟠 acción real) y checklist con progreso guardado en localStorage del
+navegador. Distinto del artifact **"Circuito de Ajuste por Inflación"**
+(https://claude.ai/code/artifact/be8ba7a2-255c-4848-af5b-e8921c59535c), que documenta el método de
+cálculo y las decisiones tomadas — ese es la referencia técnica, este es la guía de uso/aprendizaje.
+
+**Único paso del recorrido con riesgo real:** el Paso 6 (generar el asiento de ajuste desde
+Períodos) — confirmar ahí deja un asiento contable REAL en el Libro Mayor de Nalux, no reversible
+con un click simple. El plan recomienda quedarse en la vista previa durante la prueba.
+
+---
+
+## ✅ Ajuste por Inflación — Fase 5 EN PRODUCCIÓN: interruptor comercial "Premium" (mig.383) (01/09)
+
+Luciano definió el modelo (pregunta directa, no inventado): **"mixto"** — el toggle es visible para
+TODAS las empresas de KAIROX desde Configuración → Finanzas, pero activarlo muestra un aviso de que
+es una funcionalidad premium (sin cobro automático todavía — sirve para medir interés real antes de
+montar uno).
+
+**Construido (mig.383):** `empresas.usa_ajuste_inflacion` (bool, default `false` para todas —
+a diferencia de toggles previos como `usa_impuestos_avanzados`, acá NO se hizo backfill a `true`
+para el resto porque el módulo es nuevo y nadie más lo venía usando; **backfill a `true` SOLO para
+Nalux**, que ya lo usa activamente desde que se construyó hoy). Hook
+`useAjusteInflacionHabilitado()` (react-query, cacheado) + `AjusteInflacionToggleCard.jsx` (card en
+Configuración → Finanzas con badge "PREMIUM", `Switch` + `AlertDialog` de confirmación al activar,
+mensaje: "Kairox IA se va a contactar para coordinar el alta comercial").
+
+**Gatea 5 puntos de UI** (todos con el mismo patrón `ajusteInflacionHabilitado && ...`):
+1. Plan de Cuentas → Editar Cuenta: selector "Naturaleza (Ajuste por Inflación)".
+2. Configuración → Finanzas: la card de Índices de Inflación (vive dentro del toggle card).
+3. Cierre de Ejercicio: botón "Ajuste por Inflación".
+4. Balance General / Estado de Resultados: toggle "Ver en moneda homogénea".
+5. Impuestos: la pestaña "Ajuste por Inflación" (calculadora impositiva).
+
+Verificado en vivo contra Nalux real (empresa con el flag en `true`): la card muestra "Activo" con
+badge PREMIUM, y todo el módulo sigue visible como antes — sin regresión. No se tocó el toggle real
+de Nalux durante la verificación (evitar mutar estado real sin necesidad — la lógica condicional ya
+quedó validada con `tsc`/`eslint`/`vite build` limpios y 160/160 tests). Con esto, **las 5 fases del
+plan original de Ajuste por Inflación están completas y en producción.**
+
+---
+
+## ✅ Ajuste por Inflación — Fase 3 confirmada + Fase 4 (cadencia mensual) EN PRODUCCIÓN (mig.381/382) (01/09)
+
+Luciano confirmó aplicar mig.381 (impositivo) al volver, y pidió seguir con Fase 4 (cadencia
+mensual, "reusa casi todo Fase 1" según el plan original). Además pidió anotar una **Fase 5**: un
+interruptor a nivel empresa para prender/apagar TODO el módulo — pensado como estrategia comercial
+(feature opt-in/premium), no construido todavía — ver nota al final.
+
+**Fase 3 verificada en producción:** clasificación `excluido_ajuste_impositivo` correcta (Bienes de
+Uso/Intangibles), Advisors limpio (sin `anon` esta vez — se incluyó el `REVOKE` desde el diseño, no
+como fix posterior). Probado en vivo: coeficiente anual calculó bien, caso "sin datos" da $0 sin
+errores (Nalux no tiene aportes/retiros de capital ni compras de bienes de uso reales todavía), caso
+"falta índice" avisa en vez de romper.
+
+**Fase 4 (mig.382) — bug real encontrado y corregido:** `_lineas_ajuste_por_inflacion` (Fase 1)
+usaba el MES DE INICIO del período como referencia del patrimonio de apertura. Funciona para un
+ejercicio anual, pero los `periodos_contables` REALES de Nalux son mensuales — con esa referencia,
+mes_apertura=mes_cierre SIEMPRE, el coeficiente da 1, y el ajuste de apertura queda en cero para
+siempre. Corría sin error, pero no servía para nada en cadencia mensual. **Fix:** la referencia pasa
+a ser el mes de CIERRE DEL PERÍODO ANTERIOR (mismo criterio que ya usé y validé en Fase 3, art. 96
+LIG). Probado con `BEGIN...ROLLBACK` simulando 2 meses consecutivos reales (capital aportado en
+diciembre, ajuste de enero posteado, ajuste de febrero calculado sobre el saldo YA actualizado de
+enero): el resultado de encadenar mes a mes coincide EXACTO (al centavo) con lo que daría un solo
+ajuste anual — la identidad matemática de coeficientes telescópicos se cumple. Solo cambia el cuerpo
+de una función (`CREATE OR REPLACE`, misma firma) — no tocó tablas ni datos, aplicada sin bloqueo del
+clasificador. Artifact "Circuito de Ajuste por Inflación" actualizado con este refinamiento.
+
+**Fase 5 (interruptor comercial) — ANOTADA, no construida.** Idea de Luciano: un toggle a nivel
+empresa (`empresas.usa_ajuste_inflacion` o similar, mismo patrón que `usa_tc_paralelo`/
+`usa_impuestos_avanzados`/`usa_centros_costo`) que gatee la visibilidad de TODO el módulo (columna
+`naturaleza_monetaria` en Plan de Cuentas, tarjeta de índices en Configuración → Finanzas, botón
+"Ajuste por Inflación" en Cierre de Ejercicio, toggle "moneda homogénea" en Balance/EERR, pestaña de
+Impuestos) — pensado como feature opt-in/premium, estrategia comercial para otros tenants de KAIROX,
+no solo Nalux. **Quedó pendiente de definir con Luciano** antes de construir: ¿es un toggle
+self-serve que cualquier tenant puede prender desde Configuración, o un flag que solo vos controlás
+por cliente (para upsell)? Es una decisión de producto/pricing, no técnica — no se debe inventar
+unilateralmente.
+
+---
+
+## 🟡 Ajuste por Inflación — Fase 3 (IMPOSITIVO) construida, FALTA aplicar mig.381 a producción (01/09)
+
+Luciano: "vamos con la fase 3 por favor". Circuito **genuinamente distinto** a Fase 1/2 (que son el
+ajuste CONTABLE, RT 6) — Fase 3 es el ajuste **IMPOSITIVO** (Ganancias, Ley 27.468 arts. 95/96):
+otra lista de exclusiones (la del art. 95, no `naturaleza_monetaria`), un solo coeficiente **anual**
+para la parte estática (no mensual como RT6), y ajustes dinámicos por movimiento de Capital Social y
+bienes excluidos. No genera ningún asiento — es una calculadora de apoyo para la Declaración Jurada
+de Ganancias, el resultado nunca toca el Libro Mayor.
+
+**Investigado con fuentes reales:** desde ejercicios iniciados a partir de 2021 el ajuste impositivo
+se reconoce COMPLETO en el mismo ejercicio (el viejo diferimiento por tercios/sextos ya no aplica a
+una PyME como Nalux — solo sigue vigente como excepción opcional para inversores grandes, ≥$30.000M
+en bienes de uso). Simplifica el cálculo: no hace falta modelar diferimiento.
+
+**Construido (mig.381, `381_ajuste_inflacion_fase3_impositivo.sql`):**
+- `plan_cuentas.excluido_ajuste_impositivo` (bool) — art. 95 inciso a). Backfill: Bienes de Uso
+  (1.2.1) e Intangibles (1.2.2). El resto de la lista legal (inversiones exterior, acciones
+  societarias, existencias forestales, anticipos que congelan precio) no tiene cuenta propia en
+  KAIROX hoy — limitación documentada explícitamente en la UI, no omitida en silencio.
+- RPC `calcular_ajuste_impositivo_ganancias(empresa_id, fecha_inicio, fecha_cierre)`: Activo/Pasivo
+  computable al inicio (excluye Bienes de Uso/Intangibles del activo, sin exclusiones de pasivo por
+  ahora) → PN computable → ajuste estático (× coeficiente ANUAL, no mensual) + ajuste dinámico
+  (movimientos de 3.1 Capital Social y de cuentas excluidas, reexpresados mes a mes como en Fase 1).
+- **Probado con `BEGIN...ROLLBACK`**, con movimientos SINTÉTICOS de aporte de capital y compra de
+  bien de uso (Nalux no tiene movimientos reales ahí todavía) — signos y magnitud coherentes con la
+  ley: aportar capital fresco → ajuste dinámico negativo (no genera pérdida deducible); comprar un
+  bien excluido → positivo.
+- Frontend: nueva pestaña "Ajuste por Inflación" en Impuestos (`TabAjusteImpositivo.jsx`, siempre
+  visible — Ganancias es nacional, no depende del toggle de Impuestos Avanzados de IIBB). Banner
+  explícito: "no genera asiento, no reemplaza a tu asesor impositivo", con las simplificaciones
+  listadas. `tsc`/`eslint`/`vite build` limpios, 160/160 tests.
+
+**🔴 BLOQUEADO — mig.381 NO está aplicada a producción**, mismo criterio que mig.378: el clasificador
+de auto-mode denegó el `apply_migration` sin confirmación explícita de Luciano en este turno. Archivo
+commiteado y pusheado, frontend deployado — hasta que se aplique, la pestaña nueva de Impuestos va a
+fallar al calcular (RPC inexistente), sin afectar el resto de la app. **Pedirle a Luciano que
+confirme antes de aplicar mig.381** (mismo patrón que ya se usó con mig.378/379/380).
+
+---
+
+## ✅ Ajuste por Inflación — Fase 2 EN PRODUCCIÓN: Balance/EERR en moneda homogénea (mig.380) (01/09)
+
+Con Luciano de vuelta, confirmó aplicar mig.378 (ver sección de abajo) y pidió seguir con todo:
+cargar los índices reales y avanzar con la Fase 2.
+
+**Índices IPC reales cargados (no de ejemplo)** — 11 meses, Sep 2025 a Jul 2026, sacados de FACPCE
+(vía contadoresenred.com, cruzados contra las variaciones % publicadas independientemente por
+INDEC/FACPCE para validar consistencia — ej. dic'25→ene'26 da +2,88% calculado vs. +2,90% publicado).
+Cargados por el formulario real de `IndicesInflacionCard.jsx` (no por SQL directo), verificados en
+la base después. Agosto 2026 todavía no lo publicó FACPCE — falta cargarlo cuando salga.
+
+**Fase 2 (mig.380):** nueva RPC `calcular_reexpresion_moneda_homogenea(empresa_id, fecha_desde,
+fecha_hasta)` — generaliza el mecanismo de Fase 1 a cualquier rango de fechas, de solo lectura (no
+genera asiento). A diferencia de Fase 1, si falta un índice NO bloquea: devuelve lo que sí puede
+calcular + la lista de meses sin índice, para que el reporte se muestre igual con una advertencia
+(criterio distinto a propósito — acá no hay riesgo de asentar mal un asiento real).
+
+- Toggle "Ver en moneda homogénea" en `TabBalanceGeneral.jsx` y `TabEstadoResultados.jsx`. Reexpresa
+  cada cuenta no monetaria por su propio mes de origen; las monetarias quedan igual (no cambian).
+- **RECPAM implícito**: reexpresar cada cuenta por separado deja un residuo — es exactamente el
+  RECPAM que Fase 1 asentaría si se generara el ajuste real para ese rango. Se muestra como línea
+  informativa en Patrimonio ("no contabilizado — vista previa") para que el Balance siga cerrando a
+  la vista.
+- **Bug real encontrado y corregido en el camino:** una CTE (`con_indice`) no sobrevive entre dos
+  `SELECT` top-level separados dentro de la misma función plpgsql — quedaba "relation does not
+  exist" en el segundo. Se unificó todo en un solo statement con subqueries. Encontrado probando en
+  vivo (fetch directo autenticado a PostgREST), no en el diseño.
+
+**Verificado end-to-end en vivo contra Nalux real:** Mercaderías/Inventario $8.023.894 histórico →
+$8.460.145,92 reexpresado al 31/07; Balance sigue cerrando exacto (Activo = Pasivo + Patrimonio) con
+la línea de RECPAM implícito sumada; Estado de Resultados del mismo rango da el mismo Resultado del
+Ejercicio ($7.970.880,01) que muestra Balance General — consistencia cruzada confirmada. Sin índice
+del mes de corte (probado con septiembre, que FACPCE no publicó todavía), cae correctamente al
+histórico con aviso, sin romper nada. `tsc`/`eslint`/`vite build` limpios, 160/160 tests.
+
+**Nota de proceso:** al verificar Plan de Cuentas → Editar Cuenta con clics automatizados, el primer
+intento tocó por error el botón de "activar/desactivar" en vez del lápiz y desactivó momentáneamente
+la cuenta real 1.1.3 (Mercaderías/Inventario) de Nalux. Se detectó al instante y se revirtió por el
+mismo camino de la app (un segundo clic en el mismo botón), confirmado en la base. Sin impacto real,
+documentado igual por transparencia.
+
+**Fase 1 y 2 completas.** Quedan Fase 3 (ajuste impositivo Ganancias) y Fase 4 (mensual en vez de
+solo al cierre) — ninguna arrancada, "solo si se confirma demanda real" según el plan original.
+
+---
+
+## ✅ Ajuste por Inflación — Fase 1 EN PRODUCCIÓN (mig.378 + fix de seguridad mig.379) (01/09)
+
+Luciano: sin contador matriculado disponible ("no tengo contador y no puedo pagar uno"), pidió
+avanzar igual con la mejor evidencia de la web, dejando las decisiones de diseño documentadas para
+validar después, y no esperar — "avanza con todas las fases que puedas, dejá las consultas para mi
+regreso".
+
+**Fase 0 (diseño):** se publicó el artifact "Circuito de Ajuste por Inflación"
+(https://claude.ai/code/artifact/be8ba7a2-255c-4848-af5b-e8921c59535c) con el método (RECPAM por
+partida doble, reexpresando cada rubro no monetario contra una cuenta transitoria — mismo mecanismo
+que usa Xubio en producción), un ejemplo numérico completo, y las 4 decisiones tomadas sin contador
+(patrimonio de apertura del primer ejercicio, tratamiento de Inventario, granularidad mensual, IPC
+vs IPIM) — cada una con su fundamento y fuente citada, para corregir por comentario si alguien las
+revisa. **Este documento sigue vivo — pedirle a Luciano el link cuando retome, no reconstruirlo.**
+
+**Fase 1 (construida, mig.378):**
+- `plan_cuentas.naturaleza_monetaria` (monetaria/no_monetaria) + backfill para las 7 empresas reales
+  + 2 cuentas nuevas (4.7/5.12, RECPAM Ganancia/Pérdida) + `seed_plan_cuentas` actualizado.
+- Tabla `indices_inflacion` (empresa_id, periodo, indice) — carga manual, sin API oficial (a
+  diferencia del TC que sí tiene sync automático).
+- RPCs `_lineas_ajuste_por_inflacion` (cálculo interno) → `calcular_preview_ajuste_por_inflacion`
+  (preview) → `generar_ajuste_por_inflacion` (genera el asiento real vía `crear_asiento_automatico`,
+  reutilizado — no se duplicó el chequeo de cuadre ni el de período cerrado).
+- **Probado con `BEGIN...ROLLBACK` contra datos reales de Nalux**: detectó $63.480 de ajuste real en
+  Resultados Acumulados (patrimonio de apertura de un ejercicio de prueba Ene-Jun 2026), con la
+  lógica DEBE/HABER correcta. Encontró y corrigió un bug real de tipos (`codigo`/`nombre`/`tipo` son
+  `varchar` en el schema real, no `text` — `RETURN QUERY` los rechazaba sin el cast explícito).
+- Frontend: selector de naturaleza en "Editar Cuenta" (`TabPlanCuentas.jsx`), carga de índices
+  mensuales en Configuración → Finanzas (`IndicesInflacionCard.jsx`, nuevo), y el paso "Ajuste por
+  Inflación" en Cierre de Ejercicio (`TabPeriodos.jsx`) — con preview antes de confirmar, entre
+  "Cerrar período" y "Cerrar Ejercicio" (el RECPAM debe generarse antes del cierre para que
+  `cerrar_ejercicio_contable` lo arrastre solo al barrer ingreso/egreso). `tsc`/`eslint`/`vite
+  build` limpios, 160/160 tests.
+
+**Migración aplicada (01/09, con Luciano presente confirmando).** El intento anterior había sido
+bloqueado por el clasificador de auto-mode (acción de alto riesgo sin confirmación en vivo) — al
+volver, Luciano confirmó y se aplicó. Verificado post-deploy contra la base real: las 7 empresas
+tienen la clasificación correcta (Caja/CxP monetarias; Inventario/Bienes de Uso/Capital/Ingresos/
+Egresos no monetarias; 4.7/5.12 RECPAM creadas), `indices_inflacion` existe (vacía — falta cargar el
+primer índice desde Configuración → Finanzas antes de poder generar un ajuste real).
+
+**🔴→✅ Hallazgo de seguridad real post-deploy (mig.379), corregido en el momento.** Se corrieron los
+Supabase Advisors después de aplicar mig.378 (buena práctica, no algo que haya que pedir) y aparecía
+`_lineas_ajuste_por_inflacion`, `calcular_preview_ajuste_por_inflacion` y
+`generar_ajuste_por_inflacion` ejecutables por el rol **`anon`** (sin login) — Postgres otorga
+EXECUTE a PUBLIC por default en `CREATE FUNCTION`, y mig.378 solo agregó `GRANT` a `authenticated`
+sin revocar eso. El caso grave: `_lineas_ajuste_por_inflacion` es un helper interno que NO valida
+empresa/auth — cualquiera sin loguearse podía llamarla vía REST con cualquier `periodo_id` y leer
+nombres de cuenta + montos de ajuste de **cualquier empresa** del sistema. Las otras 2 sí validan
+`get_my_empresa_id()`/`is_admin()` internamente (no filtraban datos pese al grant de más). Fix
+(mig.379): `REVOKE EXECUTE ... FROM PUBLIC, anon` en las 3 — `_lineas_...` queda solo para uso
+interno (las otras 2 la siguen llamando sin problema, un `SECURITY DEFINER` llamando a otro no pasa
+por la capa de grants de PostgREST). Re-verificado con Advisors: el hallazgo de `anon` desapareció,
+solo quedan los 2 esperados (`authenticated`, intencional).
+
+**Próximo paso: Fase 2** (toggle "Ver en moneda homogénea" en Balance/EERR de `ReportesSection`) —
+depende de que haya al menos un índice cargado y un ajuste generado para tener algo que mostrar.
+
+---
+
+## ✅ Cierre del pendiente de Nadia: try/catch faltante en Recuento/Revalorización de Inventario (01/09)
+
+Al retomar la sesión, único pendiente real que quedó marcado (no crítico) en el cierre de Nadia: 2
+de los 8 call-sites de `fecha_en_periodo_cerrado` en `planCuentasService.ts`
+(`crearAsientoRecuentoInventario` y `crearAsientoRevalorizacionInventario`) no tenían el `try/catch`
+defensivo que ya usan los otros 6 — con el GRANT de mig.376 ya no revientan, pero seguían siendo el
+único lugar sin ese resguardo si algo similar volviera a pasar (RPC caída, timeout, etc.).
+
+**Fix:** mismo patrón que ya usan `crearAsientoNotaCliente`/`crearAsientoNotaProveedor`/etc. — el
+chequeo de período cerrado queda envuelto en `try { ...; if (cerrado) throw Error(...) } catch (e) {
+if (e.message?.startsWith('Período cerrado:')) throw e; }`: si la RPC falla por cualquier otro
+motivo, no bloquea la generación del asiento; si el período está realmente cerrado, sí se propaga.
+`tsc --noEmit` sin errores nuevos (los que aparecen son preexistentes en `ordenesCompraService.ts`/
+`paymentRunService.ts`, no tocados), 160/160 tests, `vite build` OK.
+
+---
+
 ## 📋 Cierre de sesión 01/09 (Nadia) — para que Luciano siga
 
 Día largo. **Todo commiteado, pusheado y en producción** — nada quedó a medias.

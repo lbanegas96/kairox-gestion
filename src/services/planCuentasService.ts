@@ -41,7 +41,7 @@ export const planCuentasService = {
 
   async updateCuenta(
     id: string,
-    payload: Partial<Pick<PlanCuenta, 'nombre' | 'activa' | 'permite_movimientos'>>
+    payload: Partial<Pick<PlanCuenta, 'nombre' | 'activa' | 'permite_movimientos' | 'naturaleza_monetaria'>>
   ): Promise<PlanCuenta> {
     const { data, error } = await supabase
       .from('plan_cuentas')
@@ -864,10 +864,14 @@ export const asientosAutoService = {
   ): Promise<void> {
     if (params.totalFaltante <= 0 && params.totalSobrante <= 0) return;
 
-    const { data: cerrado } = await supabase.rpc('fecha_en_periodo_cerrado', {
-      p_empresa_id: empresaId, p_fecha: params.fecha,
-    });
-    if (cerrado) throw new Error(`Período cerrado: la fecha ${params.fecha} pertenece a un período contable cerrado.`);
+    try {
+      const { data: cerrado } = await supabase.rpc('fecha_en_periodo_cerrado', {
+        p_empresa_id: empresaId, p_fecha: params.fecha,
+      });
+      if (cerrado) throw new Error(`Período cerrado: la fecha ${params.fecha} pertenece a un período contable cerrado.`);
+    } catch (e: any) {
+      if (e.message?.startsWith('Período cerrado:')) throw e;
+    }
 
     const [cuentaInventario, cuentaFaltantes, cuentaSobrantes] = await Promise.all([
       findCuentaByCodigo(empresaId, '1.1.3'),
@@ -913,10 +917,14 @@ export const asientosAutoService = {
   ): Promise<void> {
     if (params.totalPerdida <= 0 && params.totalGanancia <= 0) return;
 
-    const { data: cerrado } = await supabase.rpc('fecha_en_periodo_cerrado', {
-      p_empresa_id: empresaId, p_fecha: params.fecha,
-    });
-    if (cerrado) throw new Error(`Período cerrado: la fecha ${params.fecha} pertenece a un período contable cerrado.`);
+    try {
+      const { data: cerrado } = await supabase.rpc('fecha_en_periodo_cerrado', {
+        p_empresa_id: empresaId, p_fecha: params.fecha,
+      });
+      if (cerrado) throw new Error(`Período cerrado: la fecha ${params.fecha} pertenece a un período contable cerrado.`);
+    } catch (e: any) {
+      if (e.message?.startsWith('Período cerrado:')) throw e;
+    }
 
     const [cuentaInventario, cuentaPerdida, cuentaGanancia] = await Promise.all([
       findCuentaByCodigo(empresaId, '1.1.3'),

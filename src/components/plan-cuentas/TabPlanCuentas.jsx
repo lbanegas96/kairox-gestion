@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useAjusteInflacionHabilitado } from '@/hooks/useAjusteInflacionHabilitado';
 import { CuentaNode } from './shared';
 import ModalNuevaCuenta from './ModalNuevaCuenta';
 
@@ -14,6 +16,7 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
   const [showModal, setShowModal]   = useState(false);
   const [editCuenta, setEditCuenta] = useState(null);
   const { toast } = useToast();
+  const { habilitado: ajusteInflacionHabilitado } = useAjusteInflacionHabilitado();
 
   const handleSeedCuentas = async () => {
     try {
@@ -101,6 +104,25 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
                   className="w-4 h-4 rounded" />
                 <span className="text-sm text-kx-text-3">Cuenta activa</span>
               </label>
+              {editCuenta.permite_movimientos && ajusteInflacionHabilitado && (
+                <div>
+                  <Label className="text-kx-text-3 text-xs">
+                    Naturaleza (Ajuste por Inflación)
+                  </Label>
+                  <Select
+                    value={editCuenta.naturaleza_monetaria ?? 'no_monetaria'}
+                    onValueChange={(v) => setEditCuenta({ ...editCuenta, naturaleza_monetaria: v })}
+                  >
+                    <SelectTrigger className="bg-kx-surface-2 border-kx-border">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="monetaria">Monetaria (Caja, CxC, CxP, deudas)</SelectItem>
+                      <SelectItem value="no_monetaria">No monetaria (se reexpresa y genera RECPAM)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter className="gap-2">
@@ -109,6 +131,7 @@ function TabPlanCuentas({ cuentasFlat, tree, empresaId, onRefresh }) {
               try {
                 await planCuentasService.updateCuenta(editCuenta.id, {
                   nombre: editCuenta.nombre, activa: editCuenta.activa,
+                  naturaleza_monetaria: editCuenta.naturaleza_monetaria,
                 });
                 onRefresh();
                 setEditCuenta(null);

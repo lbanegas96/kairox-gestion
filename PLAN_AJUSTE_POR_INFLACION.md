@@ -1,6 +1,6 @@
 # Plan — Ajuste por Inflación en KAIROX Gestión
 
-**Estado: solo investigación y diseño. Nada de esto está construido todavía — este documento es la base para decidir si y cómo se construye.**
+**Estado (01/09): Fases 1 a 5 COMPLETAS EN PRODUCCIÓN** (mig.378-383), probadas contra datos reales de Nalux y aplicadas con Luciano confirmando. Sin contador matriculado disponible: las decisiones donde la norma deja margen se tomaron con evidencia pública, documentadas en el artifact ["Circuito de Ajuste por Inflación"](https://claude.ai/code/artifact/be8ba7a2-255c-4848-af5b-e8921c59535c) para corregir por comentario si alguien las revisa. Índices IPC reales cargados (FACPCE, sep'25-jul'26) — falta agosto 2026, que FACPCE aún no publicó. Toggle "Ver en moneda homogénea" en Balance/EERR, calculadora de ajuste impositivo (Ganancias) en Impuestos, ajuste encadenado correctamente mes a mes (Fase 4), y un interruptor comercial "Premium" (`empresas.usa_ajuste_inflacion`, Fase 5) que gatea todo el módulo — activo solo para Nalux hoy, visible para el resto de los tenants con aviso de funcionalidad paga.
 
 ---
 

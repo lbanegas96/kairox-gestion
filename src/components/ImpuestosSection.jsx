@@ -7,6 +7,8 @@ import TabIVA from '@/components/impuestos/TabIVA';
 import TabAlicuotas from '@/components/impuestos/TabAlicuotas';
 import TabRetenciones from '@/components/impuestos/TabRetenciones';
 import TabIIBB from '@/components/impuestos/TabIIBB';
+import TabAjusteImpositivo from '@/components/impuestos/TabAjusteImpositivo';
+import { useAjusteInflacionHabilitado } from '@/hooks/useAjusteInflacionHabilitado';
 
 function ImpuestosSection({ onNavigate }) {
   const { user } = useAuth();
@@ -14,6 +16,7 @@ function ImpuestosSection({ onNavigate }) {
   // desde Configuración → Finanzas. IVA está SIEMPRE disponible. Si el flag está
   // apagado, esas solapas no se muestran (ni se pueden ejecutar sus acciones).
   const [impuestosAvanzados, setImpuestosAvanzados] = useState(false);
+  const { habilitado: ajusteInflacionHabilitado } = useAjusteInflacionHabilitado();
 
   useEffect(() => {
     if (!user?.empresa_id) return;
@@ -44,6 +47,7 @@ function ImpuestosSection({ onNavigate }) {
       <Tabs defaultValue="iva" className="w-full">
         <TabsList>
           <TabsTrigger value="iva">IVA</TabsTrigger>
+          {ajusteInflacionHabilitado && <TabsTrigger value="ajuste_impositivo">Ajuste por Inflación</TabsTrigger>}
           {impuestosAvanzados && <TabsTrigger value="iibb">IIBB</TabsTrigger>}
           {impuestosAvanzados && <TabsTrigger value="retenciones">Retenciones y Percepciones</TabsTrigger>}
           {impuestosAvanzados && <TabsTrigger value="alicuotas">Alícuotas</TabsTrigger>}
@@ -51,6 +55,11 @@ function ImpuestosSection({ onNavigate }) {
         <TabsContent value="iva" className="mt-4">
           <TabIVA onNavigate={onNavigate} />
         </TabsContent>
+        {ajusteInflacionHabilitado && (
+          <TabsContent value="ajuste_impositivo" className="mt-4">
+            <TabAjusteImpositivo />
+          </TabsContent>
+        )}
         {impuestosAvanzados && (
           <>
             <TabsContent value="iibb" className="mt-4">
