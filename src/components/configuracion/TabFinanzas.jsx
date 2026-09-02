@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import IndicesInflacionCard from './IndicesInflacionCard';
+import AjusteInflacionToggleCard from './AjusteInflacionToggleCard';
 
 /**
  * Tab "Finanzas" de ConfiguracionSection — moneda paralela (tipo de cambio) +
@@ -179,8 +179,8 @@ const TabFinanzas = ({
       )}
     </div>
 
-    {/* Ajuste por Inflación — índice IPC mensual (mig.378, Fase 1) */}
-    <IndicesInflacionCard />
+    {/* Ajuste por Inflación — interruptor premium (mig.383, Fase 5) + índices (Fase 1) */}
+    <AjusteInflacionToggleCard />
 
     {/* Condiciones de pago */}
     <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm">

@@ -3,6 +3,7 @@ import { Loader2, RefreshCw, TrendingUp, TrendingDown, Download, Calculator } fr
 import { useQuery } from '@tanstack/react-query';
 import { asientosService, PLAN_CUENTAS_KEYS } from '@/services/planCuentasService';
 import { ajusteInflacionService } from '@/services/ajusteInflacionService';
+import { useAjusteInflacionHabilitado } from '@/hooks/useAjusteInflacionHabilitado';
 import { supabase } from '@/lib/customSupabaseClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +15,7 @@ function TabEstadoResultados({ empresaId }) {
   const [fechaDesde, setDesde] = useState('');
   const [fechaHasta, setHasta] = useState('');
   const [monedaHomogenea, setMonedaHomogenea] = useState(false);
+  const { habilitado: ajusteInflacionHabilitado } = useAjusteInflacionHabilitado();
   // Centro de costo (Fase 1 del plan de 4 frentes contables) — opcional.
   const [centrosCosto, setCentrosCosto] = useState([]);
   const [centroCostoId, setCentroCostoId] = useState('');
@@ -43,7 +45,7 @@ function TabEstadoResultados({ empresaId }) {
   const { data: reexpresion, isFetching: cargandoReexpresion } = useQuery({
     queryKey: ['reexpresion_moneda_homogenea', empresaId, fechaDesde || null, fechaHastaEfectiva],
     queryFn: () => ajusteInflacionService.calcularReexpresion(empresaId, fechaDesde || null, fechaHastaEfectiva),
-    enabled: !!empresaId && monedaHomogenea,
+    enabled: !!empresaId && monedaHomogenea && ajusteInflacionHabilitado,
   });
 
   const aplicarHomog = monedaHomogenea && reexpresion && !reexpresion.indice_hasta_faltante;
@@ -120,7 +122,7 @@ function TabEstadoResultados({ empresaId }) {
             <Download size={14} className="mr-1" /> Exportar CSV
           </Button>
         )}
-        {!sinDatos && (
+        {!sinDatos && ajusteInflacionHabilitado && (
           <label className="flex items-center gap-2 text-xs text-kx-text-3 cursor-pointer">
             <Switch checked={monedaHomogenea} onCheckedChange={setMonedaHomogenea} />
             <span className="flex items-center gap-1">

@@ -3,6 +3,7 @@ import { AlertTriangle, Loader2, CheckCircle2, RefreshCw, Scale, Download, Calcu
 import { useQuery } from '@tanstack/react-query';
 import { asientosService, PLAN_CUENTAS_KEYS } from '@/services/planCuentasService';
 import { ajusteInflacionService } from '@/services/ajusteInflacionService';
+import { useAjusteInflacionHabilitado } from '@/hooks/useAjusteInflacionHabilitado';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +14,7 @@ function TabBalanceGeneral({ empresaId }) {
   const todayStr = new Date().toISOString().slice(0, 10);
   const [fechaCorte, setFechaCorte] = useState(todayStr);
   const [monedaHomogenea, setMonedaHomogenea] = useState(false);
+  const { habilitado: ajusteInflacionHabilitado } = useAjusteInflacionHabilitado();
 
   const { data: rows = [], isLoading, refetch } = useQuery({
     queryKey: PLAN_CUENTAS_KEYS.balanceGeneral(empresaId, fechaCorte),
@@ -26,7 +28,7 @@ function TabBalanceGeneral({ empresaId }) {
   const { data: reexpresion, isFetching: cargandoReexpresion } = useQuery({
     queryKey: ['reexpresion_moneda_homogenea', empresaId, fechaCorte],
     queryFn: () => ajusteInflacionService.calcularReexpresion(empresaId, null, fechaCorte),
-    enabled: !!empresaId && !!fechaCorte && monedaHomogenea,
+    enabled: !!empresaId && !!fechaCorte && monedaHomogenea && ajusteInflacionHabilitado,
   });
 
   const calc = useMemo(() => {
@@ -116,7 +118,7 @@ function TabBalanceGeneral({ empresaId }) {
           </Button>
         )}
 
-        {!sinDatos && (
+        {!sinDatos && ajusteInflacionHabilitado && (
           <label className="flex items-center gap-2 text-xs text-kx-text-3 cursor-pointer">
             <Switch checked={monedaHomogenea} onCheckedChange={setMonedaHomogenea} />
             <span className="flex items-center gap-1">

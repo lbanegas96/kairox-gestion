@@ -3,6 +3,7 @@ import { Plus, Check, AlertTriangle, Loader2, Lock, Unlock, BookLock, ArrowRight
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { ajusteInflacionService } from '@/services/ajusteInflacionService';
+import { useAjusteInflacionHabilitado } from '@/hooks/useAjusteInflacionHabilitado';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,6 +32,7 @@ function TabPeriodos({ empresaId, userId, userRole }) {
   const [nuevoForm, setNuevoForm]             = useState({ nombre: '', fecha_inicio: '', fecha_cierre: '', observaciones: '' });
   const { toast } = useToast();
   const isAdmin = userRole === 'admin';
+  const { habilitado: ajusteInflacionHabilitado } = useAjusteInflacionHabilitado();
 
   const fetchPeriodos = async () => {
     if (!empresaId) return;
@@ -315,7 +317,7 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                           <Unlock size={12} /> Reabrir
                         </button>
                       )}
-                      {p.estado === 'cerrado' && !p.asiento_ajuste_inflacion_id && !p.asiento_cierre_id && (
+                      {ajusteInflacionHabilitado && p.estado === 'cerrado' && !p.asiento_ajuste_inflacion_id && !p.asiento_cierre_id && (
                         <button
                           onClick={() => handleAbrirAjusteInflacion(p)}
                           title="RT 6 — reexpresa rubros no monetarios y genera el RECPAM (opcional, antes de cerrar el ejercicio)"

@@ -1,5 +1,35 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Ajuste por Inflación — Fase 5 EN PRODUCCIÓN: interruptor comercial "Premium" (mig.383) (01/09)
+
+Luciano definió el modelo (pregunta directa, no inventado): **"mixto"** — el toggle es visible para
+TODAS las empresas de KAIROX desde Configuración → Finanzas, pero activarlo muestra un aviso de que
+es una funcionalidad premium (sin cobro automático todavía — sirve para medir interés real antes de
+montar uno).
+
+**Construido (mig.383):** `empresas.usa_ajuste_inflacion` (bool, default `false` para todas —
+a diferencia de toggles previos como `usa_impuestos_avanzados`, acá NO se hizo backfill a `true`
+para el resto porque el módulo es nuevo y nadie más lo venía usando; **backfill a `true` SOLO para
+Nalux**, que ya lo usa activamente desde que se construyó hoy). Hook
+`useAjusteInflacionHabilitado()` (react-query, cacheado) + `AjusteInflacionToggleCard.jsx` (card en
+Configuración → Finanzas con badge "PREMIUM", `Switch` + `AlertDialog` de confirmación al activar,
+mensaje: "Kairox IA se va a contactar para coordinar el alta comercial").
+
+**Gatea 5 puntos de UI** (todos con el mismo patrón `ajusteInflacionHabilitado && ...`):
+1. Plan de Cuentas → Editar Cuenta: selector "Naturaleza (Ajuste por Inflación)".
+2. Configuración → Finanzas: la card de Índices de Inflación (vive dentro del toggle card).
+3. Cierre de Ejercicio: botón "Ajuste por Inflación".
+4. Balance General / Estado de Resultados: toggle "Ver en moneda homogénea".
+5. Impuestos: la pestaña "Ajuste por Inflación" (calculadora impositiva).
+
+Verificado en vivo contra Nalux real (empresa con el flag en `true`): la card muestra "Activo" con
+badge PREMIUM, y todo el módulo sigue visible como antes — sin regresión. No se tocó el toggle real
+de Nalux durante la verificación (evitar mutar estado real sin necesidad — la lógica condicional ya
+quedó validada con `tsc`/`eslint`/`vite build` limpios y 160/160 tests). Con esto, **las 5 fases del
+plan original de Ajuste por Inflación están completas y en producción.**
+
+---
+
 ## ✅ Ajuste por Inflación — Fase 3 confirmada + Fase 4 (cadencia mensual) EN PRODUCCIÓN (mig.381/382) (01/09)
 
 Luciano confirmó aplicar mig.381 (impositivo) al volver, y pidió seguir con Fase 4 (cadencia
