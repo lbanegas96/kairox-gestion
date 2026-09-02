@@ -1,5 +1,51 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Ajuste por Inflación — Fase 2 EN PRODUCCIÓN: Balance/EERR en moneda homogénea (mig.380) (01/09)
+
+Con Luciano de vuelta, confirmó aplicar mig.378 (ver sección de abajo) y pidió seguir con todo:
+cargar los índices reales y avanzar con la Fase 2.
+
+**Índices IPC reales cargados (no de ejemplo)** — 11 meses, Sep 2025 a Jul 2026, sacados de FACPCE
+(vía contadoresenred.com, cruzados contra las variaciones % publicadas independientemente por
+INDEC/FACPCE para validar consistencia — ej. dic'25→ene'26 da +2,88% calculado vs. +2,90% publicado).
+Cargados por el formulario real de `IndicesInflacionCard.jsx` (no por SQL directo), verificados en
+la base después. Agosto 2026 todavía no lo publicó FACPCE — falta cargarlo cuando salga.
+
+**Fase 2 (mig.380):** nueva RPC `calcular_reexpresion_moneda_homogenea(empresa_id, fecha_desde,
+fecha_hasta)` — generaliza el mecanismo de Fase 1 a cualquier rango de fechas, de solo lectura (no
+genera asiento). A diferencia de Fase 1, si falta un índice NO bloquea: devuelve lo que sí puede
+calcular + la lista de meses sin índice, para que el reporte se muestre igual con una advertencia
+(criterio distinto a propósito — acá no hay riesgo de asentar mal un asiento real).
+
+- Toggle "Ver en moneda homogénea" en `TabBalanceGeneral.jsx` y `TabEstadoResultados.jsx`. Reexpresa
+  cada cuenta no monetaria por su propio mes de origen; las monetarias quedan igual (no cambian).
+- **RECPAM implícito**: reexpresar cada cuenta por separado deja un residuo — es exactamente el
+  RECPAM que Fase 1 asentaría si se generara el ajuste real para ese rango. Se muestra como línea
+  informativa en Patrimonio ("no contabilizado — vista previa") para que el Balance siga cerrando a
+  la vista.
+- **Bug real encontrado y corregido en el camino:** una CTE (`con_indice`) no sobrevive entre dos
+  `SELECT` top-level separados dentro de la misma función plpgsql — quedaba "relation does not
+  exist" en el segundo. Se unificó todo en un solo statement con subqueries. Encontrado probando en
+  vivo (fetch directo autenticado a PostgREST), no en el diseño.
+
+**Verificado end-to-end en vivo contra Nalux real:** Mercaderías/Inventario $8.023.894 histórico →
+$8.460.145,92 reexpresado al 31/07; Balance sigue cerrando exacto (Activo = Pasivo + Patrimonio) con
+la línea de RECPAM implícito sumada; Estado de Resultados del mismo rango da el mismo Resultado del
+Ejercicio ($7.970.880,01) que muestra Balance General — consistencia cruzada confirmada. Sin índice
+del mes de corte (probado con septiembre, que FACPCE no publicó todavía), cae correctamente al
+histórico con aviso, sin romper nada. `tsc`/`eslint`/`vite build` limpios, 160/160 tests.
+
+**Nota de proceso:** al verificar Plan de Cuentas → Editar Cuenta con clics automatizados, el primer
+intento tocó por error el botón de "activar/desactivar" en vez del lápiz y desactivó momentáneamente
+la cuenta real 1.1.3 (Mercaderías/Inventario) de Nalux. Se detectó al instante y se revirtió por el
+mismo camino de la app (un segundo clic en el mismo botón), confirmado en la base. Sin impacto real,
+documentado igual por transparencia.
+
+**Fase 1 y 2 completas.** Quedan Fase 3 (ajuste impositivo Ganancias) y Fase 4 (mensual en vez de
+solo al cierre) — ninguna arrancada, "solo si se confirma demanda real" según el plan original.
+
+---
+
 ## ✅ Ajuste por Inflación — Fase 1 EN PRODUCCIÓN (mig.378 + fix de seguridad mig.379) (01/09)
 
 Luciano: sin contador matriculado disponible ("no tengo contador y no puedo pagar uno"), pidió

@@ -54,7 +54,24 @@ export const indicesInflacionService = {
   },
 };
 
+export interface ReexpresionMonedaHomogenea {
+  montos: { cuenta_id: string; monto_homogeneo: number }[];
+  meses_sin_indice: string[];
+  indice_hasta_faltante: boolean;
+}
+
 export const ajusteInflacionService = {
+  /** Fase 2 — reexpresión de solo lectura para Balance General/Estado de Resultados, sin generar asiento. */
+  async calcularReexpresion(empresaId: string, fechaDesde: string | null, fechaHasta: string): Promise<ReexpresionMonedaHomogenea> {
+    const { data, error } = await supabase.rpc('calcular_reexpresion_moneda_homogenea', {
+      p_empresa_id: empresaId,
+      p_fecha_desde: fechaDesde,
+      p_fecha_hasta: fechaHasta,
+    });
+    if (error) throw new Error(error.message);
+    return data as ReexpresionMonedaHomogenea;
+  },
+
   async calcularPreview(periodoId: string): Promise<PreviewAjusteInflacion> {
     const { data, error } = await supabase.rpc('calcular_preview_ajuste_por_inflacion', {
       p_periodo_id: periodoId,
