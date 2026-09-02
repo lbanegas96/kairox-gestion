@@ -1,5 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🔴→✅ CRÍTICO — facturas_saldo_pendiente filtraba datos entre empresas (mig.384, 02/09)
+
+Al bajar el proyecto para ver qué había hecho Luciano (Ajuste por Inflación, ver secciones de
+abajo), se corrió `get_advisors` de rutina — buena práctica después de cualquier tanda grande de
+migraciones, no algo que haya que pedir. Apareció 1 solo advisor en nivel **ERROR** en toda la base:
+`facturas_saldo_pendiente` (la vista de mig.374, construida ESTA MISMA SEMANA, sin relación con el
+trabajo de Luciano de hoy) marcada "Security Definer View".
+
+**Confirmado explotable en vivo** (`BEGIN...ROLLBACK`, simulando un usuario real de Nalux):
+`SELECT DISTINCT empresa_id FROM facturas_saldo_pendiente` devolvía **Nalux Y Ferretería NADIA
+juntas** — cualquier usuario logueado de cualquier tenant podía leer nombre de cliente, número de
+factura, fecha y saldo pendiente de **otro tenant cualquiera**. La tabla base (`comprobantes`) sí
+tiene la política RLS correcta (`empresa_id = get_my_empresa_id()`) — la vista la esquivaba por
+completo al no tener `security_invoker`.
+
+**Fix (mig.384):** `ALTER VIEW ... SET (security_invoker = true)` — la vista pasa a heredar la RLS
+real de la tabla base, sin tocar su lógica SQL. Re-verificado con la misma simulación: ahora sólo ve
+su propia empresa. Uso legítimo del frontend (`ModalCobro`, `CuentaCorrienteSection`,
+`ReportesSection`, `useRegistrarCobro`) sin cambios — siempre consultan como el usuario logueado.
+
+**Aplicado y pusheado de inmediato**, antes de seguir con cualquier otra cosa — era el hallazgo más
+importante del chequeo.
+
+---
+
+# KAIROX Gestión — Contexto de Sesión
+
 ## 📘 Ajuste por Inflación — plan de pruebas didáctico publicado, cierre de las 5 fases (01/09)
 
 Con las Fases 1-5 completas en producción, Luciano pidió cerrar el día con un plan de pruebas de
