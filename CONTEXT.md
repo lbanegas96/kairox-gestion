@@ -1,5 +1,44 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Ajuste por Inflación — Fase 3 confirmada + Fase 4 (cadencia mensual) EN PRODUCCIÓN (mig.381/382) (01/09)
+
+Luciano confirmó aplicar mig.381 (impositivo) al volver, y pidió seguir con Fase 4 (cadencia
+mensual, "reusa casi todo Fase 1" según el plan original). Además pidió anotar una **Fase 5**: un
+interruptor a nivel empresa para prender/apagar TODO el módulo — pensado como estrategia comercial
+(feature opt-in/premium), no construido todavía — ver nota al final.
+
+**Fase 3 verificada en producción:** clasificación `excluido_ajuste_impositivo` correcta (Bienes de
+Uso/Intangibles), Advisors limpio (sin `anon` esta vez — se incluyó el `REVOKE` desde el diseño, no
+como fix posterior). Probado en vivo: coeficiente anual calculó bien, caso "sin datos" da $0 sin
+errores (Nalux no tiene aportes/retiros de capital ni compras de bienes de uso reales todavía), caso
+"falta índice" avisa en vez de romper.
+
+**Fase 4 (mig.382) — bug real encontrado y corregido:** `_lineas_ajuste_por_inflacion` (Fase 1)
+usaba el MES DE INICIO del período como referencia del patrimonio de apertura. Funciona para un
+ejercicio anual, pero los `periodos_contables` REALES de Nalux son mensuales — con esa referencia,
+mes_apertura=mes_cierre SIEMPRE, el coeficiente da 1, y el ajuste de apertura queda en cero para
+siempre. Corría sin error, pero no servía para nada en cadencia mensual. **Fix:** la referencia pasa
+a ser el mes de CIERRE DEL PERÍODO ANTERIOR (mismo criterio que ya usé y validé en Fase 3, art. 96
+LIG). Probado con `BEGIN...ROLLBACK` simulando 2 meses consecutivos reales (capital aportado en
+diciembre, ajuste de enero posteado, ajuste de febrero calculado sobre el saldo YA actualizado de
+enero): el resultado de encadenar mes a mes coincide EXACTO (al centavo) con lo que daría un solo
+ajuste anual — la identidad matemática de coeficientes telescópicos se cumple. Solo cambia el cuerpo
+de una función (`CREATE OR REPLACE`, misma firma) — no tocó tablas ni datos, aplicada sin bloqueo del
+clasificador. Artifact "Circuito de Ajuste por Inflación" actualizado con este refinamiento.
+
+**Fase 5 (interruptor comercial) — ANOTADA, no construida.** Idea de Luciano: un toggle a nivel
+empresa (`empresas.usa_ajuste_inflacion` o similar, mismo patrón que `usa_tc_paralelo`/
+`usa_impuestos_avanzados`/`usa_centros_costo`) que gatee la visibilidad de TODO el módulo (columna
+`naturaleza_monetaria` en Plan de Cuentas, tarjeta de índices en Configuración → Finanzas, botón
+"Ajuste por Inflación" en Cierre de Ejercicio, toggle "moneda homogénea" en Balance/EERR, pestaña de
+Impuestos) — pensado como feature opt-in/premium, estrategia comercial para otros tenants de KAIROX,
+no solo Nalux. **Quedó pendiente de definir con Luciano** antes de construir: ¿es un toggle
+self-serve que cualquier tenant puede prender desde Configuración, o un flag que solo vos controlás
+por cliente (para upsell)? Es una decisión de producto/pricing, no técnica — no se debe inventar
+unilateralmente.
+
+---
+
 ## 🟡 Ajuste por Inflación — Fase 3 (IMPOSITIVO) construida, FALTA aplicar mig.381 a producción (01/09)
 
 Luciano: "vamos con la fase 3 por favor". Circuito **genuinamente distinto** a Fase 1/2 (que son el
