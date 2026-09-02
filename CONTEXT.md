@@ -1,5 +1,43 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Ajuste por Inflación — Nadia recorrió las 7 pantallas ella misma, sin usar la de Luciano (02/09)
+
+Como Nadia no tenía acceso al artifact "Recorrido del Ajuste por Inflación" que publicó Luciano
+(quedó en la cuenta de él, no compartido), se le armó uno **equivalente** — mismo espíritu (7
+pasos, navegación real, "por qué" en criollo, badges 🟢/🟠, checklist en localStorage) — publicado
+acá: https://claude.ai/code/artifact/ba1c9c74-339f-46f8-9a2e-6fdee995208b
+
+**Nadia hizo el recorrido completo ella misma**, en `localhost:3000` (no producción), guiada paso a
+paso en el chat. Las 7 pantallas, sin encontrar ningún bug — sólo 2 dudas, ambas explicadas y
+confirmadas como comportamiento correcto (no fallas):
+
+1. **Paso 4 (Balance en moneda homogénea):** con la fecha de hoy (02/09) aparecía el aviso "falta
+   el índice de 2026-09" — esperado, FACPCE todavía no lo publicó. Cambiando "Fecha de corte" a
+   31/07/2026 (último mes con índice real cargado) + botón "Actualizar", el toggle funcionó
+   perfecto: Mercaderías/Inventario pasó de $8.285.520,00 (histórico) a $8.460.145,92 (reexpresado).
+   **Hallazgo de UX real, menor:** el toggle no dispara un refetch automático al cambiar sólo la
+   fecha — hay que tocar "Actualizar" a propósito. No es un bug (el botón está ahí para eso), pero
+   vale la pena que Luciano lo tenga presente si en algún momento se simplifica el flujo.
+2. **Paso 5:** el Resultado del Ejercicio del Estado de Resultados coincidió exacto con el del
+   Balance General — la validación cruzada más importante del recorrido, confirmada por Nadia con
+   sus propios ojos.
+3. **Paso 6 (calculadora de Ganancias):** mismo patrón que el Paso 4 — el "Cierre del ejercicio
+   fiscal" por defecto (31/12/2026) pedía el índice de diciembre, todavía no publicado. Cambiado a
+   31/07/2026, calculó: coeficiente anual real (1,1932) pero Activo/Pasivo/Patrimonio computable al
+   inicio y ajuste dinámico en $0,00. **Verificado por qué es correcto** (no un bug): el primer
+   asiento contable de Nalux es del 02/06/2026 — con "Inicio del ejercicio fiscal" en 01/01/2026 la
+   empresa todavía no existía contablemente, así que el patrimonio de apertura es genuinamente $0.
+4. **Paso 7:** Nadia llegó hasta la vista previa del asiento y frenó ahí, tal como pedía la guía —
+   **no se generó ningún asiento real**, Nalux queda intacta.
+
+**Conclusión:** el módulo de Ajuste por Inflación quedó validado de punta a punta por una usuaria
+real sin conocimiento del código, no sólo por quien lo construyó — la señal más fuerte de que las 5
+fases de Luciano están sólidas. Sin hallazgos que requieran corrección de código.
+
+---
+
+# KAIROX Gestión — Contexto de Sesión
+
 ## 🔴→✅ CRÍTICO — facturas_saldo_pendiente filtraba datos entre empresas (mig.384, 02/09)
 
 Al bajar el proyecto para ver qué había hecho Luciano (Ajuste por Inflación, ver secciones de
