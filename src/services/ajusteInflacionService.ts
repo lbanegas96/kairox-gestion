@@ -88,4 +88,30 @@ export const ajusteInflacionService = {
     if (error) throw new Error(error.message);
     return data as { ok: boolean; asiento_id: string | null; numero?: string; mensaje?: string };
   },
+
+  // Fase 3 — ajuste IMPOSITIVO (Ganancias, Ley 27.468 arts. 95/96). Circuito
+  // distinto al contable: no genera asiento, es una estimación de apoyo
+  // para la Declaración Jurada.
+  async calcularAjusteImpositivo(empresaId: string, fechaInicio: string, fechaCierre: string): Promise<AjusteImpositivoGanancias> {
+    const { data, error } = await supabase.rpc('calcular_ajuste_impositivo_ganancias', {
+      p_empresa_id: empresaId,
+      p_fecha_inicio: fechaInicio,
+      p_fecha_cierre: fechaCierre,
+    });
+    if (error) throw new Error(error.message);
+    return data as AjusteImpositivoGanancias;
+  },
 };
+
+export interface AjusteImpositivoGanancias {
+  ok: boolean;
+  mensaje?: string;
+  activo_computable_inicio?: number;
+  pasivo_computable_inicio?: number;
+  pn_computable_inicio?: number;
+  coeficiente_anual?: number;
+  ajuste_estatico?: number;
+  ajuste_dinamico?: number;
+  ajuste_total?: number;
+  meses_sin_indice?: string[];
+}

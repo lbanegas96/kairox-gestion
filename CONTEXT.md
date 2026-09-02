@@ -1,5 +1,45 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🟡 Ajuste por Inflación — Fase 3 (IMPOSITIVO) construida, FALTA aplicar mig.381 a producción (01/09)
+
+Luciano: "vamos con la fase 3 por favor". Circuito **genuinamente distinto** a Fase 1/2 (que son el
+ajuste CONTABLE, RT 6) — Fase 3 es el ajuste **IMPOSITIVO** (Ganancias, Ley 27.468 arts. 95/96):
+otra lista de exclusiones (la del art. 95, no `naturaleza_monetaria`), un solo coeficiente **anual**
+para la parte estática (no mensual como RT6), y ajustes dinámicos por movimiento de Capital Social y
+bienes excluidos. No genera ningún asiento — es una calculadora de apoyo para la Declaración Jurada
+de Ganancias, el resultado nunca toca el Libro Mayor.
+
+**Investigado con fuentes reales:** desde ejercicios iniciados a partir de 2021 el ajuste impositivo
+se reconoce COMPLETO en el mismo ejercicio (el viejo diferimiento por tercios/sextos ya no aplica a
+una PyME como Nalux — solo sigue vigente como excepción opcional para inversores grandes, ≥$30.000M
+en bienes de uso). Simplifica el cálculo: no hace falta modelar diferimiento.
+
+**Construido (mig.381, `381_ajuste_inflacion_fase3_impositivo.sql`):**
+- `plan_cuentas.excluido_ajuste_impositivo` (bool) — art. 95 inciso a). Backfill: Bienes de Uso
+  (1.2.1) e Intangibles (1.2.2). El resto de la lista legal (inversiones exterior, acciones
+  societarias, existencias forestales, anticipos que congelan precio) no tiene cuenta propia en
+  KAIROX hoy — limitación documentada explícitamente en la UI, no omitida en silencio.
+- RPC `calcular_ajuste_impositivo_ganancias(empresa_id, fecha_inicio, fecha_cierre)`: Activo/Pasivo
+  computable al inicio (excluye Bienes de Uso/Intangibles del activo, sin exclusiones de pasivo por
+  ahora) → PN computable → ajuste estático (× coeficiente ANUAL, no mensual) + ajuste dinámico
+  (movimientos de 3.1 Capital Social y de cuentas excluidas, reexpresados mes a mes como en Fase 1).
+- **Probado con `BEGIN...ROLLBACK`**, con movimientos SINTÉTICOS de aporte de capital y compra de
+  bien de uso (Nalux no tiene movimientos reales ahí todavía) — signos y magnitud coherentes con la
+  ley: aportar capital fresco → ajuste dinámico negativo (no genera pérdida deducible); comprar un
+  bien excluido → positivo.
+- Frontend: nueva pestaña "Ajuste por Inflación" en Impuestos (`TabAjusteImpositivo.jsx`, siempre
+  visible — Ganancias es nacional, no depende del toggle de Impuestos Avanzados de IIBB). Banner
+  explícito: "no genera asiento, no reemplaza a tu asesor impositivo", con las simplificaciones
+  listadas. `tsc`/`eslint`/`vite build` limpios, 160/160 tests.
+
+**🔴 BLOQUEADO — mig.381 NO está aplicada a producción**, mismo criterio que mig.378: el clasificador
+de auto-mode denegó el `apply_migration` sin confirmación explícita de Luciano en este turno. Archivo
+commiteado y pusheado, frontend deployado — hasta que se aplique, la pestaña nueva de Impuestos va a
+fallar al calcular (RPC inexistente), sin afectar el resto de la app. **Pedirle a Luciano que
+confirme antes de aplicar mig.381** (mismo patrón que ya se usó con mig.378/379/380).
+
+---
+
 ## ✅ Ajuste por Inflación — Fase 2 EN PRODUCCIÓN: Balance/EERR en moneda homogénea (mig.380) (01/09)
 
 Con Luciano de vuelta, confirmó aplicar mig.378 (ver sección de abajo) y pidió seguir con todo:
