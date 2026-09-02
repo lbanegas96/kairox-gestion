@@ -1,5 +1,26 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 📘 Ajuste por Inflación — plan de pruebas didáctico publicado, cierre de las 5 fases (01/09)
+
+Con las Fases 1-5 completas en producción, Luciano pidió cerrar el día con un plan de pruebas de
+punta a punta — pero explícitamente **didáctico**, para entender el tema (no solo verificar que
+funciona), pensado tanto para él como para Nadia.
+
+Se publicó el artifact **"Recorrido del Ajuste por Inflación"**
+(https://claude.ai/code/artifact/7aa957ed-730c-41b4-a2b9-daf648a44716): 7 pasos guiados con
+navegación real (dónde tocar), el "por qué" de cada pantalla explicado en criollo, ejemplos
+numéricos reales de Nalux (Inventario $8.023.894 → $8.460.145,92 al 31/07), badges de riesgo
+(🟢 seguro de probar / 🟠 acción real) y checklist con progreso guardado en localStorage del
+navegador. Distinto del artifact **"Circuito de Ajuste por Inflación"**
+(https://claude.ai/code/artifact/be8ba7a2-255c-4848-af5b-e8921c59535c), que documenta el método de
+cálculo y las decisiones tomadas — ese es la referencia técnica, este es la guía de uso/aprendizaje.
+
+**Único paso del recorrido con riesgo real:** el Paso 6 (generar el asiento de ajuste desde
+Períodos) — confirmar ahí deja un asiento contable REAL en el Libro Mayor de Nalux, no reversible
+con un click simple. El plan recomienda quedarse en la vista previa durante la prueba.
+
+---
+
 ## ✅ Ajuste por Inflación — Fase 5 EN PRODUCCIÓN: interruptor comercial "Premium" (mig.383) (01/09)
 
 Luciano definió el modelo (pregunta directa, no inventado): **"mixto"** — el toggle es visible para
