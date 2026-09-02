@@ -1,0 +1,27 @@
+-- migration 384 — facturas_saldo_pendiente (mig.374) filtraba datos entre
+-- empresas: cualquier usuario logueado de CUALQUIER tenant podía leer los
+-- saldos pendientes de TODOS los tenants.
+--
+-- HALLAZGO real (02/09, chequeo de rutina de Supabase Advisors al revisar el
+-- trabajo del día): el linter marca `facturas_saldo_pendiente` como
+-- "Security Definer View" (nivel ERROR) — una vista sin `security_invoker`
+-- corre con los privilegios de quien la CREÓ, no los del usuario que
+-- consulta, así que ignora las políticas RLS de las tablas base para ese
+-- usuario.
+--
+-- Confirmado explotable en vivo (BEGIN...ROLLBACK, simulando un usuario real
+-- de Nalux): `SELECT DISTINCT empresa_id FROM facturas_saldo_pendiente`
+-- devolvía Nalux Y Ferretería NADIA juntas — pese a que `comprobantes` (la
+-- tabla base) sí tiene la política RLS correcta
+-- (`empresa_id = get_my_empresa_id()`), la vista la esquivaba por completo.
+-- Cualquier tenant podía ver nombre de cliente, número de factura, fecha y
+-- saldo pendiente de OTRO tenant.
+--
+-- Fix: `security_invoker = true` (Postgres 15+, ya soportado en este
+-- proyecto) — la vista pasa a ejecutarse con los privilegios de quien
+-- consulta, así que hereda la RLS real de `comprobantes`. No cambia la
+-- lógica SQL de la vista en absoluto, sólo el modo de ejecución. Verificado
+-- con el mismo BEGIN...ROLLBACK: después del fix, el mismo usuario de Nalux
+-- sólo ve su propia empresa.
+
+ALTER VIEW public.facturas_saldo_pendiente SET (security_invoker = true);
