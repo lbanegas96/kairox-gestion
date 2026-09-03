@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Check, AlertTriangle, Loader2, Lock, Unlock, BookLock, ArrowRightLeft, Calculator } from 'lucide-react';
+import { Plus, Check, AlertTriangle, Loader2, Lock, Unlock, BookLock, ArrowRightLeft, Calculator, Undo2 } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { ajusteInflacionService } from '@/services/ajusteInflacionService';
@@ -29,6 +29,9 @@ function TabPeriodos({ empresaId, userId, userRole }) {
   const [previewAjuste, setPreviewAjuste]     = useState(null);
   const [cargandoPreview, setCargandoPreview] = useState(false);
   const [procesandoAjuste, setProcesandoAjuste] = useState(false);
+  const [showRevertirAjuste, setShowRevertirAjuste] = useState(false);
+  const [periodoARevertirAjuste, setPeriodoARevertirAjuste] = useState(null);
+  const [procesandoRevertirAjuste, setProcesandoRevertirAjuste] = useState(false);
   const [nuevoForm, setNuevoForm]             = useState({ nombre: '', fecha_inicio: '', fecha_cierre: '', observaciones: '' });
   const { toast } = useToast();
   const isAdmin = userRole === 'admin';
@@ -240,6 +243,26 @@ function TabPeriodos({ empresaId, userId, userRole }) {
     }
   };
 
+  const handleRevertirAjusteInflacion = async () => {
+    if (!periodoARevertirAjuste) return;
+    setProcesandoRevertirAjuste(true);
+    try {
+      const data = await ajusteInflacionService.revertir(periodoARevertirAjuste.id, userId);
+      toast({
+        title: 'Ajuste por inflación revertido',
+        description: `Asiento de reversa ${data.numero} generado. El período queda libre para ajustar de nuevo.`,
+        className: 'bg-green-900 border-green-700 text-white',
+      });
+      setShowRevertirAjuste(false);
+      setPeriodoARevertirAjuste(null);
+      fetchPeriodos();
+    } catch (e) {
+      toast({ title: 'Error al revertir el ajuste', description: e.message, variant: 'destructive' });
+    } finally {
+      setProcesandoRevertirAjuste(false);
+    }
+  };
+
   const fmt = (n) => `$ ${Number(n ?? 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const fmtFecha = (d) => new Date(d + 'T12:00:00').toLocaleDateString('es-AR');
@@ -330,6 +353,15 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                         <span className="text-2xs px-2 py-1 rounded-full border border-cyan-500/30 text-cyan-600 dark:text-cyan-400 bg-cyan-500/10">
                           Ajustado por inflación
                         </span>
+                      )}
+                      {isAdmin && p.asiento_ajuste_inflacion_id && !p.asiento_cierre_id && (
+                        <button
+                          onClick={() => { setPeriodoARevertirAjuste(p); setShowRevertirAjuste(true); }}
+                          title="Deshace el ajuste por inflación de este período (postea un asiento de reversa, el original queda intacto)"
+                          className="flex items-center gap-1 px-3 py-1.5 rounded text-xs text-amber-600 dark:text-amber-400 hover:opacity-80 hover:bg-amber-500/10 border border-amber-500/30 transition-colors"
+                        >
+                          <Undo2 size={12} /> Revertir
+                        </button>
                       )}
                       {p.estado === 'cerrado' && !p.asiento_cierre_id && (
                         <button
@@ -673,6 +705,40 @@ function TabPeriodos({ empresaId, userId, userRole }) {
                 ? <Loader2 size={14} className="animate-spin mr-2" />
                 : <Calculator size={14} className="mr-2" />}
               Confirmar y generar asiento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: confirmar reversa del Ajuste por Inflación */}
+      <Dialog
+        open={showRevertirAjuste}
+        onOpenChange={v => { if (!procesandoRevertirAjuste) { setShowRevertirAjuste(v); if (!v) setPeriodoARevertirAjuste(null); } }}
+      >
+        <DialogContent className="bg-kx-surface border-kx-border text-kx-text max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-500">
+              <Undo2 size={18} /> Revertir Ajuste por Inflación
+            </DialogTitle>
+            <DialogDescription>
+              Se va a postear un asiento nuevo que neutraliza el ajuste por inflación de
+              "{periodoARevertirAjuste?.nombre}" — el asiento original no se borra ni se edita, queda
+              en el Libro Mayor junto con su reversa. El período vuelve a quedar disponible para
+              generar el ajuste de nuevo.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="ghost" disabled={procesandoRevertirAjuste}
+              onClick={() => { setShowRevertirAjuste(false); setPeriodoARevertirAjuste(null); }}
+              className="text-kx-text-3">
+              Cancelar
+            </Button>
+            <Button onClick={handleRevertirAjusteInflacion} disabled={procesandoRevertirAjuste}
+              className="bg-amber-600 hover:bg-amber-700 text-white">
+              {procesandoRevertirAjuste
+                ? <Loader2 size={14} className="animate-spin mr-2" />
+                : <Undo2 size={14} className="mr-2" />}
+              Confirmar reversa
             </Button>
           </DialogFooter>
         </DialogContent>

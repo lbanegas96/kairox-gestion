@@ -65,6 +65,48 @@ importante del chequeo.
 
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Ajuste por Inflación — fix crítico + reversa + alcance acotado a Inventario/Moneda (mig.385/386, 02/09)
+
+Retomando el mismo día, tras la auditoría de abajo, Luciano pidió construir la reversa (hallazgo #1)
+y aclaró el alcance real que busca: **"contemplar la revalorización de la mercadería y la moneda más
+que otra cosa, no quiero que los bienes interfieran en esto ya que no es a lo que apunto por ahora"**
+— Bienes de Uso queda fuera del circuito contable por decisión de producto, no por error técnico.
+
+**🔴→✅ Bug crítico encontrado AL CONSTRUIR la reversa (no estaba en el hallazgo original de la
+auditoría):** `generar_ajuste_por_inflacion` nunca podía confirmarse de verdad en producción.
+Reusaba `crear_asiento_automatico` (mig.314), que bloquea CUALQUIER fecha dentro de un período
+`'cerrado'` — pero el botón "Ajuste por Inflación" en `TabPeriodos.jsx` sólo aparece precisamente
+cuando el período YA está `'cerrado'` (es su precondición). Confirmado con una simulación real
+contra Nalux: cerrar un período de prueba y llamar la función tiraba
+`"Período cerrado: la fecha ... pertenece a un período contable cerrado"`. Nunca se detectó porque
+(1) ningún período de Nalux estuvo realmente cerrado en producción todavía, y (2) tanto el recorrido
+de Luciano como el de Nadia pararon deliberadamente en la vista previa, sin tocar "Confirmar".
+
+**Fix (mig.385):** mismo patrón que `cerrar_ejercicio_contable` (mig.283) — inserción directa en
+`asientos_contables`/`asientos_items`, sin pasar por el guard genérico (correcto: este asiento por
+diseño se genera con el período ya cerrado). Probado en vivo con `BEGIN...ROLLBACK`: cerrar un
+período real → generar → revertir → volver a generar, los 3 asientos cuadran exacto.
+
+**Reversa (mig.385, `revertir_ajuste_por_inflacion`):** botón "Revertir" nuevo en `TabPeriodos.jsx`,
+junto al badge "Ajustado por inflación" (sólo admin, sólo si el período no tiene ya el asiento de
+Cierre de Ejercicio encima). Postea un asiento espejado con debe/haber invertidos — el original
+NUNCA se toca ni se borra (mismo criterio de inmutabilidad de mig.314) — y libera el período para
+generar el ajuste de nuevo. **Corregí la guía "Recorrido del Ajuste por Inflación", que hace unos
+minutos decía (correctamente, en ese momento) que esto no se podía deshacer — ahora sí se puede.**
+
+**Alcance acotado (mig.386):** `plan_cuentas.naturaleza_monetaria` de Bienes de Uso (`1.2.1`) pasa de
+`'no_monetaria'` a `'monetaria'` — deja de reexpresarse tanto en el asiento real (Fase 1/4) como en
+el Balance en moneda homogénea (Fase 2), ya que ambos leen la misma columna. Foco queda en
+Mercaderías/Inventario (`1.1.3`, sigue `'no_monetaria'`) + cuentas monetarias (RECPAM). No se tocó
+Intangibles (`1.2.2`, no mencionado) ni Fase 3 impositivo (ahí Bienes de Uso ya estaba excluido por
+Ley 27.468, coincide con lo pedido). Nalux tenía $20.000 en Bienes de Uso — efecto real aunque chico.
+
+Verificado post-aplicación: `1.2.1 = monetaria`, `1.1.3 = no_monetaria` sin cambios, las 2 RPCs
+nuevas `anon=false`/`authenticated=true`, Advisors sin hallazgos ERROR. `tsc`/`eslint`/`vite build`
+limpios (sin errores nuevos, sólo warnings preexistentes en archivos no tocados).
+
+---
+
 ## 🟡 Auditoría contable (3ra verificación) del Ajuste por Inflación — 1 gap real encontrado (02/09)
 
 Luciano pidió una tercera verificación, actuando con la skill `auditor-contable`, sobre el código de

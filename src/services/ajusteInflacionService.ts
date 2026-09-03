@@ -89,6 +89,18 @@ export const ajusteInflacionService = {
     return data as { ok: boolean; asiento_id: string | null; numero?: string; mensaje?: string };
   },
 
+  /** Fase 1/4 -- revierte el asiento de un período (mig.385): postea un
+   * asiento nuevo con debe/haber invertidos y libera el período para poder
+   * generar el ajuste de nuevo. El asiento original nunca se toca. */
+  async revertir(periodoId: string, userId: string): Promise<{ ok: boolean; asiento_reversa_id: string; numero: string }> {
+    const { data, error } = await supabase.rpc('revertir_ajuste_por_inflacion', {
+      p_periodo_id: periodoId,
+      p_user_id: userId,
+    });
+    if (error) throw new Error(error.message);
+    return data as { ok: boolean; asiento_reversa_id: string; numero: string };
+  },
+
   // Fase 3 — ajuste IMPOSITIVO (Ganancias, Ley 27.468 arts. 95/96). Circuito
   // distinto al contable: no genera asiento, es una estimación de apoyo
   // para la Declaración Jurada.
