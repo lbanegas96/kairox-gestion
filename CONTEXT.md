@@ -65,6 +65,50 @@ importante del chequeo.
 
 # KAIROX Gestión — Contexto de Sesión
 
+## 🟡 Auditoría contable (3ra verificación) del Ajuste por Inflación — 1 gap real encontrado (02/09)
+
+Luciano pidió una tercera verificación, actuando con la skill `auditor-contable`, sobre el código de
+las migraciones 378-384 (Fases 1-5). Ya estaba validado por pruebas `BEGIN...ROLLBACK` durante la
+construcción y por el recorrido completo de Nadia (sección de abajo) — esta pasada revisa el DISEÑO
+contable en el SQL, no la UI.
+
+**Seguridad y partida doble: sólidas.** Las 5 RPCs nuevas están `authenticated`-only (`anon`
+revocado, confirmado contra la base real). `generar_ajuste_por_inflacion` reusa
+`crear_asiento_automatico` (mig.314), que valida cuadre DEBE=HABER y período cerrado server-side
+antes de persistir — no hay forma de generar un asiento descuadrado. `usa_ajuste_inflacion`
+(Fase 5) sólo lo puede tocar un admin (`empresas_update` exige `is_admin()`), confirmado contra RLS
+real.
+
+**🟡 Hallazgo real — el asiento del Paso 6 no tiene forma de deshacerse.** `generar_ajuste_por_inflacion`
+inserta el asiento directo en estado `'confirmado'` (nunca `'borrador'`), así que `anular_asiento`
+(que sólo actúa sobre borradores) no aplica. No existe ningún `crearAsientoReversaAjusteInflacion`
+como sí existe para venta/cobro/NC (`planCuentasService.ts`). Si alguien confirma por error, hoy
+sólo se puede corregir con un asiento manual espejado a mano — no hay botón. **Ya corregí la guía
+publicada** ("Recorrido del Ajuste por Inflación") para reflejar esto en vez de decir "se anula y se
+regenera", que no es cierto. Pendiente de decidir con Luciano: ¿construir una RPC de reversa
+dedicada, o dejarlo así (dado que el flujo ya frena en la vista previa)?
+
+**🟡 Hallazgo metodológico — el asiento real y el reporte de Fase 2 pueden divergir con el tiempo.**
+`_lineas_ajuste_por_inflacion` (el asiento REAL de Fase 1/4) sólo reexpresa el saldo de apertura de
+cuentas tipo **Patrimonio** — nunca reexpresa directamente el saldo de apertura de Inventario/Bienes
+de Uso que viene de ANTES del primer período ajustado (sólo sus movimientos DENTRO de cada período).
+Es matemáticamente consistente (el asiento siempre cierra, y el ajuste al Patrimonio actúa como
+proxy agregado de todo el lado no monetario, vía la identidad Activo=Pasivo+Patrimonio) pero es una
+simplificación más profunda de lo que dice hoy la decisión #1 del artifact "Circuito de Ajuste por
+Inflación" (que sólo habla de la fecha de origen del Patrimonio, no de que Inventario/Bienes de Uso
+individualmente nunca se reexpresan por asiento real). Fase 2 (el reporte de solo lectura) SÍ
+reexpresa cada cuenta por separado con su historial completo — por eso hoy coinciden con los datos
+actuales de Nalux, pero **con el correr de los períodos el saldo real de Inventario en el Libro
+Mayor podría alejarse del que muestra el Balance en moneda homogénea**. No es urgente (nadie generó
+todavía un asiento real), pero conviene que quede anotado antes de confirmar el primero.
+
+**Sin hallazgos en Fase 3 (impositivo) más allá de lo ya documentado** — la mecánica de PN
+computable/coeficiente anual/ajuste dinámico está bien trasladada de Ley 27.468 arts. 95/96, con las
+mismas limitaciones ya conocidas (sin contador matriculado validándolo, documentado explícitamente
+en el propio SQL).
+
+---
+
 ## 📘 Ajuste por Inflación — plan de pruebas didáctico publicado, cierre de las 5 fases (01/09)
 
 Con las Fases 1-5 completas en producción, Luciano pidió cerrar el día con un plan de pruebas de
