@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { User, Loader2, DollarSign, Clock, Banknote, AlertCircle, RefreshCw } from 'lucide-react';
+import { User, Loader2, DollarSign, Clock, Banknote, AlertCircle, RefreshCw, FileDown } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -15,6 +15,7 @@ import { useCaja } from '@/contexts/CajaContext';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { getNowAR, getTodayAR, formatDateAR, formatTimeAR } from '@/lib/dateUtils';
+import { imprimirEstadoCuenta } from '@/lib/imprimirEstadoCuenta';
 
 const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate }) => {
   const { user } = useAuth();
@@ -27,7 +28,15 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
   const [paymentAmount, setPaymentAmount] = useState('');
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
 
-  const detailsQueryKey = ['client_detail', clientId];
+  // Filtro de fecha (02/09, hallazgo Luciano: "filtros por fecha") — sin
+  // filtro, se mantiene el comportamiento de siempre (últimos 50). Con
+  // filtro, trae TODO el rango (sin límite artificial) — es lo que se
+  // espera al pedir "movimientos entre estas fechas".
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
+  const [descargandoPDF, setDescargandoPDF] = useState(false);
+
+  const detailsQueryKey = ['client_detail', clientId, fechaDesde, fechaHasta];
 
   const { data: details, isLoading: loading, error: detailsError } = useQuery({
     queryKey: detailsQueryKey,
@@ -43,13 +52,19 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
       // 2. Fetch Movements History
       // We want to show sales, payments, adjustments.
       // Current table 'cuenta_corriente_movimientos' tracks debits/credits.
-      // We'll use this.
-      const { data: movs, error: movsError } = await supabase
+      // We'll use this. Filtra por 'fecha' (la fecha de negocio del
+      // movimiento), no por 'created_at' (timestamp de carga) — es lo que
+      // el usuario espera al elegir un rango.
+      let movsQuery = supabase
         .from('cuenta_corriente_movimientos')
         .select('*')
         .eq('cliente_id', clientId)
-        .order('created_at', { ascending: false })
-        .limit(50); // Reasonable limit for modal
+        .order('created_at', { ascending: false });
+      if (fechaDesde) movsQuery = movsQuery.gte('fecha', fechaDesde);
+      if (fechaHasta) movsQuery = movsQuery.lte('fecha', `${fechaHasta}T23:59:59`);
+      if (!fechaDesde && !fechaHasta) movsQuery = movsQuery.limit(50); // Reasonable default limit sin filtro
+
+      const { data: movs, error: movsError } = await movsQuery;
 
       if (movsError) throw movsError;
 
@@ -83,9 +98,14 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
     }
   }, [detailsError]);
 
-  // Limpiar el form de pago al cerrar el modal (no es fetch, efecto de UI legítimo)
+  // Limpiar el form de pago y los filtros de fecha al cerrar el modal (no es
+  // fetch, efecto de UI legítimo)
   useEffect(() => {
-    if (!open) setPaymentAmount('');
+    if (!open) {
+      setPaymentAmount('');
+      setFechaDesde('');
+      setFechaHasta('');
+    }
   }, [open]);
 
   // Mientras la query resuelve, mostramos el clientData pasado por prop (misma UX que antes)
@@ -183,6 +203,22 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
     if (onUpdate) onUpdate();
   };
 
+  const handleDescargarPDF = async () => {
+    setDescargandoPDF(true);
+    try {
+      await imprimirEstadoCuenta({
+        clienteId: clientId,
+        empresaId: user.empresa_id,
+        fechaDesde: fechaDesde || null,
+        fechaHasta: fechaHasta || null,
+      });
+    } catch (error) {
+      toast({ title: 'No se pudo generar el PDF', description: error.message, variant: 'destructive' });
+    } finally {
+      setDescargandoPDF(false);
+    }
+  };
+
   const hasDebt = (localClientData?.saldo_actual || 0) > 0;
   const saldo = localClientData?.saldo_actual || 0;
   const limite = localClientData?.limite_credito || 0;
@@ -195,8 +231,11 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl kairox-bg-card kairox-text-primary overflow-hidden flex flex-col max-h-[90vh] dark:bg-kx-bg dark:border-kx-border">
-        <DialogHeader className="border-b border-slate-100 dark:border-kx-border pb-4">
+      {/* size="wide" (02/09, hallazgo Luciano: "los mismos tamaños de
+          cotización") — mismo shell que Cotización/Entrega/OC, reemplaza el
+          max-w-4xl/max-h-[90vh] ad-hoc que traía antes. */}
+      <DialogContent size="wide" className="kairox-bg-card kairox-text-primary dark:bg-kx-bg dark:border-kx-border">
+        <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b border-slate-100 dark:border-kx-border">
           <DialogTitle className="flex items-center gap-2 text-xl dark:text-kx-text">
              <User className="h-6 w-6 text-blue-600 dark:text-kx-violet" />
              <span>{localClientData?.nombre || 'Detalle Cuenta Corriente'}</span>
@@ -206,7 +245,7 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto p-1 space-y-6">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-6">
            
            {/* SUMMARY CARDS */}
            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
@@ -276,9 +315,40 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
 
            {/* MOVEMENTS HISTORY */}
            <div>
-              <h4 className="font-semibold text-slate-700 dark:text-kx-text text-sm mb-3 flex items-center gap-2 uppercase tracking-wider">
-                 <Clock className="h-4 w-4 text-kx-text-3" /> Historial de Movimientos
-              </h4>
+              <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
+                 <h4 className="font-semibold text-slate-700 dark:text-kx-text text-sm flex items-center gap-2 uppercase tracking-wider">
+                    <Clock className="h-4 w-4 text-kx-text-3" /> Historial de Movimientos
+                 </h4>
+                 <div className="flex items-end gap-2">
+                    <div className="space-y-1">
+                       <Label htmlFor="cc-fecha-desde" className="text-2xs text-kx-text-3 uppercase">Desde</Label>
+                       <Input id="cc-fecha-desde" type="date" value={fechaDesde}
+                          onChange={e => setFechaDesde(e.target.value)}
+                          className="h-8 text-xs w-36 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+                    </div>
+                    <div className="space-y-1">
+                       <Label htmlFor="cc-fecha-hasta" className="text-2xs text-kx-text-3 uppercase">Hasta</Label>
+                       <Input id="cc-fecha-hasta" type="date" value={fechaHasta}
+                          onChange={e => setFechaHasta(e.target.value)}
+                          className="h-8 text-xs w-36 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+                    </div>
+                    {(fechaDesde || fechaHasta) && (
+                       <Button variant="ghost" size="sm"
+                          onClick={() => { setFechaDesde(''); setFechaHasta(''); }}
+                          className="h-8 text-xs text-kx-text-3 hover:text-kx-text">
+                          Limpiar
+                       </Button>
+                    )}
+                    <Button variant="outline" size="sm" onClick={handleDescargarPDF} disabled={descargandoPDF}
+                       className="h-8 text-xs dark:text-kx-text dark:border-kx-border">
+                       {descargandoPDF ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5 mr-1.5" />}
+                       Descargar PDF
+                    </Button>
+                 </div>
+              </div>
+              {!fechaDesde && !fechaHasta && (
+                 <p className="text-2xs text-kx-text-3 -mt-2 mb-2">Mostrando los últimos 50 movimientos. Filtrá por fecha para ver un rango completo.</p>
+              )}
               <div className="border kairox-border rounded-lg overflow-hidden bg-kx-surface dark:bg-transparent shadow-sm dark:border-kx-border">
                  <table className="w-full text-sm text-left">
                     <thead className="bg-kx-surface-2 dark:bg-slate-800/50 text-xs uppercase text-slate-500 font-semibold border-b kairox-border dark:border-kx-border dark:text-kx-text-2">
@@ -347,7 +417,7 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
 
         </div>
 
-        <DialogFooter className="border-t border-slate-100 dark:border-kx-border pt-4">
+        <DialogFooter className="shrink-0 px-6 py-4 border-t border-slate-100 dark:border-kx-border">
           <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:text-kx-text dark:border-kx-border dark:hover:bg-slate-800">
             Cerrar
           </Button>

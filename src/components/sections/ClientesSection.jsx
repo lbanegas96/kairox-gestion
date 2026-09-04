@@ -171,10 +171,17 @@ function ClientesSection() {
   // DialogContent más abajo): Documento/Teléfono/Email y Límite/Condición de
   // Pago/Días de Crédito pasan a una sola fila cada uno, mismo criterio ya
   // aplicado a Localidad/Provincia/CP.
+  // Rediseño 02/09 (hallazgo Luciano: "agrandaste la pantalla pero los campos
+  // siguen agrupados" — el modal ya es "wide" pero el formulario seguía en
+  // grid-cols-3, apilando ~9 filas y forzando scroll igual). Grid de 5
+  // columnas: Nombre y Dirección ocupan 2 (son los campos más largos), el
+  // resto 1 cada uno — encadena 4 campos por fila en vez de 3, y Lista de
+  // Precios pasa a compartir fila con Crédito en vez de tener la suya propia.
+  // Baja de ~9 filas a 5-6, entra sin scroll en la mayoría de las pantallas.
   const renderClientForm = () => (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-2">
+    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 py-2">
       {/* Nombre */}
-      <div className="space-y-1.5 md:col-span-3">
+      <div className="space-y-1.5 md:col-span-2">
         <Label className="dark:text-kx-text">Nombre / Razón Social *</Label>
         <Input value={formData.nombre} onChange={e => setFormData(f => ({ ...f, nombre: e.target.value }))}
           className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" required />
@@ -198,9 +205,8 @@ function ClientesSection() {
           className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
       </div>
       {/* Domicilio — mig.345 (item 7): la dirección sola no alcanzaba para
-          emitir un remito usable. Ocupa el ancho completo porque son 4 campos
-          que se leen como una unidad. */}
-      <div className="md:col-span-3 border-t border-kx-border dark:border-kx-border pt-3">
+          emitir un remito usable. */}
+      <div className="md:col-span-5 border-t border-kx-border dark:border-kx-border pt-3">
         <p className="text-xs font-semibold text-slate-500 dark:text-kx-text-2 uppercase tracking-wider flex items-center gap-1">
           <MapPin className="h-3.5 w-3.5" /> Domicilio
         </p>
@@ -208,7 +214,7 @@ function ClientesSection() {
           Se usa en los remitos y en la solapa Logística de los documentos.
         </p>
       </div>
-      <div className="space-y-1.5 md:col-span-3">
+      <div className="space-y-1.5 md:col-span-2">
         <Label className="dark:text-kx-text">Dirección</Label>
         <Input value={formData.direccion} onChange={e => setFormData(f => ({ ...f, direccion: e.target.value }))}
           placeholder="Calle y número, piso/depto"
@@ -234,7 +240,7 @@ function ClientesSection() {
       </div>
 
       {/* Separador Crédito */}
-      <div className="md:col-span-3 border-t border-kx-border dark:border-kx-border pt-3">
+      <div className="md:col-span-5 border-t border-kx-border dark:border-kx-border pt-3">
         <p className="text-xs font-semibold text-slate-500 dark:text-kx-text-2 uppercase tracking-wider flex items-center gap-1">
           <CreditCard className="h-3.5 w-3.5" /> Condiciones de Crédito
         </p>
@@ -292,9 +298,9 @@ function ClientesSection() {
           className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
         <p className="text-xs text-kx-text-3">Días hasta vencimiento de facturas CC</p>
       </div>
-      {/* Lista de precios */}
+      {/* Lista de precios — comparte fila con Crédito en vez de una fila propia */}
       {listasPrecios.filter(l => l.activo).length > 0 && (
-        <div className="md:col-span-3 space-y-1.5">
+        <div className="space-y-1.5 md:col-span-2">
           <Label className="dark:text-kx-text flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-violet-500" /> Lista de Precios</Label>
           <select
             value={formData.lista_precio_id}
@@ -306,13 +312,13 @@ function ClientesSection() {
               <option key={l.id} value={l.id}>{l.nombre}{l.descripcion ? ` — ${l.descripcion}` : ''}</option>
             ))}
           </select>
-          <p className="text-xs text-kx-text-3">Al seleccionar un cliente en Ventas, se aplicarán automáticamente sus precios de lista.</p>
+          <p className="text-xs text-kx-text-3">Se aplica automáticamente al elegir este cliente en Ventas.</p>
         </div>
       )}
 
       {/* Bloquear */}
       {(parseFloat(formData.limite_credito) || 0) > 0 && (
-        <div className="md:col-span-3 flex items-center gap-3 bg-amber-50 dark:bg-amber-900/10 p-3 rounded-lg border border-amber-200 dark:border-amber-800">
+        <div className="md:col-span-5 flex items-center gap-3 bg-amber-50 dark:bg-amber-900/10 p-3 rounded-lg border border-amber-200 dark:border-amber-800">
           <Shield className="h-5 w-5 text-amber-600 shrink-0" />
           <div className="flex-1">
             <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Bloquear ventas al superar el límite</p>
@@ -455,24 +461,25 @@ function ClientesSection() {
         setIsAddDialogOpen(open);
         if (!open) document.activeElement?.blur();
       }}>
-        {/* size="medium" (30/08, hallazgo Luciano: "me obliga a escrolear...
-            apliquemos el mismo diseño de factura, agrandemos el modal") —
-            antes el overflow-y-auto vivía en el DialogContent entero, así
-            que título y botones Cancelar/Crear se iban con el scroll. Mismo
-            shell flex-col que ya usan Factura/Pedido: cabecera y footer
-            fijos, solo el cuerpo del formulario escrolea. Reemplaza el
-            max-w-2xl (672px) por el ancho estándar de "medium" (max-w-3xl,
-            768px) — más lugar para Localidad/Provincia/CP en una sola fila. */}
-        {/* max-w-4xl — segunda vuelta de "agrandemos" (30/08): medium (max-w-3xl)
-            se quedaba corto para 3 columnas cómodas; twMerge en cn() pisa el
-            max-w-3xl de mediumDialogClass con este. */}
-        <DialogContent size="medium" className="max-w-4xl dark:bg-kx-bg dark:border-kx-border">
+        {/* size="wide" (02/09, hallazgo Luciano: "le coloquemos el mismo
+            tamaño que la entrega o la cotización") — mismo shell que
+            Entrega/Cotización/OC/Factura/Pedido, reemplaza el size="medium"
+            max-w-4xl que traía antes. El formulario en sí no es una grilla
+            ancha (a diferencia de esos documentos), así que el contenido va
+            en un contenedor max-w-6xl centrado adentro del shell "wide" —
+            ancho suficiente para la grilla de 5 columnas del formulario
+            (02/09, hallazgo Luciano: "erradicar el scroll") sin que los
+            campos cortos (Teléfono, CUIT/DNI) queden estirados a lo ancho
+            de toda la pantalla. */}
+        <DialogContent size="wide" className="dark:bg-kx-bg dark:border-kx-border">
           <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b border-kx-border dark:border-kx-border">
             <DialogTitle className="dark:text-kx-text">Nuevo Cliente</DialogTitle>
             <DialogDescription className="dark:text-kx-text-2">Completá los datos del nuevo cliente.</DialogDescription>
           </DialogHeader>
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
-            {renderClientForm({ isEdit: false })}
+            <div className="max-w-6xl mx-auto">
+              {renderClientForm({ isEdit: false })}
+            </div>
           </div>
           <DialogFooter className="shrink-0 px-6 py-4 border-t border-kx-border dark:border-kx-border">
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="dark:text-kx-text dark:border-kx-border">Cancelar</Button>
@@ -488,16 +495,17 @@ function ClientesSection() {
         setIsEditDialogOpen(open);
         if (!open) document.activeElement?.blur();
       }}>
-        {/* max-w-4xl — segunda vuelta de "agrandemos" (30/08): medium (max-w-3xl)
-            se quedaba corto para 3 columnas cómodas; twMerge en cn() pisa el
-            max-w-3xl de mediumDialogClass con este. */}
-        <DialogContent size="medium" className="max-w-4xl dark:bg-kx-bg dark:border-kx-border">
+        {/* size="wide" — mismo criterio que el modal de "Nuevo Cliente" de
+            arriba (02/09, hallazgo Luciano). */}
+        <DialogContent size="wide" className="dark:bg-kx-bg dark:border-kx-border">
           <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b border-kx-border dark:border-kx-border">
             <DialogTitle className="dark:text-kx-text">Editar: {selectedClient?.nombre}</DialogTitle>
             <DialogDescription className="dark:text-kx-text-2">Modificá los datos del cliente.</DialogDescription>
           </DialogHeader>
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
-            {renderClientForm({ isEdit: true })}
+            <div className="max-w-6xl mx-auto">
+              {renderClientForm({ isEdit: true })}
+            </div>
           </div>
           <DialogFooter className="shrink-0 px-6 py-4 border-t border-kx-border dark:border-kx-border">
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="dark:text-kx-text dark:border-kx-border">Cancelar</Button>
