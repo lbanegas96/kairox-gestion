@@ -1,5 +1,44 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Listas de Precio — prueba en vivo contra producción + revisión contable (04/09)
+
+Después de cerrar la Fase C/D (ver sección siguiente), se hizo una ronda de pruebas end-to-end
+contra Nalux real, con datos de prueba creados y eliminados a propósito para no tocar clientes
+reales: cliente "TEST Fase C-D - borrar" asignado a la lista "Precio VIP".
+
+**Casos probados, todos ✅ sin encontrar bugs:**
+1. Elegir cliente en Cotización auto-completa su lista de precios.
+2. Agregar un producto con una lista activa toma el precio de esa lista, no el del catálogo.
+3. La cotización se guarda con `lista_precio_id` persistido correctamente.
+4. Editar la cotización conserva la lista elegida (no se resetea a "Precio estándar").
+5. "Copiar a Pedido" arrastra la lista y el precio tal cual se cotizó.
+6. Editar el pedido conserva la lista guardada, sin re-derivarla del cliente.
+7. **Prueba del bug corregido:** se cambió la lista del cliente de prueba (Precio VIP → Cliente
+   VIP, que cotiza el mismo producto a $45.000 en vez de $20.000) y se abrió "Facturar Pedido" —
+   la factura siguió mostrando $20.000 (el precio cotizado), no $45.000. Repetido con "Convertir en
+   Venta" (POS) desde la cotización: el carrito mostró $20.000, confirmando en vivo que el fix de
+   `NuevaVentaModal.jsx` funciona.
+8. Un Pedido nuevo creado directo (sin cotización de por medio) sí toma la lista ACTUAL del
+   cliente ($45.000 con Cliente VIP) — comportamiento correcto, distinto del caso 7 porque acá no
+   hay ningún documento previo que respetar.
+
+Ninguna venta/factura real se confirmó durante las pruebas (se cerraban los modales antes del paso
+final) para no generar asientos ni movimientos de Cuenta Corriente de prueba. Los 3 registros de
+prueba (cliente + cotización + pedido) se eliminaron al terminar.
+
+**Revisión contable** (skill `auditor-contable`, alcance acotado a riesgos nuevos): el cálculo de
+totales/IVA/asiento automático no se tocó — sigue operando sobre `precio_unitario` sea cual sea su
+origen, así que no hay riesgo de partida simple ni de asientos mal calculados. Encontró 1 hallazgo
+🟡 real: `lista_precio_factores_categoria.factor` sólo valida `factor > 0`, así que un factor como
+`0.5` permite vender sistemáticamente por debajo del costo sin ningún aviso — no es un bug de
+partida doble, es un control de negocio ausente. Recomendación (no aplicada todavía, queda para
+cuando haya una lista 'factor' real en producción): warning no bloqueante en el preview de
+"Recalcular precios" si el factor implica vender bajo costo. 2 hallazgos 🟢 menores (trazabilidad
+de qué lista se usó no se muestra en el detalle del documento aunque sí queda en `audit_log`; no
+hay reporte de ventas por lista). Nada bloqueante para seguir usando el sistema.
+
+---
+
 ## ✅ Listas de Precio — Fases C y D: la lista se guarda en el documento y se arrastra por todo el circuito (mig.389, 02/09)
 
 Pedido textual de Luciano, después de cerrar las Fases A/B: *"si seleccionamos una lista de precios
