@@ -138,7 +138,7 @@ function ModalDetallePedido({
                   Cabecera en grilla igual que ModalDetalleCotizacion.jsx, en
                   vez de la lista de renglones sueltos que tenía esto antes. */}
               <div className="flex-1 min-h-0 flex flex-col gap-4 overflow-hidden px-6 py-4">
-                <div className="shrink-0 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                <div className="shrink-0 grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
                   <div>
                     <span className="text-kx-text-3 dark:text-kx-text-3 text-xs uppercase">Cliente</span>
                     <p className="font-medium dark:text-kx-text">{detailPedido.cliente_nombre}</p>
@@ -154,6 +154,10 @@ function ModalDetallePedido({
                   <div>
                     <span className="text-kx-text-3 dark:text-kx-text-3 text-xs uppercase">Fecha entrega</span>
                     <p className="dark:text-slate-300">{detailPedido.fecha_entrega ? formatDateAR(detailPedido.fecha_entrega) : '—'}</p>
+                  </div>
+                  <div>
+                    <span className="text-kx-text-3 dark:text-kx-text-3 text-xs uppercase">Lista de Precios</span>
+                    <p className="dark:text-slate-300">{detailPedido.listas_precio?.nombre ?? 'Precio estándar'}</p>
                   </div>
                 </div>
 

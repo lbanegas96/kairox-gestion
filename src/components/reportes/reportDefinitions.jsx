@@ -399,10 +399,11 @@ export const getTableConfig = (reportId, data) => {
 
 const GROUP_BY_OPTIONS_POR_REPORTE = {
   ventas: [
-    { value: 'none',        label: 'Sin agrupar' },
-    { value: 'dia',         label: 'Por día' },
-    { value: 'metodo_pago', label: 'Por método de pago' },
-    { value: 'cliente',     label: 'Por cliente' },
+    { value: 'none',         label: 'Sin agrupar' },
+    { value: 'dia',          label: 'Por día' },
+    { value: 'metodo_pago',  label: 'Por método de pago' },
+    { value: 'cliente',      label: 'Por cliente' },
+    { value: 'lista_precio', label: 'Por lista de precios' },
   ],
   compras: [
     { value: 'none',        label: 'Sin agrupar' },
@@ -430,9 +431,10 @@ export function getGroupByOptions(reportId) {
 
 const GROUP_KEY_FN_POR_REPORTE = {
   ventas: {
-    dia:         (r) => formatDateAR(r.fecha),
-    metodo_pago: (r) => r.metodo_pago || 'Sin método',
-    cliente:     (r) => r.cliente || 'Sin cliente',
+    dia:          (r) => formatDateAR(r.fecha),
+    metodo_pago:  (r) => r.metodo_pago || 'Sin método',
+    cliente:      (r) => r.cliente || 'Sin cliente',
+    lista_precio: (r) => r.lista_precio || 'Precio estándar',
   },
   compras: {
     dia:         (r) => formatDateAR(r.fecha),

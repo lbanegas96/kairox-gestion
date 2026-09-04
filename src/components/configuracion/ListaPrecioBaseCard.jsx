@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Percent, Loader2, RefreshCw, Check, ArrowRight } from 'lucide-react';
+import { Percent, Loader2, RefreshCw, Check, ArrowRight, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -195,6 +195,18 @@ function ListaPrecioBaseCard() {
             </p>
           ) : (
             <>
+              {(() => {
+                const conMargenNegativo = preview.filter(item => Number(item.precio_nuevo) < Number(item.costo_compra));
+                return conMargenNegativo.length > 0 ? (
+                  <div className="flex items-start gap-2 p-2 mb-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>
+                      {conMargenNegativo.length} producto{conMargenNegativo.length !== 1 ? 's' : ''} quedarían con precio
+                      por DEBAJO del costo con este factor — revisá el factor antes de aplicar (marcados en rojo abajo).
+                    </span>
+                  </div>
+                ) : null;
+              })()}
               <div className="flex-1 overflow-y-auto border border-kx-border dark:border-kx-border rounded-lg">
                 <table className="w-full text-sm">
                   <thead className="bg-kx-surface-2 dark:bg-slate-900/50 text-xs uppercase text-slate-500 dark:text-kx-text-2 sticky top-0">
@@ -207,15 +219,23 @@ function ListaPrecioBaseCard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {preview.map(item => (
-                      <tr key={item.producto_id}>
-                        <td className="p-2.5 text-kx-text dark:text-kx-text truncate max-w-[180px]">{item.nombre}</td>
-                        <td className="p-2.5 text-right text-kx-text-3 tabular-nums">${Number(item.costo_compra).toLocaleString('es-AR')}</td>
-                        <td className="p-2.5 text-right text-kx-text-3 tabular-nums">${Number(item.precio_actual).toLocaleString('es-AR')}</td>
-                        <td className="p-2.5 text-center"><ArrowRight className="w-3.5 h-3.5 text-kx-text-3 inline" /></td>
-                        <td className="p-2.5 text-right font-semibold text-kx-green tabular-nums">${Number(item.precio_nuevo).toLocaleString('es-AR')}</td>
-                      </tr>
-                    ))}
+                    {preview.map(item => {
+                      const margenNegativo = Number(item.precio_nuevo) < Number(item.costo_compra);
+                      return (
+                        <tr key={item.producto_id} className={margenNegativo ? 'bg-red-50 dark:bg-red-950/20' : undefined}>
+                          <td className="p-2.5 text-kx-text dark:text-kx-text truncate max-w-[180px]">
+                            {margenNegativo && <AlertTriangle className="w-3 h-3 inline-block mr-1 text-kx-red align-[-1px]" />}
+                            {item.nombre}
+                          </td>
+                          <td className="p-2.5 text-right text-kx-text-3 tabular-nums">${Number(item.costo_compra).toLocaleString('es-AR')}</td>
+                          <td className="p-2.5 text-right text-kx-text-3 tabular-nums">${Number(item.precio_actual).toLocaleString('es-AR')}</td>
+                          <td className="p-2.5 text-center"><ArrowRight className="w-3.5 h-3.5 text-kx-text-3 inline" /></td>
+                          <td className={`p-2.5 text-right font-semibold tabular-nums ${margenNegativo ? 'text-kx-red' : 'text-kx-green'}`}>
+                            ${Number(item.precio_nuevo).toLocaleString('es-AR')}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

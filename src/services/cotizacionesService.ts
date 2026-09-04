@@ -72,7 +72,7 @@ export const cotizacionesService = {
   async getById(id: string): Promise<Cotizacion> {
     const { data, error } = await supabase
       .from('cotizaciones')
-      .select('*, clientes(*), cotizacion_items(*, productos(nombre, unidad_medida)), pedidos(id, numero)')
+      .select('*, clientes(*), cotizacion_items(*, productos(nombre, unidad_medida)), pedidos(id, numero), listas_precio(nombre)')
       .eq('id', id)
       .single();
     if (error) throw new Error(error.message);

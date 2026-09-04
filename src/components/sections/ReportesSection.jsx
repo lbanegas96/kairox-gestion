@@ -147,7 +147,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
       if (selectedReport.id === 'ventas') {
         let query = supabase
           .from('comprobantes')
-          .select('*, comprobante_items(*)')
+          .select('*, comprobante_items(*), listas_precio(nombre)')
           .eq('empresa_id', user.empresa_id)
           .eq('tipo', 'venta')
           .gte('fecha', start)
@@ -168,7 +168,10 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
             : `Venta #${s.numero_venta || '-'}`,
           metodo_pago: s.forma_pago,
           items: s.comprobante_items?.length || 0,
-          total: s.total
+          total: s.total,
+          // Mejora del auditor-contable (04/09): traza qué lista de precios se
+          // usó, para poder agrupar y medir cuánto se facturó a cada una.
+          lista_precio: s.listas_precio?.nombre ?? 'Precio estándar',
         }));
 
         setPreviousPeriodStats(await fetchPreviousPeriodStats('comprobantes', {

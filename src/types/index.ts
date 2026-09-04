@@ -230,11 +230,13 @@ export interface Cotizacion {
   notas?: string | null;
   condiciones_pago?: string | null;
   comprobante_id?: string | null;
+  lista_precio_id?: string | null;
   created_at: string;
   updated_at: string;
   // joins
   clientes?: Pick<Cliente, 'nombre'> | null;
   cotizacion_items?: CotizacionItem[];
+  listas_precio?: { nombre: string } | null;
 }
 
 export interface CotizacionItem {

@@ -123,7 +123,8 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
           *,
           clientes(nombre, documento, direccion, localidad, provincia, codigo_postal),
           punto_venta:puntos_venta(numero, nombre),
-          centro_costo:centros_costo(nombre)
+          centro_costo:centros_costo(nombre),
+          listas_precio(nombre)
         `)
         .eq('id', saleId)
         .single();
@@ -400,6 +401,9 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
                 </Campo>
                 <Campo label="CUIT / DNI">
                   <span className="font-mono dark:text-slate-300">{sale.clientes?.documento || '—'}</span>
+                </Campo>
+                <Campo label="Lista de Precios">
+                  <span className="dark:text-slate-300">{sale.listas_precio?.nombre ?? 'Precio estándar'}</span>
                 </Campo>
                 {flow?.origen && (
                   <Campo label={flow.origen.tipo === 'cotizacion' ? 'Cotización de origen' : 'Pedido de origen'}>

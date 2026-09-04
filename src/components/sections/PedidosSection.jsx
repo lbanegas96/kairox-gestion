@@ -194,7 +194,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       const [{ data: p }, { data: c }, { data: pr }, { data: emp }, { data: lp }] = await Promise.all([
         supabase
           .from('pedidos')
-          .select('*, pedido_items(*), cotizaciones(numero), clientes(condicion_iva)')
+          .select('*, pedido_items(*), cotizaciones(numero), clientes(condicion_iva), listas_precio(nombre)')
           .eq('empresa_id', user.empresa_id)
           .order('created_at', { ascending: false }),
         supabase.from('clientes').select('id, nombre, condicion_iva, lista_precio_id').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre'),
@@ -499,7 +499,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       if (pedidoCreadoId) {
         const { data: nuevo } = await supabase
           .from('pedidos')
-          .select('*, pedido_items(*), cotizaciones(numero), clientes(condicion_iva)')
+          .select('*, pedido_items(*), cotizaciones(numero), clientes(condicion_iva), listas_precio(nombre)')
           .eq('id', pedidoCreadoId)
           .single();
         if (nuevo) {
@@ -647,7 +647,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
     if (detailPedido?.id) {
       const { data } = await supabase
         .from('pedidos')
-        .select('*, pedido_items(*), cotizaciones(numero), clientes(condicion_iva)')
+        .select('*, pedido_items(*), cotizaciones(numero), clientes(condicion_iva), listas_precio(nombre)')
         .eq('id', detailPedido.id)
         .single();
       if (data) setDetailPedido(data);

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Tag, Plus, Edit, Trash2, Package, Search, Check,
   ToggleLeft, ToggleRight, X, Loader2, DollarSign, Sparkles, ArrowRight, History, CalendarClock,
-  Percent, RefreshCw
+  Percent, RefreshCw, AlertTriangle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -956,6 +956,18 @@ function ListasPrecioSection() {
               </p>
             ) : (
               <>
+                {(() => {
+                  const conMargenNegativo = factorPreview.filter(item => Number(item.precio_nuevo) < Number(item.costo_compra));
+                  return conMargenNegativo.length > 0 ? (
+                    <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300">
+                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>
+                        {conMargenNegativo.length} producto{conMargenNegativo.length !== 1 ? 's' : ''} quedarían con precio
+                        por DEBAJO del costo con este factor — revisá el factor antes de aplicar (marcados en rojo abajo).
+                      </span>
+                    </div>
+                  ) : null;
+                })()}
                 <div className="max-h-52 overflow-y-auto border border-kx-border dark:border-kx-border rounded-lg">
                   <table className="w-full text-sm">
                     <thead className="bg-kx-surface-2 dark:bg-slate-900/50 text-xs uppercase text-slate-500 dark:text-kx-text-2 sticky top-0">
@@ -967,14 +979,22 @@ function ListasPrecioSection() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {factorPreview.map(item => (
-                        <tr key={item.producto_id}>
-                          <td className="p-2 text-kx-text dark:text-kx-text truncate max-w-[160px]">{item.nombre}</td>
-                          <td className="p-2 text-right text-kx-text-3 tabular-nums">${Number(item.costo_compra).toLocaleString('es-AR')}</td>
-                          <td className="p-2 text-right text-kx-text-3 tabular-nums">×{Number(item.factor_aplicado).toLocaleString('es-AR')}</td>
-                          <td className="p-2 text-right font-semibold text-kx-green tabular-nums">${Number(item.precio_nuevo).toLocaleString('es-AR')}</td>
-                        </tr>
-                      ))}
+                      {factorPreview.map(item => {
+                        const margenNegativo = Number(item.precio_nuevo) < Number(item.costo_compra);
+                        return (
+                          <tr key={item.producto_id} className={margenNegativo ? 'bg-red-50 dark:bg-red-950/20' : undefined}>
+                            <td className="p-2 text-kx-text dark:text-kx-text truncate max-w-[160px]">
+                              {margenNegativo && <AlertTriangle className="w-3 h-3 inline-block mr-1 text-kx-red align-[-1px]" />}
+                              {item.nombre}
+                            </td>
+                            <td className="p-2 text-right text-kx-text-3 tabular-nums">${Number(item.costo_compra).toLocaleString('es-AR')}</td>
+                            <td className="p-2 text-right text-kx-text-3 tabular-nums">×{Number(item.factor_aplicado).toLocaleString('es-AR')}</td>
+                            <td className={`p-2 text-right font-semibold tabular-nums ${margenNegativo ? 'text-kx-red' : 'text-kx-green'}`}>
+                              ${Number(item.precio_nuevo).toLocaleString('es-AR')}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

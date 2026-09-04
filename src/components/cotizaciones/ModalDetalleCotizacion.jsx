@@ -105,7 +105,7 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, o
         </DialogHeader>
         {detalle && (
           <div className="flex-1 min-h-0 overflow-y-auto space-y-4 px-6 py-4">
-            <div className="grid grid-cols-4 gap-4 text-sm">
+            <div className="grid grid-cols-5 gap-4 text-sm">
               <div>
                 <span className="text-kx-text-3 dark:text-kx-text-3 text-xs uppercase">Cliente</span>
                 <p className="font-medium dark:text-kx-text">{detalle.cliente_nombre ?? detalle.clientes?.nombre ?? '—'}</p>
@@ -121,6 +121,10 @@ function ModalDetalleCotizacion({ viewId, setViewId, detalle, onCopiarAPedido, o
               <div>
                 <span className="text-kx-text-3 dark:text-kx-text-3 text-xs uppercase">Vence</span>
                 <p className="dark:text-slate-300">{detalle.fecha_vencimiento ? formatDateAR(detalle.fecha_vencimiento) : '—'}</p>
+              </div>
+              <div>
+                <span className="text-kx-text-3 dark:text-kx-text-3 text-xs uppercase">Lista de Precios</span>
+                <p className="dark:text-slate-300">{detalle.listas_precio?.nombre ?? 'Precio estándar'}</p>
               </div>
             </div>
 
