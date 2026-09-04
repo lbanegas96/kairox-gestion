@@ -1,5 +1,55 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Listas de Precio — Fases C y D: la lista se guarda en el documento y se arrastra por todo el circuito (mig.389, 02/09)
+
+Pedido textual de Luciano, después de cerrar las Fases A/B: *"si seleccionamos una lista de precios
+en la cotización, esa misma debe arrastrarse al pedido, entrega, factura, con la posibilidad de
+seleccionar otra pero que se arrastre la seleccionada inicialmente para que el precio siempre se
+respete salvo que por algún motivo necesite cambiarlo"*.
+
+**Investigado antes de tocar código** (agente de exploración): ningún documento del circuito O2C
+guardaba qué lista se usó — ni cotizaciones, ni pedidos, ni comprobantes. Las conversiones
+(Cotización→Pedido, Pedido→Factura) ya copiaban el **número** del precio tal cual quedó tipeado,
+pero no la **referencia** a qué lista lo originó — sin eso no había forma de recalcular ni de saber
+qué lista corresponde a un documento ya creado.
+
+**mig.389:** agrega `lista_precio_id` (nullable, FK a `listas_precio`, `ON DELETE SET NULL`) a
+`cotizaciones`, `pedidos` y `comprobantes`. `entregas` queda afuera a propósito — no tiene ningún
+campo de precio (Regla 8: el stock se mueve en el evento físico), así que no hay nada que arrastrar
+ahí; la trazabilidad de qué lista se usó sigue disponible vía `entregas.pedido_id →
+pedidos.lista_precio_id`. Probada con `BEGIN...ROLLBACK` contra Nalux real (columnas + FK +
+`ON DELETE SET NULL`) antes de aplicar.
+
+**Frontend, mismo patrón en los 3 documentos** (`FormNuevaCotizacion.jsx`, `ModalPedidoForm.jsx`,
+`NuevaFacturaModal.jsx`): selector "Lista de Precios" en el encabezado, con
+`listaPreciosService.getPrecioMapForLista(id)` (nuevo método, factoreado de
+`getPrecioMapForCliente`) resolviendo un mapa `producto_id → precio`. Elegir cliente autocompleta
+la lista desde `clientes.lista_precio_id` (editable después); elegir la lista a mano reprecea los
+ítems ya cargados; agregar un producto nuevo con una lista activa toma su precio en vez del
+`precio_venta` del catálogo. El carry-forward real: el prefill de "Copiar a Pedido" y el de
+"Facturar Pedido"/"Duplicar Factura" ahora leen `lista_precio_id` del documento de origen (ya
+disponible vía `select('*')`, sin tocar esos queries) en vez de partir de cero. Persistencia: las
+RPCs de edición (`actualizar_cotizacion`, `actualizar_pedido`) y `crear_venta` no conocen el campo
+nuevo (no se tocaron sus firmas) — se persiste con un `UPDATE` directo de seguimiento después de
+que la RPC confirma, mismo criterio ya usado para otros campos de UI-only en el proyecto.
+
+**Bug real encontrado auditando el último eslabón** (`NuevaVentaModal.jsx`, el "Convertir en Venta"
+estilo POS): `handleSelectClient` sobrescribía el precio YA COPIADO de la cotización con el precio
+de la lista **actual** del cliente — si el cliente cambió de lista de precios después de cotizar, la
+venta final terminaba con un precio distinto al que el cliente vio cotizado. Corregido: ahora carga
+el `precioMap` de la lista **guardada en la cotización/pedido de origen** (`cargarListaPrecioSinRepricar`,
+nueva función que no reprecea el carrito) en vez de re-derivar en vivo del cliente.
+
+Verificado en vivo en `localhost:3000` contra Nalux real: cliente "Katy" sin lista propia → agregar
+"Celulares" toma el precio estándar ($30.000) → cambiar a lista "Precio VIP" → agregar "Mate" toma
+$1.500 (el precio fijo de esa lista, no los $30.000 del catálogo). `tsc`/`eslint`/`vite build`
+limpios en los 6 archivos tocados. Sin consola de errores. No se guardó ninguna cotización de
+prueba real.
+
+---
+
+# KAIROX Gestión — Contexto de Sesión
+
 ## ✅ Ajuste por Inflación — Nadia recorrió las 7 pantallas ella misma, sin usar la de Luciano (02/09)
 
 Como Nadia no tenía acceso al artifact "Recorrido del Ajuste por Inflación" que publicó Luciano
@@ -99,9 +149,9 @@ bucattini, costo $5.000 → precio $7.500 con factor 1.5, stock actualizado), y 
 todo correcto, nada persistido hasta aplicar. `tsc`/`eslint`/`vite build` limpios. Grants verificados
 (`anon=false` en ambas RPCs nuevas, el helper interno cerrado incluso a `authenticated`).
 
-**Pendientes (Fases C y D, no construidas todavía):** extender la resolución de la lista del
-cliente a los 4 flujos que hoy la ignoran (Caja, Factura directa, Cotización, Pedido), y agregar un
-selector de lista de precios editable en el encabezado de la Cotización (por defecto la del cliente).
+**Fases C y D — construidas el mismo día** (ver sección arriba, al tope de este archivo): el
+selector de lista de precios en Cotización/Pedido/Factura, y el carry-forward de la lista elegida
+por todo el circuito de documentos (mig.389).
 
 ---
 
