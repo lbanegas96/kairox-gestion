@@ -260,13 +260,20 @@ export const listaPreciosService = {
       .single();
     if (cErr || !cliente?.lista_precio_id) return {};
 
-    // 2. Obtener items de la lista
-    const { data: items, error: iErr } = await supabase
+    return listaPreciosService.getPrecioMapForLista(cliente.lista_precio_id);
+  },
+
+  // Igual que getPrecioMapForCliente, pero a partir de una lista puntual --
+  // Fases C/D (02/09): la lista que se elige en un documento (Cotización,
+  // Pedido, Factura) no siempre es la del cliente, así que la resolución
+  // por producto necesita poder arrancar directo desde el lista_precio_id.
+  async getPrecioMapForLista(listaPrecioId: string | null): Promise<PrecioMap> {
+    if (!listaPrecioId) return {};
+    const { data: items, error } = await supabase
       .from('lista_precio_items')
       .select('producto_id, precio')
-      .eq('lista_precio_id', cliente.lista_precio_id);
-    if (iErr || !items) return {};
-
+      .eq('lista_precio_id', listaPrecioId);
+    if (error || !items) return {};
     return Object.fromEntries(items.map((i: any) => [i.producto_id, Number(i.precio)]));
   },
 

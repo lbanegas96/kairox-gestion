@@ -27,6 +27,7 @@ function FormNuevaCotizacion({
   unidadesMedida,
   condicionesPago,
   allClientes, showClienteDropdown, setShowClienteDropdown, clienteWrapperRef,
+  listasPrecio, aplicarListaPrecio,
   tcMissing, setTcMissing,
   totales, discrimina,
   handleSubmit, resetForm,
@@ -153,6 +154,10 @@ function FormNuevaCotizacion({
                               cliente_id: c.id,
                               cliente_nombre: c.nombre,
                               ...(condicionCliente ? { condiciones_pago: condicionCliente.nombre } : {}),
+                              // Fase C/D de Listas de Precio (02/09): al elegir el
+                              // cliente, arranca con SU lista asignada -- el
+                              // selector de acá abajo sigue permitiendo cambiarla.
+                              lista_precio_id: c.lista_precio_id ?? '',
                             }));
                             setClienteQuery(c.nombre);
                             setShowClienteDropdown(false);
@@ -187,6 +192,20 @@ function FormNuevaCotizacion({
                       </option>
                     );
                   })}
+                </select>
+              </div>
+
+              <div className="col-span-2 space-y-1">
+                <Label className="text-xs dark:text-kx-text">Lista de Precios</Label>
+                <select
+                  value={form.lista_precio_id}
+                  onChange={e => aplicarListaPrecio(e.target.value, { repriceExisting: true })}
+                  className="w-full h-8 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Precio estándar</option>
+                  {listasPrecio.map(lp => (
+                    <option key={lp.id} value={lp.id}>{lp.nombre}</option>
+                  ))}
                 </select>
               </div>
 

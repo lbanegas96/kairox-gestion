@@ -20,6 +20,7 @@ import ModalPedidoForm from '@/components/pedidos/ModalPedidoForm';
 import ModalDetallePedido from '@/components/pedidos/ModalDetallePedido';
 import ConfirmDuplicarDialog from '@/components/shared/ConfirmDuplicarDialog';
 import { determinarTipoComprobante } from '@/hooks/useAfipConfig';
+import { listaPreciosService } from '@/services/listaPreciosService';
 
 // precio_unitario es SIEMPRE el precio final que paga el cliente (IVA incluido) —
 // mismo criterio que en Cotizaciones/Ventas. Para separar neto/IVA hay que
@@ -40,6 +41,11 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
   const [pedidos, setPedidos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [productos, setProductos] = useState([]);
+  // Fase C/D de Listas de Precio (02/09): listas activas para el selector del
+  // form + mapa producto_id→precio de la lista elegida (para repricear los
+  // ítems al cambiarla), mismo patrón que CotizacionesSection.jsx.
+  const [listasPrecio, setListasPrecio] = useState([]);
+  const [precioMap, setPrecioMap] = useState({});
   const [empresaCondicionIva, setEmpresaCondicionIva] = useState(null);
   // mig.347 — si está apagado, "Avanzar" salta confirmado→facturado directo
   // sin pasar por en_preparacion (pedido 23/08: negocios con proceso acotado
@@ -90,6 +96,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
     moneda: 'ARS',
     tipoCambioTasa: 1,
     descuentoGlobalPct: '',
+    lista_precio_id: '',
     items: [{ producto_id: '', descripcion: '', cantidad: 1, precio_unitario: 0, descuento_item: '', alicuota_iva: '21' }],
   });
   const [form, setForm] = useState(emptyForm());
@@ -129,6 +136,10 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       // La cotización ya trae su propio % de descuento global — mismo significado
       // en ambos documentos, se copia directo en vez de perderse en la conversión.
       descuentoGlobalPct: prefillCotizacion.descuento ? String(prefillCotizacion.descuento) : '',
+      // Pedido de Luciano (02/09): la lista elegida en la cotización se
+      // arrastra tal cual al pedido -- sigue siendo editable acá, pero el
+      // precio que el cliente vio cotizado queda respetado por defecto.
+      lista_precio_id: prefillCotizacion.lista_precio_id || '',
       items: (prefillCotizacion.cotizacion_items ?? []).map(it => ({
         producto_id: it.producto_id || '',
         descripcion: it.descripcion,
@@ -180,22 +191,24 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [{ data: p }, { data: c }, { data: pr }, { data: emp }] = await Promise.all([
+      const [{ data: p }, { data: c }, { data: pr }, { data: emp }, { data: lp }] = await Promise.all([
         supabase
           .from('pedidos')
           .select('*, pedido_items(*), cotizaciones(numero), clientes(condicion_iva)')
           .eq('empresa_id', user.empresa_id)
           .order('created_at', { ascending: false }),
-        supabase.from('clientes').select('id, nombre, condicion_iva').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre'),
+        supabase.from('clientes').select('id, nombre, condicion_iva, lista_precio_id').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre'),
         // .limit(200) -- mismo criterio que CotizacionesSection: sin esto, un catálogo
         // grande (import masivo) trae TODOS los productos activos en cada carga de la
         // sección, aunque el autocomplete de abajo solo muestre 50 a la vez.
         supabase.from('productos').select('id, nombre, precio_venta, codigo_sku, unidad_medida, alicuota_iva').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre').limit(200),
         supabase.from('empresas').select('condicion_iva, usa_estado_en_preparacion').eq('id', user.empresa_id).single(),
+        supabase.from('listas_precio').select('id, nombre').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre'),
       ]);
       setPedidos(p || []);
       setClientes(c || []);
       setProductos(pr || []);
+      setListasPrecio(lp || []);
       setEmpresaCondicionIva(emp?.condicion_iva ?? null);
       // mig.347 — default true si la columna todavía no llegó a esta empresa
       // (empresas creadas antes de la migration ya la tienen por el DEFAULT).
@@ -249,7 +262,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
         ...items[idx],
         producto_id: prod.id,
         descripcion: prod.nombre,
-        precio_unitario: prod.precio_venta ?? '',
+        precio_unitario: precioMap[prod.id] !== undefined ? precioMap[prod.id] : (prod.precio_venta ?? ''),
         unidad_medida: prod.unidad_medida ?? '',
         alicuota_iva: prod.alicuota_iva ?? '21',
       };
@@ -259,6 +272,31 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
     setProdResults(prev => ({ ...prev, [idx]: [] }));
     setProdOpen(prev => ({ ...prev, [idx]: false }));
   };
+
+  // Fase C/D de Listas de Precio (02/09): mismo patrón que CotizacionesSection.jsx
+  // -- reprecea los ítems ya cargados sólo cuando el usuario elige la lista a
+  // mano (repriceExisting=true); al prellenar desde cliente/cotización/edición
+  // el effect de abajo solo mantiene precioMap sincronizado sin tocar precios.
+  const aplicarListaPrecio = async (listaId, { repriceExisting = false } = {}) => {
+    const mapa = await listaPreciosService.getPrecioMapForLista(listaId || null);
+    setPrecioMap(mapa);
+    setForm(f => ({ ...f, lista_precio_id: listaId || '' }));
+    if (repriceExisting) {
+      setForm(f => ({
+        ...f,
+        items: f.items.map(it =>
+          it.producto_id && mapa[it.producto_id] !== undefined
+            ? { ...it, precio_unitario: mapa[it.producto_id] }
+            : it
+        ),
+      }));
+    }
+  };
+
+  useEffect(() => {
+    listaPreciosService.getPrecioMapForLista(form.lista_precio_id || null).then(setPrecioMap);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.lista_precio_id]);
 
   // Letra probable (A/B/C) — misma función que ya deciden las facturas reales
   // (y que ya usa Cotizaciones), nunca una opción manual aparte.
@@ -316,6 +354,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       moneda: p.moneda || 'ARS',
       tipoCambioTasa: Number(p.tipo_cambio_tasa) || 1,
       descuentoGlobalPct: p.descuento_global_pct ? String(p.descuento_global_pct) : '',
+      lista_precio_id: p.lista_precio_id || '',
       items: p.pedido_items?.length
         ? p.pedido_items.map(it => ({
             id: it.id,
@@ -386,6 +425,16 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
           p_descuento_global_pct: descGlobal,
         });
         if (error) throw error;
+
+        // actualizar_pedido no conoce lista_precio_id (es una referencia de UI,
+        // no participa del diffing de ítems que hace la RPC) -- se persiste con
+        // un UPDATE directo aparte, mismo criterio que cotizacionesService.update().
+        const { error: listaError } = await supabase
+          .from('pedidos')
+          .update({ lista_precio_id: form.lista_precio_id || null })
+          .eq('id', editingPedido.id);
+        if (listaError) throw listaError;
+
         toast({ title: 'Pedido actualizado' });
         pedidoCreadoId = editingPedido.id;
       } else {
@@ -420,6 +469,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
           fecha: now,
           cotizacion_id: origenCotizacionId,
           duplicado_de_id: duplicadoDeIdPendiente,
+          lista_precio_id: form.lista_precio_id || null,
         }]).select().single();
         if (error) throw error;
 
@@ -487,6 +537,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       moneda: duplicarTarget.moneda || 'ARS',
       tipoCambioTasa: Number(duplicarTarget.tipo_cambio_tasa) || 1,
       descuentoGlobalPct: duplicarTarget.descuento_global_pct ? String(duplicarTarget.descuento_global_pct) : '',
+      lista_precio_id: duplicarTarget.lista_precio_id || '',
       items: duplicarTarget.pedido_items?.length
         ? duplicarTarget.pedido_items.map(it => ({
             producto_id: it.producto_id || '',
@@ -748,6 +799,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
         editingPedido={editingPedido}
         form={form} setForm={setForm}
         clientes={clientes}
+        listasPrecio={listasPrecio} aplicarListaPrecio={aplicarListaPrecio}
         addItem={addItem}
         removeItem={removeItem}
         updateItem={updateItem}

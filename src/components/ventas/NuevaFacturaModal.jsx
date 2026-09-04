@@ -17,6 +17,7 @@ import { dispararArcaWorker } from '@/lib/afipQueue';
 import ClienteSelector from '@/components/shared/ClienteSelector';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import ProductoAutocomplete from '@/components/shared/ProductoAutocomplete';
+import { listaPreciosService } from '@/services/listaPreciosService';
 
 // Sin 27% a propósito — viola el CHECK real de comprobante_items.alicuota_iva
 // (mismo set que cotizacion_items/pedido_items: 21/10.5/0/exento/no_gravado).
@@ -139,14 +140,25 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
   // vista de éxito en vez de cerrarse solo; el usuario sale con Cancelar/Esc
   // o sigue directo a "Registrar Cobro".
   const [facturaCreada, setFacturaCreada] = useState(null); // { id, numero, total, clienteId }
+  // Fase C/D de Listas de Precio (02/09): se arrastra la lista del pedido/
+  // comprobante de origen (ver el efecto de pre-carga de abajo) o la del
+  // cliente si se factura standalone -- sigue siendo editable acá, mismo
+  // patrón que Cotizaciones/Pedidos.
+  const [listasPrecio, setListasPrecio] = useState([]);
+  const [listaPrecioId, setListaPrecioId] = useState('');
+  const [precioMap, setPrecioMap] = useState({});
 
   // ── Carga de datos al abrir ─────────────────────────────────────────────────
   useEffect(() => {
     if (!open || !user?.empresa_id) return;
 
-    supabase.from('clientes').select('id, nombre, dias_credito')
+    supabase.from('clientes').select('id, nombre, dias_credito, lista_precio_id')
       .eq('empresa_id', user.empresa_id).neq('activo', false).order('nombre')
       .then(({ data }) => setClientes(data || []));
+
+    supabase.from('listas_precio').select('id, nombre')
+      .eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre')
+      .then(({ data }) => setListasPrecio(data || []));
 
     supabase.from('empresas')
       .select('usa_factura_electronica, condicion_iva, afip_cuit, usa_centros_costo')
@@ -195,6 +207,12 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
     if (pedido?.id) {
       setClienteId(pedido.cliente_id || '');
       setReferenciaCliente(pedido.referencia_cliente || '');
+      // Pedido de Luciano (02/09): la lista elegida en el pedido (que a su vez
+      // pudo venir de la cotización) se arrastra a la factura -- los precios
+      // de los ítems ya vienen copiados tal cual del pedido más abajo, esto
+      // sólo deja la REFERENCIA correcta para trazabilidad y para poder
+      // recalcular si el usuario la cambia acá.
+      setListaPrecioId(pedido.lista_precio_id || '');
       // Un solo query cubre dos frentes del plan:
       // - Frente 4: la Factura de Reserva sólo tiene sentido si el pedido no
       //   tuvo ninguna Entrega manual todavía.
@@ -260,6 +278,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
       // original, y arranca su propio trámite de CAE si el PdV lo requiere.
       setClienteId(comprobanteOrigen.cliente_id || '');
       setReferenciaCliente(comprobanteOrigen.referencia_cliente || '');
+      setListaPrecioId(comprobanteOrigen.lista_precio_id || '');
       if (comprobanteOrigen.tipo_comprobante_afip) {
         setTipoDoc(`Factura ${comprobanteOrigen.tipo_comprobante_afip}`);
       }
@@ -301,6 +320,8 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
       setFacturaReserva(false);
       setPedidoTieneEntrega(null);
       setFacturaCreada(null);
+      setListaPrecioId('');
+      setPrecioMap({});
     }
   }, [open]);
 
@@ -355,7 +376,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
     setItems(prev => prev.map(i =>
       i._id === rowId
         ? { ...i, producto_id: producto.id, descripcion: producto.nombre,
-            precio_unit: Number(producto.precio_venta || 0),
+            precio_unit: precioMap[producto.id] !== undefined ? precioMap[producto.id] : Number(producto.precio_venta || 0),
             alicuota_iva: Number(producto.alicuota_iva ?? 21) }
         : i
     ));
@@ -372,6 +393,35 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
   };
   const removeItem = (id) => setItems(prev => prev.filter(i => i._id !== id));
   const addItem    = ()   => setItems(prev => [...prev, newItem()]);
+
+  // Fase C/D de Listas de Precio (02/09): mismo patrón que CotizacionesSection/
+  // PedidosSection -- reprecea los ítems ya cargados sólo cuando el usuario
+  // elige la lista a mano; el effect de abajo mantiene precioMap sincronizado
+  // en el resto de los casos (prellenado desde pedido/comprobante/cliente) sin
+  // tocar los precios ya copiados.
+  const aplicarListaPrecio = async (listaId, { repriceExisting = false } = {}) => {
+    const mapa = await listaPreciosService.getPrecioMapForLista(listaId || null);
+    setPrecioMap(mapa);
+    setListaPrecioId(listaId || '');
+    if (repriceExisting) {
+      setItems(prev => prev.map(i =>
+        i.producto_id && mapa[i.producto_id] !== undefined
+          ? { ...i, precio_unit: mapa[i.producto_id] }
+          : i
+      ));
+    }
+  };
+
+  const handleClienteChange = (id) => {
+    setClienteId(id);
+    const c = clientes.find(cl => cl.id === id);
+    setListaPrecioId(c?.lista_precio_id ?? '');
+  };
+
+  useEffect(() => {
+    listaPreciosService.getPrecioMapForLista(listaPrecioId || null).then(setPrecioMap);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listaPrecioId]);
 
   // ── Atajo Enter (14/08, Fase 2 — mismo patrón que Cotización/Pedido/OC) ────
   // Enter en cualquier campo de una fila agrega la siguiente y le pasa el foco
@@ -536,6 +586,15 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
         comprobanteId = rpcResult.comprobante_id;
         costoMercaderiaVendida = rpcResult.costo_mercaderia_vendida || 0;
 
+        // crear_venta no conoce lista_precio_id (es una referencia de UI) --
+        // se persiste con un UPDATE directo aparte, mismo criterio que
+        // cotizacionesService.update()/PedidosSection.jsx.
+        const { error: listaError } = await supabase
+          .from('comprobantes')
+          .update({ lista_precio_id: listaPrecioId || null })
+          .eq('id', comprobanteId);
+        if (listaError) throw listaError;
+
         // AFIP — crear_venta ya guardó tipo_comprobante_afip/punto_venta_id/
         // referencia_cliente en el INSERT; acá solo se dispara la cola (mismo
         // criterio que el resto del modal: PdV que envía a ARCA y no Ticket).
@@ -572,6 +631,7 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
           centro_costo_id:       centroCostoId || null,
           referencia_cliente:    referenciaCliente.trim() || null,
           duplicado_de_id:       duplicadoDeId,
+          lista_precio_id:       listaPrecioId || null,
         }]).select('id').single();
         if (compErr) throw compErr;
         comprobanteId = comp.id;
@@ -822,9 +882,22 @@ function NuevaFacturaModal({ open, onOpenChange, comprobanteOrigen = null, pedid
                   <ClienteSelector
                     clientes={clientes}
                     value={clienteId}
-                    onChange={setClienteId}
+                    onChange={handleClienteChange}
                     onClienteCreado={c => { setClientes(p => [...p, c]); setClienteId(c.id); }}
                   />
+                </div>
+                <div className="col-span-2 space-y-1">
+                  <Label className="text-xs dark:text-kx-text">Lista de Precios</Label>
+                  <select
+                    value={listaPrecioId}
+                    onChange={e => aplicarListaPrecio(e.target.value, { repriceExisting: true })}
+                    className="w-full h-8 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Precio estándar</option>
+                    {listasPrecio.map(lp => (
+                      <option key={lp.id} value={lp.id}>{lp.nombre}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="col-span-2 space-y-1">
                   <Label className="text-xs dark:text-kx-text">Tipo de documento</Label>

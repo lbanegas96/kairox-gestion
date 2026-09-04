@@ -24,6 +24,7 @@ function ModalPedidoForm({
   editingPedido,
   form, setForm,
   clientes,
+  listasPrecio, aplicarListaPrecio,
   addItem,
   removeItem,
   updateItem,
@@ -97,7 +98,14 @@ function ModalPedidoForm({
                 <Label className="text-xs dark:text-kx-text">Cliente</Label>
                 <select
                   value={form.cliente_id}
-                  onChange={e => setForm(f => ({ ...f, cliente_id: e.target.value }))}
+                  onChange={e => {
+                    const c = clientes.find(cl => cl.id === e.target.value);
+                    // Fase C/D de Listas de Precio (02/09): al elegir cliente
+                    // directo (sin venir de una cotización), arranca con SU
+                    // lista asignada -- el selector de acá abajo la sigue
+                    // permitiendo cambiar.
+                    setForm(f => ({ ...f, cliente_id: e.target.value, lista_precio_id: c?.lista_precio_id ?? '' }));
+                  }}
                   className="w-full h-8 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Sin cliente</option>
@@ -139,6 +147,19 @@ function ModalPedidoForm({
                   onChange={e => setForm(f => ({ ...f, descuentoGlobalPct: e.target.value }))}
                   className="h-8 text-sm dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
                 />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <Label className="text-xs dark:text-kx-text">Lista de Precios</Label>
+                <select
+                  value={form.lista_precio_id}
+                  onChange={e => aplicarListaPrecio(e.target.value, { repriceExisting: true })}
+                  className="w-full h-8 px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Precio estándar</option>
+                  {listasPrecio.map(lp => (
+                    <option key={lp.id} value={lp.id}>{lp.nombre}</option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>

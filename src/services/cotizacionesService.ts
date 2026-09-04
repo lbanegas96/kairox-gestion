@@ -27,6 +27,9 @@ interface CreateCotizacionPayload {
   // eligió "vincular en el Mapa de Relaciones" al duplicar. null en el resto de
   // los casos (creación normal, o duplicado sin vincular).
   duplicadoDeId?: string | null;
+  // Fase D de Listas de Precio (02/09): la lista elegida al cotizar -- por
+  // defecto la del cliente, editable. null = precio estándar de catálogo.
+  listaPrecioId?: string | null;
 }
 
 // Igual forma que CreateCotizacionPayload — updateEstado()/actualizar_cotizacion() comparten
@@ -79,7 +82,7 @@ export const cotizacionesService = {
   async create(
     empresaId: string,
     userId: string,
-    { cliente, items, notas, condicionesPago, fechaVencimiento, moneda = 'ARS', tipoCambioTasa = 1, descuentoGlobal = 0, duplicadoDeId = null }: CreateCotizacionPayload
+    { cliente, items, notas, condicionesPago, fechaVencimiento, moneda = 'ARS', tipoCambioTasa = 1, descuentoGlobal = 0, duplicadoDeId = null, listaPrecioId = null }: CreateCotizacionPayload
   ): Promise<Cotizacion> {
     const { data: numData, error: numError } = await supabase
       .rpc('obtener_proximo_numero', { p_empresa_id: empresaId, p_tipo_documento: 'cotizacion' });
@@ -113,6 +116,7 @@ export const cotizacionesService = {
         tipo_cambio_tasa: tipoCambioTasa,
         estado: 'borrador' as CotizacionEstado,
         duplicado_de_id: duplicadoDeId,
+        lista_precio_id: listaPrecioId,
       }])
       .select()
       .single();
@@ -149,7 +153,7 @@ export const cotizacionesService = {
   // "quitado"+"agregado" en cada edición, aunque no hubieran cambiado).
   async update(
     cotizacionId: string,
-    { cliente, items, notas, condicionesPago, fechaVencimiento, moneda = 'ARS', tipoCambioTasa = 1, descuentoGlobal = 0 }: UpdateCotizacionPayload
+    { cliente, items, notas, condicionesPago, fechaVencimiento, moneda = 'ARS', tipoCambioTasa = 1, descuentoGlobal = 0, listaPrecioId = null }: UpdateCotizacionPayload
   ): Promise<Cotizacion> {
     const itemsPayload = items.map((item) => ({
       id: item.id ?? null,
@@ -175,6 +179,17 @@ export const cotizacionesService = {
       p_descuento: Number(descuentoGlobal) || 0,
     });
     if (error) throw new Error(error.message);
+
+    // actualizar_cotizacion no conoce lista_precio_id (es solo una referencia
+    // de UI, no participa del cálculo de totales/diffing de ítems que hace la
+    // RPC) -- se persiste con un UPDATE directo aparte, mismo criterio que
+    // cualquier otro campo de cabecera simple en el resto del proyecto.
+    const { error: listaError } = await supabase
+      .from('cotizaciones')
+      .update({ lista_precio_id: listaPrecioId })
+      .eq('id', cotizacionId);
+    if (listaError) throw new Error(listaError.message);
+
     return data as Cotizacion;
   },
 

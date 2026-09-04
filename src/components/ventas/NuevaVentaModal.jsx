@@ -159,7 +159,22 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
           client = (clis || []).find(c => (c.nombre || '').trim().toLowerCase() === target);
         }
 
-        if (client) handleSelectClient(client);
+        // Bug real encontrado auditando el flujo completo de Listas de Precio
+        // (02/09): esto llamaba a handleSelectClient(client), que sobrescribe
+        // el precio de cada ítem del carrito con el de la lista ACTUAL del
+        // cliente -- si el cliente cambió de lista de precios después de
+        // cotizar, la venta final terminaba con un precio distinto al que el
+        // cliente vio cotizado (los ítems ya vienen copiados arriba, en
+        // preCart, con el precio_unitario TAL CUAL quedó en la cotización).
+        // Ahora sólo se fija el cliente y se carga el precioMap de la lista
+        // GUARDADA en la cotización (mig.389) -- así un producto agregado
+        // DESPUÉS de convertir sigue tomando ese mismo precio, sin tocar los
+        // ítems que ya se prellenaron.
+        if (client) {
+          setSelectedClient(client);
+          setPuntosCanjeados('');
+          await cargarListaPrecioSinRepricar(cotizacion.lista_precio_id ?? client.lista_precio_id ?? null);
+        }
       }
 
       // Pre-llenar carrito desde pedido
@@ -203,7 +218,13 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
         }
         if (pedido.cliente_id) {
           const client = (clis || []).find(c => c.id === pedido.cliente_id);
-          if (client) setSelectedClient(client);
+          if (client) {
+            setSelectedClient(client);
+            // Mismo criterio que en la pre-carga de cotización: se toma la
+            // lista GUARDADA en el pedido (que a su vez pudo arrastrarse de
+            // la cotización de origen), no la actual del cliente.
+            await cargarListaPrecioSinRepricar(pedido.lista_precio_id ?? client.lista_precio_id ?? null);
+          }
         }
       }
     };
@@ -259,6 +280,25 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
     setPedidoYaEntregado(false);
     setCentroCostoId('');
     setPuntoVentaId(''); // vuelve a resolver el PdV por defecto al reabrir
+  };
+
+  // Fase D de Listas de Precio (02/09): carga precioMap/listaNombre de una
+  // lista PUNTUAL (la guardada en la cotización/pedido de origen) sin tocar
+  // el carrito -- a diferencia de handleSelectClient, que reprecea todo con
+  // la lista ACTUAL del cliente (correcto cuando el usuario elige el cliente
+  // a mano, incorrecto cuando el carrito ya viene con precios copiados de un
+  // documento previo que hay que respetar).
+  const cargarListaPrecioSinRepricar = async (listaId) => {
+    if (!listaId) { setPrecioMap({}); setListaNombre(''); return; }
+    try {
+      const map = await listaPreciosService.getPrecioMapForLista(listaId);
+      setPrecioMap(map);
+      const { data: lista } = await supabase.from('listas_precio').select('nombre').eq('id', listaId).single();
+      setListaNombre(lista?.nombre ?? '');
+    } catch {
+      setPrecioMap({});
+      setListaNombre('');
+    }
   };
 
   // Cuando cambia el cliente, cargar su lista de precios

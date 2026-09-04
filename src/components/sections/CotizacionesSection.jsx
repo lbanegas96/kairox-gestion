@@ -10,6 +10,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { cotizacionesService, COTIZACIONES_KEYS } from '@/services/cotizacionesService';
+import { listaPreciosService } from '@/services/listaPreciosService';
 import { supabase } from '@/lib/customSupabaseClient';
 import NuevaVentaModal from '@/components/ventas/NuevaVentaModal';
 import { parseNumberLocale } from '@/lib/currencyUtils';
@@ -52,7 +53,12 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
     moneda: 'ARS',
     tipoCambioTasa: 1,
     descuento: '',
+    lista_precio_id: '',
   });
+  // Fase C/D de Listas de Precio (02/09): { producto_id: precio } de la lista
+  // elegida en form.lista_precio_id -- selectProducto la consulta para saber
+  // qué precio poner en un ítem nuevo. Se recalcula al cambiar la lista.
+  const [precioMap, setPrecioMap] = useState({});
   const [items, setItems] = useState([{ ...EMPTY_ITEM }]);
   const [prodSearch, setProdSearch] = useState({});
   const [prodResults, setProdResults] = useState({});
@@ -117,12 +123,48 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
   const { data: allClientes = [] } = useQuery({
     queryKey: ['cotizaciones_clientes_autocomplete', empresaId],
     queryFn: async () => {
-      const { data, error } = await supabase.from('clientes').select('id, nombre, condicion_pago_id, condicion_iva').eq('empresa_id', empresaId).order('nombre').limit(500);
+      const { data, error } = await supabase.from('clientes').select('id, nombre, condicion_pago_id, condicion_iva, lista_precio_id').eq('empresa_id', empresaId).order('nombre').limit(500);
       if (error) throw error;
       return data ?? [];
     },
     enabled: !!empresaId,
   });
+
+  const { data: listasPrecio = [] } = useQuery({
+    queryKey: ['listas_precio_activas', empresaId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('listas_precio').select('id, nombre').eq('empresa_id', empresaId).eq('activo', true).order('nombre');
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!empresaId,
+  });
+
+  // Cambia la lista de precios activa en el form y, si se pide, recalcula el
+  // precio de los ítems YA cargados (no solo los que se agreguen de acá en
+  // más) -- así elegir otra lista después de armar el carrito realmente
+  // cambia lo que se va a cotizar, no solo lo que se agregue después.
+  const aplicarListaPrecio = async (listaId, { repriceExisting = false } = {}) => {
+    const mapa = await listaPreciosService.getPrecioMapForLista(listaId || null);
+    setPrecioMap(mapa);
+    setForm(f => ({ ...f, lista_precio_id: listaId || '' }));
+    if (repriceExisting) {
+      setItems(prev => prev.map(it =>
+        it.producto_id && mapa[it.producto_id] !== undefined
+          ? { ...it, precio_unitario: mapa[it.producto_id] }
+          : it
+      ));
+    }
+  };
+
+  // Mantiene precioMap sincronizado con form.lista_precio_id para los otros
+  // 3 puntos que la cambian sin pasar por aplicarListaPrecio (resetForm,
+  // click en el dropdown de cliente, prefill de Editar/Duplicar) -- ninguno
+  // de esos toca ítems ya cargados, solo necesitan que selectProducto tenga
+  // el mapa correcto disponible para los ítems que se agreguen de acá en más.
+  useEffect(() => {
+    listaPreciosService.getPrecioMapForLista(form.lista_precio_id || null).then(setPrecioMap);
+  }, [form.lista_precio_id]);
 
   // Condición de IVA de la propia empresa — determina, junto con la del cliente
   // elegido, si la cotización va a discriminar IVA (Factura A) o no (B/C) el día
@@ -308,6 +350,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
       cliente_id: cf?.id ?? '', cliente_nombre: cf?.nombre ?? '',
       notas: '', condiciones_pago: condicionPagoDefault(), fecha_vencimiento: '',
       moneda: 'ARS', tipoCambioTasa: 1, descuento: '',
+      lista_precio_id: cf?.lista_precio_id ?? '',
     });
     setItems([{ ...EMPTY_ITEM }]);
     setProdSearch({});
@@ -335,6 +378,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
       moneda: full.moneda ?? 'ARS',
       tipoCambioTasa: full.tipo_cambio_tasa ?? 1,
       descuento: full.descuento ? String(full.descuento) : '',
+      lista_precio_id: full.lista_precio_id ?? '',
     });
     setItems((full.cotizacion_items ?? []).map(i => ({
       id: i.id,
@@ -373,6 +417,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
       moneda: full.moneda ?? 'ARS',
       tipoCambioTasa: full.tipo_cambio_tasa ?? 1,
       descuento: full.descuento ? String(full.descuento) : '',
+      lista_precio_id: full.lista_precio_id ?? '',
     });
     setItems((full.cotizacion_items ?? []).map(i => ({
       // Sin `id` — son ítems nuevos, no los de la cotización original.
@@ -406,7 +451,11 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
 
   const selectProducto = (idx, prod) => {
     const updated = [...items];
-    updated[idx] = { ...updated[idx], producto_id: prod.id, descripcion: prod.nombre, precio_unitario: prod.precio_venta ?? '', unidad_medida: prod.unidad_medida ?? '', alicuota_iva: prod.alicuota_iva ?? '21' };
+    // Fase C de Listas de Precio (02/09): si la lista elegida tiene un precio
+    // especial para este producto, se usa ese -- si no, el precio estándar
+    // del catálogo, como siempre.
+    const precio = precioMap[prod.id] !== undefined ? precioMap[prod.id] : (prod.precio_venta ?? '');
+    updated[idx] = { ...updated[idx], producto_id: prod.id, descripcion: prod.nombre, precio_unitario: precio, unidad_medida: prod.unidad_medida ?? '', alicuota_iva: prod.alicuota_iva ?? '21' };
     setItems(updated);
     setProdSearch(prev => ({ ...prev, [idx]: prod.nombre }));
     setProdResults(prev => ({ ...prev, [idx]: [] }));
@@ -527,6 +576,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
       tipoCambioTasa: form.tipoCambioTasa,
       descuentoGlobal: descuentoGlobalPct,
       duplicadoDeId: editingId ? null : duplicadoDeId,
+      listaPrecioId: form.lista_precio_id || null,
     };
     if (editingId) {
       updateMutation.mutate({ id: editingId, payload });
@@ -600,6 +650,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
             condicionesPago={condicionesPago}
             allClientes={allClientes} showClienteDropdown={showClienteDropdown}
             setShowClienteDropdown={setShowClienteDropdown} clienteWrapperRef={clienteWrapperRef}
+            listasPrecio={listasPrecio} aplicarListaPrecio={aplicarListaPrecio}
             tcMissing={tcMissing} setTcMissing={setTcMissing}
             totales={totales} discrimina={discrimina}
             handleSubmit={handleSubmit} resetForm={resetForm}
