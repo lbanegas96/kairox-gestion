@@ -1,5 +1,30 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Listas de Precio — las 3 recomendaciones del auditor contable, cerradas (04/09)
+
+Después de la revisión contable (ver sección siguiente), Luciano pidió construir las 3
+recomendaciones en vez de dejarlas anotadas. Las 3 se hicieron y están en producción:
+
+1. **🟡 Warning de margen negativo** — en los dos previews de "Recalcular precios"
+   (`ListasPrecioSection.jsx` para listas secundarias, `ListaPrecioBaseCard.jsx` para la lista base
+   de Modo Caja) aparece un banner ámbar + filas en rojo cuando el factor de una categoría implica
+   `precio_nuevo < costo_compra` — no bloquea aplicar, sólo avisa. Probado en vivo: se creó una
+   lista de prueba con factor `0.5` (garantiza margen negativo en TODO el catálogo), se confirmó
+   que el warning aparece, y se borró la lista de prueba.
+2. **🟢 Trazabilidad visible** — el detalle de Cotización, Pedido y Factura ahora muestra qué
+   lista de precios se usó (antes sólo se veía reabriendo el formulario de edición). Campo nuevo
+   "Lista de Precios" en `ModalDetalleCotizacion.jsx`, `ModalDetallePedido.jsx` y
+   `SaleDetailModal.jsx`, con un join a `listas_precio(nombre)` agregado a cada query — sin migración,
+   el dato ya existía.
+3. **🟢 Reporte por lista** — nuevo agrupamiento "Por lista de precios" en el Reporte de Ventas
+   (`ReportesSection.jsx` + `reportDefinitions.jsx`), reutilizando el motor de reportes existente
+   (subtotales, PDF, Excel) en vez de construir algo nuevo — mismo patrón que "Por cliente"/"Por
+   método de pago".
+
+`tsc`/`eslint`/`vite build` limpios en los 10 archivos tocados. Commiteado, pusheado y desplegado.
+
+---
+
 ## ✅ Listas de Precio — prueba en vivo contra producción + revisión contable (04/09)
 
 Después de cerrar la Fase C/D (ver sección siguiente), se hizo una ronda de pruebas end-to-end
