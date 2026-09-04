@@ -65,6 +65,62 @@ importante del chequeo.
 
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Listas de Precio — Fases A y B: "Por Factor" (costo × margen) + lista base para Modo Caja (mig.387/388, 02/09)
+
+Luciano pidió repasar cómo se aplican hoy las Listas de Precio. Hallazgo real: solo se aplicaban en
+UN flujo de todo el sistema (Convertir Cotización→Venta) — Modo Caja, Factura directa, Cotización y
+Pedido siempre usaban el precio estándar del catálogo, ignorando la lista asignada al cliente.
+
+Antes de rediseñar, investigué SAP Business One (Último Precio de Compra + listas vinculadas por
+Factor — [fuente](https://community.sap.com/t5/enterprise-resource-planning-blog-posts-by-members/price-lists-in-sap-business-one-all-you-need-to-know/ba-p/13404212)),
+que resuelve exactamente lo que Luciano tenía en mente. Plan de 4 fases; construidas A y B hoy.
+
+**Fase A (mig.387) — listas "Por Factor":** una lista de precios ahora puede ser `'fija'` (como
+antes, precio a mano por producto) o `'factor'` — el precio sale de `costo_compra × factor`, con el
+factor definido **por categoría** (`lista_precio_factores_categoria`, decisión de Luciano sobre 3
+opciones preguntadas) + un factor "por defecto" (`categoria_id NULL`) para productos sin categoría o
+categorías sin factor propio. Botón "Recalcular precios" con vista previa antes de aplicar (mismo
+patrón que el Ajuste Masivo ya existente, mig.290) — escribe en `lista_precio_items`, el mismo
+destino de siempre, así el resto del sistema no distingue de dónde vino el precio.
+
+**Fase B (mig.388) — lista base para Modo Caja:** se puede marcar UNA lista "Por Factor" como la
+"lista base" de la empresa (`empresas.lista_precio_base_id`, card nueva en Configuración →
+Finanzas). A partir de ahí, `productos.precio_venta` se recalcula SOLO cada vez que cambia el costo
+por una compra real — enganchado en los 2 puntos reales donde eso pasa (`fn_oc_update_stock`,
+recepción de OC; `aplicar_compra_producto`, Compra Rápida) — sin que nadie tenga que tocar nada a
+mano. Al activarla por primera vez, recalcula todo el catálogo activo de una sola vez (decisión ya
+confirmada con Luciano antes de construir). Objetivo de fondo: actualizar precios ante inflación sea
+un solo número por categoría, no producto por producto.
+
+Probado con `BEGIN...ROLLBACK` contra datos reales de Nalux antes de aplicar cada migración: factor
+específico por categoría (Electrónica ×2.00 → Celulares $15.000→$30.000), factor por defecto
+(incluido un producto sin categoría, "Jamón Cocido"), el trigger de recepción real (Lucchetti
+bucattini, costo $5.000 → precio $7.500 con factor 1.5, stock actualizado), y el recálculo masivo —
+todo correcto, nada persistido hasta aplicar. `tsc`/`eslint`/`vite build` limpios. Grants verificados
+(`anon=false` en ambas RPCs nuevas, el helper interno cerrado incluso a `authenticated`).
+
+**Pendientes (Fases C y D, no construidas todavía):** extender la resolución de la lista del
+cliente a los 4 flujos que hoy la ignoran (Caja, Factura directa, Cotización, Pedido), y agregar un
+selector de lista de precios editable en el encabezado de la Cotización (por defecto la del cliente).
+
+---
+
+## ✅ Cuenta Corriente — tamaño de modal, filtros de fecha y PDF de Estado de Cuenta (02/09)
+
+A pedido de Luciano ("los mismos tamaños de cotización, filtros por fecha, un botón de impresión con
+PDF, y algún día WhatsApp"): el modal de movimientos (`ClientDetailModal.jsx`) pasa de un ancho
+ad-hoc a `size="wide"` (verificado en vivo, 1332px, idéntico a Cotización); se agregan filtros
+Desde/Hasta que filtran la consulta real (antes solo traía los últimos 50 movimientos sin importar
+la fecha); y un botón "Descargar PDF" que genera un Estado de Cuenta con el mismo estilo que
+Factura/Recibo (`@react-pdf/renderer`) — saldo corrido, saldo final con signo/color según sea deuda
+o a favor, y trazabilidad: cada línea de venta muestra el N° de comprobante real (mismo formato
+"Letra PdV-Folio" que usa el resto del sistema) y cada pago el medio utilizado, para poder ir
+directo al sistema ante un reclamo. Probado extrayendo el PDF real generado y mandándoselo a
+Luciano para revisión antes de cerrar. El botón de WhatsApp queda pendiente, para cuando se arme esa
+integración — no se construyó ni siquiera como placeholder, a la espera de indicación.
+
+---
+
 ## ✅ Ajuste por Inflación — fix crítico + reversa + alcance acotado a Inventario/Moneda (mig.385/386, 02/09)
 
 Retomando el mismo día, tras la auditoría de abajo, Luciano pidió construir la reversa (hallazgo #1)
