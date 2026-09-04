@@ -1,5 +1,27 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 📋 Auditoría de paridad Compras vs Ventas — informe listo, sin implementar (04/09)
+
+Luciano pidió, al cierre del trabajo de Listas de Precio, auditar qué le falta a Compras para
+quedar "operativo como Ventas" tras todas las mejoras de esta sesión. Informe completo en
+[`PLAN_PARIDAD_COMPRAS.md`](PLAN_PARIDAD_COMPRAS.md) (relevamiento de código + marco `sap-reference`
++ revisión `auditor-contable`).
+
+**Hallazgo más importante — 🔴 bug real ya en producción, verificado por inspección directa (no
+solo por el relevamiento):** "Registrar Factura" desde una Orden de Compra calcula el IVA sobre el
+precio BRUTO (con IVA incluido) tratándolo como si fuera neto — infla el total y el Crédito Fiscal
+declarado en cualquier factura de compra registrada por ese camino (`OrdenesCompraSection.jsx:169`
++ `ModalRegistrarFactura.jsx:23-25`). También se hardcodea `alicuota_iva: 21` sin leer la real del
+ítem. Segundo hallazgo 🔴: `registrar_factura_compra_oc` (mig.332) hardcodea moneda='ARS'/TC=1,
+perdiendo la moneda pactada si la OC estaba en USD. El resto son 3 gaps 🟡 (Facturas de Compra sin
+editar+historial, Cuenta Corriente de Proveedores atrasada en UI vs. Clientes, sin reporte de aging
+para Proveedores) y 2 mejoras 🟢 menores. Se aclaran 3 falsos positivos en el documento (cosas que
+parecían asimetría pero no lo son — ej. Recepciones sin "Duplicar" es correcto, igual que Entregas).
+
+**Sin cambios de código todavía** — es solo el informe, a revisar y priorizar cuando Luciano vuelva.
+
+---
+
 ## ✅ Listas de Precio — las 3 recomendaciones del auditor contable, cerradas (04/09)
 
 Después de la revisión contable (ver sección siguiente), Luciano pidió construir las 3
