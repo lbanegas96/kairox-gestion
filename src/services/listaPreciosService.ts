@@ -7,10 +7,28 @@ export interface ListaPrecio {
   user_id: string;
   nombre: string;
   descripcion: string | null;
+  tipo: 'fija' | 'factor';
   activo: boolean;
   created_at: string;
   updated_at: string;
   _itemCount?: number;
+}
+
+export interface FactorCategoria {
+  id: string;
+  lista_precio_id: string;
+  empresa_id: string;
+  categoria_id: string | null; // null = factor por defecto
+  factor: number;
+}
+
+export interface RecalculoFactorItem {
+  producto_id: string;
+  nombre: string;
+  costo_compra: number;
+  factor_aplicado: number;
+  precio_actual: number;
+  precio_nuevo: number;
 }
 
 export interface ListaPrecioItem {
@@ -68,20 +86,20 @@ export const listaPreciosService = {
     })) as ListaPrecio[];
   },
 
-  async create(empresaId: string, userId: string, nombre: string, descripcion?: string): Promise<ListaPrecio> {
+  async create(empresaId: string, userId: string, nombre: string, descripcion?: string, tipo: 'fija' | 'factor' = 'fija'): Promise<ListaPrecio> {
     const { data, error } = await supabase
       .from('listas_precio')
-      .insert([{ empresa_id: empresaId, user_id: userId, nombre, descripcion: descripcion ?? null }])
+      .insert([{ empresa_id: empresaId, user_id: userId, nombre, descripcion: descripcion ?? null, tipo }])
       .select()
       .single();
     if (error) throw new Error(error.message);
     return data as ListaPrecio;
   },
 
-  async update(id: string, nombre: string, descripcion?: string): Promise<ListaPrecio> {
+  async update(id: string, nombre: string, descripcion?: string, tipo?: 'fija' | 'factor'): Promise<ListaPrecio> {
     const { data, error } = await supabase
       .from('listas_precio')
-      .update({ nombre, descripcion: descripcion ?? null, updated_at: getNowAR().toISOString() })
+      .update({ nombre, descripcion: descripcion ?? null, ...(tipo ? { tipo } : {}), updated_at: getNowAR().toISOString() })
       .eq('id', id)
       .select()
       .single();
@@ -250,5 +268,104 @@ export const listaPreciosService = {
     if (iErr || !items) return {};
 
     return Object.fromEntries(items.map((i: any) => [i.producto_id, Number(i.precio)]));
+  },
+
+  // ── Listas "por Factor" (costo × margen) ────────────────────────────────────
+  // Fase A del rediseño (02/09) — investigado contra el mecanismo de SAP B1
+  // (Último Precio de Compra + listas vinculadas por Factor).
+
+  async getFactoresCategoria(listaPrecioId: string): Promise<FactorCategoria[]> {
+    const { data, error } = await supabase
+      .from('lista_precio_factores_categoria')
+      .select('id, lista_precio_id, empresa_id, categoria_id, factor')
+      .eq('lista_precio_id', listaPrecioId);
+    if (error) throw new Error(error.message);
+    return (data ?? []) as FactorCategoria[];
+  },
+
+  async upsertFactorCategoria(listaPrecioId: string, empresaId: string, categoriaId: string | null, factor: number): Promise<void> {
+    // categoria_id NULL (factor por defecto) no entra en el onConflict normal
+    // porque Postgres no matchea NULL en un ON CONFLICT sobre columnas
+    // nullable con un UNIQUE normal -- por eso hay un índice parcial
+    // dedicado (idx_factor_categoria_default_unico) para ese caso.
+    if (categoriaId === null) {
+      const { data: existing } = await supabase
+        .from('lista_precio_factores_categoria')
+        .select('id')
+        .eq('lista_precio_id', listaPrecioId)
+        .is('categoria_id', null)
+        .maybeSingle();
+      if (existing) {
+        const { error } = await supabase
+          .from('lista_precio_factores_categoria')
+          .update({ factor, updated_at: getNowAR().toISOString() })
+          .eq('id', existing.id);
+        if (error) throw new Error(error.message);
+        return;
+      }
+      const { error } = await supabase
+        .from('lista_precio_factores_categoria')
+        .insert([{ lista_precio_id: listaPrecioId, empresa_id: empresaId, categoria_id: null, factor }]);
+      if (error) throw new Error(error.message);
+      return;
+    }
+    const { error } = await supabase
+      .from('lista_precio_factores_categoria')
+      .upsert(
+        [{ lista_precio_id: listaPrecioId, empresa_id: empresaId, categoria_id: categoriaId, factor }],
+        { onConflict: 'lista_precio_id,categoria_id' }
+      );
+    if (error) throw new Error(error.message);
+  },
+
+  async deleteFactorCategoria(id: string): Promise<void> {
+    const { error } = await supabase.from('lista_precio_factores_categoria').delete().eq('id', id);
+    if (error) throw new Error(error.message);
+  },
+
+  // aplicar=false → preview (no escribe nada); aplicar=true → hace upsert en
+  // lista_precio_items (mismo destino que las listas "fija", el resto del
+  // sistema no necesita distinguir de dónde salió el precio).
+  async recalcularPreciosFactor(listaPrecioId: string, aplicar: boolean): Promise<RecalculoFactorItem[]> {
+    const { data, error } = await supabase.rpc('recalcular_precios_lista_factor', {
+      p_lista_precio_id: listaPrecioId,
+      p_aplicar: aplicar,
+    });
+    if (error) throw new Error(error.message);
+    return ((data as any)?.items ?? []) as RecalculoFactorItem[];
+  },
+
+  // ── Lista base para Modo Caja (Fase B, 02/09) ───────────────────────────────
+  // A diferencia de recalcularPreciosFactor (que escribe en lista_precio_items,
+  // para listas secundarias), esta escribe directo en productos.precio_venta --
+  // es LA lista que alimenta el catálogo. También se recalcula sola en cada
+  // compra (trigger + aplicar_compra_producto en el backend, sin acción del
+  // usuario) — este método es solo para el recálculo manual/inicial.
+
+  async getListaBaseId(empresaId: string): Promise<string | null> {
+    const { data, error } = await supabase
+      .from('empresas')
+      .select('lista_precio_base_id')
+      .eq('id', empresaId)
+      .single();
+    if (error) throw new Error(error.message);
+    return (data as any)?.lista_precio_base_id ?? null;
+  },
+
+  async setListaBase(empresaId: string, listaPrecioId: string | null): Promise<void> {
+    const { error } = await supabase
+      .from('empresas')
+      .update({ lista_precio_base_id: listaPrecioId })
+      .eq('id', empresaId);
+    if (error) throw new Error(error.message);
+  },
+
+  async recalcularCatalogoBase(listaPrecioId: string, aplicar: boolean): Promise<RecalculoFactorItem[]> {
+    const { data, error } = await supabase.rpc('recalcular_catalogo_lista_base', {
+      p_lista_precio_id: listaPrecioId,
+      p_aplicar: aplicar,
+    });
+    if (error) throw new Error(error.message);
+    return ((data as any)?.items ?? []) as RecalculoFactorItem[];
   },
 };

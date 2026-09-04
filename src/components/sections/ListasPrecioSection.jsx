@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Tag, Plus, Edit, Trash2, Package, Search, Check,
-  ToggleLeft, ToggleRight, X, Loader2, DollarSign, Sparkles, ArrowRight, History, CalendarClock
+  ToggleLeft, ToggleRight, X, Loader2, DollarSign, Sparkles, ArrowRight, History, CalendarClock,
+  Percent, RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +29,13 @@ function ListasPrecioSection() {
   // ── Modales ──────────────────────────────────────────────────────────────────
   const [listaModal, setListaModal] = useState(false);
   const [editingLista, setEditingLista] = useState(null); // null = nueva
-  const [formLista, setFormLista] = useState({ nombre: '', descripcion: '' });
+  const [formLista, setFormLista] = useState({ nombre: '', descripcion: '', tipo: 'fija' });
+
+  // ── Listas "por Factor" (costo × margen, Fase A 02/09) ──────────────────────
+  const [factorModal, setFactorModal] = useState(false);
+  const [factorEdicion, setFactorEdicion] = useState({}); // { categoria_id | 'default': factor_str }
+  const [savingFactor, setSavingFactor] = useState(null); // categoria_id | 'default' | null
+  const [factorPreview, setFactorPreview] = useState(null); // RecalculoFactorItem[] | null
 
   const [itemsModal, setItemsModal] = useState(false);
   const [selectedLista, setSelectedLista] = useState(null);
@@ -70,6 +77,12 @@ function ListasPrecioSection() {
     enabled: historialModal && !!selectedLista?.id && !!historialProducto?.id,
   });
 
+  const { data: factores = [] } = useQuery({
+    queryKey: ['lista_precio_factores', selectedLista?.id],
+    queryFn: () => listaPreciosService.getFactoresCategoria(selectedLista.id),
+    enabled: factorModal && !!selectedLista?.id,
+  });
+
   // Inicializar precios de edición cuando cambian los items
   useEffect(() => {
     if (items.length > 0) {
@@ -91,25 +104,34 @@ function ListasPrecioSection() {
       .then(({ data }) => setProductos(data ?? []));
   }, [itemsModal, empresaId]);
 
-  // Categorías (para el filtro de ajuste masivo)
+  // Inicializar factores de edición cuando cambian (modal de listas por Factor)
   useEffect(() => {
-    if (!ajusteModal || !empresaId) return;
+    if (factores.length > 0) {
+      const map = {};
+      factores.forEach(f => { map[f.categoria_id ?? 'default'] = String(f.factor); });
+      setFactorEdicion(map);
+    }
+  }, [factores]);
+
+  // Categorías (para el filtro de ajuste masivo, y para el modal de factores)
+  useEffect(() => {
+    if ((!ajusteModal && !factorModal) || !empresaId) return;
     supabase
       .from('categorias')
       .select('id, nombre')
       .eq('empresa_id', empresaId)
       .order('nombre')
       .then(({ data }) => setCategorias(data ?? []));
-  }, [ajusteModal, empresaId]);
+  }, [ajusteModal, factorModal, empresaId]);
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
   const saveLista = useMutation({
     mutationFn: async () => {
       if (!formLista.nombre.trim()) throw new Error('El nombre es requerido');
       if (editingLista) {
-        return listaPreciosService.update(editingLista.id, formLista.nombre, formLista.descripcion);
+        return listaPreciosService.update(editingLista.id, formLista.nombre, formLista.descripcion, formLista.tipo);
       }
-      return listaPreciosService.create(empresaId, user.id, formLista.nombre, formLista.descripcion);
+      return listaPreciosService.create(empresaId, user.id, formLista.nombre, formLista.descripcion, formLista.tipo);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: LISTAS_KEY(empresaId) });
@@ -183,6 +205,61 @@ function ListasPrecioSection() {
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });
 
+  // ── Listas "por Factor" ──────────────────────────────────────────────────────
+  const saveFactor = useMutation({
+    mutationFn: ({ categoriaId, factor }) =>
+      listaPreciosService.upsertFactorCategoria(selectedLista.id, empresaId, categoriaId, factor),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['lista_precio_factores', selectedLista?.id] });
+      toast({ title: 'Factor guardado ✓', className: 'bg-green-600 text-white' });
+    },
+    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const deleteFactor = useMutation({
+    mutationFn: (id) => listaPreciosService.deleteFactorCategoria(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lista_precio_factores', selectedLista?.id] }),
+    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const previewRecalculo = useMutation({
+    mutationFn: () => listaPreciosService.recalcularPreciosFactor(selectedLista.id, false),
+    onSuccess: (items) => setFactorPreview(items),
+    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const aplicarRecalculo = useMutation({
+    mutationFn: () => listaPreciosService.recalcularPreciosFactor(selectedLista.id, true),
+    onSuccess: (items) => {
+      qc.invalidateQueries({ queryKey: LISTAS_KEY(empresaId) });
+      toast({
+        title: 'Precios recalculados ✓',
+        description: `${items.length} producto${items.length !== 1 ? 's' : ''} actualizado${items.length !== 1 ? 's' : ''} (costo × factor)`,
+        className: 'bg-green-600 text-white',
+      });
+      setFactorPreview(null);
+    },
+    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+  });
+
+  const handleSaveFactor = (categoriaId) => {
+    const key = categoriaId ?? 'default';
+    const factor = parseNumberLocale(factorEdicion[key]);
+    if (isNaN(factor) || factor <= 0) {
+      toast({ title: 'Factor inválido', description: 'Ej: 2.00 = costo × 2 (100% de margen)', variant: 'destructive' });
+      return;
+    }
+    setSavingFactor(key);
+    saveFactor.mutate({ categoriaId, factor }, { onSettled: () => setSavingFactor(null) });
+  };
+
+  const openFactores = (lista) => {
+    setSelectedLista(lista);
+    setFactorEdicion({});
+    setFactorPreview(null);
+    setFactorModal(true);
+  };
+
   const programarVigencia = useMutation({
     mutationFn: async () => {
       const precio = parseNumberLocale(vigenciaForm.precio);
@@ -222,17 +299,18 @@ function ListasPrecioSection() {
   // ── Helpers ───────────────────────────────────────────────────────────────────
   const openNueva = () => {
     setEditingLista(null);
-    setFormLista({ nombre: '', descripcion: '' });
+    setFormLista({ nombre: '', descripcion: '', tipo: 'fija' });
     setListaModal(true);
   };
 
   const openEditar = (lista) => {
     setEditingLista(lista);
-    setFormLista({ nombre: lista.nombre, descripcion: lista.descripcion ?? '' });
+    setFormLista({ nombre: lista.nombre, descripcion: lista.descripcion ?? '', tipo: lista.tipo ?? 'fija' });
     setListaModal(true);
   };
 
   const openItems = (lista) => {
+    if (lista.tipo === 'factor') { openFactores(lista); return; }
     setSelectedLista(lista);
     setProdSearch('');
     setPrecioEdicion({});
@@ -346,9 +424,16 @@ function ListasPrecioSection() {
                     <td className="p-4">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-md bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center shrink-0">
-                          <Tag className="w-3.5 h-3.5 text-kx-violet" />
+                          {lista.tipo === 'factor' ? <Percent className="w-3.5 h-3.5 text-kx-violet" /> : <Tag className="w-3.5 h-3.5 text-kx-violet" />}
                         </div>
-                        <span className="font-semibold text-kx-text dark:text-kx-text">{lista.nombre}</span>
+                        <div>
+                          <span className="font-semibold text-kx-text dark:text-kx-text">{lista.nombre}</span>
+                          {lista.tipo === 'factor' && (
+                            <span className="ml-2 text-2xs px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 align-middle">
+                              Por Factor
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="p-4 text-slate-500 dark:text-kx-text-2 hidden md:table-cell">
@@ -419,6 +504,33 @@ function ListasPrecioSection() {
                 className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
                 autoFocus
               />
+            </div>
+            <div className="space-y-2">
+              <Label className="dark:text-kx-text">Cómo se calcula el precio</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setFormLista(f => ({ ...f, tipo: 'fija' }))}
+                  className={`text-left p-3 rounded-lg border transition-colors ${
+                    formLista.tipo === 'fija'
+                      ? 'bg-violet-50 border-violet-300 dark:bg-violet-900/20 dark:border-violet-700'
+                      : 'border-kx-border dark:border-kx-border hover:bg-kx-surface-2 dark:hover:bg-slate-800/50'
+                  }`}>
+                  <p className="text-sm font-semibold text-kx-text dark:text-kx-text flex items-center gap-1.5">
+                    <DollarSign className="w-3.5 h-3.5 text-kx-violet" /> Fija
+                  </p>
+                  <p className="text-xs text-kx-text-3 mt-0.5">Precio a mano, producto por producto</p>
+                </button>
+                <button type="button" onClick={() => setFormLista(f => ({ ...f, tipo: 'factor' }))}
+                  className={`text-left p-3 rounded-lg border transition-colors ${
+                    formLista.tipo === 'factor'
+                      ? 'bg-violet-50 border-violet-300 dark:bg-violet-900/20 dark:border-violet-700'
+                      : 'border-kx-border dark:border-kx-border hover:bg-kx-surface-2 dark:hover:bg-slate-800/50'
+                  }`}>
+                  <p className="text-sm font-semibold text-kx-text dark:text-kx-text flex items-center gap-1.5">
+                    <Percent className="w-3.5 h-3.5 text-kx-violet" /> Por Factor
+                  </p>
+                  <p className="text-xs text-kx-text-3 mt-0.5">Costo × margen, por categoría</p>
+                </button>
+              </div>
             </div>
             <div className="space-y-2">
               <Label className="dark:text-kx-text">Descripción <span className="text-kx-text-3 font-normal">(opcional)</span></Label>
@@ -750,6 +862,141 @@ function ListasPrecioSection() {
 
           <DialogFooter className="pt-2 border-t border-kx-border dark:border-kx-border">
             <Button variant="outline" onClick={() => setAjusteModal(false)} className="dark:border-kx-border dark:text-slate-300">
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── MODAL: Factores por categoría (listas tipo "Por Factor") ── */}
+      <Dialog open={factorModal} onOpenChange={(open) => { setFactorModal(open); if (!open) setFactorPreview(null); }}>
+        <DialogContent className="max-w-2xl dark:bg-kx-bg dark:border-kx-border max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="dark:text-kx-text flex items-center gap-2">
+              <Percent className="w-5 h-5 text-kx-violet" />
+              Factores por categoría — {selectedLista?.nombre}
+            </DialogTitle>
+            <DialogDescription className="dark:text-kx-text-2">
+              El precio de cada producto sale de <b>costo × factor</b> de su categoría (ej: factor 2.00 = 100% de margen).
+              Los productos sin categoría, o de una categoría sin factor propio, usan el factor por defecto.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+            {/* Factor por defecto — siempre primero */}
+            <div className="flex items-center gap-3 p-3 rounded-lg border bg-violet-50 border-violet-200 dark:bg-violet-900/10 dark:border-violet-800/40">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-kx-text dark:text-kx-text">Factor por defecto</p>
+                <p className="text-xs text-kx-text-3">Para productos sin categoría, o categorías sin factor propio</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <input
+                  type="text" inputMode="decimal"
+                  value={factorEdicion['default'] ?? ''}
+                  onChange={e => setFactorEdicion(prev => ({ ...prev, default: e.target.value }))}
+                  placeholder="ej: 2,00"
+                  className="w-24 h-8 px-2 text-right text-sm rounded-md border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+                <Button size="icon" variant="ghost" className="h-8 w-8 text-kx-violet hover:bg-violet-100 dark:hover:bg-violet-900/20"
+                  onClick={() => handleSaveFactor(null)}
+                  disabled={savingFactor === 'default' || !factorEdicion['default']} title="Guardar factor">
+                  {savingFactor === 'default' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                </Button>
+              </div>
+            </div>
+
+            {categorias.map(cat => {
+              const existente = factores.find(f => f.categoria_id === cat.id);
+              return (
+                <div key={cat.id}
+                  className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                    existente
+                      ? 'bg-violet-50 border-violet-200 dark:bg-violet-900/10 dark:border-violet-800/40'
+                      : 'bg-kx-surface border-slate-100 dark:bg-kx-surface dark:border-kx-border hover:bg-kx-surface-2 dark:hover:bg-slate-800/50'
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-kx-text dark:text-kx-text truncate">{cat.nombre}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <input
+                      type="text" inputMode="decimal"
+                      value={factorEdicion[cat.id] ?? ''}
+                      onChange={e => setFactorEdicion(prev => ({ ...prev, [cat.id]: e.target.value }))}
+                      placeholder="sin factor"
+                      className="w-24 h-8 px-2 text-right text-sm rounded-md border border-kx-border dark:border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    />
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-kx-violet hover:bg-violet-100 dark:hover:bg-violet-900/20"
+                      onClick={() => handleSaveFactor(cat.id)}
+                      disabled={savingFactor === cat.id || !factorEdicion[cat.id]} title="Guardar factor">
+                      {savingFactor === cat.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    </Button>
+                    {existente && (
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-kx-text-3 hover:text-kx-red"
+                        onClick={() => deleteFactor.mutate(existente.id)} title="Quitar factor">
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="pt-2 border-t border-kx-border dark:border-kx-border space-y-2">
+            {!factorPreview ? (
+              <Button onClick={() => previewRecalculo.mutate()} disabled={previewRecalculo.isPending}
+                className="w-full bg-violet-600 hover:bg-violet-700 text-white gap-2">
+                {previewRecalculo.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                Recalcular precios
+              </Button>
+            ) : factorPreview.length === 0 ? (
+              <p className="text-center text-kx-text-3 py-4 text-sm">
+                Ningún producto tiene un factor aplicable todavía — cargá al menos el factor por defecto.
+              </p>
+            ) : (
+              <>
+                <div className="max-h-52 overflow-y-auto border border-kx-border dark:border-kx-border rounded-lg">
+                  <table className="w-full text-sm">
+                    <thead className="bg-kx-surface-2 dark:bg-slate-900/50 text-xs uppercase text-slate-500 dark:text-kx-text-2 sticky top-0">
+                      <tr>
+                        <th className="p-2 text-left">Producto</th>
+                        <th className="p-2 text-right">Costo</th>
+                        <th className="p-2 text-right">Factor</th>
+                        <th className="p-2 text-right">Precio nuevo</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {factorPreview.map(item => (
+                        <tr key={item.producto_id}>
+                          <td className="p-2 text-kx-text dark:text-kx-text truncate max-w-[160px]">{item.nombre}</td>
+                          <td className="p-2 text-right text-kx-text-3 tabular-nums">${Number(item.costo_compra).toLocaleString('es-AR')}</td>
+                          <td className="p-2 text-right text-kx-text-3 tabular-nums">×{Number(item.factor_aplicado).toLocaleString('es-AR')}</td>
+                          <td className="p-2 text-right font-semibold text-kx-green tabular-nums">${Number(item.precio_nuevo).toLocaleString('es-AR')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-kx-text-3">{factorPreview.length} producto{factorPreview.length !== 1 ? 's' : ''} — nada se guardó todavía</span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setFactorPreview(null)} className="dark:border-kx-border dark:text-slate-300">
+                      Volver
+                    </Button>
+                    <Button size="sm" onClick={() => aplicarRecalculo.mutate()} disabled={aplicarRecalculo.isPending}
+                      className="bg-kx-green hover:bg-green-700 text-white gap-2">
+                      {aplicarRecalculo.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                      Aplicar a {factorPreview.length} producto{factorPreview.length !== 1 ? 's' : ''}
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <DialogFooter className="pt-2 border-t border-kx-border dark:border-kx-border">
+            <Button variant="outline" onClick={() => setFactorModal(false)} className="dark:border-kx-border dark:text-slate-300">
               Cerrar
             </Button>
           </DialogFooter>
