@@ -24,6 +24,10 @@ import ConfirmDuplicarDialog from '@/components/shared/ConfirmDuplicarDialog';
 // mismo criterio que Cotizaciones/Pedidos/Ventas. Para separar neto/IVA hay que
 // DIVIDIR por el factor de la alícuota, nunca sumarlo.
 const FACTOR_IVA = { '21': 1.21, '10.5': 1.105 };
+// ModalRegistrarFactura/registrar_factura_compra_oc esperan un número (0/10.5/21),
+// no el set de texto de ordenes_compra_items ('21'/'10.5'/'0'/'exento'/'no_gravado')
+// -- exento y no_gravado no llevan IVA, se traducen a 0.
+const alicuotaANumero = (a) => (a === '21' || a === '10.5' || a === '0') ? Number(a) : 0;
 // Bug real encontrado por revisión automática (13/08): sin esto, un typo como "150" en vez
 // de "15" en un % de descuento producía un total negativo en el resumen (y persistido, si
 // no fuera por el clamp del lado del servidor en actualizar_orden_compra/create()). Recibe
@@ -162,13 +166,23 @@ function OrdenesCompraSection() {
     setFacturaForm({
       numero_factura: '',
       fecha_factura: '',
-      items: itemsPendientes.map(({ i, maxFacturable }) => ({
-        producto_id: i.producto_id ?? null,
-        descripcion: i.descripcion,
-        cantidad: maxFacturable,
-        costo_unitario_neto: i.costo_unitario,
-        alicuota_iva: 21,
-      })),
+      // Bug real (04/09, auditoría de paridad Compras vs Ventas): acá se copiaba
+      // i.costo_unitario (SIEMPRE bruto, con IVA incluido -- ver comentario de
+      // FACTOR_IVA arriba) directo a costo_unitario_neto, y encima se hardcodeaba
+      // alicuota_iva=21 sin mirar la real del ítem. El formulario de abajo vuelve
+      // a sumarle IVA a ese valor ya bruto -- factura salía inflada ~alícuota%,
+      // con Crédito Fiscal declarado de más. Ahora se divide por el factor real
+      // de la alícuota del ítem antes de tratarlo como neto.
+      items: itemsPendientes.map(({ i, maxFacturable }) => {
+        const factor = FACTOR_IVA[i.alicuota_iva] ?? 1;
+        return {
+          producto_id: i.producto_id ?? null,
+          descripcion: i.descripcion,
+          cantidad: maxFacturable,
+          costo_unitario_neto: Math.round((Number(i.costo_unitario) / factor) * 100) / 100,
+          alicuota_iva: alicuotaANumero(i.alicuota_iva),
+        };
+      }),
     });
     setFacturaModal(true);
   };
@@ -564,6 +578,7 @@ function OrdenesCompraSection() {
         facturaModal={facturaModal} setFacturaModal={setFacturaModal}
         facturaForm={facturaForm} setFacturaForm={setFacturaForm}
         detalle={detalle}
+        moneda={detalle?.moneda ?? 'ARS'}
         handleRegistrarFactura={handleRegistrarFactura}
         registrarFacturaMutation={registrarFacturaMutation}
       />

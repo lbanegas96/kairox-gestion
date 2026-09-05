@@ -101,8 +101,8 @@ Compras tiene 3 (día/método de pago/proveedor) contra 4 de Ventas (+ "por list
 
 ## Plan de fases sugerido (mismo criterio que Listas de Precio A-D)
 
-1. **Fase 1 (🔴 urgente):** fix de IVA duplicado + moneda/TC hardcodeados en "Registrar Factura desde OC". Es un bug, no una feature nueva — la corrección es acotada a `OrdenesCompraSection.jsx` (2 líneas) + la RPC `registrar_factura_compra_oc` (mig. nueva, 1 línea).
-2. **Fase 2 (🟡):** Editar + historial para Facturas de Compra — portar el patrón ya probado de OC.
+1. **✅ Fase 1 (🔴 urgente) — CERRADA (04/09):** fix de IVA duplicado + moneda/TC hardcodeados en "Registrar Factura desde OC". mig.390 (`registrar_factura_compra_oc`) + `OrdenesCompraSection.jsx`/`ModalRegistrarFactura.jsx`. Probado con `BEGIN...ROLLBACK` simulando una OC en USD/350 (total pasó de $544.500 mal calculado a $450.000,03 correcto) y verificado en vivo contra OC-00005 real en el navegador (precio neto $24.793,39 = 30000/1.21, alícuota real 21%, sin registrar la factura real). Revisión `auditor-contable` del asiento automático: sin riesgo, `crearAsientoCompra` hereda los totales directo de la RPC, no los recalcula — el asiento queda bien imputado automáticamente. Facturas ya registradas ANTES del fix (con el cálculo viejo, infladas) se dejan como están — no se tocan retroactivamente (RT 17: un ajuste a un registro ya emitido se hace con un asiento de ajuste explícito, no reescribiendo el historial); pendiente que Luciano/Nadia revisen manualmente si alguna factura histórica quedó inflada desde que existe esta función (mig.332, 18/08).
+2. **Fase 2 (🟡, en curso):** Editar + historial para Facturas de Compra — portar el patrón ya probado de OC.
 3. **Fase 3 (🟡):** Cuenta Corriente de Proveedores a la par de Clientes (modal, filtros, PDF).
 4. **Fase 4 (🟡):** Reporte de Antigüedad de Saldos para Proveedores.
 5. **Fase 5 (🟢):** Mapa de Relaciones en NC/ND de Proveedor + agrupamiento "por categoría" en reporte de Compras.
@@ -111,4 +111,4 @@ Compras tiene 3 (día/método de pago/proveedor) contra 4 de Ventas (+ "por list
 
 ## Próximos pasos
 
-Este documento es un informe para revisar, no fue implementado todavía. Al retomar, decidir con Luciano si se ataca en el orden de fases de arriba o se prioriza distinto (la Fase 1 es la única con urgencia real de compliance).
+Fase 1 cerrada y en producción. Siguiendo el pedido de Luciano (04/09: "arranca por cada una de las fases en orden... realiza una prueba al término de cada una"), se continúa con la Fase 2 en el mismo orden.

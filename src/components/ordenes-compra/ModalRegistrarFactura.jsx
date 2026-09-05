@@ -9,6 +9,7 @@ function ModalRegistrarFactura({
   facturaModal, setFacturaModal,
   facturaForm, setFacturaForm,
   detalle,
+  moneda = 'ARS',
   handleRegistrarFactura,
   registrarFacturaMutation,
 }) {
@@ -101,7 +102,7 @@ function ModalRegistrarFactura({
                       </select>
                     </td>
                     <td className="py-1.5 text-right dark:text-kx-text">
-                      {formatCurrency((Number(item.cantidad) || 0) * (Number(item.costo_unitario_neto) || 0), 'ARS')}
+                      {formatCurrency((Number(item.cantidad) || 0) * (Number(item.costo_unitario_neto) || 0), moneda)}
                     </td>
                   </tr>
                 ))}
@@ -111,9 +112,9 @@ function ModalRegistrarFactura({
 
           <div className="flex justify-end">
             <div className="text-sm space-y-1 text-right">
-              <p className="text-kx-text-2">Neto: {formatCurrency(subtotalNeto, 'ARS')}</p>
-              <p className="text-kx-text-2">IVA: {formatCurrency(totalIva, 'ARS')}</p>
-              <p className="font-bold dark:text-kx-text">Total: {formatCurrency(total, 'ARS')}</p>
+              <p className="text-kx-text-2">Neto: {formatCurrency(subtotalNeto, moneda)}</p>
+              <p className="text-kx-text-2">IVA: {formatCurrency(totalIva, moneda)}</p>
+              <p className="font-bold dark:text-kx-text">Total: {formatCurrency(total, moneda)}</p>
             </div>
           </div>
 
