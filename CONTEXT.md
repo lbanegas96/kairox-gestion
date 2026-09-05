@@ -1,5 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Paridad Compras vs Ventas — Fases 1-3 CERRADAS, Fase 4 ya existía (04/09)
+
+Continuando `PLAN_PARIDAD_COMPRAS.md` fase por fase (ver sección de abajo para el detalle de
+Fases 1/2). Nuevo en esta tanda:
+
+**Fase 3 (🟡):** Cuenta Corriente de Proveedores a la par de Clientes — modal `size="wide"`,
+`proveedoresService.getCuentaCorriente` con filtros de fecha reales, botón "Descargar PDF" nuevo
+(`imprimirEstadoCuentaProveedor.jsx`, reutiliza `EstadoCuentaPDF.jsx` generalizado con
+`entidadLabel`/`esDebito` en vez de duplicar el componente). Sin migraciones — probado en vivo.
+
+**Fase 4 — segundo hallazgo corregido (mismo patrón que la Fase 2):** el informe original decía
+"sin reporte de Antigüedad de Saldos para Proveedores". Al retomar, se confirmó que **ya existe**
+— vive como una solapa dentro de `ProveedoresSection.jsx` ("Antigüedad de Deuda", mig.314, previa
+a esta sesión), reutilizando el mismo `TabAntiguedad.jsx` que usa Cartera de Clientes. El hallazgo
+original buscó solo en `reportDefinitions.jsx` (el módulo Reportes) y no encontró la solapa
+equivalente que vive en otro lugar. Verificado en vivo con datos reales — sin cambios de código.
+
+**Hallazgo aparte, sin tocar:** la solapa de Antigüedad muestra en vivo que las filas de prueba
+`TEST-PARCIAL-*`/`FAC-PROV-TEST-*` (proveedor "Alibaba", ya mencionadas al cerrar la Fase 2) están
+sumando **~$200.472,80 a la banda "0-30 días"** del reporte real. Sigue pendiente que Luciano
+decida si las anula o elimina.
+
+Sigue la Fase 5 (Mapa de Relaciones en NC/ND de Proveedor + agrupamiento "por categoría" en
+reporte de Compras) — ver más abajo.
+
+---
+
 ## ✅ Paridad Compras vs Ventas — Fases 1 y 2 CERRADAS y en producción (04/09)
 
 Luciano pidió atacar `PLAN_PARIDAD_COMPRAS.md` fase por fase, con prueba + revisión contable al
