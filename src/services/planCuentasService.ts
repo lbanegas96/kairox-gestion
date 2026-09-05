@@ -634,6 +634,46 @@ export const asientosAutoService = {
   },
 
   /**
+   * Reversa el asiento de una Compra cancelada (RPC cancelar_compra, mig.391)
+   * -- mismo patrón que crearAsientoReversaVenta: el asiento original
+   * (origen='compra') queda 'confirmado' tal cual quedó posteado, se crea uno
+   * NUEVO con debe/haber invertidos que lo neutraliza en el balance.
+   */
+  async crearAsientoReversaCompra(
+    empresaId: string,
+    userId: string,
+    params: { compraId: string; numeroFactura?: string | null; fecha: string }
+  ): Promise<void> {
+    const { data: original, error } = await supabase
+      .from('asientos_contables')
+      .select('id, asientos_items(cuenta_id, debe, haber, descripcion)')
+      .eq('empresa_id', empresaId)
+      .eq('origen', 'compra')
+      .eq('origen_id', params.compraId)
+      .eq('estado', 'confirmado')
+      .maybeSingle();
+    if (error || !original || !(original as any).asientos_items?.length) return;
+
+    const items = ((original as any).asientos_items as any[]).map((i) => ({
+      cuenta_id: i.cuenta_id,
+      debe: Number(i.haber),
+      haber: Number(i.debe),
+      descripcion: `Reversa — ${i.descripcion || ''}`,
+    }));
+
+    await asientosService.createAsientoAutomatico(
+      empresaId, userId,
+      {
+        fecha: params.fecha,
+        descripcion: `Reversa — Anulación Factura ${params.numeroFactura || 'S/N'}`,
+        origen: 'cancelacion_compra',
+        origen_id: params.compraId,
+      },
+      items
+    );
+  },
+
+  /**
    * Crea y confirma el asiento de una Nota de Crédito o Débito de CLIENTE.
    * Ambas SIEMPRE mueven Cuenta Corriente (nunca Caja — `crear_nota_credito`/
    * `crear_nota_debito_cliente` solo tocan `cuenta_corriente_movimientos`),

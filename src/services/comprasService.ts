@@ -84,6 +84,48 @@ export const comprasService = {
     if (error) throw new Error(error.message);
     return data as Compra;
   },
+
+  // Anulación real (mig.391, Fase 2 de PLAN_PARIDAD_COMPRAS.md) — simétrica a
+  // cancelar_factura del lado ventas: reversa stock, cantidad_facturada de la
+  // OC de origen (si vino de una), caja (si fue Efectivo) y Cuenta Corriente
+  // del proveedor. El asiento se reversa aparte, en el caller (mismo patrón
+  // que SaleDetailModal.jsx con crearAsientoReversaVenta).
+  async cancelar(
+    empresaId: string, userId: string, compraId: string, motivo?: string | null
+  ): Promise<{ compra_id: string; numero_factura: string | null; total: number }> {
+    const { data, error } = await supabase.rpc('cancelar_compra', {
+      p_empresa_id: empresaId,
+      p_user_id: userId,
+      p_compra_id: compraId,
+      p_motivo: motivo ?? null,
+    });
+    if (error) throw new Error(error.message);
+    return data as { compra_id: string; numero_factura: string | null; total: number };
+  },
+
+  // Historial de cambios — junta auditoría de cabecera (compras) e ítems
+  // (detalle_compras, filtrados por compra_id dentro del JSONB porque su
+  // propio registro_id es el id del ítem, no el de la compra). Mismo patrón
+  // que ordenesCompraService.getHistorial().
+  async getHistorial(compraId: string) {
+    const [cabeceraRes, itemsRes] = await Promise.all([
+      supabase
+        .from('audit_log')
+        .select('id, tabla, operacion, old_data, new_data, user_id, created_at')
+        .eq('tabla', 'compras')
+        .eq('registro_id', compraId),
+      supabase
+        .from('audit_log')
+        .select('id, tabla, operacion, old_data, new_data, user_id, created_at')
+        .eq('tabla', 'detalle_compras')
+        .or(`old_data->>compra_id.eq.${compraId},new_data->>compra_id.eq.${compraId}`),
+    ]);
+    if (cabeceraRes.error) throw new Error(cabeceraRes.error.message);
+    if (itemsRes.error) throw new Error(itemsRes.error.message);
+
+    return [...(cabeceraRes.data ?? []), ...(itemsRes.data ?? [])]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  },
 };
 
 export const COMPRAS_KEYS = {

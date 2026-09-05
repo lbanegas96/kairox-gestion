@@ -1,9 +1,21 @@
-import { Receipt, Network, FileMinus, FilePlus, Undo2, Copy } from 'lucide-react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Receipt, Network, FileMinus, FilePlus, Undo2, Copy, Ban, History, Code2, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { formatDateAR } from '@/lib/dateUtils';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useToast } from '@/components/ui/use-toast';
+import { formatDateAR, getTodayAR } from '@/lib/dateUtils';
+import { comprasService } from '@/services/comprasService';
+import { asientosAutoService } from '@/services/planCuentasService';
 import VerAsientoButton from '@/components/shared/VerAsientoButton';
 import MenuAccionesDocumento from '@/components/shared/documento/MenuAccionesDocumento';
+import HistorialCambiosDialog from '@/components/shared/documento/HistorialCambiosDialog';
 
 // Fase 2 (15/08): antes Factura de Compra era el único documento sin un modal
 // de detalle propio — una fila que se expandía inline en la tabla, sin totales
@@ -21,11 +33,59 @@ const ESTADO_LABELS = {
   anulada:   { label: 'Anulada',   className: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' },
 };
 
+// Campos de cabecera que vale la pena mostrar en el historial si cambiaron —
+// mismo criterio que CAMPOS_HISTORIAL en ModalDetalleOC.jsx.
+const CAMPOS_HISTORIAL = {
+  proveedor_id: 'Proveedor', forma_pago: 'Forma de pago', numero_factura: 'N° Factura',
+  total: 'Total', estado_pago: 'Estado', observaciones: 'Observaciones',
+};
+
 function ModalDetalleFacturaCompra({
   compra, onClose, onOpenMapa,
-  onCopiarNc, onCopiarNd, onDevolver, onDuplicar,
+  onCopiarNc, onCopiarNd, onDevolver, onDuplicar, onCancelado,
 }) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [showHistorial, setShowHistorial] = useState(false);
+  const [verCrudoId, setVerCrudoId] = useState(null);
+  const [showCancelarConfirm, setShowCancelarConfirm] = useState(false);
+  const [motivoCancelacion, setMotivoCancelacion] = useState('');
+  const [cancelando, setCancelando] = useState(false);
+
+  const { data: historial = [] } = useQuery({
+    queryKey: ['compra_historial', compra?.id],
+    queryFn: () => comprasService.getHistorial(compra.id),
+    enabled: !!compra?.id && showHistorial,
+  });
+
   if (!compra) return null;
+
+  const puedeCancelar = compra.estado_pago !== 'anulada';
+
+  const handleCancelarCompra = async () => {
+    setCancelando(true);
+    try {
+      const data = await comprasService.cancelar(user.empresa_id, user.id, compra.id, motivoCancelacion.trim() || null);
+      asientosAutoService.crearAsientoReversaCompra(user.empresa_id, user.id, {
+        compraId: compra.id,
+        numeroFactura: data?.numero_factura ?? compra.numero_factura,
+        fecha: getTodayAR(),
+      }).catch(e => console.warn('[Contabilidad] reversa compra:', e.message));
+
+      toast({
+        title: `Factura ${compra.numero_factura || 'S/N'} anulada`,
+        description: 'Se revirtió el stock, la caja (si hubo) y la cuenta corriente del proveedor.',
+      });
+      setShowCancelarConfirm(false);
+      setMotivoCancelacion('');
+      onCancelado?.();
+      onClose();
+    } catch (err) {
+      toast({ title: 'No se pudo anular la factura', description: err.message, variant: 'destructive' });
+    } finally {
+      setCancelando(false);
+    }
+  };
 
   const items = compra.detalle_compras ?? [];
   const estadoCfg = ESTADO_LABELS[compra.estado_pago] || ESTADO_LABELS.pendiente;
@@ -171,11 +231,13 @@ function ModalDetalleFacturaCompra({
           <Button variant="outline" onClick={onClose} className="dark:border-kx-border dark:text-slate-300">
             Cerrar
           </Button>
-          {/* Duplicar — pedido de Luciano (23/08): disponible pero no a mano
-              del resto de las acciones. Mismo criterio en Cotización/OC/Pedido. */}
+          {/* Duplicar/Historial — pedido de Luciano (23/08): disponible pero no
+              a mano del resto de las acciones. Mismo criterio en Cotización/
+              OC/Pedido. Historial nuevo (mig.391, Fase 2 paridad Compras). */}
           <MenuAccionesDocumento
             acciones={[
               onDuplicar && { label: 'Duplicar', icon: Copy, onClick: () => onDuplicar(compra) },
+              { label: 'Historial de cambios', icon: History, onClick: () => setShowHistorial(true) },
             ]}
           />
           {onCopiarNc && (
@@ -197,9 +259,109 @@ function ModalDetalleFacturaCompra({
               <Undo2 className="w-4 h-4" /> Devolver a proveedor
             </Button>
           )}
+          {/* Anular Factura — mig.391, Fase 2 de PLAN_PARIDAD_COMPRAS.md.
+              Simétrica a "Cancelar Factura" del lado ventas (SaleDetailModal.jsx). */}
+          {puedeCancelar && (
+            <Button
+              variant="outline"
+              onClick={() => setShowCancelarConfirm(true)}
+              className="gap-2 border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20"
+            >
+              <Ban className="w-4 h-4" /> Anular Factura
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
+
+      <AlertDialog open={showCancelarConfirm} onOpenChange={v => { if (!cancelando) { setShowCancelarConfirm(v); if (!v) setMotivoCancelacion(''); } }}>
+        <AlertDialogContent className="dark:bg-kx-bg dark:border-kx-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="dark:text-kx-text">
+              ¿Anular Factura {compra.numero_factura || 'S/N'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="dark:text-kx-text-2">
+              Se repone el stock recibido, se revierte el pago en caja (si lo hubo) y la deuda en
+              Cuenta Corriente del proveedor (si la hay). Queda un registro completo de la
+              reversión — nada se borra. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            value={motivoCancelacion}
+            onChange={e => setMotivoCancelacion(e.target.value)}
+            placeholder="Motivo (opcional) — ej. error de carga, factura duplicada..."
+            className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+            rows={2}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelando} className="dark:text-kx-text dark:border-kx-border">Volver</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancelarCompra} disabled={cancelando} className="bg-red-600 hover:bg-red-700 text-white">
+              {cancelando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Ban className="h-4 w-4 mr-2" />}
+              Sí, anular factura
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <HistorialCambiosDialog open={showHistorial} onOpenChange={setShowHistorial}>
+        {historial.length === 0 && (
+          <p className="text-kx-text-3 py-2">Sin cambios registrados todavía.</p>
+        )}
+        {historial.map(entry => (
+          <HistorialItemCompra key={`${entry.tabla}-${entry.id}`} entry={entry}
+            verCrudo={verCrudoId === `${entry.tabla}-${entry.id}`}
+            onToggleCrudo={() => setVerCrudoId(v => v === `${entry.tabla}-${entry.id}` ? null : `${entry.tabla}-${entry.id}`)}
+          />
+        ))}
+      </HistorialCambiosDialog>
     </Dialog>
+  );
+}
+
+// Traduce una fila cruda de audit_log a algo legible — mismo patrón que
+// HistorialItem en ModalDetalleOC.jsx/ModalDetalleCotizacion.jsx.
+function HistorialItemCompra({ entry, verCrudo, onToggleCrudo }) {
+  const fecha = new Date(entry.created_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+
+  const resumen = (() => {
+    if (entry.tabla === 'detalle_compras') {
+      const item = entry.new_data ?? entry.old_data;
+      if (entry.operacion === 'INSERT') return `Ítem agregado (x${item?.cantidad ?? '?'})`;
+      if (entry.operacion === 'DELETE') return `Ítem quitado`;
+      return `Ítem modificado`;
+    }
+    if (entry.operacion === 'INSERT') return 'Factura registrada';
+    if (entry.operacion === 'DELETE') return 'Factura eliminada';
+    const cambios = Object.entries(CAMPOS_HISTORIAL)
+      .filter(([campo]) => JSON.stringify(entry.old_data?.[campo]) !== JSON.stringify(entry.new_data?.[campo]))
+      .map(([campo, label]) => {
+        const antes = entry.old_data?.[campo];
+        const despues = entry.new_data?.[campo];
+        const fmtVal = (v) => {
+          if (v == null || v === '') return '—';
+          if (campo === 'estado_pago') return ESTADO_LABELS[v]?.label ?? v;
+          if (campo === 'total') return `$${Number(v).toLocaleString('es-AR')}`;
+          return String(v);
+        };
+        return `${label}: ${fmtVal(antes)} → ${fmtVal(despues)}`;
+      });
+    return cambios.length > 0 ? cambios.join(' · ') : 'Cambio sin campos relevantes visibles';
+  })();
+
+  return (
+    <div className="border-b border-kx-border dark:border-kx-border last:border-0 pb-2">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-kx-text-2 dark:text-kx-text-2">{resumen}</span>
+        <span className="text-kx-text-3 whitespace-nowrap">{fecha}</span>
+      </div>
+      <button type="button" onClick={onToggleCrudo} className="text-kx-text-3 hover:text-kx-text flex items-center gap-1 mt-0.5">
+        <Code2 className="w-3 h-3" /> {verCrudo ? 'Ocultar detalle técnico' : 'Ver detalle técnico'}
+      </button>
+      {verCrudo && (
+        <pre className="mt-1 p-2 bg-kx-surface-2 dark:bg-slate-900 rounded text-[10px] overflow-x-auto text-kx-text-2">
+          {JSON.stringify({ old: entry.old_data, new: entry.new_data }, null, 2)}
+        </pre>
+      )}
+    </div>
   );
 }
 

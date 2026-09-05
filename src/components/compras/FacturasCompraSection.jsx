@@ -341,6 +341,7 @@ function FacturasCompraSection() {
         onCopiarNd={(c) => { setDetalleCompra(null); abrirNd(c); }}
         onDevolver={(c) => { setDetalleCompra(null); abrirDevolucion(c); }}
         onDuplicar={(c) => { setDetalleCompra(null); setDuplicarTarget(c); }}
+        onCancelado={() => fetchCompras()}
       />
 
       <NuevaFacturaProveedorModal
