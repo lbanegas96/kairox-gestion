@@ -1,5 +1,44 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Paridad Compras vs Ventas — Fases 1 y 2 CERRADAS y en producción (04/09)
+
+Luciano pidió atacar `PLAN_PARIDAD_COMPRAS.md` fase por fase, con prueba + revisión contable al
+cierre de cada una. Fases 1 y 2 ya están en producción:
+
+**Fase 1 (🔴, mig.390):** el bug real de IVA duplicado al "Registrar Factura desde OC" — corregido.
+Ver detalle en la sección de más abajo (era la sección de tope antes de esta).
+
+**Fase 2 (🟡, mig.391) — el alcance CAMBIÓ durante la implementación**, hallazgo importante:
+el plan original decía "editar + historial para Facturas de Compra, portando el patrón de OC" —
+pero investigando se confirmó que la comparación estaba mal planteada. OC es un documento
+PRE-transaccional (como Cotización/Pedido, se edita ANTES de mover nada); una Factura (de Compra
+O de Venta) es POST-transaccional (ya movió stock/CxP/caja/asiento). Se confirmó en el código que
+**las Facturas de VENTA tampoco se editan por ítems una vez creadas** (no existe ninguna RPC
+`actualizar_venta`/`actualizar_factura`) — construir esa edición para Compras hubiera sido una
+asimetría NUEVA, no una corrección. La comparación correcta era Factura de Compra vs. Factura de
+Venta: ahí sí faltaba el equivalente de `cancelar_factura` (Ventas) — Compras no tenía ninguna
+forma de anular una factura ya registrada (ni siquiera `compras.estado_pago` admitía `'anulada'`,
+aunque el frontend ya tenía el badge/color puesto, anticipando la función que nunca se construyó).
+
+Se construyó `cancelar_compra` (mig.391), simétrica a `cancelar_factura`: revierte stock,
+`cantidad_facturada` de la OC de origen (si la factura vino de ahí), caja (si fue Efectivo) y
+Cuenta Corriente del proveedor — con los mismos guards (ya anulada, ya tiene pagos imputados).
+Se agregó también auditoría a `detalle_compras` (no la tenía) y un "Historial de cambios" visible
+en `ModalDetalleFacturaCompra.jsx`. Probado con `BEGIN...ROLLBACK` contra Nalux real (compra ligada
+a OC, compra en Efectivo, doble anulación bloqueada) y en vivo en el navegador. Revisión
+`auditor-contable`: circuito equivalente a Ventas, sin riesgos bloqueantes — 2 mejoras 🟢 anotadas
+para más adelante (columna `compra_id` en `movimientos_caja` para el matching de reversa sin
+ambigüedad; no anular una factura que ya tuvo una NC de Proveedor parcial, ajustar esos casos a mano).
+
+**Hallazgo aparte, sin tocar:** al probar en vivo aparecieron varias filas `FAC-PROV-TEST-*` /
+`TEST-PARCIAL-*` en la tabla `compras` de producción — artefactos de prueba de una sesión anterior
+(no de esta), ligados a la OC-00003 con proveedor "Alibaba". No se tocaron — quedan para que
+Luciano decida si limpiarlos.
+
+Sigue la Fase 3 (Cuenta Corriente de Proveedores a la par de Clientes) — ver más abajo.
+
+---
+
 ## 📋 Auditoría de paridad Compras vs Ventas — informe listo, sin implementar (04/09)
 
 Luciano pidió, al cierre del trabajo de Listas de Precio, auditar qué le falta a Compras para
