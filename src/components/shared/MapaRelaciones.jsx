@@ -863,7 +863,7 @@ function MapaRelaciones({
     fetchDuplicadoInfo('factura_compra', idCompra);
     try {
       const { data: compra } = await supabase.from('compras')
-        .select('id, numero_factura, total, fecha, proveedor_id, proveedores(nombre)')
+        .select('id, numero_factura, total, fecha, proveedor_id, estado_pago, proveedores(nombre)')
         .eq('id', idCompra).single();
 
       if (!compra) { setMapa(null); return; }
@@ -1026,6 +1026,10 @@ function MapaRelaciones({
     numero: mapa.compra.numero_factura || 'S/N',
     fecha:  mapa.compra.fecha,
     total:  mapa.compra.total,
+    // Mismo bug que compNodo (Ventas, 23/08) del lado Compras — el SELECT ya
+    // trae estado_pago pero nunca se lo pasaba al nodo, una Factura de Compra
+    // anulada se veía idéntica a una vigente (hallazgo Fase 5, 05/09).
+    estado: mapa.compra.estado_pago,
   } : null;
 
   // ── Sin relaciones ───────────────────────────────────────────────────────────

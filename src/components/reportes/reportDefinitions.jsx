@@ -410,6 +410,7 @@ const GROUP_BY_OPTIONS_POR_REPORTE = {
     { value: 'dia',         label: 'Por día' },
     { value: 'metodo_pago', label: 'Por método de pago' },
     { value: 'proveedor',   label: 'Por proveedor' },
+    { value: 'categoria',   label: 'Por categoría de producto' },
   ],
   financiero: [
     { value: 'none',        label: 'Sin agrupar' },
@@ -440,6 +441,7 @@ const GROUP_KEY_FN_POR_REPORTE = {
     dia:         (r) => formatDateAR(r.fecha),
     metodo_pago: (r) => r.forma_pago || 'Sin método',
     proveedor:   (r) => r.proveedor || 'Sin proveedor',
+    categoria:   (r) => r.categoria || 'Sin categoría',
   },
   financiero: {
     dia:         (r) => formatDateAR(r.fecha),

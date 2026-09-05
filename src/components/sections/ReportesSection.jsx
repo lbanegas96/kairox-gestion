@@ -184,7 +184,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
       else if (selectedReport.id === 'compras') {
          let query = supabase
           .from('compras')
-          .select('*, proveedores(nombre)')
+          .select('*, proveedores(nombre), detalle_compras(productos(categoria_id, categorias(nombre)))')
           .eq('empresa_id', user.empresa_id)
           .gte('fecha', start)
           .lte('fecha', end);
@@ -193,14 +193,29 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
 
         if (error) throw error;
 
-        data = purchases.map(p => ({
-          id: p.id,
-          fecha: p.fecha,
-          proveedor: p.proveedores?.nombre || 'Desconocido',
-          numero_factura: p.numero_factura,
-          forma_pago: p.forma_pago,
-          total: p.total
-        }));
+        data = purchases.map(p => {
+          // Una Factura de Compra puede traer ítems de más de una categoría
+          // (confirmado con datos reales) — a diferencia de "por lista de
+          // precios" en Ventas (1 FK en el header), acá no hay un valor único
+          // y honesto salvo que todos los ítems coincidan.
+          const categoriasItems = [...new Set(
+            (p.detalle_compras || []).map(d => d.productos?.categorias?.nombre).filter(Boolean)
+          )];
+          const categoria = categoriasItems.length === 0
+            ? 'Sin categoría'
+            : categoriasItems.length === 1
+              ? categoriasItems[0]
+              : 'Varias categorías';
+          return {
+            id: p.id,
+            fecha: p.fecha,
+            proveedor: p.proveedores?.nombre || 'Desconocido',
+            numero_factura: p.numero_factura,
+            forma_pago: p.forma_pago,
+            categoria,
+            total: p.total
+          };
+        });
 
         setPreviousPeriodStats(await fetchPreviousPeriodStats('compras', {
           centro_costo_id: centroCostoId,

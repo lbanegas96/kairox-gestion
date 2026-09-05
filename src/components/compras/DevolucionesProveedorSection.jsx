@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RotateCcw, FileWarning, FileMinus, ChevronDown, ChevronRight, Package, Ban, Loader2, Copy } from 'lucide-react';
+import { RotateCcw, FileWarning, FileMinus, ChevronDown, ChevronRight, Package, Ban, Loader2, Copy, Network } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { formatDateAR, getTodayAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
 import { asientosAutoService } from '@/services/planCuentasService';
 import ConfirmDuplicarDialog from '@/components/shared/ConfirmDuplicarDialog';
+import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import NuevaNCProveedorModal from './NuevaNCProveedorModal';
 import NuevaNotaDebitoModal from '@/components/shared/NuevaNotaDebitoModal';
 
@@ -52,7 +53,7 @@ function CompensacionBadge({ comp }) {
   return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${cfg.className}`}>{cfg.label}</span>;
 }
 
-function DevolucionesTab({ onNavigate }) {
+function DevolucionesTab({ onNavigate, onOpenMapa }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [devoluciones, setDevoluciones] = useState([]);
@@ -113,13 +114,14 @@ function DevolucionesTab({ onNavigate }) {
               <th className="text-left p-3 font-semibold text-kx-text-2">Compensación</th>
               <th className="text-left p-3 font-semibold text-kx-text-2">Stock</th>
               <th className="text-center p-3 font-semibold text-kx-text-2">Ítems</th>
+              <th className="text-center p-3 font-semibold text-kx-text-2">Acc.</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-kx-border">
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <tr key={i}>
-                  {Array.from({ length: 8 }).map((_, j) => (
+                  {Array.from({ length: 9 }).map((_, j) => (
                     <td key={j} className="p-3">
                       <div className="h-4 bg-kx-surface-2 rounded animate-pulse w-16" />
                     </td>
@@ -128,7 +130,7 @@ function DevolucionesTab({ onNavigate }) {
               ))
             ) : devoluciones.length === 0 ? (
               <tr>
-                <td colSpan={8} className="p-12 text-center text-kx-text-3">
+                <td colSpan={9} className="p-12 text-center text-kx-text-3">
                   <RotateCcw className="w-10 h-10 mx-auto mb-3 opacity-20" />
                   <p className="font-medium text-kx-text-2">No hay devoluciones a proveedores</p>
                 </td>
@@ -182,12 +184,23 @@ function DevolucionesTab({ onNavigate }) {
                         {dev.reingresa_stock ? 'Egresó stock' : 'Sin movimiento'}
                       </td>
                       <td className="p-3 text-center text-kx-text-2">{items.length}</td>
+                      <td className="p-3 text-center">
+                        {dev.compra_id && (
+                          <button
+                            className="text-kx-text-3 hover:text-[rgb(var(--kx-violet))] transition-colors"
+                            title="Mapa de relaciones"
+                            onClick={e => { e.stopPropagation(); onOpenMapa?.(dev.compra_id); }}
+                          >
+                            <Network className="h-4 w-4" />
+                          </button>
+                        )}
+                      </td>
                     </tr>
 
                     {isOpen && items.length > 0 && (
                       <tr>
                         <td />
-                        <td colSpan={7} className="pb-3 pr-3">
+                        <td colSpan={8} className="pb-3 pr-3">
                           <div className="bg-kx-surface-2 rounded-lg border border-kx-border p-3">
                             <p className="text-xs font-semibold text-kx-text-3 uppercase mb-2">Ítems devueltos</p>
                             <div className="space-y-1">
@@ -254,7 +267,7 @@ function DevolucionesTab({ onNavigate }) {
   );
 }
 
-function NotasDebitoRecibidas() {
+function NotasDebitoRecibidas({ onOpenMapa }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [notas, setNotas]     = useState([]);
@@ -271,7 +284,7 @@ function NotasDebitoRecibidas() {
     setLoading(true);
     supabase
       .from('notas_debito')
-      .select('id, numero_nd, fecha, concepto, monto, neto_gravado, iva_discriminado, tipo, estado, proveedor_id, proveedores(nombre)')
+      .select('id, numero_nd, fecha, concepto, monto, neto_gravado, iva_discriminado, tipo, estado, proveedor_id, compra_id, proveedores(nombre)')
       .eq('empresa_id', user.empresa_id)
       .eq('tipo', 'recibida')
       .order('created_at', { ascending: false })
@@ -388,6 +401,15 @@ function NotasDebitoRecibidas() {
                           <Ban className="h-3 w-3" /> Cancelar
                         </Button>
                       )}
+                      {nd.compra_id && (
+                        <button
+                          className="text-kx-text-3 hover:text-[rgb(var(--kx-violet))] transition-colors p-1"
+                          title="Mapa de relaciones"
+                          onClick={() => onOpenMapa?.(nd.compra_id)}
+                        >
+                          <Network className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -440,7 +462,7 @@ function NotasDebitoRecibidas() {
   );
 }
 
-function NotasCreditoRecibidas() {
+function NotasCreditoRecibidas({ onOpenMapa }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [notas, setNotas]     = useState([]);
@@ -457,7 +479,7 @@ function NotasCreditoRecibidas() {
     setLoading(true);
     supabase
       .from('notas_credito_proveedor')
-      .select('id, numero_ncp, fecha, motivo, monto, neto_gravado, iva_discriminado, reembolso_efectivo, estado, proveedor_id, proveedores(nombre)')
+      .select('id, numero_ncp, fecha, motivo, monto, neto_gravado, iva_discriminado, reembolso_efectivo, estado, proveedor_id, compra_id, proveedores(nombre)')
       .eq('empresa_id', user.empresa_id)
       .order('fecha', { ascending: false })
       .then(({ data, error }) => {
@@ -579,6 +601,15 @@ function NotasCreditoRecibidas() {
                       {nc.estado !== 'cancelada' && nc.reembolso_efectivo && (
                         <span className="text-2xs text-kx-text-3 italic">Cobrada en efectivo</span>
                       )}
+                      {nc.compra_id && (
+                        <button
+                          className="text-kx-text-3 hover:text-[rgb(var(--kx-violet))] transition-colors p-1"
+                          title="Mapa de relaciones"
+                          onClick={() => onOpenMapa?.(nc.compra_id)}
+                        >
+                          <Network className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -633,6 +664,9 @@ function NotasCreditoRecibidas() {
 
 function DevolucionesProveedorSection({ onNavigate }) {
   const [tab, setTab] = useState('devoluciones');
+  const [mapaCompraId, setMapaCompraId] = useState(null);
+  const [isMapaOpen, setIsMapaOpen] = useState(false);
+  const abrirMapa = (compraId) => { setMapaCompraId(compraId); setIsMapaOpen(true); };
 
   const tabClass = [
     'rounded-none rounded-t-sm px-4 py-2 text-sm border-b-2 transition-colors',
@@ -660,17 +694,24 @@ function DevolucionesProveedorSection({ onNavigate }) {
         </TabsList>
 
         <TabsContent value="devoluciones" className="mt-4">
-          <DevolucionesTab onNavigate={onNavigate} />
+          <DevolucionesTab onNavigate={onNavigate} onOpenMapa={abrirMapa} />
         </TabsContent>
 
         <TabsContent value="notas_debito" className="mt-4">
-          <NotasDebitoRecibidas />
+          <NotasDebitoRecibidas onOpenMapa={abrirMapa} />
         </TabsContent>
 
         <TabsContent value="notas_credito" className="mt-4">
-          <NotasCreditoRecibidas />
+          <NotasCreditoRecibidas onOpenMapa={abrirMapa} />
         </TabsContent>
       </Tabs>
+
+      <MapaRelaciones
+        open={isMapaOpen}
+        onOpenChange={setIsMapaOpen}
+        compraId={mapaCompraId}
+        onNavigate={onNavigate}
+      />
     </div>
   );
 }
