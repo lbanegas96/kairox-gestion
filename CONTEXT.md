@@ -1,5 +1,38 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Paridad Compras vs Ventas — PLAN COMPLETO, las 5 fases cerradas (05/09)
+
+Cierre de `PLAN_PARIDAD_COMPRAS.md` — última fase (5) hecha y en producción. Detalle de Fases
+1-4 en la sección de abajo.
+
+**Fase 5 (🟢):** 2 cambios, ninguno con migración — Mapa de Relaciones en NC/ND de Proveedor
+(`DevolucionesProveedorSection.jsx` ahora abre `<MapaRelaciones compraId={...}>` desde sus 3
+solapas — Devoluciones, ND y NC Recibidas — reusando el componente ya existente sin tocarlo) y
+un nuevo agrupamiento "Por categoría de producto" en el reporte de Compras (`reportDefinitions.jsx`
++ `ReportesSection.jsx`): una factura con ítems de más de una categoría se agrupa como "Varias
+categorías" en vez de asumir la primera — confirmado con SQL real contra Nalux que sí existen
+facturas mixtas.
+
+**Hallazgo real, corregido en el mismo commit:** al pedirle a `auditor-contable` que revisara esta
+fase, encontró que `MapaRelaciones.jsx` nunca pasaba `estado_pago` al nodo de una Factura de Compra
+(mismo bug que ya se había corregido del lado Ventas el 23/08) — una factura **anulada** (la función
+nueva de la Fase 2) se veía en el Mapa idéntica a una vigente, sin ningún indicio. Fix de 2 líneas
+(agregar `estado_pago` al SELECT + al nodo); verificado en vivo que una factura "Pagada" ahora
+muestra su badge verde en el Mapa.
+
+**Hallazgo aparte, sin tocar (task spawneada por separado):** verificando en vivo apareció un error
+400 real en consola — la solapa "Antigüedad de Deuda" de Proveedores (mig.314) intenta leer
+`proveedores.saldo_actual`, columna que no existe (a diferencia de `clientes`, que sí la tiene). El
+error se traga en silencio, así que la reconciliación contra pagos sin imputar que esa solapa
+agregó específicamente nunca se ejecuta. Gap real del motor de aging, independiente de este plan
+— no se tocó en esta sesión.
+
+**Con esto, Compras queda a la par de Ventas** en Document Flow, motor contable (asientos +
+reversión de stock/CC/caja), Cuenta Corriente y reporting — el pedido original de Luciano
+("que quede operativo como Ventas") está cumplido.
+
+---
+
 ## ✅ Paridad Compras vs Ventas — Fases 1-3 CERRADAS, Fase 4 ya existía (04/09)
 
 Continuando `PLAN_PARIDAD_COMPRAS.md` fase por fase (ver sección de abajo para el detalle de
