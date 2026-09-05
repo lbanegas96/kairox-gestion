@@ -72,7 +72,7 @@ export async function imprimirEstadoCuenta({ clienteId, empresaId, fechaDesde, f
     const referencia = isDebe
       ? (m.comprobante_id ? formatNumeroComprobante(comprobantesMap[m.comprobante_id]) : null)
       : (m.metodo_cobro || null);
-    return { ...m, saldo: saldoCorrido, referencia };
+    return { ...m, saldo: saldoCorrido, esDebito: isDebe, referencia };
   });
 
   const empresa = await getEmpresaParaPDF(empresaId);

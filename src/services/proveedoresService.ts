@@ -5,7 +5,7 @@ export const PROV_KEYS = {
   all:     (empresaId: string) => ['proveedores', empresaId] as const,
   list:    (empresaId: string, f?: object) => ['proveedores', empresaId, 'list', f] as const,
   detail:  (id: string) => ['proveedor', id] as const,
-  cuentaCorriente: (id: string) => ['proveedor', id, 'cuentaCorriente'] as const,
+  cuentaCorriente: (id: string, fechaDesde?: string, fechaHasta?: string) => ['proveedor', id, 'cuentaCorriente', fechaDesde, fechaHasta] as const,
   historial:       (id: string) => ['proveedor', id, 'historial'] as const,
 };
 
@@ -110,14 +110,26 @@ export async function getStats(empresaId: string) {
 
 // ─── Cuenta Corriente ─────────────────────────────────────────────────────────
 
-export async function getCuentaCorriente(proveedorId: string, empresaId: string) {
-  const { data, error } = await supabase
+// Fase 3 de PLAN_PARIDAD_COMPRAS.md (04/09): filtros de fecha reales, mismo
+// criterio que ClientDetailModal.jsx — sin filtro, se mantiene el
+// comportamiento de siempre (últimos 100); con filtro, trae TODO el rango
+// (sin límite artificial), filtrando por `fecha` (fecha de negocio), no por
+// `created_at`.
+export async function getCuentaCorriente(
+  proveedorId: string, empresaId: string,
+  { fechaDesde, fechaHasta }: { fechaDesde?: string; fechaHasta?: string } = {}
+) {
+  let query = supabase
     .from('cuenta_corriente_proveedores')
     .select('*')
     .eq('proveedor_id', proveedorId)
     .eq('empresa_id', empresaId)
-    .order('fecha', { ascending: false })
-    .limit(100);
+    .order('fecha', { ascending: false });
+  if (fechaDesde) query = query.gte('fecha', fechaDesde);
+  if (fechaHasta) query = query.lte('fecha', `${fechaHasta}T23:59:59`);
+  if (!fechaDesde && !fechaHasta) query = query.limit(100);
+
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return data as MovimientoCCP[];
 }

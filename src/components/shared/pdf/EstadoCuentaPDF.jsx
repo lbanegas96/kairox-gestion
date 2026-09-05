@@ -220,10 +220,15 @@ const formatFechaHora = (iso) => {
 export function EstadoCuentaPDF({ estadoCuenta }) {
   const {
     cliente = {},
+    // Fase 3 de PLAN_PARIDAD_COMPRAS.md (04/09): mismo componente para el
+    // Estado de Cuenta de Proveedores -- entidadLabel cambia "Cliente" por
+    // "Proveedor" en el recuadro, el resto del documento es idéntico
+    // (una compra pendiente de pagar es, ni más ni menos, una deuda propia).
+    entidadLabel = 'Cliente',
     fechaDesde,
     fechaHasta,
     saldoAnterior = 0,
-    movimientos = [], // ya vienen en orden cronológico con .saldo (corrido) calculado
+    movimientos = [], // ya vienen en orden cronológico con .saldo (corrido) y .esDebito calculados
     totalDebe = 0,
     totalHaber = 0,
     saldoFinal = 0,
@@ -261,7 +266,7 @@ export function EstadoCuentaPDF({ estadoCuenta }) {
         {/* ── CLIENTE ────────────────────────────────────────────────── */}
         <View style={styles.sectionBox}>
           <View>
-            <Text style={styles.sectionTitle}>Cliente</Text>
+            <Text style={styles.sectionTitle}>{entidadLabel}</Text>
             <Text style={styles.receptorNombre}>{cliente.nombre}</Text>
             {cliente.documento ? <Text style={styles.receptorDato}>CUIT/DNI: {cliente.documento}</Text> : null}
           </View>
@@ -287,7 +292,13 @@ export function EstadoCuentaPDF({ estadoCuenta }) {
             </View>
           ) : (
             movimientos.map((mov, i) => {
-              const isDebe = mov.tipo === 'DEBE';
+              // esDebito lo calcula el caller (imprimirEstadoCuenta.jsx /
+              // imprimirEstadoCuentaProveedor.jsx) -- cada uno conoce el
+              // vocabulario real de su propia tabla (DEBE/HABER para
+              // Clientes, compra/pago/nota_credito/nota_debito para
+              // Proveedores). Fallback a 'DEBE' por compatibilidad si algún
+              // caller viejo no lo manda.
+              const isDebe = mov.esDebito ?? (mov.tipo === 'DEBE');
               return (
                 <View key={mov.id || i} style={[styles.tableRow, i % 2 === 1 ? styles.tableRowAlt : {}]} wrap={false}>
                   <Text style={[styles.tdText, { flex: 2.2 }]}>{formatFecha(mov.fecha)}</Text>

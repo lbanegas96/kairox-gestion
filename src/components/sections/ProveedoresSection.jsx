@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Truck, Plus, Search, Edit, Eye, UserX, UserCheck,
-  DollarSign, FileText, ShoppingBag, Banknote, RefreshCw, Clock
+  DollarSign, FileText, ShoppingBag, Banknote, RefreshCw, Clock, FileDown, Loader2
 } from 'lucide-react';
 import PaymentRunModal from '@/components/proveedores/PaymentRunModal';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ import { parseNumberLocale } from '@/lib/currencyUtils';
 import { getEmpresaParaPDF } from '@/lib/empresaUtils';
 import TabAntiguedad from '@/components/cuenta-corriente/TabAntiguedad';
 import { imprimirReciboPago } from '@/lib/imprimirRecibo';
+import { imprimirEstadoCuentaProveedor } from '@/lib/imprimirEstadoCuentaProveedor';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const CONDICIONES_IVA = ['RI', 'Monotributo', 'Exento', 'CF', 'No Categorizado'];
@@ -65,6 +66,11 @@ function ProveedoresSection() {
   const [facturasAbiertas, setFacturasAbiertas] = useState([]);
   const [imputaciones, setImputaciones] = useState({}); // { compra_id: "monto string" }
   const [imputacionesFX, setImputacionesFX] = useState({}); // { compra_id: "monto FX string" } — compras en moneda extranjera
+  // Fase 3 de PLAN_PARIDAD_COMPRAS.md (04/09) — filtros de fecha + PDF de
+  // Estado de Cuenta, mismo criterio que ClientDetailModal.jsx del lado clientes.
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
+  const [descargandoPDF, setDescargandoPDF] = useState(false);
 
   const activoFilter = filtroActivo === 'activos' ? true : filtroActivo === 'inactivos' ? false : undefined;
 
@@ -111,8 +117,8 @@ function ProveedoresSection() {
   });
 
   const { data: cuentaCorriente = [] } = useQuery({
-    queryKey: PROV_KEYS.cuentaCorriente(detalleId),
-    queryFn: () => proveedoresService.getCuentaCorriente(detalleId, empresaId),
+    queryKey: PROV_KEYS.cuentaCorriente(detalleId, fechaDesde, fechaHasta),
+    queryFn: () => proveedoresService.getCuentaCorriente(detalleId, empresaId, { fechaDesde, fechaHasta }),
     enabled: !!detalleId,
   });
 
@@ -286,6 +292,22 @@ function ProveedoresSection() {
       numero_factura: numerosPorId[f.compra_id]?.numero_factura || 'S/N',
       fecha: numerosPorId[f.compra_id]?.fecha,
     })));
+  };
+
+  const handleDescargarPDFProveedor = async () => {
+    setDescargandoPDF(true);
+    try {
+      await imprimirEstadoCuentaProveedor({
+        proveedorId: detalleId,
+        empresaId,
+        fechaDesde: fechaDesde || null,
+        fechaHasta: fechaHasta || null,
+      });
+    } catch (error) {
+      toast({ title: 'No se pudo generar el PDF', description: error.message, variant: 'destructive' });
+    } finally {
+      setDescargandoPDF(false);
+    }
   };
 
   const openPagoDialog = () => {
@@ -701,9 +723,9 @@ function ProveedoresSection() {
       </Dialog>
 
       {/* ── Panel Detalle ────────────────────────────────────────────────────── */}
-      <Dialog open={!!detalleId} onOpenChange={(o) => { if (!o) setDetalleId(null); }}>
-        <DialogContent className="max-w-3xl dark:bg-kx-bg dark:border-kx-border max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+      <Dialog open={!!detalleId} onOpenChange={(o) => { if (!o) { setDetalleId(null); setFechaDesde(''); setFechaHasta(''); } }}>
+        <DialogContent size="wide" className="dark:bg-kx-bg dark:border-kx-border">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b border-kx-border dark:border-kx-border">
             <DialogTitle className="dark:text-kx-text flex items-center gap-2">
               <Truck className="w-5 h-5 text-indigo-600 dark:text-indigo-500" /> {detalle?.nombre}
             </DialogTitle>
@@ -712,8 +734,8 @@ function ProveedoresSection() {
             </DialogDescription>
           </DialogHeader>
 
-          <Tabs defaultValue="cuentaCorriente">
-            <TabsList className="bg-transparent gap-2">
+          <Tabs defaultValue="cuentaCorriente" className="flex flex-1 flex-col overflow-hidden min-h-0 px-6">
+            <TabsList className="bg-transparent gap-2 shrink-0 pt-4">
               <TabsTrigger value="cuentaCorriente" className="data-[state=active]:bg-indigo-500 data-[state=active]:text-white bg-slate-100 dark:bg-kx-surface rounded-md px-4 py-2 text-slate-500 dark:text-kx-text-2">
                 <Banknote className="w-4 h-4 mr-2" /> Cuenta Corriente
               </TabsTrigger>
@@ -726,8 +748,8 @@ function ProveedoresSection() {
             </TabsList>
 
             {/* Tab: Cuenta Corriente */}
-            <TabsContent value="cuentaCorriente" className="space-y-4 mt-4">
-              <div className="flex items-center justify-between">
+            <TabsContent value="cuentaCorriente" className="flex-1 min-h-0 overflow-y-auto space-y-4 mt-4 pb-4">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="p-3 rounded-lg bg-kx-surface-2 dark:bg-kx-surface border border-kx-border dark:border-kx-border">
                   <p className="text-xs text-kx-text-3 uppercase">Saldo Deuda</p>
                   <p className={`text-2xl font-bold font-mono ${saldo > 0 ? 'text-kx-red' : 'text-kx-green'}`}>
@@ -739,6 +761,43 @@ function ProveedoresSection() {
                   <Banknote className="w-4 h-4" /> Registrar Pago
                 </Button>
               </div>
+
+              {/* Filtros de fecha + PDF — Fase 3 de PLAN_PARIDAD_COMPRAS.md (04/09),
+                  mismo patrón que ClientDetailModal.jsx del lado clientes. */}
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <h4 className="font-semibold text-slate-700 dark:text-kx-text text-sm flex items-center gap-2 uppercase tracking-wider">
+                  <Clock className="h-4 w-4 text-kx-text-3" /> Historial de Movimientos
+                </h4>
+                <div className="flex items-end gap-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="ccp-fecha-desde" className="text-2xs text-kx-text-3 uppercase">Desde</Label>
+                    <Input id="ccp-fecha-desde" type="date" value={fechaDesde}
+                      onChange={e => setFechaDesde(e.target.value)}
+                      className="h-8 text-xs w-36 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="ccp-fecha-hasta" className="text-2xs text-kx-text-3 uppercase">Hasta</Label>
+                    <Input id="ccp-fecha-hasta" type="date" value={fechaHasta}
+                      onChange={e => setFechaHasta(e.target.value)}
+                      className="h-8 text-xs w-36 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
+                  </div>
+                  {(fechaDesde || fechaHasta) && (
+                    <Button variant="ghost" size="sm"
+                      onClick={() => { setFechaDesde(''); setFechaHasta(''); }}
+                      className="h-8 text-xs text-kx-text-3 hover:text-kx-text">
+                      Limpiar
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={handleDescargarPDFProveedor} disabled={descargandoPDF}
+                    className="h-8 text-xs dark:text-kx-text dark:border-kx-border">
+                    {descargandoPDF ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5 mr-1.5" />}
+                    Descargar PDF
+                  </Button>
+                </div>
+              </div>
+              {!fechaDesde && !fechaHasta && (
+                <p className="text-2xs text-kx-text-3 -mt-2">Mostrando los últimos 100 movimientos. Filtrá por fecha para ver un rango completo.</p>
+              )}
 
               <div className="rounded-xl border border-kx-border dark:border-kx-border overflow-hidden">
                 <table className="w-full text-sm">
@@ -786,7 +845,7 @@ function ProveedoresSection() {
             </TabsContent>
 
             {/* Tab: Historial OC */}
-            <TabsContent value="historial" className="mt-4">
+            <TabsContent value="historial" className="flex-1 min-h-0 overflow-y-auto mt-4 pb-4">
               <div className="rounded-xl border border-kx-border dark:border-kx-border overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-kx-surface-2 dark:bg-slate-900/50 text-xs uppercase text-slate-500 dark:text-kx-text-2">
@@ -816,7 +875,7 @@ function ProveedoresSection() {
             </TabsContent>
 
             {/* Tab: Ficha */}
-            <TabsContent value="ficha" className="mt-4">
+            <TabsContent value="ficha" className="flex-1 min-h-0 overflow-y-auto mt-4 pb-4">
               {detalle && (
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   {[
@@ -849,7 +908,7 @@ function ProveedoresSection() {
             </TabsContent>
           </Tabs>
 
-          <DialogFooter>
+          <DialogFooter className="shrink-0 px-6 py-4 border-t border-kx-border dark:border-kx-border">
             <Button variant="outline" onClick={() => openEditar(detalle)} className="dark:border-kx-border dark:text-slate-300">
               <Edit className="w-4 h-4 mr-2" /> Editar
             </Button>
