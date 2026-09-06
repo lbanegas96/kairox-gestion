@@ -1,5 +1,17 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🧹 Limpieza de datos de prueba en Compras — RESUELTO (05/09)
+
+A pedido explícito de Luciano se eliminaron de producción las 4 facturas de prueba que quedaron
+flotando desde una sesión anterior (`TEST-PARCIAL-001/002`, `FAC-PROV-TEST-001/002`, proveedor
+"Alibaba", ligadas a OC-00003) — inflaban ~$200.472,80 la banda "0-30 días" del aging real de
+Proveedores. Borrado en una sola transacción: las 4 `compras` + 5 líneas de `detalle_compras` + 4
+registros de `cuenta_corriente_proveedores` + 4 asientos contables (12 líneas). También se corrigió
+`cantidad_facturada` de "Batidora Eléctrica" en OC-00003 (volvió a 0 — todo lo facturado venía de
+una sola de esas facturas falsas) y el estado de la OC volvió a `'recibida'`, para no dejar el
+3-way match de esa orden en un estado inconsistente. Quedan otras 4 compras del mismo proveedor
+"Alibaba" (~$78.958, sin prefijo de test) que no se tocaron — no confirmadas como descartables.
+
 ## ✅ Paridad Compras vs Ventas — PLAN COMPLETO, las 5 fases cerradas (05/09)
 
 Cierre de `PLAN_PARIDAD_COMPRAS.md` — última fase (5) hecha y en producción. Detalle de Fases

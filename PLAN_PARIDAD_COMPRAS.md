@@ -129,11 +129,18 @@ monto crudo `saldo_pendiente`. No sobreestima por mucho en la mayoría de los ca
 gap real del motor de aging de Proveedores, independiente de este plan. Se dejó anotado como
 tarea aparte (no se tocó en esta sesión) para no mezclar alcance con el cierre de Fase 5.
 
-## Hallazgo aparte, pendiente de decisión de Luciano
+## Hallazgo aparte — RESUELTO (05/09)
 
-Verificado en vivo en la solapa "Antigüedad de Deuda" de Proveedores: las filas de prueba
-`TEST-PARCIAL-001/002`, `FAC-PROV-TEST-001/002` (proveedor "Alibaba", ligadas a OC-00003) siguen
-en producción y **suman ~$200.472,80 a la banda "0-30 días"** del reporte real — no son datos de
-esta sesión, quedaron de una prueba anterior. No se tocaron. Si Luciano confirma que son
-descartables, se pueden anular (vía el nuevo botón "Anular Factura" de la Fase 2, que además las
-saca del cálculo de aging) o eliminar directamente.
+Las filas de prueba `TEST-PARCIAL-001/002`, `FAC-PROV-TEST-001/002` (proveedor "Alibaba", ligadas
+a OC-00003), que sumaban ~$200.472,80 a la banda "0-30 días" del aging real, fueron eliminadas
+directamente de producción a pedido explícito de Luciano. Limpieza completa en una transacción:
+las 4 `compras` + sus 5 líneas en `detalle_compras` + sus 4 registros en
+`cuenta_corriente_proveedores` + sus 4 asientos contables (12 líneas). También se corrigió
+`cantidad_facturada` de "Batidora Eléctrica" en OC-00003 (volvió a 0 — los 10 facturados venían
+solo de `TEST-PARCIAL-001`, y de no corregirse hubiera bloqueado el 3-way match real de esa OC), y
+el estado de OC-00003 volvió a `'recibida'` (recibida al 100%, sin ninguna factura real todavía).
+Verificado sin filas remanentes y contadores correctos.
+
+Nota aparte: la misma consulta encontró **otras 4 compras** con el mismo proveedor "Alibaba" (sin
+`TEST-`/`FAC-PROV-TEST-` en el número, ~$78.958 en total) que no estaban dentro del hallazgo
+original y no se tocaron — no confirmadas como descartables.
