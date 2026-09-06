@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Package, Search, ChevronDown, ChevronRight, Network } from 'lucide-react';
+import { Package, Search, ChevronDown, ChevronRight, Network, Plus, Copy } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,8 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { formatDateAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
+import ModalNuevaRecepcion from '@/components/compras/ModalNuevaRecepcion';
+import ConfirmDuplicarDialog from '@/components/shared/ConfirmDuplicarDialog';
 
 const ORIGEN_LABELS = {
   implicita: { label: 'Compra Rápida', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
@@ -43,6 +45,18 @@ function RecepcionesSection() {
   const [mapaRecId, setMapaRecId]     = useState(null);
   const [isMapaOpen, setIsMapaOpen]   = useState(false);
 
+  // ── Nueva Recepción manual (standalone, sin OC) + Duplicar ──────────────────
+  // Mismo patrón que EntregasSection.jsx: Recepciones nunca tuvo creación
+  // standalone (siempre nacía de confirmar una OC o de Compra Rápida) — se
+  // agrega acá para poder resolver "Duplicar" (pedido de Luciano, 14/08, mig.392).
+  const [proveedores, setProveedores] = useState([]);
+  const [productos, setProductos]     = useState([]);
+  const [isNuevaOpen, setIsNuevaOpen] = useState(false);
+  const [nuevaForm, setNuevaForm]     = useState({ proveedor_id: '', observaciones: '', items: [{ producto_id: '', cantidad: 1 }] });
+  const [savingNueva, setSavingNueva] = useState(false);
+  const [duplicarTarget, setDuplicarTarget] = useState(null);
+  const [duplicadoDeId, setDuplicadoDeId]   = useState(null);
+
   const fetchRecepciones = async () => {
     if (!user?.empresa_id) return;
     setLoading(true);
@@ -68,6 +82,81 @@ function RecepcionesSection() {
   };
 
   useEffect(() => { fetchRecepciones(); }, [user?.empresa_id]);
+
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    supabase.from('proveedores').select('id, nombre').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre')
+      .then(({ data }) => setProveedores(data || []));
+    // .limit(200) — mismo criterio que EntregasSection: sin esto, un catálogo
+    // grande trae TODOS los productos activos cada vez que se abre Recepciones.
+    supabase.from('productos').select('id, nombre, stock_actual').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre').limit(200)
+      .then(({ data }) => setProductos(data || []));
+  }, [user?.empresa_id]);
+
+  const emptyNuevaForm = () => ({ proveedor_id: '', observaciones: '', items: [{ producto_id: '', cantidad: 1 }] });
+
+  const abrirNuevaRecepcion = () => { setDuplicadoDeId(null); setNuevaForm(emptyNuevaForm()); setIsNuevaOpen(true); };
+
+  const addItemNueva = () =>
+    setNuevaForm(f => ({ ...f, items: [...f.items, { producto_id: '', cantidad: 1 }] }));
+
+  const removeItemNueva = (i) =>
+    setNuevaForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
+
+  const updateItemNueva = (i, field, value) =>
+    setNuevaForm(f => {
+      const items = [...f.items];
+      items[i] = { ...items[i], [field]: value };
+      return { ...f, items };
+    });
+
+  const handleGuardarNuevaRecepcion = async () => {
+    const validItems = nuevaForm.items
+      .filter(it => it.producto_id && Number(it.cantidad) > 0)
+      .map(it => ({ producto_id: it.producto_id, cantidad: Number(it.cantidad) }));
+    if (validItems.length === 0) {
+      toast({ title: 'Agregá al menos un ítem con producto y cantidad', variant: 'destructive' });
+      return;
+    }
+    setSavingNueva(true);
+    try {
+      const { data, error } = await supabase.rpc('crear_recepcion_manual', {
+        p_empresa_id: user.empresa_id,
+        p_user_id: user.id,
+        p_proveedor_id: nuevaForm.proveedor_id || null,
+        p_items: validItems,
+        p_observaciones: nuevaForm.observaciones || null,
+        p_duplicado_de_id: duplicadoDeId,
+      });
+      if (error) throw error;
+      toast({ title: `Recepción ${data.numero_recepcion} creada`, className: 'bg-green-600 text-white border-green-700' });
+      setIsNuevaOpen(false);
+      setDuplicadoDeId(null);
+      await fetchRecepciones();
+    } catch (err) {
+      toast({ title: 'No se pudo crear la recepción', description: err.message, variant: 'destructive' });
+    } finally {
+      setSavingNueva(false);
+    }
+  };
+
+  // Duplicar (pedido 14/08): reabre el mismo formulario de alta manual,
+  // precargado con los ítems del original — el submit normal (con su propia
+  // validación) corre igual que si el usuario lo hubiera tipeado de cero.
+  // Duplicar SÍ vuelve a sumar stock: es un nuevo evento físico real (otra
+  // recepción), igual que "Copiar A" en SAP B1.
+  const handleConfirmarDuplicar = (vincular) => {
+    if (!duplicarTarget) return;
+    const items = (duplicarTarget.recepcion_items || []).map(i => ({ producto_id: i.producto_id, cantidad: Number(i.cantidad) }));
+    setNuevaForm({
+      proveedor_id: duplicarTarget.proveedor_id || '',
+      observaciones: '',
+      items: items.length > 0 ? items : [{ producto_id: '', cantidad: 1 }],
+    });
+    setDuplicadoDeId(vincular ? duplicarTarget.id : null);
+    setDuplicarTarget(null);
+    setIsNuevaOpen(true);
+  };
 
   const filtered = useMemo(() => {
     let r = recepciones;
@@ -106,6 +195,9 @@ function RecepcionesSection() {
           <option value="manual">Solo manuales (OC)</option>
           <option value="implicita">Solo Compra Rápida</option>
         </select>
+        <Button onClick={abrirNuevaRecepcion} className="bg-[rgb(var(--kx-violet))] hover:opacity-90 text-white shrink-0">
+          <Plus className="h-4 w-4 mr-2" /> Nueva Recepción
+        </Button>
       </div>
 
       <Card className="overflow-hidden bg-kx-surface border-kx-border">
@@ -189,14 +281,24 @@ function RecepcionesSection() {
                           <EstadoBadge estado={rec.estado} />
                         </td>
                         <td className="p-3 text-center" onClick={ev => ev.stopPropagation()}>
-                          <Button
-                            variant="ghost" size="icon"
-                            className="h-7 w-7 text-kx-text-3 hover:text-kx-violet"
-                            onClick={() => { setMapaRecId(rec.id); setIsMapaOpen(true); }}
-                            title="Mapa de relaciones"
-                          >
-                            <Network className="w-3.5 h-3.5" />
-                          </Button>
+                          <div className="flex items-center justify-center gap-1">
+                            <Button
+                              variant="ghost" size="icon"
+                              className="h-7 w-7 text-kx-text-3 hover:text-kx-violet"
+                              onClick={() => { setMapaRecId(rec.id); setIsMapaOpen(true); }}
+                              title="Mapa de relaciones"
+                            >
+                              <Network className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost" size="icon"
+                              className="h-7 w-7 text-kx-text-3 hover:text-kx-violet"
+                              onClick={() => setDuplicarTarget(rec)}
+                              title="Duplicar"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
 
@@ -238,6 +340,29 @@ function RecepcionesSection() {
         open={isMapaOpen}
         onOpenChange={setIsMapaOpen}
         recepcionId={mapaRecId}
+      />
+
+      <ModalNuevaRecepcion
+        isOpen={isNuevaOpen}
+        onClose={() => { setIsNuevaOpen(false); setDuplicadoDeId(null); }}
+        proveedores={proveedores}
+        productos={productos}
+        form={nuevaForm}
+        setForm={setNuevaForm}
+        addItem={addItemNueva}
+        removeItem={removeItemNueva}
+        updateItem={updateItemNueva}
+        handleSave={handleGuardarNuevaRecepcion}
+        saving={savingNueva}
+      />
+
+      <ConfirmDuplicarDialog
+        open={!!duplicarTarget}
+        onOpenChange={v => !v && setDuplicarTarget(null)}
+        tipoLabel="la recepción"
+        numero={duplicarTarget?.numero_recepcion}
+        onConfirm={handleConfirmarDuplicar}
+        loading={false}
       />
     </div>
   );

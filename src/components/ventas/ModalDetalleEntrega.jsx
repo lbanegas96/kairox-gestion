@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Truck, Package, Download, Loader2, Send, FileOutput, Ban, Network, Receipt, FileText, MapPin, ScrollText } from 'lucide-react';
+import { Truck, Package, Download, Loader2, Send, FileOutput, Ban, Network, Receipt, FileText, MapPin, ScrollText, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
@@ -38,6 +38,7 @@ function ModalDetalleEntrega({
   onCompartirWhatsApp,
   onAnular,
   onFacturar,
+  onDuplicar,
 }) {
   const [mapaOpen, setMapaOpen] = useState(false);
 
@@ -244,6 +245,13 @@ function ModalDetalleEntrega({
         <DialogFooter className="shrink-0 flex-wrap gap-2 sm:justify-between border-t border-kx-border dark:border-kx-border px-6 py-4">
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose} className="dark:border-kx-border dark:text-slate-300">Cerrar</Button>
+            <Button
+              variant="outline"
+              onClick={() => onDuplicar?.(entrega)}
+              className="dark:border-kx-border dark:text-slate-300"
+            >
+              <Copy className="w-4 h-4 mr-2" /> Duplicar
+            </Button>
             {puedeAnular && (
               <Button
                 variant="outline"

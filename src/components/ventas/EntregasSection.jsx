@@ -15,6 +15,7 @@ import { getEmpresaParaPDF } from '@/lib/empresaUtils';
 import ModalDetalleEntrega from '@/components/ventas/ModalDetalleEntrega';
 import ModalNuevaEntrega from '@/components/ventas/ModalNuevaEntrega';
 import NuevaFacturaModal from '@/components/ventas/NuevaFacturaModal';
+import ConfirmDuplicarDialog from '@/components/shared/ConfirmDuplicarDialog';
 
 const ORIGEN_LABELS = {
   implicita: { label: 'POS',    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
@@ -62,6 +63,12 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
   // confirmada y no vuelve a descontar stock.
   const [pedidoAFacturar, setPedidoAFacturar] = useState(null);
   const [entregaFacturando, setEntregaFacturando] = useState(null);
+  // Duplicar (pedido 14/08, mig.392): reabre este mismo formulario de alta
+  // manual, precargado con cliente + ítems del original. duplicadoDeId queda
+  // pendiente en estado hasta que el usuario confirma el alta en
+  // handleGuardarNuevaEntrega — mismo criterio que el resto de los documentos.
+  const [duplicarTarget, setDuplicarTarget] = useState(null);
+  const [duplicadoDeId, setDuplicadoDeId]   = useState(null);
 
   const viewEntrega = entregas.find(e => e.id === viewEntregaId) ?? null;
 
@@ -259,7 +266,27 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
 
   const emptyNuevaForm = () => ({ cliente_id: '', observaciones: '', items: [{ producto_id: '', cantidad: 1 }] });
 
-  const abrirNuevaEntrega = () => { setNuevaForm(emptyNuevaForm()); setIsNuevaOpen(true); };
+  const abrirNuevaEntrega = () => { setDuplicadoDeId(null); setNuevaForm(emptyNuevaForm()); setIsNuevaOpen(true); };
+
+  // Duplicar SÍ vuelve a descontar stock: es un nuevo envío físico real, igual
+  // que "Copiar A" en SAP B1 — no un clon inerte.
+  const handleConfirmarDuplicar = (vincular) => {
+    if (!duplicarTarget) return;
+    const items = (duplicarTarget.entrega_items || []).map(i => ({ producto_id: i.producto_id, cantidad: Number(i.cantidad) }));
+    setNuevaForm({
+      cliente_id: duplicarTarget.cliente_id || '',
+      observaciones: '',
+      items: items.length > 0 ? items : [{ producto_id: '', cantidad: 1 }],
+    });
+    setDuplicadoDeId(vincular ? duplicarTarget.id : null);
+    setDuplicarTarget(null);
+    // Mismo criterio que handleFacturarEntrega: si "Duplicar" se disparó desde
+    // el detalle abierto, hay que cerrarlo antes de abrir el form de alta —
+    // los dos son <Dialog> hermanos (no anidados), no <AlertDialog> sobre un
+    // Dialog como el flujo de Anular.
+    setViewEntregaId(null);
+    setIsNuevaOpen(true);
+  };
 
   const addItemNueva = () =>
     setNuevaForm(f => ({ ...f, items: [...f.items, { producto_id: '', cantidad: 1 }] }));
@@ -290,10 +317,12 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
         p_cliente_id: nuevaForm.cliente_id || null,
         p_items: validItems,
         p_observaciones: nuevaForm.observaciones || null,
+        p_duplicado_de_id: duplicadoDeId,
       });
       if (error) throw error;
       toast({ title: `Entrega ${data.numero_entrega} creada`, className: 'bg-green-600 text-white border-green-700' });
       setIsNuevaOpen(false);
+      setDuplicadoDeId(null);
       await fetchEntregas();
     } catch (err) {
       toast({ title: 'No se pudo crear la entrega', description: err.message, variant: 'destructive' });
@@ -417,7 +446,7 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
       {/* ── Modal Nueva Entrega (standalone, sin pedido) ────────────────────── */}
       <ModalNuevaEntrega
         isOpen={isNuevaOpen}
-        onClose={() => setIsNuevaOpen(false)}
+        onClose={() => { setIsNuevaOpen(false); setDuplicadoDeId(null); }}
         clientes={clientes}
         productos={productos}
         form={nuevaForm}
@@ -441,6 +470,7 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
         onCompartirWhatsApp={handleShareWhatsApp}
         onAnular={setAnularTarget}
         onFacturar={handleFacturarEntrega}
+        onDuplicar={setDuplicarTarget}
       />
 
       {/* ── Facturar la entrega (Factura de Venta del ERP, con el pedido de origen cargado) ── */}
@@ -470,6 +500,15 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ConfirmDuplicarDialog
+        open={!!duplicarTarget}
+        onOpenChange={v => !v && setDuplicarTarget(null)}
+        tipoLabel="la entrega"
+        numero={duplicarTarget?.numero_entrega}
+        onConfirm={handleConfirmarDuplicar}
+        loading={false}
+      />
     </div>
   );
 }

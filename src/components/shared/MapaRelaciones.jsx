@@ -21,12 +21,16 @@ const fmt = (n) =>
 // notas_credito_proveedor) también la tienen, pero hoy no son un entry point
 // propio de este mapa (solo aparecen como nodos derivados de una compra), así
 // que sus duplicados no se resuelven acá — limitación aceptada, no un bug.
+// mig.392 agrega entrega/recepcion (pedido 14/08: Duplicar sí mueve stock real,
+// es un nuevo evento físico, igual que "Copiar A" en SAP B1).
 const DUPLICADO_TABLAS = {
   cotizacion:     { tabla: 'cotizaciones',   numeroCol: 'numero' },
   pedido:         { tabla: 'pedidos',        numeroCol: 'numero' },
   orden_compra:   { tabla: 'ordenes_compra', numeroCol: 'numero' },
   venta:          { tabla: 'comprobantes',   numeroCol: 'numero_venta' },
   factura_compra: { tabla: 'compras',        numeroCol: 'numero_factura' },
+  entrega:        { tabla: 'entregas',       numeroCol: 'numero_entrega' },
+  recepcion:      { tabla: 'recepciones',    numeroCol: 'numero_recepcion' },
 };
 
 // mig.315 — Fase 1 del rediseño (PLAN_MAPA_RELACIONES.md): un ícono por tipo de
@@ -599,6 +603,7 @@ function MapaRelaciones({
           .select('id, numero_entrega, fecha, estado, comprobante_id, pedido_id')
           .eq('id', entregaId).eq('empresa_id', user.empresa_id).maybeSingle();
         if (!data) return setMapa(null);
+        fetchDuplicadoInfo('entrega', entregaId);
         let compId = data.comprobante_id;
         if (!compId && data.pedido_id) {
           const { data: ped } = await supabase.from('pedidos').select('comprobante_id').eq('id', data.pedido_id).maybeSingle();
@@ -613,6 +618,7 @@ function MapaRelaciones({
           .select('id, numero_recepcion, fecha, estado, compra_id')
           .eq('id', recepcionId).eq('empresa_id', user.empresa_id).maybeSingle();
         if (!data) return setMapa(null);
+        fetchDuplicadoInfo('recepcion', recepcionId);
         if (data.compra_id) { setActivoId(recepcionId); return fetchMapaCompra(data.compra_id); }
         setActivoId(recepcionId);
         return setSinFacturar({ label: 'Recepción', nodos: [{ id: data.id, tipo: 'recepcion', numero: data.numero_recepcion, fecha: data.fecha, estado: data.estado }] });

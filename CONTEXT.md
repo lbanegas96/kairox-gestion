@@ -1,5 +1,43 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Duplicar Entregas/Recepciones + Nueva Recepción manual — CERRADO (06/09)
+
+Resuelve el pendiente del 14/08 que había quedado abierto a propósito ("falta resolver...
+una Entrega, volvería a descontar stock"). Decisión de diseño confirmada con Luciano:
+duplicar SÍ vuelve a mover stock real — es un nuevo evento físico (otro envío/otra
+recepción), igual que "Copiar A" en SAP B1, no un clon inerte.
+
+**Entregas** — ya tenía creación standalone (`crear_entrega_manual`, mig.254). Se agregó
+botón "Duplicar" en `ModalDetalleEntrega.jsx`, mismo patrón `ConfirmDuplicarDialog` que el
+resto de los documentos: reabre "Nueva Entrega" precargada con cliente + ítems del
+original, sin fecha heredada, correlativo nuevo.
+
+**Recepciones** — nunca tuvo creación standalone (siempre nacía de confirmar una OC o de
+Compra Rápida). Se construyó desde cero: RPC `crear_recepcion_manual` (mig.392, espejo de
+`crear_entrega_manual` pero sumando stock en vez de restarlo), modal `ModalNuevaRecepcion.jsx`
+nuevo, botón "+ Nueva Recepción" en `RecepcionesSection.jsx`, y "Duplicar" sobre esa misma
+base.
+
+**Columna nueva `duplicado_de_id`** en `entregas` y `recepciones` (self-FK) + wiring en
+`MapaRelaciones.jsx` (`DUPLICADO_TABLAS` + `fetchDuplicadoInfo` en los 2 entry points) para
+que el vínculo se vea en el Mapa de Relaciones, igual que Cotización/Pedido/OC/Factura.
+
+**Devoluciones** — decisión confirmada de NO construir "Duplicar": toda devolución está
+topeada por lo que todavía no se devolvió del documento de origen, así que duplicar una ya
+hecha típicamente no tiene saldo para devolver de nuevo. El caso real ya se resuelve abriendo
+una devolución nueva contra el mismo origen.
+
+**Gotcha aplicado (ya conocido, mig.308):** `crear_entrega_manual` ganó un parámetro nuevo
+(`p_duplicado_de_id`) — `CREATE OR REPLACE` con esa firma NO reemplaza la función vieja de 5
+args, crea un overload huérfano. Se hizo `DROP FUNCTION` de la firma vieja antes de crear la
+de 6 args.
+
+Verificado con `BEGIN...ROLLBACK` contra datos reales de Nalux: 2 recepciones (+3 c/u) → 2
+entregas (-2 c/u) → stock cuadra exacto (34→36), ambos duplicados quedaron vinculados a su
+origen vía `duplicado_de_id`, y el guard de producto inexistente lanzó la excepción esperada.
+Supabase Advisors post-deploy: ambas funciones nuevas solo ejecutables por `authenticated`,
+sin exposición a `anon`.
+
 ## 🧹 Limpieza de datos de prueba en Compras — RESUELTO (05/09)
 
 A pedido explícito de Luciano se eliminaron de producción las 4 facturas de prueba que quedaron
