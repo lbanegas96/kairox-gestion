@@ -16,10 +16,11 @@ import CompraDetailModal from '../ventas/CompraDetailModal';
 import TabNuevaCompra from '../compras/TabNuevaCompra';
 import TabHistorialCompras from '../compras/TabHistorialCompras';
 import ModalEditarCompra from '../compras/ModalEditarCompra';
+import ModalPagoCompraRapida from '../compras/ModalPagoCompraRapida';
 
 function ComprasSection() {
   const { user } = useAuth();
-  const { isSessionOpen, currentSession } = useCaja();
+  const { isSessionOpen } = useCaja();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("historial");
   const searchInputRef = useRef(null);
@@ -61,6 +62,14 @@ function ComprasSection() {
   // --- MODAL DETALLE States ---
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedCompraId, setSelectedCompraId] = useState(null);
+
+  // --- MODAL PAGO States (pedido 08/09) ---
+  // La compra ahora SIEMPRE nace pendiente (Open Item en la Cuenta Corriente del
+  // proveedor) — si la Forma de Pago elegida no fue "Cuenta Corriente", se ofrece
+  // este modal justo después de crearla para pagarla ahí mismo, restando de
+  // Caja/Bancos de verdad (mismo circuito que "Registrar Pago" de Proveedores).
+  const [pagoModalOpen, setPagoModalOpen] = useState(false);
+  const [compraAPagar, setCompraAPagar] = useState(null);
 
   // --- MODAL EDIT States ---
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -361,7 +370,11 @@ function ComprasSection() {
 
     try {
       const totalCompra = calculateTotal();
-      const status = purchaseForm.forma_pago === 'Cuenta Corriente' ? 'pendiente' : 'pagada';
+      // La compra SIEMPRE nace pendiente (Open Item) — pagar ahí mismo con
+      // Efectivo/Transferencia/Tarjeta ya no es un insert directo y silencioso a
+      // movimientos_caja; se ofrece el modal "Registrar Pago" después de crearla
+      // (mismo circuito que ya usa Proveedores, ver ModalPagoCompraRapida).
+      const status = 'pendiente';
 
       // IVA por ítem — costo_unitario es precio FINAL (IVA incluido, igual que
       // siempre se cargó acá), se discrimina neto/IVA con la alícuota real de
@@ -475,42 +488,27 @@ function ComprasSection() {
       const providerName = proveedores.find(p => p.id === purchaseForm.proveedor_id)?.nombre || 'Proveedor';
 
       // Cuenta Corriente → cargo en el sub-libro del proveedor (aumenta su deuda).
-      // Sin esto la compra a crédito quedaba registrada y con asiento contable, pero
-      // la deuda NO aparecía en Proveedores → Cuenta Corriente (mismo patrón que
-      // NuevaFacturaProveedorModal).
-      if (purchaseForm.forma_pago === 'Cuenta Corriente') {
-        const { error: ccErr } = await supabase.from('cuenta_corriente_proveedores').insert([{
-          empresa_id:      user.empresa_id,
-          user_id:         user.id,
-          proveedor_id:    purchaseForm.proveedor_id,
-          tipo:            'compra',
-          monto:           totalCompra,
-          descripcion:     `Compra ${purchaseForm.numero_factura || 'S/N'} — ${providerName}`,
-          referencia_id:   newPurchase.id,
-          referencia_tipo: 'compra_rapida',
-          fecha:           getDateFromInputAR(purchaseForm.fecha),
-        }]);
-        if (ccErr) throw ccErr;
-      }
+      // Ahora SIEMPRE se registra acá, sin importar la Forma de Pago elegida —
+      // toda compra nace como Open Item; pagarla es un paso aparte (el modal que
+      // se abre más abajo si no se eligió "Cuenta Corriente").
+      const { error: ccErr } = await supabase.from('cuenta_corriente_proveedores').insert([{
+        empresa_id:      user.empresa_id,
+        user_id:         user.id,
+        proveedor_id:    purchaseForm.proveedor_id,
+        tipo:            'compra',
+        monto:           totalCompra,
+        descripcion:     `Compra ${purchaseForm.numero_factura || 'S/N'} — ${providerName}`,
+        referencia_id:   newPurchase.id,
+        referencia_tipo: 'compra_rapida',
+        fecha:           getDateFromInputAR(purchaseForm.fecha),
+      }]);
+      if (ccErr) throw ccErr;
 
-      // Caja
-      if (status === 'pagada') {
-        const { error: cajaErr } = await supabase.from('movimientos_caja').insert([{
-          user_id: user.id,
-          empresa_id: user.empresa_id,
-          caja_sesion_id: currentSession?.id,
-          fecha: getDateFromInputAR(purchaseForm.fecha),
-          tipo: 'egreso',
-          categoria: 'Compra',
-          concepto: `Compra a ${providerName} (${purchaseForm.forma_pago})`,
-          monto: totalCompra,
-          metodo_pago: purchaseForm.forma_pago,
-          is_automatic: true
-        }]);
-        if (cajaErr) throw cajaErr;
-      }
-
-      // Asiento contable automático (no bloquea el flujo de compras)
+      // Asiento contable automático (no bloquea el flujo de compras) — siempre
+      // "a crédito" (HABER 2.1.1 Cuentas a Pagar): el pago inmediato, si lo hay,
+      // genera su PROPIO asiento por separado (CxP debe / Caja-Banco haber) desde
+      // registrar_pago_proveedor, mismo criterio de 2 asientos que ya usa
+      // Facturas de Compra a crédito seguidas de un pago.
       asientosAutoService.crearAsientoCompra(
         user.empresa_id,
         user.id,
@@ -521,7 +519,7 @@ function ComprasSection() {
           iva: totalIvaReal,
           fecha: purchaseForm.fecha || getTodayAR(),
           descripcion: `Compra a ${providerName} - Fac. ${purchaseForm.numero_factura || 'S/N'}`,
-          esCredito: purchaseForm.forma_pago === 'Cuenta Corriente',
+          esCredito: true,
           centroCostoId: purchaseForm.centro_costo_id || null,
         }
       ).catch(e => {
@@ -536,6 +534,21 @@ function ComprasSection() {
         title: "¡Compra registrada correctamente! Stock actualizado.",
         className: "bg-green-600 text-white border-green-500"
       });
+
+      // Si no se eligió "Cuenta Corriente", ofrecer pagarla ya mismo — la compra
+      // igual queda pendiente en la Cuenta Corriente del proveedor si se cierra
+      // el modal sin confirmar, no se pierde nada.
+      if (purchaseForm.forma_pago !== 'Cuenta Corriente') {
+        setCompraAPagar({
+          id: newPurchase.id,
+          numeroFactura: purchaseForm.numero_factura || 'S/N',
+          total: totalCompra,
+          proveedorId: purchaseForm.proveedor_id,
+          proveedorNombre: providerName,
+          formaPagoHint: purchaseForm.forma_pago,
+        });
+        setPagoModalOpen(true);
+      }
 
       setPurchaseForm({
         proveedor_id: '',
@@ -918,6 +931,14 @@ function ComprasSection() {
         onOpenChange={setDetailsOpen}
         compraId={selectedCompraId}
         onUpdateCompra={handleCompraUpdate}
+      />
+
+      {/* MODAL PAGO (pedido 08/09) */}
+      <ModalPagoCompraRapida
+        open={pagoModalOpen}
+        onOpenChange={setPagoModalOpen}
+        compra={compraAPagar}
+        onSuccess={loadCompras}
       />
 
       {/* MODAL EDITAR COMPRA */}

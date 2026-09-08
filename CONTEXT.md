@@ -1,5 +1,45 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Compra Rápida — pago diferido a un modal real (CERRADO 08/09)
+
+Pedido de Luciano: Compra Rápida marcaba "Pagada" en silencio al crear (un simple `<select>`
+"Forma de Pago" disparaba un insert directo a `movimientos_caja` sin ningún paso de
+confirmación), a diferencia del circuito espejo de Ventas. Investigado contra `sap-reference`
++ el código real: el "modal de pago" que se creía existente en Ventas (Nueva Venta/POS) en
+realidad NO existe como modal separado — ahí pasa exactamente lo mismo que en Compras hoy
+(un solo paso silencioso). El circuito real y ya maduro que hace lo que se pedía (restar de
+Caja/Bancos con confirmación real) es el modal "Registrar Pago" de `ProveedoresSection.jsx`,
+sobre la RPC `registrar_pago_proveedor` (mig.131/215) — ya probada en producción.
+
+**Diseño (sin RPC ni migración nueva — 100% reuso):**
+- Toda compra de Compra Rápida ahora nace **siempre** como Open Item pendiente en la Cuenta
+  Corriente del proveedor (`cuenta_corriente_proveedores`, tipo='compra'), sin importar la
+  Forma de Pago elegida — se sacó el insert directo a `movimientos_caja` del alta.
+- El asiento de creación ahora es **siempre** "a crédito" (HABER 2.1.1 Cuentas a Pagar) —
+  el pago inmediato, si lo hay, genera su PROPIO asiento aparte (CxP debe / Caja-Banco haber),
+  mismo patrón de 2 asientos que ya usa cualquier Factura de Compra a crédito seguida de un
+  pago después.
+- Si la Forma de Pago elegida no fue "Cuenta Corriente", inmediatamente después de crear la
+  compra se abre `ModalPagoCompraRapida.jsx` (nuevo, componente propio — más simple que el de
+  Proveedores, sin FIFO/multi-factura porque acá siempre es esta única compra recién creada),
+  precargado con el proveedor, el total, y la forma de pago real del maestro `formas_pago`
+  (mejor esfuerzo por nombre/tipo — antes Compra Rápida usaba un string hardcodeado, ahora
+  usa el maestro real, igual que Ventas/Proveedores). Confirmar ahí llama a
+  `proveedoresService.registrarPago` (sin cambios) con `imputaciones=[{compra_id, monto}]`.
+- Si se cierra el modal sin pagar ("Ahora no"), la compra queda pendiente en la Cuenta
+  Corriente del proveedor — se puede pagar después desde ahí, no se pierde nada.
+
+Verificado en vivo contra producción real (Nalux, compra de $100 mínima): Efectivo → queda
+"Pendiente" → se abre el modal con "Efectivo (Caja)" preseleccionado → confirmar → pasa a
+"Pagada", 2 asientos correctos (Mercaderías+IVA debe/CxP haber al crear; CxP debe/Caja haber
+al pagar), `movimientos_caja` con `forma_pago_id` resuelto. Cuenta Corriente → pendiente, sin
+modal, sin cambios de comportamiento. Sin errores de consola en ningún caso.
+
+**Hallazgo aparte, spawneado para otra sesión (no corregido acá):** el modal "Registrar Pago"
+de `ProveedoresSection.jsx` no valida Efectivo+caja cerrada (a diferencia de Compra Rápida y
+Ventas, que sí lo hacen) — un pago ahí en Efectivo con la caja cerrada queda con
+`caja_sesion_id=NULL`, invisible en el arqueo por sesión.
+
 ## ✅ Duplicar Entregas/Recepciones + Nueva Recepción manual — CERRADO (06/09)
 
 Resuelve el pendiente del 14/08 que había quedado abierto a propósito ("falta resolver...
