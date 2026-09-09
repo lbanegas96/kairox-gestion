@@ -11,7 +11,7 @@ function TablaOrdenesCompra({
   isLoading, filteredList,
   listData, page, setPage,
   setDetalleId, setGenRecepId, setDevolverOC,
-  estadoMutation, cancelarMutation,
+  estadoMutation, setCancelTarget,
 }) {
   return (
     <div className="space-y-4">
@@ -93,7 +93,7 @@ function TablaOrdenesCompra({
 
                       {['borrador', 'enviada'].includes(oc.estado) && (
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-kx-text-3 hover:text-kx-red"
-                          onClick={() => cancelarMutation.mutate(oc.id)} title="Cancelar OC">
+                          onClick={() => setCancelTarget(oc)} title="Cancelar OC">
                           <XCircle className="w-3.5 h-3.5" />
                         </Button>
                       )}

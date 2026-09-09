@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ShoppingBag, Truck, Receipt, AlertTriangle, BadgeCheck, Banknote, RotateCcw, Pencil, History, Code2, Network, Copy } from 'lucide-react';
+import { ShoppingBag, Truck, Receipt, AlertTriangle, BadgeCheck, Banknote, RotateCcw, Pencil, History, Code2, Network, Copy, Ban, Send, Download, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import MenuAccionesDocumento from '@/components/shared/documento/MenuAccionesDocumento';
 import HistorialCambiosDialog from '@/components/shared/documento/HistorialCambiosDialog';
 import { formatCurrency } from '@/lib/currencyUtils';
 import { formatDateAR } from '@/lib/dateUtils';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useToast } from '@/components/ui/use-toast';
+import { getEmpresaParaPDF } from '@/lib/empresaUtils';
 import { ordenesCompraService } from '@/services/ordenesCompraService';
 import { ESTADOS, FACTURA_ESTADO_COLORS } from './shared';
 
@@ -17,6 +20,9 @@ const ALICUOTA_LABEL = { '21': '21%', '10.5': '10.5%', '0': '0%', exento: 'Exent
 // Editable mientras no haya Recepción generada — mismo criterio que la RPC
 // actualizar_orden_compra (mig.322).
 const ESTADOS_EDITABLES = ['borrador', 'enviada'];
+// Cancelable — mismo filtro que ya usaba TablaOrdenesCompra.jsx; la guarda real
+// (bloquea facturada/con recepciones) vive en cancelar_orden_compra (mig.393).
+const ESTADOS_CANCELABLES = ['borrador', 'enviada'];
 
 const CAMPOS_HISTORIAL = {
   proveedor_nombre: 'Proveedor', forma_pago: 'Forma de pago', fecha_entrega_esperada: 'Entrega esperada',
@@ -31,15 +37,47 @@ function ModalDetalleOC({
   onEditar,
   onDuplicar,
   onOpenMapa,
+  onCancelar,
+  onAvanzarEstado,
 }) {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [showHistorial, setShowHistorial] = useState(false);
   const [verCrudoId, setVerCrudoId] = useState(null);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
 
   const { data: historial = [] } = useQuery({
     queryKey: ['orden_compra_historial', detalleId],
     queryFn: () => ordenesCompraService.getHistorial(detalleId),
     enabled: !!detalleId && showHistorial,
   });
+
+  // PDF real (hallazgo 09/09: la OC no tenía ningún PDF, ni siquiera el
+  // window.print() crudo que tiene Compra Rápida) — mismo patrón que
+  // ModalDetalleCotizacion.handleDownloadPDF.
+  const handleDownloadPDF = async () => {
+    if (!detalle) return;
+    setGeneratingPDF(true);
+    try {
+      const [{ pdf }, { OrdenCompraPDF }, empresa] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('./OrdenCompraPDF'),
+        getEmpresaParaPDF(user.empresa_id),
+      ]);
+      const blob = await pdf(<OrdenCompraPDF orden={detalle} empresa={empresa} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `OrdenCompra_${detalle.numero}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[OrdenCompraPDF] Error al generar:', err);
+      toast({ title: 'Error al generar PDF', description: err.message, variant: 'destructive' });
+    } finally {
+      setGeneratingPDF(false);
+    }
+  };
 
   return (
     <Dialog open={!!detalleId} onOpenChange={() => setDetalleId(null)}>
@@ -290,6 +328,32 @@ function ModalDetalleOC({
               { label: 'Historial de cambios', icon: History, onClick: () => setShowHistorial(true) },
             ]}
           />
+          {/* Cancelar OC (mig.393, hallazgo 09/09 auditando paridad con
+              Pedido): la guarda real (bloquea facturada/con recepciones) vive
+              en el RPC — esto solo evita mostrar el botón donde seguro lo va
+              a rechazar. */}
+          {onCancelar && detalle && ESTADOS_CANCELABLES.includes(detalle.estado) && (
+            <Button
+              variant="outline"
+              className="border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
+              onClick={() => onCancelar(detalle)}
+            >
+              <Ban className="w-4 h-4 mr-2" /> Cancelar
+            </Button>
+          )}
+          {/* Marcar como enviada (mismo hallazgo 09/09): antes solo existía
+              este botón en la fila de la tabla, afuera del detalle — sin él,
+              una OC en Borrador nunca podía avanzar y "Registrar Recepción"
+              (más abajo) nunca llegaba a aparecer. */}
+          {onAvanzarEstado && detalle && detalle.estado === 'borrador' && (
+            <Button
+              variant="outline"
+              className="dark:border-kx-border dark:text-slate-300"
+              onClick={() => onAvanzarEstado(detalle)}
+            >
+              <Send className="w-4 h-4 mr-2" /> Marcar como enviada
+            </Button>
+          )}
           {/* mig.332 — 'facturada' incluido a propósito: devolver mercadería
               sigue siendo válido aunque ya esté 100% facturada. */}
           {detalle && ['recibida', 'recibida_parcial', 'facturada'].includes(detalle.estado) && (
@@ -305,6 +369,11 @@ function ModalDetalleOC({
             </Button>
           )}
           <Button variant="outline" onClick={() => setDetalleId(null)} className="dark:border-kx-border dark:text-slate-300">Cerrar</Button>
+          <Button onClick={handleDownloadPDF} disabled={generatingPDF || !detalle} className="bg-blue-600 hover:bg-blue-700 text-white">
+            {generatingPDF
+              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generando...</>
+              : <><Download className="w-4 h-4 mr-2" /> Descargar PDF</>}
+          </Button>
         </DialogFooter>
 
         <HistorialCambiosDialog open={showHistorial} onOpenChange={setShowHistorial}>

@@ -1,5 +1,46 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Orden de Compra — paridad con Pedido de Ventas (CERRADO 09/09)
+
+Luciano auditó el detalle de una OC recién creada y notó que le faltaba paridad con Pedido
+(su documento espejo del lado Ventas): sin "Copiar a" (en realidad tapado porque no había forma
+de sacarla de Borrador), sin Cancelar, el modal se cerraba al editar, y el PDF de Compra Rápida
+"muy pelado". Investigado en detalle (comparación archivo:línea OC vs Pedido) antes de tocar
+nada — confirmado que **"Aprobar/Rechazar" de Cotización NO aplica a OC** (esa aprobación
+registra la decisión del CLIENTE frente a un presupuesto; una OC no tiene un paso equivalente
+del lado proveedor — se descartó a propósito, decisión de Luciano).
+
+**Construido (mig.393 + 5 archivos):**
+1. **RPC `cancelar_orden_compra`** (espejo de `cancelar_pedido`, mig.368) — reemplaza el UPDATE
+   directo sin guardas que tenía `ordenesCompraService.cancelar()`. Bloquea cancelar si ya
+   facturada, si ya cancelada, o si ya tiene mercadería recibida (`cantidad_recibida > 0` en
+   algún ítem). **Hallazgo real durante la prueba:** el guard original chequeaba
+   `recepciones.orden_compra_id`, pero una recepción puede vincularse solo a nivel de ÍTEM
+   (`recepcion_items.orden_compra_item_id`) sin que el header tenga `orden_compra_id` seteado —
+   confirmado con OC-00003 real (ítems recibidos, cero filas en `recepciones` con ese id). Se
+   corrigió para chequear `cantidad_recibida` directo, mismo criterio que ya usa el trigger
+   automático de recálculo de estado.
+2. **Botón "Cancelar" en `ModalDetalleOC.jsx`** — mismo patrón que Pedido (AlertDialog +
+   motivo opcional), cableado también en `TablaOrdenesCompra.jsx` (antes llamaba directo al
+   mutation sin confirmar nada).
+3. **Botón "Marcar como enviada" en el detalle** — antes solo vivía en la fila de la tabla; sin
+   él, una OC en Borrador nunca podía avanzar y "Registrar Recepción" nunca llegaba a aparecer
+   (exactamente el síntoma que reportó Luciano).
+4. **Reabre el detalle actualizado al terminar de editar** — antes dejaba al usuario en la
+   lista (Pedido sí lo hacía). Como `detalle` en OC ya es un valor de react-query (a diferencia
+   del objeto plano de Pedido), alcanzó con `setDetalleId(editingId)` en el `onSuccess` del
+   guardado — la resincronización es automática vía invalidación de query, sin código extra.
+5. **PDF real para Orden de Compra** (`OrdenCompraPDF.jsx`, nuevo) y **PDF real para Compra
+   Rápida** (`CompraPDF.jsx`, nuevo, reemplaza el `window.print()` crudo que tenía
+   `CompraDetailModal.jsx`) — mismo patrón visual que `CotizacionPDF.jsx`/`FacturaPDF.jsx`
+   (header con logo, desglose neto/IVA, pie de página). Ninguno de los dos tenía PDF antes.
+
+Verificado en vivo end-to-end contra producción real (OC-00016): Marcar como enviada → aparece
+"Registrar Recepción" automáticamente ✓; Editar → guarda → reabre el detalle actualizado ✓;
+Cancelar con motivo → toast + estado "Cancelada" en la tabla ✓; ambos PDF descargan sin errores
+de consola. Migración probada con `BEGIN...ROLLBACK` (cancelación normal, guard de mercadería
+recibida, guard de doble cancelación) antes de aplicar.
+
 ## 🔴✅ Bug real: Moneda extranjera no se convertía, se relabeleaba (CERRADO 08/09)
 
 Luciano detectó: en Compra Rápida, un producto cargado a $1000 (pesos) al elegir Moneda=USD

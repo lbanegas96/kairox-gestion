@@ -203,11 +203,18 @@ export const ordenesCompraService = {
     return data as OrdenCompra;
   },
 
-  async cancelar(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('ordenes_compra')
-      .update({ estado: 'cancelada' as OrdenCompraEstado })
-      .eq('id', id);
+  // RPC cancelar_orden_compra (mig.393) — reemplaza el UPDATE directo que
+  // tenía esto antes: sin guardas, dejaba cancelar una OC ya facturada o con
+  // recepciones ya registradas (mercadería que ya entró físicamente — Regla 8
+  // sap-reference) sin avisar ni revertir nada. Mismo patrón que
+  // cancelar_pedido del lado Ventas.
+  async cancelar(empresaId: string, userId: string, id: string, motivo?: string | null): Promise<void> {
+    const { error } = await supabase.rpc('cancelar_orden_compra', {
+      p_empresa_id: empresaId,
+      p_user_id: userId,
+      p_orden_compra_id: id,
+      p_motivo: motivo || null,
+    });
     if (error) throw new Error(error.message);
   },
 

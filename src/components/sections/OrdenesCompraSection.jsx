@@ -3,6 +3,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { ordenesCompraService, OC_KEYS } from '@/services/ordenesCompraService';
@@ -55,6 +60,10 @@ function OrdenesCompraSection() {
   // Pendiente hasta que el usuario confirma el alta desde el form (ver
   // handleConfirmarDuplicar/handleSubmit) — null si no viene de "Duplicar".
   const [duplicadoDeId, setDuplicadoDeId] = useState(null);
+  // Cancelar OC (mig.393, hallazgo 09/09 auditando paridad con Pedido) —
+  // mismo patrón de confirmación + motivo que ya usa Pedidos.
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [motivoCancelacion, setMotivoCancelacion] = useState('');
   const [facturaForm, setFacturaForm] = useState({ numero_factura: '', fecha_factura: '', items: [] });
 
   // form nueva OC / edición (editingId != null = editando una OC existente)
@@ -287,9 +296,20 @@ function OrdenesCompraSection() {
   });
 
   const cancelarMutation = useMutation({
-    mutationFn: (id) => ordenesCompraService.cancelar(id),
-    onSuccess: invalidateOCAndNotifs,
+    mutationFn: ({ id, motivo }) => ordenesCompraService.cancelar(empresaId, user.id, id, motivo),
+    onSuccess: () => {
+      invalidateOCAndNotifs();
+      toast({ title: `Orden de compra ${cancelTarget?.numero ?? ''} cancelada` });
+      setCancelTarget(null);
+      setMotivoCancelacion('');
+    },
+    onError: (e) => toast({ title: 'No se pudo cancelar la orden de compra', description: e.message, variant: 'destructive' }),
   });
+
+  const handleCancelarOC = () => {
+    if (!cancelTarget) return;
+    cancelarMutation.mutate({ id: cancelTarget.id, motivo: motivoCancelacion.trim() || null });
+  };
 
   // ── Helpers de form ───────────────────────────────────────────────────────────
 
@@ -450,7 +470,11 @@ function OrdenesCompraSection() {
       duplicadoDeId: editingId ? null : duplicadoDeId,
     };
     if (editingId) {
-      updateMutation.mutate({ id: editingId, payload });
+      // Reabre el detalle actualizado al terminar de guardar — hallazgo Luciano
+      // (09/09, auditando paridad con Pedido): antes de esto, editar dejaba al
+      // usuario mirando la lista en vez de volver al detalle (Pedido sí lo hace,
+      // ver PedidosSection.jsx handleSave).
+      updateMutation.mutate({ id: editingId, payload }, { onSuccess: () => setDetalleId(editingId) });
     } else {
       createMutation.mutate(payload, { onSuccess: (oc) => setDetalleId(oc.id) });
     }
@@ -510,7 +534,7 @@ function OrdenesCompraSection() {
         isLoading={isLoading} filteredList={filteredList}
         listData={listData} page={page} setPage={setPage}
         setDetalleId={setDetalleId} setGenRecepId={setGenRecepId} setDevolverOC={setDevolverOC}
-        estadoMutation={estadoMutation} cancelarMutation={cancelarMutation}
+        estadoMutation={estadoMutation} setCancelTarget={setCancelTarget}
       />
 
       {/* ── MODAL: Nueva / Editar OC — size="wide" (hallazgo Luciano 22/08:
@@ -551,6 +575,8 @@ function OrdenesCompraSection() {
         onEditar={openEdit}
         onDuplicar={(oc) => { setDetalleId(null); setDuplicarTarget(oc); }}
         onOpenMapa={(id) => { setMapaOcId(id); setIsMapaOpen(true); }}
+        onCancelar={setCancelTarget}
+        onAvanzarEstado={(oc) => estadoMutation.mutate({ id: oc.id, estado: 'enviada' })}
       />
 
       <ConfirmDuplicarDialog
@@ -611,6 +637,36 @@ function OrdenesCompraSection() {
           qc.invalidateQueries({ queryKey: OC_KEYS.list(empresaId) });
         }}
       />
+
+      {/* ── Confirm cancelar OC (mig.393) ──────────────────────────────────── */}
+      <AlertDialog open={!!cancelTarget} onOpenChange={v => { if (!cancelarMutation.isPending) { if (!v) { setCancelTarget(null); setMotivoCancelacion(''); } } }}>
+        <AlertDialogContent className="dark:bg-kx-bg dark:border-kx-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="dark:text-kx-text">¿Cancelar orden de compra?</AlertDialogTitle>
+            <AlertDialogDescription className="dark:text-kx-text-2">
+              La orden <strong>{cancelTarget?.numero}</strong> se marcará como cancelada. Esta acción no puede deshacerse.
+              {cancelTarget?.ordenes_compra_items?.some(i => Number(i.cantidad_recibida) > 0) && (
+                <span className="block mt-1 text-amber-600 dark:text-amber-400">
+                  Esta orden ya tiene recepciones — la RPC va a rechazar la cancelación hasta que las anules.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            value={motivoCancelacion}
+            onChange={e => setMotivoCancelacion(e.target.value)}
+            placeholder="Motivo (opcional) — ej. proveedor sin stock, error de carga..."
+            className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
+            rows={2}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelarMutation.isPending} className="dark:text-kx-text dark:border-kx-border">Volver</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancelarOC} disabled={cancelarMutation.isPending} className="bg-red-600 hover:bg-red-700 text-white">
+              Sí, cancelar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

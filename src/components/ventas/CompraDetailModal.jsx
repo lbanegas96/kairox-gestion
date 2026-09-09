@@ -3,12 +3,13 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Printer, X, Save, Edit2, Loader2, FileText, User, Clock, RefreshCw, Network } from 'lucide-react';
+import { Download, X, Save, Edit2, Loader2, FileText, User, Clock, RefreshCw, Network } from 'lucide-react';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import { formatDateAR } from '@/lib/dateUtils';
+import { getEmpresaParaPDF } from '@/lib/empresaUtils';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import VerAsientoButton from '@/components/shared/VerAsientoButton';
 
@@ -25,6 +26,7 @@ const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra, onNav
   const [newStatus, setNewStatus] = useState('');
   const [saving, setSaving] = useState(false);
   const [mapaOpen, setMapaOpen] = useState(false);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
 
   useEffect(() => {
     if (open && compraId) {
@@ -112,6 +114,33 @@ const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra, onNav
     }
     toast({ title: 'Asiento regenerado', className: 'bg-emerald-600 text-white border-none' });
     fetchCompraDetails();
+  };
+
+  // PDF real (hallazgo 09/09, Luciano: "el PDF de Compra Rápida lo veo muy
+  // pelado") — reemplaza el window.print() crudo del modal por un PDF real
+  // con @react-pdf/renderer, mismo patrón que Cotización/Factura/Orden de Compra.
+  const handleDownloadPDF = async () => {
+    if (!compra) return;
+    setGeneratingPDF(true);
+    try {
+      const [{ pdf }, { CompraPDF }, empresa] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('@/components/compras/CompraPDF'),
+        getEmpresaParaPDF(user.empresa_id),
+      ]);
+      const blob = await pdf(<CompraPDF compra={compra} items={items} empresa={empresa} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Compra_${compra.numero_factura || 'S-N'}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[CompraPDF] Error al generar:', err);
+      toast({ title: 'Error al generar PDF', description: err.message, variant: 'destructive' });
+    } finally {
+      setGeneratingPDF(false);
+    }
   };
 
   if (!open) return null;
@@ -274,12 +303,14 @@ const CompraDetailModal = ({ open, onOpenChange, compraId, onUpdateCompra, onNav
           <Button variant="outline" onClick={() => onOpenChange(false)} className="dark:text-kx-text dark:border-kx-border dark:hover:bg-slate-800">
             Cerrar
           </Button>
-          <Button 
-            className="bg-blue-600 hover:bg-blue-700 text-white" 
-            onClick={() => window.print()} // Simple print for now
-            disabled={!compra}
+          <Button
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={handleDownloadPDF}
+            disabled={!compra || generatingPDF}
           >
-            <Printer className="w-4 h-4 mr-2" /> Imprimir
+            {generatingPDF
+              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generando...</>
+              : <><Download className="w-4 h-4 mr-2" /> Descargar PDF</>}
           </Button>
         </DialogFooter>
       </DialogContent>
