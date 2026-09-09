@@ -392,12 +392,18 @@ function ComprasSection() {
         totalIvaReal += bruto - neto;
       });
 
-      // Moneda paralela
+      // Moneda paralela — bug real (08/09): totalCompra SIEMPRE está en ARS (costo_unitario
+      // se carga en pesos, Moneda/TC del documento solo sirven para derivar
+      // monto_moneda_original más abajo). Pasarle `moneda`/`tipoCambioTasa` acá hacía que,
+      // cuando la Moneda del documento coincidía con la paralela (USD en Nalux), calcParalelo
+      // devolviera totalCompra sin dividir — quedaba guardado monto_paralelo = total en pesos,
+      // corrompiendo el dato persistido (no solo un problema de pantalla). Con datos reales:
+      // total $4.660.000 (ARS) guardaba monto_paralelo=4.660.000 en vez de 3.045,75.
       const montoParaleloValue = tcParalelo.enabled && tcParalelo.tcHoy
-        ? tcParalelo.calcParalelo(totalCompra, moneda, tipoCambioTasa)
+        ? tcParalelo.calcParalelo(totalCompra, 'ARS', 1)
         : null;
       const tcParaleloValue = tcParalelo.enabled && montoParaleloValue !== null
-        ? (moneda === tcParalelo.monedaParalela ? tipoCambioTasa : tcParalelo.tcHoy)
+        ? tcParalelo.tcHoy
         : null;
 
       const { data: newPurchase, error: purchaseError } = await supabase

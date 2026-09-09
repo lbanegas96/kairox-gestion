@@ -96,7 +96,13 @@ function TabNuevaCompra({
             <div className="text-3xl font-black bg-gradient-to-r from-blue-600 to-purple-600 dark:from-kx-violet dark:to-kx-blue bg-clip-text text-transparent font-mono">${calculateTotal().toLocaleString('es-AR', { minimumFractionDigits: 2 })}</div>
             {tcParalelo.enabled && tcParalelo.tcHoy && calculateTotal() > 0 && (
               <p className="text-xs text-kx-text-3 mt-0.5">
-                ≈ {tcParalelo.calcParalelo(calculateTotal(), moneda, tipoCambioTasa)?.toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
+                {/* calculateTotal() SIEMPRE está en ARS, sin importar la Moneda del
+                    documento — costo_unitario se carga en pesos, la Moneda/TC solo
+                    sirven para derivar monto_moneda_original. Pasarle `moneda` acá
+                    (bug real, 08/09) hacía que calcParalelo devolviera el total en
+                    pesos tal cual cuando Moneda coincidía con la paralela (USD),
+                    sin dividir por el TC — "1000 pesos" se mostraban como "1000 USD". */}
+                ≈ {tcParalelo.calcParalelo(calculateTotal(), 'ARS', 1)?.toLocaleString('es-AR', { minimumFractionDigits: 2 })} {tcParalelo.monedaParalela}
               </p>
             )}
           </div>

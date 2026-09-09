@@ -683,8 +683,12 @@ const NuevaVentaModal = ({ isOpen, onOpenChange, onSaleSuccess, cotizacion = nul
       // Pagos para la RPC (monto_paralelo calculado por pago).
       // Se envía '' en lugar de null para que NULLIF(...,'') del SQL resuelva a NULL.
       const pagosPayload = pagosFinales.map(pago => {
+        // pago.monto SIEMPRE está en ARS (mismo criterio que montoParalelo del header,
+        // arriba: calculateTotal()/tipoCambioTasa, nunca "pasarle moneda a calcParalelo
+        // con un monto ya en ARS" — bug real encontrado 08/09 en Compra Rápida, mismo
+        // patrón acá aunque nunca llegó a corromper un dato real de Nalux).
         const pagoParalelo = tcParalelo.enabled && tcParaleloFinalValue
-          ? tcParalelo.calcParalelo(pago.monto, moneda, tipoCambioTasa)
+          ? tcParalelo.calcParalelo(pago.monto, 'ARS', 1)
           : null;
         return {
           metodo:         pago.metodo,

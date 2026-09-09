@@ -180,10 +180,17 @@ function TabHistorialCompras({
                       <EstadoBadge estado={compra.estado_pago} />
                     </td>
                     <td className="p-4 text-right font-bold text-slate-700 dark:text-kx-text group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
-                      {formatCurrency(compra.total, compra.moneda ?? 'ARS')}
+                      {/* compra.total SIEMPRE está en ARS (costo_unitario se carga en
+                          pesos) — bug real (08/09): esto mostraba formatCurrency(total,
+                          moneda), pegándole el símbolo "US$" al monto en pesos SIN
+                          convertir ("$4.660.000" pasaba a mostrarse "US$4.660.000,00").
+                          Ahora el total sigue en ARS y el equivalente real en la moneda
+                          extranjera (monto_moneda_original, ya calculado bien al guardar
+                          pero nunca mostrado) va como anotación junto al TC. */}
+                      {formatCurrency(compra.total, 'ARS')}
                       {compra.moneda && compra.moneda !== 'ARS' && (
                         <span className="text-xs text-kx-text-3 dark:text-kx-text-3 ml-1 font-normal">
-                          (TC: {compra.tipo_cambio_tasa})
+                          ({formatCurrency(compra.monto_moneda_original, compra.moneda)} · TC {compra.tipo_cambio_tasa})
                         </span>
                       )}
                     </td>
@@ -193,7 +200,9 @@ function TabHistorialCompras({
                           if (compra.monto_paralelo) {
                             return `≈ ${Number(compra.monto_paralelo).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
                           }
-                          const calc = tcParalelo.calcParalelo(Number(compra.total), compra.moneda ?? 'ARS', Number(compra.tipo_cambio_tasa) || 1);
+                          // compra.total SIEMPRE está en ARS (ver bug real 08/09 en
+                          // CompraRapidaSection.jsx) — nunca pasarle compra.moneda acá.
+                          const calc = tcParalelo.calcParalelo(Number(compra.total), 'ARS', 1);
                           return calc !== null ? `≈ ${calc.toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—';
                         })()}
                       </td>

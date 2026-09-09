@@ -257,7 +257,9 @@ function FacturasCompraSection() {
                               if (compra.monto_paralelo) {
                                 return `≈ ${Number(compra.monto_paralelo).toLocaleString('es-AR', { minimumFractionDigits: 2 })}`;
                               }
-                              const calc = tcParalelo.calcParalelo(Number(compra.total), compra.moneda ?? 'ARS', Number(compra.tipo_cambio_tasa) || 1);
+                              // compra.total SIEMPRE está en ARS (ver bug real 08/09 en
+                              // CompraRapidaSection.jsx) — nunca pasarle compra.moneda acá.
+                              const calc = tcParalelo.calcParalelo(Number(compra.total), 'ARS', 1);
                               return calc !== null ? `≈ ${calc.toLocaleString('es-AR', { minimumFractionDigits: 2 })}` : '—';
                             })()}
                           </td>

@@ -1,5 +1,45 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🔴✅ Bug real: Moneda extranjera no se convertía, se relabeleaba (CERRADO 08/09)
+
+Luciano detectó: en Compra Rápida, un producto cargado a $1000 (pesos) al elegir Moneda=USD
+se mostraba/guardaba como si fueran US$1000, sin convertir. Causa raíz: `costo_unitario`/
+`calculateTotal()` SIEMPRE están en ARS (la Moneda/TC del documento solo sirven para derivar
+`monto_moneda_original = total / tipo_cambio_tasa`, que sí se calculaba bien) — pero 5 lugares
+del código llamaban a `formatCurrency(monto, moneda)` / `tcParalelo.calcParalelo(monto, moneda,
+tasa)` pasándole el total en ARS **junto con la Moneda extranjera del documento** en vez de
+`'ARS'` — la función, al recibir `monedaOp === monedaParalela` (Nalux usa USD de paralela),
+devuelve el monto tal cual sin dividir por el TC (comportamiento correcto de la función dado
+ese input — el bug era mentirle sobre en qué moneda estaba expresado el monto).
+
+**Corregido:**
+- `TabNuevaCompra.jsx` (preview del total en el form) y `TabHistorialCompras.jsx`/
+  `FacturasCompraSection.jsx` (columna "≈ paralelo" del historial) — display únicamente.
+- `CompraRapidaSection.jsx` — **el crítico**: esto se persistía en `compras.monto_paralelo`,
+  corrompiendo el dato real. Corroborado contra producción: la compra de Amazon ($4.660.000
+  ARS, Moneda USD) tenía `monto_paralelo=4.660.000` guardado (debía ser 3.045,75, igual que
+  `monto_moneda_original`, ya bien calculado). Se corrigieron a mano las 2 filas reales
+  afectadas (las únicas en toda la base — escaneado `compras`/`comprobantes`/
+  `cuenta_corriente_movimientos`/`movimientos_caja`, 0 en las otras 3 tablas).
+- `TabHistorialCompras.jsx` columna "Total" — bug separado pero mismo patrón: usaba
+  `formatCurrency(compra.total, compra.moneda)`, mostrando literalmente "US$4.660.000,00" en
+  la columna más visible del historial. Ahora muestra el total en ARS + una anotación con el
+  valor real en la moneda extranjera (`monto_moneda_original`, que existía hace tiempo pero
+  nunca se mostraba en ningún lado) y el TC usado.
+- `NuevaVentaModal.jsx` (Ventas/POS) — mismo patrón encontrado por inspección preventiva en el
+  cálculo de `monto_paralelo` por pago; sin datos corrompidos en producción (0 filas afectadas
+  en `comprobantes`/`movimientos_caja`), corregido antes de que se dispare con datos reales.
+
+Verificado en vivo: historial ya muestra "$4.660.000,00 (US$3.045,75 · TC 1530)" correcto;
+compra nueva de prueba ($100 ARS, Moneda USD) guardó `monto_paralelo=0.07` correcto desde el
+alta, sin corrección manual. Sin errores de consola.
+
+**Hallazgo aparte, spawneado para otra sesión (no tocado, no verificado si es el mismo bug):**
+~55 llamadas más a `formatCurrency()`/`calcParalelo()` en Cotizaciones, Órdenes de Compra,
+Pedidos, Ventas (PanelPago) y Reportes que también pasan la moneda/TC del documento — cada una
+necesita revisarse por separado antes de tocar nada, porque esos formularios podrían legítimamente
+calcular sus totales ya en la moneda extranjera (modelo distinto al de Compra Rápida).
+
 ## ✅ Compra Rápida — pago diferido a un modal real (CERRADO 08/09)
 
 Pedido de Luciano: Compra Rápida marcaba "Pagada" en silencio al crear (un simple `<select>`
