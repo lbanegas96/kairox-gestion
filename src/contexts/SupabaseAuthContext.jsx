@@ -19,7 +19,13 @@ export const AuthProvider = ({ children }) => {
   const lastProcessedToken = useRef(null);
 
   // FETCH PROFILE
-  const fetchProfile = async (userId) => {
+  // Hallazgo Nadia (09/09): justo tras un login recién emitido, este pedido
+  // puede volver 401 por un glitch puntual de propagación del token (el
+  // mismo token, milisegundos después, ya responde 200 sin problema — visto
+  // en los logs de Supabase). Sin retry, el fallback de handleSession baja al
+  // usuario a role='staff' sin permisos y le vacía el menú entero hasta que
+  // recarga la página a mano, sin ningún aviso de que fue un glitch.
+  const fetchProfile = async (userId, retry = true) => {
     try {
       // Fetch profile AND associated company details
       const { data, error } = await supabase
@@ -30,11 +36,19 @@ export const AuthProvider = ({ children }) => {
 
       if (error) {
         logger.warn("Profile fetch warning:", error.message);
+        if (retry) {
+          await new Promise((r) => setTimeout(r, 600));
+          return fetchProfile(userId, false);
+        }
         return null;
       }
       return data;
     } catch (err) {
       logger.error("Profile fetch exception:", err);
+      if (retry) {
+        await new Promise((r) => setTimeout(r, 600));
+        return fetchProfile(userId, false);
+      }
       return null;
     }
   };

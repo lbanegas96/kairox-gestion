@@ -1,5 +1,43 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Menú vacío (Sidebar) + 3 fixes de Proveedores en segundo plano (CERRADO 09/09)
+
+**Bug del menú vacío** — Nadia mandó captura: le desapareció todo el menú lateral (Sidebar),
+solo quedaba el pie con su avatar, y decía "Staff" en vez de "Administrador". Investigado por
+logs de Supabase (`auth_logs`/`edge_logs`, no por reproducción): a las 23:24 UTC tuvo un login
+fallido (contraseña mal) y 8 segundos después uno exitoso. Justo en ese instante, el pedido que
+trae el perfil (`profiles` + `empresas(nombre)`) volvió **401** por un glitch puntual de
+propagación del token recién emitido, mientras el update de `last_login_at` con el mismo token sí
+pasó (204). Como `fetchProfile()` no reintentaba, `handleSession` cayó al fallback
+`role: 'staff'` sin permisos → `Sidebar.jsx` filtra TODOS los ítems por `hasPermission()` → menú
+vacío. Se autocorrigió solo en el siguiente pedido (200), por eso alcanzaba con recargar.
+
+**Fix aplicado** (`src/contexts/SupabaseAuthContext.jsx`, `fetchProfile`): reintenta una vez tras
+600ms si el pedido de perfil falla (error o excepción), antes de caer al fallback `'staff'` sin
+permisos. Un glitch de un segundo ya no vacía el menú entero sin aviso.
+
+**3 branches de tareas en segundo plano (arrancadas por Luciano en sesiones separadas), revisadas
+y mergeadas a `master` sin conflictos** (tocan regiones distintas de los mismos 2 archivos):
+1. **Regla Caja en pagos a Proveedores** (`ProveedoresSection.jsx`) — solo Efectivo exigía caja
+   abierta ya en Compra Rápida/Ventas, pero el pago a Proveedores no tenía ninguna guarda. Mismo
+   criterio aplicado: guarda en `handlePago`, aviso inline y botón deshabilitado si la forma de
+   pago es Efectivo y la caja está cerrada.
+2. **Aging de deuda de Proveedores usaba una columna inexistente** (`ProveedoresSection.jsx`) —
+   `proveedores` NO tiene `saldo_actual` (a diferencia de `clientes`), así que la reconciliación
+   del reporte de antigüedad (mig.314) nunca se disparaba (`undefined` siempre). Se reemplazó por
+   sumar `cuenta_corriente_proveedores` (compra/nota_débito suman, pago/nota_crédito restan),
+   mismo criterio ya usado en `proveedoresService.getSaldoProveedor`.
+3. **`PaymentRunModal.jsx` mostraba saldo en moneda extranjera sin convertir** — mismo patrón que
+   el bug de `TabHistorialCompras.jsx` ya cerrado: `f.saldo_pendiente` viene siempre en ARS,
+   pasarle `f.moneda` le pegaba el símbolo USD/etc. a un monto que seguía en pesos. Se muestra en
+   ARS y, si la factura es FX, se anota el equivalente dividiendo por el TC original.
+
+Verificado: `npx eslint` (sin errores nuevos) + `npx vite build` (limpio) sobre los 3 archivos
+tocados. No se probó en navegador en vivo (son fixes de guardas/visualización, sin flujo de UI
+nuevo que requiera reproducir).
+
+---
+
 ## ✅ Orden de Compra — paridad con Pedido de Ventas (CERRADO 09/09)
 
 Luciano auditó el detalle de una OC recién creada y notó que le faltaba paridad con Pedido
