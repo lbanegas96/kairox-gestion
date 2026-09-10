@@ -211,7 +211,18 @@ function PaymentRunModal({ empresaId, formasPago, open, onOpenChange }) {
                             ) : <span className="text-xs text-kx-text-3">—</span>}
                           </td>
                           <td className="px-3 py-2 text-right font-mono text-kx-text">
-                            {formatCurrency(f.saldo_pendiente, f.moneda)}
+                            {/* Bug real (08/09, mismo patrón que TabHistorialCompras.jsx): f.saldo_pendiente
+                                viene de compras_saldo_pendiente/compras.total, que está SIEMPRE en ARS
+                                (costo_unitario se carga en pesos en Compra Rápida) — pasarle f.moneda acá
+                                le pegaba el símbolo "US$" a un saldo que seguía en pesos, sin convertir.
+                                Se muestra en ARS y, si es FX, se anota el equivalente dividiendo por el
+                                TC original de la factura (mismo criterio que calcParalelo/monto_moneda_original). */}
+                            {formatCurrency(f.saldo_pendiente, 'ARS')}
+                            {esFX && f.tipo_cambio_tasa > 0 && (
+                              <div className="text-2xs text-kx-text-3 font-normal">
+                                ≈ {formatCurrency(f.saldo_pendiente / f.tipo_cambio_tasa, f.moneda)}
+                              </div>
+                            )}
                           </td>
                         </tr>
                       );
