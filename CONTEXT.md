@@ -30,11 +30,12 @@ El flujo completo de confirmación no se pudo probar en vivo porque ninguna OC "
 producto real (no texto libre) tenía ítems pendientes en este momento — verificado por código +
 `npx eslint` + `npx vite build` (limpios).
 
-**Hallazgo aparte, NO corregido todavía (pendiente confirmación de Luciano):** OC-00006 y
-OC-00010 están 100% recibidas en la base (`cantidad_recibida = cantidad_pedida`) pero con
-`estado='enviada'` — datos viejos de antes de que existiera el trigger de mig.066, que nunca se
-recalculó retroactivamente. Se corrigen con un UPDATE puntual (no una migración) que fuerza el
-trigger a re-evaluar esas 2 OCs.
+**Hallazgo aparte, corregido (confirmado por Luciano):** OC-00006 y OC-00010 estaban 100%
+recibidas en la base (`cantidad_recibida = cantidad_pedida`) pero con `estado='enviada'` — datos
+viejos de antes de que existiera el trigger de mig.066, que nunca se recalculó retroactivamente.
+Corregido con un UPDATE puntual (no una migración): `SET cantidad_recibida = cantidad_recibida`
+sobre sus ítems fuerza a `trg_oc_recalcular_estado` a re-evaluar sin tocar ninguna cantidad real.
+Ambas quedaron en `estado='recibida'`, verificado.
 
 ---
 
