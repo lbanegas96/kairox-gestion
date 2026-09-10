@@ -115,6 +115,11 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
   const [loadingEntidad, setLoadingEntidad] = useState(false);
   const [entidad, setEntidad] = useState(null);
   const [cantidades, setCantidades] = useState({});
+  // Hallazgo Luciano 10/09: al confirmar, el modal se cerraba entero de una —
+  // no quedaba forma de ver qué se acababa de recibir/entregar sin ir a buscar
+  // el documento a mano. `resultado` reemplaza el formulario por un resumen
+  // (mismos ítems, cantidad confirmada) hasta que el usuario cierra a propósito.
+  const [resultado, setResultado] = useState(null);
   // Campo temporal del conversor de unidad de compra (Caja/Docena/etc., mismo
   // patrón que CompraRapidaSection/TabNuevaCompra) — solo pre-carga `cantidades`,
   // no se envía al backend.
@@ -123,6 +128,7 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
   const isOpen = !!sourceId;
 
   useEffect(() => {
+    setResultado(null);
     if (!sourceId || !user?.empresa_id) { setEntidad(null); return; }
     setLoadingEntidad(true);
     cfg.fetchEntidad(sourceId, user.empresa_id)
@@ -189,6 +195,12 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
       return;
     }
 
+    // Resumen para la vista de confirmación — se arma ANTES de llamar al RPC
+    // (con los datos que ya tenemos en pantalla), no depende de la respuesta.
+    const resumenItems = itemsConPendiente
+      .filter(it => Number(cantidades[it.id] || 0) > 0)
+      .map(it => ({ id: it.id, nombre: it.nombre, cantidad: Number(cantidades[it.id] || 0) }));
+
     setSaving(true);
     try {
       const { data, error } = await supabase.rpc(cfg.rpc, {
@@ -199,17 +211,19 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
       });
       if (error) throw error;
 
-      const resultado = typeof data === 'string' ? JSON.parse(data) : data;
-      const numero = resultado?.[cfg.numeroResultKey] || cfg.numeroFallback;
+      const rpcResult = typeof data === 'string' ? JSON.parse(data) : data;
+      const numero = rpcResult?.[cfg.numeroResultKey] || cfg.numeroFallback;
       toast({
         title: `${cfg.tituloEntidad} ${numero} generada`,
         description: `${totalUnidades} unidad(es) en ${itemsAProcesar.length} ítem(s)`,
       });
       // El id va junto con el número para que quien lo llame pueda abrir el
       // documento recién generado (seguir la cadena, como en SAP B1) en vez de
-      // dejar al usuario en el documento de origen.
-      onSuccess(numero, resultado?.[cfg.idResultKey] ?? null);
-      onClose();
+      // dejar al usuario en el documento de origen. El modal ya NO se cierra
+      // solo: se reemplaza por el resumen de lo confirmado (ver `resultado`),
+      // así el usuario ve qué quedó registrado antes de decidir cerrar.
+      onSuccess(numero, rpcResult?.[cfg.idResultKey] ?? null);
+      setResultado({ numero, items: resumenItems });
     } catch (err) {
       toast({ title: `Error al generar ${cfg.tituloEntidad.toLowerCase()}`, description: err.message, variant: 'destructive' });
     } finally {
@@ -221,18 +235,38 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
 
   return (
     <Dialog open={isOpen} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="max-w-lg dark:bg-kx-bg dark:border-kx-border">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto dark:bg-kx-bg dark:border-kx-border">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 dark:text-kx-text">
             <Icon className="h-5 w-5 text-[rgb(var(--kx-violet))]" />
             Generar {cfg.tituloEntidad}{entidad?.numero ? ` — ${entidad.numero}` : ''}
           </DialogTitle>
           <DialogDescription className="dark:text-kx-text-2">
-            Indicá la cantidad a {cfg.verboAccion} por ítem. {cfg.mensajeStock}
+            {resultado
+              ? `${cfg.tituloEntidad} confirmada. Esto fue lo que quedó registrado.`
+              : <>Indicá la cantidad a {cfg.verboAccion} por ítem. {cfg.mensajeStock}</>}
           </DialogDescription>
         </DialogHeader>
 
-        {loadingEntidad ? (
+        {resultado ? (
+          <div className="py-2">
+            <div className="flex items-center gap-3 pb-4">
+              <Check className="h-8 w-8 shrink-0 text-[rgb(var(--kx-green))]" />
+              <div>
+                <p className="font-semibold text-kx-text">{cfg.tituloEntidad} {resultado.numero} registrada</p>
+                <p className="text-sm text-kx-text-2">{cfg.mensajeStock}</p>
+              </div>
+            </div>
+            <div className="border border-kx-border rounded-lg divide-y divide-kx-border">
+              {resultado.items.map(it => (
+                <div key={it.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                  <span className="text-kx-text truncate pr-2">{it.nombre}</span>
+                  <span className="font-mono text-kx-text-2 shrink-0">{it.cantidad} u.</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : loadingEntidad ? (
           <div className="py-10 flex items-center justify-center">
             <Loader2 className="h-6 w-6 animate-spin text-kx-text-3" />
           </div>
@@ -310,18 +344,28 @@ function GenerarMovimientoModal({ tipo, sourceId, onClose, onSuccess }) {
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} className="dark:text-kx-text dark:border-kx-border">
-            Cancelar
-          </Button>
-          {!loadingEntidad && itemsConPendiente.length > 0 && (
-            <Button
-              onClick={handleConfirm}
-              disabled={saving || totalUnidades === 0}
-              className="bg-[rgb(var(--kx-violet))] hover:opacity-90 text-white"
-            >
-              {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Icon className="h-4 w-4 mr-2" />}
-              Confirmar {cfg.tituloEntidad.toLowerCase()} ({totalUnidades} u.)
+          {resultado ? (
+            <Button onClick={onClose} className="bg-[rgb(var(--kx-violet))] hover:opacity-90 text-white">
+              Cerrar
             </Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={onClose} className="dark:text-kx-text dark:border-kx-border">
+                {/* Sin ítems pendientes no hay nada que "cancelar" -- es una vista
+                    informativa, "Cerrar" describe mejor lo que hace el botón. */}
+                {!loadingEntidad && itemsConPendiente.length === 0 ? 'Cerrar' : 'Cancelar'}
+              </Button>
+              {!loadingEntidad && itemsConPendiente.length > 0 && (
+                <Button
+                  onClick={handleConfirm}
+                  disabled={saving || totalUnidades === 0}
+                  className="bg-[rgb(var(--kx-violet))] hover:opacity-90 text-white"
+                >
+                  {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Icon className="h-4 w-4 mr-2" />}
+                  Confirmar {cfg.tituloEntidad.toLowerCase()} ({totalUnidades} u.)
+                </Button>
+              )}
+            </>
           )}
         </DialogFooter>
       </DialogContent>

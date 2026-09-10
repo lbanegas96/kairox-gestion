@@ -1,5 +1,43 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Generar Recepción desde OC — 4 ajustes (CERRADO 10/09)
+
+Luciano reportó (con capturas) 4 problemas usando "Generar Recepción" desde una OC:
+
+1. **Botón "Cancelar" en la vista vacía** ("Todos los ítems ya fueron recibidos") — no hay nada
+   que cancelar ahí, es informativo. `GenerarMovimientoModal.jsx`: ahora dice "Cerrar" cuando
+   `itemsConPendiente.length === 0`, "Cancelar" cuando sí hay un formulario para abandonar.
+2. **La lista de OC seguía mostrando "Enviada" después de recibir todo** — investigado en la
+   base: el trigger `trg_oc_recalcular_estado` (mig.066) SÍ corre bien y el estado en la tabla
+   queda correcto (`recibida`) apenas se recibe. El bug real era de cache del frontend:
+   `OrdenesCompraSection.jsx` invalidaba con `OC_KEYS.list(empresaId)` (sin filtros) →
+   `['ordenes_compra', empresaId, undefined]`, pero la query real vive en
+   `['ordenes_compra', empresaId, {estado, page}]` — React Query compara `typeof` en cada
+   posición del key al hacer partial-match, y `undefined` vs. un objeto nunca matchea, así que
+   la invalidación no hacía nada. Reemplazado por `invalidateOCAndNotifs()` (el helper que ya
+   usan Cancelar/Avanzar, con el key correcto) en los 2 call-sites que lo tenían mal: Generar
+   Recepción y Devolución al Proveedor desde OC.
+3. **Tamaño del modal** — `GenerarMovimientoModal.jsx` usaba `max-w-lg` sin scroll; se llevó a
+   `max-w-2xl max-h-[90vh] overflow-y-auto`, mismo criterio que `ModalNuevaRecepcion.jsx`.
+4. **"Se cierra todo al confirmar, en vez de mostrar lo recibido"** — el problema real, arrastrado
+   desde antes: el modal compartido (usado por Entrega y Recepción) llamaba `onClose()` apenas la
+   RPC devolvía éxito, sin mostrar nada. Se agregó un estado `resultado` que reemplaza el
+   formulario por un resumen (número + ítems con cantidad confirmada) hasta que el usuario
+   cierra a propósito — el modal ya no se autocierra solo.
+
+Verificado en vivo (browser real): el fix del botón "Cerrar" confirmado sobre una OC ya recibida.
+El flujo completo de confirmación no se pudo probar en vivo porque ninguna OC "Enviada" con
+producto real (no texto libre) tenía ítems pendientes en este momento — verificado por código +
+`npx eslint` + `npx vite build` (limpios).
+
+**Hallazgo aparte, NO corregido todavía (pendiente confirmación de Luciano):** OC-00006 y
+OC-00010 están 100% recibidas en la base (`cantidad_recibida = cantidad_pedida`) pero con
+`estado='enviada'` — datos viejos de antes de que existiera el trigger de mig.066, que nunca se
+recalculó retroactivamente. Se corrigen con un UPDATE puntual (no una migración) que fuerza el
+trigger a re-evaluar esas 2 OCs.
+
+---
+
 ## ✅ Menú vacío (Sidebar) + 3 fixes de Proveedores en segundo plano (CERRADO 09/09)
 
 **Bug del menú vacío** — Nadia mandó captura: le desapareció todo el menú lateral (Sidebar),

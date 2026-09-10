@@ -615,8 +615,15 @@ function OrdenesCompraSection() {
         sourceId={genRecepId}
         onClose={() => setGenRecepId(null)}
         onSuccess={() => {
-          setGenRecepId(null);
-          qc.invalidateQueries({ queryKey: OC_KEYS.list(empresaId) });
+          // invalidateOCAndNotifs() y NO OC_KEYS.list(empresaId) suelto: ese key
+          // sin filtros arma ['ordenes_compra', empresaId, undefined] -- el
+          // 3er elemento undefined vs. el {estado, page} real de la query en uso
+          // no matchea en el partial-match de React Query (distinto typeof),
+          // así que esta invalidación nunca pegaba. La lista quedaba mostrando
+          // el estado viejo (ej. "Enviada" después de una recepción que ya
+          // dejó la OC en "recibida" en la base) hasta que algo más forzaba un
+          // refetch. Hallazgo Luciano 10/09.
+          invalidateOCAndNotifs();
         }}
       />
 
@@ -634,7 +641,9 @@ function OrdenesCompraSection() {
         } : null}
         onSuccess={() => {
           setDevolverOC(null);
-          qc.invalidateQueries({ queryKey: OC_KEYS.list(empresaId) });
+          // Mismo bug que Generar Recepción (ver comentario ahí): OC_KEYS.list(empresaId)
+          // sin filtros no matchea la query real, que sí los lleva.
+          invalidateOCAndNotifs();
         }}
       />
 
