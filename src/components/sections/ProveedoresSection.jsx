@@ -375,8 +375,9 @@ function ProveedoresSection() {
   // ── Aging report (antigüedad de deuda) — mig.314, hallazgo #2 de la auditoría
   // contable: este reporte ya existía para Clientes (TabAntiguedad.jsx) pero no
   // tenía equivalente del lado de Proveedores. Mismo criterio: reconcilia contra
-  // `proveedores.saldo_actual` para no sobreestimar deuda si hubo pagos a cuenta
-  // sin imputar a una compra puntual.
+  // el saldo real de `cuenta_corriente_proveedores` (proveedores no tiene columna
+  // saldo_actual, a diferencia de clientes) para no sobreestimar deuda si hubo
+  // pagos a cuenta sin imputar a una compra puntual.
   const [activeTab, setActiveTab]         = useState('proveedores');
   const [agingProvData, setAgingProvData] = useState([]);
   const [agingLoading, setAgingLoading]   = useState(false);
@@ -395,14 +396,34 @@ function ProveedoresSection() {
 
       const compraIds    = comprasPendientes.map(c => c.compra_id);
       const proveedorIds = [...new Set(comprasPendientes.map(c => c.proveedor_id))];
-      const [{ data: comprasInfo }, { data: proveedoresInfo }] = await Promise.all([
+      const [
+        { data: comprasInfo, error: comprasInfoError },
+        { data: proveedoresInfo, error: proveedoresInfoError },
+        { data: ccpMovs, error: ccpMovsError },
+      ] = await Promise.all([
         supabase.from('compras').select('id, numero_factura, fecha').in('id', compraIds),
-        supabase.from('proveedores').select('id, nombre, saldo_actual').in('id', proveedorIds),
+        supabase.from('proveedores').select('id, nombre').in('id', proveedorIds),
+        // proveedores no tiene columna saldo_actual (a diferencia de clientes) —
+        // el saldo real se deriva sumando cuenta_corriente_proveedores, igual que
+        // proveedoresService.getSaldoProveedor, pero en un solo query para todos.
+        supabase.from('cuenta_corriente_proveedores').select('proveedor_id, tipo, monto').eq('empresa_id', empresaId).in('proveedor_id', proveedorIds),
       ]);
+      if (comprasInfoError) throw comprasInfoError;
+      if (proveedoresInfoError) throw proveedoresInfoError;
+      if (ccpMovsError) throw ccpMovsError;
+
       const compraInfoPorId = Object.fromEntries((comprasInfo || []).map(c => [c.id, c]));
       const provPorId       = Object.fromEntries((proveedoresInfo || []).map(p => [p.id, p]));
 
-      // Un pago a cuenta sin imputar a una compra puntual reduce saldo_actual sin
+      const saldoRealPorProv = {};
+      (ccpMovs || []).forEach(m => {
+        const delta = (m.tipo === 'compra' || m.tipo === 'nota_debito') ? Number(m.monto)
+                    : (m.tipo === 'pago'   || m.tipo === 'nota_credito') ? -Number(m.monto)
+                    : 0;
+        saldoRealPorProv[m.proveedor_id] = (saldoRealPorProv[m.proveedor_id] || 0) + delta;
+      });
+
+      // Un pago a cuenta sin imputar a una compra puntual reduce el saldo real sin
       // cancelar ninguna compra abierta específica — reconciliamos igual que
       // Clientes para que la suma por proveedor nunca sobreestime la deuda real.
       const sumaRawPorProv = {};
@@ -422,7 +443,7 @@ function ProveedoresSection() {
         else                 { banda = '+90 días';   color = 'red'; }
 
         let monto = Number(c.saldo_pendiente);
-        const saldoReal = provPorId[c.proveedor_id]?.saldo_actual;
+        const saldoReal = saldoRealPorProv[c.proveedor_id];
         const sumaRaw    = sumaRawPorProv[c.proveedor_id];
         if (saldoReal !== undefined) {
           if (saldoReal <= 0) {
