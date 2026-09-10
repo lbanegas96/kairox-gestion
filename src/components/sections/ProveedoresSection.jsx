@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Truck, Plus, Search, Edit, Eye, UserX, UserCheck,
-  DollarSign, FileText, ShoppingBag, Banknote, RefreshCw, Clock, FileDown, Loader2
+  DollarSign, FileText, ShoppingBag, Banknote, RefreshCw, Clock, FileDown, Loader2, AlertTriangle
 } from 'lucide-react';
 import PaymentRunModal from '@/components/proveedores/PaymentRunModal';
 import { Button } from '@/components/ui/button';
@@ -46,7 +46,7 @@ function ProveedoresSection() {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
-  const { currentSession } = useCaja();
+  const { currentSession, isSessionOpen } = useCaja();
   const empresaId = user?.empresa_id;
   const isAdmin = user?.role === 'admin';
 
@@ -337,8 +337,25 @@ function ProveedoresSection() {
     setImputaciones(nuevo);
   };
 
+  // Regla Caja: solo pagos en Efectivo (tipo_instrumento === 'efectivo') requieren
+  // caja abierta. Transferencia/Tarjeta/CC operan sin caja (mismo criterio que
+  // CompraRapidaSection y NuevaVentaModal).
+  const formaPagoEsEfectivo = (formaId, metodoFallback) => {
+    const forma = formasPago.find(f => f.id === formaId);
+    return forma ? forma.tipo_instrumento === 'efectivo' : metodoFallback === 'Efectivo';
+  };
+
   const handlePago = (e) => {
     e.preventDefault();
+
+    if (!isSessionOpen && formaPagoEsEfectivo(pagoForm.forma_pago_id, pagoForm.metodo)) {
+      return toast({
+        variant: 'destructive',
+        title: 'Caja cerrada',
+        description: 'Abrí la caja para registrar pagos en efectivo. Podés usar Transferencia, Tarjeta o Cuenta Corriente sin abrir la caja.',
+      });
+    }
+
     const monto = parseNumberLocale(pagoForm.monto);
     if (!monto || monto <= 0) return toast({ title: 'Ingresá un monto válido', variant: 'destructive' });
 
@@ -951,6 +968,11 @@ function ProveedoresSection() {
                 ))}
               </select>
               <p className="text-2xs text-kx-text-3">Efectivo descuenta de la Caja; los demás, de la cuenta bancaria mapeada.</p>
+              {!isSessionOpen && formaPagoEsEfectivo(pagoForm.forma_pago_id, pagoForm.metodo) && (
+                <p className="text-xs text-red-500 font-medium flex items-center gap-1 dark:text-red-400">
+                  <AlertTriangle className="h-3 w-3" /> Caja cerrada: abrí la caja para pagar en efectivo, o elegí otra forma de pago.
+                </p>
+              )}
             </div>
             {(() => {
               const forma = formasPago.find(f => f.id === pagoForm.forma_pago_id);
@@ -1030,7 +1052,7 @@ function ProveedoresSection() {
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setPagoOpen(false)} className="dark:border-kx-border dark:text-slate-300">Cancelar</Button>
-              <Button type="submit" disabled={pagoMutation.isPending || totalImputadoPago > montoPago} className="bg-green-600 hover:bg-green-700 text-white">
+              <Button type="submit" disabled={pagoMutation.isPending || totalImputadoPago > montoPago || (!isSessionOpen && formaPagoEsEfectivo(pagoForm.forma_pago_id, pagoForm.metodo))} className="bg-green-600 hover:bg-green-700 text-white">
                 {pagoMutation.isPending ? 'Guardando...' : 'Confirmar Pago'}
               </Button>
             </DialogFooter>
