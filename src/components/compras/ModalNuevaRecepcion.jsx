@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { Plus, Trash2, Loader2, Check, Package } from 'lucide-react';
+import { Plus, Trash2, Loader2, Check, Package, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,6 +30,7 @@ function ModalNuevaRecepcion({
   addItem, removeItem, updateItem,
   handleSave, saving,
   resultado,
+  ordenesCompra, onElegirOC,
 }) {
   const prodRefs = useRef([]);
   const prevItemsLength = useRef(form.items.length);
@@ -79,6 +80,27 @@ function ModalNuevaRecepcion({
           </div>
         ) : (
         <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
+          {/* "Copiar de OC" (pedido Luciano 11/09): un atajo para arrancar
+              desde una orden de compra en vez de cargar todo a mano. Elegir
+              una acá corta este flujo y abre GenerarMovimientoModal con esa
+              OC — no reimplementa sus guardas de sobre-recepción. */}
+          {ordenesCompra?.length > 0 && (
+            <div className="shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-kx-border bg-kx-surface-2/50">
+              <ShoppingBag className="h-4 w-4 text-kx-text-3 shrink-0" />
+              <Label className="text-xs text-kx-text-2 shrink-0">Copiar de Orden de Compra (opcional)</Label>
+              <select
+                value=""
+                onChange={e => { if (e.target.value) onElegirOC(e.target.value); }}
+                className="h-8 flex-1 max-w-xs px-2 rounded-md border border-kx-border bg-kx-surface text-slate-900 dark:bg-kx-surface dark:border-kx-border dark:text-kx-text text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">— cargar manual, sin OC —</option>
+                {ordenesCompra.map(oc => (
+                  <option key={oc.id} value={oc.id}>{oc.numero}{oc.proveedores?.nombre ? ` — ${oc.proveedores.nombre}` : ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <Card className="dark:bg-kx-bg dark:border-kx-border shrink-0">
             <CardContent className="p-3">
               <div className="grid grid-cols-12 gap-3 items-start">

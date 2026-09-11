@@ -1,5 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ "Copiar de Orden de Compra" en Nueva Recepción (11/09)
+
+Idea de Luciano: agregar un atajo para arrancar una recepción desde una OC existente sin salir
+de la pestaña Recepciones (hoy solo se podía desde el botón propio de la OC). Decisión de diseño
+clave (aprobada antes de construir): **no reimplementar las guardas de sobre-recepción** dentro
+del flujo manual — en vez de eso, el picker le pasa la mano a `GenerarMovimientoModal` (el mismo
+componente que ya usa "Generar Recepción" desde `OrdenesCompraSection`), reusando `crear_recepcion`
+y sus validaciones ya resueltas.
+
+**Construido:**
+- `RecepcionesSection.jsx`: fetch de OC con `estado IN ('enviada','recibida_parcial')` (mismos 2
+  estados que el trigger `fn_oc_recalcular_estado` reconoce como "con margen para recibir más");
+  monta una segunda instancia de `GenerarMovimientoModal` (tipo `recepcion`) independiente de la
+  de OC; `handleElegirOC` cierra "Nueva Recepción" y abre esa instancia con el id elegido.
+- `ModalNuevaRecepcion.jsx`: select "Copiar de Orden de Compra (opcional)" arriba de todo — al
+  elegir una OC, corta el flujo manual inmediatamente (no hay ítems cargados todavía en ese
+  punto, no hay nada que perder).
+
+Verificado en vivo: elegir OC-00012 cierra "Nueva Recepción" y abre "Generar Recepción —
+OC-00012" correctamente (mostró "Todos los ítems ya fueron recibidos" porque esa OC en particular
+tiene ítems de texto libre sin producto real — comportamiento esperado, no un bug de esto). El
+flujo de recibir de verdad contra una OC con productos reales ya se había probado end-to-end en
+la sesión anterior (OC-00017). Sin impacto contable: `crear_recepcion` tampoco genera asiento
+propio (Regla 8).
+
+---
+
 ## ✅ Nueva Recepción manual — atajo Enter + ya no se cierra sola al crear (11/09)
 
 Segunda vuelta sobre el modal recién reestructurado (ver entrada de abajo). Dos hallazgos de

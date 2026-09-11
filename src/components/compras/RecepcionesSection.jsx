@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/use-toast';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import ModalNuevaRecepcion from '@/components/compras/ModalNuevaRecepcion';
 import ConfirmDuplicarDialog from '@/components/shared/ConfirmDuplicarDialog';
+import GenerarMovimientoModal from '@/components/shared/GenerarMovimientoModal';
 
 const ORIGEN_LABELS = {
   implicita: { label: 'Compra Rápida', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
@@ -51,6 +52,13 @@ function RecepcionesSection() {
   // agrega acá para poder resolver "Duplicar" (pedido de Luciano, 14/08, mig.392).
   const [proveedores, setProveedores] = useState([]);
   const [productos, setProductos]     = useState([]);
+  // "Copiar de OC" (pedido Luciano 11/09): en vez de reimplementar las guardas
+  // de sobre-recepción acá adentro, el picker le pasa la mano a
+  // GenerarMovimientoModal (mismo componente que usa el botón "Generar
+  // Recepción" de OrdenesCompraSection) — reusa crear_recepcion y sus
+  // validaciones ya resueltas en vez de duplicarlas en el flujo manual.
+  const [ordenesCompraPendientes, setOrdenesCompraPendientes] = useState([]);
+  const [copiarDeOcId, setCopiarDeOcId] = useState(null);
   const [isNuevaOpen, setIsNuevaOpen] = useState(false);
   const [nuevaForm, setNuevaForm]     = useState({ proveedor_id: '', fecha: getTodayAR(), observaciones: '', items: [{ producto_id: '', cantidad: 1 }] });
   const [savingNueva, setSavingNueva] = useState(false);
@@ -96,6 +104,12 @@ function RecepcionesSection() {
     // grande trae TODOS los productos activos cada vez que se abre Recepciones.
     supabase.from('productos').select('id, nombre, stock_actual').eq('empresa_id', user.empresa_id).eq('activo', true).order('nombre').limit(200)
       .then(({ data }) => setProductos(data || []));
+    // OC con algo pendiente de recibir -- mismo criterio que el trigger
+    // fn_oc_recalcular_estado (mig.066): "enviada" (nada recibido aún) o
+    // "recibida_parcial" son los únicos estados con margen para recibir más.
+    supabase.from('ordenes_compra').select('id, numero, proveedores(nombre)')
+      .eq('empresa_id', user.empresa_id).in('estado', ['enviada', 'recibida_parcial']).order('numero')
+      .then(({ data }) => setOrdenesCompraPendientes(data || []));
   }, [user?.empresa_id]);
 
   const emptyNuevaForm = () => ({ proveedor_id: '', fecha: getTodayAR(), observaciones: '', items: [{ producto_id: '', cantidad: 1 }] });
@@ -106,6 +120,20 @@ function RecepcionesSection() {
     setIsNuevaOpen(false);
     setDuplicadoDeId(null);
     setRecepcionCreada(null);
+  };
+
+  // El picker de "Copiar de OC" corta el flujo manual y le pasa la mano a
+  // GenerarMovimientoModal (ver comentario en el useState de copiarDeOcId).
+  const handleElegirOC = (ocId) => {
+    cerrarNuevaRecepcion();
+    setCopiarDeOcId(ocId);
+  };
+
+  const refetchOrdenesCompraPendientes = () => {
+    if (!user?.empresa_id) return;
+    supabase.from('ordenes_compra').select('id, numero, proveedores(nombre)')
+      .eq('empresa_id', user.empresa_id).in('estado', ['enviada', 'recibida_parcial']).order('numero')
+      .then(({ data }) => setOrdenesCompraPendientes(data || []));
   };
 
   const addItemNueva = () =>
@@ -379,6 +407,18 @@ function RecepcionesSection() {
         handleSave={handleGuardarNuevaRecepcion}
         saving={savingNueva}
         resultado={recepcionCreada}
+        ordenesCompra={ordenesCompraPendientes}
+        onElegirOC={handleElegirOC}
+      />
+
+      <GenerarMovimientoModal
+        tipo="recepcion"
+        sourceId={copiarDeOcId}
+        onClose={() => setCopiarDeOcId(null)}
+        onSuccess={() => {
+          fetchRecepciones();
+          refetchOrdenesCompraPendientes();
+        }}
       />
 
       <ConfirmDuplicarDialog
