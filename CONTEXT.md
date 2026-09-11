@@ -44,7 +44,17 @@ de otra forma, ver detalle abajo). Orden de prioridad y estado:
    (`ndCreada`). Verificado en vivo + contabilidad ("Copiar a ND" desde FAC-20260822-001):
    ND-20260911-001 $5000, asiento correcto (DEBE 1.1.2 CxC $5000 = HABER 4.1 Ventas $4132.23 +
    HABER 2.1.3 IVA Débito Fiscal $867.77).
-7. ⏳ NC de Proveedor (`NuevaNCProveedorModal.jsx:309-311`) — SÍ genera asiento.
+7. ✅ **NC de Proveedor** (`NuevaNCProveedorModal.jsx`) — CERRADO, mismo patrón (`ncCreada`).
+   A diferencia de NC/ND de Venta, sus 3 call-sites (`FacturasCompraSection.jsx`,
+   `DevolucionesProveedorSection.jsx` x2) SÍ cerraban el modal en `onSuccess` — se les sacó eso
+   ahí. Al hacerlo apareció un detalle cosmético nuevo: el título ("NC de Proveedor sobre...")
+   perdía la referencia al origen porque `onSuccess` limpiaba `ncOrigen` de inmediato mientras
+   el resumen seguía mostrándose — se corrigió difiriendo esa limpieza a `onOpenChange` (recién
+   al cerrar de verdad), mismo criterio que ya usaba el flujo de Duplicar. Se encontró y corrigió
+   el mismo detalle en el `onSuccess` de Duplicar del ítem 1 (Nueva Factura de Proveedor).
+   Verificado en vivo + contabilidad ("Copiar a NC" desde una factura a Amazon): NC-20260911-001
+   $2000, asiento correcto (DEBE 2.1.1 CxP $2000 = HABER 1.1.3 Mercaderías $1652.89 + HABER
+   1.1.4 IVA Crédito Fiscal $347.11).
 8. ⏳ ND de Proveedor (`NuevaNotaDebitoModal.jsx:222-224`) — SÍ genera asiento.
 9. ⏳ Cheques — alta tercero/propio (`ChequesSection.jsx:205-208` y `:242-245`) — SÍ genera
    asiento (vía trigger, no en el frontend).

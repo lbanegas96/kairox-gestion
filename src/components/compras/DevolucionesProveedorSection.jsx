@@ -259,9 +259,12 @@ function DevolucionesTab({ onNavigate, onOpenMapa }) {
 
       <NuevaNCProveedorModal
         open={isNcOpen}
-        onOpenChange={setIsNcOpen}
+        // ncOrigen se limpia recién al cerrar de verdad -- si no, el título
+        // del modal pierde la referencia mientras todavía está mostrando el
+        // resumen de confirmación (ncCreada).
+        onOpenChange={v => { setIsNcOpen(v); if (!v) setNcOrigen(null); }}
         devolucionOrigen={ncOrigen}
-        onSuccess={() => { setIsNcOpen(false); setNcOrigen(null); fetchDevoluciones(); }}
+        onSuccess={() => fetchDevoluciones()}
       />
     </Card>
   );
@@ -656,7 +659,7 @@ function NotasCreditoRecibidas({ onOpenMapa }) {
         onOpenChange={v => { setIsDuplicarOpen(v); if (!v) setDuplicarTarget(null); }}
         duplicarOrigen={duplicarTarget ? { id: duplicarTarget.id, proveedor_id: duplicarTarget.proveedor_id } : null}
         duplicadoDeId={duplicarVincular ? (duplicarTarget?.id ?? null) : null}
-        onSuccess={() => { setIsDuplicarOpen(false); setDuplicarTarget(null); fetchNotas(); }}
+        onSuccess={() => { setDuplicarTarget(null); fetchNotas(); }}
       />
     </Card>
   );

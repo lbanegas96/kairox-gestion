@@ -369,10 +369,14 @@ function FacturasCompraSection() {
 
       <NuevaFacturaProveedorModal
         open={isDuplicarOpen}
+        // duplicarOrigen se limpia recién al cerrar de verdad (arriba) -- si
+        // se limpiara en onSuccess, el título ("Copiar a Factura — ...")
+        // perdería la referencia mientras el modal sigue mostrando el
+        // resumen de confirmación (facturaCreada).
         onOpenChange={v => { setIsDuplicarOpen(v); if (!v) { setDuplicarOrigen(null); setDuplicarDeId(null); } }}
         compraOrigen={duplicarOrigen}
         duplicadoDeId={duplicarDeId}
-        onSuccess={() => { setDuplicarOrigen(null); setDuplicarDeId(null); fetchCompras(); }}
+        onSuccess={() => fetchCompras()}
       />
 
       <NuevaDevolucionModal
@@ -385,9 +389,12 @@ function FacturasCompraSection() {
 
       <NuevaNCProveedorModal
         open={isNcOpen}
-        onOpenChange={setIsNcOpen}
+        // ncOrigen se limpia recién al cerrar de verdad -- si no, el título
+        // del modal ("NC sobre S/N") pierde la referencia mientras todavía
+        // está mostrando el resumen de confirmación.
+        onOpenChange={v => { setIsNcOpen(v); if (!v) setNcOrigen(null); }}
         compraOrigen={ncOrigen}
-        onSuccess={() => { setIsNcOpen(false); setNcOrigen(null); fetchCompras(); }}
+        onSuccess={() => fetchCompras()}
       />
 
       <NuevaNotaDebitoModal
