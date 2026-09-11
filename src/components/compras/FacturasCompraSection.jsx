@@ -349,7 +349,9 @@ function FacturasCompraSection() {
       <NuevaFacturaProveedorModal
         open={showNuevaFactura}
         onOpenChange={setShowNuevaFactura}
-        onSuccess={() => { setShowNuevaFactura(false); fetchCompras(); }}
+        // No cierra acá -- el modal se queda abierto mostrando la confirmación
+        // (facturaCreada) hasta que el usuario clickea "Cerrar" ahí adentro.
+        onSuccess={() => fetchCompras()}
       />
 
       <ConfirmDuplicarDialog
@@ -370,7 +372,7 @@ function FacturasCompraSection() {
         onOpenChange={v => { setIsDuplicarOpen(v); if (!v) { setDuplicarOrigen(null); setDuplicarDeId(null); } }}
         compraOrigen={duplicarOrigen}
         duplicadoDeId={duplicarDeId}
-        onSuccess={() => { setIsDuplicarOpen(false); setDuplicarOrigen(null); setDuplicarDeId(null); fetchCompras(); }}
+        onSuccess={() => { setDuplicarOrigen(null); setDuplicarDeId(null); fetchCompras(); }}
       />
 
       <NuevaDevolucionModal

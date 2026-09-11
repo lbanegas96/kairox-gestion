@@ -69,6 +69,11 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, d
   // Centro de costo (Fase 1 del plan de 4 frentes contables) — opcional.
   const [centrosCosto, setCentrosCosto]   = useState([]);
   const [centroCostoId, setCentroCostoId] = useState('');
+  // Hallazgo Luciano 11/09 (mismo patrón que NuevaFacturaModal.jsx de Ventas,
+  // que ya lo tenía): el modal se cerraba solo apenas la factura quedaba
+  // registrada, sin mostrar ningún resumen. `facturaCreada` reemplaza el
+  // formulario por una confirmación hasta que el usuario cierra a propósito.
+  const [facturaCreada, setFacturaCreada] = useState(null);
 
   // ── Carga al abrir ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -120,6 +125,7 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, d
       setProdResults({});
       setSearchFocusId(null);
       setCentroCostoId('');
+      setFacturaCreada(null);
     }
   }, [open]);
 
@@ -374,7 +380,14 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, d
 
       toast({ title: `Factura de proveedor registrada${numeroFactura ? ` — ${numeroFactura}` : ''}` });
       onSuccess?.({ id: compra.id, total });
-      onOpenChange(false);
+      // No cierra el modal solo -- muestra la confirmación (mismo patrón que
+      // NuevaFacturaModal.jsx de Ventas). El usuario cierra con "Cerrar".
+      setFacturaCreada({
+        numero: numeroFactura.trim() || 'S/N',
+        total,
+        proveedorNombre: provNombre,
+        esCC: isCC,
+      });
     } catch (err) {
       console.error('[NuevaFacturaProveedor]', err);
       toast({ title: 'Error al registrar la factura', description: err.message, variant: 'destructive' });
@@ -400,6 +413,32 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, d
           </DialogDescription>
         </DialogHeader>
 
+        {facturaCreada ? (
+          <>
+            <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+              <div className="w-14 h-14 rounded-full bg-kx-green/10 flex items-center justify-center">
+                <FileText className="w-7 h-7 text-kx-green" />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-kx-text">Factura {facturaCreada.numero} registrada</p>
+                <p className="text-sm text-kx-text-2 mt-1">
+                  Total ${fmt(facturaCreada.total)}
+                  {facturaCreada.esCC
+                    ? ` — queda pendiente en la Cuenta Corriente de ${facturaCreada.proveedorNombre}.`
+                    : ' — pagada.'}
+                </p>
+              </div>
+            </div>
+            <DialogFooter className="px-6 py-4 border-t border-kx-border shrink-0">
+              <Button onClick={() => onOpenChange(false)}
+                style={{ background: 'rgb(var(--kx-blue))', color: '#fff' }}
+                className="ml-auto gap-2 hover:opacity-90">
+                Cerrar
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+        <>
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
           {/* Banner */}
           <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-900/30 text-xs text-blue-700 dark:text-blue-300">
@@ -691,6 +730,8 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, d
             </Button>
           </div>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
 
       <TipoCambioModal

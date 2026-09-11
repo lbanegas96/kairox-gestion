@@ -1,5 +1,44 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🔄 Auditoría "se cierra solo al crear" — patrón repetido en 10 lugares (en curso, 11/09)
+
+Después de corregir el mismo bug 2 veces (GenerarMovimientoModal, Nueva Recepción manual),
+Luciano pidió auditar todo el sistema. Un agente en segundo plano encontró **10 casos reales**
+confirmados (y una lista de casos que parecían candidatos pero NO son el mismo bug — ya resueltos
+de otra forma, ver detalle abajo). Orden de prioridad y estado:
+
+1. ✅ **Nueva Factura de Proveedor** (`NuevaFacturaProveedorModal.jsx`) — CERRADO. Agregado
+   `facturaCreada` (mismo patrón que `NuevaFacturaModal.jsx` de Ventas, que ya lo tenía
+   correcto). `FacturasCompraSection.jsx`: los 2 call-sites (alta + duplicar) ya no cierran el
+   modal en `onSuccess`. Verificado en vivo end-to-end: factura a Amazon $1210 (neto $1000 + IVA
+   $210), el modal quedó abierto mostrando el resumen, y el asiento generado es correcto —
+   partida doble verificada: DEBE 1.1.3 Mercaderías $1000 + DEBE 1.1.4 IVA Crédito Fiscal $210 =
+   HABER 2.1.1 Cuentas a Pagar $1210.
+2. ⏳ Nueva Entrega manual (`EntregasSection.jsx:322-326`) — sin asiento propio (remito/stock).
+3. ⏳ Ajuste de Stock manual (`ProductosSection.jsx:416-419`) — SÍ genera asiento
+   (`crearAsientoAjusteStock`).
+4. ⏳ Devolución Cliente/Proveedor (`NuevaDevolucionModal.jsx:317-319`) — asiento condicional
+   (solo si "Reembolsar en efectivo ahora").
+5. ⏳ NC de Venta (`NuevaNCModal.jsx:382-384`) — SÍ genera asiento.
+6. ⏳ ND de Venta (`NuevaNDModal.jsx:315-317`) — SÍ genera asiento.
+7. ⏳ NC de Proveedor (`NuevaNCProveedorModal.jsx:309-311`) — SÍ genera asiento.
+8. ⏳ ND de Proveedor (`NuevaNotaDebitoModal.jsx:222-224`) — SÍ genera asiento.
+9. ⏳ Cheques — alta tercero/propio (`ChequesSection.jsx:205-208` y `:242-245`) — SÍ genera
+   asiento (vía trigger, no en el frontend).
+10. ⏳ Asiento Contable Manual (`ModalNuevoAsiento.jsx:41-45`) — el más sensible: ni siquiera
+    mostraba las líneas Debe/Haber recién grabadas. Es el asiento en sí.
+
+**NO son el mismo bug** (ya revisados por el agente, no reabrir): Cotizaciones, Pedidos, Órdenes
+de Compra (cierran pero reabren el detalle del documento recién creado — patrón correcto ya
+existente), Registrar Factura desde OC (el `ModalDetalleOC` de atrás ya lista la factura nueva),
+Compra Rápida y su pago (cambian de pestaña a Historial, no es un modal de creación), Nueva
+Factura de Venta (ya tenía el patrón correcto — es la referencia que se está replicando acá),
+Cobro de Cliente (abre el detalle del cobro), Pago a Proveedores (queda en el detalle del
+proveedor + PDF), Recuento/Revalorización de Inventario (ya no cierran), Pago Masivo a
+Proveedores (ya tiene su propia vista de resultados).
+
+---
+
 ## ✅ "Copiar de Orden de Compra" en Nueva Recepción (11/09)
 
 Idea de Luciano: agregar un atajo para arrancar una recepción desde una OC existente sin salir
