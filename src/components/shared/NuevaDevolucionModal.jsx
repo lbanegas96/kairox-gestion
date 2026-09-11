@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Undo2, RotateCcw, Loader2, AlertCircle } from 'lucide-react';
+import { Undo2, RotateCcw, Loader2, AlertCircle, Check } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import ClienteSelector from '@/components/shared/ClienteSelector';
 import { formatDateAR, getTodayAR } from '@/lib/dateUtils';
@@ -135,6 +135,11 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
   const [motivo, setMotivo]                       = useState('');
   const [loadingItems, setLoadingItems]           = useState(false);
   const [saving, setSaving]                       = useState(false);
+  // Hallazgo Luciano 11/09 (mismo patrón repetitivo, ver CONTEXT.md — 4/10):
+  // el modal se cerraba solo apenas la devolución se registraba, sin mostrar
+  // nada. `resultado` reemplaza el formulario por un resumen hasta que el
+  // usuario cierra a propósito.
+  const [resultado, setResultado]                 = useState(null);
 
   // "Origen efectivo": el `origen` que llega por prop (modo "Devolver
   // mercadería", ya resuelto por el caller) o, en modo standalone de
@@ -216,6 +221,7 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
       setReembolsoEfectivo(false);
       setMotivo('');
       setSaving(false);
+      setResultado(null);
     }
   }, [isOpen]);
 
@@ -316,7 +322,18 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
         : `Devolución ${data.numero_devolucion} registrada`;
       toast({ title: msg });
       onSuccess?.(data);
-      onClose();
+      // No cierra el modal solo -- muestra el resumen (mismo patrón que
+      // Nueva Recepción/Nueva Entrega manual). El usuario cierra con "Cerrar".
+      setResultado({
+        numero: data.numero_devolucion,
+        total: data.total,
+        reembolsoEfectivo,
+        items: itemsToReturn.map(it => ({
+          id: it.producto_id,
+          nombre: items.find(i => i.producto_id === it.producto_id)?.nombre ?? 'Producto',
+          cantidad: it.cantidad,
+        })),
+      });
     } catch (err) {
       console.error('[NuevaDevolucion]', err);
       if (tipo === 'proveedor') {
@@ -362,10 +379,32 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
             {tituloOrigen}
           </DialogTitle>
           <DialogDescription className="dark:text-kx-text-2">
-            {descripcion}
+            {resultado ? 'Devolución confirmada. Esto fue lo que quedó registrado.' : descripcion}
           </DialogDescription>
         </DialogHeader>
 
+        {resultado ? (
+          <div className="py-2">
+            <div className="flex items-center gap-3 pb-4">
+              <Check className="h-8 w-8 shrink-0 text-[rgb(var(--kx-green))]" />
+              <div>
+                <p className="font-semibold text-kx-text">Devolución {resultado.numero} registrada</p>
+                <p className="text-sm text-kx-text-2">
+                  Total ${Number(resultado.total).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+                  {resultado.reembolsoEfectivo ? ' — reembolso en efectivo aplicado.' : ' — sin reembolso en efectivo.'}
+                </p>
+              </div>
+            </div>
+            <div className="border border-kx-border rounded-lg divide-y divide-kx-border">
+              {resultado.items.map((it, i) => (
+                <div key={`${it.id}-${i}`} className="flex items-center justify-between px-3 py-2 text-sm">
+                  <span className="text-kx-text truncate pr-2">{it.nombre}</span>
+                  <span className="font-mono text-kx-text-2 shrink-0">{it.cantidad} u.</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
         <div className="space-y-5 py-2">
           {/* Cliente (modo standalone) */}
           {tipo === 'cliente' && !origen && (
@@ -515,16 +554,25 @@ function NuevaDevolucionModal({ tipo, isOpen, onClose, onSuccess, origen = null 
             />
           </div>
         </div>
+        )}
 
         <div className="flex justify-end gap-3 pt-2 border-t border-kx-border">
-          <Button variant="outline" onClick={onClose} disabled={saving} className="dark:border-kx-border dark:text-slate-300">
-            Cancelar
-          </Button>
-          <Button onClick={handleConfirm} disabled={!puedeGuardar} className={cfg.confirmClass}>
-            {saving
-              ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Registrando...</>
-              : <><Icon className="h-4 w-4 mr-2" />Registrar Devolución</>}
-          </Button>
+          {resultado ? (
+            <Button onClick={onClose} className="bg-[rgb(var(--kx-violet))] hover:opacity-90 text-white">
+              Cerrar
+            </Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={onClose} disabled={saving} className="dark:border-kx-border dark:text-slate-300">
+                Cancelar
+              </Button>
+              <Button onClick={handleConfirm} disabled={!puedeGuardar} className={cfg.confirmClass}>
+                {saving
+                  ? <><Loader2 className="h-4 w-4 animate-spin mr-2" />Registrando...</>
+                  : <><Icon className="h-4 w-4 mr-2" />Registrar Devolución</>}
+              </Button>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
