@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react';
 import { Plus, Trash2, Loader2, Check, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,23 +16,68 @@ import { getTodayAR } from '@/lib/dateUtils';
 // layout de 2 Cards (datos del encabezado + grilla de ítems), y suma "Fecha
 // de recepción" (mig.394) para poder backdatear una recepción que
 // físicamente pasó otro día, igual que "Entrega esperada" en Nueva OC.
+//
+// Segunda vuelta 11/09: faltaba el atajo Enter-agrega-fila (patrón ya
+// confirmado en FormNuevaOC/FormNuevaCotizacion/ModalPedidoForm) y el modal
+// se cerraba solo al crear, sin mostrar qué quedó registrado (mismo bug ya
+// corregido en GenerarMovimientoModal) — `resultado` (controlado por
+// RecepcionesSection) reemplaza el formulario por un resumen hasta que el
+// usuario cierra a propósito.
 function ModalNuevaRecepcion({
   isOpen, onClose,
   proveedores, productos,
   form, setForm,
   addItem, removeItem, updateItem,
   handleSave, saving,
+  resultado,
 }) {
+  const prodRefs = useRef([]);
+  const prevItemsLength = useRef(form.items.length);
+  useEffect(() => {
+    if (form.items.length > prevItemsLength.current) {
+      prodRefs.current[form.items.length - 1]?.focus();
+    }
+    prevItemsLength.current = form.items.length;
+  }, [form.items.length]);
+
+  const handleItemRowKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addItem();
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={v => !v && onClose()}>
       <DialogContent size="wide" className="dark:bg-kx-bg dark:border-kx-border">
         <DialogHeader className="shrink-0">
           <DialogTitle className="dark:text-kx-text">Nueva Recepción</DialogTitle>
           <DialogDescription className="dark:text-kx-text-2">
-            Registrá una recepción de mercadería sin partir de una orden de compra. El stock se suma al confirmar.
+            {resultado
+              ? 'Recepción confirmada. Esto fue lo que quedó registrado.'
+              : 'Registrá una recepción de mercadería sin partir de una orden de compra. El stock se suma al confirmar.'}
           </DialogDescription>
         </DialogHeader>
 
+        {resultado ? (
+          <div className="flex-1 min-h-0 overflow-y-auto py-2">
+            <div className="flex items-center gap-3 pb-4">
+              <Check className="h-8 w-8 shrink-0 text-[rgb(var(--kx-green))]" />
+              <div>
+                <p className="font-semibold text-kx-text">Recepción {resultado.numero} registrada</p>
+                <p className="text-sm text-kx-text-2">El stock se sumó correctamente.</p>
+              </div>
+            </div>
+            <div className="border border-kx-border rounded-lg divide-y divide-kx-border">
+              {resultado.items.map((it, i) => (
+                <div key={`${it.id}-${i}`} className="flex items-center justify-between px-3 py-2 text-sm">
+                  <span className="text-kx-text truncate pr-2">{it.nombre}</span>
+                  <span className="font-mono text-kx-text-2 shrink-0">{it.cantidad} u.</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
         <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden">
           <Card className="dark:bg-kx-bg dark:border-kx-border shrink-0">
             <CardContent className="p-3">
@@ -93,8 +139,10 @@ function ModalNuevaRecepcion({
                     <div key={i} className="grid grid-cols-12 gap-2 items-center">
                       <div className="col-span-7">
                         <select
+                          ref={el => { prodRefs.current[i] = el; }}
                           value={item.producto_id}
                           onChange={e => updateItem(i, 'producto_id', e.target.value)}
+                          onKeyDown={handleItemRowKeyDown}
                           className="w-full h-9 text-sm rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-surface dark:text-kx-text px-2"
                         >
                           <option value="">— seleccionar producto —</option>
@@ -110,6 +158,7 @@ function ModalNuevaRecepcion({
                           type="number" min="1" step="1"
                           value={item.cantidad}
                           onChange={e => updateItem(i, 'cantidad', e.target.value.replace(/[^\d]/g, ''))}
+                          onKeyDown={handleItemRowKeyDown}
                           className="h-9 text-sm text-center dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
                         />
                       </div>
@@ -128,15 +177,24 @@ function ModalNuevaRecepcion({
             </CardContent>
           </Card>
         </div>
+        )}
 
         <DialogFooter className="shrink-0">
-          <Button variant="outline" onClick={onClose} className="dark:text-kx-text dark:border-kx-border">
-            Cancelar
-          </Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white">
-            {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
-            Crear Recepción
-          </Button>
+          {resultado ? (
+            <Button onClick={onClose} className="bg-[rgb(var(--kx-violet))] hover:opacity-90 text-white">
+              Cerrar
+            </Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={onClose} className="dark:text-kx-text dark:border-kx-border">
+                Cancelar
+              </Button>
+              <Button onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white">
+                {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
+                Crear Recepción
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

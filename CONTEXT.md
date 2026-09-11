@@ -1,5 +1,37 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Nueva Recepción manual — atajo Enter + ya no se cierra sola al crear (11/09)
+
+Segunda vuelta sobre el modal recién reestructurado (ver entrada de abajo). Dos hallazgos de
+Luciano, mismo patrón que ya se había corregido en `GenerarMovimientoModal.jsx`:
+
+1. **Atajo Enter no agregaba fila** — `ModalNuevaRecepcion.jsx` nunca tuvo el patrón ya
+   confirmado en `FormNuevaOC.jsx`/`FormNuevaCotizacion.jsx`/`ModalPedidoForm.jsx`. Agregado:
+   `onKeyDown` en Producto/Cantidad dispara `addItem()` + autofocus a la fila nueva (mismo
+   `useRef` array + `useEffect` sobre `items.length`). Verificado en vivo — el navegador de
+   prueba no reenvía bien la tecla Enter simulada, así que se confirmó con un `KeyboardEvent`
+   despachado directo al DOM: agrega fila y enfoca el nuevo Producto correctamente.
+2. **Se cerraba solo al crear** — mismo bug que ya existía en `GenerarMovimientoModal.jsx`
+   antes de corregirlo (10/09). `RecepcionesSection.jsx` ahora guarda `recepcionCreada` (número +
+   ítems confirmados) en vez de cerrar el modal apenas la RPC devuelve éxito; `ModalNuevaRecepcion`
+   recibe ese resultado por prop y muestra el mismo resumen (check + lista de ítems) con un único
+   botón "Cerrar", igual que el otro modal.
+
+**Sin impacto contable** — verificado: `crear_recepcion_manual` no genera asiento (Regla 8, la
+Recepción nunca lo hace, solo Factura/Compra), y se confirmó con `SELECT count(*) FROM
+asientos_contables WHERE created_at > now() - interval '10 minutes'` = 0 tras la prueba en vivo.
+
+Verificado en vivo end-to-end: creó `REC-2026-0027` (Lucchetti bucattini 500 g, 1 u.), el modal
+quedó abierto mostrando el resumen hasta cerrar a propósito.
+
+**Pendiente, en curso**: auditoría en segundo plano de dónde más se repite el patrón "se cierra
+solo al crear un comprobante" en el resto del sistema (Cotizaciones, Pedidos, Compra Rápida,
+Facturas, NC/ND, Devoluciones, Cheques, Pagos/Cobros, Ajuste de stock, Recuento/Revalorización).
+Después de esto sigue "Copiar de OC" en Nueva Recepción (Luciano aprobó el planteo: reusar
+`GenerarMovimientoModal`/`crear_recepcion` en vez de duplicar las guardas de sobre-recepción).
+
+---
+
 ## ✅ Nueva Recepción manual — reestructurada + Fecha de recepción (mig.394, 11/09)
 
 Luciano confirmó en vivo que "Nueva Recepción" (mig.392, la manual sin partir de una OC) ya

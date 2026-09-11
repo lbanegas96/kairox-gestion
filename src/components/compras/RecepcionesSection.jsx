@@ -56,6 +56,11 @@ function RecepcionesSection() {
   const [savingNueva, setSavingNueva] = useState(false);
   const [duplicarTarget, setDuplicarTarget] = useState(null);
   const [duplicadoDeId, setDuplicadoDeId]   = useState(null);
+  // Hallazgo Luciano 11/09 (mismo patrón ya corregido en GenerarMovimientoModal):
+  // el modal se cerraba solo apenas la recepción se creaba, sin mostrar qué
+  // quedó registrado. `recepcionCreada` reemplaza el formulario por un resumen
+  // hasta que el usuario cierra a propósito.
+  const [recepcionCreada, setRecepcionCreada] = useState(null);
 
   const fetchRecepciones = async () => {
     if (!user?.empresa_id) return;
@@ -95,7 +100,13 @@ function RecepcionesSection() {
 
   const emptyNuevaForm = () => ({ proveedor_id: '', fecha: getTodayAR(), observaciones: '', items: [{ producto_id: '', cantidad: 1 }] });
 
-  const abrirNuevaRecepcion = () => { setDuplicadoDeId(null); setNuevaForm(emptyNuevaForm()); setIsNuevaOpen(true); };
+  const abrirNuevaRecepcion = () => { setDuplicadoDeId(null); setNuevaForm(emptyNuevaForm()); setRecepcionCreada(null); setIsNuevaOpen(true); };
+
+  const cerrarNuevaRecepcion = () => {
+    setIsNuevaOpen(false);
+    setDuplicadoDeId(null);
+    setRecepcionCreada(null);
+  };
 
   const addItemNueva = () =>
     setNuevaForm(f => ({ ...f, items: [...f.items, { producto_id: '', cantidad: 1 }] }));
@@ -131,8 +142,17 @@ function RecepcionesSection() {
       });
       if (error) throw error;
       toast({ title: `Recepción ${data.numero_recepcion} creada`, className: 'bg-green-600 text-white border-green-700' });
-      setIsNuevaOpen(false);
-      setDuplicadoDeId(null);
+      // No cierra el modal solo -- muestra el resumen de lo que quedó
+      // registrado (mismo patrón que GenerarMovimientoModal). El usuario
+      // cierra con el botón "Cerrar" de esa vista.
+      setRecepcionCreada({
+        numero: data.numero_recepcion,
+        items: validItems.map(it => ({
+          id: it.producto_id,
+          nombre: productos.find(p => p.id === it.producto_id)?.nombre ?? 'Producto',
+          cantidad: it.cantidad,
+        })),
+      });
       await fetchRecepciones();
     } catch (err) {
       toast({ title: 'No se pudo crear la recepción', description: err.message, variant: 'destructive' });
@@ -348,7 +368,7 @@ function RecepcionesSection() {
 
       <ModalNuevaRecepcion
         isOpen={isNuevaOpen}
-        onClose={() => { setIsNuevaOpen(false); setDuplicadoDeId(null); }}
+        onClose={cerrarNuevaRecepcion}
         proveedores={proveedores}
         productos={productos}
         form={nuevaForm}
@@ -358,6 +378,7 @@ function RecepcionesSection() {
         updateItem={updateItemNueva}
         handleSave={handleGuardarNuevaRecepcion}
         saving={savingNueva}
+        resultado={recepcionCreada}
       />
 
       <ConfirmDuplicarDialog
