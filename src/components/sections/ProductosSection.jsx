@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { Plus, Power, PowerOff, Upload, Sparkles, Search, Check, ArrowRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,11 @@ const ProductosSection = () => {
   const [isNewProductOpen, setIsNewProductOpen] = useState(false);
   const [isEditProductOpen, setIsEditProductOpen] = useState(false);
   const [isMovimientoOpen, setIsMovimientoOpen] = useState(false);
+  // Hallazgo Luciano 11/09 (mismo patrón repetitivo, ver CONTEXT.md — 3/10):
+  // el modal se cerraba solo apenas el movimiento se registraba, sin mostrar
+  // nada. `movimientoResultado` reemplaza el formulario por un resumen hasta
+  // que el usuario cierra a propósito.
+  const [movimientoResultado, setMovimientoResultado] = useState(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
 
   // mig.354 — Ajuste masivo de precios del catálogo (aumento por inflación, pedido de Nadia
@@ -380,6 +385,20 @@ const ProductosSection = () => {
     }
   };
 
+  // El "Cerrar" de la vista de resultado pasa por acá (limpia todo antes de
+  // cerrar), pero el usuario también puede cerrar el diálogo con Escape, click
+  // afuera o la X (eso llama a setIsMovimientoOpen directo, sin pasar por acá)
+  // -- este efecto cubre esos otros caminos para que no quede un resultado
+  // viejo mostrándose la próxima vez que se abra el modal para otro producto.
+  useEffect(() => {
+    if (!isMovimientoOpen) setMovimientoResultado(null);
+  }, [isMovimientoOpen]);
+
+  const cerrarMovimientoResultado = () => {
+    setIsMovimientoOpen(false);
+    setMovimientoResultado(null);
+  };
+
   const handleSubmitMovimiento = async (e) => {
     e.preventDefault();
     if (isSubmitting) return;
@@ -414,7 +433,14 @@ const ProductosSection = () => {
        });
 
        toast({ title: "Movimiento registrado", description: "Stock actualizado correctamente." });
-       setIsMovimientoOpen(false);
+       // No cierra el modal solo -- muestra el resumen (delta + costo) hasta
+       // que el usuario cierra a propósito (mismo patrón que Nueva Recepción/
+       // Nueva Entrega manual).
+       setMovimientoResultado({
+         productoNombre: selectedProductForMov.nombre,
+         delta,
+         costoUnitario: costo_unitario,
+       });
        setMovimientoForm(initialMovimientoState);
        invalidateProductos();
        invalidateNotifs();
@@ -599,6 +625,8 @@ const ProductosSection = () => {
          movimientoForm={movimientoForm} setMovimientoForm={setMovimientoForm}
          handleSubmitMovimiento={handleSubmitMovimiento}
          isSubmitting={isSubmitting}
+         resultado={movimientoResultado}
+         onCerrarResultado={cerrarMovimientoResultado}
        />
 
        {/* CSV Import Modal */}

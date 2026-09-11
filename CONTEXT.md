@@ -20,8 +20,13 @@ de otra forma, ver detalle abajo). Orden de prioridad y estado:
    correctamente. Nota: esta vez HMR de Vite no recargó los 2 archivos en el primer intento
    (2 entregas de prueba se crearon con el código VIEJO antes de notarlo) — un `navigate()`
    completo (no solo `location.reload()`) lo resolvió. Ojo para los próximos ítems de esta lista.
-3. ⏳ Ajuste de Stock manual (`ProductosSection.jsx:416-419`) — SÍ genera asiento
-   (`crearAsientoAjusteStock`).
+3. ✅ **Ajuste de Stock manual** (`ProductosSection.jsx`/`ModalMovimiento.jsx`) — CERRADO.
+   `movimientoResultado` reemplaza el form por variación de stock + costo unitario. Ojo: como
+   el Dialog cierra directo con `setIsMovimientoOpen` (sin wrapper), se agregó un `useEffect`
+   que limpia `movimientoResultado` cuando `isMovimientoOpen` pasa a `false` por CUALQUIER vía
+   (botón Cerrar, Escape, click afuera) — si no, el próximo movimiento sobre otro producto podía
+   arrancar mostrando el resultado viejo. Verificado en vivo + contabilidad: +5 u. de "aromaza",
+   asiento correcto (DEBE 1.1.3 Mercaderías $5000 = HABER 4.3 Otros Ingresos $5000).
 4. ⏳ Devolución Cliente/Proveedor (`NuevaDevolucionModal.jsx:317-319`) — asiento condicional
    (solo si "Reembolsar en efectivo ahora").
 5. ⏳ NC de Venta (`NuevaNCModal.jsx:382-384`) — SÍ genera asiento.
