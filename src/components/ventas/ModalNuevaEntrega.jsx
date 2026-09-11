@@ -11,6 +11,7 @@ function ModalNuevaEntrega({
   form, setForm,
   addItem, removeItem, updateItem,
   handleSave, saving,
+  resultado,
 }) {
   return (
     <Dialog open={isOpen} onOpenChange={v => !v && onClose()}>
@@ -18,10 +19,31 @@ function ModalNuevaEntrega({
         <DialogHeader>
           <DialogTitle className="dark:text-kx-text">Nueva Entrega</DialogTitle>
           <DialogDescription className="dark:text-kx-text-2">
-            Registrá una entrega de mercadería sin partir de un pedido. El stock se descuenta al confirmar.
+            {resultado
+              ? 'Entrega confirmada. Esto fue lo que quedó registrado.'
+              : 'Registrá una entrega de mercadería sin partir de un pedido. El stock se descuenta al confirmar.'}
           </DialogDescription>
         </DialogHeader>
 
+        {resultado ? (
+          <div className="py-2">
+            <div className="flex items-center gap-3 pb-4">
+              <Check className="h-8 w-8 shrink-0 text-[rgb(var(--kx-green))]" />
+              <div>
+                <p className="font-semibold text-kx-text">Entrega {resultado.numero} registrada</p>
+                <p className="text-sm text-kx-text-2">El stock se descontó correctamente.</p>
+              </div>
+            </div>
+            <div className="border border-kx-border rounded-lg divide-y divide-kx-border">
+              {resultado.items.map((it, i) => (
+                <div key={`${it.id}-${i}`} className="flex items-center justify-between px-3 py-2 text-sm">
+                  <span className="text-kx-text truncate pr-2">{it.nombre}</span>
+                  <span className="font-mono text-kx-text-2 shrink-0">{it.cantidad} u.</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
         <div className="space-y-5 py-2">
           <div className="space-y-1.5">
             <Label className="dark:text-kx-text">Cliente (opcional)</Label>
@@ -105,15 +127,24 @@ function ModalNuevaEntrega({
             />
           </div>
         </div>
+        )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} className="dark:text-kx-text dark:border-kx-border">
-            Cancelar
-          </Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white">
-            {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
-            Crear Entrega
-          </Button>
+          {resultado ? (
+            <Button onClick={onClose} className="bg-[rgb(var(--kx-violet))] hover:opacity-90 text-white">
+              Cerrar
+            </Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={onClose} className="dark:text-kx-text dark:border-kx-border">
+                Cancelar
+              </Button>
+              <Button onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white">
+                {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
+                Crear Entrega
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

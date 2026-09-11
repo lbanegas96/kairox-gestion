@@ -69,6 +69,11 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
   // handleGuardarNuevaEntrega — mismo criterio que el resto de los documentos.
   const [duplicarTarget, setDuplicarTarget] = useState(null);
   const [duplicadoDeId, setDuplicadoDeId]   = useState(null);
+  // Hallazgo Luciano 11/09 (mismo patrón repetitivo, ver CONTEXT.md): el modal
+  // se cerraba solo apenas la entrega se creaba, sin mostrar qué quedó
+  // registrado. `entregaCreada` reemplaza el formulario por un resumen hasta
+  // que el usuario cierra a propósito.
+  const [entregaCreada, setEntregaCreada] = useState(null);
 
   const viewEntrega = entregas.find(e => e.id === viewEntregaId) ?? null;
 
@@ -266,7 +271,13 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
 
   const emptyNuevaForm = () => ({ cliente_id: '', observaciones: '', items: [{ producto_id: '', cantidad: 1 }] });
 
-  const abrirNuevaEntrega = () => { setDuplicadoDeId(null); setNuevaForm(emptyNuevaForm()); setIsNuevaOpen(true); };
+  const abrirNuevaEntrega = () => { setDuplicadoDeId(null); setNuevaForm(emptyNuevaForm()); setEntregaCreada(null); setIsNuevaOpen(true); };
+
+  const cerrarNuevaEntrega = () => {
+    setIsNuevaOpen(false);
+    setDuplicadoDeId(null);
+    setEntregaCreada(null);
+  };
 
   // Duplicar SÍ vuelve a descontar stock: es un nuevo envío físico real, igual
   // que "Copiar A" en SAP B1 — no un clon inerte.
@@ -280,6 +291,7 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
     });
     setDuplicadoDeId(vincular ? duplicarTarget.id : null);
     setDuplicarTarget(null);
+    setEntregaCreada(null);
     // Mismo criterio que handleFacturarEntrega: si "Duplicar" se disparó desde
     // el detalle abierto, hay que cerrarlo antes de abrir el form de alta —
     // los dos son <Dialog> hermanos (no anidados), no <AlertDialog> sobre un
@@ -321,8 +333,16 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
       });
       if (error) throw error;
       toast({ title: `Entrega ${data.numero_entrega} creada`, className: 'bg-green-600 text-white border-green-700' });
-      setIsNuevaOpen(false);
-      setDuplicadoDeId(null);
+      // No cierra el modal solo -- muestra el resumen de lo que quedó
+      // registrado (mismo patrón que Nueva Recepción manual).
+      setEntregaCreada({
+        numero: data.numero_entrega,
+        items: validItems.map(it => ({
+          id: it.producto_id,
+          nombre: productos.find(p => p.id === it.producto_id)?.nombre ?? 'Producto',
+          cantidad: it.cantidad,
+        })),
+      });
       await fetchEntregas();
     } catch (err) {
       toast({ title: 'No se pudo crear la entrega', description: err.message, variant: 'destructive' });
@@ -446,7 +466,7 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
       {/* ── Modal Nueva Entrega (standalone, sin pedido) ────────────────────── */}
       <ModalNuevaEntrega
         isOpen={isNuevaOpen}
-        onClose={() => { setIsNuevaOpen(false); setDuplicadoDeId(null); }}
+        onClose={cerrarNuevaEntrega}
         clientes={clientes}
         productos={productos}
         form={nuevaForm}
@@ -456,6 +476,7 @@ function EntregasSection({ navigateEntregaId, onNavigated, onNavigate } = {}) {
         updateItem={updateItemNueva}
         handleSave={handleGuardarNuevaEntrega}
         saving={savingNueva}
+        resultado={entregaCreada}
       />
 
       {/* ── Modal Detalle ─────────────────────────────────────────────────── */}

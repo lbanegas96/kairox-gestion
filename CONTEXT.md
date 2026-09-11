@@ -14,7 +14,12 @@ de otra forma, ver detalle abajo). Orden de prioridad y estado:
    $210), el modal quedó abierto mostrando el resumen, y el asiento generado es correcto —
    partida doble verificada: DEBE 1.1.3 Mercaderías $1000 + DEBE 1.1.4 IVA Crédito Fiscal $210 =
    HABER 2.1.1 Cuentas a Pagar $1210.
-2. ⏳ Nueva Entrega manual (`EntregasSection.jsx:322-326`) — sin asiento propio (remito/stock).
+2. ✅ **Nueva Entrega manual** (`EntregasSection.jsx`/`ModalNuevaEntrega.jsx`) — CERRADO, mismo
+   patrón exacto que Nueva Recepción (`entregaCreada`). Sin asiento propio (remito/stock), nada
+   que controlar contablemente. Verificado en vivo: creó `ENT-2026-0158`, resumen mostrado
+   correctamente. Nota: esta vez HMR de Vite no recargó los 2 archivos en el primer intento
+   (2 entregas de prueba se crearon con el código VIEJO antes de notarlo) — un `navigate()`
+   completo (no solo `location.reload()`) lo resolvió. Ojo para los próximos ítems de esta lista.
 3. ⏳ Ajuste de Stock manual (`ProductosSection.jsx:416-419`) — SÍ genera asiento
    (`crearAsientoAjusteStock`).
 4. ⏳ Devolución Cliente/Proveedor (`NuevaDevolucionModal.jsx:317-319`) — asiento condicional
