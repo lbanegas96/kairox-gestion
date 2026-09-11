@@ -40,7 +40,10 @@ de otra forma, ver detalle abajo). Orden de prioridad y estado:
    resumen sin conflicto. Verificado en vivo + contabilidad ("Copiar a NC" desde
    FAC-20260818-003): NC-20260911-001 $3000, asiento correcto (DEBE 4.1 Ventas $2479.34 +
    DEBE 2.1.3 IVA Débito Fiscal $520.66 = HABER 1.1.2 Cuentas a Cobrar $3000).
-6. ⏳ ND de Venta (`NuevaNDModal.jsx:315-317`) — SÍ genera asiento.
+6. ✅ **ND de Venta** (`NuevaNDModal.jsx`) — CERRADO, mismo patrón exacto que NC de Venta
+   (`ndCreada`). Verificado en vivo + contabilidad ("Copiar a ND" desde FAC-20260822-001):
+   ND-20260911-001 $5000, asiento correcto (DEBE 1.1.2 CxC $5000 = HABER 4.1 Ventas $4132.23 +
+   HABER 2.1.3 IVA Débito Fiscal $867.77).
 7. ⏳ NC de Proveedor (`NuevaNCProveedorModal.jsx:309-311`) — SÍ genera asiento.
 8. ⏳ ND de Proveedor (`NuevaNotaDebitoModal.jsx:222-224`) — SÍ genera asiento.
 9. ⏳ Cheques — alta tercero/propio (`ChequesSection.jsx:205-208` y `:242-245`) — SÍ genera
