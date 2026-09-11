@@ -34,7 +34,12 @@ de otra forma, ver detalle abajo). Orden de prioridad y estado:
    con reembolso en efectivo (el caso con asiento): DEV-2026-0018 sobre Consumidor Final,
    $1200 — asiento correcto (DEBE 4.1 Ventas $991.74 + DEBE 2.1.3 IVA Débito Fiscal $208.26 =
    HABER 1.1.1 Caja y Bancos $1200).
-5. ⏳ NC de Venta (`NuevaNCModal.jsx:382-384`) — SÍ genera asiento.
+5. ✅ **NC de Venta** (`NuevaNCModal.jsx`) — CERRADO. `ncCreada` reemplaza el form por número +
+   total + ítems. El `<AlertDialog>` de "¿Reabrir el pedido?" (mig.331) sigue funcionando igual
+   — ya vivía fuera del `<Dialog>` principal a propósito, así que puede aparecer arriba del
+   resumen sin conflicto. Verificado en vivo + contabilidad ("Copiar a NC" desde
+   FAC-20260818-003): NC-20260911-001 $3000, asiento correcto (DEBE 4.1 Ventas $2479.34 +
+   DEBE 2.1.3 IVA Débito Fiscal $520.66 = HABER 1.1.2 Cuentas a Cobrar $3000).
 6. ⏳ ND de Venta (`NuevaNDModal.jsx:315-317`) — SÍ genera asiento.
 7. ⏳ NC de Proveedor (`NuevaNCProveedorModal.jsx:309-311`) — SÍ genera asiento.
 8. ⏳ ND de Proveedor (`NuevaNotaDebitoModal.jsx:222-224`) — SÍ genera asiento.

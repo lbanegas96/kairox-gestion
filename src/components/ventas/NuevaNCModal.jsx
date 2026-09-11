@@ -92,6 +92,11 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
   // separado (no dentro del <Dialog> principal) para sobrevivir al cierre del
   // formulario de la NC.
   const [reabrirPedido, setReabrirPedido] = useState(null); // { id, numero } | null
+  // Hallazgo Luciano 11/09 (mismo patrón repetitivo, ver CONTEXT.md — 5/10):
+  // el modal se cerraba solo apenas la NC se creaba, sin mostrar nada.
+  // `ncCreada` reemplaza el formulario por un resumen hasta que el usuario
+  // cierra a propósito.
+  const [ncCreada, setNcCreada] = useState(null);
 
   const origenLocked = !!comprobanteOrigen || !!devolucionOrigen;
 
@@ -227,6 +232,7 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
       setAfipConfig(null);
       setProdResults({});
       setProdOpen({});
+      setNcCreada(null);
     }
   }, [open]);
 
@@ -381,7 +387,16 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
 
       toast({ title: `Nota de Crédito ${data.numero_venta} creada` });
       onSuccess?.({ id: data.comprobante_id, numero_venta: data.numero_venta, total: data.total });
-      onOpenChange(false);
+      // No cierra el modal solo -- muestra el resumen (mismo patrón que
+      // Nueva Factura de Proveedor). El usuario cierra con "Cerrar".
+      setNcCreada({
+        numero: data.numero_venta,
+        total: data.total,
+        items: itemsValidos.map(i => ({
+          nombre: i.descripcion,
+          cantidad: i.cantidad,
+        })),
+      });
 
       // mig.331 — el pedido de origen quedó con saldo sin facturar mientras
       // seguía marcado 'facturado'. No se reabre solo: se pregunta.
@@ -427,10 +442,38 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
                 : 'Nueva Nota de Crédito'}
           </DialogTitle>
           <DialogDescription className="text-kx-text-2 text-xs">
-            NC aislada — ajuste financiero sin devolución de mercadería
+            {ncCreada ? 'NC confirmada. Esto fue lo que quedó registrado.' : 'NC aislada — ajuste financiero sin devolución de mercadería'}
           </DialogDescription>
         </DialogHeader>
 
+        {ncCreada ? (
+          <>
+            <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+              <div className="w-14 h-14 rounded-full bg-kx-green/10 flex items-center justify-center">
+                <FileMinus className="w-7 h-7 text-kx-green" />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-kx-text">Nota de Crédito {ncCreada.numero} registrada</p>
+                <p className="text-sm text-kx-text-2 mt-1">Total ${fmt(ncCreada.total)} — reduce la deuda del cliente.</p>
+              </div>
+              <div className="w-full max-w-sm border border-kx-border rounded-lg divide-y divide-kx-border text-left">
+                {ncCreada.items.map((it, i) => (
+                  <div key={i} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <span className="text-kx-text truncate pr-2">{it.nombre}</span>
+                    <span className="font-mono text-kx-text-2 shrink-0">{it.cantidad} u.</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <DialogFooter className="px-6 py-4 border-t border-kx-border shrink-0">
+              <Button onClick={() => onOpenChange(false)}
+                className="ml-auto bg-kx-amber hover:opacity-90 text-white">
+                Cerrar
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+        <>
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
           {/* Banner */}
           <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 text-xs text-amber-700 dark:text-amber-300">
@@ -630,6 +673,8 @@ function NuevaNCModal({ open, onOpenChange, comprobanteOrigen = null, devolucion
             </Button>
           </div>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
 
