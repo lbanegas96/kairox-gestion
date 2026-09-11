@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { formatDateAR } from '@/lib/dateUtils';
+import { formatDateAR, getTodayAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import ModalNuevaRecepcion from '@/components/compras/ModalNuevaRecepcion';
@@ -52,7 +52,7 @@ function RecepcionesSection() {
   const [proveedores, setProveedores] = useState([]);
   const [productos, setProductos]     = useState([]);
   const [isNuevaOpen, setIsNuevaOpen] = useState(false);
-  const [nuevaForm, setNuevaForm]     = useState({ proveedor_id: '', observaciones: '', items: [{ producto_id: '', cantidad: 1 }] });
+  const [nuevaForm, setNuevaForm]     = useState({ proveedor_id: '', fecha: getTodayAR(), observaciones: '', items: [{ producto_id: '', cantidad: 1 }] });
   const [savingNueva, setSavingNueva] = useState(false);
   const [duplicarTarget, setDuplicarTarget] = useState(null);
   const [duplicadoDeId, setDuplicadoDeId]   = useState(null);
@@ -93,7 +93,7 @@ function RecepcionesSection() {
       .then(({ data }) => setProductos(data || []));
   }, [user?.empresa_id]);
 
-  const emptyNuevaForm = () => ({ proveedor_id: '', observaciones: '', items: [{ producto_id: '', cantidad: 1 }] });
+  const emptyNuevaForm = () => ({ proveedor_id: '', fecha: getTodayAR(), observaciones: '', items: [{ producto_id: '', cantidad: 1 }] });
 
   const abrirNuevaRecepcion = () => { setDuplicadoDeId(null); setNuevaForm(emptyNuevaForm()); setIsNuevaOpen(true); };
 
@@ -127,6 +127,7 @@ function RecepcionesSection() {
         p_items: validItems,
         p_observaciones: nuevaForm.observaciones || null,
         p_duplicado_de_id: duplicadoDeId,
+        p_fecha: nuevaForm.fecha || null,
       });
       if (error) throw error;
       toast({ title: `Recepción ${data.numero_recepcion} creada`, className: 'bg-green-600 text-white border-green-700' });
@@ -150,6 +151,9 @@ function RecepcionesSection() {
     const items = (duplicarTarget.recepcion_items || []).map(i => ({ producto_id: i.producto_id, cantidad: Number(i.cantidad) }));
     setNuevaForm({
       proveedor_id: duplicarTarget.proveedor_id || '',
+      // Fecha SIEMPRE hoy al duplicar, nunca la del original — es un evento
+      // físico nuevo (mismo criterio que el comentario de más arriba).
+      fecha: getTodayAR(),
       observaciones: '',
       items: items.length > 0 ? items : [{ producto_id: '', cantidad: 1 }],
     });

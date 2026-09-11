@@ -1,5 +1,30 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Nueva Recepción manual — reestructurada + Fecha de recepción (mig.394, 11/09)
+
+Luciano confirmó en vivo que "Nueva Recepción" (mig.392, la manual sin partir de una OC) ya
+funciona bien — quedaba solo pulir tamaño y contenido, lo veía "un poco pobre" para el tamaño
+que tenía. Cambios en `ModalNuevaRecepcion.jsx`:
+
+1. **Tamaño**: pasó de un `max-w-2xl` ad-hoc al shell compartido `size="wide"` (`ui/dialog.jsx`),
+   el mismo que usa Nueva OC/Nuevo Pedido — quedó del mismo ancho/alto que "Nueva Orden de Compra".
+2. **Reestructurado en 2 Cards**, mismo criterio visual que `FormNuevaOC.jsx`: una Card de
+   encabezado (Proveedor + Fecha + Observaciones en una fila de 12 columnas) y una Card para la
+   grilla de ítems (sin cambios funcionales ahí, solo el contenedor).
+3. **Campo nuevo: Fecha de recepción** — antes la fecha quedaba hardcodeada a `CURRENT_DATE` en
+   `crear_recepcion_manual` (mig.392), sin forma de backdatear una recepción que físicamente pasó
+   otro día. Mig.394 agrega `p_fecha date DEFAULT NULL` (con guarda: no permite fecha futura) —
+   igual que `DROP FUNCTION` + `CREATE` en vez de `CREATE OR REPLACE` (un parámetro nuevo crea un
+   overload, no reemplaza). Al duplicar una recepción, la fecha siempre arranca en hoy (es un
+   evento físico nuevo), nunca copia la del original.
+
+Verificado: `BEGIN...ROLLBACK` contra Nalux real (backdate OK, guarda de fecha futura lanza
+excepción) antes de aplicar; `npx eslint` + `npx vite build` limpios; probado en vivo en el
+browser end-to-end (creó `REC-2026-0025` con fecha 08/09/2026, no la de hoy — confirma que el
+dato viaja UI → RPC → tabla).
+
+---
+
 ## ✅ Generar Recepción desde OC — 4 ajustes (CERRADO 10/09)
 
 Luciano reportó (con capturas) 4 problemas usando "Generar Recepción" desde una OC:
