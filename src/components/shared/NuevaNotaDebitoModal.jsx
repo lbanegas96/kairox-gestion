@@ -71,6 +71,11 @@ function NuevaNotaDebitoModal({ open, onOpenChange, origen = null, duplicarOrige
   const [saving, setSaving]               = useState(false);
   const [prodResults, setProdResults]     = useState({});
   const [prodOpen, setProdOpen]           = useState({});
+  // Hallazgo Luciano 11/09 (mismo patrón repetitivo, ver CONTEXT.md — 8/10):
+  // el modal se cerraba solo apenas la ND se creaba, sin mostrar nada.
+  // `ndCreada` reemplaza el formulario por un resumen hasta que el usuario
+  // cierra a propósito.
+  const [ndCreada, setNdCreada] = useState(null);
 
   const lockEntidad = !!origen?.lockEntidad;
 
@@ -123,6 +128,7 @@ function NuevaNotaDebitoModal({ open, onOpenChange, origen = null, duplicarOrige
       setSaving(false);
       setProdResults({});
       setProdOpen({});
+      setNdCreada(null);
     }
   }, [open]);
 
@@ -221,7 +227,12 @@ function NuevaNotaDebitoModal({ open, onOpenChange, origen = null, duplicarOrige
 
       toast({ title: `Nota de Débito ${numeroNd} registrada` });
       onSuccess?.(data);
-      onOpenChange(false);
+      // No cierra el modal solo -- muestra el resumen (mismo patrón que NC de Proveedor).
+      setNdCreada({
+        numero: numeroNd,
+        total: data.total,
+        items: itemsValidos.map(i => ({ nombre: i.descripcion, cantidad: i.cantidad })),
+      });
     } catch (err) {
       toast({ title: err.message || 'Error al registrar la Nota de Débito', variant: 'destructive' });
     } finally {
@@ -240,10 +251,38 @@ function NuevaNotaDebitoModal({ open, onOpenChange, origen = null, duplicarOrige
             {origen?.docNumero ? `ND de Proveedor sobre ${origen.docNumero}` : 'Nueva ND de Proveedor'}
           </DialogTitle>
           <DialogDescription className="text-kx-text-2 text-xs">
-            El proveedor nos cobra un monto adicional — flete, diferencia de precio, etc.
+            {ndCreada ? 'ND confirmada. Esto fue lo que quedó registrado.' : 'El proveedor nos cobra un monto adicional — flete, diferencia de precio, etc.'}
           </DialogDescription>
         </DialogHeader>
 
+        {ndCreada ? (
+          <>
+            <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+              <div className="w-14 h-14 rounded-full bg-kx-green/10 flex items-center justify-center">
+                <FilePlus className="w-7 h-7 text-kx-green" />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-kx-text">ND de Proveedor {ndCreada.numero} registrada</p>
+                <p className="text-sm text-kx-text-2 mt-1">Total ${fmt(ndCreada.total)} — se sumó a la deuda con el proveedor.</p>
+              </div>
+              <div className="w-full max-w-sm border border-kx-border rounded-lg divide-y divide-kx-border text-left">
+                {ndCreada.items.map((it, i) => (
+                  <div key={i} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <span className="text-kx-text truncate pr-2">{it.nombre}</span>
+                    <span className="font-mono text-kx-text-2 shrink-0">{it.cantidad} u.</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <DialogFooter className="px-6 py-4 border-t border-kx-border shrink-0">
+              <Button onClick={() => onOpenChange(false)}
+                className="ml-auto bg-kx-red hover:opacity-90 text-white">
+                Cerrar
+              </Button>
+            </DialogFooter>
+          </>
+        ) : (
+        <>
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
           <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 text-xs text-red-700 dark:text-red-400">
             <Info className="w-4 h-4 shrink-0 mt-0.5" />
@@ -397,6 +436,8 @@ function NuevaNotaDebitoModal({ open, onOpenChange, origen = null, duplicarOrige
             </Button>
           </div>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );

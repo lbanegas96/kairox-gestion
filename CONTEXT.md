@@ -55,7 +55,12 @@ de otra forma, ver detalle abajo). Orden de prioridad y estado:
    Verificado en vivo + contabilidad ("Copiar a NC" desde una factura a Amazon): NC-20260911-001
    $2000, asiento correcto (DEBE 2.1.1 CxP $2000 = HABER 1.1.3 Mercaderías $1652.89 + HABER
    1.1.4 IVA Crédito Fiscal $347.11).
-8. ⏳ ND de Proveedor (`NuevaNotaDebitoModal.jsx:222-224`) — SÍ genera asiento.
+8. ✅ **ND de Proveedor** (`NuevaNotaDebitoModal.jsx`) — CERRADO, mismo patrón (`ndCreada`).
+   Mismo detalle cosmético que el ítem 7: los 2 call-sites (`FacturasCompraSection.jsx`,
+   `DevolucionesProveedorSection.jsx`) cerraban en `onSuccess` — corregido igual, difiriendo la
+   limpieza del origen a `onOpenChange`. Verificado en vivo + contabilidad ("Copiar a ND" desde
+   la misma factura a Amazon): ND-2026-0008 $3000, asiento correcto (DEBE 1.1.3 Mercaderías
+   $2479.34 + DEBE 1.1.4 IVA Crédito Fiscal $520.66 = HABER 2.1.1 Cuentas a Pagar $3000).
 9. ⏳ Cheques — alta tercero/propio (`ChequesSection.jsx:205-208` y `:242-245`) — SÍ genera
    asiento (vía trigger, no en el frontend).
 10. ⏳ Asiento Contable Manual (`ModalNuevoAsiento.jsx:41-45`) — el más sensible: ni siquiera

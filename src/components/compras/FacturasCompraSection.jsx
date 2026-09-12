@@ -399,9 +399,12 @@ function FacturasCompraSection() {
 
       <NuevaNotaDebitoModal
         open={isNdOpen}
-        onOpenChange={setIsNdOpen}
+        // ndOrigen se limpia recién al cerrar de verdad -- si no, el título
+        // pierde la referencia mientras el modal sigue mostrando el resumen
+        // de confirmación (ndCreada).
+        onOpenChange={v => { setIsNdOpen(v); if (!v) setNdOrigen(null); }}
         origen={ndOrigen}
-        onSuccess={() => { setIsNdOpen(false); setNdOrigen(null); fetchCompras(); }}
+        onSuccess={() => fetchCompras()}
       />
 
       <MapaRelaciones

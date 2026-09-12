@@ -459,7 +459,7 @@ function NotasDebitoRecibidas({ onOpenMapa }) {
         onOpenChange={v => { setIsDuplicarOpen(v); if (!v) setDuplicarTarget(null); }}
         duplicarOrigen={duplicarTarget ? { id: duplicarTarget.id, entidadId: duplicarTarget.proveedor_id } : null}
         duplicadoDeId={duplicarVincular ? (duplicarTarget?.id ?? null) : null}
-        onSuccess={() => { setIsDuplicarOpen(false); setDuplicarTarget(null); fetchNotas(); }}
+        onSuccess={() => { setDuplicarTarget(null); fetchNotas(); }}
       />
     </Card>
   );
