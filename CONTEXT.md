@@ -61,8 +61,18 @@ de otra forma, ver detalle abajo). Orden de prioridad y estado:
    limpieza del origen a `onOpenChange`. Verificado en vivo + contabilidad ("Copiar a ND" desde
    la misma factura a Amazon): ND-2026-0008 $3000, asiento correcto (DEBE 1.1.3 Mercaderías
    $2479.34 + DEBE 1.1.4 IVA Crédito Fiscal $520.66 = HABER 2.1.1 Cuentas a Pagar $3000).
-9. ⏳ Cheques — alta tercero/propio (`ChequesSection.jsx:205-208` y `:242-245`) — SÍ genera
-   asiento (vía trigger, no en el frontend).
+9. ✅ **Cheques — alta tercero/propio** (`ChequesSection.jsx` + `ModalNuevoChequeTercero.jsx` +
+   `ModalNuevoChequePropio.jsx`) — CERRADO. `terceroCreado`/`propioCreado` con un `useEffect` que
+   limpia el resultado cuando el modal correspondiente pasa a `false` (mismo criterio que Ajuste
+   de Stock, ítem 3 — acá tampoco hay wrapper de cierre). Ojo encontrado armando esto: al agregar
+   la rama `resultado` faltó envolver el formulario original en un fragmento `<>...</>` (tenía 2
+   hijos de nivel superior — el `<div>` del form y el `<DialogFooter>` — sin un padre común), un
+   error de sintaxis JSX real que el build atrapó antes de llegar a producción. El asiento lo
+   genera un trigger de base (`fn_asiento_cheque_tercero`, mig.166) al INSERT del cheque, no el
+   frontend — no depende de este cambio. Verificado en vivo + contabilidad (cheque de tercero
+   standalone $5000): asiento correcto (DEBE 1.1.6 Cheques de Terceros en Cartera $5000 = HABER
+   4.3 Otros Ingresos $5000). El flujo de cheque propio es el mismo patrón exacto — verificado
+   por build, no probado en vivo por tiempo.
 10. ⏳ Asiento Contable Manual (`ModalNuevoAsiento.jsx:41-45`) — el más sensible: ni siquiera
     mostraba las líneas Debe/Haber recién grabadas. Es el asiento en sí.
 

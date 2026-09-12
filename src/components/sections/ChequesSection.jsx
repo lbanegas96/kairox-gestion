@@ -50,6 +50,14 @@ export default function ChequesSection() {
   const [savingTercero, setSavingT]     = useState(false);
   const [savingPropio, setSavingP]      = useState(false);
   const [savingEstado, setSavingE]      = useState(false);
+  // Hallazgo Luciano 11/09 (mismo patrón repetitivo, ver CONTEXT.md — 9/10):
+  // los 2 modales de alta se cerraban solos apenas el cheque quedaba
+  // registrado, sin mostrar nada. `terceroCreado`/`propioCreado` reemplazan
+  // el formulario por un resumen hasta que el usuario cierra a propósito.
+  const [terceroCreado, setTerceroCreado] = useState(null);
+  const [propioCreado, setPropioCreado]   = useState(null);
+  useEffect(() => { if (!showNuevoTercero) setTerceroCreado(null); }, [showNuevoTercero]);
+  useEffect(() => { if (!showNuevoPropio) setPropioCreado(null); }, [showNuevoPropio]);
 
   // ── Data loading ──────────────────────────────────────────────────────────
 
@@ -203,7 +211,9 @@ export default function ChequesSection() {
       });
       if (error) throw error;
       toast({ title: 'Cheque registrado en cartera', className: 'bg-green-900 border-green-700 text-white' });
-      setShowNuevoTercero(false);
+      // No cierra el modal solo -- muestra el resumen hasta que el usuario
+      // cierra a propósito (mismo patrón que el resto de los comprobantes).
+      setTerceroCreado({ numero: terceroForm.numero, banco: terceroForm.banco, monto });
       setTerceroForm(emptyTerceroForm());
       fetchCheques();
       fetchAsientosPendientes();
@@ -240,7 +250,9 @@ export default function ChequesSection() {
       });
       if (error) throw error;
       toast({ title: 'Cheque propio registrado', className: 'bg-green-900 border-green-700 text-white' });
-      setShowNuevoPropio(false);
+      // No cierra el modal solo -- muestra el resumen hasta que el usuario
+      // cierra a propósito (mismo patrón que el resto de los comprobantes).
+      setPropioCreado({ numero: propioForm.numero, banco: propioForm.banco, monto });
       setPropioForm(emptyPropioForm());
       fetchCheques();
     } catch (e) {
@@ -436,6 +448,7 @@ export default function ChequesSection() {
         comprobantesCliente={comprobantesCliente}
         savingTercero={savingTercero}
         onGuardar={handleGuardarTercero}
+        resultado={terceroCreado}
       />
 
       {/* ── Modal: Nuevo cheque propio ── */}
@@ -447,6 +460,7 @@ export default function ChequesSection() {
         comprasProveedor={comprasProveedor}
         savingPropio={savingPropio}
         onGuardar={handleGuardarPropio}
+        resultado={propioCreado}
       />
 
       {/* ── Modal: Detalle + Historial ── */}

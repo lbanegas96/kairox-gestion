@@ -13,6 +13,7 @@ function ModalNuevoChequeTercero({
   comprobantesCliente,
   savingTercero,
   onGuardar,
+  resultado,
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -21,8 +22,27 @@ function ModalNuevoChequeTercero({
           <DialogTitle className="flex items-center gap-2">
             <Plus size={16} className="text-kx-green" /> Registrar cheque recibido
           </DialogTitle>
-          <DialogDescription>Cheque de tercero recibido como medio de pago de un cliente.</DialogDescription>
+          <DialogDescription>
+            {resultado ? 'Cheque confirmado.' : 'Cheque de tercero recibido como medio de pago de un cliente.'}
+          </DialogDescription>
         </DialogHeader>
+        {resultado ? (
+          <div className="py-2 space-y-4">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="h-8 w-8 shrink-0 text-kx-green" />
+              <div>
+                <p className="font-semibold text-kx-text">Cheque Nº {resultado.numero} registrado en cartera</p>
+                <p className="text-sm text-kx-text-3">{resultado.banco} — {fmt(resultado.monto)}</p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => onOpenChange(false)} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                Cerrar
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
+        <>
         <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto pr-1">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -116,6 +136,8 @@ function ModalNuevoChequeTercero({
             Registrar
           </Button>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );

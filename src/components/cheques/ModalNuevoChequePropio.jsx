@@ -14,6 +14,7 @@ function ModalNuevoChequePropio({
   comprasProveedor,
   savingPropio,
   onGuardar,
+  resultado,
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -22,8 +23,27 @@ function ModalNuevoChequePropio({
           <DialogTitle className="flex items-center gap-2">
             <Plus size={16} className="text-kx-blue" /> Registrar cheque propio emitido
           </DialogTitle>
-          <DialogDescription>Cheque emitido por la empresa para pagar a un proveedor.</DialogDescription>
+          <DialogDescription>
+            {resultado ? 'Cheque confirmado.' : 'Cheque emitido por la empresa para pagar a un proveedor.'}
+          </DialogDescription>
         </DialogHeader>
+        {resultado ? (
+          <div className="py-2 space-y-4">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="h-8 w-8 shrink-0 text-kx-blue" />
+              <div>
+                <p className="font-semibold text-kx-text">Cheque Nº {resultado.numero} registrado</p>
+                <p className="text-sm text-kx-text-3">{resultado.banco} — {fmt(resultado.monto)}</p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => onOpenChange(false)} className="bg-blue-600 hover:bg-blue-700 text-white">
+                Cerrar
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
+        <>
         <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto pr-1">
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -134,6 +154,8 @@ function ModalNuevoChequePropio({
             Registrar
           </Button>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );
