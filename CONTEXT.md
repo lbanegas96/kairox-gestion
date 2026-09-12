@@ -1,6 +1,6 @@
 # KAIROX Gestión — Contexto de Sesión
 
-## 🔄 Auditoría "se cierra solo al crear" — patrón repetido en 10 lugares (en curso, 11/09)
+## ✅ Auditoría "se cierra solo al crear" — patrón repetido en 10 lugares — CERRADA (11/09)
 
 Después de corregir el mismo bug 2 veces (GenerarMovimientoModal, Nueva Recepción manual),
 Luciano pidió auditar todo el sistema. Un agente en segundo plano encontró **10 casos reales**
@@ -73,8 +73,18 @@ de otra forma, ver detalle abajo). Orden de prioridad y estado:
    standalone $5000): asiento correcto (DEBE 1.1.6 Cheques de Terceros en Cartera $5000 = HABER
    4.3 Otros Ingresos $5000). El flujo de cheque propio es el mismo patrón exacto — verificado
    por build, no probado en vivo por tiempo.
-10. ⏳ Asiento Contable Manual (`ModalNuevoAsiento.jsx:41-45`) — el más sensible: ni siquiera
-    mostraba las líneas Debe/Haber recién grabadas. Es el asiento en sí.
+10. ✅ **Asiento Contable Manual** (`ModalNuevoAsiento.jsx`) — CERRADO, el más sensible de los 10:
+    acá el resumen ES el asiento en sí, no una referencia a otro documento. Mismo patrón que
+    Ajuste de Stock (ítem 3) — sin wrapper de cierre, así que un `useEffect` limpia `resultado`
+    cuando `open` pasa a `false` por cualquier vía. Único caller (`TabAsientos.jsx`) no necesitó
+    cambios (su `onSuccess` solo invalida queries, nunca tocaba el estado del modal). Verificado
+    en vivo + contabilidad con 2 asientos de prueba: $15 (DEBE 1.1.5 Otros Activos Corrientes =
+    HABER 3.2 Resultados Acumulados) y $10 (mismo par de cuentas) — ambos con la vista de
+    resultado mostrando la tabla Cuenta/Detalle/Debe/Haber correctamente antes de cerrarse, y
+    ambos balanceados en partida doble en `asientos_contables`/`asientos_items`.
+
+Con esto se cierran los 10 casos encontrados por el agente de auditoría — no quedó ningún ítem
+pendiente de decisión de Luciano (todos fueron directos de corregir).
 
 **NO son el mismo bug** (ya revisados por el agente, no reabrir): Cotizaciones, Pedidos, Órdenes
 de Compra (cierran pero reabren el detalle del documento recién creado — patrón correcto ya

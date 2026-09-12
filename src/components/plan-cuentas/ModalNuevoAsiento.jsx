@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Check, X, AlertTriangle, FileText, Loader2, CheckCircle2 } from 'lucide-react';
 import { asientosService } from '@/services/planCuentasService';
 import { parseNumberLocale } from '@/lib/currencyUtils';
@@ -15,6 +15,17 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
   const [lineas, setLineas] = useState([emptyLinea(), emptyLinea()]);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
+  // Hallazgo Luciano 11/09 (mismo patrón repetitivo, ver CONTEXT.md — 10/10,
+  // el más sensible de los 10: esto es el asiento en sí, ni siquiera mostraba
+  // las líneas Debe/Haber recién grabadas antes de cerrarse). `resultado`
+  // reemplaza el formulario por las líneas confirmadas hasta que el usuario
+  // cierra a propósito.
+  const [resultado, setResultado] = useState(null);
+
+  // Igual que Ajuste de Stock (ítem 3): sin esto, cerrar con Escape/click
+  // afuera en vez del botón "Cerrar" dejaría `resultado` viejo mostrándose
+  // la próxima vez que se abra el modal.
+  useEffect(() => { if (!open) setResultado(null); }, [open]);
 
   const totalDebe  = lineas.reduce((s, l) => s + (parseNumberLocale(l.debe)  || 0), 0);
   const totalHaber = lineas.reduce((s, l) => s + (parseNumberLocale(l.haber) || 0), 0);
@@ -40,7 +51,18 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
       await asientosService.createAsientoManual(empresaId, userId, form, items);
       toast({ title: 'Asiento creado', className: 'bg-green-900 border-green-700 text-white' });
       onSuccess();
-      onClose();
+      // No cierra el modal solo -- muestra las líneas Debe/Haber recién
+      // grabadas hasta que el usuario cierra a propósito. Es el caso más
+      // sensible de los 10: acá el resumen ES el asiento, no una referencia
+      // a otro documento.
+      setResultado({
+        fecha: form.fecha,
+        descripcion: form.descripcion,
+        items: items.map((it) => {
+          const cuenta = cuentasFlat.find((c) => c.id === it.cuenta_id);
+          return { ...it, cuentaLabel: cuenta ? `${cuenta.codigo} — ${cuenta.nombre}` : it.cuenta_id };
+        }),
+      });
       setForm({ fecha: new Date().toISOString().slice(0, 10), descripcion: '' });
       setLineas([emptyLinea(), emptyLinea()]);
     } catch (e) {
@@ -59,9 +81,52 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             <FileText size={18} className="text-kx-violet" /> Nuevo Asiento Contable
           </DialogTitle>
-          <DialogDescription>Registrá un asiento manual con líneas de debe/haber balanceadas.</DialogDescription>
+          <DialogDescription>
+            {resultado ? 'Asiento confirmado. Estas son las líneas que quedaron registradas.' : 'Registrá un asiento manual con líneas de debe/haber balanceadas.'}
+          </DialogDescription>
         </DialogHeader>
 
+        {resultado ? (
+          <div className="py-2 space-y-4">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="h-8 w-8 shrink-0 text-kx-green" />
+              <div>
+                <p className="font-semibold text-kx-text">
+                  Asiento del {resultado.fecha.split('-').reverse().join('/')} registrado
+                </p>
+                {resultado.descripcion && <p className="text-sm text-kx-text-3">{resultado.descripcion}</p>}
+              </div>
+            </div>
+            <div className="rounded-lg border border-kx-border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-kx-surface-2">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-kx-text-3 font-medium">Cuenta</th>
+                    <th className="px-3 py-2 text-left text-kx-text-3 font-medium">Detalle</th>
+                    <th className="px-3 py-2 text-right text-kx-text-3 font-medium w-28">Debe</th>
+                    <th className="px-3 py-2 text-right text-kx-text-3 font-medium w-28">Haber</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {resultado.items.map((it, i) => (
+                    <tr key={i} className="border-t border-kx-border">
+                      <td className="px-3 py-1.5 text-xs text-kx-text">{it.cuentaLabel}</td>
+                      <td className="px-3 py-1.5 text-xs text-kx-text-2">{it.descripcion || '—'}</td>
+                      <td className="px-3 py-1.5 text-right text-xs font-mono text-kx-text">{it.debe > 0 ? fmt(it.debe) : '—'}</td>
+                      <td className="px-3 py-1.5 text-right text-xs font-mono text-kx-text">{it.haber > 0 ? fmt(it.haber) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <DialogFooter>
+              <Button onClick={onClose} className="bg-kx-violet text-white hover:opacity-90 ml-auto">
+                Cerrar
+              </Button>
+            </DialogFooter>
+          </div>
+        ) : (
+        <>
         <div className="space-y-4 py-2 max-h-[60vh] overflow-y-auto pr-1">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -170,6 +235,8 @@ function ModalNuevoAsiento({ open, onClose, cuentasFlat, empresaId, userId, onSu
             Crear Asiento
           </Button>
         </DialogFooter>
+        </>
+        )}
       </DialogContent>
     </Dialog>
   );
