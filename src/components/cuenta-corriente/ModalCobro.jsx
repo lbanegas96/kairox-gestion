@@ -27,6 +27,7 @@ import { parseNumberLocale } from '@/lib/currencyUtils';
 function ModalCobro({
   isPaymentDialogOpen, setIsPaymentDialogOpen,
   selectedClient,
+  facturaOrigenId,
   paymentData, setPaymentData,
   formasPago = [],
   tcParalelo,
@@ -62,6 +63,12 @@ function ModalCobro({
     return s + (parseNumberLocale(imputaciones[f.comprobante_id] || '') || 0);
   }, 0);
   const fmt = (n) => Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Ordena la factura de origen primero, para que sea lo primero que se ve
+  // en la tabla aunque `facturasAbiertas` venga en otro orden.
+  const facturasOrdenadas = facturaOrigenId
+    ? [...facturasAbiertas].sort((a, b) => (a.comprobante_id === facturaOrigenId ? -1 : b.comprobante_id === facturaOrigenId ? 1 : 0))
+    : facturasAbiertas;
 
   const toggleFactura = (f, checked) => {
     const esFX = !!(f.moneda && f.moneda !== 'ARS');
@@ -115,6 +122,14 @@ function ModalCobro({
                 <span className="text-xs text-slate-500 dark:text-kx-text-2 uppercase tracking-wide">Equivalente</span>
                 <p className="mt-0.5 tabular-nums text-kx-text-2">
                   ≈ {fmt(Number(selectedClient.saldo_actual) / tcParalelo.tcHoy)} {tcParalelo.monedaParalela}
+                </p>
+              </div>
+            )}
+            {facturaOrigenId && (
+              <div>
+                <span className="text-xs text-slate-500 dark:text-kx-text-2 uppercase tracking-wide">Cobrando la factura</span>
+                <p className="mt-0.5 font-medium text-kx-violet truncate">
+                  {facturasAbiertas.find(f => f.comprobante_id === facturaOrigenId)?.numero_venta ?? '—'}
                 </p>
               </div>
             )}
@@ -204,8 +219,9 @@ function ModalCobro({
               className="flex-1 min-h-0 flex flex-col overflow-hidden"
             >
               <p className="shrink-0 text-xs text-kx-text-3 mb-3">
-                Tildá una factura para aplicarle el cobro. Si aplicás menos que su saldo, queda
-                abierta por la diferencia — igual que en SAP.
+                {facturaOrigenId
+                  ? 'La factura por la que entraste ya viene tildada con su saldo completo. Si tildás alguna más, el mismo cobro también la cancela — es opcional.'
+                  : 'Tildá una factura para aplicarle el cobro. Si aplicás menos que su saldo, queda abierta por la diferencia — igual que en SAP.'}
               </p>
               <div className="flex-1 min-h-0 border border-kx-border rounded-lg overflow-hidden">
                 <div className="h-full overflow-y-auto">
@@ -219,7 +235,8 @@ function ModalCobro({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-kx-border">
-                      {facturasAbiertas.map(f => {
+                      {facturasOrdenadas.map(f => {
+                        const esOrigen = f.comprobante_id === facturaOrigenId;
                         const esFX = !!(f.moneda && f.moneda !== 'ARS');
                         const fxValue = parseNumberLocale(imputacionesFX[f.comprobante_id] || '') || 0;
                         const arsValue = parseNumberLocale(imputaciones[f.comprobante_id] || '') || 0;
@@ -230,7 +247,7 @@ function ModalCobro({
                         const quedaPendiente = Number(f.saldo_pendiente) - valorActual;
                         const quedaPct = Number(f.saldo_pendiente) > 0 ? (quedaPendiente / Number(f.saldo_pendiente)) * 100 : 0;
                         return (
-                          <tr key={f.comprobante_id} className="hover:bg-kx-surface-2/60 dark:hover:bg-slate-800/40 transition-colors">
+                          <tr key={f.comprobante_id} className={esOrigen ? 'bg-kx-violet/5' : 'hover:bg-kx-surface-2/60 dark:hover:bg-slate-800/40 transition-colors'}>
                             <td className="px-3 py-2 align-top">
                               <input
                                 type="checkbox"
@@ -240,9 +257,14 @@ function ModalCobro({
                               />
                             </td>
                             <td className="px-3 py-2 align-top min-w-0">
-                              <div className="font-medium text-kx-text truncate">
+                              <div className="font-medium text-kx-text truncate flex items-center gap-1.5">
                                 {f.numero_venta}
-                                {esFX && <span className="ml-1 text-2xs text-kx-text-3">({f.moneda})</span>}
+                                {esFX && <span className="text-2xs text-kx-text-3">({f.moneda})</span>}
+                                {esOrigen && (
+                                  <span className="text-2xs font-semibold text-kx-violet bg-kx-violet/10 px-1.5 py-0.5 rounded-full shrink-0">
+                                    la que estás cobrando
+                                  </span>
+                                )}
                               </div>
                               {esFX && !f.tc_hoy && (
                                 <div className="text-2xs text-amber-600 dark:text-amber-400 mt-0.5">

@@ -1,5 +1,42 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Registrar Cobro (Ventas) — mismo resaltado de "factura de origen" que Pago a Proveedores + bug real de saldo al cancelar (13/09)
+
+Luciano preguntó si el resaltado recién agregado a "Registrar Pago" (Compras) ya estaba
+aplicado del lado de Ventas. No lo estaba: `ModalCobro.jsx` ya tenía el shell ancho +
+`PanelSeccion` (de hecho es de ahí de donde se copió el patrón para Pago), y `SaleDetailModal`
+ya hacía el deep-link desde una factura puntual (`abrirCobroPorClienteId`), pero la factura de
+origen no se distinguía visualmente de las demás facturas pendientes del cliente.
+
+**Fix simétrico:** se agregó `facturaOrigenId` a `useRegistrarCobro.jsx` (mismo criterio que
+`useRegistrarPago.jsx`) — `openPaymentDialog` ahora guarda qué factura (si alguna) originó el
+cobro. `ModalCobro.jsx` suma una celda "Cobrando la factura" en la cabecera y resalta esa fila
+en la tabla de imputación con fondo propio + badge "la que estás cobrando", ordenada primero.
+Actualizados los 3 puntos de montaje (`SaleDetailModal.jsx`, `VentasSection.jsx`,
+`CuentaCorrienteSection.jsx`) para pasar `facturaOrigenId`.
+
+**Bug real encontrado durante la verificación (no relacionado al pedido, pero grave):**
+al probar el flujo por error toqué el cuadro "Registrar Pago Rápido" del detalle de cliente
+(un atajo directo, no el modal en cuestión) y generé un cobro real de prueba de $1.000 contra
+Jhon V. Lo revertí con el mismo mecanismo que usa la app (`cancelar_cobro_cliente`), pero al
+hacerlo detecté que **cancelar un cobro nunca recomponía `clientes.saldo_actual`**: el trigger
+`fn_update_cliente_saldo()` calculaba el efecto sobre el saldo solo en base a `tipo`/`monto`, y
+cancelar un cobro solo cambia `estado` — el revertir-y-reaplicar daba un neto de cero, dejando
+el saldo cacheado permanentemente mal después de cualquier cancelación (no solo la mía; esto ya
+podía estar afectando cancelaciones reales previas). Corregido en mig. 395: el efecto de cada
+movimiento ahora depende de su `estado` (`cancelado` = $0, sin importar tipo/monto), simétrico
+para INSERT/UPDATE/DELETE. Verificado con un ciclo completo insertar→cancelar→borrar sobre
+"Cliente de prueba 1" (saldo vuelve a $0 en cada paso) y corregido manualmente el saldo de
+Jhon V. (quedó en $89.000 por mi prueba, restaurado a $90.000, su valor real).
+
+Verificado en vivo: desde una Factura de Jhon V. con 2 facturas abiertas (FAC-20260619-002 y
+20260703-002) — la cabecera muestra "Cobrando la Factura FAC-20260619-002", esa fila queda
+resaltada y tildada con el saldo completo, la otra factura queda aparte sin tildar; desde
+Cuenta Corriente (genérico, sin factura de origen) no aparece ninguna distinción — ambos casos
+sin errores nuevos de consola.
+
+---
+
 ## ✅ Registrar Pago — rediseño + aclaración de cálculos (13/09)
 
 Luciano viendo el modal de "Registrar Pago" (chico, formulario de una sola columna) pidió 2

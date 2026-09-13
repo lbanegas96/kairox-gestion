@@ -686,6 +686,7 @@ const SaleDetailModal = ({ open, onOpenChange, saleId, onUpdateSale, onNavigate 
       <ModalCobro
         isPaymentDialogOpen={cobro.isPaymentDialogOpen} setIsPaymentDialogOpen={cobro.setIsPaymentDialogOpen}
         selectedClient={cobro.selectedClient}
+        facturaOrigenId={cobro.facturaOrigenId}
         paymentData={cobro.paymentData} setPaymentData={cobro.setPaymentData}
         formasPago={cobro.formasPago}
         tcParalelo={cobro.tcParalelo}

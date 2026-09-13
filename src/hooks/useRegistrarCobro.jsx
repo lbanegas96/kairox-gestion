@@ -46,6 +46,10 @@ export function useRegistrarCobro(onSuccess) {
   const [imputaciones, setImputaciones] = useState({});
   const [imputacionesFX, setImputacionesFX] = useState({});
   const [showParaleloTCModal, setShowParaleloTCModal] = useState(false);
+  // Qué factura puntual (si alguna) originó este cobro — ver ModalCobro.jsx
+  // para el resaltado visual que esto habilita (13/09, mismo pedido aplicado
+  // primero en useRegistrarPago.jsx del lado Compras).
+  const [facturaOrigenId, setFacturaOrigenId] = useState(null);
 
   // "Comprobante de Pago" — el mismo ModalDetalleCobro sirve para la vista
   // recién-creada y para reabrir un cobro viejo (ver comentario de arriba).
@@ -126,6 +130,7 @@ export function useRegistrarCobro(onSuccess) {
     setImputaciones({});
     setImputacionesFX({});
     setFacturasAbiertas([]);
+    setFacturaOrigenId(facturaId);
     setIsPaymentDialogOpen(true);
     fetchFacturasAbiertas(client.id, facturaId);
   }, [formasPago, fetchFacturasAbiertas]);
@@ -321,6 +326,7 @@ export function useRegistrarCobro(onSuccess) {
     facturasAbiertas,
     imputaciones, setImputaciones,
     imputacionesFX, setImputacionesFX,
+    facturaOrigenId,
     autoDistribuirFIFO,
     handleRegisterPayment,
     openPaymentDialog,

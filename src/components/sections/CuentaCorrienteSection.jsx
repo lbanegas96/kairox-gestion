@@ -46,6 +46,7 @@ function CuentaCorrienteSection({ initialClienteId } = {}) {
     facturasAbiertas,
     imputaciones, setImputaciones,
     imputacionesFX, setImputacionesFX,
+    facturaOrigenId,
     autoDistribuirFIFO,
     handleRegisterPayment,
     openPaymentDialog,
@@ -347,6 +348,7 @@ function CuentaCorrienteSection({ initialClienteId } = {}) {
       <ModalCobro
         isPaymentDialogOpen={isPaymentDialogOpen} setIsPaymentDialogOpen={setIsPaymentDialogOpen}
         selectedClient={clienteCobro}
+        facturaOrigenId={facturaOrigenId}
         paymentData={paymentData} setPaymentData={setPaymentData}
         formasPago={formasPago}
         tcParalelo={tcParalelo}

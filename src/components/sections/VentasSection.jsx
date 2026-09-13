@@ -197,6 +197,7 @@ function VentasSection({ initialTab = 'historial', onNavigateGlobal }) {
       <ModalCobro
         isPaymentDialogOpen={cobroPostFactura.isPaymentDialogOpen} setIsPaymentDialogOpen={cobroPostFactura.setIsPaymentDialogOpen}
         selectedClient={cobroPostFactura.selectedClient}
+        facturaOrigenId={cobroPostFactura.facturaOrigenId}
         paymentData={cobroPostFactura.paymentData} setPaymentData={cobroPostFactura.setPaymentData}
         formasPago={cobroPostFactura.formasPago}
         tcParalelo={cobroPostFactura.tcParalelo}
