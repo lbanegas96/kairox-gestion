@@ -555,6 +555,40 @@ function MapaRelaciones({
     return ramas;
   };
 
+  // Resuelve la cadena a partir de una Orden de Compra — reusado tanto al
+  // entrar directo por ordenCompraId como al entrar por una Recepción que
+  // tiene orden_compra_id pero no compra_id propio (13/09, hallazgo Luciano:
+  // "debería mostrarme las 2 recepciones, la OC y la Factura" — antes de
+  // esto, entrar por la Recepción mostraba SOLO esa recepción suelta, sin
+  // ver ni la OC ni sus recepciones hermanas ni la factura ya registrada
+  // sobre la OC — mig.332 nunca linkea la factura a una recepción puntual).
+  // No toca activoId — el caller decide qué nodo queda marcado "actual".
+  const resolveViaOrdenCompra = async (ordenCompraId) => {
+    const { data } = await supabase.from('ordenes_compra')
+      .select('id, numero, fecha, total, estado')
+      .eq('id', ordenCompraId).eq('empresa_id', user.empresa_id).maybeSingle();
+    if (!data) return false;
+    fetchDuplicadoInfo('orden_compra', ordenCompraId);
+    const { data: compra } = await supabase.from('compras')
+      .select('id').eq('orden_compra_id', ordenCompraId).eq('empresa_id', user.empresa_id).maybeSingle();
+    if (compra) { await fetchMapaCompra(compra.id); return true; }
+    // Sin factura todavía: la cadena es Orden de Compra → Recepciones (puede
+    // haber más de una si se recibió en tandas), mismo espíritu que la
+    // cadena Cotización → Pedido → Entrega del lado Ventas.
+    const { data: recepciones } = await supabase.from('recepciones')
+      .select('id, numero_recepcion, fecha, estado')
+      .eq('orden_compra_id', ordenCompraId).eq('empresa_id', user.empresa_id)
+      .order('created_at', { ascending: true });
+    setSinFacturar({
+      label: 'Orden de Compra',
+      nodos: [
+        { id: data.id, tipo: 'orden_compra', numero: data.numero, fecha: data.fecha, total: data.total, estado: data.estado },
+        ...(recepciones ?? []).map(r => ({ id: r.id, tipo: 'recepcion', numero: r.numero_recepcion, fecha: r.fecha, estado: r.estado })),
+      ],
+    });
+    return true;
+  };
+
   // ── Resolución del punto de entrada ──────────────────────────────────────────
   const resolveAndFetch = async () => {
     setSinFacturar(null);
@@ -617,38 +651,23 @@ function MapaRelaciones({
       }
       if (recepcionId) {
         const { data } = await supabase.from('recepciones')
-          .select('id, numero_recepcion, fecha, estado, compra_id')
+          .select('id, numero_recepcion, fecha, estado, compra_id, orden_compra_id')
           .eq('id', recepcionId).eq('empresa_id', user.empresa_id).maybeSingle();
         if (!data) return setMapa(null);
         fetchDuplicadoInfo('recepcion', recepcionId);
-        if (data.compra_id) { setActivoId(recepcionId); return fetchMapaCompra(data.compra_id); }
         setActivoId(recepcionId);
+        if (data.compra_id) { return fetchMapaCompra(data.compra_id); }
+        // compra_id siempre queda NULL cuando la factura se registró a nivel
+        // OC (mig.332) — delega en la misma resolución que ordenCompraId
+        // para ver la OC completa (recepciones hermanas + factura si ya
+        // existe), en vez de mostrar esta recepción sola y sin contexto.
+        if (data.orden_compra_id && await resolveViaOrdenCompra(data.orden_compra_id)) return;
         return setSinFacturar({ label: 'Recepción', nodos: [{ id: data.id, tipo: 'recepcion', numero: data.numero_recepcion, fecha: data.fecha, estado: data.estado }] });
       }
       if (ordenCompraId) {
-        const { data } = await supabase.from('ordenes_compra')
-          .select('id, numero, fecha, total, estado')
-          .eq('id', ordenCompraId).eq('empresa_id', user.empresa_id).maybeSingle();
-        if (!data) return setMapa(null);
-        fetchDuplicadoInfo('orden_compra', ordenCompraId);
-        const { data: compra } = await supabase.from('compras')
-          .select('id').eq('orden_compra_id', ordenCompraId).eq('empresa_id', user.empresa_id).maybeSingle();
-        if (compra) { setActivoId(ordenCompraId); return fetchMapaCompra(compra.id); }
-        // Sin factura todavía: la cadena es Orden de Compra → Recepciones (puede
-        // haber más de una si se recibió en tandas), mismo espíritu que la
-        // cadena Cotización → Pedido → Entrega del lado Ventas.
-        const { data: recepciones } = await supabase.from('recepciones')
-          .select('id, numero_recepcion, fecha, estado')
-          .eq('orden_compra_id', ordenCompraId).eq('empresa_id', user.empresa_id)
-          .order('created_at', { ascending: true });
         setActivoId(ordenCompraId);
-        return setSinFacturar({
-          label: 'Orden de Compra',
-          nodos: [
-            { id: data.id, tipo: 'orden_compra', numero: data.numero, fecha: data.fecha, total: data.total, estado: data.estado },
-            ...(recepciones ?? []).map(r => ({ id: r.id, tipo: 'recepcion', numero: r.numero_recepcion, fecha: r.fecha, estado: r.estado })),
-          ],
-        });
+        if (await resolveViaOrdenCompra(ordenCompraId)) return;
+        return setMapa(null);
       }
       if (devolucionId) {
         const { data } = await supabase.from('devoluciones')
@@ -871,17 +890,43 @@ function MapaRelaciones({
     fetchDuplicadoInfo('factura_compra', idCompra);
     try {
       const { data: compra } = await supabase.from('compras')
-        .select('id, numero_factura, total, fecha, proveedor_id, estado_pago, proveedores(nombre)')
+        .select('id, numero_factura, total, fecha, proveedor_id, estado_pago, orden_compra_id, proveedores(nombre)')
         .eq('id', idCompra).single();
 
       if (!compra) { setMapa(null); return; }
 
-      const [recepcionesRes, ncsRes, ndsRes, pagosRes, imputacionesRes, ncFinRes] = await Promise.allSettled([
-        // Recepciones vinculadas a esta compra
+      const [recepcionesRes, recepcionesPorOcRes, ordenCompraRes, ncsRes, ndsRes, pagosRes, imputacionesRes, ncFinRes] = await Promise.allSettled([
+        // Recepciones vinculadas a esta compra directo (patrón viejo —
+        // Compra Rápida, que crea compra+recepción atómicamente con el link).
         supabase.from('recepciones')
           .select('id, numero_recepcion, fecha, estado')
           .eq('compra_id', idCompra)
           .eq('empresa_id', user.empresa_id),
+
+        // Recepciones vinculadas por orden_compra_id (patrón real desde
+        // mig.332: la Factura se registra a nivel OC, nunca queda linkeada a
+        // una recepción puntual — recepciones.compra_id queda NULL siempre
+        // en este camino). Bug real (13/09, hallazgo Luciano: "debería
+        // mostrarme las 2 recepciones, la OC y la Factura" — el Mapa de una
+        // Recepción con OC de origen mostraba esa recepción sola, sin ver
+        // ni a su OC ni a sus recepciones hermanas ni a la factura ya
+        // registrada). Solo tiene sentido si esta compra viene de una OC.
+        compra.orden_compra_id
+          ? supabase.from('recepciones')
+              .select('id, numero_recepcion, fecha, estado')
+              .eq('orden_compra_id', compra.orden_compra_id)
+              .eq('empresa_id', user.empresa_id)
+          : Promise.resolve({ data: [] }),
+
+        // La OC de origen — mismo pedido de Luciano (13/09): "debería
+        // mostrarme... la OC" — antes esta rama del mapa nunca mostraba la
+        // OC como nodo propio (a diferencia de Ventas, que sí muestra
+        // Cotización/Pedido junto a la Factura).
+        compra.orden_compra_id
+          ? supabase.from('ordenes_compra')
+              .select('id, numero, fecha, total, estado')
+              .eq('id', compra.orden_compra_id).eq('empresa_id', user.empresa_id).maybeSingle()
+          : Promise.resolve({ data: null }),
 
         // Devoluciones (NC físicas) al proveedor
         supabase.from('devoluciones')
@@ -947,10 +992,18 @@ function MapaRelaciones({
       const pagosCC = [...pagosDirectos, ...pagosImputados].filter(p => vistos.has(p.id) ? false : (vistos.add(p.id), true));
       const ncsFinancieras = safeArr(ncFinRes);
 
+      // Dedup por id — si algún día una recepción llegara a tener AMBOS
+      // links (compra_id directo Y orden_compra_id) no se muestra dos veces.
+      const recepcionesVistas = new Set();
+      const recepciones = [...safeArr(recepcionesRes), ...safeArr(recepcionesPorOcRes)]
+        .filter(r => recepcionesVistas.has(r.id) ? false : (recepcionesVistas.add(r.id), true));
+      const ordenCompra = ordenCompraRes.status === 'fulfilled' ? (ordenCompraRes.value.data ?? null) : null;
+
       setMapa({
         modo:         'compra',
         compra,
-        recepciones:  safeArr(recepcionesRes),
+        ordenCompra,
+        recepciones,
         devoluciones: safeArr(ncsRes),
         nds:          safeArr(ndsRes),
         pagos:        pagosCC,
@@ -1093,7 +1146,7 @@ function MapaRelaciones({
     && mapa.cobros.length === 0 && mapa.pagosContado.length === 0;
 
   const sinRelacionesCompra = mapa?.modo === 'compra'
-    && mapa.recepciones.length === 0 && mapa.devoluciones.length === 0
+    && !mapa.ordenCompra && mapa.recepciones.length === 0 && mapa.devoluciones.length === 0
     && mapa.nds.length === 0 && mapa.pagos.length === 0
     && mapa.ncsFinancieras.length === 0;
 
@@ -1216,7 +1269,7 @@ function MapaRelaciones({
     : 0;
 
   const pasosCompra = mapa?.modo === 'compra'
-    ? 1 + mapa.recepciones.length + mapa.pagos.length
+    ? 1 + (mapa.ordenCompra ? 1 : 0) + mapa.recepciones.length + mapa.pagos.length
     : 0;
   const derivadosCompra = mapa?.modo === 'compra'
     ? mapa.devoluciones.length + mapa.nds.length + mapa.ncsFinancieras.length
@@ -1592,6 +1645,19 @@ function MapaRelaciones({
                   Cadena de documentos
                 </p>
                 <div className="flex-1 min-h-0 flex flex-wrap content-start items-start gap-y-3 gap-x-0 overflow-y-auto pr-1">
+                  {/* OC de origen (13/09, hallazgo Luciano: "debería
+                      mostrarme... la OC") — mismo criterio que Cotización/
+                      Pedido del lado Ventas, que sí se muestran junto a la
+                      Factura una vez facturados. */}
+                  {mapa.ordenCompra && (() => {
+                    const n = { id: mapa.ordenCompra.id, tipo: 'orden_compra', numero: mapa.ordenCompra.numero, fecha: mapa.ordenCompra.fecha, total: mapa.ordenCompra.total, estado: mapa.ordenCompra.estado };
+                    return (
+                      <React.Fragment key={n.id}>
+                        <NodoMapa nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />
+                        <Conector />
+                      </React.Fragment>
+                    );
+                  })()}
                   {/* Recepciones previas */}
                   {mapa.recepciones.map((r) => {
                     const n = { id: r.id, tipo: 'recepcion', numero: r.numero_recepcion, fecha: r.fecha, estado: r.estado };

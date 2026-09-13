@@ -105,6 +105,22 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
     enabled: !!empresaId,
   });
 
+  // Conteo por estado para las 4 tarjetas de arriba — bug real (13/09,
+  // hallazgo Luciano: "hice una recibida parcial y el indicador no marcaba
+  // nada"): antes se derivaban de `listData`, que YA viene filtrado por
+  // `estadoFiltro` (clickear una tarjeta pone ese filtro) — con cualquier
+  // filtro activo, las otras 3 tarjetas quedaban en 0 pase lo que pase, sin
+  // relación con la data real. Query separada, siempre sin filtrar.
+  const { data: estadosCount = [] } = useQuery({
+    queryKey: ['ordenes_compra_estados', empresaId],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('ordenes_compra').select('estado').eq('empresa_id', empresaId);
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!empresaId,
+  });
+
   const { data: detalle } = useQuery({
     queryKey: OC_KEYS.detail(detalleId),
     queryFn: () => ordenesCompraService.getById(detalleId),
@@ -323,6 +339,7 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
   // Helper: invalidar también el cache de notificaciones cuando cambia el estado/stock
   const invalidateOCAndNotifs = () => {
     qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] });
+    qc.invalidateQueries({ queryKey: ['ordenes_compra_estados', empresaId] });
     qc.invalidateQueries({ queryKey: ['notif'] });
     // OC_KEYS.detail() usa la clave singular 'orden_compra' (no 'ordenes_compra')
     // — mismo bug encontrado y corregido en CotizacionesSection: sin esto, el
@@ -553,7 +570,7 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
           { est: 'recibida_parcial', accent: 'border-t-kx-amber'  },
           { est: 'recibida',         accent: 'border-t-kx-green'  },
         ].map(({ est, accent }) => {
-          const count = (listData?.data ?? []).filter(o => o.estado === est).length;
+          const count = estadosCount.filter(o => o.estado === est).length;
           const cfg = ESTADOS[est];
           const Icon = cfg.icon;
           return (

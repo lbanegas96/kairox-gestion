@@ -1,5 +1,37 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Recepciones parciales — tarjetas de estado + Mapa de Relaciones incompleto para OC (13/09)
+
+Luciano probando una OC recibida en 2 tandas parciales (OC-00020) encontró 2 problemas más:
+
+1. ✅ **Las tarjetas "Recibida parcial"/"Recibida" no marcaban nada** — bug real en
+   `OrdenesCompraSection.jsx`: las 4 tarjetas de estado se calculaban filtrando `listData`, pero
+   esa MISMA lista ya viene filtrada del servidor por `estadoFiltro` (clickear una tarjeta pone
+   ese filtro). Con cualquier filtro activo, las otras 3 tarjetas quedaban en 0 sin relación con
+   la data real — no era una demora de caché, era matemáticamente imposible que mostraran otra
+   cosa. Se agregó una query separada y siempre sin filtrar (`ordenes_compra_estados`) solo para
+   los conteos, independiente de `listData`. Verificado en vivo: con el filtro "Recibida parcial"
+   activo (mostrando solo OC-00020), las 4 tarjetas siguen mostrando los conteos reales
+   (0/1/1/11), no 0 en las que no coinciden con el filtro.
+
+2. ✅ **Mapa de Relaciones incompleto para una Recepción con OC de origen** — mismo síntoma que
+   ayer pero en un caso más completo: "debería mostrarme las 2 recepciones, la OC y la Factura".
+   Causa: `recepciones.compra_id` queda SIEMPRE null cuando la factura se registra a nivel OC
+   (mig.332) — ni `fetchMapaCompra` (que buscaba recepciones por `compra_id`) ni la resolución de
+   entrada por `recepcionId` (que solo miraba `compra_id`, nunca `orden_compra_id`) llegaban a
+   armar la cadena completa. Se agregó: (a) una segunda búsqueda de recepciones por
+   `orden_compra_id` en `fetchMapaCompra`, con dedup; (b) la Orden de Compra como nodo propio en
+   la cadena (mismo criterio que Ventas ya hace con Cotización/Pedido junto a la Factura); (c)
+   `resolveViaOrdenCompra` — un helper compartido entre la entrada por `ordenCompraId` y por
+   `recepcionId` (cuando esta última no tiene `compra_id` propio pero sí `orden_compra_id`), para
+   no duplicar la lógica de "OC → factura si existe, si no → OC + recepciones hermanas".
+   Verificado en vivo desde ambas recepciones de OC-00020 (REC-2026-0030 y REC-2026-0031): el
+   Mapa ahora muestra "4 pasos en la cadena" — OC-00020 → REC-0030 → REC-0031 → Factura
+   789897978979 — con cada nodo (incluida la OC) abriendo su preview y su "Ver documento
+   completo" correctamente.
+
+---
+
 ## ✅ "Registrar Factura del Proveedor" no registraba nada — 2 bugs reales (13/09)
 
 Luciano probó el atajo recién armado (desde la Recepción) y reportó: "quiero registrar la
