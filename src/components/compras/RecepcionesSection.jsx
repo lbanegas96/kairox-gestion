@@ -35,7 +35,7 @@ function EstadoBadge({ estado }) {
   return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.className}`}>{cfg.label}</span>;
 }
 
-function RecepcionesSection() {
+function RecepcionesSection({ navigateRecepcionId, onNavigated, onNavigate } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -102,6 +102,14 @@ function RecepcionesSection() {
   };
 
   useEffect(() => { fetchRecepciones(); }, [user?.empresa_id]);
+
+  // Navegación desde el Flujo del Documento/Mapa de Relaciones de otra sección
+  // (12/09, mismo criterio que EntregasSection.jsx del lado Ventas).
+  useEffect(() => {
+    if (!navigateRecepcionId) return;
+    setViewRecepcionId(navigateRecepcionId);
+    onNavigated?.();
+  }, [navigateRecepcionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!user?.empresa_id) return;
@@ -346,6 +354,7 @@ function RecepcionesSection() {
         open={isMapaOpen}
         onOpenChange={setIsMapaOpen}
         recepcionId={mapaRecId}
+        onNavigate={onNavigate}
       />
 
       {/* ── Modal Detalle ─────────────────────────────────────────────────── */}
@@ -354,6 +363,7 @@ function RecepcionesSection() {
         onClose={() => setViewRecepcionId(null)}
         onVerMapa={() => { setMapaRecId(viewRecepcionId); setIsMapaOpen(true); }}
         onDuplicar={setDuplicarTarget}
+        onNavigate={(tipo, id) => { setViewRecepcionId(null); onNavigate?.(tipo, id); }}
       />
 
       <ModalNuevaRecepcion

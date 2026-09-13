@@ -38,7 +38,7 @@ function EstadoBadge({ estado }) {
   );
 }
 
-function FacturasCompraSection() {
+function FacturasCompraSection({ navigateFacturaId, onNavigated, onNavigate } = {}) {
   const { user }  = useAuth();
   const { toast } = useToast();
   const tcParalelo = useTCParalelo();
@@ -94,6 +94,20 @@ function FacturasCompraSection() {
   };
 
   useEffect(() => { fetchCompras(); }, [user?.empresa_id]);
+
+  // Navegación desde el Flujo del Documento/Mapa de Relaciones de otra sección
+  // (12/09, mismo criterio que EntregasSection.jsx del lado Ventas). A
+  // diferencia de OrdenesCompraSection/RecepcionesSection (que guardan solo el
+  // id y derivan el detalle con .find()), acá `detalleCompra` YA es el objeto
+  // completo -- se resuelve el id contra la lista recién cargada.
+  useEffect(() => {
+    if (!navigateFacturaId) return;
+    const target = compras.find(c => c.id === navigateFacturaId);
+    if (target) {
+      setDetalleCompra(target);
+      onNavigated?.();
+    }
+  }, [navigateFacturaId, compras]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
     let r = compras;
@@ -344,6 +358,7 @@ function FacturasCompraSection() {
         onDevolver={(c) => { setDetalleCompra(null); abrirDevolucion(c); }}
         onDuplicar={(c) => { setDetalleCompra(null); setDuplicarTarget(c); }}
         onCancelado={() => fetchCompras()}
+        onPagoRegistrado={() => fetchCompras()}
       />
 
       <NuevaFacturaProveedorModal
@@ -411,7 +426,7 @@ function FacturasCompraSection() {
         open={isMapaOpen}
         onOpenChange={setIsMapaOpen}
         compraId={mapaCompraId}
-        onNavigate={() => {}}
+        onNavigate={onNavigate}
       />
     </div>
   );

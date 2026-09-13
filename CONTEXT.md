@@ -1,5 +1,60 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Circuito OC → Recepción → Factura → Pago — 4 gaps reales cerrados (12/09)
+
+Luciano armando el circuito completo de Compras de punta a punta (OC → Recepción → Factura →
+Pago) para aprobarlo encontró 4 problemas reales, todos relacionados con el fix anterior del
+mismo día (modal de detalle de Recepción):
+
+1. ✅ **Mapa de Relaciones no navegaba — "se cierra todo"** — `MapaRelaciones.navigate()`
+   siempre llamaba `onNavigate?.(tipo, id)` y cerraba el mapa, pero **ninguna** sección de
+   Compras (`OrdenesCompraSection`/`RecepcionesSection`/`FacturasCompraSection`) le pasaba un
+   `onNavigate` real — el código ya lo documentaba así (`OrdenesCompraSection.jsx:591`, ahora
+   corregido). A diferencia de Ventas (`VentasSection.jsx` orquesta `navigateEntregaId`/
+   `navigateSaleId`/etc.), Compras nunca tuvo esa navegación cross-tab. Se agregó en
+   `ComprasSection.jsx` (`navigateOrdenId`/`navigateRecepcionId`/`navigateFacturaId` +
+   `handleComprasNavigate`, mismo criterio que `VentasSection.handleVentasNavigate`), y cada
+   sección ahora acepta `navigateXId`/`onNavigated`/`onNavigate` y los reenvía a su
+   `<MapaRelaciones>` (y `ModalDetalleRecepcion` a su `<DocumentFlow>`). Verificado en vivo:
+   desde OC-00018 → Mapa → preview de REC-2026-0028 → "Ver documento completo" cambia a la
+   pestaña Recepciones y abre esa recepción; desde ahí, clickear el chip "OC-00018" del Flujo
+   del Documento vuelve a Órdenes de Compra y abre esa OC — navegación bidireccional confirmada.
+2. ✅ **"Registrar Factura del Proveedor" enterrado bajo el scroll** — el botón vivía dentro del
+   panel "3-Way Match" en el cuerpo scrolleable de `ModalDetalleOC.jsx`, mientras que
+   "Registrar Recepción"/"Devolver" (mismo tipo de acción, avanza el estado de la OC) ya vivían
+   en el footer fijo. Se movió al footer junto a esas dos. Verificado en vivo: visible sin
+   scrollear en OC-00018 (estado "Recibida").
+3. ✅ **"Copiar a NC"/"Copiar a ND"/"Devolver a proveedor" muy expuestos en el detalle de
+   Factura** — `ModalDetalleFacturaCompra.jsx` los mostraba como botones sueltos en el footer
+   ("se presta a error"), mientras que la fila de `FacturasCompraSection.jsx` YA los tenía
+   tucked en su propio "···" (`DropdownMenu` con Ver detalle/Mapa/Duplicar/Copiar a NC/Copiar a
+   ND/Devolver). Se sumaron al `MenuAccionesDocumento` ("···") que el detalle ya usaba para
+   Duplicar/Historial — mismo criterio, ahora consistente entre fila y detalle. "Anular
+   Factura" queda expuesto a propósito (única acción realmente destructiva, mismo criterio que
+   "Cancelar" en `SaleDetailModal.jsx`).
+4. ✅ **Sin forma de registrar el pago al proveedor desde la Factura** — a diferencia de Ventas
+   (`SaleDetailModal.jsx` tiene "Registrar Cobro" vía `useRegistrarCobro`/`ModalCobro.jsx`),
+   Compras no tenía ningún acceso directo — la única pista era un texto ("Pagala desde
+   Proveedores → Cuenta Corriente") dentro del 3-Way Match de la OC. Se extrajo la lógica de
+   pago que vivía inline en `ProveedoresSection.jsx` (facturasAbiertas/imputaciones/
+   pagoMutation) a un hook nuevo **`src/hooks/useRegistrarPago.jsx`** (espejo de
+   `useRegistrarCobro.jsx`) + un modal compartido nuevo **`src/components/proveedores/
+   ModalRegistrarPago.jsx`** (mismo layout compacto que ya tenía el dialog de ProveedoresSection
+   — sin rediseño, solo relocated). `ProveedoresSection.jsx` se refactorizó para consumir el
+   hook (mismo comportamiento, sin regresión — verificado en vivo con Amazon). `abrirPagoPorProveedorId(proveedorId, facturaId)`
+   agrega deep-link con preselección (mismo criterio que `abrirCobroPorClienteId`), usado desde
+   el nuevo botón "Registrar Pago" en `ModalDetalleFacturaCompra.jsx` (visible solo si
+   `estado_pago === 'pendiente'`). Verificado en vivo: desde la factura S/N $1.210 de Amazon,
+   "Registrar Pago" abre con saldo real ($2.210, vía `getSaldoProveedor`), monto precargado
+   $1.210 y esa factura específica tildada/imputada — cancelado antes de confirmar para no
+   mutar deuda real de un proveedor real.
+
+Sin errores de consola en ningún paso de la verificación en vivo. Ningún dato real fue
+modificado (todos los "Confirmar" se cancelaron después de comprobar que el flujo llega
+correctamente hasta ahí).
+
+---
+
 ## ✅ Recepciones — click en la fila abre modal de detalle, ya no acordeón inline (12/09)
 
 Luciano probando el circuito de Compras de punta a punta encontró que, a diferencia de

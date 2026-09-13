@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -39,7 +39,7 @@ const alicuotaANumero = (a) => (a === '21' || a === '10.5' || a === '0') ? Numbe
 // un número ya parseado (usar junto con parseNumberLocale).
 const clampPct = (n) => Math.min(100, Math.max(0, n || 0));
 
-function OrdenesCompraSection() {
+function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -78,6 +78,14 @@ function OrdenesCompraSection() {
   const [prodOpen, setProdOpen] = useState({});
 
   const empresaId = user?.empresa_id;
+
+  // Navegación desde el Flujo del Documento/Mapa de Relaciones de otra sección
+  // (12/09, mismo criterio que EntregasSection.jsx del lado Ventas).
+  useEffect(() => {
+    if (!navigateOrdenId) return;
+    setDetalleId(navigateOrdenId);
+    onNavigated?.();
+  }, [navigateOrdenId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Queries ──────────────────────────────────────────────────────────────────
 
@@ -588,15 +596,15 @@ function OrdenesCompraSection() {
         loading={createMutation.isPending}
       />
 
-      {/* OrdenesCompraSection no recibe onNavigate (Compras todavía no tiene
-          navegación cross-tab, a diferencia de Ventas) — clickear un nodo del
-          Mapa abre su preview inline, pero no navega a la pestaña Recepciones.
-          Mismo criterio que RecepcionesSection/FacturasCompraSection, que
-          tampoco lo pasan. */}
+      {/* onNavigate (12/09): antes ninguna sección de Compras lo pasaba, así
+          que "ver detalle" de un nodo del Mapa cerraba todo sin navegar a
+          ningún lado (hallazgo Luciano: "no pasa nada, se cierra todo").
+          Mismo criterio que VentasSection/EntregasSection. */}
       <MapaRelaciones
         open={isMapaOpen}
         onOpenChange={setIsMapaOpen}
         ordenCompraId={mapaOcId}
+        onNavigate={onNavigate}
       />
 
       {/* ── MODAL: Registrar Factura del Proveedor ── */}

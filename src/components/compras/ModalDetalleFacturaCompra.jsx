@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Receipt, Network, FileMinus, FilePlus, Undo2, Copy, Ban, History, Code2, Loader2 } from 'lucide-react';
+import { Receipt, Network, FileMinus, FilePlus, Undo2, Copy, Ban, History, Code2, Loader2, Banknote } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -16,6 +16,8 @@ import { asientosAutoService } from '@/services/planCuentasService';
 import VerAsientoButton from '@/components/shared/VerAsientoButton';
 import MenuAccionesDocumento from '@/components/shared/documento/MenuAccionesDocumento';
 import HistorialCambiosDialog from '@/components/shared/documento/HistorialCambiosDialog';
+import { useRegistrarPago } from '@/hooks/useRegistrarPago';
+import ModalRegistrarPago from '@/components/proveedores/ModalRegistrarPago';
 
 // Fase 2 (15/08): antes Factura de Compra era el único documento sin un modal
 // de detalle propio — una fila que se expandía inline en la tabla, sin totales
@@ -43,6 +45,7 @@ const CAMPOS_HISTORIAL = {
 function ModalDetalleFacturaCompra({
   compra, onClose, onOpenMapa,
   onCopiarNc, onCopiarNd, onDevolver, onDuplicar, onCancelado,
+  onPagoRegistrado,
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -51,6 +54,12 @@ function ModalDetalleFacturaCompra({
   const [showCancelarConfirm, setShowCancelarConfirm] = useState(false);
   const [motivoCancelacion, setMotivoCancelacion] = useState('');
   const [cancelando, setCancelando] = useState(false);
+
+  // "Registrar Pago" desde acá mismo (hallazgo Luciano 12/09: "tampoco veo lo
+  // importante, como registrar el pago al proveedor de esa factura") — mismo
+  // criterio que "Registrar Cobro" en SaleDetailModal.jsx (lado Ventas): cada
+  // pantalla monta su propio useRegistrarPago + <ModalRegistrarPago>.
+  const pago = useRegistrarPago(() => onPagoRegistrado?.());
 
   const { data: historial = [] } = useQuery({
     queryKey: ['compra_historial', compra?.id],
@@ -227,51 +236,64 @@ function ModalDetalleFacturaCompra({
           <span className="font-mono font-bold text-lg dark:text-kx-text">{simbolo}{fmt(compra.total)}</span>
         </div>
 
-        <DialogFooter className="gap-2 flex-wrap px-6 py-4 shrink-0 border-t-0">
-          <Button variant="outline" onClick={onClose} className="dark:border-kx-border dark:text-slate-300">
-            Cerrar
-          </Button>
-          {/* Duplicar/Historial — pedido de Luciano (23/08): disponible pero no
-              a mano del resto de las acciones. Mismo criterio en Cotización/
-              OC/Pedido. Historial nuevo (mig.391, Fase 2 paridad Compras). */}
-          <MenuAccionesDocumento
-            acciones={[
-              onDuplicar && { label: 'Duplicar', icon: Copy, onClick: () => onDuplicar(compra) },
-              { label: 'Historial de cambios', icon: History, onClick: () => setShowHistorial(true) },
-            ]}
-          />
-          {onCopiarNc && (
-            <Button variant="outline" onClick={() => onCopiarNc(compra)} className="gap-2 dark:border-kx-border dark:text-slate-300">
-              <FileMinus className="w-4 h-4 text-kx-amber" /> Copiar a NC
+        <DialogFooter className="gap-2 flex-wrap sm:justify-between px-6 py-4 shrink-0 border-t-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="outline" onClick={onClose} className="dark:border-kx-border dark:text-slate-300">
+              Cerrar
             </Button>
-          )}
-          {onCopiarNd && (
-            <Button variant="outline" onClick={() => onCopiarNd(compra)} className="gap-2 dark:border-kx-border dark:text-slate-300">
-              <FilePlus className="w-4 h-4 text-kx-red" /> Copiar a ND
-            </Button>
-          )}
-          {onDevolver && compra.estado_pago !== 'anulada' && (
+            {/* Hallazgo Luciano 12/09: "Copiar a NC"/"Copiar a ND"/"Devolver" estaban
+                muy expuestos acá (se prestaba a error) — la fila de FacturasCompraSection
+                ya los tenía tucked en un "···" propio; ahora el detalle es consistente
+                con eso. Duplicar/Historial ya vivían acá adentro (23/08). Anular queda
+                afuera a propósito: es la única acción realmente destructiva, mismo
+                criterio que "Cancelar" en SaleDetailModal.jsx (lado Ventas). */}
+            <MenuAccionesDocumento
+              acciones={[
+                onDuplicar && { label: 'Duplicar', icon: Copy, onClick: () => onDuplicar(compra) },
+                { label: 'Historial de cambios', icon: History, onClick: () => setShowHistorial(true) },
+                onCopiarNc && { label: 'Copiar a NC', icon: FileMinus, onClick: () => onCopiarNc(compra) },
+                onCopiarNd && { label: 'Copiar a ND', icon: FilePlus, onClick: () => onCopiarNd(compra) },
+                onDevolver && compra.estado_pago !== 'anulada' && { label: 'Devolver a proveedor', icon: Undo2, onClick: () => onDevolver(compra) },
+              ]}
+            />
+            {/* Anular Factura — mig.391, Fase 2 de PLAN_PARIDAD_COMPRAS.md.
+                Simétrica a "Cancelar Factura" del lado ventas (SaleDetailModal.jsx). */}
+            {puedeCancelar && (
+              <Button
+                variant="outline"
+                onClick={() => setShowCancelarConfirm(true)}
+                className="gap-2 border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20"
+              >
+                <Ban className="w-4 h-4" /> Anular Factura
+              </Button>
+            )}
+          </div>
+          {/* "Registrar Pago" — mismo criterio que "Registrar Cobro" en
+              SaleDetailModal.jsx: acción positiva a la derecha, solo mientras
+              quede saldo pendiente. */}
+          {compra.estado_pago === 'pendiente' && compra.proveedor_id && (
             <Button
-              variant="outline"
-              onClick={() => onDevolver(compra)}
-              className="gap-2 border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-900/20"
+              className="bg-green-600 hover:bg-green-700 text-white gap-2"
+              onClick={() => pago.abrirPagoPorProveedorId(compra.proveedor_id, compra.id)}
             >
-              <Undo2 className="w-4 h-4" /> Devolver a proveedor
-            </Button>
-          )}
-          {/* Anular Factura — mig.391, Fase 2 de PLAN_PARIDAD_COMPRAS.md.
-              Simétrica a "Cancelar Factura" del lado ventas (SaleDetailModal.jsx). */}
-          {puedeCancelar && (
-            <Button
-              variant="outline"
-              onClick={() => setShowCancelarConfirm(true)}
-              className="gap-2 border-red-200 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20"
-            >
-              <Ban className="w-4 h-4" /> Anular Factura
+              <Banknote className="w-4 h-4" /> Registrar Pago
             </Button>
           )}
         </DialogFooter>
       </DialogContent>
+
+      <ModalRegistrarPago
+        isPaymentDialogOpen={pago.isPaymentDialogOpen} setIsPaymentDialogOpen={pago.setIsPaymentDialogOpen}
+        selectedProveedor={pago.selectedProveedor}
+        paymentData={pago.paymentData} setPaymentData={pago.setPaymentData}
+        formasPago={pago.formasPago}
+        isProcessingPayment={pago.isProcessingPayment}
+        handleRegisterPayment={pago.handleRegisterPayment}
+        facturasAbiertas={pago.facturasAbiertas}
+        imputaciones={pago.imputaciones} setImputaciones={pago.setImputaciones}
+        imputacionesFX={pago.imputacionesFX} setImputacionesFX={pago.setImputacionesFX}
+        autoDistribuirFIFO={pago.autoDistribuirFIFO}
+      />
 
       <AlertDialog open={showCancelarConfirm} onOpenChange={v => { if (!cancelando) { setShowCancelarConfirm(v); if (!v) setMotivoCancelacion(''); } }}>
         <AlertDialogContent className="dark:bg-kx-bg dark:border-kx-border">

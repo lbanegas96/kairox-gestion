@@ -19,9 +19,28 @@ function ComprasSection({ initialTab = 'ordenes' }) {
   const [activeTab, setActiveTab] = useState(
     initialTab === 'rapida' ? 'rapida' : initialTab
   );
+  // Navegación cross-tab (12/09, mismo criterio que VentasSection): antes
+  // ninguna sección de Compras recibía onNavigate, así que clickear "ver
+  // detalle" de un nodo del Mapa de Relaciones (o un chip del Flujo del
+  // Documento) cerraba todo sin ir a ningún lado (hallazgo Luciano: "no pasa
+  // nada, se cierra todo").
+  const [navigateOrdenId, setNavigateOrdenId]         = useState(null);
+  const [navigateRecepcionId, setNavigateRecepcionId] = useState(null);
+  const [navigateFacturaId, setNavigateFacturaId]     = useState(null);
 
   const handleDevolucionNavigate = (tipo) => {
     if (tipo === 'factura_compra') setActiveTab('facturas');
+  };
+
+  const handleComprasNavigate = (tipo, id) => {
+    const SECCION = { orden_compra: 'ordenes', recepcion: 'recepciones', factura_compra: 'facturas' };
+    const seccion = SECCION[tipo];
+    if (!seccion) return;
+    setActiveTab(seccion);
+    if (!id) return;
+    if (seccion === 'ordenes') setNavigateOrdenId(id);
+    else if (seccion === 'recepciones') setNavigateRecepcionId(id);
+    else if (seccion === 'facturas') setNavigateFacturaId(id);
   };
 
   const tabClass = [
@@ -76,15 +95,27 @@ function ComprasSection({ initialTab = 'ordenes' }) {
           </TabsList>
 
           <TabsContent value="ordenes" className="mt-4">
-            <OrdenesCompraSection />
+            <OrdenesCompraSection
+              navigateOrdenId={navigateOrdenId}
+              onNavigated={() => setNavigateOrdenId(null)}
+              onNavigate={handleComprasNavigate}
+            />
           </TabsContent>
 
           <TabsContent value="recepciones" className="mt-4">
-            <RecepcionesSection />
+            <RecepcionesSection
+              navigateRecepcionId={navigateRecepcionId}
+              onNavigated={() => setNavigateRecepcionId(null)}
+              onNavigate={handleComprasNavigate}
+            />
           </TabsContent>
 
           <TabsContent value="facturas" className="mt-4">
-            <FacturasCompraSection />
+            <FacturasCompraSection
+              navigateFacturaId={navigateFacturaId}
+              onNavigated={() => setNavigateFacturaId(null)}
+              onNavigate={handleComprasNavigate}
+            />
           </TabsContent>
 
           <TabsContent value="devoluciones" className="mt-4">

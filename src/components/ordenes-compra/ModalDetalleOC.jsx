@@ -291,12 +291,6 @@ function ModalDetalleOC({
                       ))}
                     </div>
                   )}
-                  {['recibida_parcial', 'recibida'].includes(detalle.estado) && (
-                    <Button size="sm" variant="outline" className="w-full gap-2 text-xs"
-                      onClick={abrirModalFactura}>
-                      <Receipt className="w-3.5 h-3.5" /> Registrar Factura del Proveedor
-                    </Button>
-                  )}
                 </div>
               );
             })()}
@@ -366,6 +360,17 @@ function ModalDetalleOC({
             <Button className="bg-green-600 hover:bg-green-700 text-white gap-2"
               onClick={() => { setDetalleId(null); setGenRecepId(detalle.id); }}>
               <Truck className="w-4 h-4" /> Registrar Recepción
+            </Button>
+          )}
+          {/* Hallazgo Luciano 12/09: este botón vivía adentro del panel 3-Way
+              Match, debajo del scroll — "nada me permite registrar la factura
+              del proveedor". Se mueve al footer, junto al resto de las
+              acciones que avanzan el estado de la OC (mismo criterio que
+              Registrar Recepción/Devolver, que sí vivían acá). */}
+          {detalle && ['recibida_parcial', 'recibida'].includes(detalle.estado) && (
+            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2"
+              onClick={() => { setDetalleId(null); abrirModalFactura(); }}>
+              <Receipt className="w-4 h-4" /> Registrar Factura del Proveedor
             </Button>
           )}
           <Button variant="outline" onClick={() => setDetalleId(null)} className="dark:border-kx-border dark:text-slate-300">Cerrar</Button>

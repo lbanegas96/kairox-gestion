@@ -26,7 +26,7 @@ function Campo({ label, children }) {
   );
 }
 
-function ModalDetalleRecepcion({ recepcion, onClose, onVerMapa, onDuplicar }) {
+function ModalDetalleRecepcion({ recepcion, onClose, onVerMapa, onDuplicar, onNavigate }) {
   if (!recepcion) return null;
 
   const items = recepcion.recepcion_items ?? [];
@@ -107,7 +107,7 @@ function ModalDetalleRecepcion({ recepcion, onClose, onVerMapa, onDuplicar }) {
                 <Network className="w-3 h-3" /> Mapa de relaciones
               </button>
             </div>
-            <DocumentFlow chips={flowChips} />
+            <DocumentFlow chips={flowChips} onNavigate={onNavigate} />
           </div>
 
           <table className="w-full text-sm">

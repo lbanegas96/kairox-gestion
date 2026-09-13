@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Truck, Plus, Search, Edit, Eye, UserX, UserCheck,
-  DollarSign, FileText, ShoppingBag, Banknote, RefreshCw, Clock, FileDown, Loader2, AlertTriangle
+  DollarSign, FileText, ShoppingBag, Banknote, RefreshCw, Clock, FileDown, Loader2,
 } from 'lucide-react';
 import PaymentRunModal from '@/components/proveedores/PaymentRunModal';
 import { Button } from '@/components/ui/button';
@@ -13,17 +13,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
-import { ToastAction } from '@/components/ui/toast';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
-import { useCaja } from '@/contexts/CajaContext';
 import { proveedoresService, PROV_KEYS } from '@/services/proveedoresService';
 import { supabase } from '@/lib/customSupabaseClient';
 import { formatDateAR, getNowAR } from '@/lib/dateUtils';
-import { parseNumberLocale } from '@/lib/currencyUtils';
-import { getEmpresaParaPDF } from '@/lib/empresaUtils';
 import TabAntiguedad from '@/components/cuenta-corriente/TabAntiguedad';
-import { imprimirReciboPago } from '@/lib/imprimirRecibo';
 import { imprimirEstadoCuentaProveedor } from '@/lib/imprimirEstadoCuentaProveedor';
+import { useRegistrarPago } from '@/hooks/useRegistrarPago';
+import ModalRegistrarPago from '@/components/proveedores/ModalRegistrarPago';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const CONDICIONES_IVA = ['RI', 'Monotributo', 'Exento', 'CF', 'No Categorizado'];
@@ -46,7 +43,6 @@ function ProveedoresSection() {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
-  const { currentSession, isSessionOpen } = useCaja();
   const empresaId = user?.empresa_id;
   const isAdmin = user?.role === 'admin';
 
@@ -58,14 +54,6 @@ function ProveedoresSection() {
   const [form, setForm]             = useState({ ...EMPTY_FORM });
   const [detalleId, setDetalleId]   = useState(null);
   const [runOpen, setRunOpen]       = useState(false);
-  const [pagoOpen, setPagoOpen]     = useState(false);
-  const [pagoForm, setPagoForm]     = useState({ monto: '', descripcion: '', metodo: 'Efectivo', forma_pago_id: '', referencia_pago: '' });
-  // Imputación por factura (Open Item clearing, migration 169/170) — opcional.
-  // Si no se imputa nada, el pago se comporta igual que siempre (reduce el
-  // saldo corrido, sin marcar ninguna compra puntual como cancelada).
-  const [facturasAbiertas, setFacturasAbiertas] = useState([]);
-  const [imputaciones, setImputaciones] = useState({}); // { compra_id: "monto string" }
-  const [imputacionesFX, setImputacionesFX] = useState({}); // { compra_id: "monto FX string" } — compras en moneda extranjera
   // Fase 3 de PLAN_PARIDAD_COMPRAS.md (04/09) — filtros de fecha + PDF de
   // Estado de Cuenta, mismo criterio que ClientDetailModal.jsx del lado clientes.
   const [fechaDesde, setFechaDesde] = useState('');
@@ -104,12 +92,6 @@ function ProveedoresSection() {
     enabled: !!empresaId,
   });
 
-  const { data: empresaData = {} } = useQuery({
-    queryKey: ['empresa_datos_recibo', empresaId],
-    queryFn: () => getEmpresaParaPDF(empresaId),
-    enabled: !!empresaId,
-  });
-
   const { data: detalle } = useQuery({
     queryKey: PROV_KEYS.detail(detalleId),
     queryFn: () => proveedoresService.getById(detalleId),
@@ -128,15 +110,6 @@ function ProveedoresSection() {
     enabled: !!detalleId,
   });
 
-  const montoPago = parseNumberLocale(pagoForm.monto) || 0;
-  const totalImputadoPago = facturasAbiertas.reduce((s, f) => {
-    if (f.moneda && f.moneda !== 'ARS') {
-      const fx = parseNumberLocale(imputacionesFX[f.compra_id] || '') || 0;
-      return s + fx * (f.tipo_cambio_tasa || 0);
-    }
-    return s + (parseNumberLocale(imputaciones[f.compra_id] || '') || 0);
-  }, 0);
-
   const saldo = (cuentaCorriente).reduce((acc, m) => {
     if (m.tipo === 'compra' || m.tipo === 'nota_debito')  return acc + Number(m.monto);
     if (m.tipo === 'pago'   || m.tipo === 'nota_credito') return acc - Number(m.monto);
@@ -152,6 +125,15 @@ function ProveedoresSection() {
     // sin esto, el detalle de proveedor abierto no se refresca tras editar/activar.
     qc.invalidateQueries({ queryKey: ['proveedor'] });
   }, [qc, empresaId]);
+
+  // "Registrar Pago" (12/09) -- extraído a useRegistrarPago para que también
+  // pueda abrirse desde el detalle de una Factura de Compra (mismo criterio
+  // que useRegistrarCobro del lado Ventas). onSuccess invalida lo mismo que
+  // invalidaba pagoMutation antes de la extracción.
+  const pago = useRegistrarPago(() => {
+    invalidate();
+    qc.invalidateQueries({ queryKey: PROV_KEYS.cuentaCorriente(detalleId) });
+  });
 
   const saveMutation = useMutation({
     mutationFn: (data) => editando
@@ -193,64 +175,6 @@ function ProveedoresSection() {
     qc.invalidateQueries({ queryKey: PROV_KEYS.cuentaCorriente(detalleId) });
   };
 
-  const pagoMutation = useMutation({
-    mutationFn: ({ monto, descripcion, metodo, imputaciones: imp, formaPagoId, referenciaPago }) =>
-      proveedoresService.registrarPago(empresaId, detalleId, detalle?.nombre, monto, metodo, descripcion, user.id, currentSession?.id ?? null, imp, formaPagoId, referenciaPago),
-    onSuccess: (data, variables) => {
-      qc.invalidateQueries({ queryKey: PROV_KEYS.cuentaCorriente(detalleId) });
-      invalidate();
-      const reciboData = {
-        tipo: 'pago',
-        movimientoId: data?.ccp_id,
-        fecha: new Date().toISOString(),
-        contraparteNombre: detalle?.nombre,
-        monto: variables.monto,
-        metodo: variables.metodo,
-        referenciaPago: variables.referenciaPago || null,
-        nota: variables.descripcion || null,
-        imputaciones: variables.imputacionesDetalle || [],
-        saldoAnteriorTotal: saldo,
-        saldoNuevoTotal: saldo - variables.monto,
-        empresa: empresaData,
-      };
-      toast({
-        title: 'Pago registrado ✓',
-        className: 'bg-green-600 text-white',
-        action: (
-          <ToastAction
-            altText="Descargar comprobante en PDF"
-            onClick={() => imprimirReciboPago(reciboData).catch(error => {
-              console.error('[ProveedoresSection] Error al generar PDF:', error);
-              toast({ title: 'Error al generar el comprobante', description: error.message, variant: 'destructive' });
-            })}
-          >
-            Descargar PDF
-          </ToastAction>
-        ),
-      });
-      // El RPC genera el asiento en la misma transacción, no bloqueante: si falla
-      // (período cerrado o cuenta faltante), el pago igual se registra sin avisar.
-      if (data?.asiento_generado === false) {
-        toast({
-          title: 'Pago registrado sin asiento contable',
-          description: 'El pago se guardó correctamente, pero no se generó el asiento (período cerrado o cuenta contable faltante). Revisar Plan de Cuentas.',
-          variant: 'destructive',
-          action: (
-            <ToastAction altText="Regenerar asiento" onClick={() => handleRegenerarAsientoCxp(data.ccp_id)}>
-              Regenerar
-            </ToastAction>
-          ),
-        });
-      }
-      setPagoOpen(false);
-      const efectivo = formasPago.find(f => f.tipo_instrumento === 'efectivo');
-      setPagoForm({ monto: '', descripcion: '', metodo: efectivo?.nombre ?? 'Efectivo', forma_pago_id: efectivo?.id ?? '', referencia_pago: '' });
-      setImputaciones({});
-      setImputacionesFX({});
-    },
-    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
-  });
-
   // ── Handlers ─────────────────────────────────────────────────────────────
   const openCrear = () => { setEditando(null); setForm({ ...EMPTY_FORM }); setFormOpen(true); };
   const openEditar = (prov) => {
@@ -269,31 +193,6 @@ function ProveedoresSection() {
     saveMutation.mutate({ ...form, plazo_pago_dias: Number(form.plazo_pago_dias) || 0 });
   };
 
-  const fetchFacturasAbiertas = async (proveedorId) => {
-    const { data, error } = await supabase
-      .from('compras_saldo_pendiente')
-      .select('compra_id, total, saldo_pendiente, moneda, tipo_cambio_tasa')
-      .eq('proveedor_id', proveedorId)
-      .gt('saldo_pendiente', 0)
-      .order('compra_id');
-    if (error) {
-      console.error('[compras_saldo_pendiente]', error.message);
-      return;
-    }
-    // Traer el número de factura por separado (la vista no lo incluye).
-    const ids = (data || []).map(f => f.compra_id);
-    let numerosPorId = {};
-    if (ids.length > 0) {
-      const { data: compras } = await supabase.from('compras').select('id, numero_factura, fecha').in('id', ids);
-      numerosPorId = Object.fromEntries((compras || []).map(c => [c.id, c]));
-    }
-    setFacturasAbiertas((data || []).map(f => ({
-      ...f,
-      numero_factura: numerosPorId[f.compra_id]?.numero_factura || 'S/N',
-      fecha: numerosPorId[f.compra_id]?.fecha,
-    })));
-  };
-
   const handleDescargarPDFProveedor = async () => {
     setDescargandoPDF(true);
     try {
@@ -308,83 +207,6 @@ function ProveedoresSection() {
     } finally {
       setDescargandoPDF(false);
     }
-  };
-
-  const openPagoDialog = () => {
-    const efectivo = formasPago.find(f => f.tipo_instrumento === 'efectivo');
-    setPagoForm({ monto: '', descripcion: '', metodo: efectivo?.nombre ?? 'Efectivo', forma_pago_id: efectivo?.id ?? '', referencia_pago: '' });
-    setImputaciones({});
-    setImputacionesFX({});
-    setFacturasAbiertas([]);
-    setPagoOpen(true);
-    if (detalleId) fetchFacturasAbiertas(detalleId);
-  };
-
-  // Reparte `monto` entre las compras abiertas más viejas primero (FIFO). Solo
-  // aplica a compras en ARS — las de moneda extranjera se imputan a mano.
-  const autoDistribuirFIFO = (monto) => {
-    let restante = monto;
-    const nuevo = {};
-    for (const f of facturasAbiertas) {
-      if (f.moneda && f.moneda !== 'ARS') continue;
-      if (restante <= 0) break;
-      const aplicar = Math.min(restante, f.saldo_pendiente);
-      if (aplicar > 0) {
-        nuevo[f.compra_id] = String(aplicar);
-        restante -= aplicar;
-      }
-    }
-    setImputaciones(nuevo);
-  };
-
-  // Regla Caja: solo pagos en Efectivo (tipo_instrumento === 'efectivo') requieren
-  // caja abierta. Transferencia/Tarjeta/CC operan sin caja (mismo criterio que
-  // CompraRapidaSection y NuevaVentaModal).
-  const formaPagoEsEfectivo = (formaId, metodoFallback) => {
-    const forma = formasPago.find(f => f.id === formaId);
-    return forma ? forma.tipo_instrumento === 'efectivo' : metodoFallback === 'Efectivo';
-  };
-
-  const handlePago = (e) => {
-    e.preventDefault();
-
-    if (!isSessionOpen && formaPagoEsEfectivo(pagoForm.forma_pago_id, pagoForm.metodo)) {
-      return toast({
-        variant: 'destructive',
-        title: 'Caja cerrada',
-        description: 'Abrí la caja para registrar pagos en efectivo. Podés usar Transferencia, Tarjeta o Cuenta Corriente sin abrir la caja.',
-      });
-    }
-
-    const monto = parseNumberLocale(pagoForm.monto);
-    if (!monto || monto <= 0) return toast({ title: 'Ingresá un monto válido', variant: 'destructive' });
-
-    // Imputación por compra (opcional): facturas en moneda extranjera usan
-    // monto_moneda_extranjera — el RPC calcula la diferencia de cambio realizada.
-    const imputacionesArray = facturasAbiertas
-      .map(f => {
-        if (f.moneda && f.moneda !== 'ARS') {
-          const fx = parseNumberLocale(imputacionesFX[f.compra_id] || '');
-          return fx > 0 ? { compra_id: f.compra_id, monto_moneda_extranjera: fx } : null;
-        }
-        const m = parseNumberLocale(imputaciones[f.compra_id] || '');
-        return m > 0 ? { compra_id: f.compra_id, monto: m } : null;
-      })
-      .filter(Boolean);
-
-    pagoMutation.mutate({
-      monto,
-      descripcion: pagoForm.descripcion || `Pago a ${detalle?.nombre}`,
-      metodo: pagoForm.metodo,
-      imputaciones: imputacionesArray.length > 0 ? imputacionesArray : null,
-      formaPagoId: pagoForm.forma_pago_id || null,
-      referenciaPago: pagoForm.referencia_pago || null,
-      imputacionesDetalle: imputacionesArray.map(imp => {
-        const f = facturasAbiertas.find(x => x.compra_id === imp.compra_id);
-        const montoImp = imp.monto ?? (imp.monto_moneda_extranjera != null ? imp.monto_moneda_extranjera * (f?.tipo_cambio_tasa || 1) : 0);
-        return { numero: f?.numero_factura || '—', monto: montoImp };
-      }),
-    });
   };
 
   const proveedores = listData?.data ?? [];
@@ -795,7 +617,7 @@ function ProveedoresSection() {
                   </p>
                   <p className="text-xs text-kx-text-3 mt-0.5">{saldo > 0 ? 'Deuda pendiente' : saldo < 0 ? 'Saldo a favor' : 'Sin deuda'}</p>
                 </div>
-                <Button onClick={openPagoDialog} className="bg-green-600 hover:bg-green-700 text-white gap-2">
+                <Button onClick={() => pago.openPaymentDialog({ id: detalleId, nombre: detalle?.nombre, saldo_actual: saldo }, null)} className="bg-green-600 hover:bg-green-700 text-white gap-2">
                   <Banknote className="w-4 h-4" /> Registrar Pago
                 </Button>
               </div>
@@ -955,131 +777,22 @@ function ProveedoresSection() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Modal Pago ───────────────────────────────────────────────────────── */}
-      <Dialog open={pagoOpen} onOpenChange={setPagoOpen}>
-        <DialogContent className="max-w-sm dark:bg-kx-bg dark:border-kx-border">
-          <DialogHeader>
-            <DialogTitle className="dark:text-kx-text">Registrar Pago</DialogTitle>
-            <DialogDescription className="dark:text-kx-text-2">
-              Saldo actual: <span className="font-bold text-kx-red">${saldo.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handlePago} className="space-y-4">
-            <div className="space-y-1">
-              <Label className="dark:text-kx-text">Monto *</Label>
-              <Input type="text" inputMode="decimal" value={pagoForm.monto}
-                onChange={e => setPagoForm(p => ({ ...p, monto: e.target.value }))}
-                placeholder="0,00" className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
-            </div>
-            <div className="space-y-1">
-              <Label className="dark:text-kx-text">Método de pago *</Label>
-              <select
-                value={pagoForm.forma_pago_id}
-                onChange={e => {
-                  const forma = formasPago.find(f => f.id === e.target.value);
-                  setPagoForm(p => ({ ...p, forma_pago_id: e.target.value, metodo: forma?.nombre ?? 'Otro' }));
-                }}
-                className="w-full h-10 rounded-md border border-kx-border bg-kx-surface px-3 text-sm text-kx-text dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"
-              >
-                {formasPago.length === 0 && <option value="">Efectivo</option>}
-                {formasPago.map(f => (
-                  <option key={f.id} value={f.id}>
-                    {f.nombre}{f.tipo_instrumento === 'efectivo' ? ' (Caja)' : f.cuenta_bancaria_id ? ' (Bancos)' : ''}
-                  </option>
-                ))}
-              </select>
-              <p className="text-2xs text-kx-text-3">Efectivo descuenta de la Caja; los demás, de la cuenta bancaria mapeada.</p>
-              {!isSessionOpen && formaPagoEsEfectivo(pagoForm.forma_pago_id, pagoForm.metodo) && (
-                <p className="text-xs text-red-500 font-medium flex items-center gap-1 dark:text-red-400">
-                  <AlertTriangle className="h-3 w-3" /> Caja cerrada: abrí la caja para pagar en efectivo, o elegí otra forma de pago.
-                </p>
-              )}
-            </div>
-            {(() => {
-              const forma = formasPago.find(f => f.id === pagoForm.forma_pago_id);
-              const REFERENCIA_LABEL = {
-                transferencia: 'N° de operación / referencia',
-                tarjeta_debito: 'N° de cupón / autorización',
-                tarjeta_credito: 'N° de cupón / autorización',
-                billetera: 'N° de operación',
-              };
-              const label = REFERENCIA_LABEL[forma?.tipo_instrumento];
-              if (!label) return null;
-              return (
-                <div className="space-y-1">
-                  <Label className="dark:text-kx-text">{label}</Label>
-                  <Input value={pagoForm.referencia_pago}
-                    onChange={e => setPagoForm(p => ({ ...p, referencia_pago: e.target.value }))}
-                    placeholder={label} className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
-                </div>
-              );
-            })()}
-            <div className="space-y-1">
-              <Label className="dark:text-kx-text">Descripción</Label>
-              <Input value={pagoForm.descripcion}
-                onChange={e => setPagoForm(p => ({ ...p, descripcion: e.target.value }))}
-                placeholder="Nota opcional del pago..." className="dark:bg-kx-surface dark:border-kx-border dark:text-kx-text" />
-            </div>
-
-            {facturasAbiertas.length > 0 && (
-                <div className="grid gap-2 border-t border-kx-border pt-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="dark:text-kx-text">Imputar a factura(s) (opcional)</Label>
-                    {montoPago > 0 && (
-                      <Button type="button" size="sm" variant="outline" onClick={() => autoDistribuirFIFO(montoPago)}>
-                        Auto (más vieja primero)
-                      </Button>
-                    )}
-                  </div>
-                  <p className="text-xs text-kx-text-3">
-                    Si no imputás nada, el pago solo baja el saldo total del proveedor (como siempre).
-                  </p>
-                  <div className="border border-kx-border rounded-lg divide-y divide-kx-border max-h-48 overflow-y-auto">
-                    {facturasAbiertas.map(f => {
-                      const esFX = !!(f.moneda && f.moneda !== 'ARS');
-                      return (
-                        <div key={f.compra_id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                          <div className="min-w-0">
-                            <div className="font-medium text-kx-text truncate">{f.numero_factura}</div>
-                            <div className="text-xs text-kx-text-3">
-                              Pendiente: ${Number(f.saldo_pendiente).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                              {esFX && <span className="ml-1">({f.moneda})</span>}
-                            </div>
-                          </div>
-                          {esFX ? (
-                            <Input
-                              type="text" inputMode="decimal" placeholder={`0,00 ${f.moneda}`}
-                              value={imputacionesFX[f.compra_id] ?? ''}
-                              onChange={(e) => setImputacionesFX(prev => ({ ...prev, [f.compra_id]: e.target.value }))}
-                              className="w-28 h-8 text-right text-xs shrink-0"
-                            />
-                          ) : (
-                            <Input
-                              type="text" inputMode="decimal" placeholder="0,00"
-                              value={imputaciones[f.compra_id] ?? ''}
-                              onChange={(e) => setImputaciones(prev => ({ ...prev, [f.compra_id]: e.target.value }))}
-                              className="w-28 h-8 text-right text-xs shrink-0"
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className={`text-xs text-right ${totalImputadoPago > montoPago ? 'text-kx-red font-semibold' : 'text-kx-text-3'}`}>
-                    Imputado: ${totalImputadoPago.toLocaleString('es-AR', { minimumFractionDigits: 2 })} / ${montoPago.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-            )}
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setPagoOpen(false)} className="dark:border-kx-border dark:text-slate-300">Cancelar</Button>
-              <Button type="submit" disabled={pagoMutation.isPending || totalImputadoPago > montoPago || (!isSessionOpen && formaPagoEsEfectivo(pagoForm.forma_pago_id, pagoForm.metodo))} className="bg-green-600 hover:bg-green-700 text-white">
-                {pagoMutation.isPending ? 'Guardando...' : 'Confirmar Pago'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* ── Modal Pago (12/09: extraído a useRegistrarPago + ModalRegistrarPago,
+          mismo criterio que useRegistrarCobro/ModalCobro del lado Ventas —
+          así también se puede abrir desde el detalle de una Factura de
+          Compra) ── */}
+      <ModalRegistrarPago
+        isPaymentDialogOpen={pago.isPaymentDialogOpen} setIsPaymentDialogOpen={pago.setIsPaymentDialogOpen}
+        selectedProveedor={pago.selectedProveedor}
+        paymentData={pago.paymentData} setPaymentData={pago.setPaymentData}
+        formasPago={pago.formasPago}
+        isProcessingPayment={pago.isProcessingPayment}
+        handleRegisterPayment={pago.handleRegisterPayment}
+        facturasAbiertas={pago.facturasAbiertas}
+        imputaciones={pago.imputaciones} setImputaciones={pago.setImputaciones}
+        imputacionesFX={pago.imputacionesFX} setImputacionesFX={pago.setImputacionesFX}
+        autoDistribuirFIFO={pago.autoDistribuirFIFO}
+      />
 
       <PaymentRunModal empresaId={empresaId} formasPago={formasPago} open={runOpen} onOpenChange={setRunOpen} />
     </div>
