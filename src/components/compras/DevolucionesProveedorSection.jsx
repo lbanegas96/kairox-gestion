@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { RotateCcw, FileWarning, FileMinus, ChevronDown, ChevronRight, Package, Ban, Loader2, Copy, Network } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { RotateCcw, FileWarning, FileMinus, Ban, Loader2, Copy, Network, MoreHorizontal, Eye } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { supabase } from '@/lib/customSupabaseClient';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { formatDateAR, getTodayAR } from '@/lib/dateUtils';
@@ -17,12 +20,8 @@ import ConfirmDuplicarDialog from '@/components/shared/ConfirmDuplicarDialog';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import NuevaNCProveedorModal from './NuevaNCProveedorModal';
 import NuevaNotaDebitoModal from '@/components/shared/NuevaNotaDebitoModal';
-
-// Fase 4 (15/08): desglose Neto/IVA en el panel expandido de Devoluciones a
-// Proveedor — mismo criterio que el resto de Compras (siempre visible, sin
-// gating por letra). alicuota_iva es snapshot por ítem (mig.262).
-const FACTOR_IVA = { '21': 1.21, '10.5': 1.105 };
-const ALICUOTA_LABEL = { '21': '21%', '10.5': '10,5%', '0': '0%', exento: 'Exento', no_gravado: 'No gravado' };
+import ModalDetalleDevolucion from '@/components/ventas/ModalDetalleDevolucion';
+import ModalDetalleNotaProveedor from './ModalDetalleNotaProveedor';
 
 function EstadoDocBadge({ estado }) {
   if (estado === 'cancelada') {
@@ -58,7 +57,7 @@ function DevolucionesTab({ onNavigate, onOpenMapa }) {
   const { toast } = useToast();
   const [devoluciones, setDevoluciones] = useState([]);
   const [loading, setLoading]           = useState(true);
-  const [expanded, setExpanded]         = useState({});
+  const [viewDevolucionId, setViewDevolucionId] = useState(null);
   // mig.360 — "Generar NC" desde una devolución puntual.
   const [ncOrigen, setNcOrigen]         = useState(null);
   const [isNcOpen, setIsNcOpen]         = useState(false);
@@ -73,7 +72,7 @@ function DevolucionesTab({ onNavigate, onOpenMapa }) {
         compra_id, proveedor_id,
         proveedores(nombre),
         factura_compra:compras!compra_id(numero_factura),
-        devolucion_items(id, cantidad, precio_unitario, subtotal, alicuota_iva, productos(nombre))
+        devolucion_items(id, cantidad, precio_unitario, subtotal, alicuota_iva, producto_id, productos(nombre))
       `)
       .eq('empresa_id', user.empresa_id)
       .eq('tipo', 'proveedor')
@@ -87,7 +86,7 @@ function DevolucionesTab({ onNavigate, onOpenMapa }) {
 
   useEffect(fetchDevoluciones, [user?.empresa_id]);
 
-  const toggleExpand = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  const viewDevolucion = devoluciones.find(d => d.id === viewDevolucionId) ?? null;
 
   const abrirNc = (dev) => {
     setNcOrigen({
@@ -100,13 +99,27 @@ function DevolucionesTab({ onNavigate, onOpenMapa }) {
     setIsNcOpen(true);
   };
 
+  // Mismo criterio que DevolucionesSection.jsx (Ventas) — "reemplazo" es solo
+  // una etiqueta de estado, no genera ningún documento ni movimiento contable.
+  const handleMarcarReemplazo = async (dev) => {
+    const { error } = await supabase.from('devoluciones')
+      .update({ compensacion: 'reemplazo' })
+      .eq('id', dev.id).eq('empresa_id', user.empresa_id);
+    if (error) {
+      toast({ title: 'No se pudo marcar como reemplazo', description: error.message, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Devolución marcada como Reemplazo' });
+    setViewDevolucionId(null);
+    fetchDevoluciones();
+  };
+
   return (
     <Card className="overflow-hidden bg-kx-surface border-kx-border">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-kx-surface-2 border-b border-kx-border">
             <tr>
-              <th className="text-left p-3 font-semibold text-kx-text-2 w-8"></th>
               <th className="text-left p-3 font-semibold text-kx-text-2">Número</th>
               <th className="text-left p-3 font-semibold text-kx-text-2">Fecha</th>
               <th className="text-left p-3 font-semibold text-kx-text-2">Proveedor</th>
@@ -114,14 +127,14 @@ function DevolucionesTab({ onNavigate, onOpenMapa }) {
               <th className="text-left p-3 font-semibold text-kx-text-2">Compensación</th>
               <th className="text-left p-3 font-semibold text-kx-text-2">Stock</th>
               <th className="text-center p-3 font-semibold text-kx-text-2">Ítems</th>
-              <th className="text-center p-3 font-semibold text-kx-text-2">Acc.</th>
+              <th className="text-right p-3 font-semibold text-kx-text-2">Acc.</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-kx-border">
             {loading ? (
               Array.from({ length: 4 }).map((_, i) => (
                 <tr key={i}>
-                  {Array.from({ length: 9 }).map((_, j) => (
+                  {Array.from({ length: 8 }).map((_, j) => (
                     <td key={j} className="p-3">
                       <div className="h-4 bg-kx-surface-2 rounded animate-pulse w-16" />
                     </td>
@@ -130,132 +143,75 @@ function DevolucionesTab({ onNavigate, onOpenMapa }) {
               ))
             ) : devoluciones.length === 0 ? (
               <tr>
-                <td colSpan={9} className="p-12 text-center text-kx-text-3">
+                <td colSpan={8} className="p-12 text-center text-kx-text-3">
                   <RotateCcw className="w-10 h-10 mx-auto mb-3 opacity-20" />
                   <p className="font-medium text-kx-text-2">No hay devoluciones a proveedores</p>
                 </td>
               </tr>
             ) : (
               devoluciones.map(dev => {
-                const items  = dev.devolucion_items || [];
-                const isOpen = !!expanded[dev.id];
-                // devolucion_items.subtotal (tipo='proveedor') ya es NETO — viene de
-                // compras.costo_unitario, sin IVA — no bruto. El cálculo viejo lo
-                // trataba como bruto y lo descomponía al revés (hallazgo auditoría
-                // Ferretería NADIA, 28/08): dividía por el factor en vez de
-                // multiplicar, mostrando "Neto" y "IVA" invertidos/incorrectos. No
-                // afectaba el monto real de la devolución ni el de la NC que genera
-                // (NuevaNCProveedorModal ya hace bien la conversión neto→bruto) — era
-                // puramente un problema de esta vista.
-                const neto = items.reduce((s, i) => s + Number(i.subtotal || 0), 0);
-                const iva  = items.reduce((s, i) => {
-                  const factor = FACTOR_IVA[String(i.alicuota_iva)] ?? 1;
-                  return s + Number(i.subtotal || 0) * (factor - 1);
-                }, 0);
-                const total = neto + iva;
+                const items = dev.devolucion_items || [];
                 return (
-                  <React.Fragment key={dev.id}>
-                    <tr
-                      className="hover:bg-kx-surface-2 cursor-pointer transition-colors"
-                      onClick={() => toggleExpand(dev.id)}
-                    >
-                      <td className="p-3 text-kx-text-3">
-                        {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                      </td>
-                      <td className="p-3 font-mono font-semibold text-[rgb(var(--kx-violet))]">
-                        {dev.numero_devolucion}
-                      </td>
-                      <td className="p-3 text-kx-text-2 text-xs">{formatDateAR(dev.fecha)}</td>
-                      <td className="p-3 text-kx-text">{dev.proveedores?.nombre || '—'}</td>
-                      <td className="p-3 font-mono text-xs text-kx-text-2">
-                        {dev.compra_id && onNavigate ? (
-                          <button
-                            className="font-mono text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                            onClick={e => { e.stopPropagation(); onNavigate('factura_compra', dev.compra_id); }}
-                          >
-                            {dev.factura_compra?.numero_factura || 'Ver →'}
-                          </button>
-                        ) : (
-                          dev.factura_compra?.numero_factura || '—'
-                        )}
-                      </td>
-                      <td className="p-3"><CompensacionBadge comp={dev.compensacion} /></td>
-                      <td className="p-3 text-xs text-kx-text-2">
-                        {dev.reingresa_stock ? 'Egresó stock' : 'Sin movimiento'}
-                      </td>
-                      <td className="p-3 text-center text-kx-text-2">{items.length}</td>
-                      <td className="p-3 text-center">
-                        {dev.compra_id && (
-                          <button
-                            className="text-kx-text-3 hover:text-[rgb(var(--kx-violet))] transition-colors"
-                            title="Mapa de relaciones"
-                            onClick={e => { e.stopPropagation(); onOpenMapa?.(dev.compra_id); }}
-                          >
-                            <Network className="h-4 w-4" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-
-                    {isOpen && items.length > 0 && (
-                      <tr>
-                        <td />
-                        <td colSpan={8} className="pb-3 pr-3">
-                          <div className="bg-kx-surface-2 rounded-lg border border-kx-border p-3">
-                            <p className="text-xs font-semibold text-kx-text-3 uppercase mb-2">Ítems devueltos</p>
-                            <div className="space-y-1">
-                              {items.map(item => (
-                                <div key={item.id} className="flex items-center justify-between text-sm">
-                                  <div className="flex items-center gap-2 text-kx-text">
-                                    <Package className="h-3.5 w-3.5 text-kx-text-3 shrink-0" />
-                                    {item.productos?.nombre || '—'}
-                                    <span className="text-2xs text-kx-text-3">
-                                      ({ALICUOTA_LABEL[item.alicuota_iva] || item.alicuota_iva || '21%'})
-                                    </span>
-                                  </div>
-                                  <span className="font-mono text-kx-text-2 text-xs">
-                                    × {Number(item.cantidad).toLocaleString('es-AR')} · ${Number(item.subtotal).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                            {iva > 0.005 && (
-                              <div className="flex justify-end gap-4 text-xs text-kx-text-2 mt-2 pt-2 border-t border-kx-border">
-                                <span>Neto: ${neto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                <span>IVA: ${iva.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                <span className="font-semibold text-kx-text">Total: ${total.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                              </div>
-                            )}
-                            {dev.motivo && (
-                              <p className="text-xs text-kx-text-3 mt-2 pt-2 border-t border-kx-border">
-                                Motivo: {dev.motivo}
-                              </p>
-                            )}
-                            {/* mig.360 — antes el único puente a una NC era
-                                texto libre en el motivo, sin FK ni forma de
-                                generarla desde acá. */}
-                            {dev.compensacion === 'pendiente' && (
-                              <div className="flex justify-end mt-2 pt-2 border-t border-kx-border">
-                                <Button
-                                  size="sm" variant="ghost"
-                                  className="h-7 text-2xs text-kx-violet hover:bg-violet-50 dark:hover:bg-violet-900/20 gap-1"
-                                  onClick={e => { e.stopPropagation(); abrirNc(dev); }}
-                                >
-                                  <FileMinus className="h-3 w-3" /> Generar NC
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
+                  <tr
+                    key={dev.id}
+                    className="hover:bg-kx-surface-2 cursor-pointer transition-colors"
+                    onClick={() => setViewDevolucionId(dev.id)}
+                  >
+                    <td className="p-3 font-mono font-semibold text-[rgb(var(--kx-violet))]">
+                      {dev.numero_devolucion}
+                    </td>
+                    <td className="p-3 text-kx-text-2 text-xs">{formatDateAR(dev.fecha)}</td>
+                    <td className="p-3 text-kx-text">{dev.proveedores?.nombre || '—'}</td>
+                    <td className="p-3 font-mono text-xs text-kx-text-2">
+                      {dev.factura_compra?.numero_factura || '—'}
+                    </td>
+                    <td className="p-3"><CompensacionBadge comp={dev.compensacion} /></td>
+                    <td className="p-3 text-xs text-kx-text-2">
+                      {dev.reingresa_stock ? 'Egresó stock' : 'Sin movimiento'}
+                    </td>
+                    <td className="p-3 text-center text-kx-text-2">{items.length}</td>
+                    <td className="p-3 text-right" onClick={e => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-kx-text-3 hover:text-kx-text">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="bg-kx-surface border-kx-border text-kx-text min-w-[200px]">
+                          <DropdownMenuItem onClick={() => setViewDevolucionId(dev.id)} className="gap-2 cursor-pointer">
+                            <Eye className="h-3.5 w-3.5" /> Ver detalle
+                          </DropdownMenuItem>
+                          {dev.compensacion === 'pendiente' && (
+                            <DropdownMenuItem onClick={() => abrirNc(dev)} className="gap-2 cursor-pointer">
+                              <FileMinus className="h-3.5 w-3.5" /> Generar NC
+                            </DropdownMenuItem>
+                          )}
+                          {dev.compra_id && (
+                            <>
+                              <DropdownMenuSeparator className="bg-kx-border" />
+                              <DropdownMenuItem onClick={() => onOpenMapa?.(dev.compra_id)} className="gap-2 cursor-pointer">
+                                <Network className="h-3.5 w-3.5" /> Mapa de relaciones
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </td>
+                  </tr>
                 );
               })
             )}
           </tbody>
         </table>
       </div>
+
+      <ModalDetalleDevolucion
+        devolucion={viewDevolucion}
+        onClose={() => setViewDevolucionId(null)}
+        onNavigate={onNavigate}
+        onGenerarNC={(dev) => { setViewDevolucionId(null); abrirNc(dev); }}
+        onMarcarReemplazo={handleMarcarReemplazo}
+      />
 
       <NuevaNCProveedorModal
         open={isNcOpen}
@@ -270,11 +226,12 @@ function DevolucionesTab({ onNavigate, onOpenMapa }) {
   );
 }
 
-function NotasDebitoRecibidas({ onOpenMapa }) {
+function NotasDebitoRecibidas({ onOpenMapa, onNavigate }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [notas, setNotas]     = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewNotaId, setViewNotaId] = useState(null);
   const [cancelTarget, setCancelTarget] = useState(null); // { id, numero_nd }
   const [motivo, setMotivo]       = useState('');
   const [cancelando, setCancelando] = useState(false);
@@ -287,7 +244,12 @@ function NotasDebitoRecibidas({ onOpenMapa }) {
     setLoading(true);
     supabase
       .from('notas_debito')
-      .select('id, numero_nd, fecha, concepto, monto, neto_gravado, iva_discriminado, tipo, estado, proveedor_id, compra_id, proveedores(nombre)')
+      .select(`
+        id, numero_nd, fecha, concepto, monto, neto_gravado, iva_discriminado, tipo, estado, proveedor_id, compra_id,
+        proveedores(nombre),
+        factura_compra:compras!compra_id(numero_factura),
+        notas_debito_items(id, producto_id, descripcion, cantidad, precio_unitario, subtotal, alicuota_iva, productos(nombre))
+      `)
       .eq('empresa_id', user.empresa_id)
       .eq('tipo', 'recibida')
       .order('created_at', { ascending: false })
@@ -299,6 +261,8 @@ function NotasDebitoRecibidas({ onOpenMapa }) {
   };
 
   useEffect(fetchNotas, [user?.empresa_id]);
+
+  const viewNota = notas.find(n => n.id === viewNotaId) ?? null;
 
   const handleCancelar = async () => {
     if (!cancelTarget) return;
@@ -367,7 +331,11 @@ function NotasDebitoRecibidas({ onOpenMapa }) {
               </tr>
             ) : (
               notas.map(nd => (
-                <tr key={nd.id} className="hover:bg-kx-surface-2 transition-colors">
+                <tr
+                  key={nd.id}
+                  className="hover:bg-kx-surface-2 cursor-pointer transition-colors"
+                  onClick={() => setViewNotaId(nd.id)}
+                >
                   <td className="p-3 font-mono text-xs font-semibold text-[rgb(var(--kx-violet))]">
                     <div className="flex items-center gap-1.5">
                       {nd.numero_nd}
@@ -386,34 +354,39 @@ function NotasDebitoRecibidas({ onOpenMapa }) {
                   <td className="p-3 text-right font-mono font-bold text-kx-text">
                     ${Number(nd.monto).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
-                  <td className="p-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        size="sm" variant="ghost"
-                        className="h-6 text-2xs text-kx-violet hover:bg-violet-50 dark:hover:bg-violet-900/20 gap-1"
-                        onClick={() => setDuplicarTarget(nd)}
-                      >
-                        <Copy className="h-3 w-3" /> Duplicar
-                      </Button>
-                      {nd.estado !== 'cancelada' && (
-                        <Button
-                          size="sm" variant="ghost"
-                          className="h-6 text-2xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 gap-1"
-                          onClick={() => setCancelTarget({ id: nd.id, numero_nd: nd.numero_nd })}
-                        >
-                          <Ban className="h-3 w-3" /> Cancelar
+                  <td className="p-3 text-right" onClick={e => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-kx-text-3 hover:text-kx-text">
+                          <MoreHorizontal className="h-4 w-4" />
                         </Button>
-                      )}
-                      {nd.compra_id && (
-                        <button
-                          className="text-kx-text-3 hover:text-[rgb(var(--kx-violet))] transition-colors p-1"
-                          title="Mapa de relaciones"
-                          onClick={() => onOpenMapa?.(nd.compra_id)}
-                        >
-                          <Network className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-kx-surface border-kx-border text-kx-text min-w-[200px]">
+                        <DropdownMenuItem onClick={() => setViewNotaId(nd.id)} className="gap-2 cursor-pointer">
+                          <Eye className="h-3.5 w-3.5" /> Ver detalle
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="bg-kx-border" />
+                        <DropdownMenuItem onClick={() => setDuplicarTarget(nd)} className="gap-2 cursor-pointer">
+                          <Copy className="h-3.5 w-3.5" /> Duplicar
+                        </DropdownMenuItem>
+                        {nd.estado !== 'cancelada' && (
+                          <DropdownMenuItem
+                            onClick={() => setCancelTarget({ id: nd.id, numero_nd: nd.numero_nd })}
+                            className="gap-2 cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600"
+                          >
+                            <Ban className="h-3.5 w-3.5" /> Cancelar
+                          </DropdownMenuItem>
+                        )}
+                        {nd.compra_id && (
+                          <>
+                            <DropdownMenuSeparator className="bg-kx-border" />
+                            <DropdownMenuItem onClick={() => onOpenMapa?.(nd.compra_id)} className="gap-2 cursor-pointer">
+                              <Network className="h-3.5 w-3.5" /> Mapa de relaciones
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               ))
@@ -421,6 +394,15 @@ function NotasDebitoRecibidas({ onOpenMapa }) {
           </tbody>
         </table>
       </div>
+
+      <ModalDetalleNotaProveedor
+        nota={viewNota}
+        tipo="debito"
+        onClose={() => setViewNotaId(null)}
+        onNavigate={onNavigate}
+        onDuplicar={() => { setViewNotaId(null); setDuplicarTarget(viewNota); }}
+        onCancelar={() => { setViewNotaId(null); setCancelTarget({ id: viewNota.id, numero_nd: viewNota.numero_nd }); }}
+      />
 
       <AlertDialog open={!!cancelTarget} onOpenChange={v => { if (!cancelando && !v) { setCancelTarget(null); setMotivo(''); } }}>
         <AlertDialogContent className="dark:bg-kx-bg dark:border-kx-border">
@@ -465,11 +447,12 @@ function NotasDebitoRecibidas({ onOpenMapa }) {
   );
 }
 
-function NotasCreditoRecibidas({ onOpenMapa }) {
+function NotasCreditoRecibidas({ onOpenMapa, onNavigate }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [notas, setNotas]     = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewNotaId, setViewNotaId] = useState(null);
   const [cancelTarget, setCancelTarget] = useState(null); // { id, numero_ncp, reembolso_efectivo }
   const [motivo, setMotivo]       = useState('');
   const [cancelando, setCancelando] = useState(false);
@@ -482,7 +465,12 @@ function NotasCreditoRecibidas({ onOpenMapa }) {
     setLoading(true);
     supabase
       .from('notas_credito_proveedor')
-      .select('id, numero_ncp, fecha, motivo, monto, neto_gravado, iva_discriminado, reembolso_efectivo, estado, proveedor_id, compra_id, proveedores(nombre)')
+      .select(`
+        id, numero_ncp, fecha, motivo, monto, neto_gravado, iva_discriminado, reembolso_efectivo, estado, proveedor_id, compra_id,
+        proveedores(nombre),
+        factura_compra:compras!compra_id(numero_factura),
+        notas_credito_proveedor_items(id, producto_id, descripcion, cantidad, precio_unitario, subtotal, alicuota_iva, productos(nombre))
+      `)
       .eq('empresa_id', user.empresa_id)
       .order('fecha', { ascending: false })
       .then(({ data, error }) => {
@@ -493,6 +481,8 @@ function NotasCreditoRecibidas({ onOpenMapa }) {
   };
 
   useEffect(fetchNotas, [user?.empresa_id]);
+
+  const viewNota = notas.find(n => n.id === viewNotaId) ?? null;
 
   const handleCancelar = async () => {
     if (!cancelTarget) return;
@@ -563,7 +553,11 @@ function NotasCreditoRecibidas({ onOpenMapa }) {
               </tr>
             ) : (
               notas.map(nc => (
-                <tr key={nc.id} className="hover:bg-kx-surface-2 transition-colors">
+                <tr
+                  key={nc.id}
+                  className="hover:bg-kx-surface-2 cursor-pointer transition-colors"
+                  onClick={() => setViewNotaId(nc.id)}
+                >
                   <td className="p-3 font-mono text-xs font-semibold text-[rgb(var(--kx-violet))]">
                     <div className="flex items-center gap-1.5">
                       {nc.numero_ncp}
@@ -583,37 +577,39 @@ function NotasCreditoRecibidas({ onOpenMapa }) {
                   <td className="p-3 text-right font-mono font-bold text-kx-text">
                     ${Number(nc.monto).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
-                  <td className="p-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        size="sm" variant="ghost"
-                        className="h-6 text-2xs text-kx-violet hover:bg-violet-50 dark:hover:bg-violet-900/20 gap-1"
-                        onClick={() => setDuplicarTarget(nc)}
-                      >
-                        <Copy className="h-3 w-3" /> Duplicar
-                      </Button>
-                      {nc.estado !== 'cancelada' && !nc.reembolso_efectivo && (
-                        <Button
-                          size="sm" variant="ghost"
-                          className="h-6 text-2xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 gap-1"
-                          onClick={() => setCancelTarget({ id: nc.id, numero_ncp: nc.numero_ncp })}
-                        >
-                          <Ban className="h-3 w-3" /> Cancelar
+                  <td className="p-3 text-right" onClick={e => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-kx-text-3 hover:text-kx-text">
+                          <MoreHorizontal className="h-4 w-4" />
                         </Button>
-                      )}
-                      {nc.estado !== 'cancelada' && nc.reembolso_efectivo && (
-                        <span className="text-2xs text-kx-text-3 italic">Cobrada en efectivo</span>
-                      )}
-                      {nc.compra_id && (
-                        <button
-                          className="text-kx-text-3 hover:text-[rgb(var(--kx-violet))] transition-colors p-1"
-                          title="Mapa de relaciones"
-                          onClick={() => onOpenMapa?.(nc.compra_id)}
-                        >
-                          <Network className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-kx-surface border-kx-border text-kx-text min-w-[200px]">
+                        <DropdownMenuItem onClick={() => setViewNotaId(nc.id)} className="gap-2 cursor-pointer">
+                          <Eye className="h-3.5 w-3.5" /> Ver detalle
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="bg-kx-border" />
+                        <DropdownMenuItem onClick={() => setDuplicarTarget(nc)} className="gap-2 cursor-pointer">
+                          <Copy className="h-3.5 w-3.5" /> Duplicar
+                        </DropdownMenuItem>
+                        {nc.estado !== 'cancelada' && !nc.reembolso_efectivo && (
+                          <DropdownMenuItem
+                            onClick={() => setCancelTarget({ id: nc.id, numero_ncp: nc.numero_ncp })}
+                            className="gap-2 cursor-pointer text-red-600 dark:text-red-400 focus:text-red-600"
+                          >
+                            <Ban className="h-3.5 w-3.5" /> Cancelar
+                          </DropdownMenuItem>
+                        )}
+                        {nc.compra_id && (
+                          <>
+                            <DropdownMenuSeparator className="bg-kx-border" />
+                            <DropdownMenuItem onClick={() => onOpenMapa?.(nc.compra_id)} className="gap-2 cursor-pointer">
+                              <Network className="h-3.5 w-3.5" /> Mapa de relaciones
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               ))
@@ -621,6 +617,15 @@ function NotasCreditoRecibidas({ onOpenMapa }) {
           </tbody>
         </table>
       </div>
+
+      <ModalDetalleNotaProveedor
+        nota={viewNota}
+        tipo="credito"
+        onClose={() => setViewNotaId(null)}
+        onNavigate={onNavigate}
+        onDuplicar={() => { setViewNotaId(null); setDuplicarTarget(viewNota); }}
+        onCancelar={() => { setViewNotaId(null); setCancelTarget({ id: viewNota.id, numero_ncp: viewNota.numero_ncp }); }}
+      />
 
       <AlertDialog open={!!cancelTarget} onOpenChange={v => { if (!cancelando && !v) { setCancelTarget(null); setMotivo(''); } }}>
         <AlertDialogContent className="dark:bg-kx-bg dark:border-kx-border">
@@ -701,11 +706,11 @@ function DevolucionesProveedorSection({ onNavigate }) {
         </TabsContent>
 
         <TabsContent value="notas_debito" className="mt-4">
-          <NotasDebitoRecibidas onOpenMapa={abrirMapa} />
+          <NotasDebitoRecibidas onOpenMapa={abrirMapa} onNavigate={onNavigate} />
         </TabsContent>
 
         <TabsContent value="notas_credito" className="mt-4">
-          <NotasCreditoRecibidas onOpenMapa={abrirMapa} />
+          <NotasCreditoRecibidas onOpenMapa={abrirMapa} onNavigate={onNavigate} />
         </TabsContent>
       </Tabs>
 

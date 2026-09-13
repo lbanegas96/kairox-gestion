@@ -1,5 +1,48 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Compras → Devoluciones — modal de detalle completo en las 3 pestañas (13/09)
+
+Luciano vio las 3 pestañas de Compras → Devoluciones (Devoluciones a Proveedor, Notas de
+Débito Recibidas, Notas de Crédito Recibidas) y pidió 2 cosas: (1) que las acciones por fila
+(Duplicar/Cancelar como botones de texto) no "roben lugar" — homogeneizar, "de última
+embeberlo en 3 puntitos"; (2) que las 3 pestañas abran un modal de detalle completo al
+clickear la fila, con todas las funciones que correspondan (Cancelar, Duplicar, etc.) — hoy
+"Devoluciones a Proveedor" solo expandía la fila inline, y NC/ND recibidas no tenían ninguna
+vista de detalle ni ítems, solo la fila de tabla.
+
+**Devoluciones a Proveedor:** se reutiliza `ModalDetalleDevolucion.jsx` (ya existía, genérico
+para cliente/proveedor, ya usado en Ventas) — se le agregó el chip "Factura origen" para el
+lado proveedor (antes solo lo tenía el lado cliente) y se le sumó `handleMarcarReemplazo` en
+Compras (ya existía en Ventas). Se eliminó el expand-inline por fila.
+
+**Notas de Débito/Crédito Recibidas:** nuevo `ModalDetalleNotaProveedor.jsx` (un solo
+componente parametrizado por `tipo: 'credito'|'debito'`, mismo shell que
+`ModalDetalleDevolucion`/`ModalDetalleFacturaCompra` — cabecera, Flujo del Documento con
+Mapa de Relaciones, tabla de ítems con IVA discriminado, footer con Cerrar + "···" (Duplicar)
++ Cancelar). Las queries de ambas tablas ahora traen los ítems (`notas_credito_proveedor_items`/
+`notas_debito_items`) y la factura de origen (`compras!compra_id`), que antes no se pedían.
+
+**Homogeneización de acciones:** en las 3 pestañas, la columna "Acc." pasó de 2-3 botones de
+texto (o un ícono suelto) a un único `DropdownMenu` "···" (mismo patrón que
+`FacturasCompraSection.jsx`): Ver detalle / Duplicar / Cancelar (si corresponde) / Mapa de
+relaciones (si tiene compra de origen).
+
+**Segunda vuelta (mismo día):** Luciano pidió que además de la fila, hacer clic también abra
+la vista previa — "mismo comportamiento que en los demás documentos" (Facturas, Recepciones,
+etc., donde la fila entera es clickeable, no solo el menú "···"). Se agregó `onClick` al
+`<tr>` de las 3 tablas (abre el modal correspondiente) + `stopPropagation` en el `<td>` del
+menú "···" para que no se disparen los dos al mismo tiempo — mismo patrón ya usado en
+`FacturasCompraSection.jsx`.
+
+También se corrigió `handleDevolucionNavigate` (`ComprasSection.jsx`): antes solo cambiaba de
+tab sin pasar el id, así que el chip "Factura origen" nunca abría la factura puntual.
+
+Verificado en vivo: las 3 pestañas abren su modal correspondiente al clickear la fila (con
+ítems, IVA discriminado, y Cancelar/Duplicar funcionando desde el modal), el menú "···" sigue
+funcionando sin abrir el modal por error, y no aparecen errores nuevos de consola.
+
+---
+
 ## ✅ Registrar Cobro (Ventas) — mismo resaltado de "factura de origen" que Pago a Proveedores + bug real de saldo al cancelar (13/09)
 
 Luciano preguntó si el resaltado recién agregado a "Registrar Pago" (Compras) ya estaba

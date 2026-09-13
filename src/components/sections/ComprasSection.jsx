@@ -34,8 +34,14 @@ function ComprasSection({ initialTab = 'ordenes' }) {
   // esa OC, en vez de solo dejarla abierta.
   const [autoFacturarOrdenId, setAutoFacturarOrdenId] = useState(null);
 
-  const handleDevolucionNavigate = (tipo) => {
-    if (tipo === 'factura_compra') setActiveTab('facturas');
+  // 13/09 — antes solo cambiaba de tab sin el id, así que el chip "Factura
+  // origen" de Devoluciones/NC/ND nunca abría la factura puntual (quedaba en
+  // la lista de Facturas sin nada seleccionado). Mismo criterio que
+  // handleComprasNavigate.
+  const handleDevolucionNavigate = (tipo, id) => {
+    if (tipo !== 'factura_compra') return;
+    setActiveTab('facturas');
+    if (id) setNavigateFacturaId(id);
   };
 
   const handleComprasNavigate = (tipo, id) => {

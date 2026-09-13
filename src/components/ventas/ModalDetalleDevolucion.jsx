@@ -43,6 +43,12 @@ function ModalDetalleDevolucion({ devolucion, onClose, onNavigate, onGenerarNC, 
     ...(esCliente && devolucion.comprobante_id
       ? [{ tipo: 'factura', id: devolucion.comprobante_id, numero: devolucion.factura_origen?.numero_venta, active: false }]
       : []),
+    // 13/09 — mismo criterio que el lado cliente, pero con la Factura de
+    // Compra de origen: antes el modal genérico (usado también por Compras)
+    // no mostraba este vínculo, solo la tabla inline lo tenía.
+    ...(!esCliente && devolucion.compra_id
+      ? [{ tipo: 'factura_compra', id: devolucion.compra_id, numero: devolucion.factura_compra?.numero_factura, active: false }]
+      : []),
     { tipo: 'devolucion', id: devolucion.id, numero: devolucion.numero_devolucion, active: true },
     ...(esCliente && devolucion.nota_credito_id
       ? [{ tipo: 'nota_credito', id: devolucion.nota_credito_id, numero: devolucion.nota_credito?.numero_venta, active: false }]
