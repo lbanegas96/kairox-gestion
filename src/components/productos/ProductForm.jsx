@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Boxes, ShoppingCart, ShoppingBag, Wrench, Globe } from 'lucide-react';
+import { Boxes, ShoppingCart, ShoppingBag, Wrench, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,7 +30,7 @@ const ToggleTipoArticulo = ({ icon: Icon, label, hint, checked, onCheckedChange,
 // Defined outside ProductosSection to keep a stable component identity across renders.
 // If defined inside, React creates a new function reference every render, causing
 // Radix UI portal (Select, Dialog) DOM nodes to unmount/remount and throw removeChild errors.
-const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categories, isSubmitting, unidadesMedida = [] }) => {
+const ProductForm = ({ id, data, setData, onSubmit, isEdit = false, providers, categories, unidadesMedida = [] }) => {
   // Gate de plan: si la empresa no tiene ecommerce (mig.236), se oculta el tilde
   // "Publicar en ecommerce" y su estado — el resto del maestro (flags SAP, imágenes) sigue.
   const { habilitado: ecommerceHabilitado } = useEcommerceHabilitado();
@@ -111,7 +111,7 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
   const precioPackFinal = Number.isFinite(precioPackBase) ? precioPackBase * (1 - descPackNum / 100) : NaN;
 
   return (
-  <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+  <form id={id} onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
     <div className="space-y-2">
       <Label htmlFor="nombre">Nombre del Producto *</Label>
       <Input
@@ -545,17 +545,6 @@ const ProductForm = ({ data, setData, onSubmit, isEdit = false, providers, categ
         onChange={e => setData({...data, descripcion: e.target.value})}
         className="bg-kx-surface dark:bg-kx-bg resize-none h-20"
       />
-    </div>
-
-    <div className="col-span-1 md:col-span-2 pt-4 flex justify-end gap-2">
-      <Button
-        type="submit"
-        disabled={isSubmitting}
-        className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white"
-      >
-        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        {isEdit ? 'Guardar Cambios' : 'Crear Producto'}
-      </Button>
     </div>
   </form>
   );

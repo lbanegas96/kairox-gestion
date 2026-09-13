@@ -1,5 +1,22 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Inventario — modal de Nuevo/Editar Producto con cabecera y footer fijos (13/09)
+
+Luciano vio el modal "Nuevo Producto": `max-h-[90vh] overflow-y-auto` envolvía TODO el
+`DialogContent` (cabecera + formulario + botón "Crear Producto" como un solo bloque), así que
+al scrollear el formulario largo el título y el botón de submit se iban de la pantalla junto
+con los campos.
+
+**Fix:** `size="medium"` (shell compartido, ya usado por ModalNuevaCuenta/ModalNuevoAsiento —
+documento angosto, no grilla ancha) con cabecera y footer `shrink-0` y solo el formulario en un
+`flex-1 overflow-y-auto`. `ProductForm.jsx` ya no incluye su propio botón de submit — recibe un
+`id` y lo pone en el `<form>`; el botón vive ahora en el `DialogFooter` de cada modal
+(`ProductosSection.jsx`) apuntando a ese id (`form="new-product-form"` / `"edit-product-form"`).
+Mismo fix aplicado a "Editar Producto" (comparte `ProductForm`). Verificado en vivo en ambos:
+cabecera y botón quedan fijos, solo el cuerpo scrollea.
+
+---
+
 ## ✅ Compras → Devoluciones — modal de detalle completo en las 3 pestañas (13/09)
 
 Luciano vio las 3 pestañas de Compras → Devoluciones (Devoluciones a Proveedor, Notas de

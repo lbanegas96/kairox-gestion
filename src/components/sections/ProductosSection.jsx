@@ -531,27 +531,41 @@ const ProductosSection = () => {
              <Sparkles className="h-4 w-4 mr-2" /> Ajuste masivo
            </Button>
 
-           {/* Add Product Dialog */}
+           {/* Add Product Dialog — size="medium" (13/09, pedido de Luciano viendo el
+               formulario largo: antes max-h-[90vh] overflow-y-auto envolvía TODO el
+               DialogContent, así que el título y el botón "Crear Producto" scrolleaban
+               junto con los campos. Mismo shell que ModalNuevaCuenta/ModalNuevoAsiento
+               (documento angosto, no grilla ancha) — cabecera y footer fijos, solo el
+               formulario scrollea. El submit vive en el footer vía form={id}, ya que
+               ProductForm ya no incluye su propio botón. */}
            <Dialog open={isNewProductOpen} onOpenChange={setIsNewProductOpen}>
             <DialogTrigger asChild>
               <Button className="bg-blue-600 hover:bg-blue-700 text-white">
                 <Plus className="h-4 w-4 mr-2" /> Nuevo Producto
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border">
-               <DialogHeader>
+            <DialogContent size="medium" className="dark:bg-kx-surface dark:border-kx-border">
+               <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b border-kx-border dark:border-kx-border">
                  <DialogTitle>Nuevo Producto</DialogTitle>
                  <DialogDescription>Ingresa los detalles del nuevo producto para el inventario.</DialogDescription>
                </DialogHeader>
-               <ProductForm
-                  data={newProduct}
-                  setData={setNewProduct}
-                  onSubmit={handleCreateProduct}
-                  providers={providers}
-                  categories={categories}
-                  isSubmitting={isSubmitting}
-                  unidadesMedida={unidadesMedida}
-               />
+               <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+                 <ProductForm
+                    id="new-product-form"
+                    data={newProduct}
+                    setData={setNewProduct}
+                    onSubmit={handleCreateProduct}
+                    providers={providers}
+                    categories={categories}
+                    unidadesMedida={unidadesMedida}
+                 />
+               </div>
+               <DialogFooter className="shrink-0 border-t border-kx-border dark:border-kx-border px-6 py-4">
+                 <Button type="submit" form="new-product-form" disabled={isSubmitting} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white">
+                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                   Crear Producto
+                 </Button>
+               </DialogFooter>
             </DialogContent>
            </Dialog>
         </div>
@@ -559,21 +573,29 @@ const ProductosSection = () => {
 
        {/* Edit Product Dialog - Triggered programmatically */}
        <Dialog open={isEditProductOpen} onOpenChange={setIsEditProductOpen}>
-          <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto bg-kx-surface dark:bg-kx-surface border-kx-border dark:border-kx-border">
-             <DialogHeader>
+          <DialogContent size="medium" className="dark:bg-kx-surface dark:border-kx-border">
+             <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b border-kx-border dark:border-kx-border">
                <DialogTitle>Editar Producto</DialogTitle>
                <DialogDescription>Modifica los detalles del producto.</DialogDescription>
              </DialogHeader>
-             <ProductForm
-                data={editProduct}
-                setData={setEditProduct}
-                onSubmit={handleUpdateProduct}
-                isEdit={true}
-                providers={providers}
-                categories={categories}
-                isSubmitting={isSubmitting}
-                unidadesMedida={unidadesMedida}
-             />
+             <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+               <ProductForm
+                  id="edit-product-form"
+                  data={editProduct}
+                  setData={setEditProduct}
+                  onSubmit={handleUpdateProduct}
+                  isEdit={true}
+                  providers={providers}
+                  categories={categories}
+                  unidadesMedida={unidadesMedida}
+               />
+             </div>
+             <DialogFooter className="shrink-0 border-t border-kx-border dark:border-kx-border px-6 py-4">
+               <Button type="submit" form="edit-product-form" disabled={isSubmitting} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white">
+                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                 Guardar Cambios
+               </Button>
+             </DialogFooter>
           </DialogContent>
        </Dialog>
 
