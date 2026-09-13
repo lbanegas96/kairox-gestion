@@ -1,5 +1,35 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Registrar Pago — rediseño + aclaración de cálculos (13/09)
+
+Luciano viendo el modal de "Registrar Pago" (chico, formulario de una sola columna) pidió 2
+cosas: aplicar el mismo rediseño ya usado en el resto de los documentos, y entender si los
+montos/selecciones que mostraba eran correctos.
+
+**Verificación primero (sin tocar nada):** reconstruí a mano el ledger completo de Amazon en
+`cuenta_corriente_proveedores` — Saldo Actual $100.946,00 y el Monto a Pagar precargado
+$99.946,00 (la factura 789897978979 de la que venía) daban exactamente los números mostrados.
+La otra fila que lo confundía ("S/N — Pendiente $10.000,00") no tiene nada que ver con el pago
+que estaba armando: es una factura de Amazon real y vieja (08/07/2026), sin relación con la OC
+que estaba facturando hoy — aparece porque el pago permite, opcionalmente, cancelar más de una
+factura del mismo proveedor a la vez, pero **no venía tildada ni sumaba al monto** — el
+comportamiento ya era el que él esperaba ("si quiere cancelar más facturas, es decisión del
+usuario"), solo que el diseño no lo comunicaba con claridad.
+
+**Rediseño:** `ModalRegistrarPago.jsx` pasa a `size="wide"` + `PanelSeccion` ("Datos del pago" /
+"Imputar a factura(s)"), mismo shell que `ModalCobro.jsx` del lado Ventas (que ya había pasado
+por este mismo rediseño) — cabecera con Proveedor/Saldo Actual, y un tercer campo "Pagando la
+factura" cuando el pago se abrió desde una factura puntual. Se agregó `facturaOrigenId` al hook
+`useRegistrarPago.jsx` para que el modal sepa distinguir esa factura del resto: en la tabla de
+imputación, esa fila ahora tiene fondo propio + una etiqueta "la que estás pagando", separándola
+visualmente de las demás facturas pendientes (que quedan claramente "opcionales, además").
+Verificado en vivo en los 2 puntos de entrada: desde la Factura de Compra (con
+`facturaOrigenId`, fila destacada) y desde Proveedores → Cuenta Corriente (genérico, sin
+factura de origen, sin ninguna fila tildada) — ambos renderizan correctamente sin errores de
+consola.
+
+---
+
 ## ✅ Recepciones parciales — tarjetas de estado + Mapa de Relaciones incompleto para OC (13/09)
 
 Luciano probando una OC recibida en 2 tandas parciales (OC-00020) encontró 2 problemas más:

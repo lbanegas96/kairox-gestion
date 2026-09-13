@@ -34,6 +34,13 @@ export function useRegistrarPago(onSuccess) {
   const [facturasAbiertas, setFacturasAbiertas] = useState([]);
   const [imputaciones, setImputaciones] = useState({});     // { compra_id: "monto string" }
   const [imputacionesFX, setImputacionesFX] = useState({}); // { compra_id: "monto FX string" }
+  // La factura desde la que se abrió el pago (si vino de un deep-link, ej.
+  // ModalDetalleFacturaCompra) — hallazgo Luciano 13/09: "no entiendo los
+  // cálculos ni lo seleccionado" — el modal necesita distinguir "la factura
+  // que vine a pagar" de "otras facturas pendientes que podrías cancelar de
+  // paso", para que la preselección se explique sola en vez de mezclarse
+  // todo en una lista sin jerarquía.
+  const [facturaOrigenId, setFacturaOrigenId] = useState(null);
 
   const { data: formasPago = [] } = useQuery({
     queryKey: ['formas_pago', user?.empresa_id],
@@ -107,6 +114,7 @@ export function useRegistrarPago(onSuccess) {
     setImputaciones({});
     setImputacionesFX({});
     setFacturasAbiertas([]);
+    setFacturaOrigenId(facturaId);
     setSelectedProveedor(proveedor);
     setIsPaymentDialogOpen(true);
     fetchFacturasAbiertas(proveedor.id, facturaId);
@@ -275,6 +283,7 @@ export function useRegistrarPago(onSuccess) {
     formasPago,
     isProcessingPayment,
     facturasAbiertas,
+    facturaOrigenId,
     imputaciones, setImputaciones,
     imputacionesFX, setImputacionesFX,
     autoDistribuirFIFO,

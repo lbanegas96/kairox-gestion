@@ -784,6 +784,7 @@ function ProveedoresSection() {
       <ModalRegistrarPago
         isPaymentDialogOpen={pago.isPaymentDialogOpen} setIsPaymentDialogOpen={pago.setIsPaymentDialogOpen}
         selectedProveedor={pago.selectedProveedor}
+        facturaOrigenId={pago.facturaOrigenId}
         paymentData={pago.paymentData} setPaymentData={pago.setPaymentData}
         formasPago={pago.formasPago}
         isProcessingPayment={pago.isProcessingPayment}
