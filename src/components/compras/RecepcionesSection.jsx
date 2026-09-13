@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Package, Search, ChevronDown, ChevronRight, Network, Plus, Copy } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Package, Search, Plus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { formatDateAR, getTodayAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import ModalNuevaRecepcion from '@/components/compras/ModalNuevaRecepcion';
+import ModalDetalleRecepcion from '@/components/compras/ModalDetalleRecepcion';
 import ConfirmDuplicarDialog from '@/components/shared/ConfirmDuplicarDialog';
 import GenerarMovimientoModal from '@/components/shared/GenerarMovimientoModal';
 
@@ -42,7 +43,11 @@ function RecepcionesSection() {
   const [loading, setLoading]         = useState(true);
   const [search, setSearch]           = useState('');
   const [filtroOrigen, setFiltroOrigen] = useState('todos');
-  const [expanded, setExpanded]       = useState({});
+  // Hallazgo Luciano 12/09: el click en la fila solo desplegaba el detalle
+  // inline (acordeón), en vez de abrir el modal de detalle con acciones --
+  // mismo bug ya corregido en Entregas (ModalDetalleEntrega). `viewRecepcionId`
+  // reemplaza el acordeón por ese mismo patrón, espejado para Compras.
+  const [viewRecepcionId, setViewRecepcionId] = useState(null);
   const [mapaRecId, setMapaRecId]     = useState(null);
   const [isMapaOpen, setIsMapaOpen]   = useState(false);
 
@@ -70,6 +75,8 @@ function RecepcionesSection() {
   // hasta que el usuario cierra a propósito.
   const [recepcionCreada, setRecepcionCreada] = useState(null);
 
+  const viewRecepcion = recepciones.find(r => r.id === viewRecepcionId) ?? null;
+
   const fetchRecepciones = async () => {
     if (!user?.empresa_id) return;
     setLoading(true);
@@ -78,10 +85,10 @@ function RecepcionesSection() {
         .from('recepciones')
         .select(`
           *,
-          proveedores(nombre),
+          proveedores(nombre, cuit),
           ordenes_compra(numero),
           compras(numero_factura),
-          recepcion_items(id, cantidad, producto_id, productos(nombre))
+          recepcion_items(id, cantidad, producto_id, productos(nombre, unidad_medida))
         `)
         .eq('empresa_id', user.empresa_id)
         .order('created_at', { ascending: false });
@@ -207,6 +214,11 @@ function RecepcionesSection() {
     });
     setDuplicadoDeId(vincular ? duplicarTarget.id : null);
     setDuplicarTarget(null);
+    setRecepcionCreada(null);
+    // Igual que EntregasSection.handleConfirmarDuplicar: si "Duplicar" se
+    // disparó desde el detalle abierto, hay que cerrarlo antes de abrir el
+    // form de alta -- son dos <Dialog> hermanos, no anidados.
+    setViewRecepcionId(null);
     setIsNuevaOpen(true);
   };
 
@@ -223,8 +235,6 @@ function RecepcionesSection() {
     }
     return r;
   }, [recepciones, filtroOrigen, search]);
-
-  const toggleExpand = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
 
   return (
     <div className="space-y-4">
@@ -257,7 +267,6 @@ function RecepcionesSection() {
           <table className="w-full text-sm">
             <thead className="bg-kx-surface-2 border-b border-kx-border">
               <tr>
-                <th className="text-left p-3 font-semibold text-kx-text-2 w-8"></th>
                 <th className="text-left p-3 font-semibold text-kx-text-2">Número</th>
                 <th className="text-left p-3 font-semibold text-kx-text-2">Fecha</th>
                 <th className="text-left p-3 font-semibold text-kx-text-2">Proveedor</th>
@@ -266,14 +275,13 @@ function RecepcionesSection() {
                 <th className="text-left p-3 font-semibold text-kx-text-2">Compra</th>
                 <th className="text-center p-3 font-semibold text-kx-text-2">Ítems</th>
                 <th className="text-center p-3 font-semibold text-kx-text-2">Estado</th>
-                <th className="text-center p-3 font-semibold text-kx-text-2">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-kx-border">
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 10 }).map((_, j) => (
+                    {Array.from({ length: 8 }).map((_, j) => (
                       <td key={j} className="p-3">
                         <div className="h-4 bg-kx-surface-2 rounded animate-pulse w-16" />
                       </td>
@@ -282,7 +290,7 @@ function RecepcionesSection() {
                 ))
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="p-12 text-center text-kx-text-3">
+                  <td colSpan={8} className="p-12 text-center text-kx-text-3">
                     <Package className="w-10 h-10 mx-auto mb-3 opacity-20" />
                     <p className="font-medium text-kx-text-2">
                       {filtroOrigen !== 'todos' || search
@@ -295,91 +303,37 @@ function RecepcionesSection() {
               ) : (
                 filtered.map(rec => {
                   const items = rec.recepcion_items || [];
-                  const isOpen = !!expanded[rec.id];
                   return (
-                    <React.Fragment key={rec.id}>
-                      <tr
-                        className="hover:bg-kx-surface-2 cursor-pointer transition-colors"
-                        onClick={() => toggleExpand(rec.id)}
-                      >
-                        <td className="p-3 text-kx-text-3">
-                          {isOpen
-                            ? <ChevronDown className="h-3.5 w-3.5" />
-                            : <ChevronRight className="h-3.5 w-3.5" />
-                          }
-                        </td>
-                        <td className="p-3 font-mono font-semibold text-[rgb(var(--kx-violet))]">
-                          {rec.numero_recepcion}
-                        </td>
-                        <td className="p-3 text-kx-text-2 text-xs">
-                          {formatDateAR(rec.fecha)}
-                        </td>
-                        <td className="p-3 text-kx-text">
-                          {rec.proveedores?.nombre || '—'}
-                        </td>
-                        <td className="p-3">
-                          <OrigenBadge origen={rec.origen} />
-                        </td>
-                        <td className="p-3 font-mono text-xs text-kx-text-2">
-                          {rec.ordenes_compra?.numero || '—'}
-                        </td>
-                        <td className="p-3 font-mono text-xs text-kx-text-2">
-                          {rec.compras?.numero_factura || '—'}
-                        </td>
-                        <td className="p-3 text-center text-kx-text-2">
-                          {items.length}
-                        </td>
-                        <td className="p-3 text-center">
-                          <EstadoBadge estado={rec.estado} />
-                        </td>
-                        <td className="p-3 text-center" onClick={ev => ev.stopPropagation()}>
-                          <div className="flex items-center justify-center gap-1">
-                            <Button
-                              variant="ghost" size="icon"
-                              className="h-7 w-7 text-kx-text-3 hover:text-kx-violet"
-                              onClick={() => { setMapaRecId(rec.id); setIsMapaOpen(true); }}
-                              title="Mapa de relaciones"
-                            >
-                              <Network className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost" size="icon"
-                              className="h-7 w-7 text-kx-text-3 hover:text-kx-violet"
-                              onClick={() => setDuplicarTarget(rec)}
-                              title="Duplicar"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-
-                      {isOpen && items.length > 0 && (
-                        <tr>
-                          <td />
-                          <td colSpan={9} className="pb-3 pr-3">
-                            <div className="bg-kx-surface-2 rounded-lg border border-kx-border p-3">
-                              <p className="text-xs font-semibold text-kx-text-3 uppercase mb-2">
-                                Detalle de ítems
-                              </p>
-                              <div className="space-y-1">
-                                {items.map(item => (
-                                  <div key={item.id} className="flex items-center justify-between text-sm">
-                                    <div className="flex items-center gap-2 text-kx-text">
-                                      <Package className="h-3.5 w-3.5 text-kx-text-3 shrink-0" />
-                                      {item.productos?.nombre || item.producto_id}
-                                    </div>
-                                    <span className="font-mono text-kx-text-2 text-xs">
-                                      × {Number(item.cantidad).toLocaleString('es-AR')}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
+                    <tr
+                      key={rec.id}
+                      className="hover:bg-kx-surface-2 cursor-pointer transition-colors"
+                      onClick={() => setViewRecepcionId(rec.id)}
+                    >
+                      <td className="p-3 font-mono font-semibold text-[rgb(var(--kx-violet))]">
+                        {rec.numero_recepcion}
+                      </td>
+                      <td className="p-3 text-kx-text-2 text-xs">
+                        {formatDateAR(rec.fecha)}
+                      </td>
+                      <td className="p-3 text-kx-text">
+                        {rec.proveedores?.nombre || '—'}
+                      </td>
+                      <td className="p-3">
+                        <OrigenBadge origen={rec.origen} />
+                      </td>
+                      <td className="p-3 font-mono text-xs text-kx-text-2">
+                        {rec.ordenes_compra?.numero || '—'}
+                      </td>
+                      <td className="p-3 font-mono text-xs text-kx-text-2">
+                        {rec.compras?.numero_factura || '—'}
+                      </td>
+                      <td className="p-3 text-center text-kx-text-2">
+                        {items.length}
+                      </td>
+                      <td className="p-3 text-center">
+                        <EstadoBadge estado={rec.estado} />
+                      </td>
+                    </tr>
                   );
                 })
               )}
@@ -392,6 +346,14 @@ function RecepcionesSection() {
         open={isMapaOpen}
         onOpenChange={setIsMapaOpen}
         recepcionId={mapaRecId}
+      />
+
+      {/* ── Modal Detalle ─────────────────────────────────────────────────── */}
+      <ModalDetalleRecepcion
+        recepcion={viewRecepcion}
+        onClose={() => setViewRecepcionId(null)}
+        onVerMapa={() => { setMapaRecId(viewRecepcionId); setIsMapaOpen(true); }}
+        onDuplicar={setDuplicarTarget}
       />
 
       <ModalNuevaRecepcion

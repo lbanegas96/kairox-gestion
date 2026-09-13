@@ -1,5 +1,57 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Recepciones — click en la fila abre modal de detalle, ya no acordeón inline (12/09)
+
+Luciano probando el circuito de Compras de punta a punta encontró que, a diferencia de
+Entregas (Ventas), hacer click en una fila de `RecepcionesSection.jsx` solo desplegaba el
+detalle de ítems inline (acordeón) en vez de abrir un modal con acciones — el mismo bug que ya
+se había corregido en Ventas vía `ModalDetalleEntrega.jsx`, pero nunca se había espejado en
+Compras (nunca existió un `ModalDetalleRecepcion.jsx`). Investigado sin tocar código primero
+(agente en segundo plano) antes de construir, según pidió Luciano.
+
+**Confirmado que NO era un problema real:** el cuadro que se muestra al confirmar una
+recepción (vía "Generar Recepción" desde una OC) es el mismo componente compartido
+`GenerarMovimientoModal` que usa Entregas (parametrizado por `tipo`) — ya es un espejo fiel,
+no hacía falta tocar nada ahí.
+
+**Construido:** `src/components/compras/ModalDetalleRecepcion.jsx` (nuevo), mismo lenguaje
+visual que `ModalDetalleEntrega.jsx` (`size="wide"`, grilla de campos, Flujo del Documento con
+chips, tabla de ítems, footer con acciones) pero **sin copiar 3 partes que no aplican a
+Compras** (deliberado, no un descuido):
+- **Sin tab "Remito"** — la Recepción no emite un documento propio con CAE/CAI; el remito lo
+  emite el proveedor, no nosotros.
+- **Sin tab "Logística"** — la Recepción no tiene domicilio de destino que congelar (siempre
+  llega al mismo depósito), a diferencia de la Entrega que sí sale a la calle.
+- **Sin botón "Anular"** — no existe un RPC `anular_recepcion` (sí existe `anular_entrega`,
+  mig.253). Anular una recepción implicaría revertir stock + reabrir la OC — es una feature
+  nueva de backend, no una corrección de UI. Queda como candidato a pedido explícito.
+- **Sin botón "Facturar" directo** — a diferencia de Entrega (factura el Pedido de origen vía
+  `NuevaFacturaModal`, un componente portable), en Compras "Registrar Factura" vive a nivel OC
+  (`ModalRegistrarFactura.jsx`, ya auditado y confirmado correcto — ver la lista de "no son el
+  mismo bug" de la auditoría anterior) y está fuertemente acoplado al estado local de
+  `OrdenesCompraSection` (react-query mutation, `detalle` de la OC). Duplicar esa lógica en
+  Recepciones hubiera arriesgado una segunda implementación divergente. El chip "OC" en el
+  Flujo del Documento deja ver de dónde viene, aunque hoy no navega (Compras todavía no tiene
+  el cross-tab `onNavigate` que sí tiene Ventas — gap ya documentado en el código,
+  `OrdenesCompraSection.jsx:591`, no introducido por este fix).
+
+`RecepcionesSection.jsx`: se sacó el acordeón (`expanded`, `toggleExpand`, columna de
+chevron) y la columna "Acciones" de la tabla (los íconos de Mapa de Relaciones y Duplicar) —
+mismo criterio que `EntregasSection.jsx`, que tampoco tiene columna de acciones porque todo
+vive en el modal. El click de fila ahora abre `ModalDetalleRecepcion`; "Mapa de relaciones" y
+"Duplicar" se disparan desde los botones/enlace del modal. El fetch de recepciones ahora trae
+`proveedores.cuit` y `productos.unidad_medida` (antes no se pedían, hacían falta para la
+cabecera y la tabla de ítems del modal).
+
+Verificado en vivo: click en REC-2026-0028 abre el modal con cabecera completa (estado, origen,
+proveedor, OC de origen, factura), Flujo del Documento (OC-00018 → REC-2026-0028), tabla de
+ítems (3 líneas), botones Cerrar/Duplicar. "Mapa de relaciones" abre el modal correcto. "Duplicar"
+abre el `AlertDialog` de confirmación existente (cancelado a propósito, sin crear datos de
+prueba). Probado también con una recepción de Compra Rápida sin OC (REC-2026-0022) — sin OC de
+origen, chip de Flujo del Documento arranca directo en la recepción.
+
+---
+
 ## ✅ Auditoría "se cierra solo al crear" — patrón repetido en 10 lugares — CERRADA (11/09)
 
 Después de corregir el mismo bug 2 veces (GenerarMovimientoModal, Nueva Recepción manual),
