@@ -1,5 +1,47 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ "Registrar Factura del Proveedor" no registraba nada — 2 bugs reales (13/09)
+
+Luciano probó el atajo recién armado (desde la Recepción) y reportó: "quiero registrar la
+factura y no pasa nada". Se encontraron y corrigieron 2 bugs reales en `OrdenesCompraSection.jsx`:
+
+1. ✅ **Regresión mía de la misma tarde** — al mover el botón "Registrar Factura del Proveedor"
+   al footer (fix anterior de hoy) le agregué `setDetalleId(null)` antes de `abrirModalFactura()`,
+   "para que cierre el detalle" — pero `handleRegistrarFactura`/`registrarFacturaMutation` leen
+   `detalle` (la OC completa, vía `useQuery(OC_KEYS.detail(detalleId))`) al momento de **enviar**,
+   no solo al precargar. Vaciar `detalleId` deshabilita esa query — para cuando el usuario
+   terminaba de tipear el N° de factura y confirmaba, `if (!detalle) return;` cortaba en
+   silencio. Mismo problema en el atajo nuevo desde Recepción (autoFacturarOrdenId). Se agregó
+   `facturaOc` — una snapshot de `{id, numero, proveedor_nombre}` capturada en el momento en que
+   se abre el form — y se migraron `handleRegistrarFactura`/`registrarFacturaMutation`/el título
+   del modal a usar esa snapshot en vez de `detalle` en vivo. Esto también corrigió un síntoma
+   visible en la captura de Luciano: el título decía "Registrar Factura — OC" sin número.
+
+2. ✅ **Bug más viejo, recién expuesto al probar de punta a punta por primera vez**: una vez el
+   fix de arriba hizo que el submit *llegara* al server, apareció "El total de la factura debe
+   ser mayor a cero" pese a mostrar un total correcto en pantalla. Causa: `costo_unitario_neto`
+   se parseaba con `parseNumberLocale` (espera formato argentino, coma decimal — "4.132,23") pero
+   viene de un `<input type="number">` en `ModalRegistrarFactura.jsx`, cuyo `.value` es **siempre**
+   punto-decimal por spec HTML ("4132.23") — `parseNumberLocale` rechaza cualquier punto-decimal
+   por diseño (devuelve `NaN`), así que con el `|| 0` de respaldo el costo terminaba siempre en 0,
+   sin importar lo que mostrara el formulario. Se cambió a `parseFloat`, mismo parser que ya
+   usaba `cantidad` (mismo tipo de input, dos líneas arriba). **Este bug es anterior a hoy** — el
+   formulario nunca había llegado a completar un registro real antes de esta sesión.
+
+Verificado en vivo end-to-end con una factura real: OC-00017 (Mayor Can, $241.000,06, sin
+productos duplicados) pasó a estado "Facturada", con asiento correcto (DEBE 1.1.3 Mercaderías
+$199.173,60 + DEBE 1.1.4 IVA Crédito Fiscal $41.826,46 = HABER 2.1.1 Cuentas a Pagar $241.000,06).
+
+**Nota aparte, no corregida hoy** (fuera de alcance, encontrada de pura casualidad durante la
+verificación): OC-00018 tiene 2 líneas distintas para el mismo producto ("aromaza" x1 y x10) —
+`registrar_factura_compra_oc` rechaza facturar la línea de 10 unidades con "máximo facturable:
+1.000", sugiriendo que su validación de "ya facturado" agrupa por `producto_id` y no encuentra
+bien la línea correcta cuando un producto aparece dos veces en la misma OC. No bloquea el caso
+normal (un producto por línea); si Luciano quiere facturar esa OC puntual, conviene revisarlo
+aparte.
+
+---
+
 ## ✅ Atajo "Facturar" desde Recepción + Mapa de Relaciones de Compras — 3 bugs más (13/09)
 
 Luciano siguió probando el circuito de Compras (después del cierre de ayer) y encontró 3 cosas

@@ -65,6 +65,16 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
   const [cancelTarget, setCancelTarget] = useState(null);
   const [motivoCancelacion, setMotivoCancelacion] = useState('');
   const [facturaForm, setFacturaForm] = useState({ numero_factura: '', fecha_factura: '', items: [] });
+  // Bug real (13/09, hallazgo Luciano: "quiero registrar la factura y no pasa
+  // nada") — handleRegistrarFactura/registrarFacturaMutation leían `detalle`
+  // (la OC completa) al momento de ENVIAR, no solo al precargar. El botón del
+  // footer y el atajo desde Recepción hacen `setDetalleId(null)` para cerrar
+  // el detalle apenas se abre "Registrar Factura" — eso vacía `detalle` (la
+  // query queda deshabilitada), así que para cuando el usuario tipeaba el N°
+  // de factura y confirmaba, `if (!detalle) return;` cortaba en silencio.
+  // Esta snapshot guarda lo que la mutation necesita de la OC en el momento
+  // de abrir el form, para no depender de que `detalleId` siga vivo.
+  const [facturaOc, setFacturaOc] = useState(null);
 
   // form nueva OC / edición (editingId != null = editando una OC existente)
   const [editingId, setEditingId] = useState(null);
@@ -128,12 +138,12 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
   const registrarFacturaMutation = useMutation({
     mutationFn: (payload) => ordenesCompraService.registrarFactura(payload),
     onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: OC_KEYS.factura(detalleId) });
+      qc.invalidateQueries({ queryKey: OC_KEYS.factura(facturaOc?.id) });
       // mig.332 — bug real encontrado probando en vivo: sin esto, `detalle`
       // (y su `cantidad_facturada` por ítem) quedaba con la caché vieja tras
       // registrar una factura parcial, y `abrirModalFactura` volvía a
       // precargar ítems ya facturados en la siguiente factura de la misma OC.
-      qc.invalidateQueries({ queryKey: OC_KEYS.detail(detalleId) });
+      qc.invalidateQueries({ queryKey: OC_KEYS.detail(facturaOc?.id) });
       qc.invalidateQueries({ queryKey: ['ordenes_compra', empresaId] });
       toast({ title: 'Factura registrada — deuda cargada a Cuenta Corriente del proveedor ✓', className: 'bg-green-600 text-white' });
       setFacturaModal(false);
@@ -141,7 +151,7 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
       // Asiento contable automático (no bloquea el flujo) — mismo patrón que
       // Compra Rápida. Siempre esCredito=true: esta factura SIEMPRE crea Open
       // Item en CC (el pago es un evento separado, ver mig.279).
-      const providerName = detalle?.proveedor_nombre ?? detalle?.proveedores?.nombre ?? 'Proveedor';
+      const providerName = facturaOc?.proveedor_nombre ?? 'Proveedor';
       asientosAutoService.crearAsientoCompra(
         empresaId,
         user.id,
@@ -151,7 +161,7 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
           neto: data.neto_gravado,
           iva: data.iva_discriminado,
           fecha: facturaForm.fecha_factura || getTodayAR(),
-          descripcion: `Compra a ${providerName} - Fac. ${facturaForm.numero_factura || 'S/N'} (OC ${detalle?.numero})`,
+          descripcion: `Compra a ${providerName} - Fac. ${facturaForm.numero_factura || 'S/N'} (OC ${facturaOc?.numero})`,
           esCredito: true,
         }
       ).catch(e => {
@@ -201,6 +211,7 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
         };
       }),
     });
+    setFacturaOc({ id: detalle.id, numero: detalle.numero, proveedor_nombre: detalle.proveedor_nombre ?? detalle.proveedores?.nombre });
     setFacturaModal(true);
   };
 
@@ -220,17 +231,26 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
 
   const handleRegistrarFactura = (e) => {
     e.preventDefault();
-    if (!detalle) return;
+    if (!facturaOc) return;
     registrarFacturaMutation.mutate({
       empresa_id: empresaId,
       user_id: user.id,
-      orden_compra_id: detalle.id,
+      orden_compra_id: facturaOc.id,
       numero_factura: facturaForm.numero_factura,
       fecha_factura: facturaForm.fecha_factura,
       items: facturaForm.items.map(i => ({
         producto_id: i.producto_id ?? null,
         cantidad: parseFloat(i.cantidad) || 0,
-        costo_unitario_neto: parseNumberLocale(String(i.costo_unitario_neto)) || 0,
+        // Bug real (13/09, hallazgo Luciano: "quiero registrar la factura y
+        // no pasa nada" -- esta vez el error SÍ se mostraba: "El total de la
+        // factura debe ser mayor a cero"). ModalRegistrarFactura.jsx usa
+        // <input type="number"> para este campo -- su .value SIEMPRE es
+        // punto-decimal (spec HTML), nunca coma. parseNumberLocale espera
+        // formato argentino (coma decimal) y RECHAZA cualquier punto-decimal
+        // devolviendo NaN -- con `|| 0`, costo_unitario_neto terminaba
+        // siempre en 0 sin importar lo que mostrara el formulario. Mismo
+        // parseFloat que ya usa `cantidad` arriba, mismo tipo de input.
+        costo_unitario_neto: parseFloat(i.costo_unitario_neto) || 0,
         alicuota_iva: Number(i.alicuota_iva) || 0,
       })),
     });
@@ -621,11 +641,17 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
         onNavigate={onNavigate}
       />
 
-      {/* ── MODAL: Registrar Factura del Proveedor ── */}
+      {/* ── MODAL: Registrar Factura del Proveedor ──
+          `detalle ?? facturaOc` — una vez que se cierra el detalle de la OC
+          (setDetalleId(null), tanto en el click manual como en el atajo
+          desde Recepción), `detalle` queda undefined y el título perdía el
+          número de OC ("Registrar Factura — OC" a secas, hallazgo Luciano
+          13/09). facturaOc (snapshot) cubre ese caso — solo se usa para el
+          título, la mutation ya no depende de ninguno de los dos acá. */}
       <ModalRegistrarFactura
         facturaModal={facturaModal} setFacturaModal={setFacturaModal}
         facturaForm={facturaForm} setFacturaForm={setFacturaForm}
-        detalle={detalle}
+        detalle={detalle ?? facturaOc}
         moneda={detalle?.moneda ?? 'ARS'}
         handleRegistrarFactura={handleRegistrarFactura}
         registrarFacturaMutation={registrarFacturaMutation}
