@@ -39,7 +39,7 @@ const alicuotaANumero = (a) => (a === '21' || a === '10.5' || a === '0') ? Numbe
 // un número ya parseado (usar junto con parseNumberLocale).
 const clampPct = (n) => Math.min(100, Math.max(0, n || 0));
 
-function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate } = {}) {
+function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFacturarOrdenId, onAutoFacturarConsumed } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -203,6 +203,20 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate } = {})
     });
     setFacturaModal(true);
   };
+
+  // Atajo "Registrar Factura" desde la Recepción (13/09, hallazgo Luciano:
+  // "sigo sin manera") — ComprasSection navega acá (navigateOrdenId) Y pide
+  // que se abra el form de factura apenas la OC completa (con sus ítems)
+  // termine de cargar; abrirModalFactura ya sabe calcular qué queda
+  // pendiente de facturar, no hace falta duplicar esa lógica. Cierra el
+  // detalle de la OC después de abrir el form -- mismo criterio que el
+  // click manual del botón del footer (setDetalleId(null) antes de abrir).
+  useEffect(() => {
+    if (!autoFacturarOrdenId || !detalle || detalle.id !== autoFacturarOrdenId) return;
+    abrirModalFactura();
+    setDetalleId(null);
+    onAutoFacturarConsumed?.();
+  }, [autoFacturarOrdenId, detalle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRegistrarFactura = (e) => {
     e.preventDefault();

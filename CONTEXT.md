@@ -1,5 +1,56 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Atajo "Facturar" desde Recepción + Mapa de Relaciones de Compras — 3 bugs más (13/09)
+
+Luciano siguió probando el circuito de Compras (después del cierre de ayer) y encontró 3 cosas
+más, todas relacionadas:
+
+1. ✅ **"En la recepción sigo sin manera de registrar la factura del proveedor"** — el fix de
+   ayer (navegación al chip de la OC) dejaba un paso de más: había que abrir la OC y ahí buscar
+   el botón. Se agregó un atajo real: `ModalDetalleRecepcion.jsx` tiene un botón "Registrar
+   Factura del Proveedor" (visible si la recepción vino de una OC) que hace los dos pasos en
+   uno — `ComprasSection.handleFacturarDesdeRecepcion` navega a la OC (`navigateOrdenId`) y
+   marca `autoFacturarOrdenId`; `OrdenesCompraSection` espera a que `detalle` (la OC completa)
+   termine de cargar y ahí llama a `abrirModalFactura()` sola (misma función que ya sabe
+   calcular qué queda pendiente de facturar) y cierra su propio detalle. Verificado en vivo:
+   un click desde REC-2026-0028 abrió "Registrar Factura — OC" con los 3 ítems de OC-00018 ya
+   precargados.
+
+2. ✅ **"Registré un pago pero no lo veo en el Mapa de Relaciones"** — bug real encontrado
+   auditando `fetchMapaCompra` en `MapaRelaciones.jsx`: el filtro de pagos comparaba
+   `m.tipo === 'DEBE'`, un valor que `cuenta_corriente_proveedores.tipo` **nunca usa** (usa
+   `'pago'/'compra'/'nota_debito'/'nota_credito'`, no el vocabulario DEBE/HABER de
+   `cuenta_corriente_movimientos` del lado Ventas) — el fetch de pagos venía **siempre vacío**,
+   con o sin imputación, desde que se escribió. Además, un pago imputado a una factura puntual
+   (`registrar_pago_proveedor`) nunca escribe `referencia_id` en su propia fila — el vínculo vive
+   en `cuenta_corriente_proveedores_imputaciones` (existe desde antes, pero `fetchMapaCompra`
+   nunca la consultaba — mismo patrón que ya resuelve `cuenta_corriente_imputaciones` del lado
+   Ventas). Se corrigieron ambas cosas: el filtro (`'pago'`) y el join a la tabla de
+   imputaciones. Verificado en vivo con el pago real que hizo Luciano: ahora aparece "PAGO CC —
+   Pago a Amazon — $1.210,00" en la cadena de documentos.
+
+3. ✅ **"Veo NC y ND pero al hacer click no abre nada — ¿tienen su propio modal?"** — respuesta:
+   no, nunca existió un modal de detalle para NC de Proveedor/ND recibida/ND emitida (solo
+   modales de alta) — pero el problema real es más chico: los nodos `nc_proveedor`/`nd_proveedor`
+   (Compras) y `nota_debito` (Ventas, mismo bug por simetría) nunca tenían `onClick` en absoluto,
+   a diferencia de `nota_credito` (Ventas) que sí lo tenía. Se agregó `onClick` a los 3 + las
+   ramas que faltaban en `fetchPreviewItems` (`notas_credito_proveedor_items`/
+   `notas_debito_items`, ambas con datos reales) — ahora abren el preview inline del propio Mapa
+   con ítems reales. Como sigue sin existir una página propia para navegar, **no** se ofrece
+   "Ver documento completo" para estos 3 tipos (se agregó un chequeo explícito para no ofrecer un
+   botón que no lleva a ningún lado — el mismo síntoma que se está arreglando). Verificado en
+   vivo: NC Proveedor y ND Recibida abren su preview con el ítem real; Pago CC abre con su
+   descripción (se sumó a `TIPOS_SIN_ITEMS`, como cobro_cc del lado Ventas).
+
+**Aclaración contable pedida por Luciano**: la NC ($2.000, "Descuento Comercial") y la ND
+($3.000, "Flete Adicional Prueba") que aparecen junto al pago **no las generó el pago** — son
+documentos de prueba de sesiones anteriores (11/09 y 12/09, fixes #7/#8 de la auditoría de
+"se cierra solo al crear"), que casualmente están sobre la misma factura de prueba de Amazon.
+El Mapa muestra TODO lo que referencia esa factura, no solo "lo de este movimiento" — no hay
+ninguna generación automática de NC/ND al registrar un pago.
+
+---
+
 ## ✅ Circuito OC → Recepción → Factura → Pago — 4 gaps reales cerrados (12/09)
 
 Luciano armando el circuito completo de Compras de punta a punta (OC → Recepción → Factura →

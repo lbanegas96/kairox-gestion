@@ -35,7 +35,7 @@ function EstadoBadge({ estado }) {
   return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${cfg.className}`}>{cfg.label}</span>;
 }
 
-function RecepcionesSection({ navigateRecepcionId, onNavigated, onNavigate } = {}) {
+function RecepcionesSection({ navigateRecepcionId, onNavigated, onNavigate, onFacturarOC } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -364,6 +364,7 @@ function RecepcionesSection({ navigateRecepcionId, onNavigated, onNavigate } = {
         onVerMapa={() => { setMapaRecId(viewRecepcionId); setIsMapaOpen(true); }}
         onDuplicar={setDuplicarTarget}
         onNavigate={(tipo, id) => { setViewRecepcionId(null); onNavigate?.(tipo, id); }}
+        onFacturar={(ordenCompraId) => { setViewRecepcionId(null); onFacturarOC?.(ordenCompraId); }}
       />
 
       <ModalNuevaRecepcion

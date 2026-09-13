@@ -83,7 +83,9 @@ const TIPO_CONFIG = {
 // fila dentro de Cuenta Corriente). El preview para estos tipos muestra la
 // descripción en vez de una grilla de ítems, y no ofrece "Ver documento
 // completo" (antes SÍ lo ofrecía y el click no llevaba a ningún lado).
-const TIPOS_SIN_ITEMS = new Set(['cobro_cc', 'reversa_cc', 'cobro_caja']);
+// pago_proveedor sumado acá 13/09 (mismo criterio que cobro_cc del lado
+// Ventas): un pago tampoco tiene ítems propios, solo una descripción.
+const TIPOS_SIN_ITEMS = new Set(['cobro_cc', 'reversa_cc', 'cobro_caja', 'pago_proveedor']);
 
 // Heurística de color de estado — unifica el vocabulario heterogéneo que trae
 // cada tabla (pedido.estado, entrega.estado, nc.estado_pago, devolucion.compensacion...)
@@ -874,7 +876,7 @@ function MapaRelaciones({
 
       if (!compra) { setMapa(null); return; }
 
-      const [recepcionesRes, ncsRes, ndsRes, pagosRes, ncFinRes] = await Promise.allSettled([
+      const [recepcionesRes, ncsRes, ndsRes, pagosRes, imputacionesRes, ncFinRes] = await Promise.allSettled([
         // Recepciones vinculadas a esta compra
         supabase.from('recepciones')
           .select('id, numero_recepcion, fecha, estado')
@@ -894,10 +896,25 @@ function MapaRelaciones({
           .eq('compra_id', idCompra)
           .eq('empresa_id', user.empresa_id),
 
-        // Pagos en CC proveedores (referencia_id = idCompra, patrón viejo — solo pagos)
+        // Pagos en CC proveedores con referencia_id directo a esta compra —
+        // patrón legacy. Bug real (13/09, hallazgo Luciano: "registré el pago
+        // pero no lo veo en el mapa"): este filtro comparaba tipo === 'DEBE',
+        // un valor que esta tabla nunca usa (usa 'pago'/'compra'/'nota_debito'/
+        // 'nota_credito', no el vocabulario DEBE/HABER de cuenta_corriente_
+        // movimientos del lado Ventas) — nunca traía nada, con o sin imputación.
         supabase.from('cuenta_corriente_proveedores')
           .select('id, tipo, monto, fecha, descripcion, referencia_tipo')
           .eq('referencia_id', idCompra)
+          .eq('empresa_id', user.empresa_id),
+
+        // Pagos REALES vía registrar_pago_proveedor: esa fila nunca lleva
+        // referencia_id (un pago puede repartirse entre varias facturas) —
+        // el vínculo vive en cuenta_corriente_proveedores_imputaciones,
+        // mismo patrón que ya resuelve fetchMapaVenta con
+        // cuenta_corriente_imputaciones del lado Ventas.
+        supabase.from('cuenta_corriente_proveedores_imputaciones')
+          .select('monto, cuenta_corriente_proveedores(id, monto, fecha, descripcion)')
+          .eq('factura_compra_id', idCompra)
           .eq('empresa_id', user.empresa_id),
 
         // NC financieras de proveedor (mig.277 — documento propio, ya no vive
@@ -911,8 +928,23 @@ function MapaRelaciones({
 
       const safeArr = (res) => res.status === 'fulfilled' ? (res.value.data ?? []) : [];
 
-      const ccMovs         = safeArr(pagosRes);
-      const pagosCC        = ccMovs.filter(m => m.tipo === 'DEBE' && m.referencia_tipo !== 'nc_proveedor');
+      const ccMovs = safeArr(pagosRes);
+      const pagosDirectos = ccMovs.filter(m => m.tipo === 'pago' && m.referencia_tipo !== 'nc_proveedor');
+      // El monto de cada imputación es la PORCIÓN de ese pago aplicada a ESTA
+      // factura — no el total del pago (que puede repartirse entre varias).
+      const pagosImputados = safeArr(imputacionesRes)
+        .filter(i => i.cuenta_corriente_proveedores)
+        .map(i => ({
+          id:          i.cuenta_corriente_proveedores.id,
+          monto:       i.monto,
+          fecha:       i.cuenta_corriente_proveedores.fecha,
+          descripcion: i.cuenta_corriente_proveedores.descripcion,
+        }));
+      // Dedup por id — un pago legacy con referencia_id directo no debería
+      // (no tiene por qué) tener también fila de imputación, pero por las
+      // dudas no se muestra dos veces si algún día coexisten.
+      const vistos = new Set();
+      const pagosCC = [...pagosDirectos, ...pagosImputados].filter(p => vistos.has(p.id) ? false : (vistos.add(p.id), true));
       const ncsFinancieras = safeArr(ncFinRes);
 
       setMapa({
@@ -1001,6 +1033,22 @@ function MapaRelaciones({
           .select('cantidad, subtotal, productos(nombre)')
           .eq('devolucion_id', id).eq('empresa_id', user.empresa_id);
         rows = (data ?? []).map(i => ({ nombre: i.productos?.nombre || '—', cantidad: i.cantidad, subtotal: i.subtotal }));
+      } else if (tipo === 'nc_proveedor') {
+        // Hallazgo Luciano 13/09: el nodo de NC Proveedor no tenía onClick ni
+        // rama acá — clickearlo no hacía nada. notas_credito_proveedor_items
+        // ya trae descripción propia (no siempre linkeada a un producto).
+        const { data } = await supabase.from('notas_credito_proveedor_items')
+          .select('descripcion, cantidad, subtotal')
+          .eq('nota_credito_proveedor_id', id).eq('empresa_id', user.empresa_id);
+        rows = (data ?? []).map(i => ({ nombre: i.descripcion || '—', cantidad: i.cantidad, subtotal: i.subtotal }));
+      } else if (tipo === 'nd_proveedor' || tipo === 'nota_debito') {
+        // Mismo hallazgo — ninguno de los dos lados (ND recibida/emitida)
+        // tenía onClick. notas_debito_items es la misma tabla para ambos
+        // sentidos (columna `tipo` en notas_debito distingue emitida/recibida).
+        const { data } = await supabase.from('notas_debito_items')
+          .select('descripcion, cantidad, subtotal')
+          .eq('nota_debito_id', id).eq('empresa_id', user.empresa_id);
+        rows = (data ?? []).map(i => ({ nombre: i.descripcion || '—', cantidad: i.cantidad, subtotal: i.subtotal }));
       }
       setPreviewItems(rows);
     } catch (err) {
@@ -1131,13 +1179,12 @@ function MapaRelaciones({
       const n = { id: nc.id, tipo: 'nota_credito', numero: nc.numero_afip ?? nc.numero_venta, fecha: nc.fecha, total: nc.total, estado: nc.estado_pago };
       return <NodoMapa key={nc.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
     }),
-    ...mapa.nds.map(nd => (
-      <NodoMapa
-        key={nd.id}
-        nodo={{ id: nd.id, tipo: 'nota_debito', numero: nd.numero_nd, fecha: nd.fecha, monto: nd.monto, estado: nd.concepto }}
-        activo={isActivo(nd.id)}
-      />
-    )),
+    ...mapa.nds.map(nd => {
+      // Mismo hallazgo que nd_proveedor (13/09): sin onClick, a diferencia
+      // de la NC de Venta de arriba, que ya lo tenía.
+      const n = { id: nd.id, tipo: 'nota_debito', numero: nd.numero_nd, fecha: nd.fecha, monto: nd.monto, estado: nd.concepto };
+      return <NodoMapa key={nd.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
+    }),
     ...mapa.devoluciones.map(d => {
       const n = { id: d.id, tipo: 'devolucion', numero: d.numero_devolucion, fecha: d.fecha, estado: d.compensacion };
       return <NodoMapa key={d.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
@@ -1148,20 +1195,16 @@ function MapaRelaciones({
       const n = { id: d.id, tipo: 'devolucion_prov', numero: d.numero_devolucion, fecha: d.fecha, estado: d.compensacion };
       return <NodoMapa key={d.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
     }),
-    ...mapa.ncsFinancieras.map(nc => (
-      <NodoMapa
-        key={nc.id}
-        nodo={{ id: nc.id, tipo: 'nc_proveedor', numero: nc.numero_ncp, fecha: nc.fecha, monto: nc.monto, estado: nc.motivo }}
-        activo={isActivo(nc.id)}
-      />
-    )),
-    ...mapa.nds.map(nd => (
-      <NodoMapa
-        key={nd.id}
-        nodo={{ id: nd.id, tipo: 'nd_proveedor', numero: nd.numero_nd, fecha: nd.fecha, monto: nd.monto, estado: nd.concepto }}
-        activo={isActivo(nd.id)}
-      />
-    )),
+    ...mapa.ncsFinancieras.map(nc => {
+      // Hallazgo Luciano 13/09: "veo NC... pero al hacer click no abre nada"
+      // — sin onClick, mismo tipo de nodo que la NC de Venta (que sí lo tiene).
+      const n = { id: nc.id, tipo: 'nc_proveedor', numero: nc.numero_ncp, fecha: nc.fecha, monto: nc.monto, estado: nc.motivo };
+      return <NodoMapa key={nc.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
+    }),
+    ...mapa.nds.map(nd => {
+      const n = { id: nd.id, tipo: 'nd_proveedor', numero: nd.numero_nd, fecha: nd.fecha, monto: nd.monto, estado: nd.concepto };
+      return <NodoMapa key={nd.id} nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />;
+    }),
   ] : [];
 
   // ── Resumen del circuito ─────────────────────────────────────────────────────
@@ -1561,16 +1604,18 @@ function MapaRelaciones({
                   })}
                   {/* Factura actual */}
                   <NodoMapa nodo={compraNodo} activo={isActivo(compraNodo.id)} onClick={() => openPreview(compraNodo)} />
-                  {/* Pagos CC */}
-                  {mapa.pagos.map(p => (
-                    <React.Fragment key={p.id}>
-                      <Conector />
-                      <NodoMapa
-                        nodo={{ id: p.id, tipo: 'pago_proveedor', numero: p.descripcion || 'Pago CC', fecha: p.fecha, monto: p.monto }}
-                        activo={isActivo(p.id)}
-                      />
-                    </React.Fragment>
-                  ))}
+                  {/* Pagos CC — sin onClick hasta 13/09 (hallazgo Luciano:
+                      "registré su pago pero no lo veo en el mapa"; una vez
+                      resuelto que sí aparezca, tampoco abría nada al clickear). */}
+                  {mapa.pagos.map(p => {
+                    const n = { id: p.id, tipo: 'pago_proveedor', numero: p.descripcion || 'Pago CC', fecha: p.fecha, monto: p.monto, descripcion: p.descripcion };
+                    return (
+                      <React.Fragment key={p.id}>
+                        <Conector />
+                        <NodoMapa nodo={n} activo={isActivo(n.id)} onClick={() => openPreview(n)} />
+                      </React.Fragment>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1615,7 +1660,15 @@ function MapaRelaciones({
             loading={previewLoading}
             onClose={() => { setPreviewNodo(null); setPreviewItems(null); }}
             onVerCompleto={
-              TIPOS_SIN_ITEMS.has(previewNodo.tipo)
+              // nc_proveedor/nd_proveedor/nota_debito (13/09, hallazgo Luciano):
+              // recién ganaron preview con ítems, pero ninguno tiene una página
+              // propia a la que navegar todavía (a diferencia de nota_credito,
+              // que sí cae en 'comprobante'/Historial) — mejor no ofrecer el
+              // botón que un "Ver documento completo" que no lleva a ningún
+              // lado, mismo problema que se está resolviendo acá.
+              ['nc_proveedor', 'nd_proveedor', 'nota_debito'].includes(previewNodo.tipo)
+                ? undefined
+                : TIPOS_SIN_ITEMS.has(previewNodo.tipo)
                 // Un cobro no tiene página propia — "revisarlo" (29/08,
                 // hallazgo Luciano) es ver los movimientos del cliente en
                 // Cuenta Corriente. El id es el cliente_id de la factura

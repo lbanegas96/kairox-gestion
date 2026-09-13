@@ -27,6 +27,12 @@ function ComprasSection({ initialTab = 'ordenes' }) {
   const [navigateOrdenId, setNavigateOrdenId]         = useState(null);
   const [navigateRecepcionId, setNavigateRecepcionId] = useState(null);
   const [navigateFacturaId, setNavigateFacturaId]     = useState(null);
+  // "Registrar Factura del Proveedor" desde la Recepción (13/09, hallazgo
+  // Luciano: "sigo sin manera") — navegar a la OC de origen YA no alcanza
+  // sola (exige un segundo click adentro de la OC), así que este flag le
+  // pide a OrdenesCompraSection que abra el form de factura apenas cargue
+  // esa OC, en vez de solo dejarla abierta.
+  const [autoFacturarOrdenId, setAutoFacturarOrdenId] = useState(null);
 
   const handleDevolucionNavigate = (tipo) => {
     if (tipo === 'factura_compra') setActiveTab('facturas');
@@ -41,6 +47,13 @@ function ComprasSection({ initialTab = 'ordenes' }) {
     if (seccion === 'ordenes') setNavigateOrdenId(id);
     else if (seccion === 'recepciones') setNavigateRecepcionId(id);
     else if (seccion === 'facturas') setNavigateFacturaId(id);
+  };
+
+  const handleFacturarDesdeRecepcion = (ordenCompraId) => {
+    if (!ordenCompraId) return;
+    setActiveTab('ordenes');
+    setNavigateOrdenId(ordenCompraId);
+    setAutoFacturarOrdenId(ordenCompraId);
   };
 
   const tabClass = [
@@ -99,6 +112,8 @@ function ComprasSection({ initialTab = 'ordenes' }) {
               navigateOrdenId={navigateOrdenId}
               onNavigated={() => setNavigateOrdenId(null)}
               onNavigate={handleComprasNavigate}
+              autoFacturarOrdenId={autoFacturarOrdenId}
+              onAutoFacturarConsumed={() => setAutoFacturarOrdenId(null)}
             />
           </TabsContent>
 
@@ -107,6 +122,7 @@ function ComprasSection({ initialTab = 'ordenes' }) {
               navigateRecepcionId={navigateRecepcionId}
               onNavigated={() => setNavigateRecepcionId(null)}
               onNavigate={handleComprasNavigate}
+              onFacturarOC={handleFacturarDesdeRecepcion}
             />
           </TabsContent>
 

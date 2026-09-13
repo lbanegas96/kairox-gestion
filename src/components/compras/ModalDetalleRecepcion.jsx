@@ -1,4 +1,4 @@
-import { Package, Network, Copy } from 'lucide-react';
+import { Package, Network, Copy, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { formatDateAR } from '@/lib/dateUtils';
@@ -26,7 +26,7 @@ function Campo({ label, children }) {
   );
 }
 
-function ModalDetalleRecepcion({ recepcion, onClose, onVerMapa, onDuplicar, onNavigate }) {
+function ModalDetalleRecepcion({ recepcion, onClose, onVerMapa, onDuplicar, onNavigate, onFacturar }) {
   if (!recepcion) return null;
 
   const items = recepcion.recepcion_items ?? [];
@@ -148,6 +148,23 @@ function ModalDetalleRecepcion({ recepcion, onClose, onVerMapa, onDuplicar, onNa
               <Copy className="w-4 h-4 mr-2" /> Duplicar
             </Button>
           </div>
+          {/* Hallazgo Luciano 13/09: "en la recepción sigo sin manera de
+              registrar la factura del proveedor" — el chip de la OC en el
+              Flujo del Documento navegaba, pero exigía un segundo paso
+              (abrir la OC y ahí buscar el botón). Este atajo hace los dos
+              pasos en uno: navega a la OC de origen y abre "Registrar
+              Factura" directo, mismo destino que el botón que ya vive en
+              ModalDetalleOC (registrar_factura_compra_oc calcula solo lo
+              pendiente por facturar, sin duplicar esa lógica acá). Solo
+              tiene sentido si esta recepción vino de una OC. */}
+          {recepcion.orden_compra_id && (
+            <Button
+              className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2"
+              onClick={() => onFacturar?.(recepcion.orden_compra_id)}
+            >
+              <Receipt className="w-4 h-4" /> Registrar Factura del Proveedor
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
