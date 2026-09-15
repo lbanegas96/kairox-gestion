@@ -18,10 +18,17 @@ así que el bloqueo tiene sentido — necesita confirmación explícita de Lucia
 El archivo de migración ya está commiteado en el repo, listo para aplicar apenas se autorice.
 
 **Lo único que SÍ se aplicó y desplegó** (100% independiente de la migración, no requiere ningún
-cambio de base de datos): botón "Regenerar asiento" en el detalle de Factura de Compra
-(`ModalDetalleFacturaCompra.jsx`), mismo patrón ya usado en Compra Rápida
-(`CompraDetailModal.jsx`). Probado en vivo contra QA-FC-0001 (factura de prueba de ayer sin
-asiento) — generó AS-000312, balanceado ($1.210 = $1.210).
+cambio de base de datos):
+- Botón "Regenerar asiento" en el detalle de Factura de Compra (`ModalDetalleFacturaCompra.jsx`),
+  mismo patrón ya usado en Compra Rápida (`CompraDetailModal.jsx`). Probado en vivo contra
+  QA-FC-0001 (factura de prueba de ayer sin asiento) — generó AS-000312, balanceado ($1.210 = $1.210).
+- NC/ND de Ventas mostraban "sin asiento vinculado" aunque el asiento SÍ existía (bug menor,
+  solo visual, del mismo informe): `TabContabilidad.jsx` resuelve ahora el asiento por
+  `origen`+`origenId` (mismo criterio que ya usaba `VerAsientoButton` para el botón, pero el
+  texto de arriba solo miraba `asientoId` — que para NC/ND siempre es null) y
+  `SaleDetailModal.jsx` pasa `origen={sale.tipo}` en vez del `"venta"` hardcodeado. Probado en
+  vivo contra ND-20260913-001 — ahora muestra "Ver asiento" y abre AS-000305 (confirmado,
+  balanceado $121=$121).
 
 **Próximo paso:** apenas Luciano autorice, aplicar la migración 396 contra
 `isvkelrdxwvkfmrfqxxk`, y verificar en vivo cada uno de los 8 fixes (varios ya tienen los pasos

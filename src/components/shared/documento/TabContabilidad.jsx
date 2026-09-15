@@ -1,8 +1,10 @@
 import { RefreshCw } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { formatDateAR } from '@/lib/dateUtils';
 import EstadoBadge from '@/components/ui/EstadoBadge';
 import VerAsientoButton from '@/components/shared/VerAsientoButton';
+import { asientosService, PLAN_CUENTAS_KEYS } from '@/services/planCuentasService';
 import { PanelSeccion, CampoDato, GrillaCampos } from './DocumentoTabs';
 
 // Solapa "Contabilidad" — equivalente a la de SAP en sus documentos de
@@ -28,6 +30,21 @@ function TabContabilidad({
   onRegenerarAsiento,
   puedeRegenerarAsiento = false,
 }) {
+  // Resuelve por origen+origenId cuando el documento no guarda el id directo
+  // (hallazgo Auditoría de Circuitos, 13/09: NC/ND de cliente mostraban "sin
+  // asiento vinculado" aunque el asiento SÍ existía y estaba balanceado — el
+  // texto de abajo solo miraba `asientoId`, que para NC/ND siempre es null,
+  // mientras que VerAsientoButton ya sabía resolverlo por origen/origenId).
+  // Mismo criterio que ya usaba VerAsientoButton — se sube acá para que el
+  // texto y el botón queden sincronizados.
+  const porOrigen = !asientoId && !!origen && !!origenId && !!empresaId;
+  const { data: resuelto } = useQuery({
+    queryKey: PLAN_CUENTAS_KEYS.asientoPorOrigen(origen ?? '', origenId ?? ''),
+    queryFn: () => asientosService.getAsientoPorOrigen(empresaId, origen, origenId),
+    enabled: porOrigen,
+  });
+  const asientoIdResuelto = asientoId ?? resuelto?.id ?? null;
+
   if (!documento) return null;
 
   const moneda = documento.moneda || 'ARS';
@@ -39,14 +56,12 @@ function TabContabilidad({
         titulo="Asiento contable"
         accion={
           <VerAsientoButton
-            asientoId={asientoId}
+            asientoId={asientoIdResuelto}
             empresaId={empresaId}
-            origen={origen}
-            origenId={origenId}
           />
         }
       >
-        {asientoId ? (
+        {asientoIdResuelto ? (
           <p className="text-sm text-slate-600 dark:text-kx-text-2">
             Este documento generó su asiento automáticamente. Abrilo para ver el detalle de Debe y Haber.
           </p>
