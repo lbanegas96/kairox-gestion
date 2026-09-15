@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Receipt, Network, FileMinus, FilePlus, Undo2, Copy, Ban, History, Code2, Loader2, Banknote } from 'lucide-react';
+import { Receipt, Network, FileMinus, FilePlus, Undo2, Copy, Ban, History, Code2, Loader2, Banknote, RefreshCw } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useToast } from '@/components/ui/use-toast';
+import { supabase } from '@/lib/customSupabaseClient';
 import { formatDateAR, getTodayAR } from '@/lib/dateUtils';
 import { comprasService } from '@/services/comprasService';
 import { asientosAutoService } from '@/services/planCuentasService';
@@ -54,6 +55,7 @@ function ModalDetalleFacturaCompra({
   const [showCancelarConfirm, setShowCancelarConfirm] = useState(false);
   const [motivoCancelacion, setMotivoCancelacion] = useState('');
   const [cancelando, setCancelando] = useState(false);
+  const [regenerandoAsiento, setRegenerandoAsiento] = useState(false);
 
   // "Registrar Pago" desde acá mismo (hallazgo Luciano 12/09: "tampoco veo lo
   // importante, como registrar el pago al proveedor de esa factura") — mismo
@@ -96,6 +98,28 @@ function ModalDetalleFacturaCompra({
     }
   };
 
+  // "Regenerar Asiento" -- hallazgo Auditoría de Circuitos (13/09): las
+  // Facturas de Compra por OC podían quedar sin asiento contable (si la
+  // conexión se cortaba, o por el bug ya corregido en registrar_factura_compra_oc),
+  // y este modal solo lo MOSTRABA si ya existía -- nunca daba forma de
+  // generarlo. Mismo patrón ya probado en CompraDetailModal.jsx (Compra Rápida).
+  const handleRegenerarAsiento = async () => {
+    setRegenerandoAsiento(true);
+    try {
+      const { error } = await supabase.rpc('regenerar_asiento_compra', {
+        p_compra_id: compra.id,
+        p_user_id: user.id,
+      });
+      if (error) throw error;
+      toast({ title: 'Asiento regenerado', className: 'bg-emerald-600 text-white border-none' });
+      onPagoRegistrado?.();
+    } catch (err) {
+      toast({ title: 'No se pudo regenerar el asiento', description: err.message, variant: 'destructive' });
+    } finally {
+      setRegenerandoAsiento(false);
+    }
+  };
+
   const items = compra.detalle_compras ?? [];
   const estadoCfg = ESTADO_LABELS[compra.estado_pago] || ESTADO_LABELS.pendiente;
   const simbolo = compra.moneda && compra.moneda !== 'ARS' ? `${compra.moneda} ` : '$';
@@ -132,9 +156,24 @@ function ModalDetalleFacturaCompra({
             </div>
             <div>
               <p className="text-xs text-kx-text-3 uppercase mb-1">Estado</p>
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${estadoCfg.className}`}>
-                {estadoCfg.label}
-              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${estadoCfg.className}`}>
+                  {estadoCfg.label}
+                </span>
+                {!compra.asiento_id && compra.estado_pago !== 'anulada' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-900 dark:text-amber-400 dark:hover:bg-amber-900/20 gap-1.5"
+                    onClick={handleRegenerarAsiento}
+                    disabled={regenerandoAsiento}
+                    title="Esta compra no tiene asiento contable — puede pasar si la conexión se cortó justo después de confirmarla"
+                  >
+                    {regenerandoAsiento ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    Regenerar asiento
+                  </Button>
+                )}
+              </div>
             </div>
             <div>
               <p className="text-xs text-kx-text-3 uppercase mb-1">Fecha</p>
