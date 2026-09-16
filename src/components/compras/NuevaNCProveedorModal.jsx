@@ -304,6 +304,7 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, devolu
         iva: totalIva,
         fecha: getTodayAR(),
         descripcion: `NC de proveedor ${data.numero_ncp}`,
+        reembolsoEfectivo,
       }).catch(e => {
         if (e.message?.startsWith('Período cerrado:')) {
           toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });

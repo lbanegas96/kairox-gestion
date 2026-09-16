@@ -998,11 +998,15 @@ export const asientosAutoService = {
 
   /**
    * Crea y confirma el asiento de una Nota de Crédito o Débito de PROVEEDOR.
-   * Ambas SIEMPRE mueven `cuenta_corriente_proveedores` (el reembolso en
-   * efectivo de una NC es un movimiento de Caja aparte, con su propio
-   * asiento) — la contrapartida es siempre 2.1.1 Cuentas a Pagar.
-   *   NC (reversa de compra): DEBE 2.1.1 CxP (total)                                          / HABER 1.1.3 Mercaderías (neto) + HABER 1.1.4 IVA Crédito Fiscal (iva)
-   *   ND (cargo adicional):   DEBE 1.1.3 Mercaderías (neto) + DEBE 1.1.4 IVA Crédito Fiscal (iva) / HABER 2.1.1 CxP (total)
+   * Por default ambas mueven `cuenta_corriente_proveedores` — la contrapartida
+   * es 2.1.1 Cuentas a Pagar. Excepción: una NC con `reembolsoEfectivo=true`
+   * se salda en el acto (mismo criterio que crearAsientoDevolucion) y por lo
+   * tanto NUNCA toca CxP — sería duplicar el mismo hecho económico (mig.396,
+   * fix #4 de la Auditoría de Circuitos 13/09: crear_nota_credito_proveedor
+   * acreditaba Caja Y Cuenta Corriente por la misma NC).
+   *   NC (reversa de compra):     DEBE 2.1.1 CxP (total)                                          / HABER 1.1.3 Mercaderías (neto) + HABER 1.1.4 IVA Crédito Fiscal (iva)
+   *   NC (reembolso en efectivo): DEBE 1.1.1 Caja (total)                                         / HABER 1.1.3 Mercaderías (neto) + HABER 1.1.4 IVA Crédito Fiscal (iva)
+   *   ND (cargo adicional):       DEBE 1.1.3 Mercaderías (neto) + DEBE 1.1.4 IVA Crédito Fiscal (iva) / HABER 2.1.1 CxP (total)
    */
   async crearAsientoNotaProveedor(
     empresaId: string,
@@ -1016,6 +1020,7 @@ export const asientosAutoService = {
       fecha: string;       // YYYY-MM-DD
       descripcion: string;
       centroCostoId?: string | null;
+      reembolsoEfectivo?: boolean;
     }
   ): Promise<void> {
     try {
@@ -1027,23 +1032,24 @@ export const asientosAutoService = {
       if (e.message?.startsWith('Período cerrado:')) throw e;
     }
 
-    const [cuentaCxP, cuentaMercaderias, cuentaIvaCredito] = await Promise.all([
-      findCuentaByCodigo(empresaId, '2.1.1'),
+    const esReembolsoEfectivo = params.tipo === 'nota_credito' && !!params.reembolsoEfectivo;
+    const [cuentaCxPOCaja, cuentaMercaderias, cuentaIvaCredito] = await Promise.all([
+      findCuentaByCodigo(empresaId, esReembolsoEfectivo ? '1.1.1' : '2.1.1'),
       findCuentaByCodigo(empresaId, '1.1.3'),
       findCuentaByCodigo(empresaId, '1.1.4'),
     ]);
-    if (!cuentaCxP || !cuentaMercaderias || !cuentaIvaCredito || !(params.neto + params.iva > 0)) return;
+    if (!cuentaCxPOCaja || !cuentaMercaderias || !cuentaIvaCredito || !(params.neto + params.iva > 0)) return;
 
     const items = params.tipo === 'nota_credito'
       ? [
-          { cuenta_id: cuentaCxP,         debe: params.total, haber: 0,           descripcion: 'Nota de Crédito de proveedor' },
+          { cuenta_id: cuentaCxPOCaja,    debe: params.total, haber: 0,           descripcion: esReembolsoEfectivo ? 'Reembolso recibido del proveedor en efectivo' : 'Nota de Crédito de proveedor' },
           { cuenta_id: cuentaMercaderias, debe: 0,             haber: params.neto, descripcion: 'Reversa de compra (neto)' },
           { cuenta_id: cuentaIvaCredito,  debe: 0,             haber: params.iva,  descripcion: 'Reversa IVA Crédito Fiscal' },
         ]
       : [
           { cuenta_id: cuentaMercaderias, debe: params.neto, haber: 0,            descripcion: 'Cargo adicional (neto)' },
           { cuenta_id: cuentaIvaCredito,  debe: params.iva,  haber: 0,            descripcion: 'IVA Crédito Fiscal' },
-          { cuenta_id: cuentaCxP,         debe: 0,           haber: params.total, descripcion: 'Nota de Débito de proveedor' },
+          { cuenta_id: cuentaCxPOCaja,    debe: 0,           haber: params.total, descripcion: 'Nota de Débito de proveedor' },
         ];
 
     await asientosService.createAsientoAutomatico(
