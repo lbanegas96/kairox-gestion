@@ -16,8 +16,6 @@ import GenerarMovimientoModal from '@/components/shared/GenerarMovimientoModal';
 import NuevaDevolucionModal from '@/components/shared/NuevaDevolucionModal';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import { parseNumberLocale } from '@/lib/currencyUtils';
-import { asientosAutoService } from '@/services/planCuentasService';
-import { getTodayAR } from '@/lib/dateUtils';
 import { ESTADOS, EMPTY_ITEM } from '@/components/ordenes-compra/shared';
 import TablaOrdenesCompra from '@/components/ordenes-compra/TablaOrdenesCompra';
 import FormNuevaOC from '@/components/ordenes-compra/FormNuevaOC';
@@ -164,29 +162,19 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
       toast({ title: 'Factura registrada — deuda cargada a Cuenta Corriente del proveedor ✓', className: 'bg-green-600 text-white' });
       setFacturaModal(false);
 
-      // Asiento contable automático (no bloquea el flujo) — mismo patrón que
-      // Compra Rápida. Siempre esCredito=true: esta factura SIEMPRE crea Open
-      // Item en CC (el pago es un evento separado, ver mig.279).
-      const providerName = facturaOc?.proveedor_nombre ?? 'Proveedor';
-      asientosAutoService.crearAsientoCompra(
-        empresaId,
-        user.id,
-        {
-          compraId: data.compra_id,
-          total: data.total,
-          neto: data.neto_gravado,
-          iva: data.iva_discriminado,
-          fecha: facturaForm.fecha_factura || getTodayAR(),
-          descripcion: `Compra a ${providerName} - Fac. ${facturaForm.numero_factura || 'S/N'} (OC ${facturaOc?.numero})`,
-          esCredito: true,
-        }
-      ).catch(e => {
-        if (e.message?.startsWith('Período cerrado:')) {
-          toast({ title: 'Asiento contable no generado', description: e.message, variant: 'destructive' });
-        } else {
-          console.warn('[Contabilidad] Asiento factura OC (no crítico):', e.message);
-        }
-      });
+      // El asiento ya lo genera el propio RPC (mig.397 -- antes esta pantalla
+      // lo generaba acá con esCredito fijo, y desde que registrar_factura_
+      // compra_oc también empezó a generarlo (mig.396) quedaban DOS asientos
+      // confirmados por la misma factura, uno de ellos huérfano). Si no se
+      // pudo generar (período cerrado, cuenta faltante), el detalle de la
+      // factura ya tiene el botón "Regenerar asiento".
+      if (data?.asiento_generado === false) {
+        toast({
+          title: 'Factura registrada sin asiento contable',
+          description: 'La factura se guardó correctamente, pero no se generó el asiento (período cerrado o cuenta contable faltante). Abrí el detalle de la factura para regenerarlo.',
+          variant: 'destructive',
+        });
+      }
     },
     onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
   });

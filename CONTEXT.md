@@ -1,5 +1,31 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Factura por OC generaba asiento contable DUPLICADO (mig.397, 17/09)
+
+Luciano pidió revisar "el 360" de una OC con 3 recepciones y 3 facturas parciales en momentos
+distintos ("controlá la contabilidad y el stock"). Stock perfecto (4 recepciones = exactamente
+lo facturado, sin doble conteo). Contabilidad: **cada una de las 3 facturas quedó con DOS
+asientos confirmados** por el mismo importe.
+
+**Causa raíz:** `OrdenesCompraSection.jsx` ya generaba su propio asiento del lado del cliente
+para "Registrar Factura desde OC" desde antes (`esCredito: true` fijo — comentario original:
+"esta factura SIEMPRE crea Open Item en CC"). Era el ÚNICO mecanismo que existía. La mig.396
+(fix #1 de la Auditoría de Circuitos) agregó una segunda generación atómica del lado del
+servidor sin saber que ya existía la del cliente — duplicando el asiento en cada factura por OC,
+y además con la cuenta equivocada (el servidor elegía Caja/CxP según `forma_pago`, pero una
+Factura por OC siempre carga a Cuenta Corriente del proveedor sin importar `forma_pago` — el
+pago es un paso separado). Confirmado cruzando contra el asiento de pago real generado después
+(AS-000327): debita 2.1.1 CxP, no 1.1.1 Caja — la cuenta correcta para este flujo es siempre CxP.
+
+**Fix:** `regenerar_asiento_compra` ahora trata como crédito cualquier compra con
+`orden_compra_id` (no solo `forma_pago='Cuenta Corriente'`); se sacó la generación redundante
+del lado del cliente en `OrdenesCompraSection.jsx` (ahora solo lee `asiento_generado` del RPC,
+mismo patrón que el resto). Los 3 asientos duplicados/huérfanos ya generados
+(AS-000321/323/325) se revirtieron con Storno (AS-000328/329/330) — nunca se editan ni se
+borran asientos confirmados.
+
+---
+
 ## ✅ Registrar Pago/Cobro con centavos no se podía tildar ni confirmar (17/09)
 
 Luciano reportó (factura de $550.000,66 a Amazon, OC con 3 entregas) que "Registrar Pago" no lo
