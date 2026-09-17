@@ -90,8 +90,10 @@ function SubTabSufridas() {
   const abrirNueva = () => { setForm({ ...emptyForm, fecha: getTodayAR() }); setModalOpen(true); };
   const abrirEditar = (r) => {
     setForm({
-      id: r.id, impuesto: r.impuesto, jurisdiccion: r.jurisdiccion, monto: String(r.monto),
-      alicuota_aplicada: r.alicuota_aplicada != null ? String(r.alicuota_aplicada) : '',
+      // .replace: parseNumberLocale exige coma decimal (es-AR); String() de un
+      // numeric de Postgres usa punto (ej. "1234.56") y lo rechaza como NaN.
+      id: r.id, impuesto: r.impuesto, jurisdiccion: r.jurisdiccion, monto: String(r.monto).replace('.', ','),
+      alicuota_aplicada: r.alicuota_aplicada != null ? String(r.alicuota_aplicada).replace('.', ',') : '',
       fecha: r.fecha, contraparte_nombre: r.contraparte_nombre, contraparte_cuit: r.contraparte_cuit ?? '',
       numero_certificado: r.numero_certificado ?? '', observaciones: r.observaciones ?? '',
     });
@@ -409,7 +411,8 @@ function SubTabPracticadas() {
     // Pre-cargar alícuota desde alicuotas_impuestos.
     const alic = await buscarAlicuota(next.impuesto, next.jurisdiccion);
     if (alic != null) {
-      next.alicuota_aplicada = String(Number(alic));
+      // Mismo fix: parseNumberLocale (recalcMonto/guardar) rechaza el punto decimal.
+      next.alicuota_aplicada = String(Number(alic)).replace('.', ',');
       next.monto = recalcMonto(next.monto_base, next.alicuota_aplicada);
     }
     setForm(next);

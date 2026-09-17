@@ -1,5 +1,36 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Retenciones (Impuestos): mismo bug de punto/coma decimal, editar con centavos fallaba (17/09)
+
+Continuación directa del hallazgo dejado pendiente en la entrada de abajo
+(`TabRetenciones.jsx:93`). Mismo patrón que el fix de Registrar Pago/Cobro:
+`parseNumberLocale` exige coma decimal y rechaza el punto como NaN, pero el
+precargado de formularios guardaba `String(valor)` de un numeric de Postgres
+tal cual (punto decimal), y ese string se re-parseaba después con
+`parseNumberLocale`.
+
+**3 lugares en `src/components/impuestos/TabRetenciones.jsx`** (no solo la
+línea 93 — se revisó el archivo completo):
+- `abrirEditar` (Retenciones Sufridas): precarga de `monto` al editar una
+  retención existente — si tenía centavos, `guardar()` daba "Datos
+  incompletos" sin poder confirmar (mismo síntoma que Registrar Pago).
+- `abrirEditar` (Retenciones Sufridas): precarga de `alicuota_aplicada` —
+  mismo problema si la alícuota tenía decimales (ej. 3,5%).
+- `onChangeProveedorOImpuesto` (Retenciones Practicadas): auto-carga de
+  alícuota desde `alicuotas_impuestos` al elegir proveedor/impuesto —
+  con decimales, `recalcMonto` fallaba silenciosamente (devolvía monto vacío
+  en vez de calcularlo).
+
+Fix: `.replace('.', ',')` en los 3 lugares, mismo idioma ya usado en
+`PanelCarrito.jsx` y en el fix de Registrar Pago/Cobro. Verificado con script
+Node aislado reproduciendo `parseNumberLocale` exacto (4 casos: monto con
+centavos, monto grande con centavos, alícuota con decimal, monto redondo sin
+centavos — los 4 vuelven a parsear al valor original tras el fix). No se
+pudo verificar en vivo contra datos reales: este worktree no tiene
+`.env.local` ni sesión autenticada disponible.
+
+---
+
 ## ✅ Registrar Pago/Cobro con centavos no se podía tildar ni confirmar (17/09)
 
 Luciano reportó (factura de $550.000,66 a Amazon, OC con 3 entregas) que "Registrar Pago" no lo
