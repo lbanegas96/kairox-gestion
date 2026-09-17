@@ -80,13 +80,15 @@ function ModalCobro({
     // Precarga el saldo completo, podado al remanente del monto a cobrar (solo
     // tiene sentido para ARS — FX se valida aparte, se precarga sin podar).
     if (esFX) {
-      setImputacionesFX(prev => ({ ...prev, [f.comprobante_id]: String(f.saldo_pendiente) }));
+      setImputacionesFX(prev => ({ ...prev, [f.comprobante_id]: String(f.saldo_pendiente).replace('.', ',') }));
       return;
     }
     const otrasImputadas = totalImputado - (parseNumberLocale(imputaciones[f.comprobante_id] || '') || 0);
     const remanente = Math.max(0, montoCobro - otrasImputadas);
     const aplicar = remanente > 0 ? Math.min(f.saldo_pendiente, remanente) : f.saldo_pendiente;
-    setImputaciones(prev => ({ ...prev, [f.comprobante_id]: String(aplicar) }));
+    // .replace: parseNumberLocale espera coma decimal, no punto (mismo
+    // hallazgo que el lado Compras, 17/09).
+    setImputaciones(prev => ({ ...prev, [f.comprobante_id]: String(aplicar).replace('.', ',') }));
   };
 
   return (

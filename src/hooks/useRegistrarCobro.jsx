@@ -109,11 +109,14 @@ export function useRegistrarCobro(onSuccess) {
     if (preseleccionarFacturaId) {
       const match = facturas.find(f => f.comprobante_id === preseleccionarFacturaId);
       if (match) {
-        const saldoStr = String(match.saldo_pendiente);
+        // .replace: parseNumberLocale espera coma decimal (es-AR) — String()
+        // de un numeric de Postgres usa punto decimal, que ese parser
+        // rechaza como NaN (mismo hallazgo que el lado Compras, 17/09).
+        const saldoStr = String(match.saldo_pendiente).replace('.', ',');
         if (match.moneda && match.moneda !== 'ARS') {
           const tc = match.tc_hoy || match.tipo_cambio_tasa || 0;
           setImputacionesFX({ [match.comprobante_id]: saldoStr });
-          setPaymentData(prev => ({ ...prev, monto: tc > 0 ? String(match.saldo_pendiente * tc) : '' }));
+          setPaymentData(prev => ({ ...prev, monto: tc > 0 ? String(match.saldo_pendiente * tc).replace('.', ',') : '' }));
         } else {
           setImputaciones({ [match.comprobante_id]: saldoStr });
           setPaymentData(prev => ({ ...prev, monto: saldoStr }));

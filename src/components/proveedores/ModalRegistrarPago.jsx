@@ -75,13 +75,15 @@ function ModalRegistrarPago({
       return;
     }
     if (esFX) {
-      setImputacionesFX(prev => ({ ...prev, [f.compra_id]: String(f.saldo_pendiente) }));
+      setImputacionesFX(prev => ({ ...prev, [f.compra_id]: String(f.saldo_pendiente).replace('.', ',') }));
       return;
     }
     const otrasImputadas = totalImputado - (parseNumberLocale(imputaciones[f.compra_id] || '') || 0);
     const remanente = Math.max(0, montoPago - otrasImputadas);
     const aplicar = remanente > 0 ? Math.min(f.saldo_pendiente, remanente) : f.saldo_pendiente;
-    setImputaciones(prev => ({ ...prev, [f.compra_id]: String(aplicar) }));
+    // .replace: parseNumberLocale espera coma decimal, no punto (ver misma
+    // nota en useRegistrarPago.jsx).
+    setImputaciones(prev => ({ ...prev, [f.compra_id]: String(aplicar).replace('.', ',') }));
   };
 
   return (

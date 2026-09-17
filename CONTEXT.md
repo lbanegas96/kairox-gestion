@@ -1,5 +1,36 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Registrar Pago/Cobro con centavos no se podía tildar ni confirmar (17/09)
+
+Luciano reportó (factura de $550.000,66 a Amazon, OC con 3 entregas) que "Registrar Pago" no lo
+dejaba confirmar: el monto aparecía cargado en el input pero la factura de origen no quedaba
+tildada, "Imputado: $0,00 / $0,00", y el botón "Confirmar Pago" quedaba deshabilitado.
+
+**Causa raíz:** `parseNumberLocale` (`src/lib/currencyUtils.js`) exige coma decimal (es-AR) y
+rechaza explícitamente el punto decimal como NaN — es su comportamiento documentado a propósito
+(para no confundir "1.234" con mil doscientos treinta y cuatro). Pero el precargado automático
+de "la factura por la que entraste" hacía `String(saldo_pendiente)` directo sobre el numeric que
+devuelve Postgres — que usa punto decimal (`"550000.66"`) — y guardaba ESE string en el mismo
+estado que después se re-parsea con `parseNumberLocale`. Con centavos, siempre daba NaN → 0 →
+checkbox destildado y validación de monto en 0. Con un monto redondo (sin centavos) no se nota,
+por eso no había aparecido en las pruebas anteriores.
+
+**Mismo bug en 4 lugares** (Compras y Ventas, precarga automática Y tilde manual de una fila):
+`src/hooks/useRegistrarPago.jsx`, `src/hooks/useRegistrarCobro.jsx`,
+`src/components/proveedores/ModalRegistrarPago.jsx`, `src/components/cuenta-corriente/ModalCobro.jsx`.
+Fix: `.replace('.', ',')` antes de guardar el string (mismo idioma ya usado en
+`PanelCarrito.jsx` para cantidades). Verificado con un script Node aislado reproduciendo
+`parseNumberLocale` exacto: `"550000.66"` → NaN (bug), `"550000,66"` → 550000.66 (fix).
+
+Circuito de fondo (OC-22124, 3 recepciones → 1 factura) revisado y sano — ya tenía su asiento
+generado automáticamente (fix de mig.396 funcionando). El único problema era este bug de
+formato, frontend puro, sin relación con la migración de la Auditoría de Circuitos.
+
+Hallazgo aparte, mismo patrón, en un módulo distinto (Impuestos → Retenciones,
+`TabRetenciones.jsx:93`) — no se tocó en este fix, ver tarea derivada.
+
+---
+
 ## ✅ Fixes de la Auditoría de Circuitos — migración 396 aplicada y verificada en vivo (16/09)
 
 Luciano autorizó explícitamente ("te autorizo por favor, realiza las migraciones") aplicar

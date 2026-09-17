@@ -97,7 +97,12 @@ export function useRegistrarPago(onSuccess) {
     if (preseleccionarFacturaId) {
       const match = facturas.find(f => f.compra_id === preseleccionarFacturaId);
       if (match) {
-        const saldoStr = String(match.saldo_pendiente);
+        // .replace: parseNumberLocale espera coma decimal (es-AR) — String()
+        // de un numeric de Postgres usa punto decimal (ej. "550000.66"), que
+        // ese parser rechaza como NaN (hallazgo Luciano 17/09: factura con
+        // centavos no se podía tildar ni pagar, aunque el monto se veía bien
+        // en el input — el valor nunca llegaba a parsear como > 0).
+        const saldoStr = String(match.saldo_pendiente).replace('.', ',');
         if (match.moneda && match.moneda !== 'ARS') {
           setImputacionesFX({ [match.compra_id]: saldoStr });
         } else {
