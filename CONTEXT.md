@@ -24,6 +24,16 @@ Dos pedidos de Luciano en la misma sesión, sobre Plan de Cuentas → Reporterí
    tarjetas hardcodeadas que no vienen del array. Patrón para replicar en cualquier reporte nuevo que
    se agregue (ver `PLAN_REPORTERIA` de la sesión, artifact enviado a Luciano, no versionado en git).
 
+**Bug real encontrado y corregido en el mismo commit**: `vercel.json` usa `vite.config.prod.js`
+(no el `vite.config.js` por defecto que usan `npx vite build` y mis verificaciones locales de
+siempre) para el build real, y ese config junta TODO `node_modules` en un solo chunk `vendor` a
+propósito (evita TDZ cross-chunk / múltiples instancias de React). Eso anulaba el
+`await import('exceljs')`: la librería (~940KB) se descargaba en CADA carga de la app para TODOS
+los usuarios, no solo al exportar. Fix: excepción puntual para `exceljs` en `manualChunks`,
+verificado corriendo `vite build --config vite.config.prod.js` (el comando real de Vercel) antes
+de desplegar — `vendor` volvió a su tamaño original (4.1MB), `exceljs` quedó aparte (939KB,
+on-demand). Ver memoria de sesión `feedback_verificar_build_prod_real`.
+
 ---
 
 ## ✅ Auditoría de Circuitos — los 8/8 críticos ahora verificados en vivo (18/09)
