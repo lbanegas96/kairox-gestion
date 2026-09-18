@@ -1,20 +1,24 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Loader2, RefreshCw, TrendingUp, TrendingDown, Download, Calculator } from 'lucide-react';
+import { Loader2, RefreshCw, TrendingUp, TrendingDown, FileSpreadsheet, Calculator } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { asientosService, PLAN_CUENTAS_KEYS } from '@/services/planCuentasService';
 import { ajusteInflacionService } from '@/services/ajusteInflacionService';
 import { useAjusteInflacionHabilitado } from '@/hooks/useAjusteInflacionHabilitado';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { fmt, csvDownload } from './shared';
+import { exportEstadoResultadosXLSX } from '@/lib/excelUtils';
+import { fmt } from './shared';
 
 function TabEstadoResultados({ empresaId }) {
+  const { user } = useAuth();
   const [fechaDesde, setDesde] = useState('');
   const [fechaHasta, setHasta] = useState('');
   const [monedaHomogenea, setMonedaHomogenea] = useState(false);
+  const [exportando, setExportando] = useState(false);
   const { habilitado: ajusteInflacionHabilitado } = useAjusteInflacionHabilitado();
   // Centro de costo (Fase 1 del plan de 4 frentes contables) — opcional.
   const [centrosCosto, setCentrosCosto] = useState([]);
@@ -69,19 +73,25 @@ function TabEstadoResultados({ empresaId }) {
   const resultado = totalIngresos - totalEgresos;
   const ganancia = resultado >= 0;
 
-  const handleExportCSV = () => {
-    const lineas = [
-      ...ingresos.map(r => `${r.codigo},"${r.nombre}",Ingreso,${r.monto.toFixed(2)}`),
-      ...egresos.map(r => `${r.codigo},"${r.nombre}",Egreso,${r.monto.toFixed(2)}`),
-      `,,Total Ingresos,${totalIngresos.toFixed(2)}`,
-      `,,Total Egresos,${totalEgresos.toFixed(2)}`,
-      `,,Resultado del Período,${resultado.toFixed(2)}`,
-    ];
-    csvDownload(
-      `estado-resultados-${fechaDesde || 'inicio'}-${fechaHasta || 'hoy'}.csv`,
-      'Código,Cuenta,Tipo,Monto',
-      lineas
-    );
+  const handleExportExcel = async () => {
+    setExportando(true);
+    try {
+      // Detalle línea por línea (pedido de Luciano, 18/09: "muy general,
+      // pongamos más detalles de las operaciones") -- se pide recién acá,
+      // solo cuando alguien realmente exporta, no en cada render de la
+      // pantalla (que solo necesita los totales por cuenta).
+      const detalle = await asientosService.getDetalleOperaciones(
+        empresaId, fechaDesde || undefined, fechaHasta || undefined, centroCostoId || undefined
+      );
+      await exportEstadoResultadosXLSX({
+        empresaNombre: user?.empresa_nombre,
+        fechaDesde, fechaHasta,
+        ingresos, egresos, totalIngresos, totalEgresos, resultado,
+        detalle,
+      });
+    } finally {
+      setExportando(false);
+    }
   };
 
   const sinDatos = !isLoading && rows.length === 0;
@@ -117,9 +127,10 @@ function TabEstadoResultados({ empresaId }) {
           <RefreshCw size={14} className="mr-1" /> Actualizar
         </Button>
         {!sinDatos && (
-          <Button onClick={handleExportCSV} size="sm" variant="outline"
+          <Button onClick={handleExportExcel} size="sm" variant="outline" disabled={exportando}
             className="border-kx-border text-kx-text-3 hover:bg-kx-surface-2">
-            <Download size={14} className="mr-1" /> Exportar CSV
+            {exportando ? <Loader2 size={14} className="mr-1 animate-spin" /> : <FileSpreadsheet size={14} className="mr-1" />}
+            Exportar Excel
           </Button>
         )}
         {!sinDatos && ajusteInflacionHabilitado && (

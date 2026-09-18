@@ -26,7 +26,12 @@ export const REPORTS = [
     requiresDate: true,
     supportsCentroCosto: true,
     supportsGroupBy: true,
-    supportsPeriodComparison: true
+    supportsPeriodComparison: true,
+    ayuda: {
+      queEs: 'Detalle de todas las ventas facturadas en el período elegido, con la opción de comparar contra el período anterior.',
+      queMuestra: ['Fecha, cliente, N° de comprobante y forma de pago de cada venta', 'Ítems vendidos y total por comprobante', 'Totales: Total Ventas, Cantidad, Ticket Promedio, Venta Mayor'],
+      filtros: ['Rango de fechas', 'Centro de costo (si está activado)', 'Agrupar por día, método de pago, cliente o lista de precios', 'Comparar contra el período anterior'],
+    },
   },
   {
     id: 'compras',
@@ -37,7 +42,12 @@ export const REPORTS = [
     requiresDate: true,
     supportsCentroCosto: true,
     supportsGroupBy: true,
-    supportsPeriodComparison: true
+    supportsPeriodComparison: true,
+    ayuda: {
+      queEs: 'Registro de las facturas de compra a proveedores registradas en el período elegido.',
+      queMuestra: ['Fecha, proveedor, N° de factura y forma de pago', 'Categoría del producto comprado (si la factura mezcla categorías, figura como "Varias")', 'Totales: Total Compras, Cantidad, Promedio'],
+      filtros: ['Rango de fechas', 'Centro de costo (si está activado)', 'Agrupar por día, método de pago, proveedor o categoría', 'Comparar contra el período anterior'],
+    },
   },
   {
     id: 'clientes',
@@ -46,7 +56,12 @@ export const REPORTS = [
     icon: <Users className="w-8 h-8 text-kx-green" />,
     borderClass: 'border-t-kx-green',
     requiresDate: false,
-    supportsFiltroDeuda: true
+    supportsFiltroDeuda: true,
+    ayuda: {
+      queEs: 'Estado de cuenta de cada cliente con antigüedad de saldo (aging), reconciliado contra los movimientos reales de Cuenta Corriente — no es un saldo estimado.',
+      queMuestra: ['Cliente y saldo actual', 'Antigüedad de la deuda en 4 tramos: 0-30, 31-60, 61-90 y más de 90 días', 'Totales: Total Clientes, Con deuda, Total a Cobrar, Total a Favor'],
+      filtros: ['Mostrar solo clientes con deuda'],
+    },
   },
   {
     id: 'cuenta_corriente',
@@ -55,7 +70,12 @@ export const REPORTS = [
     icon: <CreditCard className="w-8 h-8 text-kx-amber" />,
     borderClass: 'border-t-kx-amber',
     requiresDate: true,
-    requiresCliente: true
+    requiresCliente: true,
+    ayuda: {
+      queEs: 'Extracto de cuenta de un cliente puntual, mostrando cómo se fue formando su saldo movimiento por movimiento.',
+      queMuestra: ['Fecha y comprobante de cada movimiento', 'Tipo de movimiento (DEBE / HABER) y monto', 'Saldo acumulado después de cada movimiento', 'Totales: Saldo Anterior, Total DEBE, Total HABER, Saldo Final'],
+      filtros: ['Cliente (obligatorio)', 'Rango de fechas'],
+    },
   },
   {
     id: 'financiero',
@@ -65,7 +85,12 @@ export const REPORTS = [
     borderClass: 'border-t-kx-green',
     requiresDate: true,
     supportsGroupBy: true,
-    supportsPeriodComparison: true
+    supportsPeriodComparison: true,
+    ayuda: {
+      queEs: 'Libro de caja: todos los movimientos de ingreso y egreso registrados en el período elegido.',
+      queMuestra: ['Fecha, tipo (ingreso/egreso), categoría y concepto de cada movimiento', 'Monto y saldo acumulado', 'Totales: Saldo Inicial, Ingresos, Egresos, Saldo Final'],
+      filtros: ['Rango de fechas', 'Agrupar por día, categoría o método de pago', 'Comparar contra el período anterior'],
+    },
   },
   {
     id: 'mp_movimientos',
@@ -76,7 +101,12 @@ export const REPORTS = [
     requiresDate: true,
     badge: 'MP',
     supportsGroupBy: true,
-    supportsPeriodComparison: true
+    supportsPeriodComparison: true,
+    ayuda: {
+      queEs: 'Cobros y pagos recibidos a través de MercadoPago, separados por tipo (QR, transferencia, tarjeta) y su estado de conciliación con el resumen real de MP.',
+      queMuestra: ['Fecha y tipo de cobro (QR / Transferencia / Tarjeta Crédito / Tarjeta Débito)', 'Monto y estado de conciliación', 'Totales: Ingresos, Egresos, Neto, Sin Conciliar'],
+      filtros: ['Rango de fechas', 'Agrupar por día o por estado de conciliación', 'Comparar contra el período anterior'],
+    },
   },
 ];
 

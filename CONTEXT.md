@@ -1,5 +1,31 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Reportería: Estado de Resultados/Balance General en Excel multi-hoja + botón "i" en cada reporte (18/09)
+
+Dos pedidos de Luciano en la misma sesión, sobre Plan de Cuentas → Reportería:
+
+1. **"No quiero CSV, quiero un Excel bien estructurado... y que despliegue más detalle de las operaciones"**
+   `src/lib/excelUtils.js` — `exportEstadoResultadosXLSX`/`exportBalanceGeneralXLSX` reemplazan el viejo
+   `csvDownload` en `TabEstadoResultados.jsx`/`TabBalanceGeneral.jsx`. Usan `exceljs` (carga diferida —
+   `await import('exceljs')`, no suma al bundle principal salvo cuando alguien exporta) para tener
+   negrita/color real y formato moneda nativo, algo que el `xlsx` básico ya usado en el resto del
+   proyecto no soporta. Cada export sale en 3-4 hojas: "Resumen" (igual que antes) + una hoja "Detalle"
+   por sección (Ingresos/Egresos, o Activo/Pasivo/Patrimonio) con una fila por movimiento real
+   (`asientos_items`, nuevo método `asientosService.getDetalleOperaciones` en `planCuentasService.ts`),
+   no solo el total por cuenta. Verificado con un script Node aislado (no hay login disponible para
+   probar en el navegador real) que arma el mismo workbook y relee la estructura: título/negrita,
+   formato moneda, hojas correctas, totales — todo OK.
+
+2. **"Quiero una 'i' en cada reporte que explique qué muestra"**
+   Botón `Info` (`src/components/reportes/ReportInfoDialog.jsx`, `ReportInfoButton`) en cada tarjeta
+   de `GridReportes.jsx` — stopPropagation para no abrir el reporte al click. Contenido en el nuevo
+   campo `ayuda: {queEs, queMuestra[], filtros[]}` de cada entrada de `reportDefinitions.jsx` (los 6
+   reportes centralizados) + 2 objetos `AYUDA_PARIDAD`/`AYUDA_LIBRO_IVA_VENTAS` inline para las 2
+   tarjetas hardcodeadas que no vienen del array. Patrón para replicar en cualquier reporte nuevo que
+   se agregue (ver `PLAN_REPORTERIA` de la sesión, artifact enviado a Luciano, no versionado en git).
+
+---
+
 ## ✅ Auditoría de Circuitos — los 8/8 críticos ahora verificados en vivo (18/09)
 
 Cerrando los 3 pendientes que habían quedado de la revisión de la migración 396/397:

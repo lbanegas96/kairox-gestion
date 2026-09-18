@@ -1,19 +1,23 @@
 import { useState, useMemo } from 'react';
-import { AlertTriangle, Loader2, CheckCircle2, RefreshCw, Scale, Download, Calculator } from 'lucide-react';
+import { AlertTriangle, Loader2, CheckCircle2, RefreshCw, Scale, FileSpreadsheet, Calculator } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { asientosService, PLAN_CUENTAS_KEYS } from '@/services/planCuentasService';
 import { ajusteInflacionService } from '@/services/ajusteInflacionService';
 import { useAjusteInflacionHabilitado } from '@/hooks/useAjusteInflacionHabilitado';
+import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { fmt, csvDownload } from './shared';
+import { exportBalanceGeneralXLSX } from '@/lib/excelUtils';
+import { fmt } from './shared';
 
 function TabBalanceGeneral({ empresaId }) {
+  const { user } = useAuth();
   const todayStr = new Date().toISOString().slice(0, 10);
   const [fechaCorte, setFechaCorte] = useState(todayStr);
   const [monedaHomogenea, setMonedaHomogenea] = useState(false);
+  const [exportando, setExportando] = useState(false);
   const { habilitado: ajusteInflacionHabilitado } = useAjusteInflacionHabilitado();
 
   const { data: rows = [], isLoading, refetch } = useQuery({
@@ -83,18 +87,24 @@ function TabBalanceGeneral({ empresaId }) {
     return { activos, pasivos, patrimonios, resultadoEjercicio, recpamImplicito, aplicarHomog, totalActivo, totalPasivo, totalPatrimonio, diferencia, cierra };
   }, [rows, reexpresion, monedaHomogenea]);
 
-  const handleExportCSV = () => {
-    const lineas = [
-      ...calc.activos.map(r => `${r.codigo},"${r.nombre}",Activo,${r.monto.toFixed(2)}`),
-      `,,Total Activo,${calc.totalActivo.toFixed(2)}`,
-      ...calc.pasivos.map(r => `${r.codigo},"${r.nombre}",Pasivo,${r.monto.toFixed(2)}`),
-      `,,Total Pasivo,${calc.totalPasivo.toFixed(2)}`,
-      ...calc.patrimonios.map(r => `${r.codigo},"${r.nombre}",Patrimonio,${r.monto.toFixed(2)}`),
-      `,,Resultado del Ejercicio (calculado),${calc.resultadoEjercicio.toFixed(2)}`,
-      `,,Total Patrimonio,${calc.totalPatrimonio.toFixed(2)}`,
-      `,,Pasivo + Patrimonio,${(calc.totalPasivo + calc.totalPatrimonio).toFixed(2)}`,
-    ];
-    csvDownload(`balance-general-${fechaCorte}.csv`, 'Código,Cuenta,Tipo,Monto', lineas);
+  const handleExportExcel = async () => {
+    setExportando(true);
+    try {
+      // Igual criterio que el resumen: acumulado desde el inicio hasta la
+      // fecha de corte, no un rango -- un Balance es una foto, no un período.
+      const detalle = await asientosService.getDetalleOperaciones(empresaId, undefined, fechaCorte || undefined);
+      await exportBalanceGeneralXLSX({
+        empresaNombre: user?.empresa_nombre,
+        fechaCorte,
+        activos: calc.activos, pasivos: calc.pasivos, patrimonios: calc.patrimonios,
+        totalActivo: calc.totalActivo, totalPasivo: calc.totalPasivo, totalPatrimonio: calc.totalPatrimonio,
+        resultadoEjercicio: calc.resultadoEjercicio,
+        cierra: calc.cierra, diferencia: Math.abs(calc.diferencia),
+        detalle,
+      });
+    } finally {
+      setExportando(false);
+    }
   };
 
   const sinDatos = !isLoading && rows.length === 0;
@@ -112,9 +122,10 @@ function TabBalanceGeneral({ empresaId }) {
           <RefreshCw size={14} className="mr-1" /> Actualizar
         </Button>
         {!sinDatos && (
-          <Button onClick={handleExportCSV} size="sm" variant="outline"
+          <Button onClick={handleExportExcel} size="sm" variant="outline" disabled={exportando}
             className="border-kx-border text-kx-text-3 hover:bg-kx-surface-2">
-            <Download size={14} className="mr-1" /> Exportar CSV
+            {exportando ? <Loader2 size={14} className="mr-1 animate-spin" /> : <FileSpreadsheet size={14} className="mr-1" />}
+            Exportar Excel
           </Button>
         )}
 

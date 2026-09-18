@@ -278,6 +278,44 @@ export const asientosService = {
       return { ...row, saldo_acumulado: saldo };
     });
   },
+
+  /**
+   * Detalle línea por línea de todos los asientos_items del período, para
+   * las hojas "Detalle de Operaciones" del export a Excel de Estado de
+   * Resultados / Balance General (pedido de Luciano, 18/09: "muy general,
+   * pongamos más detalles de las operaciones"). Mismo filtro base que
+   * getBalanceComprobacion (mismos joins), pero sin agrupar por cuenta —
+   * cada fila es un movimiento real, no un total.
+   */
+  async getDetalleOperaciones(empresaId: string, fechaDesde?: string, fechaHasta?: string, centroCostoId?: string) {
+    let q = supabase
+      .from('asientos_items')
+      .select('cuenta_id, debe, haber, descripcion, plan_cuentas(codigo, nombre, tipo), asientos_contables!inner(numero, fecha, descripcion, origen, estado, empresa_id, centro_costo_id)')
+      .eq('empresa_id', empresaId)
+      .eq('asientos_contables.estado', 'confirmado')
+      .eq('asientos_contables.empresa_id', empresaId)
+      .order('asientos_contables(fecha)', { ascending: true });
+
+    if (fechaDesde) q = (q as any).gte('asientos_contables.fecha', fechaDesde);
+    if (fechaHasta) q = (q as any).lte('asientos_contables.fecha', fechaHasta);
+    if (centroCostoId) q = (q as any).eq('asientos_contables.centro_costo_id', centroCostoId);
+
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+
+    return (data ?? []).map((row: any) => ({
+      fecha: row.asientos_contables?.fecha,
+      numero_asiento: row.asientos_contables?.numero,
+      cuenta_id: row.cuenta_id,
+      codigo: row.plan_cuentas?.codigo ?? '',
+      cuenta: row.plan_cuentas?.nombre ?? '',
+      tipo: row.plan_cuentas?.tipo ?? '',
+      descripcion: row.descripcion || row.asientos_contables?.descripcion || '',
+      origen: row.asientos_contables?.origen || '',
+      debe: Number(row.debe),
+      haber: Number(row.haber),
+    }));
+  },
 };
 
 // ─── Query keys ───────────────────────────────────────────────────────────────
