@@ -1,5 +1,22 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Auditoría de Circuitos — los 8/8 críticos ahora verificados en vivo (18/09)
+
+Cerrando los 3 pendientes que habían quedado de la revisión de la migración 396/397:
+1. **`crear_venta` con 2+ entregas del mismo pedido (punto 6)** — reproducido en vivo por
+   primera vez: pedido con 2 entregas manuales (4 + 6 unidades) → 2 facturas separadas. La
+   2da factura vinculó correctamente la entrega que quedaba sin reclamar (`entregas.
+   comprobante_id`), no la más reciente que ya estaba tomada por la 1ra — confirma el filtro
+   `comprobante_id IS NULL` agregado en mig.396. Stock sin movimiento extra desde las facturas.
+2. **Riesgo de asiento duplicado del lado Ventas** — descartado. `crear_venta` nunca generó
+   asiento server-side (confirmado en el código fuente de la función), el asiento siempre salió
+   solo del cliente (`NuevaVentaModal.jsx`/`NuevaFacturaModal.jsx`, una sola llamada cada uno) —
+   no hay una segunda generación que pueda colisionar, a diferencia de lo que pasaba en Compras.
+3. **Bug de centavos en Retenciones** — sigue pendiente, corriendo en una sesión aparte que
+   Luciano arrancó por su cuenta.
+
+---
+
 ## ✅ Factura por OC generaba asiento contable DUPLICADO (mig.397, 17/09)
 
 Luciano pidió revisar "el 360" de una OC con 3 recepciones y 3 facturas parciales en momentos
