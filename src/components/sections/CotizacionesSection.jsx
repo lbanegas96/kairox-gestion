@@ -377,7 +377,11 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
       fecha_vencimiento: full.fecha_vencimiento ?? '',
       moneda: full.moneda ?? 'ARS',
       tipoCambioTasa: full.tipo_cambio_tasa ?? 1,
-      descuento: full.descuento ? String(full.descuento) : '',
+      // .replace: parseNumberLocale espera coma decimal (es-AR) — String()
+      // de un numeric de Postgres usa punto decimal, que ese parser rechaza
+      // como NaN con descuentos no enteros (mismo hallazgo recurrente esta
+      // sesión).
+      descuento: full.descuento ? String(full.descuento).replace('.', ',') : '',
       lista_precio_id: full.lista_precio_id ?? '',
     });
     setItems((full.cotizacion_items ?? []).map(i => ({
@@ -385,7 +389,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
       descripcion: i.descripcion,
       cantidad: i.cantidad,
       precio_unitario: i.precio_unitario,
-      descuento_item: i.descuento_item || '',
+      descuento_item: i.descuento_item ? String(i.descuento_item).replace('.', ',') : '',
       producto_id: i.producto_id,
       unidad_medida: i.unidad_medida ?? '',
       alicuota_iva: i.alicuota_iva ?? '21',
@@ -416,7 +420,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
       fecha_vencimiento: '', // se resetea — el usuario elige la propia
       moneda: full.moneda ?? 'ARS',
       tipoCambioTasa: full.tipo_cambio_tasa ?? 1,
-      descuento: full.descuento ? String(full.descuento) : '',
+      descuento: full.descuento ? String(full.descuento).replace('.', ',') : '',
       lista_precio_id: full.lista_precio_id ?? '',
     });
     setItems((full.cotizacion_items ?? []).map(i => ({
@@ -424,7 +428,7 @@ function CotizacionesSection({ onNavigateToSale, onCopiarAPedido, onVerPedido, o
       descripcion: i.descripcion,
       cantidad: i.cantidad,
       precio_unitario: i.precio_unitario,
-      descuento_item: i.descuento_item || '',
+      descuento_item: i.descuento_item ? String(i.descuento_item).replace('.', ',') : '',
       producto_id: i.producto_id,
       unidad_medida: i.unidad_medida ?? '',
       alicuota_iva: i.alicuota_iva ?? '21',

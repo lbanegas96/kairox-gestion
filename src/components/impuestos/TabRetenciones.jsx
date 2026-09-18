@@ -90,8 +90,12 @@ function SubTabSufridas() {
   const abrirNueva = () => { setForm({ ...emptyForm, fecha: getTodayAR() }); setModalOpen(true); };
   const abrirEditar = (r) => {
     setForm({
-      id: r.id, impuesto: r.impuesto, jurisdiccion: r.jurisdiccion, monto: String(r.monto),
-      alicuota_aplicada: r.alicuota_aplicada != null ? String(r.alicuota_aplicada) : '',
+      // .replace: parseNumberLocale espera coma decimal (es-AR) — String()
+      // de un numeric de Postgres usa punto decimal (ej. "1234.56"), que ese
+      // parser rechaza como NaN (mismo hallazgo que Registrar Pago/Cobro,
+      // 17/09 — acá afecta editar una retención sufrida con centavos).
+      id: r.id, impuesto: r.impuesto, jurisdiccion: r.jurisdiccion, monto: String(r.monto).replace('.', ','),
+      alicuota_aplicada: r.alicuota_aplicada != null ? String(r.alicuota_aplicada).replace('.', ',') : '',
       fecha: r.fecha, contraparte_nombre: r.contraparte_nombre, contraparte_cuit: r.contraparte_cuit ?? '',
       numero_certificado: r.numero_certificado ?? '', observaciones: r.observaciones ?? '',
     });

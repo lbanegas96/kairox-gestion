@@ -303,7 +303,11 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
       notas: full.notas ?? '',
       moneda: full.moneda ?? 'ARS',
       tipoCambioTasa: Number(full.tipo_cambio_tasa) || 1,
-      descuentoGlobalPct: full.descuento_global_pct ? String(full.descuento_global_pct) : '',
+      // .replace: parseNumberLocale espera coma decimal (es-AR) -- String()
+      // de un numeric de Postgres usa punto decimal, que ese parser rechaza
+      // como NaN con descuentos no enteros (mismo hallazgo recurrente esta
+      // sesion).
+      descuentoGlobalPct: full.descuento_global_pct ? String(full.descuento_global_pct).replace('.', ',') : '',
     });
     setSelectedProv(full.proveedor_id ? { id: full.proveedor_id, nombre: full.proveedor_nombre ?? full.proveedores?.nombre } : null);
     setProvSearch(full.proveedor_nombre ?? full.proveedores?.nombre ?? '');
@@ -312,7 +316,7 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
       descripcion: i.descripcion,
       cantidad_pedida: i.cantidad_pedida,
       costo_unitario: i.costo_unitario,
-      descuento_item: i.descuento_item || '',
+      descuento_item: i.descuento_item ? String(i.descuento_item).replace('.', ',') : '',
       producto_id: i.producto_id,
       unidad_medida: i.unidad_medida ?? '',
       alicuota_iva: i.alicuota_iva ?? '21',
@@ -386,7 +390,11 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
       notas: full.notas ?? '',
       moneda: full.moneda ?? 'ARS',
       tipoCambioTasa: Number(full.tipo_cambio_tasa) || 1,
-      descuentoGlobalPct: full.descuento_global_pct ? String(full.descuento_global_pct) : '',
+      // .replace: parseNumberLocale espera coma decimal (es-AR) -- String()
+      // de un numeric de Postgres usa punto decimal, que ese parser rechaza
+      // como NaN con descuentos no enteros (mismo hallazgo recurrente esta
+      // sesion).
+      descuentoGlobalPct: full.descuento_global_pct ? String(full.descuento_global_pct).replace('.', ',') : '',
     });
     setSelectedProv(full.proveedor_id ? { id: full.proveedor_id, nombre: full.proveedor_nombre ?? full.proveedores?.nombre } : null);
     setProvSearch(full.proveedor_nombre ?? full.proveedores?.nombre ?? '');
@@ -395,7 +403,7 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
       descripcion: i.descripcion,
       cantidad_pedida: i.cantidad_pedida,
       costo_unitario: i.costo_unitario,
-      descuento_item: i.descuento_item || '',
+      descuento_item: i.descuento_item ? String(i.descuento_item).replace('.', ',') : '',
       producto_id: i.producto_id,
       unidad_medida: i.unidad_medida ?? '',
       alicuota_iva: i.alicuota_iva ?? '21',

@@ -93,7 +93,11 @@ function TabAlicuotas() {
       id: a.id,
       impuesto: a.impuesto,
       jurisdiccion: a.jurisdiccion,
-      alicuota: String(a.alicuota),
+      // .replace: parseNumberLocale espera coma decimal (es-AR) — String()
+      // de un numeric de Postgres usa punto decimal, que ese parser rechaza
+      // como NaN con alícuotas no enteras (ej. 3.5%) (mismo hallazgo que
+      // Registrar Pago/Cobro, Retenciones y Compra Rápida).
+      alicuota: String(a.alicuota).replace('.', ','),
       concepto: a.concepto ?? '',
       vigencia_desde: a.vigencia_desde,
       vigencia_hasta: a.vigencia_hasta ?? '',

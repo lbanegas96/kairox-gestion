@@ -87,7 +87,11 @@ function ListasPrecioSection() {
   useEffect(() => {
     if (items.length > 0) {
       const map = {};
-      items.forEach(i => { map[i.producto_id] = String(i.precio); });
+      // .replace: parseNumberLocale espera coma decimal (es-AR) — String()
+      // de un numeric de Postgres usa punto decimal, que ese parser rechaza
+      // como NaN cuando el precio tiene centavos (mismo hallazgo que
+      // Registrar Pago/Cobro, Retenciones, Alícuotas y Compra Rápida).
+      items.forEach(i => { map[i.producto_id] = String(i.precio).replace('.', ','); });
       setPrecioEdicion(map);
     }
   }, [items]);
@@ -108,7 +112,11 @@ function ListasPrecioSection() {
   useEffect(() => {
     if (factores.length > 0) {
       const map = {};
-      factores.forEach(f => { map[f.categoria_id ?? 'default'] = String(f.factor); });
+      // .replace: parseNumberLocale espera coma decimal (es-AR) — String()
+      // de un numeric de Postgres usa punto decimal, que ese parser rechaza
+      // como NaN con factores no enteros (ej. 1.15) (mismo hallazgo
+      // recurrente esta sesión).
+      factores.forEach(f => { map[f.categoria_id ?? 'default'] = String(f.factor).replace('.', ','); });
       setFactorEdicion(map);
     }
   }, [factores]);

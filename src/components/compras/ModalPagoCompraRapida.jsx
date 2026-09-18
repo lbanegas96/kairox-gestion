@@ -48,7 +48,11 @@ function ModalPagoCompraRapida({ open, onOpenChange, compra, onSuccess }) {
   // cambia acá, es solo un punto de partida, no una decisión ya tomada).
   useEffect(() => {
     if (!open || !compra) return;
-    setMonto(String(compra.total));
+    // .replace: parseNumberLocale espera coma decimal (es-AR) — String() de
+    // un numeric de Postgres usa punto decimal, que ese parser rechaza como
+    // NaN cuando el total tiene centavos (mismo hallazgo que Registrar
+    // Pago/Cobro y Retenciones, 17-18/09).
+    setMonto(String(compra.total).replace('.', ','));
     setReferenciaPago('');
     if (formasPago.length === 0) return;
     const hint = (compra.formaPagoHint || '').toLowerCase();

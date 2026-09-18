@@ -135,7 +135,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       tipoCambioTasa: Number(prefillCotizacion.tipo_cambio_tasa) || 1,
       // La cotización ya trae su propio % de descuento global — mismo significado
       // en ambos documentos, se copia directo en vez de perderse en la conversión.
-      descuentoGlobalPct: prefillCotizacion.descuento ? String(prefillCotizacion.descuento) : '',
+      descuentoGlobalPct: prefillCotizacion.descuento ? String(prefillCotizacion.descuento).replace('.', ',') : '',
       // Pedido de Luciano (02/09): la lista elegida en la cotización se
       // arrastra tal cual al pedido -- sigue siendo editable acá, pero el
       // precio que el cliente vio cotizado queda respetado por defecto.
@@ -145,7 +145,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
         descripcion: it.descripcion,
         cantidad: Number(it.cantidad) || 1,
         precio_unitario: Number(it.precio_unitario) || 0,
-        descuento_item: it.descuento_item || '',
+        descuento_item: it.descuento_item ? String(it.descuento_item).replace('.', ',') : '',
         alicuota_iva: it.alicuota_iva ?? '21',
       })),
     });
@@ -353,7 +353,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       referencia_cliente: p.referencia_cliente || '',
       moneda: p.moneda || 'ARS',
       tipoCambioTasa: Number(p.tipo_cambio_tasa) || 1,
-      descuentoGlobalPct: p.descuento_global_pct ? String(p.descuento_global_pct) : '',
+      descuentoGlobalPct: p.descuento_global_pct ? String(p.descuento_global_pct).replace('.', ',') : '',
       lista_precio_id: p.lista_precio_id || '',
       items: p.pedido_items?.length
         ? p.pedido_items.map(it => ({
@@ -362,7 +362,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
             descripcion: it.descripcion,
             cantidad: it.cantidad,
             precio_unitario: it.precio_unitario,
-            descuento_item: it.descuento_item || '',
+            descuento_item: it.descuento_item ? String(it.descuento_item).replace('.', ',') : '',
             alicuota_iva: it.alicuota_iva ?? '21',
             // Bug real encontrado por Nadia (13/08): sin esto, editar un pedido
             // borraba la unidad_medida de cualquier ítem que no se volviera a
@@ -536,7 +536,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
       referencia_cliente: duplicarTarget.referencia_cliente || '',
       moneda: duplicarTarget.moneda || 'ARS',
       tipoCambioTasa: Number(duplicarTarget.tipo_cambio_tasa) || 1,
-      descuentoGlobalPct: duplicarTarget.descuento_global_pct ? String(duplicarTarget.descuento_global_pct) : '',
+      descuentoGlobalPct: duplicarTarget.descuento_global_pct ? String(duplicarTarget.descuento_global_pct).replace('.', ',') : '',
       lista_precio_id: duplicarTarget.lista_precio_id || '',
       items: duplicarTarget.pedido_items?.length
         ? duplicarTarget.pedido_items.map(it => ({
@@ -544,7 +544,7 @@ function PedidosSection({ onNavigate, prefillCotizacion, onPrefillConsumed, navi
             descripcion: it.descripcion,
             cantidad: it.cantidad,
             precio_unitario: it.precio_unitario,
-            descuento_item: it.descuento_item || '',
+            descuento_item: it.descuento_item ? String(it.descuento_item).replace('.', ',') : '',
             alicuota_iva: it.alicuota_iva ?? '21',
             unidad_medida: it.unidad_medida ?? '',
           }))

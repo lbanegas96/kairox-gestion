@@ -112,7 +112,12 @@ function TabIIBB() {
   const abrirNuevoCoef = () => { setCoefForm({ ...emptyCoefForm, vigencia_desde: getTodayAR() }); setModalCoefOpen(true); };
   const abrirEditarCoef = (c) => {
     setCoefForm({
-      id: c.id, jurisdiccion: c.jurisdiccion, coeficiente: String(c.coeficiente),
+      // .replace: parseNumberLocale espera coma decimal (es-AR) — String()
+      // de un numeric de Postgres usa punto decimal, que ese parser rechaza
+      // como NaN con coeficientes no enteros (mismo hallazgo recurrente
+      // esta sesión: Pagos/Cobros, Retenciones, Alícuotas, Compra Rápida,
+      // Listas de Precio).
+      id: c.id, jurisdiccion: c.jurisdiccion, coeficiente: String(c.coeficiente).replace('.', ','),
       vigencia_desde: c.vigencia_desde, vigencia_hasta: c.vigencia_hasta ?? '',
     });
     setModalCoefOpen(true);

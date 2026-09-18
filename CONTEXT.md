@@ -1,5 +1,29 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Barrido completo del bug de centavos (String + coma decimal) — 8 lugares más (18/09)
+
+El bug de "Registrar Pago/Cobro con centavos" del 17/09 (`String(numeric)` de Postgres usa punto
+decimal, `parseNumberLocale` lo rechaza como NaN) apareció en MUCHOS más lugares de los que
+parecía — cualquier formulario de "Editar" que precarga un campo numérico no entero. Barrido
+completo, mismo fix (`.replace('.', ',')`) en cada uno:
+
+- `TabRetenciones.jsx` (Retenciones Sufridas: monto + alícuota) — el que originalmente se derivó
+  a una sesión aparte que nunca llegó a cerrar, así que se resolvió acá directamente.
+- `TabAlicuotas.jsx` (alícuota IIBB/Ganancias no entera, ej. 3,5%)
+- `TabIIBB.jsx` (coeficiente de distribución CM05, ej. 33,33%)
+- `ModalPagoCompraRapida.jsx` (precarga del monto a pagar = total de la factura)
+- `ListasPrecioSection.jsx` (precio por ítem al editar Y factor por categoría)
+- `CotizacionesSection.jsx` (descuento global + descuento por ítem, en Editar y en Duplicar)
+- `OrdenesCompraSection.jsx` (mismo par, en Editar y en Duplicar)
+- `PedidosSection.jsx` (mismo par, en Editar, Duplicar y al prellenar desde una Cotización)
+
+Verificado con un script Node aislado que corre `parseNumberLocale` real contra 5 valores
+representativos (coeficiente 33,33 / factor 1,15 / descuento 10,5 / alícuota 3,5 / total 1210,5):
+todos dan NaN sin el fix, todos parsean correctamente con el fix. Build verificado con
+`--config vite.config.prod.js` (el comando real de Vercel, no el default).
+
+---
+
 ## ✅ Reportería: Estado de Resultados/Balance General en Excel multi-hoja + botón "i" en cada reporte (18/09)
 
 Dos pedidos de Luciano en la misma sesión, sobre Plan de Cuentas → Reportería:
