@@ -1,5 +1,47 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Reportería Fase 2 — Rentabilidad real (18/09)
+
+Segunda fase del Plan de Reportería (ver Fase 1 debajo), los 4 ítems de "Rentabilidad real":
+motor de COGS ya maduro, faltaba exponerlo.
+
+1. **Rentabilidad por Producto** y **Rentabilidad por Cliente** — 2 cards nuevas
+   (`reportDefinitions.jsx` ids `rentabilidad_productos`/`rentabilidad_clientes`), mismo query en
+   `ReportesSection.jsx` (comprobantes `tipo='venta'` + `comprobante_items`), agregado por
+   producto o por cliente según cuál se abrió. `costo_unitario × cantidad` sumado por línea
+   verificado contra `comprobantes.costo_mercaderia_vendida` (coinciden exactamente en una
+   muestra real) antes de confiar en la fórmula. Ranking de Productos del plan quedó cubierto
+   por el mismo reporte ordenado por margen desc — no hizo falta una card aparte.
+2. **Valorización de Inventario** — stock actual × costo, agrupable por categoría, con
+   indicador "Sin costo cargado" por fila.
+3. **Kardex de Inventario** — ficha de UN producto (nuevo mecanismo `requiresProducto`, mismo
+   patrón que `requiresCliente` pero con selector de producto en `ReportHeader.jsx`), stock
+   acumulado movimiento a movimiento. **Hallazgo real durante la verificación en vivo**:
+   `movimientos_inventario.cantidad` es un DELTA para tipo `entrada`/`ingreso`/`salida`, pero
+   para el tipo legado `ajuste` (de antes de que `ajustar_stock_manual`/
+   `confirmar_recuento_inventario` se reescribieran para insertar entrada/salida) es el STOCK
+   ABSOLUTO resultante, no un delta — confirmado leyendo el código fuente de esas 2 funciones y
+   probado en vivo contra "Máquina de afeitar para hombres" (dato de prueba): tratarlo como
+   delta hubiera dado stock negativo donde el real era positivo. El kardex lo maneja como caso
+   especial (`SET` en vez de sumar).
+4. **Valor del Kardex al costo actual, no histórico**: `movimientos_inventario` no guarda el
+   costo vigente en cada movimiento — la columna "Valor" usa el costo ACTUAL del producto,
+   aclarado en el diálogo de ayuda (no es una valuación contable exacta, es referencia de
+   magnitud).
+
+**Hallazgo fuera de alcance de esta fase, derivado a una sesión aparte** (`task_7402fb62`): el
+stock reconstruido desde `movimientos_inventario` no coincide con `productos.stock_actual` en
+20 de 75 productos de Nalux (1 a 7.595 unidades de diferencia) — significa que algo cambia
+`stock_actual` sin loguear el movimiento. Varios nombres afectados tienen pinta de datos de
+QA/testing de sesiones anteriores, pero no se confirmó si también hay una RPC real con el mismo
+gap. El diálogo de ayuda del Kardex ya avisa que el stock reconstruido puede no coincidir con
+el real.
+
+Build verificado con `--config vite.config.prod.js`: sin errores, `exceljs` en su propio chunk,
+`vendor` sin regresión.
+
+---
+
 ## ✅ Reportería Fase 1 — 4 quick-wins del Plan de Reportería (18/09)
 
 Primera fase del "Plan de Reportería" (barrido del agente contable, aprobado por Luciano, no

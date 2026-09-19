@@ -83,6 +83,17 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
       .then(({ data }) => setClientesList(data || []));
   }, [user?.empresa_id]);
 
+  // Selector de producto — obligatorio para Kardex de Inventario
+  // (requiresProducto): el kardex es una ficha de UN producto a la vez.
+  const [productosList, setProductosList] = useState([]);
+  const [productoId, setProductoId] = useState('');
+  useEffect(() => {
+    if (!user?.empresa_id) return;
+    supabase.from('productos').select('id, nombre').eq('empresa_id', user.empresa_id)
+      .eq('activo', true).order('nombre')
+      .then(({ data }) => setProductosList(data || []));
+  }, [user?.empresa_id]);
+
   // Filters
   const [startDate, setStartDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
@@ -95,6 +106,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
     setEndDate(new Date().toISOString().split('T')[0]);
     setCentroCostoId('');
     setClienteId('');
+    setProductoId('');
     setReportData([]);
     setGroupBy('none');
     setPreviousPeriodStats(null);
@@ -112,6 +124,10 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
     if (!user?.empresa_id) return;
     if (selectedReport?.requiresCliente && !clienteId) {
       toast({ description: "Seleccioná un cliente para generar el extracto.", variant: "destructive" });
+      return;
+    }
+    if (selectedReport?.requiresProducto && !productoId) {
+      toast({ description: "Seleccioná un producto para generar el kardex.", variant: "destructive" });
       return;
     }
     setLoading(true);
@@ -222,6 +238,52 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         setPreviousPeriodStats(await fetchPreviousPeriodStats('compras', {
           centro_costo_id: centroCostoId,
         }));
+      }
+
+      // 2b. RENTABILIDAD (por Producto o por Cliente) — mismo cálculo de
+      // margen en ambas, agrupado distinto. costo_unitario × cantidad de
+      // comprobante_items ya es el mismo COGS que costo_mercaderia_vendida
+      // guarda a nivel de header (verificado: coinciden exactamente) — reusa
+      // ese dato línea por línea en vez de inventar un cálculo nuevo.
+      // tipo='venta' explícito, mismo motivo que el reporte de Ventas: las
+      // Notas de Crédito no tienen costo_unitario cargado (siempre NULL) y
+      // no deben sumarse acá.
+      else if (selectedReport.id === 'rentabilidad_productos' || selectedReport.id === 'rentabilidad_clientes') {
+        const porProducto = selectedReport.id === 'rentabilidad_productos';
+        let query = supabase
+          .from('comprobantes')
+          .select('cliente_id, cliente_nombre, centro_costo_id, comprobante_items(producto_id, cantidad, subtotal, costo_unitario, productos(nombre, codigo_sku))')
+          .eq('empresa_id', user.empresa_id)
+          .eq('tipo', 'venta')
+          .gte('fecha', start)
+          .lte('fecha', end);
+        if (centroCostoId) query = query.eq('centro_costo_id', centroCostoId);
+        const { data: ventas, error } = await query;
+        if (error) throw error;
+
+        const acumulado = {};
+        (ventas || []).forEach(v => {
+          (v.comprobante_items || []).forEach(item => {
+            const cantidad = Number(item.cantidad || 0);
+            const key = porProducto ? item.producto_id : (v.cliente_id || 'sin_cliente');
+            if (!key) return;
+            if (!acumulado[key]) {
+              acumulado[key] = {
+                id: key,
+                nombre: porProducto ? (item.productos?.nombre || 'Producto eliminado') : (v.cliente_nombre || 'Consumidor Final'),
+                sku: porProducto ? (item.productos?.codigo_sku || '') : undefined,
+                cantidad: 0, venta: 0, costo: 0,
+              };
+            }
+            acumulado[key].cantidad += cantidad;
+            acumulado[key].venta += Number(item.subtotal || 0);
+            acumulado[key].costo += Number(item.costo_unitario || 0) * cantidad;
+          });
+        });
+
+        data = Object.values(acumulado)
+          .map(r => ({ ...r, margen: r.venta - r.costo, margenPct: r.venta > 0 ? ((r.venta - r.costo) / r.venta) * 100 : 0 }))
+          .sort((a, b) => b.margen - a.margen);
       }
 
       // 3. CLIENTES
@@ -561,6 +623,98 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         }));
       }
 
+      // 7. VALORIZACIÓN DE INVENTARIO — foto a HOY, no de un período (fecha
+      // ignorada a propósito, igual que Clientes/Proveedores). Solo
+      // es_inventariable: un servicio no tiene stock que valorizar.
+      else if (selectedReport.id === 'valorizacion_inventario') {
+        const { data: prods, error } = await supabase
+          .from('productos')
+          .select('id, nombre, codigo_sku, stock_actual, costo_compra, categorias(nombre)')
+          .eq('empresa_id', user.empresa_id)
+          .eq('activo', true)
+          .eq('es_inventariable', true)
+          .order('nombre');
+        if (error) throw error;
+
+        data = (prods || []).map(p => ({
+          id: p.id,
+          nombre: p.nombre,
+          sku: p.codigo_sku,
+          categoria: p.categorias?.nombre || 'Sin categoría',
+          stock: Number(p.stock_actual || 0),
+          costo: Number(p.costo_compra || 0),
+          valor: Number(p.stock_actual || 0) * Number(p.costo_compra || 0),
+        })).sort((a, b) => b.valor - a.valor);
+      }
+
+      // 8. KARDEX DE INVENTARIO — ficha de UN producto (requiresProducto).
+      // movimientos_inventario.cantidad es un DELTA para tipo entrada/
+      // ingreso/salida, pero para el legado tipo='ajuste' (de antes de que
+      // ajustar_stock_manual/confirmar_recuento_inventario se reescribieran
+      // para insertar entrada/salida) cantidad es el STOCK ABSOLUTO
+      // resultante, no un delta — verificado contra datos reales (ej. motivo
+      // "40->46" con cantidad=46, no 6). Tratarlo como delta daría un stock
+      // acumulado incorrecto para cualquier producto con un ajuste viejo.
+      // "Valor" usa el costo ACTUAL del producto (no hay costo histórico por
+      // movimiento guardado) — aclarado en el diálogo de ayuda del reporte.
+      else if (selectedReport.id === 'kardex_inventario') {
+        const { data: prod, error: prodError } = await supabase
+          .from('productos')
+          .select('nombre, costo_compra')
+          .eq('id', productoId)
+          .eq('empresa_id', user.empresa_id)
+          .single();
+        if (prodError) throw prodError;
+        const costoActual = Number(prod?.costo_compra || 0);
+
+        const aplicarMovimiento = (stock, m) => {
+          if (m.tipo === 'entrada' || m.tipo === 'ingreso') return stock + Number(m.cantidad);
+          if (m.tipo === 'salida') return stock - Number(m.cantidad);
+          if (m.tipo === 'ajuste') return Number(m.cantidad); // legado: valor absoluto
+          return stock;
+        };
+        const signoDe = (tipo) => tipo === 'salida' ? -1 : tipo === 'ajuste' ? 0 : 1;
+
+        const { data: anteriores, error: errAnt } = await supabase
+          .from('movimientos_inventario')
+          .select('tipo, cantidad')
+          .eq('empresa_id', user.empresa_id)
+          .eq('producto_id', productoId)
+          .lt('fecha', start);
+        if (errAnt) throw errAnt;
+        const stockAnterior = (anteriores || []).reduce(aplicarMovimiento, 0);
+
+        const { data: movs, error } = await supabase
+          .from('movimientos_inventario')
+          .select('id, fecha, tipo, cantidad, motivo')
+          .eq('empresa_id', user.empresa_id)
+          .eq('producto_id', productoId)
+          .gte('fecha', start)
+          .lte('fecha', end)
+          .order('fecha', { ascending: true });
+        if (error) throw error;
+
+        let stockCorrido = stockAnterior;
+        const movimientos = (movs || []).map(m => {
+          stockCorrido = aplicarMovimiento(stockCorrido, m);
+          return {
+            id: m.id,
+            fecha: m.fecha,
+            tipo: m.tipo,
+            motivo: m.motivo,
+            cantidad: Number(m.cantidad),
+            signo: signoDe(m.tipo),
+            stock: stockCorrido,
+            valor: Number(m.cantidad) * costoActual,
+          };
+        });
+
+        data = [
+          { id: 'stock_anterior', fecha: start, tipo: '', motivo: 'Stock anterior', cantidad: 0, signo: 0, stock: stockAnterior, valor: 0, esStockAnterior: true },
+          ...movimientos,
+        ];
+      }
+
       setReportData(data);
       if (data.length === 0) {
         toast({ description: "No se encontraron datos para el período.", duration: 3000 });
@@ -669,6 +823,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         reportData={reportData} handleDownloadPDF={handleDownloadPDF} handleDownloadExcel={handleDownloadExcel} handleShareWhatsApp={handleShareWhatsApp}
         centrosCosto={centrosCosto} centroCostoId={centroCostoId} setCentroCostoId={setCentroCostoId}
         clientesList={clientesList} clienteId={clienteId} setClienteId={setClienteId}
+        productosList={productosList} productoId={productoId} setProductoId={setProductoId}
         groupBy={groupBy} setGroupBy={setGroupBy}
         soloConDeuda={soloConDeuda} setSoloConDeuda={setSoloConDeuda}
       />

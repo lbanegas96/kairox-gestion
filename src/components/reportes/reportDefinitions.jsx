@@ -1,4 +1,4 @@
-import { BarChart3, ShoppingCart, Users, CreditCard, Banknote, Smartphone, Truck, Scale } from 'lucide-react';
+import { BarChart3, ShoppingCart, Users, CreditCard, Banknote, Smartphone, Truck, Scale, TrendingUp, Boxes, History } from 'lucide-react';
 import { formatDateAR } from '@/lib/dateUtils';
 import { formatCurrency } from '@/lib/currencyUtils';
 
@@ -31,6 +31,34 @@ export const REPORTS = [
       queEs: 'Detalle de todas las ventas facturadas en el período elegido, con la opción de comparar contra el período anterior.',
       queMuestra: ['Fecha, cliente, N° de comprobante y forma de pago de cada venta', 'Ítems vendidos y total por comprobante', 'Totales: Total Ventas, Cantidad, Ticket Promedio, Venta Mayor'],
       filtros: ['Rango de fechas', 'Centro de costo (si está activado)', 'Agrupar por día, método de pago, cliente o lista de precios', 'Comparar contra el período anterior'],
+    },
+  },
+  {
+    id: 'rentabilidad_productos',
+    title: 'Rentabilidad por Producto',
+    description: 'Margen bruto real de cada producto vendido: venta, costo y ganancia.',
+    icon: <TrendingUp className="w-8 h-8 text-kx-green" />,
+    borderClass: 'border-t-kx-green',
+    requiresDate: true,
+    supportsCentroCosto: true,
+    ayuda: {
+      queEs: 'Margen bruto de cada producto vendido en el período: cuánto entró por venta, cuánto costó la mercadería vendida (COGS) y qué ganancia real dejó — no solo facturación. Es el ranking de "qué me conviene vender", ordenado de mayor a menor margen.',
+      queMuestra: ['Producto, cantidad vendida', 'Venta total y Costo total (costo de mercadería vendida al momento de cada venta)', 'Margen $ y Margen % por producto'],
+      filtros: ['Rango de fechas', 'Centro de costo (si está activado)', 'Ojo: una venta muy vieja que no tenía costo cargado en su momento aparece con 100% de margen — no es un error, es que a esa venta le falta el dato de costo'],
+    },
+  },
+  {
+    id: 'rentabilidad_clientes',
+    title: 'Rentabilidad por Cliente',
+    description: 'Margen bruto real que deja cada cliente, no solo cuánto factura.',
+    icon: <TrendingUp className="w-8 h-8 text-kx-violet" />,
+    borderClass: 'border-t-kx-violet',
+    requiresDate: true,
+    supportsCentroCosto: true,
+    ayuda: {
+      queEs: 'Margen bruto que deja cada cliente en el período: mismo cálculo que Rentabilidad por Producto, pero agrupado por cliente — el cliente que más factura no siempre es el que más plata deja.',
+      queMuestra: ['Cliente, cantidad de ítems vendidos', 'Venta total y Costo total (costo de mercadería vendida)', 'Margen $ y Margen % por cliente'],
+      filtros: ['Rango de fechas', 'Centro de costo (si está activado)', 'Ojo: un cliente con ventas muy viejas sin costo cargado en su momento aparece con 100% de margen — no es un error, es que a esas ventas les falta el dato de costo'],
     },
   },
   {
@@ -121,6 +149,34 @@ export const REPORTS = [
     },
   },
   {
+    id: 'valorizacion_inventario',
+    title: 'Valorización de Inventario',
+    description: 'Cuánta plata tenés parada en stock ahora mismo, por categoría.',
+    icon: <Boxes className="w-8 h-8 text-kx-blue" />,
+    borderClass: 'border-t-kx-blue',
+    requiresDate: false,
+    supportsGroupBy: true,
+    ayuda: {
+      queEs: 'Foto del valor del stock a HOY (no de un período): cada producto activo, su stock actual y su costo, multiplicados — para saber cuánta plata está inmovilizada en mercadería y en qué categorías.',
+      queMuestra: ['Producto, categoría y stock actual', 'Costo unitario y Valor total (stock × costo)', 'Total: cantidad de productos, unidades en stock, valor total y productos sin costo cargado'],
+      filtros: ['Agrupar por categoría (opcional)'],
+    },
+  },
+  {
+    id: 'kardex_inventario',
+    title: 'Kardex de Inventario',
+    description: 'Ficha de movimientos de un producto puntual, con stock acumulado.',
+    icon: <History className="w-8 h-8 text-kx-amber" />,
+    borderClass: 'border-t-kx-amber',
+    requiresDate: true,
+    requiresProducto: true,
+    ayuda: {
+      queEs: 'Ficha (kardex) de un producto puntual: cada entrada y salida de stock en el período, con el stock resultante después de cada movimiento — para reconstruir "por qué el stock está en el número que está".',
+      queMuestra: ['Fecha, tipo de movimiento (entrada/salida/ajuste) y motivo', 'Cantidad de cada movimiento', 'Stock resultante después de cada movimiento', 'Valor aproximado del movimiento, al costo ACTUAL del producto (el sistema no guarda el costo histórico de cada movimiento — no es una valuación contable exacta, es una referencia de magnitud)'],
+      filtros: ['Producto (obligatorio)', 'Rango de fechas', 'Ojo: el "Stock Resultante" reconstruye el stock SOLO a partir de los movimientos registrados — en algunos productos puede no coincidir con el stock actual real si hubo algún cambio de stock que no quedó registrado como movimiento'],
+    },
+  },
+  {
     id: 'mp_movimientos',
     title: 'MercadoPago por Tipo',
     description: 'Ingresos y egresos de MP por tipo de cobro, con estado de conciliación.',
@@ -180,6 +236,17 @@ export const buildSummaryMetrics = (reportId, data, previousPeriod = null) => {
       metrics[1].delta = deltaLabel(data.length, previousPeriod.count);
     }
     return metrics;
+  }
+  if (reportId === 'rentabilidad_productos' || reportId === 'rentabilidad_clientes') {
+    const totalVenta = data.reduce((s, r) => s + (r.venta || 0), 0);
+    const totalCosto = data.reduce((s, r) => s + (r.costo || 0), 0);
+    const margen = totalVenta - totalCosto;
+    return [
+      { label: 'Venta Total',  value: fc(totalVenta) },
+      { label: 'Costo Total',  value: fc(totalCosto) },
+      { label: 'Margen Bruto', value: fc(margen) },
+      { label: 'Margen %',     value: totalVenta > 0 ? `${((margen / totalVenta) * 100).toFixed(1)}%` : '—' },
+    ];
   }
   if (reportId === 'clientes') {
     // Nunca netear deudores y acreedores en un mismo total — un cliente que
@@ -258,6 +325,31 @@ export const buildSummaryMetrics = (reportId, data, previousPeriod = null) => {
       { label: 'Total Sobrante', value: fc(totalSobrante) },
     ];
   }
+  if (reportId === 'valorizacion_inventario') {
+    const unidades = data.reduce((s, r) => s + (r.stock || 0), 0);
+    const valorTotal = data.reduce((s, r) => s + (r.valor || 0), 0);
+    const sinCosto = data.filter(r => !r.costo).length;
+    return [
+      { label: 'Productos',          value: data.length },
+      { label: 'Unidades en Stock',  value: unidades.toLocaleString('es-AR') },
+      { label: 'Valor Total',        value: fc(valorTotal) },
+      { label: 'Sin Costo Cargado',  value: sinCosto },
+    ];
+  }
+  if (reportId === 'kardex_inventario') {
+    // Mismo criterio que Financiero (Saldo Inicial/Ingresos/Egresos/Saldo
+    // Final): la fila sintética "Stock anterior" no es un movimiento real.
+    const entradas = data.filter(r => !r.esStockAnterior && r.signo > 0).reduce((s, r) => s + r.cantidad, 0);
+    const salidas  = data.filter(r => !r.esStockAnterior && r.signo < 0).reduce((s, r) => s + r.cantidad, 0);
+    const stockAnterior = data[0]?.esStockAnterior ? data[0].stock : 0;
+    const stockFinal = data.length ? data[data.length - 1].stock : 0;
+    return [
+      { label: 'Stock Anterior', value: stockAnterior.toLocaleString('es-AR') },
+      { label: 'Entradas',       value: `+${entradas.toLocaleString('es-AR')}` },
+      { label: 'Salidas',        value: `-${salidas.toLocaleString('es-AR')}` },
+      { label: 'Stock Actual',   value: stockFinal.toLocaleString('es-AR') },
+    ];
+  }
   if (reportId === 'mp_movimientos') {
     // movimientos_bancarios con origen='mercadopago' incluye tanto cobros
     // (tipo='ingreso') como reintegros/contracargos (tipo='egreso') — sumarlos
@@ -318,6 +410,37 @@ export const getTableConfig = (reportId, data) => {
       totals: [
         { content: 'TOTAL COMPRAS', colSpan: 4, align: 'right' },
         { content: formatCurrency(totalAmount), align: 'right', value: totalAmount }
+      ]
+    };
+  }
+
+  if (reportId === 'rentabilidad_productos' || reportId === 'rentabilidad_clientes') {
+    const esPorProducto = reportId === 'rentabilidad_productos';
+    const totalCantidad = data.reduce((s, r) => s + (r.cantidad || 0), 0);
+    const totalVenta = data.reduce((s, r) => s + (r.venta || 0), 0);
+    const totalCosto = data.reduce((s, r) => s + (r.costo || 0), 0);
+    const totalMargen = totalVenta - totalCosto;
+    return {
+      columns: [
+        { header: esPorProducto ? 'Producto' : 'Cliente', key: 'nombre', align: 'left' },
+        ...(esPorProducto ? [{ header: 'SKU', key: 'sku', align: 'left', render: (r) => r.sku || '-' }] : []),
+        { header: 'Cantidad', key: 'cantidad', align: 'right', render: (r) => r.cantidad.toLocaleString('es-AR'), pdfRender: (r) => r.cantidad.toLocaleString('es-AR') },
+        { header: 'Venta', key: 'venta', align: 'right', render: (r) => formatCurrency(r.venta), pdfRender: (r) => formatCurrency(r.venta) },
+        { header: 'Costo', key: 'costo', align: 'right', render: (r) => formatCurrency(r.costo), pdfRender: (r) => formatCurrency(r.costo) },
+        {
+          header: 'Margen $', key: 'margen', align: 'right',
+          render: (r) => <span className={r.margen >= 0 ? 'text-green-600 dark:text-green-400 font-bold' : 'text-red-600 dark:text-red-400 font-bold'}>{formatCurrency(r.margen)}</span>,
+          pdfRender: (r) => formatCurrency(r.margen),
+        },
+        { header: 'Margen %', key: 'margenPct', align: 'right', render: (r) => `${r.margenPct.toFixed(1)}%`, pdfRender: (r) => `${r.margenPct.toFixed(1)}%` },
+      ],
+      totals: [
+        { content: 'TOTALES', colSpan: esPorProducto ? 2 : 1, align: 'right' },
+        { content: totalCantidad.toLocaleString('es-AR'), align: 'right' },
+        { content: formatCurrency(totalVenta), align: 'right', value: totalVenta },
+        { content: formatCurrency(totalCosto), align: 'right', value: totalCosto },
+        { content: formatCurrency(totalMargen), align: 'right', value: totalMargen },
+        { content: totalVenta > 0 ? `${((totalMargen / totalVenta) * 100).toFixed(1)}%` : '—', align: 'right' },
       ]
     };
   }
@@ -480,6 +603,64 @@ export const getTableConfig = (reportId, data) => {
     };
   }
 
+  if (reportId === 'valorizacion_inventario') {
+    const totalStock = data.reduce((s, r) => s + (r.stock || 0), 0);
+    const totalValor = data.reduce((s, r) => s + (r.valor || 0), 0);
+    return {
+      columns: [
+        { header: 'Producto', key: 'nombre', align: 'left' },
+        { header: 'SKU', key: 'sku', align: 'left', render: (r) => r.sku || '-' },
+        { header: 'Categoría', key: 'categoria', align: 'left' },
+        { header: 'Stock', key: 'stock', align: 'right', render: (r) => r.stock.toLocaleString('es-AR'), pdfRender: (r) => r.stock.toLocaleString('es-AR') },
+        { header: 'Costo Unitario', key: 'costo', align: 'right', render: (r) => r.costo ? formatCurrency(r.costo) : <span className="text-amber-600 dark:text-amber-400">Sin costo</span>, pdfRender: (r) => r.costo ? formatCurrency(r.costo) : 'Sin costo' },
+        { header: 'Valor Total', key: 'valor', align: 'right', render: (r) => formatCurrency(r.valor), pdfRender: (r) => formatCurrency(r.valor) },
+      ],
+      totals: [
+        { content: 'TOTALES', colSpan: 3, align: 'right' },
+        { content: totalStock.toLocaleString('es-AR'), align: 'right' },
+        { content: '', align: 'right' },
+        { content: formatCurrency(totalValor), align: 'right', value: totalValor },
+      ]
+    };
+  }
+
+  if (reportId === 'kardex_inventario') {
+    const TIPO_LABEL = { entrada: 'Entrada', ingreso: 'Entrada', salida: 'Salida', ajuste: 'Ajuste (recuento)' };
+    const entradas = data.filter(r => !r.esStockAnterior && r.signo > 0).reduce((s, r) => s + r.cantidad, 0);
+    const salidas  = data.filter(r => !r.esStockAnterior && r.signo < 0).reduce((s, r) => s + r.cantidad, 0);
+    return {
+      columns: [
+        { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
+        {
+          header: 'Tipo', key: 'tipo', align: 'left',
+          render: (r) => r.esStockAnterior ? <span className="italic text-kx-text-2">—</span> : (TIPO_LABEL[r.tipo] || r.tipo),
+          pdfRender: (r) => r.esStockAnterior ? '—' : (TIPO_LABEL[r.tipo] || r.tipo),
+        },
+        { header: 'Motivo', key: 'motivo', align: 'left', render: (r) => r.motivo || '-' },
+        {
+          header: 'Cantidad', key: 'cantidad', align: 'right',
+          render: (r) => {
+            if (r.esStockAnterior) return '-';
+            const signoTxt = r.signo > 0 ? '+' : r.signo < 0 ? '-' : '=';
+            return <span className={r.signo > 0 ? 'text-green-600 dark:text-green-400' : r.signo < 0 ? 'text-red-600 dark:text-red-400' : ''}>{signoTxt}{r.cantidad.toLocaleString('es-AR')}</span>;
+          },
+          pdfRender: (r) => r.esStockAnterior ? '-' : `${r.signo > 0 ? '+' : r.signo < 0 ? '-' : '='}${r.cantidad.toLocaleString('es-AR')}`,
+        },
+        {
+          header: 'Stock Resultante', key: 'stock', align: 'right',
+          render: (r) => <span className={r.esStockAnterior ? 'italic text-kx-text-2' : 'font-bold'}>{r.stock.toLocaleString('es-AR')}</span>,
+          pdfRender: (r) => r.stock.toLocaleString('es-AR'),
+        },
+        { header: 'Valor (costo actual)', key: 'valor', align: 'right', render: (r) => r.esStockAnterior ? '-' : formatCurrency(r.valor), pdfRender: (r) => r.esStockAnterior ? '-' : formatCurrency(r.valor) },
+      ],
+      totals: [
+        { content: `ENTRADAS: +${entradas.toLocaleString('es-AR')} | SALIDAS: -${salidas.toLocaleString('es-AR')}`, colSpan: 4, align: 'right' },
+        { content: data.length ? data[data.length - 1].stock.toLocaleString('es-AR') : '0', align: 'right' },
+        { content: '', align: 'right' },
+      ]
+    };
+  }
+
   if (reportId === 'mp_movimientos') {
     // Ingreso/Egreso en columnas separadas (ver nota en buildSummaryMetrics —
     // nunca sumar tipo='ingreso' y tipo='egreso' como si fueran lo mismo).
@@ -571,6 +752,10 @@ const GROUP_BY_OPTIONS_POR_REPORTE = {
     { value: 'cajero', label: 'Por cajero' },
     { value: 'caja',   label: 'Por caja' },
   ],
+  valorizacion_inventario: [
+    { value: 'none',      label: 'Sin agrupar' },
+    { value: 'categoria', label: 'Por categoría' },
+  ],
 };
 
 export function getGroupByOptions(reportId) {
@@ -605,6 +790,9 @@ const GROUP_KEY_FN_POR_REPORTE = {
     cajero: (r) => r.cajero || 'Sin datos',
     caja:   (r) => r.caja || 'Sin datos',
   },
+  valorizacion_inventario: {
+    categoria: (r) => r.categoria || 'Sin categoría',
+  },
 };
 
 // Subtotal por grupo — ventas/compras suman `total`; financiero (Libro de
@@ -612,9 +800,10 @@ const GROUP_KEY_FN_POR_REPORTE = {
 // Egreso son columnas separadas), el subtotal ahí es el neto ingreso-egreso
 // del grupo.
 const GROUP_SUBTOTAL_FN_POR_REPORTE = {
-  financiero:      (r) => (r.ingreso || 0) - (r.egreso || 0),
-  mp_movimientos:  (r) => (r.ingreso || 0) - (r.egreso || 0),
-  arqueos_caja:    (r) => r.diferencia || 0,
+  financiero:               (r) => (r.ingreso || 0) - (r.egreso || 0),
+  mp_movimientos:           (r) => (r.ingreso || 0) - (r.egreso || 0),
+  arqueos_caja:             (r) => r.diferencia || 0,
+  valorizacion_inventario:  (r) => r.valor || 0,
 };
 
 /**

@@ -32,6 +32,10 @@ const ReportHeader = ({
   clientesList,
   clienteId,
   setClienteId,
+  showProductoFilter,
+  productosList,
+  productoId,
+  setProductoId,
 }) => {
   return (
     <div className="bg-white dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
@@ -116,6 +120,19 @@ const ReportHeader = ({
             >
               <option value="">Seleccionar cliente...</option>
               {(clientesList || []).map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+            </select>
+          </div>
+        )}
+        {showProductoFilter && (
+          <div className="space-y-1">
+            <Label className="text-xs font-semibold text-kx-text-2 uppercase">Producto <span className="text-red-500">*</span></Label>
+            <select
+              value={productoId}
+              onChange={(e) => setProductoId(e.target.value)}
+              className="h-9 w-full rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm text-kx-text px-2"
+            >
+              <option value="">Seleccionar producto...</option>
+              {(productosList || []).map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
             </select>
           </div>
         )}
