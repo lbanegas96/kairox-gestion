@@ -3,6 +3,9 @@ import { useState, useEffect } from 'react';
 import ReporteParidad from '@/components/reportes/ReporteParidad';
 import ReporteLibroIVA from '@/components/reportes/ReporteLibroIVA';
 import ReporteLibroIVACompras from '@/components/reportes/ReporteLibroIVACompras';
+import ReporteEstadoResultadosCC from '@/components/reportes/ReporteEstadoResultadosCC';
+import ReporteComparativoPeriodos from '@/components/reportes/ReporteComparativoPeriodos';
+import ReportePosicionFiscal from '@/components/reportes/ReportePosicionFiscal';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useConfig } from '@/contexts/ConfigContext';
@@ -27,6 +30,9 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   const [showParidad, setShowParidad] = useState(false);
   const [showLibroIVA, setShowLibroIVA] = useState(false);
   const [showLibroIVACompras, setShowLibroIVACompras] = useState(false);
+  const [showEstadoResultadosCC, setShowEstadoResultadosCC] = useState(false);
+  const [showComparativoPeriodos, setShowComparativoPeriodos] = useState(false);
+  const [showPosicionFiscal, setShowPosicionFiscal] = useState(false);
   const [libroIVAOrigen, setLibroIVAOrigen] = useState(null);
   const [afipActivo, setAfipActivo] = useState(false);
   const [groupBy, setGroupBy] = useState('none');
@@ -996,6 +1002,15 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   if (showLibroIVACompras) {
     return <ReporteLibroIVACompras onBack={() => setShowLibroIVACompras(false)} />;
   }
+  if (showEstadoResultadosCC) {
+    return <ReporteEstadoResultadosCC onBack={() => setShowEstadoResultadosCC(false)} />;
+  }
+  if (showComparativoPeriodos) {
+    return <ReporteComparativoPeriodos onBack={() => setShowComparativoPeriodos(false)} />;
+  }
+  if (showPosicionFiscal) {
+    return <ReportePosicionFiscal onBack={() => setShowPosicionFiscal(false)} />;
+  }
 
   return (
     <div className="space-y-8 pb-8 animate-in fade-in duration-500">
@@ -1004,6 +1019,9 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         tcParaleloEnabled={tcParaleloEnabled} monedaParalela={monedaParalela} setShowParidad={setShowParidad}
         afipActivo={afipActivo} setShowLibroIVA={setShowLibroIVA} setLibroIVAOrigen={setLibroIVAOrigen}
         setShowLibroIVACompras={setShowLibroIVACompras}
+        setShowEstadoResultadosCC={setShowEstadoResultadosCC}
+        setShowComparativoPeriodos={setShowComparativoPeriodos}
+        setShowPosicionFiscal={setShowPosicionFiscal}
       />
 
       <ModalReporte

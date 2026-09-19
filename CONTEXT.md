@@ -1,5 +1,42 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Reportería Fase 4 — Comparativos, y plan de pruebas (19/09)
+
+Última fase del Plan de Reportería. Los 3 items del plan son "esfuerzo medio/medio/alto" y
+tienen forma DINÁMICA (columnas por Centro de Costo, selector de 2 períodos, resumen
+multi-sección) que no encaja en el array genérico `REPORTS` de `reportDefinitions.jsx` (asume
+columnas fijas por reportId) — se armaron como 3 componentes standalone nuevos
+(`ReporteEstadoResultadosCC.jsx`, `ReporteComparativoPeriodos.jsx`, `ReportePosicionFiscal.jsx`),
+mismo patrón "inline full-screen" que ya usan Paridad/Libro IVA Ventas/Libro IVA Compras.
+
+1. **Estado de Resultados por Centro de Costo** — reusa `asientosService.getBalanceComprobacion`
+   (la MISMA fuente que ya usa Plan de Cuentas → Estado de Resultados) una vez por CC en paralelo,
+   no reinventa el cálculo de Ingresos/Egresos. Verificado en vivo: con 1 solo CC activo en Nalux
+   ("Sucursal Centro"), la columna Total coincide exactamente con la única columna de CC.
+2. **Comparativo entre Períodos Cerrados** — el plan lo pedía como "Interanual", pero
+   `periodos_contables` (mig.283/284) guarda períodos MENSUALES, no ejercicios anuales, y hoy
+   Nalux tiene 0 períodos con `estado='cerrado'` (los 2 que existen siguen abiertos) — se
+   generalizó a "entre 2 períodos cerrados cualesquiera" en vez de asumir una unidad de tiempo que
+   el schema no tiene, y se verificó que el estado vacío ("necesitás al menos 2 cerrados, hoy
+   tenés 0") funciona sin crashear.
+3. **Posición Fiscal Consolidada** — cruza IVA (Débito−Crédito, de `iva_discriminado`), IIBB y
+   Retenciones. **Gap real encontrado investigando**: el sistema NUNCA tuvo guardada la alícuota
+   de Ingresos Brutos en ningún lado — `iibb_coeficientes` solo tiene el % de DISTRIBUCIÓN para
+   CM05, no una tasa. En vez de inventar un monto en pesos, el reporte muestra Base Imponible +
+   Coeficiente con el gap explícito. Verificado en vivo: Total Neto Estimado ($211.164,90) =
+   max(0, Saldo IVA $227.164,90) − Retenciones Sufridas ($16.000), coincide exacto con el cálculo
+   manual hecho por SQL antes de escribir el componente.
+
+**Plan de pruebas**: [PLAN_PRUEBAS_REPORTERIA_2026-09-19.md](PLAN_PRUEBAS_REPORTERIA_2026-09-19.md)
+cubre los 15 reportes nuevos de las 4 fases — no busca bugs técnicos (ya verificados en vivo por
+mí), es para revisión de criterio de negocio. Junta los 4 hallazgos reales de la sesión (drift de
+stock, IIBB sin alícuota, ventas viejas sin costo, 0 períodos cerrados) en un solo lugar.
+
+Build verificado con `--config vite.config.prod.js`: sin errores, `exceljs` en su propio chunk,
+`vendor` sin regresión.
+
+---
+
 ## ✅ Reportería Fase 3 — Información operativa (19/09)
 
 Tercera fase del Plan de Reportería: 5 cards nuevas en Centro de Reportes con plata/compromisos

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileSpreadsheet, ArrowLeftRight, BookOpen } from 'lucide-react';
+import { FileSpreadsheet, ArrowLeftRight, BookOpen, Columns, GitCompareArrows, Landmark } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { REPORTS } from './reportDefinitions';
 import ReportInfoDialog, { ReportInfoButton } from './ReportInfoDialog';
@@ -19,11 +19,27 @@ const AYUDA_LIBRO_IVA_COMPRAS = {
   queMuestra: ['Fecha, factura y proveedor (con CUIT si corresponde)', 'Neto gravado e IVA discriminado por alícuota', 'Total por factura'],
   filtros: ['Rango de fechas (normalmente un mes calendario)'],
 };
+const AYUDA_ESTADO_RESULTADOS_CC = {
+  queEs: 'El mismo Estado de Resultados de Plan de Cuentas, pero con todos los Centros de Costo activos lado a lado en vez de tener que mirarlos uno a la vez.',
+  queMuestra: ['Ingresos y Egresos por cuenta, una columna por Centro de Costo + el Total', 'Resultado del Período de cada Centro de Costo'],
+  filtros: ['Rango de fechas', 'Requiere tener Centros de Costo activados en Configuración → Finanzas'],
+};
+const AYUDA_COMPARATIVO_PERIODOS = {
+  queEs: 'Compara el resultado de 2 períodos contables ya CERRADOS (no un rango de fechas cualquiera) — el número que se muestra es el que quedó certificado al momento del cierre, no se recalcula.',
+  queMuestra: ['Ingresos, Egresos y Resultado de cada período elegido', 'Variación % de un período contra el otro'],
+  filtros: ['Elegí cuáles 2 períodos cerrados comparar — necesitás al menos 2 cerrados para poder usar este reporte'],
+};
+const AYUDA_POSICION_FISCAL = {
+  queEs: 'Cruza en una sola pantalla los 3 cálculos impositivos que hoy viven sueltos en Impuestos: IVA (Débito vs. Crédito Fiscal), Ingresos Brutos y Retenciones.',
+  queMuestra: ['Saldo de IVA del período (a pagar o a favor)', 'Base Imponible de IIBB y Coeficiente de Distribución (el sistema no tiene cargada la alícuota, así que no calcula el monto en pesos)', 'Retenciones Sufridas (a favor) y Practicadas (depósito de terceros, aparte)', 'Total Neto Estimado a Pagar — IVA menos Retenciones Sufridas, sin incluir IIBB'],
+  filtros: ['Rango de fechas'],
+};
 
 function GridReportes({
   openReportDialog,
   tcParaleloEnabled, monedaParalela, setShowParidad,
   afipActivo, setShowLibroIVA, setLibroIVAOrigen, setShowLibroIVACompras,
+  setShowEstadoResultadosCC, setShowComparativoPeriodos, setShowPosicionFiscal,
 }) {
   const [infoAbierto, setInfoAbierto] = useState(null); // { title, icon, ayuda } | null
 
@@ -187,6 +203,84 @@ function GridReportes({
             className="w-full bg-kx-surface-2 hover:bg-kx-border text-kx-text border border-kx-border transition-all"
           >
             Ver Libro IVA Compras
+          </Button>
+        </div>
+
+        {/* ── Estado de Resultados por Centro de Costo ── */}
+        <div
+          className="group bg-kx-surface border border-kx-border rounded-2xl p-6 shadow-sm dark:shadow-none
+            border-t-2 border-t-kx-violet transition-all duration-200
+            hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+          onClick={() => setShowEstadoResultadosCC(true)}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 bg-kx-surface-2 rounded-xl border border-kx-border">
+              <Columns className="w-8 h-8 text-kx-violet" />
+            </div>
+            <ReportInfoButton onClick={() => setInfoAbierto({ title: 'Estado de Resultados por Centro de Costo', icon: <Columns className="w-8 h-8 text-kx-violet" />, ayuda: AYUDA_ESTADO_RESULTADOS_CC })} />
+          </div>
+          <div className="mb-5">
+            <h3 className="text-lg font-bold text-kx-text mb-1.5 group-hover:text-kx-violet transition-colors">
+              Estado de Resultados por CC
+            </h3>
+            <p className="text-kx-text-2 text-sm line-clamp-2">
+              Ingresos, Egresos y Resultado de cada Centro de Costo, lado a lado.
+            </p>
+          </div>
+          <Button className="w-full bg-kx-surface-2 hover:bg-kx-border text-kx-text border border-kx-border transition-all">
+            Ver Reporte
+          </Button>
+        </div>
+
+        {/* ── Comparativo entre Períodos Cerrados ── */}
+        <div
+          className="group bg-kx-surface border border-kx-border rounded-2xl p-6 shadow-sm dark:shadow-none
+            border-t-2 border-t-kx-blue transition-all duration-200
+            hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+          onClick={() => setShowComparativoPeriodos(true)}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 bg-kx-surface-2 rounded-xl border border-kx-border">
+              <GitCompareArrows className="w-8 h-8 text-kx-blue" />
+            </div>
+            <ReportInfoButton onClick={() => setInfoAbierto({ title: 'Comparativo entre Períodos Cerrados', icon: <GitCompareArrows className="w-8 h-8 text-kx-blue" />, ayuda: AYUDA_COMPARATIVO_PERIODOS })} />
+          </div>
+          <div className="mb-5">
+            <h3 className="text-lg font-bold text-kx-text mb-1.5 group-hover:text-kx-violet transition-colors">
+              Comparativo entre Períodos
+            </h3>
+            <p className="text-kx-text-2 text-sm line-clamp-2">
+              Cómo te fue en un período cerrado comparado con otro.
+            </p>
+          </div>
+          <Button className="w-full bg-kx-surface-2 hover:bg-kx-border text-kx-text border border-kx-border transition-all">
+            Ver Reporte
+          </Button>
+        </div>
+
+        {/* ── Posición Fiscal Consolidada ── */}
+        <div
+          className="group bg-kx-surface border border-kx-border rounded-2xl p-6 shadow-sm dark:shadow-none
+            border-t-2 border-t-kx-red transition-all duration-200
+            hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+          onClick={() => setShowPosicionFiscal(true)}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 bg-kx-surface-2 rounded-xl border border-kx-border">
+              <Landmark className="w-8 h-8 text-kx-red" />
+            </div>
+            <ReportInfoButton onClick={() => setInfoAbierto({ title: 'Posición Fiscal Consolidada', icon: <Landmark className="w-8 h-8 text-kx-red" />, ayuda: AYUDA_POSICION_FISCAL })} />
+          </div>
+          <div className="mb-5">
+            <h3 className="text-lg font-bold text-kx-text mb-1.5 group-hover:text-kx-violet transition-colors">
+              Posición Fiscal Consolidada
+            </h3>
+            <p className="text-kx-text-2 text-sm line-clamp-2">
+              IVA, IIBB y Retenciones del período, cruzados en un solo lugar.
+            </p>
+          </div>
+          <Button className="w-full bg-kx-surface-2 hover:bg-kx-border text-kx-text border border-kx-border transition-all">
+            Ver Reporte
           </Button>
         </div>
       </div>
