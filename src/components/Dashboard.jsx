@@ -99,7 +99,7 @@ function Dashboard({ user, onLogout, onEnterPOS }) {
       case 'devoluciones_proveedor': return <ComprasSection initialTab="devoluciones" />;
       case 'compras':                return <ComprasSection initialTab="rapida" />;
       case 'caja':          return <CajaSection />;
-      case 'clientes':      return <ClientesSection />;
+      case 'clientes':      return <ClientesSection initialClienteId={sectionParams.clienteId} />;
       case 'cuentacorriente':return <CuentaCorrienteSection initialClienteId={sectionParams.clienteId} />;
       case 'reportes':      return <ReportesSection initialView={sectionParams.initialView ?? null} onNavigate={navigateTo} />;
       case 'usuarios':      return <ConfiguracionSection initialTab="usuarios" />;
@@ -108,7 +108,7 @@ function Dashboard({ user, onLogout, onEnterPOS }) {
       case 'bancos':        return <CuentasBancariasSection />;
       case 'cheques':       return <ChequesSection />;
       case 'impuestos':     return <ImpuestosSection onNavigate={navigateTo} />;
-      case 'proveedores':   return <ProveedoresSection />;
+      case 'proveedores':   return <ProveedoresSection initialProveedorId={sectionParams.proveedorId} />;
       default:              return <DashboardSection onNavigate={navigateTo} />;
     }
   };

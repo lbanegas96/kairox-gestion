@@ -1,5 +1,49 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Reportería — ajustes de UX en Cartera de Clientes/Proveedores (19/09)
+
+Feedback de Luciano mirando Cartera de Proveedores en producción, aplicado a los 2 reportes que
+comparten esta tabla (Clientes y Proveedores):
+
+1. **Modal de reportes más angosto que el resto del sistema** — `ModalReporte.jsx` tenía su
+   propio `sm:max-w-[900px]`, nunca migró al shell `size="wide"` que ya usan Factura/OC/
+   Cotización/etc. desde el 22/08 (`dialog.jsx`). Causaba scroll lateral en tablas con muchas
+   columnas. Cambiado a `size="wide"` — ese shell trae `p-0`, así que hubo que agregarle padding
+   propio a los 2 bloques internos (mismo criterio que `NuevaFacturaModal.jsx`).
+2. **"0-30/31-60/61-90/+90" no decía que eran días** — sufijo "d" en el header (no " días"
+   completo: el auto-ancho del PDF, `pdfUtils.js`, mide el header entero y esas 4 columnas ya
+   compiten por espacio con los montos).
+3. **Email/Teléfono afuera, CUIT/Documento + Condición de Pago adentro** — contacto no es lo que
+   se necesita mirar en una vista de saldos; se reemplazó por 2 campos que YA estaban en la tabla
+   (`proveedores.cuit`/`condicion_pago`/`plazo_pago_dias`, `clientes.documento`/
+   `condiciones_pago`/`dias_credito`) pero nunca se mostraban acá. Estándar de "qué se espera ver
+   en un aging report" (SAP B1 Business Partner Aging: código/nombre, tax id, términos de pago,
+   antigüedad) — no hizo falta inventar campos nuevos, ya estaban en el schema.
+4. **Drill-down a la ficha** — botón (ícono `ExternalLink`, mismo patrón que `ReportInfoButton`)
+   junto al nombre que llama a `onNavigate('clientes'|'proveedores', { clienteId|proveedorId })`
+   — la MISMA función global que ya usa Sidebar/CommandPalette/Dashboard (`Dashboard.jsx:navigateTo`).
+   Requirió agregar `initialProveedorId`/`initialClienteId` a `ProveedoresSection.jsx`/
+   `ClientesSection.jsx` (mismo patrón que `CuentaCorrienteSection` ya tenía con
+   `initialClienteId`) para que la sección de destino abra directo en el detalle.
+5. **Sin grupos de proveedores** — confirmado por schema (`proveedores` no tiene columna
+   grupo/categoría) que no existe el concepto — Luciano ya había dicho que si no existía no hacía
+   falta actuar, así que no se tocó nada más.
+
+`getTableConfig(reportId, data, ctx)` ahora acepta un 3er parámetro opcional `{ onNavigate }` —
+todos los demás reportId lo ignoran, sin impacto en el resto.
+
+**Sin verificación visual en navegador**: la sesión persistente que venía usando toda la sesión
+se deslogueó a mitad de esta tarea y no hay credenciales disponibles para volver a entrar — se
+verificó lint + build (`vite.config.prod.js`) limpios y se revisó el código a mano (flujo de
+`onNavigate`, composición de `wideDialogClass` + padding, que el export a Excel/PDF cae al
+fallback de texto plano `row[col.key]` y no intenta serializar el JSX del botón de drill-down).
+Vale la pena una revisión visual real la próxima vez que haya sesión.
+
+Build verificado con `--config vite.config.prod.js`: sin errores, `exceljs` en su propio chunk,
+`vendor` sin regresión.
+
+---
+
 ## ✅ Reportería Fase 4 — Comparativos, y plan de pruebas (19/09)
 
 Última fase del Plan de Reportería. Los 3 items del plan son "esfuerzo medio/medio/alto" y

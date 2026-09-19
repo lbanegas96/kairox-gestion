@@ -39,7 +39,7 @@ const EMPTY_FORM = {
 };
 
 // ─── Componente principal ────────────────────────────────────────────────────
-function ProveedoresSection() {
+function ProveedoresSection({ initialProveedorId } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -52,7 +52,10 @@ function ProveedoresSection() {
   const [formOpen, setFormOpen]     = useState(false);
   const [editando, setEditando]     = useState(null);   // proveedor a editar
   const [form, setForm]             = useState({ ...EMPTY_FORM });
-  const [detalleId, setDetalleId]   = useState(null);
+  // Drill-down desde Reportería (Cartera de Proveedores) — detalleId ya se
+  // fetchea por id solo (proveedoresService.getById), no hace falta esperar
+  // a que la lista cargue para abrir la ficha.
+  const [detalleId, setDetalleId]   = useState(initialProveedorId || null);
   const [runOpen, setRunOpen]       = useState(false);
   // Fase 3 de PLAN_PARIDAD_COMPRAS.md (04/09) — filtros de fecha + PDF de
   // Estado de Cuenta, mismo criterio que ClientDetailModal.jsx del lado clientes.

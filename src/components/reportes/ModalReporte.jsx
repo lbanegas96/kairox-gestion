@@ -14,23 +14,33 @@ function ModalReporte({
   productosList, productoId, setProductoId,
   groupBy, setGroupBy,
   soloConDeuda, setSoloConDeuda,
+  onNavigate,
 }) {
   // Totales/columnas siempre sobre los datos crudos filtrados (nunca sobre
   // las filas sintéticas de agrupamiento, o el total general quedaría
   // duplicado con los subtotales) — solo la vista de tabla usa los datos
   // agrupados.
   const filteredData = selectedReport ? applyFiltroDeuda(selectedReport.id, reportData, soloConDeuda) : reportData;
-  const { columns, totals } = selectedReport ? getTableConfig(selectedReport.id, filteredData) : { columns: [], totals: null };
+  const { columns, totals } = selectedReport ? getTableConfig(selectedReport.id, filteredData, { onNavigate }) : { columns: [], totals: null };
   const displayData = selectedReport ? applyGrouping(selectedReport.id, filteredData, groupBy) : filteredData;
 
   return (
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-      <DialogContent className="kairox-bg-card border kairox-border kairox-text-primary sm:max-w-[900px] flex flex-col max-h-[90vh] dark:bg-kx-bg dark:border-kx-border">
+      {/* size="wide" — mismo shell que Factura/OC/Cotización/etc (hallazgo
+          Luciano 19/09: los reportes tenían su propio max-w-[900px] y
+          forzaban scroll lateral en tablas con muchas columnas, mientras el
+          resto de los documentos ya usaba este shell compartido desde el
+          22/08). Ver dialog.jsx para los gotchas de calc() si se toca. */}
+      <DialogContent size="wide" className="kairox-bg-card border kairox-border kairox-text-primary dark:bg-kx-bg dark:border-kx-border">
         <DialogTitle className="sr-only">{selectedReport?.title ?? 'Reporte'}</DialogTitle>
         <DialogDescription className="sr-only">Visualización y descarga del reporte seleccionado.</DialogDescription>
         {selectedReport && (
           <>
-            <div className="flex-none">
+            {/* size="wide" trae p-0 en el shell (mismo motivo que
+                NuevaFacturaModal.jsx: header/footer necesitan su propio
+                padding, no uno solo para todo el modal) — sin esto el
+                contenido queda pegado al borde. */}
+            <div className="flex-none px-4 pt-4">
               <ReportHeader
                 title={selectedReport.title}
                 startDate={startDate}
@@ -66,7 +76,7 @@ function ModalReporte({
               />
             </div>
 
-            <div className="flex-1 overflow-y-auto mt-4 min-h-[300px]">
+            <div className="flex-1 overflow-y-auto px-4 pb-4 mt-4 min-h-[300px]">
               <ReportTable
                 columns={columns}
                 data={displayData}

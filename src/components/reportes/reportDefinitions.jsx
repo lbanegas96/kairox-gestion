@@ -1,4 +1,4 @@
-import { BarChart3, ShoppingCart, Users, CreditCard, Banknote, Smartphone, Truck, Scale, TrendingUp, Boxes, History, Landmark, Award, CalendarClock, PackageSearch, ShoppingBag } from 'lucide-react';
+import { BarChart3, ShoppingCart, Users, CreditCard, Banknote, Smartphone, Truck, Scale, TrendingUp, Boxes, History, Landmark, Award, CalendarClock, PackageSearch, ShoppingBag, ExternalLink } from 'lucide-react';
 import { formatDateAR } from '@/lib/dateUtils';
 import { formatCurrency } from '@/lib/currencyUtils';
 
@@ -498,7 +498,23 @@ export const buildSummaryMetrics = (reportId, data, previousPeriod = null) => {
   return null;
 };
 
-export const getTableConfig = (reportId, data) => {
+// DrillDownButton — abre la ficha del cliente/proveedor vía onNavigate (misma
+// función global de Dashboard.jsx que ya usan Sidebar/CommandPalette/etc), sin
+// salir del reporte. stopPropagation porque las filas de tabla no tienen su
+// propio onClick hoy, pero es el mismo cuidado que ya usa ReportInfoButton.
+const DrillDownButton = ({ onClick, title }) => (
+  <button
+    type="button"
+    onClick={(e) => { e.stopPropagation(); onClick(); }}
+    title={title}
+    className="text-kx-text-3 hover:text-kx-blue transition-colors shrink-0"
+  >
+    <ExternalLink className="w-3.5 h-3.5" />
+  </button>
+);
+
+export const getTableConfig = (reportId, data, ctx = {}) => {
+  const { onNavigate } = ctx;
   if (reportId === 'ventas') {
     const totalAmount = data.reduce((acc, curr) => acc + (curr.total || 0), 0);
     return {
@@ -572,9 +588,17 @@ export const getTableConfig = (reportId, data) => {
     const totalAFavor  = data.filter(r => (r.saldo || 0) < 0).reduce((s, r) => s + Math.abs(r.saldo), 0);
     return {
       columns: [
-        { header: 'Nombre', key: 'nombre', align: 'left' },
-        { header: 'Email', key: 'email', align: 'left', render: (r) => r.email || '-' },
-        { header: 'Teléfono', key: 'telefono', align: 'left', render: (r) => r.telefono || '-' },
+        {
+          header: 'Cliente', key: 'nombre', align: 'left',
+          render: (r) => (
+            <span className="flex items-center gap-1.5">
+              {r.nombre}
+              {onNavigate && <DrillDownButton title="Ver ficha del cliente" onClick={() => onNavigate('clientes', { clienteId: r.id })} />}
+            </span>
+          ),
+        },
+        { header: 'Documento', key: 'documento', align: 'left', render: (r) => r.documento || '-' },
+        { header: 'Cond. de Pago', key: 'condicionPago', align: 'left', render: (r) => r.condicionPago || '-' },
         {
           header: 'Límite Crédito', key: 'limite_credito', align: 'right',
           render: (r) => r.limite_credito ? formatCurrency(r.limite_credito) : '-',
@@ -590,10 +614,16 @@ export const getTableConfig = (reportId, data) => {
         },
         // Antigüedad de saldos — Open Item Management real (facturas_saldo_pendiente),
         // mismo criterio de días que ya usa Cuenta Corriente > Antigüedad.
-        { header: '0-30',  key: 'aging_0_30',   align: 'right', render: (r) => r.aging_0_30   ? formatCurrency(r.aging_0_30)   : '-', pdfRender: (r) => r.aging_0_30   ? formatCurrency(r.aging_0_30)   : '-' },
-        { header: '31-60', key: 'aging_31_60',  align: 'right', render: (r) => r.aging_31_60  ? formatCurrency(r.aging_31_60)  : '-', pdfRender: (r) => r.aging_31_60  ? formatCurrency(r.aging_31_60)  : '-' },
-        { header: '61-90', key: 'aging_61_90',  align: 'right', render: (r) => r.aging_61_90  ? formatCurrency(r.aging_61_90)  : '-', pdfRender: (r) => r.aging_61_90  ? formatCurrency(r.aging_61_90)  : '-' },
-        { header: '+90',   key: 'aging_90_mas', align: 'right', render: (r) => r.aging_90_mas ? <span className="text-red-600 font-bold">{formatCurrency(r.aging_90_mas)}</span> : '-', pdfRender: (r) => r.aging_90_mas ? formatCurrency(r.aging_90_mas) : '-' },
+        // Sufijo "d" (18/09→19/09, hallazgo Luciano): sin esto no quedaba
+        // claro que 0-30/31-60/etc. son DÍAS y no otra unidad — se probó
+        // "0-30 días" primero, pero el autoWidth del PDF mide el header
+        // completo (pdfUtils.js) y esas 4 columnas ya compiten por espacio
+        // con los montos, así que "d" corto evita reintroducir el apriete
+        // que se estaba corrigiendo.
+        { header: '0-30d',  key: 'aging_0_30',   align: 'right', render: (r) => r.aging_0_30   ? formatCurrency(r.aging_0_30)   : '-', pdfRender: (r) => r.aging_0_30   ? formatCurrency(r.aging_0_30)   : '-' },
+        { header: '31-60d', key: 'aging_31_60',  align: 'right', render: (r) => r.aging_31_60  ? formatCurrency(r.aging_31_60)  : '-', pdfRender: (r) => r.aging_31_60  ? formatCurrency(r.aging_31_60)  : '-' },
+        { header: '61-90d', key: 'aging_61_90',  align: 'right', render: (r) => r.aging_61_90  ? formatCurrency(r.aging_61_90)  : '-', pdfRender: (r) => r.aging_61_90  ? formatCurrency(r.aging_61_90)  : '-' },
+        { header: '+90d',   key: 'aging_90_mas', align: 'right', render: (r) => r.aging_90_mas ? <span className="text-red-600 font-bold">{formatCurrency(r.aging_90_mas)}</span> : '-', pdfRender: (r) => r.aging_90_mas ? formatCurrency(r.aging_90_mas) : '-' },
       ],
       totals: [
         { content: `TOTAL A COBRAR: ${formatCurrency(totalACobrar)} | TOTAL A FAVOR: ${formatCurrency(totalAFavor)}`, colSpan: 5, align: 'right' },
@@ -611,19 +641,27 @@ export const getTableConfig = (reportId, data) => {
     const totalAFavorProv = data.filter(r => (r.saldo || 0) < 0).reduce((s, r) => s + Math.abs(r.saldo), 0);
     return {
       columns: [
-        { header: 'Proveedor', key: 'nombre', align: 'left' },
-        { header: 'Email', key: 'email', align: 'left', render: (r) => r.email || '-' },
-        { header: 'Teléfono', key: 'telefono', align: 'left', render: (r) => r.telefono || '-' },
+        {
+          header: 'Proveedor', key: 'nombre', align: 'left',
+          render: (r) => (
+            <span className="flex items-center gap-1.5">
+              {r.nombre}
+              {onNavigate && <DrillDownButton title="Ver ficha del proveedor" onClick={() => onNavigate('proveedores', { proveedorId: r.id })} />}
+            </span>
+          ),
+        },
+        { header: 'CUIT', key: 'cuit', align: 'left', render: (r) => r.cuit || '-' },
+        { header: 'Cond. de Pago', key: 'condicionPago', align: 'left', render: (r) => r.condicionPago || '-' },
         {
           header: 'Saldo Actual', key: 'saldo', align: 'right',
           render: (r) => <span className={r.saldo > 0 ? 'text-red-600 font-bold' : 'text-green-600 dark:text-green-400'}>{formatCurrency(r.saldo)}</span>,
           pdfRender: (r) => formatCurrency(r.saldo),
         },
         // Antigüedad de saldos — mismo criterio de días que Cartera de Clientes.
-        { header: '0-30',  key: 'aging_0_30',   align: 'right', render: (r) => r.aging_0_30   ? formatCurrency(r.aging_0_30)   : '-', pdfRender: (r) => r.aging_0_30   ? formatCurrency(r.aging_0_30)   : '-' },
-        { header: '31-60', key: 'aging_31_60',  align: 'right', render: (r) => r.aging_31_60  ? formatCurrency(r.aging_31_60)  : '-', pdfRender: (r) => r.aging_31_60  ? formatCurrency(r.aging_31_60)  : '-' },
-        { header: '61-90', key: 'aging_61_90',  align: 'right', render: (r) => r.aging_61_90  ? formatCurrency(r.aging_61_90)  : '-', pdfRender: (r) => r.aging_61_90  ? formatCurrency(r.aging_61_90)  : '-' },
-        { header: '+90',   key: 'aging_90_mas', align: 'right', render: (r) => r.aging_90_mas ? <span className="text-red-600 font-bold">{formatCurrency(r.aging_90_mas)}</span> : '-', pdfRender: (r) => r.aging_90_mas ? formatCurrency(r.aging_90_mas) : '-' },
+        { header: '0-30d',  key: 'aging_0_30',   align: 'right', render: (r) => r.aging_0_30   ? formatCurrency(r.aging_0_30)   : '-', pdfRender: (r) => r.aging_0_30   ? formatCurrency(r.aging_0_30)   : '-' },
+        { header: '31-60d', key: 'aging_31_60',  align: 'right', render: (r) => r.aging_31_60  ? formatCurrency(r.aging_31_60)  : '-', pdfRender: (r) => r.aging_31_60  ? formatCurrency(r.aging_31_60)  : '-' },
+        { header: '61-90d', key: 'aging_61_90',  align: 'right', render: (r) => r.aging_61_90  ? formatCurrency(r.aging_61_90)  : '-', pdfRender: (r) => r.aging_61_90  ? formatCurrency(r.aging_61_90)  : '-' },
+        { header: '+90d',   key: 'aging_90_mas', align: 'right', render: (r) => r.aging_90_mas ? <span className="text-red-600 font-bold">{formatCurrency(r.aging_90_mas)}</span> : '-', pdfRender: (r) => r.aging_90_mas ? formatCurrency(r.aging_90_mas) : '-' },
       ],
       totals: [
         { content: `TOTAL A PAGAR: ${formatCurrency(totalAPagar)} | TOTAL A FAVOR: ${formatCurrency(totalAFavorProv)}`, colSpan: 4, align: 'right' },

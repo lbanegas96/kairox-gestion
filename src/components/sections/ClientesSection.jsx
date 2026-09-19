@@ -30,7 +30,7 @@ const emptyForm = () => ({
   bloquear_en_limite: false, lista_precio_id: '', condicion_pago_id: '',
 });
 
-function ClientesSection() {
+function ClientesSection({ initialClienteId } = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -41,8 +41,12 @@ function ClientesSection() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState(null);
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [clientForDetail, setClientForDetail] = useState(null);
+  // Drill-down desde Reportería (Cartera de Clientes) — ClientDetailModal
+  // solo necesita `clientId`, fetchea sus propios datos por id (clientData es
+  // un fallback opcional mientras esa query resuelve), así que alcanza con
+  // un placeholder {id} sin esperar a que `clients` termine de cargar.
+  const [detailModalOpen, setDetailModalOpen] = useState(!!initialClienteId);
+  const [clientForDetail, setClientForDetail] = useState(initialClienteId ? { id: initialClienteId } : null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 

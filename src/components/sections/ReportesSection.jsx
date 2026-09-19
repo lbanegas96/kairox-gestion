@@ -369,6 +369,11 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
               nombre: c.nombre,
               telefono: c.telefono,
               email: c.email,
+              documento: c.documento || '',
+              // condiciones_pago es texto libre ("Contado", "30 días"...);
+              // dias_credito es el fallback numérico cuando no se cargó texto
+              // — mismo par de campos que ya usa la ficha de Cliente.
+              condicionPago: c.condiciones_pago || (c.dias_credito ? `${c.dias_credito} días` : ''),
               saldo: saldoReal,
               limite_credito: c.limite_credito || 0,
               ...aging,
@@ -459,6 +464,8 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
             nombre: p.nombre,
             telefono: p.telefono,
             email: p.email,
+            cuit: p.cuit || '',
+            condicionPago: p.condicion_pago || (p.plazo_pago_dias ? `${p.plazo_pago_dias} días` : ''),
             saldo: saldoReal,
             ...aging,
           };
@@ -1035,6 +1042,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         productosList={productosList} productoId={productoId} setProductoId={setProductoId}
         groupBy={groupBy} setGroupBy={setGroupBy}
         soloConDeuda={soloConDeuda} setSoloConDeuda={setSoloConDeuda}
+        onNavigate={onNavigate}
       />
     </div>
   );
