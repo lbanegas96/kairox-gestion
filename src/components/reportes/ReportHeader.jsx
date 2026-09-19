@@ -6,6 +6,7 @@ import { Loader2, Download, FileSpreadsheet, MessageCircle, FilterX, RefreshCw }
 
 const ReportHeader = ({
   title,
+  showDateFilter,
   startDate,
   setStartDate,
   endDate,
@@ -77,14 +78,18 @@ const ReportHeader = ({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 items-end bg-slate-50 dark:bg-slate-950/50 p-3 rounded-md border border-slate-100 dark:border-slate-800">
-        <div className="space-y-1">
-          <Label className="text-xs font-semibold text-kx-text-2 uppercase">Desde</Label>
-          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-white dark:bg-slate-900" />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs font-semibold text-kx-text-2 uppercase">Hasta</Label>
-          <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-white dark:bg-slate-900" />
-        </div>
+        {showDateFilter && (
+          <>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-kx-text-2 uppercase">Desde</Label>
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-white dark:bg-slate-900" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-kx-text-2 uppercase">Hasta</Label>
+              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-white dark:bg-slate-900" />
+            </div>
+          </>
+        )}
         {showCentroCosto && centrosCosto?.length > 0 && (
           <div className="space-y-1">
             <Label className="text-xs font-semibold text-kx-text-2 uppercase">Centro de costo</Label>

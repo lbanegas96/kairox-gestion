@@ -942,6 +942,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
 
       await generatePDF({
         title:           selectedReport.title,
+        esSnapshot:      selectedReport.requiresDate === false,
         startDate:       startDate,
         endDate:         endDate,
         columns:         columns,
@@ -989,9 +990,16 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   const handleShareWhatsApp = () => {
     const filteredData = applyFiltroDeuda(selectedReport.id, reportData, soloConDeuda);
     const summaryMetrics = buildSummaryMetrics(selectedReport.id, filteredData, selectedReport.supportsPeriodComparison ? previousPeriodStats : null);
+    // Mismo criterio que generatePDF (esSnapshot) — Cartera de Proveedores y
+    // demás reportes requiresDate:false no filtran por fecha, así que
+    // "Período: X al Y" acá sugeriría lo mismo que confundió a Luciano en
+    // pantalla.
+    const lineaFecha = selectedReport.requiresDate === false
+      ? `Estado actual al ${new Date().toLocaleDateString('es-AR')}`
+      : `Período: ${startDate} al ${endDate}`;
     const lineas = [
       `📊 *${selectedReport.title}*`,
-      `Período: ${startDate} al ${endDate}`,
+      lineaFecha,
       ...(summaryMetrics || []).map(m => `${m.label}: ${m.value}${m.delta ? ` (${m.delta.text})` : ''}`),
     ];
     const texto = encodeURIComponent(lineas.join('\n'));

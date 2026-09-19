@@ -39,6 +39,7 @@ async function cargarLogoComoDataURL(logoUrl) {
 /**
  * @param {object}   opts
  * @param {string}   opts.title
+ * @param {boolean}  [opts.esSnapshot]   – true para reportes sin filtro de fecha real (Cartera de Clientes/Proveedores, Valorización de Inventario, etc. — requiresDate:false en reportDefinitions.jsx). Cambia el rótulo de "Período: X al Y" a "Estado actual al {hoy}", que es lo que esos reportes realmente muestran.
  * @param {string}   opts.startDate
  * @param {string}   opts.endDate
  * @param {object[]} opts.columns        – { header, key, align?, pdfRender? }
@@ -51,6 +52,7 @@ async function cargarLogoComoDataURL(logoUrl) {
  */
 export const generatePDF = async ({
   title,
+  esSnapshot = false,
   startDate,
   endDate,
   columns,
@@ -97,7 +99,14 @@ export const generatePDF = async ({
   // " al " en vez de "→": la fuente 'helvetica' de jsPDF usa codificación
   // WinAnsi (base-14, sin embeber fuente propia) y no tiene el glyph de la
   // flecha unicode — se veía como basura en el PDF real ("!'" en vez de "→").
-  const periodoLabel = `Período: ${startDate} al ${endDate}`;
+  // esSnapshot (hallazgo Luciano 19/09): reportes tipo Cartera de
+  // Proveedores no filtran por fecha (son el saldo/estado ACTUAL, ver
+  // requiresDate:false en reportDefinitions.jsx) — imprimir "Período: X al
+  // Y" ahí sugiere un filtro que no existe. "Estado actual al {hoy}" es lo
+  // que el reporte realmente refleja.
+  const periodoLabel = esSnapshot
+    ? `Estado actual al ${new Date().toLocaleDateString('es-AR')}`
+    : `Período: ${startDate} al ${endDate}`;
   doc.text(periodoLabel, pw - 14, 20, { align: 'right' });
 
   // ── Summary metrics (KPI boxes) ───────────────────────────────────────────

@@ -43,6 +43,7 @@ function ModalReporte({
             <div className="flex-none px-4 pt-4">
               <ReportHeader
                 title={selectedReport.title}
+                showDateFilter={selectedReport.requiresDate !== false}
                 startDate={startDate}
                 setStartDate={setStartDate}
                 endDate={endDate}

@@ -1,5 +1,33 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Bug real: filtro de fecha fantasma en reportes "snapshot" (19/09)
+
+Luciano probó Cartera de Proveedores con Desde/Hasta en el año 2000 y le siguió trayendo datos
+reales — pregunta legítima de "¿el filtro anda?". Sí había un bug: `ReportHeader.jsx` mostraba
+los campos Desde/Hasta **sin condición, para los 15 reportes**, pero 6 de ellos
+(`reportDefinitions.jsx`, `requiresDate: false`) son fotos del estado ACTUAL y su query nunca
+usa `start`/`end` — Cartera de Clientes, Cartera de Proveedores, Valorización de Inventario,
+Liquidación de Tarjetas, Pasivo de Fidelización, Órdenes de Compra Abiertas. El filtro no estaba
+roto — directamente no existía para esos 6, pero la UI sugería que sí.
+
+**Fix**: `ReportHeader.jsx` recibe `showDateFilter` (nuevo, `ModalReporte.jsx` lo arma como
+`selectedReport.requiresDate !== false`) y oculta Desde/Hasta cuando el reporte no los usa. Mismo
+criterio aplicado al PDF (`pdfUtils.js`, nuevo param `esSnapshot`) y al resumen de WhatsApp — los
+2 imprimían "Período: X al Y" sin condición también, mismo bug en otro lugar. Ahora esos 6
+reportes muestran "Estado actual al {fecha de generación}" en vez de un período que nunca filtró
+nada. Excel no tenía el problema (`exportReporte` nunca imprimió período).
+
+Verificado en vivo (la sesión volvió a autenticarse sola a mitad de la tarea anterior, se
+aprovechó para confirmar esto): Cartera de Proveedores ya no muestra Desde/Hasta, el botón de
+drill-down agregado en el ajuste anterior navega correctamente a la ficha del proveedor con el
+saldo correcto. El label de PDF/WhatsApp se verificó por code-trace (mismo flag ya confirmado
+correcto en pantalla), no se descargó el archivo.
+
+Build verificado con `--config vite.config.prod.js`: sin errores, `exceljs` en su propio chunk,
+`vendor` sin regresión.
+
+---
+
 ## ✅ Reportería — ajustes de UX en Cartera de Clientes/Proveedores (19/09)
 
 Feedback de Luciano mirando Cartera de Proveedores en producción, aplicado a los 2 reportes que
