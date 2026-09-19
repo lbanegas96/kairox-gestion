@@ -28,6 +28,14 @@ const ALICUOTAS = [
 
 const FORMAS_PAGO = ['Efectivo', 'Transferencia', 'CC Proveedor'];
 
+// Plan Libro IVA Digital, Fase 0 (19/09, aprobado por Luciano): letra +
+// Punto de Venta + Número del comprobante del PROVEEDOR, obligatorios en
+// toda alta nueva — sin esto no hay forma de exportar el TXT que exige ARCA
+// (necesita voucherTypeAfip(letra) + PV/folio separados, no un texto libre).
+// El historial previo a este cambio queda sin estos datos a propósito (así
+// se acordó) — no se completa retroactivo.
+const TIPOS_COMPROBANTE = ['A', 'B', 'C', 'M', 'E'];
+
 const newItem = () => ({
   _id:            Math.random().toString(36).slice(2),
   producto_id:    null,
@@ -56,7 +64,15 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, d
 
   const [proveedores, setProveedores]     = useState([]);
   const [proveedorId, setProveedorId]     = useState('');
-  const [numeroFactura, setNumeroFactura] = useState('');
+  // Comprobante del proveedor, estructurado (Fase 0 Libro IVA Digital) —
+  // numeroFactura sigue existiendo, pero ahora se DERIVA de estos 3, no se
+  // tipea libre (mismo campo que sigue leyendo toda la UI/reportes viejos).
+  const [tipoComprobanteLetra, setTipoComprobanteLetra] = useState('A');
+  const [puntoVentaProveedor, setPuntoVentaProveedor]   = useState('');
+  const [numeroComprobanteProveedor, setNumeroComprobanteProveedor] = useState('');
+  const numeroFactura = (puntoVentaProveedor && numeroComprobanteProveedor)
+    ? `${tipoComprobanteLetra}-${puntoVentaProveedor.padStart(4, '0')}-${numeroComprobanteProveedor.padStart(8, '0')}`
+    : '';
   const [fecha, setFecha]                 = useState(getTodayAR());
   const [formaPago, setFormaPago]         = useState('CC Proveedor');
   const [items, setItems]                 = useState([newItem()]);
@@ -117,7 +133,9 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, d
   useEffect(() => {
     if (!open) {
       setProveedorId('');
-      setNumeroFactura('');
+      setTipoComprobanteLetra('A');
+      setPuntoVentaProveedor('');
+      setNumeroComprobanteProveedor('');
       setFecha(getTodayAR());
       setFormaPago('CC Proveedor');
       setItems([newItem()]);
@@ -210,6 +228,14 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, d
       toast({ title: 'Proveedor requerido para Cuenta Corriente', variant: 'destructive' });
       return;
     }
+    if (!puntoVentaProveedor.trim() || !numeroComprobanteProveedor.trim()) {
+      toast({
+        title: 'Faltan datos del comprobante del proveedor',
+        description: 'Tipo, Punto de Venta y Número son obligatorios — hacen falta para poder declarar esta compra ante ARCA más adelante.',
+        variant: 'destructive',
+      });
+      return;
+    }
     const itemsValidos = items.filter(i => i.descripcion.trim());
     if (itemsValidos.length === 0) {
       toast({ title: 'Agregá al menos un ítem con descripción', variant: 'destructive' });
@@ -256,7 +282,10 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, d
         empresa_id:       user.empresa_id,
         user_id:          user.id,
         proveedor_id:     proveedorId || null,
-        numero_factura:   numeroFactura.trim() || null,
+        numero_factura:   numeroFactura || null,
+        tipo_comprobante_letra:        tipoComprobanteLetra,
+        punto_venta_proveedor:         puntoVentaProveedor.trim(),
+        numero_comprobante_proveedor:  numeroComprobanteProveedor.trim(),
         fecha:            now,
         forma_pago:       formaPago,
         estado_pago:      isCC ? 'pendiente' : 'pagada',
@@ -461,14 +490,34 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, d
                 onProveedorCreado={p => { setProveedores(prev => [...prev, p]); setProveedorId(p.id); }}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-kx-text-2">N° Factura del Proveedor</Label>
-              <Input
-                placeholder="A-0001-00012345"
-                value={numeroFactura}
-                onChange={e => setNumeroFactura(e.target.value)}
-                className="h-10 bg-kx-surface border-kx-border text-kx-text font-mono"
-              />
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs font-medium text-kx-text-2">
+                Comprobante del Proveedor <span className="text-red-500">*</span>
+              </Label>
+              <div className="flex gap-2">
+                <select
+                  value={tipoComprobanteLetra}
+                  onChange={e => setTipoComprobanteLetra(e.target.value)}
+                  title="Tipo de comprobante"
+                  className="h-10 w-16 rounded-md border border-kx-border bg-kx-surface px-2 text-sm text-kx-text focus:outline-none focus:ring-1 focus:ring-[rgb(var(--kx-violet))]"
+                >
+                  {TIPOS_COMPROBANTE.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <Input
+                  placeholder="PV (0001)"
+                  value={puntoVentaProveedor}
+                  onChange={e => setPuntoVentaProveedor(e.target.value.replace(/\D/g, ''))}
+                  title="Punto de venta"
+                  className="h-10 w-24 bg-kx-surface border-kx-border text-kx-text font-mono"
+                />
+                <Input
+                  placeholder="Número (00012345)"
+                  value={numeroComprobanteProveedor}
+                  onChange={e => setNumeroComprobanteProveedor(e.target.value.replace(/\D/g, ''))}
+                  title="Número de comprobante"
+                  className="h-10 flex-1 bg-kx-surface border-kx-border text-kx-text font-mono"
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-medium text-kx-text-2">Fecha</Label>

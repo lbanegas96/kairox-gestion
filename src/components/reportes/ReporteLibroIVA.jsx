@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import {
   BookOpen, Calendar, Download, RefreshCw, Check, Clock,
-  AlertTriangle, ArrowLeft, AlertCircle, FileSpreadsheet, MessageCircle
+  AlertTriangle, ArrowLeft, AlertCircle, FileSpreadsheet, MessageCircle, FileDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,8 @@ import { getTodayAR, formatDateAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
 import { generatePDF } from '@/lib/pdfUtils';
 import { exportReporte } from '@/lib/excelUtils';
+import { generarVentasCbte, generarVentasAlicuotas } from '@/lib/libroIvaDigitalExport';
+import { descargarTxt } from '@/lib/registroAnchoFijo';
 
 const PAGE_SIZE = 100;
 
@@ -290,6 +292,36 @@ function ReporteLibroIVA({ onBack }) {
     window.open(`https://wa.me/?text=${encodeURIComponent(lineas.join('\n'))}`, '_blank');
   };
 
+  // Exportar TXT ARCA — SIEMPRE sobre todos los comprobantes válidos del
+  // período (esComprobanteValido), nunca sobre comprobantesFiltrados: el
+  // filtro de "Tipo"/"Estado CAE" de la pantalla es para revisar, no para
+  // recortar una declaración que se presenta completa ante ARCA.
+  const handleExportarTxtArca = () => {
+    try {
+      const validos = comprobantes.filter(esComprobanteValido);
+      const cbte = generarVentasCbte(validos, itemsPorComprobante);
+      const alicuotas = generarVentasAlicuotas(validos, itemsPorComprobante);
+      const periodo = `${fechaDesde.replace(/-/g, '')}_${fechaHasta.replace(/-/g, '')}`;
+
+      descargarTxt(cbte.contenido, `LIBRO_IVA_DIGITAL_VENTAS_CBTE_${periodo}.txt`);
+      descargarTxt(alicuotas.contenido, `LIBRO_IVA_DIGITAL_VENTAS_ALICUOTAS_${periodo}.txt`);
+
+      if (cbte.excluidos.length > 0) {
+        toast({
+          title: 'Archivos generados con comprobantes afuera',
+          description: `${cbte.incluidos} comprobantes exportados. ${cbte.excluidos.length} quedaron afuera por no tener numeración fiscal (numero_afip) — típicamente ventas sin AFIP activo en el momento.`,
+          variant: 'destructive',
+          duration: 8000,
+        });
+      } else {
+        toast({ title: 'Éxito', description: `${cbte.incluidos} comprobantes exportados en 2 archivos TXT.`, className: 'bg-green-600 text-white' });
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Error', description: 'Falló la generación del TXT.', variant: 'destructive' });
+    }
+  };
+
   const caeEstadoBadge = (estado) => {
     if (estado === 'emitido')
       return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"><Check className="w-3 h-3" />Emitido</span>;
@@ -382,7 +414,7 @@ function ReporteLibroIVA({ onBack }) {
             Generar
           </Button>
           {generated && comprobantesFiltrados.length > 0 && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button variant="outline" onClick={handleDownloadExcel} className="h-9 dark:border-kx-border dark:text-slate-300">
                 <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Excel
               </Button>
@@ -391,6 +423,10 @@ function ReporteLibroIVA({ onBack }) {
               </Button>
               <Button variant="outline" onClick={handleShareWhatsApp} className="h-9 dark:border-kx-border dark:text-slate-300">
                 <MessageCircle className="h-4 w-4 mr-1.5" /> WhatsApp
+              </Button>
+              <Button onClick={handleExportarTxtArca} title="Genera los 2 archivos TXT (Cabecera + Alícuotas) para importar directo en el Portal IVA de ARCA"
+                className="h-9 bg-violet-600 hover:bg-violet-700 text-white">
+                <FileDown className="h-4 w-4 mr-1.5" /> Exportar TXT ARCA
               </Button>
             </div>
           )}

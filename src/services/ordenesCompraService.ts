@@ -260,6 +260,9 @@ export const ordenesCompraService = {
     orden_compra_id: string;
     numero_factura: string;
     fecha_factura: string;
+    tipo_comprobante_letra: string;
+    punto_venta_proveedor: string;
+    numero_comprobante_proveedor: string;
     items: {
       producto_id?: string | null;
       cantidad: number;
@@ -274,6 +277,9 @@ export const ordenesCompraService = {
       p_numero_factura: payload.numero_factura,
       p_fecha_factura: payload.fecha_factura,
       p_items: payload.items,
+      p_tipo_comprobante_letra: payload.tipo_comprobante_letra,
+      p_punto_venta_proveedor: payload.punto_venta_proveedor,
+      p_numero_comprobante_proveedor: payload.numero_comprobante_proveedor,
     });
     if (error) throw new Error(error.message);
     return data as { compra_id: string; total: number };

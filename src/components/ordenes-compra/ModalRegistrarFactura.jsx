@@ -4,6 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { formatCurrency } from '@/lib/currencyUtils';
 
 const ALICUOTAS = [0, 10.5, 21, 27];
+// Plan Libro IVA Digital, Fase 0 (19/09) — mismo criterio que NuevaFacturaProveedorModal.jsx.
+const TIPOS_COMPROBANTE = ['A', 'B', 'C', 'M', 'E'];
 
 function ModalRegistrarFactura({
   facturaModal, setFacturaModal,
@@ -42,14 +44,31 @@ function ModalRegistrarFactura({
         <form onSubmit={handleRegistrarFactura} className="space-y-4 mt-2">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="text-xs font-medium text-slate-700 dark:text-slate-300">N° de Factura *</label>
-              <input
-                className="mt-1 w-full rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface dark:bg-kx-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-kx-text"
-                placeholder="ej: A-0001-00012345"
-                value={facturaForm.numero_factura}
-                onChange={e => setFacturaForm(p => ({ ...p, numero_factura: e.target.value }))}
-                required
-              />
+              <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Comprobante del Proveedor *</label>
+              <div className="mt-1 flex gap-2">
+                <select
+                  className="rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-kx-text"
+                  value={facturaForm.tipo_comprobante_letra}
+                  onChange={e => setFacturaForm(p => ({ ...p, tipo_comprobante_letra: e.target.value }))}
+                  title="Tipo de comprobante"
+                >
+                  {TIPOS_COMPROBANTE.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <input
+                  className="w-24 rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-kx-text"
+                  placeholder="PV (0001)"
+                  value={facturaForm.punto_venta_proveedor}
+                  onChange={e => setFacturaForm(p => ({ ...p, punto_venta_proveedor: e.target.value.replace(/\D/g, '') }))}
+                  required
+                />
+                <input
+                  className="flex-1 rounded-md border border-slate-300 dark:border-kx-border bg-kx-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:text-kx-text"
+                  placeholder="Número (00012345)"
+                  value={facturaForm.numero_comprobante_proveedor}
+                  onChange={e => setFacturaForm(p => ({ ...p, numero_comprobante_proveedor: e.target.value.replace(/\D/g, '') }))}
+                  required
+                />
+              </div>
             </div>
             <div className="col-span-2">
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Fecha Factura *</label>

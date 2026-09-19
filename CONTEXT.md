@@ -1,5 +1,66 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🔶 Libro IVA Digital ARCA — Fase 1 (Ventas) verificada, Fase 0 (Compras) código completo, migración PENDIENTE de aplicar (19/09)
+
+Plan completo (4 fases) aprobado por Luciano para que el reporte IVA Ventas/Compras exporte el
+TXT de "Libro de IVA Digital" (RG 3685/4597) listo para importar al Portal IVA de ARCA. Investigación
+real hecha antes de tocar código: PDF oficial de ARCA extraído con `pdftotext -layout` (WebFetch no
+pudo parsear el PDF), layout de registros de ancho fijo reconstruido posición por posición y
+validado contra el largo total que declara el propio PDF. Plan completo en el artifact
+`https://claude.ai/artifact/WQhiv4LzjuEBvjDbbDLkca`.
+
+**Fase 1 — Ventas: CERRADA y verificada en vivo.**
+- Nuevos `src/lib/afipCodigos.js` (mismos códigos de catálogo AFIP que ya usa
+  `supabase/functions/_shared/afip.ts` en el arca-worker — no se reinventó nada) y
+  `src/lib/registroAnchoFijo.js` (formatters genéricos de ancho fijo: numérico, alfabético,
+  fecha, importe en centavos siempre positivo, tipo de cambio a 6 decimales implícitos).
+- Nuevo `src/lib/libroIvaDigitalExport.js` con `generarVentasCbte`/`generarVentasAlicuotas`.
+  Reparte cada comprobante por alícuota proporcional al subtotal (mismo criterio que ya usa
+  `ReporteLibroIVA.jsx`), separa exento/no gravado en un acumulador aparte (no es una fila de
+  alícuota). Excluye comprobantes sin `numero_afip` parseable.
+- Botón "Exportar TXT ARCA" en `ReporteLibroIVA.jsx` (`handleExportarTxtArca`) — usa
+  `comprobantes.filter(esComprobanteValido)`, a propósito ignora los filtros de Tipo/Estado que
+  se ven en pantalla, para no exportar un IVA Ventas parcial sin darse cuenta.
+- Verificado con Blob-interception (se interceptó `URL.createObjectURL` para leer el contenido
+  del archivo sin depender del filesystem): largo de línea correcto (266/62 char), Neto+IVA=Total
+  y IVA/Neto=21% exacto en la muestra probada.
+- **Hallazgo para reportar a Luciano, sin decidir nada unilateralmente**: 144 de 199 comprobantes
+  del período de prueba (72%) quedan excluidos del TXT por no tener `numero_afip` (`cae_estado`
+  no aplica). Distribución por mes: 98 en junio, 2 en julio, 29 en agosto, 7 en septiembre — el
+  patrón (pico en junio, casi nada después) sugiere que son datos QA de sesiones anteriores y no
+  ventas reales sin facturar, pero **falta que Luciano lo confirme** (ver
+  `feedback_datos_prueba_sin_prefijo_qa.md` — ya pasó antes que algo pareciera dato real sin
+  serlo).
+
+**Fase 0 — Compras: código completo, migración SIN aplicar (bloqueante para Fase 2).**
+Motivo: `compras.numero_factura` es texto 100% libre (confirmado con SQL contra Nalux real:
+"77419635", "S/N", null, "VERIF-13-09-C") — no existe forma de armar Libro IVA Compras sin
+separar la letra del comprobante del proveedor (A/B/C/M/E) del punto de venta y el número.
+Luciano confirmó (19/09): compras históricas quedan afuera del export sin backfill, y de acá en
+adelante estos 3 campos son obligatorios en el frontend (no a nivel DB — no hay NOT NULL, para no
+romper las ~40 filas viejas).
+- `supabase/migrations/398_compras_comprobante_estructurado.sql` (NUEVA, sin aplicar):
+  3 columnas nullable en `compras` + `registrar_factura_compra_oc` extendida con 3 parámetros
+  `DEFAULT NULL`.
+- Los 2 caminos que insertan en `compras` quedaron cubiertos: `NuevaFacturaProveedorModal.jsx`
+  (Compra directa, valida obligatoriedad con toast propio) y `ModalRegistrarFactura.jsx` +
+  `OrdenesCompraSection.jsx` (Factura sobre OC, valida con `required` nativo del input además del
+  mismo toast en el handler). `ordenesCompraService.ts` pasa los 3 campos nuevos al RPC.
+- Verificado en vivo: ambos modales muestran correctamente el selector de letra + PV + Número: la
+  validación de obligatoriedad bloquea el submit en los 2 (toast en el primero, foco nativo del
+  browser en el segundo) cuando faltan datos. No se pudo probar un guardado exitoso real todavía
+  porque la migración no está aplicada — cualquier intento de guardar con los campos nuevos
+  fallaría contra la DB actual (columnas no existen aún).
+- Lint (`eslint`, 8 archivos) y build (`vite build --config vite.config.prod.js`) limpios.
+
+**Pendiente, en este orden:** (1) Luciano confirma si aplica `apply_migration` a producción — sin
+esto Fase 0 no es usable y Fase 2 (exportador de Compras) no puede arrancar; (2) reportarle el
+hallazgo del 72% de exclusión en Ventas; (3) Fase 2 (COMPRAS_CBTE + COMPRAS_ALICUOTAS +
+botón en `ReporteLibroIVACompras.jsx`); (4) Fase 3 (validaciones pre-export: comprobantes sin CAE,
+compras sin tipo/PV/número, entidades sin CUIT).
+
+---
+
 ## ✅ Bug real: filtro de fecha fantasma en reportes "snapshot" (19/09)
 
 Luciano probó Cartera de Proveedores con Desde/Hasta en el año 2000 y le siguió trayendo datos

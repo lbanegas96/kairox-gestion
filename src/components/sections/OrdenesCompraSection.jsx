@@ -62,7 +62,12 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
   // mismo patrón de confirmación + motivo que ya usa Pedidos.
   const [cancelTarget, setCancelTarget] = useState(null);
   const [motivoCancelacion, setMotivoCancelacion] = useState('');
-  const [facturaForm, setFacturaForm] = useState({ numero_factura: '', fecha_factura: '', items: [] });
+  const [facturaForm, setFacturaForm] = useState({
+    numero_factura: '', fecha_factura: '', items: [],
+    // Plan Libro IVA Digital, Fase 0 (19/09) — comprobante del proveedor
+    // estructurado, obligatorio en toda alta nueva.
+    tipo_comprobante_letra: 'A', punto_venta_proveedor: '', numero_comprobante_proveedor: '',
+  });
   // Bug real (13/09, hallazgo Luciano: "quiero registrar la factura y no pasa
   // nada") — handleRegistrarFactura/registrarFacturaMutation leían `detalle`
   // (la OC completa) al momento de ENVIAR, no solo al precargar. El botón del
@@ -196,6 +201,7 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
 
     setFacturaForm({
       numero_factura: '',
+      tipo_comprobante_letra: 'A', punto_venta_proveedor: '', numero_comprobante_proveedor: '',
       fecha_factura: '',
       // Bug real (04/09, auditoría de paridad Compras vs Ventas): acá se copiaba
       // i.costo_unitario (SIEMPRE bruto, con IVA incluido -- ver comentario de
@@ -236,12 +242,26 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
   const handleRegistrarFactura = (e) => {
     e.preventDefault();
     if (!facturaOc) return;
+    // Plan Libro IVA Digital, Fase 0 (19/09) — obligatorio en toda alta
+    // nueva, mismo criterio que NuevaFacturaProveedorModal.jsx.
+    if (!facturaForm.punto_venta_proveedor?.trim() || !facturaForm.numero_comprobante_proveedor?.trim()) {
+      toast({
+        title: 'Faltan datos del comprobante del proveedor',
+        description: 'Tipo, Punto de Venta y Número son obligatorios — hacen falta para poder declarar esta compra ante ARCA más adelante.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const numeroFacturaDerivado = `${facturaForm.tipo_comprobante_letra}-${facturaForm.punto_venta_proveedor.trim().padStart(4, '0')}-${facturaForm.numero_comprobante_proveedor.trim().padStart(8, '0')}`;
     registrarFacturaMutation.mutate({
       empresa_id: empresaId,
       user_id: user.id,
       orden_compra_id: facturaOc.id,
-      numero_factura: facturaForm.numero_factura,
+      numero_factura: numeroFacturaDerivado,
       fecha_factura: facturaForm.fecha_factura,
+      tipo_comprobante_letra: facturaForm.tipo_comprobante_letra,
+      punto_venta_proveedor: facturaForm.punto_venta_proveedor.trim(),
+      numero_comprobante_proveedor: facturaForm.numero_comprobante_proveedor.trim(),
       items: facturaForm.items.map(i => ({
         producto_id: i.producto_id ?? null,
         cantidad: parseFloat(i.cantidad) || 0,
