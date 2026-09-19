@@ -14,11 +14,16 @@ const AYUDA_LIBRO_IVA_VENTAS = {
   queMuestra: ['Fecha, comprobante y cliente (con CUIT si corresponde)', 'Neto gravado e IVA discriminado por alícuota', 'Total por comprobante'],
   filtros: ['Rango de fechas (normalmente un mes calendario)'],
 };
+const AYUDA_LIBRO_IVA_COMPRAS = {
+  queEs: 'Detalle de facturas de compra recibidas con el IVA Crédito Fiscal discriminado, en el formato que se usa para la posición mensual de IVA ante AFIP/ARCA.',
+  queMuestra: ['Fecha, factura y proveedor (con CUIT si corresponde)', 'Neto gravado e IVA discriminado por alícuota', 'Total por factura'],
+  filtros: ['Rango de fechas (normalmente un mes calendario)'],
+};
 
 function GridReportes({
   openReportDialog,
   tcParaleloEnabled, monedaParalela, setShowParidad,
-  afipActivo, setShowLibroIVA, setLibroIVAOrigen,
+  afipActivo, setShowLibroIVA, setLibroIVAOrigen, setShowLibroIVACompras,
 }) {
   const [infoAbierto, setInfoAbierto] = useState(null); // { title, icon, ayuda } | null
 
@@ -147,6 +152,41 @@ function GridReportes({
             className="w-full bg-kx-surface-2 hover:bg-kx-border text-kx-text border border-kx-border transition-all"
           >
             Ver Libro IVA Ventas
+          </Button>
+        </div>
+
+        {/* ── Libro IVA Compras (AFIP) ── */}
+        <div
+          className="group bg-kx-surface border border-kx-border rounded-2xl p-6 shadow-sm dark:shadow-none
+            border-t-2 border-t-kx-blue transition-all duration-200
+            hover:shadow-md hover:-translate-y-0.5 cursor-pointer"
+          onClick={() => setShowLibroIVACompras(true)}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 bg-kx-surface-2 rounded-xl border border-kx-border">
+              <BookOpen className="w-8 h-8 text-kx-blue" />
+            </div>
+            <div className="flex items-center gap-1">
+              {afipActivo && (
+                <span className="text-xs font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">
+                  AFIP
+                </span>
+              )}
+              <ReportInfoButton onClick={() => setInfoAbierto({ title: 'Libro IVA Compras', icon: <BookOpen className="w-8 h-8 text-kx-blue" />, ayuda: AYUDA_LIBRO_IVA_COMPRAS })} />
+            </div>
+          </div>
+          <div className="mb-5">
+            <h3 className="text-lg font-bold text-kx-text mb-1.5 group-hover:text-kx-violet transition-colors">
+              Libro IVA Compras
+            </h3>
+            <p className="text-kx-text-2 text-sm line-clamp-2">
+              Facturas recibidas con neto gravado e IVA Crédito Fiscal discriminado por período.
+            </p>
+          </div>
+          <Button
+            className="w-full bg-kx-surface-2 hover:bg-kx-border text-kx-text border border-kx-border transition-all"
+          >
+            Ver Libro IVA Compras
           </Button>
         </div>
       </div>

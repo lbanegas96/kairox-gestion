@@ -1,5 +1,37 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Reportería Fase 1 — 4 quick-wins del Plan de Reportería (18/09)
+
+Primera fase del "Plan de Reportería" (barrido del agente contable, aprobado por Luciano, no
+versionado en git — ver artifact de la sesión) para cerrar huecos de información ahora que el
+motor contable/funcional tuvo muchos ajustes. Los 4 ítems, todos con el botón "i" de ayuda
+(`ReportInfoDialog`) ya incorporado desde el arranque, no como agregado posterior:
+
+1. **Cartera de Proveedores** — nueva card en Centro de Reportes (`reportDefinitions.jsx` id
+   `proveedores`), aging 0-30/31-60/61-90/90+ igual que el ya existente de Clientes. La lógica de
+   `ReportesSection.jsx` reusa el mismo criterio de reconciliación que
+   `ProveedoresSection.jsx`/`fetchAgingProveedores`: los buckets crudos de
+   `compras_saldo_pendiente` se re-escalan proporcionalmente contra el saldo real
+   (`cuenta_corriente_proveedores`) cuando difieren en más de $0,01 (un pago a cuenta no siempre
+   se imputa a una factura puntual).
+2. **Libro IVA Compras** — nueva card hardcodeada en `GridReportes.jsx` (mismo patrón que la ya
+   existente "Libro IVA Ventas"), componente `ReporteLibroIVACompras.jsx` ya armado, ahora
+   enlazado desde Reportería (antes solo vivía en el módulo de Compras).
+3. **Histórico de Arqueos de Caja** — nueva card `arqueos_caja`, lista todo `caja_sesiones`
+   cerrada con esperado/real/diferencia, agrupable por día/cajero/caja. Confirma en vivo un caso
+   real de sobrante ($70.000, 03/08, Nadia Tecera/Caja Principal).
+4. **$ Impacto en Recuento/Revalorización de Inventario** — columna nueva en
+   `TabRecuentoInventario.jsx`/`TabRevalorizacionInventario.jsx`. No hizo falta migración ni
+   recálculo: `recuentos_inventario.asiento_id`/`revalorizaciones_inventario.asiento_id` ya
+   apuntan al asiento balanceado que la confirmación genera, así que el monto sale de un simple
+   embedded select `asientos_contables(total_debe)` agregado a `getAll()` de ambos services — la
+   fuente de verdad es el asiento mismo, nunca se recalcula aparte.
+
+Build verificado con `--config vite.config.prod.js` (ver ítem anterior sobre por qué ese config
+específico importa): sin errores, `exceljs` sigue en su propio chunk, `vendor` sin regresión.
+
+---
+
 ## ✅ Barrido completo del bug de centavos (String + coma decimal) — 8 lugares más (18/09)
 
 El bug de "Registrar Pago/Cobro con centavos" del 17/09 (`String(numeric)` de Postgres usa punto

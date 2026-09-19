@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 
 import ReporteParidad from '@/components/reportes/ReporteParidad';
 import ReporteLibroIVA from '@/components/reportes/ReporteLibroIVA';
+import ReporteLibroIVACompras from '@/components/reportes/ReporteLibroIVACompras';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useConfig } from '@/contexts/ConfigContext';
@@ -25,6 +26,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   const [loading, setLoading] = useState(false);
   const [showParidad, setShowParidad] = useState(false);
   const [showLibroIVA, setShowLibroIVA] = useState(false);
+  const [showLibroIVACompras, setShowLibroIVACompras] = useState(false);
   const [libroIVAOrigen, setLibroIVAOrigen] = useState(null);
   const [afipActivo, setAfipActivo] = useState(false);
   const [groupBy, setGroupBy] = useState('none');
@@ -297,6 +299,95 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
          });
       }
 
+      // 3b. PROVEEDORES — mismo criterio que Clientes (aging + reconciliación),
+      // pero proveedores no tiene columna saldo_actual cacheada: el saldo real
+      // se deriva sumando cuenta_corriente_proveedores (mismo cálculo que
+      // proveedoresService.getSaldoProveedor, pero en un solo query para
+      // todos a la vez, igual que ya hace ProveedoresSection.fetchAgingProveedores).
+      else if (selectedReport.id === 'proveedores') {
+        const { data: provs, error } = await supabase
+          .from('proveedores')
+          .select('*')
+          .eq('empresa_id', user.empresa_id)
+          .neq('activo', false)
+          .order('nombre');
+        if (error) throw error;
+
+        const { data: openItems, error: agingError } = await supabase
+          .from('compras_saldo_pendiente')
+          .select('compra_id, proveedor_id, saldo_pendiente')
+          .eq('empresa_id', user.empresa_id)
+          .gt('saldo_pendiente', 0);
+        if (agingError) throw agingError;
+
+        // compras_saldo_pendiente no trae la fecha de la factura directo —
+        // hace falta un segundo query a compras para poder bucketear por
+        // antigüedad (mismo problema que ya resolvió ProveedoresSection).
+        const { data: comprasInfo, error: comprasInfoError } = await supabase
+          .from('compras')
+          .select('id, fecha')
+          .in('id', (openItems || []).map(i => i.compra_id));
+        if (comprasInfoError) throw comprasInfoError;
+        const fechaPorCompraId = Object.fromEntries((comprasInfo || []).map(c => [c.id, c.fecha]));
+
+        const { data: ccpMovs, error: ccpError } = await supabase
+          .from('cuenta_corriente_proveedores')
+          .select('proveedor_id, tipo, monto')
+          .eq('empresa_id', user.empresa_id);
+        if (ccpError) throw ccpError;
+
+        const saldoRealPorProv = {};
+        (ccpMovs || []).forEach(m => {
+          const delta = (m.tipo === 'compra' || m.tipo === 'nota_debito') ? Number(m.monto)
+                      : (m.tipo === 'pago'   || m.tipo === 'nota_credito') ? -Number(m.monto)
+                      : 0;
+          saldoRealPorProv[m.proveedor_id] = (saldoRealPorProv[m.proveedor_id] || 0) + delta;
+        });
+
+        const now = getNowAR();
+        const agingPorProveedor = {};
+        (openItems || []).forEach(item => {
+          const fecha = fechaPorCompraId[item.compra_id];
+          const dias = fecha ? Math.floor((now - new Date(fecha)) / 86400000) : 0;
+          const bucket = dias <= 30 ? 'aging_0_30' : dias <= 60 ? 'aging_31_60' : dias <= 90 ? 'aging_61_90' : 'aging_90_mas';
+          if (!agingPorProveedor[item.proveedor_id]) {
+            agingPorProveedor[item.proveedor_id] = { aging_0_30: 0, aging_31_60: 0, aging_61_90: 0, aging_90_mas: 0 };
+          }
+          agingPorProveedor[item.proveedor_id][bucket] += Number(item.saldo_pendiente);
+        });
+
+        data = provs.map(p => {
+          const raw = agingPorProveedor[p.id] || { aging_0_30: 0, aging_31_60: 0, aging_61_90: 0, aging_90_mas: 0 };
+          const saldoReal = saldoRealPorProv[p.id] || 0;
+          const sumaBuckets = raw.aging_0_30 + raw.aging_31_60 + raw.aging_61_90 + raw.aging_90_mas;
+
+          // Reconciliación: igual que Clientes — un pago a cuenta sin imputar
+          // a una compra puntual no debe inflar la antigüedad por encima del
+          // saldo real ya verificado.
+          let aging = raw;
+          if (saldoReal <= 0) {
+            aging = { aging_0_30: 0, aging_31_60: 0, aging_61_90: 0, aging_90_mas: 0 };
+          } else if (sumaBuckets > 0 && Math.abs(sumaBuckets - saldoReal) > 0.01) {
+            const factor = saldoReal / sumaBuckets;
+            aging = {
+              aging_0_30:   Math.round(raw.aging_0_30   * factor * 100) / 100,
+              aging_31_60:  Math.round(raw.aging_31_60  * factor * 100) / 100,
+              aging_61_90:  Math.round(raw.aging_61_90  * factor * 100) / 100,
+              aging_90_mas: Math.round(raw.aging_90_mas * factor * 100) / 100,
+            };
+          }
+
+          return {
+            id: p.id,
+            nombre: p.nombre,
+            telefono: p.telefono,
+            email: p.email,
+            saldo: saldoReal,
+            ...aging,
+          };
+        });
+      }
+
       // 4. CUENTA CORRIENTE — extracto por cliente con saldo acumulado
       // (estilo resumen bancario). requiresCliente obliga a elegir un
       // cliente antes de generar: el saldo acumulado solo tiene sentido
@@ -442,6 +533,34 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         });
       }
 
+      // 6. ARQUEOS DE CAJA — historial de diferencias al cerrar cada sesión
+      // (mig.216/multi-caja). Solo sesiones 'cerrada' tienen un arqueo real;
+      // 'abierta' todavía no comparó nada. Filtra por cierre_fecha, no por
+      // apertura — una caja abierta el 31 y cerrada el 1 pertenece al día
+      // que efectivamente se arqueó.
+      else if (selectedReport.id === 'arqueos_caja') {
+        let query = supabase
+          .from('caja_sesiones')
+          .select('id, cierre_fecha, monto_final_esperado, monto_final_real, diferencia, cerrado_por, caja_id, profiles:cerrado_por(first_name, last_name, email), cajas:caja_id(nombre)')
+          .eq('empresa_id', user.empresa_id)
+          .eq('estado', 'cerrada')
+          .gte('cierre_fecha', start)
+          .lte('cierre_fecha', end)
+          .order('cierre_fecha', { ascending: false });
+        const { data: sesiones, error } = await query;
+        if (error) throw error;
+
+        data = (sesiones || []).map(s => ({
+          id: s.id,
+          fecha: s.cierre_fecha,
+          caja: s.cajas?.nombre || 'Caja única',
+          cajero: s.profiles ? (`${s.profiles.first_name || ''} ${s.profiles.last_name || ''}`.trim() || s.profiles.email) : '—',
+          esperado: Number(s.monto_final_esperado || 0),
+          real: Number(s.monto_final_real || 0),
+          diferencia: Number(s.diferencia || 0),
+        }));
+      }
+
       setReportData(data);
       if (data.length === 0) {
         toast({ description: "No se encontraron datos para el período.", duration: 3000 });
@@ -529,6 +648,9 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   if (showLibroIVA) {
     return <ReporteLibroIVA onBack={handleLibroIVABack} />;
   }
+  if (showLibroIVACompras) {
+    return <ReporteLibroIVACompras onBack={() => setShowLibroIVACompras(false)} />;
+  }
 
   return (
     <div className="space-y-8 pb-8 animate-in fade-in duration-500">
@@ -536,6 +658,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         openReportDialog={openReportDialog}
         tcParaleloEnabled={tcParaleloEnabled} monedaParalela={monedaParalela} setShowParidad={setShowParidad}
         afipActivo={afipActivo} setShowLibroIVA={setShowLibroIVA} setLibroIVAOrigen={setLibroIVAOrigen}
+        setShowLibroIVACompras={setShowLibroIVACompras}
       />
 
       <ModalReporte

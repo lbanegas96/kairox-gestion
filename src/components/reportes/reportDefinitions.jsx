@@ -1,4 +1,4 @@
-import { BarChart3, ShoppingCart, Users, CreditCard, Banknote, Smartphone } from 'lucide-react';
+import { BarChart3, ShoppingCart, Users, CreditCard, Banknote, Smartphone, Truck, Scale } from 'lucide-react';
 import { formatDateAR } from '@/lib/dateUtils';
 import { formatCurrency } from '@/lib/currencyUtils';
 
@@ -64,6 +64,20 @@ export const REPORTS = [
     },
   },
   {
+    id: 'proveedores',
+    title: 'Cartera de Proveedores',
+    description: 'Estado de cuentas y antigüedad de deuda con proveedores.',
+    icon: <Truck className="w-8 h-8 text-kx-red" />,
+    borderClass: 'border-t-kx-red',
+    requiresDate: false,
+    supportsFiltroDeuda: true,
+    ayuda: {
+      queEs: 'Estado de cuenta de cada proveedor con antigüedad de deuda (aging), reconciliado contra los movimientos reales de Cuenta Corriente de Proveedores — no es un saldo estimado. Mismo criterio que Cartera de Clientes, del otro lado del mostrador.',
+      queMuestra: ['Proveedor y saldo actual (lo que le debés)', 'Antigüedad de la deuda en 4 tramos: 0-30, 31-60, 61-90 y más de 90 días', 'Totales: Total Proveedores, Con deuda, Total a Pagar, Total a Favor'],
+      filtros: ['Mostrar solo proveedores con deuda'],
+    },
+  },
+  {
     id: 'cuenta_corriente',
     title: 'Movimientos Cta. Corriente',
     description: 'Extracto de cuenta por cliente, con saldo acumulado.',
@@ -90,6 +104,20 @@ export const REPORTS = [
       queEs: 'Libro de caja: todos los movimientos de ingreso y egreso registrados en el período elegido.',
       queMuestra: ['Fecha, tipo (ingreso/egreso), categoría y concepto de cada movimiento', 'Monto y saldo acumulado', 'Totales: Saldo Inicial, Ingresos, Egresos, Saldo Final'],
       filtros: ['Rango de fechas', 'Agrupar por día, categoría o método de pago', 'Comparar contra el período anterior'],
+    },
+  },
+  {
+    id: 'arqueos_caja',
+    title: 'Arqueos de Caja',
+    description: 'Historial de diferencias al cerrar caja, por cajero y por período.',
+    icon: <Scale className="w-8 h-8 text-kx-amber" />,
+    borderClass: 'border-t-kx-amber',
+    requiresDate: true,
+    supportsGroupBy: true,
+    ayuda: {
+      queEs: 'Historial de las diferencias encontradas al cerrar cada sesión de caja (monto contado vs. monto que el sistema esperaba), para detectar faltantes recurrentes por cajero o por caja.',
+      queMuestra: ['Fecha de cierre, caja y quién cerró la sesión', 'Monto esperado, monto real contado y la diferencia', 'Totales: Total Faltante y Total Sobrante (nunca se compensan entre sí)'],
+      filtros: ['Rango de fechas', 'Agrupar por día, por cajero o por caja'],
     },
   },
   {
@@ -170,6 +198,19 @@ export const buildSummaryMetrics = (reportId, data, previousPeriod = null) => {
       { label: 'Total a Favor',  value: fc(totalAFavor) },
     ];
   }
+  if (reportId === 'proveedores') {
+    // Mismo criterio que Clientes: nunca netear lo que le debemos a un
+    // proveedor con un saldo a favor que tengamos con otro.
+    const totalAPagar = data.filter(r => (r.saldo || 0) > 0).reduce((s, r) => s + r.saldo, 0);
+    const totalAFavorProv = data.filter(r => (r.saldo || 0) < 0).reduce((s, r) => s + Math.abs(r.saldo), 0);
+    const conDeudaProv = data.filter(r => r.saldo > 0).length;
+    return [
+      { label: 'Total Proveedores', value: data.length },
+      { label: 'Con deuda',         value: conDeudaProv },
+      { label: 'Total a Pagar',     value: fc(totalAPagar) },
+      { label: 'Total a Favor',     value: fc(totalAFavorProv) },
+    ];
+  }
   if (reportId === 'financiero') {
     // Libro de caja: arranca de un Saldo Inicial (movimientos previos al
     // período, fila sintética) y termina en un Saldo Final acumulado —
@@ -201,6 +242,20 @@ export const buildSummaryMetrics = (reportId, data, previousPeriod = null) => {
       { label: 'Total DEBE',     value: fc(debe) },
       { label: 'Total HABER',    value: fc(haber) },
       { label: 'Saldo Final',    value: fc(saldoFinal) },
+    ];
+  }
+  if (reportId === 'arqueos_caja') {
+    // Nunca compensar faltante contra sobrante — un cajero con $5.000 de
+    // faltante un día y $5.000 de sobrante otro día no "cerró en cero", tuvo
+    // DOS problemas de arqueo distintos.
+    const totalFaltante = data.filter(r => (r.diferencia || 0) < 0).reduce((s, r) => s + Math.abs(r.diferencia), 0);
+    const totalSobrante = data.filter(r => (r.diferencia || 0) > 0).reduce((s, r) => s + r.diferencia, 0);
+    const conDiferencia = data.filter(r => Math.abs(r.diferencia || 0) > 0.01).length;
+    return [
+      { label: 'Arqueos',        value: data.length },
+      { label: 'Con diferencia', value: conDiferencia },
+      { label: 'Total Faltante', value: fc(totalFaltante) },
+      { label: 'Total Sobrante', value: fc(totalSobrante) },
     ];
   }
   if (reportId === 'mp_movimientos') {
@@ -306,6 +361,36 @@ export const getTableConfig = (reportId, data) => {
     };
   }
 
+  if (reportId === 'proveedores') {
+    // Ver nota en buildSummaryMetrics: nunca netear deudores y acreedores.
+    const totalAPagar = data.filter(r => (r.saldo || 0) > 0).reduce((s, r) => s + r.saldo, 0);
+    const totalAFavorProv = data.filter(r => (r.saldo || 0) < 0).reduce((s, r) => s + Math.abs(r.saldo), 0);
+    return {
+      columns: [
+        { header: 'Proveedor', key: 'nombre', align: 'left' },
+        { header: 'Email', key: 'email', align: 'left', render: (r) => r.email || '-' },
+        { header: 'Teléfono', key: 'telefono', align: 'left', render: (r) => r.telefono || '-' },
+        {
+          header: 'Saldo Actual', key: 'saldo', align: 'right',
+          render: (r) => <span className={r.saldo > 0 ? 'text-red-600 font-bold' : 'text-green-600 dark:text-green-400'}>{formatCurrency(r.saldo)}</span>,
+          pdfRender: (r) => formatCurrency(r.saldo),
+        },
+        // Antigüedad de saldos — mismo criterio de días que Cartera de Clientes.
+        { header: '0-30',  key: 'aging_0_30',   align: 'right', render: (r) => r.aging_0_30   ? formatCurrency(r.aging_0_30)   : '-', pdfRender: (r) => r.aging_0_30   ? formatCurrency(r.aging_0_30)   : '-' },
+        { header: '31-60', key: 'aging_31_60',  align: 'right', render: (r) => r.aging_31_60  ? formatCurrency(r.aging_31_60)  : '-', pdfRender: (r) => r.aging_31_60  ? formatCurrency(r.aging_31_60)  : '-' },
+        { header: '61-90', key: 'aging_61_90',  align: 'right', render: (r) => r.aging_61_90  ? formatCurrency(r.aging_61_90)  : '-', pdfRender: (r) => r.aging_61_90  ? formatCurrency(r.aging_61_90)  : '-' },
+        { header: '+90',   key: 'aging_90_mas', align: 'right', render: (r) => r.aging_90_mas ? <span className="text-red-600 font-bold">{formatCurrency(r.aging_90_mas)}</span> : '-', pdfRender: (r) => r.aging_90_mas ? formatCurrency(r.aging_90_mas) : '-' },
+      ],
+      totals: [
+        { content: `TOTAL A PAGAR: ${formatCurrency(totalAPagar)} | TOTAL A FAVOR: ${formatCurrency(totalAFavorProv)}`, colSpan: 4, align: 'right' },
+        { content: formatCurrency(data.reduce((s, r) => s + (r.aging_0_30 || 0), 0)),   align: 'right', value: data.reduce((s, r) => s + (r.aging_0_30 || 0), 0) },
+        { content: formatCurrency(data.reduce((s, r) => s + (r.aging_31_60 || 0), 0)),  align: 'right', value: data.reduce((s, r) => s + (r.aging_31_60 || 0), 0) },
+        { content: formatCurrency(data.reduce((s, r) => s + (r.aging_61_90 || 0), 0)),  align: 'right', value: data.reduce((s, r) => s + (r.aging_61_90 || 0), 0) },
+        { content: formatCurrency(data.reduce((s, r) => s + (r.aging_90_mas || 0), 0)), align: 'right', value: data.reduce((s, r) => s + (r.aging_90_mas || 0), 0) },
+      ]
+    };
+  }
+
   if (reportId === 'cuenta_corriente') {
     // Extracto por cliente estilo resumen bancario: orden cronológico
     // ascendente + saldo acumulado fila a fila, arrancando del saldo previo
@@ -365,6 +450,32 @@ export const getTableConfig = (reportId, data) => {
         { content: formatCurrency(totalIngresos), align: 'right', value: totalIngresos },
         { content: formatCurrency(totalEgresos),  align: 'right', value: totalEgresos },
         { content: formatCurrency(saldoFinal),    align: 'right', value: saldoFinal },
+      ]
+    };
+  }
+
+  if (reportId === 'arqueos_caja') {
+    const totalFaltante = data.filter(r => (r.diferencia || 0) < 0).reduce((s, r) => s + Math.abs(r.diferencia), 0);
+    const totalSobrante = data.filter(r => (r.diferencia || 0) > 0).reduce((s, r) => s + r.diferencia, 0);
+    return {
+      columns: [
+        { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
+        { header: 'Caja', key: 'caja', align: 'left', render: (r) => r.caja || '-' },
+        { header: 'Cerrado por', key: 'cajero', align: 'left', render: (r) => r.cajero || '-' },
+        { header: 'Esperado', key: 'esperado', align: 'right', render: (r) => formatCurrency(r.esperado), pdfRender: (r) => formatCurrency(r.esperado) },
+        { header: 'Real', key: 'real', align: 'right', render: (r) => formatCurrency(r.real), pdfRender: (r) => formatCurrency(r.real) },
+        {
+          header: 'Diferencia', key: 'diferencia', align: 'right',
+          render: (r) => {
+            if (Math.abs(r.diferencia) < 0.01) return <span className="text-kx-text-3">—</span>;
+            return <span className={r.diferencia < 0 ? 'text-red-600 dark:text-red-400 font-bold' : 'text-green-600 dark:text-green-400 font-bold'}>{formatCurrency(r.diferencia)}</span>;
+          },
+          pdfRender: (r) => formatCurrency(r.diferencia),
+        },
+      ],
+      totals: [
+        { content: `TOTAL FALTANTE: ${formatCurrency(totalFaltante)} | TOTAL SOBRANTE: ${formatCurrency(totalSobrante)}`, colSpan: 5, align: 'right' },
+        { content: formatCurrency(data.reduce((s, r) => s + (r.diferencia || 0), 0)), align: 'right', value: data.reduce((s, r) => s + (r.diferencia || 0), 0) },
       ]
     };
   }
@@ -454,6 +565,12 @@ const GROUP_BY_OPTIONS_POR_REPORTE = {
     { value: 'subtipo',    label: 'Por tipo de cobro' },
     { value: 'conciliado', label: 'Por estado de conciliación' },
   ],
+  arqueos_caja: [
+    { value: 'none',   label: 'Sin agrupar' },
+    { value: 'dia',    label: 'Por día' },
+    { value: 'cajero', label: 'Por cajero' },
+    { value: 'caja',   label: 'Por caja' },
+  ],
 };
 
 export function getGroupByOptions(reportId) {
@@ -483,6 +600,11 @@ const GROUP_KEY_FN_POR_REPORTE = {
     subtipo:    (r) => SUBTIPO_LABEL[r.subtipo] || 'Otro',
     conciliado: (r) => r.conciliado ? 'Conciliado' : 'Sin conciliar',
   },
+  arqueos_caja: {
+    dia:    (r) => formatDateAR(r.fecha),
+    cajero: (r) => r.cajero || 'Sin datos',
+    caja:   (r) => r.caja || 'Sin datos',
+  },
 };
 
 // Subtotal por grupo — ventas/compras suman `total`; financiero (Libro de
@@ -492,6 +614,7 @@ const GROUP_KEY_FN_POR_REPORTE = {
 const GROUP_SUBTOTAL_FN_POR_REPORTE = {
   financiero:      (r) => (r.ingreso || 0) - (r.egreso || 0),
   mp_movimientos:  (r) => (r.ingreso || 0) - (r.egreso || 0),
+  arqueos_caja:    (r) => r.diferencia || 0,
 };
 
 /**
@@ -533,11 +656,11 @@ export function applyGrouping(reportId, data, groupBy) {
 }
 
 /**
- * Filtro "solo con deuda" de Cartera de Clientes — oculta clientes con saldo
- * 0 o a favor (negativo). En la práctica quien cobra no quiere ver los 7
- * clientes, quiere ver los 3 que le deben.
+ * Filtro "solo con deuda" de Cartera de Clientes/Proveedores — oculta filas
+ * con saldo 0 o a favor (negativo). En la práctica quien cobra/paga no
+ * quiere ver los 7 clientes, quiere ver los 3 que le deben.
  */
 export function applyFiltroDeuda(reportId, data, soloConDeuda) {
-  if (reportId !== 'clientes' || !soloConDeuda) return data;
+  if ((reportId !== 'clientes' && reportId !== 'proveedores') || !soloConDeuda) return data;
   return data.filter(r => (r.saldo || 0) > 0);
 }

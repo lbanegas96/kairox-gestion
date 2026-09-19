@@ -20,13 +20,19 @@ export interface RecuentoInventario {
   observaciones: string | null;
   asiento_id: string | null;
   categorias?: { nombre: string } | null;
+  // $ de impacto del recuento (18/09, pedido de Luciano: "$ visible en
+  // Recuento/Revalorización") -- se lee directo del asiento ya generado
+  // (total_debe = total_haber siempre, es la misma magnitud que
+  // total_faltante + total_sobrante) en vez de recalcularlo de nuevo desde
+  // los items, así nunca puede desincronizarse de lo que el asiento dice.
+  asientos_contables?: { total_debe: number } | null;
 }
 
 export const recuentoInventarioService = {
   async getAll(empresaId: string): Promise<RecuentoInventario[]> {
     const { data, error } = await supabase
       .from('recuentos_inventario')
-      .select('*, categorias(nombre)')
+      .select('*, categorias(nombre), asientos_contables(total_debe)')
       .eq('empresa_id', empresaId)
       .order('created_at', { ascending: false });
     if (error) throw new Error(error.message);

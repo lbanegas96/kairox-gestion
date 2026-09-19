@@ -20,13 +20,15 @@ export interface RevalorizacionInventario {
   observaciones: string | null;
   asiento_id: string | null;
   categorias?: { nombre: string } | null;
+  // $ de impacto (mismo criterio que RecuentoInventario, ver ahí el porqué)
+  asientos_contables?: { total_debe: number } | null;
 }
 
 export const revalorizacionInventarioService = {
   async getAll(empresaId: string): Promise<RevalorizacionInventario[]> {
     const { data, error } = await supabase
       .from('revalorizaciones_inventario')
-      .select('*, categorias(nombre)')
+      .select('*, categorias(nombre), asientos_contables(total_debe)')
       .eq('empresa_id', empresaId)
       .order('created_at', { ascending: false });
     if (error) throw new Error(error.message);

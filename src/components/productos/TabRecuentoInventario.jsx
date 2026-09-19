@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ClipboardList, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDateAR } from '@/lib/dateUtils';
+import { formatCurrency } from '@/lib/currencyUtils';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { recuentoInventarioService, RECUENTO_INVENTARIO_KEYS } from '@/services/recuentoInventarioService';
 import { ESTADOS_AJUSTE_INVENTARIO } from './shared';
@@ -42,13 +43,14 @@ function TabRecuentoInventario({ categories = [] }) {
               <th className="p-4 text-left">Fecha</th>
               <th className="p-4 text-left">Alcance</th>
               <th className="p-4 text-left">Estado</th>
+              <th className="p-4 text-right">$ Impacto</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {isLoading ? (
-              <tr><td colSpan={4} className="p-10 text-center text-kx-text-3">Cargando...</td></tr>
+              <tr><td colSpan={5} className="p-10 text-center text-kx-text-3">Cargando...</td></tr>
             ) : recuentos.length === 0 ? (
-              <tr><td colSpan={4} className="p-10 text-center text-kx-text-3">
+              <tr><td colSpan={5} className="p-10 text-center text-kx-text-3">
                 <div className="flex flex-col items-center gap-2">
                   <ClipboardList className="w-8 h-8 opacity-30" />
                   <span>No hay recuentos de inventario</span>
@@ -57,6 +59,7 @@ function TabRecuentoInventario({ categories = [] }) {
             ) : recuentos.map(r => {
               const cfg = ESTADOS_AJUSTE_INVENTARIO[r.estado] ?? ESTADOS_AJUSTE_INVENTARIO.borrador;
               const Icon = cfg.icon;
+              const impacto = r.asientos_contables?.total_debe;
               return (
                 <tr key={r.id} onClick={() => setDetalleId(r.id)}
                   className="hover:bg-kx-surface-2 dark:hover:bg-slate-800/40 transition-colors cursor-pointer">
@@ -67,6 +70,9 @@ function TabRecuentoInventario({ categories = [] }) {
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${cfg.color}`}>
                       <Icon className="w-3 h-3" /> {cfg.label}
                     </span>
+                  </td>
+                  <td className="p-4 text-right font-mono text-slate-700 dark:text-kx-text">
+                    {impacto ? formatCurrency(impacto) : '—'}
                   </td>
                 </tr>
               );
