@@ -1,5 +1,38 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Reportería Fase 3 — Información operativa (19/09)
+
+Tercera fase del Plan de Reportería: 5 cards nuevas en Centro de Reportes con plata/compromisos
+reales que el sistema ya registraba pero nunca se veían juntos. Las 5 verificadas en vivo contra
+datos reales de Nalux (no solo el build):
+
+1. **Liquidación de Tarjetas** — `movimientos_caja` con `estado_liquidacion='pendiente'`
+   (mig.216/362). Snapshot a hoy, sin filtro de fecha. Hoy en Nalux da vacío (las 237 filas de
+   tarjeta ya están `acreditado`) — confirmado que es el estado real, no un bug del reporte.
+2. **Pasivo de Fidelización** — `clientes.saldo_puntos` (la fuente de verdad ya mantenida por
+   el trigger de puntos) × `empresas.puntos_valor_pesos`, NO reconstruido sumando
+   `movimientos_puntos` a mano — mismo criterio que Valorización de Inventario en Fase 2 (confiar
+   en el campo ya calculado, no en el ledger crudo). $7.802 de pasivo verificado en 8 clientes.
+3. **Flujo de Cheques Proyectado** — combina `cheques` tipo `tercero` en `en_cartera` (a cobrar)
+   con tipo `propio` en `pendiente`/`entregado` (a pagar) — **son 2 vocabularios de estado
+   distintos por tipo**, confirmado leyendo `ChequesSection.jsx` antes de escribir el query (un
+   filtro único `estado='en_cartera'` para ambos tipos habría sido incorrecto). Único reporte de
+   todo el plan que mira para ADELANTE (vencimientos futuros): `openReportDialog` le pisa el
+   default de fecha a "hoy → +30 días" en vez de "inicio de mes → hoy".
+4. **Órdenes de Compra Abiertas** — consolidado línea por línea (`cantidad_pedida` vs.
+   `cantidad_recibida` vs. `cantidad_facturada` de `ordenes_compra_items`), no OC por OC. 16 OCs
+   con algo pendiente en Nalux, incluye casos reales de mercadería recibida hace 100+ días que
+   nunca se facturó.
+5. **Detalle de Compras por Producto** — mismo patrón que Rentabilidad por Producto (Fase 2)
+   pero sobre `detalle_compras`; costo promedio PONDERADO por cantidad (costo total ÷ cantidad
+   total, no promedio ingenuo de `costo_unitario` por fila) — cruzado contra `costo_compra` de
+   Valorización de Inventario y coincide.
+
+Build verificado con `--config vite.config.prod.js`: sin errores, `exceljs` en su propio chunk,
+`vendor` sin regresión.
+
+---
+
 ## ✅ Reportería Fase 2 — Rentabilidad real (18/09)
 
 Segunda fase del Plan de Reportería (ver Fase 1 debajo), los 4 ítems de "Rentabilidad real":

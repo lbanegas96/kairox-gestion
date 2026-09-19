@@ -116,6 +116,15 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   const openReportDialog = (report) => {
     setSelectedReport(report);
     resetFilters();
+    // Flujo de Cheques mira para ADELANTE (vencimientos futuros), al revés
+    // que el resto de los reportes (que miran hacia atrás desde hoy) — el
+    // default de "inicio de mes -> hoy" no tendría ningún cheque para mostrar.
+    if (report.id === 'flujo_cheques') {
+      const hoy = new Date();
+      const en30dias = new Date(hoy.getTime() + 30 * 86400000);
+      setStartDate(hoy.toISOString().split('T')[0]);
+      setEndDate(en30dias.toISOString().split('T')[0]);
+    }
     setIsDialogOpen(true);
   };
 
@@ -713,6 +722,188 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
           { id: 'stock_anterior', fecha: start, tipo: '', motivo: 'Stock anterior', cantidad: 0, signo: 0, stock: stockAnterior, valor: 0, esStockAnterior: true },
           ...movimientos,
         ];
+      }
+
+      // 9. LIQUIDACIÓN DE TARJETAS — movimientos_caja con estado_liquidacion
+      // ='pendiente' (mig.216/362): el dinero todavía no está acreditado en
+      // el banco. Snapshot a HOY, no de un período — una vez que se acredita
+      // (acreditar_movimiento_caja) deja de aparecer, no tiene sentido
+      // filtrar por fecha de la venta.
+      else if (selectedReport.id === 'liquidacion_tarjetas') {
+        const { data: movs, error } = await supabase
+          .from('movimientos_caja')
+          .select('id, fecha, concepto, metodo_pago, monto, monto_comision, monto_neto, fecha_acreditacion_estimada')
+          .eq('empresa_id', user.empresa_id)
+          .eq('estado_liquidacion', 'pendiente')
+          .order('fecha_acreditacion_estimada', { ascending: true });
+        if (error) throw error;
+
+        data = (movs || []).map(m => ({
+          id: m.id,
+          fecha: m.fecha,
+          concepto: m.concepto,
+          metodo: m.metodo_pago,
+          monto: Number(m.monto || 0),
+          comision: Number(m.monto_comision || 0),
+          neto: Number(m.monto_neto || 0),
+          fechaAcreditacion: m.fecha_acreditacion_estimada,
+        }));
+      }
+
+      // 10. PASIVO DE FIDELIZACIÓN — saldo_puntos de clientes (fuente de
+      // verdad ya mantenida por el trigger de puntos, mig.312) valorizado al
+      // tipo de cambio puntos->pesos configurado en Configuración > Finanzas.
+      // No se reconstruye desde movimientos_puntos: ese ledger sirve para
+      // auditar el detalle, pero el saldo YA está calculado y es más
+      // confiable que re-sumar ganado/canjeado/reversión a mano.
+      else if (selectedReport.id === 'pasivo_fidelizacion') {
+        const { data: emp, error: empError } = await supabase
+          .from('empresas')
+          .select('puntos_valor_pesos')
+          .eq('id', user.empresa_id)
+          .single();
+        if (empError) throw empError;
+        const valorPorPunto = Number(emp?.puntos_valor_pesos || 0);
+
+        const { data: clients, error } = await supabase
+          .from('clientes')
+          .select('id, nombre, saldo_puntos')
+          .eq('empresa_id', user.empresa_id)
+          .gt('saldo_puntos', 0)
+          .order('saldo_puntos', { ascending: false });
+        if (error) throw error;
+
+        data = (clients || []).map(c => ({
+          id: c.id,
+          nombre: c.nombre,
+          saldoPuntos: Number(c.saldo_puntos || 0),
+          valorPesos: Number(c.saldo_puntos || 0) * valorPorPunto,
+          valorPorPunto,
+        }));
+      }
+
+      // 11. FLUJO DE CHEQUES PROYECTADO — cheques de terceros "en_cartera"
+      // (a cobrar) + cheques propios "pendiente"/"entregado" (a pagar,
+      // ChequesSection.jsx usa esos 2 estados para propios, NO 'en_cartera' —
+      // los dos tipos tienen vocabularios de estado distintos). Filtra por
+      // fecha_vencimiento (date puro), no por start/end (timestamptz de
+      // start-of-month a hoy no tiene sentido para un flujo hacia adelante).
+      else if (selectedReport.id === 'flujo_cheques') {
+        const { data: terceros, error: e1 } = await supabase
+          .from('cheques')
+          .select('id, numero, banco, monto, fecha_vencimiento, clientes(nombre)')
+          .eq('empresa_id', user.empresa_id)
+          .eq('tipo', 'tercero')
+          .eq('estado', 'en_cartera')
+          .gte('fecha_vencimiento', startDate)
+          .lte('fecha_vencimiento', endDate);
+        if (e1) throw e1;
+
+        const { data: propios, error: e2 } = await supabase
+          .from('cheques')
+          .select('id, numero, banco, monto, fecha_vencimiento, proveedores(nombre)')
+          .eq('empresa_id', user.empresa_id)
+          .eq('tipo', 'propio')
+          .in('estado', ['pendiente', 'entregado'])
+          .gte('fecha_vencimiento', startDate)
+          .lte('fecha_vencimiento', endDate);
+        if (e2) throw e2;
+
+        data = [
+          ...(terceros || []).map(c => ({
+            id: c.id, fecha: c.fecha_vencimiento, direccion: 'cobrar',
+            contraparte: c.clientes?.nombre || '-', banco: c.banco, numero: c.numero,
+            monto: Number(c.monto || 0),
+          })),
+          ...(propios || []).map(c => ({
+            id: c.id, fecha: c.fecha_vencimiento, direccion: 'pagar',
+            contraparte: c.proveedores?.nombre || '-', banco: c.banco, numero: c.numero,
+            monto: Number(c.monto || 0),
+          })),
+        ].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+      }
+
+      // 12. ÓRDENES DE COMPRA ABIERTAS — consolidado línea por línea (no OC
+      // por OC): cantidad_pedida/recibida/facturada ya están en
+      // ordenes_compra_items, solo hace falta filtrar las líneas con algo
+      // pendiente. Excluye 'cancelada' (nunca va a llegar). Snapshot a HOY,
+      // no de un período — es "qué sigue abierto ahora", no un movimiento.
+      else if (selectedReport.id === 'oc_abiertas') {
+        const { data: ocs, error } = await supabase
+          .from('ordenes_compra')
+          .select('id, numero, proveedor_nombre, fecha, ordenes_compra_items(producto_id, descripcion, cantidad_pedida, cantidad_recibida, cantidad_facturada, costo_unitario, productos(nombre))')
+          .eq('empresa_id', user.empresa_id)
+          .neq('estado', 'cancelada')
+          .order('fecha', { ascending: true });
+        if (error) throw error;
+
+        const now = getNowAR();
+        const filas = [];
+        (ocs || []).forEach(oc => {
+          (oc.ordenes_compra_items || []).forEach((item, idx) => {
+            const pedida = Number(item.cantidad_pedida || 0);
+            const recibida = Number(item.cantidad_recibida || 0);
+            const facturada = Number(item.cantidad_facturada || 0);
+            const pendienteRecibir = Math.max(0, pedida - recibida);
+            const pendienteFacturar = Math.max(0, recibida - facturada);
+            if (pendienteRecibir <= 0 && pendienteFacturar <= 0) return;
+            const dias = Math.floor((now - new Date(oc.fecha)) / 86400000);
+            filas.push({
+              id: `${oc.id}_${idx}`,
+              ocId: oc.id,
+              numero: oc.numero,
+              proveedor: oc.proveedor_nombre,
+              fecha: oc.fecha,
+              producto: item.productos?.nombre || item.descripcion || 'Producto eliminado',
+              pedida, recibida,
+              pendienteRecibir, pendienteFacturar,
+              dias,
+              valorPendienteRecibir: pendienteRecibir * Number(item.costo_unitario || 0),
+              valorPendienteFacturar: pendienteFacturar * Number(item.costo_unitario || 0),
+            });
+          });
+        });
+        data = filas;
+      }
+
+      // 13. DETALLE DE COMPRAS POR PRODUCTO — mismo patrón que Rentabilidad
+      // por Producto (Fase 2), pero sobre detalle_compras en vez de
+      // comprobante_items. costoPromedio = costo total / cantidad total:
+      // promedio PONDERADO por cantidad (no un promedio ingenuo de
+      // costo_unitario por fila), que es el criterio correcto cuando las
+      // compras vienen en tandas de tamaño distinto.
+      else if (selectedReport.id === 'detalle_compras_producto') {
+        let query = supabase
+          .from('compras')
+          .select('centro_costo_id, detalle_compras(producto_id, cantidad, subtotal, productos(nombre, codigo_sku, categorias(nombre)))')
+          .eq('empresa_id', user.empresa_id)
+          .gte('fecha', start)
+          .lte('fecha', end);
+        if (centroCostoId) query = query.eq('centro_costo_id', centroCostoId);
+        const { data: comprasData, error } = await query;
+        if (error) throw error;
+
+        const acumulado = {};
+        (comprasData || []).forEach(c => {
+          (c.detalle_compras || []).forEach(item => {
+            if (!item.producto_id) return;
+            if (!acumulado[item.producto_id]) {
+              acumulado[item.producto_id] = {
+                id: item.producto_id,
+                nombre: item.productos?.nombre || 'Producto eliminado',
+                sku: item.productos?.codigo_sku || '',
+                categoria: item.productos?.categorias?.nombre || 'Sin categoría',
+                cantidad: 0, costo: 0,
+              };
+            }
+            acumulado[item.producto_id].cantidad += Number(item.cantidad || 0);
+            acumulado[item.producto_id].costo += Number(item.subtotal || 0);
+          });
+        });
+
+        data = Object.values(acumulado)
+          .map(r => ({ ...r, costoPromedio: r.cantidad > 0 ? r.costo / r.cantidad : 0 }))
+          .sort((a, b) => b.costo - a.costo);
       }
 
       setReportData(data);

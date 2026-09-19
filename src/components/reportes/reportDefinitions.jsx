@@ -1,4 +1,4 @@
-import { BarChart3, ShoppingCart, Users, CreditCard, Banknote, Smartphone, Truck, Scale, TrendingUp, Boxes, History } from 'lucide-react';
+import { BarChart3, ShoppingCart, Users, CreditCard, Banknote, Smartphone, Truck, Scale, TrendingUp, Boxes, History, Landmark, Award, CalendarClock, PackageSearch, ShoppingBag } from 'lucide-react';
 import { formatDateAR } from '@/lib/dateUtils';
 import { formatCurrency } from '@/lib/currencyUtils';
 
@@ -192,6 +192,72 @@ export const REPORTS = [
       filtros: ['Rango de fechas', 'Agrupar por día o por estado de conciliación', 'Comparar contra el período anterior'],
     },
   },
+  {
+    id: 'liquidacion_tarjetas',
+    title: 'Liquidación de Tarjetas',
+    description: 'Cobros con tarjeta que todavía no se acreditaron en el banco.',
+    icon: <Landmark className="w-8 h-8 text-kx-blue" />,
+    borderClass: 'border-t-kx-blue',
+    requiresDate: false,
+    ayuda: {
+      queEs: 'Ventas cobradas con tarjeta que el banco todavía no acreditó — el dinero está "en camino" pero no disponible. Cuando se acredita, deja de aparecer acá.',
+      queMuestra: ['Fecha de la venta, concepto y método de cobro', 'Monto bruto, comisión estimada y monto neto a acreditar', 'Fecha de acreditación estimada'],
+      filtros: ['No aplica rango de fechas — siempre muestra todo lo pendiente de acreditar hoy'],
+    },
+  },
+  {
+    id: 'pasivo_fidelizacion',
+    title: 'Pasivo de Fidelización',
+    description: 'Cuánto tenés comprometido en descuentos futuros por puntos.',
+    icon: <Award className="w-8 h-8 text-kx-violet" />,
+    borderClass: 'border-t-kx-violet',
+    requiresDate: false,
+    ayuda: {
+      queEs: 'Puntos de fidelización que los clientes tienen acumulados y todavía no canjearon, valorizados al tipo de cambio puntos→pesos configurado — es plata que en algún momento se va a convertir en descuento.',
+      queMuestra: ['Cliente y saldo de puntos actual', 'Valor en pesos de esos puntos (saldo × valor por punto configurado)', 'Total: clientes con puntos, puntos totales, pasivo total en pesos'],
+      filtros: ['No aplica rango de fechas — es el saldo comprometido a hoy, no un movimiento del período'],
+    },
+  },
+  {
+    id: 'flujo_cheques',
+    title: 'Flujo de Cheques Proyectado',
+    description: 'Cuánto cobrás y cuánto pagás en cheques, por fecha de vencimiento.',
+    icon: <CalendarClock className="w-8 h-8 text-kx-green" />,
+    borderClass: 'border-t-kx-green',
+    requiresDate: true,
+    ayuda: {
+      queEs: 'Cheques de terceros en cartera (todavía no depositados/cobrados) y cheques propios entregados (todavía no debitados), combinados por fecha de vencimiento — para anticipar cuánto entra y cuánto sale de la cuenta.',
+      queMuestra: ['Fecha de vencimiento, tipo (a cobrar / a pagar) y de quién', 'Banco y número de cheque', 'Totales: a cobrar, a pagar y el neto proyectado'],
+      filtros: ['Rango de fechas de vencimiento (por defecto, los próximos 30 días)'],
+    },
+  },
+  {
+    id: 'oc_abiertas',
+    title: 'Órdenes de Compra Abiertas',
+    description: 'Qué le pediste a los proveedores que todavía no llegó o no se facturó.',
+    icon: <PackageSearch className="w-8 h-8 text-kx-amber" />,
+    borderClass: 'border-t-kx-amber',
+    requiresDate: false,
+    ayuda: {
+      queEs: 'Consolidado de todas las Órdenes de Compra no canceladas con algo pendiente: mercadería que todavía no llegó, o mercadería que llegó pero todavía no se facturó — línea por línea, no OC por OC.',
+      queMuestra: ['N° de OC, proveedor, fecha y producto', 'Cantidad pedida, recibida y facturada', 'Pendiente de recibir y pendiente de facturar', 'Días transcurridos desde que se hizo la OC'],
+      filtros: ['No aplica rango de fechas — siempre muestra todo lo que sigue abierto hoy'],
+    },
+  },
+  {
+    id: 'detalle_compras_producto',
+    title: 'Detalle de Compras por Producto',
+    description: 'Qué compraste, cuánto, y a qué costo promedio en el tiempo.',
+    icon: <ShoppingBag className="w-8 h-8 text-kx-red" />,
+    borderClass: 'border-t-kx-red',
+    requiresDate: true,
+    supportsCentroCosto: true,
+    ayuda: {
+      queEs: 'Detalle de compras a nivel de línea de producto (no solo el total de la factura) — para ver qué productos concentran el gasto de compras y a qué costo promedio se vinieron comprando en el período.',
+      queMuestra: ['Producto, SKU y categoría', 'Cantidad total comprada y costo total', 'Costo promedio (costo total ÷ cantidad)'],
+      filtros: ['Rango de fechas', 'Centro de costo (si está activado)'],
+    },
+  },
 ];
 
 // % variación vs. un valor anterior — null si no hay base de comparación
@@ -373,6 +439,61 @@ export const buildSummaryMetrics = (reportId, data, previousPeriod = null) => {
       metrics[1].delta = deltaLabel(egresos, previousPeriod.egresos);
     }
     return metrics;
+  }
+  if (reportId === 'liquidacion_tarjetas') {
+    const totalBruto = data.reduce((s, r) => s + (r.monto || 0), 0);
+    const totalComision = data.reduce((s, r) => s + (r.comision || 0), 0);
+    const totalNeto = data.reduce((s, r) => s + (r.neto || 0), 0);
+    return [
+      { label: 'Movimientos',      value: data.length },
+      { label: 'Monto Bruto',      value: fc(totalBruto) },
+      { label: 'Comisión',         value: fc(totalComision) },
+      { label: 'Neto a Acreditar', value: fc(totalNeto) },
+    ];
+  }
+  if (reportId === 'pasivo_fidelizacion') {
+    const totalPuntos = data.reduce((s, r) => s + (r.saldoPuntos || 0), 0);
+    const totalValor = data.reduce((s, r) => s + (r.valorPesos || 0), 0);
+    return [
+      { label: 'Clientes con Puntos', value: data.length },
+      { label: 'Puntos Totales',      value: totalPuntos.toLocaleString('es-AR') },
+      { label: 'Pasivo Total',        value: fc(totalValor) },
+      { label: 'Valor por Punto',     value: data.length ? fc(data[0].valorPorPunto) : '—' },
+    ];
+  }
+  if (reportId === 'flujo_cheques') {
+    // Nunca netear a cobrar contra a pagar en una sola caja — son dos
+    // compromisos económicos distintos, mismo criterio que el resto de los
+    // reportes (Clientes/Proveedores, Arqueos).
+    const totalCobrar = data.filter(r => r.direccion === 'cobrar').reduce((s, r) => s + r.monto, 0);
+    const totalPagar  = data.filter(r => r.direccion === 'pagar').reduce((s, r) => s + r.monto, 0);
+    return [
+      { label: 'Cheques',       value: data.length },
+      { label: 'A Cobrar',      value: fc(totalCobrar) },
+      { label: 'A Pagar',       value: fc(totalPagar) },
+      { label: 'Neto Proyectado', value: fc(totalCobrar - totalPagar) },
+    ];
+  }
+  if (reportId === 'oc_abiertas') {
+    const totalPendienteRecibir = data.reduce((s, r) => s + (r.valorPendienteRecibir || 0), 0);
+    const totalPendienteFacturar = data.reduce((s, r) => s + (r.valorPendienteFacturar || 0), 0);
+    const ocsUnicas = new Set(data.map(r => r.ocId)).size;
+    return [
+      { label: 'OC Abiertas',            value: ocsUnicas },
+      { label: 'Líneas Pendientes',      value: data.length },
+      { label: 'Valor Pend. Recibir',    value: fc(totalPendienteRecibir) },
+      { label: 'Valor Pend. Facturar',   value: fc(totalPendienteFacturar) },
+    ];
+  }
+  if (reportId === 'detalle_compras_producto') {
+    const totalCantidad = data.reduce((s, r) => s + (r.cantidad || 0), 0);
+    const totalCosto = data.reduce((s, r) => s + (r.costo || 0), 0);
+    return [
+      { label: 'Productos',       value: data.length },
+      { label: 'Unidades Compradas', value: totalCantidad.toLocaleString('es-AR') },
+      { label: 'Costo Total',     value: fc(totalCosto) },
+      { label: 'Costo Promedio',  value: totalCantidad > 0 ? fc(totalCosto / totalCantidad) : '—' },
+    ];
   }
   return null;
 };
@@ -712,6 +833,123 @@ export const getTableConfig = (reportId, data) => {
         { content: formatCurrency(totalIngresos), align: 'right', value: totalIngresos },
         { content: formatCurrency(totalEgresos),  align: 'right', value: totalEgresos },
         { content: '', align: 'right' },
+      ]
+    };
+  }
+
+  if (reportId === 'liquidacion_tarjetas') {
+    const totalBruto = data.reduce((s, r) => s + (r.monto || 0), 0);
+    const totalComision = data.reduce((s, r) => s + (r.comision || 0), 0);
+    const totalNeto = data.reduce((s, r) => s + (r.neto || 0), 0);
+    return {
+      columns: [
+        { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
+        { header: 'Concepto', key: 'concepto', align: 'left' },
+        { header: 'Método', key: 'metodo', align: 'center', render: (r) => r.metodo || '-' },
+        { header: 'Monto Bruto', key: 'monto', align: 'right', render: (r) => formatCurrency(r.monto), pdfRender: (r) => formatCurrency(r.monto) },
+        { header: 'Comisión', key: 'comision', align: 'right', render: (r) => r.comision ? formatCurrency(r.comision) : '-', pdfRender: (r) => r.comision ? formatCurrency(r.comision) : '-' },
+        { header: 'Neto', key: 'neto', align: 'right', render: (r) => <span className="font-bold">{formatCurrency(r.neto)}</span>, pdfRender: (r) => formatCurrency(r.neto) },
+        { header: 'Acreditación Est.', key: 'fechaAcreditacion', align: 'left', render: (r) => r.fechaAcreditacion ? formatDateAR(r.fechaAcreditacion) : '-', pdfRender: (r) => r.fechaAcreditacion ? formatDateAR(r.fechaAcreditacion) : '-' },
+      ],
+      totals: [
+        { content: 'TOTALES', colSpan: 3, align: 'right' },
+        { content: formatCurrency(totalBruto), align: 'right', value: totalBruto },
+        { content: formatCurrency(totalComision), align: 'right', value: totalComision },
+        { content: formatCurrency(totalNeto), align: 'right', value: totalNeto },
+        { content: '', align: 'right' },
+      ]
+    };
+  }
+
+  if (reportId === 'pasivo_fidelizacion') {
+    const totalPuntos = data.reduce((s, r) => s + (r.saldoPuntos || 0), 0);
+    const totalValor = data.reduce((s, r) => s + (r.valorPesos || 0), 0);
+    return {
+      columns: [
+        { header: 'Cliente', key: 'nombre', align: 'left' },
+        { header: 'Saldo de Puntos', key: 'saldoPuntos', align: 'right', render: (r) => r.saldoPuntos.toLocaleString('es-AR'), pdfRender: (r) => r.saldoPuntos.toLocaleString('es-AR') },
+        { header: 'Valor en Pesos', key: 'valorPesos', align: 'right', render: (r) => formatCurrency(r.valorPesos), pdfRender: (r) => formatCurrency(r.valorPesos) },
+      ],
+      totals: [
+        { content: 'TOTALES', colSpan: 1, align: 'right' },
+        { content: totalPuntos.toLocaleString('es-AR'), align: 'right' },
+        { content: formatCurrency(totalValor), align: 'right', value: totalValor },
+      ]
+    };
+  }
+
+  if (reportId === 'flujo_cheques') {
+    const totalCobrar = data.filter(r => r.direccion === 'cobrar').reduce((s, r) => s + r.monto, 0);
+    const totalPagar  = data.filter(r => r.direccion === 'pagar').reduce((s, r) => s + r.monto, 0);
+    return {
+      columns: [
+        { header: 'Vencimiento', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
+        {
+          header: 'Dirección', key: 'direccion', align: 'center',
+          render: (r) => <span className={`px-2 py-0.5 rounded text-xs font-semibold ${r.direccion === 'cobrar' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>{r.direccion === 'cobrar' ? 'A Cobrar' : 'A Pagar'}</span>,
+          pdfRender: (r) => r.direccion === 'cobrar' ? 'A Cobrar' : 'A Pagar',
+        },
+        { header: 'De / Para', key: 'contraparte', align: 'left', render: (r) => r.contraparte || '-' },
+        { header: 'Banco', key: 'banco', align: 'left', render: (r) => r.banco || '-' },
+        { header: 'Número', key: 'numero', align: 'left', render: (r) => r.numero || '-' },
+        {
+          header: 'Monto', key: 'monto', align: 'right',
+          render: (r) => <span className={r.direccion === 'cobrar' ? 'text-green-600 dark:text-green-400 font-bold' : 'text-red-600 dark:text-red-400 font-bold'}>{formatCurrency(r.monto)}</span>,
+          pdfRender: (r) => formatCurrency(r.monto),
+        },
+      ],
+      totals: [
+        { content: `A COBRAR: ${formatCurrency(totalCobrar)} | A PAGAR: ${formatCurrency(totalPagar)} | NETO: ${formatCurrency(totalCobrar - totalPagar)}`, colSpan: 6, align: 'right' },
+      ]
+    };
+  }
+
+  if (reportId === 'oc_abiertas') {
+    const totalPendRecibir = data.reduce((s, r) => s + (r.valorPendienteRecibir || 0), 0);
+    const totalPendFacturar = data.reduce((s, r) => s + (r.valorPendienteFacturar || 0), 0);
+    return {
+      columns: [
+        { header: 'N° OC', key: 'numero', align: 'left' },
+        { header: 'Proveedor', key: 'proveedor', align: 'left' },
+        { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
+        { header: 'Producto', key: 'producto', align: 'left' },
+        { header: 'Pedido', key: 'pedida', align: 'right', render: (r) => r.pedida.toLocaleString('es-AR'), pdfRender: (r) => r.pedida.toLocaleString('es-AR') },
+        { header: 'Recibido', key: 'recibida', align: 'right', render: (r) => r.recibida.toLocaleString('es-AR'), pdfRender: (r) => r.recibida.toLocaleString('es-AR') },
+        {
+          header: 'Pend. Recibir', key: 'pendienteRecibir', align: 'right',
+          render: (r) => r.pendienteRecibir > 0 ? <span className="text-amber-600 dark:text-amber-400 font-bold">{r.pendienteRecibir.toLocaleString('es-AR')}</span> : '-',
+          pdfRender: (r) => r.pendienteRecibir > 0 ? r.pendienteRecibir.toLocaleString('es-AR') : '-',
+        },
+        {
+          header: 'Pend. Facturar', key: 'pendienteFacturar', align: 'right',
+          render: (r) => r.pendienteFacturar > 0 ? <span className="text-blue-600 dark:text-blue-400 font-bold">{r.pendienteFacturar.toLocaleString('es-AR')}</span> : '-',
+          pdfRender: (r) => r.pendienteFacturar > 0 ? r.pendienteFacturar.toLocaleString('es-AR') : '-',
+        },
+        { header: 'Días', key: 'dias', align: 'right', render: (r) => r.dias, pdfRender: (r) => String(r.dias) },
+      ],
+      totals: [
+        { content: `VALOR PEND. RECIBIR: ${formatCurrency(totalPendRecibir)} | VALOR PEND. FACTURAR: ${formatCurrency(totalPendFacturar)}`, colSpan: 9, align: 'right' },
+      ]
+    };
+  }
+
+  if (reportId === 'detalle_compras_producto') {
+    const totalCantidad = data.reduce((s, r) => s + (r.cantidad || 0), 0);
+    const totalCosto = data.reduce((s, r) => s + (r.costo || 0), 0);
+    return {
+      columns: [
+        { header: 'Producto', key: 'nombre', align: 'left' },
+        { header: 'SKU', key: 'sku', align: 'left', render: (r) => r.sku || '-' },
+        { header: 'Categoría', key: 'categoria', align: 'left' },
+        { header: 'Cantidad', key: 'cantidad', align: 'right', render: (r) => r.cantidad.toLocaleString('es-AR'), pdfRender: (r) => r.cantidad.toLocaleString('es-AR') },
+        { header: 'Costo Total', key: 'costo', align: 'right', render: (r) => formatCurrency(r.costo), pdfRender: (r) => formatCurrency(r.costo) },
+        { header: 'Costo Promedio', key: 'costoPromedio', align: 'right', render: (r) => formatCurrency(r.costoPromedio), pdfRender: (r) => formatCurrency(r.costoPromedio) },
+      ],
+      totals: [
+        { content: 'TOTALES', colSpan: 3, align: 'right' },
+        { content: totalCantidad.toLocaleString('es-AR'), align: 'right' },
+        { content: formatCurrency(totalCosto), align: 'right', value: totalCosto },
+        { content: totalCantidad > 0 ? formatCurrency(totalCosto / totalCantidad) : '-', align: 'right' },
       ]
     };
   }
