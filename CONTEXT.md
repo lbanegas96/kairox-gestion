@@ -1,5 +1,59 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🔴 Gap de seguridad real: overload huérfano + anon puede ejecutar RPC (20/09) — PENDIENTE de confirmación
+
+Al aplicar la migración 398 (ver entrada de abajo) apareció el mismo gotcha ya documentado en
+`project_criterio_fiscal_unificado_pdv.md`: `CREATE OR REPLACE FUNCTION registrar_factura_compra_oc`
+con 3 parámetros nuevos (`DEFAULT NULL`) NO reemplazó la función — Postgres identifica funciones
+por firma completa, así que creó un **overload nuevo** de 9 parámetros al lado del viejo de 6.
+Confirmado con `has_function_privilege`:
+
+- `registrar_factura_compra_oc(uuid,uuid,uuid,text,date,jsonb)` (viejo, 6 params) — `anon: false`,
+  `authenticated: true`. Ya estaba bien restringido de antes.
+- `registrar_factura_compra_oc(uuid,uuid,uuid,text,date,jsonb,text,text,text)` (nuevo, 9 params) —
+  **`anon: true`**, `authenticated: true`. Postgres otorga EXECUTE a PUBLIC por default en toda
+  función nueva (mismo patrón de `feedback_rpc_grant_revoke_public.md`) y la migración no llevaba
+  el REVOKE.
+
+Riesgo real acotado (no es un agujero abierto de par en par): la función es `SECURITY DEFINER`
+pero valida `p_empresa_id IS DISTINCT FROM get_my_empresa_id()` — para un caller anon sin JWT,
+`get_my_empresa_id()` da NULL, así que cualquier `p_empresa_id` no nulo dispara la excepción "No
+autorizado". Aun así, viola el principio de defensa en profundidad y hay que cerrarlo.
+
+**Intenté corregirlo (REVOKE FROM PUBLIC + GRANT a authenticated) y el clasificador de modo
+automático lo bloqueó** ("Protected-Scope IaC Apply") — es una escritura a producción nueva,
+distinta de la migración 398 puntual que Luciano ya había confirmado, así que no insistí por otra
+vía. **Pendiente, necesita confirmación explícita de Luciano:**
+1. `REVOKE EXECUTE ON FUNCTION registrar_factura_compra_oc(uuid,uuid,uuid,text,date,jsonb,text,text,text) FROM PUBLIC; GRANT ... TO authenticated;`
+2. Una vez confirmado que el frontend nuevo (ya deployado, ver abajo) está andando bien en vivo,
+   `DROP FUNCTION registrar_factura_compra_oc(uuid,uuid,uuid,text,date,jsonb)` (el overload viejo
+   de 6 params, huérfano — mismo patrón que el fix de `project_overload_huerfano_crear_nota_credito.md`).
+   No se dropeó todavía a propósito: hasta que el nuevo deploy esté confirmado, dropearlo ahora
+   hubiese roto "Registrar Factura" para cualquiera todavía en el frontend viejo cacheado.
+
+---
+
+## ✅ Libro IVA Digital ARCA — Fase 0 aplicada y deployada a producción (20/09)
+
+Luciano confirmó los 3 pendientes de la entrada anterior:
+1. **Migración 398 aplicada** a producción (`isvkelrdxwvkfmrfqxxk`) — ver el gap de seguridad
+   que esto destapó, arriba.
+2. **Deployado** con `npx vercel deploy --prod --yes` (el auto-deploy de GitHub sigue roto, ver
+   `project_vercel_deploy.md`) — aliased a `kairox-gestion-chi.vercel.app`, build limpio, sitio
+   verificado en vivo (consola sin errores, login renderiza bien).
+3. **El 72% de exclusión en Ventas es comportamiento correcto, no un bug ni dato QA**: Luciano
+   explicó que algunos comprobantes son internos o no corresponde reportarlos, y que el sistema
+   ya tiene el criterio "no relevante" para eso (vía PdV, ver `project_criterio_fiscal_unificado_pdv.md`
+   — ya no es un checkbox). Verificado en código: esos comprobantes quedan en `cae_estado='no_aplica'`,
+   se siguen mostrando en el reporte en pantalla (`esComprobanteValido` los incluye), pero
+   `generarVentasCbte` los excluye del TXT porque no tienen `numero_afip` — exactamente el
+   comportamiento esperado. Cerrado, sin cambios de código necesarios.
+
+**Pendiente**: confirmar el fix de seguridad de arriba antes de dar Fase 0 por 100% cerrada.
+Fase 2 (exportador de Compras) ya puede arrancar en paralelo, no depende del fix de permisos.
+
+---
+
 ## 🔶 Libro IVA Digital ARCA — Fase 1 (Ventas) verificada, Fase 0 (Compras) código completo, migración PENDIENTE de aplicar (19/09)
 
 Plan completo (4 fases) aprobado por Luciano para que el reporte IVA Ventas/Compras exporte el
