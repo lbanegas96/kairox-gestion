@@ -11,6 +11,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useConfig } from '@/contexts/ConfigContext';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -18,7 +22,7 @@ import { getTodayAR, formatDateAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
 import { generatePDF } from '@/lib/pdfUtils';
 import { exportReporte } from '@/lib/excelUtils';
-import { generarVentasCbte, generarVentasAlicuotas } from '@/lib/libroIvaDigitalExport';
+import { generarVentasCbte, generarVentasAlicuotas, validarVentasParaExport } from '@/lib/libroIvaDigitalExport';
 import { descargarTxt } from '@/lib/registroAnchoFijo';
 
 const PAGE_SIZE = 100;
@@ -81,6 +85,9 @@ function ReporteLibroIVA({ onBack }) {
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [filtroEstado, setFiltroEstado] = useState('todos');
   const [page, setPage] = useState(1);
+  // Fase 3 (22/09) — resultado de validarVentasParaExport cuando hay algo
+  // para avisar antes de exportar. null = no hay diálogo abierto.
+  const [validacionExport, setValidacionExport] = useState(null);
 
   const fetchLibroIVA = useCallback(async () => {
     if (!user?.empresa_id) return;
@@ -292,34 +299,44 @@ function ReporteLibroIVA({ onBack }) {
     window.open(`https://wa.me/?text=${encodeURIComponent(lineas.join('\n'))}`, '_blank');
   };
 
-  // Exportar TXT ARCA — SIEMPRE sobre todos los comprobantes válidos del
-  // período (esComprobanteValido), nunca sobre comprobantesFiltrados: el
-  // filtro de "Tipo"/"Estado CAE" de la pantalla es para revisar, no para
-  // recortar una declaración que se presenta completa ante ARCA.
-  const handleExportarTxtArca = () => {
+  // Exportar TXT ARCA — SIEMPRE sobre todos los comprobantes del período
+  // (nunca sobre comprobantesFiltrados: el filtro de "Tipo"/"Estado CAE" de
+  // la pantalla es para revisar, no para recortar una declaración que se
+  // presenta completa ante ARCA). Fase 3 (22/09): antes de generar/descargar,
+  // valida y si hay algo para avisar (sin CAE, sin numeración fiscal, o
+  // cliente sin CUIT) frena con un diálogo de confirmación en vez de bajar
+  // el archivo directo — "mejor frenar antes de generar un archivo
+  // incompleto que descubrirlo en el Portal de ARCA".
+  const generarYDescargarTxt = (listos) => {
     try {
-      const validos = comprobantes.filter(esComprobanteValido);
-      const cbte = generarVentasCbte(validos, itemsPorComprobante);
-      const alicuotas = generarVentasAlicuotas(validos, itemsPorComprobante);
+      const cbte = generarVentasCbte(listos, itemsPorComprobante);
+      const alicuotas = generarVentasAlicuotas(listos, itemsPorComprobante);
       const periodo = `${fechaDesde.replace(/-/g, '')}_${fechaHasta.replace(/-/g, '')}`;
 
       descargarTxt(cbte.contenido, `LIBRO_IVA_DIGITAL_VENTAS_CBTE_${periodo}.txt`);
       descargarTxt(alicuotas.contenido, `LIBRO_IVA_DIGITAL_VENTAS_ALICUOTAS_${periodo}.txt`);
 
-      if (cbte.excluidos.length > 0) {
-        toast({
-          title: 'Archivos generados con comprobantes afuera',
-          description: `${cbte.incluidos} comprobantes exportados. ${cbte.excluidos.length} quedaron afuera por no tener numeración fiscal (numero_afip) — típicamente ventas sin AFIP activo en el momento.`,
-          variant: 'destructive',
-          duration: 8000,
-        });
-      } else {
-        toast({ title: 'Éxito', description: `${cbte.incluidos} comprobantes exportados en 2 archivos TXT.`, className: 'bg-green-600 text-white' });
-      }
+      toast({ title: 'Éxito', description: `${cbte.incluidos} comprobante(s) exportado(s) en 2 archivos TXT.`, className: 'bg-green-600 text-white' });
     } catch (err) {
       console.error(err);
       toast({ title: 'Error', description: 'Falló la generación del TXT.', variant: 'destructive' });
     }
+  };
+
+  const handleExportarTxtArca = () => {
+    const validacion = validarVentasParaExport(comprobantes);
+    const hayAvisos = validacion.sinCae.length > 0 || validacion.sinNumeroFiscal.length > 0 || validacion.sinCuit.length > 0;
+    if (hayAvisos) {
+      setValidacionExport(validacion);
+    } else {
+      generarYDescargarTxt(validacion.listos);
+    }
+  };
+
+  const confirmarExportTxtArca = () => {
+    if (!validacionExport) return;
+    generarYDescargarTxt(validacionExport.listos);
+    setValidacionExport(null);
   };
 
   const caeEstadoBadge = (estado) => {
@@ -630,6 +647,35 @@ function ReporteLibroIVA({ onBack }) {
           )}
         </div>
       )}
+
+      {/* Fase 3 (22/09) — aviso pre-export, ver handleExportarTxtArca */}
+      <AlertDialog open={!!validacionExport} onOpenChange={(v) => { if (!v) setValidacionExport(null); }}>
+        <AlertDialogContent className="dark:bg-kx-bg dark:border-kx-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="dark:text-kx-text">Antes de exportar — revisá esto</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="dark:text-kx-text-2 space-y-2 text-sm">
+                {validacionExport?.sinCae.length > 0 && (
+                  <p>⏳ <strong>{validacionExport.sinCae.length}</strong> comprobante(s) todavía sin CAE (pendiente o con error) — no se incluyen.</p>
+                )}
+                {validacionExport?.sinNumeroFiscal.length > 0 && (
+                  <p>🚫 <strong>{validacionExport.sinNumeroFiscal.length}</strong> comprobante(s) sin numeración fiscal (numero_afip) — no se incluyen.</p>
+                )}
+                {validacionExport?.sinCuit.length > 0 && (
+                  <p>⚠️ <strong>{validacionExport.sinCuit.length}</strong> comprobante(s) con cliente sin CUIT/DNI cargado — se incluyen, pero declarados como Consumidor Final.</p>
+                )}
+                <p className="pt-1">Se van a exportar <strong>{validacionExport?.listos.length ?? 0}</strong> comprobante(s).</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="dark:text-kx-text dark:border-kx-border">Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmarExportTxtArca} className="bg-violet-600 hover:bg-violet-700 text-white">
+              Exportar {validacionExport?.listos.length ?? 0} de todos modos
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

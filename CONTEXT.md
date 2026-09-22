@@ -1,5 +1,36 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Libro IVA Digital ARCA — Fase 3 (validaciones pre-export), código completo (22/09)
+
+Último paso del plan de 4 fases. En vez de descargar el TXT directo y avisar recién en el toast
+posterior (como hacían Fase 1/2), ahora "Exportar TXT ARCA" valida ANTES de generar el archivo y,
+si encuentra algo para avisar, frena con un `AlertDialog` de confirmación en vez de bajar el
+archivo — "mejor frenar antes de generar un archivo incompleto que descubrirlo en el Portal de
+ARCA" (texto del plan original). Si no hay nada para avisar, exporta directo como antes (sin
+fricción extra en el caso feliz).
+
+`libroIvaDigitalExport.js` suma `validarVentasParaExport`/`validarComprasParaExport`:
+- **Ventas**: separa en `sinCae` (pendiente/error — hoy invisible, ni se contaba en el toast de
+  antes), `sinNumeroFiscal` (ya existía como "excluidos"), `sinCuit` (NUEVO: comprobantes con
+  `cliente_id` real —no Consumidor Final anónimo— pero sin documento cargado; se exportan igual,
+  declarados como Consumidor Final, pero ahora se avisa).
+- **Compras**: `sinDatos` (ya existía) + `sinCuit` (NUEVO: proveedor sin CUIT — a diferencia de
+  Ventas no hay caso "anónimo legítimo", todo comprobante de compra tiene un proveedor real).
+
+**Verificado con datos sintéticos** (conteos exactos contra casos armados a mano) **y en vivo con
+datos reales de Nalux**: Ventas mostró correctamente 1 sin CAE + 144 sin numeración fiscal + 9 con
+cliente sin CUIT, exportando 55 — los números cierran contra el total de 200 comprobantes del
+período. Compras mostró 42 sin Tipo/PV/Número, exportando 1 — cierra contra el total de 43. El
+archivo final se comparó byte a byte contra el capturado antes de este cambio (mismo contenido
+exacto), confirmando que la validación solo agrega una pantalla de confirmación, no cambia lo que
+se exporta.
+
+**Con esto el plan de 4 fases del Libro IVA Digital queda COMPLETO** (Fase 0, 1, 2, 3 + el
+barrido de ND/NC), todo en producción salvo esta última fase (código listo, sin pushear/deployar
+todavía — pendiente de confirmación, mismo criterio de siempre).
+
+---
+
 ## ✅ Libro IVA Digital ARCA — "barrido completo": ND/NC de proveedor en el TXT (22/09) — EN PRODUCCIÓN
 
 Luciano pidió cerrar el gap que la entrada de Fase 2 (abajo) había dejado documentado: las ND

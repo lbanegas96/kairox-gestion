@@ -7,11 +7,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { getTodayAR, formatDateAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
-import { generarComprasCbte, generarComprasAlicuotas } from '@/lib/libroIvaDigitalExport';
+import { generarComprasCbte, generarComprasAlicuotas, validarComprasParaExport } from '@/lib/libroIvaDigitalExport';
 import { descargarTxt } from '@/lib/registroAnchoFijo';
 
 const PAGE_SIZE = 100;
@@ -32,6 +36,9 @@ function ReporteLibroIVACompras({ onBack }) {
   const [loading, setLoading] = useState(false);
   const [generated, setGenerated] = useState(false);
   const [page, setPage] = useState(1);
+  // Fase 3 (22/09) — resultado de validarComprasParaExport cuando hay algo
+  // para avisar antes de exportar. null = no hay diálogo abierto.
+  const [validacionExport, setValidacionExport] = useState(null);
 
   const fetchLibroIVACompras = useCallback(async () => {
     if (!user?.empresa_id) return;
@@ -225,29 +232,40 @@ function ReporteLibroIVACompras({ onBack }) {
   // mig.399) — el aviso lo cuenta agregado, sin distinguir el motivo, porque
   // en los 2 casos la acción para el usuario es la misma: no hay nada que
   // declarar ahí.
-  const handleExportarTxtArca = () => {
+  // Fase 3 (22/09) — antes de generar/descargar, valida y si hay algo para
+  // avisar (sin Tipo/PV/Número, o proveedor sin CUIT) frena con un diálogo
+  // de confirmación en vez de bajar el archivo directo, mismo criterio que
+  // ReporteLibroIVA.jsx del lado Ventas.
+  const generarYDescargarTxt = (listos) => {
     try {
-      const cbte = generarComprasCbte(compras, itemsPorCompra);
-      const alicuotas = generarComprasAlicuotas(compras, itemsPorCompra);
+      const cbte = generarComprasCbte(listos, itemsPorCompra);
+      const alicuotas = generarComprasAlicuotas(listos, itemsPorCompra);
       const periodo = `${fechaDesde.replace(/-/g, '')}_${fechaHasta.replace(/-/g, '')}`;
 
       descargarTxt(cbte.contenido, `LIBRO_IVA_DIGITAL_COMPRAS_CBTE_${periodo}.txt`);
       descargarTxt(alicuotas.contenido, `LIBRO_IVA_DIGITAL_COMPRAS_ALICUOTAS_${periodo}.txt`);
 
-      if (cbte.excluidos.length > 0) {
-        toast({
-          title: `${cbte.incluidos} comprobante(s) exportado(s), con avisos`,
-          description: `${cbte.excluidos.length} comprobante(s) afuera por no tener Tipo/PV/Número del proveedor cargado — factura previa al 20/09, o NC/ND sin comprobante fiscal propio del proveedor.`,
-          variant: 'destructive',
-          duration: 9000,
-        });
-      } else {
-        toast({ title: 'Éxito', description: `${cbte.incluidos} comprobante(s) exportado(s) en 2 archivos TXT.`, className: 'bg-green-600 text-white' });
-      }
+      toast({ title: 'Éxito', description: `${cbte.incluidos} comprobante(s) exportado(s) en 2 archivos TXT.`, className: 'bg-green-600 text-white' });
     } catch (err) {
       console.error(err);
       toast({ title: 'Error', description: 'Falló la generación del TXT.', variant: 'destructive' });
     }
+  };
+
+  const handleExportarTxtArca = () => {
+    const validacion = validarComprasParaExport(compras);
+    const hayAvisos = validacion.sinDatos.length > 0 || validacion.sinCuit.length > 0;
+    if (hayAvisos) {
+      setValidacionExport(validacion);
+    } else {
+      generarYDescargarTxt(validacion.listos);
+    }
+  };
+
+  const confirmarExportTxtArca = () => {
+    if (!validacionExport) return;
+    generarYDescargarTxt(validacionExport.listos);
+    setValidacionExport(null);
   };
 
   const fmtARS = (n) =>
@@ -428,6 +446,32 @@ function ReporteLibroIVACompras({ onBack }) {
           )}
         </div>
       )}
+
+      {/* Fase 3 (22/09) — aviso pre-export, ver handleExportarTxtArca */}
+      <AlertDialog open={!!validacionExport} onOpenChange={(v) => { if (!v) setValidacionExport(null); }}>
+        <AlertDialogContent className="dark:bg-kx-bg dark:border-kx-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="dark:text-kx-text">Antes de exportar — revisá esto</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="dark:text-kx-text-2 space-y-2 text-sm">
+                {validacionExport?.sinDatos.length > 0 && (
+                  <p>🚫 <strong>{validacionExport.sinDatos.length}</strong> comprobante(s) sin Tipo/PV/Número del proveedor cargado — no se incluyen.</p>
+                )}
+                {validacionExport?.sinCuit.length > 0 && (
+                  <p>⚠️ <strong>{validacionExport.sinCuit.length}</strong> comprobante(s) con proveedor sin CUIT cargado — se incluyen, pero declarados sin identificar.</p>
+                )}
+                <p className="pt-1">Se van a exportar <strong>{validacionExport?.listos.length ?? 0}</strong> comprobante(s).</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="dark:text-kx-text dark:border-kx-border">Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmarExportTxtArca} className="bg-violet-600 hover:bg-violet-700 text-white">
+              Exportar {validacionExport?.listos.length ?? 0} de todos modos
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

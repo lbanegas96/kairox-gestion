@@ -151,6 +151,31 @@ export function generarVentasAlicuotas(comprobantes, itemsPorComprobante) {
   return { contenido: lineas.join(SALTO) + (lineas.length ? SALTO : ''), filas: lineas.length };
 }
 
+/**
+ * Fase 3 (22/09) — validación PRE-export: separa los comprobantes del
+ * período en los grupos que la pantalla necesita para avisar ANTES de
+ * generar el archivo, no después. 3 motivos de aviso distintos, cada uno con
+ * su propia acción implícita:
+ *  - sinCae: cae_estado pendiente/error — todavía no son un comprobante
+ *    fiscal cerrado (puede resolverse solo con el tiempo/el arca-worker).
+ *  - sinNumeroFiscal: cae_estado válido (emitido/no_aplica) pero sin
+ *    numero_afip parseable — no hay forma de declararlo, mismo criterio que
+ *    ya usa generarVentasCbte para excluir.
+ *  - sinCuit: SÍ se van a exportar (quedan en `listos`), pero el cliente
+ *    vinculado (cliente_id no nulo — un Consumidor Final anónimo sin
+ *    cliente_id es normal y NO se marca acá) no tiene documento cargado, así
+ *    que van a salir declarados como tipo 99/Consumidor Final aunque en
+ *    realidad haya un cliente identificado en el sistema.
+ */
+export function validarVentasParaExport(comprobantes) {
+  const sinCae = comprobantes.filter(c => c.cae_estado === 'pendiente' || c.cae_estado === 'error');
+  const validosCae = comprobantes.filter(c => c.cae_estado === 'emitido' || c.cae_estado === 'no_aplica');
+  const listos = validosCae.filter(c => parsearNumeroAfip(c.numero_afip));
+  const sinNumeroFiscal = validosCae.filter(c => !parsearNumeroAfip(c.numero_afip));
+  const sinCuit = listos.filter(c => c.cliente_id && !c.cliente_documento);
+  return { listos, sinCae, sinNumeroFiscal, sinCuit };
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // Lado COMPRAS — Fase 2 (Facturas) + "barrido completo" (22/09, ND/NC de
 // proveedor). Requiere los 3 campos tipo_comprobante_letra/
@@ -251,4 +276,19 @@ export function generarComprasAlicuotas(compras, itemsPorCompra) {
   });
 
   return { contenido: lineas.join(SALTO) + (lineas.length ? SALTO : ''), filas: lineas.length };
+}
+
+/**
+ * Fase 3 (22/09) — mismo criterio que validarVentasParaExport, lado Compras:
+ *  - sinDatos: sin los 3 campos estructurados (Factura previa al 20/09, o
+ *    NC/ND sin comprobante fiscal propio del proveedor — ver mig.399).
+ *  - sinCuit: SÍ se van a exportar (quedan en `listos`), pero el proveedor
+ *    (siempre hay uno — a diferencia de Ventas, acá no existe el caso
+ *    "Consumidor Final anónimo") no tiene CUIT cargado.
+ */
+export function validarComprasParaExport(compras) {
+  const listos = compras.filter(comprobanteCompraValido);
+  const sinDatos = compras.filter(c => !comprobanteCompraValido(c));
+  const sinCuit = listos.filter(c => !c.proveedor_cuit);
+  return { listos, sinDatos, sinCuit };
 }
