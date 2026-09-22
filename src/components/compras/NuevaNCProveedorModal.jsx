@@ -76,6 +76,14 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, devolu
   const [proveedorId, setProveedorId]     = useState('');
   const [motivo, setMotivo]               = useState(MOTIVOS_NC[0]);
   const [motivoCustom, setMotivoCustom]   = useState('');
+  // mig.399, 22/09 — OPCIONAL a propósito (a diferencia de Compras, mig.398):
+  // no toda NC de proveedor tiene un comprobante fiscal propio (ver motivos
+  // "Ajuste de cuenta corriente"/"Descuento comercial" arriba). Solo hace
+  // falta completarlo si el proveedor emitió una NC real — sin esto, la NC
+  // simplemente no entra en el export TXT del Libro IVA Digital.
+  const [tipoComprobanteLetra, setTipoComprobanteLetra] = useState('');
+  const [puntoVentaProveedor, setPuntoVentaProveedor]   = useState('');
+  const [numeroComprobanteProveedor, setNumeroComprobanteProveedor] = useState('');
   const [items, setItems]                 = useState([newItem()]);
   const [reembolsoEfectivo, setReembolsoEfectivo] = useState(false);
   const [loading, setLoading]             = useState(false);
@@ -195,6 +203,9 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, devolu
       setProveedorId('');
       setMotivo(MOTIVOS_NC[0]);
       setMotivoCustom('');
+      setTipoComprobanteLetra('');
+      setPuntoVentaProveedor('');
+      setNumeroComprobanteProveedor('');
       setItems([newItem()]);
       setReembolsoEfectivo(false);
       setProdResults({});
@@ -286,6 +297,10 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, devolu
         // mig.360 — vincula la devolución de origen (compensacion pasa a
         // 'nota_credito' del lado servidor, no hace falta tocarlo acá).
         p_devolucion_id:      devolucionOrigen?.id || null,
+        // mig.399 — opcional, ver el useState de arriba.
+        p_tipo_comprobante_letra:        tipoComprobanteLetra || null,
+        p_punto_venta_proveedor:         puntoVentaProveedor.trim() || null,
+        p_numero_comprobante_proveedor:  numeroComprobanteProveedor.trim() || null,
       });
       if (error) throw error;
 
@@ -447,6 +462,41 @@ function NuevaNCProveedorModal({ open, onOpenChange, compraOrigen = null, devolu
                 />
               )}
             </div>
+          </div>
+
+          {/* Comprobante del proveedor — mig.399, opcional */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-kx-text-2">
+              Comprobante del proveedor <span className="font-normal text-kx-text-3">(opcional)</span>
+            </Label>
+            <div className="flex gap-2">
+              <select
+                value={tipoComprobanteLetra}
+                onChange={e => setTipoComprobanteLetra(e.target.value)}
+                title="Tipo de comprobante"
+                className="h-9 rounded-md border border-kx-border bg-kx-surface px-2 text-sm text-kx-text focus:outline-none focus:ring-1 focus:ring-[rgb(var(--kx-amber))]"
+              >
+                <option value="">—</option>
+                {['A', 'B', 'C', 'M', 'E'].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <Input
+                placeholder="PV (0001)"
+                value={puntoVentaProveedor}
+                onChange={e => setPuntoVentaProveedor(e.target.value.replace(/\D/g, ''))}
+                className="w-24 h-9 text-sm bg-kx-surface border-kx-border text-kx-text"
+              />
+              <Input
+                placeholder="Número (00012345)"
+                value={numeroComprobanteProveedor}
+                onChange={e => setNumeroComprobanteProveedor(e.target.value.replace(/\D/g, ''))}
+                className="flex-1 h-9 text-sm bg-kx-surface border-kx-border text-kx-text"
+              />
+            </div>
+            <p className="text-2xs text-kx-text-3">
+              Completalo solo si el proveedor te dio una NC con comprobante fiscal propio (no aplica a
+              ajustes internos como descuentos o bonificaciones). Lo necesitás para declarar esta NC en
+              el Libro IVA Digital.
+            </p>
           </div>
 
           {/* Compra origen */}

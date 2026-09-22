@@ -67,6 +67,13 @@ function NuevaNotaDebitoModal({ open, onOpenChange, origen = null, duplicarOrige
   const [entidadId, setEntidadId]         = useState('');
   const [comprobanteId, setComprobanteId] = useState('');
   const [concepto, setConcepto]           = useState('');
+  // mig.399, 22/09 — OPCIONAL a propósito, mismo criterio que
+  // NuevaNCProveedorModal.jsx: no toda ND recibida tiene un comprobante
+  // fiscal propio del proveedor (puede ser un concepto libre tipo "Flete
+  // adicional"). Solo hace falta si el proveedor emitió una ND real.
+  const [tipoComprobanteLetra, setTipoComprobanteLetra] = useState('');
+  const [puntoVentaProveedor, setPuntoVentaProveedor]   = useState('');
+  const [numeroComprobanteProveedor, setNumeroComprobanteProveedor] = useState('');
   const [items, setItems]                 = useState([newItem()]);
   const [saving, setSaving]               = useState(false);
   const [prodResults, setProdResults]     = useState({});
@@ -124,6 +131,9 @@ function NuevaNotaDebitoModal({ open, onOpenChange, origen = null, duplicarOrige
       setEntidadId('');
       setComprobanteId('');
       setConcepto('');
+      setTipoComprobanteLetra('');
+      setPuntoVentaProveedor('');
+      setNumeroComprobanteProveedor('');
       setItems([newItem()]);
       setSaving(false);
       setProdResults({});
@@ -197,6 +207,10 @@ function NuevaNotaDebitoModal({ open, onOpenChange, origen = null, duplicarOrige
           alicuota_iva:    Number(i.alicuota_iva),
         })),
         p_compra_id: comprobanteId || null,
+        // mig.399 — opcional, ver el useState de arriba.
+        p_tipo_comprobante_letra:       tipoComprobanteLetra || null,
+        p_punto_venta_proveedor:        puntoVentaProveedor.trim() || null,
+        p_numero_comprobante_proveedor: numeroComprobanteProveedor.trim() || null,
       });
       if (error) throw error;
 
@@ -314,6 +328,41 @@ function NuevaNotaDebitoModal({ open, onOpenChange, origen = null, duplicarOrige
                 className="h-10 text-sm bg-kx-surface border-kx-border text-kx-text"
               />
             </div>
+          </div>
+
+          {/* Comprobante del proveedor — mig.399, opcional */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-kx-text-2">
+              Comprobante del proveedor <span className="font-normal text-kx-text-3">(opcional)</span>
+            </Label>
+            <div className="flex gap-2">
+              <select
+                value={tipoComprobanteLetra}
+                onChange={e => setTipoComprobanteLetra(e.target.value)}
+                title="Tipo de comprobante"
+                className="h-9 rounded-md border border-kx-border bg-kx-surface px-2 text-sm text-kx-text focus:outline-none focus:ring-1 focus:ring-[rgb(var(--kx-red))]"
+              >
+                <option value="">—</option>
+                {['A', 'B', 'C', 'M', 'E'].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <Input
+                placeholder="PV (0001)"
+                value={puntoVentaProveedor}
+                onChange={e => setPuntoVentaProveedor(e.target.value.replace(/\D/g, ''))}
+                className="w-24 h-9 text-sm bg-kx-surface border-kx-border text-kx-text"
+              />
+              <Input
+                placeholder="Número (00012345)"
+                value={numeroComprobanteProveedor}
+                onChange={e => setNumeroComprobanteProveedor(e.target.value.replace(/\D/g, ''))}
+                className="flex-1 h-9 text-sm bg-kx-surface border-kx-border text-kx-text"
+              />
+            </div>
+            <p className="text-2xs text-kx-text-3">
+              Completalo solo si el proveedor te dio una ND con comprobante fiscal propio (no aplica a
+              conceptos internos como flete o recargos sin comprobante). Lo necesitás para declarar esta
+              ND en el Libro IVA Digital.
+            </p>
           </div>
 
           {origen && (

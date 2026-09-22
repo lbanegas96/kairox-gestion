@@ -152,29 +152,34 @@ export function generarVentasAlicuotas(comprobantes, itemsPorComprobante) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// Lado COMPRAS — Fase 2. Requiere los 3 campos de Fase 0
-// (tipo_comprobante_letra/punto_venta_proveedor/numero_comprobante_proveedor,
-// mig.398) completos en `compras`. Reusa `repartirPorAlicuota` de arriba tal
-// cual: `compras` tiene las mismas columnas `neto_gravado`/`iva_discriminado`
-// que `comprobantes`, y `detalle_compras` las mismas `subtotal`/`alicuota_iva`
-// que `comprobante_items` — no hace falta una versión aparte.
+// Lado COMPRAS — Fase 2 (Facturas) + "barrido completo" (22/09, ND/NC de
+// proveedor). Requiere los 3 campos tipo_comprobante_letra/
+// punto_venta_proveedor/numero_comprobante_proveedor completos — en
+// `compras` desde mig.398 (obligatorios en altas nuevas), en
+// `notas_debito`/`notas_credito_proveedor` desde mig.399 (OPCIONALES: no
+// toda NC/ND de proveedor es un comprobante fiscal real, ver esa migración).
+// Reusa `repartirPorAlicuota` y `claseDocumento` de arriba tal cual — las 3
+// tablas comparten las columnas `neto_gravado`/`iva_discriminado`/`fecha`/
+// `proveedor_id` con los mismos nombres, y `c.tipo` ('compra'/'nota_debito'/
+// 'nota_credito', ya armado así por ReporteLibroIVACompras.jsx) es el mismo
+// vocabulario que usa `claseDocumento` del lado Ventas.
 //
-// OJO — alcance real de esta fase: solo exporta `compras` (Facturas de
-// Compra). Las ND recibidas y NC de proveedor (`notas_debito`,
-// `notas_credito_proveedor`) NO tienen los 3 campos de Fase 0 en su propia
-// tabla — mismo tipo de gap que Fase 0 resolvió para `compras`, todavía sin
-// resolver ahí. Quedan afuera del TXT a propósito, no por descuido.
+// Los importes de NC ya vienen con signo negativo en el objeto mergeado
+// (para que los KPIs en pantalla neteen bien) — no hace falta des-negarlos
+// acá: `importeAncho` aplica Math.abs() siempre, mismo mecanismo con el que
+// ya se declaran las NC de Ventas (el signo real lo da el código de "Tipo de
+// comprobante" vía `claseDocumento`, nunca un signo en el importe).
 
-/** true si la compra tiene los 3 campos de Fase 0 completos — sin esto no hay forma de armar un registro válido. */
+/** true si el comprobante tiene los 3 campos estructurados completos — sin esto no hay forma de armar un registro válido. */
 function comprobanteCompraValido(c) {
   return !!(c.tipo_comprobante_letra && c.punto_venta_proveedor && c.numero_comprobante_proveedor);
 }
 
 /**
  * Genera LIBRO_IVA_DIGITAL_COMPRAS_CBTE.txt — una línea de 325 caracteres por
- * compra. Devuelve { contenido, incluidos, excluidos } — excluidos son
- * compras sin los 3 campos de Fase 0 completos (típicamente cargadas antes
- * del 20/09, cuando pasaron a ser obligatorios para altas nuevas).
+ * comprobante (Factura de Compra, ND recibida o NC de proveedor). Devuelve
+ * { contenido, incluidos, excluidos } — excluidos son los que no tienen los
+ * 3 campos estructurados completos.
  */
 export function generarComprasCbte(compras, itemsPorCompra) {
   const lineas = [];
@@ -189,7 +194,7 @@ export function generarComprasCbte(compras, itemsPorCompra) {
 
     lineas.push(armarLinea([
       { tipo: 'fecha',   valor: c.fecha },
-      { tipo: 'num',     valor: voucherTypeAfip(c.tipo_comprobante_letra), longitud: 3 },
+      { tipo: 'num',     valor: voucherTypeAfip(c.tipo_comprobante_letra, claseDocumento(c.tipo)), longitud: 3 },
       { tipo: 'num',     valor: c.punto_venta_proveedor, longitud: 5 },
       { tipo: 'num',     valor: c.numero_comprobante_proveedor, longitud: 20 },
       { tipo: 'alfa',    valor: '', longitud: 16 }, // despacho de importación — Nalux no importa bienes
@@ -228,7 +233,7 @@ export function generarComprasAlicuotas(compras, itemsPorCompra) {
 
     const items = itemsPorCompra[c.id] || [];
     const { alicuotas } = repartirPorAlicuota(c, items);
-    const tipoCbte = voucherTypeAfip(c.tipo_comprobante_letra);
+    const tipoCbte = voucherTypeAfip(c.tipo_comprobante_letra, claseDocumento(c.tipo));
     const doc = docTipoAfip(c.proveedor_cuit);
 
     alicuotas.forEach(({ pct, neto, iva }) => {
