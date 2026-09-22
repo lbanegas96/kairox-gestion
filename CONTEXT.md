@@ -1,10 +1,13 @@
 # KAIROX Gestión — Contexto de Sesión
 
-## ✅ Libro IVA Digital ARCA — "barrido completo": ND/NC de proveedor en el TXT (22/09)
+## ✅ Libro IVA Digital ARCA — "barrido completo": ND/NC de proveedor en el TXT (22/09) — EN PRODUCCIÓN
 
 Luciano pidió cerrar el gap que la entrada de Fase 2 (abajo) había dejado documentado: las ND
 recibidas y NC de proveedor no tenían los 3 campos estructurados, así que el export TXT de Libro
-IVA Compras siempre las excluía. Migración 399 (SIN aplicar todavía) + código.
+IVA Compras siempre las excluía. Migración 399 aplicada, código deployado (`npx vercel deploy
+--prod --yes`, aliased a `kairox-gestion-chi.vercel.app`, verificado sin errores de consola).
+Re-verificado con `has_function_privilege`: los 2 overloads nuevos quedaron únicos (sin huérfano
+del signature viejo) y con `anon:false`/`authenticated:true` desde el arranque.
 
 **Diferencia de diseño a propósito vs. Fase 0/compras**: acá los 3 campos son OPCIONALES incluso
 para altas nuevas, no obligatorios. Motivo verificado leyendo el código de los 2 modales
@@ -28,19 +31,19 @@ declarar NC/ND con el código AFIP correcto) — ahora Compras la comparte, mape
 ya traían en el objeto mergeado (para que los KPIs en pantalla neteen bien) no hace falta
 tratarlo especial: `importeAncho` ya aplica `Math.abs()` siempre.
 
-**Verificado con datos sintéticos** (migración sin aplicar, no se pudo probar en vivo contra
-datos reales todavía): Factura A→código 001, NC A→código 003, ND A→código 002 — coinciden con la
-tabla de `afipCodigos.js`. 325 caracteres exactos en los 3 casos. Una NC sin los 3 campos quedó
-correctamente excluida. UI de ambos modales verificada en vivo (flujo "Duplicar" sobre notas QA
-existentes, sin guardar — no hay botón de alta standalone para NC/ND, solo "Generar NC" con
+**Verificado con datos sintéticos**: Factura A→código 001, NC A→código 003, ND A→código 002 —
+coinciden con la tabla de `afipCodigos.js`. 325 caracteres exactos en los 3 casos. Una NC sin los
+3 campos quedó correctamente excluida. UI de ambos modales verificada en vivo (flujo "Duplicar"
+sobre notas QA existentes — no hay botón de alta standalone para NC/ND, solo "Generar NC" con
 origen o "Duplicar" desde una fila existente).
 
-**Pendiente — necesita confirmación explícita de Luciano**: aplicar migración 399 a producción,
-después push + deploy (junto con el código de Fase 2 ya commiteado antes).
+**Pendiente, sin urgencia**: probar el camino "incluida" con una NC/ND de prueba real que sí
+tenga los 3 campos cargados (todavía no se hizo, a diferencia de Fase 2/Compras que sí se probó
+end-to-end) — y dropear el overload huérfano de 6 params de `registrar_factura_compra_oc`.
 
 ---
 
-## ✅ Libro IVA Digital ARCA — Fase 2 (exportador TXT de Compras), código completo (22/09)
+## ✅ Libro IVA Digital ARCA — Fase 2 (exportador TXT de Compras), EN PRODUCCIÓN desde el 22/09
 
 Mismo patrón que Fase 1 (Ventas), aplicado al lado Compras. Layout exacto (COMPRAS_CBTE 325
 caracteres/25 campos, COMPRAS_ALICUOTAS 84 caracteres/8 campos) sacado del artifact "Libro IVA
