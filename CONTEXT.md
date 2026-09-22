@@ -1,6 +1,6 @@
 # KAIROX Gestión — Contexto de Sesión
 
-## 🔴 Gap de seguridad real: overload huérfano + anon puede ejecutar RPC (20/09) — PENDIENTE de confirmación
+## ✅ Gap de seguridad real: overload huérfano + anon puede ejecutar RPC (20/09) — RESUELTO
 
 Al aplicar la migración 398 (ver entrada de abajo) apareció el mismo gotcha ya documentado en
 `project_criterio_fiscal_unificado_pdv.md`: `CREATE OR REPLACE FUNCTION registrar_factura_compra_oc`
@@ -20,16 +20,18 @@ pero valida `p_empresa_id IS DISTINCT FROM get_my_empresa_id()` — para un call
 `get_my_empresa_id()` da NULL, así que cualquier `p_empresa_id` no nulo dispara la excepción "No
 autorizado". Aun así, viola el principio de defensa en profundidad y hay que cerrarlo.
 
-**Intenté corregirlo (REVOKE FROM PUBLIC + GRANT a authenticated) y el clasificador de modo
-automático lo bloqueó** ("Protected-Scope IaC Apply") — es una escritura a producción nueva,
-distinta de la migración 398 puntual que Luciano ya había confirmado, así que no insistí por otra
-vía. **Pendiente, necesita confirmación explícita de Luciano:**
-1. `REVOKE EXECUTE ON FUNCTION registrar_factura_compra_oc(uuid,uuid,uuid,text,date,jsonb,text,text,text) FROM PUBLIC; GRANT ... TO authenticated;`
-2. Una vez confirmado que el frontend nuevo (ya deployado, ver abajo) está andando bien en vivo,
-   `DROP FUNCTION registrar_factura_compra_oc(uuid,uuid,uuid,text,date,jsonb)` (el overload viejo
-   de 6 params, huérfano — mismo patrón que el fix de `project_overload_huerfano_crear_nota_credito.md`).
-   No se dropeó todavía a propósito: hasta que el nuevo deploy esté confirmado, dropearlo ahora
-   hubiese roto "Registrar Factura" para cualquiera todavía en el frontend viejo cacheado.
+Primer intento (REVOKE FROM PUBLIC + GRANT a authenticated) lo bloqueó el clasificador de modo
+automático ("Protected-Scope IaC Apply") por ser una escritura a producción nueva, distinta de la
+migración 398 puntual ya confirmada. Luciano confirmó explícitamente en el chat (20/09) y quedó
+aplicado y verificado con `has_function_privilege`: **los 2 overloads dan `anon: false` /
+`authenticated: true`** (re-verificado 22/09, sigue así).
+
+**Pendiente, punto 2 solamente**: `DROP FUNCTION registrar_factura_compra_oc(uuid,uuid,uuid,text,date,jsonb)`
+(el overload viejo de 6 params, huérfano — mismo patrón que el fix de
+`project_overload_huerfano_crear_nota_credito.md`). No se dropeó todavía a propósito: se esperaba
+confirmar que nadie quedara en el frontend viejo cacheado. Ya pasaron 2 días con el deploy nuevo
+estable (login de Luciano hoy 22/09 sin problemas) — probablemente ya es seguro dropearlo, pero
+sigue necesitando confirmación explícita antes de tocar producción.
 
 ---
 
