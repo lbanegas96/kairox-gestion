@@ -1,6 +1,6 @@
 # KAIROX Gestión — Contexto de Sesión
 
-## ✅ Libro IVA Digital ARCA — Fase 3 (validaciones pre-export), código completo (22/09)
+## ✅ Libro IVA Digital ARCA — Fase 3 (validaciones pre-export), EN PRODUCCIÓN (22/09)
 
 Último paso del plan de 4 fases. En vez de descargar el TXT directo y avisar recién en el toast
 posterior (como hacían Fase 1/2), ahora "Exportar TXT ARCA" valida ANTES de generar el archivo y,
@@ -25,9 +25,13 @@ archivo final se comparó byte a byte contra el capturado antes de este cambio (
 exacto), confirmando que la validación solo agrega una pantalla de confirmación, no cambia lo que
 se exporta.
 
-**Con esto el plan de 4 fases del Libro IVA Digital queda COMPLETO** (Fase 0, 1, 2, 3 + el
-barrido de ND/NC), todo en producción salvo esta última fase (código listo, sin pushear/deployar
-todavía — pendiente de confirmación, mismo criterio de siempre).
+**Con esto el plan de 4 fases del Libro IVA Digital queda COMPLETO y TODO en producción** (Fase 0,
+1, 2, 3 + el barrido de ND/NC). Deploy verificado en vivo contra `kairox-gestion-chi.vercel.app`
+directamente (no solo en local): el diálogo de Ventas mostró el mismo desglose exacto (1 sin
+CAE + 144 sin numeración fiscal + 9 sin CUIT, exporta 55) que en local. Hubo unos errores de
+consola "Failed to load module script" al entrar por primera vez que resultaron ser residuo de
+navegación anterior en localhost en la misma pestaña del navegador (ningún request real a
+producción falló — los 5 assets clave dieron 200 OK), no un problema del deploy.
 
 ---
 
