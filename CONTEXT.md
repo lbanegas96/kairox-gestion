@@ -1,5 +1,34 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Libro IVA Digital ARCA — barrido final de pruebas, 0 bugs (22/09)
+
+Pedido de Luciano después de cerrar Fase 3: un barrido más antes de dar todo por terminado.
+Cubrió justo los 2 huecos que quedaban marcados como "sin probar con datos reales" en la memoria
+del proyecto:
+
+- **NC de proveedor con comprobante fiscal (letra B, PV 1, número 555001)**: guardado real vía
+  `NuevaNCProveedorModal.jsx` (duplicando una NC existente) → exportada con código AFIP `008`
+  (Nota de Crédito, letra B) — coincide con `afipCodigos.js`.
+- **ND de proveedor con comprobante fiscal (letra A, PV 1, número 777001)**: guardado real vía
+  `NuevaNotaDebitoModal.jsx` → exportada con código `002` (Nota de Débito, letra A).
+- **Factura por Orden de Compra**: guardado real vía `ModalRegistrarFactura.jsx` sobre
+  OC-QA396-221248 → los 3 campos (Tipo/PV/Número) se persistieron bien vía el RPC de 9 params.
+
+También regresión de Excel/PDF/WhatsApp (Ventas) y CSV (Compras) — sin cambios, y 2 casos borde:
+período sin avisos exporta directo sin diálogo (confirmado con las 3 compras QA del día, todas
+limpias), período vacío no rompe nada en ninguno de los 2 reportes. Consola limpia en todo el
+barrido.
+
+**0 errores encontrados — no hizo falta ningún fix.**
+
+Se armó un artifact-checklist ("Antes de Declarar",
+`https://claude.ai/artifact/USckpWPjNEGpksU2Pezh5a`) con lo que queda para Luciano: importar de
+verdad un TXT en el Portal IVA de ARCA (necesita sus credenciales, no lo puede hacer Claude),
+revisar con criterio de negocio los avisos de "sin CUIT"/"sin numeración fiscal", y probar el
+flujo con datos reales de Nadia.
+
+---
+
 ## ✅ Libro IVA Digital ARCA — Fase 3 (validaciones pre-export), EN PRODUCCIÓN (22/09)
 
 Último paso del plan de 4 fases. En vez de descargar el TXT directo y avisar recién en el toast
