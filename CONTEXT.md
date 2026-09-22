@@ -1,5 +1,45 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Libro IVA Digital ARCA — "barrido completo": ND/NC de proveedor en el TXT (22/09)
+
+Luciano pidió cerrar el gap que la entrada de Fase 2 (abajo) había dejado documentado: las ND
+recibidas y NC de proveedor no tenían los 3 campos estructurados, así que el export TXT de Libro
+IVA Compras siempre las excluía. Migración 399 (SIN aplicar todavía) + código.
+
+**Diferencia de diseño a propósito vs. Fase 0/compras**: acá los 3 campos son OPCIONALES incluso
+para altas nuevas, no obligatorios. Motivo verificado leyendo el código de los 2 modales
+(`NuevaNCProveedorModal.jsx`/`NuevaNotaDebitoModal.jsx`): a diferencia de una Factura de Compra
+(siempre un comprobante fiscal real), muchas NC/ND de proveedor en KAIROX son ajustes puramente
+internos — motivos como "Ajuste de cuenta corriente"/"Descuento comercial", o un concepto libre
+tipo "Flete adicional" sin comprobante. Confirmado con datos reales de Nalux: hay NC como
+"Descuento comercial suelto (sin devolucion ni compra)" que genuinamente no tienen número de
+comprobante del proveedor. Obligar el campo ahí empujaría a inventar un número — el export TXT ya
+excluye con aviso lo que no tenga los 3 campos, ese es el mecanismo correcto, no un NOT NULL.
+
+**Segunda vez que se pisa el gotcha del overload** (`CREATE OR REPLACE` con params nuevos crea un
+overload en vez de reemplazar) — esta vez se evitó desde el arranque: `crear_nota_credito_proveedor`
+y `crear_nota_debito_proveedor` se tocan con `DROP FUNCTION` + `CREATE FUNCTION` (no
+`CREATE OR REPLACE`), con `REVOKE FROM PUBLIC` + `GRANT TO authenticated` en el mismo script, en
+vez de dejarlo como deuda para después.
+
+`libroIvaDigitalExport.js` reusa `claseDocumento` (la función que Fase 1/Ventas ya tenía para
+declarar NC/ND con el código AFIP correcto) — ahora Compras la comparte, mapeando
+`tipo: 'compra'|'nota_debito'|'nota_credito'` al mismo vocabulario. El signo negativo que las NC
+ya traían en el objeto mergeado (para que los KPIs en pantalla neteen bien) no hace falta
+tratarlo especial: `importeAncho` ya aplica `Math.abs()` siempre.
+
+**Verificado con datos sintéticos** (migración sin aplicar, no se pudo probar en vivo contra
+datos reales todavía): Factura A→código 001, NC A→código 003, ND A→código 002 — coinciden con la
+tabla de `afipCodigos.js`. 325 caracteres exactos en los 3 casos. Una NC sin los 3 campos quedó
+correctamente excluida. UI de ambos modales verificada en vivo (flujo "Duplicar" sobre notas QA
+existentes, sin guardar — no hay botón de alta standalone para NC/ND, solo "Generar NC" con
+origen o "Duplicar" desde una fila existente).
+
+**Pendiente — necesita confirmación explícita de Luciano**: aplicar migración 399 a producción,
+después push + deploy (junto con el código de Fase 2 ya commiteado antes).
+
+---
+
 ## ✅ Libro IVA Digital ARCA — Fase 2 (exportador TXT de Compras), código completo (22/09)
 
 Mismo patrón que Fase 1 (Ventas), aplicado al lado Compras. Layout exacto (COMPRAS_CBTE 325
