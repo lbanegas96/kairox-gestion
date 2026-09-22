@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import {
-  BookOpen, Calendar, Download, RefreshCw, ArrowLeft, AlertCircle
+  BookOpen, Calendar, Download, RefreshCw, ArrowLeft, AlertCircle, FileDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,8 @@ import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { supabase } from '@/lib/customSupabaseClient';
 import { getTodayAR, formatDateAR } from '@/lib/dateUtils';
 import { useToast } from '@/components/ui/use-toast';
+import { generarComprasCbte, generarComprasAlicuotas } from '@/lib/libroIvaDigitalExport';
+import { descargarTxt } from '@/lib/registroAnchoFijo';
 
 const PAGE_SIZE = 100;
 
@@ -26,6 +28,7 @@ function ReporteLibroIVACompras({ onBack }) {
   const [fechaDesde, setFechaDesde] = useState(firstOfMonthStr);
   const [fechaHasta, setFechaHasta] = useState(todayStr);
   const [compras, setCompras] = useState([]);
+  const [itemsPorCompra, setItemsPorCompra] = useState({});
   const [loading, setLoading] = useState(false);
   const [generated, setGenerated] = useState(false);
   const [page, setPage] = useState(1);
@@ -46,7 +49,11 @@ function ReporteLibroIVACompras({ onBack }) {
              { data: ndData, error: errNd },
              { data: ncpData, error: errNcp }] = await Promise.all([
         supabase.from('compras')
-          .select('id, numero_factura, fecha, proveedor_id, total, neto_gravado, iva_discriminado')
+          .select(`
+            id, numero_factura, fecha, proveedor_id, total, neto_gravado, iva_discriminado,
+            tipo_comprobante_letra, punto_venta_proveedor, numero_comprobante_proveedor,
+            moneda, tipo_cambio_tasa
+          `)
           .eq('empresa_id', user.empresa_id)
           .gte('fecha', rangoDesde).lte('fecha', rangoHasta),
         supabase.from('notas_debito')
@@ -77,6 +84,23 @@ function ReporteLibroIVACompras({ onBack }) {
         provMap = Object.fromEntries((provs ?? []).map(p => [p.id, p]));
       }
 
+      // Ítems por compra (detalle_compras) — para repartir neto/IVA por
+      // alícuota real en el export TXT ARCA (Fase 2), mismo criterio que
+      // ReporteLibroIVA.jsx usa con comprobante_items del lado Ventas.
+      const compraIds = (comprasData ?? []).map(c => c.id);
+      let itemsMap = {};
+      if (compraIds.length > 0) {
+        const { data: itemsData } = await supabase
+          .from('detalle_compras')
+          .select('compra_id, subtotal, alicuota_iva')
+          .in('compra_id', compraIds);
+        (itemsData ?? []).forEach(it => {
+          if (!itemsMap[it.compra_id]) itemsMap[it.compra_id] = [];
+          itemsMap[it.compra_id].push(it);
+        });
+      }
+      setItemsPorCompra(itemsMap);
+
       const nombreProv = (id) => {
         const p = provMap[id];
         return p?.razon_social || p?.nombre || 'Proveedor';
@@ -88,6 +112,14 @@ function ReporteLibroIVACompras({ onBack }) {
           id: c.id, tipo: 'compra', numero: c.numero_factura, fecha: c.fecha,
           proveedor_nombre: nombreProv(c.proveedor_id), proveedor_cuit: cuitProv(c.proveedor_id),
           total: Number(c.total), neto_gravado: c.neto_gravado, iva_discriminado: c.iva_discriminado,
+          // Campos de Fase 0 (mig.398) — solo existen en `compras`, no en
+          // notas_debito/notas_credito_proveedor. Necesarios para el export
+          // TXT ARCA (Fase 2); quedan undefined en las filas de ND/NC abajo
+          // a propósito, así el generador las excluye solo.
+          tipo_comprobante_letra: c.tipo_comprobante_letra,
+          punto_venta_proveedor: c.punto_venta_proveedor,
+          numero_comprobante_proveedor: c.numero_comprobante_proveedor,
+          tipo_cambio_tasa: c.tipo_cambio_tasa,
         })),
         ...(ndData ?? []).map(n => ({
           id: n.id, tipo: 'nota_debito', numero: n.numero_nd, fecha: n.fecha,
@@ -157,6 +189,45 @@ function ReporteLibroIVACompras({ onBack }) {
     URL.revokeObjectURL(url);
   };
 
+  // Exportar TXT ARCA (Fase 2) — solo Facturas de Compra (tipo: 'compra'),
+  // nunca ND/NC de proveedor: esas tablas no tienen los campos de Fase 0
+  // (ver nota en libroIvaDigitalExport.js). Se avisan aparte, no se mezclan
+  // con las excluidas por falta de datos — son 2 motivos distintos.
+  const handleExportarTxtArca = () => {
+    try {
+      const facturas = compras.filter(c => c.tipo === 'compra');
+      const notasSinSoporte = compras.length - facturas.length;
+      const cbte = generarComprasCbte(facturas, itemsPorCompra);
+      const alicuotas = generarComprasAlicuotas(facturas, itemsPorCompra);
+      const periodo = `${fechaDesde.replace(/-/g, '')}_${fechaHasta.replace(/-/g, '')}`;
+
+      descargarTxt(cbte.contenido, `LIBRO_IVA_DIGITAL_COMPRAS_CBTE_${periodo}.txt`);
+      descargarTxt(alicuotas.contenido, `LIBRO_IVA_DIGITAL_COMPRAS_ALICUOTAS_${periodo}.txt`);
+
+      const avisos = [];
+      if (cbte.excluidos.length > 0) {
+        avisos.push(`${cbte.excluidos.length} factura(s) de compra afuera por no tener Tipo/PV/Número del proveedor cargado (compras previas al 20/09).`);
+      }
+      if (notasSinSoporte > 0) {
+        avisos.push(`${notasSinSoporte} ND/NC de proveedor no incluida(s) — todavía no soportadas en el export TXT.`);
+      }
+
+      if (avisos.length > 0) {
+        toast({
+          title: `${cbte.incluidos} factura(s) exportada(s), con avisos`,
+          description: avisos.join(' '),
+          variant: 'destructive',
+          duration: 9000,
+        });
+      } else {
+        toast({ title: 'Éxito', description: `${cbte.incluidos} facturas de compra exportadas en 2 archivos TXT.`, className: 'bg-green-600 text-white' });
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Error', description: 'Falló la generación del TXT.', variant: 'destructive' });
+    }
+  };
+
   const fmtARS = (n) =>
     `$${Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -199,9 +270,15 @@ function ReporteLibroIVACompras({ onBack }) {
             Generar
           </Button>
           {generated && compras.length > 0 && (
-            <Button variant="outline" onClick={exportarCSV} className="h-9 dark:border-kx-border dark:text-slate-300">
-              <Download className="h-4 w-4 mr-1.5" /> Exportar CSV
-            </Button>
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" onClick={exportarCSV} className="h-9 dark:border-kx-border dark:text-slate-300">
+                <Download className="h-4 w-4 mr-1.5" /> Exportar CSV
+              </Button>
+              <Button onClick={handleExportarTxtArca} title="Genera los 2 archivos TXT (Cabecera + Alícuotas) para importar directo en el Portal IVA de ARCA — solo Facturas de Compra con Tipo/PV/Número del proveedor cargado"
+                className="h-9 bg-violet-600 hover:bg-violet-700 text-white">
+                <FileDown className="h-4 w-4 mr-1.5" /> Exportar TXT ARCA
+              </Button>
+            </div>
           )}
         </div>
       </div>

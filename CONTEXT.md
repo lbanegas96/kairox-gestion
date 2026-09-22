@@ -1,5 +1,39 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Libro IVA Digital ARCA — Fase 2 (exportador TXT de Compras), código completo (22/09)
+
+Mismo patrón que Fase 1 (Ventas), aplicado al lado Compras. Layout exacto (COMPRAS_CBTE 325
+caracteres/25 campos, COMPRAS_ALICUOTAS 84 caracteres/8 campos) sacado del artifact "Libro IVA
+Digital" ya aprobado — no se re-investigó de cero.
+
+- `src/lib/libroIvaDigitalExport.js`: nuevas `generarComprasCbte`/`generarComprasAlicuotas`.
+  Reusan `repartirPorAlicuota` tal cual (mismas columnas `neto_gravado`/`iva_discriminado` en
+  `compras` que en `comprobantes`, mismas `subtotal`/`alicuota_iva` en `detalle_compras` que en
+  `comprobante_items` — no hizo falta una versión aparte).
+- `src/components/reportes/ReporteLibroIVACompras.jsx`: select de `compras` extendido con los 3
+  campos de Fase 0, nuevo fetch de `detalle_compras`, botón violeta "Exportar TXT ARCA" igual que
+  Ventas.
+- **Alcance real, a propósito**: el export SOLO cubre `compras` (Facturas de Compra). Las ND
+  recibidas y NC de proveedor (`notas_debito`, `notas_credito_proveedor`) NO tienen los 3 campos
+  de Fase 0 en su propia tabla — mismo tipo de gap que Fase 0 resolvió para `compras`, sin resolver
+  ahí todavía. Quedan afuera del TXT con aviso aparte en el toast ("N ND/NC no incluida(s)"), no
+  mezcladas con las excluidas por falta de datos. Backlog para más adelante, no pedido ahora.
+
+**Verificado dos veces:**
+1. Matemáticamente con datos sintéticos (largo de línea 325/84 exacto, todos los campos
+   verificados por posición contra la tabla del artifact, Neto+IVA=Total).
+2. En vivo, de punta a punta: creé una compra de prueba con el proveedor QA ya existente
+   (`QA-13SEP Proveedor Compras`, factura A-0001-00099001, $12.100 con IVA 21%) y confirmé que el
+   TXT real generado por la app coincide campo por campo con lo esperado (crédito fiscal
+   computable = $2.100 exacto). Con datos reales de Nalux (01/09 al 22/09, 23 comprobantes): 1
+   incluida (la de prueba) + 16 compras afuera por no tener Tipo/PV/Número (todas anteriores al
+   20/09) + 6 ND/NC no soportadas = 23, cierra exacto.
+
+Lint y build (`vite.config.prod.js`) limpios. **Sin pushear ni deployar todavía** — falta
+confirmación explícita, mismo criterio que el resto de la sesión.
+
+---
+
 ## ✅ Gap de seguridad real: overload huérfano + anon puede ejecutar RPC (20/09) — RESUELTO
 
 Al aplicar la migración 398 (ver entrada de abajo) apareció el mismo gotcha ya documentado en
