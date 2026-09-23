@@ -1,5 +1,58 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🔶 IVA — "¿qué queda?": 4 bugs reales encontrados y arreglados en código, SIN DEPLOYAR (23/09)
+
+Luciano preguntó qué faltaba del tema IVA. Al revisar las pantallas de Posición IVA contra los
+Libros (no solo el exportador TXT) aparecieron 4 problemas que el "barrido final, 0 bugs" del
+22/09 **no vio** — ese barrido probó el camino feliz con datos limpios, nunca los estados
+`anulada`/`cancelada`/`error_definitivo` ni las monedas extranjeras. Todos verificados contra datos
+reales de Nalux por SQL antes de tocar código:
+
+1. **Compra anulada seguía contando** (`cancelar_compra` deja `compras.estado_pago='anulada'`) en
+   Libro IVA Compras (pantalla + TXT), Posición IVA y Posición Fiscal Consolidada. Nalux: 2
+   anuladas, $231 de IVA. Igual para NC/ND de proveedor `cancelada`. → `.neq(...)` en las 3 consultas
+   de `ReporteLibroIVACompras.jsx`.
+2. **Dos "Posición IVA" con números distintos para el mismo período**: `TabIVA.jsx` (Impuestos →
+   IVA) y `ReportePosicionFiscal.jsx` (Reportes) tenían cada una su copia; ninguna coincidía con los
+   Libros. TabIVA no sumaba ND de proveedor y contaba comprobantes con CAE `error`/`error_definitivo`
+   (rechazados por ARCA: en Nalux $867,77 en sept y $25.859,50 en ago); la consolidada solo miraba
+   `tipo='venta'` (sin NC/ND de cliente, sin NC/ND de proveedor, sin canceladas). Sept 2026 Nalux:
+   débito $32.469,90 (TabIVA) vs $32.292,70 (Consolidada) vs $31.602,13 (criterio de los Libros). → nueva
+   `src/lib/posicionIva.js` (`fetchPosicionIva` + `calcularPosicionIva` pura) usada por las 2 pantallas,
+   con el mismo criterio que los Libros: solo CAE `emitido`/`no_aplica`, sin canceladas/anuladas,
+   NC/ND de cliente y de proveedor. Sept 2026 ahora: débito $31.602,13 / crédito $1.062.456,22 en
+   ambas.
+3. **Moneda extranjera en el TXT**: se declaraba `PES` con el TC real (p. ej. 1530) — par inválido
+   (ARCA exige TC 1 con PES). Ventas: el arca-worker autoriza TODO CAE en `PES`/`MonCotiz 1`
+   (`wsfe.ts`) → el Libro sale siempre PES/1. Compras: ahora `monedaAfip()` (ARS→PES, USD→DOL,
+   EUR→060, BRL→012) + `tipoCambioAfip()`. Los importes ya están en pesos (`total` = base,
+   `monto_moneda_original` = nominal). Hoy no pegaba en Nalux (los 20 comprobantes en USD/EUR/BRL son
+   `no_aplica` sin numeración fiscal y las 5 compras USD son previas a Fase 0), pero iba a pegar con
+   la primera Factura de OC en USD.
+4. **Letras M/E de proveedor** caían en el fallback a B (una Factura M se declaraba como B). Ahora
+   M = 51/52/53 y E = 19/20/21 (Factura/ND/NC) en `afipCodigos.js` — excepción a propósito al
+   "espejo" de `_shared/afip.ts` (el worker nunca las emite).
+
+**Verificado**: 19 chequeos unitarios (largos 325/266/84, códigos, moneda/TC, `calcularPosicionIva`),
+SQL replicando los filtros exactos contra Nalux (sept: débito $31.602,13 / crédito $1.062.456,22),
+0 filas con estado NULL en ninguna tabla (los `.neq` no pierden filas), lint 0 errores, build de
+producción OK. **No se pudo verificar en pantalla**: el navegador del panel no tenía sesión y no se
+tipean contraseñas.
+
+**Decisión pendiente de Luciano — Compra Rápida** (`CompraRapidaSection.jsx`, pestaña "Nueva
+Compra"): es un TERCER camino que inserta en `compras` y Fase 0 no lo cubrió (la nota de Fase 0
+dice "los 2 caminos"). No pide tipo/PV/número, así que esas compras nunca salen en el TXT (solo el
+aviso pre-export). Falta decidir si esos 3 campos van obligatorios, opcionales (como NC/ND) o si
+Compra Rápida se considera "sin comprobante fiscal" a propósito.
+
+**Observaciones sin tocar** (criterio fiscal, para el contador): la Consolidada resta TODAS las
+retenciones sufridas (hoy solo IIBB en Nalux) del saldo de IVA — mezcla impuestos; su "Base
+Imponible IIBB" sigue mirando solo `tipo='venta'` sin NC ni canceladas; no hay campo de
+percepciones (IVA/IIBB) en compras — el TXT las declara siempre en 0; no hay asiento de liquidación
+mensual de IVA (2.1.3 vs 1.1.4).
+
+---
+
 ## ✅ Libro IVA Digital ARCA — barrido final de pruebas, 0 bugs (22/09)
 
 Pedido de Luciano después de cerrar Fase 3: un barrido más antes de dar todo por terminado.

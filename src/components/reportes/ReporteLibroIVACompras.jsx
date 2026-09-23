@@ -62,6 +62,10 @@ function ReporteLibroIVACompras({ onBack }) {
             moneda, tipo_cambio_tasa
           `)
           .eq('empresa_id', user.empresa_id)
+          // Anulada (cancelar_compra) fuera del Libro — igual que las ventas
+          // canceladas en Libro IVA Ventas. Sin este filtro una factura de
+          // compra anulada seguía sumando crédito fiscal y salía en el TXT.
+          .neq('estado_pago', 'anulada')
           .gte('fecha', rangoDesde).lte('fecha', rangoHasta),
         supabase.from('notas_debito')
           .select(`
@@ -69,6 +73,7 @@ function ReporteLibroIVACompras({ onBack }) {
             tipo_comprobante_letra, punto_venta_proveedor, numero_comprobante_proveedor
           `)
           .eq('empresa_id', user.empresa_id).eq('tipo', 'recibida')
+          .neq('estado', 'cancelada')
           .gte('fecha', rangoDesde).lte('fecha', rangoHasta),
         supabase.from('notas_credito_proveedor')
           .select(`
@@ -76,6 +81,7 @@ function ReporteLibroIVACompras({ onBack }) {
             tipo_comprobante_letra, punto_venta_proveedor, numero_comprobante_proveedor
           `)
           .eq('empresa_id', user.empresa_id)
+          .neq('estado', 'cancelada')
           .gte('fecha', rangoDesde).lte('fecha', rangoHasta),
       ]);
       if (errCompras) throw errCompras;
@@ -147,6 +153,7 @@ function ReporteLibroIVACompras({ onBack }) {
           tipo_comprobante_letra: c.tipo_comprobante_letra,
           punto_venta_proveedor: c.punto_venta_proveedor,
           numero_comprobante_proveedor: c.numero_comprobante_proveedor,
+          moneda: c.moneda,
           tipo_cambio_tasa: c.tipo_cambio_tasa,
         })),
         ...(ndData ?? []).map(n => ({

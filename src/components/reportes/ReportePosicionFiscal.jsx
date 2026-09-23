@@ -9,13 +9,17 @@ import { supabase } from '@/lib/customSupabaseClient';
 import { getTodayAR } from '@/lib/dateUtils';
 import { formatCurrency } from '@/lib/currencyUtils';
 import { useToast } from '@/components/ui/use-toast';
+import { fetchPosicionIva } from '@/lib/posicionIva';
 
 // Posición Fiscal Consolidada — cruza IVA, IIBB y Retenciones, que hoy son 3
 // cálculos sueltos (uno por tab de Impuestos) que nunca se ven juntos.
 //
-// IVA: Débito (comprobantes.iva_discriminado, ventas) menos Crédito
-// (compras.iva_discriminado) — mismo campo que ya usan ReporteLibroIVA/
-// ReporteLibroIVACompras, cálculo limpio y confiable.
+// IVA: Débito menos Crédito, calculado por `fetchPosicionIva` (src/lib/
+// posicionIva.js) — la MISMA función que usa Impuestos → IVA, con el mismo
+// criterio que Libro IVA Ventas/Compras (NC/ND de cliente y de proveedor,
+// sin canceladas/anuladas, solo CAE válido). Antes esta pantalla tenía su
+// propia copia que solo sumaba ventas y compras "crudas" y no coincidía con
+// ninguna de las otras.
 //
 // IIBB: el sistema NO tiene guardada la alícuota de Ingresos Brutos en
 // ningún lado (iibb_coeficientes solo guarda el % de DISTRIBUCIÓN entre
@@ -49,16 +53,16 @@ function ReportePosicionFiscal({ onBack }) {
       const rangoHasta = `${fechaHasta}T23:59:59`;
 
       const [
+        iva,
         { data: ventas, error: e1 },
-        { data: compras, error: e2 },
         { data: retenciones, error: e3 },
         { data: coeficientes, error: e4 },
       ] = await Promise.all([
-        supabase.from('comprobantes').select('iva_discriminado, neto_gravado')
+        // IVA: misma función que Impuestos → IVA, mismo criterio que los Libros.
+        fetchPosicionIva(supabase, user.empresa_id, fechaDesde, fechaHasta),
+        // Solo para la Base Imponible de IIBB (más abajo) — el IVA ya no sale de acá.
+        supabase.from('comprobantes').select('neto_gravado')
           .eq('empresa_id', user.empresa_id).eq('tipo', 'venta')
-          .gte('fecha', rangoDesde).lte('fecha', rangoHasta),
-        supabase.from('compras').select('iva_discriminado')
-          .eq('empresa_id', user.empresa_id)
           .gte('fecha', rangoDesde).lte('fecha', rangoHasta),
         supabase.from('retenciones').select('tipo, impuesto, monto')
           .eq('empresa_id', user.empresa_id)
@@ -66,11 +70,9 @@ function ReportePosicionFiscal({ onBack }) {
         supabase.from('iibb_coeficientes').select('jurisdiccion, coeficiente')
           .eq('empresa_id', user.empresa_id).eq('activo', true),
       ]);
-      if (e1) throw e1; if (e2) throw e2; if (e3) throw e3; if (e4) throw e4;
+      if (e1) throw e1; if (e3) throw e3; if (e4) throw e4;
 
-      const debitoFiscal = (ventas || []).reduce((s, v) => s + Number(v.iva_discriminado || 0), 0);
-      const creditoFiscal = (compras || []).reduce((s, c) => s + Number(c.iva_discriminado || 0), 0);
-      const saldoIVA = debitoFiscal - creditoFiscal;
+      const { debito: debitoFiscal, credito: creditoFiscal, saldo: saldoIVA } = iva;
 
       const baseImponibleIIBB = (ventas || []).reduce((s, v) => s + Number(v.neto_gravado || 0), 0);
       const coeficienteTotal = (coeficientes || []).reduce((s, c) => s + Number(c.coeficiente || 0), 0);

@@ -9,7 +9,7 @@
 // cabecera tiene que coincidir con cuántas filas propias tiene en el archivo
 // de Alícuotas, o el Portal IVA rechaza el comprobante.
 import { armarLinea } from './registroAnchoFijo';
-import { voucherTypeAfip, docTipoAfip, alicuotaPct, ivaIdFromPct } from './afipCodigos';
+import { voucherTypeAfip, docTipoAfip, alicuotaPct, ivaIdFromPct, monedaAfip, tipoCambioAfip } from './afipCodigos';
 
 const SALTO = '\r\n'; // convención de fin de línea de los regímenes SIAP/AFIP
 
@@ -109,8 +109,13 @@ export function generarVentasCbte(comprobantes, itemsPorComprobante) {
       { tipo: 'importe', valor: 0, longitud: 15 }, // percepciones de IIBB
       { tipo: 'importe', valor: 0, longitud: 15 }, // percepciones imp. municipales
       { tipo: 'importe', valor: 0, longitud: 15 }, // impuestos internos
+      // Siempre PES / TC 1: el arca-worker autoriza TODO CAE en pesos
+      // (`MonId PES`, `MonCotiz 1` en wsfe.ts) y `total` ya es la moneda base —
+      // el Libro tiene que decir lo mismo que el CAE, aunque el comprobante
+      // interno esté en USD/EUR/BRL. Antes salía PES con el TC real (p. ej.
+      // 1446,61), un par que el Portal IVA rechaza.
       { tipo: 'alfa',    valor: 'PES', longitud: 3 },
-      { tipo: 'tipoCambio', valor: c.tipo_cambio_tasa || 1 },
+      { tipo: 'tipoCambio', valor: 1 },
       { tipo: 'num',     valor: Math.max(alicuotas.length, 1), longitud: 1 },
       { tipo: 'alfa',    valor: '', longitud: 1 }, // código de operación — blanco, doméstica normal
       { tipo: 'importe', valor: 0, longitud: 15 }, // otros tributos
@@ -216,6 +221,10 @@ export function generarComprasCbte(compras, itemsPorCompra) {
     const items = itemsPorCompra[c.id] || [];
     const { exento, alicuotas } = repartirPorAlicuota(c, items);
     const doc = docTipoAfip(c.proveedor_cuit);
+    // Los importes de `compras` están en pesos aunque la factura del proveedor
+    // sea en USD/EUR/BRL (`monto_moneda_original` guarda el valor nominal) — acá
+    // se declara la moneda original con su TC, o PES con TC 1 si es en pesos.
+    const monedaCbte = monedaAfip(c.moneda);
 
     lineas.push(armarLinea([
       { tipo: 'fecha',   valor: c.fecha },
@@ -234,8 +243,8 @@ export function generarComprasCbte(compras, itemsPorCompra) {
       { tipo: 'importe', valor: 0, longitud: 15 }, // percepciones de IIBB
       { tipo: 'importe', valor: 0, longitud: 15 }, // percepciones imp. municipales
       { tipo: 'importe', valor: 0, longitud: 15 }, // impuestos internos
-      { tipo: 'alfa',    valor: 'PES', longitud: 3 },
-      { tipo: 'tipoCambio', valor: c.tipo_cambio_tasa || 1 },
+      { tipo: 'alfa',    valor: monedaCbte, longitud: 3 },
+      { tipo: 'tipoCambio', valor: tipoCambioAfip(monedaCbte, c.tipo_cambio_tasa) },
       { tipo: 'num',     valor: Math.max(alicuotas.length, 1), longitud: 1 },
       { tipo: 'alfa',    valor: '', longitud: 1 }, // código de operación — blanco, doméstica normal
       { tipo: 'importe', valor: c.iva_discriminado, longitud: 15 }, // crédito fiscal computable — 100% computable
