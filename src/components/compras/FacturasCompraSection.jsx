@@ -78,7 +78,7 @@ function FacturasCompraSection({ navigateFacturaId, onNavigated, onNavigate } = 
         .select(`
           id, fecha, numero_factura, total, forma_pago, estado_pago, moneda, tipo_cambio_tasa,
           monto_paralelo, tc_paralelo, created_at, proveedor_id, observaciones, asiento_id,
-          neto_gravado, iva_discriminado, descuento_global_pct,
+          neto_gravado, iva_discriminado, descuento_global_pct, en_libro_iva,
           proveedores(nombre),
           detalle_compras(id, cantidad, costo_unitario, subtotal, descuento_item, alicuota_iva, productos(nombre))
         `)
@@ -259,6 +259,9 @@ function FacturasCompraSection({ navigateFacturaId, onNavigated, onNavigate } = 
                         <td className="p-3 text-kx-text">{compra.proveedores?.nombre || '—'}</td>
                         <td className="p-3 font-mono text-xs text-[rgb(var(--kx-blue))]">
                           {compra.numero_factura || 'S/N'}
+                          {compra.en_libro_iva === false && (
+                            <span className="ml-2 px-1.5 py-0.5 rounded text-2xs font-sans font-semibold uppercase tracking-wide bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">No libro</span>
+                          )}
                         </td>
                         <td className="p-3 text-kx-text-2 text-xs">{compra.forma_pago || '—'}</td>
                         <td className="p-3 text-right font-mono font-bold text-kx-text">

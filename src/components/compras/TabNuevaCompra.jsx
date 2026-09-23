@@ -4,6 +4,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MonedaSelector } from '@/components/ui/MonedaSelector';
 import { parseNumberLocale } from '@/lib/currencyUtils';
+import { comprobanteProveedorCompleto, tieneCuitValido } from '@/lib/comprasLibro';
+import ComprobanteProveedorFields from './ComprobanteProveedorFields';
 
 function TabNuevaCompra({
   purchaseForm, setPurchaseForm,
@@ -32,13 +34,54 @@ function TabNuevaCompra({
   handleRegisterPurchase,
   isPurchaseValid,
 }) {
+  // "Libro" (por defecto) = va al Libro IVA Compras y exige los datos del
+  // comprobante del proveedor. "No libro" = ticket / sin factura / uso interno:
+  // no va al Libro ni suma crédito fiscal, no exige nada (ver src/lib/comprasLibro.js).
+  const enLibro = purchaseForm.en_libro_iva !== false;
+  const comprobanteOk = comprobanteProveedorCompleto({
+    letra: purchaseForm.tipo_comprobante_letra,
+    puntoVenta: purchaseForm.punto_venta_proveedor,
+    numero: purchaseForm.numero_comprobante_proveedor,
+  });
+  const proveedorSel = proveedores.find(p => p.id === purchaseForm.proveedor_id);
+  const proveedorSinCuit = !!proveedorSel && !tieneCuitValido(proveedorSel.cuit);
+
   return (
     <div className="mt-0 space-y-4">
       <div className="kairox-bg-card border kairox-border p-6 rounded-xl shadow-sm dark:bg-kx-bg dark:border-kx-border">
-        <h3 className="text-lg font-bold text-blue-800 dark:text-kx-violet flex items-center gap-2 mb-4"><ShoppingBag className="h-5 w-5" /> DATOS DE COMPRA</h3>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+          <h3 className="text-lg font-bold text-blue-800 dark:text-kx-violet flex items-center gap-2"><ShoppingBag className="h-5 w-5" /> DATOS DE COMPRA</h3>
+          <div role="group" aria-label="¿Va al Libro IVA?" className="inline-flex rounded-lg border border-slate-300 dark:border-kx-border overflow-hidden text-sm font-semibold">
+            <button
+              type="button"
+              aria-pressed={enLibro}
+              onClick={() => setPurchaseForm({ ...purchaseForm, en_libro_iva: true })}
+              className={`px-4 h-9 transition-colors ${enLibro ? 'bg-blue-600 text-white dark:bg-kx-violet' : 'bg-transparent text-slate-600 dark:text-kx-text-2 hover:bg-slate-100 dark:hover:bg-kx-surface-2'}`}
+            >
+              Libro
+            </button>
+            <button
+              type="button"
+              aria-pressed={!enLibro}
+              onClick={() => setPurchaseForm({ ...purchaseForm, en_libro_iva: false })}
+              className={`px-4 h-9 border-l border-slate-300 dark:border-kx-border transition-colors ${!enLibro ? 'bg-amber-600 text-white' : 'bg-transparent text-slate-600 dark:text-kx-text-2 hover:bg-slate-100 dark:hover:bg-kx-surface-2'}`}
+            >
+              No libro
+            </button>
+          </div>
+        </div>
+        <p className="text-xs text-slate-500 dark:text-kx-text-2 mb-4">
+          {enLibro
+            ? 'Libro: va al Libro IVA Compras y suma crédito fiscal. Cargá los datos del comprobante del proveedor.'
+            : 'No libro: ticket, compra sin factura o uso interno. No va al Libro IVA ni suma crédito fiscal — el IVA queda dentro del costo.'}
+        </p>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="space-y-2"><Label className="dark:text-kx-text">Proveedor <span className="text-red-600 dark:text-red-400">*</span></Label><div className="relative"><select className="w-full h-10 rounded-md bg-kx-surface dark:bg-kx-surface border border-slate-300 dark:border-kx-border text-slate-900 dark:text-kx-text px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-kx-violet" value={purchaseForm.proveedor_id} onChange={e => setPurchaseForm({...purchaseForm, proveedor_id: e.target.value})}><option value="">Seleccione Proveedor...</option>{proveedores.map(p => (<option key={p.id} value={p.id}>{p.nombre}</option>))}</select></div></div>
-          <div className="space-y-2"><Label className="dark:text-kx-text">N° Factura / Referencia</Label><Input value={purchaseForm.numero_factura} onChange={e => setPurchaseForm({...purchaseForm, numero_factura: e.target.value})} placeholder="Ej: F-001-2304" className="kairox-input dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"/></div>
+          {enLibro ? (
+            <ComprobanteProveedorFields form={purchaseForm} setForm={setPurchaseForm} className="md:col-span-2" />
+          ) : (
+            <div className="space-y-2"><Label className="dark:text-kx-text">N° Factura / Referencia (opcional)</Label><Input value={purchaseForm.numero_factura} onChange={e => setPurchaseForm({...purchaseForm, numero_factura: e.target.value})} placeholder="Ej: ticket 0012-345" className="kairox-input dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"/></div>
+          )}
           <div className="space-y-2"><Label className="dark:text-kx-text">Fecha de Compra</Label><div className="relative"><Calendar className="absolute left-3 top-2.5 h-4 w-4 text-slate-500"/><Input type="date" value={purchaseForm.fecha} onChange={e => setPurchaseForm({...purchaseForm, fecha: e.target.value})} className="pl-9 kairox-input dark:bg-kx-surface dark:border-kx-border dark:text-kx-text"/></div></div>
           <div className="space-y-2"><Label className="dark:text-kx-text">Forma de Pago</Label><select className="w-full h-10 rounded-md bg-kx-surface dark:bg-kx-surface border border-slate-300 dark:border-kx-border text-slate-900 dark:text-kx-text px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value={purchaseForm.forma_pago} onChange={e => setPurchaseForm({...purchaseForm, forma_pago: e.target.value})}><option value="Efectivo">Efectivo</option><option value="Transferencia">Transferencia</option><option value="Tarjeta">Tarjeta</option><option value="Cuenta Corriente">Cuenta Corriente</option></select></div>
           {centrosCosto.length > 0 && (
@@ -77,6 +120,15 @@ function TabNuevaCompra({
             )}
           </div>
         </div>
+        {enLibro && proveedorSinCuit && (
+          <div className="mt-4 flex items-start gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2 border border-amber-200 dark:border-amber-800">
+            <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+            <span>
+              Este proveedor no tiene un CUIT válido cargado (11 dígitos). La compra se guarda igual, pero sin CUIT no
+              puede salir en el archivo de ARCA — cargalo desde Proveedores.
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="kairox-bg-card border kairox-border p-6 rounded-xl flex flex-col relative min-h-[400px] shadow-sm dark:bg-kx-bg dark:border-kx-border">
@@ -120,6 +172,11 @@ function TabNuevaCompra({
               {moneda !== 'ARS' && tcMissing && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
                   ⚠ Cargá el TC del día para registrar la compra
+                </p>
+              )}
+              {enLibro && purchaseForm.proveedor_id && cart.length > 0 && !comprobanteOk && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  ⚠ Completá el Punto de Venta y el Número del comprobante, o elegí «No libro»
                 </p>
               )}
             </div>

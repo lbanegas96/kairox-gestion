@@ -66,6 +66,9 @@ function ReporteLibroIVACompras({ onBack }) {
           // canceladas en Libro IVA Ventas. Sin este filtro una factura de
           // compra anulada seguía sumando crédito fiscal y salía en el TXT.
           .neq('estado_pago', 'anulada')
+          // "No libro" (Compra Rápida, mig.400): ticket / sin factura / uso interno —
+          // no va al Libro ni suma crédito fiscal.
+          .eq('en_libro_iva', true)
           .gte('fecha', rangoDesde).lte('fecha', rangoHasta),
         supabase.from('notas_debito')
           .select(`

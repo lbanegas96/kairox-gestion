@@ -12,11 +12,28 @@ import { getTodayAR, getDateFromInputAR } from '@/lib/dateUtils';
 import { asientosAutoService } from '@/services/planCuentasService';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { parseNumberLocale } from '@/lib/currencyUtils';
+import { netoIvaCompra, resolverCompraLibro, comprobanteProveedorCompleto } from '@/lib/comprasLibro';
 import CompraDetailModal from '../ventas/CompraDetailModal';
 import TabNuevaCompra from '../compras/TabNuevaCompra';
 import TabHistorialCompras from '../compras/TabHistorialCompras';
 import ModalEditarCompra from '../compras/ModalEditarCompra';
 import ModalPagoCompraRapida from '../compras/ModalPagoCompraRapida';
+
+// Estado inicial del formulario de Nueva Compra. "Libro" por defecto: la compra
+// va al Libro IVA Compras y exige los datos del comprobante del proveedor;
+// "No libro" (ticket, sin factura, uso interno) no exige nada y no suma crédito
+// fiscal — ver src/lib/comprasLibro.js.
+const nuevoFormCompra = () => ({
+  proveedor_id: '',
+  numero_factura: '',
+  fecha: getTodayAR(),
+  forma_pago: 'Efectivo',
+  centro_costo_id: '',
+  en_libro_iva: true,
+  tipo_comprobante_letra: 'A',
+  punto_venta_proveedor: '',
+  numero_comprobante_proveedor: '',
+});
 
 function ComprasSection() {
   const { user } = useAuth();
@@ -31,13 +48,7 @@ function ComprasSection() {
   const [loading, setLoading] = useState(false);
 
   // --- NUEVA COMPRA States ---
-  const [purchaseForm, setPurchaseForm] = useState({
-    proveedor_id: '',
-    numero_factura: '',
-    fecha: getTodayAR(),
-    forma_pago: 'Efectivo',
-    centro_costo_id: ''
-  });
+  const [purchaseForm, setPurchaseForm] = useState(nuevoFormCompra);
   // Centro de costo (Fase 1 del plan de 4 frentes contables) — opcional.
   const [centrosCosto, setCentrosCosto] = useState([]);
   const [products, setProducts] = useState([]); // All available products for search
@@ -101,7 +112,7 @@ function ComprasSection() {
   const loadProveedores = async () => {
     const { data } = await supabase
       .from('proveedores')
-      .select('id, nombre')
+      .select('id, nombre, cuit')
       .order('nombre');
     if (data) setProveedores(data);
   };
@@ -317,13 +328,7 @@ function ComprasSection() {
 
   const handleClearAll = () => {
     setCart([]);
-    setPurchaseForm({
-      proveedor_id: '',
-      numero_factura: '',
-      fecha: getTodayAR(),
-      forma_pago: 'Efectivo',
-      centro_costo_id: ''
-    });
+    setPurchaseForm(nuevoFormCompra());
     setProductSearch('');
     setMoneda('ARS');
     setTipoCambioTasa(1);
@@ -336,7 +341,13 @@ function ComprasSection() {
     return (
       purchaseForm.proveedor_id &&
       cart.length > 0 &&
-      cart.every(item => item.cantidad > 0 && (parseNumberLocale(item.costo_unitario) || 0) >= 0)
+      cart.every(item => item.cantidad > 0 && (parseNumberLocale(item.costo_unitario) || 0) >= 0) &&
+      // "Libro" exige los 3 datos del comprobante del proveedor; "No libro" no exige nada.
+      (purchaseForm.en_libro_iva === false || comprobanteProveedorCompleto({
+        letra: purchaseForm.tipo_comprobante_letra,
+        puntoVenta: purchaseForm.punto_venta_proveedor,
+        numero: purchaseForm.numero_comprobante_proveedor,
+      }))
     );
   };
 
@@ -376,21 +387,31 @@ function ComprasSection() {
       // (mismo circuito que ya usa Proveedores, ver ModalPagoCompraRapida).
       const status = 'pendiente';
 
+      // Libro / No libro (23/09). "Libro": va al Libro IVA Compras con el
+      // comprobante estructurado del proveedor y suma crédito fiscal. "No libro"
+      // (ticket, sin factura, uso interno): sin comprobante fiscal → no va al
+      // Libro ni a la Posición IVA y no suma crédito fiscal (neto = total, IVA = 0,
+      // el asiento sale sin la línea de IVA Crédito Fiscal).
+      //
       // IVA por ítem — costo_unitario es precio FINAL (IVA incluido, igual que
       // siempre se cargó acá), se discrimina neto/IVA con la alícuota real de
       // cada producto en vez de asumir 21% fijo. Mismo criterio "bruto/factor"
       // que ND/NC de Proveedor (mig.276/277). Sin esto, ReporteLibroIVACompras.jsx
-      // caía siempre en su fallback de 21% para estas compras.
-      const FACTOR_IVA = { '0': 1, '10.5': 1.105, '21': 1.21, '27': 1.27 };
-      let subtotalNetoReal = 0;
-      let totalIvaReal = 0;
-      cart.forEach(item => {
-        const bruto = (parseInt(item.cantidad) || 0) * (parseNumberLocale(item.costo_unitario) || 0);
-        const factor = FACTOR_IVA[String(item.alicuota_iva ?? 21)] ?? 1.21;
-        const neto = bruto / factor;
-        subtotalNetoReal += neto;
-        totalIvaReal += bruto - neto;
-      });
+      // caía siempre en su fallback de 21% para estas compras. Todo esto vive en
+      // resolverCompraLibro (comparte regla con la edición y se prueba aparte) — y
+      // un producto exento o no gravado ya no se calcula al 21%.
+      const {
+        enLibro, numeroFactura, comprobante,
+        neto: subtotalNetoReal, iva: totalIvaReal,
+      } = resolverCompraLibro(
+        purchaseForm,
+        cart.map(item => ({
+          cantidad: parseInt(item.cantidad),
+          costo_unitario: parseNumberLocale(item.costo_unitario),
+          alicuota_iva: item.alicuota_iva,
+        })),
+        totalCompra
+      );
 
       // Moneda paralela — bug real (08/09): totalCompra SIEMPRE está en ARS (costo_unitario
       // se carga en pesos, Moneda/TC del documento solo sirven para derivar
@@ -413,7 +434,10 @@ function ComprasSection() {
           empresa_id: user.empresa_id,
           fecha: getDateFromInputAR(purchaseForm.fecha),
           proveedor_id: purchaseForm.proveedor_id,
-          numero_factura: purchaseForm.numero_factura || 'S/N',
+          numero_factura: numeroFactura,
+          en_libro_iva: enLibro,
+          // Comprobante estructurado del proveedor — solo "Libro" (mig.398); vacío en "No libro".
+          ...comprobante,
           total: totalCompra,
           neto_gravado: subtotalNetoReal,
           iva_discriminado: totalIvaReal,
@@ -503,7 +527,7 @@ function ComprasSection() {
         proveedor_id:    purchaseForm.proveedor_id,
         tipo:            'compra',
         monto:           totalCompra,
-        descripcion:     `Compra ${purchaseForm.numero_factura || 'S/N'} — ${providerName}`,
+        descripcion:     `Compra ${numeroFactura} — ${providerName}`,
         referencia_id:   newPurchase.id,
         referencia_tipo: 'compra_rapida',
         fecha:           getDateFromInputAR(purchaseForm.fecha),
@@ -524,7 +548,7 @@ function ComprasSection() {
           neto: subtotalNetoReal,
           iva: totalIvaReal,
           fecha: purchaseForm.fecha || getTodayAR(),
-          descripcion: `Compra a ${providerName} - Fac. ${purchaseForm.numero_factura || 'S/N'}`,
+          descripcion: `Compra a ${providerName} - Fac. ${numeroFactura}`,
           esCredito: true,
           centroCostoId: purchaseForm.centro_costo_id || null,
         }
@@ -547,7 +571,7 @@ function ComprasSection() {
       if (purchaseForm.forma_pago !== 'Cuenta Corriente') {
         setCompraAPagar({
           id: newPurchase.id,
-          numeroFactura: purchaseForm.numero_factura || 'S/N',
+          numeroFactura,
           total: totalCompra,
           proveedorId: purchaseForm.proveedor_id,
           proveedorNombre: providerName,
@@ -556,13 +580,7 @@ function ComprasSection() {
         setPagoModalOpen(true);
       }
 
-      setPurchaseForm({
-        proveedor_id: '',
-        numero_factura: '',
-        fecha: getTodayAR(),
-        forma_pago: 'Efectivo',
-        centro_costo_id: ''
-      });
+      setPurchaseForm(nuevoFormCompra());
       setCart([]);
       setMoneda('ARS');
       setTipoCambioTasa(1);
@@ -595,7 +613,10 @@ function ComprasSection() {
       numero_factura: compra.numero_factura,
       fecha: compra.fecha.split('T')[0],
       fechaOriginal: compra.fecha, // Timestamp completo original (preserva hora si la fecha no se toca)
-      total: compra.total
+      total: compra.total,
+      // "No libro" no suma crédito fiscal — al guardar, neto/IVA se recalculan con esa
+      // misma regla (si no, editar una cantidad le devolvería el IVA a la compra).
+      en_libro_iva: compra.en_libro_iva !== false,
     });
 
     // 2. Fetch Details
@@ -722,16 +743,16 @@ function ComprasSection() {
       // ver más arriba en este archivo) — antes este recálculo no existía acá:
       // el header quedaba con el neto_gravado/iva_discriminado de ANTES de la
       // edición, desalineado del total nuevo y de los ítems reales.
-      const FACTOR_IVA = { '0': 1, '10.5': 1.105, '21': 1.21, '27': 1.27 };
-      let netoGravadoReal = 0;
-      let ivaDiscriminadoReal = 0;
-      editItems.forEach(item => {
-        const bruto = (Number(item.cantidad) || 0) * (parseNumberLocale(item.costo_unitario) || 0);
-        const factor = FACTOR_IVA[String(item.alicuota_iva ?? 21)] ?? 1.21;
-        const neto = bruto / factor;
-        netoGravadoReal += neto;
-        ivaDiscriminadoReal += bruto - neto;
-      });
+      // Misma regla que la creación (netoIvaCompra): en "No libro" todo el importe
+      // es neto y el IVA es 0.
+      const { neto: netoGravadoReal, iva: ivaDiscriminadoReal } = netoIvaCompra(
+        editItems.map(item => ({
+          cantidad: Number(item.cantidad),
+          costo_unitario: parseNumberLocale(item.costo_unitario),
+          alicuota_iva: item.alicuota_iva,
+        })),
+        editForm.en_libro_iva !== false
+      );
 
       // 1. Update Purchase Header
       const { error: headerError } = await supabase

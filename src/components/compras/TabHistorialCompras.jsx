@@ -169,6 +169,9 @@ function TabHistorialCompras({
                     </td>
                     <td className="p-4 text-slate-500 font-mono text-xs font-medium dark:text-kx-text-2">
                       {compra.numero_factura}
+                      {compra.en_libro_iva === false && (
+                        <span className="ml-2 px-1.5 py-0.5 rounded text-2xs font-sans font-semibold uppercase tracking-wide bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">No libro</span>
+                      )}
                     </td>
                     <td className="p-4 font-medium text-kx-text dark:text-kx-text">
                       {compra.proveedores?.nombre || '---'}

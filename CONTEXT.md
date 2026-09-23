@@ -1,5 +1,55 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🔶 Compra Rápida — botón "Libro / No libro" (23/09) — CÓDIGO LISTO, migración 400 SIN APLICAR
+
+Pedido de Luciano sobre la decisión pendiente de abajo (Compra Rápida era el 3er camino que crea
+`compras` sin los datos del comprobante): un botón **Libro / No libro** para que cada compra vaya o
+no al IVA. "Libro" obliga a cargar los datos necesarios; "No libro" no pide nada.
+
+**Cómo quedó** (pestaña "Nueva Compra", `CompraRapidaSection.jsx` + `TabNuevaCompra.jsx`):
+- **Libro** (por defecto): pide letra + punto de venta + número del comprobante del proveedor (nuevo
+  `ComprobanteProveedorFields.jsx`, PV máx. 5 dígitos y número máx. 8: `numAncho` del TXT recorta por
+  la izquierda si se pasan), deriva `numero_factura` ("A-0001-00012345") y guarda las 3 columnas de
+  mig.398. El botón REGISTRAR queda deshabilitado con un aviso hasta completarlos. Si el proveedor no
+  tiene CUIT de 11 dígitos avisa (amarillo, NO bloquea: el CUIT es dato del proveedor y bloquear
+  obligaría a salir del formulario; el pre-export de Fase 3 también lo marca).
+- **No libro**: referencia libre opcional; sin comprobante estructurado; **sin crédito fiscal**:
+  `neto_gravado = total`, `iva_discriminado = 0`, y el asiento sale de 2 líneas (Mercaderías / Cuentas
+  a Pagar, sin IVA Crédito Fiscal — `crearAsientoCompra` ya cae ahí cuando iva = 0, y
+  `regenerar_asiento_compra` también). Es la lectura de "que ese movimiento vaya al IVA o no": si no
+  va al IVA, tampoco puede quedar como crédito en el mayor.
+- **Migración 400** (`supabase/migrations/400_compras_en_libro_iva.sql`, SIN APLICAR):
+  `compras.en_libro_iva BOOLEAN NOT NULL DEFAULT true` — lo existente queda como estaba. **El orden
+  importa: migración ANTES del deploy** — el front nuevo lee/escribe esa columna (Libro IVA Compras,
+  Posición IVA, Facturas de Compra, alta de compra) y sin ella esas pantallas fallan.
+- Fuera del Libro y de la Posición las "No libro": `ReporteLibroIVACompras.jsx` y
+  `posicionIva.js` filtran `.eq('en_libro_iva', true)`. Badge ámbar "No libro" en el historial de
+  Compra Rápida y en Facturas de Compra. Editar una "No libro" recalcula neto/IVA con la misma regla
+  (si no, editar una cantidad le devolvería el IVA).
+- Regla compartida en `src/lib/comprasLibro.js` (`resolverCompraLibro`, `netoIvaCompra`, `factorIva`…).
+  Efecto colateral bueno: un producto **exento / no gravado** ya no se calcula al 21% (la tabla inline
+  vieja no tenía esas claves y caía en el fallback 1,21).
+- **Tests nuevos** (vitest): `comprasLibro.test.js` (22), `posicionIva.test.js` (9, incluye los filtros
+  exactos de cada consulta), `libroIvaDigitalExport.test.js` (15), `TabNuevaCompra.test.jsx` (13, el
+  botón y los campos). Lint 0 errores, build de producción OK. **Sin verificar en pantalla ni
+  contra la base** (necesita la migración aplicada y una sesión iniciada).
+
+**Límites conocidos, a propósito**: (1) el Libro / No libro se decide al crear — no se cambia al
+editar (cambiarlo obligaría a regenerar el asiento; para corregirlo: anular la compra y recargarla);
+(2) las ~40 compras anteriores a Fase 0 quedan como "Libro" sin datos (default true) — si son de
+prueba, pasarlas a No libro o anularlas es decisión de Luciano; (3) PV/número de las otras pantallas
+(Factura de Proveedor, Factura por OC, NC y ND de proveedor) siguen sin tope de largo;
+(4) editar el N° de factura a mano en "Editar compra" no actualiza los 3 campos estructurados (ya
+pasaba con las otras vías); (5) `aplicar_compra_producto` recibe el costo con IVA incluido aunque el
+IVA sea crédito fiscal — el costo del producto queda inflado en las compras "Libro"; es de antes y es
+criterio contable, para el contador.
+
+**Aparte**: 3 tests de `FormNuevaCotizacion.test.jsx` fallan desde el 03/09 (commit 0a3d254 agregó las
+props `listasPrecio`/`aplicarListaPrecio` y el test nunca las pasa) — sin relación con esto; quedó
+como tarea aparte.
+
+---
+
 ## 🔶 IVA — "¿qué queda?": 4 bugs reales encontrados y arreglados en código, SIN DEPLOYAR (23/09)
 
 Luciano preguntó qué faltaba del tema IVA. Al revisar las pantallas de Posición IVA contra los
@@ -39,11 +89,10 @@ SQL replicando los filtros exactos contra Nalux (sept: débito $31.602,13 / cré
 producción OK. **No se pudo verificar en pantalla**: el navegador del panel no tenía sesión y no se
 tipean contraseñas.
 
-**Decisión pendiente de Luciano — Compra Rápida** (`CompraRapidaSection.jsx`, pestaña "Nueva
-Compra"): es un TERCER camino que inserta en `compras` y Fase 0 no lo cubrió (la nota de Fase 0
-dice "los 2 caminos"). No pide tipo/PV/número, así que esas compras nunca salen en el TXT (solo el
-aviso pre-export). Falta decidir si esos 3 campos van obligatorios, opcionales (como NC/ND) o si
-Compra Rápida se considera "sin comprobante fiscal" a propósito.
+**Compra Rápida** (`CompraRapidaSection.jsx`, pestaña "Nueva Compra") era un TERCER camino que
+inserta en `compras` y Fase 0 no lo cubrió (la nota de Fase 0 dice "los 2 caminos"): no pedía
+tipo/PV/número, así que esas compras nunca salían en el TXT. **Resuelto por Luciano** con un botón
+Libro / No libro — ver la entrada de arriba.
 
 **Observaciones sin tocar** (criterio fiscal, para el contador): la Consolidada resta TODAS las
 retenciones sufridas (hoy solo IIBB en Nalux) del saldo de IVA — mezcla impuestos; su "Base

@@ -13,9 +13,10 @@
 //   que ARCA rechazó — ninguno es un documento válido todavía. Canceladas afuera.
 //   (Las ND de cliente viven en `comprobantes`, no en `notas_debito` — esa rama
 //   quedó deprecada, ver mig.268/269/278.)
-// CRÉDITO (Compras) — compras suman (menos las `anulada`, cancelar_compra),
-//   ND recibida de proveedor suma (nos cobran algo con IVA), NC de proveedor
-//   resta. ND/NC canceladas afuera.
+// CRÉDITO (Compras) — compras suman (menos las `anulada`, cancelar_compra, y
+//   las "No libro" de Compra Rápida, que no suman crédito fiscal), ND recibida
+//   de proveedor suma (nos cobran algo con IVA), NC de proveedor resta.
+//   ND/NC canceladas afuera.
 
 const CAE_VALIDOS = ['emitido', 'no_aplica'];
 
@@ -60,6 +61,7 @@ export async function fetchPosicionIva(supabase, empresaId, fechaDesde, fechaHas
       .select('total, iva_discriminado')
       .eq('empresa_id', empresaId)
       .neq('estado_pago', 'anulada')
+      .eq('en_libro_iva', true) // "No libro" no suma crédito fiscal (mig.400)
       .gte('fecha', desde).lte('fecha', hasta),
     supabase.from('notas_debito')
       .select('monto, iva_discriminado')

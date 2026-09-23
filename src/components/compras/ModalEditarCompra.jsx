@@ -31,6 +31,11 @@ function ModalEditarCompra({
           <DialogDescription className="dark:text-kx-text-2">
             Modifique los detalles de la compra. El stock se ajustará automáticamente según los cambios.
           </DialogDescription>
+          {editForm?.en_libro_iva === false && (
+            <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+              Compra «No libro»: no va al Libro IVA ni suma crédito fiscal.
+            </p>
+          )}
         </DialogHeader>
 
         {editForm && (
