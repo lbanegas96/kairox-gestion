@@ -1,6 +1,7 @@
-import { BarChart3, ShoppingCart, Users, CreditCard, Banknote, Smartphone, Truck, Scale, TrendingUp, Boxes, History, Landmark, Award, CalendarClock, PackageSearch, ShoppingBag, ExternalLink } from 'lucide-react';
+import { BarChart3, ShoppingCart, Users, CreditCard, Banknote, Smartphone, Truck, Scale, TrendingUp, Boxes, History, Landmark, Award, CalendarClock, PackageSearch, ShoppingBag, ExternalLink, Tags, Trophy, ClipboardList, Undo2 } from 'lucide-react';
 import { formatDateAR } from '@/lib/dateUtils';
 import { formatCurrency } from '@/lib/currencyUtils';
+import { SITUACION_LISTA_LABEL } from '@/lib/reportesBacklog';
 
 export const SUBTIPO_LABEL = {
   'transferencia':   'CVU / Transferencia',
@@ -258,6 +259,62 @@ export const REPORTS = [
       filtros: ['Rango de fechas', 'Centro de costo (si está activado)'],
     },
   },
+  {
+    id: 'rendimiento_listas_precio',
+    title: 'Rendimiento por Lista de Precios',
+    description: 'Cuánto vendés y qué margen dejás con cada lista, y qué ventas no usaron la lista del cliente.',
+    icon: <Tags className="w-8 h-8 text-kx-violet" />,
+    borderClass: 'border-t-kx-violet',
+    requiresDate: true,
+    supportsCentroCosto: true,
+    ayuda: {
+      queEs: 'Compara la lista de precios que se USÓ en cada venta contra la que el cliente tiene ASIGNADA, y muestra cuánto se vendió y qué margen quedó con cada combinación. Sirve para detectar fuga de margen: ventas hechas con una lista distinta a la que le corresponde al cliente.',
+      queMuestra: ['Lista aplicada, lista asignada al cliente y si coinciden', 'Cantidad de ventas y de clientes en cada caso', 'Vendido, costo de mercadería vendida y margen ($ y %)', 'Arriba de todo aparecen las filas donde NO coinciden — son las que conviene revisar'],
+      filtros: ['Rango de fechas', 'Centro de costo (si está activado)', 'No incluye ventas canceladas', 'Ojo: una venta muy vieja que no tenía costo cargado en su momento muestra 100% de margen — le falta el dato de costo'],
+    },
+  },
+  {
+    id: 'ranking_proveedores',
+    title: 'Ranking de Proveedores',
+    description: 'A quién le comprás más: volumen, facturas, ticket promedio y concentración.',
+    icon: <Trophy className="w-8 h-8 text-kx-amber" />,
+    borderClass: 'border-t-kx-amber',
+    requiresDate: true,
+    supportsCentroCosto: true,
+    ayuda: {
+      queEs: 'Ranking de proveedores por lo que les compraste en el período, con cuánto pesa cada uno sobre el total — para ver si dependés demasiado de pocos proveedores.',
+      queMuestra: ['Posición, proveedor, cantidad de facturas y total comprado', 'Ticket promedio (total ÷ facturas)', '% sobre el total comprado y % acumulado (con cuántos proveedores llegás al 80% del gasto)', 'Fecha de la última compra'],
+      filtros: ['Rango de fechas', 'Centro de costo (si está activado)', 'No incluye facturas anuladas ni descuenta notas de crédito'],
+    },
+  },
+  {
+    id: 'historial_ajustes_inventario',
+    title: 'Historial de Ajustes de Inventario',
+    description: 'Cuánto perdés (o ganás) en diferencias de stock y qué productos ajustan siempre.',
+    icon: <ClipboardList className="w-8 h-8 text-kx-red" />,
+    borderClass: 'border-t-kx-red',
+    requiresDate: true,
+    supportsGroupBy: true,
+    ayuda: {
+      queEs: 'Todos los ajustes de stock del período: las diferencias que salieron en los Recuentos de Inventario confirmados y los ajustes manuales hechos desde Productos. Sirve para medir cuánta mercadería se pierde y detectar los productos que ajustan una y otra vez (señal de merma sistemática).',
+      queMuestra: ['Fecha, origen (Recuento o Ajuste manual), producto y documento', 'Unidades de diferencia y valor en $ (negativo = faltante, positivo = sobrante)', 'Cuántas veces ajustó ese producto en el período', 'Totales: faltantes y sobrantes por separado — nunca se compensan entre sí'],
+      filtros: ['Rango de fechas', 'Agrupar por producto, mes u origen', 'El valor de un recuento usa el costo que tenía el producto al contarlo. Los ajustes manuales se toman de su asiento contable: muestran $ pero no unidades, y uno hecho sobre un producto sin costo cargado no aparece'],
+    },
+  },
+  {
+    id: 'devoluciones_proveedor',
+    title: 'Devoluciones a Proveedores',
+    description: 'Qué le devolvés a cada proveedor y por qué motivo.',
+    icon: <Undo2 className="w-8 h-8 text-kx-blue" />,
+    borderClass: 'border-t-kx-blue',
+    requiresDate: true,
+    supportsGroupBy: true,
+    ayuda: {
+      queEs: 'Las devoluciones de mercadería que le hiciste a tus proveedores en el período, con el motivo y cómo se compensó (nota de crédito, reemplazo). Sirve para ver qué proveedor devuelve más mercadería rota o de menos, y por qué.',
+      queMuestra: ['Fecha, número de devolución, proveedor y motivo', 'Cómo se compensó y el monto devuelto', 'Cuántas quedaron sin motivo cargado'],
+      filtros: ['Rango de fechas', 'Agrupar por proveedor, motivo o mes', 'El motivo es texto libre: los que solo cambian en mayúsculas o tildes se juntan en un mismo grupo'],
+    },
+  },
 ];
 
 // % variación vs. un valor anterior — null si no hay base de comparación
@@ -493,6 +550,54 @@ export const buildSummaryMetrics = (reportId, data, previousPeriod = null) => {
       { label: 'Unidades Compradas', value: totalCantidad.toLocaleString('es-AR') },
       { label: 'Costo Total',     value: fc(totalCosto) },
       { label: 'Costo Promedio',  value: totalCantidad > 0 ? fc(totalCosto / totalCantidad) : '—' },
+    ];
+  }
+  if (reportId === 'rendimiento_listas_precio') {
+    const ventas = data.reduce((s, r) => s + (r.ventas || 0), 0);
+    const venta = data.reduce((s, r) => s + (r.venta || 0), 0);
+    const costo = data.reduce((s, r) => s + (r.costo || 0), 0);
+    const desvio = data.filter(r => r.esDesvio);
+    const ventasDesvio = desvio.reduce((s, r) => s + (r.ventas || 0), 0);
+    const montoDesvio = desvio.reduce((s, r) => s + (r.venta || 0), 0);
+    return [
+      { label: 'Ventas',                    value: ventas },
+      { label: 'Vendido',                   value: fc(venta) },
+      { label: 'Margen %',                  value: venta > 0 ? `${(((venta - costo) / venta) * 100).toFixed(1)}%` : '—' },
+      { label: 'Con lista distinta a la asignada', value: `${ventasDesvio} (${fc(montoDesvio)})` },
+    ];
+  }
+  if (reportId === 'ranking_proveedores') {
+    const total = data.reduce((s, r) => s + (r.total || 0), 0);
+    const facturas = data.reduce((s, r) => s + (r.facturas || 0), 0);
+    const top3 = data.slice(0, 3).reduce((s, r) => s + (r.pct || 0), 0);
+    return [
+      { label: 'Proveedores',     value: data.length },
+      { label: 'Total Comprado',  value: fc(total) },
+      { label: 'Facturas',        value: facturas },
+      { label: 'Los 3 primeros concentran', value: `${top3.toFixed(1)}%` },
+    ];
+  }
+  if (reportId === 'historial_ajustes_inventario') {
+    // Nunca compensar faltante contra sobrante — mismo criterio que Arqueos de
+    // Caja: perder $5.000 de un producto y ganar $5.000 de otro no "cerró en
+    // cero", fueron dos diferencias distintas.
+    const faltantes = data.filter(r => (r.valor || 0) < 0).reduce((s, r) => s + Math.abs(r.valor), 0);
+    const sobrantes = data.filter(r => (r.valor || 0) > 0).reduce((s, r) => s + r.valor, 0);
+    const reincidentes = new Set(data.filter(r => r.veces >= 2).map(r => r.productoId)).size;
+    return [
+      { label: 'Ajustes',                       value: data.length },
+      { label: 'Faltantes',                     value: fc(faltantes) },
+      { label: 'Sobrantes',                     value: fc(sobrantes) },
+      { label: 'Productos que ajustan seguido', value: reincidentes },
+    ];
+  }
+  if (reportId === 'devoluciones_proveedor') {
+    const total = data.reduce((s, r) => s + (r.total || 0), 0);
+    return [
+      { label: 'Devoluciones',   value: data.length },
+      { label: 'Monto Devuelto', value: fc(total) },
+      { label: 'Proveedores',    value: new Set(data.map(r => r.proveedor)).size },
+      { label: 'Sin motivo',     value: data.filter(r => r.sinMotivo).length },
     ];
   }
   return null;
@@ -992,6 +1097,127 @@ export const getTableConfig = (reportId, data, ctx = {}) => {
     };
   }
 
+  if (reportId === 'rendimiento_listas_precio') {
+    const totalVentas = data.reduce((s, r) => s + (r.ventas || 0), 0);
+    const totalVenta = data.reduce((s, r) => s + (r.venta || 0), 0);
+    const totalCosto = data.reduce((s, r) => s + (r.costo || 0), 0);
+    const totalMargen = totalVenta - totalCosto;
+    return {
+      columns: [
+        { header: 'Lista aplicada', key: 'usada', align: 'left' },
+        { header: 'Lista asignada al cliente', key: 'asignada', align: 'left' },
+        {
+          header: 'Situación', key: 'situacion', align: 'left',
+          render: (r) => r.esDesvio
+            ? <span className="text-amber-600 dark:text-amber-400 font-bold">{SITUACION_LISTA_LABEL[r.situacion]}</span>
+            : SITUACION_LISTA_LABEL[r.situacion],
+          pdfRender: (r) => SITUACION_LISTA_LABEL[r.situacion],
+        },
+        { header: 'Ventas', key: 'ventas', align: 'right', render: (r) => r.ventas.toLocaleString('es-AR'), pdfRender: (r) => r.ventas.toLocaleString('es-AR') },
+        { header: 'Clientes', key: 'clientes', align: 'right', render: (r) => r.clientes.toLocaleString('es-AR'), pdfRender: (r) => r.clientes.toLocaleString('es-AR') },
+        { header: 'Vendido', key: 'venta', align: 'right', render: (r) => formatCurrency(r.venta), pdfRender: (r) => formatCurrency(r.venta) },
+        { header: 'Costo', key: 'costo', align: 'right', render: (r) => formatCurrency(r.costo), pdfRender: (r) => formatCurrency(r.costo) },
+        {
+          header: 'Margen $', key: 'margen', align: 'right',
+          render: (r) => <span className={r.margen >= 0 ? 'text-green-600 dark:text-green-400 font-bold' : 'text-red-600 dark:text-red-400 font-bold'}>{formatCurrency(r.margen)}</span>,
+          pdfRender: (r) => formatCurrency(r.margen),
+        },
+        { header: 'Margen %', key: 'margenPct', align: 'right', render: (r) => `${r.margenPct.toFixed(1)}%`, pdfRender: (r) => `${r.margenPct.toFixed(1)}%` },
+      ],
+      totals: [
+        { content: 'TOTALES', colSpan: 3, align: 'right' },
+        { content: totalVentas.toLocaleString('es-AR'), align: 'right' },
+        // Los clientes no se suman: uno puede aparecer en varias filas.
+        { content: '', align: 'right' },
+        { content: formatCurrency(totalVenta), align: 'right', value: totalVenta },
+        { content: formatCurrency(totalCosto), align: 'right', value: totalCosto },
+        { content: formatCurrency(totalMargen), align: 'right', value: totalMargen },
+        { content: totalVenta > 0 ? `${((totalMargen / totalVenta) * 100).toFixed(1)}%` : '—', align: 'right' },
+      ]
+    };
+  }
+
+  if (reportId === 'ranking_proveedores') {
+    const totalFacturas = data.reduce((s, r) => s + (r.facturas || 0), 0);
+    const totalComprado = data.reduce((s, r) => s + (r.total || 0), 0);
+    return {
+      columns: [
+        { header: '#', key: 'posicion', align: 'right' },
+        { header: 'Proveedor', key: 'nombre', align: 'left' },
+        { header: 'Facturas', key: 'facturas', align: 'right', render: (r) => r.facturas.toLocaleString('es-AR'), pdfRender: (r) => r.facturas.toLocaleString('es-AR') },
+        { header: 'Total Comprado', key: 'total', align: 'right', render: (r) => formatCurrency(r.total), pdfRender: (r) => formatCurrency(r.total) },
+        { header: 'Ticket Promedio', key: 'ticket', align: 'right', render: (r) => formatCurrency(r.ticket), pdfRender: (r) => formatCurrency(r.ticket) },
+        { header: '% del Total', key: 'pct', align: 'right', render: (r) => `${r.pct.toFixed(1)}%`, pdfRender: (r) => `${r.pct.toFixed(1)}%` },
+        { header: '% Acumulado', key: 'pctAcum', align: 'right', render: (r) => `${r.pctAcum.toFixed(1)}%`, pdfRender: (r) => `${r.pctAcum.toFixed(1)}%` },
+        { header: 'Última Compra', key: 'ultima', align: 'left', render: (r) => r.ultima ? formatDateAR(r.ultima) : '-', pdfRender: (r) => r.ultima ? formatDateAR(r.ultima) : '-' },
+      ],
+      totals: [
+        { content: 'TOTALES', colSpan: 2, align: 'right' },
+        { content: totalFacturas.toLocaleString('es-AR'), align: 'right' },
+        { content: formatCurrency(totalComprado), align: 'right', value: totalComprado },
+        { content: totalFacturas > 0 ? formatCurrency(totalComprado / totalFacturas) : '—', align: 'right' },
+        { content: totalComprado > 0 ? '100,0%' : '—', align: 'right' },
+        { content: '', colSpan: 2, align: 'right' },
+      ]
+    };
+  }
+
+  if (reportId === 'historial_ajustes_inventario') {
+    // Faltantes y sobrantes por separado (ver buildSummaryMetrics) — una sola
+    // suma con signo escondería que se perdió y se ganó a la vez.
+    const faltantes = data.filter(r => (r.valor || 0) < 0).reduce((s, r) => s + Math.abs(r.valor), 0);
+    const sobrantes = data.filter(r => (r.valor || 0) > 0).reduce((s, r) => s + r.valor, 0);
+    return {
+      columns: [
+        { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
+        { header: 'Origen', key: 'origen', align: 'left' },
+        { header: 'Documento', key: 'documento', align: 'left' },
+        { header: 'Producto', key: 'producto', align: 'left' },
+        {
+          header: 'Unidades', key: 'unidades', align: 'right',
+          render: (r) => r.unidades == null ? '—' : `${r.unidades > 0 ? '+' : ''}${r.unidades.toLocaleString('es-AR')}`,
+          pdfRender: (r) => r.unidades == null ? '—' : `${r.unidades > 0 ? '+' : ''}${r.unidades.toLocaleString('es-AR')}`,
+        },
+        {
+          header: 'Valor $', key: 'valor', align: 'right',
+          render: (r) => <span className={r.valor < 0 ? 'text-red-600 dark:text-red-400 font-bold' : 'text-green-600 dark:text-green-400 font-bold'}>{formatCurrency(r.valor)}</span>,
+          pdfRender: (r) => formatCurrency(r.valor),
+        },
+        {
+          header: 'Veces', key: 'veces', align: 'right',
+          render: (r) => r.veces >= 2 ? <span className="text-amber-600 dark:text-amber-400 font-bold">{r.veces}</span> : r.veces,
+          pdfRender: (r) => String(r.veces),
+        },
+        { header: 'Detalle', key: 'detalle', align: 'left', render: (r) => r.detalle || '-', pdfRender: (r) => r.detalle || '-' },
+      ],
+      totals: [
+        { content: `FALTANTES: ${formatCurrency(faltantes)} | SOBRANTES: ${formatCurrency(sobrantes)}`, colSpan: 8, align: 'right' },
+      ]
+    };
+  }
+
+  if (reportId === 'devoluciones_proveedor') {
+    const total = data.reduce((s, r) => s + (r.total || 0), 0);
+    return {
+      columns: [
+        { header: 'Fecha', key: 'fecha', align: 'left', render: (r) => formatDateAR(r.fecha), pdfRender: (r) => formatDateAR(r.fecha) },
+        { header: 'N° Devolución', key: 'numero', align: 'left' },
+        { header: 'Proveedor', key: 'proveedor', align: 'left' },
+        {
+          header: 'Motivo', key: 'motivo', align: 'left',
+          render: (r) => r.sinMotivo ? <span className="text-kx-text-3 italic">Sin motivo</span> : r.motivo,
+          pdfRender: (r) => r.motivo,
+        },
+        { header: 'Compensación', key: 'compensacion', align: 'left' },
+        { header: 'Monto', key: 'total', align: 'right', render: (r) => formatCurrency(r.total), pdfRender: (r) => formatCurrency(r.total) },
+      ],
+      totals: [
+        { content: 'TOTAL DEVUELTO', colSpan: 5, align: 'right' },
+        { content: formatCurrency(total), align: 'right', value: total },
+      ]
+    };
+  }
+
   return { columns: [], totals: [] };
 };
 
@@ -1032,6 +1258,24 @@ const GROUP_BY_OPTIONS_POR_REPORTE = {
     { value: 'none',      label: 'Sin agrupar' },
     { value: 'categoria', label: 'Por categoría' },
   ],
+  historial_ajustes_inventario: [
+    { value: 'none',     label: 'Sin agrupar' },
+    { value: 'producto', label: 'Por producto' },
+    { value: 'mes',      label: 'Por mes' },
+    { value: 'origen',   label: 'Por origen (recuento / manual)' },
+  ],
+  devoluciones_proveedor: [
+    { value: 'none',      label: 'Sin agrupar' },
+    { value: 'proveedor', label: 'Por proveedor' },
+    { value: 'motivo',    label: 'Por motivo' },
+    { value: 'mes',       label: 'Por mes' },
+  ],
+};
+
+// 'YYYY-MM-DD…' → 'MM/YYYY' para agrupar por mes.
+const mesLabel = (fecha) => {
+  const [y, m] = String(fecha || '').slice(0, 7).split('-');
+  return y && m ? `${m}/${y}` : 'Sin fecha';
 };
 
 export function getGroupByOptions(reportId) {
@@ -1069,6 +1313,16 @@ const GROUP_KEY_FN_POR_REPORTE = {
   valorizacion_inventario: {
     categoria: (r) => r.categoria || 'Sin categoría',
   },
+  historial_ajustes_inventario: {
+    producto: (r) => r.producto || 'Producto eliminado',
+    mes:      (r) => mesLabel(r.fecha),
+    origen:   (r) => r.origen || 'Sin origen',
+  },
+  devoluciones_proveedor: {
+    proveedor: (r) => r.proveedor || 'Sin proveedor',
+    motivo:    (r) => r.motivo || 'Sin motivo',
+    mes:       (r) => mesLabel(r.fecha),
+  },
 };
 
 // Subtotal por grupo — ventas/compras suman `total`; financiero (Libro de
@@ -1080,6 +1334,7 @@ const GROUP_SUBTOTAL_FN_POR_REPORTE = {
   mp_movimientos:           (r) => (r.ingreso || 0) - (r.egreso || 0),
   arqueos_caja:             (r) => r.diferencia || 0,
   valorizacion_inventario:  (r) => r.valor || 0,
+  historial_ajustes_inventario: (r) => r.valor || 0,
 };
 
 /**

@@ -14,6 +14,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { generatePDF } from '@/lib/pdfUtils';
 import { exportReporte } from '@/lib/excelUtils';
 import { buildSummaryMetrics, getTableConfig, applyGrouping, applyFiltroDeuda } from '@/components/reportes/reportDefinitions';
+import { rendimientoListasPrecio, rankingProveedores, historialAjustesInventario, devolucionesProveedor } from '@/lib/reportesBacklog';
 import { getNowAR } from '@/lib/dateUtils';
 import GridReportes from '@/components/reportes/GridReportes';
 import ModalReporte from '@/components/reportes/ModalReporte';
@@ -160,7 +161,10 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
       const rangeMs  = new Date(end).getTime() - new Date(start).getTime();
       const prevEnd  = new Date(new Date(start).getTime() - 1);
       const prevStart = new Date(prevEnd.getTime() - rangeMs);
-      const fetchPreviousPeriodStats = async (table, extraFilters = {}) => {
+      // `excluir` ({ columna: valor }) saca del período anterior lo cancelado/
+      // anulado — tiene que ser el MISMO criterio que el período actual, si no el
+      // % de variación compara peras con manzanas.
+      const fetchPreviousPeriodStats = async (table, extraFilters = {}, excluir = {}) => {
         let q = supabase
           .from(table)
           .select('total')
@@ -168,6 +172,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
           .gte('fecha', prevStart.toISOString())
           .lte('fecha', prevEnd.toISOString());
         Object.entries(extraFilters).forEach(([k, v]) => { if (v) q = q.eq(k, v); });
+        Object.entries(excluir).forEach(([k, v]) => { q = q.neq(k, v); });
         const { data: prev } = await q;
         return prev ? { total: prev.reduce((s, r) => s + (r.total || 0), 0), count: prev.length } : null;
       };
@@ -183,6 +188,9 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
           .select('*, comprobante_items(*), listas_precio(nombre)')
           .eq('empresa_id', user.empresa_id)
           .eq('tipo', 'venta')
+          // Una venta cancelada (cancelar_factura) no es una venta: antes se listaba y
+          // se sumaba igual (hallazgo 24/09: 11 en Nalux, $117.902).
+          .neq('estado_pago', 'cancelada')
           .gte('fecha', start)
           .lte('fecha', end);
         if (centroCostoId) query = query.eq('centro_costo_id', centroCostoId);
@@ -210,7 +218,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         setPreviousPeriodStats(await fetchPreviousPeriodStats('comprobantes', {
           tipo: 'venta',
           centro_costo_id: centroCostoId,
-        }));
+        }, { estado_pago: 'cancelada' }));
       }
 
       // 2. COMPRAS
@@ -219,6 +227,8 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
           .from('compras')
           .select('*, proveedores(nombre), detalle_compras(productos(categoria_id, categorias(nombre)))')
           .eq('empresa_id', user.empresa_id)
+          // Factura anulada (cancelar_compra) fuera: antes se listaba y sumaba igual.
+          .neq('estado_pago', 'anulada')
           .gte('fecha', start)
           .lte('fecha', end);
          if (centroCostoId) query = query.eq('centro_costo_id', centroCostoId);
@@ -252,7 +262,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
 
         setPreviousPeriodStats(await fetchPreviousPeriodStats('compras', {
           centro_costo_id: centroCostoId,
-        }));
+        }, { estado_pago: 'anulada' }));
       }
 
       // 2b. RENTABILIDAD (por Producto o por Cliente) — mismo cálculo de
@@ -270,6 +280,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
           .select('cliente_id, cliente_nombre, centro_costo_id, comprobante_items(producto_id, cantidad, subtotal, costo_unitario, productos(nombre, codigo_sku))')
           .eq('empresa_id', user.empresa_id)
           .eq('tipo', 'venta')
+          .neq('estado_pago', 'cancelada') // una venta cancelada no deja margen
           .gte('fecha', start)
           .lte('fecha', end);
         if (centroCostoId) query = query.eq('centro_costo_id', centroCostoId);
@@ -890,6 +901,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
           .from('compras')
           .select('centro_costo_id, detalle_compras(producto_id, cantidad, subtotal, productos(nombre, codigo_sku, categorias(nombre)))')
           .eq('empresa_id', user.empresa_id)
+          .neq('estado_pago', 'anulada') // una factura anulada no es una compra
           .gte('fecha', start)
           .lte('fecha', end);
         if (centroCostoId) query = query.eq('centro_costo_id', centroCostoId);
@@ -917,6 +929,146 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         data = Object.values(acumulado)
           .map(r => ({ ...r, costoPromedio: r.cantidad > 0 ? r.costo / r.cantidad : 0 }))
           .sort((a, b) => b.costo - a.costo);
+      }
+
+      // 14. RENDIMIENTO POR LISTA DE PRECIOS (asignada vs. usada) — Backlog de
+      // Reportería. Lista USADA = comprobantes.lista_precio_id (se arrastra por
+      // Cotización → Pedido → Factura, mig.389); lista ASIGNADA = clientes.
+      // lista_precio_id. Sin ventas canceladas. La agregación vive en
+      // src/lib/reportesBacklog.js (probada aparte).
+      else if (selectedReport.id === 'rendimiento_listas_precio') {
+        let query = supabase
+          .from('comprobantes')
+          .select('id, cliente_id, lista_precio_id, total, costo_mercaderia_vendida')
+          .eq('empresa_id', user.empresa_id)
+          .eq('tipo', 'venta')
+          .neq('estado_pago', 'cancelada')
+          .gte('fecha', start)
+          .lte('fecha', end);
+        if (centroCostoId) query = query.eq('centro_costo_id', centroCostoId);
+        const [{ data: ventas, error: e1 }, { data: clientesLista, error: e2 }, { data: listas, error: e3 }] = await Promise.all([
+          query,
+          supabase.from('clientes').select('id, lista_precio_id').eq('empresa_id', user.empresa_id),
+          supabase.from('listas_precio').select('id, nombre').eq('empresa_id', user.empresa_id),
+        ]);
+        if (e1) throw e1;
+        if (e2) throw e2;
+        if (e3) throw e3;
+
+        data = rendimientoListasPrecio(
+          ventas || [],
+          Object.fromEntries((clientesLista || []).map(c => [c.id, c.lista_precio_id])),
+          Object.fromEntries((listas || []).map(l => [l.id, l.nombre]))
+        );
+      }
+
+      // 15. RANKING DE PROVEEDORES — concentración de compra. Sin facturas
+      // anuladas. No descuenta Notas de Crédito de proveedor (aclarado en el
+      // diálogo de ayuda): es "cuánto se facturó", no "cuánto quedó neto".
+      else if (selectedReport.id === 'ranking_proveedores') {
+        let query = supabase
+          .from('compras')
+          .select('proveedor_id, total, fecha, proveedores(nombre)')
+          .eq('empresa_id', user.empresa_id)
+          .neq('estado_pago', 'anulada')
+          .gte('fecha', start)
+          .lte('fecha', end);
+        if (centroCostoId) query = query.eq('centro_costo_id', centroCostoId);
+        const { data: comprasData, error } = await query;
+        if (error) throw error;
+
+        data = rankingProveedores((comprasData || []).map(c => ({
+          proveedor_id: c.proveedor_id,
+          proveedor: c.proveedores?.nombre,
+          total: c.total,
+          fecha: c.fecha,
+        })));
+      }
+
+      // 16. HISTORIAL DE AJUSTES DE INVENTARIO — 2 fuentes: (a) Recuentos
+      // confirmados (ítems con diferencia; $ = diferencia × el costo que tenía el
+      // ítem al contarlo) y (b) ajustes manuales, que se toman de su asiento
+      // contable (origen='ajuste_stock', origen_id = producto) porque
+      // ajustar_stock_manual no guarda costo. Se ignoran los recuentos borrador y
+      // anulados. Dos pasos (sin embedded select en los ítems) a propósito: no
+      // depende de que la FK reversa esté bien configurada.
+      else if (selectedReport.id === 'historial_ajustes_inventario') {
+        const [{ data: recuentos, error: e1 }, { data: asientos, error: e2 }] = await Promise.all([
+          supabase
+            .from('recuentos_inventario')
+            .select('id, numero, confirmado_at')
+            .eq('empresa_id', user.empresa_id)
+            .eq('estado', 'confirmado')
+            .gte('confirmado_at', start)
+            .lte('confirmado_at', end),
+          supabase
+            .from('asientos_contables')
+            .select('id, fecha, descripcion, origen_id, total_debe, asientos_items(descripcion)')
+            .eq('empresa_id', user.empresa_id)
+            .eq('origen', 'ajuste_stock')
+            .eq('estado', 'confirmado')
+            .gte('fecha', startDate)
+            .lte('fecha', endDate),
+        ]);
+        if (e1) throw e1;
+        if (e2) throw e2;
+
+        const recuentoPorId = Object.fromEntries((recuentos || []).map(r => [r.id, r]));
+        let itemsRecuento = [];
+        if ((recuentos || []).length > 0) {
+          const { data: items, error: e3 } = await supabase
+            .from('recuento_inventario_items')
+            .select('recuento_id, producto_id, stock_sistema, cantidad_contada, costo_unitario, productos(nombre)')
+            .in('recuento_id', Object.keys(recuentoPorId));
+          if (e3) throw e3;
+          itemsRecuento = items || [];
+        }
+
+        const productoIds = [...new Set((asientos || []).map(a => a.origen_id).filter(Boolean))];
+        let nombreProducto = {};
+        if (productoIds.length > 0) {
+          const { data: prods, error: e4 } = await supabase
+            .from('productos')
+            .select('id, nombre')
+            .in('id', productoIds);
+          if (e4) throw e4;
+          nombreProducto = Object.fromEntries((prods || []).map(p => [p.id, p.nombre]));
+        }
+
+        data = historialAjustesInventario({
+          recuentoItems: itemsRecuento.map(it => ({
+            ...it,
+            numero: recuentoPorId[it.recuento_id]?.numero,
+            fecha: recuentoPorId[it.recuento_id]?.confirmado_at,
+            producto: it.productos?.nombre,
+          })),
+          manuales: (asientos || []).map(a => ({
+            id: a.id,
+            fecha: a.fecha,
+            producto_id: a.origen_id,
+            producto: nombreProducto[a.origen_id],
+            descripcion: a.descripcion,
+            monto: a.total_debe,
+            // Faltante = el asiento debita el gasto (ver crearAsientoAjusteStock).
+            esFaltante: (a.asientos_items || []).some(i => /^Faltante/i.test(i.descripcion || '')),
+          })),
+        });
+      }
+
+      // 17. DEVOLUCIONES A PROVEEDORES — misma consulta que la pantalla de
+      // Compras → Devoluciones a Proveedor (mismo select con proveedores(nombre) y
+      // devolucion_items). `fecha` es date puro: se filtra con startDate/endDate.
+      else if (selectedReport.id === 'devoluciones_proveedor') {
+        const { data: devs, error } = await supabase
+          .from('devoluciones')
+          .select('id, numero_devolucion, fecha, motivo, compensacion, proveedores(nombre), devolucion_items(subtotal)')
+          .eq('empresa_id', user.empresa_id)
+          .eq('tipo', 'proveedor')
+          .gte('fecha', startDate)
+          .lte('fecha', endDate);
+        if (error) throw error;
+
+        data = devolucionesProveedor(devs || []);
       }
 
       setReportData(data);
