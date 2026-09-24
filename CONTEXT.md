@@ -1,9 +1,17 @@
 # KAIROX Gestión — Contexto de Sesión
 
-## 🔶 Reportería — Backlog completo: 6 reportes nuevos + bug real de Ajuste por Inflación (24/09)
+## ✅ Reportería — Backlog completo: 6 reportes nuevos + bug real de Ajuste por Inflación — EN PRODUCCIÓN (24/09)
 
 Luciano pidió "terminar con la reportería": se construyó el Backlog entero (los 6 ítems que el Plan
 de Reportería dejó como "nicho, no construir hasta que se pida"), en 2 tandas.
+
+**Publicado 24/09**: Luciano aprobó (AskUserQuestion) "Aplicar la 401 y publicar todo" → migración 401
+aplicada (verificado: `_lineas_ajuste_por_inflacion` da 0 líneas en Junio y en Julio, antes $4.340,34
+y $4.862,14; `memoria_calculo_ajuste_por_inflacion` responde con control de diferencia 0 para los 2
+períodos; ACL correcta: `_lineas` interna, la memoria solo `authenticated`) y `git push` → el
+auto-deploy de Vercel publicó a `kairox-gestion-chi.vercel.app` (bundle verificado: `ReportesSection`
+trae los 4 ids nuevos, la RPC y la card de la Memoria; `ImpuestosSection` trae el export impositivo).
+**Sin verificar en pantalla** (sin sesión iniciada en el navegador del panel).
 
 **Tanda 1 — 4 reportes operativos** (commit 5fbf15b, sin dependencia de la base): en el Centro de
 Reportes, entradas nuevas de `REPORTS` (`reportDefinitions.jsx`) + fetch en `ReportesSection.jsx`;
@@ -49,8 +57,7 @@ ajuste de Junio (arranca 01/06) proponía $4.340,34 y el de Julio $4.862,14; lo 
 Ningún período de ninguna empresa tiene ajuste generado, así que corregirlo no cambia ningún asiento ya
 posteado. Las otras 2 funciones (`calcular_reexpresion_moneda_homogenea`, `..._impositivo_ganancias`)
 usan INNER JOIN con los filtros en el WHERE: no tienen el problema. **Fix en la migración 401**
-(`LEFT JOIN` → `JOIN` en `apertura`), junto con la RPC de la Memoria. **Requiere confirmación explícita
-para aplicarla** (toca una función que genera asientos).
+(`LEFT JOIN` → `JOIN` en `apertura`), junto con la RPC de la Memoria — APLICADA el 24/09.
 
 **Tests nuevos**: `reportesBacklog` (31) + `reportDefinitionsBacklog` (27) + `memoriaAjusteInflacion` (23)
 + pantalla de la Memoria (9) + export impositivo (3). Lint 0 errores (encontró un `totals` mal nombrado
