@@ -1,6 +1,9 @@
 # KAIROX Gestión — Contexto de Sesión
 
-## 🔶 Centro de Reportes ordenado por rubro, con buscador y favoritos (24/09) — CÓDIGO LISTO, sin publicar
+## ✅ Centro de Reportes ordenado por rubro, con buscador y favoritos (24/09) — EN PRODUCCIÓN
+
+**Publicado 24/09** (Luciano aprobó por AskUserQuestion): `git push` → auto-deploy de Vercel; verificado que
+el bundle de `ReportesSection` en producción trae los rubros, el buscador, los favoritos y el recuerdo de vista.
 
 Pedido de Luciano ("darle el último toque"): con 28 reportes en una grilla plana, encontrar uno puntual era
 "una aguja en un pajar". Se reordenó `GridReportes.jsx` sin tocar ningún reporte:
