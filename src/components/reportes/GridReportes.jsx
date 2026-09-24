@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileSpreadsheet, ArrowLeftRight, BookOpen, Columns, GitCompareArrows, Landmark } from 'lucide-react';
+import { FileSpreadsheet, ArrowLeftRight, BookOpen, Columns, GitCompareArrows, Landmark, Calculator } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { REPORTS } from './reportDefinitions';
 import ReportInfoDialog, { ReportInfoButton } from './ReportInfoDialog';
@@ -35,11 +35,18 @@ const AYUDA_POSICION_FISCAL = {
   filtros: ['Rango de fechas'],
 };
 
+const AYUDA_MEMORIA_AJUSTE = {
+  queEs: 'El papel de trabajo del Ajuste por Inflación contable de un período: cuenta por cuenta y mes por mes, con el saldo, el índice, el coeficiente aplicado y el ajuste — lo que el asiento resume en una línea por cuenta. Sirve de respaldo ante una inspección o para que tu contador revise el cálculo.',
+  queMuestra: ['Por cada cuenta: saldo de apertura y movimientos de cada mes, con su índice y coeficiente', 'Saldo reexpresado y ajuste de cada línea, y el ajuste total de la cuenta', 'RECPAM (ganancia, pérdida y neto) y los índices utilizados', 'Un control de que el detalle cierra contra el ajuste que se va a postear'],
+  filtros: ['Período contable', 'Requiere el Ajuste por Inflación activado en Configuración → Finanzas y los índices de inflación cargados', 'Descarga en PDF y Excel'],
+};
+
 function GridReportes({
   openReportDialog,
   tcParaleloEnabled, monedaParalela, setShowParidad,
   afipActivo, setShowLibroIVA, setLibroIVAOrigen, setShowLibroIVACompras,
   setShowEstadoResultadosCC, setShowComparativoPeriodos, setShowPosicionFiscal,
+  ajusteInflacionHabilitado = false, setShowMemoriaAjuste,
 }) {
   const [infoAbierto, setInfoAbierto] = useState(null); // { title, icon, ayuda } | null
 
@@ -281,6 +288,38 @@ function GridReportes({
           </div>
           <Button className="w-full bg-kx-surface-2 hover:bg-kx-border text-kx-text border border-kx-border transition-all">
             Ver Reporte
+          </Button>
+        </div>
+
+        {/* ── Memoria de Cálculo del Ajuste por Inflación (solo con el módulo activo) ── */}
+        <div
+          className={`group bg-kx-surface border border-kx-border rounded-2xl p-6 shadow-sm dark:shadow-none
+            border-t-2 border-t-kx-amber transition-all duration-200
+            ${ajusteInflacionHabilitado ? 'hover:shadow-md hover:-translate-y-0.5 cursor-pointer' : 'opacity-60 cursor-default'}`}
+          onClick={() => ajusteInflacionHabilitado && setShowMemoriaAjuste?.(true)}
+          title={!ajusteInflacionHabilitado ? 'Activá el Ajuste por Inflación en Configuración → Finanzas para usar este reporte' : ''}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 bg-kx-surface-2 rounded-xl border border-kx-border">
+              <Calculator className="w-8 h-8 text-kx-amber" />
+            </div>
+            <ReportInfoButton onClick={() => setInfoAbierto({ title: 'Memoria de Cálculo — Ajuste por Inflación', icon: <Calculator className="w-8 h-8 text-kx-amber" />, ayuda: AYUDA_MEMORIA_AJUSTE })} />
+          </div>
+          <div className="mb-5">
+            <h3 className="text-lg font-bold text-kx-text mb-1.5 group-hover:text-kx-violet transition-colors">
+              Memoria de Cálculo — Ajuste por Inflación
+            </h3>
+            <p className="text-kx-text-2 text-sm line-clamp-2">
+              {ajusteInflacionHabilitado
+                ? 'Papel de trabajo cuenta por cuenta del ajuste de un período, para respaldo.'
+                : 'Activá el Ajuste por Inflación en Configuración para habilitar este reporte.'}
+            </p>
+          </div>
+          <Button
+            disabled={!ajusteInflacionHabilitado}
+            className="w-full bg-kx-surface-2 hover:bg-kx-border text-kx-text border border-kx-border transition-all disabled:opacity-50"
+          >
+            {ajusteInflacionHabilitado ? 'Ver Reporte' : 'Requiere configuración'}
           </Button>
         </div>
       </div>

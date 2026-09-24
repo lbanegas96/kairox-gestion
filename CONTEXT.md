@@ -1,5 +1,63 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🔶 Reportería — Backlog completo: 6 reportes nuevos + bug real de Ajuste por Inflación (24/09)
+
+Luciano pidió "terminar con la reportería": se construyó el Backlog entero (los 6 ítems que el Plan
+de Reportería dejó como "nicho, no construir hasta que se pida"), en 2 tandas.
+
+**Tanda 1 — 4 reportes operativos** (commit 5fbf15b, sin dependencia de la base): en el Centro de
+Reportes, entradas nuevas de `REPORTS` (`reportDefinitions.jsx`) + fetch en `ReportesSection.jsx`;
+toda la agregación en `src/lib/reportesBacklog.js` (pura, con tests).
+1. **Rendimiento por Lista de Precios** — lista USADA en la venta (`comprobantes.lista_precio_id`) vs
+   ASIGNADA al cliente (`clientes.lista_precio_id`); una fila por par con ventas/margen; los desvíos
+   (4 situaciones) van primero. Hoy Nalux tiene 2 listas y **0 ventas y 0 clientes con lista**: da una
+   sola fila "Precio estándar / Coincide" — solo se ve trabajando cuando se usen listas.
+2. **Ranking de Proveedores** — volumen, facturas, ticket, % del total y % acumulado (Nalux: Kiosko
+   Achaval 52,4% + Amazon 39,5%, casi seguro datos de prueba).
+3. **Historial de Ajustes de Inventario** — 2 fuentes: Recuentos confirmados (ítems con diferencia, $ al
+   costo del ítem al contar) y ajustes manuales (desde su asiento `origen='ajuste_stock'`, porque
+   `ajustar_stock_manual` no guarda costo: solo $ y sin unidades). Columna "Veces" por producto,
+   agrupable por producto/mes/origen. Faltantes y sobrantes SIEMPRE por separado.
+4. **Devoluciones a Proveedores** — por proveedor/motivo/mes; motivo es texto libre y opcional (4 de 7
+   de Nalux sin motivo): los que solo cambian en mayúsculas/tildes se juntan.
+
+**Hallazgo corregido de paso (tanda 1)**: Ventas, Rentabilidad (producto/cliente), Historial de
+Compras y Detalle de Compras por Producto **sumaban ventas `cancelada` y facturas `anulada`** como
+reales (Nalux: 11 ventas por $117.902 y 2 compras por $1.331); también en el período anterior del %
+de variación. Ahora quedan afuera. (Mismo error de fondo que el de Libro IVA: falta de filtrar el
+estado terminal.)
+
+**Tanda 2 — Ajuste por Inflación** (necesita la migración 401):
+5. **Memoria de Cálculo — Ajuste por Inflación** — card nueva (deshabilitada si
+   `empresas.usa_ajuste_inflacion` está apagado), componente standalone
+   `ReporteMemoriaAjusteInflacion.jsx`: elegís un período contable y muestra, cuenta por cuenta y mes por
+   mes, saldo / índice / coeficiente / saldo reexpresado / ajuste, RECPAM, índices usados, asiento (si ya
+   se generó) y un CONTROL de que el detalle cierra contra las líneas oficiales. PDF y Excel. Lee de la
+   RPC nueva `memoria_calculo_ajuste_por_inflacion` (mig.401). Lógica en
+   `src/lib/memoriaAjusteInflacion.js`.
+6. **Export del Ajuste Impositivo** — botones PDF/Excel nuevos en Impuestos → Ajuste por Inflación
+   (el cálculo `calcular_ajuste_impositivo_ganancias` ya existía, solo se veía en pantalla).
+   Papel de trabajo con cada paso, su fórmula y las salvedades. No depende de la migración.
+
+**🔴 BUG REAL de Ajuste por Inflación encontrado al armar la Memoria** (`_lineas_ajuste_por_inflacion`,
+mig.378): la CTE `apertura` (saldo inicial de las cuentas de Patrimonio) hacía `LEFT JOIN asientos_items`
++ `LEFT JOIN asientos_contables ON ... AND ac.estado='confirmado' AND ac.fecha < inicio` — los filtros en
+el ON de un LEFT JOIN NO sacan filas de `asientos_items`, así que el "saldo de apertura" era el saldo de
+la cuenta de TODA la historia (movimientos posteriores y no confirmados incluidos). Con datos reales de
+Nalux: 3.2 Resultados Acumulados tiene un único movimiento de $230.000 del 07/07/2026 y aun así el
+ajuste de Junio (arranca 01/06) proponía $4.340,34 y el de Julio $4.862,14; lo correcto es $0 en ambos.
+Ningún período de ninguna empresa tiene ajuste generado, así que corregirlo no cambia ningún asiento ya
+posteado. Las otras 2 funciones (`calcular_reexpresion_moneda_homogenea`, `..._impositivo_ganancias`)
+usan INNER JOIN con los filtros en el WHERE: no tienen el problema. **Fix en la migración 401**
+(`LEFT JOIN` → `JOIN` en `apertura`), junto con la RPC de la Memoria. **Requiere confirmación explícita
+para aplicarla** (toca una función que genera asientos).
+
+**Tests nuevos**: `reportesBacklog` (31) + `reportDefinitionsBacklog` (27) + `memoriaAjusteInflacion` (23)
++ pantalla de la Memoria (9) + export impositivo (3). Lint 0 errores (encontró un `totals` mal nombrado
+en la pantalla de la Memoria antes de publicar), build de producción OK.
+
+---
+
 ## ✅ Compra Rápida — botón "Libro / No libro" (23/09) — EN PRODUCCIÓN desde el 24/09
 
 **Publicado 24/09**: Luciano confirmó (AskUserQuestion, porque el clasificador de permisos frenó el

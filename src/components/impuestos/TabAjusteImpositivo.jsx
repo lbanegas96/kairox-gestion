@@ -1,10 +1,15 @@
 import { useState } from 'react';
-import { Calculator, AlertTriangle, Loader2, TrendingUp, TrendingDown } from 'lucide-react';
+import { Calculator, AlertTriangle, Loader2, TrendingUp, TrendingDown, FileSpreadsheet, Download } from 'lucide-react';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
+import { useConfig } from '@/contexts/ConfigContext';
 import { ajusteInflacionService } from '@/services/ajusteInflacionService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useToast } from '@/components/ui/use-toast';
+import { generatePDF } from '@/lib/pdfUtils';
+import { exportReporte } from '@/lib/excelUtils';
+import { armarAjusteImpositivoExport } from '@/lib/memoriaAjusteInflacion';
 
 const fmtARS = (n) =>
   `$${Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -18,6 +23,8 @@ const fmtARS = (n) =>
 // Declaración Jurada de Ganancias, no en el Libro Mayor.
 function TabAjusteImpositivo() {
   const { user } = useAuth();
+  const { config } = useConfig();
+  const { toast } = useToast();
   const empresaId = user?.empresa_id;
 
   const anioActual = new Date().getFullYear();
@@ -38,6 +45,29 @@ function TabAjusteImpositivo() {
       setError(e.message);
     } finally {
       setCalculando(false);
+    }
+  };
+
+  // Papel de trabajo del cálculo, para llevarle al contador / adjuntar a la
+  // Declaración Jurada — hasta ahora solo se podía mirar en pantalla.
+  const exportar = async (formato) => {
+    const papel = armarAjusteImpositivoExport(resultado, { fechaInicio, fechaCierre });
+    if (!papel) return;
+    try {
+      if (formato === 'pdf') {
+        await generatePDF({
+          ...papel,
+          filename: 'ajuste_inflacion_impositivo',
+          companyName: config?.nombre_empresa || 'KAIROX Gestión',
+          logoUrl: config?.logo_base64 || null,
+        });
+      } else {
+        exportReporte({ title: papel.title, columns: papel.columns, data: papel.data, totals: papel.totals, filename: 'ajuste_inflacion_impositivo' });
+      }
+      toast({ title: 'Éxito', description: `${formato === 'pdf' ? 'PDF' : 'Excel'} generado correctamente.`, className: 'bg-green-600 text-white' });
+    } catch (e) {
+      console.error(e);
+      toast({ title: 'Error', description: 'No se pudo generar el archivo.', variant: 'destructive' });
     }
   };
 
@@ -92,6 +122,15 @@ function TabAjusteImpositivo() {
 
       {resultado?.ok && (
         <div className="space-y-4">
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => exportar('excel')} className="bg-green-700 hover:bg-green-800 text-white h-9">
+              <FileSpreadsheet className="h-4 w-4 mr-1.5" /> Descargar Excel
+            </Button>
+            <Button onClick={() => exportar('pdf')} className="bg-red-600 hover:bg-red-700 text-white h-9">
+              <Download className="h-4 w-4 mr-1.5" /> Descargar PDF
+            </Button>
+          </div>
+
           <div className="rounded-xl border border-kx-border overflow-hidden">
             <div className="bg-kx-surface-2 px-4 py-2 border-b border-kx-border">
               <span className="text-sm font-semibold text-kx-text">Ajuste estático (patrimonio de apertura)</span>

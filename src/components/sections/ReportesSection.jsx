@@ -6,7 +6,9 @@ import ReporteLibroIVACompras from '@/components/reportes/ReporteLibroIVACompras
 import ReporteEstadoResultadosCC from '@/components/reportes/ReporteEstadoResultadosCC';
 import ReporteComparativoPeriodos from '@/components/reportes/ReporteComparativoPeriodos';
 import ReportePosicionFiscal from '@/components/reportes/ReportePosicionFiscal';
+import ReporteMemoriaAjusteInflacion from '@/components/reportes/ReporteMemoriaAjusteInflacion';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
+import { useAjusteInflacionHabilitado } from '@/hooks/useAjusteInflacionHabilitado';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
 import { useConfig } from '@/contexts/ConfigContext';
 import { supabase } from '@/lib/customSupabaseClient';
@@ -24,6 +26,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   const { config } = useConfig();
   const { toast } = useToast();
   const { enabled: tcParaleloEnabled, monedaParalela } = useTCParalelo();
+  const { habilitado: ajusteInflacionHabilitado } = useAjusteInflacionHabilitado();
 
   const [selectedReport, setSelectedReport] = useState(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -34,6 +37,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   const [showEstadoResultadosCC, setShowEstadoResultadosCC] = useState(false);
   const [showComparativoPeriodos, setShowComparativoPeriodos] = useState(false);
   const [showPosicionFiscal, setShowPosicionFiscal] = useState(false);
+  const [showMemoriaAjuste, setShowMemoriaAjuste] = useState(false);
   const [libroIVAOrigen, setLibroIVAOrigen] = useState(null);
   const [afipActivo, setAfipActivo] = useState(false);
   const [groupBy, setGroupBy] = useState('none');
@@ -1178,6 +1182,9 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   if (showPosicionFiscal) {
     return <ReportePosicionFiscal onBack={() => setShowPosicionFiscal(false)} />;
   }
+  if (showMemoriaAjuste) {
+    return <ReporteMemoriaAjusteInflacion onBack={() => setShowMemoriaAjuste(false)} />;
+  }
 
   return (
     <div className="space-y-8 pb-8 animate-in fade-in duration-500">
@@ -1189,6 +1196,8 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         setShowEstadoResultadosCC={setShowEstadoResultadosCC}
         setShowComparativoPeriodos={setShowComparativoPeriodos}
         setShowPosicionFiscal={setShowPosicionFiscal}
+        ajusteInflacionHabilitado={ajusteInflacionHabilitado}
+        setShowMemoriaAjuste={setShowMemoriaAjuste}
       />
 
       <ModalReporte
