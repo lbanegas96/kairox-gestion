@@ -1,6 +1,16 @@
 # KAIROX Gestión — Contexto de Sesión
 
-## 🔶 Compra Rápida — botón "Libro / No libro" (23/09) — CÓDIGO LISTO, migración 400 SIN APLICAR
+## ✅ Compra Rápida — botón "Libro / No libro" (23/09) — EN PRODUCCIÓN desde el 24/09
+
+**Publicado 24/09**: Luciano confirmó (AskUserQuestion, porque el clasificador de permisos frenó el
+primer intento de `apply_migration` sin OK explícito a esa acción) → migración 400 aplicada
+(columna `boolean NOT NULL DEFAULT true`, las 39 compras existentes quedaron `en_libro_iva = true`),
+`git push` (3 commits) y deploy. **El Git Integration de Vercel funciona**: el push disparó solo el
+deploy que quedó en el alias `kairox-gestion-chi.vercel.app`; el `vercel deploy --prod` manual que
+corrí después fue redundante (2 builds idénticos, sin efecto). Verificado: el bundle de producción
+(`ComprasSection-edd531d7.js`, mismo hash que el build local) contiene "No libro"/`en_libro_iva`, y
+`posicionIva` también. **Todavía sin verificar en pantalla** (sin sesión iniciada en el navegador
+del panel).
 
 Pedido de Luciano sobre la decisión pendiente de abajo (Compra Rápida era el 3er camino que crea
 `compras` sin los datos del comprobante): un botón **Libro / No libro** para que cada compra vaya o
@@ -18,7 +28,7 @@ no al IVA. "Libro" obliga a cargar los datos necesarios; "No libro" no pide nada
   a Pagar, sin IVA Crédito Fiscal — `crearAsientoCompra` ya cae ahí cuando iva = 0, y
   `regenerar_asiento_compra` también). Es la lectura de "que ese movimiento vaya al IVA o no": si no
   va al IVA, tampoco puede quedar como crédito en el mayor.
-- **Migración 400** (`supabase/migrations/400_compras_en_libro_iva.sql`, SIN APLICAR):
+- **Migración 400** (`supabase/migrations/400_compras_en_libro_iva.sql`, APLICADA el 24/09):
   `compras.en_libro_iva BOOLEAN NOT NULL DEFAULT true` — lo existente queda como estaba. **El orden
   importa: migración ANTES del deploy** — el front nuevo lee/escribe esa columna (Libro IVA Compras,
   Posición IVA, Facturas de Compra, alta de compra) y sin ella esas pantallas fallan.
@@ -50,7 +60,7 @@ como tarea aparte.
 
 ---
 
-## 🔶 IVA — "¿qué queda?": 4 bugs reales encontrados y arreglados en código, SIN DEPLOYAR (23/09)
+## ✅ IVA — "¿qué queda?": 4 bugs reales encontrados y arreglados — EN PRODUCCIÓN desde el 24/09 (junto con Libro / No libro)
 
 Luciano preguntó qué faltaba del tema IVA. Al revisar las pantallas de Posición IVA contra los
 Libros (no solo el exportador TXT) aparecieron 4 problemas que el "barrido final, 0 bugs" del
