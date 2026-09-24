@@ -1,5 +1,32 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🔎 Auditoría general del sistema (24/09) — SOLO LECTURA, SIN CAMBIOS APLICADOS
+
+Pedido de Luciano: "una buena pasada general" (contabilidad, seguridad, bugs, vacíos, madurez, robustez).
+Informe completo con evidencia y plan: **`AUDITORIA_SISTEMA_2026-09-24.md`** (raíz) · versión para leer (privada):
+https://claude.ai/artifact/QAJzGcQpsVCi2gkCVr8KnR. 37 hallazgos (SEG 11, CON 10, ARC 2, COD 4, OPE 5). **No se tocó
+código ni base**; todo lo que toca producción espera OK explícito de Luciano.
+- **Lo urgente:** OPE-1 plan Free de Supabase = sin backups; OPE-2 `cron.job_run_details` = 201 MB de 254 MB (crece
+  5–6 MB/día, tope Free 500 MB ≈ principios de noviembre → base de solo lectura); SEG-1 `profiles` deja a un usuario
+  editar su propio `permissions`/`active`/`empresa_id` (solo `role` está protegido; hoy 2 usuarios, ambos admin →
+  latente); SEG-2 Edge Function `arca-corregir-nc-historica` de un solo uso sigue desplegada SIN auth (usa
+  `AFIP_ENVIRONMENT`: en producción emitiría NC reales) → borrarla; SEG-4 `ajustar_precios_masivo_catalogo` con
+  EXECUTE a PUBLIC y sin permiso de módulo.
+- **Contabilidad (Nalux):** motor sano (355 asientos, 0 desbalanceados, 912 líneas limpias) pero historial de prueba
+  sucio: 17 NC del 13/06–30/07 sin asiento ($1.133.194,52); 7 asientos duplicados por `regenerar_asiento_cxc/cxp`
+  (solo miran `asiento_id`, no buscan por origen); AS-000318/319 (compra Amazon $550.000,66) duplicado sin reversar;
+  `confirmar_asiento` no recalcula `plan_cuentas.saldo_actual` (5.4 desfasada $20.000); mayor vs subdiarios no
+  concilia (Cuentas a Cobrar 823.621 vs clientes 314.103; inventario 14,3 M vs 16,8 M). Recomendación: operar en real
+  en empresa nueva y limpia.
+- **Lecciones:** el advisor de Supabase estaba cacheado del 01/09 (mirar `observed_at`; verificar contra el
+  catálogo); `net.http_post` del cron figura "succeeded" aunque la función devuelva error (medir `net._http_response`);
+  Vitest recoge copias de `.claude/worktrees/*` (6 fallos fantasma).
+- **Decisiones pendientes de Luciano:** plan Pro o dump diario; empresa limpia vs regularizar Nalux; cerrar registro
+  público; OK para la Tanda 1 (migraciones 402 purga cron, 403 blindaje `profiles`, 404 precios, 405 saldos).
+- Commit local docs-only (junto al de Centro de Reportes), sin push.
+
+---
+
 ## ✅ Centro de Reportes ordenado por rubro, con buscador y favoritos (24/09) — EN PRODUCCIÓN
 
 **Publicado 24/09** (Luciano aprobó por AskUserQuestion): `git push` → auto-deploy de Vercel; verificado que
