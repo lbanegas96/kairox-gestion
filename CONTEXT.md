@@ -1,5 +1,30 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🔶 Centro de Reportes ordenado por rubro, con buscador y favoritos (24/09) — CÓDIGO LISTO, sin publicar
+
+Pedido de Luciano ("darle el último toque"): con 28 reportes en una grilla plana, encontrar uno puntual era
+"una aguja en un pajar". Se reordenó `GridReportes.jsx` sin tocar ningún reporte:
+- **5 rubros** (`reportCatalog.jsx`, `RUBROS`): Ventas y Clientes (7) · Compras y Proveedores (6) ·
+  Inventario (3) · Caja, Bancos y Cobros (5) · Impuestos y Contabilidad (7). Cada rubro lista los ids de sus
+  reportes en orden de uso. **Al agregar un reporte nuevo hay que sumarlo a su rubro**; si se olvida aparece
+  igual en "Otros reportes" (`repartirEnRubros`), nunca invisible.
+- **Buscador** ("IVA", "stock", "deuda", "margen", "caja"…): busca en título, descripción, texto de ayuda y
+  `PALABRAS_CLAVE` (sinónimos de uso: "deuda" para las carteras, "stock" para inventario, "posnet"…), sin
+  importar mayúsculas ni tildes, **por comienzo de palabra** (si no, "iva" encontraba "activá").
+- **Chips por rubro** con la cantidad (con la búsqueda aplicada; los que quedan en 0 se apagan).
+- **Favoritos** con estrella (por usuario, `localStorage`, `favoritosReportes.js`): sección arriba de todo y chip.
+- **Recuerda la vista** (`sessionStorage`): los 7 reportes de pantalla entera desmontan el Centro; al "Volver"
+  no se pierde la búsqueda ni el rubro.
+- Lógica pura en `src/lib/catalogoReportes.js`. Las 7 tarjetas de pantalla propia pasaron de ser bloques
+  copiados a datos (un mismo `TarjetaReporte`), con el comportamiento idéntico (Paridad y Memoria apagadas
+  sin su configuración, badge AFIP/moneda, "i" de ayuda).
+- Tests: `catalogoReportes` (23) + pantalla `GridReportes` (24: 28 tarjetas una sola vez y ninguna en "Otros",
+  rubro correcto de varias, chips, búsquedas reales, favoritos, abrir cada tipo, estados apagados).
+  Suite completa 889 OK (los únicos fallos son los 3 de `FormNuevaCotizacion`, previos). Lint 0 errores, build OK.
+- **Sin verificar en pantalla** (sin sesión en el navegador del panel).
+
+---
+
 ## ✅ Reportería — Backlog completo: 6 reportes nuevos + bug real de Ajuste por Inflación — EN PRODUCCIÓN (24/09)
 
 Luciano pidió "terminar con la reportería": se construyó el Backlog entero (los 6 ítems que el Plan
