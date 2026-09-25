@@ -142,3 +142,22 @@ GRANT EXECUTE ON FUNCTION public.actualizar_cotizacion TO authenticated;
 -- DROP TRIGGER IF EXISTS trg_audit_cotizacion_items ON public.cotizacion_items;
 -- ALTER TABLE public.cotizacion_items DROP CONSTRAINT IF EXISTS cotizacion_items_alicuota_iva_check;
 -- ALTER TABLE public.cotizacion_items DROP COLUMN IF EXISTS alicuota_iva;
+
+-- ════════════════════════════════════════════════════════════════════════════════════════
+-- Incorporado acá el 25/09/2026 (auditoría COD-3) desde el archivo `318b_actualizar_cotizacion_revoke_anon.sql`.
+-- El CLI de Supabase IGNORA los archivos cuyo nombre no es "<número>_<nombre>.sql" (esa "b" no cumple el patrón), así
+-- que al recrear la base desde cero (la CI de pgTAP, un staging) este arreglo no se aplicaba y la base quedaba distinta de
+-- producción. En producción ya estaba aplicado por separado: este archivo no cambia nada allá.
+-- ════════════════════════════════════════════════════════════════════════════════════════
+
+-- migration 318b — actualizar_cotizacion: anon podía ejecutarla pese al REVOKE ALL FROM PUBLIC
+--
+-- Verificado con get_advisors() justo después de aplicar la mig.318: `anon` seguía con EXECUTE
+-- (has_function_privilege confirmó true) — Supabase otorga privilegios por defecto a `anon` en
+-- funciones nuevas del schema public, que un REVOKE ALL FROM PUBLIC no cubre (PUBLIC y el grant
+-- directo a `anon` son cosas distintas). Mismo estándar que el resto del proyecto: `anon` en 0
+-- funciones ejecutables.
+
+REVOKE EXECUTE ON FUNCTION public.actualizar_cotizacion(uuid, uuid, text, jsonb, text, text, date, text, numeric, numeric) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.actualizar_cotizacion(uuid, uuid, text, jsonb, text, text, date, text, numeric, numeric) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.actualizar_cotizacion(uuid, uuid, text, jsonb, text, text, date, text, numeric, numeric) TO authenticated;
