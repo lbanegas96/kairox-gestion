@@ -33,9 +33,22 @@ const adminClient = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
 );
 
+// SEG-3 (auditoría 24/09): el cron manda `x-cron-secret` (secreto de Vault, mig. 415) y se verifica contra la base.
+// Inline y no importado de _shared/cronAuth.ts: esta función se mantiene autocontenida (ver el comentario de arriba).
+async function cronAutorizado(req: Request): Promise<boolean> {
+  const secreto = req.headers.get('x-cron-secret');
+  if (!secreto) return false;
+  const { data, error } = await adminClient.rpc('verificar_cron_secret', { p_secret: secreto });
+  return !error && data === true;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { status: 200 });
+  }
+
+  if (!(await cronAutorizado(req))) {
+    return new Response(JSON.stringify({ error: 'No autorizado' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
 
   try {

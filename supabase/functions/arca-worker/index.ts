@@ -31,6 +31,7 @@
 // Procesa hasta 10 registros por corrida para no exceder el timeout de Edge Function.
 
 import { adminClient } from '../_shared/auth.ts';
+import { autorizarWorker } from '../_shared/cronAuth.ts';
 import {
   voucherTypeAfip,
   alicuotaPct,
@@ -52,6 +53,11 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { status: 200 });
   }
+
+  // SEG-3 (auditoría 24/09): el pedido tiene que traer el secreto del cron o ser de un usuario con sesión
+  // (el navegador lo dispara al encolar una factura, ver dispararArcaWorker).
+  const denegado = await autorizarWorker(req, { permitirUsuario: true });
+  if (denegado) return denegado;
 
   const isProduction = Deno.env.get('AFIP_ENVIRONMENT') === 'production';
   const environment: 'production' | 'sandbox' = isProduction ? 'production' : 'sandbox';

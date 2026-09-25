@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { adminClient } from '../_shared/auth.ts';
+import { autorizarWorker } from '../_shared/cronAuth.ts';
 import { leerTokenCanal } from '../_shared/integraciones.ts';
 
 /**
@@ -27,6 +28,10 @@ async function sleep(ms: number) {
 
 serve(async (req) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+
+  // SEG-3 (auditoría 24/09): solo el cron, con su secreto compartido.
+  const denegado = await autorizarWorker(req);
+  if (denegado) return denegado;
 
   const { data: pendientes, error: fetchError } = await adminClient
     .from('integraciones_stock_pendiente')

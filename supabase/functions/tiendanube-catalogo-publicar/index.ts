@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { adminClient, buildCorsHeaders } from '../_shared/auth.ts';
+import { autorizarWorker } from '../_shared/cronAuth.ts';
 import { leerTokenCanal } from '../_shared/integraciones.ts';
 
 /**
@@ -105,6 +106,10 @@ serve(async (req) => {
   const cors = buildCorsHeaders(req);
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: cors });
+
+  // SEG-3 (auditoría 24/09): el secreto del cron o un usuario con sesión (el navegador dispara la publicación).
+  const denegado = await autorizarWorker(req, { permitirUsuario: true });
+  if (denegado) return denegado;
 
   const { data: pendientes, error: fetchError } = await adminClient
     .from('integraciones_producto_pendiente')
