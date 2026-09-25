@@ -1,0 +1,130 @@
+# ═══════════════════════════════════════════════════════════════════════════════════════════════
+# EJEMPLO — VOLCADO DIARIO DE LA BASE (opción C de PLAN_DE_RECUPERACION.md). NO ESTÁ ACTIVO Y NO SE PROBÓ.
+# ═══════════════════════════════════════════════════════════════════════════════════════════════
+#
+# Para qué sirve: una segunda copia de la base que vive FUERA de Supabase (aunque se contrate el plan Pro),
+# cifrada, en un almacenamiento propio. Es el plan B si Supabase tiene un problema o se borra el proyecto.
+#
+# ⚠️ EL REPOSITORIO DE GITHUB ES PÚBLICO. Por eso:
+#    · NO se suben los volcados como "artifact" de GitHub Actions (los podría bajar cualquiera con cuenta de GitHub).
+#      Se suben a un almacenamiento PRIVADO aparte (Cloudflare R2, Backblaze B2, AWS S3, Google Cloud Storage).
+#    · Se cifran con `age` usando solo la CLAVE PÚBLICA: el flujo no puede descifrar lo que sube. La clave privada
+#      la guarda Luciano fuera de línea (gestor de contraseñas + una copia impresa en un lugar seguro).
+#    · Si se decide hacer el repositorio privado, todo lo de acá sigue valiendo (y es aún más seguro).
+#
+# Cómo activarlo (30 minutos, una sola vez):
+#   1. Crear el almacenamiento: un bucket PRIVADO (sin acceso público) y una clave de acceso que solo pueda
+#      escribir/leer en ese bucket. Activar la eliminación automática de objetos con más de 30 días.
+#   2. Generar el par de claves de cifrado (en la computadora de Luciano):   age-keygen -o clave-backup.txt
+#      La línea "public key: age1..." es la pública. GUARDAR clave-backup.txt en el gestor de contraseñas
+#      (sin ese archivo los volcados no se pueden abrir nunca más).
+#   3. En GitHub → Settings → Secrets and variables → Actions, crear estos secretos:
+#        SUPABASE_DB_URL         cadena del "Session pooler" (Supabase → Connect → Session pooler; puerto 5432, IPv4).
+#                                Usa la contraseña del usuario postgres. Es un secreto MUY sensible.
+#        BACKUP_AGE_PUBLIC_KEY   la clave pública (age1...)
+#        BACKUP_S3_BUCKET        nombre del bucket
+#        BACKUP_S3_ENDPOINT      URL del servicio S3-compatible (vacío si es AWS S3)
+#        AWS_ACCESS_KEY_ID       clave de acceso del almacenamiento
+#        AWS_SECRET_ACCESS_KEY   secreto de la clave de acceso
+#   4. Mover este archivo a .github/workflows/backup-diario.yml (quitando ".ejemplo") y subirlo.
+#   5. Correrlo a mano una vez (Actions → Backup diario → Run workflow) y verificar que aparece el archivo en el bucket.
+#   6. HACER EL ENSAYO DE RESTAURACIÓN (PLAN_DE_RECUPERACION.md, sección 6). Una copia que no se restauró no es una copia.
+#
+# Qué incluye el volcado: los esquemas `public` (todos los datos del sistema) y `auth` (usuarios), SIN sesiones ni tokens.
+# Qué NO incluye: el Vault (los secretos están cifrados con una clave del proyecto y no sirven en otro), Storage
+# (archivos subidos: hoy el sistema no guarda archivos de clientes) ni las tareas de cron (se recrean con las migraciones).
+#
+# Cómo abrir un volcado:
+#   aws s3 cp s3://BUCKET/kairox/2026-09-25.dump.age .  (con --endpoint-url si no es AWS)
+#   age -d -i clave-backup.txt 2026-09-25.dump.age > 2026-09-25.dump
+#   pg_restore --list 2026-09-25.dump        # ver el contenido
+#   pg_restore --data-only --disable-triggers -d "<url del proyecto nuevo>" 2026-09-25.dump   # ver PLAN_DE_RECUPERACION.md, paso 3
+
+name: Backup diario de la base
+
+on:
+  schedule:
+    - cron: '30 6 * * *'   # 06:30 UTC = 03:30 en Argentina
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Chequear que estén todos los secretos
+        id: check
+        env:
+          A: ${{ secrets.SUPABASE_DB_URL }}
+          B: ${{ secrets.BACKUP_AGE_PUBLIC_KEY }}
+          C: ${{ secrets.BACKUP_S3_BUCKET }}
+          D: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          E: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -z "$A" ] || [ -z "$B" ] || [ -z "$C" ] || [ -z "$D" ] || [ -z "$E" ]; then
+            echo "::warning title=Backup diario::Faltan secretos (ver la cabecera del archivo). Se omite."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Instalar pg_dump 17 y age
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y curl ca-certificates gnupg lsb-release age
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
+          echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -y
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Volcado (sin sesiones ni tokens)
+        if: steps.check.outputs.skip == 'false'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          pg_dump "$SUPABASE_DB_URL" \
+            --format=custom --no-owner --no-privileges \
+            --schema=public --schema=auth \
+            --exclude-table-data='auth.sessions' \
+            --exclude-table-data='auth.refresh_tokens' \
+            --exclude-table-data='auth.one_time_tokens' \
+            --exclude-table-data='auth.audit_log_entries' \
+            --exclude-table-data='auth.flow_state' \
+            --file=backup.dump
+          ls -l backup.dump
+          # Control mínimo: el volcado tiene que poder listarse y traer las tablas principales.
+          pg_restore --list backup.dump | grep -q "TABLE DATA public asientos_contables"
+          pg_restore --list backup.dump | grep -q "TABLE DATA public comprobantes"
+
+      - name: Cifrar con age (solo clave pública)
+        if: steps.check.outputs.skip == 'false'
+        env:
+          BACKUP_AGE_PUBLIC_KEY: ${{ secrets.BACKUP_AGE_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          age -r "$BACKUP_AGE_PUBLIC_KEY" -o "$(date -u +%F).dump.age" backup.dump
+          shred -u backup.dump || rm -f backup.dump
+          ls -l ./*.age
+
+      - name: Subir al almacenamiento privado
+        if: steps.check.outputs.skip == 'false'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+        run: |
+          set -euo pipefail
+          ARCHIVO="$(ls ./*.dump.age)"
+          if [ -n "${BACKUP_S3_ENDPOINT:-}" ]; then
+            aws s3 cp "$ARCHIVO" "s3://$BACKUP_S3_BUCKET/kairox/$(basename "$ARCHIVO")" --endpoint-url "$BACKUP_S3_ENDPOINT"
+          else
+            aws s3 cp "$ARCHIVO" "s3://$BACKUP_S3_BUCKET/kairox/$(basename "$ARCHIVO")"
+          fi
+          echo "✅ Copia subida: kairox/$(basename "$ARCHIVO")" >> "$GITHUB_STEP_SUMMARY"
