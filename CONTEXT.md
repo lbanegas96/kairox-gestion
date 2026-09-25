@@ -2,7 +2,7 @@
 
 ## 🛠️ Auditoría general (24/09) — TANDAS 2 y 3 PREPARADAS y probadas, SIN APLICAR (25/09)
 
-Luciano pidió acumular lo que necesita su OK y ejecutarlo todo al final (la "Tanda 4"). Todo está en **11 commits locales**, cada
+Luciano pidió acumular lo que necesita su OK y ejecutarlo todo al final (la "Tanda 4"). Todo está en **commits locales**, cada
 migración probada con pgTAP en `BEGIN…ROLLBACK` contra la base real (sin rastro, verificado después). **No se aplicó nada en
 producción, no se desplegó nada y no se subió nada a GitHub.** Lista y orden de aplicación: `PENDIENTES_LUCIANO_AUDITORIA.md`
 (sin versionar a propósito: el repo es público). Informe con el estado al 25/09: `AUDITORIA_SISTEMA_2026-09-24.md`.

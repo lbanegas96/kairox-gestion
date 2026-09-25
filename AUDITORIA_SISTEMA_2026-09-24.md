@@ -21,7 +21,7 @@
 > Luciano pidió ir acumulando lo que necesita su OK para ejecutarlo todo junto al final. Se prepararon las **migraciones 406 a 417**,
 > el código de las 8 funciones de servidor, los cambios de pantalla, las pruebas y los documentos. Cada migración se probó contra la
 > base real dentro de `BEGIN…ROLLBACK` con su prueba de base de datos (212 casos nuevos, sin rastro) y la suite de pantalla queda en
-> verde (406 pruebas). **Nada de esto está aplicado en producción, desplegado ni subido a GitHub** (11 commits locales). El orden de
+> verde (406 pruebas). **Nada de esto está aplicado en producción, desplegado ni subido a GitHub** (commits locales). El orden de
 > aplicación y todo lo que necesita a Luciano está en `PENDIENTES_LUCIANO_AUDITORIA.md`.
 >
 > | Hallazgo | Estado 25/09 | Dónde |
@@ -317,7 +317,7 @@ De las 7.878 filas de `audit_log`, 2.921 son de `profiles` y **2.880 son solo el
 
 ## 6. Estado al 25/09 y qué sigue
 
-- **Preparado y probado, sin aplicar:** mig. 406–417, 8 workers, cabeceras, exceljs, reporte de conciliación, botón de reversa, documentos. **11 commits locales, sin subir.**
+- **Preparado y probado, sin aplicar:** mig. 406–417, 8 workers, cabeceras, exceljs, reporte de conciliación, botón de reversa, documentos. **En commits locales, sin subir.**
 - **Lo que necesita a Luciano** (aplicar en orden, borrar 3 funciones, decisiones sobre backups, empresa limpia, registro público y **repositorio público**, cuentas nuevas para staging/webhook/Sentry, revisión legal): ver `PENDIENTES_LUCIANO_AUDITORIA.md`, que es la lista de la «Tanda 4».
 - **No se hizo, con motivo:** CON-7 (RPC atómicas de compras: se difiere hasta verificar esos flujos en pantalla), SEG-8 y SEG-9 (dependen de decisiones de producto), jsPDF 4 y react-router 7 (exigen revisar los PDF a ojo).
 - **No pude verificar:** la CI real después de mis cambios (no hay Docker Desktop abierto para reproducirla local; hay que subir y mirar), los PDF con jsPDF 4, y nada «en pantalla» (el navegador integrado no tiene sesión).
