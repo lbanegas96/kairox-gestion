@@ -7,6 +7,7 @@ import ReporteEstadoResultadosCC from '@/components/reportes/ReporteEstadoResult
 import ReporteComparativoPeriodos from '@/components/reportes/ReporteComparativoPeriodos';
 import ReportePosicionFiscal from '@/components/reportes/ReportePosicionFiscal';
 import ReporteMemoriaAjusteInflacion from '@/components/reportes/ReporteMemoriaAjusteInflacion';
+import ReporteConciliacionControl from '@/components/reportes/ReporteConciliacionControl';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { useAjusteInflacionHabilitado } from '@/hooks/useAjusteInflacionHabilitado';
 import { useAuth } from '@/contexts/SupabaseAuthContext';
@@ -38,6 +39,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   const [showComparativoPeriodos, setShowComparativoPeriodos] = useState(false);
   const [showPosicionFiscal, setShowPosicionFiscal] = useState(false);
   const [showMemoriaAjuste, setShowMemoriaAjuste] = useState(false);
+  const [showConciliacion, setShowConciliacion] = useState(false);
   const [libroIVAOrigen, setLibroIVAOrigen] = useState(null);
   const [afipActivo, setAfipActivo] = useState(false);
   const [groupBy, setGroupBy] = useState('none');
@@ -1185,6 +1187,9 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   if (showMemoriaAjuste) {
     return <ReporteMemoriaAjusteInflacion onBack={() => setShowMemoriaAjuste(false)} />;
   }
+  if (showConciliacion) {
+    return <ReporteConciliacionControl onBack={() => setShowConciliacion(false)} />;
+  }
 
   return (
     <div className="space-y-8 pb-8 animate-in fade-in duration-500">
@@ -1198,6 +1203,7 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
         setShowPosicionFiscal={setShowPosicionFiscal}
         ajusteInflacionHabilitado={ajusteInflacionHabilitado}
         setShowMemoriaAjuste={setShowMemoriaAjuste}
+        setShowConciliacion={setShowConciliacion}
       />
 
       <ModalReporte

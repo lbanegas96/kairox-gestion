@@ -13,6 +13,7 @@ import { asientosAutoService } from '@/services/planCuentasService';
 import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { parseNumberLocale } from '@/lib/currencyUtils';
 import { netoIvaCompra, resolverCompraLibro, comprobanteProveedorCompleto } from '@/lib/comprasLibro';
+import { mensajeErrorCompra } from '@/lib/erroresCompra';
 import CompraDetailModal from '../ventas/CompraDetailModal';
 import TabNuevaCompra from '../compras/TabNuevaCompra';
 import TabHistorialCompras from '../compras/TabHistorialCompras';
@@ -594,7 +595,7 @@ function ComprasSection() {
       console.error('Transaction error:', error);
       toast({
         title: "Error al registrar compra",
-        description: error.message,
+        description: mensajeErrorCompra(error),
         variant: "destructive"
       });
     } finally {
@@ -866,7 +867,7 @@ function ComprasSection() {
 
     } catch (error) {
       console.error("Save Edit Error:", error);
-      toast({ title: "Error al guardar", description: error.message, variant: "destructive" });
+      toast({ title: "Error al guardar", description: mensajeErrorCompra(error), variant: "destructive" });
     } finally {
       setIsSavingEdit(false);
     }

@@ -44,7 +44,7 @@ export const RUBROS = [
     corto: 'Contabilidad',
     descripcion: 'IVA, posición fiscal, resultados y ajuste por inflación',
     icon: <Landmark className="w-5 h-5 text-kx-red" />,
-    ids: ['libro_iva_ventas', 'libro_iva_compras', 'posicion_fiscal', 'estado_resultados_cc', 'comparativo_periodos', 'memoria_ajuste_inflacion', 'paridad'],
+    ids: ['libro_iva_ventas', 'libro_iva_compras', 'posicion_fiscal', 'conciliacion_cuentas_control', 'estado_resultados_cc', 'comparativo_periodos', 'memoria_ajuste_inflacion', 'paridad'],
   },
 ];
 
@@ -77,6 +77,7 @@ export const PALABRAS_CLAVE = {
   posicion_fiscal: ['iva', 'ingresos brutos', 'iibb', 'retenciones', 'impuestos'],
   estado_resultados_cc: ['sucursal', 'centro de costo', 'ganancias y pérdidas'],
   comparativo_periodos: ['cierre', 'mes contra mes', 'evolución'],
+  conciliacion_cuentas_control: ['conciliar', 'mayor', 'subdiario', 'cuentas de control', 'cierre', 'diferencias', 'auditoría', 'descuadre'],
   memoria_ajuste_inflacion: ['inflación', 'recpam', 'papel de trabajo', 'inspección'],
   paridad: ['dólar', 'moneda extranjera', 'tipo de cambio'],
 };

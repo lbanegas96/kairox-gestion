@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import {
-  FileSpreadsheet, ArrowLeftRight, BookOpen, Columns, GitCompareArrows, Landmark, Calculator,
+  FileSpreadsheet, ArrowLeftRight, BookOpen, Columns, GitCompareArrows, Landmark, Calculator, Scale,
   Search, X, Star, LayoutGrid, SearchX,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -48,6 +48,12 @@ const AYUDA_MEMORIA_AJUSTE = {
   queEs: 'El papel de trabajo del Ajuste por Inflación contable de un período: cuenta por cuenta y mes por mes, con el saldo, el índice, el coeficiente aplicado y el ajuste — lo que el asiento resume en una línea por cuenta. Sirve de respaldo ante una inspección o para que tu contador revise el cálculo.',
   queMuestra: ['Por cada cuenta: saldo de apertura y movimientos de cada mes, con su índice y coeficiente', 'Saldo reexpresado y ajuste de cada línea, y el ajuste total de la cuenta', 'RECPAM (ganancia, pérdida y neto) y los índices utilizados', 'Un control de que el detalle cierra contra el ajuste que se va a postear'],
   filtros: ['Período contable', 'Requiere el Ajuste por Inflación activado en Configuración → Finanzas y los índices de inflación cargados', 'Descarga en PDF y Excel'],
+};
+
+const AYUDA_CONCILIACION = {
+  queEs: 'Una foto a hoy de si el mayor contable coincide con los libros auxiliares que lo respaldan, para revisar en cada cierre. No genera ni corrige nada: solo muestra dónde hay diferencias y de dónde vienen.',
+  queMuestra: ['Por cada cuenta de control (Cuentas a Cobrar, Cuentas a Pagar, Mercaderías, Caja y Bancos, IVA Débito e IVA Crédito): el saldo del mayor, el del subdiario y la diferencia', 'Controles de integridad con los casos concretos: movimientos de cuenta corriente sin cliente, saldos de clientes que no coinciden con sus movimientos, productos con stock y sin costo, cuentas con el saldo desactualizado, asientos desbalanceados, documentos sin asiento y asientos duplicados'],
+  filtros: ['Ninguno: siempre es el estado actual', 'Descarga en PDF y Excel'],
 };
 
 const ICONO_FAVORITOS = <Star className="w-5 h-5 text-amber-500" />;
@@ -131,7 +137,7 @@ function GridReportes({
   tcParaleloEnabled, monedaParalela, setShowParidad,
   afipActivo, setShowLibroIVA, setLibroIVAOrigen, setShowLibroIVACompras,
   setShowEstadoResultadosCC, setShowComparativoPeriodos, setShowPosicionFiscal,
-  ajusteInflacionHabilitado = false, setShowMemoriaAjuste,
+  ajusteInflacionHabilitado = false, setShowMemoriaAjuste, setShowConciliacion,
 }) {
   const { user } = useAuth();
   const [infoAbierto, setInfoAbierto] = useState(null); // { title, icon, ayuda } | null
@@ -148,7 +154,7 @@ function GridReportes({
   };
 
   // Todos los reportes en una sola forma: los que se abren en un diálogo
-  // (REPORTS) y los que ocupan la pantalla entera (los 7 de abajo). Cada uno
+  // (REPORTS) y los que ocupan la pantalla entera (los de abajo). Cada uno
   // sabe cómo abrirse; el rubro al que pertenece lo define reportCatalog.jsx.
   const tarjetas = useMemo(() => {
     const generales = REPORTS.map(r => ({
@@ -240,12 +246,22 @@ function GridReportes({
         buttonLabel: ajusteInflacionHabilitado ? 'Ver Reporte' : 'Requiere configuración',
         onOpen: () => setShowMemoriaAjuste?.(true),
       },
+      {
+        id: 'conciliacion_cuentas_control',
+        title: 'Conciliación de Cuentas de Control',
+        description: 'Si el mayor coincide con clientes, proveedores, stock, caja e IVA — y dónde no.',
+        icon: <Scale className="w-8 h-8 text-kx-red" />,
+        borderClass: 'border-t-kx-red',
+        ayuda: AYUDA_CONCILIACION,
+        buttonLabel: 'Ver Reporte',
+        onOpen: () => setShowConciliacion?.(true),
+      },
     ];
     return [...generales, ...especiales].map(t => ({ ...t, palabrasClave: PALABRAS_CLAVE[t.id] }));
   }, [
     openReportDialog, tcParaleloEnabled, monedaParalela, setShowParidad, afipActivo, setShowLibroIVA,
     setLibroIVAOrigen, setShowLibroIVACompras, setShowEstadoResultadosCC, setShowComparativoPeriodos,
-    setShowPosicionFiscal, ajusteInflacionHabilitado, setShowMemoriaAjuste,
+    setShowPosicionFiscal, ajusteInflacionHabilitado, setShowMemoriaAjuste, setShowConciliacion,
   ]);
 
   const secciones = useMemo(
@@ -273,7 +289,7 @@ function GridReportes({
         </div>
       </div>
 
-      {/* Buscador + rubros: encontrar un reporte puntual sin recorrer los 28. */}
+      {/* Buscador + rubros: encontrar un reporte puntual sin recorrer todos. */}
       <div className="space-y-4 mb-8">
         <div className="relative max-w-xl">
           <Search className="absolute left-3.5 top-3 h-4 w-4 text-kx-text-3" />

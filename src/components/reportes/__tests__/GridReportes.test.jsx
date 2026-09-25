@@ -7,14 +7,14 @@ import GridReportes from '@/components/reportes/GridReportes';
 import { REPORTS } from '@/components/reportes/reportDefinitions';
 
 // Centro de Reportes ordenado por rubro, con buscador y favoritos (pedido de
-// Luciano, 24/09: con 28 reportes en una grilla plana, uno puntual era una aguja
+// Luciano, 24/09: con 28 reportes (hoy 29) en una grilla plana, uno puntual era una aguja
 // en un pajar).
 const props = () => ({
   openReportDialog: vi.fn(),
   tcParaleloEnabled: false, monedaParalela: 'USD', setShowParidad: vi.fn(),
   afipActivo: true, setShowLibroIVA: vi.fn(), setLibroIVAOrigen: vi.fn(), setShowLibroIVACompras: vi.fn(),
   setShowEstadoResultadosCC: vi.fn(), setShowComparativoPeriodos: vi.fn(), setShowPosicionFiscal: vi.fn(),
-  ajusteInflacionHabilitado: true, setShowMemoriaAjuste: vi.fn(),
+  ajusteInflacionHabilitado: true, setShowMemoriaAjuste: vi.fn(), setShowConciliacion: vi.fn(),
 });
 const montar = (extra = {}) => {
   const p = { ...props(), ...extra };
@@ -36,20 +36,21 @@ describe('GridReportes — por rubro', () => {
     const rubros = screen.getAllByRole('heading', { level: 3 }).map(h => h.textContent);
     expect(rubros).toEqual([
       'Ventas y Clientes (7)', 'Compras y Proveedores (6)', 'Inventario (3)',
-      'Caja, Bancos y Cobros (5)', 'Impuestos y Contabilidad (7)',
+      'Caja, Bancos y Cobros (5)', 'Impuestos y Contabilidad (8)',
     ]);
   });
 
-  it('están los 28 reportes, cada uno una sola vez, y ninguno quedó suelto en "Otros"', () => {
+  it('están los 29 reportes, cada uno una sola vez, y ninguno quedó suelto en "Otros"', () => {
     montar();
     const titulos = titulosVisibles();
-    expect(titulos).toHaveLength(28);
-    expect(new Set(titulos).size).toBe(28);
+    expect(titulos).toHaveLength(29);
+    expect(new Set(titulos).size).toBe(29);
     expect(screen.queryByText(/Otros reportes/)).toBeNull();
-    // Los 21 del catálogo general + los 7 que abren pantalla propia.
+    // Los 21 del catálogo general + los 8 que abren pantalla propia.
     REPORTS.forEach(r => expect(titulos).toContain(r.title));
     ['Reporte de Paridad', 'Libro IVA Ventas', 'Libro IVA Compras', 'Estado de Resultados por CC',
-      'Comparativo entre Períodos', 'Posición Fiscal Consolidada', 'Memoria de Cálculo — Ajuste por Inflación']
+      'Comparativo entre Períodos', 'Posición Fiscal Consolidada', 'Memoria de Cálculo — Ajuste por Inflación',
+      'Conciliación de Cuentas de Control']
       .forEach(t => expect(titulos).toContain(t));
   });
 
@@ -70,7 +71,7 @@ describe('GridReportes — por rubro', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Inventario/ }));
     expect(titulosVisibles().sort()).toEqual(['Historial de Ajustes de Inventario', 'Kardex de Inventario', 'Valorización de Inventario']);
     fireEvent.click(screen.getByRole('button', { name: /^Todos/ }));
-    expect(titulosVisibles()).toHaveLength(28);
+    expect(titulosVisibles()).toHaveLength(29);
   });
 });
 
@@ -111,7 +112,7 @@ describe('GridReportes — buscador', () => {
 
   it('los chips muestran cuántos resultados cayeron en cada rubro y se apagan los que quedan en cero', () => {
     montar();
-    buscar('stock');
+    buscar('kardex');
     expect(screen.getByRole('button', { name: /^Inventario/ }).disabled).toBe(false);
     expect(screen.getByRole('button', { name: /^Contabilidad 0/ }).disabled).toBe(true);
   });
@@ -121,7 +122,7 @@ describe('GridReportes — buscador', () => {
     buscar('zzzz');
     expect(screen.getByText(/No encontré reportes con «zzzz»/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Limpiar búsqueda' }));
-    expect(titulosVisibles()).toHaveLength(28);
+    expect(titulosVisibles()).toHaveLength(29);
   });
 
   it('la X del buscador borra el texto', () => {
@@ -150,7 +151,7 @@ describe('GridReportes — recuerda lo que estabas mirando', () => {
     window.sessionStorage.setItem('kx_reportes_vista', '{no es json');
     montar();
     expect(screen.getByLabelText('Buscar reporte').value).toBe('');
-    expect(titulosVisibles()).toHaveLength(28);
+    expect(titulosVisibles()).toHaveLength(29);
   });
 });
 
@@ -217,6 +218,8 @@ describe('GridReportes — abrir cada tipo de reporte', () => {
     expect(p.setShowPosicionFiscal).toHaveBeenCalledWith(true);
     fireEvent.click(screen.getByText('Memoria de Cálculo — Ajuste por Inflación'));
     expect(p.setShowMemoriaAjuste).toHaveBeenCalledWith(true);
+    fireEvent.click(screen.getByText('Conciliación de Cuentas de Control'));
+    expect(p.setShowConciliacion).toHaveBeenCalledWith(true);
   });
 
   it('Paridad y Memoria quedan apagados hasta que se active lo que necesitan', () => {

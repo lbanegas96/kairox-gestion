@@ -16,6 +16,7 @@ import GenerarMovimientoModal from '@/components/shared/GenerarMovimientoModal';
 import NuevaDevolucionModal from '@/components/shared/NuevaDevolucionModal';
 import MapaRelaciones from '@/components/shared/MapaRelaciones';
 import { parseNumberLocale } from '@/lib/currencyUtils';
+import { mensajeErrorCompra } from '@/lib/erroresCompra';
 import { ESTADOS, EMPTY_ITEM } from '@/components/ordenes-compra/shared';
 import TablaOrdenesCompra from '@/components/ordenes-compra/TablaOrdenesCompra';
 import FormNuevaOC from '@/components/ordenes-compra/FormNuevaOC';
@@ -181,7 +182,7 @@ function OrdenesCompraSection({ navigateOrdenId, onNavigated, onNavigate, autoFa
         });
       }
     },
-    onError: (e) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
+    onError: (e) => toast({ title: 'Error', description: mensajeErrorCompra(e), variant: 'destructive' }),
   });
 
   // mig.332 — la OC ahora admite varias facturas parciales: precarga solo lo
