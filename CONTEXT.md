@@ -2,9 +2,8 @@
 
 ## 🛠️ Auditoría general (24/09) — TANDAS 2 y 3 PREPARADAS y probadas, SIN APLICAR (25/09)
 
-Luciano pidió acumular lo que necesita su OK y ejecutarlo todo al final (la "Tanda 4"). Todo está en **commits locales**, cada
-migración probada con pgTAP en `BEGIN…ROLLBACK` contra la base real (sin rastro, verificado después). **No se aplicó nada en
-producción, no se desplegó nada y no se subió nada a GitHub.** Lista y orden de aplicación: `PENDIENTES_LUCIANO_AUDITORIA.md`
+Luciano pidió acumular lo que necesita su OK y ejecutarlo todo al final (la "Tanda 4"). Todo quedó subido a GitHub el 25/09 a las 20:02 en un push que no hice yo (salvo el arreglo de la mig. 341); cada
+migración probada con pgTAP en `BEGIN…ROLLBACK` contra la base real (sin rastro, verificado después). **No se aplicó nada en producción** (el frontend nuevo sí quedó desplegado en Vercel: hasta aplicar las migraciones, «Reversar asiento» y «Conciliación de cuentas de control» dan error al usarlas). Lista y orden de aplicación: `PENDIENTES_LUCIANO_AUDITORIA.md`
 (sin versionar a propósito: el repo es público). Informe con el estado al 25/09: `AUDITORIA_SISTEMA_2026-09-24.md`.
 - **mig. 406–410** (permisos y asientos): permiso de módulo en 15 RPC (SEG-12); `get_my_empresa_id()` NULL si el perfil está
   inactivo (SEG-13); `crear_asiento_automatico/manual` validan cuentas de la empresa, permiso por tipo e idempotencia por
@@ -34,8 +33,8 @@ producción, no se desplegó nada y no se subió nada a GitHub.** Lista y orden 
   2. **La CI de pgTAP nunca corrió sus pruebas:** recrear la base desde cero fallaba en la mig. **297** (INSERT con el `empresa_id` de
      Nalux escrito a mano → FK) y el CLI de Supabase **ignora** los archivos que no son `<número>_<nombre>.sql`: los arreglos
      `318b/325b/328b` no se aplicaban en una base recreada (quedaban `anon` en `actualizar_cotizacion` y 3 sobrecargas de
-     `crear_venta`). Corregido: guarda en la 297 y los tres arreglos incorporados a sus archivos. Pueden quedar más bloqueos
-     después de la 297: solo se ven subiendo y mirando la CI, o con Docker Desktop abierto (Docker está instalado pero apagado).
+     `crear_venta`). Corregido: guarda en la 297 y los tres arreglos incorporados a sus archivos. Tras el push del 25/09 la recreación pasa la 297 y se detiene en la 341 (`rls_auto_enable()` la crea Supabase; guarda agregada, falta subirla). Puede haber más bloqueos: se ven de a uno subiendo y mirando la CI, o con Docker Desktop abierto (instalado pero apagado).
+  2b. **Un push que no hice yo publicó los commits en el repo público** (`origin/master` figura «update by push» a las 20:02:11 desde este mismo repositorio local; sin hooks, alias, tareas programadas ni otras sesiones en el repo; lo más probable es un botón «Push» de la app o una acción de Luciano). Efecto: el informe, `docs/operacion`, las migraciones sin aplicar y el frontend nuevo quedaron publicados/desplegados; la CI de frontend dio verde por primera vez desde el 03/09.
   3. Un CLI que ordena por nombre de archivo no admite «una migración en el medio»: un número con más dígitos (`3181_`) queda ANTES de
      `318_` y repetir el prefijo duplica la versión. Un arreglo intermedio se incorpora al archivo que arregla.
   4. `asiento_id IS NULL` **no** sirve para detectar «documento sin asiento» (los movimientos de cuenta corriente y las NC no lo
