@@ -104,6 +104,7 @@ export default function PlanCuentasSection() {
             <TabAsientos
               empresaId={empresaId}
               userId={userId}
+              userRole={userRole}
               cuentasFlat={cuentasFlat}
               onRefresh={handleRefresh}
             />

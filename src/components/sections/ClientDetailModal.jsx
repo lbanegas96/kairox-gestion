@@ -184,9 +184,10 @@ const ClientDetailModal = ({ open, onOpenChange, clientId, clientData, onUpdate 
   // Migration 181/183: cobros históricos que quedaron sin asiento (período cerrado o
   // cuenta faltante al momento del cobro) pueden regenerarse acá. El RPC ya rechaza
   // (con guard propio) filas que en realidad son cheques o Notas de Crédito, así que
-  // el filtro de abajo es solo para no mostrar el botón donde el RPC lo va a rechazar.
+  // el filtro de abajo es solo para no mostrar el botón donde el RPC lo va a rechazar
+  // (mig.409: tampoco un cobro cancelado — su ingreso ya está revertido).
   const puedeRegenerarAsiento = (mov) =>
-    mov.tipo === 'HABER' && !mov.asiento_id && !mov.cheque_id &&
+    mov.tipo === 'HABER' && !mov.asiento_id && !mov.cheque_id && mov.estado !== 'cancelado' &&
     !(mov.comprobante_id && !mov.metodo_cobro);
 
   const handleRegenerarAsiento = async (movimientoId) => {

@@ -16,6 +16,7 @@ import { useTCParalelo } from '@/hooks/useTCParalelo';
 import { TipoCambioModal } from '@/components/ui/TipoCambioModal';
 import ProveedorSelector from '@/components/shared/ProveedorSelector';
 import { asientosAutoService } from '@/services/planCuentasService';
+import { mensajeErrorCompra } from '@/lib/erroresCompra';
 
 // Bug real (Fase 0.3, 13/08 — mismo hallazgo se repite acá): 27% viola el CHECK
 // real de detalle_compras.alicuota_iva (confirmado contra la base: solo admite
@@ -419,7 +420,7 @@ function NuevaFacturaProveedorModal({ open, onOpenChange, compraOrigen = null, d
       });
     } catch (err) {
       console.error('[NuevaFacturaProveedor]', err);
-      toast({ title: 'Error al registrar la factura', description: err.message, variant: 'destructive' });
+      toast({ title: 'Error al registrar la factura', description: mensajeErrorCompra(err), variant: 'destructive' });
     } finally {
       setLoading(false);
     }

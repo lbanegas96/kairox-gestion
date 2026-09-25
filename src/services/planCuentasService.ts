@@ -206,6 +206,18 @@ export const asientosService = {
     if (error) throw new Error(error.message);
   },
 
+  // mig.410 — un asiento CONFIRMADO no se anula: se corrige con un contra-asiento (mismas líneas, debe y haber
+  // invertidos). Solo un administrador, con un motivo escrito; la base se niega si un documento (venta, compra,
+  // cobro, cierre…) tiene ese asiento como suyo — para deshacer un documento se cancela el documento.
+  async reversarAsiento(
+    id: string,
+    motivo: string
+  ): Promise<{ id: string; numero: string; estado: string; reversa_de: string }> {
+    const { data, error } = await supabase.rpc('reversar_asiento', { p_asiento_id: id, p_motivo: motivo });
+    if (error) throw new Error(error.message);
+    return data as { id: string; numero: string; estado: string; reversa_de: string };
+  },
+
   /** Balance de comprobación: suma debe/haber por cuenta */
   async getBalanceComprobacion(empresaId: string, fechaDesde?: string, fechaHasta?: string, centroCostoId?: string) {
     let q = supabase
