@@ -419,8 +419,12 @@ GRANT  EXECUTE ON FUNCTION public.cancelar_venta_pendiente_qr(uuid, uuid) TO aut
 -- movimientos_bancarios, duplicando lo que la conciliación MP existente
 -- (mp-sync/mp-webhook, sin tocar) ya va a insertar por su cuenta al ver el
 -- mismo payment_id.
+-- (Guarda WHERE EXISTS agregada el 25/09/2026, auditoría COD-3: sin ella, recrear la base desde cero — la CI de pgTAP,
+-- un staging — falla acá con una violación de clave foránea porque la empresa Nalux no existe en una base vacía. En
+-- producción no cambia nada: Nalux existe y la fila ya está cargada.)
 INSERT INTO public.formas_pago (empresa_id, nombre, tipo_instrumento, activo)
-VALUES ('cbc4db74-ec31-4324-bd36-207b7a7bd99a', 'QR MercadoPago', 'billetera', true)
+SELECT 'cbc4db74-ec31-4324-bd36-207b7a7bd99a', 'QR MercadoPago', 'billetera', true
+WHERE EXISTS (SELECT 1 FROM public.empresas WHERE id = 'cbc4db74-ec31-4324-bd36-207b7a7bd99a')
 ON CONFLICT (empresa_id, nombre) DO NOTHING;
 
 -- ROLLBACK (comentado):
