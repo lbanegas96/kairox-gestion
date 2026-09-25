@@ -12,7 +12,7 @@ const PRODUCTO = { id: 'prod-1', nombre: 'Aramis TESTE Azul marino', precio_vent
 function buildProps(overrides = {}) {
   const items = [{ producto_id: '', descripcion: '', cantidad: 1, unidad_medida: '', precio_unitario: '', alicuota_iva: '21', descuento_item: '' }];
   return {
-    form: { cliente_nombre: 'Consumidor Final', cliente_id: '', condiciones_pago: '', fecha_vencimiento: '', moneda: 'ARS', tipoCambioTasa: 1, descuento: '', notas: '' },
+    form: { cliente_nombre: 'Consumidor Final', cliente_id: '', condiciones_pago: '', fecha_vencimiento: '', moneda: 'ARS', tipoCambioTasa: 1, descuento: '', notas: '', lista_precio_id: '' },
     setForm: vi.fn(),
     items,
     addItem: vi.fn(),
@@ -30,6 +30,9 @@ function buildProps(overrides = {}) {
     showClienteDropdown: false,
     setShowClienteDropdown: vi.fn(),
     clienteWrapperRef: { current: null },
+    // Fase C/D de Listas de Precio (02/09): el form pide estas dos props. Sin ellas el test explotaba en el render.
+    listasPrecio: [],
+    aplicarListaPrecio: vi.fn(),
     tcMissing: false,
     setTcMissing: vi.fn(),
     totales: { subtotal: 1200, descuento: 0, neto: 0, iva: 0, total: 1200 },

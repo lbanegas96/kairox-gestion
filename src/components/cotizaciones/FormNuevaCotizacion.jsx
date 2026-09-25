@@ -27,7 +27,7 @@ function FormNuevaCotizacion({
   unidadesMedida,
   condicionesPago,
   allClientes, showClienteDropdown, setShowClienteDropdown, clienteWrapperRef,
-  listasPrecio, aplicarListaPrecio,
+  listasPrecio = [], aplicarListaPrecio,
   tcMissing, setTcMissing,
   totales, discrimina,
   handleSubmit, resetForm,

@@ -40,6 +40,10 @@ export default defineConfig({
     // (**/*.spec.js) pero es un spec de Playwright (API distinta, depende de
     // scripts/loadtest/fixtures.json generado localmente por seed.mjs) — no
     // un test unitario. Se corre aparte con `npx playwright test`, nunca acá.
-    exclude: [...configDefaults.exclude, 'loadtest/**'],
+    //
+    // `.claude/**`: las copias de trabajo (worktrees) de las sesiones de Claude Code viven
+    // dentro del repo y traen copias de todos los tests; sin excluirlas Vitest las corre
+    // (triplica la corrida y suma fallos "fantasma" de código que no es el de master).
+    exclude: [...configDefaults.exclude, 'loadtest/**', '.claude/**'],
   },
 });
