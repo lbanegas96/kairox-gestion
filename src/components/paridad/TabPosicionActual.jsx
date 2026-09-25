@@ -188,9 +188,9 @@ function TabPosicionActual() {
     }
   };
 
-  const handleDownloadExcel = () => {
+  const handleDownloadExcel = async () => {
     try {
-      exportReporte({ title: 'Paridad Posición Actual', columns, data: rows, totals, filename: 'paridad_posicion_actual' });
+      await exportReporte({ title: 'Paridad Posición Actual', columns, data: rows, totals, filename: 'paridad_posicion_actual' });
       toast({ title: 'Éxito', description: 'Excel generado correctamente.', className: 'bg-green-600 text-white' });
     } catch (err) {
       console.error(err);

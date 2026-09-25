@@ -1120,13 +1120,13 @@ function ReportesSection({ initialView = null, onNavigate } = {}) {
   };
 
   // --- EXCEL DOWNLOAD ---
-  const handleDownloadExcel = () => {
+  const handleDownloadExcel = async () => {
     try {
       const filteredData = applyFiltroDeuda(selectedReport.id, reportData, soloConDeuda);
       const { columns, totals } = getTableConfig(selectedReport.id, filteredData);
       const displayData = applyGrouping(selectedReport.id, filteredData, groupBy);
 
-      exportReporte({
+      await exportReporte({
         title:    selectedReport.title,
         columns:  columns,
         data:     displayData,

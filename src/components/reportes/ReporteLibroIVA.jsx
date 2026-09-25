@@ -276,9 +276,9 @@ function ReporteLibroIVA({ onBack }) {
     }
   };
 
-  const handleDownloadExcel = () => {
+  const handleDownloadExcel = async () => {
     try {
-      exportReporte({ title: 'Libro IVA Ventas', columns, data: comprobantesFiltrados, totals: totalsRow, filename: 'libro_iva_ventas' });
+      await exportReporte({ title: 'Libro IVA Ventas', columns, data: comprobantesFiltrados, totals: totalsRow, filename: 'libro_iva_ventas' });
       toast({ title: 'Éxito', description: 'Excel generado correctamente.', className: 'bg-green-600 text-white' });
     } catch (err) {
       console.error(err);

@@ -224,9 +224,9 @@ function TabHistorico() {
     }
   };
 
-  const handleDownloadExcel = () => {
+  const handleDownloadExcel = async () => {
     try {
-      exportReporte({ title: 'Paridad Histórico', columns, data: rows, totals, filename: 'paridad_historico' });
+      await exportReporte({ title: 'Paridad Histórico', columns, data: rows, totals, filename: 'paridad_historico' });
       toast({ title: 'Éxito', description: 'Excel generado correctamente.', className: 'bg-green-600 text-white' });
     } catch (err) {
       console.error(err);

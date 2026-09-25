@@ -90,9 +90,9 @@ function ReporteMemoriaAjusteInflacion({ onBack }) {
     }
   };
 
-  const descargarExcel = () => {
+  const descargarExcel = async () => {
     try {
-      exportReporte({
+      await exportReporte({
         title: TITULO,
         columns: MEMORIA_COLUMNS,
         data: memoria.filasPlanas,

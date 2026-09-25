@@ -1,4 +1,11 @@
-import * as XLSX from 'xlsx';
+// Exportadores a .xlsx. Todos usan `exceljs` con carga diferida (`await import`): la librería solo se
+// descarga cuando alguien realmente exporta, no suma al bundle principal. Antes `exportToExcel` y
+// `exportReporte` usaban `xlsx` (SheetJS), que ya no tiene parche en npm (prototype pollution y ReDoS al LEER
+// archivos; acá solo se usaba para escribir) — auditoría 24/09, SEG-7. Por eso ahora son `async`: quien las llama
+// tiene que hacer `await` para poder avisar si falló.
+
+// Excel no admite estos caracteres en el nombre de una hoja y limita el largo a 31.
+const nombreHoja = (n, porDefecto) => String(n || porDefecto).replace(/[*?:\\/[\]]/g, '-').slice(0, 31);
 
 /**
  * Exporta datos a un archivo Excel (.xlsx).
@@ -8,30 +15,25 @@ import * as XLSX from 'xlsx';
  * @param {string}   filename    - Nombre del archivo sin extensión
  * @param {string}   sheetName   - Nombre de la hoja
  */
-export function exportToExcel({ rows, headers, labels, filename = 'exportacion', sheetName = 'Datos' }) {
-  const worksheetData = [
-    labels,
-    ...rows.map(row => headers.map(h => row[h] ?? '')),
-  ];
+export async function exportToExcel({ rows, headers, labels, filename = 'exportacion', sheetName = 'Datos' }) {
+  const ExcelJS = (await import('exceljs')).default;
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'KAIROX Gestión';
+  wb.created = new Date();
+  const ws = wb.addWorksheet(nombreHoja(sheetName, 'Datos'));
 
-  const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+  const encabezado = ws.addRow(labels);
+  encabezado.font = { bold: true };
+  rows.forEach(row => ws.addRow(headers.map(h => row[h] ?? '')));
 
-  // Ancho de columnas automático
-  const colWidths = labels.map((label, i) => {
-    const maxContent = Math.max(
-      label.length,
-      ...rows.map(row => String(row[headers[i]] ?? '').length)
-    );
-    return { wch: Math.min(maxContent + 2, 40) };
+  // Ancho de columnas automático: el contenido más largo + 2, con tope de 40.
+  labels.forEach((label, i) => {
+    const maxContent = Math.max(label.length, ...rows.map(row => String(row[headers[i]] ?? '').length));
+    ws.getColumn(i + 1).width = Math.min(maxContent + 2, 40);
   });
-  ws['!cols'] = colWidths;
 
-  // Estilo encabezado (negrita) — xlsx básico no soporta estilos sin xlsx-style, pero estructuramos el wb
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
-
-  const date = new Date().toISOString().split('T')[0];
-  XLSX.writeFile(wb, `${filename}_${date}.xlsx`);
+  const buffer = await wb.xlsx.writeBuffer();
+  downloadWorkbookBuffer(buffer, `${filename}_${new Date().toISOString().split('T')[0]}.xlsx`);
 }
 
 /**
@@ -42,7 +44,7 @@ export function exportToExcel({ rows, headers, labels, filename = 'exportacion',
  * que Excel pueda sumarlas/graficarlas; el resto usa pdfRender si existe
  * (fechas, labels) o el valor crudo.
  */
-export function exportReporte({ title, columns, data, totals = null, filename = 'reporte' }) {
+export async function exportReporte({ title, columns, data, totals = null, filename = 'reporte' }) {
   const header = columns.map(c => c.header);
   const rows = data.map(row => {
     // Filas sintéticas de agrupamiento (reportDefinitions.applyGrouping) —
@@ -77,19 +79,23 @@ export function exportReporte({ title, columns, data, totals = null, filename = 
     aoa.push(totalsRow);
   }
 
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = columns.map(() => ({ wch: 18 }));
+  const ExcelJS = (await import('exceljs')).default;
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'KAIROX Gestión';
+  wb.created = new Date();
+  const ws = wb.addWorksheet(nombreHoja(title, 'Reporte'));
+  aoa.forEach(fila => ws.addRow(fila));
+  ws.getRow(1).font = { bold: true };
+  columns.forEach((_, i) => { ws.getColumn(i + 1).width = 18; });
 
-  const wb = XLSX.utils.book_new();
-  // Nombre de hoja tope 31 caracteres (límite de Excel/XLSX).
-  XLSX.utils.book_append_sheet(wb, ws, (title || 'Reporte').slice(0, 31));
-  XLSX.writeFile(wb, `${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  const buffer = await wb.xlsx.writeBuffer();
+  downloadWorkbookBuffer(buffer, `${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
 // Helpers por módulo
 
 export function exportProductos(productos) {
-  exportToExcel({
+  return exportToExcel({
     rows: productos,
     headers: ['codigo_sku', 'nombre', 'categoria', 'stock_actual', 'stock_minimo', 'precio_venta', 'costo_compra', 'unidad_medida'],
     labels: ['SKU', 'Nombre', 'Categoría', 'Stock Actual', 'Stock Mínimo', 'Precio Venta', 'Costo Compra', 'Unidad'],
@@ -99,7 +105,7 @@ export function exportProductos(productos) {
 }
 
 export function exportVentas(ventas) {
-  exportToExcel({
+  return exportToExcel({
     rows: ventas.map(v => ({
       ...v,
       fecha: v.created_at ? new Date(v.created_at).toLocaleDateString('es-AR') : '',
@@ -113,7 +119,7 @@ export function exportVentas(ventas) {
 }
 
 export function exportCompras(compras) {
-  exportToExcel({
+  return exportToExcel({
     rows: compras.map(c => ({
       ...c,
       fecha: c.fecha ? new Date(c.fecha).toLocaleDateString('es-AR') : '',
@@ -127,7 +133,7 @@ export function exportCompras(compras) {
 }
 
 export function exportClientes(clientes) {
-  exportToExcel({
+  return exportToExcel({
     rows: clientes,
     headers: ['nombre', 'documento', 'telefono', 'email', 'direccion', 'limite_credito', 'saldo_actual'],
     labels: ['Nombre', 'Documento', 'Teléfono', 'Email', 'Dirección', 'Límite Crédito', 'Saldo Actual'],
@@ -137,7 +143,7 @@ export function exportClientes(clientes) {
 }
 
 export function exportMovimientosCaja(movimientos) {
-  exportToExcel({
+  return exportToExcel({
     rows: movimientos.map(m => ({
       ...m,
       fecha: m.fecha ? new Date(m.fecha).toLocaleDateString('es-AR') : '',

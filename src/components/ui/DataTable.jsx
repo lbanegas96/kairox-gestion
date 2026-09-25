@@ -87,13 +87,17 @@ export function DataTable({
   }, [sortKey]);
 
   // ── Exportar ───────────────────────────────────────────────────────────────
-  const handleExport = () => {
-    exportToExcel({
-      rows: sorted,
-      headers: columns.filter(c => !c.noExport).map(c => c.key),
-      labels: columns.filter(c => !c.noExport).map(c => c.label),
-      filename: exportFilename,
-    });
+  const handleExport = async () => {
+    try {
+      await exportToExcel({
+        rows: sorted,
+        headers: columns.filter(c => !c.noExport).map(c => c.key),
+        labels: columns.filter(c => !c.noExport).map(c => c.label),
+        filename: exportFilename,
+      });
+    } catch (err) {
+      console.error('[DataTable] no se pudo exportar a Excel:', err);
+    }
   };
 
   // ── Paginación (cuando es server-side) ────────────────────────────────────

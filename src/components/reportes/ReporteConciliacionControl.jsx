@@ -73,9 +73,9 @@ function ReporteConciliacionControl({ onBack }) {
     }
   };
 
-  const descargarExcel = () => {
+  const descargarExcel = async () => {
     try {
-      exportReporte({
+      await exportReporte({
         title: TITULO,
         columns: CONCILIACION_COLUMNS,
         data: datos.filasPlanas,

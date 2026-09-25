@@ -62,7 +62,7 @@ function TabAjusteImpositivo() {
           logoUrl: config?.logo_base64 || null,
         });
       } else {
-        exportReporte({ title: papel.title, columns: papel.columns, data: papel.data, totals: papel.totals, filename: 'ajuste_inflacion_impositivo' });
+        await exportReporte({ title: papel.title, columns: papel.columns, data: papel.data, totals: papel.totals, filename: 'ajuste_inflacion_impositivo' });
       }
       toast({ title: 'Éxito', description: `${formato === 'pdf' ? 'PDF' : 'Excel'} generado correctamente.`, className: 'bg-green-600 text-white' });
     } catch (e) {
