@@ -47,4 +47,13 @@ GRANT EXECUTE ON FUNCTION public.productos_stock_bajo(uuid) TO authenticated;
 
 REVOKE EXECUTE ON FUNCTION public.marcar_cae_resuelto_manual(uuid, text, text, date) FROM PUBLIC, anon;
 
-REVOKE EXECUTE ON FUNCTION public.rls_auto_enable() FROM PUBLIC, anon, authenticated;
+-- (Guarda agregada el 25/09/2026, auditoría COD-3: esta función la crea Supabase en los proyectos alojados (la opción
+-- «Enable automatic RLS»); ninguna migración la crea, así que en una base recreada desde cero —la CI de pgTAP, un
+-- staging— no existe y este REVOKE fallaba con "function does not exist". En producción no cambia nada.)
+DO $$
+BEGIN
+  IF to_regprocedure('public.rls_auto_enable()') IS NOT NULL THEN
+    REVOKE EXECUTE ON FUNCTION public.rls_auto_enable() FROM PUBLIC, anon, authenticated;
+  END IF;
+END
+$$;
