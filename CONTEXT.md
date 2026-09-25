@@ -1,17 +1,34 @@
 # KAIROX Gestión — Contexto de Sesión
 
-## 🔎 Auditoría general del sistema (24/09) — SOLO LECTURA, SIN CAMBIOS APLICADOS
+## 🔎 Auditoría general del sistema (24/09) — TANDA 1 APLICADA EN PRODUCCIÓN (mig. 402–405 + función ARCA neutralizada)
 
 Pedido de Luciano: "una buena pasada general" (contabilidad, seguridad, bugs, vacíos, madurez, robustez).
 Informe completo con evidencia y plan: **`AUDITORIA_SISTEMA_2026-09-24.md`** (raíz) · versión para leer (privada):
-https://claude.ai/artifact/QAJzGcQpsVCi2gkCVr8KnR. 37 hallazgos (SEG 11, CON 10, ARC 2, COD 4, OPE 5). **No se tocó
-código ni base**; todo lo que toca producción espera OK explícito de Luciano.
-- **Lo urgente:** OPE-1 plan Free de Supabase = sin backups; OPE-2 `cron.job_run_details` = 201 MB de 254 MB (crece
-  5–6 MB/día, tope Free 500 MB ≈ principios de noviembre → base de solo lectura); SEG-1 `profiles` deja a un usuario
-  editar su propio `permissions`/`active`/`empresa_id` (solo `role` está protegido; hoy 2 usuarios, ambos admin →
-  latente); SEG-2 Edge Function `arca-corregir-nc-historica` de un solo uso sigue desplegada SIN auth (usa
-  `AFIP_ENVIRONMENT`: en producción emitiría NC reales) → borrarla; SEG-4 `ajustar_precios_masivo_catalogo` con
-  EXECUTE a PUBLIC y sin permiso de módulo.
+https://claude.ai/artifact/QAJzGcQpsVCi2gkCVr8KnR. 39 hallazgos (SEG 13, CON 10, ARC 2, COD 4, OPE 5). La auditoría
+fue de solo lectura; **después Luciano aprobó y se aplicó la Tanda 1** (24/09 noche), cada pieza probada antes contra
+la base real en `BEGIN…ROLLBACK` (sin rastro) y verificada después en producción:
+- **mig. 403 (SEG-1, era CRÍTICO, no "latente")**: un `signUp` con `{"role":"admin"}` en la metadata + UN `UPDATE` de
+  `profiles.empresa_id` dejaba al atacante como admin de otra empresa (reproducido; bastaba el UUID, público en las URLs de
+  imágenes). Ahora `handle_new_user` fuerza `staff` y el trigger `trg_proteger_profiles` (detecta por `current_user`,
+  NO por `auth.uid()`: dentro de un SECURITY DEFINER el rol efectivo es el del dueño) limita lo que edita un usuario
+  final. Test `profiles_blindaje.test.sql` (20).
+- **mig. 402 (OPE-2)**: `TRUNCATE cron.job_run_details` + tarea `purgar-historial-cron-diario` (06:15 UTC, conserva 3
+  días). Base 254 MB → 53 MB. **Mirar mañana** que la tabla siga chica tras la primera corrida de la purga.
+- **mig. 404 (SEG-4)**: ajuste masivo de precios (catálogo y listas) exige permiso de módulo (`productos`/`clientes`) y
+  sin EXECUTE público. Test `ajuste_masivo_precios_permiso.test.sql` (13).
+- **mig. 405 (CON-4)**: trigger `trg_asiento_estado_saldo` (recalcula saldos al entrar/salir de `confirmado`) +
+  recalculo único (cambió solo Nalux 5.4: 130.000 → 150.000; suma de saldos de Nalux = 0). Test
+  `asiento_estado_saldo.test.sql` (8).
+- **SEG-2**: `arca-corregir-nc-historica` reemplazada por un stub 410 con `verify_jwt=true` (versión 2; antes un GET
+  sin credenciales llegaba al código con 405, ahora 401). **Pendiente**: borrarla del panel (con `create-user` y
+  `emitir-cae`) y borrar el stub del repo.
+- **Hallazgos nuevos al armar los arreglos (Tanda 2)**: SEG-12 (9 RPC SECURITY DEFINER que escriben sin
+  `has_module_permission`: `actualizar_cotizacion`, `actualizar_pedido`, `ajustar_stock_manual`,
+  `aplicar_compra_producto`, `confirmar/crear_recuento_inventario`, `crear_revalorizacion_inventario`,
+  `programar_precio_futuro`, `recalcular_precios_lista_factor`) y SEG-13 (`get_my_empresa_id()` no mira `active`: un
+  usuario desactivado sigue leyendo las tablas de lectura abierta).
+- **Sigue abierto de lo urgente**: OPE-1 plan Free = SIN BACKUPS (decisión de Luciano: Pro ≈ US$25/mes o dump diario).
+- **Sin cambios de la auditoría original que siguen vigentes:** CON-1/2/3/5/6/7 (libros de Nalux), SEG-3/5/6/7, COD-1/2.
 - **Contabilidad (Nalux):** motor sano (355 asientos, 0 desbalanceados, 912 líneas limpias) pero historial de prueba
   sucio: 17 NC del 13/06–30/07 sin asiento ($1.133.194,52); 7 asientos duplicados por `regenerar_asiento_cxc/cxp`
   (solo miran `asiento_id`, no buscan por origen); AS-000318/319 (compra Amazon $550.000,66) duplicado sin reversar;
@@ -22,8 +39,9 @@ código ni base**; todo lo que toca producción espera OK explícito de Luciano.
   catálogo); `net.http_post` del cron figura "succeeded" aunque la función devuelva error (medir `net._http_response`);
   Vitest recoge copias de `.claude/worktrees/*` (6 fallos fantasma).
 - **Decisiones pendientes de Luciano:** plan Pro o dump diario; empresa limpia vs regularizar Nalux; cerrar registro
-  público; OK para la Tanda 1 (migraciones 402 purga cron, 403 blindaje `profiles`, 404 precios, 405 saldos).
-- Commit local docs-only (junto al de Centro de Reportes), sin push.
+  público; arrancar la Tanda 2 (permisos SEG-12/13 + integridad contable).
+- Migraciones 402–405 aplicadas con `apply_migration` (nombres sin prefijo numérico, como 400/401); los archivos del
+  repo tienen los mismos textos. Push a GitHub autorizado por Luciano (auto-deploy de Vercel sin cambios de app).
 
 ---
 

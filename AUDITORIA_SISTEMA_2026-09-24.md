@@ -5,6 +5,18 @@
 **Versión analizada:** `master` @ `5865e15` · proyecto Supabase `isvkelrdxwvkfmrfqxxk` (Postgres 17, **plan Free**) · 7 empresas, 2 usuarios (ambos admin).
 **Convenciones:** esfuerzo Bajo = menos de medio día · Medio = 1 a 2 días · Alto = más de 3 días. "Necesita OK" = toca producción (migración, borrar una función, cambiar de plan) y no se aplica sin confirmación explícita.
 
+> ## ✅ Actualización 24/09 (noche): la Tanda 1 está APLICADA en producción
+> Con el OK explícito de Luciano se aplicaron las migraciones **402, 403, 404 y 405** y se reemplazó la función de ARCA
+> de un solo uso. Cada una se probó antes contra la base real dentro de `BEGIN…ROLLBACK` (sin rastro) y se verificó
+> después en producción. Resultado: **SEG-1 (crítico, ver corrección de severidad), SEG-2 (neutralizada), SEG-4, CON-4 y
+> OPE-2 quedan resueltos**; la base pasó de 254 MB a 53 MB. Quedan marcados abajo con ✅. Al armar los arreglos aparecieron
+> **2 hallazgos nuevos** (SEG-12 y SEG-13). Los textos originales de cada hallazgo se conservan como registro.
+> **Corrección de severidad de SEG-1:** el informe original lo daba por *latente*. Al reproducirlo (en una transacción
+> revertida, con empresas y usuarios inventados) resultó **explotable hoy**: un registro con `{"role":"admin"}` en la
+> metadata + un solo UPDATE de `empresa_id` dejaba al atacante como admin de otra empresa, con acceso a sus datos.
+> Bastaba conocer el UUID de la empresa, que figura en las URLs públicas de imágenes. No había señales de uso: solo
+> existen los 2 usuarios de siempre.
+
 ---
 
 ## 1. Veredicto
@@ -13,21 +25,21 @@ La base del sistema es sólida: **los asientos cuadran al 100 %, el aislamiento 
 
 Aun así, **no lo llamaría "listo para operar con clientes reales"** todavía. Hay 4 cosas concretas, baratas de cerrar, que conviene resolver antes de cargar usuarios y datos reales:
 
-1. **No hay copias de seguridad** (plan Free) y la base tiene un **reloj corriendo**: el historial de tareas programadas ocupa 201 MB de 254 MB y crece 5–6 MB por día; al llegar a 500 MB (≈ principios de noviembre) la base pasa a solo lectura y el POS deja de registrar ventas.
-2. **Un usuario común puede darse permisos de administrador a sí mismo** (hoy no se puede aprovechar porque los 2 usuarios son admin; se activa al crear el primer empleado).
-3. **Sigue publicada una función de ARCA sin autenticación** que era de un solo uso (borrarla).
-4. **Los libros de Nalux tienen historial de prueba con inconsistencias** (17 notas de crédito sin asiento, 8 asientos duplicados, cuentas de control que no concilian). Para operar en real conviene arrancar con libros limpios.
+1. **No hay copias de seguridad** (plan Free) y la base tenía un **reloj corriendo**: el historial de tareas programadas ocupaba 201 MB de 254 MB y crecía 5–6 MB por día; al llegar a 500 MB (≈ principios de noviembre) la base pasaba a solo lectura y el POS dejaba de registrar ventas. **✅ El reloj está resuelto (mig. 402: la base bajó a 53 MB y se purga sola); los backups siguen pendientes.**
+2. **Cualquier persona que se registrara podía quedar como admin de otra empresa** conociendo su UUID (ver la corrección de severidad arriba). **✅ Resuelto (mig. 403).**
+3. **Sigue publicada una función de ARCA sin autenticación** que era de un solo uso. **✅ Neutralizada (responde 401 sin credenciales; queda borrarla del panel).**
+4. **Los libros de Nalux tienen historial de prueba con inconsistencias** (17 notas de crédito sin asiento, 8 asientos duplicados, cuentas de control que no concilian). Para operar en real conviene arrancar con libros limpios. **Pendiente (Tanda 2).**
 
 | Área | Estado | En una línea |
 |---|---|---|
 | Aislamiento entre empresas | 🟢 | 91 de 91 tablas con RLS, 279 políticas, sin fugas entre empresas |
-| Permisos dentro de una empresa | 🔴 (latente) | Un usuario puede editar sus propios permisos (SEG-1); hoy no aplica porque los 2 usuarios son admin |
-| Funciones de servidor (Edge) | 🟡 | 1 abierta que hay que borrar; 8 workers sin clave |
+| Permisos dentro de una empresa | 🟡 | SEG-1 ✅ resuelto. Quedan 9 RPC sin permiso de módulo (SEG-12) y el usuario desactivado sigue leyendo (SEG-13) |
+| Funciones de servidor (Edge) | 🟡 | La función abierta de ARCA ✅ neutralizada (falta borrarla); 8 workers sin clave |
 | Motor contable | 🟢 | 355 asientos, 0 desbalanceados, 912 líneas sin anomalías |
 | Datos contables de Nalux | 🟡 | Historial de prueba con inconsistencias y sin reporte de conciliación |
 | Impuestos y ARCA | 🟡 | Todo en homologación; Libro IVA sin validar contra el Portal |
 | Código, pruebas y proceso | 🟡 | CI en rojo hace 3 semanas, no frena el deploy, sin staging |
-| Operación y respaldo | 🔴 | Sin backups, reloj de 500 MB, sin monitoreo |
+| Operación y respaldo | 🔴 | Sin backups y sin monitoreo. El reloj de 500 MB ✅ resuelto (base en 53 MB) |
 
 ---
 
@@ -35,13 +47,14 @@ Aun así, **no lo llamaría "listo para operar con clientes reales"** todavía. 
 
 ### 2.1 Seguridad
 
-**SEG-1 · ALTO (latente) · Un usuario puede modificar su propio perfil sin límite de columnas.**
-La política de UPDATE de `profiles` deja a cada usuario actualizar su propia fila, y el único freno es un trigger que protege la columna `role`. Quedan libres `permissions`, `active`, `empresa_id`, `tenant_id` y `modo_caja`. Consecuencias posibles: (a) un empleado se otorga permisos de cualquier módulo (incluido `configuracion`); (b) un empleado desactivado por el admin se reactiva solo; (c) cambiarse de empresa apuntando a otra (necesita conocer el UUID; los UUID de empresa aparecen en las URLs públicas de imágenes de productos y logos).
-*Evidencia:* `profiles_update` (USING `id = auth.uid()`; WITH CHECK solo exige `role` sin cambios), `has_column_privilege('authenticated', …, 'UPDATE')` verdadero en todas las columnas, `trg_protect_profile_role` (solo `UPDATE OF role`). El frontend solo actualiza su propia fila para `last_login_at`.
-*Hoy:* 2 perfiles, ambos admin → no hay quien lo aproveche. **Se vuelve real al crear el primer usuario "staff".**
-*Arreglo:* trigger BEFORE UPDATE en `profiles` que, si quien llama no es admin de la misma empresa ni `service_role`, solo permita cambiar `last_login_at`, nombre y apellido. Esfuerzo Bajo. **Necesita OK (migración).** Idealmente con un test pgTAP.
+**SEG-1 · CRÍTICO (originalmente informado como ALTO/latente) · ✅ RESUELTO (mig. 403, 24/09) · Cualquier registro podía quedar como admin de otra empresa.**
+Dos huecos que combinados lo permitían: (a) `handle_new_user` tomaba el rol de `raw_user_meta_data->>'role'`, un dato que manda el cliente en el `signUp` (un registro con `{"role":"admin"}` nacía como admin, sin empresa); (b) la política de UPDATE de `profiles` deja a cada usuario actualizar su propia fila y el único freno era un trigger que protege solo la columna `role`: quedaban libres `empresa_id`, `tenant_id`, `permissions`, `active` y `modo_caja`. Con eso: (1) **un registro nuevo podía apuntar su ficha a otra empresa y quedar como su admin** (basta conocer el UUID, que aparece en las URLs públicas de imágenes de productos y logos; el de Nalux tiene 12 imágenes + 1 logo en buckets públicos); (2) un empleado se otorgaba permisos de cualquier módulo; (3) un empleado desactivado se reactivaba solo.
+*Evidencia:* `profiles_update` (USING `id = auth.uid()`; WITH CHECK solo exige `role` sin cambios), `has_column_privilege('authenticated', …, 'UPDATE')` verdadero en todas las columnas, `trg_protect_profile_role` (solo `UPDATE OF role`). **Reproducido de punta a punta** en una transacción revertida con datos inventados: tras el signUp con metadata admin el perfil quedaba `rol=admin | empresa=NULL`; con un UPDATE de `empresa_id` pasaba a `get_my_empresa_id() = <víctima>` e `is_admin() = true`, y leía los clientes de la víctima (0 antes, 1 después). Sin señales de uso: solo existen los 2 usuarios de siempre.
+*Arreglo aplicado (mig. 403):* (1) `handle_new_user` fuerza `role='staff'` (solo `create_tenant`, en el servidor, hace admin al fundador); (2) trigger `trg_proteger_profiles`: si el pedido llega con el rol `authenticated`/`anon` nadie cambia `id`, `empresa_id` ni `tenant_id`, y solo el admin de la misma empresa cambia `role`, `permissions`, `active`, `modo_caja`, `email`; un usuario común solo toca nombre, apellido y `last_login_at`. `service_role`, `create_tenant`, migraciones y seeds no se ven afectados (se detecta por `current_user`, no por `auth.uid()`, porque dentro de una función SECURITY DEFINER el rol efectivo es el del dueño).
+*Verificación:* pgTAP `profiles_blindaje.test.sql` (20 casos, todos ok) corrido contra la base real dentro de `BEGIN…ROLLBACK`; y el ataque, repetido en producción tras aplicar, queda bloqueado (`No autorizado: no se puede cambiar la empresa de un usuario desde el navegador`) y Luciano (admin real) sigue actualizando su ficha.
 
-**SEG-2 · ALTO (fácil de cerrar) · Función `arca-corregir-nc-historica` publicada y sin autenticación.**
+**SEG-2 · ALTO (fácil de cerrar) · ✅ NEUTRALIZADA (24/09; falta borrarla del panel) · Función `arca-corregir-nc-historica` publicada y sin autenticación.**
+> *Aplicado:* la función se reemplazó por un stub que responde 410 y se redesplegó con `verify_jwt=true` (versión 2). Antes, un GET sin credenciales respondía `405 Method not allowed` (llegaba al código); ahora el gateway responde `401` a GET y POST sin credenciales. El stub quedó en el repo (`supabase/functions/arca-corregir-nc-historica/index.ts`, mismo contenido que el desplegado). **Pendiente (30 s):** borrarla desde el panel de Supabase (Edge Functions → arca-corregir-nc-historica → Delete), y con ella `create-user` y `emitir-cae`; después borrar el stub del repo.
 Era una herramienta de un solo uso (21/08) que el propio código pide borrar. Sigue desplegada con `verify_jwt=false`, usa `service_role`, lee el certificado y la clave privada de ARCA desde el Vault y puede emitir una NC ante ARCA para cualquier `comprobante_id` que le pasen. Exige un UUID válido de una NC con CAE, así que hoy la explotación es difícil y apunta a homologación; pero toma el ambiente de `AFIP_ENVIRONMENT`, o sea que **el día que se pase ARCA a producción emitiría notas de crédito reales ante ARCA** a quien la llame. No está en el repositorio (el chequeo de drift la marcaría).
 *Arreglo:* borrarla desde el panel de Supabase o con `supabase functions delete arca-corregir-nc-historica`. También conviene borrar `create-user` (no se usa; el frontend invita con `invite-user`, y `create-user` chocaría con el trigger `handle_new_user`) y `emitir-cae` (stub 410). Esfuerzo Bajo. **Necesita OK.**
 
@@ -49,7 +62,8 @@ Era una herramienta de un solo uso (21/08) que el propio código pide borrar. Si
 `arca-worker`, `mp-qr-poller`, `mp-sync-worker`, `mercadolibre-stock-worker`, `mercadolibre-catalogo-publicar`, `tiendanube-stock-worker` y `tiendanube-catalogo-publicar` tienen `verify_jwt=false` y ninguna verificación propia; `tc-diario-sync` sí exige un JWT, pero el cron le manda la clave anónima, que es pública y sirve para llamarla desde cualquier lado. No permiten inyectar datos (solo procesan colas), pero cualquiera puede llamarlos en bucle y forzar llamadas a ARCA, Mercado Pago, Tiendanube o MercadoLibre (bloqueos por exceso de pedidos, consumo del cupo de invocaciones).
 *Arreglo:* un secreto compartido (`CRON_SECRET`) en un header que cada worker valida y que los 8 jobs del cron envían. Esfuerzo Medio. **Necesita OK** (redeploy de funciones y cambio de los cron jobs).
 
-**SEG-4 · MEDIO · `ajustar_precios_masivo_catalogo`: abierta al público y sin permiso por módulo.**
+**SEG-4 · MEDIO · ✅ RESUELTO (mig. 404, 24/09) · `ajustar_precios_masivo_catalogo`: abierta al público y sin permiso por módulo.**
+> *Aplicado:* las dos funciones de ajuste masivo (`ajustar_precios_masivo_catalogo` y su gemela `ajustar_precios_masivo`, de listas de precios) exigen ahora sesión con empresa y el permiso de módulo (`productos` y `clientes` respectivamente, los mismos que exige el RLS de las tablas que tocan); se revocó `EXECUTE` a PUBLIC/anon. Cuerpo idéntico al original salvo los chequeos (verificado por hash del cuerpo normalizado). pgTAP `ajuste_masivo_precios_permiso.test.sql` (13 casos, ok). Ya no queda ninguna función SECURITY DEFINER abierta a `anon`.
 Es la única función SECURITY DEFINER ejecutable por `anon` (tiene `EXECUTE` para PUBLIC). Sin sesión no hace nada porque `get_my_empresa_id()` devuelve NULL, pero rompe la regla del proyecto (REVOKE FROM PUBLIC) y no chequea `has_module_permission`: cualquier usuario de la empresa puede cambiar todos los precios llamándola por API.
 *Arreglo:* `REVOKE EXECUTE … FROM PUBLIC, anon` + chequeo del permiso del módulo. Esfuerzo Bajo. **Necesita OK (migración).**
 
@@ -73,6 +87,14 @@ Los permisos por módulo solo limitan escribir en varias tablas. Cualquier usuar
 
 **SEG-11 · INFO · Los avisos del panel de Supabase están viejos.** El análisis de seguridad cacheado es del **01/09** (`observed_at`): muestra una vista `SECURITY DEFINER` y 4 funciones abiertas a `anon` que ya se corrigieron (queda solo la de SEG-4). No usar el advisor como estado actual sin mirar la fecha de observación.
 
+**SEG-12 · MEDIO (nuevo, 24/09) · Nueve RPC sensibles no chequean el permiso de módulo.**
+Al recorrer las funciones SECURITY DEFINER que escriben datos y no llaman a `has_module_permission` ni `is_admin` aparecieron, además de las de precios (ya corregidas): `actualizar_cotizacion`, `actualizar_pedido`, `ajustar_stock_manual`, `aplicar_compra_producto`, `confirmar_recuento_inventario`, `crear_recuento_inventario`, `crear_revalorizacion_inventario`, `programar_precio_futuro` y `recalcular_precios_lista_factor`. Como saltean el RLS, un usuario de la empresa sin el módulo puede ejecutarlas por API (ajustar stock y costos, crear/confirmar recuentos y revalorizaciones que generan asientos, editar cotizaciones y pedidos). Sin empleados hoy no se nota; con empleados es una brecha de permisos. Además `seed_maestros_default`, `seed_series_numeracion` y `obtener_proximo_numero` solo validan la empresa (inocuas, idempotentes).
+*Arreglo:* agregar el chequeo del módulo correspondiente (`productos`, `ventas`, `pedidos`, `clientes`, `configuracion` según el caso) con el mismo método de la mig. 404 (cuerpo idéntico + chequeo, verificado por hash), más un test pgTAP por función. Esfuerzo Medio. **Necesita OK (migración).**
+
+**SEG-13 · MEDIO (nuevo, 24/09) · Desactivar un usuario no le corta la lectura.**
+`get_my_empresa_id()` no mira `profiles.active`. Un usuario desactivado conserva su empresa: **confirmado con una prueba** (usuario `active=false` en una empresa inventada): `get_my_empresa_id()` devuelve su empresa y sigue leyendo las tablas de lectura abierta (productos con su costo de compra; por política también asientos, movimientos y cuentas bancarias, ver SEG-8); solo `has_module_permission` e `is_admin` le dan falso. Su sesión además sigue vigente hasta que venza el token: Auth no sabe de `active`. El botón «Desactivar» del panel de Usuarios corta escribir en módulos pero no leer.
+*Arreglo:* que `get_my_empresa_id()` y `get_my_role()` devuelvan NULL si el perfil está inactivo (un cambio de una línea con efecto en todo el RLS: probar contra la suite completa de pgTAP), y bloquear la cuenta en Auth al desactivar (hoy solo `delete-user` la elimina). Esfuerzo Bajo–Medio. **Necesita OK (migración).**
+
 ### 2.2 Contabilidad
 
 **CON-1 · ALTO para arrancar en serio · 17 notas de crédito históricas sin asiento contable ($ 1.133.194,52).**
@@ -86,7 +108,8 @@ Los permisos por módulo solo limitan escribir en varias tablas. Cualquier usuar
 **CON-3 · MEDIO · 1 doble asiento de compra sin reversar ($ 550.000,66).**
 La mig. 397 reversó 3 de las 4 duplicaciones de "factura por OC" (AS-000321, 323, 325). Quedó **AS-000318 / AS-000319** (Amazon, factura 889998899888, OC-22124): ambos confirmados, por $ 550.000,66. Sobrestima Mercaderías ($ 454.546), IVA Crédito Fiscal ($ 95.454,66) y Cuentas a Pagar. **Necesita OK** para el asiento de reversa.
 
-**CON-4 · MEDIO · `confirmar_asiento` no actualiza el saldo de las cuentas.**
+**CON-4 · MEDIO · ✅ RESUELTO (mig. 405, 24/09) · `confirmar_asiento` no actualiza el saldo de las cuentas.**
+> *Aplicado:* trigger `trg_asiento_estado_saldo` (AFTER UPDATE OF estado en `asientos_contables`): cuando un asiento entra o sale de `confirmado` recalcula las cuentas de sus líneas (cubre `confirmar_asiento` y cualquier ruta futura). Recalculo único de todas las cuentas desfasadas: cambió **exactamente una** (Nalux 5.4: $ 130.000 → $ 150.000) y la suma de todos los saldos de Nalux quedó en **0,00**. pgTAP `asiento_estado_saldo.test.sql` (8 casos, ok).
 `trg_asiento_item_saldo` recalcula `plan_cuentas.saldo_actual` cuando cambian las *líneas*, y `recalcular_saldo_cuenta` suma solo asientos `confirmado`. Pero confirmar un borrador cambia solo el *estado* del encabezado y nada recalcula. Resultado: un asiento manual confirmado no impacta el saldo que muestra el Plan de Cuentas hasta que otra línea toque esa cuenta. Caso real residual: cuenta 5.4 Gastos de Administración, saldo mostrado $ 130.000 vs $ 150.000 del mayor (AS-000118). La suma de todos los `saldo_actual` da −$ 20.000 en lugar de 0.
 *Arreglo:* llamar a `recalcular_saldo_cuenta` desde `confirmar_asiento` (o un trigger sobre el cambio de estado) + recalcular todas las cuentas una vez. Esfuerzo Bajo. **Necesita OK (migración).**
 
@@ -135,7 +158,8 @@ Un cliente que migra con caja, deudores, proveedores y stock previos no tiene un
 
 **OPE-1 · ALTO · Sin copias de seguridad.** La organización está en el plan **Free** de Supabase, que no incluye backups automáticos restaurables ni recuperación a un punto en el tiempo (verificar en Dashboard → Database → Backups). La base guarda la contabilidad. *Arreglo:* plan Pro (≈ US$ 25/mes), que además habilita la protección contra contraseñas filtradas, o como mínimo un `pg_dump` diario programado a otro almacenamiento. **Decisión de Luciano.**
 
-**OPE-2 · ALTO (con reloj) · La base se va a llenar.** `cron.job_run_details` tiene 219.286 filas y **201 MB de los 254 MB** de la base (79 %); crece ≈ 5–6 MB por día (10 tareas, 4 de ellas cada 1–2 minutos y 3 cada 5). Con el tope de 500 MB del plan Free, la base llega al límite hacia **principios de noviembre** y pasa a solo lectura. *Arreglo:* una tarea diaria que borre lo anterior a 3 días (`DELETE FROM cron.job_run_details WHERE end_time < now() - interval '3 days'`) más una purga inicial y `VACUUM`. Esfuerzo Bajo (10 minutos). **Necesita OK.** El `audit_log` (24 MB, 7.174 filas) también necesita política de retención más adelante.
+**OPE-2 · ALTO (con reloj) · ✅ RESUELTO (mig. 402, 24/09) · La base se va a llenar.**
+> *Aplicado:* `TRUNCATE cron.job_run_details` (solo el historial de ejecuciones; las 10 tareas no se tocaron) y tarea diaria `purgar-historial-cron-diario` (06:15 UTC) que conserva 3 días. La base pasó de **254 MB a 53 MB**; el historial de 202 MB a 32 kB; las tareas siguen corriendo y registrando. **Pendiente de observar:** la primera corrida de la purga es hoy 06:15 UTC; conviene mirar mañana que `cron.job_run_details` siga chico. `cron.job_run_details` tiene 219.286 filas y **201 MB de los 254 MB** de la base (79 %); crece ≈ 5–6 MB por día (10 tareas, 4 de ellas cada 1–2 minutos y 3 cada 5). Con el tope de 500 MB del plan Free, la base llega al límite hacia **principios de noviembre** y pasa a solo lectura. *Arreglo:* una tarea diaria que borre lo anterior a 3 días (`DELETE FROM cron.job_run_details WHERE end_time < now() - interval '3 days'`) más una purga inicial y `VACUUM`. Esfuerzo Bajo (10 minutos). **Necesita OK.** El `audit_log` (24 MB, 7.174 filas) también necesita política de retención más adelante.
 
 **OPE-3 · MEDIO · Sin monitoreo ni alertas.** No hay telemetría de errores del navegador (sin Sentry o similar; solo `SectionErrorBoundary`). Las tareas de cron figuran "succeeded" aunque la función responda error (`net.http_post` solo encola): así estuvo caída la sincronización de MercadoPago del 14 al 29/07 sin síntoma visible. *Arreglo:* un chequeo diario que lea `net._http_response` y la cola de ARCA y avise por correo, y Sentry en el frontend.
 
@@ -153,7 +177,7 @@ Un cliente que migra con caja, deudores, proveedores y stock previos no tiene un
 - **Secretos:** 959 archivos versionados y el historial escaneados sin claves reales (las únicas son las claves públicas de demostración de Supabase local); `.env` ignorado; certificados de ARCA y tokens de MercadoPago/Tiendanube en el Vault.
 - **Funciones de usuarios y webhooks:** `delete-user`, `invite-user`, `generar-csr`, `probar-conexion-afip` verifican JWT, rol admin y misma empresa; los webhooks de MercadoPago y Tiendanube validan firma HMAC.
 - **Integridad:** numeración con bloqueo (`FOR UPDATE`) y reconciliación contra el máximo real; idempotencia del POS por `client_uuid`; sin CAE ni números de AFIP repetidos; auditoría de cambios en las tablas financieras; cierre de ejercicio y traslado de resultados.
-- **Pruebas:** 898 pruebas automáticas (889 pasan; las que fallan están identificadas), 18 archivos de pruebas de base de datos y escenarios de carga con k6.
+- **Pruebas:** 898 pruebas automáticas (889 pasan; las que fallan están identificadas), 17 archivos de pruebas de base de datos al auditar (20 con los 3 nuevos de la Tanda 1) y escenarios de carga con k6.
 - **Operación diaria:** en las últimas 24 h no hay errores de aplicación en la base ni en las funciones; las 10 tareas programadas corren; 1.456 llamadas a workers respondieron 200.
 - **Continuidad:** documentación muy completa (CONTEXT.md, planes, informes previos, memoria de decisiones).
 
@@ -172,16 +196,17 @@ Un cliente que migra con caja, deudores, proveedores y stock previos no tiene un
 
 ## 5. Plan sugerido
 
-**Tanda 1 — antes de cargar usuarios o datos reales (≈ 1 día).**
-1. Purga del historial de cron + tarea diaria (OPE-2). *mig. 402*
-2. Blindar `profiles` con trigger + test pgTAP (SEG-1). *mig. 403*
-3. Borrar `arca-corregir-nc-historica`, `create-user` y `emitir-cae` (SEG-2). *manual*
-4. Cerrar `ajustar_precios_masivo_catalogo` (SEG-4). *mig. 404*
-5. Decidir el plan Pro o el dump diario (OPE-1). *decisión*
-6. Decidir el registro público (SEG-5) y verificar Auth en el panel.
-7. `confirmar_asiento` recalcula saldos + recalcular todo (CON-4). *mig. 405*
+**Tanda 1 — antes de cargar usuarios o datos reales (≈ 1 día). ✅ APLICADA el 24/09 (noche), salvo las 3 decisiones/tareas marcadas «pendiente».**
+1. ✅ Purga del historial de cron + tarea diaria (OPE-2). *mig. 402 aplicada; falta ver mañana la primera corrida de la purga*
+2. ✅ Blindar `profiles` con trigger + test pgTAP (SEG-1). *mig. 403 aplicada y verificada*
+3. ✅ (a medias) `arca-corregir-nc-historica` neutralizada (SEG-2). ***Pendiente:** borrarla del panel junto con `create-user` y `emitir-cae`, y borrar el stub del repo.*
+4. ✅ Cerrar `ajustar_precios_masivo_catalogo` y su gemela de listas (SEG-4). *mig. 404 aplicada*
+5. ⏳ Decidir el plan Pro o el dump diario (OPE-1). *pendiente: decisión de Luciano*
+6. ⏳ Decidir el registro público (SEG-5) y verificar Auth en el panel. *pendiente: decisión de Luciano*
+7. ✅ `confirmar_asiento` recalcula saldos + recalcular todo (CON-4). *mig. 405 aplicada*
 
-**Tanda 2 — integridad contable (≈ 2–3 días).**
+**Tanda 2 — permisos e integridad contable (≈ 3–4 días).**
+0. **Permisos (nuevo):** chequeo de permiso de módulo en las 9 RPC de SEG-12 y `get_my_empresa_id()` sin usuarios desactivados + bloqueo de la cuenta en Auth (SEG-13). Con un pgTAP por función.
 1. Decisión: empresa limpia para operar en real, o regularizar Nalux (CON-1).
 2. `regenerar_asiento_*` idempotentes + reversar los 7 duplicados y AS-000318/319 (CON-2, CON-3).
 3. Índice único de facturas de proveedor + aviso (CON-6).
@@ -200,6 +225,6 @@ Un cliente que migra con caja, deudores, proveedores y stock previos no tiene un
 8. Política de privacidad y términos, plan de recuperación (OPE-4).
 9. Antes de ARCA producción: resolver la cola (ARC-1), validar el Libro IVA en el Portal (ARC-2).
 
-**Decisiones que necesito de Luciano:** (1) ¿plan Pro de Supabase ahora?; (2) ¿operación real en empresa limpia o regularizar Nalux?; (3) ¿cerramos el registro público hasta el lanzamiento?; (4) ¿aplico la Tanda 1?
+**Decisiones pendientes de Luciano:** (1) ¿plan Pro de Supabase ahora, o un volcado diario propio?; (2) ¿operación real en empresa limpia o regularizar Nalux?; (3) ¿cerramos el registro público hasta el lanzamiento? (con SEG-1 cerrado ya no permite tomar otra empresa, pero sigue permitiendo crear cuentas y empresas basura); (4) ¿arrancamos la Tanda 2 (permisos e integridad contable)?
 
 *Todo lo que toca producción (migraciones, borrar funciones, cambiar el plan) queda a la espera de confirmación explícita.*
