@@ -1,5 +1,51 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## 🛠️ Auditoría general (24/09) — TANDAS 2 y 3 PREPARADAS y probadas, SIN APLICAR (25/09)
+
+Luciano pidió acumular lo que necesita su OK y ejecutarlo todo al final (la "Tanda 4"). Todo está en **11 commits locales**, cada
+migración probada con pgTAP en `BEGIN…ROLLBACK` contra la base real (sin rastro, verificado después). **No se aplicó nada en
+producción, no se desplegó nada y no se subió nada a GitHub.** Lista y orden de aplicación: `PENDIENTES_LUCIANO_AUDITORIA.md`
+(sin versionar a propósito: el repo es público). Informe con el estado al 25/09: `AUDITORIA_SISTEMA_2026-09-24.md`.
+- **mig. 406–410** (permisos y asientos): permiso de módulo en 15 RPC (SEG-12); `get_my_empresa_id()` NULL si el perfil está
+  inactivo (SEG-13); `crear_asiento_automatico/manual` validan cuentas de la empresa, permiso por tipo e idempotencia por
+  documento (SEG-14, nuevo); `regenerar_asiento_cxc/cxp` reconectan en vez de duplicar (CON-2); `reversar_asiento` + botón
+  «Reversar» en Plan de Cuentas → Asientos (CON-3). Datafix de los 8 duplicados preparado en `supabase/datafix/`, NO aplicado
+  (espera "empresa limpia vs regularizar Nalux").
+- **mig. 411–414** (integridad): índice único de factura de proveedor + aviso en pantalla (CON-6: el "caso existente" era un
+  falso positivo por el valor `S/N`); CHECK de `comprobantes.estado_pago` (CON-8); las compras anuladas dejan de figurar como
+  deuda en `compras_saldo_pendiente` (hallazgo nuevo, CON-11); reporte **«Conciliación de Cuentas de Control»** (Reportes →
+  Contabilidad).
+- **mig. 415 + `_shared/cronAuth.ts`** (SEG-3): secreto compartido `cron_secret` (Vault, se genera en la base) que mandan los 8
+  jobs (`x-cron-secret`) y verifican los 8 workers; `arca-worker` y los `*-catalogo-publicar` aceptan también un JWT de usuario
+  (los dispara el navegador). **Orden: primero la migración, después desplegar los workers.**
+- **mig. 416** (espejo de un GRANT que producción ya tiene, COD-3) y **mig. 417** (**chequeo de salud** `chequeo_salud_sistema()`
+  con 10 chequeos + tarea horaria + aviso por webhook guardado en el Vault como `alerta_webhook_url`; sin ese secreto no avisa).
+- **Frontend/proceso:** `xlsx` fuera (exceljs; `npm audit` de producción 13 → 7), cabeceras de seguridad en `vercel.json` (CSP en
+  modo solo-reporte), Vitest sin las copias de `.claude/**` (**406 pruebas en 35 archivos, todas verdes**), 3 pruebas de
+  `FormNuevaCotizacion` arregladas (COD-1).
+- **Documentos nuevos:** `docs/operacion/` (MONITOREO, PLAN_DE_RECUPERACION con RPO/RTO propuestos, STAGING, ejemplo de volcado
+  diario cifrado no activo) y `docs/legal/` (borradores de política de privacidad, términos y derechos de los titulares).
+- **No se hizo, con motivo:** CON-7 (RPC atómicas de compras: hasta verificar en pantalla Compra Rápida Libro/No libro), SEG-8/SEG-9
+  (dependen de decisiones de producto), jsPDF 4 / react-router 7 (hay que revisar los PDF a ojo).
+- **Lecciones nuevas (importantes):**
+  1. **El repositorio de GitHub es PÚBLICO** (SEG-15) y el informe de auditoría ya está publicado. Hacerlo privado es una decisión de
+     Luciano (punto 0 de la Tanda 4). La CI se puede leer **sin `gh`** por la API pública
+     (`api.github.com/repos/lbanegas96/kairox-gestion/actions/runs` → jobs → `check-runs/<id>/annotations`); ya no valdrá si pasa a privado.
+  2. **La CI de pgTAP nunca corrió sus pruebas:** recrear la base desde cero fallaba en la mig. **297** (INSERT con el `empresa_id` de
+     Nalux escrito a mano → FK) y el CLI de Supabase **ignora** los archivos que no son `<número>_<nombre>.sql`: los arreglos
+     `318b/325b/328b` no se aplicaban en una base recreada (quedaban `anon` en `actualizar_cotizacion` y 3 sobrecargas de
+     `crear_venta`). Corregido: guarda en la 297 y los tres arreglos incorporados a sus archivos. Pueden quedar más bloqueos
+     después de la 297: solo se ven subiendo y mirando la CI, o con Docker Desktop abierto (Docker está instalado pero apagado).
+  3. Un CLI que ordena por nombre de archivo no admite «una migración en el medio»: un número con más dígitos (`3181_`) queda ANTES de
+     `318_` y repetir el prefijo duplica la versión. Un arreglo intermedio se incorpora al archivo que arregla.
+  4. `asiento_id IS NULL` **no** sirve para detectar «documento sin asiento» (los movimientos de cuenta corriente y las NC no lo
+     guardan): usar `asientos_contables.origen/origen_id` (así lo hace el reporte de conciliación y el chequeo de salud).
+  5. Sandbox: `cron.job_run_details` se inserta con `runid` explícito (el rol no tiene permiso sobre la secuencia); solo puede haber
+     un QR pendiente por comprobante (`idx_qr_pagos_mp_una_pendiente`); una sentencia que llama a una función que inserta no ve esa
+     fila dentro de la misma sentencia (separar en dos).
+  6. Un flujo «no bloqueante» que falla en silencio (asiento de una compra) no se puede detectar mirando el código: el chequeo de
+     salud lo mira por el efecto (documento reciente sin asiento).
+
 ## 🔎 Auditoría general del sistema (24/09) — TANDA 1 APLICADA EN PRODUCCIÓN (mig. 402–405 + función ARCA neutralizada)
 
 Pedido de Luciano: "una buena pasada general" (contabilidad, seguridad, bugs, vacíos, madurez, robustez).
