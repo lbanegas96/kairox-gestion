@@ -53,7 +53,7 @@ SELECT public.ajustar_stock_manual('00000000-beef-0000-0000-00000000aa01'::uuid,
 
 SELECT is(
   (SELECT stock_actual FROM public.productos WHERE id = '00000000-beef-0000-0000-00000000aa01'),
-  15,
+  15::numeric,
   'Caso 1: ajustar_stock_manual entrada(5) sobre stock=10 deja stock_actual=15'
 );
 
@@ -65,7 +65,7 @@ SELECT public.ajustar_stock_manual('00000000-beef-0000-0000-00000000aa02'::uuid,
 
 SELECT is(
   (SELECT stock_actual FROM public.productos WHERE id = '00000000-beef-0000-0000-00000000aa02'),
-  7,
+  7::numeric,
   'Caso 2: ajustar_stock_manual salida(3) sobre stock=10 deja stock_actual=7'
 );
 
@@ -83,7 +83,7 @@ SELECT throws_like(
 
 SELECT is(
   (SELECT stock_actual FROM public.productos WHERE id = '00000000-beef-0000-0000-00000000aa03'),
-  2,
+  2::numeric,
   'Caso 3b: stock_actual de H3 no cambio tras el intento bloqueado (sigue en 2)'
 );
 
@@ -96,7 +96,7 @@ SELECT public.ajustar_stock_manual('00000000-beef-0000-0000-00000000aa04'::uuid,
 
 SELECT is(
   (SELECT stock_actual FROM public.productos WHERE id = '00000000-beef-0000-0000-00000000aa04'),
-  2,
+  2::numeric,
   'Caso 4: ajustar_stock_manual ajuste(2) sobre stock=10 deja stock_actual=2 (valor absoluto, no delta)'
 );
 
@@ -114,7 +114,7 @@ SELECT throws_like(
 
 SELECT is(
   (SELECT stock_actual FROM public.productos WHERE id = '00000000-beef-0000-0000-00000000aa04'),
-  2,
+  2::numeric,
   'Caso 5b: stock_actual de H4 no cambio tras el intento bloqueado (sigue en 2)'
 );
 
