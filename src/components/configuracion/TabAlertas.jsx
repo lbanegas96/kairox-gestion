@@ -23,23 +23,18 @@ const TabAlertas = ({ alertas, setAlertas, loadingAlertas, savingAlertas, onSave
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Alerta stock bajo */}
+          {/* Alerta stock bajo — el umbral NO se configura acá: vive en Configuración →
+              Inventario (stock_minimo_global), o por producto en Productos (stock_minimo).
+              El input de "Umbral" que estaba acá era un campo duplicado (alerta_stock_umbral)
+              que nunca leyó nadie — se sacó el 29/09 para no tener dos lugares prometiendo
+              controlar lo mismo y que solo uno funcione. */}
           <div className="flex items-start justify-between gap-4 p-4 bg-kx-surface-2 rounded-lg border border-kx-border">
             <div className="flex-1">
               <p className="font-medium text-kx-text text-sm">Alerta de stock bajo</p>
-              <p className="text-xs text-kx-text-2 mt-0.5">Notificar cuando el stock de un producto baje del umbral definido.</p>
-              {alertas.alerta_stock_bajo && (
-                <div className="flex items-center gap-2 mt-3">
-                  <span className="text-xs text-kx-text-2">Umbral:</span>
-                  <Input
-                    type="number" min="0"
-                    value={alertas.alerta_stock_umbral}
-                    onChange={e => setAlertas(prev => ({ ...prev, alerta_stock_umbral: e.target.value }))}
-                    className="h-7 w-20 text-xs kairox-input"
-                  />
-                  <span className="text-xs text-kx-text-3">unidades</span>
-                </div>
-              )}
+              <p className="text-xs text-kx-text-2 mt-0.5">
+                Notificar cuando el stock de un producto baje del mínimo. El mínimo se define en
+                <strong> Configuración → Inventario</strong> (general) o por producto en <strong>Productos</strong>.
+              </p>
             </div>
             <Switch checked={alertas.alerta_stock_bajo} onCheckedChange={v => setAlertas(prev => ({ ...prev, alerta_stock_bajo: v }))} />
           </div>
@@ -65,11 +60,15 @@ const TabAlertas = ({ alertas, setAlertas, loadingAlertas, savingAlertas, onSave
             <Switch checked={alertas.alerta_vencimiento_cc} onCheckedChange={v => setAlertas(prev => ({ ...prev, alerta_vencimiento_cc: v }))} />
           </div>
 
-          {/* Apertura de caja */}
+          {/* Caja sin cerrar — la clave se llama alerta_caja_apertura por historia, pero lo que
+              avisa hoy (y lo único que useNotifications.js implementa) es que una sesión de caja
+              lleva más de 24h abierta sin cerrarse. Copy corregido 29/09 para que diga lo que
+              realmente hace — antes prometía "no abriste la caja hoy", algo que nunca se llegó
+              a construir. */}
           <div className="flex items-center justify-between p-4 bg-kx-surface-2 rounded-lg border border-kx-border">
             <div>
-              <p className="font-medium text-kx-text text-sm">Recordatorio apertura de caja</p>
-              <p className="text-xs text-kx-text-2 mt-0.5">Mostrar aviso si la caja no fue abierta en el primer acceso del día.</p>
+              <p className="font-medium text-kx-text text-sm">Caja abierta hace más de 24 horas</p>
+              <p className="text-xs text-kx-text-2 mt-0.5">Avisar si una sesión de caja quedó abierta más de un día sin cerrarse.</p>
             </div>
             <Switch checked={alertas.alerta_caja_apertura} onCheckedChange={v => setAlertas(prev => ({ ...prev, alerta_caja_apertura: v }))} />
           </div>

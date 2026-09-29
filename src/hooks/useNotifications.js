@@ -22,14 +22,61 @@ const REFETCH_OPTS = {
 /**
  * Hook de notificaciones inteligentes.
  * Devuelve alertas agrupadas por tipo:
- *   - stock_bajo:    productos con stock ≤ stock_minimo
- *   - deuda_vencida: clientes con saldo > 0 sin movimiento en +30 días
- *   - oc_pendiente:  órdenes de compra enviadas sin recibir
+ *   - stock_bajo:    productos con stock ≤ stock_minimo (si "Alerta de stock bajo" está activa)
+ *   - deuda_vencida: clientes con saldo > 0 sin movimiento en +N días (N configurable, si el toggle está activo)
+ *   - oc_pendiente:  órdenes de compra enviadas sin recibir (sin toggle, siempre activa con permiso de compras)
+ *
+ * Los 4 tipos configurables desde Configuración → Alertas (stock bajo, vencimiento de
+ * CC, caja sin cerrar, cheques por vencer) respetan acá su interruptor de encendido y,
+ * donde aplica, su plazo/antelación en días — antes de esta revisión (29/09) esa
+ * pantalla guardaba los 7 valores pero ninguno se leía nunca: cambiar cualquier cosa
+ * ahí no tenía ningún efecto.
  */
+// Defaults idénticos a los que arranca ConfiguracionSection.jsx (Tab Alertas) — si una
+// empresa nunca tocó esa pantalla, el comportamiento es el mismo de siempre.
+const ALERTA_DEFAULTS = {
+  alerta_stock_bajo: true,
+  alerta_stock_umbral: 5,
+  alerta_vencimiento_cc: true,
+  alerta_vencimiento_dias: 30,
+  alerta_caja_apertura: true,
+  alerta_cheque_vencimiento: true,
+  alerta_cheque_dias: 7,
+};
+const ALERTA_KEYS = Object.keys(ALERTA_DEFAULTS);
+
 export function useNotifications() {
   const { user } = useAuth();
   const { hasPermission } = useUserPermissions();
   const empresaId = user?.empresa_id;
+
+  // ── Configuración de Alertas (Configuración → Alertas) ──────────────────────
+  const { data: alertasCfg = ALERTA_DEFAULTS } = useQuery({
+    queryKey: ['notif', 'alertas_config', empresaId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('configuracion')
+        .select('clave, valor')
+        .eq('empresa_id', empresaId)
+        .in('clave', ALERTA_KEYS);
+      if (error || !data?.length) return ALERTA_DEFAULTS;
+      const map = Object.fromEntries(data.map((r) => [r.clave, r.valor]));
+      const bool = (k) => (map[k] !== undefined ? map[k] === 'true' : ALERTA_DEFAULTS[k]);
+      const num  = (k) => Number(map[k] ?? ALERTA_DEFAULTS[k]);
+      return {
+        alerta_stock_bajo:         bool('alerta_stock_bajo'),
+        alerta_stock_umbral:       num('alerta_stock_umbral'),
+        alerta_vencimiento_cc:     bool('alerta_vencimiento_cc'),
+        alerta_vencimiento_dias:   num('alerta_vencimiento_dias'),
+        alerta_caja_apertura:      bool('alerta_caja_apertura'),
+        alerta_cheque_vencimiento: bool('alerta_cheque_vencimiento'),
+        alerta_cheque_dias:        num('alerta_cheque_dias'),
+      };
+    },
+    enabled: !!empresaId,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+  });
 
   // ── Stock mínimo global (config de empresa) ────────────────────────────────
   const { data: stockMinimoGlobal = 5 } = useQuery({
@@ -63,11 +110,12 @@ export function useNotifications() {
     ...REFETCH_OPTS,
   });
 
-  // ── Deuda vencida (+30 días sin movimiento) ────────────────────────────────
+  // ── Deuda vencida (sin movimiento hace más de N días, configurable) ────────
+  const diasVencimientoCC = alertasCfg.alerta_vencimiento_dias;
   const { data: deudaVencida = [] } = useQuery({
-    queryKey: ['notif', 'deuda_vencida', empresaId],
+    queryKey: ['notif', 'deuda_vencida', empresaId, diasVencimientoCC],
     queryFn: async () => {
-      const hace30dias = new Date(getNowAR().getTime() - 30 * 86400000).toISOString();
+      const haceNdias = new Date(getNowAR().getTime() - diasVencimientoCC * 86400000).toISOString();
       const { data: clientes, error } = await supabase
         .from('clientes')
         .select('id, nombre, saldo_actual')
@@ -83,12 +131,12 @@ export function useNotifications() {
           .from('cuenta_corriente_movimientos')
           .select('id', { count: 'exact', head: true })
           .eq('cliente_id', c.id)
-          .gte('created_at', hace30dias);
-        if ((count ?? 0) === 0) result.push(c);
+          .gte('created_at', haceNdias);
+        if ((count ?? 0) === 0) result.push({ ...c, diasVencimiento: diasVencimientoCC });
       }
       return result;
     },
-    enabled: !!empresaId,
+    enabled: !!empresaId && alertasCfg.alerta_vencimiento_cc,
     ...REFETCH_OPTS,
   });
 
@@ -123,16 +171,17 @@ export function useNotifications() {
       if (error) return [];
       return data ?? [];
     },
-    enabled: !!empresaId,
+    enabled: !!empresaId && alertasCfg.alerta_caja_apertura,
     ...REFETCH_OPTS,
   });
 
-  // ── Cheques por vencer (próximos 7 días) ──────────────────────────────────
+  // ── Cheques por vencer (próximos N días, configurable) ─────────────────────
+  const diasCheque = alertasCfg.alerta_cheque_dias;
   const { data: chequesProximos = [] } = useQuery({
-    queryKey: ['notif', 'cheques_proximos', empresaId],
+    queryKey: ['notif', 'cheques_proximos', empresaId, diasCheque],
     queryFn: async () => {
       const hoy   = getTodayAR();
-      const in7d  = new Date(new Date(hoy + 'T00:00:00Z').getTime() + 7 * 86400000)
+      const inNd  = new Date(new Date(hoy + 'T00:00:00Z').getTime() + diasCheque * 86400000)
                       .toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('cheques')
@@ -140,11 +189,11 @@ export function useNotifications() {
         .eq('empresa_id', empresaId)
         .not('estado', 'in', '(cobrado,rechazado)')
         .gte('fecha_vencimiento', hoy)
-        .lte('fecha_vencimiento', in7d);
+        .lte('fecha_vencimiento', inNd);
       if (error) return [];
       return data ?? [];
     },
-    enabled: !!empresaId && hasPermission('cheques'),
+    enabled: !!empresaId && hasPermission('cheques') && alertasCfg.alerta_cheque_vencimiento,
     ...REFETCH_OPTS,
   });
 
@@ -276,7 +325,7 @@ export function useNotifications() {
       seccion: 'impuestos',
       raw: retencionesPracticadas,
     }] : []),
-    ...stockBajo.map(p => ({
+    ...(alertasCfg.alerta_stock_bajo ? stockBajo.map(p => ({
       id: `stock-${p.id}`,
       tipo: 'stock_bajo',
       titulo: p.nombre,
@@ -284,12 +333,12 @@ export function useNotifications() {
       nivel: p.stock_actual === 0 ? 'critico' : 'advertencia',
       seccion: 'productos',
       raw: p,
-    })),
+    })) : []),
     ...deudaVencida.map(c => ({
       id: `deuda-${c.id}`,
       tipo: 'deuda_vencida',
       titulo: c.nombre,
-      detalle: `Deuda: $${Number(c.saldo_actual).toLocaleString('es-AR', { minimumFractionDigits: 2 })} — sin movimiento +30 días`,
+      detalle: `Deuda: $${Number(c.saldo_actual).toLocaleString('es-AR', { minimumFractionDigits: 2 })} — sin movimiento +${c.diasVencimiento} días`,
       nivel: 'advertencia',
       seccion: 'cuentacorriente',
       raw: c,
