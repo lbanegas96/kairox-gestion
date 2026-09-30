@@ -1,5 +1,45 @@
 # KAIROX Gestión — Contexto de Sesión
 
+## ✅ Alertas y Notificaciones (config muerta) + retención con centavos (gap residual) + panorama de WhatsApp (29/09)
+
+Tres cosas cerradas en la misma sesión, documentadas acá y en memoria de sesión.
+
+**Alertas y Notificaciones:** Configuración → Alertas guardaba 7 valores (4 interruptores + 3
+plazos) que `useNotifications.js` nunca leía — tenía sus propios plazos fijos en el código (30 días
+CC, 7 días cheques, 24h caja). Apagar un interruptor o cambiar un plazo no hacía nada. Fix: el hook
+ahora lee `configuracion` y cada query respeta su interruptor vía `enabled`. De paso, dos hallazgos
+más: el input "Umbral" de stock bajo (`alerta_stock_umbral`) era un campo duplicado e inerte (el
+umbral real vive en `stock_minimo_global`/`stock_minimo` por producto) — se sacó; y el toggle
+"Recordatorio apertura de caja" prometía algo nunca construido ("no abriste la caja hoy") cuando lo
+único implementado es lo opuesto (caja abierta +24h sin cerrar) — se corrigió el texto. 406/406
+tests en verde. N+1 real detectado en `deudaVencida` (un await por cliente), anotado para otra
+pasada, no corregido ahora.
+
+**Retenciones — gap residual del bug String()+parseNumberLocale:** revisando ramas `claude/*`
+viejas sin mergear (ver abajo) apareció un commit de 16/09 con un fix de `TabRetenciones.jsx` que
+nunca llegó a master. 2 de los 3 lugares ya estaban corregidos (por la auditoría del 18/09,
+`project_bug_string_parsenumberlocale_recurrente`), pero **`onChangeProveedorOImpuesto`
+(Retenciones Practicadas) seguía roto**: al auto-cargar la alícuota desde `alicuotas_impuestos`, si
+tenía decimales (ej. 3,5%), `recalcMonto` fallaba en silencio y el monto quedaba vacío. Mismo fix de
+siempre: `.replace('.', ',')` antes de guardar en el form.
+
+**Ramas `claude/*` sin mergear — auditadas, no todas tenían algo real:** de 6 ramas locales
+(`agitated-lamport-e3f4f4`, `fervent-goldberg-702857`, `peaceful-liskov-650b43`,
+`practical-engelbart-2cae23`, `stoic-feistel-022c7a`, `strange-bhaskara-5ba79f`, sobrantes de
+worktrees de sesiones de Agent anteriores), solo 2 tenían commits que master no tiene: la de
+retenciones (arriba, aplicada directo en vez de mergear el commit viejo completo — el CONTEXT.md de
+esa rama estaba desactualizado 2 semanas) y un fix de fixture de test (`FormNuevaCotizacion.test.jsx`)
+que resultó ya estar aplicado en master de otra forma — descartada. Los worktrees en
+`.claude/worktrees/` quedan para limpiar cuando se quiera (no se tocaron).
+
+**Panorama y plan de integración con WhatsApp:** a pedido de Luciano, armado el panorama completo
+(qué hay, qué falta, costos y modelo de cuenta — ver memoria de sesión
+`project_whatsapp_integracion_panorama.md`) y el plan de construcción técnica en 6 fases
+(`PLAN_INTEGRACION_WHATSAPP.md`), dejando afuera a propósito la elección de proveedor/API y costos.
+Sin construir nada todavía.
+
+---
+
 ## 🛠️ Auditoría general (24/09) — TANDAS 2 y 3 PREPARADAS y probadas, SIN APLICAR (25/09)
 
 Luciano pidió acumular lo que necesita su OK y ejecutarlo todo al final (la "Tanda 4"). Todo quedó subido a GitHub el 25/09 a las 20:02 en un push que no hice yo (salvo el arreglo de la mig. 341); cada

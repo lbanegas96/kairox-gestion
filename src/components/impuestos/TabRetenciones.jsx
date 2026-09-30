@@ -413,7 +413,9 @@ function SubTabPracticadas() {
     // Pre-cargar alícuota desde alicuotas_impuestos.
     const alic = await buscarAlicuota(next.impuesto, next.jurisdiccion);
     if (alic != null) {
-      next.alicuota_aplicada = String(Number(alic));
+      // parseNumberLocale (recalcMonto) exige coma decimal; String() de un numeric con
+      // decimales devuelve punto y rompe el parseo silenciosamente.
+      next.alicuota_aplicada = String(Number(alic)).replace('.', ',');
       next.monto = recalcMonto(next.monto_base, next.alicuota_aplicada);
     }
     setForm(next);
